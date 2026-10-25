@@ -1,10 +1,27 @@
-.gradle/
-build/
-/local.properties
-.idea/
-*.iml
-captures/
+# node / pnpm
+node_modules/
+*.log
+.npm/
+
+# expo / react-native builds
+.expo/
+expo-env.d.ts
+apps/*/ios/build/
+apps/*/ios/Pods/Manifest.lock.bak
+apps/*/android/.gradle/
+apps/*/android/app/build/
+apps/*/android/build/
+apps/*/android/local.properties
+apps/*/android/**/.cxx/
+
+# electron (future apps)
+apps/*/dist/
+apps/*/out/
+
+# rust targets if any future app uses them
+target/
+
+# misc
 .DS_Store
-.cxx/
-*.apk
-*.aab
+coverage/
+*.tsbuildinfo

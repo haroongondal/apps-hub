@@ -1,0 +1,16 @@
+{
+  "name": "@apps-hub/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure TypeScript domain logic for NetLens (runnable from RN, Electron, or Node)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "node --test src/__tests__/subnet-calculator.test.ts src/__tests__/tcp-scan-engine.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.9.2"
+  }
+}

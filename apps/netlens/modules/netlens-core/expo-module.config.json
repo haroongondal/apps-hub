@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["NetlensCoreModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.netlenscore.NetlensCoreModule"]
+  }
+}

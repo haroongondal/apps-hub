@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "NetLens",
+    "slug": "netlens",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "netlens",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "app.netlens",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "NetLens scans your local Wi-Fi network to discover connected devices and services.",
+        "NSBonjourServices": ["_services._dns-sd._udp", "_http._tcp"]
+      }
+    },
+    "android": {
+      "package": "app.netlens",
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE",
+        "CHANGE_WIFI_STATE",
+        "CHANGE_WIFI_MULTICAST_STATE"
+      ]
+    }
+  }
+}
