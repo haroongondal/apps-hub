@@ -56,13 +56,13 @@ object PlatformNetwork {
       Collections.list(NetworkInterface.getNetworkInterfaces()).asSequence()
         .filter { it.isUp && !it.isLoopback }
         .flatMap { it.interfaceAddresses.asSequence() }
-        .firstOrNull { it.address is Inet4Address && it.networkPrefixLength in 0..32 }
+        .firstOrNull { it.address is Inet4Address && it.networkPrefixLength.toInt() in 0..32 }
         ?.let { address ->
           val ip = (address.address as Inet4Address).hostAddress ?: return@let null
           if (ip.isBlank()) null
           else NetLensInterface(
             localIp = ip,
-            cidrPrefix = address.networkPrefixLength,
+            cidrPrefix = address.networkPrefixLength.toInt(),
             gatewayIp = null, // gateway stays unknown on the fallback path
           )
         }

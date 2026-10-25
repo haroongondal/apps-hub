@@ -1,5 +1,36 @@
 import Darwin
 
+// MARK: - <net/route.h> mirroring (not exposed via the Darwin Swift module)
+
+/**
+ * BSD route-message contract mirrored from <net/route.h>.
+ * Only used to parse the sysctl(CTL_NET, PF_ROUTE, …, NET_RT_DUMP) byte
+ * stream; the field layout must match the kernel's rt_msghdr exactly.
+ */
+private let routeFlagGateway: Int32 = 0x0002 // RTF_GATEWAY (compared against rtm_flags)
+private let routeAttrDst = 0x0001            // RTA_DST (compared against Int rtm_addrs mask)
+private let routeAttrGateway = 0x0002        // RTA_GATEWAY
+private let routeAddrTypeDst = 0      // RTAX_DST
+private let routeAddrTypeGateway = 1  // RTAX_GATEWAY
+private let routeAddrTypeMax = 8      // RTAX_MAX
+
+private struct BSDRouteMessageHeader {
+  var rtm_msglen: UInt16
+  var rtm_version: UInt8
+  var rtm_type: UInt8
+  var rtm_index: UInt16
+  var rtm_flags: Int32
+  var rtm_addrs: Int32
+  var rtm_pid: Int32
+  var rtm_seq: Int32
+  var rtm_errno: Int32
+  var rtm_use: Int32
+  var rtm_inits: UInt64
+  // struct rt_metrics — 14 u_long values on LP64 (locks, mtu, hopcount, …,
+  // state, filler[2]); parsed but never dereferenced.
+  var rtm_rmx: (UInt64, UInt64, UInt64, UInt64, UInt64, UInt64, UInt64, UInt64, UInt64, UInt64, UInt64, UInt64, UInt64, UInt64)
+}
+
 // MARK: - Interface facts (FR-1)
 
 struct NetLensInterfaceInfo {
@@ -13,9 +44,7 @@ struct NetLensInterfaceInfo {
  *  - local IP + CIDR prefix from POSIX getifaddrs() filtered to `en0`/AF_INET
  *    (ifa_netmask parsed to prefix length).
  *  - gateway from the IPv4 route table via sysctl(NET_RT_DUMP) — the first
- *    default route (destination 0.0.0.0) carrying RTF_GATEWAY.
- *    The rt_msghdr slot after the destination is only returned when the route
- *    is a default route; otherwise nil.
+ *    default route (destination 0.0.0.0) carrying a gateway address.
  */
 enum NetworkInterfaceDetector {
 
@@ -103,17 +132,25 @@ private enum RouteTableGateway {
       let base = rawBuffer.baseAddress!
       let total = Int(bufferSize)
       var offset = 0
+      let headerSize = MemoryLayout<BSDRouteMessageHeader>.size
 
-      while offset + MemoryLayout<rt_msghdr>.size <= total {
-        let header = base.loadUnaligned(fromByteOffset: offset, as: rt_msghdr.self)
-        let messageLength = Int(header.rtm_msglen)
+      while offset + 4 <= total {
+        let messageLength = Int(base.loadUnaligned(fromByteOffset: offset, as: UInt16.self))
         if messageLength == 0 { break }
 
-        let flags = Int(header.rtm_flags)
-        let addrsMask = Int(header.rtm_addrs)
-        if flags & RTF_GATEWAY != 0, addrsMask & RTA_DST != 0, addrsMask & RTA_GATEWAY != 0 {
-          if let gateway = parseGatewayOfDefaultRoute(base, messageStart: offset, addrsMask: addrsMask) {
-            return gateway
+        if messageLength >= headerSize {
+          let header = base.loadUnaligned(
+            fromByteOffset: offset,
+            as: BSDRouteMessageHeader.self,
+          )
+          let flags = header.rtm_flags
+          let addrsMask = Int(header.rtm_addrs)
+          if flags & routeFlagGateway != 0,
+             addrsMask & routeAttrDst != 0,
+             addrsMask & routeAttrGateway != 0 {
+            if let gateway = parseGatewayOfDefaultRoute(rawBuffer, messageStart: offset, addrsMask: addrsMask) {
+              return gateway
+            }
           }
         }
         offset += messageLength
@@ -130,17 +167,17 @@ private enum RouteTableGateway {
     addrsMask: Int,
   ) -> String? {
     let base = rawBuffer.baseAddress!
-    var cursor = messageStart + MemoryLayout<rt_msghdr>.size
+    var cursor = messageStart + MemoryLayout<BSDRouteMessageHeader>.size
     var isDefaultRoute = false
     var gatewayIp: String?
 
     var index = 0
-    while index <= Int(RTAX_MAX) {
+    while index <= routeAddrTypeMax {
       if addrsMask & (1 << index) != 0 {
         guard cursor + 2 <= rawBuffer.count else { break }
         let saLength = Int(base.loadUnaligned(fromByteOffset: cursor, as: UInt8.self))
         let saFamily = Int(base.loadUnaligned(fromByteOffset: cursor + 1, as: UInt8.self))
-        let stride = saLength > 0 ? saLength : MemoryLayout<sockaddr_in>.size
+        let stride = saLength > 0 ? saLength : 16
 
         if saFamily == AF_INET, cursor + 8 <= rawBuffer.count {
           let first = base.loadUnaligned(fromByteOffset: cursor + 4, as: UInt8.self)
@@ -149,9 +186,9 @@ private enum RouteTableGateway {
           let fourth = base.loadUnaligned(fromByteOffset: cursor + 7, as: UInt8.self)
           let addressString = "\(first).\(second).\(third).\(fourth)"
 
-          if index == Int(RTAX_DST) {
+          if index == routeAddrTypeDst {
             isDefaultRoute = (first, second, third, fourth) == (0, 0, 0, 0)
-          } else if index == Int(RTAX_GATEWAY) {
+          } else if index == routeAddrTypeGateway {
             gatewayIp = addressString
           }
         }

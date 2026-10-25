@@ -1,13 +1,15 @@
 Pod::Spec.new do |s|
   s.name           = 'NetlensCore'
-  s.version        = '1.0.0'
-  s.summary        = 'A sample project summary'
-  s.description    = 'A sample project description'
-  s.author         = ''
-  s.homepage       = 'https://docs.expo.dev/modules/'
+  s.version        = '0.1.0'
+  s.summary        = 'NetLens native networking engine (TCP sweep, mDNS, SSDP)'
+  s.description    = 'LAN host discovery and service enrichment engine for NetLens, exposed through the Expo Modules API.'
+  s.author         = 'apps-hub'
+  s.homepage       = 'https://github.com/outsentia/apps-hub'
+  # Constraints must be <= the app target (Podfile.properties.json defaults to 15.1);
+  # app's autolink skips pods whose platform requirement is newer than the target.
   s.platforms      = {
-    :ios => '16.4',
-    :tvos => '16.4'
+    :ios => '15.1',
+    :tvos => '15.1'
   }
   s.source         = { git: '' }
   s.static_framework = true

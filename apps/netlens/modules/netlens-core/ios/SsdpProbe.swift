@@ -94,11 +94,12 @@ enum SsdpProbe {
 
       var source = sockaddr()
       var sourceLength = socklen_t(MemoryLayout<sockaddr>.size)
+      let capacity = buffer.count
       let received = buffer.withUnsafeMutableBytes { mutableBytes -> Int in
         Darwin.recvfrom(
           socketDescriptor,
           mutableBytes.baseAddress,
-          buffer.count,
+          capacity,
           0,
           &source,
           &sourceLength,
@@ -106,20 +107,14 @@ enum SsdpProbe {
       }
       guard received > 0 else { continue } // timeout or transient error
 
-      var sourceName = ""
-      var sourceAddr = withUnsafePointer(to: &source) { pointer -> in_addr? in
-        pointer.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { bound in
-          bound.pointee.sin_addr
-        }
-      }
-      if let sourceAddr {
-        var addrBuffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
-        if withUnsafePointer(to: &sourceAddr) { pointer -> Bool in
-          pointer.withMemoryRebound(to: in_addr.self, capacity: 1) { bound in
-            inet_ntop(AF_INET, bound, &addrBuffer, socklen_t(INET_ADDRSTRLEN)) != nil
+      let sourceIp = withUnsafePointer(to: &source) { sockaddrPointer -> String? in
+        sockaddrPointer.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { bound -> String? in
+          var address = bound.pointee.sin_addr
+          var addressBuffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+          guard inet_ntop(AF_INET, &address, &addressBuffer, socklen_t(INET_ADDRSTRLEN)) != nil else {
+            return nil
           }
-        } {
-          sourceName = String(cString: addrBuffer)
+          return String(cString: addressBuffer)
         }
       }
 
@@ -128,7 +123,7 @@ enum SsdpProbe {
       let server = header(in: text, name: "SERVER")
       let usn = header(in: text, name: "USN")
       if location != nil || server != nil || usn != nil {
-        onDiscovered(location, server, usn, sourceName.isEmpty ? nil : sourceName)
+        onDiscovered(location, server, usn, sourceIp)
       }
     }
   }

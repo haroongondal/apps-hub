@@ -3,23 +3,19 @@ node_modules/
 *.log
 .npm/
 
-# expo / react-native builds
-.expo/
-expo-env.d.ts
-apps/*/ios/build/
-apps/*/ios/Pods/Manifest.lock.bak
-apps/*/android/.gradle/
-apps/*/android/app/build/
-apps/*/android/build/
-apps/*/android/local.properties
-apps/*/android/**/.cxx/
+# expo / react-native builds (root-anchored: DO NOT match apps/*/modules/*/android|ios)
+/apps/netlens/android/.gradle/
+/apps/netlens/android/app/build/
+/apps/netlens/android/build/
+/apps/netlens/android/local.properties
+/apps/netlens/android/**/.cxx/
+/apps/netlens/modules/*/android/build/
+/apps/netlens/ios/build/
+/apps/netlens/.expo/
 
 # electron (future apps)
-apps/*/dist/
-apps/*/out/
-
-# rust targets if any future app uses them
-target/
+/apps/*/dist/
+/apps/*/out/
 
 # misc
 .DS_Store
