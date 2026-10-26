@@ -57,3 +57,17 @@ coverage/
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+/apps/pdf-editor-mobile/android/.gradle/
+/apps/pdf-editor-mobile/android/app/build/
+/apps/pdf-editor-mobile/android/build/
+/apps/pdf-editor-mobile/android/local.properties
+/apps/pdf-editor-mobile/android/**/.cxx/
+/apps/pdf-editor-mobile/ios/build/
+/apps/pdf-editor-mobile/ios/Pods/
+/apps/pdf-editor-mobile/.expo/
+/apps/pdf-editor-mobile/assets/editor/editor.html
+/apps/pdf-editor-desktop/test/*.pdf
+/apps/design-editor/test/out/
+
+# release APKs are build outputs; the store pipeline uploads its own builds
+/apps/*/releases/*.apk

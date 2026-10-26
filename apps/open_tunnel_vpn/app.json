@@ -4,6 +4,7 @@
     "slug": "open_tunnel_vpn",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "scheme": "opentunnel",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -28,6 +29,10 @@
     },
     "android": {
       "package": "com.opentunnel.open_tunnel_vpn",
+      "adaptiveIcon": {
+        "backgroundColor": "#0f2e1f",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [

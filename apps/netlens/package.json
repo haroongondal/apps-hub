@@ -13,10 +13,14 @@
   },
   "dependencies": {
     "@apps-hub/core": "workspace:*",
+    "@apps-hub/ui": "workspace:*",
     "expo": "~54.0.36",
+    "expo-font": "~14.0.12",
+    "expo-sqlite": "~16.0.10",
     "netlens-core": "workspace:*",
     "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react-native": "0.81.5",
+    "react-native-safe-area-context": "~5.6.0"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",

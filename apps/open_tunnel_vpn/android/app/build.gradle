@@ -92,8 +92,9 @@ android {
         applicationId 'com.opentunnel.open_tunnel_vpn'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        // tools/release passes these; plain builds keep the defaults.
+        versionCode findProperty('appsHubVersionCode')?.toInteger() ?: 1
+        versionName findProperty('appsHubVersionName') ?: "1.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -104,15 +105,22 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        // Shared apps-hub release key; credentials live in ~/.gradle/gradle.properties (docs/app-store.md).
+        if (findProperty('APPS_HUB_RELEASE_STORE_FILE')) {
+            release {
+                storeFile file(findProperty('APPS_HUB_RELEASE_STORE_FILE'))
+                storePassword findProperty('APPS_HUB_RELEASE_STORE_PASSWORD')
+                keyAlias findProperty('APPS_HUB_RELEASE_KEY_ALIAS')
+                keyPassword findProperty('APPS_HUB_RELEASE_KEY_PASSWORD')
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.findByName('release') ?: signingConfigs.debug
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

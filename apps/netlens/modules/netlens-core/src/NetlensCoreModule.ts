@@ -13,6 +13,21 @@ export interface NetlensCoreApi {
   stopTcpScan(): Promise<void>;
   startServiceDiscovery(timeoutMs: number): Promise<void>;
   stopServiceDiscovery(): Promise<void>;
+  /**
+   * SPEC §5: single TCP handshake; the payload carries `outcome`
+   * (open|refused|timeout|unreachable) and `rttMs` (number|null; valid for
+   * open AND refused/RST carriers per hard rule #2).
+   */
+  measureTcpHandshake(
+    ip: string,
+    port: number,
+    timeoutMs: number,
+  ): Promise<Record<string, unknown>>;
+  /**
+   * SPEC §5: native resolver bridge (Android InetAddress / iOS getaddrinfo),
+   * IPv4-first. Payload: hostname, addresses, durationMs, success.
+   */
+  resolveHostname(hostname: string): Promise<Record<string, unknown> | null>;
   addListener(
     eventName: string,
     listener: (...args: any[]) => void,

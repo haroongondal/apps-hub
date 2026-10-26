@@ -1,0 +1,9 @@
+{
+  "name": "@apps-hub/pdf-editor-engine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Offline PDF editor engine (PDF.js + pdf-lib) shared by pdf-editor-desktop and pdf-editor-mobile",
+  "scripts": {
+    "build": "node build.mjs"
+  }
+}

@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en" data-brand="pdf">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>PDF Editor</title>
+<link rel="stylesheet" href="../ui/web/tokens.css">
+<link rel="stylesheet" href="../ui/web/base.css">
+<style>
+  :root { --fit:1; }
+  body { font: var(--type-meta) var(--font-sans); }
+  .ui-btn { min-height:44px; }
+  .ui-btn--icon { width:44px; }
+  .ui-btn svg { width:20px; height:20px; flex:none; fill:none; stroke:currentColor; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round; }
+  /* scroller -> fit -> #pages: a uniform width-fit scale. local() measures the implicit
+     client rect, so page coordinates survive the transform untouched. #fit centers
+     through left:50% + translateX(-50%): auto margins collapse to zero once the box
+     overflows its parent, which would pin the scaled content off-center. */
+  #scroller { position:fixed; inset:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+  #fit { position:absolute; left:50%; width:max-content; transform:translateX(-50%) scale(var(--fit)); transform-origin:50% 0; }
+  /* lengths divided by --fit come out at their nominal size after the width-fit scale */
+  #pages { display:flex; flex-direction:column; align-items:center; gap:24px; padding:24px 16px calc(140px / var(--fit)); }
+  #empty { margin-top:18vh; max-width:300px; display:flex; flex-direction:column; align-items:center; gap:var(--space-md); text-align:center; }
+  #empty p { margin:0; }
+  .slot { display:flex; flex-direction:column; gap:calc(4px / var(--fit)); align-items:center; }
+  /* contain: the rail stretches to the page width but never widens the slot, which would feed back into --fit */
+  .pbar { align-self:stretch; contain:inline-size; display:flex; align-items:center; gap:calc(2px / var(--fit)); color:var(--c-muted);
+    font:600 calc(13px / var(--fit)) var(--font-sans); }
+  .pbar .ui-btn { width:calc(44px / var(--fit)); min-height:calc(44px / var(--fit)); border-radius:calc(10px / var(--fit)); color:var(--c-muted); }
+  .pbar .ui-btn svg { width:calc(20px / var(--fit)); height:calc(20px / var(--fit)); stroke-width:1.75; }
+  .pbar .ui-btn:disabled { opacity:.35; }
+  .pnum { margin-right:auto; display:flex; align-items:center; gap:calc(8px / var(--fit)); font-variant-numeric:tabular-nums; }
+  .pnum::before { content:''; width:calc(3px / var(--fit)); height:calc(14px / var(--fit)); border-radius:calc(2px / var(--fit)); background:var(--c-line); }
+  .slot[aria-current="page"] .pnum { color:var(--c-accent); }
+  .slot[aria-current="page"] .pnum::before { background:var(--c-accent); }
+  .frame { position:relative; }
+  .page { position:absolute; left:50%; top:50%; background:#fff; box-shadow:0 0 0 1px rgb(0 0 0 / .06), 0 2px 12px -4px rgb(0 0 0 / .25); }
+  .page canvas { display:block; }
+  .layer { position:absolute; inset:0; touch-action:none; }
+  body[data-tool="text"] .layer { cursor:text; }
+  .annot { position:absolute; }
+  .annot.text { font-family:Helvetica, Arial, sans-serif; line-height:1.2; white-space:pre; min-width:1ch; outline:1px dashed transparent; }
+  body[data-tool="text"] .annot.text { outline-color:#999; }
+  .annot.draw { left:0; top:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
+  .annot.draw polyline { pointer-events:stroke; }
+  .annot.sel { outline:2px solid var(--c-accent) !important; }
+  .annot.draw.sel polyline { filter:drop-shadow(0 0 2px var(--c-accent)); }
+  body[data-tool="draw"] .layer, body[data-tool="highlight"] .layer, body[data-tool="whiteout"] .layer, body[data-tool="image"] .layer { cursor:crosshair; }
+  body[data-tool="edittext"] .layer { cursor:text; }
+  .tbox { position:absolute; white-space:pre; color:transparent; outline:1px solid transparent; }
+  body[data-tool="edittext"] .tbox:hover { outline-color:var(--c-accent); }
+  .tbox:focus, .tbox.edited { color:#000; background:#fff; }
+  .tbox:focus { outline:2px solid var(--c-accent); }
+
+  #dock { position:fixed; left:0; right:0; bottom:0; z-index:20; background:var(--c-surface); border-top:1px solid var(--c-line);
+    padding-bottom:env(safe-area-inset-bottom); }
+  .strip { display:flex; gap:var(--space-xs); align-items:center; padding:6px var(--space-md); overflow-x:auto; scrollbar-width:none; }
+  .strip::-webkit-scrollbar { display:none; }
+  .strip > * { flex:none; }
+  #context { border-bottom:1px solid var(--c-line); }
+  .field { display:inline-flex; align-items:center; gap:var(--space-sm); min-height:44px; padding:0 var(--space-xs); color:var(--c-muted); white-space:nowrap; }
+  #color { width:32px; height:32px; padding:0; border:1px solid var(--c-line); border-radius:8px; background:none; }
+  #color::-webkit-color-swatch-wrapper { padding:0; }
+  #color::-webkit-color-swatch { border:none; border-radius:7px; }
+  #size { width:60px; min-height:44px; padding:0 var(--space-sm); font-size:16px; font-variant-numeric:tabular-nums; }
+  /* the native top bar already shows the file name */
+  #name { display:none; }
+  #save { position:sticky; right:0; margin-left:auto; box-shadow:-8px 0 0 var(--c-surface); }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+  .ui-sep { width:1px; align-self:stretch; margin:8px var(--space-xs); background:var(--c-line); }
+
+  #toast { position:fixed; left:50%; bottom:calc(128px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(6px);
+    z-index:40; max-width:80vw; padding:10px 16px; border-radius:var(--radius-control); background:var(--c-text); color:var(--c-bg);
+    box-shadow:0 8px 24px -8px rgb(0 0 0 / .4); opacity:0; transition:opacity .18s ease, transform .18s ease; pointer-events:none; }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  #sheetWrap { position:fixed; inset:0; z-index:60; display:flex; align-items:flex-end; justify-content:center; background:rgb(0 0 0 / .45); }
+  #sheetWrap[hidden] { display:none; }
+  #sheet { width:min(420px, 100% - 24px); margin-bottom:calc(12px + env(safe-area-inset-bottom)); padding:var(--space-lg); }
+  #sheetMsg { margin:0 0 var(--space-lg); font:600 var(--type-body) var(--font-sans); }
+  #sheetBtns { display:flex; gap:var(--space-sm); }
+  #sheetBtns .ui-btn { flex:1; }
+</style>
+</head>
+<body data-tool="select">
+<div id="scroller"><div id="fit"><main id="pages">
+  <section id="empty">
+    <h1 class="ui-heading">Open a PDF to start</h1>
+    <p class="ui-muted">The file stays on this phone while you edit it.</p>
+    <button class="ui-btn ui-btn--primary ui-btn--lg" id="emptyOpen">Open a PDF</button>
+  </section>
+</main></div></div>
+<div id="dock">
+  <nav class="strip" id="context" aria-label="Document">
+    <label class="field" title="Colour"><span class="sr">Colour</span><input id="color" type="color" value="#000000"></label>
+    <label class="field">Size <input id="size" class="ui-input" type="number" min="1" max="200" value="14"></label>
+    <span class="ui-sep"></span>
+    <button class="ui-btn ui-btn--ghost" id="docopen" title="Open a PDF in place of this one">Open</button>
+    <button class="ui-btn ui-btn--ghost" id="docadd" title="Append the pages of another PDF">Add</button>
+    <span id="name"></span>
+    <button class="ui-btn ui-btn--primary" id="save" title="Build the edited PDF and share it" disabled>Save</button>
+  </nav>
+  <nav class="strip" id="tools" aria-label="Tools">
+    <button class="ui-btn ui-btn--ghost" data-tool="select" aria-pressed="true">Select</button>
+    <button class="ui-btn ui-btn--ghost" data-tool="edittext">Edit text</button>
+    <button class="ui-btn ui-btn--ghost" data-tool="text">Text</button>
+    <button class="ui-btn ui-btn--ghost" data-tool="draw">Draw</button>
+    <button class="ui-btn ui-btn--ghost" data-tool="highlight">Highlight</button>
+    <button class="ui-btn ui-btn--ghost" data-tool="whiteout">White-out</button>
+    <button class="ui-btn ui-btn--ghost" data-tool="image">Image</button>
+    <span class="ui-sep"></span>
+    <button class="ui-btn ui-btn--ghost ui-btn--icon" id="undo" title="Undo last add" aria-label="Undo last add">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
+    </button>
+    <button class="ui-btn ui-btn--ghost ui-btn--icon" id="del" title="Delete selected" aria-label="Delete selected">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+    </button>
+  </nav>
+</div>
+<div id="toast" role="status"></div>
+<div id="sheetWrap" hidden>
+  <div id="sheet" class="ui-sheet" role="dialog" aria-modal="true" aria-labelledby="sheetMsg">
+    <p id="sheetMsg"></p>
+    <div id="sheetBtns"><button class="ui-btn ui-btn--lg" id="sheetNo">Cancel</button><button class="ui-btn ui-btn--primary ui-btn--lg" id="sheetOk">Confirm</button></div>
+  </div>
+</div>
+
+<script src="vendor/pdf.min.js"></script>
+<!-- Loading the worker as a plain script makes PDF.js parse on the main thread, which is
+     also what lets build.mjs inline everything into one self-contained file -->
+<script src="vendor/pdf.worker.min.js"></script>
+<script src="vendor/pdf-lib.min.js"></script>
+<script src="textedit.js"></script>
+<script src="core.js"></script>
+<script>
+// Mobile adapter: WKWebView implements no JS alert/confirm, so the page talks to
+// the Expo shell through the frozen bridge schema and renders feedback itself.
+const post = m => window.ReactNativeWebView?.postMessage(JSON.stringify(m));
+
+const toastBox = document.querySelector('#toast');
+let toastTimer;
+function toast(message) {
+  toastBox.textContent = message;
+  toastBox.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastBox.classList.remove('show'), 2600);
+}
+
+let sheetResolve = null;
+function confirmSheet(message) {
+  document.querySelector('#sheetMsg').textContent = message;
+  document.querySelector('#sheetWrap').hidden = false;
+  return new Promise(resolve => {
+    sheetResolve = resolve;
+  });
+}
+const settleSheet = ok => {
+  document.querySelector('#sheetWrap').hidden = true;
+  if (sheetResolve) { sheetResolve(ok); sheetResolve = null; }
+};
+document.querySelector('#sheetOk').onclick = () => settleSheet(true);
+document.querySelector('#sheetNo').onclick = () => settleSheet(false);
+document.querySelector('#sheetWrap').addEventListener('pointerdown', e => { if (e.target.id === 'sheetWrap') settleSheet(false); });
+
+// bytes -> base64, in chunks so multi-MB PDFs stay within argument limits
+const b64 = b => {
+  let s = '';
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+
+const mobileAdapter = {
+  savePdf(bytes, name) { post({ type: 'save', name, base64: b64(bytes) }); },
+  pickPdf(append) { post({ type: 'pickPdf', append: !!append }); },
+  pickImage(pageIndex, x, y) { post({ type: 'pickImage', pageIndex, x, y }); },
+  alert(message) { toast(message); },
+  confirm(message) { return confirmSheet(message); },
+  emitDocumentLoaded(info) { post({ type: 'documentLoaded', ...info }); },
+  supports: { dragDrop: false, keyboard: false, fileInputs: false },
+};
+pdfEditorShell(mobileAdapter);
+document.querySelector('#docopen').onclick = () => mobileAdapter.pickPdf(false);
+document.querySelector('#docadd').onclick = () => mobileAdapter.pickPdf(true);
+document.querySelector('#emptyOpen').onclick = () => mobileAdapter.pickPdf(false);
+
+// Width-fit: scale pages so their widest edge fills the screen. offset* reads are
+// pre-transform layout values, so the measurement is unaffected by the current --fit.
+const fitScale = () => {
+  const scroller = document.querySelector('#scroller');
+  let w = 0;
+  for (const slot of document.querySelectorAll('#pages .slot')) w = Math.max(w, slot.offsetLeft + slot.offsetWidth);
+  if (w) document.documentElement.style.setProperty('--fit', `${Math.min(1, scroller.clientWidth / w)}`);
+};
+new MutationObserver(() => requestAnimationFrame(fitScale)).observe(document.querySelector('#pages'), { childList: true, subtree: true });
+addEventListener('resize', fitScale);
+
+post({ type: 'ready' });
+</script>
+</body>
+</html>

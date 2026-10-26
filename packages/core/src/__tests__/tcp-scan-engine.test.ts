@@ -40,6 +40,25 @@ class FakeBinding implements NetLensNativeBinding {
   stopServiceCalls = 0;
   canceled = false;
 
+  // --- Phase 2 diagnostic surface (unsed by this suite; stubs for typing) ---
+
+  handshakeCalls: { ip: string; port: number; timeoutMs: number }[] = [];
+  resolveCalls: string[] = [];
+
+  async measureTcpHandshake(
+    ip: string,
+    port: number,
+    timeoutMs: number,
+  ): Promise<{ outcome: ProbeOutcome; rttMs: number | null }> {
+    this.handshakeCalls.push({ ip, port, timeoutMs });
+    throw new Error('measureTcpHandshake is not scripted in this suite');
+  }
+
+  async resolveHostname(hostname: string): Promise<null> {
+    this.resolveCalls.push(hostname);
+    throw new Error('resolveHostname is not scripted in this suite');
+  }
+
   addListener<E extends ScanEventName>(
     event: E,
     listener: ScanEventListener<E>,

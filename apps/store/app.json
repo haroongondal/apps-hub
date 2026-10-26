@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Store",
+    "slug": "store",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": [
+      "android"
+    ],
+    "android": {
+      "package": "com.haroon.store",
+      "allowBackup": false,
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "INTERNET",
+        "REQUEST_INSTALL_PACKAGES",
+        "UPDATE_PACKAGES_WITHOUT_USER_ACTION",
+        "POST_NOTIFICATIONS"
+      ],
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.FOREGROUND_SERVICE"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#1B1840",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      }
+    },
+    "icon": "./assets/icon.png"
+  }
+}

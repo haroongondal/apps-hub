@@ -2,3 +2,10 @@ packages:
   - "apps/*"
   - "apps/*/modules/*"
   - "packages/*"
+  - "tools/*"
+
+allowBuilds:
+  workerd: true
+  electron: true
+  canvas: false
+  unrs-resolver: false

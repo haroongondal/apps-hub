@@ -13,7 +13,10 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "NetLens scans your local Wi-Fi network to discover connected devices and services.",
-        "NSBonjourServices": ["_services._dns-sd._udp", "_http._tcp"]
+        "NSBonjourServices": [
+          "_services._dns-sd._udp",
+          "_http._tcp"
+        ]
       }
     },
     "android": {
@@ -25,8 +28,12 @@
         "ACCESS_NETWORK_STATE",
         "ACCESS_WIFI_STATE",
         "CHANGE_WIFI_STATE",
-        "CHANGE_WIFI_MULTICAST_STATE"
+        "CHANGE_WIFI_MULTICAST_STATE",
+        "NEARBY_WIFI_DEVICES"
       ]
-    }
+    },
+    "plugins": [
+      "expo-sqlite"
+    ]
   }
 }

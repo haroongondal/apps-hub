@@ -1,0 +1,20 @@
+{
+  "name": "design-editor",
+  "productName": "Design Editor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "env -u ELECTRON_RUN_AS_NODE electron .",
+    "dist": "electron-packager . --out=dist --overwrite --ignore='^/(test|graft|dist|node_modules|\\.claude-trash|\\.ignore|\\.gitignore)($|/)'",
+    "test:e2e": "node test/e2e.mjs"
+  },
+  "main": "main.js",
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "44.8.0",
+    "fabric": "7.4.0",
+    "pdf-lib": "1.17.1",
+    "playwright-core": "1.49.1"
+  }
+}

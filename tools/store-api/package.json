@@ -1,0 +1,22 @@
+{
+  "name": "@apps-hub/store-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker: token-gated manifest, short-lived signed download URLs, release uploads (R2)",
+  "scripts": {
+    "test": "node --test src/__tests__/worker.test.ts",
+    "typecheck": "tsc --noEmit",
+    "deploy": "cf deploy --secrets-file .dev.vars"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "2.0.0-beta.v.4",
+    "@types/node": "^22.10.0",
+    "cf": "1.0.0-beta.21",
+    "typescript": "~5.9.2",
+    "vite": "^8.3.5"
+  },
+  "dependencies": {
+    "@apps-hub/store-manifest": "workspace:*"
+  }
+}

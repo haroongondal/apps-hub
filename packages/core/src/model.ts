@@ -92,3 +92,91 @@ export type ScanEventListener<E extends ScanEventName> = (
 export interface ListenerHandle {
   remove(): void;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2 — Connectivity & Latency Diagnostic Engine (FR-3, SPEC §5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of one native TCP handshake measurement. HARD RULE (AGENTS.md #2):
+ * BOTH an `open` connect and a `refused` response (TCP RST carrier) carry a
+ * measured RTT; only `timeout` / `unreachable` come back with null.
+ */
+export interface TcpHandshakeResult {
+  outcome: ProbeOutcome;
+  /** Round-trip in ms when the outcome is `open` or `refused`, else null. */
+  rttMs: number | null;
+}
+
+/**
+ * One OS resolver round-trip measured natively (Android `InetAddress`
+ * / iOS `getaddrinfo`). A failed lookup is still a valid (failed)
+ * measurement: `success: false` keeps the elapsed wall time.
+ */
+export interface DnsResolution {
+  hostname: string;
+  addresses: string[];
+  /** Elapsed resolver wall time in ms. */
+  durationMs: number;
+  /** false when the resolver returned no usable address. */
+  success: boolean;
+}
+
+/** The three FR-3 diagnostic hops, in measurement order (SPEC §5). */
+export type PingHopName = 'gateway' | 'wan_cloudflare' | 'wan_google';
+
+/** One sequential probe sample inside a PingEngine burst. */
+export interface PingProbeSample {
+  /** Zero-based position within the burst (0..probeCount-1). */
+  index: number;
+  /** TCP port probed; gateway bursts rotate their port plan. */
+  port: number;
+  outcome: ProbeOutcome;
+  /**
+   * Valid RTT sample (`open` | `refused` carrier); null ⇒ this probe counts
+   * as packet loss.
+   */
+  rttMs: number | null;
+}
+
+/** SPEC §5 metrics computed from one hop's samples. */
+export interface HopMetrics {
+  /** Mean of valid RTT samples; null when none carried an RTT. */
+  avgRttMs: number | null;
+  /** Mean absolute difference between consecutive valid RTTs; null when < 2. */
+  jitterMs: number | null;
+  /** failed/total × 100 over the whole burst. */
+  packetLossPct: number;
+}
+
+/** One completed PingEngine hop burst. */
+export interface PingHopResult {
+  hop: PingHopName;
+  targetIp: string;
+  probeCount: number;
+  /** TCP port for single-port hops; null for the rotating gateway burst. */
+  port: number | null;
+  samples: PingProbeSample[];
+  metrics: HopMetrics;
+}
+
+/** Full per-hop result of one PingEngine run. */
+export interface PingReport {
+  hops: PingHopResult[];
+  /** The gateway burst, or null when no gateway was detectable (NFR-3). */
+  gateway: PingHopResult | null;
+}
+
+/** Aggregated DnsBenchmark result — the SPEC §5 `dnsResolveMs` input. */
+export interface DnsBenchmarkResult {
+  hostname: string;
+  /** Mean resolver wall time over SUCCESSFUL attempts; null if all failed. */
+  resolveMs: number | null;
+  /** Union of addresses seen across successful attempts. */
+  addresses: string[];
+  /** At least one attempt produced addresses. */
+  success: boolean;
+  attemptCount: number;
+  /** Wall time of every attempt, success or not (diagnostic detail). */
+  attemptDurationsMs: number[];
+}

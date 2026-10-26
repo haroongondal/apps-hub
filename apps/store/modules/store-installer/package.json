@@ -1,0 +1,11 @@
+{
+  "name": "store-installer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Android PackageInstaller + background update checks for the apps-hub store (Expo local module)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "expo-modules-core": "~3.0.30"
+  }
+}

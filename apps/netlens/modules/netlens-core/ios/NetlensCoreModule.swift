@@ -345,6 +345,54 @@ public class NetlensCoreModule: Module {
       promise.resolve(true)
     }
 
+    /**
+     * SPEC §5: one TCP handshake measurement. RTT valid for BOTH `open`
+     * connects and `refused` (TCP RST carrier, AGENTS.md #2); offline
+     * verdicts resolve rttMs = nil for PingEngine packet-loss accounting.
+     */
+    AsyncFunction("measureTcpHandshake") { (ip: String, port: Int, timeoutMs: Int, promise: Promise) in
+      guard port >= 1, port <= 65535 else {
+        promise.reject("INVALID_PARAMS", "port must be in 1..65535")
+        return
+      }
+      guard timeoutMs >= 1, timeoutMs <= 10_000 else {
+        promise.reject("INVALID_PARAMS", "timeoutMs must be in 1..10000")
+        return
+      }
+      let target = ip.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !target.isEmpty, target.count <= 45 else {
+        promise.reject("INVALID_PARAMS", "invalid target address")
+        return
+      }
+      DispatchQueue.global(qos: .userInitiated).async {
+        let result = DiagnosticProbes.measureHandshake(ip: target, port: port, timeoutMs: timeoutMs)
+        let payload: [String: Any] = [
+          "outcome": result.outcome.rawValue,
+          "rttMs": result.elapsedMs ?? NSNull(),
+        ]
+        promise.resolve(payload)
+      }
+    }
+
+    /// SPEC §5: native resolver bridge (getaddrinfo, IPv4-first).
+    AsyncFunction("resolveHostname") { (hostname: String, promise: Promise) in
+      let target = hostname.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !target.isEmpty, target.count <= 253 else {
+        promise.reject("INVALID_HOSTNAME", "hostname must be 1..253 characters")
+        return
+      }
+      DispatchQueue.global(qos: .userInitiated).async {
+        let measurement = DiagnosticProbes.resolveHostname(target)
+        let payload: [String: Any] = [
+          "hostname": measurement.hostname,
+          "addresses": measurement.addresses,
+          "durationMs": measurement.durationMs,
+          "success": measurement.success,
+        ]
+        promise.resolve(payload)
+      }
+    }
+
     OnDestroy { }
   }
 }

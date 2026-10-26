@@ -20,6 +20,8 @@ private const val EVENT_SERVICE_COMPLETE = "onServiceScanComplete"
 
 private const val ERR_SCAN_IN_PROGRESS = "SCAN_IN_PROGRESS"
 private const val ERR_NO_CONTEXT = "NO_CONTEXT"
+private const val ERR_INVALID_PARAMS = "INVALID_PARAMS"
+private const val ERR_INVALID_HOSTNAME = "INVALID_HOSTNAME"
 
 /**
  * Expo Modules API wrapper for the NetLens networking engine.
@@ -189,6 +191,63 @@ class NetlensCoreModule : Module() {
     AsyncFunction("stopServiceDiscovery") { promise: Promise ->
       serviceJob?.cancel()
       promise.resolve(true)
+    }
+
+    /**
+     * SPEC §5: one TCP handshake measurement. The RTT is valid for BOTH an
+     * `open` connect and a `refused` reply (TCP RST carrier, AGENTS.md #2);
+     * timeouts/unreachable carry null so PingEngine counts them as loss.
+     */
+    AsyncFunction("measureTcpHandshake") { ip: String, port: Int, timeoutMs: Int, promise: Promise ->
+      if (port !in 1..65535) {
+        promise.reject(ERR_INVALID_PARAMS, "port must be in 1..65535", null)
+      } else if (timeoutMs !in 1..10_000) {
+        promise.reject(ERR_INVALID_PARAMS, "timeoutMs must be in 1..10000", null)
+      } else {
+        moduleScope.launch {
+          try {
+            val measurement = withContext(Dispatchers.IO) {
+              HandshakeProbe.measure(ip.trim(), port, timeoutMs)
+            }
+            promise.resolve(
+              mapOf(
+                "outcome" to measurement.outcome.name.lowercase(),
+                "rttMs" to measurement.rttMs,
+              ),
+            )
+          } catch (error: IllegalArgumentException) {
+            promise.reject(ERR_INVALID_PARAMS, "invalid target address: $ip", error)
+          } catch (error: Exception) {
+            promise.reject("HANDSHAKE_FAILED", error.message, error)
+          }
+        }
+      }
+    }
+
+    /** SPEC §5: native resolver bridge (Android InetAddress), IPv4-first. */
+    AsyncFunction("resolveHostname") { hostname: String, promise: Promise ->
+      val trimmed = hostname.trim()
+      if (trimmed.isEmpty() || trimmed.length > 253) {
+        promise.reject(ERR_INVALID_HOSTNAME, "hostname must be 1..253 characters", null)
+      } else {
+        moduleScope.launch {
+          try {
+            val measurement = withContext(Dispatchers.IO) {
+              HostnameResolver.resolve(trimmed)
+            }
+            promise.resolve(
+              mapOf(
+                "hostname" to measurement.hostname,
+                "addresses" to measurement.addresses,
+                "durationMs" to measurement.durationMs,
+                "success" to measurement.success,
+              ),
+            )
+          } catch (error: Exception) {
+            promise.reject("RESOLVE_FAILED", error.message, error)
+          }
+        }
+      }
     }
 
     OnDestroy {

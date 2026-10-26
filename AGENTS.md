@@ -13,11 +13,34 @@ Current apps:
   React Native (Expo SDK 54) on 2026-10-26 (Dart snapshot: commit `a8cf6e9`).
   Domain logic in `packages/open-tunnel-core`; phases in
   `apps/open_tunnel_vpn/.opencode/commands/`.
+- **store** (`apps/store`) — private Android sideload store (`docs/app-store.md`).
+- **pdf-editor** — offline PDF editor, moved in from `~/Documents/pdf-editor`
+  on 2026-10-26: `apps/pdf-editor-desktop` (Electron), `apps/pdf-editor-mobile`
+  (Expo + WebView), both booting the shared engine in
+  `packages/pdf-editor-engine` (`build.mjs` inlines it for mobile).
+- **design-editor** (`apps/design-editor`) — offline Canva-style editor for the
+  Mac (Electron), moved in from `~/Documents/design-editor` on 2026-10-26.
+
+Not here on purpose: `~/Documents/browser-automation` (stays standalone) and
+`~/Documents/agent-harness` (deferred until its phase branches are merged).
 
 Planned (do not scaffold yet):
-- **pdf-editor** migration from `~/Documents/pdf-editor` (Electron desktop +
-  Expo mobile) → lands as `apps/pdf-editor`.
 - macOS/Windows targets for NetLens (react-native-macos / Electron) — future scope.
+
+## Shared UI (`packages/ui`, NEVER hand-roll colours or fonts in an app)
+- Every app uses `@apps-hub/ui`. React Native: wrap the root in
+  `<ThemeProvider brand="…">` and build screens from its components (`Screen`,
+  `Header`, `Group`/`Row`, `Button`, `Field`, `Segmented`, `TabBar`, `Readout`,
+  `Notice`, `Sheet`, …). HTML/Electron: load `web/tokens.css` + `web/base.css`
+  and set `<html data-brand="…">`; use the `--c-*` variables and `.ui-*` classes.
+- Tokens live in `src/tokens.ts` only. After changing them run
+  `pnpm --filter @apps-hub/ui build:css`; the test fails if `web/tokens.css` is
+  stale, and it enforces WCAG AA contrast for every brand in light and dark.
+- Brands: netlens, opentunnel, store, pdf, design (hue + accent from each
+  launcher icon). Light and dark follow the system.
+- Copy is sentence case, active voice; errors say what happened and how to fix
+  it. No emoji icons, no ALL-CAPS labels.
+- Fonts: Atkinson Hyperlegible Next + Mono (OFL, vendored in `packages/ui/fonts`).
 
 ## Tech Stack & Toolchain
 - React Native 0.81.x + Expo SDK 54 + TypeScript 5.9.x (version-pinned to the
@@ -86,6 +109,9 @@ cd apps/netlens/ios && xcodebuild -workspace NetLens.xcworkspace -scheme NetLens
   -configuration Debug build CODE_SIGNING_ALLOWED=NO
 # Native compile gate (OpenTunnel, after Phase 2+):
 cd apps/open_tunnel_vpn/android && JAVA_HOME=$JAVA_HOME ./gradlew :app:assembleDebug
+# Electron apps (open real windows, so not part of `pnpm test`):
+pnpm --filter pdf-editor-desktop test:e2e   # desktop + Electron + mobile-bridge suites
+pnpm --filter design-editor test:e2e
 # Environment sanity:
 pnpm doctor                     # expo-doctor in every app that ships it
 ```
