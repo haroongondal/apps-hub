@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- VPN Gate is reachable over HTTPS; the HTTP fallback is scoped to this domain
+     only. Everything else keeps Android's cleartext block. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">vpngate.net</domain>
+    </domain-config>
+</network-security-config>

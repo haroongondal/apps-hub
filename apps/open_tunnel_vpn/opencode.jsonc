@@ -1,0 +1,34 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  // Verified model in the OpenCode catalog. Same model family, free tier.
+  "model": "opencode/glm-5.3-flash-free",
+
+  "compaction": {
+    "auto": true
+  },
+
+  "shell": "/bin/zsh",
+
+  "providers": {
+    // Optional paid route requested in the project brief.
+    // Use /models to switch to z-ai/glm-5.3-flash after exporting ZAI_API_KEY.
+    "z-ai": {
+      "name": "Z.ai (Gate)",
+      "env": ["ZAI_API_KEY", "GATE_API_KEY", "OPENAI_API_KEY"],
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "https://api.gate.ai/openai/v1"
+      },
+      "models": {
+        "glm-5.3-flash": {
+          "name": "GLM 5.3 Flash",
+          "limit": {
+            "context": 1048576,
+            "output": 131072
+          }
+        }
+      }
+    }
+  }
+}
