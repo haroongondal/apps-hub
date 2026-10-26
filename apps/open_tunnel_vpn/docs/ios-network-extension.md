@@ -1,5 +1,19 @@
 # iOS Network Extension Target — Required Manual Setup
 
+> **Status (2026-10-27): §1–§3 are DONE in the committed project.** The
+> `OpenTunnelPacketTunnel` target was added programmatically (bundle id
+> `com.opentunnel.openTunnelVpn.PacketTunnel`, deployment iOS 16.0,
+> Info.plist extension point per §3, entitlements per §2 on both targets,
+> dependency + `Embed App Extensions` on the app target), and the extension
+> target builds for the simulator (`xcodebuild -target OpenTunnelPacketTunnel
+> -sdk iphonesimulator`, `CODE_SIGNING_ALLOWED=NO` → `BUILD SUCCEEDED`).
+> **Still required from a human with the Apple team:** attach the
+> DEVELOPMENT_TEAM on both targets (one dropdown in Signing & Capabilities)
+> and let Xcode register the App Group with the portal on the first signed
+> device build — no codesigning identity exists on this machine to do it.
+> §4 file membership lands with the phase-3 `PacketTunnelProvider.swift`.
+
+
 `expo prebuild` cannot generate a Network Extension target. Do this once in Xcode
 before running `/phase3`. Without it, `PacketTunnelProvider.swift` has no host
 process and `NETunnelProviderManager` will fail to start the tunnel.
