@@ -6,6 +6,8 @@ Read `AGENTS.md`. Implement Phase 2. Verify every native API you use against
 the installed SDK; do not invent methods. If an engine dependency cannot be
 resolved, stop and report it instead of writing a mock.
 
+Decision map + gates: `docs/phase2-plan.md` — read it before starting.
+
 ## 1. Native module contract — `modules/open-tunnel-native`
 
 Create an Expo local module (Expo Modules API, not Pigeon) at
@@ -17,7 +19,9 @@ Shared typed surface (TypeScript contract in the module's `src`):
 
 - `type VpnProtocol = 'openvpn' | 'wireguard'`
 - `type VpnStatusState = 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'reasserting' | 'error'`
-- `interface VpnTunnelConfig { nodeId, serverIp, serverPort, protocol, dnsServers, enableKillSwitch, disallowedApps }`
+- `interface VpnTunnelConfig { nodeId, serverIp, serverPort, protocol, configText, dnsServers, enableKillSwitch, disallowedApps }`
+  (`configText` = the already-sanitized `.conf`/`.ovpn` payload — engines
+  cannot run from endpoint metadata alone; plan §4.1)
 - Functions: `startTunnel(config)`, `stopTunnel()`, `getState(): VpnStatusState`, `openSystemVpnSettings(): boolean`
 - Events (use `addHistoryForExportedValue`… no — use Expo Modules event emitters): `onStatusChanged(state, message?)`, `onTrafficUpdate(bytesIn, bytesOut, connectedDurationSec)` at ~1 Hz, emitted on the main thread.
 
