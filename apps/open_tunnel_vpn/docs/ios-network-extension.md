@@ -1,32 +1,32 @@
 # iOS Network Extension Target — Required Manual Setup
 
-`flutter create` cannot generate a Network Extension target. Do this once in Xcode
+`expo prebuild` cannot generate a Network Extension target. Do this once in Xcode
 before running `/phase3`. Without it, `PacketTunnelProvider.swift` has no host
 process and `NETunnelProviderManager` will fail to start the tunnel.
 
 ## 1. Create the target
 
-1. `open ios/Runner.xcworkspace`
+1. `open ios/OpenTunnel.xcworkspace`
 2. **File → New → Target… → Network Extension**, then choose **Packet Tunnel**.
-3. Product name: `PacketTunnel`. Language: Swift.
+3. Product name: `OpenTunnelPacketTunnel`. Language: Swift.
 4. Bundle identifier: `com.opentunnel.openTunnelVpn.PacketTunnel`
-   (must be prefixed by the Runner bundle identifier shown in Xcode; confirm the
-   exact Runner id rather than copying this example blindly).
+   (must be prefixed by the Runner bundle identifier shown in Xcode; the app id
+   is `com.opentunnel.openTunnelVpn` in app.json).
 5. Finish, then **Activate** the new scheme when prompted.
 
 ## 2. Capabilities
 
-Select **both** the `Runner` and `PacketTunnel` targets and add:
+Select **both** the `OpenTunnel` and `OpenTunnelPacketTunnel` targets and add:
 
 - **App Groups** → `group.com.opentunnel.vpn` on both.
-- **Network Extensions** → check **Packet Tunnel** (extension target; Runner also
+- **Network Extensions** → check **Packet Tunnel** (extension target; OpenTunnel also
   needs it to install the extension).
-- **Personal VPN** (Runner target).
+- **Personal VPN** (OpenTunnel target).
 
 Equivalent entitlements:
 
 ```xml
-<!-- Runner/Runner.entitlements -->
+<!-- OpenTunnel/OpenTunnel.entitlements -->
 <key>com.apple.developer.networking.networkextension</key>
 <array><string>packet-tunnel-provider</string></array>
 <key>com.apple.developer.networking.vpn.api</key>
@@ -36,7 +36,7 @@ Equivalent entitlements:
 ```
 
 ```xml
-<!-- PacketTunnel/PacketTunnel.entitlements -->
+<!-- OpenTunnelPacketTunnel/OpenTunnelPacketTunnel.entitlements -->
 <key>com.apple.developer.networking.networkextension</key>
 <array><string>packet-tunnel-provider</string></array>
 <key>com.apple.security.application-groups</key>
@@ -60,17 +60,17 @@ entitlements are not available with a personal (free) team for distribution.
 
 ## 4. File membership
 
-- `ios/PacketTunnel/PacketTunnelProvider.swift` → **PacketTunnel** target only.
-- `ios/Runner/VpnManagerBridge.swift` and `ios/Runner/VpnBridge.g.swift` →
-  **Runner** target.
-- Do not add the Dart/Flutter engine to the extension.
+- `ios/OpenTunnelPacketTunnel/PacketTunnelProvider.swift` → **OpenTunnelPacketTunnel** target only.
+- `ios/OpenTunnel/VpnManagerBridge.swift` (Phase 3 Expo module support) →
+  **OpenTunnel** target.
+- Do not add the React Native engine or any JS runtime to the extension.
 - Add WireGuardKit (Swift Package) and OpenVPNAdapter to the **PacketTunnel**
   target. Confirm the actual package URLs and licenses at implementation time.
 
 ## 5. Deployment target
 
 Set both targets to iOS 16.0 or newer. `includeAllNetworks` (the closest thing to
-an iOS kill switch) requires iOS 16; WireGuardKit and current Flutter releases
+an iOS kill switch) requires iOS 16; WireGuardKit and current RN releases
 are comfortable there.
 
 ## 6. Verification limits

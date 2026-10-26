@@ -1,0 +1,16 @@
+{
+  "name": "open-tunnel-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure TypeScript domain logic for OpenTunnel (runnable from RN, Node, or Electron)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "node --test src/__tests__/model.test.ts src/__tests__/parser.test.ts src/__tests__/sanitizer.test.ts src/__tests__/prober.test.ts src/__tests__/service.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.9.2"
+  }
+}

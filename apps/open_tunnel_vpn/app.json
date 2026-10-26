@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "OpenTunnel",
+    "slug": "open_tunnel_vpn",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "opentunnel",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "com.opentunnel.openTunnelVpn",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false,
+          "NSExceptionDomains": {
+            "www.vpngate.net": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": true
+            },
+            "vpngate.net": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": true
+            }
+          }
+        }
+      }
+    },
+    "android": {
+      "package": "com.opentunnel.open_tunnel_vpn",
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_SPECIAL_USE",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "plugins": [
+      "./plugin/opentunnel-android-config.js",
+      "expo-sqlite"
+    ]
+  }
+}

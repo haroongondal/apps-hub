@@ -12,6 +12,17 @@ node_modules/
 /apps/netlens/modules/*/android/build/
 /apps/netlens/ios/build/
 /apps/netlens/.expo/
+/apps/open_tunnel_vpn/android/.gradle/
+/apps/open_tunnel_vpn/android/app/build/
+/apps/open_tunnel_vpn/android/build/
+/apps/open_tunnel_vpn/android/local.properties
+/apps/open_tunnel_vpn/android/**/.cxx/
+/apps/open_tunnel_vpn/modules/*/android/build/
+/apps/open_tunnel_vpn/ios/build/
+/apps/open_tunnel_vpn/ios/Pods/
+/apps/open_tunnel_vpn/.expo/
+/apps/open_tunnel_vpn/**/*.xcuserstate
+/apps/open_tunnel_vpn/project.xcworkspace/xcuserdata/
 
 # electron (future apps)
 /apps/*/dist/
@@ -21,3 +32,28 @@ node_modules/
 .DS_Store
 coverage/
 *.tsbuildinfo
+
+# signing material & secrets (apps-hub store pipeline) — never commit
+*.jks
+*.p12
+*.p8
+*.mobileprovision
+*.keystore
+!/apps/*/android/app/debug.keystore
+.env
+.env.*
+!.env.example
+.dev.vars
+/apps/store/android/.gradle/
+/apps/store/android/app/build/
+/apps/store/android/build/
+/apps/store/android/local.properties
+/apps/store/android/**/.cxx/
+/apps/store/modules/*/android/build/
+/apps/store/.expo/
+/tools/store-api/.cloudflare/
+/tools/store-api/.wrangler/
+/tools/store-api/dist/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

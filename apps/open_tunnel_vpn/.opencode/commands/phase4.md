@@ -1,62 +1,61 @@
 ---
-description: Phase 4 — Privacy-first Flutter UI, filtering, and egress verification
+description: Phase 4 — Privacy-first React Native UI, filtering, and egress verification
 ---
 
-Read `AGENTS.md`. Build the presentation layer on top of the existing Riverpod
-controllers and Pigeon bridge. Do not duplicate native state in widgets.
+Read `AGENTS.md`. Build the presentation layer on top of the migrated data
+layer and the native tunnel state; do not duplicate native state in
+components.
 
 ## 1. Theme and shell
 
-Create the dark slate theme exactly: background `#0B0F19`, connected accent
-`#10B981`, connecting pulse `#F59E0B`, high-contrast text, and a restrained
-surface (`#111827`). Add a single `MaterialApp` entry point. No analytics, no
+Dark slate theme: background `#0B0F19`, connected accent `#10B981`,
+connecting pulse `#F59E0B`, high-contrast text, restrained surface
+(`#111827`). Single `App.tsx` entry (already present) — keep navigation
+light (e.g. `@react-navigation/native` + bottom sheet) only if it is
+warranted; the pipeline is four screens at most. No analytics, no
 third-party fonts fetched at runtime.
 
-## 2. `lib/features/vpn_tunnel/presentation/home_screen.dart`
+## 2. Home screen
 
-- Central interactive Connection Shield: tap connects to the selected node or
-  auto-selected fastest; tap again disconnects. Show all six `VpnStatusState`
-  values distinctly, with an error message surface.
-- Real-time upload/download throughput graph from `onTrafficUpdate` (keep a
-  bounded 60-sample ring buffer; dispose the timer).
+- Central interactive Connection Shield: tap connects to the selected node
+  or auto-selected fastest; tap again disconnects. Show all six
+  `VpnStatusState` values distinctly, with an error message surface; drive
+  state exclusively from the native module's events.
+- Real-time upload/download throughput from `onTrafficUpdate` (bounded
+  60-sample ring buffer; clear timers/taksk on unmount).
 - Current public IP badge (fetched on demand, cached only in memory).
-- "Auto-Select Fastest" toggle; when on, run the probe + fitness ranking and
-  connect to the winner. Do not block the UI thread.
-- Show connected duration and active node country; never show a fake "connected"
-  state before the native callback confirms it.
+- "Auto-Select Fastest" toggle; when on, run the native probe +
+  `computeFitnessScore` ranking and connect to the winner. Do not block the
+  JS thread: probing is bounded-concurrency native work (`TcpProbeFn`).
+- Show connected duration and active node country; never render a fake
+  "connected" state before the native callback confirms it.
 
-## 3. `lib/features/vpn_tunnel/presentation/server_list_sheet.dart`
+## 3. Server list sheet
 
-- Filterable modal bottom sheet grouped by country with flag emoji/ISO code.
-- Ping badge: green < 80 ms, amber < 180 ms, red otherwise; display `—` when
-  unprobed rather than 0.
-- Show Mbps capacity and active sessions.
-- Sort: Fastest Score (default), Lowest Latency, Highest Throughput, Highest
-  Uptime. Sorting happens on immutable copies; the selected node survives
-  filtering.
-- Empty, loading, and fetch-error states with retry.
+- Filterable modal grouped by country with flag emoji/ISO code.
+- Each row: `nodeLabel`, ping/RTT, speed, sessions, upstream score, and the
+  `measuredRttMs` once probed; sorting by fitness uses the cached
+  `fitnessScore` from `loadNodes` minus heavy recomputation.
+- List reads must stay configless (`loadNodes()` without `withConfig`); the
+  sanitized payload is fetched by node id only when the user connects.
 
-## 4. `lib/features/vpn_tunnel/presentation/privacy_guard_screen.dart`
+## 4. Settings and privacy surfaces
 
-- DNS provider toggle: Cloudflare `1.1.1.1` vs Quad9 `9.9.9.9` (and
-  `149.112.112.112`).
-- IPv6 leak block toggle, disabled with an explanation when the connected node
-  cannot carry IPv6.
-- Kill switch toggle. On Android, show an inline banner explaining that the app
-  cannot flip "Block connections without VPN" itself, plus a one-tap deep link
-  via `VpnHostApi.openSystemVpnSettings()`. On iOS, state that On-Demand is
-  active and that the OS has no user-facing toggle.
-- "Run Leak Test": query `https://1.1.1.1/cdn-cgi/trace` through the active
-  tunnel, parse `ip=`, `loc=`, and `warp=`, compare the exit IP/country to the
-  selected node, and show the result with timestamps. Label it accurately as an
-  egress + resolver-path check; a true DNS-leak audit needs a canary domain and
-  must not be faked client-side.
-- Never persist leak-test results or IP history.
+- Kill-switch toggle → deep link to Android system VPN settings via
+  `openSystemVpnSettings`, and in-app packet blocking from the engine. On
+  iOS, on-demand connect rules.
+- Disallowed apps picker (Android) on demand — do not over-build.
+- "My data lives only on this phone" disclosure copy: no accounts, no
+  analytics, cache dies with the app.
+- Remember the threat-model copy: free relays are not anonymous; VPN Gate
+  operator terms apply.
 
 ## 5. Verification
 
-- `flutter analyze` clean; `flutter test` green with widget tests for the three
-  state transitions (disconnected → connecting → connected/error) and the ping
-  badge thresholds.
-- Run on an iOS simulator or Android emulator if available and report exactly
-  what was verified; otherwise state that UI rendering was not device-verified.
+- `pnpm test`, `pnpm typecheck` green.
+- Android build + install guide OK on a device; iOS follows
+  `docs/ios-network-extension.md` limits (Allocations profiling on real
+  hardware).
+- Egress verification: with the tunnel connected, an external IP echo
+  `curl` from the device resolves to the relay's IP, not the device's.
+- Phase gate: no fake states, no `TODO` markers, all four phases green.

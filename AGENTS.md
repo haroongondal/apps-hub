@@ -8,6 +8,11 @@ in `packages/`.
 Current apps:
 - **netlens** (`apps/netlens`) — FOSS, zero-telemetry LAN scanner & connectivity
   diagnostic toolkit. Android-first, iOS second. Feature docs: `docs/netlens/`.
+- **open_tunnel_vpn** (`apps/open_tunnel_vpn`) — zero-registration VPN client
+  aggregating VPN Gate relays + user WireGuard nodes. Migrated from Flutter to
+  React Native (Expo SDK 54) on 2026-10-26 (Dart snapshot: commit `a8cf6e9`).
+  Domain logic in `packages/open-tunnel-core`; phases in
+  `apps/open_tunnel_vpn/.opencode/commands/`.
 
 Planned (do not scaffold yet):
 - **pdf-editor** migration from `~/Documents/pdf-editor` (Electron desktop +
@@ -24,8 +29,10 @@ Planned (do not scaffold yet):
 - Android builds: JDK 21 (`$JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`)
   + Android SDK (`ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`,
   platform-tools, platforms;android-36, build-tools;36.0.0).
-- iOS builds: Xcode + CocoaPods (`pod install` in `apps/netlens/ios`).
-- Local DB (when Phase 3 starts): `expo-sqlite` (pure FOSS).
+- iOS builds: Xcode + CocoaPods (`pod install` in `apps/netlens/ios`,
+  `apps/open_tunnel_vpn/ios`).
+- Local DB (when Phase 3 starts): `expo-sqlite` (pure FOSS). OpenTunnel's
+  cache already runs expo-sqlite (schemaVersion 1).
 
 ## Hard Architectural & OS Constraints — NetLens (NEVER VIOLATE)
 1. **NO ARP TABLE SCRAPING:** Never read `/proc/net/arp`, never shell out to
@@ -74,10 +81,11 @@ pnpm typecheck                  # tsc --noEmit per package
 # Native engine compile + unit tests:
 cd apps/netlens/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :netlens-core:testDebugUnitTest :app:assembleDebug
-# iOS compile check (no signing needed):
 cd apps/netlens/ios && xcodebuild -workspace NetLens.xcworkspace -scheme NetLens \
   -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
   -configuration Debug build CODE_SIGNING_ALLOWED=NO
+# Native compile gate (OpenTunnel, after Phase 2+):
+cd apps/open_tunnel_vpn/android && JAVA_HOME=$JAVA_HOME ./gradlew :app:assembleDebug
 # Environment sanity:
-pnpm --filter netlens exec expo-doctor
+pnpm doctor                     # expo-doctor in every app that ships it
 ```
