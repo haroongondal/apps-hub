@@ -6,6 +6,11 @@ Read `AGENTS.md`. Respect the 15 MB extension ceiling absolutely: no CSV
 fetching, parsing, Base64 decoding, analytics, or unbounded logging inside
 `ios/OpenTunnelPacketTunnel/`.
 
+Decision map, gates, fallbacks, and the phase-2 hand-off record:
+`docs/phase3-plan.md` — read it (and `docs/phase2-session-log.md`) first.
+The `OpenTunnelPacketTunnel` Xcode target does not exist in the committed
+project yet; the manual prerequisite below is a hard stop if still absent.
+
 ## Prerequisite
 
 `expo prebuild` cannot generate a Network Extension target either — this is a
