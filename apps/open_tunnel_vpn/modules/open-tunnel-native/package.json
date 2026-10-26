@@ -1,0 +1,12 @@
+{
+  "name": "open-tunnel-native",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenTunnel native bridge (Expo local module): tunnel status/traffic events, TCP relay probe, Android VpnService host hookup",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "expo-modules-core": "~3.0.30",
+    "open-tunnel-core": "workspace:*"
+  }
+}

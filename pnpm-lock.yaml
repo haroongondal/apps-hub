@@ -214,6 +214,9 @@ importers:
       open-tunnel-core:
         specifier: workspace:*
         version: link:../../packages/open-tunnel-core
+      open-tunnel-native:
+        specifier: workspace:*
+        version: link:modules/open-tunnel-native
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -233,6 +236,15 @@ importers:
       typescript:
         specifier: ~5.9.2
         version: 5.9.3
+
+  apps/open_tunnel_vpn/modules/open-tunnel-native:
+    dependencies:
+      expo-modules-core:
+        specifier: ~3.0.30
+        version: 3.0.30(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
+      open-tunnel-core:
+        specifier: workspace:*
+        version: link:../../../../packages/open-tunnel-core
 
   packages/config: {}
 

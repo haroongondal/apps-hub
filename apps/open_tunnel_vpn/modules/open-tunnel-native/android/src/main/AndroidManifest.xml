@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- No permissions here: INTERNET/ACCESS_NETWORK_STATE/FOREGROUND_SERVICE/
+         FOREGROUND_SERVICE_SPECIAL_USE/POST_NOTIFICATIONS are declared by the
+         app manifest (see apps/open_tunnel_vpn/android/app/src/main). -->
+</manifest>

@@ -156,6 +156,11 @@ dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
+    // Non-root WireGuard engine (GoBackend / wireguard-go, Apache-2.0).
+    // Pinned to the version whose API was inspected for this phase; the
+    // integration details are in docs/phase2-session-log.md §G4.
+    implementation("com.wireguard.android:tunnel:1.0.20260102")
+
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
     def isWebpAnimatedEnabled = (findProperty('expo.webp.animated') ?: "") == "true";
