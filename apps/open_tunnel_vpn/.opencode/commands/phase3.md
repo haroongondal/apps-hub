@@ -8,8 +8,11 @@ fetching, parsing, Base64 decoding, analytics, or unbounded logging inside
 
 Decision map, gates, fallbacks, and the phase-2 hand-off record:
 `docs/phase3-plan.md` — read it (and `docs/phase2-session-log.md`) first.
-The `OpenTunnelPacketTunnel` Xcode target does not exist in the committed
-project yet; the manual prerequisite below is a hard stop if still absent.
+The `OpenTunnelPacketTunnel` Xcode target EXISTS since 2026-10-27
+(commit `1f77983`: entitlements + extension Info.plist + simulator build
+`BUILD SUCCEEDED`); the `PacketTunnelProvider.swift` source this phase
+writes joins the existing target. Attaching the Apple team
+(`DEVELOPMENT_TEAM`) is owner-only before any device build.
 
 ## Prerequisite
 

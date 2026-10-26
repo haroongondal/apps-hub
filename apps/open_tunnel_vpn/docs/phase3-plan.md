@@ -77,12 +77,17 @@ session unblocked and honest).
   before adding.
 - **G4 — artifact/API verification before writing Swift** (same discipline
   as phase 2 G4):
-  1. Target exists — **verified today: it does not.** `grep OpenTunnelPacketTunnel
-     ios/OpenTunnel.xcodeproj/project.pbxproj` → 0 hits; the committed repo has
-     `OpenTunnel.entitlements` only on the app target. The manual Xcode step in
-     `docs/ios-network-extension.md` §1–§3 is still outstanding — it needs a
-     human with a real Apple team (App Groups + Network Extension entitlements
-     are not grantable from session tooling).
+  1. Target prerequisite — **done 2026-10-27, commit `1f77983`**: the
+     `OpenTunnelPacketTunnel` target exists in the committed project
+     (bundle id `com.opentunnel.openTunnelVpn.PacketTunnel`, iOS 16.0,
+     embedded into the app), entitlements per `docs/ios-network-extension.md`
+     §2 are on both targets, and the extension proves out with
+     `xcodebuild -target OpenTunnelPacketTunnel -sdk iphonesimulator
+     CODE_SIGNING_ALLOWED=NO` → `BUILD SUCCEEDED`. Re-run that greps/build
+     at session start to confirm nothing regressed. Still human-only:
+     attaching a paid-team `DEVELOPMENT_TEAM` (this machine has no
+     codesigning identity); it gates device builds/portal registration,
+     NOT simulator work or the rest of the plan.
   2. Verify `includeAllNetworks` / `excludeLocalNetworks` availability and
      behavior against the actual SDK headers the project builds with (iOS 16
      deployment target per `docs/ios-network-extension.md` §5), not from
@@ -226,17 +231,21 @@ Acceptance checks (extend the phase-2 checklist style):
 - [ ] Session log `docs/phase3-session-log.md`: gates asked/answered,
       deviations, verification outputs, memory numbers
 
-Hard stop-and-report triggers (no fakes, no path invention): the
-OpenTunnelPacketTunnel target is still absent; entitlements/team not
-available; WireGuardKit unverifiable under G2; an `.ovpn` payload arrives
-before a G1 decision (typed gate covers this at runtime — that is the
-"engine-unavailable" path, not a blocker).
+Hard stop-and-report triggers (no fakes, no path invention): entitlements
+broken or the target/regression check fails at session start
+(re-run the §3 G4.1 build); the Apple team cannot be attached when device
+verification needs it (record as blocker — owner action — instead of
+faking a signed build); WireGuardKit unverifiable under G2; an `.ovpn`
+payload arrives before a G1 decision (typed gate covers this at runtime —
+that is the "engine-unavailable" path, not a blocker).
 
 ## 8. Risks & blockers (prioritized)
 
-1. **Manual Xcode prerequisite (verified absent):** blocks everything
-   native-iOS. Needs the owner (or a signed-in human) to add the target +
-   capabilities on a real team, exactly per `docs/ios-network-extension.md`.
+1. **Apple team attach (verified absent on this machine):** the target and
+   capabilities exist, but `DEVELOPMENT_TEAM` + portal registration of the
+   App Group need the owner's account at the first signed device build.
+   Simulator/compile work is unblocked; `DEVELOPMENT_TEAM` attach is not
+   grantable from session tooling.
 2. **G1 license** — unchanged from phase 2; now binds the iOS `.ovpn` path
    too; WireGuard-only fallback keeps the rest of the phase shippable.
 3. **Entitlement limits on free/personal teams** — App Groups + Network
@@ -252,10 +261,11 @@ before a G1 decision (typed gate covers this at runtime — that is the
 
 1. Read `AGENTS.md`, this plan, `docs/phase2-session-log.md`, command
    `phase3.md`. Ask G-gates; merge answers into §3 fallbacks.
-2. Prerequisite check (§3 G4.1) — if absent, STOP and report the missing
-   Xcode steps verbatim; everything after is dead code without it. (TS/
-   module-scaffold homework below can proceed only if explicitly kept
-   compile-clean on Android — do not half-land.)
+2. Prerequisite + regression check (§3 G4.1): confirm the target and
+   its entitlements are intact via the committed-project grep and the
+   simulator build (they were verified green 2026-10-27, `1f77983`);
+   do NOT re-attempt project surgery. If anything regressed, stop and
+   report diffs verbatim.
 3. G4 verifications (SDK symbols, WireGuardKit pin/license/docs).
 4. Module iOS half (§4) → `pnpm test`+`typecheck` green on Node/Android.
 5. Extension (§6) + entitlement verification (§2 of the docs file).
