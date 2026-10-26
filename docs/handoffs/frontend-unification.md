@@ -44,6 +44,7 @@ User request: majorly improve the frontends of Store, PDF editor and NetLens wit
 
 ## 7. Current state and next step
 
-- Done and verified: pnpm test (128 tests) + pnpm typecheck green; assembleDebug green for store, netlens, pdf-editor-mobile; pdf-editor-desktop and design-editor e2e green.
-- Not seen on a device (no emulator attached). Next: install the debug APKs, check light/dark on hardware, then commit (user hasn't asked for a commit yet).
-- Open ideas from agents: list-friendly Group for FlatList, mono label option on Readout, design-editor dark mode, drop unused expo-router template deps from pdf-editor-mobile.
+- Committed a32fa72 on branch `frontend-unification`, pushed to GitHub (not merged to main). The branch also carries other sessions' OpenTunnel commits.
+- Released 2026-10-27 through the private store: pdf-editor 1.0.0 (3), netlens 0.1.0 (3), store 0.1.0 (4). open-tunnel deliberately left at 1.0.0 (2) because its RN port is mid-migration.
+- Not yet seen on a device. Next: update the apps from the Store on the phone and check light/dark; merge the branch to main when happy.
+- Open ideas: list-friendly Group for FlatList, mono label option on Readout, design-editor dark mode, drop unused expo-router template deps from pdf-editor-mobile.

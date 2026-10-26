@@ -53,28 +53,12 @@ class UpdateCheckWorker(context: Context, params: WorkerParameters) : CoroutineW
     Result.success()
   }
 
-  @SuppressLint("MissingPermission")
-  private fun notify(names: List<String>) {
-    val ctx = applicationContext
-    if (Build.VERSION.SDK_INT >= 33 &&
-      ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-    ) return
-    val nm = NotificationManagerCompat.from(ctx)
-    nm.createNotificationChannel(
-      NotificationChannelCompat.Builder(CHANNEL, NotificationManagerCompat.IMPORTANCE_DEFAULT).setName("App updates").build(),
-    )
-    val open = PendingIntent.getActivity(
-      ctx, 0, ctx.packageManager.getLaunchIntentForPackage(ctx.packageName), PendingIntent.FLAG_IMMUTABLE,
-    )
-    val notification = NotificationCompat.Builder(ctx, CHANNEL)
-      .setSmallIcon(android.R.drawable.stat_sys_download_done)
-      .setContentTitle(if (names.size == 1) "Update available" else "${names.size} updates available")
-      .setContentText(names.joinToString())
-      .setContentIntent(open)
-      .setAutoCancel(true)
-      .build()
-    nm.notify(NOTIFICATION_ID, notification)
-  }
+  private fun notify(names: List<String>) = postNotification(
+    applicationContext,
+    NOTIFICATION_ID,
+    if (names.size == 1) "Update available" else "${names.size} updates available",
+    names.joinToString(),
+  )
 
   companion object {
     private const val WORK = "store-update-check"
@@ -96,5 +80,27 @@ class UpdateCheckWorker(context: Context, params: WorkerParameters) : CoroutineW
     }
 
     fun hours(context: Context) = prefs(context).getInt("checkHours", DEFAULT_HOURS)
+
+    @SuppressLint("MissingPermission")
+    fun postNotification(ctx: Context, id: Int, title: String, text: String) {
+      if (Build.VERSION.SDK_INT >= 33 &&
+        ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+      ) return
+      val nm = NotificationManagerCompat.from(ctx)
+      nm.createNotificationChannel(
+        NotificationChannelCompat.Builder(CHANNEL, NotificationManagerCompat.IMPORTANCE_DEFAULT).setName("App updates").build(),
+      )
+      val open = PendingIntent.getActivity(
+        ctx, 0, ctx.packageManager.getLaunchIntentForPackage(ctx.packageName), PendingIntent.FLAG_IMMUTABLE,
+      )
+      val notification = NotificationCompat.Builder(ctx, CHANNEL)
+        .setSmallIcon(android.R.drawable.stat_sys_download_done)
+        .setContentTitle(title)
+        .setContentText(text)
+        .setContentIntent(open)
+        .setAutoCancel(true)
+        .build()
+      nm.notify(id, notification)
+    }
   }
 }
