@@ -73,7 +73,9 @@ object PlatformNetwork {
     val lan = cm?.let(::lanNetwork)
     val addr = runCatching { InetAddress.getByName(ip) }.getOrNull()
     val isPrivate = addr != null && (addr.isSiteLocalAddress || addr.isLinkLocalAddress)
-    return if (lan != null && isPrivate) ({ lan.socketFactory.createSocket() }) else ({ Socket() })
+    // Inside a VPN that doesn't allow bypass, binding to Wi-Fi fails (EPERM); the system route then decides,
+    // which keeps the LAN on Wi-Fi when the VPN excludes local routes (seen with OpenTunnel on HyperOS).
+    return if (lan != null && isPrivate) ({ runCatching { lan.socketFactory.createSocket() }.getOrElse { Socket() } }) else ({ Socket() })
   }
 
   private fun detectViaNetworkInterfaces(): NetLensInterface? {
