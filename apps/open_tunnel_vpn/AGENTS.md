@@ -13,7 +13,14 @@
   Expo Modules API — replaces the Flutter-era Pigeon contract; event
   emitters for status + ~1 Hz traffic counters).
 - Android: `android.net.VpnService` (Kotlin, package
-  `com.opentunnel.open_tunnel_vpn`).
+  `com.opentunnel.open_tunnel_vpn`). Engines: WireGuard via
+  `com.wireguard.android:tunnel`, OpenVPN 2 via ics-openvpn (GPLv2, the
+  reason this app is GPL-2.0-only) built by `vendor/ics-openvpn/build-aar.sh`
+  into `android/app/libs/ics-openvpn.aar`. Both engines host their own
+  VpnService; `OpenTunnelVpnService` is the controller. The manifest keeps
+  ics-openvpn's services in the app process and removes its remote-control
+  API; `expo.useLegacyPackaging=true` because the OpenVPN binary
+  (`libovpnexec.so`) must be extracted to run.
 - iOS: `NETunnelProviderManager` in `ios/OpenTunnel/` and
   `NEPacketTunnelProvider` in `ios/OpenTunnelPacketTunnel/` (manually created
   Xcode target; see `docs/ios-network-extension.md`).

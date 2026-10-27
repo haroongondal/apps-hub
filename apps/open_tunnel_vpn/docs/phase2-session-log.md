@@ -3,6 +3,8 @@
 Date: 2026-10-26 · Session scope: `docs/phase2-plan.md` (Prompts: `docs/phase2.md`)
 Governing rules: root `AGENTS.md`, app `AGENTS.md`, plan §8 manifest block.
 
+> **Update 2026-10-27:** G1 decided: GPLv2 + OpenVPN. The ics-openvpn engine is built and wired (see `vendor/ics-openvpn/` and docs/handoffs/round2-fixes.md in the repo root); the G1 rows below are history.
+
 ## Gate decisions (owner answered "don't know" on all four → fallback governs)
 
 | Gate | Owner answer | Resolution |

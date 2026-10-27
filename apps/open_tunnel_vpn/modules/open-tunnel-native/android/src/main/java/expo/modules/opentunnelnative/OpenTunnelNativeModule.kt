@@ -1,5 +1,6 @@
 package expo.modules.opentunnelnative
 
+import android.app.Activity
 import android.content.Intent
 import android.net.VpnService
 import android.os.Build
@@ -22,13 +23,14 @@ private const val EVENT_TRAFFIC_UPDATE = "onTrafficUpdate"
 private const val ERR_INVALID_CONFIG = "ERR_INVALID_CONFIG"
 private const val ERR_INVALID_PARAMS = "ERR_INVALID_PARAMS"
 private const val ERR_NO_CONTEXT = "ERR_NO_CONTEXT"
-private const val ERR_ENGINE_UNAVAILABLE = "ERR_ENGINE_UNAVAILABLE"
 private const val ERR_SERVICE_START_FAILED = "ERR_SERVICE_START_FAILED"
 private const val ERR_PROBE_FAILED = "ERR_PROBE_FAILED"
+private const val VPN_CONSENT_REQUEST = 0x0715
 
 /** Validated tunnel config — handed to the service as JSON in the intent
- * extra. Never written to disk (privacy rule #5); `configText` reaches the
- * engine byte-for-byte. */
+ * extra; `configText` reaches the engine byte-for-byte. The module never
+ * writes it to disk (privacy rule #5); see OpenVpnEngine for ics-openvpn's
+ * own profile file, which it deletes. */
 internal data class NormalizedTunnelConfig(
   val nodeId: String,
   val serverIp: String,
@@ -55,6 +57,23 @@ class OpenTunnelNativeModule : Module() {
 
   private val moduleScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
   private var busListener: TunnelEventBus.Listener? = null
+  private var pendingConsent: Pair<NormalizedTunnelConfig, Promise>? = null
+
+  private fun startTunnelService(config: NormalizedTunnelConfig) {
+    val context = appContext.reactContext ?: throw IllegalStateException("React context unavailable")
+    TunnelStateRegistry.setStatus(TunnelStatus.CONNECTING)
+    TunnelEventBus.postStatus(TunnelStatus.CONNECTING, null)
+    val serviceIntent = Intent().apply {
+      setClassName(context, ServiceContracts.SERVICE_CLASS_NAME)
+      setAction(ServiceContracts.ACTION_START)
+      putExtra(ServiceContracts.EXTRA_CONFIG, configJson(config))
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      context.startForegroundService(serviceIntent)
+    } else {
+      context.startService(serviceIntent)
+    }
+  }
 
   override fun definition() = ModuleDefinition {
     Name("OpenTunnelNative")
@@ -87,6 +106,22 @@ class OpenTunnelNativeModule : Module() {
       }
       busListener = listener
       TunnelEventBus.add(listener)
+    }
+
+    OnActivityResult { _, payload ->
+      if (payload.requestCode != VPN_CONSENT_REQUEST) return@OnActivityResult
+      val (config, promise) = pendingConsent ?: return@OnActivityResult
+      pendingConsent = null
+      if (payload.resultCode != Activity.RESULT_OK) {
+        promise.reject(ERR_SERVICE_START_FAILED, "Android didn't allow the VPN. Tap a server to try again.", null)
+        return@OnActivityResult
+      }
+      try {
+        startTunnelService(config)
+        promise.resolve(null)
+      } catch (error: Exception) {
+        promise.reject(ERR_SERVICE_START_FAILED, "tunnel start failed: ${error.javaClass.name}", error)
+      }
     }
 
     OnDestroy {
@@ -158,41 +193,24 @@ class OpenTunnelNativeModule : Module() {
               return@launch
             }
 
-            // Gate G1 undecided: the OpenVPN path is a typed, explicit
-            // failure — no stand-in state is ever produced.
-            if (sniffed == VpnPayload.PROTOCOL_OPENVPN) {
-              promise.reject(ERR_ENGINE_UNAVAILABLE, ServiceContracts.OPENVPN_GATE_MESSAGE, null)
-              return@launch
-            }
-
-            // VPN consent first, before any foreground service work. The
-            // system dialog is surfaced from here; the user retries start.
+            // VPN consent first, from the current activity so the dialog
+            // stays on top; OnActivityResult continues the start.
             val prepareIntent = VpnService.prepare(reactContext)
             if (prepareIntent != null) {
-              reactContext.startActivity(
-                prepareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-              )
-              promise.reject(
-                ERR_SERVICE_START_FAILED,
-                "Android VPN consent required — approve the system dialog, then start again",
-                null,
-              )
+              val activity = appContext.currentActivity
+              if (activity == null) {
+                promise.reject(ERR_NO_CONTEXT, "Open OpenTunnel and tap the server again.", null)
+                return@launch
+              }
+              pendingConsent?.second?.reject(ERR_SERVICE_START_FAILED, "Replaced by a newer connect request.", null)
+              pendingConsent = normalized to promise
+              withContext(Dispatchers.Main) {
+                activity.startActivityForResult(prepareIntent, VPN_CONSENT_REQUEST)
+              }
               return@launch
             }
 
-            TunnelStateRegistry.setStatus(TunnelStatus.CONNECTING)
-            TunnelEventBus.postStatus(TunnelStatus.CONNECTING, null)
-
-            val serviceIntent = Intent().apply {
-              setClassName(reactContext, ServiceContracts.SERVICE_CLASS_NAME)
-              setAction(ServiceContracts.ACTION_START)
-              putExtra(ServiceContracts.EXTRA_CONFIG, configJson(normalized))
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-              reactContext.startForegroundService(serviceIntent)
-            } else {
-              reactContext.startService(serviceIntent)
-            }
+            startTunnelService(normalized)
             promise.resolve(null)
           } catch (error: Exception) {
             promise.reject(

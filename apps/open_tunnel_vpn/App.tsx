@@ -1,33 +1,21 @@
-/**
- * Phase 1 data-parity screen + Phase 2 dev readout.
- *
- * This screen proves the migrated pipeline end to end on device: VPN Gate
- * fetch → streaming parse → sanitize → SQLite cache → ranked list, and now
- * exposes the phase 2 tunnel contract for development: the native status
- * machine (error = terminal with the native message), the 1 Hz traffic
- * ticks, the system VPN settings deep link, and real TCP probing through
- * the native TcpProbeFn. The full tunnel UI arrives in Phase 4.
- */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { PermissionsAndroid, Platform } from 'react-native';
 import {
-  ActivityIndicator,
-  PermissionsAndroid,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
+  Button,
+  Dot,
+  Empty,
+  Group,
+  Header,
+  Notice,
+  Pill,
+  Row,
+  Screen,
   Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+  ThemeProvider,
+  type Tone,
+} from '@apps-hub/ui';
 
-import {
-  LatencyProber,
-  computeFitnessScore,
-  nodeLabel,
-  VpnGateService,
-  type VpnNode,
-} from 'open-tunnel-core';
+import { LatencyProber, VpnGateService, type VpnNode } from 'open-tunnel-core';
 import { openVpnNodeCache } from './src/data/open-database.ts';
 import type { VpnNodeCache } from './src/data/node-cache.ts';
 import { nativeTcpProbe, openTunnelBinding } from './src/tunnel/native-tcp-probe.ts';
@@ -37,42 +25,48 @@ import {
   type TunnelSnapshot,
 } from './src/tunnel/tunnel-client.ts';
 
-/** Probe bound to the native module's single-connect socket probe. */
 const prober = new LatencyProber(nativeTcpProbe);
-
-/** Dev relay-probe budget: the prober's own defaults stay 8 x 1500 ms. */
-const PROBE_CANDIDATE_LIMIT = 32;
-
-type RefreshState =
-  | { kind: 'idle' }
-  | { kind: 'loading' }
-  | { kind: 'loaded'; count: number; at: number }
-  | { kind: 'error'; message: string };
+const LIST_LIMIT = 40;
 
 export default function App() {
+  return (
+    <ThemeProvider brand="opentunnel">
+      <Servers />
+    </ThemeProvider>
+  );
+}
+
+function Servers() {
   const [cache, setCache] = useState<VpnNodeCache | null>(null);
   const [nodes, setNodes] = useState<VpnNode[]>([]);
-  const [state, setState] = useState<RefreshState>({ kind: 'idle' });
-  const [tunnel, setTunnel] = useState<TunnelSnapshot>({
-    state: 'disconnected',
-    message: null,
-    traffic: null,
-  });
-  const [probeNote, setProbeNote] = useState<string>(PROBE_OFF_NOTE);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [tunnel, setTunnel] = useState<TunnelSnapshot>({ state: 'disconnected', message: null, traffic: null });
 
-  const tunnelClientRef = useRef<TunnelClient | null>(null);
-  if (tunnelClientRef.current === null) {
-    tunnelClientRef.current = createTunnelClient(openTunnelBinding);
-  }
-  const tunnelClient = tunnelClientRef.current;
+  const clientRef = useRef<TunnelClient | null>(null);
+  if (clientRef.current === null) clientRef.current = createTunnelClient(openTunnelBinding);
+  const client = clientRef.current;
 
   useEffect(() => {
-    const handle = tunnelClient.subscribe(setTunnel);
-    void tunnelClient.refresh();
-    return () => {
-      handle.remove();
-    };
-  }, [tunnelClient]);
+    const handle = client.subscribe(setTunnel);
+    void client.refresh();
+    return () => handle.remove();
+  }, [client]);
+
+  const refresh = useCallback(async (opened: VpnNodeCache) => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      await opened.replaceAllNodes(await new VpnGateService().fetchNodes());
+      const best = await opened.loadNodes({ limit: LIST_LIMIT, withConfig: true });
+      setNodes(await prober.probeAndScoreNodes(best));
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,220 +74,144 @@ export default function App() {
       .then(async (opened) => {
         if (cancelled) return;
         setCache(opened);
-        // Cached nodes render immediately, before any network round trip.
-        setNodes(await opened.loadNodes({ limit: 50 }));
+        const cached = await opened.loadNodes({ limit: LIST_LIMIT, withConfig: true });
+        setNodes(cached);
+        if (cached.length === 0) await refresh(opened);
       })
-      .catch((error: unknown) =>
-        setState({ kind: 'error', message: `cache: ${String(error)}` }),
-      );
+      .catch((error: unknown) => setLoadError(String(error)));
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refresh]);
 
-  const refresh = useCallback(async () => {
-    if (!cache) return;
-    setState({ kind: 'loading' });
-    try {
-      const fetched = await new VpnGateService().fetchNodes();
-      // Cache persists the complete fetched list (phase 1 parity);
-      // probing upgrades the on-screen ranking for the top candidates.
-      await cache.replaceAllNodes(fetched);
-      const staticBest = await cache.loadNodes({ limit: PROBE_CANDIDATE_LIMIT });
-      const ranked = await prober.probeAndScoreNodes(staticBest);
-      const measured = ranked.filter((node) => node.measuredRttMs !== null).length;
-      setNodes(ranked);
-      setProbeNote(
-        measured > 0
-          ? `measured ${measured}/${ranked.length} relays (native TCP probe)`
-          : `no live measurements; static ping fallback (${ranked.length} relays)`,
-      );
-      setState({ kind: 'loaded', count: fetched.length, at: Date.now() });
-    } catch (error) {
-      setState({
-        kind: 'error',
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }, [cache]);
+  const connect = useCallback(
+    async (node: VpnNode) => {
+      await requestNotifications();
+      setActiveId(node.id);
+      await client.startTunnel(client.configFromNode(node, { enableKillSwitch: true }));
+    },
+    [client],
+  );
 
-  const startTopRelay = useCallback(async () => {
-    const node = nodes[0];
-    if (!node) return;
-    await requestPostNotificationsNonBlocking();
-    // The config payload must come from the cache row itself (list reads
-    // blank the sanitized OpenVPN text).
-    const fullyLoaded = cache
-      ? (await cache.loadNodes({ limit: 1, withConfig: true })).find(
-          (candidate) => candidate.id === node.id,
-        ) ?? node
-      : node;
-    await tunnelClient.startTunnel(
-      tunnelClient.configFromNode(fullyLoaded, { enableKillSwitch: true }),
-    );
-  }, [cache, nodes, tunnelClient]);
-
-  const stopTunnel = useCallback(async () => {
-    await tunnelClient.stopTunnel();
-  }, [tunnelClient]);
-
-  const openSystemVpnSettings = useCallback(async () => {
-    await tunnelClient.openSystemVpnSettings();
-  }, [tunnelClient]);
+  const busy = tunnel.state === 'connecting' || tunnel.state === 'disconnecting';
+  const live = tunnel.state === 'connected' || tunnel.state === 'reasserting' || busy;
+  const active = nodes.find((node) => node.id === activeId) ?? null;
 
   return (
-    <ScrollView
-      style={styles.sheet}
-      contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl refreshing={state.kind === 'loading'} onRefresh={refresh} />
-      }
-    >
-      <Text style={styles.title}>OpenTunnel</Text>
-      <Text style={styles.subtitle}>
-        VPN Gate relays · local cache only · no analytics, no accounts
-      </Text>
+    <Screen scroll refreshing={loading} onRefresh={cache ? () => void refresh(cache) : undefined}>
+      <Header title="OpenTunnel" subtitle="Free VPN Gate servers, no account" />
 
-      <View style={styles.statusBox}>
-        <Text style={styles.statusText}>
-          {state.kind === 'idle' && (cache ? 'Pull down to refresh nodes' : 'Opening local cache…')}
-          {state.kind === 'loading' && 'Fetching VPN Gate list…'}
-          {state.kind === 'loaded' && `Refreshed ${state.count} nodes`}
-          {state.kind === 'error' && `Refresh failed: ${state.message}`}
-        </Text>
-        {state.kind === 'loaded' && <Text style={styles.probeNote}>{probeNote}</Text>}
-      </View>
+      <Group title="Connection">
+        <Row
+          leading={<Dot tone={STATE_TONE[tunnel.state]} />}
+          title={stateTitle(tunnel, active)}
+          subtitle={live && tunnel.traffic ? trafficLine(tunnel.traffic) : undefined}
+          trailing={
+            live ? (
+              <Button label="Disconnect" variant="secondary" size="sm" busy={tunnel.state === 'disconnecting'} onPress={() => void client.stopTunnel()} />
+            ) : undefined
+          }
+        />
+      </Group>
 
-      <View style={styles.tunnelBox}>
-        <Text style={styles.tunnelTitle}>Tunnel (dev readout)</Text>
-        <Text style={styles.tunnelState}>
-          {`state: ${tunnel.state}${tunnel.message ? ` — ${tunnel.message}` : ''}`}
-        </Text>
-        {tunnel.traffic !== null && (
-          <Text style={styles.tunnelMeta}>
-            {trafficLine(tunnel.traffic.bytesIn, tunnel.traffic.bytesOut, tunnel.traffic.connectedDurationSec)}
-          </Text>
-        )}
-        <View style={styles.tunnelActions}>
-          <DevButton label="Start top relay" onPress={() => void startTopRelay()} />
-          <DevButton label="Stop" onPress={() => void stopTunnel()} />
-          <DevButton label="System VPN settings" onPress={() => void openSystemVpnSettings()} />
-        </View>
-      </View>
-
-      {nodes.map((node) => (
-        <View key={node.id} style={styles.nodeRow}>
-          <Text style={styles.nodeLabel} numberOfLines={1}>
-            {nodeLabel(node)}
-          </Text>
-          <Text style={styles.nodeMeta} numberOfLines={1}>
-            {scoreSummary(node)}
-          </Text>
-        </View>
-      ))}
-
-      {nodes.length === 0 && state.kind !== 'loading' && (
-        <Text style={styles.empty}>No cached relays yet.</Text>
+      {tunnel.state === 'error' && tunnel.message && (
+        <Notice tone="danger" title="Couldn't connect">
+          {tunnel.message.replace(/^ERR_[A-Z_]+: /, '')}
+        </Notice>
+      )}
+      {loadError && (
+        <Notice tone="warn" title="Couldn't load the server list">
+          {`${loadError}. Pull down to try again.`}
+        </Notice>
       )}
 
-      {state.kind === 'loading' && nodes.length === 0 && <ActivityIndicator />}
-    </ScrollView>
+      {nodes.length === 0 ? (
+        <Empty
+          title={loading ? 'Loading servers' : 'No servers yet'}
+          body={loading ? 'Fetching the VPN Gate list. This can take a minute.' : 'Pull down to load the VPN Gate list.'}
+        />
+      ) : (
+        <Group
+          title="Servers"
+          footer="Volunteers run these servers and can see which sites you visit. Use HTTPS sites."
+        >
+          {nodes.map((node) => (
+            <Row
+              key={node.id}
+              title={`${countryName(node)} · ${node.hostName}`}
+              subtitle={serverLine(node)}
+              trailing={node.id === activeId && live ? <Pill label={tunnel.state === 'connected' ? 'Connected' : 'Connecting'} tone="ok" /> : undefined}
+              onPress={busy ? undefined : () => void connect(node)}
+              accessibilityHint="Connects to this server"
+            />
+          ))}
+        </Group>
+      )}
+
+      <Button label="Always-on VPN settings" variant="ghost" onPress={() => void client.openSystemVpnSettings()} />
+      <Text variant="caption" tone="faint" align="center">
+        OpenTunnel is free software under the GPLv2. Source: github.com/haroongondal/apps-hub
+      </Text>
+    </Screen>
   );
 }
 
-const PROBE_OFF_NOTE = 'no probe yet; static ranking';
+const STATE_TONE: Record<TunnelSnapshot['state'], Tone> = {
+  disconnected: 'neutral',
+  connecting: 'warn',
+  connected: 'ok',
+  reasserting: 'warn',
+  disconnecting: 'warn',
+  error: 'danger',
+};
 
-/** Static ping for unprobed relays, honest measured RTT once probed. */
-function scoreSummary(node: VpnNode): string {
-  const fitness = computeFitnessScore(node);
-  const parts =
-    node.measuredRttMs === null
-      ? [`${node.pingMs}ms static`]
-      : [`${Math.round(node.measuredRttMs)}ms measured`];
-  parts.push(
-    `${(node.speedBps / 1000000).toFixed(1)}Mbps`,
-    `fitness ${fitness.toFixed(1)}`,
-  );
-  return parts.join(' · ');
-}
-
-function trafficLine(bytesIn: number, bytesOut: number, connectedDurationSec: number): string {
-  return `traffic ↓${formatKib(bytesIn)} ↑${formatKib(bytesOut)} · up ${connectedDurationSec}s`;
-}
-
-function formatKib(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MiB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)}KiB`;
-  return `${bytes}B`;
-}
-
-/**
- * POST_NOTIFICATIONS is requested at runtime on Android 13+; a denial
- * never blocks the tunnel (plan §6). Silence on other runtimes.
- */
-async function requestPostNotificationsNonBlocking(): Promise<void> {
-  if (Platform.OS !== 'android') return;
-  if (Number(Platform.Version) < 33) return;
-  try {
-    await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
-  } catch {
-    // Denial keeps the tunnel running without the notice.
+function stateTitle(tunnel: TunnelSnapshot, active: VpnNode | null): string {
+  const where = active ? ` to ${countryName(active)}` : '';
+  switch (tunnel.state) {
+    case 'connected':
+      return `Connected${where}`;
+    case 'connecting':
+      return `Connecting${where}`;
+    case 'reasserting':
+      return `Reconnecting${where}`;
+    case 'disconnecting':
+      return 'Disconnecting';
+    default:
+      return 'Not connected. Tap a server to connect.';
   }
 }
 
-function DevButton({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <TouchableOpacity style={styles.tunnelButton} onPress={onPress}>
-      <Text style={styles.tunnelButtonText}>{label}</Text>
-    </TouchableOpacity>
-  );
+function countryName(node: VpnNode): string {
+  return node.countryLong || node.countryShort;
 }
 
-const styles = StyleSheet.create({
-  sheet: { flex: 1, backgroundColor: '#0b1020' },
-  content: { paddingHorizontal: 20, paddingBottom: 40, paddingTop: 64 },
-  title: { color: '#7dd3fc', fontSize: 28, fontWeight: '700' },
-  subtitle: { color: '#94a3b8', fontSize: 13, marginTop: 4, marginBottom: 16 },
-  statusBox: {
-    backgroundColor: '#111a33',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 14,
-  },
-  statusText: { color: '#cbd5f5', fontSize: 13 },
-  probeNote: { color: '#7dd3fc', fontSize: 12, marginTop: 4 },
-  tunnelBox: {
-    backgroundColor: '#111a33',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 14,
-  },
-  tunnelTitle: { color: '#e2e8f0', fontSize: 14, fontWeight: '700' },
-  tunnelState: { color: '#cbd5f5', fontSize: 12, marginTop: 6 },
-  tunnelMeta: { color: '#7dd3fc', fontSize: 12, marginTop: 4 },
-  tunnelActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 10,
-  },
-  tunnelButton: {
-    backgroundColor: '#1d2951',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  tunnelButtonText: { color: '#7dd3fc', fontSize: 13, fontWeight: '600' },
-  nodeRow: {
-    backgroundColor: '#111a33',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 8,
-  },
-  nodeLabel: { color: '#e2e8f0', fontSize: 15, fontWeight: '600' },
-  nodeMeta: { color: '#7dd3fc', fontSize: 12, marginTop: 2 },
-  empty: { color: '#94a3b8', fontSize: 13, textAlign: 'center', marginTop: 24 },
-});
+function serverLine(node: VpnNode): string {
+  const ping = node.measuredRttMs === null ? node.pingMs : Math.round(node.measuredRttMs);
+  return `${ping} ms · ${(node.speedBps / 1_000_000).toFixed(0)} Mbps · ${node.transportProto.toUpperCase()}`;
+}
+
+// Native ticks carry bytes moved in the last second, not running totals.
+function trafficLine(traffic: NonNullable<TunnelSnapshot['traffic']>): string {
+  return `Down ${formatBytes(traffic.bytesIn)}/s · Up ${formatBytes(traffic.bytesOut)}/s · ${formatDuration(traffic.connectedDurationSec)}`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${bytes} B`;
+}
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  return m > 0 ? `${m} min` : `${seconds} s`;
+}
+
+// A denial only hides the connection notice; the tunnel still runs.
+async function requestNotifications(): Promise<void> {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 33) return;
+  try {
+    await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+  } catch {
+    // ignored: see above
+  }
+}

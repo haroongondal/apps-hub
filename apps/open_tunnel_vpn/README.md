@@ -69,9 +69,14 @@ the app.
 
 ## Licensing and release blockers
 
-- `ics-openvpn` is GPLv2; OpenVPNAdapter / OpenVPN 3 Core is AGPLv3. A
-  proprietary App Store build that links them must comply with
-  source-disclosure obligations.
+- OpenTunnel is GPL-2.0-only (`LICENSE`, decided 2026-10-27) because the
+  Android OpenVPN engine is `ics-openvpn` v0.7.69 (GPLv2 with additional
+  terms, `vendor/ics-openvpn/LICENSE-ics-openvpn.txt`). Anyone who gets the
+  APK must be able to get this source; the repo is public.
+- Rebuild the engine with `vendor/ics-openvpn/build-aar.sh` (needs the
+  Android NDK 28.2 and CMake 3.22 from the SDK); it writes
+  `android/app/libs/ics-openvpn.aar`, which is committed.
+- OpenVPNAdapter / OpenVPN 3 Core (a future iOS engine) is AGPLv3.
 - WireGuardKit is MIT.
 - App Groups and Network Extension entitlements require a paid Apple
   Developer team.

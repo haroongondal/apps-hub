@@ -68,6 +68,14 @@ class OpenTunnelVpnService : VpnService() {
         }
       }
       ServiceContracts.ACTION_STOP -> stopTunnel()
+      // The engine already ended on its own and reported the final state.
+      ServiceContracts.ACTION_RELEASE -> {
+        engine?.let { runCatching { it.stop() } }
+        engine = null
+        TrafficTicker.stop()
+        stopForegroundCompat()
+        stopSelf()
+      }
       else -> {
         // No active command (e.g. a stale or system-delivered intent):
         // tear down the notice and end this instance cleanly; the registry

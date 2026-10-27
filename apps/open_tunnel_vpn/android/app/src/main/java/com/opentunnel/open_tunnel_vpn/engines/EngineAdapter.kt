@@ -7,8 +7,10 @@ import expo.modules.opentunnelnative.VpnPayload
 /**
  * What an engine receives. `configText` is the already-sanitized payload —
  * VPN Gate `.ovpn` text was rewritten once by open-tunnel-core
- * (`sanitizeOpenVpnConfig`), and no engine ever re-injects directives, logs
- * it, or persists it (AGENTS rules #4/#5).
+ * (`sanitizeOpenVpnConfig`), and no engine logs it (AGENTS rules #4/#5).
+ * ics-openvpn parses it into a profile and regenerates the config it hands
+ * the openvpn binary on stdin (cipher directives still once); its saved
+ * profile file is deleted straight away (OpenVpnEngine.clearPersisted).
  */
 data class EngineConfig(
   val nodeId: String,
@@ -64,7 +66,7 @@ object EngineAdapter {
   fun engineFor(protocol: String, context: Context): TunnelEngine =
     when (protocol) {
       VpnPayload.PROTOCOL_WIREGUARD -> WireGuardEngine(context)
-      VpnPayload.PROTOCOL_OPENVPN -> OpenVpnEngine()
+      VpnPayload.PROTOCOL_OPENVPN -> OpenVpnEngine(context)
       else -> throw EngineUnavailableException("no engine for protocol $protocol")
     }
 }
