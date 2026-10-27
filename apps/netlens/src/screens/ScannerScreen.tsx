@@ -101,12 +101,19 @@ export default function ScannerScreen() {
   const [pingTargetBusy, setPingTargetBusy] = useState(false);
   const [pingResult, setPingResult] = useState<PingResult | null>(null);
   const [mdnsTypes, setMdnsTypes] = useState<string[]>([]);
+  const [storeReady, setStoreReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    openDeviceStore().then((store) => {
-      if (!cancelled) storeProxy.current = store;
-    });
+    openDeviceStore()
+      .then((store) => {
+        if (cancelled) return;
+        storeProxy.current = store;
+        setStoreReady(true);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setErrorNote(`NetLens could not open its device list on this phone: ${e instanceof Error ? e.message : String(e)}`);
+      });
     bindingProxy.detectInterface().then((info) => {
       if (!cancelled) setIface(info);
     });
@@ -362,7 +369,7 @@ export default function ScannerScreen() {
           label={hasScanned ? 'Scan again' : 'Scan network'}
           block
           onPress={runScan}
-          disabled={storeProxy.current === null}
+          disabled={!storeReady}
           accessibilityHint="Looks for devices on your Wi-Fi"
         />
       )}

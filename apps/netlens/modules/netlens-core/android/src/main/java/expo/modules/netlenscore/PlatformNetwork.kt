@@ -42,7 +42,7 @@ object PlatformNetwork {
       ?: return null
 
     val gateway = linkProperties.routes
-      .firstOrNull { it.isDefaultRoute && it.gateway != null }
+      .firstOrNull { it.isDefaultRoute && it.gateway is Inet4Address }
       ?.gateway
       ?.hostAddress
 

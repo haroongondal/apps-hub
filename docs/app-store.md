@@ -167,6 +167,10 @@ so its scheduling keeps working. Package visibility uses a `<queries>` list
 Play Protect scans apps installed from outside Play, may ask to send unknown apps to Google for scanning, and can
 warn about, disable or remove apps it considers harmful ([help](https://support.google.com/googleplay/answer/2812853)).
 Expect a "scan app?" prompt the first time each app is installed. Keep Play Protect on.
+Android only waits about 17 s (`settings get global verifier_timeout`) for that prompt. Tap **Scan app** promptly; "Install
+without scanning" also asks for a fingerprint and on a Xiaomi (Android 16) usually ran out of time, aborting the
+install. The Store now says so instead of resetting silently. To skip the prompt entirely for one build, install it
+over Wi-Fi debugging with the Store as installer of record: `adb install -r -i com.haroon.store app-release.apk`.
 
 ### Android developer verification checklist
 Since **30 Sep 2026**, certified devices in Brazil, Indonesia, Singapore and Thailand only install or update apps

@@ -46,9 +46,9 @@ test('pill tone follows status; a foreign signing key is a warning', () => {
   assert.equal(statusPill(appStatus(app, null)).tone, 'neutral');
 });
 
-test('install failures: quiet on success or cancel, explained otherwise', () => {
+test('install failures: quiet on success, explained otherwise', () => {
   assert.equal(installFailure('SUCCESS', null), null);
-  assert.equal(installFailure('FAILURE_ABORTED', 'user'), null);
+  assert.match(installFailure('FAILURE_ABORTED', 'user')!, /cancelled.*Play Protect/);
   assert.match(installFailure('FAILURE_CONFLICT', 'x')!, /different key/);
   assert.match(installFailure('FAILURE_STORAGE', 'disk')!, /storage.*Android said: disk/);
   assert.equal(installFailure('FAILURE', null), 'Android stopped the install (FAILURE).');
