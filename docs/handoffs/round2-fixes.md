@@ -9,6 +9,7 @@ for background). Trust §4 (verified facts); do not redo that work. Follow the h
 ~/.claude/CLAUDE.md: keep this file's §6/§7 updated as milestones land, and at ~85% context write a
 new resume prompt here and stop instead of compacting.
 Start at §7 "Next step". Ask me the open decisions in §3 before building the parts that depend on them.
+This round also includes making OpenTunnel actually connect (goal 7): ask me gate G1 first, then build it.
 ```
 
 ## 2. Goal (user's words, 2026-10-27) and fixed constraints
@@ -19,13 +20,14 @@ Start at §7 "Next step". Ask me the open decisions in §3 before building the p
 4. "How to connect to VPN in OpenTunnel?" and "create logo for OpenTunnel app".
 5. "What's the purpose of NetLens? Make it purposeful."
 6. "In PDF editor, after edit text the background stays white, fix it."
+7. "Make OpenTunnel work as well" (2026-10-27, after s1): a user can pick a server and get a working VPN connection on the phone.
 
 Constraints: **Never install/update apps on the phone with adb (user, 2026-10-27): only through the Store; fix Store bugs first.** adb stays fine for logcat/screens/taps. AGENTS.md hard rules (NetLens: no ARP, TCP RST = alive, bounded sweeps, F-Droid pure FOSS; OpenTunnel rules in apps/open_tunnel_vpn/AGENTS.md). All UI on `packages/ui`. Report ACTUAL command output. Release apps with `pnpm release <id> -m "..."` (docs/app-store.md); never release open-tunnel without the user's go-ahead.
 
 ## 3. Open decisions (ask the user)
 
 - **NetLens rule 2 vs false positives.** AGENTS.md says ECONNREFUSED/RST = alive. If the investigation shows something on this network sends RSTs for addresses with no device (see §4), fixing it may need to change that hard rule (e.g. require a second signal). Changing a hard rule needs the user's explicit OK.
-- **OpenTunnel gate G1.** VPN Gate relays are OpenVPN only. `OpenVpnEngine.start` deliberately throws: "the ics-openvpn GPLv2 core needs a project license decision first" (`modules/open-tunnel-native/.../ServiceContracts.kt:22`, `docs/phase2-session-log.md`). The user must decide whether OpenTunnel may ship GPLv2 code (or pick another engine) before VPN Gate connections can work.
+- **OpenTunnel gate G1 (ask first for goal 7; s1 answer was "I don't know").** Explain in plain words and recommend: (a) ship ics-openvpn, OpenTunnel becomes GPLv2 (source stays public, F-Droid fine) and VPN Gate relays connect, recommended if the user is happy to keep it open source; (b) WireGuard only, no GPL, only the user's own WireGuard servers connect. Original note: VPN Gate relays are OpenVPN only. `OpenVpnEngine.start` deliberately throws: "the ics-openvpn GPLv2 core needs a project license decision first" (`modules/open-tunnel-native/.../ServiceContracts.kt:22`, `docs/phase2-session-log.md`). The user must decide whether OpenTunnel may ship GPLv2 code (or pick another engine) before VPN Gate connections can work.
 - **NetLens purpose.** Propose 2-3 concrete directions (use superpowers:brainstorming), e.g. "Who's on my Wi-Fi" guard (named devices via mDNS/SSDP/NetBIOS, alert when an unknown device joins, trust list) plus "is it my Wi-Fi, my ISP or DNS" diagnostics, and let the user pick before building.
 
 **Answers (s1, 2026-10-27):** Rule 2 → measure first (bind probes to Wi-Fi, log refused vs connected on the phone); come back only if data says the rule must change. G1 → user said "I don't know": treat as decide later; explain the trade-off plainly, do only the logo. NetLens purpose → both, device guard first (named devices, trust list, flag new unknown devices), then the "why is my internet slow" verdict screen.
@@ -63,6 +65,7 @@ Environment: Node 22.23.4 is the nvm default (graft needed `SDKROOT=$(xcrun --sd
 - PDF editor: `packages/pdf-editor-engine/{core.js,textedit.js,desktop.html,mobile.html,build.mjs}`.
 - OpenTunnel: `apps/open_tunnel_vpn/{App.tsx,AGENTS.md,docs/,modules/open-tunnel-native}`, engines in `android/app/src/main/java/com/opentunnel/open_tunnel_vpn/engines/`.
 - Icons: `tools/icons/render-icon.mjs`.
+- OpenTunnel connect: engines `apps/open_tunnel_vpn/android/app/src/main/java/com/opentunnel/open_tunnel_vpn/engines/{EngineAdapter,OpenVpnEngine,WireGuardEngine}.kt` (WireGuardEngine is implemented; OpenVpnEngine.start throws `ServiceContracts.OPENVPN_GATE_MESSAGE`), service `OpenTunnelVpnService.kt`, bridge `modules/open-tunnel-native`, phase prompts `.opencode/commands/phase2..4.md`, plans/logs `docs/phase2-plan.md`, `docs/phase2-session-log.md`, `docs/phase3-plan.md` (iOS). Rules: `apps/open_tunnel_vpn/AGENTS.md` (sanitize every .ovpn, kill switch, no placeholders).
 
 ## 6. Session log
 
@@ -77,4 +80,8 @@ Environment: Node 22.23.4 is the nvm default (graft needed `SDKROOT=$(xcrun --sd
 
 Done in s1: goal 3 (merge), Store fix (Store 7 released), NetLens VPN fix (NetLens 5 released), PDF fix (PDF Editor 4 released), OpenTunnel logo (committed, not released). All on branch `round2-fixes` (local, not pushed, not merged).
 Waiting on the user: on the phone, self-update Store 6 → 7 (Play Protect: tap Scan app), then update NetLens → 5 and PDF Editor → 4 through Store 7; report the NetLens host count with the VPN on. Never adb-install on the phone.
-Next step: NetLens purpose, part 1 "device guard": brainstorm/spec first (superpowers:brainstorming → writing-plans), then build: named devices (mDNS/SSDP names already discovered by `MdnsProbe`/`SsdpProbe`, store in the expo-sqlite device store `apps/netlens/src/db/`), trust list, flag new unknown devices per scan. Part 2 after: "why is my internet slow" verdict screen (DiagnosticsScreen + `packages/core` DiagnosticVerdict). Then merge `round2-fixes` into main and push once the user confirms phone results. G1 stays open (user unsure).
+Next steps, in order:
+1. OpenTunnel connect (goal 7). Ask G1 first (§3). Read the OpenTunnel file map (§5), `docs/phase2-session-log.md` and `apps/open_tunnel_vpn/AGENTS.md`; check `git log` for OpenTunnel commits other sessions made. Then: wire the Android connect flow end to end in the app UI (pick node → VpnService consent → engine → status/traffic events). If G1 = GPLv2: add ics-openvpn as the OpenVPN engine (license audit, update app license + AGENTS.md), so VPN Gate nodes connect. If G1 = WireGuard only: make importing a WireGuard .conf and connecting work, and label VPN Gate nodes as not connectable yet. Verify: JVM tests + `:app:assembleDebug`, connect on the emulator, then ask the user's go-ahead before `pnpm release open-tunnel` (also ships the new logo) and have them install through the Store and connect on the phone. iOS stays Phase 3 (needs a paid Apple team).
+2. NetLens purpose, part 1 "device guard": brainstorm/spec first (superpowers:brainstorming → writing-plans), then build: named devices (mDNS/SSDP names already discovered by `MdnsProbe`/`SsdpProbe`, store in the expo-sqlite device store `apps/netlens/src/db/`), trust list, flag new unknown devices per scan. Part 2 after: "why is my internet slow" verdict screen (DiagnosticsScreen + `packages/core` DiagnosticVerdict).
+3. Merge `round2-fixes` into main and push once the user confirms phone results.
+G1 still open.
