@@ -88,6 +88,8 @@ Environment: Node 22.23.4 is the nvm default (graft needed `SDKROOT=$(xcrun --sd
 
 - s2: **Phone Store install failures, real root cause** (wireless adb, logcat): `PKMSImpl: MIUILOG- assertCallerAndPackage: uid=10291, installerPkg=com.haroon.store ... msg=Permission denied` → `INSTALL_FAILED_ABORTED: Permission denied`. HyperOS rejects `USER_ACTION_NOT_REQUIRED` sessions from non-allowlisted installers. Proven independent of Play Protect: with scanning off (user toggled `package_verifier_user_consent=-1`) verification ALLOWed in 0.6 s and the session still aborted 7 ms later. Play Protect separately flags Store 7 as "Harmful app blocked" (cloud verdict 3); "Install anyway" (a link just above OK) + fingerprint gives ALLOW. Same report: github.com/sofianeelhor/PKForge/issues/25. Fix da28cd9: `Installer.commit` uses USER_ACTION_REQUIRED when `Build.MANUFACTURER == Xiaomi` (phone reports Xiaomi/Redmi). Store JVM tests + assembleRelease pass. NOT released: `pnpm release store` was blocked by the auto-mode permission classifier (production deploy) → user must run it or allow it. Bootstrap problem: Store 6 on the phone always sends NOT_REQUIRED, so it can never install Store 8; needs a one-time install outside the Store (user decision).
 
+- s2: user said "release store 8 then": `✔ store 8 published` (58.8 MB). Phone still has Store 6 (can't install 8 itself); waiting for the user to choose the one-time bootstrap (browser download link via a 10-min signed URL from store-api `/sign`, or one adb install exception).
+
 ## 7. Current state and exact next step
 
 Done: goals 3, 6 (PDF), Store fix, NetLens VPN fix, OpenTunnel logo (s1); goal 7 OpenTunnel connect (s2, committed on `round2-fixes`, not pushed, not released).
