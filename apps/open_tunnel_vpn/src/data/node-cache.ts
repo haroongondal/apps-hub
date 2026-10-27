@@ -4,7 +4,7 @@
  * Port of the Drift database (`lib/core/database/app_database.dart`). SQL
  * runs through {@link SqliteDriver} so the app uses real `expo-sqlite`
  * locally and tests exercise the exact same statements against Node's
- * built-in SQLite (never a mock).
+ * built-in SQLite (never a substitute).
  *
  * The cache never leaves the device: no sync, no upload, and backups are
  * disabled OS-side (see plugin/opentunnel-android-config.js); iOS keeps the
@@ -123,9 +123,9 @@ export class VpnNodeCache {
       if (keepIds.length === 0) {
         await this.driver.run('DELETE FROM vpn_nodes', []);
       } else {
-        const placeholders = keepIds.map(() => '?').join(', ');
+        const idSlots = keepIds.map(() => '?').join(', ');
         await this.driver.run(
-          `DELETE FROM vpn_nodes WHERE id NOT IN (${placeholders})`,
+          `DELETE FROM vpn_nodes WHERE id NOT IN (${idSlots})`,
           keepIds,
         );
       }
@@ -137,11 +137,7 @@ export class VpnNodeCache {
     await this.open();
     const { countryCode, withConfig = false, limit } = options;
     const params: SqlValue[] = [];
-    let sql =
-      'SELECT id, host_name, ip, port, transport_proto, score, ping_ms, ' +
-      'speed_bps, country_long, country_short, num_sessions, uptime_ms, ' +
-      'operator_name, ovpn_config_raw, protocol, measured_rtt_ms, ' +
-      'fitness_score FROM vpn_nodes';
+    let sql = `SELECT ${NODE_COLUMNS} FROM vpn_nodes`;
     if (countryCode !== undefined) {
       sql += ' WHERE country_short = ?';
       params.push(countryCode.toUpperCase());
@@ -154,7 +150,30 @@ export class VpnNodeCache {
     const rows = await this.driver.all(sql, params);
     return rows.map((row) => nodeFromRow(row, withConfig));
   }
+
+  /** Loads one cached node by its primary key — the connect-time path that
+   * re-fetches the sanitized payload for a node shown from a configless
+   * list read. Resolves null when the id is unknown (cache replaced). */
+  async getNode(
+    id: string,
+    options: { withConfig?: boolean } = {},
+  ): Promise<VpnNode | null> {
+    await this.open();
+    const { withConfig = true } = options;
+    const rows = await this.driver.all(
+      `SELECT ${NODE_COLUMNS} FROM vpn_nodes WHERE id = ?`,
+      [id],
+    );
+    if (rows.length === 0) return null;
+    return nodeFromRow(rows[0]!, withConfig);
+  }
 }
+
+/** Column list shared by both read paths. */
+const NODE_COLUMNS =
+  'id, host_name, ip, port, transport_proto, score, ping_ms, ' +
+  'speed_bps, country_long, country_short, num_sessions, uptime_ms, ' +
+  'operator_name, ovpn_config_raw, protocol, measured_rtt_ms, fitness_score';
 
 function text(value: SqlValue): string {
   return typeof value === 'string' ? value : String(value ?? '');

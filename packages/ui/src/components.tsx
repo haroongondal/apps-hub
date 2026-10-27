@@ -342,7 +342,21 @@ export function Segmented<K extends string>({ options, value, onChange, accessib
     <View
       accessibilityRole="radiogroup"
       accessibilityLabel={accessibilityLabel}
-      style={{ flexDirection: 'row', backgroundColor: c.raised, borderRadius: radius.control + 2, padding: 3, gap: 3 }}
+      // `alignSelf: 'stretch'` fills the width when a column parent
+      // stretches the container (standalone usage) while the width stays
+      // intrinsic inside a Row's trailing slot. The segments never carry
+      // flex themselves: a grow/basis child inside this intrinsic chain
+      // collapses Yoga's shrink-to-fit pass (the whole subtree stops
+      // rendering — observed on Android, settings-sheet Row trailing slot).
+      style={{
+        flexDirection: 'row',
+        alignSelf: 'stretch',
+        justifyContent: 'center',
+        backgroundColor: c.raised,
+        borderRadius: radius.control + 2,
+        padding: 3,
+        gap: 3,
+      }}
     >
       {options.map((o) => {
         const on = o.key === value;
@@ -354,7 +368,7 @@ export function Segmented<K extends string>({ options, value, onChange, accessib
             accessibilityState={{ checked: on }}
             accessibilityLabel={o.a11yLabel ?? o.label}
             style={{
-              flex: 1,
+              paddingHorizontal: space.md,
               minHeight: 40,
               borderRadius: radius.control - 1,
               alignItems: 'center',

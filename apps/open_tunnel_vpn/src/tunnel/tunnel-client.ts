@@ -159,12 +159,28 @@ export function createTunnelClient(binding: OpenTunnelBinding): TunnelClient {
   };
 }
 
+/**
+ * Snapshot wording for a tunnel call failure. Native rejections arrive as
+ * Expo `CodedError`s — `code` (one of `OPEN_TUNNEL_ERROR_CODES`) plus the
+ * reason as `message` — so their typed code surfaces verbatim. A plain
+ * error keeps the conservative start-failure code; the reason text is
+ * still quoted word for word.
+ */
 function describeError(error: unknown): string {
   if (error instanceof OpenTunnelError) {
     return `${error.code}: ${error.message}`;
   }
   if (error instanceof Error && error.message.length > 0) {
-    return `${OPEN_TUNNEL_ERROR_CODES.SERVICE_START_FAILED}: ${error.message}`;
+    const nativeCode = (error as { code?: unknown }).code;
+    const code =
+      typeof nativeCode === 'string' && isTunnelErrorCode(nativeCode)
+        ? nativeCode
+        : OPEN_TUNNEL_ERROR_CODES.SERVICE_START_FAILED;
+    return `${code}: ${error.message}`;
   }
   return `${OPEN_TUNNEL_ERROR_CODES.SERVICE_START_FAILED}: tunnel call failed (${typeof error})`;
+}
+
+function isTunnelErrorCode(code: string): boolean {
+  return (Object.values(OPEN_TUNNEL_ERROR_CODES) as readonly string[]).includes(code);
 }

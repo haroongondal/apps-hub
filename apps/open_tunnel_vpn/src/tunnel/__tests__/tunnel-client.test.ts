@@ -288,6 +288,39 @@ test('status coercion maps unknown native strings to the conservative default', 
   assert.equal(normalizeStatusState('wet-paint'), 'disconnected');
 });
 
+test('native CodedError rejections surface their typed code verbatim', async () => {
+  const standIn = standInBinding();
+  standIn.nativeApi.startTunnel = async () => {
+    // The real Expo Modules shape: a plain Error subclass carrying the
+    // native reject code (`CodedError.code`) with the reason as `message`.
+    throw Object.assign(
+      new Error('openvpn engine unavailable on iOS: ics-openvpn port is gated pending the GPLv2 license decision (G1)'),
+      { code: OPEN_TUNNEL_ERROR_CODES.ENGINE_UNAVAILABLE },
+    );
+  };
+  const client = createTunnelClient(standIn.binding);
+  const snapshot = await client.startTunnel(validConfig());
+  assert.equal(snapshot.state, 'error');
+  assert.equal(
+    snapshot.message,
+    `${OPEN_TUNNEL_ERROR_CODES.ENGINE_UNAVAILABLE}: openvpn engine unavailable on iOS: ics-openvpn port is gated pending the GPLv2 license decision (G1)`,
+  );
+});
+
+test('a rejection without a tunnel code keeps the conservative start-failure code', async () => {
+  const standIn = standInBinding();
+  standIn.nativeApi.startTunnel = async () => {
+    throw new Error('socket exploded');
+  };
+  const client = createTunnelClient(standIn.binding);
+  const snapshot = await client.startTunnel(validConfig());
+  assert.equal(snapshot.state, 'error');
+  assert.equal(
+    snapshot.message,
+    `${OPEN_TUNNEL_ERROR_CODES.SERVICE_START_FAILED}: socket exploded`,
+  );
+});
+
 /** The PRESENCE contract strings stay coherent with the module name. */
 test('module name is fixed for the native surface', () => {
   assert.equal(OPEN_TUNNEL_MODULE_NAME, 'OpenTunnelNative');

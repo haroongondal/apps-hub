@@ -153,3 +153,25 @@ test('identity persists as the sha256 endpoint key', async () => {
     crypto.createHash('sha256').update('203.0.113.10:10').digest('hex'),
   );
 });
+
+test('getNode resolves one row by id, with config only when asked', async () => {
+  const cache = openCache();
+  const node = fixtureNode({ host: 'osaka-relay', ip: '219.100.37.9', port: 1194, fitness: 11 });
+  await cache.replaceAllNodes([node]);
+
+  const full = await cache.getNode(node.id);
+  assert.ok(full);
+  assert.equal(full.id, node.id);
+  assert.equal(full.hostName, 'osaka-relay');
+  assert.ok(full.ovpnConfigRaw.includes('data-ciphers'));
+
+  const configless = await cache.getNode(node.id, { withConfig: false });
+  assert.ok(configless);
+  assert.equal(configless.ovpnConfigRaw, '');
+});
+
+test('getNode resolves null for an unknown id (cache was replaced)', async () => {
+  const cache = openCache();
+  await cache.replaceAllNodes([fixtureNode({ host: 'only', ip: '203.0.113.50', port: 5, fitness: 1 })]);
+  assert.equal(await cache.getNode('b'.repeat(64)), null);
+});

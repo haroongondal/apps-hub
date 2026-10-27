@@ -45,6 +45,48 @@ function bodyFromText(text: string): AsyncIterable<Uint8Array> {
 const sourceA = 'https://www.vpngate.net/api/iphone/';
 const sourceB = 'http://www.vpngate.net/api/iphone/';
 
+/** Delay raced against the abort signal: resolves, or rejects 'Aborted'. */
+function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new Error('Aborted'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/**
+ * Streams `text` in two chunks `gapMs` apart, honouring the abort signal;
+ * `stallAfterYields` hangs (until aborted) after that many chunks — the
+ * streamless-platform shape where a download is long and can stall.
+ */
+function streamBody(
+  text: string,
+  gapMs: number,
+  stallAfterYields?: number,
+): (url: string, request: { signal: AbortSignal }) => Promise<AsyncIterable<Uint8Array>> {
+  return async (_url, request) => {
+    const bytes = Buffer.from(text, 'utf8');
+    const mid = Math.floor(bytes.length / 2);
+    let yielded = 0;
+    return (async function* () {
+      for (const part of [bytes.subarray(0, mid), bytes.subarray(mid)]) {
+        if (yielded > 0) await abortableDelay(gapMs, request.signal);
+        yield part;
+        yielded += 1;
+        if (stallAfterYields !== undefined && yielded >= stallAfterYields) {
+          await abortableDelay(10_000, request.signal);
+        }
+      }
+    })();
+  };
+}
+
 const TWO_NODE_BODY = fixtureBody([
   csvRow({ ip: '219.100.37.110', ovpnConfig: ovpnConfig({ port: 1195 }) }),
   csvRow({
@@ -104,6 +146,46 @@ test('all sources failing raises VpnGateFetchException with the cause', async ()
       assert.deepEqual(error.sourcesTried, [sourceA, sourceB]);
       assert.equal((error.cause as Error).message, 'refused');
       assert.match(error.message, /all 2 sources failed/);
+      return true;
+    },
+  );
+});
+
+test('headers that never establish inside the connect deadline abort', async () => {
+  const service = new VpnGateService({
+    fetcher: async (_url, request) => {
+      await abortableDelay(50, request.signal);
+      return bodyFromText(TWO_NODE_BODY);
+    },
+    sources: [sourceA],
+    connectTimeoutMs: 10,
+  });
+  await assert.rejects(service.fetchNodes(), VpnGateFetchException);
+});
+
+test('a slow-but-flowing body is not aborted while chunks keep arriving', async () => {
+  const service = new VpnGateService({
+    fetcher: streamBody(TWO_NODE_BODY, 5),
+    sources: [sourceA],
+    connectTimeoutMs: 1_000,
+    receiveTimeoutMs: 20,
+  });
+  const nodes = await service.fetchNodes();
+  assert.equal(nodes.length, 2);
+});
+
+test('a stalled body is aborted by the receive deadline', async () => {
+  const service = new VpnGateService({
+    fetcher: streamBody(TWO_NODE_BODY, 5, 1),
+    sources: [sourceA],
+    connectTimeoutMs: 1_000,
+    receiveTimeoutMs: 20,
+  });
+  await assert.rejects(
+    service.fetchNodes(),
+    (error: unknown) => {
+      assert.ok(error instanceof VpnGateFetchException);
+      assert.equal((error.cause as Error).message, 'Aborted');
       return true;
     },
   );

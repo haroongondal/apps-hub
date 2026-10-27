@@ -37,12 +37,20 @@ function describe(cause: unknown): string {
  * Returns the response body as a byte stream. A body without rows counts as
  * a failed source. Implementations must never buffer the multi-megabyte body
  * in memory as one string.
+ *
+ * `onHeaders` is optional and called exactly once when the response headers
+ * are established — the moment the service stops enforcing the connect
+ * deadline and starts the receive (data-gap) deadline. Streamless platforms
+ * (React Native has no streaming fetch bodies) download inside the fetcher
+ * after the headers, so without this hook the whole body download would run
+ * under the connect deadline and healthy-but-slow transfers would abort.
  */
 export type VpnGateFetcher = (
   url: string,
   request: {
     headers: Record<string, string>;
     signal: AbortSignal;
+    onHeaders?: () => void;
   },
 ) => Promise<AsyncIterable<Uint8Array>>;
 
@@ -56,6 +64,8 @@ export function defaultVpnGateFetcher(): VpnGateFetcher {
       // receive instead of throwing on status mismatches.
       redirect: 'follow',
     });
+    // Headers are established — hand the deadline baton back to the service.
+    request.onHeaders?.();
     if (response.status >= 500) {
       throw new Error(`source ${url} returned HTTP ${response.status}`);
     }
@@ -80,6 +90,19 @@ export function defaultVpnGateFetcher(): VpnGateFetcher {
       yield buffered;
     })();
   };
+}
+
+/** Resets the receive (data-gap) deadline as every chunk flows through. */
+function idleResetting(
+  stream: AsyncIterable<Uint8Array>,
+  restart: () => void,
+): AsyncIterable<Uint8Array> {
+  return (async function* () {
+    for await (const chunk of stream) {
+      restart();
+      yield chunk;
+    }
+  })();
 }
 
 export class VpnGateService {
@@ -126,9 +149,10 @@ export class VpnGateService {
       this.connectTimeoutMs,
     );
 
-    // Phase 2 (receive): dio's receiveTimeout is a data-gap deadline — reset
-    // on every chunk, so a slow-but-flowing 1.3 MB transfer lives and a
-    // stalled one dies.
+    // Phase 2 (receive): a data-gap deadline — reset on every chunk, so a
+    // slow-but-flowing 1.3 MB transfer lives and a stalled one dies. Streamless
+    // platforms deliver the whole body as one chunk after the download, so the
+    // timer is also armed at the headers moment to guard that download.
     let receiveTimer: ReturnType<typeof setTimeout> | undefined;
     const restartIdleTimer = () => {
       if (receiveTimer !== undefined) clearTimeout(receiveTimer);
@@ -139,12 +163,27 @@ export class VpnGateService {
       const chunks = await this.fetcher(source, {
         headers: { 'User-Agent': 'OpenTunnel/0.1' },
         signal: controller.signal,
+        // Fetchers that honour the hook end the connect deadline here
+        // (default platform fetcher); the explicit call below covers the
+        // injected fetchers that ignore it.
+        onHeaders: () => {
+          if (connectTimer !== undefined) {
+            clearTimeout(connectTimer);
+            connectTimer = undefined;
+          }
+          restartIdleTimer();
+        },
       });
-      clearTimeout(connectTimer);
-      connectTimer = undefined;
+      if (connectTimer !== undefined) {
+        clearTimeout(connectTimer);
+        connectTimer = undefined;
+      }
+      restartIdleTimer();
 
       const nodes: VpnNode[] = [];
-      for await (const node of parseVpnGateCsv(linesFromBytes(chunks))) {
+      for await (const node of parseVpnGateCsv(
+        linesFromBytes(idleResetting(chunks, restartIdleTimer)),
+      )) {
         nodes.push(node);
       }
       if (nodes.length === 0) {

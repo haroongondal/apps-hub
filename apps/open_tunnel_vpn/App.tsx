@@ -1,209 +1,289 @@
+/**
+ * OpenTunnel — phase-4 shell. The tunnel client (`createTunnelClient`) is
+ * the single tunnel-state authority; the node list and preferences come
+ * from the local database; both sheets are presentation modals. No tunnel
+ * state is duplicated here: everything rendered descends from a client
+ * snapshot or a native event.
+ */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { PermissionsAndroid, Platform } from 'react-native';
-import {
-  Button,
-  Dot,
-  Empty,
-  Group,
-  Header,
-  Notice,
-  Pill,
-  Row,
-  Screen,
-  Text,
-  ThemeProvider,
-  type Tone,
-} from '@apps-hub/ui';
+import { Header, Screen, ThemeProvider } from '@apps-hub/ui';
 
 import { LatencyProber, VpnGateService, type VpnNode } from 'open-tunnel-core';
-import { openVpnNodeCache } from './src/data/open-database.ts';
-import type { VpnNodeCache } from './src/data/node-cache.ts';
-import { nativeTcpProbe, openTunnelBinding } from './src/tunnel/native-tcp-probe.ts';
+import { openAppDatabase, type AppDatabase } from './src/data/open-database.ts';
+import type { TunnelSettings } from './src/data/settings-store.ts';
+import { openTunnelBinding, nativeTcpProbe } from './src/tunnel/native-tcp-probe.ts';
 import {
   createTunnelClient,
+  OpenTunnelError,
   type TunnelClient,
   type TunnelSnapshot,
 } from './src/tunnel/tunnel-client.ts';
+import { HomeScreen } from './src/ui/home-screen.tsx';
+import { ServerSheet } from './src/ui/server-sheet.tsx';
+import { SettingsSheet } from './src/ui/settings-sheet.tsx';
 
 const prober = new LatencyProber(nativeTcpProbe);
-const LIST_LIMIT = 40;
+/** Render + auto-select pool bound (display-ranking probes stay bounded). */
+const LIST_LIMIT = 60;
+
+type SheetKind = 'none' | 'servers' | 'settings';
 
 export default function App() {
   return (
     <ThemeProvider brand="opentunnel">
-      <Servers />
+      <OpenTunnelApp />
     </ThemeProvider>
   );
 }
 
-function Servers() {
-  const [cache, setCache] = useState<VpnNodeCache | null>(null);
-  const [nodes, setNodes] = useState<VpnNode[]>([]);
-  const [loading, setLoading] = useState(false);
+function OpenTunnelApp() {
+  const [database, setDatabase] = useState<AppDatabase | null>(null);
+  const [settings, setSettings] = useState<TunnelSettings | null>(null);
+  const [nodes, setNodes] = useState<readonly VpnNode[]>([]);
+  const [activeNode, setActiveNode] = useState<VpnNode | null>(null);
+  const [tunnel, setTunnel] = useState<TunnelSnapshot>({
+    state: 'disconnected',
+    message: null,
+    traffic: null,
+  });
+  const [sheet, setSheet] = useState<SheetKind>('none');
+  const [scanning, setScanning] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [tunnel, setTunnel] = useState<TunnelSnapshot>({ state: 'disconnected', message: null, traffic: null });
+  const [actionError, setActionError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  const busy = tunnel.state === 'connecting' || tunnel.state === 'disconnecting';
+  const live = tunnel.state === 'connected' || tunnel.state === 'reasserting' || busy;
+  const activeId = activeNode?.id ?? null;
 
   const clientRef = useRef<TunnelClient | null>(null);
   if (clientRef.current === null) clientRef.current = createTunnelClient(openTunnelBinding);
   const client = clientRef.current;
 
+  // One subscription: the snapshot feeds the screens; native events own
+  // cadence. Removed on unmount (plan §4 cleanup rule).
   useEffect(() => {
+    mountedRef.current = true;
     const handle = client.subscribe(setTunnel);
     void client.refresh();
-    return () => handle.remove();
+    return () => {
+      mountedRef.current = false;
+      handle.remove();
+    };
   }, [client]);
 
-  const refresh = useCallback(async (opened: VpnNodeCache) => {
-    setLoading(true);
+  const refreshList = useCallback(async (opened: AppDatabase) => {
+    setRefreshing(true);
     setLoadError(null);
     try {
-      await opened.replaceAllNodes(await new VpnGateService().fetchNodes());
-      const best = await opened.loadNodes({ limit: LIST_LIMIT, withConfig: true });
-      setNodes(await prober.probeAndScoreNodes(best));
+      await opened.nodes.replaceAllNodes(await new VpnGateService().fetchNodes());
+      const best = await opened.nodes.loadNodes({ limit: LIST_LIMIT });
+      const ranked = await prober.probeAndScoreNodes(best);
+      if (mountedRef.current) setNodes(ranked);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : String(error));
+      if (mountedRef.current) {
+        setLoadError(error instanceof Error ? error.message : String(error));
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setRefreshing(false);
     }
   }, []);
 
+  // Cache-first open: settings + last node + cached list, then a fetch when
+  // the cache is empty (phase-2 parity).
   useEffect(() => {
     let cancelled = false;
-    openVpnNodeCache()
+    openAppDatabase()
       .then(async (opened) => {
         if (cancelled) return;
-        setCache(opened);
-        const cached = await opened.loadNodes({ limit: LIST_LIMIT, withConfig: true });
+        setDatabase(opened);
+        const loaded = await opened.settings.loadSettings();
+        if (cancelled) return;
+        setSettings(loaded);
+        if (loaded.lastNodeId !== null) {
+          // Configless label lookup — the payload is only fetched at
+          // connect time (plan §5).
+          const node = await opened.nodes.getNode(loaded.lastNodeId, { withConfig: false });
+          if (!cancelled && node) setActiveNode(node);
+        }
+        const cached = await opened.nodes.loadNodes({ limit: LIST_LIMIT });
+        if (cancelled) return;
         setNodes(cached);
-        if (cached.length === 0) await refresh(opened);
+        if (cached.length === 0) await refreshList(opened);
       })
-      .catch((error: unknown) => setLoadError(String(error)));
+      .catch((error: unknown) => {
+        if (!cancelled) setLoadError(String(error));
+      });
     return () => {
       cancelled = true;
     };
-  }, [refresh]);
+  }, [refreshList]);
 
   const connect = useCallback(
     async (node: VpnNode) => {
+      if (database === null) {
+        setActionError('The local database is still opening. Try again in a moment.');
+        return;
+      }
+      setActionError(null);
       await requestNotifications();
-      setActiveId(node.id);
-      await client.startTunnel(client.configFromNode(node, { enableKillSwitch: true }));
+      try {
+        // Connect-time payload fetch by node id (list reads are configless).
+        const loaded = await database.nodes.getNode(node.id, { withConfig: true });
+        if (loaded === null) {
+          setActionError('This relay is no longer in the cache. Pull down to refresh the list.');
+          return;
+        }
+        const config = client.configFromNode(loaded, {
+          enableKillSwitch: settings?.killSwitchEnabled ?? true,
+          disallowedApps: Platform.OS === 'android' ? (settings?.disallowedApps ?? []) : [],
+        });
+        await database.settings.setLastNodeId(node.id);
+        setActiveNode(loaded);
+        // Switching relays never double-starts: a live tunnel gets an
+        // explicit stop before the new start (plan §5).
+        const current = client.getSnapshot();
+        if (current.state === 'connected' || current.state === 'reasserting' || current.state === 'connecting') {
+          await client.stopTunnel();
+        }
+        await client.startTunnel(config);
+        setSheet('none');
+      } catch (error) {
+        // Typed pre-start failures (invalid config, payload mismatch) —
+        // surfaced verbatim next to the native error surface.
+        setActionError(describeLocalError(error));
+      }
     },
-    [client],
+    [client, database, settings],
   );
 
-  const busy = tunnel.state === 'connecting' || tunnel.state === 'disconnecting';
-  const live = tunnel.state === 'connected' || tunnel.state === 'reasserting' || busy;
-  const active = nodes.find((node) => node.id === activeId) ?? null;
+  const autoSelect = useCallback(async () => {
+    if (busy || nodes.length === 0) {
+      if (nodes.length === 0) setActionError('No servers are cached yet. Pull down to load the list.');
+      return;
+    }
+    setActionError(null);
+    setScanning(true);
+    try {
+      // Bounded native probe (concurrency 8) + fitness scoring; socket work
+      // happens in the native module, never on the JS thread.
+      const ranked = await prober.probeAndScoreNodes(nodes, { concurrency: 8 });
+      if (mountedRef.current) setNodes(ranked);
+      const winner = ranked[0];
+      if (winner) await connect(winner);
+    } catch (error) {
+      if (mountedRef.current) setActionError(describeLocalError(error));
+    } finally {
+      if (mountedRef.current) setScanning(false);
+    }
+  }, [busy, connect, nodes]);
+
+  const changeKillSwitch = useCallback(
+    async (enabled: boolean) => {
+      if (database === null) return;
+      await database.settings.setKillSwitchEnabled(enabled);
+      setSettings((current) =>
+        current === null
+          ? current
+          : { ...current, killSwitchEnabled: enabled },
+      );
+    },
+    [database],
+  );
+
+  const addDisallowedApp = useCallback(
+    async (packageName: string) => {
+      if (database === null) return;
+      const current = settings?.disallowedApps ?? [];
+      await database.settings.setDisallowedApps([...current, packageName]);
+      setSettings((current2) =>
+        current2 === null ? current2 : { ...current2, disallowedApps: [...current2.disallowedApps, packageName] },
+      );
+    },
+    [database, settings],
+  );
+
+  const removeDisallowedApp = useCallback(
+    async (packageName: string) => {
+      if (database === null) return;
+      const current = settings?.disallowedApps ?? [];
+      await database.settings.setDisallowedApps(current.filter((app) => app !== packageName));
+      setSettings((current2) =>
+        current2 === null
+          ? current2
+          : { ...current2, disallowedApps: current2.disallowedApps.filter((app) => app !== packageName) },
+      );
+    },
+    [database, settings],
+  );
+
+  const openSystemSettings = useCallback(() => {
+    void client.openSystemVpnSettings();
+  }, [client]);
+
+  const disconnect = useCallback(() => {
+    void client.stopTunnel();
+  }, [client]);
 
   return (
-    <Screen scroll refreshing={loading} onRefresh={cache ? () => void refresh(cache) : undefined}>
-      <Header title="OpenTunnel" subtitle="Free VPN Gate servers, no account" />
-
-      <Group title="Connection">
-        <Row
-          leading={<Dot tone={STATE_TONE[tunnel.state]} />}
-          title={stateTitle(tunnel, active)}
-          subtitle={live && tunnel.traffic ? trafficLine(tunnel.traffic) : undefined}
-          trailing={
-            live ? (
-              <Button label="Disconnect" variant="secondary" size="sm" busy={tunnel.state === 'disconnecting'} onPress={() => void client.stopTunnel()} />
-            ) : undefined
-          }
+    <>
+      <Screen scroll refreshing={refreshing} onRefresh={database ? () => void refreshList(database) : undefined}>
+        <Header title="OpenTunnel" subtitle="Free VPN Gate relays, no account" />
+        <HomeScreen
+          tunnel={tunnel}
+          activeNode={activeNode}
+          nodeCount={nodes.length}
+          scanning={scanning}
+          loadError={loadError}
+          actionError={actionError}
+          onConnect={(node) => void connect(node)}
+          onAutoSelect={() => void autoSelect()}
+          onDisconnect={disconnect}
+          onOpenServers={() => setSheet('servers')}
+          onOpenSettings={() => setSheet('settings')}
+          onOpenSystemSettings={openSystemSettings}
         />
-      </Group>
+      </Screen>
 
-      {tunnel.state === 'error' && tunnel.message && (
-        <Notice tone="danger" title="Couldn't connect">
-          {tunnel.message.replace(/^ERR_[A-Z_]+: /, '')}
-        </Notice>
-      )}
-      {loadError && (
-        <Notice tone="warn" title="Couldn't load the server list">
-          {`${loadError}. Pull down to try again.`}
-        </Notice>
-      )}
+      <ServerSheet
+        visible={sheet === 'servers'}
+        onClose={() => setSheet('none')}
+        nodes={nodes}
+        activeId={activeId}
+        live={live}
+        tunnel={tunnel}
+        busy={busy}
+        onConnect={(node) => void connect(node)}
+      />
 
-      {nodes.length === 0 ? (
-        <Empty
-          title={loading ? 'Loading servers' : 'No servers yet'}
-          body={loading ? 'Fetching the VPN Gate list. This can take a minute.' : 'Pull down to load the VPN Gate list.'}
+      {settings !== null && (
+        <SettingsSheet
+          visible={sheet === 'settings'}
+          onClose={() => setSheet('none')}
+          settings={settings}
+          onChangeKillSwitch={(enabled) => void changeKillSwitch(enabled)}
+          onAddDisallowedApp={(packageName) => void addDisallowedApp(packageName)}
+          onRemoveDisallowedApp={(packageName) => void removeDisallowedApp(packageName)}
+          onOpenSystemSettings={() => {
+            setSheet('none');
+            openSystemSettings();
+          }}
         />
-      ) : (
-        <Group
-          title="Servers"
-          footer="Volunteers run these servers and can see which sites you visit. Use HTTPS sites."
-        >
-          {nodes.map((node) => (
-            <Row
-              key={node.id}
-              title={`${countryName(node)} · ${node.hostName}`}
-              subtitle={serverLine(node)}
-              trailing={node.id === activeId && live ? <Pill label={tunnel.state === 'connected' ? 'Connected' : 'Connecting'} tone="ok" /> : undefined}
-              onPress={busy ? undefined : () => void connect(node)}
-              accessibilityHint="Connects to this server"
-            />
-          ))}
-        </Group>
       )}
-
-      <Button label="Always-on VPN settings" variant="ghost" onPress={() => void client.openSystemVpnSettings()} />
-      <Text variant="caption" tone="faint" align="center">
-        OpenTunnel is free software under the GPLv2. Source: github.com/haroongondal/apps-hub
-      </Text>
-    </Screen>
+    </>
   );
 }
 
-const STATE_TONE: Record<TunnelSnapshot['state'], Tone> = {
-  disconnected: 'neutral',
-  connecting: 'warn',
-  connected: 'ok',
-  reasserting: 'warn',
-  disconnecting: 'warn',
-  error: 'danger',
-};
-
-function stateTitle(tunnel: TunnelSnapshot, active: VpnNode | null): string {
-  const where = active ? ` to ${countryName(active)}` : '';
-  switch (tunnel.state) {
-    case 'connected':
-      return `Connected${where}`;
-    case 'connecting':
-      return `Connecting${where}`;
-    case 'reasserting':
-      return `Reconnecting${where}`;
-    case 'disconnecting':
-      return 'Disconnecting';
-    default:
-      return 'Not connected. Tap a server to connect.';
-  }
-}
-
-function countryName(node: VpnNode): string {
-  return node.countryLong || node.countryShort;
-}
-
-function serverLine(node: VpnNode): string {
-  const ping = node.measuredRttMs === null ? node.pingMs : Math.round(node.measuredRttMs);
-  return `${ping} ms · ${(node.speedBps / 1_000_000).toFixed(0)} Mbps · ${node.transportProto.toUpperCase()}`;
-}
-
-// Native ticks carry bytes moved in the last second, not running totals.
-function trafficLine(traffic: NonNullable<TunnelSnapshot['traffic']>): string {
-  return `Down ${formatBytes(traffic.bytesIn)}/s · Up ${formatBytes(traffic.bytesOut)}/s · ${formatDuration(traffic.connectedDurationSec)}`;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${bytes} B`;
-}
-
-function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  return m > 0 ? `${m} min` : `${seconds} s`;
+/**
+ * Verbatim wording for failures caught before the native call (config
+ * build, cache read). Native-side failures flow through the snapshot.
+ */
+function describeLocalError(error: unknown): string {
+  if (error instanceof OpenTunnelError) return `${error.code}: ${error.message}`;
+  if (error instanceof Error) return error.message;
+  return `the connect attempt failed (${typeof error})`;
 }
 
 // A denial only hides the connection notice; the tunnel still runs.

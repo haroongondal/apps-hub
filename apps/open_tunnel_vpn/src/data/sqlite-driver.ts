@@ -2,7 +2,7 @@
  * Two SQLite drivers for the {@link VpnNodeCache}: the on-device
  * `expo-sqlite` driver and a Node-only `node:sqlite` driver used by the unit
  * tests. Both are real engines — tests exercise the app's actual SQL with
- * no mocks.
+ * no stubs.
  */
 import type * as SQLite from 'expo-sqlite';
 

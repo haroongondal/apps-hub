@@ -18,6 +18,7 @@
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 		FD9271867EBEFC59C3DEC2B1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13AB86D5A3BEDBC31565466A /* PrivacyInfo.xcprivacy */; };
+		5A0B1E571024000000000003 /* OpenTunnelUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A0B1E571024000000000001 /* OpenTunnelUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -27,6 +28,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 27F9048E0B1EA1752426F115;
 			remoteInfo = OpenTunnelPacketTunnel;
+		};
+		5A0B1E57102400000000000A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 13B07F861A680F5B00A75B9A;
+			remoteInfo = OpenTunnel;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -56,6 +64,8 @@
 		7E2A2BA03473CA679E290F54 /* libPods-OpenTunnel.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-OpenTunnel.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		823C646E7DF0D87004AF20C7 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-OpenTunnel/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		96DB829999FABD7691DC8AA8 /* OpenTunnelPacketTunnel.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OpenTunnelPacketTunnel.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		5A0B1E571024000000000001 /* OpenTunnelUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenTunnelUITests.swift; sourceTree = "<group>"; };
+		5A0B1E571024000000000002 /* OpenTunnelUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenTunnelUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A6812529453424CC953CC79D /* PacketTunnelProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PacketTunnelProvider.swift; path = PacketTunnelProvider.swift; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = OpenTunnel/SplashScreen.storyboard; sourceTree = "<group>"; };
 		B2BAD02A4BA5EB5DC8A995BF /* OpenTunnelShared.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = OpenTunnelShared.swift; path = OpenTunnelShared.swift; sourceTree = "<group>"; };
@@ -163,6 +173,7 @@
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				43605A30BDDC46BF9578073D /* OpenTunnelPacketTunnel */,
+				5A0B1E571024000000000004 /* OpenTunnelUITests */,
 				55CD392F1179310146D1C1F6 /* OpenTunnelSharedSource */,
 				53B8B1730807AF281289A464 /* Pods */,
 				9D0EC2B06D742EA5AF745786 /* ExpoModulesProviders */,
@@ -177,6 +188,7 @@
 			children = (
 				13B07F961A680F5B00A75B9A /* OpenTunnel.app */,
 				96DB829999FABD7691DC8AA8 /* OpenTunnelPacketTunnel.appex */,
+				5A0B1E571024000000000002 /* OpenTunnelUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -204,6 +216,14 @@
 				7B934A6F7F9FBBA0B21DF205 /* Foundation.framework */,
 			);
 			name = iOS;
+			sourceTree = "<group>";
+		};
+		5A0B1E571024000000000004 /* OpenTunnelUITests */ = {
+			isa = PBXGroup;
+			children = (
+				5A0B1E571024000000000001 /* OpenTunnelUITests.swift */,
+			);
+			path = OpenTunnelUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -250,6 +270,22 @@
 			productReference = 96DB829999FABD7691DC8AA8 /* OpenTunnelPacketTunnel.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		5A0B1E571024000000000006 /* OpenTunnelUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5A0B1E571024000000000009 /* Build configuration list for PBXNativeTarget "OpenTunnelUITests" */;
+			buildPhases = (
+				5A0B1E571024000000000005 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5A0B1E57102400000000000B /* PBXTargetDependency */,
+			);
+			name = OpenTunnelUITests;
+			productName = OpenTunnelUITests;
+			productReference = 5A0B1E571024000000000002 /* OpenTunnelUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -260,6 +296,9 @@
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
 						LastSwiftMigration = 1250;
+					};
+					5A0B1E571024000000000006 = {
+						TestTargetID = 13B07F861A680F5B00A75B9A;
 					};
 				};
 			};
@@ -278,6 +317,7 @@
 			targets = (
 				13B07F861A680F5B00A75B9A /* OpenTunnel */,
 				27F9048E0B1EA1752426F115 /* OpenTunnelPacketTunnel */,
+				5A0B1E571024000000000006 /* OpenTunnelUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -436,6 +476,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5A0B1E571024000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5A0B1E571024000000000003 /* OpenTunnelUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -444,6 +492,11 @@
 			name = OpenTunnelPacketTunnel;
 			target = 27F9048E0B1EA1752426F115 /* OpenTunnelPacketTunnel */;
 			targetProxy = 9A02246A588BA80D145ECDAD /* PBXContainerItemProxy */;
+		};
+		5A0B1E57102400000000000B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 13B07F861A680F5B00A75B9A /* OpenTunnel */;
+			targetProxy = 5A0B1E57102400000000000A /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -530,6 +583,8 @@
 					"\"@loader_path/Frameworks\"",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.opentunnel.openTunnelVpn.PacketTunnel;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -556,6 +611,8 @@
 					"\"@loader_path/Frameworks\"",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.opentunnel.openTunnelVpn.PacketTunnel;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -683,6 +740,53 @@
 			};
 			name = Release;
 		};
+		5A0B1E571024000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"\"$(inherited)\"",
+					"\"@executable_path/Frameworks\"",
+					"\"@loader_path/Frameworks\"",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.opentunnel.openTunnelVpnUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = OpenTunnel;
+			};
+			name = Debug;
+		};
+		5A0B1E571024000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"\"$(inherited)\"",
+					"\"@executable_path/Frameworks\"",
+					"\"@loader_path/Frameworks\"",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.opentunnel.openTunnelVpnUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = OpenTunnel;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -709,6 +813,15 @@
 			buildConfigurations = (
 				458F1DFE61171AF3CD449FC0 /* Release */,
 				6EE474849DEC3186AFB94BB9 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5A0B1E571024000000000009 /* Build configuration list for PBXNativeTarget "OpenTunnelUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5A0B1E571024000000000007 /* Debug */,
+				5A0B1E571024000000000008 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
