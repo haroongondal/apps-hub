@@ -44,7 +44,8 @@ User request: majorly improve the frontends of Store, PDF editor and NetLens wit
 
 ## 7. Current state and next step
 
-- Committed a32fa72 on branch `frontend-unification`, pushed to GitHub (not merged to main). The branch also carries other sessions' OpenTunnel commits.
-- Released 2026-10-27 through the private store: pdf-editor 1.0.0 (3), netlens 0.1.0 (3), store 0.1.0 (4). open-tunnel deliberately left at 1.0.0 (2) because its RN port is mid-migration.
-- Not yet seen on a device. Next: update the apps from the Store on the phone and check light/dark; merge the branch to main when happy.
-- Open ideas: list-friendly Group for FlatList, mono label option on Readout, design-editor dark mode, drop unused expo-router template deps from pdf-editor-mobile.
+- Branch `frontend-unification` pushed (latest d0e24a0); not merged to main.
+- Store: store 6, netlens 4, pdf-editor 3, open-tunnel 2 (deliberately untouched). The user's Xiaomi (Android 16, HyperOS) runs exactly these.
+- Verified on the phone 2026-10-27: Store lists all apps correctly; NetLens scan (135 devices on /24), device sheet and diagnostics work; PDF Editor opens and edits a PDF; OpenTunnel refreshes 97 relays (phase-1 screen only).
+- Known: Play Protect holds Store installs with a ~17 s approval window (verifier_timeout=17000). "Install without scanning" + fingerprint usually times out and aborts; "Scan app" is the reliable path, or adb `install -r -i com.haroon.store`.
+- Next options: background download for Store installs (MIUI may freeze it); OpenTunnel UI on packages/ui; merge to main.
