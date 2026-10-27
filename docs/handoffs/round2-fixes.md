@@ -90,12 +90,14 @@ Environment: Node 22.23.4 is the nvm default (graft needed `SDKROOT=$(xcrun --sd
 
 - s2: user said "release store 8 then": `✔ store 8 published` (58.8 MB). Phone still has Store 6 (can't install 8 itself); waiting for the user to choose the one-time bootstrap (browser download link via a 10-min signed URL from store-api `/sign`, or one adb install exception).
 
+- s2: user chose "install using adb" (one-time exception): `adb install -r -i com.haroon.store` of the released Store 8 APK → phone Store 8, installer of record kept. Then through Store 8 (taps via adb, installs by the Store): NetLens 4→5, OpenTunnel 2→3, PDF Editor 3→4, all `PackageInstallerSession ... as applied`, zero `assertCallerAndPackage` denials. HyperOS shows "Xiaomi security scan" (com.miui.global.packageinstaller ScanActivity) then installs and opens the app. Play Protect scanning was still OFF during these (user turned it off for the test).
+
 ## 7. Current state and exact next step
 
-Done: goals 3, 6 (PDF), Store fix, NetLens VPN fix, OpenTunnel logo (s1); goal 7 OpenTunnel connect (s2, committed on `round2-fixes`, not pushed, not released).
-Waiting on the user: (a) OpenTunnel 3 is released: they update it through the Store on the phone and try a few servers (consent dialog, connect, switch, disconnect). (b) From s1: phone Store 6 → 7 (Play Protect: Scan app), then NetLens 5 + PDF Editor 4 via Store; report NetLens host count with VPN on. Never adb-install on the phone.
+Done: goals 3, 6, Store fix (Store 8: HyperOS silent-install fix, verified on the phone), NetLens VPN fix, OpenTunnel connect + logo (OpenTunnel 3). Phone now: Store 8, NetLens 5, OpenTunnel 3, PDF Editor 4.
+Waiting on the user: turn Play Protect scanning back on; try OpenTunnel 3 on the phone (consent, connect, switch, disconnect); NetLens 5 host count with the VPN on.
 Next steps, in order:
-1. Ask the user for OpenTunnel 3 phone results (consent dialog, connect, switch, disconnect). Untested so far: 30 s timeout path, phone (non-emulator) OpenSSL CPU detection.
-2. NetLens purpose, part 1 "device guard": brainstorm/spec first (superpowers:brainstorming → writing-plans), then build: named devices (mDNS/SSDP names from `MdnsProbe`/`SsdpProbe`, stored in `apps/netlens/src/db/`), trust list, flag new unknown devices per scan. Part 2: "why is my internet slow" verdict screen.
+1. Collect phone results for OpenTunnel 3 and NetLens 5; fix what they report. Open question: with Play Protect scanning ON, do Store 8 installs still get the "Harmful app blocked" dialog for Store itself (needs "Install anyway")? Normal app updates should now work either way.
+2. NetLens purpose, part 1 "device guard": brainstorm/spec first (superpowers:brainstorming → writing-plans), then build (named devices from MdnsProbe/SsdpProbe in `apps/netlens/src/db/`, trust list, flag new unknown devices). Part 2: "why is my internet slow" verdict screen.
 3. Merge `round2-fixes` into main and push once the user confirms phone results.
-Known gaps (OpenTunnel): no WireGuard import UI; kill switch not enforced app-side for either engine (OS Always-on settings link only); no JVM tests for engine state logic (needs Robolectric or an extracted pure state function); `expo prebuild --clean` would drop the hand-written ics manifest overrides (not in the config plugin).
+Known gaps (OpenTunnel): no WireGuard import UI; kill switch not enforced app-side; no JVM tests for engine state logic; `expo prebuild --clean` would drop the hand-written ics manifest overrides.
