@@ -70,15 +70,13 @@ Environment: Node 22.23.4 is the nvm default (graft needed `SDKROOT=$(xcrun --sd
 - s1 (2026-10-27): main fast-forwarded to 695ac29 and pushed (goal 3 done). Work continues on branch `round2-fixes` (from 695ac29). Asked the §3 decisions.
 - s1: Store fix (7ecf8f7): `InstallWorker` (WorkManager foreground job, dataSync, progress notification), verified APK kept in cache/apks/<sha>.apk until an install succeeds (instant retry after a Play Protect abort), background-finished downloads post "ready to install" instead of committing unseen, PENDING_USER_ACTION in background → notification, reopened Store shows running downloads. Verified on emulator (Android 15, adb allowed there by the user): NetLens 3→4, PDF Editor 1→3 (FGS type 0x1 running while backgrounded at 98%; resumed after force-stop), OpenTunnel 1→2 (background finish → notification → retry from cache in <3 s; Cancel → notice). Store 7 released (`✔ store 7 published`). Phone still on Store 6: user must self-update through Store 6 (tap Scan app on Play Protect).
 - s1: NetLens false positives. Measured from the Mac (192.168.18.242, same /24, same ports/350 ms/64 workers, script was a scratch node sweep): **3 hosts** (.1 open:80, .209 refused:80, .242). So the router does not fake RSTs; the 135 came from the phone (VPN seen in status bar). Fix 9218320: `PlatformNetwork.lanNetwork` (Wi-Fi/Ethernet non-VPN network) for interface detection; sweep + private-address handshakes use `lanNetwork.socketFactory`; internet handshakes keep the default route. Rule 2 unchanged. JVM tests 10/10, core 65/65. NetLens 5 released. iOS twin not changed (iOS VPNs usually exclude the LAN; revisit if seen). Phone adb was unreachable (wireless debugging off).
+- s1: PDF editor (goal 6) done: the saved PDF was already right (content-stream rewrite, no cover box); the on-screen edit box used `color:#000; background:#fff`. `core.js pageInk()` samples the rendered canvas around the box (border mode = bg, farthest pixel = ink) into `--tb-bg/--tb-ink`. e2e now uses a #fde68a page with navy text; all 3 desktop suites pass. PDF Editor 4 released.
 
 ## 7. Current state and exact next step
 
-Goal 3 (merge) done in s1. Suggested order:
-1. ~~Merge `frontend-unification` into `main` (fast-forward or merge commit, push), then branch for the work below.~~ Done.
-2. Ask the §3 decisions (one message).
-3. Store download/update robustness (foreground download with progress notification, restore in-progress state on reopen); verify on the phone over wireless debugging, including a real Store self-update and an app update through Play Protect ("Scan app").
-4. NetLens false positives: instrument, measure on the phone, fix within the hard rules (or with the user's OK to change rule 2).
-5. PDF editor white background after text edit: reproduce, fix, cover with the desktop e2e.
-6. OpenTunnel logo (+ answer/act on gate G1).
-7. NetLens purpose: build the direction the user picked.
-8. Release changed apps, install on the phone, re-verify.
+Done: goal 3 (merge), Store fix (Store 7 released), NetLens VPN fix (NetLens 5 released), PDF fix (PDF Editor 4 released). Branch `round2-fixes`, not yet merged to main/pushed.
+Waiting on the user: self-update Store 6 → 7 on the phone (Play Protect: tap Scan app), then update NetLens 5 + PDF Editor 4 through Store 7; report the NetLens host count with the VPN on.
+Next:
+1. OpenTunnel logo (§4 recipe). G1 stays open: user unsure; explain GPLv2 vs WireGuard-only plainly again when it comes up.
+2. NetLens purpose: device guard first (named devices via mDNS/SSDP, trust list, flag new unknown devices), then the "why is my internet slow" verdict. Use superpowers:brainstorming/writing-plans to spec before building.
+3. Merge `round2-fixes` into main and push when the user confirms the phone results.
