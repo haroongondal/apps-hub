@@ -1,0 +1,95 @@
+# Every push: tests + typecheck. Pushes to main also publish each Store app whose files changed
+# (the app, its native modules, or a workspace package it depends on; docs-only changes publish nothing).
+# Secrets and setup: docs/app-store.md "CI/CD".
+name: CI
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      apps:
+        description: 'Apps to release, space-separated: netlens open-tunnel pdf-editor store'
+        required: true
+
+concurrency:
+  # One release at a time on main (the manifest is read-modify-write); never cancel one halfway.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.changed.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm typecheck
+      - id: changed
+        env:
+          BASE: ${{ github.event.before }}
+          REQUESTED: ${{ inputs.apps }}
+        run: |
+          apps="${REQUESTED:-$(node tools/release/src/changed.ts "$BASE")}"
+          echo "Apps to release: ${apps:-none}"
+          echo "apps=$apps" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: test
+    if: github.ref == 'refs/heads/main' && needs.test.outputs.apps != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Free disk space for the Android builds
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - name: Android SDK packages
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006" > /dev/null
+      - run: pnpm install --frozen-lockfile
+      - name: Signing key and Store credentials
+        env:
+          KEYSTORE: ${{ secrets.APPS_HUB_RELEASE_KEYSTORE }}
+          STORE_PASSWORD: ${{ secrets.APPS_HUB_RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.APPS_HUB_RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.APPS_HUB_RELEASE_KEY_PASSWORD }}
+          STORE_API_URL: ${{ secrets.STORE_API_URL }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          mkdir -p ~/.gradle ~/.config/apps-hub
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
+          cat >> ~/.gradle/gradle.properties <<EOF
+          APPS_HUB_RELEASE_STORE_FILE=$RUNNER_TEMP/release.jks
+          APPS_HUB_RELEASE_STORE_PASSWORD=$STORE_PASSWORD
+          APPS_HUB_RELEASE_KEY_ALIAS=$KEY_ALIAS
+          APPS_HUB_RELEASE_KEY_PASSWORD=$KEY_PASSWORD
+          EOF
+          printf 'STORE_API_URL=%s\nRELEASE_TOKEN=%s\n' "$STORE_API_URL" "$RELEASE_TOKEN" > ~/.config/apps-hub/release.env
+          chmod 600 ~/.gradle/gradle.properties ~/.config/apps-hub/release.env "$RUNNER_TEMP/release.jks"
+      - name: Release
+        env:
+          APPS: ${{ needs.test.outputs.apps }}
+          MESSAGE: ${{ github.event.head_commit.message || 'Manual release' }}
+        run: |
+          read -ra ids <<< "$APPS"
+          pnpm release "${ids[@]}" -m "${MESSAGE%%$'\n'*}"
+      - name: Remove credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" ~/.gradle/gradle.properties ~/.config/apps-hub/release.env

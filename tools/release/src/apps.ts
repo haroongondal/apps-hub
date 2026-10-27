@@ -23,3 +23,9 @@ export const APPS: Record<string, ReleasableApp> = {
   },
   store: { name: 'Store', dir: 'apps/store', android: { packageName: 'com.haroon.store' } },
 };
+
+/** Release ids of the apps whose workspace-relative dir is in `dirs` (the packages pnpm says changed). */
+export function releaseIdsForDirs(dirs: string[]): string[] {
+  const changed = new Set(dirs);
+  return Object.keys(APPS).filter((id) => changed.has(APPS[id].dir));
+}

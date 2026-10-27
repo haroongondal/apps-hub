@@ -399,6 +399,9 @@ importers:
         specifier: 0.5.1
         version: 0.5.1(@babel/core@7.29.7(supports-color@8.1.1))(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)(supports-color@8.1.1)
     devDependencies:
+      '@apps-hub/pdf-editor-engine':
+        specifier: workspace:*
+        version: link:../../packages/pdf-editor-engine
       '@types/react':
         specifier: ~19.1.0
         version: 19.1.17

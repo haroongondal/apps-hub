@@ -17,10 +17,11 @@ and are invoked as `/phase1` … `/phase4`.
 | expo-sqlite cache (Drift parity, `node:sqlite` tests) | Implemented |
 | Android VPN/FGS permissions + scoped cleartext policy | Configured (Expo config plugin) |
 | iOS ATS exception (vpngate.net) — bundle id retained | Configured |
-| Phase 1 — ingestion, parser, sanitizer, scorer, cache | **Ported and green** (22 + 7 tests) |
-| Phase 2 — Expo native module + Android VpnService | Not implemented |
-| Phase 3 — iOS Network Extension | Not implemented (manual Xcode target) |
-| Phase 4 — full UI | Not implemented (Phase-1 parity list screen only) |
+| Phase 1 — ingestion, parser, sanitizer, scorer, cache | Done |
+| Phase 2 — Android VpnService + OpenVPN engine (ics-openvpn) | Done; connects to VPN Gate relays on a real phone (2026-10-27) |
+| Phase 3 — iOS Network Extension | Module + provider built; both iOS engines still gated (OpenVPN core licence, WireGuard Go build) |
+| Phase 4 — full UI | Built: server list, connect/disconnect, live traffic, settings (on `@apps-hub/ui`); not yet tested on a phone |
+| Distribution | Private Store (Android). Every push to `main` that changes this app, its native module or a package it uses publishes a new build automatically (`docs/app-store.md`, "CI/CD") |
 
 ## Quick start
 
@@ -95,7 +96,7 @@ the app.
 - VPN Gate needs a scoped cleartext exception for its HTTP fallback
   (`plugin/opentunnel-android-config.js`) plus the iOS ATS exception
   (already in `app.json`). HTTPS remains primary.
-- Licensing is a release blocker — decide before distribution.
+- Licensing was decided on 2026-10-27: GPL-2.0-only (see above).
 
 ## Migration provenance (Flutter → React Native, 2026-10-26)
 

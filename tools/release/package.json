@@ -5,7 +5,7 @@
   "type": "module",
   "description": "pnpm release <app>: build, sign-check, upload, update the private store manifest",
   "scripts": {
-    "test": "node --test src/__tests__/android.test.ts",
+    "test": "node --test src/__tests__/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

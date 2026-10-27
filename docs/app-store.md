@@ -15,6 +15,7 @@ pnpm release <app>                 apps-hub-store Worker (Cloudflare)           
 |---|---|
 | Manifest schema + pinned cert (`SIGNING_CERT_SHA256`) | `packages/store-manifest` |
 | Release CLI | `tools/release` (`pnpm release`) |
+| CI/CD (auto-release on push to `main`) | `.github/workflows/ci.yml`, `tools/release/src/changed.ts` |
 | Worker: auth, signed URLs, uploads | `tools/store-api` |
 | Store app + native module (`store-installer`) | `apps/store`, `apps/store/modules/store-installer` |
 
@@ -97,6 +98,30 @@ For each app, the CLI:
 
 `--platform ios` exits with an explanation until iOS is set up.
 
+### CI/CD (automatic releases)
+
+`.github/workflows/ci.yml` runs on GitHub Actions (free for this public repo):
+
+- **Every push, any branch:** `pnpm test` and `pnpm typecheck`, then it prints which apps a release would include.
+- **Push to `main`:** if the tests pass, it runs `pnpm release <apps> -m "<commit subject>"` for each Store app
+  affected by the pushed commits. "Affected" comes from pnpm's dependency graph
+  (`tools/release/src/changed.ts`): the app folder (including its native module in `apps/<app>/modules/`) or any
+  workspace package the app depends on, e.g. `packages/ui` releases all four, `packages/core` only NetLens.
+  Changes to `*.md` files alone release nothing. A release only reads the commit range of that push, so if
+  one fails, re-run it from the Actions tab or use **Run workflow** with the app ids.
+- **Manual:** Actions → CI → Run workflow, `apps` = `netlens open-tunnel pdf-editor store` (any subset).
+
+Releases run one at a time (`concurrency`), since each one rewrites `manifest.json`. Repository secrets
+(Settings → Secrets and variables → Actions), copied from this Mac's files:
+
+| Secret | Source |
+|---|---|
+| `APPS_HUB_RELEASE_KEYSTORE` | `base64 -i ~/.config/apps-hub/release.jks` |
+| `APPS_HUB_RELEASE_STORE_PASSWORD`, `APPS_HUB_RELEASE_KEY_ALIAS`, `APPS_HUB_RELEASE_KEY_PASSWORD` | `~/.gradle/gradle.properties` |
+| `STORE_API_URL`, `RELEASE_TOKEN` | `~/.config/apps-hub/release.env` |
+
+After rotating `RELEASE_TOKEN` (section 4), update the GitHub secret too.
+
 ---
 
 ## 3. Android: first-time phone setup
@@ -140,7 +165,8 @@ so its scheduling keeps working. Package visibility uses a `<queries>` list
 1. In `tools/store-api/.dev.vars`, replace `STORE_TOKEN` and/or `RELEASE_TOKEN` (`openssl rand -hex 32`).
    Rotating `SIGNING_KEY` only invalidates download links that haven't expired yet.
 2. `pnpm run deploy` (from `tools/store-api`).
-3. New `RELEASE_TOKEN` → update `~/.config/apps-hub/release.env`.
+3. New `RELEASE_TOKEN` → update `~/.config/apps-hub/release.env` and the `RELEASE_TOKEN` GitHub secret
+   (`gh secret set RELEASE_TOKEN`).
    New `STORE_TOKEN` → in the Store tap **Sign out** and enter the new token.
 
 ---
