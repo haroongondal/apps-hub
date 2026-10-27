@@ -20,9 +20,9 @@ import {
   useTheme,
 } from '@apps-hub/ui';
 import { SIGNING_CERT_SHA256, type StoreApp, type StoreManifest } from '@apps-hub/store-manifest';
-import StoreInstaller, { type InstallStatusEvent } from 'store-installer';
+import StoreInstaller, { type InstallProgress, type InstallStatusEvent } from 'store-installer';
 import { fetchManifest, signUrl, type Credentials } from './src/api';
-import { installFailure, listSummary, statusPill, versionLines } from './src/present';
+import { downloadLabel, installFailure, listSummary, statusPill, versionLines } from './src/present';
 import { appStatus, type Installed } from './src/status';
 
 const CHECK_INTERVALS = [
@@ -31,6 +31,11 @@ const CHECK_INTERVALS = [
   { key: '12', label: '12h', a11yLabel: 'Every 12 hours' },
   { key: '24', label: '24h', a11yLabel: 'Every 24 hours' },
 ] as const;
+
+interface Busy {
+  label: string;
+  value: number | null;
+}
 
 interface Problem {
   title: string;
@@ -125,12 +130,13 @@ function StoreList({ creds, onSignOut }: { creds: Credentials; onSignOut: () => 
   const { c } = useTheme();
   const [manifest, setManifest] = useState<StoreManifest | null>(null);
   const [installed, setInstalled] = useState<Record<string, Installed | null>>({});
-  const [progress, setProgress] = useState<Record<string, string>>({});
+  const [progress, setProgress] = useState<Record<string, Busy>>({});
   const [problems, setProblems] = useState<Record<string, Problem>>({});
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hours, setHours] = useState(() => StoreInstaller.getUpdateCheckHours());
 
+  const setBusy = (pkg: string, b: Busy | null) => setProgress(({ [pkg]: _, ...rest }) => (b ? { ...rest, [pkg]: b } : rest));
   const report = (pkg: string, p: Problem | null) =>
     setProblems(({ [pkg]: _, ...rest }) => (p ? { ...rest, [pkg]: p } : rest));
 
@@ -165,13 +171,21 @@ function StoreList({ creds, onSignOut }: { creds: Credentials; onSignOut: () => 
   }, [manifest, readInstalled]);
 
   useEffect(() => {
+    const downloading = (e: InstallProgress) =>
+      setBusy(e.packageName, { label: downloadLabel(e.bytes, e.total), value: e.total > 0 ? e.bytes / e.total : null });
+    StoreInstaller.getActiveInstalls().then((list) => list.forEach(downloading));
+    const sub = StoreInstaller.addListener('onInstallProgress', downloading);
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
     const sub = StoreInstaller.addListener('onInstallStatus', (e: InstallStatusEvent) => {
       const pkg = e.packageName ?? '';
-      if (e.status === 'PENDING_USER_ACTION') {
-        setProgress((p) => ({ ...p, [pkg]: 'Waiting for you to confirm' }));
+      if (e.status === 'PENDING_USER_ACTION' || e.status === 'INSTALLING') {
+        setBusy(pkg, { label: e.status === 'INSTALLING' ? 'Installing' : 'Waiting for you to confirm', value: null });
         return;
       }
-      setProgress(({ [pkg]: _, ...rest }) => rest);
+      setBusy(pkg, null);
       readInstalled(manifest);
       const body = installFailure(e.status, e.message);
       if (body) report(pkg, { title: 'Install failed', body });
@@ -196,13 +210,12 @@ function StoreList({ creds, onSignOut }: { creds: Credentials; onSignOut: () => 
       return;
     }
     report(release.packageName, null);
-    setProgress((p) => ({ ...p, [release.packageName]: 'Downloading' }));
+    setBusy(release.packageName, { label: 'Downloading', value: null });
     try {
       const url = await signUrl(creds, release.apkPath);
-      await StoreInstaller.installApk(url, release.packageName, release.sha256, SIGNING_CERT_SHA256);
-      setProgress((p) => ({ ...p, [release.packageName]: 'Installing' }));
+      StoreInstaller.installApk(url, release.packageName, app.name, release.sha256, SIGNING_CERT_SHA256);
     } catch (e) {
-      setProgress(({ [release.packageName]: _, ...rest }) => rest);
+      setBusy(release.packageName, null);
       report(release.packageName, { title: 'Install failed', body: String((e as Error).message) });
     }
   };
@@ -287,9 +300,9 @@ function StoreList({ creds, onSignOut }: { creds: Credentials; onSignOut: () => 
               >
                 {busy && (
                   <View style={{ gap: space.xs }} accessibilityLiveRegion="polite">
-                    <Progress value={null} />
+                    <Progress value={busy.value} />
                     <Text variant="meta" tone="muted">
-                      {busy}
+                      {busy.label}
                     </Text>
                   </View>
                 )}

@@ -38,13 +38,20 @@ const failures: Partial<Record<InstallStatusName, string>> = {
 
 // FAILURE_ABORTED also covers Play Protect's ~17 s approval window expiring, not only the user tapping Cancel.
 export function installFailure(status: InstallStatusName, message: string | null): string | null {
-  if (status === 'SUCCESS' || status === 'PENDING_USER_ACTION') return null;
+  if (status === 'SUCCESS' || status === 'PENDING_USER_ACTION' || status === 'DOWNLOADED' || status === 'INSTALLING') return null;
+  if (status === 'FAILURE_DOWNLOAD') return `${message ?? 'The download stopped.'} Check your connection, then try again.`;
   if (status === 'FAILURE_ABORTED') {
     return 'The install was cancelled. If Google Play Protect asked to scan the app, tap Scan app (or approve within a few seconds), then try again.';
   }
   if (status === 'FAILURE_CONFLICT') return failures.FAILURE_CONFLICT!;
   const base = failures[status] ?? `Android stopped the install (${status}).`;
   return message ? `${base} Android said: ${message}` : base;
+}
+
+const mb = (bytes: number) => Math.round(bytes / 1e6);
+
+export function downloadLabel(bytes: number, total: number): string {
+  return total > 0 ? `Downloading ${mb(bytes)} of ${mb(total)} MB` : 'Downloading';
 }
 
 export function listSummary(statuses: AppStatus[]): string {

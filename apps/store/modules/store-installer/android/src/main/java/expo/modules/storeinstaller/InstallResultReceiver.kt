@@ -1,5 +1,6 @@
 package expo.modules.storeinstaller
 
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -9,12 +10,27 @@ import android.os.Build
 class InstallResultReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
-    if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-      confirmIntent(intent)?.let { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    val pkg = intent.getStringExtra(EXTRA_PACKAGE)
+    val name = intent.getStringExtra(EXTRA_NAME) ?: pkg
+    val foreground = Installer.isForeground()
+    when (status) {
+      PackageInstaller.STATUS_SUCCESS -> Installer.clearDownloads(context)
+      PackageInstaller.STATUS_PENDING_USER_ACTION -> confirmIntent(intent)?.let {
+        it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // Android blocks starting an activity from the background, so hand the prompt to a notification instead.
+        if (foreground) context.startActivity(it)
+        else UpdateCheckWorker.postNotification(
+          context, pkg.hashCode(), "Finish installing $name", "Tap to confirm the install.",
+          PendingIntent.getActivity(context, pkg.hashCode(), it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
+        )
+      }
+      PackageInstaller.STATUS_FAILURE_ABORTED -> if (!foreground) {
+        UpdateCheckWorker.postNotification(context, pkg.hashCode(), "$name was not installed", "Open Store and tap Update to try again.")
+      }
     }
     StoreInstallerModule.emitInstallStatus(
       mapOf(
-        "packageName" to intent.getStringExtra(EXTRA_PACKAGE),
+        "packageName" to pkg,
         "status" to statusName(status),
         "statusCode" to status,
         "message" to intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE),

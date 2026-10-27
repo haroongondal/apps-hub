@@ -169,8 +169,14 @@ warn about, disable or remove apps it considers harmful ([help](https://support.
 Expect a "scan app?" prompt the first time each app is installed. Keep Play Protect on.
 Android only waits about 17 s (`settings get global verifier_timeout`) for that prompt. Tap **Scan app** promptly; "Install
 without scanning" also asks for a fingerprint and on a Xiaomi (Android 16) usually ran out of time, aborting the
-install. The Store now says so instead of resetting silently. To skip the prompt entirely for one build, install it
-over Wi-Fi debugging with the Store as installer of record: `adb install -r -i com.haroon.store app-release.apk`.
+install. The Store then says so and keeps the verified download, so tapping Update again goes straight back to the
+prompt without downloading again. Install through the Store, not `adb install`, so these paths stay tested.
+
+### Downloads
+Store 7+ downloads in a WorkManager foreground job (`InstallWorker`, type `dataSync`) with a progress notification,
+so locking the screen or switching apps does not stop it, and a reopened Store shows the running download. If the
+download finishes while the Store is in the background, it does not start the install (Play Protect's prompt would
+go unseen and time out); it posts "ready to install" and waits for the user to tap Update.
 
 ### Android developer verification checklist
 Since **30 Sep 2026**, certified devices in Brazil, Indonesia, Singapore and Thailand only install or update apps

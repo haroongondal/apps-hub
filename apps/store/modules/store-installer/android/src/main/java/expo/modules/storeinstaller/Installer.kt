@@ -1,5 +1,6 @@
 package expo.modules.storeinstaller
 
+import android.app.ActivityManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -9,38 +10,80 @@ import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.DigestInputStream
 import java.security.MessageDigest
 
 internal const val EXTRA_PACKAGE = "expo.modules.storeinstaller.PACKAGE"
+internal const val EXTRA_NAME = "expo.modules.storeinstaller.NAME"
 
 object Installer {
-  /** Downloads to app-private storage, verifies hash/package/signer, then commits a PackageInstaller session. */
-  fun install(context: Context, url: String, packageName: String, sha256: String, certSha256: String): Int {
-    val file = File(context.cacheDir, "apks/$packageName.apk").apply { parentFile?.mkdirs() }
-    try {
-      val digest = MessageDigest.getInstance("SHA-256")
-      val conn = URL(url).openConnection() as HttpURLConnection
-      conn.connectTimeout = 15_000
-      conn.readTimeout = 60_000
-      try {
-        if (conn.responseCode != 200) throw IOException("download failed: HTTP ${conn.responseCode}")
-        DigestInputStream(conn.inputStream, digest).use { input -> file.outputStream().use { input.copyTo(it) } }
-      } finally {
-        conn.disconnect()
-      }
-      val archive = Packages.archive(context, file.path)
-      ApkVerifier.mismatch(
-        packageName, sha256, certSha256,
-        archive?.packageName, ApkVerifier.hex(digest.digest()), archive?.let(Packages::certs).orEmpty(),
-      )?.let { throw SecurityException(it) }
-      return commit(context, file, packageName)
-    } finally {
+  // Kept until an install succeeds, so a retry after Play Protect aborts does not download it again.
+  fun download(
+    context: Context, url: String, packageName: String, sha256: String, certSha256: String,
+    onProgress: (done: Long, total: Long) -> Unit,
+  ): File {
+    val file = File(cacheDir(context), "${sha256.lowercase()}.apk")
+    if (!file.exists()) fetch(url, file, onProgress)
+    val archive = Packages.archive(context, file.path)
+    ApkVerifier.mismatch(
+      packageName, sha256, certSha256,
+      archive?.packageName, fileSha256(file), archive?.let(Packages::certs).orEmpty(),
+    )?.let {
       file.delete()
+      throw SecurityException(it)
+    }
+    return file
+  }
+
+  fun clearDownloads(context: Context) = cacheDir(context).deleteRecursively()
+
+  fun isForeground(): Boolean =
+    ActivityManager.RunningAppProcessInfo().also(ActivityManager::getMyMemoryState).importance ==
+      ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+
+  private fun cacheDir(context: Context) = File(context.cacheDir, "apks")
+
+  private fun fetch(url: String, file: File, onProgress: (Long, Long) -> Unit) {
+    val part = File(file.path + ".part").apply { parentFile?.mkdirs() }
+    val conn = URL(url).openConnection() as HttpURLConnection
+    conn.connectTimeout = 15_000
+    conn.readTimeout = 60_000
+    try {
+      if (conn.responseCode != 200) throw IOException("Download failed: the server answered HTTP ${conn.responseCode}.")
+      val total = conn.contentLengthLong
+      conn.inputStream.use { input ->
+        part.outputStream().use { out ->
+          val buf = ByteArray(64 * 1024)
+          var done = 0L
+          while (true) {
+            val n = input.read(buf)
+            if (n < 0) break
+            out.write(buf, 0, n)
+            done += n
+            onProgress(done, total)
+          }
+        }
+      }
+      if (!part.renameTo(file)) throw IOException("Could not save the download.")
+    } finally {
+      conn.disconnect()
+      part.delete()
     }
   }
 
-  private fun commit(context: Context, file: File, packageName: String): Int {
+  private fun fileSha256(file: File): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input ->
+      val buf = ByteArray(64 * 1024)
+      while (true) {
+        val n = input.read(buf)
+        if (n < 0) break
+        digest.update(buf, 0, n)
+      }
+    }
+    return ApkVerifier.hex(digest.digest())
+  }
+
+  fun commit(context: Context, file: File, packageName: String, name: String): Int {
     val installer = context.packageManager.packageInstaller
     val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
       setAppPackageName(packageName)
@@ -56,7 +99,9 @@ object Installer {
             session.fsync(out)
           }
         }
-        val intent = Intent(context, InstallResultReceiver::class.java).putExtra(EXTRA_PACKAGE, packageName)
+        val intent = Intent(context, InstallResultReceiver::class.java)
+          .putExtra(EXTRA_PACKAGE, packageName)
+          .putExtra(EXTRA_NAME, name)
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
         session.commit(PendingIntent.getBroadcast(context, id, intent, flags).intentSender)
       }

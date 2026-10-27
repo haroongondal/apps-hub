@@ -82,7 +82,7 @@ class UpdateCheckWorker(context: Context, params: WorkerParameters) : CoroutineW
     fun hours(context: Context) = prefs(context).getInt("checkHours", DEFAULT_HOURS)
 
     @SuppressLint("MissingPermission")
-    fun postNotification(ctx: Context, id: Int, title: String, text: String) {
+    fun postNotification(ctx: Context, id: Int, title: String, text: String, tap: PendingIntent? = null) {
       if (Build.VERSION.SDK_INT >= 33 &&
         ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
       ) return
@@ -97,7 +97,7 @@ class UpdateCheckWorker(context: Context, params: WorkerParameters) : CoroutineW
         .setSmallIcon(android.R.drawable.stat_sys_download_done)
         .setContentTitle(title)
         .setContentText(text)
-        .setContentIntent(open)
+        .setContentIntent(tap ?: open)
         .setAutoCancel(true)
         .build()
       nm.notify(id, notification)

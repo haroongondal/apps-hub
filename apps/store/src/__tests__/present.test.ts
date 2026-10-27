@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SIGNING_CERT_SHA256, type StoreApp } from '@apps-hub/store-manifest';
 import { STORE_PACKAGE, appStatus, type Installed } from '../status.ts';
-import { installFailure, listSummary, statusPill, versionLines } from '../present.ts';
+import { downloadLabel, installFailure, listSummary, statusPill, versionLines } from '../present.ts';
 
 const app: StoreApp = {
   id: 'netlens',
@@ -59,4 +59,15 @@ test('list summary counts updates first', () => {
   assert.equal(listSummary([appStatus(app, old), appStatus(app, old)]), '2 updates ready to install');
   assert.equal(listSummary([appStatus(app, installed()), appStatus(app, null)]), 'Everything installed is up to date');
   assert.equal(listSummary([appStatus(app, null)]), '1 app ready to install');
+});
+
+test('downloadLabel shows megabytes when the size is known', () => {
+  assert.equal(downloadLabel(12_400_000, 85_000_000), 'Downloading 12 of 85 MB');
+  assert.equal(downloadLabel(500, -1), 'Downloading');
+});
+
+test('installFailure explains download errors and stays quiet for Store stages', () => {
+  assert.match(installFailure('FAILURE_DOWNLOAD', 'Download failed: the server answered HTTP 403.')!, /HTTP 403.*try again/);
+  assert.equal(installFailure('DOWNLOADED', null), null);
+  assert.equal(installFailure('INSTALLING', null), null);
 });

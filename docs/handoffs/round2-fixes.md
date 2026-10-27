@@ -20,13 +20,15 @@ Start at §7 "Next step". Ask me the open decisions in §3 before building the p
 5. "What's the purpose of NetLens? Make it purposeful."
 6. "In PDF editor, after edit text the background stays white, fix it."
 
-Constraints: AGENTS.md hard rules (NetLens: no ARP, TCP RST = alive, bounded sweeps, F-Droid pure FOSS; OpenTunnel rules in apps/open_tunnel_vpn/AGENTS.md). All UI on `packages/ui`. Report ACTUAL command output. Release apps with `pnpm release <id> -m "..."` (docs/app-store.md); never release open-tunnel without the user's go-ahead.
+Constraints: **Never install/update apps on the phone with adb (user, 2026-10-27): only through the Store; fix Store bugs first.** adb stays fine for logcat/screens/taps. AGENTS.md hard rules (NetLens: no ARP, TCP RST = alive, bounded sweeps, F-Droid pure FOSS; OpenTunnel rules in apps/open_tunnel_vpn/AGENTS.md). All UI on `packages/ui`. Report ACTUAL command output. Release apps with `pnpm release <id> -m "..."` (docs/app-store.md); never release open-tunnel without the user's go-ahead.
 
 ## 3. Open decisions (ask the user)
 
 - **NetLens rule 2 vs false positives.** AGENTS.md says ECONNREFUSED/RST = alive. If the investigation shows something on this network sends RSTs for addresses with no device (see §4), fixing it may need to change that hard rule (e.g. require a second signal). Changing a hard rule needs the user's explicit OK.
 - **OpenTunnel gate G1.** VPN Gate relays are OpenVPN only. `OpenVpnEngine.start` deliberately throws: "the ics-openvpn GPLv2 core needs a project license decision first" (`modules/open-tunnel-native/.../ServiceContracts.kt:22`, `docs/phase2-session-log.md`). The user must decide whether OpenTunnel may ship GPLv2 code (or pick another engine) before VPN Gate connections can work.
 - **NetLens purpose.** Propose 2-3 concrete directions (use superpowers:brainstorming), e.g. "Who's on my Wi-Fi" guard (named devices via mDNS/SSDP/NetBIOS, alert when an unknown device joins, trust list) plus "is it my Wi-Fi, my ISP or DNS" diagnostics, and let the user pick before building.
+
+**Answers (s1, 2026-10-27):** Rule 2 → measure first (bind probes to Wi-Fi, log refused vs connected on the phone); come back only if data says the rule must change. G1 → user said "I don't know": treat as decide later; explain the trade-off plainly, do only the logo. NetLens purpose → both, device guard first (named devices, trust list, flag new unknown devices), then the "why is my internet slow" verdict screen.
 
 ## 4. Verified facts (do not re-derive)
 
@@ -65,11 +67,12 @@ Environment: Node 22.23.4 is the nvm default (graft needed `SDKROOT=$(xcrun --sd
 ## 6. Session log
 
 - s0 (2026-10-26/27, previous chat): redesign, app moves, releases, on-phone debugging; see frontend-unification.md.
+- s1 (2026-10-27): main fast-forwarded to 695ac29 and pushed (goal 3 done). Work continues on branch `round2-fixes` (from 695ac29). Asked the §3 decisions.
 
 ## 7. Current state and exact next step
 
-Nothing in §2 started yet. Suggested order:
-1. Merge `frontend-unification` into `main` (fast-forward or merge commit, push), then branch for the work below.
+Goal 3 (merge) done in s1. Suggested order:
+1. ~~Merge `frontend-unification` into `main` (fast-forward or merge commit, push), then branch for the work below.~~ Done.
 2. Ask the §3 decisions (one message).
 3. Store download/update robustness (foreground download with progress notification, restore in-progress state on reopen); verify on the phone over wireless debugging, including a real Store self-update and an app update through Play Protect ("Scan app").
 4. NetLens false positives: instrument, measure on the phone, fix within the hard rules (or with the user's OK to change rule 2).

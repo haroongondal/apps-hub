@@ -1,4 +1,6 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Package visibility for getInstalledVersion: keep in sync with tools/release/src/apps.ts. -->
     <queries>
         <package android:name="app.netlens" />
@@ -6,6 +8,10 @@
         <package android:name="com.haroon.pdfeditor" />
     </queries>
     <application>
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
         <receiver android:name="expo.modules.storeinstaller.InstallResultReceiver" android:exported="false" />
         <receiver android:name="expo.modules.storeinstaller.SelfUpdateReceiver" android:exported="false">
             <intent-filter>

@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private const val EVENT_INSTALL_STATUS = "onInstallStatus"
+private const val EVENT_INSTALL_PROGRESS = "onInstallProgress"
 
 class StoreInstallerModule : Module() {
   private val context: Context
@@ -20,16 +21,18 @@ class StoreInstallerModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("StoreInstaller")
 
-    Events(EVENT_INSTALL_STATUS)
+    Events(EVENT_INSTALL_STATUS, EVENT_INSTALL_PROGRESS)
 
     OnCreate { instance = this@StoreInstallerModule }
     OnDestroy { if (instance === this@StoreInstallerModule) instance = null }
 
     Function("getInstalledVersion") { packageName: String -> Packages.installed(context, packageName) }
 
-    AsyncFunction("installApk") Coroutine { url: String, packageName: String, sha256: String, certSha256: String ->
-      withContext(Dispatchers.IO) { Installer.install(context, url, packageName, sha256, certSha256) }
+    Function("installApk") { url: String, packageName: String, name: String, sha256: String, certSha256: String ->
+      InstallWorker.enqueue(context, url, packageName, name, sha256, certSha256)
     }
+
+    AsyncFunction("getActiveInstalls") Coroutine { -> withContext(Dispatchers.IO) { InstallWorker.active(context) } }
 
     Function("canRequestPackageInstalls") {
       Build.VERSION.SDK_INT < 26 || context.packageManager.canRequestPackageInstalls()
@@ -55,6 +58,10 @@ class StoreInstallerModule : Module() {
 
     fun emitInstallStatus(payload: Map<String, Any?>) {
       instance?.sendEvent(EVENT_INSTALL_STATUS, payload)
+    }
+
+    fun emitInstallProgress(payload: Map<String, Any?>) {
+      instance?.sendEvent(EVENT_INSTALL_PROGRESS, payload)
     }
   }
 }
