@@ -56,7 +56,7 @@
   .tbox { position:absolute; white-space:pre; color:transparent; outline:1px solid transparent; }
   body[data-tool="edittext"] .tbox:hover { outline-color:var(--c-accent); }
   body[data-tool="edittext"] .tbox:hover:not(:focus, .edited) { background:var(--c-accent-soft); }
-  .tbox:focus, .tbox.edited { color:#000; background:#fff; }
+  .tbox:focus, .tbox.edited { color:var(--tb-ink, #000); background:var(--tb-bg, #fff); }
   .tbox:focus { outline:2px solid var(--c-accent); }
 </style>
 </head>

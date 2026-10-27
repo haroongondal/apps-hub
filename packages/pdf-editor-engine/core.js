@@ -48,8 +48,33 @@ window.pdfEditorShell = function (main) {
     }
   }
 
-  function textBox(g) {
+  // Edited text hides the canvas glyphs under it, so paint the box in the page's own colours, not white on black.
+  function pageInk(pg, [x0, y0, x1, y1]) {
+    const c = pg.canvas, k = c.width / pg.vp.width, m = 2;
+    const sx = Math.max(0, Math.floor(x0 * k) - m), sy = Math.max(0, Math.floor(y0 * k) - m);
+    const w = Math.min(c.width - sx, Math.ceil((x1 - x0) * k) + 2 * m), h = Math.min(c.height - sy, Math.ceil((y1 - y0) * k) + 2 * m);
+    if (w <= 0 || h <= 0) return null;
+    const d = c.getContext('2d').getImageData(sx, sy, w, h).data, counts = new Map();
+    const at = i => [d[i], d[i + 1], d[i + 2], d[i + 3]];
+    for (let x = 0; x < w; x++) for (const y of [0, h - 1]) { const p = at((y * w + x) * 4).join(); counts.set(p, (counts.get(p) ?? 0) + 1); }
+    for (let y = 0; y < h; y++) for (const x of [0, w - 1]) { const p = at((y * w + x) * 4).join(); counts.set(p, (counts.get(p) ?? 0) + 1); }
+    const bg = [...counts].sort((a, b) => b[1] - a[1])[0][0].split(',').map(Number);
+    if (bg[3] === 0) return null; // not painted yet
+    let ink = bg, far = -1;
+    for (let i = 0; i < d.length; i += 4) {
+      const dist = Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]);
+      if (dist > far) { far = dist; ink = at(i); }
+    }
+    const css = ([r, g, b]) => `rgb(${r}, ${g}, ${b})`;
+    return { bg: css(bg), ink: css(ink) };
+  }
+
+  function textBox(pg, g) {
     const e = document.createElement('div'), [x0, y0, x1, y1] = g.box;
+    pg.painted.then(() => {
+      const ink = pageInk(pg, g.box);
+      if (ink) e.style.setProperty('--tb-bg', ink.bg), e.style.setProperty('--tb-ink', ink.ink);
+    });
     e.className = 'tbox' + (g.newText !== undefined ? ' edited' : '');
     Object.assign(e.style, { left: x0 * S + 'px', top: y0 * S + 'px', minWidth: (x1 - x0) * S + 'px', height: (y1 - y0) * S + 'px', lineHeight: (y1 - y0) * S + 'px', fontSize: g.em * S + 'px', ...cssFontFor(g.face) });
     e.textContent = g.newText ?? g.text;
@@ -67,7 +92,8 @@ window.pdfEditorShell = function (main) {
     const W = pg.vp.width * S, H = pg.vp.height * S, dpr = devicePixelRatio || 1;
     const canvas = Object.assign(document.createElement('canvas'), { width: W * dpr, height: H * dpr });
     Object.assign(canvas.style, { width: W + 'px', height: H + 'px' });
-    pdfPage.render({ canvasContext: canvas.getContext('2d'), viewport: pdfPage.getViewport({ scale: S * dpr }) });
+    pg.canvas = canvas;
+    pg.painted = pdfPage.render({ canvasContext: canvas.getContext('2d', { willReadFrequently: true }), viewport: pdfPage.getViewport({ scale: S * dpr }) }).promise.catch(() => {});
     pg.layer = Object.assign(document.createElement('div'), { className: 'layer' });
     pg.pageEl = Object.assign(document.createElement('div'), { className: 'page' });
     Object.assign(pg.pageEl.style, { width: W + 'px', height: H + 'px' });
@@ -124,7 +150,7 @@ window.pdfEditorShell = function (main) {
   function move(n, d) { [pages[n], pages[n + d]] = [pages[n + d], pages[n]]; layout(); }
 
   function renderAnnots(pg) {
-    const boxes = (pg.text?.groups || []).filter(g => tool === 'edittext' || g.newText !== undefined).map(textBox);
+    const boxes = (pg.text?.groups || []).filter(g => tool === 'edittext' || g.newText !== undefined).map(g => textBox(pg, g));
     pg.layer.replaceChildren(...boxes, ...pg.annots.map(a => {
       let e;
       if (a.type === 'draw') {

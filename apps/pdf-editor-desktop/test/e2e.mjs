@@ -59,8 +59,9 @@ console.log('ops on edited page:', ops.fnArray.length, 'OK');
 {
   const browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
   const maker = await browser.newPage();
-  await maker.setContent('<p style="font:24px Georgia">Hello World from Chrome</p><p style="font:16px Arial">Second line here</p><p style="font:16px Arial">Untouched line</p>');
-  fs.writeFileSync(dir + 'chrome.pdf', await maker.pdf());
+  // a tinted page with navy text: edited boxes must match it, not show white on black
+  await maker.setContent('<body style="background:#fde68a;color:#1e3a8a"><p style="font:24px Georgia">Hello World from Chrome</p><p style="font:16px Arial">Second line here</p><p style="font:16px Arial">Untouched line</p></body>');
+  fs.writeFileSync(dir + 'chrome.pdf', await maker.pdf({ printBackground: true }));
   const before = await pdfjs.getDocument({ data: new Uint8Array(fs.readFileSync(dir + 'chrome.pdf')) }).promise;
   const origItems = (await (await before.getPage(1)).getTextContent()).items;
 
@@ -82,7 +83,10 @@ console.log('ops on edited page:', ops.fnArray.length, 'OK');
   await edit('Hello World from Chrome', 'Hello Chrome'); // every glyph is in the original subset font
   await edit('Second line here', 'Brand new Xylo text'); // needs glyphs the subset lacks -> standard font
   // the pointer is still over this box; hover styling must not let the old canvas text show through
-  assert.equal(await page.locator('.tbox.edited', { hasText: 'Brand new Xylo text' }).evaluate(e => getComputedStyle(e).backgroundColor), 'rgb(255, 255, 255)');
+  const style = await page.locator('.tbox.edited', { hasText: 'Brand new Xylo text' }).evaluate(e => [getComputedStyle(e).backgroundColor, getComputedStyle(e).color]);
+  assert.equal(style[0], 'rgb(253, 230, 138)');
+  const near = (css, [r, g, b]) => { const [x, y, z] = css.match(/\d+/g).map(Number); return Math.abs(x - r) + Math.abs(y - g) + Math.abs(z - b) < 60; };
+  assert.ok(near(style[1], [0x1e, 0x3a, 0x8a]), `edited text colour ${style[1]} should be the page's navy`);
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#save')]);
   await dl.saveAs(dir + 'chrome-out.pdf');
   await browser.close();

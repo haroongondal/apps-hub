@@ -49,7 +49,7 @@
   body[data-tool="edittext"] .layer { cursor:text; }
   .tbox { position:absolute; white-space:pre; color:transparent; outline:1px solid transparent; }
   body[data-tool="edittext"] .tbox:hover { outline-color:var(--c-accent); }
-  .tbox:focus, .tbox.edited { color:#000; background:#fff; }
+  .tbox:focus, .tbox.edited { color:var(--tb-ink, #000); background:var(--tb-bg, #fff); }
   .tbox:focus { outline:2px solid var(--c-accent); }
 
   #dock { position:fixed; left:0; right:0; bottom:0; z-index:20; background:var(--c-surface); border-top:1px solid var(--c-line);
