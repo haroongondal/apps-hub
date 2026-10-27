@@ -3,13 +3,13 @@
 ## 1. Resume prompt
 
 ```text
-Continue the apps-hub "round 2" fixes (resume prompt updated 2026-10-27, after s2). Working dir: /Users/outsentia/Documents/apps-hub.
+Continue the apps-hub "round 2" fixes (resume prompt updated 2026-10-27, end of s2). Working dir: /Users/outsentia/Documents/apps-hub.
 Read docs/handoffs/round2-fixes.md completely first (and skim docs/handoffs/frontend-unification.md
 for background). Trust §4 (verified facts); do not redo that work. Follow the handoff contract in
 ~/.claude/CLAUDE.md: keep this file's §6/§7 updated as milestones land, and at ~85% context write a
 new resume prompt here and stop instead of compacting.
 Start at §7 "Next step". Ask me the open decisions in §3 before building the parts that depend on them.
-Goal 7 (OpenTunnel connect) is built and committed; ask me before releasing open-tunnel.
+Start at §7: release NetLens 6 (needs my OK; the auto-mode classifier blocks `pnpm release` unless I say so), then verify it on the phone.
 ```
 
 ## 2. Goal (user's words, 2026-10-27) and fixed constraints
@@ -92,12 +92,15 @@ Environment: Node 22.23.4 is the nvm default (graft needed `SDKROOT=$(xcrun --sd
 
 - s2: user chose "install using adb" (one-time exception): `adb install -r -i com.haroon.store` of the released Store 8 APK → phone Store 8, installer of record kept. Then through Store 8 (taps via adb, installs by the Store): NetLens 4→5, OpenTunnel 2→3, PDF Editor 3→4, all `PackageInstallerSession ... as applied`, zero `assertCallerAndPackage` denials. HyperOS shows "Xiaomi security scan" (com.miui.global.packageinstaller ScanActivity) then installs and opens the app. Play Protect scanning was still OFF during these (user turned it off for the test).
 
+- s2 phone tests (wireless adb, user asked "run the test for the fixes"): OpenTunnel 3 on the phone: consent → "Connected to Japan" public-vpn-130, exit `JP 219.100.37.238` (before: `PK 154.192.128.43`), no crash (real phone needs no OpenSSL workaround). PDF Editor: `pnpm --filter pdf-editor-desktop test:e2e` exit 0 ("edit text OK", "electron ok", "mobile bridge ok"). **NetLens 5 regression found:** with OpenTunnel connected it shows **0 devices** (router .1:80 "Not seen"). Cause: inside a VPN without allowBypass, `Network.socketFactory` binding to Wi-Fi fails (EPERM) → every probe UNREACHABLE. Shell under the same VPN: `ip route get 192.168.18.1` → `dev wlan0`, `nc -z 192.168.18.1 80` open, Mac .242:22 refused (RST = alive). Fix (committed, not released): `PlatformNetwork.socketFactoryFor` falls back to a plain `Socket()` when the bound socket can't be created. JVM 10/10, assembleRelease ok. Emulator is useless for host counts: its NAT answers ~106-121 addresses on 10.0.2.0/24 with or without VPN. VPN disconnected on the phone at end of session. Play Protect scanning still OFF on the phone (user must re-enable).
+
 ## 7. Current state and exact next step
 
-Done: goals 3, 6, Store fix (Store 8: HyperOS silent-install fix, verified on the phone), NetLens VPN fix, OpenTunnel connect + logo (OpenTunnel 3). Phone now: Store 8, NetLens 5, OpenTunnel 3, PDF Editor 4.
-Waiting on the user: turn Play Protect scanning back on; try OpenTunnel 3 on the phone (consent, connect, switch, disconnect); NetLens 5 host count with the VPN on.
+Done: goals 3, 6, Store fix (Store 8, verified on phone), OpenTunnel connect + logo (OpenTunnel 3, verified on phone), PDF fix (e2e). Phone now: Store 8, NetLens 5, OpenTunnel 3, PDF Editor 4.
+Open: NetLens 0-devices-under-VPN regression, fix committed (`PlatformNetwork.socketFactoryFor` fallback), NOT released.
 Next steps, in order:
-1. Collect phone results for OpenTunnel 3 and NetLens 5; fix what they report. Open question: with Play Protect scanning ON, do Store 8 installs still get the "Harmful app blocked" dialog for Store itself (needs "Install anyway")? Normal app updates should now work either way.
-2. NetLens purpose, part 1 "device guard": brainstorm/spec first (superpowers:brainstorming → writing-plans), then build (named devices from MdnsProbe/SsdpProbe in `apps/netlens/src/db/`, trust list, flag new unknown devices). Part 2: "why is my internet slow" verdict screen.
-3. Merge `round2-fixes` into main and push once the user confirms phone results.
-Known gaps (OpenTunnel): no WireGuard import UI; kill switch not enforced app-side; no JVM tests for engine state logic; `expo prebuild --clean` would drop the hand-written ics manifest overrides.
+1. Ask the user to OK `pnpm release netlens -m "Finds devices again while a VPN is on"`, release, then on the phone (wireless adb: `adb mdns services`, serial `adb-49kjmnuwonkffqzh-zHnffO._adb-tls-connect._tcp`; taps via adb are fine, installs only via the Store) update NetLens through Store 8 and scan (a) VPN off, (b) OpenTunnel connected. Expect a small count close to the Mac sweep (s1: 3 hosts: .1, .209, .242), not 0 and not 135. If (b) shows phantoms, the VPN routes the LAN: then report "a VPN is routing your network; turn it off to scan" instead of guessing.
+2. Remind the user to turn Play Protect scanning back on.
+3. NetLens purpose part 1 "device guard" (brainstorm → plan → build), then part 2 "why is my internet slow".
+4. Merge `round2-fixes` into main and push once the user confirms phone results.
+Known gaps (OpenTunnel): no WireGuard import UI; kill switch not enforced app-side; no JVM tests for engine state logic; `expo prebuild --clean` drops the ics manifest overrides.
