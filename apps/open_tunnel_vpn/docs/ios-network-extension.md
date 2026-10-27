@@ -11,7 +11,9 @@
 > DEVELOPMENT_TEAM on both targets (one dropdown in Signing & Capabilities)
 > and let Xcode register the App Group with the portal on the first signed
 > device build — no codesigning identity exists on this machine to do it.
-> §4 file membership lands with the phase-3 `PacketTunnelProvider.swift`.
+> Status: §1–§4 are done — the target exists, entitlements/Info.plist are
+> final, and `PacketTunnelProvider.swift` (with the shared contract source)
+> is in the extension target and compiles (2026-10-27, phase 3).
 
 
 `expo prebuild` cannot generate a Network Extension target. Do this once in Xcode
@@ -74,12 +76,25 @@ entitlements are not available with a personal (free) team for distribution.
 
 ## 4. File membership
 
-- `ios/OpenTunnelPacketTunnel/PacketTunnelProvider.swift` → **OpenTunnelPacketTunnel** target only.
-- `ios/OpenTunnel/VpnManagerBridge.swift` (Phase 3 Expo module support) →
-  **OpenTunnel** target.
+Landed 2026-10-27 (phase 3); the project file carries the membership:
+
+- `ios/OpenTunnelPacketTunnel/PacketTunnelProvider.swift` →
+  **OpenTunnelPacketTunnel** target only.
+- `modules/open-tunnel-native/ios/OpenTunnelShared.swift` → compiled into
+  the **OpenTunnelPacketTunnel** target AND into the **OpenTunnelNative**
+  Expo module pod (one contract source, two consumers).
+- The provider-bridge flow (`VpnManagerBridge`, registry, ticker, probe)
+  lives in `modules/open-tunnel-native/ios/OpenTunnelNativeModule.swift`,
+  compiled into the **OpenTunnelNative** pod. Deviation from the original
+  plan (which placed it in `ios/OpenTunnel/`): the Expo Modules API requires
+  the module class to live in its pod, so the bridge moved with it; the app
+  target links the pod.
 - Do not add the React Native engine or any JS runtime to the extension.
-- Add WireGuardKit (Swift Package) and OpenVPNAdapter to the **PacketTunnel**
-  target. Confirm the actual package URLs and licenses at implementation time.
+- WireGuardKit and the OpenVPN engine are NOT added as Swift packages this
+  phase: the wireguard-go bridge cannot be built by SwiftPM (external Go
+  build target required) and the OpenVPN carry-in is gated on the G1
+  license decision. Both engines surface typed `ERR_ENGINE_UNAVAILABLE`
+  failures instead.
 
 ## 5. Deployment target
 

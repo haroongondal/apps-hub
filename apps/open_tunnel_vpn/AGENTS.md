@@ -43,9 +43,10 @@ pnpm --filter open_tunnel_vpn exec expo prebuild --no-install
 ```
 
 Android native compilation works on this machine with JDK 21 (`openjdk@21`)
-plus the Android SDK at `~/Library/Android/sdk`; iOS compilation requires
-Xcode plus the manually created `OpenTunnelPacketTunnel` target — that
-target is the only blocking prerequisite for Phase 3.
+plus the Android SDK at `~/Library/Android/sdk`; iOS compilation works too —
+the committed workspace builds (2026-10-27, see
+`docs/phase3-session-log.md`), and the only owner-only step still outstanding
+is attaching a paid-team DEVELOPMENT_TEAM for device builds.
 
 ## Directory Map
 
@@ -152,11 +153,15 @@ expo-sqlite semantics were ported with two deliberate deviations:
   together with the Kotlin class).
 - Phase 1 data layer (ingestion, parser, sanitizer, scorer, cache) is
   implemented in TS and green: `pnpm test` / `pnpm typecheck`.
-- The iOS `OpenTunnelPacketTunnel` Network Extension target exists in the
-  committed project (added 2026-10-27 per `docs/ios-network-extension.md`;
-  its Info.plist/entitlements are final, the `PacketTunnelProvider.swift`
-  source arrives in Phase 3 — see the status note at the top of that doc).
-  A paid-team DEVELOPMENT_TEAM still needs attaching before device builds.
+- The iOS `OpenTunnelPacketTunnel` Network Extension target carries the
+  Phase-3 sources (added 2026-10-27 per `docs/ios-network-extension.md` and
+  `docs/phase3-session-log.md`): `PacketTunnelProvider.swift` in the
+  extension target plus the shared App-Group contract, and the
+  `OpenTunnelNative` Expo module pod implements the iOS half alongside
+  Kotlin. Full workspace build green; extension Info.plist/entitlements
+  are final. Both iOS engines stay typed-gated (G1 license carry-in, G2
+  no-Go toolchain for the wireguard-go bridge) — see the session log. A
+  paid-team DEVELOPMENT_TEAM still needs attaching before device builds.
   App Group: `group.com.opentunnel.vpn`.
 
 ## Verification Discipline

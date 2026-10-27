@@ -250,7 +250,7 @@ function unavailableBinding(platform: RuntimePlatform): OpenTunnelBinding {
     new OpenTunnelError(
       OPEN_TUNNEL_ERROR_CODES.ENGINE_UNAVAILABLE,
       platform === 'ios'
-        ? 'iOS network extension ships in Phase 3'
+        ? 'the OpenTunnelNative iOS module is not installed in this runtime (pod install/autolinking or a test host without the pod)'
         : 'native tunnel engine unavailable on this runtime',
     );
 
@@ -272,7 +272,7 @@ function unavailableBinding(platform: RuntimePlatform): OpenTunnelBinding {
       throw new OpenTunnelError(
         OPEN_TUNNEL_ERROR_CODES.PROBE_FAILED,
         platform === 'ios'
-          ? 'the native TCP probe ships with the Android module; it arrives with the Phase 3 extension'
+          ? 'the native TCP probe ships with the OpenTunnelNative iOS module, which is not installed in this runtime'
           : 'the native TCP probe is unavailable on this runtime',
       );
     },
@@ -285,20 +285,40 @@ function unavailableBinding(platform: RuntimePlatform): OpenTunnelBinding {
   };
 }
 
+/**
+ * Resolves the native seam for a mobile platform, degrading typed when
+ * the module is genuinely absent (pod not installed, test host). Node
+ * environments are still excluded at the platform gate — the require of
+ * `expo` only runs on a real mobile runtime (type-stripping inside
+ * node_modules is unsupported for Node, phase-2 finding).
+ */
+function resolveNativeModule(platform: RuntimePlatform): OpenTunnelNativeApi | null {
+  try {
+    const { requireNativeModule } = require('expo') as {
+      requireNativeModule: <T>(moduleName: string) => T;
+    };
+    return requireNativeModule<OpenTunnelNativeApi>(OPEN_TUNNEL_MODULE_NAME);
+  } catch {
+    // Module not registered in this runtime (pod not installed yet, or a
+    // test host): the typed uni-available path handles it — no invented
+    // engine objects (plan §4.3).
+    return null;
+  }
+}
+
 export function createOpenTunnelBinding(options?: BindingOptions): OpenTunnelBinding {
   const platform = options?.platform ?? runtimePlatform();
-  if (platform !== 'android') {
+  if (platform !== 'android' && platform !== 'ios') {
     return unavailableBinding(platform);
   }
 
-  // The native seam runs only after the platform check, so iOS and Node
-  // environments never trip the module-not-found path (plan §4.3). The
-  // require is statically analyzable for Metro and lazy for Node, where
-  // type-stripping inside node_modules is unsupported.
-  const { requireNativeModule } = require('expo') as {
-    requireNativeModule: <T>(moduleName: string) => T;
-  };
-  const native = requireNativeModule<OpenTunnelNativeApi>(OPEN_TUNNEL_MODULE_NAME);
+  // iOS now binds the real native module (the Swift half of the Expo
+  // module); when the pod is absent from this build, the resolver degrades
+  // typed instead of throwing unstructured.
+  const native = resolveNativeModule(platform);
+  if (native == null) {
+    return unavailableBinding(platform);
+  }
 
   return {
     async startTunnel(config): Promise<null> {

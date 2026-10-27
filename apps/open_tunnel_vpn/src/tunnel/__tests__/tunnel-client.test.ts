@@ -249,7 +249,9 @@ test('validateTunnelConfig rejects malformed contracts with typed codes', () => 
   );
 });
 
-test('iOS behaves per plan §4.3: typed engine failure, true states, no invented path', async () => {
+test('iOS degrades typed when the native module is absent in this runtime (plan §4.3)', async () => {
+  // The test host has no native module; `resolveNativeModule` must degrade
+  // typed (not crash) with wording that no longer mentions a past phase.
   const ios = createOpenTunnelBinding({ platform: 'ios' });
 
   await assert.rejects(
@@ -257,7 +259,7 @@ test('iOS behaves per plan §4.3: typed engine failure, true states, no invented
     (error: unknown) =>
       error instanceof OpenTunnelError &&
       error.code === OPEN_TUNNEL_ERROR_CODES.ENGINE_UNAVAILABLE &&
-      error.message.includes('Phase 3'),
+      error.message.includes('iOS module'),
   );
   await assert.rejects(
     ios.stopTunnel(),
@@ -270,7 +272,7 @@ test('iOS behaves per plan §4.3: typed engine failure, true states, no invented
     (error: unknown) =>
       error instanceof OpenTunnelError &&
       error.code === OPEN_TUNNEL_ERROR_CODES.PROBE_FAILED &&
-      error.message.includes('Android module'),
+      error.message.includes('iOS module'),
   );
 
   // The Node/runtime path degrades identically and honestly.

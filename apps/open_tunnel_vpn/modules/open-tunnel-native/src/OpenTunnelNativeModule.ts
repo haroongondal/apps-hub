@@ -1,9 +1,9 @@
 /**
  * JavaScript contract of the `OpenTunnelNative` Expo module (phase 2 plan
  * §4.1). The Kotlin module (expo.modules.opentunnelnative) implements the
- * Android half; the iOS network extension ships in Phase 3, so the binding
- * in `src/index.ts` fail-fast per §4.3 instead of touching the native
- * module on non-Android runtimes.
+ * Android half; the Swift module (OpenTunnelNativeModule.swift, phase 3)
+ * implements the iOS half, so the binding now binds the native seam on
+ * both mobile platforms and degrades typed where the pod is absent.
  *
  * Where the module is absent the `requireNativeModule` call must not run at
  * import time — it is therefore exported as a helper, not as a default
