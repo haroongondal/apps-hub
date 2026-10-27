@@ -88,7 +88,13 @@ object Installer {
     val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
       setAppPackageName(packageName)
       setSize(file.length())
-      if (Build.VERSION.SDK_INT >= 31) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+      // HyperOS (PKMSImpl.assertCallerAndPackage) aborts silent installs from non-allowlisted installers with "Permission denied".
+      if (Build.VERSION.SDK_INT >= 31) {
+        setRequireUserAction(
+          if (Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true)) PackageInstaller.SessionParams.USER_ACTION_REQUIRED
+          else PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED,
+        )
+      }
     }
     val id = installer.createSession(params)
     try {
