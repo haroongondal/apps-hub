@@ -84,12 +84,14 @@ Environment: Node 22.23.4 is the nvm default (graft needed `SDKROOT=$(xcrun --sd
 
 - s2: invariant review fixes (verified on emulator): session guard (`armed` = this session's first own state; replayed CONNECTED/NOTCONNECTED ignored); `stop()` waits ≤3 s for the old session's NOTCONNECTED and stops via `stopService` when the control binder isn't bound yet; ics persisted state cleared (`ProfileManager.setConnectedVpnProfileDisconnected`, `keepVPNAlive.unscheduleKeepVPNAliveJobService`, delete `files/temporary-vpn-profile.{vp,cp,cpold}`) right after start, on stop and in `initProcess`. Emulator: JP .236 → switch → JP .246 with correct UI; US foxdenvpn = genuine AUTH_FAILED → error notice, tunnel down; `am crash` while connected → system restarts OpenVPNService but no tunnel, no job. LICENSE now starts with an OpenSSL + Apache-2.0 linking exception. Note: uiautomator dumps are stale while the traffic line ticks; use screenshots. Tap rows by current layout (an error Notice shifts the list).
 
+- s2: user said "yes please update the app": `pnpm release open-tunnel -m "Connects to free VPN Gate servers, new logo"` → `✔ open-tunnel 3 published` (46.4 MB APK). Merged release manifest exports only MainActivity, OpenVPNService (BIND_VPN_SERVICE), keepVPNAlive (BIND_JOB_SERVICE), ProfileInstallReceiver (DUMP).
+
 ## 7. Current state and exact next step
 
 Done: goals 3, 6 (PDF), Store fix, NetLens VPN fix, OpenTunnel logo (s1); goal 7 OpenTunnel connect (s2, committed on `round2-fixes`, not pushed, not released).
-Waiting on the user: (a) go-ahead to `pnpm release open-tunnel -m "Connects to VPN Gate servers (OpenVPN), new logo"`; then they update OpenTunnel through the Store on the phone and try a few servers. (b) From s1: phone Store 6 → 7 (Play Protect: Scan app), then NetLens 5 + PDF Editor 4 via Store; report NetLens host count with VPN on. Never adb-install on the phone.
+Waiting on the user: (a) OpenTunnel 3 is released: they update it through the Store on the phone and try a few servers (consent dialog, connect, switch, disconnect). (b) From s1: phone Store 6 → 7 (Play Protect: Scan app), then NetLens 5 + PDF Editor 4 via Store; report NetLens host count with VPN on. Never adb-install on the phone.
 Next steps, in order:
-1. If go-ahead: release open-tunnel, ask user for phone results (consent dialog, connect, switch, disconnect). Untested so far: 30 s timeout path, phone (non-emulator) OpenSSL CPU detection.
+1. Ask the user for OpenTunnel 3 phone results (consent dialog, connect, switch, disconnect). Untested so far: 30 s timeout path, phone (non-emulator) OpenSSL CPU detection.
 2. NetLens purpose, part 1 "device guard": brainstorm/spec first (superpowers:brainstorming → writing-plans), then build: named devices (mDNS/SSDP names from `MdnsProbe`/`SsdpProbe`, stored in `apps/netlens/src/db/`), trust list, flag new unknown devices per scan. Part 2: "why is my internet slow" verdict screen.
 3. Merge `round2-fixes` into main and push once the user confirms phone results.
 Known gaps (OpenTunnel): no WireGuard import UI; kill switch not enforced app-side for either engine (OS Always-on settings link only); no JVM tests for engine state logic (needs Robolectric or an extracted pure state function); `expo prebuild --clean` would drop the hand-written ics manifest overrides (not in the config plugin).
