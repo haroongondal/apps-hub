@@ -4,6 +4,9 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.LinkProperties
+import android.net.NetworkCapabilities
+import java.net.InetAddress
+import java.net.Socket
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.util.Collections
@@ -33,7 +36,7 @@ object PlatformNetwork {
     val connectivityManager =
       context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
         ?: return null
-    val activeNetwork: Network = connectivityManager.activeNetwork ?: return null
+    val activeNetwork: Network = lanNetwork(connectivityManager) ?: return null
     val linkProperties: LinkProperties = connectivityManager.getLinkProperties(activeNetwork)
       ?: return null
 
@@ -49,6 +52,28 @@ object PlatformNetwork {
     val localIp = (ipv4Address.address as Inet4Address).hostAddress ?: return null
     if (localIp.isBlank()) return null
     return NetLensInterface(localIp = localIp, cidrPrefix = ipv4Address.prefixLength, gatewayIp = gateway)
+  }
+
+  /**
+   * The Wi-Fi/Ethernet network, even when a VPN is the default: probes routed into a VPN get answers for
+   * addresses where no device exists (a phone behind a VPN reported 135 "hosts" on a 3-host /24).
+   */
+  @Suppress("DEPRECATION") // allNetworks: a one-shot lookup; a NetworkCallback would need lifecycle plumbing
+  fun lanNetwork(cm: ConnectivityManager): Network? {
+    fun isLan(n: Network) = cm.getNetworkCapabilities(n)?.let {
+      !it.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+        (it.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || it.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
+    } == true
+    return cm.activeNetwork?.takeIf(::isLan) ?: cm.allNetworks.firstOrNull(::isLan) ?: cm.activeNetwork
+  }
+
+  /** Sockets for private (LAN) targets bound to [lanNetwork]; internet targets keep the default route. */
+  fun socketFactoryFor(context: Context?, ip: String): () -> Socket {
+    val cm = context?.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+    val lan = cm?.let(::lanNetwork)
+    val addr = runCatching { InetAddress.getByName(ip) }.getOrNull()
+    val isPrivate = addr != null && (addr.isSiteLocalAddress || addr.isLinkLocalAddress)
+    return if (lan != null && isPrivate) ({ lan.socketFactory.createSocket() }) else ({ Socket() })
   }
 
   private fun detectViaNetworkInterfaces(): NetLensInterface? {

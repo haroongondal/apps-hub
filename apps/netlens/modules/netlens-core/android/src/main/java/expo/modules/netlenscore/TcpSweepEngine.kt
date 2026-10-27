@@ -1,5 +1,6 @@
 package expo.modules.netlenscore
 
+import java.net.Socket
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -20,6 +21,7 @@ class TcpSweepEngine(
   private val ports: List<Int> = TcpProbe.DEFAULT_PORTS,
   private val timeoutMs: Int = 350,
   private val maxConcurrency: Int = 64,
+  private val newSocket: () -> Socket = { Socket() },
   private val onHostDiscovered: suspend (DiscoveredHostPayload) -> Unit,
 ) {
   init {
@@ -38,7 +40,7 @@ class TcpSweepEngine(
           try {
             if (!isActive) return@launch
             for (port in ports) {
-              val result = TcpProbe.connect(ip, port, timeoutMs)
+              val result = TcpProbe.connect(ip, port, timeoutMs, newSocket)
               if (TcpProbe.isReachable(result.outcome)) {
                 foundCounter.incrementAndGet()
                 onHostDiscovered(

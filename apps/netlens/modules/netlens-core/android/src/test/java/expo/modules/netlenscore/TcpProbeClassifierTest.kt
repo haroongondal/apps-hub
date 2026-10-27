@@ -61,4 +61,14 @@ class TcpProbeClassifierTest {
       runCatching { server.close() }
     }
   }
+
+  @Test
+  fun `sweep opens every probe socket through the given factory`() = kotlinx.coroutines.runBlocking {
+    val made = java.util.concurrent.atomic.AtomicInteger()
+    TcpSweepEngine(listOf("127.0.0.1"), ports = listOf(9), timeoutMs = 500, newSocket = {
+      made.incrementAndGet()
+      java.net.Socket()
+    }) {}.run()
+    assertEquals("probes must use the Wi-Fi-bound factory, not the default route", 1, made.get())
+  }
 }

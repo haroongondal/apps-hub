@@ -72,12 +72,14 @@ class NetlensCoreModule : Module() {
         promise.reject(ERR_SCAN_IN_PROGRESS, "A TCP scan is already running", null)
       } else {
         val effectivePorts = if (ports.isEmpty()) TcpProbe.DEFAULT_PORTS else ports
+        val newSocket = PlatformNetwork.socketFactoryFor(resolvedContext(), hostIps.firstOrNull().orEmpty())
         tcpScanJob = moduleScope.launch {
           try {
             val stats = TcpSweepEngine(
               hostIps = hostIps,
               ports = effectivePorts,
               timeoutMs = timeoutMs,
+              newSocket = newSocket,
             ) { host ->
               postEvent(
                 EVENT_HOST_DISCOVERED,
@@ -207,7 +209,7 @@ class NetlensCoreModule : Module() {
         moduleScope.launch {
           try {
             val measurement = withContext(Dispatchers.IO) {
-              HandshakeProbe.measure(ip.trim(), port, timeoutMs)
+              HandshakeProbe.measure(ip.trim(), port, timeoutMs, PlatformNetwork.socketFactoryFor(resolvedContext(), ip.trim()))
             }
             promise.resolve(
               mapOf(

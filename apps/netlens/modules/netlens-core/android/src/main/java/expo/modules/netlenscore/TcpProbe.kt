@@ -35,11 +35,11 @@ object TcpProbe {
   /** Default hard-rule probe ports (netlens SPEC §3.2). */
   val DEFAULT_PORTS: List<Int> = listOf(80, 443, 22, 445, 5353, 8080, 62078)
 
-  fun connect(ip: String, port: Int, timeoutMs: Int): TcpProbeResult {
+  fun connect(ip: String, port: Int, timeoutMs: Int, newSocket: () -> Socket = { Socket() }): TcpProbeResult {
     val startedAt = System.nanoTime()
     var socket: Socket? = null
     return try {
-      socket = Socket()
+      socket = newSocket()
       socket.connect(InetSocketAddress(ip, port), timeoutMs)
       TcpProbeResult(ProbeOutcome.OPEN, elapsedMs(startedAt), port)
     } catch (error: IOException) {

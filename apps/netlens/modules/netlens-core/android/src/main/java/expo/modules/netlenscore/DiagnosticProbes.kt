@@ -2,6 +2,7 @@ package expo.modules.netlenscore
 
 import java.net.Inet4Address
 import java.net.InetAddress
+import java.net.Socket
 import java.net.UnknownHostException
 
 /**
@@ -30,8 +31,8 @@ object HandshakeProbe {
       get() = TcpProbe.isReachable(outcome) && rttMs != null
   }
 
-  fun measure(ip: String, port: Int, timeoutMs: Int): Measurement {
-    val probe = TcpProbe.connect(ip, port, timeoutMs)
+  fun measure(ip: String, port: Int, timeoutMs: Int, newSocket: () -> Socket = { Socket() }): Measurement {
+    val probe = TcpProbe.connect(ip, port, timeoutMs, newSocket)
     return Measurement(probe.outcome, probe.elapsedMs, probe.port)
   }
 }
