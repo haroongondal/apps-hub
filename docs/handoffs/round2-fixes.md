@@ -68,6 +68,7 @@ Environment: Node 22.23.4 is the nvm default (graft needed `SDKROOT=$(xcrun --sd
 
 - s0 (2026-10-26/27, previous chat): redesign, app moves, releases, on-phone debugging; see frontend-unification.md.
 - s1 (2026-10-27): main fast-forwarded to 695ac29 and pushed (goal 3 done). Work continues on branch `round2-fixes` (from 695ac29). Asked the §3 decisions.
+- s1: Store fix (7ecf8f7): `InstallWorker` (WorkManager foreground job, dataSync, progress notification), verified APK kept in cache/apks/<sha>.apk until an install succeeds (instant retry after a Play Protect abort), background-finished downloads post "ready to install" instead of committing unseen, PENDING_USER_ACTION in background → notification, reopened Store shows running downloads. Verified on emulator (Android 15, adb allowed there by the user): NetLens 3→4, PDF Editor 1→3 (FGS type 0x1 running while backgrounded at 98%; resumed after force-stop), OpenTunnel 1→2 (background finish → notification → retry from cache in <3 s; Cancel → notice). Store 7 released (`✔ store 7 published`). Phone still on Store 6: user must self-update through Store 6 (tap Scan app on Play Protect).
 
 ## 7. Current state and exact next step
 
