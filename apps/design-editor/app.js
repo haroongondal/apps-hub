@@ -1,11 +1,56 @@
 'use strict';
-const { Canvas, Textbox, Rect, Circle, Triangle, Polygon, Line, FabricImage, Group, Point, filters } = fabric;
+const { Canvas, StaticCanvas, FabricText, Textbox, Rect, Circle, Triangle, Polygon, Line, FabricImage, Group, Point, filters } = fabric;
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 
 // fabric leaves these out of toObject, so locks would vanish on undo and save
 const PROPS = ['lockMovementX', 'lockMovementY', 'lockScalingX', 'lockScalingY', 'lockRotation', 'hasControls', 'name'];
-const FONTS = ['Avenir Next', 'Helvetica Neue', 'Futura', 'Gill Sans', 'Georgia', 'Baskerville', 'Didot', 'Times New Roman', 'American Typewriter', 'Marker Felt', 'Impact', 'Menlo', 'Arial', 'Verdana', 'Trebuchet MS', 'Courier New'];
+const SANS = 'Atkinson Hyperlegible Next';
+const BUNDLED = {
+  [SANS]: 'ui/fonts/AtkinsonHyperlegibleNext_400Regular ui/fonts/AtkinsonHyperlegibleNext_600SemiBold ui/fonts/AtkinsonHyperlegibleNext_800ExtraBold fonts/AtkinsonHyperlegibleNext_700Bold fonts/AtkinsonHyperlegibleNext_400Regular_Italic fonts/AtkinsonHyperlegibleNext_700Bold_Italic',
+  Jost: 'fonts/Jost_400Regular fonts/Jost_700Bold fonts/Jost_400Regular_Italic fonts/Jost_700Bold_Italic',
+  'Playfair Display': 'fonts/PlayfairDisplay_400Regular fonts/PlayfairDisplay_700Bold fonts/PlayfairDisplay_400Regular_Italic fonts/PlayfairDisplay_700Bold_Italic',
+  'Dancing Script': 'fonts/DancingScript_400Regular fonts/DancingScript_700Bold',
+};
+const FACES = Object.entries(BUNDLED).flatMap(([family, files]) => files.split(' ').map(f => {
+  const [, weight, italic] = /_(\d+)\D+?(_Italic)?$/.exec(f);
+  return { family, src: `vendor/${f}.ttf`, weight: +weight, italic: !!italic };
+}));
+const SYSTEM_FONTS = ['Avenir Next', 'Helvetica Neue', 'Futura', 'Gill Sans', 'Georgia', 'Baskerville', 'Didot', 'Times New Roman', 'American Typewriter', 'Marker Felt', 'Impact', 'Menlo', 'Arial', 'Verdana', 'Trebuchet MS', 'Courier New'];
+const fontOptions = sel => [['Included with the app', Object.keys(BUNDLED)], ['This Mac only', SYSTEM_FONTS]]
+  .map(([label, list]) => `<optgroup label="${label}">${list.map(f => `<option ${f === sel ? 'selected' : ''}>${esc(f)}</option>`).join('')}</optgroup>`).join('');
+async function loadFonts() {
+  await Promise.all(FACES.map(f => {
+    const face = new FontFace(f.family, `url("${f.src}")`, { weight: String(f.weight), style: f.italic ? 'italic' : 'normal' });
+    document.fonts.add(face);
+    return face.load();
+  })).catch(() => toast('Some bundled fonts didn’t load. Reinstall the app to fix this.', 6000));
+}
+const cssWeight = w => w === 'bold' ? 700 : +w || 400;
+// the CSS font matching rules, so the PDF embeds the same face the canvas drew with
+function pickFace(family, weight, italic) {
+  const faces = FACES.filter(f => f.family === family), same = faces.filter(f => f.italic === italic);
+  const pool = same.length ? same : faces, w = cssWeight(weight);
+  const cost = ({ weight: f }) => w > 500 ? (f >= w ? f - w : 1e4 + w - f)
+    : w < 400 ? (f <= w ? w - f : 1e4 + f - w)
+    : f >= w && f <= 500 ? f - w : f < w ? 1e3 + w - f : 1e4 + f - w;
+  return pool.reduce((a, b) => cost(b) < cost(a) ? b : a);
+}
+const probe = document.createElement('canvas').getContext('2d');
+function hasFont(f) {
+  if (BUNDLED[f]) return true;
+  return ['monospace', 'serif'].some(g => {
+    probe.font = `40px ${g}`; const w = probe.measureText('mmmwwwlli10O@').width;
+    probe.font = `40px "${f}", ${g}`; return probe.measureText('mmmwwwlli10O@').width !== w;
+  });
+}
+const textsIn = objs => (objs || []).flatMap(o => o.objects ? textsIn(o.objects) : typeof o.fontFamily === 'string' ? [o] : []);
+function replaceMissingFonts(d) {
+  const missing = new Set();
+  for (const t of d.pages.flatMap(p => textsIn(p.objects))) if (!hasFont(t.fontFamily)) { missing.add(t.fontFamily); t.fontFamily = SANS; }
+  const names = [...missing];
+  if (names.length) toast(`${names.join(', ')} ${names.length > 1 ? 'aren’t' : 'isn’t'} on this Mac, so that text now uses ${SANS}.`, 6000);
+}
 const PRESETS = [
   ['Instagram post', 1080, 1080], ['Instagram story', 1080, 1920], ['Facebook post', 1200, 630],
   ['YouTube thumbnail', 1280, 720], ['Presentation 16:9', 1920, 1080], ['A4 portrait', 2480, 3508],
@@ -19,11 +64,14 @@ const store = {
 
 let W = 1080, H = 1080;
 const canvas = new Canvas('c', { preserveObjectStacking: true, backgroundColor: '#ffffff' });
-const brand = store.get('brand', { colors: ['#1d2433', '#2f54d8', '#ffd43b', '#ffffff'], heading: 'Avenir Next', body: 'Avenir Next' });
+const brand = store.get('brand', { colors: ['#1d2433', '#2f54d8', '#ffd43b', '#ffffff'], heading: 'Jost', body: SANS });
+// every page as canvas JSON; the current one lives in `canvas` and pages[cur] is stale until we leave it
+let pages = [{}], cur = 0;
+const pagesNow = () => pages.map((p, i) => i === cur ? canvas.toObject(PROPS) : p);
 
-function toast(msg) {
+function toast(msg, ms = 1800) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove('show'), 1800);
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove('show'), ms);
 }
 
 let zoom = 1;
@@ -44,7 +92,11 @@ window.addEventListener('resize', fit);
 
 let undoStack = [], redoStack = [], restoring = false, saveTimer;
 let filePath = null, savedSnap = null;
-const snapshot = () => JSON.stringify({ W, H, canvas: canvas.toObject(PROPS) });
+function snapshot() {
+  const all = pagesNow();
+  const fonts = [...new Set(all.flatMap(p => textsIn(p.objects).map(t => t.fontFamily)))];
+  return JSON.stringify({ version: 2, W, H, fonts, pages: all });
+}
 const docName = () => filePath ? filePath.split(/[\\/]/).pop().replace(/\.json$/i, '') : 'Untitled';
 function docChanged(snap) {
   const dirty = snap !== savedSnap;
@@ -54,34 +106,87 @@ function docChanged(snap) {
 function record() {
   if (restoring) return;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    const s = snapshot();
-    if (s === undoStack.at(-1)) return;
-    undoStack.push(s); if (undoStack.length > 80) undoStack.shift();
-    redoStack = [];
-    docChanged(s);
-  }, 150);
+  saveTimer = setTimeout(commit, 150);
 }
-async function restore(s) {
-  restoring = true;
-  const d = JSON.parse(s);
-  W = d.W; H = d.H;
-  await canvas.loadFromJSON(d.canvas);
-  restoring = false;
-  updateSize(); fit(); canvas.requestRenderAll(); inspect();
+// undo entries remember the page they were made on, kept out of `s` so switching pages never dirties the design
+function commit() {
+  clearTimeout(saveTimer);
+  const s = snapshot();
+  if (s === undoStack.at(-1)?.s) return;
+  undoStack.push({ s, page: cur }); if (undoStack.length > 80) undoStack.shift();
+  redoStack = [];
+  docChanged(s);
+  const img = $('#pageList [aria-current] img'); if (img) img.src = pageThumb(canvas);
 }
-function flushRecord() { clearTimeout(saveTimer); const s = snapshot(); if (s !== undoStack.at(-1)) undoStack.push(s); }
+// accepts v2 { W, H, pages } and v1 { W, H, canvas } files
+function parseDoc(text) {
+  const d = JSON.parse(text), list = d.pages ?? (d.canvas && [d.canvas]);
+  if (!(d.W > 0 && d.H > 0 && Array.isArray(list) && list.length && list.every(p => p && typeof p === 'object'))) throw new Error('not a design file');
+  return { W: d.W, H: d.H, pages: list };
+}
+async function load(d, page = 0) {
+  W = d.W; H = d.H; pages = d.pages;
+  await openPage(Math.min(page, pages.length - 1));
+  updateSize(); fit();
+}
+const restore = (s, page) => load(parseDoc(s), page);
 async function undo() {
-  flushRecord();
+  commit();
   if (undoStack.length < 2) return;
-  redoStack.push(undoStack.pop());
-  await restore(undoStack.at(-1)); docChanged(undoStack.at(-1));
+  const u = undoStack.pop(); redoStack.push(u);
+  await restore(undoStack.at(-1).s, u.page); docChanged(undoStack.at(-1).s);
 }
 async function redo() {
   if (!redoStack.length) return;
-  const s = redoStack.pop(); undoStack.push(s);
-  await restore(s); docChanged(s);
+  const r = redoStack.pop(); undoStack.push(r);
+  await restore(r.s, r.page); docChanged(r.s);
 }
+
+async function openPage(i) {
+  restoring = true;
+  try { cur = i; await canvas.loadFromJSON(pages[i]); } finally { restoring = false; }
+  canvas.requestRenderAll(); inspect(); renderPages();
+}
+async function showPage(i) {
+  if (i === cur || !pages[i]) return;
+  commit(); canvas.discardActiveObject();
+  pages[cur] = canvas.toObject(PROPS);
+  await openPage(i);
+}
+async function pageOp(op) {
+  commit(); canvas.discardActiveObject();
+  pages[cur] = canvas.toObject(PROPS);
+  let to = cur + 1;
+  if (op === 'add') pages.splice(to, 0, { objects: [], background: '#ffffff' });
+  else if (op === 'duplicate') pages.splice(to, 0, structuredClone(pages[cur]));
+  else if (op === 'delete') { if (pages.length < 2) return; pages.splice(cur, 1); to = Math.min(cur, pages.length - 1); }
+  else { to = op === 'left' ? cur - 1 : cur + 1; if (!pages[to]) return; [pages[cur], pages[to]] = [pages[to], pages[cur]]; }
+  await openPage(to); record();
+}
+async function withPage(json, fn) {
+  const sc = new StaticCanvas(document.createElement('canvas'), { width: W, height: H, renderOnAddRemove: false, enableRetinaScaling: false });
+  try { await sc.loadFromJSON(json); return await fn(sc); } finally { sc.dispose(); }
+}
+const pageThumb = c => c.toDataURL({ format: 'png', multiplier: 160 / (Math.max(W, H) * c.getZoom()) });
+const thumbs = new WeakMap();
+function renderPages() {
+  const list = $('#pageList'), focused = list.contains(document.activeElement), n = pages.length;
+  list.replaceChildren(...pages.map((p, i) => {
+    const li = document.createElement('li'), b = document.createElement('button'), img = new Image(), num = document.createElement('span');
+    b.className = 'thumb'; b.setAttribute('aria-label', `Page ${i + 1} of ${n}`);
+    if (i === cur) { b.setAttribute('aria-current', 'true'); img.src = pageThumb(canvas); }
+    else {
+      if (!thumbs.has(p)) thumbs.set(p, withPage(p, pageThumb));
+      thumbs.get(p).then(u => { img.src = u; }, () => {});
+    }
+    img.alt = ''; num.textContent = i + 1;
+    b.append(img, num); b.onclick = () => showPage(i);
+    li.append(b); return li;
+  }));
+  if (focused) list.querySelector('[aria-current]').focus();
+  $('#pageDel').disabled = n < 2; $('#pageLeft').disabled = cur === 0; $('#pageRight').disabled = cur === n - 1;
+}
+for (const [id, op] of [['pageAdd', 'add'], ['pageDup', 'duplicate'], ['pageDel', 'delete'], ['pageLeft', 'left'], ['pageRight', 'right']]) $('#' + id).onclick = () => pageOp(op);
 $('#undo').onclick = undo; $('#redo').onclick = redo;
 canvas.on('object:added', record);
 canvas.on('object:removed', record);
@@ -186,32 +291,33 @@ document.addEventListener('cut', e => copySelection(e) && del());
 const TEMPLATES = [
   { name: 'Sale', bg: '#ffd43b', items: () => [
     new Circle({ left: W * 0.82, top: H * 0.18, radius: 220 * s(), fill: '#ff6b6b' }),
-    new Textbox('Summer sale', { left: W / 2, top: H * 0.42, width: W * 0.86, fontSize: 150 * s(), fontWeight: 'bold', fontFamily: 'Futura', fill: '#1d2433', textAlign: 'center', lineHeight: 0.95 }),
-    new Textbox('Up to 50% off everything in store', { left: W / 2, top: H * 0.62, width: W * 0.8, fontSize: 46 * s(), fontFamily: 'Avenir Next', fill: '#1d2433', textAlign: 'center' }),
+    new Textbox('Summer sale', { left: W / 2, top: H * 0.42, width: W * 0.86, fontSize: 150 * s(), fontWeight: 'bold', fontFamily: 'Jost', fill: '#1d2433', textAlign: 'center', lineHeight: 0.95 }),
+    new Textbox('Up to 50% off everything in store', { left: W / 2, top: H * 0.62, width: W * 0.8, fontSize: 46 * s(), fontFamily: SANS, fill: '#1d2433', textAlign: 'center' }),
     new Rect({ left: W / 2, top: H * 0.78, width: 420 * s(), height: 100 * s(), rx: 50 * s(), ry: 50 * s(), fill: '#1d2433' }),
-    new Textbox('Shop now', { left: W / 2, top: H * 0.78, width: 400 * s(), fontSize: 40 * s(), fontWeight: 'bold', fontFamily: 'Avenir Next', fill: '#ffd43b', textAlign: 'center' }),
+    new Textbox('Shop now', { left: W / 2, top: H * 0.78, width: 400 * s(), fontSize: 40 * s(), fontWeight: 'bold', fontFamily: SANS, fill: '#ffd43b', textAlign: 'center' }),
   ] },
   { name: 'Quote', bg: '#1d2433', items: () => [
-    new Textbox('“', { left: W / 2, top: H * 0.26, width: W * 0.3, fontSize: 260 * s(), fontFamily: 'Georgia', fill: '#5c7cfa', textAlign: 'center' }),
-    new Textbox('Design is not just what it looks like. Design is how it works.', { left: W / 2, top: H * 0.5, width: W * 0.78, fontSize: 64 * s(), fontFamily: 'Georgia', fontStyle: 'italic', fill: '#ffffff', textAlign: 'center', lineHeight: 1.25 }),
-    new Textbox('Steve Jobs', { left: W / 2, top: H * 0.74, width: W * 0.6, fontSize: 34 * s(), fontFamily: 'Avenir Next', fill: '#aab4c8', textAlign: 'center', charSpacing: 120 }),
+    new Textbox('“', { left: W / 2, top: H * 0.26, width: W * 0.3, fontSize: 260 * s(), fontFamily: 'Playfair Display', fill: '#5c7cfa', textAlign: 'center' }),
+    new Textbox('Design is not just what it looks like. Design is how it works.', { left: W / 2, top: H * 0.5, width: W * 0.78, fontSize: 64 * s(), fontFamily: 'Playfair Display', fontStyle: 'italic', fill: '#ffffff', textAlign: 'center', lineHeight: 1.25 }),
+    new Textbox('Steve Jobs', { left: W / 2, top: H * 0.74, width: W * 0.6, fontSize: 34 * s(), fontFamily: SANS, fill: '#aab4c8', textAlign: 'center', charSpacing: 120 }),
   ] },
   { name: 'Event', bg: '#edf2ff', items: () => [
     new Rect({ left: W / 2, top: H * 0.12, width: W, height: H * 0.24, fill: '#2f54d8' }),
-    new Textbox('You’re invited', { left: W / 2, top: H * 0.12, width: W * 0.8, fontSize: 52 * s(), fontFamily: 'Avenir Next', fontWeight: '600', fill: '#ffffff', textAlign: 'center' }),
-    new Textbox('Studio open night', { left: W / 2, top: H * 0.45, width: W * 0.84, fontSize: 120 * s(), fontFamily: 'Didot', fontWeight: 'bold', fill: '#1d2433', textAlign: 'center', lineHeight: 1 }),
+    new Textbox('You’re invited', { left: W / 2, top: H * 0.12, width: W * 0.8, fontSize: 64 * s(), fontFamily: 'Dancing Script', fontWeight: '600', fill: '#ffffff', textAlign: 'center' }),
+    new Textbox('Studio open night', { left: W / 2, top: H * 0.45, width: W * 0.84, fontSize: 120 * s(), fontFamily: 'Playfair Display', fontWeight: 'bold', fill: '#1d2433', textAlign: 'center', lineHeight: 1 }),
     new Line([0, 0, W * 0.3, 0], { left: W / 2, top: H * 0.62, stroke: '#2f54d8', strokeWidth: 6 * s() }),
-    new Textbox('Friday 14 November, 7pm\n22 Market Street', { left: W / 2, top: H * 0.74, width: W * 0.8, fontSize: 44 * s(), fontFamily: 'Avenir Next', fill: '#1d2433', textAlign: 'center', lineHeight: 1.3 }),
+    new Textbox('Friday 14 November, 7pm\n22 Market Street', { left: W / 2, top: H * 0.74, width: W * 0.8, fontSize: 44 * s(), fontFamily: SANS, fill: '#1d2433', textAlign: 'center', lineHeight: 1.3 }),
   ] },
   { name: 'Launch', bg: '#ffffff', items: () => [
     new Rect({ left: W * 0.2, top: H / 2, width: W * 0.4, height: H, fill: '#12b886' }),
     new Polygon(starPoints(130 * s()), { left: W * 0.2, top: H / 2, fill: '#ffffff' }),
-    new Textbox('New', { left: W * 0.7, top: H * 0.3, width: W * 0.5, fontSize: 48 * s(), fontFamily: 'Avenir Next', fontWeight: '600', fill: '#12b886' }),
-    new Textbox('The everyday bag, rebuilt', { left: W * 0.7, top: H * 0.48, width: W * 0.5, fontSize: 84 * s(), fontFamily: 'Avenir Next', fontWeight: 'bold', fill: '#1d2433', lineHeight: 1.05 }),
-    new Textbox('Lighter, tougher, and out today.', { left: W * 0.7, top: H * 0.7, width: W * 0.5, fontSize: 36 * s(), fontFamily: 'Avenir Next', fill: '#5b6475' }),
+    new Textbox('New', { left: W * 0.7, top: H * 0.3, width: W * 0.5, fontSize: 48 * s(), fontFamily: SANS, fontWeight: '600', fill: '#12b886' }),
+    new Textbox('The everyday bag, rebuilt', { left: W * 0.7, top: H * 0.48, width: W * 0.5, fontSize: 84 * s(), fontFamily: SANS, fontWeight: 'bold', fill: '#1d2433', lineHeight: 1.05 }),
+    new Textbox('Lighter, tougher, and out today.', { left: W * 0.7, top: H * 0.7, width: W * 0.5, fontSize: 36 * s(), fontFamily: SANS, fill: '#5b6475' }),
   ] },
 ];
-function applyTemplate(t) {
+async function applyTemplate(t) {
+  if (canvas.getObjects().length) await pageOp('add');
   restoring = true;
   canvas.clear();
   canvas.backgroundColor = t.bg;
@@ -244,23 +350,25 @@ $('#presets').replaceChildren(...PRESETS.map(([n, w, h]) => {
   b.onclick = () => { $('#cw').value = w; $('#ch').value = h; };
   return b;
 }));
-function resizePage(nw, nh, scaleContent) {
+async function resizePage(nw, nh, scaleContent) {
   canvas.discardActiveObject();
   const k = Math.min(nw / W, nh / H);
-  for (const o of canvas.getObjects()) {
+  const move = objs => { for (const o of objs) {
     const c = o.getCenterPoint();
     const nc = scaleContent ? new Point((c.x - W / 2) * k + nw / 2, (c.y - H / 2) * k + nh / 2) : new Point(c.x - W / 2 + nw / 2, c.y - H / 2 + nh / 2);
     if (scaleContent) o.set({ scaleX: o.scaleX * k, scaleY: o.scaleY * k });
     o.setPositionByOrigin(nc, 'center', 'center');
     o.setCoords();
-  }
+  } };
+  for (const [i, p] of pages.entries()) if (i !== cur) pages[i] = await withPage(p, sc => { move(sc.getObjects()); return sc.toObject(PROPS); });
+  move(canvas.getObjects());
   W = nw; H = nh;
-  updateSize(); fit(); renderTemplates(); record();
+  updateSize(); fit(); renderTemplates(); renderPages(); record();
 }
-$('#applySize').onclick = () => {
+$('#applySize').onclick = async () => {
   const w = Math.round(+$('#cw').value), h = Math.round(+$('#ch').value);
   if (!(w >= 16 && h >= 16 && w <= 8000 && h <= 8000)) return toast('Use a size between 16 and 8000 px');
-  resizePage(w, h, $('#magic').checked);
+  await resizePage(w, h, $('#magic').checked);
   toast(`Resized to ${w} × ${h}`);
 };
 
@@ -274,9 +382,7 @@ function renderBrand() {
     return b;
   }));
   for (const id of ['brandHeading', 'brandBody']) {
-    const sel = $('#' + id);
-    sel.replaceChildren(...FONTS.map(f => new Option(f, f)));
-    sel.value = id === 'brandHeading' ? brand.heading : brand.body;
+    $('#' + id).innerHTML = fontOptions(id === 'brandHeading' ? brand.heading : brand.body);
   }
 }
 $('#brandAdd').onclick = () => { const c = $('#brandPick').value; if (!brand.colors.includes(c)) brand.colors.push(c); saveBrand(); renderBrand(); };
@@ -436,7 +542,7 @@ function inspect() {
     ${range('op', 'Opacity', 0, 1, 0.01, +o.opacity)}
     ${isText ? `
       <h3>Font</h3>
-      <select id="ff" aria-label="Font" style="width:100%">${FONTS.map(f => `<option ${f === o.fontFamily ? 'selected' : ''}>${esc(f)}</option>`).join('')}</select>
+      <select id="ff" aria-label="Font" style="width:100%">${fontOptions(o.fontFamily)}</select>
       <div class="row" style="margin-top:6px"><input type="number" id="fs" min="4" max="2000" value="${Math.round(o.fontSize)}" style="width:72px" aria-label="Font size">
         <button id="fb" class="${['bold', '600', '700', '800', '900'].includes(String(o.fontWeight)) ? 'on' : ''}" aria-label="Bold"><b>B</b></button>
         <button id="fi" class="${o.fontStyle === 'italic' ? 'on' : ''}" aria-label="Italic"><i>I</i></button>
@@ -533,40 +639,102 @@ document.addEventListener('keydown', e => {
 
 const download = (ext, data) => native.saveFile({ name: `${docName()}.${ext}`, ext, data });
 const dataURLtoBytes = u => Uint8Array.from(atob(u.split(',')[1]), c => c.charCodeAt(0));
-function atDesignSize(fn) {
-  const z = zoom; setZoom(1);
-  try { return fn(); } finally { setZoom(z); }
+const rgba = c => {
+  if (typeof c !== 'string' || !c) return null;
+  const [r, g, b, a] = new fabric.Color(c).getSource();
+  return a > 0 ? [r / 255, g / 255, b / 255, a] : null;
+};
+const fontData = new Map();
+const fontFile = src => {
+  if (!fontData.has(src)) fontData.set(src, fetch(src).then(r => r.arrayBuffer()).then(bytes => ({ bytes, fk: fontkit.create(new Uint8Array(bytes)) })));
+  return fontData.get(src);
+};
+async function pdfFont(o, doc, embedded) {
+  if (!(o instanceof FabricText && BUNDLED[o.fontFamily] && rgba(o.fill) && !(o.stroke && o.strokeWidth) && !o.shadow && !o.path
+    && !o.clipPath && !o.backgroundColor && !o.textBackgroundColor && o.direction !== 'rtl' && o.isEmptyStyles())) return null;
+  const italic = o.fontStyle === 'italic' || o.fontStyle === 'oblique', face = pickFace(o.fontFamily, o.fontWeight, italic);
+  const { bytes, fk } = await fontFile(face.src);
+  if (![...o.text].every(c => c === '\n' || fk.hasGlyphForCodePoint(c.codePointAt(0)))) return null;
+  if (!embedded.has(face.src)) embedded.set(face.src, doc.embedFont(bytes, { subset: true }));
+  // Chromium fakes a missing italic with a 0.25 skew, so match it
+  return { font: await embedded.get(face.src), slant: italic && !face.italic ? 0.25 : 0 };
 }
-function render(format, scale, transparent) {
-  const bg = canvas.backgroundColor;
-  if (transparent) canvas.backgroundColor = '';
-  const url = atDesignSize(() => canvas.toDataURL({ format, quality: 0.92, multiplier: scale }));
-  canvas.backgroundColor = bg;
-  return url;
+// mirrors FabricText._renderTextCommon and _renderTextDecoration, so glyphs land where the canvas put them
+function drawText(doc, page, o, { font, slant }) {
+  const P = PDFLib, [r, g, b, a] = rgba(o.fill), size = o.fontSize, left = o._getLeftOffset();
+  const ops = [P.pushGraphicsState(), P.concatTransformationMatrix(0.75, 0, 0, -0.75, 0, H * 0.75), P.concatTransformationMatrix(...o.calcTransformMatrix())];
+  if (a * o.opacity < 1) ops.push(P.setGraphicsState(page.node.newExtGState('GS', doc.context.obj({ Type: 'ExtGState', ca: a * o.opacity }))));
+  ops.push(P.setFillingRgbColor(r, g, b));
+  const key = page.node.newFontDictionary(font.name, font.ref);
+  let top = o._getTopOffset();
+  o._textLines.forEach((line, i) => {
+    const x = left + o._getLineLeftOffset(i), base = top + o.getHeightOfLineImpl(i) * (1 - o._fontSizeFraction), box = o.__charBounds[i];
+    top += o.getHeightOfLine(i);
+    if (!line.length) return;
+    const tj = line.flatMap((ch, j) => j < line.length - 1
+      ? [font.encodeText(ch), (font.widthOfTextAtSize(ch, size) - (box[j + 1].left - box[j].left)) * 1000 / size]
+      : [font.encodeText(ch)]);
+    ops.push(P.beginText(), P.setFontAndSize(key, size), P.setTextMatrix(1, 0, slant, -1, x + box[0].left, base),
+      P.PDFOperator.of(P.PDFOperatorNames.ShowTextAdjusted, [doc.context.obj(tj)]), P.endText());
+    const t = size * o.textDecorationThickness / 1000, w = box.reduce((sum, c) => sum + c.kernedWidth, 0) - o._getWidthOfCharSpacing();
+    for (const [type, aligner] of [['underline', 0], ['linethrough', 0.5], ['overline', 1]]) {
+      if (o[type]) ops.push(P.rectangle(x, base + o.offsets[type] * size - aligner * t, w, t), P.fill());
+    }
+  });
+  ops.push(P.popGraphicsState());
+  page.pushOperators(...ops);
 }
-async function exportAs(fmt, scale) {
+async function pdfPage(doc, sc, scale, embedded) {
+  const pw = W * 0.75, ph = H * 0.75, page = doc.addPage([pw, ph]), bg = rgba(sc.backgroundColor);
+  if (bg) page.drawRectangle({ x: 0, y: 0, width: pw, height: ph, color: PDFLib.rgb(bg[0], bg[1], bg[2]), opacity: bg[3] });
+  sc.backgroundColor = '';
+  let run = [];
+  const flush = async () => {
+    if (!run.length) return;
+    const png = await doc.embedPng(dataURLtoBytes(sc.toDataURL({ format: 'png', multiplier: scale, filter: o => run.includes(o) })));
+    page.drawImage(png, { x: 0, y: 0, width: pw, height: ph });
+    run = [];
+  };
+  for (const o of sc.getObjects()) {
+    if (!o.visible) continue;
+    const text = await pdfFont(o, doc, embedded);
+    if (!text) { run.push(o); continue; }
+    await flush();
+    drawText(doc, page, o, text);
+  }
+  await flush();
+}
+async function exportAs(fmt, scale, all) {
   canvas.discardActiveObject(); canvas.renderAll();
-  if (fmt === 'png' || fmt === 'png-t') return download('png', dataURLtoBytes(render('png', scale, fmt === 'png-t')));
-  if (fmt === 'jpeg') return download('jpg', dataURLtoBytes(render('jpeg', scale)));
-  if (fmt === 'svg') return download('svg', atDesignSize(() => canvas.toSVG()));
   if (fmt === 'pdf') {
-    const doc = await PDFLib.PDFDocument.create();
-    const png = await doc.embedPng(dataURLtoBytes(render('png', scale)));
-    const pw = W * 0.75, ph = H * 0.75;
-    doc.addPage([pw, ph]).drawImage(png, { x: 0, y: 0, width: pw, height: ph });
+    const doc = await PDFLib.PDFDocument.create(), embedded = new Map();
+    doc.registerFontkit(fontkit);
+    for (const p of pagesNow()) await withPage(p, sc => pdfPage(doc, sc, scale, embedded));
     return download('pdf', await doc.save());
   }
+  const files = [];
+  for (const p of all ? pagesNow() : [pagesNow()[cur]]) files.push(await withPage(p, sc => {
+    if (fmt === 'svg') return sc.toSVG();
+    if (fmt === 'png-t') sc.backgroundColor = '';
+    return dataURLtoBytes(sc.toDataURL({ format: fmt === 'jpeg' ? 'jpeg' : 'png', quality: 0.92, multiplier: scale }));
+  }));
+  return download({ png: 'png', 'png-t': 'png', jpeg: 'jpg', svg: 'svg' }[fmt], files.length > 1 ? files : files[0]);
 }
 const menu = $('#exportMenu');
-$('#exportBtn').onclick = () => { menu.classList.toggle('open'); $('#exportBtn').setAttribute('aria-expanded', menu.classList.contains('open')); };
+const allPagesShown = () => { $('#allPagesRow').hidden = $('#fmt').value === 'pdf' || pages.length < 2; };
+$('#fmt').onchange = allPagesShown;
+$('#exportBtn').onclick = () => { allPagesShown(); menu.classList.toggle('open'); $('#exportBtn').setAttribute('aria-expanded', menu.classList.contains('open')); };
 document.addEventListener('click', e => { if (!menu.contains(e.target)) menu.classList.remove('open'); });
 $('#download').onclick = async () => {
   menu.classList.remove('open');
-  const saved = await exportAs($('#fmt').value, +$('#scale').value);
-  if (saved) toast('Downloaded to ' + saved.split(/[\\/]/).pop());
+  const all = !$('#allPagesRow').hidden && $('#allPages').checked;
+  try {
+    const saved = await exportAs($('#fmt').value, +$('#scale').value, all);
+    if (saved) toast((all ? 'Downloaded one file per page, starting with ' : 'Downloaded to ') + saved.split(/[\\/]/).pop());
+  } catch (e) { console.error(e); toast('The download didn’t finish. Try again, or pick another format.', 5000); }
 };
 
-const discardOk = () => undoStack.at(-1) === savedSnap || confirm(`Discard unsaved changes to “${docName()}”?`);
+const discardOk = () => undoStack.at(-1).s === savedSnap || confirm(`Discard unsaved changes to “${docName()}”?`);
 async function save(as) {
   const snap = snapshot();
   const p = await native.saveFile({ name: docName() + '.json', ext: 'json', data: snap, filePath: as ? null : filePath });
@@ -575,24 +743,27 @@ async function save(as) {
   docChanged(snap); toast('Saved');
 }
 async function open() {
-  flushRecord();
+  commit();
   if (!discardOk()) return;
   const r = await native.openDesign();
   if (!r) return;
+  const before = undoStack.at(-1);
   try {
-    const d = JSON.parse(r.text);
-    if (!(d.W > 0 && d.H > 0 && d.canvas)) throw new Error('not a design file');
-    await restore(r.text);
-  } catch { restoring = false; return toast('That file is not a design saved from this editor'); }
-  filePath = r.filePath; savedSnap = snapshot(); undoStack = [savedSnap]; redoStack = [];
+    const d = parseDoc(r.text);
+    replaceMissingFonts(d);
+    await load(d);
+  } catch {
+    await restore(before.s, before.page).catch(() => {});
+    return toast('That file is not a design saved from this editor. Open a .json file you saved here.', 5000);
+  }
+  filePath = r.filePath; savedSnap = snapshot(); undoStack = [{ s: savedSnap, page: 0 }]; redoStack = [];
   docChanged(savedSnap); renderTemplates();
 }
-function newDesign() {
-  flushRecord();
+async function newDesign() {
+  commit();
   if (!discardOk()) return;
-  restoring = true; canvas.clear(); canvas.backgroundColor = '#ffffff'; restoring = false;
-  canvas.requestRenderAll(); inspect();
-  filePath = null; savedSnap = snapshot(); undoStack = [savedSnap]; redoStack = [];
+  await load({ W, H, pages: [{ objects: [], background: '#ffffff' }] });
+  filePath = null; savedSnap = snapshot(); undoStack = [{ s: savedSnap, page: 0 }]; redoStack = [];
   docChanged(savedSnap);
 }
 const typingOr = (cmd, fn) => () => isTyping() ? document.execCommand(cmd) : fn();
@@ -610,14 +781,23 @@ $$('nav.rail button').forEach(b => b.onclick = () => {
 });
 
 (async () => {
+  // fabric caches glyph widths per font, so nothing may measure text before the bundled fonts are in
+  await loadFonts();
   renderBrand();
   const saved = await native.readAutosave();
   if (saved?.doc) {
-    try { await restore(saved.doc); filePath = saved.filePath || null; } catch { restoring = false; }
+    try {
+      const d = parseDoc(saved.doc);
+      replaceMissingFonts(d);
+      await load(d); filePath = saved.filePath || null;
+    } catch {
+      await load({ W, H, pages: [{ objects: [], background: '#ffffff' }] });
+      toast('The last session couldn’t be restored, so this is a new design.', 5000);
+    }
   }
-  updateSize(); fit(); renderTemplates(); inspect();
-  undoStack = [snapshot()];
-  savedSnap = saved?.dirty ? null : undoStack[0];
-  docChanged(undoStack[0]);
+  updateSize(); fit(); renderTemplates(); inspect(); renderPages();
+  undoStack = [{ s: snapshot(), page: cur }];
+  savedSnap = saved?.dirty ? null : undoStack[0].s;
+  docChanged(undoStack[0].s);
 })();
-window.editor = { canvas, MENU, removeBackground, resizePage, exportAs, applyTemplate, TEMPLATES, get size() { return [W, H]; } };
+window.editor = { canvas, MENU, removeBackground, resizePage, exportAs, applyTemplate, pickFace, TEMPLATES, get size() { return [W, H]; }, get page() { return [cur, pages.length]; } };

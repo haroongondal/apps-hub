@@ -51,14 +51,18 @@ const FILTERS = {
 ipcMain.handle('save-file', async (_, { name, ext, data, filePath }) => {
   if (!FILTERS[ext]) throw new Error('unknown file type ' + ext);
   if (filePath && !granted.has(filePath)) throw new Error('path was not chosen in a dialog');
+  if (Array.isArray(data) && (filePath || ext === 'json')) throw new Error('several files need a dialog');
   if (!filePath) {
     const r = await dialog.showSaveDialog(win, { defaultPath: name, filters: [FILTERS[ext]] });
     if (r.canceled || !r.filePath) return null;
     filePath = r.filePath;
     if (ext === 'json') granted.add(filePath);
   }
-  await fs.writeFile(filePath, typeof data === 'string' ? data : Buffer.from(data));
-  return filePath;
+  // one file per page: name-1.png, name-2.png, … next to the path picked in the dialog
+  const files = Array.isArray(data) ? data.map((_, i) => filePath.replace(/(\.\w+)?$/, `-${i + 1}$1`)) : [filePath];
+  const list = Array.isArray(data) ? data : [data];
+  await Promise.all(files.map((f, i) => fs.writeFile(f, typeof list[i] === 'string' ? list[i] : Buffer.from(list[i]))));
+  return files[0];
 });
 ipcMain.handle('open-design', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [FILTERS.json] });
