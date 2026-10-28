@@ -51,6 +51,13 @@ coverage/
 /apps/store/android/**/.cxx/
 /apps/store/modules/*/android/build/
 /apps/store/.expo/
+/apps/deputy/android/.gradle/
+/apps/deputy/android/app/build/
+/apps/deputy/android/build/
+/apps/deputy/android/local.properties
+/apps/deputy/android/**/.cxx/
+/apps/deputy/modules/*/android/build/
+/apps/deputy/.expo/
 /tools/store-api/.cloudflare/
 /tools/store-api/.wrangler/
 /tools/store-api/dist/

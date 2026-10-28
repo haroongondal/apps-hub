@@ -219,6 +219,7 @@ whose package names are registered by a verified developer. Google says the requ
   - `app.netlens`
   - `com.opentunnel.open_tunnel_vpn`
   - `com.haroon.pdfeditor`
+  - `com.haroon.deputy` (once it is released)
 - [ ] Signing cert SHA-256 for all of them: `e3af4a92b1e858ede650bf53521c9be86702036100b2dc07393a262748d0317d`.
       A signed APK from `pnpm release` is in `<app>/android/app/build/outputs/apk/release/`.
 - [ ] Authorize your phone in the Console as one of the 20 devices.

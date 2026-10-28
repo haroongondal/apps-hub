@@ -20,6 +20,11 @@ Current apps:
   `packages/pdf-editor-engine` (`build.mjs` inlines it for mobile).
 - **design-editor** (`apps/design-editor`) — offline Canva-style editor for the
   Mac (Electron), moved in from `~/Documents/design-editor` on 2026-10-26.
+- **deputy** (`apps/deputy`) — personal Android agent that carries out tasks by
+  operating other apps through an AccessibilityService. Android only, private
+  Store only (`com.haroon.deputy`). Kotlin owns the agent loop and the
+  confirmation gate; RN only renders. Specs: `docs/deputy/` (PRD, SPEC);
+  phases and spike results: `docs/handoffs/deputy.md`.
 
 Not here on purpose: `~/Documents/browser-automation` (stays standalone) and
 `~/Documents/agent-harness` (deferred until its phase branches are merged).
@@ -36,7 +41,7 @@ Planned (do not scaffold yet):
 - Tokens live in `src/tokens.ts` only. After changing them run
   `pnpm --filter @apps-hub/ui build:css`; the test fails if `web/tokens.css` is
   stale, and it enforces WCAG AA contrast for every brand in light and dark.
-- Brands: netlens, opentunnel, store, pdf, design (hue + accent from each
+- Brands: netlens, opentunnel, store, pdf, design, deputy (hue + accent from each
   launcher icon). Light and dark follow the system.
 - Copy is sentence case, active voice; errors say what happened and how to fix
   it. No emoji icons, no ALL-CAPS labels.
@@ -109,6 +114,9 @@ cd apps/netlens/ios && xcodebuild -workspace NetLens.xcworkspace -scheme NetLens
   -configuration Debug build CODE_SIGNING_ALLOWED=NO
 # Native compile gate (OpenTunnel, after Phase 2+):
 cd apps/open_tunnel_vpn/android && JAVA_HOME=$JAVA_HOME ./gradlew :app:assembleDebug
+# Native compile gate (Deputy):
+cd apps/deputy/android && JAVA_HOME=$JAVA_HOME ./gradlew \
+  :deputy-agent:testDebugUnitTest :app:assembleDebug
 # Electron apps (open real windows, so not part of `pnpm test`):
 pnpm --filter pdf-editor-desktop test:e2e   # desktop + Electron + mobile-bridge suites
 pnpm --filter design-editor test:e2e

@@ -1,7 +1,7 @@
 // Pure TS so the RN theme and the generated web/tokens.css share one source of truth.
 
 export type Scheme = 'light' | 'dark';
-export type BrandKey = 'netlens' | 'opentunnel' | 'store' | 'pdf' | 'design';
+export type BrandKey = 'netlens' | 'opentunnel' | 'store' | 'pdf' | 'design' | 'deputy';
 export type Tone = 'neutral' | 'accent' | 'ok' | 'warn' | 'danger';
 
 export interface Palette {
@@ -36,6 +36,8 @@ export const brands: Record<BrandKey, Brand> = {
   store: { name: 'Store', hue: 250, accent: { dark: '#F6B73C', light: '#8A5300' }, onAccent: { dark: '#2A1A00', light: '#FFFFFF' } },
   pdf: { name: 'PDF Editor', hue: 345, accent: { dark: '#FF6B6B', light: '#C42B2B' }, onAccent: { dark: '#2B0707', light: '#FFFFFF' } },
   design: { name: 'Design Editor', hue: 268, accent: { dark: '#B79CFF', light: '#5B34D6' }, onAccent: { dark: '#1C0E40', light: '#FFFFFF' } },
+  // Provisional hue and accent until the launcher icon is chosen (docs/deputy/PRD.md Q4).
+  deputy: { name: 'Deputy', hue: 30, accent: { dark: '#FB923C', light: '#B43C0A' }, onAccent: { dark: '#2A1000', light: '#FFFFFF' } },
 };
 
 export function hsl(h: number, s: number, l: number): string {

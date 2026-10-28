@@ -22,6 +22,7 @@ export const APPS: Record<string, ReleasableApp> = {
     prepare: [['node', '../../packages/pdf-editor-engine/build.mjs']],
   },
   store: { name: 'Store', dir: 'apps/store', android: { packageName: 'com.haroon.store' } },
+  deputy: { name: 'Deputy', dir: 'apps/deputy', android: { packageName: 'com.haroon.deputy' } },
 };
 
 /** Release ids of the apps whose workspace-relative dir is in `dirs` (the packages pnpm says changed). */
