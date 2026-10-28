@@ -166,6 +166,20 @@ export function createTunnelClient(binding: OpenTunnelBinding): TunnelClient {
  * error keeps the conservative start-failure code; the reason text is
  * still quoted word for word.
  */
+/** Resolves once a started tunnel settles: connected, failed, or stopped. */
+export function settled(client: TunnelClient): Promise<TunnelSnapshot['state']> {
+  const done = (state: TunnelSnapshot['state']) => state === 'connected' || state === 'error' || state === 'disconnected';
+  const now = client.getSnapshot().state;
+  if (done(now)) return Promise.resolve(now);
+  return new Promise((resolve) => {
+    const handle = client.subscribe(({ state }) => {
+      if (!done(state)) return;
+      handle.remove();
+      resolve(state);
+    });
+  });
+}
+
 function describeError(error: unknown): string {
   if (error instanceof OpenTunnelError) {
     return `${error.code}: ${error.message}`;

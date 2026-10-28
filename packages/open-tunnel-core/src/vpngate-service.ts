@@ -64,7 +64,7 @@ export function defaultVpnGateFetcher(): VpnGateFetcher {
       // receive instead of throwing on status mismatches.
       redirect: 'follow',
     });
-    // Headers are established — hand the deadline baton back to the service.
+    // Headers are established here on Node; React Native resolves fetch only after the whole body, so the app injects an XHR fetcher.
     request.onHeaders?.();
     if (response.status >= 500) {
       throw new Error(`source ${url} returned HTTP ${response.status}`);

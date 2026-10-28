@@ -1,6 +1,6 @@
 {
   "name": "open_tunnel_vpn",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "main": "index.ts",
   "scripts": {
@@ -9,7 +9,7 @@
     "ios": "expo run:ios",
     "prebuild": "expo prebuild",
     "doctor": "expo-doctor",
-    "test": "node --test src/data/__tests__/node-cache.test.ts src/data/__tests__/settings-store.test.ts src/tunnel/__tests__/tunnel-client.test.ts src/ui/__tests__/traffic-samples.test.ts src/ui/__tests__/format.test.ts",
+    "test": "node --test src/data/__tests__/node-cache.test.ts src/data/__tests__/settings-store.test.ts src/tunnel/__tests__/tunnel-client.test.ts src/ui/__tests__/traffic-samples.test.ts src/ui/__tests__/format.test.ts src/data/__tests__/vpngate-fetcher.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -131,10 +131,9 @@ class OpenTunnelNativeModule : Module() {
     }
 
     /**
-     * Single TCP connect measurement for relay ranking. Connect refused is
-     * a TCP RST from a live host and still carries the RTT (shared hard
-     * rule); timeout/unreachable resolve null and the prober keeps the
-     * static VPN Gate ping as fallback.
+     * Single TCP connect measurement for relay ranking. Refused, timeout
+     * and unreachable all resolve null (a refused relay port means the relay
+     * is down); the prober keeps the static VPN Gate ping as fallback.
      */
     AsyncFunction("tcpProbe") { ip: String, port: Int, timeoutMs: Int, promise: Promise ->
       if (port !in 1..65535) {

@@ -43,8 +43,8 @@ export class LatencyProber {
     this.probe = probe;
   }
 
-  /** Returns new node copies ranked by fitness score, highest first.
-   * Input nodes are never mutated. */
+  /** Returns new node copies, relays that answered first, then by fitness
+   * score, highest first. Input nodes are never mutated. */
   async probeAndScoreNodes(
     candidates: readonly VpnNode[],
     options?: LatencyProberOptions,
@@ -78,7 +78,8 @@ export class LatencyProber {
     for (const probedNode of probed) {
       if (probedNode !== undefined) results.push(probedNode);
     }
-    const fitness = (a: VpnNode) => a.fitnessScore;
-    return results.sort((a, b) => fitness(b) - fitness(a));
+    // A relay that never answered can't win on its listed ping: VPN Gate lists many we can't reach.
+    const answered = (node: VpnNode) => (node.measuredRttMs === null ? 0 : 1);
+    return results.sort((a, b) => answered(b) - answered(a) || b.fitnessScore - a.fitnessScore);
   }
 }

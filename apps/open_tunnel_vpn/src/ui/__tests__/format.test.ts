@@ -7,6 +7,7 @@ import { createVpnNode } from 'open-tunnel-core';
 
 import {
   countryLabel,
+  countryOptions,
   fitnessLabel,
   formatBytes,
   formatDuration,
@@ -63,6 +64,20 @@ test('countryLabel renders the ISO code with the long name, never emoji', () => 
   assert.equal(countryLabel(node({})), 'JP · Japan');
   assert.equal(countryLabel(node({ countryLong: '' })), 'JP');
   assert.equal(countryLabel(node({ countryShort: '', countryLong: '' })), '--');
+});
+
+test('countryOptions lists each country once, most relays first', () => {
+  const options = countryOptions([
+    node({ countryShort: 'KR', countryLong: 'Korea Republic of' }),
+    node({}),
+    node({}),
+    node({ countryShort: '', countryLong: '' }),
+  ]);
+  assert.deepEqual(options, [
+    { code: 'JP', label: 'JP · Japan', count: 2 },
+    { code: '--', label: '--', count: 1 },
+    { code: 'KR', label: 'KR · Korea Republic of', count: 1 },
+  ]);
 });
 
 test('rttLabel marks provenance: listed until measured', () => {

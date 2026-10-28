@@ -22,7 +22,7 @@ import {
   type VpnTunnelConfig,
   type VpnTrafficListener,
 } from 'open-tunnel-native';
-import { createTunnelClient } from '../tunnel-client.ts';
+import { createTunnelClient, settled } from '../tunnel-client.ts';
 
 interface StandInState {
   binding: OpenTunnelBinding;
@@ -165,6 +165,17 @@ test('status events drive the state map; error is terminal until the next explic
   assert.equal(client.getSnapshot().message, null);
   assert.deepEqual(standIn.startedConfigs, [validConfig()]);
   client.dispose();
+});
+
+test('settled waits through connecting and resolves with the outcome', async () => {
+  const standIn = standInBinding();
+  const client = createTunnelClient(standIn.binding);
+  standIn.statusListener?.({ state: 'connecting' });
+  const outcome = settled(client);
+  standIn.statusListener?.({ state: 'reasserting' });
+  standIn.statusListener?.({ state: 'error', message: 'AUTH_FAILED' });
+  assert.equal(await outcome, 'error');
+  assert.equal(await settled(client), 'error');
 });
 
 test('refresh uses the native state (process restore path)', async () => {

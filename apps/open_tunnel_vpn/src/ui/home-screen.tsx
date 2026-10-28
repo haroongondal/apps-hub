@@ -24,7 +24,7 @@ import {
 
 import type { VpnNode } from 'open-tunnel-core';
 import type { TunnelSnapshot } from '../tunnel/tunnel-client.ts';
-import { countryLabel, formatBytes, formatDuration } from './format.ts';
+import { countryLabel, formatBytes, formatDuration, type CountryOption } from './format.ts';
 import { SMOOTHED_SAMPLE_COUNT, sparklineBars, type TrafficSample } from './traffic-samples.ts';
 import { forgetPublicIp, fetchPublicIp } from './public-ip.ts';
 import { useTrafficRing } from './use-traffic-ring.ts';
@@ -33,8 +33,12 @@ export interface HomeScreenProps {
   tunnel: TunnelSnapshot;
   /** Node the app last asked the client to start (label source). */
   activeNode: VpnNode | null;
-  /** Cached server count, for the sheet affordance. */
+  /** Cached server count in the selected country, for the sheet affordance. */
   nodeCount: number;
+  countries: readonly CountryOption[];
+  /** Selected country code, or null for any country. */
+  country: string | null;
+  onSelectCountry(code: string | null): void;
   scanning: boolean;
   loadError: string | null;
   /** Verbatim local (pre-start) failure wording, shown next to the
@@ -62,6 +66,9 @@ export function HomeScreen({
   tunnel,
   activeNode,
   nodeCount,
+  countries,
+  country,
+  onSelectCountry,
   scanning,
   loadError,
   actionError,
@@ -75,6 +82,12 @@ export function HomeScreen({
   const busy = tunnel.state === 'connecting' || tunnel.state === 'disconnecting';
   const live = tunnel.state === 'connected' || tunnel.state === 'reasserting' || busy;
   const { ring } = useTrafficRing(live ? tunnel.traffic : null);
+  const [countryOpen, setCountryOpen] = useState(false);
+  const countryName = country === null ? 'Any country' : countries.find((option) => option.code === country)?.label ?? country;
+  const countryChoices: readonly { code: string | null; label: string; count: number }[] = [
+    { code: null, label: 'Any country', count: countries.reduce((sum, option) => sum + option.count, 0) },
+    ...countries,
+  ];
 
   return (
     <View style={{ gap: 24 }}>
@@ -109,6 +122,33 @@ export function HomeScreen({
 
       <Group title="Servers" footer="Volunteers run these relays. They can see the sites you visit — use HTTPS.">
         <Row
+          title="Country"
+          subtitle={countryName}
+          trailing={<Text variant="meta" tone="accent">{countryOpen ? 'Close' : 'Change'}</Text>}
+          onPress={() => setCountryOpen((open) => !open)}
+          accessibilityLabel={`Country, ${countryName}, ${countryOpen ? 'expanded' : 'collapsed'}`}
+          accessibilityHint="Lists the countries that have relays"
+        />
+        {countryOpen &&
+          countryChoices.map((option) => (
+            <Row
+              key={option.code ?? 'any'}
+              title={option.label}
+              trailing={
+                option.code === country ? (
+                  <Pill label="Selected" tone="ok" />
+                ) : (
+                  <Text variant="meta" tone="muted">{`${option.count} relays`}</Text>
+                )
+              }
+              onPress={() => {
+                onSelectCountry(option.code);
+                setCountryOpen(false);
+              }}
+              accessibilityLabel={`${option.label}, ${option.count} relays`}
+            />
+          ))}
+        <Row
           title="Choose a server"
           subtitle={
             activeNode && live
@@ -121,7 +161,11 @@ export function HomeScreen({
         />
         <Row
           title="Auto-select fastest"
-          subtitle="Measures the cached relays and connects to the best score"
+          subtitle={
+            country === null
+              ? 'Measures the cached relays and connects to the best score'
+              : `Measures the relays in ${countryName} and connects to the best score`
+          }
           trailing={
             <Button
               label="Scan"
@@ -187,11 +231,14 @@ function ShieldRow({
   const press = () => {
     switch (tunnel.state) {
       case 'disconnected':
-      case 'error':
         // The explicit start out of a terminal state — same path as the
         // sheet rows; the client owns the transition into `connecting`.
         if (activeNode) onConnect(activeNode);
         else onAutoSelect();
+        return;
+      case 'error':
+        // Retrying a relay that just failed usually fails again: VPN Gate relays drop out often.
+        onAutoSelect();
         return;
       case 'connected':
         onDisconnect();
@@ -279,10 +326,8 @@ function shieldCopy(
     case 'error':
       return {
         title: 'Connection failed',
-        subtitle: activeNode
-          ? `Tap to try ${countryLabel(activeNode)} again`
-          : 'Tap to try again',
-        action: 'Starts a new attempt',
+        subtitle: scanning ? 'Measuring relays' : 'Tap to find another relay',
+        action: 'Connects the fastest relay that answers',
       };
     default:
       return {

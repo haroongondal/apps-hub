@@ -12,20 +12,22 @@ import { Header, Screen, ThemeProvider } from '@apps-hub/ui';
 import { LatencyProber, VpnGateService, type VpnNode } from 'open-tunnel-core';
 import { openAppDatabase, type AppDatabase } from './src/data/open-database.ts';
 import type { TunnelSettings } from './src/data/settings-store.ts';
+import { xhrVpnGateFetcher } from './src/data/vpngate-fetcher.ts';
 import { openTunnelBinding, nativeTcpProbe } from './src/tunnel/native-tcp-probe.ts';
 import {
   createTunnelClient,
   OpenTunnelError,
+  settled,
   type TunnelClient,
   type TunnelSnapshot,
 } from './src/tunnel/tunnel-client.ts';
+import { countryCode, countryOptions } from './src/ui/format.ts';
 import { HomeScreen } from './src/ui/home-screen.tsx';
 import { ServerSheet } from './src/ui/server-sheet.tsx';
 import { SettingsSheet } from './src/ui/settings-sheet.tsx';
 
 const prober = new LatencyProber(nativeTcpProbe);
-/** Render + auto-select pool bound (display-ranking probes stay bounded). */
-const LIST_LIMIT = 60;
+const MAX_ATTEMPTS = 3;
 
 type SheetKind = 'none' | 'servers' | 'settings';
 
@@ -42,6 +44,7 @@ function OpenTunnelApp() {
   const [settings, setSettings] = useState<TunnelSettings | null>(null);
   const [nodes, setNodes] = useState<readonly VpnNode[]>([]);
   const [activeNode, setActiveNode] = useState<VpnNode | null>(null);
+  const [country, setCountry] = useState<string | null>(null);
   const [tunnel, setTunnel] = useState<TunnelSnapshot>({
     state: 'disconnected',
     message: null,
@@ -53,10 +56,12 @@ function OpenTunnelApp() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const failedIds = useRef(new Set<string>());
 
   const busy = tunnel.state === 'connecting' || tunnel.state === 'disconnecting';
   const live = tunnel.state === 'connected' || tunnel.state === 'reasserting' || busy;
   const activeId = activeNode?.id ?? null;
+  const shown = country === null ? nodes : nodes.filter((node) => countryCode(node) === country);
 
   const clientRef = useRef<TunnelClient | null>(null);
   if (clientRef.current === null) clientRef.current = createTunnelClient(openTunnelBinding);
@@ -74,13 +79,20 @@ function OpenTunnelApp() {
     };
   }, [client]);
 
+  // Auto-select skips relays that already failed this session, whoever picked them.
+  useEffect(() => {
+    if (tunnel.state === 'error' && activeNode !== null) failedIds.current.add(activeNode.id);
+  }, [tunnel.state, activeNode]);
+
   const refreshList = useCallback(async (opened: AppDatabase) => {
     setRefreshing(true);
     setLoadError(null);
     try {
-      await opened.nodes.replaceAllNodes(await new VpnGateService().fetchNodes());
-      const best = await opened.nodes.loadNodes({ limit: LIST_LIMIT });
-      const ranked = await prober.probeAndScoreNodes(best);
+      await opened.nodes.replaceAllNodes(
+        await new VpnGateService({ fetcher: xhrVpnGateFetcher() }).fetchNodes(),
+      );
+      // The cache holds one VPN Gate fetch (~100 relays); all of them load so every country is offered.
+      const ranked = await prober.probeAndScoreNodes(await opened.nodes.loadNodes());
       if (mountedRef.current) setNodes(ranked);
     } catch (error) {
       if (mountedRef.current) {
@@ -91,8 +103,7 @@ function OpenTunnelApp() {
     }
   }, []);
 
-  // Cache-first open: settings + last node + cached list, then a fetch when
-  // the cache is empty (phase-2 parity).
+  // Always refetch after showing the cache: VPN Gate relays come and go within hours.
   useEffect(() => {
     let cancelled = false;
     openAppDatabase()
@@ -102,16 +113,18 @@ function OpenTunnelApp() {
         const loaded = await opened.settings.loadSettings();
         if (cancelled) return;
         setSettings(loaded);
-        if (loaded.lastNodeId !== null) {
+        const { state } = await client.refresh();
+        // Only a still-running tunnel gets its label back; an idle one would make the button retry an old, likely gone relay.
+        if (loaded.lastNodeId !== null && state !== 'disconnected' && state !== 'error') {
           // Configless label lookup — the payload is only fetched at
           // connect time (plan §5).
           const node = await opened.nodes.getNode(loaded.lastNodeId, { withConfig: false });
           if (!cancelled && node) setActiveNode(node);
         }
-        const cached = await opened.nodes.loadNodes({ limit: LIST_LIMIT });
+        const cached = await opened.nodes.loadNodes();
         if (cancelled) return;
         setNodes(cached);
-        if (cached.length === 0) await refreshList(opened);
+        await refreshList(opened);
       })
       .catch((error: unknown) => {
         if (!cancelled) setLoadError(String(error));
@@ -119,7 +132,7 @@ function OpenTunnelApp() {
     return () => {
       cancelled = true;
     };
-  }, [refreshList]);
+  }, [client, refreshList]);
 
   const connect = useCallback(
     async (node: VpnNode) => {
@@ -160,8 +173,8 @@ function OpenTunnelApp() {
   );
 
   const autoSelect = useCallback(async () => {
-    if (busy || nodes.length === 0) {
-      if (nodes.length === 0) setActionError('No servers are cached yet. Pull down to load the list.');
+    if (busy || scanning || shown.length === 0) {
+      if (shown.length === 0) setActionError('No servers are cached yet. Pull down to load the list.');
       return;
     }
     setActionError(null);
@@ -169,16 +182,33 @@ function OpenTunnelApp() {
     try {
       // Bounded native probe (concurrency 8) + fitness scoring; socket work
       // happens in the native module, never on the JS thread.
-      const ranked = await prober.probeAndScoreNodes(nodes, { concurrency: 8 });
-      if (mountedRef.current) setNodes(ranked);
-      const winner = ranked[0];
-      if (winner) await connect(winner);
+      const ranked = await prober.probeAndScoreNodes(shown, { concurrency: 8 });
+      const rankedIds = new Set(ranked.map((node) => node.id));
+      if (mountedRef.current) setNodes((all) => [...ranked, ...all.filter((node) => !rankedIds.has(node.id))]);
+      // VPN Gate lists relays that are down or refuse this client, so a failed start moves on to the next one.
+      const candidates = ranked.filter((node) => !failedIds.current.has(node.id)).slice(0, MAX_ATTEMPTS);
+      if (candidates.length === 0) {
+        setActionError('Every relay here has already failed. Pull down to refresh the list, or choose another country.');
+      }
+      for (const candidate of candidates) {
+        await connect(candidate);
+        if ((await settled(client)) !== 'error') return;
+      }
     } catch (error) {
       if (mountedRef.current) setActionError(describeLocalError(error));
     } finally {
       if (mountedRef.current) setScanning(false);
     }
-  }, [busy, connect, nodes]);
+  }, [busy, scanning, connect, shown, client]);
+
+  const selectCountry = useCallback(
+    (code: string | null) => {
+      setCountry(code);
+      // The connect button retries the last relay; it must not jump back to another country.
+      if (!live && code !== null && activeNode !== null && countryCode(activeNode) !== code) setActiveNode(null);
+    },
+    [live, activeNode],
+  );
 
   const changeKillSwitch = useCallback(
     async (enabled: boolean) => {
@@ -234,7 +264,10 @@ function OpenTunnelApp() {
         <HomeScreen
           tunnel={tunnel}
           activeNode={activeNode}
-          nodeCount={nodes.length}
+          nodeCount={shown.length}
+          countries={countryOptions(nodes)}
+          country={country}
+          onSelectCountry={selectCountry}
           scanning={scanning}
           loadError={loadError}
           actionError={actionError}
@@ -250,7 +283,7 @@ function OpenTunnelApp() {
       <ServerSheet
         visible={sheet === 'servers'}
         onClose={() => setSheet('none')}
-        nodes={nodes}
+        nodes={shown}
         activeId={activeId}
         live={live}
         tunnel={tunnel}

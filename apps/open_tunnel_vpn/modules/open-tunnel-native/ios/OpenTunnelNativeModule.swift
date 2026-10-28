@@ -604,10 +604,9 @@ final class TrafficTicker {
 
 // MARK: - NativeTcpProbe (Kotlin NativeTcpProbe mirror)
 //
-// Hard-classifier parity (repo AGENTS rule #2): a refused connect is a TCP
-// RST emitted by a live host — a valid latency measurement. Only timeouts
-// and unroutable paths report no measurement. One bounded connect; the
-// connection is destroyed on every path.
+// Unlike NetLens host discovery, a refused connect means the relay's VPN
+// port is closed, so it reports no measurement, like timeouts and
+// unroutable paths. One bounded connect; destroyed on every path.
 
 enum NativeTcpProbe {
   /** Bounded single-connect measurement (ms) or nil without a measurement. */
@@ -647,16 +646,8 @@ enum NativeTcpProbe {
       switch state {
       case .ready:
         finish(elapsedMs())
-      case .failed(let error):
-        // TCP RST ⇒ live host: measured, like an open connect (Kotlin
-        // ConnectException branch). Everything else has no measurement —
-        // the caller keeps the static CSV ping as fallback.
-        if case .posix(let code) = error, code.rawValue == ECONNREFUSED {
-          finish(elapsedMs())
-        } else {
-          finish(nil)
-        }
-      case .cancelled:
+      case .failed, .cancelled:
+        // The caller keeps the static CSV ping as fallback.
         finish(nil)
       default:
         break // .waiting stays inside the deadline window
@@ -823,9 +814,9 @@ public class OpenTunnelNativeModule: Module {
 
     /**
      * Bounded single-connect probe (plan §4.4, Android parity). Validation
-     * ranges are identical; the RTT is measured in ms for OPEN and RST;
-     * timeouts/unroutable resolve null (the JS layer keeps the static CSV
-     * ping as fitness fallback).
+     * ranges are identical; the RTT is measured in ms for an open connect;
+     * refused/timeouts/unroutable resolve null (the JS layer keeps the static
+     * CSV ping as fitness fallback).
      */
     AsyncFunction("tcpProbe") { (ip: String, port: Int, timeoutMs: Int, promise: Promise) in
       guard (1 ... 65535).contains(port) else {

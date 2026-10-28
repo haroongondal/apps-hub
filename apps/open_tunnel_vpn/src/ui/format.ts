@@ -27,8 +27,30 @@ export function formatDuration(seconds: number): string {
 /** Countries render as the ISO code plus the upstream long name — never
  * flag emoji (repo copy rules). The long name is optional upstream data. */
 export function countryLabel(node: VpnNode): string {
-  const code = node.countryShort || '--';
+  const code = countryCode(node);
   return node.countryLong ? `${code} · ${node.countryLong}` : code;
+}
+
+export interface CountryOption {
+  code: string;
+  label: string;
+  count: number;
+}
+
+export function countryCode(node: VpnNode): string {
+  return node.countryShort || '--';
+}
+
+/** One entry per country in the list, most relays first. */
+export function countryOptions(nodes: readonly VpnNode[]): CountryOption[] {
+  const byCode = new Map<string, CountryOption>();
+  for (const node of nodes) {
+    const code = countryCode(node);
+    const option = byCode.get(code) ?? { code, label: countryLabel(node), count: 0 };
+    option.count += 1;
+    byCode.set(code, option);
+  }
+  return [...byCode.values()].sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
 }
 
 /** Server-list row line: measured RTT once probed, upstream static ping

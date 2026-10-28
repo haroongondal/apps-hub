@@ -103,6 +103,22 @@ test('ranks the reachable node above an unreachable one', async () => {
   await close(server);
 });
 
+test('a relay that never answered ranks below one that did, whatever its listed ping', async () => {
+  const { port: openPort, server } = await openLoopbackPort();
+  const closedPort = await bindAndReleasePort();
+  const stats = { score: 100, speedBps: 10000000, numSessions: 10, uptimeMs: 60000 };
+  const reachable = loopbackNode('loopback-open', openPort, { ...stats, pingMs: 500 });
+  const dead = loopbackNode('loopback-dead', closedPort, { ...stats, pingMs: 1, speedBps: 900000000 });
+
+  const ranked = await new LatencyProber(createNodeTcpProbe()).probeAndScoreNodes(
+    [dead, reachable],
+    { timeoutMs: 1200 },
+  );
+
+  await close(server);
+  assert.deepEqual(ranked.map((node) => node.id), [reachable.id, dead.id]);
+});
+
 test('never mutates the input list or its nodes', async () => {
   const closedPort = await bindAndReleasePort();
   const original = loopbackNode('mutate-target', closedPort, {
