@@ -718,8 +718,28 @@ confirmed; **(phone)** means unverified until the eval:
     swapped for a gate-free one, with the web search moved to AC-2c; SPEC §8.2.
   - Final verification (real output): `pnpm test` exit 0, all 9 packages fail 0
     (deputy 7/7); `pnpm typecheck` exit 0; `./gradlew :deputy-agent:testDebugUnitTest
-    :app:assembleDebug` exit 0, JVM 144/144, `app-debug.apk` built. Nothing
-    committed; the probe deletion is unstaged.
+    :app:assembleDebug` exit 0, JVM 144/144, `app-debug.apk` built.
+  - The user said "commit, merge to main and release", then changed it to:
+    test on the phone over wireless debugging first, commit only, no merge or
+    push. Committed `2b116d5` on `deputy-phase-2` (47 files; untracked
+    `CLAUDE.md` files and `.claude/rules/` left out). The first `pnpm release`
+    was blocked by the auto-mode permission check; the user then said to
+    release. `pnpm release deputy` → **Deputy 3 published** (0.1.0, 67.6 MB).
+  - Store update over wireless debugging (adb taps only): Store → Deputy Update
+    → installer "Do you want to update this app?" Update → Play Protect "App
+    scan recommended" → Scan app → "This app looks safe" Install → Xiaomi "No
+    risks detected" (ads, not tapped) → Open. Installed versionCode 3, installer
+    `com.haroon.store`. The accessibility service stayed enabled and bound
+    through the update; no crash in logcat.
+- **2026-10-29, voice to text (user request, overrides PRD §8's "no voice
+  input").** A Speak button under the task field calls the new `listen(prompt)`
+  in `DeputyAgentModule`, which opens Android's `RecognizerIntent` dialog and
+  returns the first result through `OnActivityResult`; the text is appended to
+  the task. No microphone permission (the recognizer app records) and no new
+  dependency; a phone with no recognizer shows the error under the field. Not yet
+  tried on the phone. `pnpm --filter deputy typecheck` and `test` (7/7) pass;
+  `./gradlew :deputy-agent:testDebugUnitTest :app:assembleDebug` built
+  `app-debug.apk`, JVM 144/144.
 
 ## Current state + exact next step
 

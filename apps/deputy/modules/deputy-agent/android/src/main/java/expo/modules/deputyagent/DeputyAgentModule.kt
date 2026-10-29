@@ -1,6 +1,8 @@
 package expo.modules.deputyagent
 
+import android.app.Activity
 import android.app.NotificationManager
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -10,12 +12,15 @@ import android.net.Uri
 import android.os.PersistableBundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.speech.RecognizerIntent
 import expo.modules.deputyagent.android.AgentRuntime
 import expo.modules.deputyagent.android.DeputyAccessibilityService
 import expo.modules.deputyagent.android.KeyVault
 import expo.modules.deputyagent.android.StopChip
 import expo.modules.deputyagent.core.ServiceSetting
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Coroutine
+import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import kotlinx.coroutines.Dispatchers
@@ -25,10 +30,13 @@ import kotlinx.coroutines.withContext
 private const val NOT_CONNECTED =
   "The accessibility service isn't connected. If Setup says it is on, turn it off and on again in Accessibility settings."
 private const val RUN_EVENT = "onRunEvent"
+private const val SPEECH_REQUEST = 7301
 
 class DeputyAgentModule : Module() {
   private val context: Context
     get() = requireNotNull(appContext.reactContext) { "React context unavailable" }
+
+  private var pendingSpeech: Promise? = null
 
   private fun open(intent: Intent) = context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 
@@ -81,6 +89,28 @@ class DeputyAgentModule : Module() {
     AsyncFunction("testProvider") Coroutine { -> AgentRuntime.testProvider(context) }
 
     Function("setPalette") { json: String -> StopChip.setPalette(json) }
+
+    // The system speech dialog records the audio itself, so Deputy needs no microphone permission.
+    AsyncFunction("listen") { prompt: String, promise: Promise ->
+      pendingSpeech?.resolve(null)
+      pendingSpeech = promise
+      val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+        .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        .putExtra(RecognizerIntent.EXTRA_PROMPT, prompt)
+      try {
+        appContext.throwingActivity.startActivityForResult(intent, SPEECH_REQUEST)
+      } catch (e: ActivityNotFoundException) {
+        pendingSpeech = null
+        promise.reject("ERR_NO_SPEECH", "This phone has no speech recognizer. Install or turn on the Google app, then try again.", e)
+      }
+    }.runOnQueue(Queues.MAIN)
+
+    OnActivityResult { _, result ->
+      if (result.requestCode != SPEECH_REQUEST) return@OnActivityResult
+      val text = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+      pendingSpeech?.resolve(if (result.resultCode == Activity.RESULT_OK) text else null)
+      pendingSpeech = null
+    }
 
     AsyncFunction("dumpForegroundTree") Coroutine { delaySeconds: Int ->
       delay(delaySeconds.coerceIn(0, 30) * 1000L)

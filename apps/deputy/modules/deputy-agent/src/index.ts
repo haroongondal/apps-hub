@@ -58,6 +58,7 @@ interface DeputyAgentApi {
   clearApiKey(): void;
   testProvider(): Promise<{ ok: boolean; message: string }>;
   setPalette(json: string): void;
+  listen(prompt: string): Promise<string | null>;
   /** Debug: waits so the owner can switch apps, then dumps the app in front. Never dumps Deputy's own screens. */
   dumpForegroundTree(delaySeconds: number): Promise<TreeDump>;
   copyToClipboard(text: string): void;

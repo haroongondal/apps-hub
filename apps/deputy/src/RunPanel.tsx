@@ -25,6 +25,8 @@ export function RunPanel({ state, refresh }: { state: ServiceState; refresh: () 
   const [task, setTask] = useState('');
   const [run, setRun] = useState<RunSnapshot>(() => DeputyAgent.getRun());
   const [error, setError] = useState<string | null>(null);
+  const [listening, setListening] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
 
   useEffect(() => setRun(DeputyAgent.getRun()), [state]);
   useEffect(() => {
@@ -42,6 +44,19 @@ export function RunPanel({ state, refresh }: { state: ServiceState; refresh: () 
     refresh();
   };
 
+  const speak = async () => {
+    setListening(true);
+    setSpeechError(null);
+    try {
+      const heard = await DeputyAgent.listen('What should Deputy do?');
+      if (heard) setTask((t) => (t.trim() ? `${t.trim()} ${heard}` : heard));
+    } catch (e) {
+      setSpeechError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setListening(false);
+    }
+  };
+
   const steps = run.events.filter((e) => e.type === 'step');
   const end = run.events.find((e) => e.type === 'finished');
   const cost = run.events.reduce((usd, e) => ('costUsd' in e ? e.costUsd : usd), 0);
@@ -53,7 +68,8 @@ export function RunPanel({ state, refresh }: { state: ServiceState; refresh: () 
         footer={state.runActive ? 'Deputy is doing a task. Stop it to start another.' : canRun(state) ? undefined : 'Finish the setup rows marked To do first.'}
       >
         <View style={{ padding: space.lg, gap: space.md }}>
-          <Field label="What should Deputy do?" value={task} onChangeText={setTask} placeholder="Open the clock app and tell me my next alarm" multiline />
+          <Field label="What should Deputy do?" value={task} onChangeText={setTask} placeholder="Open the clock app and tell me my next alarm" multiline error={speechError} />
+          <Button label="Speak" variant="secondary" onPress={speak} busy={listening} accessibilityHint="Say the task instead of typing it" block />
           <Button label="Run" onPress={start} disabled={!canRun(state) || task.trim() === ''} block />
           {error && (
             <Notice tone="danger" title="Deputy didn't start">

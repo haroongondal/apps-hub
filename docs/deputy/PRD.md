@@ -248,8 +248,9 @@ eval checklist.
 - **On-device model in v1.** See §10, Q3.
 - **Multi-agent planner/executor.** Start with one loop; add a planner only if the
   eval shows the single loop falls short (RESEARCH §3).
-- **AppFunctions, voice input, remote control from a PC, cloud sync, multiple
-  users, telemetry.**
+- **AppFunctions, remote control from a PC, cloud sync, multiple users,
+  telemetry.** (Voice input for the task field was added on 2026-10-29 at the
+  user's request, through the system speech dialog.)
 
 ## 9. Dependencies and risks
 
