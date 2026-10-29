@@ -505,6 +505,35 @@ the user hasn't confirmed:
     200 in 1.3 s.
   - The key is still in the Keychain (`deputy-gemini`); delete it with
     `security delete-generic-password -s deputy-gemini` when the user says.
+- **Phase 2+3 eval, Part 1 (session 7, 2026-10-29, Deputy 4 = `af1f85f`,
+  `gemini-3.5-flash-lite`, free tier; tasks typed and Run tapped over adb, the
+  owner answering gates on the phone).** Deputy 4 was installed through the Store
+  (same four dialogs as Deputy 3); the key carried over; the service stayed bound.
+  | # | Task | Result | Time, steps, cost |
+  | - | ---- | ------ | ----------------- |
+  | 1 | Clock: next alarm (AC-1) | **Pass**, no gate: "8:30 AM and 9:00 AM, both deactivated" (true; the system's next alarm is another app's) | 49 s, 5, $0.0070 |
+  | 2 | Settings: Android version | Right answer ("Android 16, BP2A.250605.031.A3") but **3 gates on "Tap Back" in Settings** (rule unknown, see below); an `intent:` link was refused as designed | 127 s incl. gate waits, 9, $0.0056 |
+  | 3 | Settings: free storage | **Pass**: "107.3GB/256GB (148.7GB free)", matches `df` | 15 s, about 2 |
+  | 4 | Clock: time in London | Right ("9:07 AM", the Mac agreed) with **1 gate by design** (type + Enter); the search-result tap likely added London to the world clock | 42 s, 7 |
+  | 5 | Calculator: 1234 × 5678 | **Fail**: "Tap 'clear'" gated (verb list), unanswered, expired as declined | 5 min 18 s, 3 |
+  - Every step's model call took about 3–6 s on Flash-Lite (vs 503s on 3.8 Flash).
+  - Two `open_app` calls hit "several apps match" (Clock, Calculator) and the
+    model then used the package name: the session-7 fix works on the phone.
+  - Approving inside Deputy (the owner opened the gate from its notification)
+    pressed Back to Settings and carried on: the session-7 fix works.
+  - Findings to fix (owner's call on the trade-offs):
+    1. A gate doesn't say which rule fired, so the "Back" gates in task 2 can't
+       be explained (likely the model's `irreversible` flag, or a Settings page
+       title on the security list). Record the rule in the step and show it on
+       the gate.
+    2. The verb "clear" gates a calculator's C key. Options: match "clear" only
+       with an object ("clear data", "clear chat", "clear all"…), or keep it.
+    3. Type + Enter is always confirmed, which gates search boxes. Option:
+       exempt fields whose hint or id says search.
+    4. The gate's draft text took the calculator's display ("210×80"): only use
+       a draft for sends, not for every editable field.
+  - Harness notes: adb `input text` can drop the first letter after clearing a
+    field; tasks went in as typed otherwise.
 - **Q5 answered (session 7): the free tier.** Google may use what Deputy sends
   (screens from messaging and finance apps included) to improve its products
   (Evidence, Gemini). Setup must say so beside the key, and the PRD risk row

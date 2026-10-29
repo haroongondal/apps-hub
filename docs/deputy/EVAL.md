@@ -28,6 +28,11 @@ task, and the "Note" column says what it asked.
 | 4 | Open the clock app and tell me what time it is in London | The summary gives London's time, matching the world clock | | | | | |
 | 5 | Open the calculator and work out 1234 times 5678 | The summary says 7006652 | | | | | |
 
+Results 2026-10-29 (Deputy 4, Gemini 3.5 Flash-Lite): tasks 1 and 3 passed with
+no gate; task 2 answered right but was gated three times; task 4 answered right
+with the type + Enter gate; task 5 failed on the "clear" gate. No answer was wrong.
+Details and findings: handoff, Evidence.
+
 Median step time (NFR-1, target under 8 s): ____
 Median cost per task (NFR-2, target $0.20 or less): ____
 
