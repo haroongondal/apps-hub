@@ -78,3 +78,4 @@ coverage/
 
 # release APKs are build outputs; the store pipeline uploads its own builds
 /apps/*/releases/*.apk
+/.superpowers/
