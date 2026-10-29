@@ -18,11 +18,14 @@ class TreeDumpTest {
     scrollable: Boolean = false,
     password: Boolean = false,
     visible: Boolean = true,
-  ) = DumpNode(text, desc, hint, viewId, clickable, editable, scrollable, password, visible)
+  ) = NodeRef("p", text, desc, hint, viewId, Bounds(0, 0, 1, 1), clickable, editable, scrollable, password, visible)
 
-  @Test fun refusesDeputysOwnScreens() {
-    assertNotNull(TreeDump.refusal(self = "com.haroon.deputy", pkg = "com.haroon.deputy"))
-    assertNull(TreeDump.refusal(self = "com.haroon.deputy", pkg = "com.example"))
+  private val policy = Policy(trust = { if (it == "com.vault") TrustLevel.BLOCKED else TrustLevel.STANDARD }, allowedApps = null, self = "com.haroon.deputy")
+
+  @Test fun refusesDeputysOwnScreensAndBlockedApps() {
+    assertNotNull(TreeDump.refusal(policy, "com.haroon.deputy"))
+    assertNotNull(TreeDump.refusal(policy, "com.vault"))
+    assertNull(TreeDump.refusal(policy, "com.example"))
   }
 
   @Test fun formatsHeaderAndOneNode() = assertEquals(

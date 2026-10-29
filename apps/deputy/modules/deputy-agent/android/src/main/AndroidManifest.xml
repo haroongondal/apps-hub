@@ -15,12 +15,22 @@
                 android:resource="@xml/deputy_accessibility_service" />
         </service>
         <service
-            android:name="expo.modules.deputyagent.android.ProbeForegroundService"
+            android:name="expo.modules.deputyagent.android.RunService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Phone agent task" />
         </service>
+        <receiver
+            android:name="expo.modules.deputyagent.android.GateReceiver"
+            android:exported="false" />
     </application>
+    <!-- open_app lists launchable apps without QUERY_ALL_PACKAGES (SPEC §14). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
 </manifest>

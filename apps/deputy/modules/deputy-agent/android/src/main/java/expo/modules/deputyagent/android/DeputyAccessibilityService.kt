@@ -2,15 +2,20 @@ package expo.modules.deputyagent.android
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessibilityNodeInfo
-import expo.modules.deputyagent.core.DumpNode
+import expo.modules.deputyagent.core.DefaultTrust
+import expo.modules.deputyagent.core.NodeRef
+import expo.modules.deputyagent.core.Policy
 import expo.modules.deputyagent.core.TreeDump
+import expo.modules.deputyagent.core.TrustLevel
 
 class DeputyAccessibilityService : AccessibilityService() {
+  // Spikes S3, S9: this runs again on rebinds without process death, so it must not reset a run.
   override fun onServiceConnected() {
     instance = this
-    SpikeProbes.connectedAt = System.currentTimeMillis()
+    AgentRuntime.init(this)
+    if (AgentRuntime.active) StopChip.show(this)
   }
 
   override fun onUnbind(intent: Intent?): Boolean {
@@ -19,7 +24,12 @@ class DeputyAccessibilityService : AccessibilityService() {
   }
 
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-    if (event != null) SpikeProbes.onEvent(this, event)
+    val pkg = event?.packageName?.toString() ?: return
+    if (pkg == packageName) return
+    val now = SystemClock.elapsedRealtime()
+    // Rule 2: a heads-up's window belongs to System UI, so screenshots wait out one from a blocked app.
+    if (event.eventType != AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) lastEventAt = now
+    else if (DefaultTrust.level(pkg, packageName) == TrustLevel.BLOCKED) blockedNoticeAt = now
   }
 
   override fun onInterrupt() = Unit
@@ -27,30 +37,24 @@ class DeputyAccessibilityService : AccessibilityService() {
   fun dumpForeground(): DumpResult {
     val root = rootInActiveWindow ?: return DumpResult(null, 0, "No window could be read. Open an app and try again.")
     val pkg = root.packageName?.toString().orEmpty()
-    TreeDump.refusal(packageName, pkg)?.let { return DumpResult(pkg, 0, it) }
-    val nodes = ArrayList<DumpNode>()
+    val policy = Policy(trust = { DefaultTrust.level(it, packageName) }, allowedApps = null, self = packageName)
+    TreeDump.refusal(policy, pkg)?.let { return DumpResult(pkg, 0, it) }
+    val nodes = ArrayList<NodeRef>()
     flatten(root, nodes)
     return DumpResult(pkg, nodes.size, TreeDump.format(pkg, nodes))
-  }
-
-  private fun flatten(node: AccessibilityNodeInfo, out: MutableList<DumpNode>) {
-    out += DumpNode(
-      text = node.text?.toString(),
-      desc = node.contentDescription?.toString(),
-      hint = node.hintText?.toString(),
-      viewId = node.viewIdResourceName,
-      clickable = node.isClickable,
-      editable = node.isEditable,
-      scrollable = node.isScrollable,
-      password = node.isPassword,
-      visible = node.isVisibleToUser,
-    )
-    for (i in 0 until node.childCount) node.getChild(i)?.let { flatten(it, out) }
   }
 
   companion object {
     @Volatile var instance: DeputyAccessibilityService? = null
       private set
+
+    @Volatile var lastEventAt = 0L
+      private set
+
+    @Volatile var blockedNoticeAt = -HEADS_UP_MS
+      private set
+
+    const val HEADS_UP_MS = 10_000L
   }
 }
 

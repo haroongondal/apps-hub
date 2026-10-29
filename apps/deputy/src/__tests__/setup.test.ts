@@ -1,14 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { setupComplete, setupRows } from '../setup.ts';
+import { canRun, setupComplete, setupRows } from '../setup.ts';
 
-const ready = { accessibilityEnabled: true, notificationsAllowed: true, batteryUnrestricted: true };
+const ready = { accessibilityEnabled: true, notificationsAllowed: true, batteryUnrestricted: true, keySet: true, runActive: false };
 
 test('everything on: every live row is ok and setup is complete', () => {
   const rows = setupRows(ready);
   assert.deepEqual(
     rows.filter((r) => r.status !== 'manual').map((r) => r.status),
-    ['ok', 'ok', 'ok'],
+    ['ok', 'ok', 'ok', 'ok'],
   );
   assert.equal(setupComplete(rows), true);
 });
@@ -39,5 +39,19 @@ test('each row opens the screen that fixes it', () => {
     notifications: 'notifications',
     battery: 'battery',
     autostart: 'appInfo',
+    key: 'key',
   });
+});
+
+test('no API key: the key row is todo and setup is incomplete', () => {
+  const rows = setupRows({ ...ready, keySet: false });
+  assert.equal(rows.find((r) => r.id === 'key')?.status, 'todo');
+  assert.equal(setupComplete(rows), false);
+});
+
+test('a task can start only with the service on, notifications allowed, a key set and no run active', () => {
+  assert.equal(canRun(ready), true);
+  assert.equal(canRun({ ...ready, batteryUnrestricted: false }), true);
+  for (const off of ['accessibilityEnabled', 'notificationsAllowed', 'keySet'] as const) assert.equal(canRun({ ...ready, [off]: false }), false, off);
+  assert.equal(canRun({ ...ready, runActive: true }), false);
 });

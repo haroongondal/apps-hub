@@ -1,9 +1,9 @@
 import type { ServiceState } from 'deputy-agent';
 
-export type SetupAction = 'accessibility' | 'appInfo' | 'notifications' | 'battery';
+export type SetupAction = 'accessibility' | 'appInfo' | 'notifications' | 'battery' | 'key';
 
 export interface SetupRow {
-  id: 'accessibility' | 'restricted' | 'notifications' | 'battery' | 'autostart';
+  id: 'accessibility' | 'restricted' | 'notifications' | 'battery' | 'autostart' | 'key';
   title: string;
   detail: string;
   status: 'ok' | 'todo' | 'manual';
@@ -16,7 +16,7 @@ export function setupRows(s: ServiceState): SetupRow[] {
     {
       id: 'accessibility',
       title: 'Turn on the Deputy accessibility service',
-      detail: 'Deputy reads and taps other apps through it. Open Settings, Accessibility, then Deputy.',
+      detail: 'Deputy reads and taps other apps through it. Open Accessibility, then Downloaded apps, then Deputy. On the warning that follows, tick the box and wait for OK.',
       status: live(s.accessibilityEnabled),
       action: 'accessibility',
     },
@@ -48,7 +48,16 @@ export function setupRows(s: ServiceState): SetupRow[] {
       status: 'manual',
       action: 'appInfo',
     },
+    {
+      id: 'key',
+      title: 'Add your API key',
+      detail: 'Deputy sends each screen to the model with this key. Paste a Gemini API key below.',
+      status: live(s.keySet),
+      action: 'key',
+    },
   ];
 }
 
 export const setupComplete = (rows: SetupRow[]): boolean => rows.every((r) => r.status !== 'todo');
+
+export const canRun = (s: ServiceState): boolean => s.accessibilityEnabled && s.notificationsAllowed && s.keySet && !s.runActive;

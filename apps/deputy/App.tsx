@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AppState, PermissionsAndroid, View } from 'react-native';
-import { Button, Group, Header, Notice, Pill, Row, Screen, Text, ThemeProvider, space } from '@apps-hub/ui';
+import { Button, Field, Group, Header, Notice, Pill, Row, Screen, Text, ThemeProvider, space, useTheme } from '@apps-hub/ui';
 import DeputyAgent, { type TreeDump } from 'deputy-agent';
+import { RunPanel } from './src/RunPanel';
 import { setupComplete, setupRows, type SetupAction, type SetupRow } from './src/setup';
 
 const PILLS = {
@@ -19,25 +20,16 @@ export default function App() {
 }
 
 function Home() {
+  const { c } = useTheme();
   const [state, setState] = useState(() => DeputyAgent.getServiceState());
+  const [keyOpen, setKeyOpen] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [dump, setDump] = useState<TreeDump | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [report, setReport] = useState('');
-  const [probing, setProbing] = useState(false);
-
   const refresh = useCallback(() => setState(DeputyAgent.getServiceState()), []);
-  const showReport = () => setReport(DeputyAgent.getSpikeReport());
-  const probe = async (run: (delaySeconds: number) => Promise<string>) => {
-    setProbing(true);
-    try {
-      setReport(await run(5));
-    } finally {
-      setProbing(false);
-    }
-  };
 
+  useEffect(() => DeputyAgent.setPalette(JSON.stringify(c)), [c]);
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => s === 'active' && refresh());
     return () => sub.remove();
@@ -49,6 +41,7 @@ function Home() {
     if (action === 'accessibility') DeputyAgent.openAccessibilitySettings();
     else if (action === 'battery') DeputyAgent.openBatterySettings();
     else if (action === 'appInfo') DeputyAgent.openAppInfo();
+    else if (action === 'key') setKeyOpen(true);
     else {
       const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
       if (result !== 'granted') DeputyAgent.openAppInfo();
@@ -71,13 +64,13 @@ function Home() {
 
   return (
     <Screen scroll>
-      <Header title="Deputy" subtitle="Set up the phone so Deputy can work in other apps." />
+      <Header title="Deputy" subtitle="Tell Deputy a task, and it works your phone's apps to do it." />
       {!state.accessibilityEnabled && (
         <Notice tone="danger" title="Deputy is off">
           Turn on the Deputy accessibility service. Without it Deputy cannot read or tap other apps.
         </Notice>
       )}
-      <Notice title="Tasks are not available yet">This version only checks your setup and can read the screen of another app.</Notice>
+      <RunPanel state={state} refresh={refresh} />
       <Group title="Setup" footer={setupComplete(rows) ? 'Setup is complete.' : undefined}>
         {rows.map((r: SetupRow) => (
           <Row
@@ -90,6 +83,7 @@ function Home() {
           />
         ))}
       </Group>
+      {(keyOpen || !state.keySet) && <KeyPanel keySet={state.keySet} refresh={refresh} />}
       <Group title="Read another app" footer="Debug. Starts a five-second countdown. Switch to the app you want to read before it ends.">
         <View style={{ padding: space.lg, gap: space.md }}>
           <Button label={waiting ? 'Reading in five seconds' : 'Read the app in front'} onPress={dumpNow} busy={waiting} disabled={!state.accessibilityEnabled} block />
@@ -111,26 +105,6 @@ function Home() {
           )}
         </View>
       </Group>
-      <Group
-        title="Spike probes"
-        footer="Debug, removed after Phase 1. Screenshots and typing: switch to the app to test within five seconds, and for typing tap into a text field first. Foreground service: tap Arm, then leave Deputy for more than a minute (locking the screen is fine). It tries on the first screen change or notification after that; come back and tap Show report. The report also lists notification events and how long the service has been connected."
-      >
-        <View style={{ padding: space.lg, gap: space.md }}>
-          <Button label={probing ? 'Testing' : 'Test screenshots in five seconds'} onPress={() => probe(DeputyAgent.probeScreenshots)} busy={probing} disabled={!state.accessibilityEnabled} block />
-          <Button label="Test typing in five seconds" variant="secondary" onPress={() => probe(DeputyAgent.probeTyping)} busy={probing} disabled={!state.accessibilityEnabled} block />
-          <Button label="Arm foreground service test" variant="secondary" onPress={() => DeputyAgent.armForegroundProbe()} disabled={!state.accessibilityEnabled} block />
-          <Button label="Show report" variant="secondary" onPress={showReport} block />
-          <Button label="Clear report" variant="ghost" onPress={() => { DeputyAgent.clearSpikeReport(); setReport(''); }} block />
-          {report !== '' && (
-            <>
-              <Text variant="data" selectable>
-                {report}
-              </Text>
-              <Button label="Copy" variant="secondary" onPress={() => DeputyAgent.copyToClipboard(report)} block />
-            </>
-          )}
-        </View>
-      </Group>
       {state.accessibilityEnabled && (
         <Button
           label="Turn off Deputy"
@@ -143,5 +117,61 @@ function Home() {
         />
       )}
     </Screen>
+  );
+}
+
+function KeyPanel({ keySet, refresh }: { keySet: boolean; refresh: () => void }) {
+  const [key, setKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const test = async () => {
+    setBusy(true);
+    setResult(null);
+    try {
+      setResult(await DeputyAgent.testProvider());
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Group title="API key" footer={keySet ? 'A key is saved. Deputy never shows it again.' : 'Deputy uses Gemini 3.8 Flash. Create a key in Google AI Studio.'}>
+      <View style={{ padding: space.lg, gap: space.md }}>
+        <Notice tone="warn" title="Free-tier keys share what Deputy sees">
+          With a free-tier key, Google may use what Deputy sends, including screens from your messaging and money apps, to improve its products. A key from a project with billing turned on avoids that.
+        </Notice>
+        <Field label="Gemini API key" value={key} onChangeText={setKey} secureTextEntry autoCapitalize="none" autoCorrect={false} mono />
+        <Button
+          label={keySet ? 'Replace the key' : 'Save the key'}
+          onPress={() => {
+            DeputyAgent.setApiKey(key.trim());
+            setKey('');
+            setResult(null);
+            refresh();
+          }}
+          disabled={key.trim() === ''}
+          block
+        />
+        {keySet && <Button label="Test the key" variant="secondary" onPress={test} busy={busy} block />}
+        {keySet && (
+          <Button
+            label="Remove the key"
+            variant="ghost"
+            onPress={() => {
+              DeputyAgent.clearApiKey();
+              setResult(null);
+              refresh();
+            }}
+            block
+          />
+        )}
+        {result && (
+          <Notice tone={result.ok ? 'ok' : 'danger'} title={result.ok ? 'The key works' : 'The key test failed'}>
+            {result.message}
+          </Notice>
+        )}
+      </View>
+    </Group>
   );
 }

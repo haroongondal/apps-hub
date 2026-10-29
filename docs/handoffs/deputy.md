@@ -3,13 +3,16 @@
 ## Resume prompt
 
 Dated 2026-10-29. Read `docs/handoffs/deputy.md` completely first, then
-`docs/deputy/RESEARCH.md`, `docs/deputy/PRD.md` and `docs/deputy/SPEC.md`. Trust
-the verified facts below and do not redo that research. Follow the handoff
-contract in `~/.claude/CLAUDE.md`. Read "Current state + exact next step" before
-doing anything, including the safety-classifier stops recorded there, then
-continue from the stated next step. Phase 1 code is built on branch
-`deputy-phase-1`; what is left of Phase 1 is the Store release and the spikes on
-the phone. Don't start Phase 2 until the Phase 1 exit criteria are met.
+`docs/deputy/PRD.md`, `docs/deputy/SPEC.md` and `docs/deputy/EVAL.md` (open
+`docs/deputy/RESEARCH.md` only where this file cites it). Trust the verified facts
+and the Phase 2 work below, and don't redo Phase 1, the spikes or the Phase 2
+core and Android side (built, reviewed twice, 144 JVM tests green). Follow the
+handoff contract in `~/.claude/CLAUDE.md`. Read "Current state + exact next step"
+before doing anything, including the safety-classifier rule there, then continue
+from it on branch `deputy-phase-2`: **the Phase 2 phone eval**. First ask the
+user whether to commit, whether to release Deputy 3 through the Store (confirm
+the Cloudflare account first), and whether the Gemini key is in the Keychain for
+S7. Commit or release only when the user says so.
 
 ## Goal and fixed constraints
 
@@ -108,6 +111,98 @@ confirmed; the cost if wrong follows the dash:
 - **Plain branch, not a worktree; no commits.** The executing-plans ledger
   scripts weren't used: SPEC §17 isn't a plan file, so this handoff is the ledger.
 
+Made in Phase 2 (session 6, 2026-10-29). Rulings the user hasn't confirmed unless
+marked; **(prov.)** means it waits on a spike:
+
+- **Dependencies, approved by the user:** `okhttp:4.9.2` and
+  `kotlinx-serialization-json:1.8.1` (implementation), `kotlinx-coroutines-test:1.7.3`
+  (tests only, virtual time). All Apache-2.0; `:app` still resolves OkHttp 4.9.2.
+- **One node type.** `DumpNode` is gone; `NodeRef` (`core/Action.kt`) carries
+  `pkg`, `bounds`, `visible`, `depth` and `childText`, and the debug dump uses it.
+- **Policy details beyond SPEC §8.2:**
+  - `type_text` with Enter is confirmed in standard apps, because Enter can send.
+  - Tap, long-press or type with no node behind the index is denied.
+  - `open_link` is denied when the run has `allowedApps`, since the app a link
+    opens can't be known.
+  - `press`, `wait` and `look` have no package, so rules 1–3 skip them, and a run
+    can't get trapped.
+  - Rule 1's "settings that change Deputy" means a Settings package
+    (`com.android.settings`, `com.miui.securitycenter`) whose title says
+    accessibility or special access, or that shows Deputy's name. Sensitive flows
+    are the permission controller and Settings pages titled security, privacy,
+    lock and similar. **(prov.)** These lists come from AOSP and HyperOS names
+    known so far; extend them from S4 dumps.
+- **Default trust (FR-4)** is `core/DefaultTrust.kt`: blocked means Deputy, the
+  Store, three package installers and 15 password or authenticator apps.
+  Read-only means a package-name word (bank, wallet, pay, invest, broker,
+  trading, finance, crypto) or a short list (Revolut, Wise, Robinhood, eToro,
+  Binance, Coinbase, Google Pay India). A bank it misses is standard until
+  Phase 3's Apps screen, so its money steps are confirmed but not denied.
+- **Observation:** a cap of 150 nodes and 8,000 characters **(prov., S4)**, keeping
+  the nodes nearest the centre. Child labels are lifted onto unlabelled clickable
+  rows (S4 finding), and the children used are left out. Nodes from blocked
+  windows or Deputy's own are dropped one by one, which also hides the Stop chip.
+  Password text is stripped from the index map as well as the text.
+- **Open risk:** the notification shade's nodes all belong to `com.android.systemui`,
+  so a blocked app's notification (an OTP, say) in an open shade isn't filtered.
+  Decide on the Android side, for example by refusing to observe while the shade
+  is open unless the task asked for it.
+- **Gates:** one pending at a time. Opening a new one cancels a leaked old one. A
+  question's answer never counts as approval, even if the receiver says approve.
+- **Prices** default to Gemini Flash's and double from 2027-01-01 UTC
+  (`Prices.geminiFlash`), so the cost cap doesn't under-count in January.
+- **Provider:** `OpenAiCompatProvider` sits in `core/` and takes a `post` function,
+  so the OkHttp transport on the Android side is only the HTTP call plus cancel.
+  `tool_choice` is sent only with tools. Unreadable `arguments` become `{}`, which
+  makes the tool parse report the missing field to the model.
+- **Loop:** each observation goes in a user message (plus the image), and each
+  tool result in a tool message. Screenshots go on the first step, after `look`,
+  when fewer than 5 nodes are labelled, or after two unchanged screens. `tap_at`
+  coordinates are in 720-px-wide screenshot pixels (`AgentLoop.SHOT_WIDTH`), so
+  the Android screenshot must downscale to exactly 720 wide. A question's timeout
+  ends as `failed`, a confirm's timeout as `declined`. History is never
+  summarised (shortcut in the code).
+
+Made in Phase 2, Android side (session 7, 2026-10-29). Rulings the user hasn't
+confirmed; **(phone)** means unverified until the eval:
+
+- **The shade is never read (decides the open risk above).** `read()` takes the
+  active window and other application windows only; System UI's (status bar,
+  heads-up, shade) are skipped, and when System UI is in front the observation
+  has no nodes and says "not read" (`ObservationBuilder`, tested). Screenshots
+  are skipped for 10 s after a blocked app posts a notification, since its
+  heads-up can sit over any screen. Notification jobs come through Phase 4's
+  rules, which know the sending package.
+- **Flutter typing fails clearly; IME stays Phase 5.** When the text doesn't
+  change after `ACTION_SET_TEXT`, the tool says typing isn't possible here.
+  Turning on `flagInputMethodEditor` would change the service's config and its
+  consent sheet without a phone test.
+- **Secure windows (phone):** a frame whose app-window area samples (12x12) all
+  near-black is dropped, and the model is told a screenshot is missing. Any
+  capture failure retries once after 350 ms.
+- **`resolveLink`** returns null only for the system chooser (`android`).
+  Browsers aren't special-cased: a browser handler is a standard app, so it
+  changes no verdict.
+- **Settle** counts 400 ms of quiet from the action itself (so it never returns
+  before the action's events), with a 3 s cap. Deputy's own events and
+  notification events don't count.
+- **Runs start by pressing Home**, because Deputy's own screen is blocked and the
+  loop would otherwise spend its first step pressing Back on itself.
+- **Fixed endpoint and model** (Gemini compatible endpoint, `gemini-3.8-flash`,
+  no `reasoning_effort`) until Phase 3's Settings (shortcut in `AgentRuntime`).
+- **Run button** needs the service on, notifications allowed (the gate's
+  heads-up), a key, and no run active (`canRun`, tested). Battery stays advice,
+  per S9.
+- **The Run screen rebuilds from `getRun()`**, the in-memory events of the
+  current or last run. Reading old runs from the log is Phase 3's history.
+- **A question gate has no Deny**; an ignored question times out as `failed`.
+- **Gate notifications are text only** (SPEC §8.3 allows it); the icon is a
+  system drawable until Q4 (shortcut).
+- **Stop chip colours** come from `setPalette` (the whole `@apps-hub/ui`
+  palette); before RN pushes one, it falls back to platform grey and black.
+- **Spike probes deleted** (`SpikeProbes.kt`, the probe service and their UI);
+  the FGS permissions stay for `RunService`.
+
 ## Evidence already verified
 
 - **Android SDK.** `platforms;android-36/android.jar` has: `takeScreenshot`,
@@ -194,6 +289,155 @@ confirmed; the cost if wrong follows the dash:
   this branch to `main` makes CI release all four with no user-visible change.
   Options for the user: accept it, or split the brand edit and release it
   deliberately (the user decides).
+- **Phone spike results (session 5, 2026-10-29, over wireless debugging; adb
+  only for screenshots, UI dumps and taps; no adb installs or grants).**
+  - Phone: Android 16, HyperOS `OS3.0`, model 24116RACCG.
+  - **Install path.** The user installed Deputy 2 from Store 8 at 00:24
+    (installer of record `com.haroon.store`). Store 8 still listed Deputy as "Not
+    installed", which is the missing `<queries>` entry. After updating to Store 9
+    it shows "Installed 0.1.0 (2)": the fix works on the phone.
+  - **S2 (Store 9 update, observed).** The steps were:
+    1. PackageInstaller: "Do you want to update this app?" → Update.
+    2. Play Protect: "App scan recommended. Play Protect hasn't seen this app
+       before" → Scan app.
+    3. Xiaomi `ScanActivity`: "Passed security tests / No risks detected" (with
+       ads; don't tap them).
+    Deputy's own install dialogs weren't observed (the user installed it before
+    this session); no block was reported.
+  - **S1 (in progress).** The taps were:
+    1. Deputy Setup → "Turn on the Deputy accessibility service".
+    2. Accessibility (General tab), scroll to the bottom → Downloaded apps.
+    3. Deputy (Off).
+    4. The "Use Deputy" switch.
+    **No "Restricted setting" block** for this Store session install on Android
+    16: the switch worked, so "Allow restricted settings" wasn't needed.
+    HyperOS then shows a Security center "Danger" sheet listing "read all screen
+    content and control screen", "learn your behaviour and automate actions"
+    and **"Unlimited autostart"** (relevant to S9). It needs the box "I'm aware
+    of the possible risks…" ticked and an OK that unlocks after 5 s. The user
+    chose to tick it themselves.
+  - **S1 result.** The user ticked the risk box and pressed OK. The service is
+    enabled (`ENABLED_ACCESSIBILITY_SERVICES` holds the full component name) and
+    bound, with capabilities 161 (window content + gestures + screenshots) and
+    exactly the configured event types. Deputy's row turned On and the "Deputy is
+    off" notice went away (AC-10 path). Connected at 00:43:20, which is S9's
+    start.
+  - **S4: trees are readable in every app type tried; Flutter typing fails.**
+    WhatsApp, Gmail and NayaPay were dumped structure-only on the user's
+    instruction: counts printed, no text, raw dump deleted.
+
+    | App (kind) | nodes | shown | clickable | clickable without own label | other |
+    | --- | --- | --- | --- | --- | --- |
+    | Settings (native) | 49 | 31 | 12 | most; label in child `android:id/title` | 20 with id |
+    | CamScanner (native first screen; ships Flutter) | 178 | 69 | 32 | 31 | 51 with id |
+    | WhatsApp (messaging) | 130 | 69 | 35 | 15 (id only) | 32 with desc |
+    | Gmail (email) | 41 | 30 | 13 | 0 | 1 editable |
+    | NayaPay (finance, first screen) | 52 | 36 | 20 | 11 (id only) | 1 editable; **no accessibility warning or refusal** |
+    | ReVanced Manager (Flutter) | 96 | 46 | 13 | 13 | no view ids, 27 text nodes |
+    | PDF Editor (Expo WebView) | 7 | 5 | 1 | 0 | web UI barely in the tree |
+
+    - **Node cap:** the most shown was 69 lines, so SPEC §5's 150-node cap holds.
+    - **Phase 2 must lift labels:** give each clickable its descendants' (and, for
+      Flutter, adjacent semantics) text in `ObservationBuilder`, and match verbs
+      and the read-only "labelled" test on that lifted label. Without it,
+      read-only denies most taps in NayaPay, and the verb gate misses Flutter
+      buttons.
+    - **WebView:** the near-empty tree triggers the screenshot rule (fewer than 5
+      labelled nodes) as designed.
+    - **Typing:** `ACTION_SET_TEXT` works in native fields (Settings search:
+      returned true, text changed). In a Flutter `EditText` it **returned false
+      and the text didn't change**. Bring the IME path
+      (`FLAG_INPUT_METHOD_EDITOR` + `getInputMethod().currentInputConnection.commitText`)
+      forward from Phase 5 to Phase 2, or have Flutter typing fail with a clear
+      "can't type in this app" result.
+  - **S5.**
+    - Full-resolution 1080x2400 shots take 23–49 ms.
+    - The interval limit is between 251 ms (fails fast, "interval too short", in
+      5 ms) and 529 ms (ok), consistent with AOSP's 333 ms. SPEC §5's "wait 1 s
+      and retry" can become about 350 ms.
+    - **Secure window:** a Chrome incognito tab (window flag `SECURE` confirmed)
+      returned **ok 1080x2400, not `ERROR_TAKE_SCREENSHOT_SECURE_WINDOW`**, with
+      the same interval. The display screenshot succeeds and the secure layer is
+      presumably blacked out (not verified; the probe keeps no image).
+      **SPEC §5 must change:** detect a blank frame, or use
+      `takeScreenshotOfWindow` (API 34), which reports secure windows, so the
+      model is never sent a black image as if it were the screen.
+  - **S3: PASS, so keep the `specialUse` foreground service (SPEC §3) and its two
+    permissions.**
+    - Screen on: armed 00:47:54, Deputy in the background, fired 75 s later on a
+      window change: `startForegroundService accepted` and `startForeground ok`.
+    - Screen off and phone locked: armed 00:50:03, fired 78 s later on an
+      `adb shell cmd notification post`. The FGS notification was posted and then
+      removed at the 10 s `stopSelf` (logcat).
+    - Logcat for both: `Background started FGS: Allowed … code:ACTIVITY_STARTER
+      allowWiu:52`, with uidState `BFGS` (screen on) and `IMPF` (locked). The
+      exemption comes from the system-bound accessibility service, which grants
+      the background-activity-start privilege; it isn't the fg-to-bg grace
+      period.
+  - **Service rebind seen.** `onServiceConnected` fired again at 00:49:16, 6 s after
+    the FGS started, without process death (the in-memory log survived). So
+    "connected since" alone doesn't prove a kill; S9 must also check that the log
+    survives, or the process start time. `instance` must stay correct across
+    rebinds.
+  - **S8: accessibility events are enough for notification rules, so no
+    `NotificationListenerService` (SPEC §11).** Read `parcelableData`
+    (`Notification`) extras, not `event.text`. Values were checked from a report
+    redacted for other apps' content (only present or null shown).
+    - **WhatsApp** (the owner's messaging app), 00:59:51, phone probably locked
+      (keyguard drawn at 00:54:42, no unlock seen before about 01:12; not
+      proven): title and body present, category `msg`. **Two events per
+      message** (one with `event.text`, one with `text=[]`), so de-duplication
+      (§11) is required.
+    - **Gmail**: title present, `EXTRA_TEXT` and `EXTRA_BIG_TEXT` null (email
+      text sits in other extras, such as text lines or subtext). Read more
+      extras if email rules are wanted.
+    - **Chrome**, unlocked: title and body present, `text=[]`.
+    - **The adb test notification** (`cmd notification post`, phone locked):
+      title and body null. The cause is unknown: lock-screen redaction or the
+      shell's notification format. Retest with a real message while locked before
+      relying on locked delivery.
+  - **Service rebinds** without process death: `onServiceConnected` fired at
+    00:43:20 (grant), 00:49:16 (6 s after the FGS started) and 01:12:25 (about
+    when the user unlocked), all in PID 7464. The in-memory log survived each
+    time. Phase 2: keep `onServiceConnected` idempotent (no state reset) and have
+    `AgentRuntime` handle `instance` going null and coming back mid-run (wait
+    briefly, then fail the run as `service_off`).
+  - **S9: PASS with default battery settings** (battery row "To do"; HyperOS's
+    accessibility grant includes unlimited autostart). PID 7464 stayed alive
+    from 00:24:28 to at least 01:21:24 (about 57 min), including about 25 min
+    locked and dozing, and the service stayed bound the whole time (rebinds
+    above, no kill). The onboarding battery and autostart steps aren't needed for
+    survival on this phone; keep the battery row as advice, not a blocker.
+    (The background check printed "not bound" from a bad grep; a direct
+    `dumpsys accessibility` showed Deputy bound.)
+  - Setup-copy follow-up: the "Allow restricted settings" row may not be needed on
+    this path; the Danger sheet and the Downloaded apps location belong in the
+    FR-10 copy.
+- **Working notes for this machine (session 4–5).**
+  - Shell: zsh. A line like `echo ====` aborts the command line, and unquoted
+    globs such as `--include=*.kt` fail. There is no `timeout`; use the Bash
+    tool's own timeout or background runs.
+  - Gradle needs `JAVA_HOME` and `ANDROID_HOME` exported; read test counts from
+    `modules/deputy-agent/android/build/test-results/testDebugUnitTest/*.xml`.
+  - A hook allows at most 2 comment lines per edit.
+  - `pnpm test` prefixes each line with the package name, so don't anchor greps
+    at `^#`.
+- **Spike status, asked 2026-10-29 (session 6).** The user answered "none yet",
+  but the phone results above (S1, S2, S3, S4 partial, S5, S8 partial) were
+  written into this file by a parallel session while session 6 ran, so they count.
+  Since then (session 5): S4 and S9 answered and S8 answered for WhatsApp; only
+  S7 is open. No Gemini
+  key exists yet (Q5 "not set up"), so S7 waits. Spike-dependent choices without a
+  result take the SPEC default and are listed as provisional under Decisions.
+- **Spike status, asked 2026-10-29 (session 7).** No new results: the user said
+  "I don't know". The phone spikes are all answered above, apart from an
+  optional S8 retest with a real message while the phone is locked. That retest
+  moves to Phase 4, where notification rules log the events themselves. S7 is
+  still open (no key yet: "Not yet, carry on").
+- **Q5 answered (session 7): the free tier.** Google may use what Deputy sends
+  (screens from messaging and finance apps included) to improve its products
+  (Evidence, Gemini). Setup must say so beside the key, and the PRD risk row
+  "the owner uses a paid-billing key" doesn't hold.
 - **Store visibility.** `apps/store/modules/store-installer/android/src/main/AndroidManifest.xml`
   lists each released package in `<queries>` ("keep in sync with
   tools/release/src/apps.ts"). Without a `com.haroon.deputy` entry the Store
@@ -229,6 +473,23 @@ confirmed; the cost if wrong follows the dash:
     (Deputy listed, its brand and native gate), `docs/app-store.md` (checklist
     entry for `com.haroon.deputy`).
   - Session 5: `tools/release/src/apps.ts` (+ `__tests__/apps.test.ts`) and the Store's `<queries>` in `apps/store/modules/store-installer/android/src/main/AndroidManifest.xml`.
+- Phase 2 code (branch `deputy-phase-2`, uncommitted):
+  - `apps/deputy/modules/deputy-agent/android/src/main/java/expo/modules/deputyagent/core/`:
+    `Action.kt` (`Action`, `NodeRef`, `ScreenContext`), `VerbMatcher.kt`,
+    `Policy.kt`, `DefaultTrust.kt`, `Guard.kt`, `Gate.kt`,
+    `ObservationBuilder.kt`, `Provider.kt` (messages, `ProviderJson`,
+    `OpenAiCompatProvider`), `Tools.kt`, `AgentLoop.kt` (`Device` interface,
+    `RunEvent`), `RunStore.kt` and `Prompt.kt`. `TreeDump.kt` now uses `NodeRef`.
+  - Tests: one `*Test.kt` per file under `android/src/test/.../core/`.
+  - `android/DeputyAccessibilityService.kt` (dump behind `Policy.preObserve`,
+    `NodeRef` with depth and bounds) and the module's `android/build.gradle`
+    (three dependencies).
+  - Session 7: `core/DeviceRules.kt`; `android/DeviceAdapter.kt`,
+    `AgentRuntime.kt`, `Notifier.kt` (`GateReceiver`, `RunService`),
+    `StopChip.kt`, `KeyVault.kt`, `OkHttpTransport.kt` (+ JVM
+    `android/OkHttpTransportTest.kt`); module manifest, `DeputyAgentModule.kt`,
+    `src/index.ts`; `apps/deputy/App.tsx`, `src/RunPanel.tsx`, `src/setup.ts`;
+    `docs/deputy/EVAL.md`. `SpikeProbes.kt` deleted.
 
 ## Session log
 
@@ -312,37 +573,211 @@ confirmed; the cost if wrong follows the dash:
   release: registered `deputy` (release test RED, then 5/5) and added the Store's
   `<queries>` entry (Store gate green). Checked the release endpoint and the signing
   properties without printing secrets. Asked the user for the go-ahead.
+  The user chose "Commit, then release": committed 82 files as `0629439` on
+  `deputy-phase-1` (untracked `CLAUDE.md` files and `.claude/rules/` left out),
+  then released Store 9 and Deputy 2 (exit 0 both).
+- 2026-10-29 (session 5): the user asked for a new-chat prompt to start Phase 2
+  before the phone spikes are run. Rewrote the resume prompt and the next step for
+  that (spike-independent core first, spike-dependent choices provisional), and
+  added working notes for this machine. This handoff edit is uncommitted.
+- 2026-10-29 (session 5, 00:24–01:22): phone testing over wireless debugging, at
+  the user's request.
+  - adb was used for screenshots, UI dumps, taps and logcat only. The Store 9
+    update went through the Store's UI, and the user ticked HyperOS's accessibility
+    risk box themselves.
+  - Private apps were dumped structure-only, as the user chose.
+  - Results: S1, S2, S3, S4, S5, S8 and S9 are answered (Evidence, "Phone spike
+    results"). Only S7 is open.
+  - Phase 2 inputs: keep the FGS; lift child labels onto clickables; use the IME
+    path for Flutter typing; for secure windows, detect a blank frame or use
+    `takeScreenshotOfWindow`; retry after about 350 ms; read notification extras
+    and de-duplicate; make `onServiceConnected` and rebinds idempotent.
+  - A parallel Phase 2 session (session 6) was working in the same tree on
+    `deputy-phase-2`; this session edited only the handoff's spike text.
+- 2026-10-29 (session 6): Phase 2 started. Cut branch `deputy-phase-2` from
+  `0629439`. Asked for spike results: none run, no Gemini key (Evidence).
+  The user approved three Gradle dependencies. Pure core done test-first, each
+  suite RED (unresolved references, or assertion failures for the S4 lifting)
+  then GREEN: VerbMatcher 6, Policy 15, DefaultTrust 3, Guard 6, GateNonce 6,
+  ObservationBuilder 12; TreeDump 7 and ServiceSetting 6 still pass (61/61). The
+  debug dump now goes through `Policy.preObserve`.
+  Then the provider layer (ProviderJson 8, OpenAiCompatProvider 7, with an
+  injected transport), Tools 5 and AgentLoop 19 (AC-1 to AC-7, first action only,
+  stale index, stuck, question isn't approval, tap_at mapping, Stop on reply):
+  100/100. A mutation check (removing `ensureActive()` before dispatch) failed the
+  Stop-on-reply test, then passed when restored.
+  Then `RunStore` 5 (log lines, active marker, AC-9 interrupted, retention,
+  today's spend; `Step` events now carry the running cost so an interrupted run
+  still counts) and `Prompt.kt` (prose, untested). Verification (real output):
+  `pnpm test` exit 0, every package fail=0 (deputy 5/5); `pnpm typecheck` exit 0;
+  `./gradlew :deputy-agent:testDebugUnitTest :app:assembleDebug` exit 0, JVM
+  105/105, `app-debug.apk` built.
+  Automated security review: `tap_at` hit-tested only the observation's index
+  map, so a tap on Deputy's overlay, a blocked window or a labelled button the cap
+  dropped went unjudged (Allow). Fixed: `Observation.all` keeps every visible
+  node read (redacted, never sent) and `tap_at` hit-tests it; two tests RED, then
+  GREEN (JVM 107/107). Not taken: confirming every unlabelled `tap_at`, which
+  would gate every tap in custom-drawn apps (SPEC §8.4 known limit).
+  `invariant-reviewer` (5 major, 5 minor) and `code-reviewer` (2 must-fix, 6
+  should-fix, 4 weak tests, 3 nits) reviews. All of these were fixed test-first
+  in two batches (10 RED, then 8 RED, then GREEN):
+  - A tap is judged by the node it lands on (`Observation.clickTarget`, the
+    nearest clickable ancestor), for `tap`, `long_press` and `tap_at`.
+  - After an approval the screen is re-read; if the app or the target changed,
+    the result is `stale_screen` and nothing is dispatched.
+  - No screenshot while a blocked app's window was read, while the shade
+    (System UI) is in front, or right after `press(recents)`; the foreground is
+    re-checked before capture, and the model is told why it got none.
+  - Shade, package-installer and permission-controller taps are confirmed;
+    "approve" was added to the verbs.
+  - Rule 1 also denies the permission controller showing Deputy, and a Settings
+    row labelled Accessibility or special access.
+  - `open_link` is judged by the app that opens it (`Device.resolveLink`, new).
+  - The blocked-app Back goes through the Stop check, and cost can't go negative.
+  - `Observation.all` strips text from blocked or own-window nodes, so none of it
+    reaches the run log.
+  - The gate draft is the whole message (field text plus the typed text), cut
+    with "…".
+  - Very long nodes are shortened to 2,000 characters instead of dropped.
+  - Any unexpected exception ends the run `failed` with an end line.
+  - `closeInterrupted` leaves this process's open run alone.
+  - Every counted turn is logged, and a gate is logged as "waiting for the
+    owner" before it is answered. `RunEvent.Step.verdict` gains `none` and
+    `question`, which the TS contract must add.
+  - The weak tests now fail under their mutations: gate expiry with no waiter,
+    the dead gate after Stop, 30-day retention on its own, and offline retries
+    (4 calls, 7 s).
+  - `index: null` is treated as missing.
+  Final verification (real output): `pnpm test` exit 0, all 9 packages fail 0;
+  `pnpm typecheck` exit 0; the Deputy native gate exit 0 with JVM 126/126, 0
+  errors, and `app-debug.apk` built.
+  Left open, for the next session:
+  - (nit) Two apps with the same exact label give an unresolvable "Several apps
+    match"; let `open_app` take a package name and call `resolveApp` once.
+  - SPEC §8.3 step 5 wrongly says rule 1 stops Deputy's own notifications; only
+    the suspended loop does, plus the new shade confirm. Fix it with the
+    post-spike SPEC update.
+  - The reviewers' unverified risks: Gemini may reject `look`'s empty
+    `properties:{}` (S7); a slide-to-pay SeekBar scroll isn't judged by label;
+    whether heads-up windows appear in the tree; whether `Screen.title` really
+    holds the Settings page title (the Android side must take it from the
+    window title or the first heading).
+
+- 2026-10-29 (session 7): asked for spike results (none new; S7 waits; Q5 is
+  the free tier, see Evidence). Android side of Phase 2 built:
+  - Core, test-first (RED, then GREEN): `open_app` takes a package name and calls
+    `resolveApp` once; a missing screenshot is explained to the model; the shade
+    is never read (see Decisions); new `DeviceRules` (gesture lines, blank frame,
+    stale-node lookup, settle). JVM 135/135.
+  - Android: `DeviceAdapter`, `OkHttpTransport`, `KeyVault`, `AgentRuntime`,
+    `Notifier` (+ `GateReceiver`, `RunService`), `StopChip`; the service tracks
+    `lastEventAt` and starts the runtime on connect. `SpikeProbes.kt` and the
+    probe service are deleted; the manifest has `RunService`, `GateReceiver` and
+    a `MAIN`/`LAUNCHER` `<queries>`.
+  - RN: TS contract (run, gate, key, palette, `onRunEvent`), `src/RunPanel.tsx`,
+    the key panel with the free-tier warning, Setup's key row and `canRun`
+    (deputy 7/7). Spike probes UI removed.
+  - Gate: `pnpm --filter deputy typecheck` exit 0; native gate exit 0, JVM
+    135/135, `app-debug.apk` built.
+  - Added after self-review: runs start from Home via the loop (Deputy's own
+    screen in front means Home, inside the loop's Stop handling, tested);
+    screenshots wait out a blocked app's notification; SPEC §1, §3, §4, §5, §6,
+    §8.3, §8.4, §11 and §14 updated; `EVAL.md` written.
+  - `code-reviewer` (1 must-fix, 6 should-fix, 3 nits) and `invariant-reviewer`
+    (1 blocker, 6 major, 2 minor). Fixed:
+    - OkHttp hang: an IOException while reading the body in `onResponse` never
+      reached `onFailure`; now passed on. JVM test with a socket that cuts the
+      body: failed (10 s timeout) with the old code, passes now.
+    - `tap_at` and gesture fallbacks on unread windows (keyboard, System UI) are
+      denied (`Screen.unread` areas into `ScreenContext`, Policy rule, tested), so
+      a password can't be typed key by key and another app's heads-up can't be
+      tapped. The Stop chip goes untouchable and invisible during gestures.
+    - `screenshotSafe` no longer exempts Deputy's own windows and counts unread
+      windows' packages (tested).
+    - The Recents guard lasts until another app is in front (tested).
+    - Approving inside Deputy now presses Back to the app before the re-check,
+      instead of always ending `stale_screen` (tested).
+    - Each gate's notification actions are distinct PendingIntents
+      (`Intent.setIdentifier`), Approve needs an unlocked phone, and a question
+      shows at most 2 option buttons, so the reply box still fits.
+    - `active` stays true until a cancelled run has unwound (`isCompleted`).
+    - `foregroundPkg()` is suspend and waits for a rebind; the screenshot's
+      scaled bitmap and the hardware bitmap are recycled correctly; the
+      blocked-notification check runs again after capture; `startRun` returns
+      `{ runId, error }` so the error copy is plain; `GateCard` keyed by gate id;
+      apps de-duplicated by package; `com.android.settings.intelligence` counts
+      as Settings (tested); SPEC §4 matches `index.ts`.
+  - Not taken: bounding `provider.step` by the time cap's remainder (each
+    attempt is already capped by the 90 s call timeout, four attempts at most);
+    extracting a tested `RunSlot` for the one-line `active` fix; editing the
+    untracked `apps/deputy/CLAUDE.md`, which still lists `SpikeProbes` (not this
+    session's file; the user should update or drop that word).
+  - Automated security review: an http or https `open_link` was allowed without
+    a gate, so injected screen text could send data out in a URL. Now it asks
+    first and shows the full URL (Policy test RED, then GREEN); `EVAL.md` task 4
+    swapped for a gate-free one, with the web search moved to AC-2c; SPEC §8.2.
+  - Final verification (real output): `pnpm test` exit 0, all 9 packages fail 0
+    (deputy 7/7); `pnpm typecheck` exit 0; `./gradlew :deputy-agent:testDebugUnitTest
+    :app:assembleDebug` exit 0, JVM 144/144, `app-debug.apk` built. Nothing
+    committed; the probe deletion is unstaged.
 
 ## Current state + exact next step
 
-- **Phase 1 code is built and verified locally** on branch `deputy-phase-1`, all
-  uncommitted (the user hasn't asked for a commit). `docs/deputy/`, this file,
-  `apps/deputy/` and the edits to `packages/ui`, `AGENTS.md`,
-  `docs/app-store.md` and `pnpm-lock.yaml` are the change. Leave the untracked
-  root `CLAUDE.md` out of it unless the user says it belongs.
+- **Phase 1 is committed** as `0629439` on `deputy-phase-1`. **Phase 2 work is on
+  `deputy-phase-2`**, uncommitted until the user asks. Leave the untracked
+  `CLAUDE.md` files and `.claude/rules/` out of any commit unless the user says
+  they belong.
 - Earlier classifier stops (recorded in the log above) hit the PRD, the SPEC and
-  an implementation how-to in previous sessions. None fired in session 4. If one
+  an implementation how-to in previous sessions. None fired in sessions 4 to 6. If one
   fires again, stop, record it here, and don't reword the content.
-- **Phase 1 exit isn't met yet.** It needs the app installed through the Store,
-  accessibility on, a real app's tree dumped and S1–S5, S7–S9 recorded here. S6 is
-  done.
-- **Exact next step: the user's go-ahead for the first Store release** (asked on
-  2026-10-29, session 5). The release doesn't run without it.
-  1. Done (session 5): Deputy is registered in `tools/release/src/apps.ts`
-     (test: `apps.test.ts` maps `apps/deputy` and its module to `deputy`, RED
-     then GREEN), and `com.haroon.deputy` is in the Store's `<queries>`. Store
-     gate: `:store-installer:testDebugUnitTest :app:assembleDebug` BUILD
-     SUCCESSFUL, ApkVerifierTest 7/7, and the merged manifest has the entry.
-  2. Account check (session 5): `pnpm release` uploads only to the Worker at
-     `https://apps-hub-store.haroonmukhtar4.workers.dev` with `RELEASE_TOKEN` from
-     `~/.config/apps-hub/release.env`. That is the personal account (memory:
-     private-app-store), so no `cf` login or deploy is involved, and the signing
-     properties are present. The user still confirms.
-  3. After the go-ahead, run `pnpm release store -m "Sees Deputy"` first, so the
-     Store can see Deputy once installed, then `pnpm release deputy -m "Deputy
-     0.1.0: setup screen and spike probes"`. Releasing from this branch avoids
-     the merge side effect (Evidence). It publishes uncommitted code unless the
-     user asks for a commit first. Install on the phone through the Store only.
+- **Phase 1 exit is mostly met:** Deputy is installed through the Store,
+  accessibility is on (S1), and a real app's tree was dumped (Settings, S4). The
+  spikes still open are listed below.
+- **Released (2026-10-29, session 5), on the user's go-ahead ("Commit, then
+  release").** Branch commit `0629439`, then `pnpm release store` → **Store 9**
+  published (58.8 MB), then `pnpm release deputy` → **Deputy versionCode 2**
+  (0.1.0, 66.9 MB; new apps start at 2 by design, `nextVersionCode`). Signer and
+  package checks passed in both. Uploads went to
+  `https://apps-hub-store.haroonmukhtar4.workers.dev`, the personal account. The
+  release changed no tracked file. Not merged to `main`, so the other four apps
+  were not re-released.
+- **Phone spikes are done** (Evidence, session 5's phone work): S1, S2, S3
+  (pass, so keep the `specialUse` foreground service), S4, S5, S8 (WhatsApp) and
+  S9 (pass). Only S7 is open (needs the key). The S8 locked retest moves to
+  Phase 4.
+- **Phase 2 code is done (sessions 6 and 7)** on `deputy-phase-2`, uncommitted:
+  the core, the Android side and the RN Run screen. JVM 144/144, `pnpm test`
+  and `pnpm typecheck` green, both reviews' findings fixed or listed as not
+  taken (session log). Nothing is verified on the phone yet; Decisions marks
+  the parts that need it **(phone)**.
+- **Exact next step: the Phase 2 phone eval.**
+  1. Ask the user whether to commit (leave the untracked `CLAUDE.md` files and
+     `.claude/rules/` out unless they say otherwise), and whether to release.
+  2. On their go-ahead, confirm the Cloudflare account, then `pnpm release
+     deputy` (Deputy versionCode 3). The user installs it through the Store.
+  3. The user saves the API key in Setup, taps "Test the key", then runs
+     `docs/deputy/EVAL.md`: five read-only tasks first, then AC-2 to AC-7, then
+     "Also check". Record every result, pass or fail, under Evidence, with the
+     measured median step time and cost per task (NFR-1, NFR-2).
+  4. Fix what the eval finds, test-first where the logic is pure. The likely
+     spots are the **(phone)** items: blank-frame detection, a full-screen
+     System UI window counted as unread, heads-up timing, the chip's position.
+  5. Exit (SPEC §17 row 2): AC-1 to AC-7 on the phone and the numbers recorded.
+     Then Phase 3 (Apps trust screen, Settings with model and prices, history,
+     saved tasks).
+- S7 needs the user's Gemini key, typed by the user into an environment
+  variable. Never write it to a file, a log or this handoff. Ask Q5 (which
+  billing project) at the same time.
+- Done in session 7: `SpikeProbes.kt` and the probe service are deleted; the FGS
+  permissions stay for `RunService`.
+- Before each session ends, run `pnpm test`, `pnpm typecheck`, the Deputy native
+  gate and the `invariant-reviewer` and `code-reviewer` agents. Update the
+  session log at each milestone, and hand off at about 85% context.
+- Exit: SPEC §17 Phase 2 row. JVM tests green; AC-1 to AC-7 on the phone, with
+  five read-only eval tasks first; `docs/deputy/EVAL.md` written; measured cost
+  and time recorded here.
+- Merging `deputy-phase-1` to `main` is still the user's decision (Evidence,
+  "Merge side effect").
 - **Phone runbook** (the user runs it; record each result, pass or fail, under
   Evidence):
   - **S1:** Setup → "Turn on the Deputy accessibility service". Is Deputy listed;
@@ -373,13 +808,17 @@ confirmed; the cost if wrong follows the dash:
     with default battery settings, then check it's unchanged and the Setup row
     still says On. Repeat after the battery and Autostart rows are done.
   - **S7** (no phone): needs the user's Gemini key (and Q5, which billing
-    project). Run it from a shell with the key in an environment variable typed
-    by the user; never write the key to a file, a log or this handoff.
-- **After the spikes:** decide §3 (FGS or plain notification) from S3, the node
-  cap and screenshot rule from S4/S5, and accessibility events or
-  `NotificationListenerService` from S8. Then delete `SpikeProbes.kt`, the probe
-  service entry and (unless S3 passed) the FGS permissions, and update SPEC §1,
-  §3, §5, §11 and §14 with the results. Then Phase 2.
+    project). Agreed method (session 5): the user runs
+    `security add-generic-password -a "$USER" -s deputy-gemini -w` in their own
+    Terminal (it prompts, so the key stays out of shell history), then says "key
+    saved". Test commands read it with
+    `security find-generic-password -s deputy-gemini -w` and pipe it into curl's
+    header via `-H @-`, so it never appears in a file, a log, argv or the chat.
+    Afterwards, `security delete-generic-password -s deputy-gemini`. Never ask the
+    user to paste the key into the chat. Paid billing must be on (the free tier
+    trains on content).
+- **After the spikes:** done in session 7 (FGS kept, cap and screenshot rules,
+  accessibility events for S8, SPEC updated).
 - Open PRD questions: Q1 and Q2 build on the recommended defaults; Q4 has the
   provisional brand and icon above, waiting on the user; Q3 waits on the
   on-device model test; Q5 is asked with S7.

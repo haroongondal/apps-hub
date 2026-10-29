@@ -17,15 +17,15 @@ point there. Items marked **spike** are unverified and are settled in Phase 1
   (RESEARCH §6, verified at `JavaTimerManager.kt:122,276`). Settings, trust
   levels, automations and run logs are therefore read natively; the RN app reads
   and edits them through the module.
-- **Model access:** OkHttp (React Native already ships it; **spike S6**: version and
-  explicit declaration) with a JSON library (**spike S6**; recommendation
-  `kotlinx-serialization-json`, Apache-2.0. `org.json` is out: it has the
-  non-OSI "good, not evil" licence, and its Android stubs throw on JVM tests).
+- **Model access:** OkHttp `4.9.2`, declared explicitly at the version React
+  Native ships (S6), with `kotlinx-serialization-json` `1.8.1` (Apache-2.0, tree
+  API, no compiler plugin). `org.json` is out: it has the non-OSI "good, not
+  evil" licence, and its Android stubs throw on JVM tests.
 - **Background scheduling:** WorkManager (Apache-2.0; the Store already uses it).
 - **Tests:** `node --test` for any TS helpers; Gradle JVM JUnit for Kotlin.
   Policy, loop, guard and provider code is pure Kotlin behind interfaces (§16).
-- **Min Android:** API 33 (NFR-5). The repo has no minSdk tooling yet
-  (`expo-build-properties` isn't used anywhere); **spike S6**.
+- **Min Android:** API 33 (NFR-5), set by `android.minSdkVersion=33` in
+  `apps/deputy/android/gradle.properties` (S6).
 - **FOSS only:** no Firebase, Play Services or closed SDK. Audit each new
   dependency's licence (AGENTS.md).
 
@@ -70,14 +70,16 @@ No new shared TypeScript package: nothing here is reused by another app.
   notification rule. It holds the service reference, so a run only exists while
   the service is bound; if the service isn't enabled, `startRun` fails with
   `service_off`.
-- **Foreground service: spike S3.** The preferred design adds a `specialUse`
-  foreground service while a run is active, for the ongoing notification and OEM
-  resilience, as OpenTunnel does
-  (`apps/open_tunnel_vpn/android/app/src/main/AndroidManifest.xml:40`). Android 12+
-  can refuse to start a foreground service from the background, which is where a
-  notification-rule run starts. If S3 shows the start is refused, use a plain
-  ongoing notification from the accessibility service instead and drop the
-  foreground service.
+- **Foreground service:** `RunService`, a `specialUse` foreground service, runs
+  while a run is active and carries the ongoing notification with Stop. S3 passed
+  on the owner's phone: the start is allowed from the background, screen on or
+  locked, because the bound accessibility service grants the
+  background-activity-start privilege. If a start is still refused, the run goes
+  on with a plain ongoing notification.
+- **Rebinds:** `onServiceConnected` fires again without process death (S3, S9),
+  so it only re-points the service reference and never resets a run. The adapter
+  looks the service up on every call and waits up to 5 s for it to come back
+  before failing the run.
 - **Events to RN:** `RunEvent`s go out through the module's event channel when the
   RN host is alive and are always appended to the run log, so a reopened UI
   rebuilds from the log (§12).
@@ -115,7 +117,7 @@ export interface Gate {
 
 export type RunEvent =
   | { type: 'step'; runId: string; n: number; app: string; action: string;
-      verdict: 'allow' | 'confirm' | 'deny'; result: string }
+      verdict: 'allow' | 'confirm' | 'deny' | 'none' | 'question'; result: string; costUsd: number }
   | { type: 'gate'; runId: string; gate: Gate }
   | { type: 'finished'; runId: string; status: RunStatus; summary?: string; costUsd: number };
 
@@ -126,11 +128,11 @@ export interface DeputyAgent {
   openBatterySettings(): void;               // ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
   disableService(): void;                    // disableSelf()
 
-  startRun(task: string, opts?: { allowedApps?: string[] }): Promise<string>; // run id
+  startRun(task: string, opts?: { allowedApps?: string[] }): { runId: string | null; error: string | null };
   stopRun(): void;
-  resolveGate(gateId: string, decision: 'approve' | 'deny', text?: string): void;
-  listRuns(limit?: number): RunSummary[];
-  getRun(id: string): RunDetail;
+  resolveGate(gateId: string, approve: boolean, text: string | null): boolean; // false: unknown, used or expired
+  getRun(): RunSnapshot;                     // current or last run's events and the pending gate
+  listRuns(limit?: number): RunSummary[];    // Phase 3, read from the run log
   clearHistory(): void;
 
   listApps(): { pkg: string; label: string; trust: TrustLevel }[];
@@ -152,7 +154,8 @@ export interface DeputyAgent {
 }
 ```
 
-`setAppTrust` rejects `standard` for a financial app unless `typedConfirmation`
+The Phase 2 subset is what `modules/deputy-agent/src/index.ts` declares; the
+rest arrives with Phases 3 and 4. `setAppTrust` rejects `standard` for a financial app unless `typedConfirmation`
 equals the app label. Everything else is a plain read or write of native state.
 
 ## 5. Observation
@@ -161,18 +164,31 @@ An observation is text, built from the accessibility tree, plus an optional
 screenshot. It is built only after `Policy.preObserve(pkg)` allows the foreground
 package (safety rule 2).
 
-- **Windows:** `getWindows()` with `FLAG_RETRIEVE_INTERACTIVE_WINDOWS`. Include the
-  application window, the input-method window (to know the keyboard is up) and the
-  notification shade when open. Exclude Deputy's own overlay and notifications.
+- **Windows:** `getWindows()` with `FLAG_RETRIEVE_INTERACTIVE_WINDOWS`. Read the
+  active window and other application windows; use the input-method window only
+  to know the keyboard is up. System UI's windows (status bar, heads-up,
+  notification shade) are never read, because their rows belong to System UI
+  whatever app posted them, so a blocked app's text can't be left out (rule 2).
+  When System UI is in front (shade, lock screen, a system dialog), the
+  observation has no nodes and says so. Deputy's own overlay is never read.
+  The keyboard's and System UI's windows are passed on as unread areas: `tap_at`
+  or a gesture fallback landing on one is refused (otherwise a key-by-key
+  `tap_at` could type into a password field, or a tap could hit another app's
+  heads-up), and a blocked app's unread window (its own keyboard, say) withholds
+  the screenshot. The Stop chip lets gestures through while they run.
+- **Title:** the window title plus the first heading, so the Settings page
+  rules in §8.2 see the page name.
 - **Nodes:** flatten the tree in reading order. Keep a node if it is visible and
   has text, a description, a hint or an id, or is clickable, editable or scrollable.
-  Drop empty wrappers. Cap at 150 nodes and about 2K tokens; when over, keep the
-  nodes nearest the viewport centre and say how many were dropped.
+  Drop empty wrappers. A clickable row without its own label gets its children's
+  labels (S4: most rows in Settings, NayaPay and Flutter apps carry the label in a
+  child). Cap at 150 nodes and 8,000 characters (S4 saw at most 69 shown); when
+  over, keep the nodes nearest the viewport centre and say how many were dropped.
 - **Redaction:** `isPassword()` nodes keep their role and drop their text (rule 3).
   Views that opt out of accessibility data (`isAccessibilityDataSensitive()`, an
   API 34 flag) may be withheld by the platform from services that aren't
   accessibility tools. Deputy doesn't try to get round that; whether such views
-  appear at all is **spike S4**.
+  appear at all wasn't seen in S4.
 - **Line format** (indices valid only for this observation):
 
   ```text
@@ -189,11 +205,16 @@ package (safety rule 2).
 - **Screenshot** (`takeScreenshot`, API 30+): attached when it is the first step,
   the tree has fewer than 5 labelled nodes (Flutter, WebView, games), the model
   calls `look`, or two actions in a row changed nothing. Downscale to about 720 px
-  wide, JPEG at quality 70. The overlay chip is hidden for the capture.
-  `ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT`: wait 1 s, retry once.
-  `ERROR_TAKE_SCREENSHOT_SECURE_WINDOW`: send the tree only and tell the model
-  "screenshot unavailable: secure window". Interval and failure behaviour on
-  HyperOS: **spike S5**.
+  wide (exactly 720, since `tap_at` uses those pixels), JPEG at quality 70. The
+  overlay chip is hidden for the capture. Any failure: wait 350 ms and retry once
+  (S5: the interval limit sits between 251 and 529 ms, as AOSP's 333 ms).
+  A secure window comes back as a black frame, not
+  `ERROR_TAKE_SCREENSHOT_SECURE_WINDOW` (S5, Chrome incognito), so a frame whose
+  app-window area samples all near-black is dropped. No screenshot is taken while
+  a blocked app's window is read, while System UI is in front, right after
+  `press(recents)`, or within 10 s of a blocked app posting a notification (its
+  heads-up may be on screen). The model is told when a wanted screenshot is
+  missing.
 
 ## 6. Model-facing tools
 
@@ -207,7 +228,7 @@ the first and answers the rest with `error: one action per step`.
 | `tap(index, irreversible?)`                       | `ACTION_CLICK` on the node or its nearest clickable ancestor; falls back to a gesture at the bounds centre. |
 | `tap_at(x, y, irreversible?)`                     | Screenshot coordinates. For custom-drawn UIs only. Checked against the node under the point if there is one. |
 | `long_press(index)`                               | Gesture.                                                                                                |
-| `type_text(index, text, press_enter?, irreversible?)` | `ACTION_SET_TEXT` with the existing value plus the new text. IME fallback is a later decision (§17).      |
+| `type_text(index, text, press_enter?, irreversible?)` | `ACTION_SET_TEXT` with the existing value plus the new text. When the text doesn't change (S4: Flutter fields), the tool says typing isn't possible here. IME fallback is Phase 5 (§17). |
 | `scroll(direction, index?)`                       | `ACTION_SCROLL_*` on the node, else a swipe gesture.                                                    |
 | `swipe(direction)`                                | Gesture across the screen.                                                                              |
 | `press(button)`                                   | `back`, `home`, `recents`, `notifications` through `performGlobalAction`.                               |
@@ -311,6 +332,10 @@ class Policy(
    - The target sits in a flow on the sensitive list (security settings in
      Settings, permission dialogs, the package installer, "clear data").
    - `modelFlag` is true.
+   - The action is an http or https `open_link`, shown with its full URL:
+     opening it sends whatever the URL carries, so screen text could use it to
+     send data out (prompt injection). Other schemes only open a dialer,
+     composer or map.
 7. **Default:** Deny anything unclassified.
 
 **Verb list** (whole word, case-insensitive; lives in one file, `VerbMatcher.kt`,
@@ -334,8 +359,10 @@ grant.
    cancels the notification. An unknown, repeated or expired id is dropped.
 4. Timeout counts as deny. For a `question`, timeout ends the run as `failed:
    no answer`.
-5. Because the loop is suspended and rule 1 blocks Deputy's own nodes, the agent
-   can't approve its own gate by tapping the notification.
+5. The agent can't approve its own gate by tapping the notification: the loop is
+   suspended while the gate waits, the shade is never read, and any tap while
+   System UI is in front is confirmed. Rule 1 covers Deputy's own app windows,
+   not its notifications.
 
 ### 8.4 Known limits
 
@@ -350,6 +377,11 @@ grant.
   a finance app is promoted.
 - Read-only denies unlabelled taps, so icon-only navigation in banking apps needs
   the owner to promote the app or use the deep link.
+- An app with notification access can press a gate's Approve action, as it can
+  any notification's. Approve needs the phone unlocked when pressed from the
+  lock screen (`setAuthenticationRequired`), and each gate's actions are their
+  own PendingIntents, so an old notification can't approve a newer gate. Keep
+  notification access for trusted apps only.
 
 ## 9. Provider layer
 
@@ -456,9 +488,12 @@ the per-rule app lists, and the prompt only supports them.
   - **Flood control:** one triggered run at a time, a cooldown per rule (default 5
     minutes), a limit of 10 runs a day per rule, and de-duplication on a hash of the
     notification text.
-  - What the event carries (title, sender, body) varies by app: **spike S8**. If it
-    is too thin, the fallback is a `NotificationListenerService`, which needs its
-    own special-access grant.
+  - S8: the event is enough, so no `NotificationListenerService`. Read the
+    `Notification` extras from `parcelableData`, not `event.text`. WhatsApp gives
+    title and body (category `msg`) but sends **two events per message**, so the
+    de-duplication above is required. Gmail leaves `EXTRA_TEXT` empty; read text
+    lines or subtext for email rules. Delivery while locked is unproven (retest in
+    Phase 4).
 
 ## 12. State and storage
 
@@ -517,8 +552,8 @@ active voice; errors say what happened and how to fix it. No emoji icons.
 
 In the module's `AndroidManifest.xml` (merged into the app, so no config plugin).
 
-- **Permissions:** `INTERNET`, `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE` and
-  `FOREGROUND_SERVICE_SPECIAL_USE` (only if S3 passes). Not requested:
+- **Permissions:** `INTERNET`, `POST_NOTIFICATIONS` (from `app.json`),
+  `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_SPECIAL_USE` (S3 passed). Not requested:
   `SYSTEM_ALERT_WINDOW`, `QUERY_ALL_PACKAGES`, exact alarms, SMS, contacts.
 - **`<queries>`:** a `MAIN`/`LAUNCHER` intent, which lists launchable apps without
   `QUERY_ALL_PACKAGES`.
@@ -530,8 +565,8 @@ In the module's `AndroidManifest.xml` (merged into the app, so no config plugin)
   - `isAccessibilityTool` **not** set (RESEARCH §4: misdeclaring it is blocked by
     Play Protect)
   - `flagInputMethodEditor` off in v1 (§17, Phase 5)
-- **Receivers:** a non-exported receiver for gate actions and Stop.
-- **Foreground service** (if S3 passes): `foregroundServiceType="specialUse"` with
+- **Receivers:** `GateReceiver`, non-exported, for gate actions and Stop.
+- **Foreground service:** `RunService`, `foregroundServiceType="specialUse"` with
   `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` = "Phone agent task".
 
 ## 15. Build, release and Store

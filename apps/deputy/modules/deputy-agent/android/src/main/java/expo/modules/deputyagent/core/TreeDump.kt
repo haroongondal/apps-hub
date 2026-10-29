@@ -1,31 +1,22 @@
 package expo.modules.deputyagent.core
 
-data class DumpNode(
-  val text: String?,
-  val desc: String?,
-  val hint: String?,
-  val viewId: String?,
-  val clickable: Boolean,
-  val editable: Boolean,
-  val scrollable: Boolean,
-  val password: Boolean,
-  val visible: Boolean,
-)
-
 object TreeDump {
-  /** Safety rule 4: checked before any node is read, so Deputy's own screens never become text. */
-  fun refusal(self: String, pkg: String): String? =
-    if (pkg == self) "Deputy does not dump its own screens. Switch to another app before the countdown ends." else null
+  /** Safety rules 2 and 4: checked before any node is read, so these screens never become text. */
+  fun refusal(policy: Policy, pkg: String): String? = when {
+    pkg == policy.self -> "Deputy does not dump its own screens. Switch to another app before the countdown ends."
+    !policy.preObserve(pkg) -> "Deputy doesn't read this app because it's blocked."
+    else -> null
+  }
 
-  fun format(pkg: String, nodes: List<DumpNode>): String {
+  fun format(pkg: String, nodes: List<NodeRef>): String {
     val lines = nodes.mapIndexedNotNull { i, n -> line(i, n) }
     return "<screen pkg=\"${esc(pkg)}\" nodes=\"${nodes.size}\" shown=\"${lines.size}\">\n" +
       lines.joinToString("") { it + "\n" } + "</screen>"
   }
 
-  private fun line(i: Int, n: DumpNode): String? {
+  internal fun line(i: Int, n: NodeRef): String? {
     // Safety rule 3: a password node keeps its role and loses its text and description.
-    val text = if (n.password) null else n.text?.takeIf { it.isNotBlank() }
+    val text = if (n.password) null else n.text?.takeIf { it.isNotBlank() } ?: n.childText
     val desc = if (n.password) null else n.desc?.takeIf { it.isNotBlank() }
     val hint = n.hint?.takeIf { it.isNotBlank() }
     val id = n.viewId?.takeIf { it.isNotBlank() }
@@ -43,6 +34,6 @@ object TreeDump {
     }
   }
 
-  private fun esc(s: String) =
+  internal fun esc(s: String) =
     s.replace("\\", "\\\\").replace("\"", "\\\"").replace("<", "&lt;").replace("\r", "").replace("\n", "\\n")
 }

@@ -18,5 +18,9 @@ android {
 }
 
 dependencies {
+  // Pinned to the OkHttp React Native 0.81.5 already ships (spike S6), so the APK keeps one copy.
+  implementation("com.squareup.okhttp3:okhttp:4.9.2")
+  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
   testImplementation("junit:junit:4.13.2")
+  testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
 }
