@@ -41,10 +41,16 @@ class AgentLoopTest {
     val apps: List<Pair<String, String>> = listOf("com.clock" to "Clock", "com.chat" to "Chat"),
     val shot: String? = "IMG",
     val onAction: (Action) -> Screen? = { null },
+    val performMs: Long = 0,
   ) : Device {
     val performed = mutableListOf<Action>()
     var resolves = 0
     val reads = mutableListOf<String>()
+    override fun info() = "Android 16, battery 80%"
+    override fun contacts(name: String) = "$name Khan: +923001234567"
+    override fun resolveClock() = "com.clock"
+    var contactsApp: String? = "com.contacts"
+    override fun resolveContacts() = contactsApp
     override suspend fun foregroundPkg() = current.pkg.also { onForeground() }
     override fun resolveLink(url: String): String? = null
     override fun read(): Screen = current.also { reads += it.pkg }
@@ -52,6 +58,7 @@ class AgentLoopTest {
     override fun resolveApp(name: String) = apps.filter { it.second.equals(name, true) || it.first == name }.also { resolves++ }
     override suspend fun perform(action: Action, target: NodeRef?): String {
       performed += action
+      kotlinx.coroutines.delay(performMs)
       onAction(action)?.let { current = it }
       return "ok"
     }
@@ -61,8 +68,10 @@ class AgentLoopTest {
   private class Script(vararg turns: List<ToolCall>) : LlmProvider {
     val queue = ArrayDeque(turns.toList())
     val seen = mutableListOf<String>()
+    val toolNames = mutableListOf<List<String>>()
     override suspend fun step(history: List<Msg>, tools: List<ToolSpec>): ModelTurn {
       seen += history.joinToString("\n") { it.json.toString() }
+      toolNames += tools.map { it.name }
       val calls = queue.removeFirstOrNull() ?: awaitCancellation()
       return ModelTurn(Msg("assistant", buildJsonObject { put("role", "assistant") }), calls, Usage(10_000, 0, 1_000), "because")
     }
@@ -72,12 +81,12 @@ class AgentLoopTest {
 
   private class Run(val loop: AgentLoop, val events: MutableList<RunEvent>, val gates: Gates)
 
-  private fun TestScope.run(device: FakeDevice, provider: LlmProvider, caps: Caps = Caps(), allowed: Set<String>? = null, maxNodes: Int = 150): Run {
+  private fun TestScope.run(device: FakeDevice, provider: LlmProvider, caps: Caps = Caps(), allowed: Set<String>? = null, maxNodes: Int = 150, images: Boolean = true): Run {
     val policy = Policy({ trust[it] ?: TrustLevel.STANDARD }, allowed, self)
     val events = mutableListOf<RunEvent>()
     val gates = Gates { testScheduler.currentTime }
     val guard = Guard(caps, Prices(1.0, 0.1, 2.0), { testScheduler.currentTime }, spentToday = 0.0)
-    return Run(AgentLoop("r1", device, provider, gates, policy, guard, ObservationBuilder(policy, "Deputy", maxNodes = maxNodes), "SYSTEM", events::add), events, gates)
+    return Run(AgentLoop("r1", device, provider, gates, policy, guard, ObservationBuilder(policy, "Deputy", maxNodes = maxNodes), "SYSTEM", events::add, images) { testScheduler.currentTime }, events, gates)
   }
 
   private fun Run.finished() = events.filterIsInstance<RunEvent.Finished>().single()
@@ -113,12 +122,72 @@ class AgentLoopTest {
     assertFalse(self in device.reads)
   }
 
-  @Test fun onlyTheFirstToolCallOfATurnRuns() = runTest {
+  private fun calls(vararg c: Pair<String, String>) = c.mapIndexed { i, (name, args) -> ToolCall("c$i", name, Json.parseToJsonElement(args).jsonObject) }
+
+  @Test fun severalStepsOnTheSameScreenRunInOrderFromOneReply() = runTest {
     val device = FakeDevice(chat)
-    val script = Script(call("tap", """{"index":3}""") + call("tap", """{"index":4}"""), call("finish", """{"status":"done","summary":"x"}"""))
+    val script = Script(calls("type_text" to """{"index":1,"text":"hi"}""", "tap" to """{"index":3}"""), call("finish", """{"status":"done","summary":"x"}"""))
+    run(device, script).loop.run("t")
+    assertEquals(listOf(Action.TypeText(1, "hi", false), Action.Tap(3)), device.performed)
+  }
+
+  @Test fun aStepThatNeedsTheOwnerNeverRidesAlongInABatch() = runTest {
+    val device = FakeDevice(chat)
+    val script = Script(calls("type_text" to """{"index":1,"text":"hi"}""", "tap" to """{"index":2}""", "tap" to """{"index":3}"""), call("finish", """{"status":"done","summary":"x"}"""))
+    val r = run(device, script)
+    r.loop.run("t")
+    assertEquals(listOf<Action>(Action.TypeText(1, "hi", false)), device.performed)
+    assertTrue(script.seen[1].contains("needs the owner"))
+    assertTrue(script.seen[1].contains("an earlier step in this reply didn't run"))
+    assertTrue(r.events.none { it is RunEvent.GateOpened })
+  }
+
+  @Test fun aReplyCantRepeatAStep() = runTest {
+    val device = FakeDevice(chat)
+    run(device, Script(calls("tap" to """{"index":3}""", "tap" to """{"index":4}""", "tap" to """{"index":3}"""), call("finish", """{"status":"done","summary":"x"}"""))).loop.run("t")
+    assertEquals(listOf<Action>(Action.Tap(3), Action.Tap(4)), device.performed)
+  }
+
+  @Test fun aReplyRunsAtMostFiveSteps() = runTest {
+    val device = FakeDevice(chat)
+    val six = calls(
+      "tap" to """{"index":3}""", "tap" to """{"index":4}""", "tap" to """{"index":1}""",
+      "long_press" to """{"index":3}""", "long_press" to """{"index":4}""", "long_press" to """{"index":1}""",
+    )
+    run(device, Script(six, call("finish", """{"status":"done","summary":"x"}"""))).loop.run("t")
+    assertEquals(5, device.performed.size)
+  }
+
+  @Test fun aBlockedOrUnlistedContactsAppIsNeverRead() = runTest {
+    for ((app, allowed) in listOf("com.vault" to null, "com.contacts" to setOf("com.chat"))) {
+      val device = FakeDevice(chat).also { it.contactsApp = app }
+      val script = Script(call("find_contact", """{"name":"Sara"}"""), call("finish", """{"status":"done","summary":"x"}"""))
+      run(device, script, allowed = allowed).loop.run("t")
+      assertFalse(script.seen[1].contains("+923001234567"))
+      assertTrue(script.seen[1].contains("denied"))
+    }
+  }
+
+  @Test fun aBatchedStepThatIsDeniedShowsNoActionTime() = runTest {
+    val device = FakeDevice(chat.copy(nodes = chat.nodes + NodeRef("com.chat", null, null, null, null, Bounds(0, 0, 10, 10), editable = true, password = true)), performMs = 800)
+    val r = run(device, Script(calls("tap" to """{"index":3}""", "type_text" to """{"index":5,"text":"x"}"""), call("finish", """{"status":"done","summary":"x"}""")))
+    r.loop.run("t")
+    val steps = r.events.filterIsInstance<RunEvent.Step>()
+    assertEquals(listOf("allow" to 800L, "deny" to 0L), steps.map { it.verdict to it.actMs })
+  }
+
+  @Test fun aChangedScreenStopsTheRestOfTheReply() = runTest {
+    val device = FakeDevice(chat, onAction = { clock })
+    val script = Script(calls("tap" to """{"index":3}""", "tap" to """{"index":4}"""), call("finish", """{"status":"done","summary":"x"}"""))
     run(device, script).loop.run("t")
     assertEquals(listOf<Action>(Action.Tap(3)), device.performed)
-    assertTrue(script.seen[1].contains("one action per step"))
+    assertTrue(script.seen[1].contains("the screen changed"))
+  }
+
+  @Test fun memoryOfEarlierRunsRidesWithTheTask() = runTest {
+    val script = Script(call("finish", """{"status":"done","summary":"x"}"""))
+    run(FakeDevice(clock), script).loop.run("t", "<memory>\nOpen com.clock\n</memory>")
+    assertTrue(script.seen[0].contains("The owner's task: t\\n\\n<memory>"))
   }
 
   @Test fun ac2SendPausesForTheOwnerAndDenyEndsTheRunDeclined() = runTest {
@@ -267,7 +336,45 @@ class AgentLoopTest {
     val script = Script(call("wait", """{"seconds":1}"""), call("finish", """{"status":"done","summary":"x"}"""))
     run(device, script).loop.run("t")
     assertTrue(script.seen[0].contains("data:image/jpeg;base64,IMG"))
-    assertEquals(1, Regex("data:image/jpeg").findAll(script.seen[1]).count())
+    assertEquals("the older screen loses its screenshot", 0, Regex("data:image/jpeg").findAll(script.seen[1]).count())
+  }
+
+  @Test fun onlyTheLatestScreenIsSentInFull() = runTest {
+    val script = Script(call("wait", """{"seconds":1}"""), call("wait", """{"seconds":1}"""), call("finish", """{"status":"done","summary":"x"}"""))
+    run(FakeDevice(clock), script).loop.run("t")
+    assertEquals(1, Regex("Next alarm 07:30").findAll(script.seen[2]).count())
+    assertEquals(2, Regex("shortened").findAll(script.seen[2]).count())
+    assertTrue(script.seen[2].contains("<screen app=\\\"Clock\\\""))
+  }
+
+  @Test fun actionToolsCarryAMemoSoFactsSurviveTheShortening() {
+    val memo = { name: String -> Tools.specs(images = true).first { it.name == name }.parameters.toString().contains("\"memo\"") }
+    assertTrue(memo("tap") && memo("open_app") && memo("press"))
+    assertFalse(memo("finish"))
+  }
+
+  @Test fun aModelThatCantSeeImagesGetsNoScreenshotsAndNoImageTools() = runTest {
+    val sparse = screen("com.game", "Game", n("Play", "com.game"))
+    val script = Script(call("look"), call("finish", """{"status":"done","summary":"x"}"""))
+    run(FakeDevice(sparse), script, images = false).loop.run("t")
+    assertFalse(script.seen.any { it.contains("data:image") })
+    assertTrue(script.seen[0].contains("can't see screenshots"))
+    assertFalse("look" in script.toolNames[0] || "tap_at" in script.toolNames[0])
+  }
+
+  @Test fun eachStepLogsHowLongTheModelAndTheActionTook() = runTest {
+    val slow = object : LlmProvider {
+      var turns = 0
+      override suspend fun step(history: List<Msg>, tools: List<ToolSpec>): ModelTurn {
+        kotlinx.coroutines.delay(1_500)
+        val calls = if (turns++ == 0) call("wait", """{"seconds":2}""") else call("finish", """{"status":"done","summary":"x"}""")
+        return ModelTurn(Msg("assistant", buildJsonObject { put("role", "assistant") }), calls, Usage(1, 0, 1), null)
+      }
+    }
+    val r = run(FakeDevice(clock, performMs = 300), slow)
+    r.loop.run("t")
+    val step = r.events.filterIsInstance<RunEvent.Step>().single()
+    assertEquals(listOf(1_500L, 300L), listOf(step.modelMs, step.actMs))
   }
 
   @Test fun tapAtMapsScreenshotPixelsToTheScreenAndJudgesTheNodeThere() = runTest {
@@ -349,7 +456,7 @@ class AgentLoopTest {
       val device = FakeDevice(clock, onAction = { overview })
       val script = Script(call("press", """{"button":"$button"}"""), call("finish", """{"status":"done","summary":"x"}"""))
       run(device, script).loop.run("t")
-      assertEquals(button, 1, Regex("data:image/jpeg").findAll(script.seen[1]).count())
+      assertEquals(button, 0, Regex("data:image/jpeg").findAll(script.seen[1]).count())
     }
   }
 
@@ -359,8 +466,8 @@ class AgentLoopTest {
     val script = Script(call("press", """{"button":"recents"}"""), call("look"), call("open_app", """{"name":"Clock"}"""), call("look"), call("finish", """{"status":"done","summary":"x"}"""))
     run(device, script).loop.run("t")
     val images = { i: Int -> Regex("data:image/jpeg").findAll(script.seen[i]).count() }
-    assertEquals(1, images(2))
-    assertEquals(2, images(4))
+    assertEquals(0, images(2))
+    assertEquals(1, images(4))
   }
 
   @Test fun approvingInsideDeputyGoesBackToTheAppAndPerformsTheStep() = runTest {
@@ -415,6 +522,17 @@ class AgentLoopTest {
     }
     val result = run(FakeDevice(clock), failing).loop.run("t")
     assertEquals(RunResult(RunStatus.FAILED, "Check your API key in Settings."), result)
+  }
+
+  @Test fun phoneInfoAndContactsAnswerWithoutTouchingTheScreen() = runTest {
+    val device = FakeDevice(clock)
+    val script = Script(call("phone_info"), call("find_contact", """{"name":"Sara"}"""), call("set_alarm", """{"hour":7,"minute":30}"""), call("finish", """{"status":"done","summary":"x"}"""))
+    val r = run(device, script)
+    r.loop.run("t")
+    assertTrue(script.seen[1].contains("battery 80%"))
+    assertTrue(script.seen[2].contains("Sara Khan: +923001234567"))
+    assertEquals(listOf<Action>(Action.SetAlarm(7, 30, null, "com.clock")), device.performed)
+    assertEquals(listOf("Phone info", "Find contact Sara", "Set an alarm for 07:30"), r.events.filterIsInstance<RunEvent.Step>().map { it.action })
   }
 
   @Test fun everyStepIsLoggedWithItsVerdictAndCost() = runTest {

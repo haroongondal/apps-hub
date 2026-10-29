@@ -30,7 +30,7 @@ object OkHttpTransport {
         // OkHttp only logs an IOException thrown here and never calls onFailure, so it must be passed on by hand.
         override fun onResponse(call: Call, response: Response) = response.use {
           try {
-            c.resume(HttpReply(it.code, it.body?.string().orEmpty()))
+            c.resume(HttpReply(it.code, it.body?.string().orEmpty(), it.header("retry-after")?.toDoubleOrNull()?.let { s -> (s * 1_000).toLong() }))
           } catch (e: IOException) {
             c.resumeWithException(e)
           }

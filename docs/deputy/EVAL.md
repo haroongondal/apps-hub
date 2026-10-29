@@ -77,10 +77,10 @@ and FR-8 pass on the phone. FR-9's saved tasks are checked here too.
 | FR-4 back | Set NayaPay back to Read-only | Saves with no typing; AC-3 behaves as in Part 2 again | | |
 | FR-4 mid-run | Start Part 1 task 3; while it runs, open Deputy, set Settings (the system app) to Blocked | From its next step the run is refused Settings and ends without sending another Settings screen. Set it back to Standard | | |
 | FR-5 key | Settings: Test the key | "The key works" | | |
-| FR-5 model | Change Model name to `gemini-3.1-flash-lite`, Save | Refused: "Enter this model's prices…". Enter 0.25 / 0.25 / 1.5, Save, run Part 1 task 2: it works and History shows it. Then set the name back and tap "Use Gemini Flash's prices", Save | | |
+| FR-5 model | Change Model name to `gemini-3.1-flash-lite`, Save | Refused: "Enter this model's prices…". Enter 0.25 / 0.25 / 1.5, Save, run Part 1 task 2: it works and History shows it. Then set the name back and tap "Use Gemini 3.5 Flash-Lite's prices", Save | | |
 | FR-5 address | Change Address to `http://example.com`, Save | "The address must start with https://…", nothing saved, the key stays | | |
-| FR-5 key drop | Change Address to `https://example.com/v1`, enter any prices, read the warning, Save | The key row in Setup turns To do (the key is deleted). Restore the Gemini address, use Gemini Flash's prices, save the key again | | |
-| FR-5 prices | Clear the Input price, Save; then type 0, Save | Both refused with the price range; then "Use Gemini Flash's prices" and Save puts the defaults back | | |
+| FR-5 key drop | Change Address to `https://example.com/v1`, enter any prices, read the warning, Save | The key row in Setup turns To do (the key is deleted). Restore the Gemini address, use Gemini 3.5 Flash-Lite's prices, save the key again | | |
+| FR-5 prices | Clear the Input price, Save; then type 0, Save | Both refused with the price range; then "Use Gemini 3.5 Flash-Lite's prices" and Save puts the defaults back | | |
 | FR-6 caps | Set Steps per task to 3, Save, run Part 1 task 3 | The run stops at "the 3-step limit". Set it back to 30 | | |
 | FR-8 list | Tasks tab, History | Every task above is listed newest first with status, steps and cost | | |
 | FR-8 detail | Tap a gated run (AC-2) | The sheet lists each step with its verdict (Asked you, Refused …) and the summary | | |

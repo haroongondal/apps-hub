@@ -53,6 +53,18 @@ class OpenAiCompatProviderTest {
     assertEquals(7_000L, testScheduler.currentTime)
   }
 
+  @Test fun aRateLimitWaitsAsLongAsTheServerSaysUpToAMinute() = runTest {
+    val http = FakeHttp(HttpReply(429, "", retryAfterMs = 20_000), HttpReply(429, "", retryAfterMs = 3_600_000), ok)
+    provider(http).step(history, emptyList())
+    assertEquals(80_000L, testScheduler.currentTime)
+  }
+
+  @Test fun aMalformedToolCallIsRetried() = runTest {
+    val http = FakeHttp(HttpReply(400, """{"error":{"code":"tool_use_failed","failed_generation":"tap(9"}}"""), ok)
+    provider(http).step(history, emptyList())
+    assertEquals(2, http.calls.size)
+  }
+
   @Test fun aFourthServerErrorFails() = runTest {
     val e = failure { provider(FakeHttp(HttpReply(500, ""), HttpReply(500, ""), HttpReply(500, ""), HttpReply(500, ""))).step(history, emptyList()) }
     assertEquals(ProviderError.Kind.SERVER, e.kind)

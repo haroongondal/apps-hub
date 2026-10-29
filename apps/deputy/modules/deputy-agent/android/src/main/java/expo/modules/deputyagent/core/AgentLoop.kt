@@ -11,6 +11,14 @@ interface Device {
   suspend fun screenshot(): String?
   fun resolveApp(name: String): List<Pair<String, String>>
   fun resolveLink(url: String): String?
+  /** The clock app that would take an alarm or timer. */
+  fun resolveClock(): String?
+  /** Android version, battery, storage, next alarm, network and time; reads no app's screen. */
+  fun info(): String
+  /** Matching contacts with their numbers, or why there are none. */
+  fun contacts(name: String): String
+  /** The app that keeps the contacts, judged before they're read. */
+  fun resolveContacts(): String?
   suspend fun perform(action: Action, target: NodeRef?): String
   suspend fun settle()
 }
@@ -20,7 +28,11 @@ enum class RunStatus { DONE, FAILED, STOPPED, DECLINED, CAPPED, INTERRUPTED }
 data class RunResult(val status: RunStatus, val summary: String?)
 
 sealed interface RunEvent {
-  data class Step(val runId: String, val n: Int, val app: String, val action: String, val verdict: String, val result: String, val costUsd: Double) : RunEvent
+  /** `modelMs` is the model call that chose the step, `actMs` the action plus the wait for the screen to settle. */
+  data class Step(
+    val runId: String, val n: Int, val app: String, val action: String, val verdict: String, val result: String, val costUsd: Double,
+    val modelMs: Long = 0, val actMs: Long = 0,
+  ) : RunEvent
   data class GateOpened(val gate: Gate) : RunEvent
   data class Finished(val runId: String, val status: RunStatus, val summary: String?, val costUsd: Double) : RunEvent
 }
@@ -35,13 +47,20 @@ class AgentLoop(
   private val observer: ObservationBuilder,
   private val systemPrompt: String,
   private val emit: (RunEvent) -> Unit,
+  /** False for a model that can't read images: no screenshot is ever taken or sent. */
+  private val images: Boolean = true,
+  private val now: () -> Long = System::currentTimeMillis,
 ) {
-  // shortcut: history is never summarised (SPEC §7 at 60% of context); add it if a 30-step run nears the model's window.
+  // Only the latest screen is sent in full (`shorten`), which keeps a 30-step run well inside the model's window.
   private val history = mutableListOf<Msg>()
+  private var modelMs = 0L
+  private var actMs = 0L
+  private var verdict = "" // of the latest logged step, so a batch only goes on after a step that simply ran
 
-  suspend fun run(task: String): RunResult {
+  /** `memory` is `RunStore.recall`'s record of earlier runs, sent with the task as data. */
+  suspend fun run(task: String, memory: String? = null): RunResult {
     history += Msgs.system(systemPrompt)
-    history += Msgs.user("The owner's task: $task")
+    history += Msgs.user("The owner's task: $task" + memory?.let { "\n\n$it" }.orEmpty())
     var backs = 0
     var note = ""
     var prevScreen: String? = null
@@ -51,6 +70,8 @@ class AgentLoop(
     var recentsPkg: String? = null
     var last: Pair<String, Call>? = null
     var repeats = 0
+    var shown = -1 // where the full screen sits in history, and its shortened form
+    var stub = ""
     try {
       while (true) {
         guard.tripped()?.let { return end(RunStatus.CAPPED, guard.describe(it)) }
@@ -67,7 +88,7 @@ class AgentLoop(
         backs = 0
         unchanged = if (obs.text == prevScreen) unchanged + 1 else 0
         prevScreen = obs.text
-        val wanted = look || obs.labelled < 5 || unchanged >= 2
+        val wanted = images && (look || obs.labelled < 5 || unchanged >= 2)
         // Recents shows other apps' last screens, Deputy's and blocked ones included, until another app comes forward.
         if (recents) recentsPkg = obs.context.pkg else if (obs.context.pkg != recentsPkg) recentsPkg = null
         recents = false
@@ -75,14 +96,21 @@ class AgentLoop(
         val shot = if (wanted && safe) device.screenshot() else null
         look = false
         val withheld = when {
+          !images && obs.labelled < 5 -> "\n(Little text on this screen, and this model can't see screenshots.)"
           wanted && !safe -> "\n(No screenshot: another app's private content may be on screen.)"
           wanted && shot == null -> "\n(No screenshot: the app hides its screen from capture, or the capture failed.)"
           else -> ""
         }
+        if (shown >= 0) history[shown] = Msgs.user(stub)
+        shown = history.size
+        stub = note + obs.text.substringBefore('\n') + "\n(shortened)\n</screen>"
         history += Msgs.user(note + obs.text + withheld, shot)
         note = ""
 
-        val turn = provider.step(history, Tools.specs)
+        val asked = now()
+        val turn = provider.step(history, Tools.specs(images))
+        modelMs = now() - asked
+        actMs = 0
         history += turn.raw
         guard.addUsage(turn.usage)
         guard.countStep()
@@ -100,6 +128,11 @@ class AgentLoop(
         val result = when (call) {
           is Call.Finish -> return end(if (call.done) RunStatus.DONE else RunStatus.FAILED, call.summary)
           is Call.Invalid -> call.error.also { step(obs, first.name, "none", it) }
+          Call.Info -> device.info().also { step(obs, "Phone info", "allow", it) }
+          is Call.FindContact -> when (val v = policy.lookup(device.resolveContacts())) {
+            is Verdict.Deny -> "denied: ${v.reason}".also { step(obs, "Find contact ${call.name}", "deny", it) }
+            else -> device.contacts(call.name).also { step(obs, "Find contact ${call.name}", "allow", it) }
+          }
           is Call.Ask -> {
             val gate = gates.open(runId, GateKind.QUESTION, obs.app, call.question, options = call.options)
             emit(RunEvent.GateOpened(gate))
@@ -121,7 +154,19 @@ class AgentLoop(
           }
         }
         history += Msgs.tool(first.id, if (repeats >= 3) "$result That did nothing. Try something else." else result)
-        turn.toolCalls.drop(1).forEach { history += Msgs.tool(it.id, "error: one action per step") }
+        var ran = call is Call.Act && verdict == "allow"
+        val calls = mutableSetOf(first.name to first.args)
+        for ((i, extra) in turn.toolCalls.drop(1).withIndex()) {
+          val r = when {
+            !ran -> "not run: an earlier step in this reply didn't run. Look at the new screen."
+            i >= MAX_BATCH - 1 -> "not run: at most $MAX_BATCH steps run from one reply."
+            !calls.add(extra.name to extra.args) -> "not run: the same step twice in one reply."
+            guard.tripped() != null -> "not run: a limit was reached."
+            else -> batched(obs, extra)
+          }
+          ran = ran && verdict == "allow" && !r.startsWith("not run")
+          history += Msgs.tool(extra.id, r)
+        }
       }
     } catch (e: CancellationException) {
       end(RunStatus.STOPPED, "Stopped by the owner.")
@@ -133,6 +178,39 @@ class AgentLoop(
     }
   }
 
+  /**
+   * A further call in the same reply, aimed at the screen the model saw. It runs only if its element is still there,
+   * unchanged, on a fresh read, and the policy allows it outright: anything that needs the owner gets its own turn.
+   */
+  private suspend fun batched(seen: Observation, tc: ToolCall): String {
+    val call = Tools.parse(tc)
+    val action = (call as? Call.Act)?.action
+    val index = when (action) {
+      is Action.Tap -> action.index
+      is Action.LongPress -> action.index
+      is Action.TypeText -> action.index
+      else -> return "not run: only taps and typing on the screen you saw can follow another step in the same reply."
+    }
+    val old = seen.nodes[index] ?: return "not run: element $index isn't on that screen."
+    val now = observer.build(device.foregroundPkg()) { device.read() }
+    val moved = now?.nodes?.entries?.firstOrNull { it.value == old }?.key?.let { j ->
+      when (action) {
+        is Action.Tap -> action.copy(index = j)
+        is Action.LongPress -> action.copy(index = j)
+        is Action.TypeText -> action.copy(index = j)
+        else -> null
+      }
+    }
+    if (now == null || moved == null) return "not run: the screen changed after the previous step. Look at the new screen."
+    val target = targetOf(now, moved)
+    val what = describe(moved, target)
+    return when (val v = policy.check(moved, target, now.context, call.irreversible)) {
+      Verdict.Allow -> perform(moved, target).also { step(now, what, "allow", it) }
+      is Verdict.Deny -> "denied: ${v.reason}".also { step(now, what, "deny", it) }
+      is Verdict.Confirm -> "not run: this step needs the owner's approval, so it gets its own turn. Call it again on the new screen."
+    }
+  }
+
   private suspend fun act(obs: Observation, requested: Action, flag: Boolean, reason: String?): String? {
     val action = when (requested) {
       is Action.TapAt -> {
@@ -140,6 +218,8 @@ class AgentLoop(
         Action.TapAt(obs.viewport.left + (requested.x * scale).toInt(), obs.viewport.top + (requested.y * scale).toInt())
       }
       is Action.OpenLink -> requested.copy(handler = device.resolveLink(requested.url))
+      is Action.SetAlarm -> requested.copy(handler = device.resolveClock())
+      is Action.SetTimer -> requested.copy(handler = device.resolveClock())
       else -> requested
     }
     val target = targetOf(obs, action)
@@ -182,7 +262,11 @@ class AgentLoop(
 
   private suspend fun perform(action: Action, target: NodeRef?): String {
     currentCoroutineContext().ensureActive()
-    return device.perform(action, target).also { device.settle() }
+    val start = now()
+    return device.perform(action, target).also {
+      device.settle()
+      actMs = now() - start
+    }
   }
 
   private fun pickApp(name: String, matches: List<Pair<String, String>>): String? =
@@ -198,11 +282,17 @@ class AgentLoop(
     is Action.OpenApp -> "Open ${a.pkg}"
     is Action.OpenLink -> "Open link ${a.url}"
     is Action.Press -> "Press ${a.button.name.lowercase()}"
+    is Action.OpenSettings -> "Open ${a.page} settings"
+    is Action.SetAlarm -> "Set an alarm for %02d:%02d".format(a.hour, a.minute)
+    is Action.SetTimer -> "Start a timer for " + if (a.seconds % 60 == 0) "${a.seconds / 60} min" else "${a.seconds} s"
     else -> a::class.simpleName.orEmpty() + t?.label?.let { " \"$it\"" }.orEmpty()
   }
 
-  private fun step(obs: Observation, action: String, verdict: String, result: String) =
-    emit(RunEvent.Step(runId, guard.steps, obs.app, action, verdict, result, guard.costUsd))
+  private fun step(obs: Observation, action: String, verdict: String, result: String) {
+    this.verdict = verdict
+    emit(RunEvent.Step(runId, guard.steps, obs.app, action, verdict, result, guard.costUsd, modelMs, actMs))
+    actMs = 0 // a later step in the same reply that never runs mustn't show this one's time
+  }
 
   private fun declined() = end(RunStatus.DECLINED, "The owner said no, so Deputy stopped before that step.")
 
@@ -212,6 +302,7 @@ class AgentLoop(
   }
 
   companion object {
+    const val MAX_BATCH = 5
     const val SHOT_WIDTH = 720 // screenshots reach the model at this width, so tap_at uses these pixels
     private const val WAITING = "waiting for the owner"
   }

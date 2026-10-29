@@ -95,7 +95,9 @@ export function RunPanel({ state, refresh }: { state: ServiceState; refresh: () 
 }
 
 export function StepRow({ step: s }: { step: Extract<RunEvent, { type: 'step' }> }) {
-  return <Row title={`${s.n}. ${s.action}`} subtitle={`${s.app}: ${s.result}`} trailing={<Pill {...VERDICTS[s.verdict]} />} />;
+  const secs = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
+  const timing = s.modelMs > 0 ? ` (model ${secs(s.modelMs)}, action ${secs(s.actMs)})` : '';
+  return <Row title={`${s.n}. ${s.action}`} subtitle={`${s.app}: ${s.result}${timing}`} trailing={<Pill {...VERDICTS[s.verdict]} />} />;
 }
 
 function GateCard({ gate, onAnswered }: { gate: Gate; onAnswered: () => void }) {

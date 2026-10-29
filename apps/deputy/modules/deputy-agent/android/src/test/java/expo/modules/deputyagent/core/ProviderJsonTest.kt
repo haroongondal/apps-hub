@@ -39,11 +39,13 @@ class ProviderJsonTest {
   @Test fun reasoningEffortIsLeftOutWhenNotSet() =
     assertFalse(ProviderJson.request("m", listOf(Msgs.user("T")), emptyList(), null).contains("reasoning_effort"))
 
-  @Test fun anAssistantMessageIsReplayedVerbatimWithUnknownFields() {
+  // Groq refuses unknown fields on a replayed message, so only the standard ones go back; tool calls keep theirs.
+  @Test fun anAssistantMessageIsReplayedWithItsToolCallsVerbatimButNoUnknownFields() {
     val turn = ProviderJson.parse(response)
-    assertEquals(assistant, turn.raw.json.toString())
+    val replayed = assistant.replace(""","x_unknown":{"a":[1,2.5,"z"]}""", "")
+    assertEquals(replayed, turn.raw.json.toString())
     val next = ProviderJson.request("m", listOf(Msgs.user("T"), turn.raw, Msgs.tool("c1", "ok")), emptyList(), null)
-    assertTrue(next, next.contains(assistant))
+    assertTrue(next, next.contains(replayed))
   }
 
   @Test fun parsesToolCallsUsageAndText() {

@@ -252,6 +252,43 @@ the user hasn't confirmed:
 - `listApps` and `setAppTrust` are async (they query PackageManager); the rest are
   sync.
 
+### Speed work (session 9, 2026-10-30, branch `deputy-speed`)
+
+The owner said "go ahead and implement it" for this order: 1 speed core, 2 direct
+phone tools, 3 memory + several actions per reply. Part 4 (Jev, on-phone OCR) is
+not to be built unless asked. My calls, not confirmed by the owner:
+
+- **Known models live in `core/Settings.kt`** (Gemini 3.5 Flash-Lite; Groq
+  `openai/gpt-oss-120b` and `-20b`, text only, `reasoning_effort` "low", prices
+  from Groq's model cards). Known models need no typed prices; the screen gets
+  their list from `knownModels()`. One key at a time stays (a new address still
+  deletes it).
+- **Replay keeps only `role`, `content`, `tool_calls`, `reasoning_details`** of
+  the assistant message: Groq rejects unknown fields, Gemini's signature is inside
+  `tool_calls`, OpenRouter needs `reasoning_details`.
+- **History:** only the latest screen goes in full; older ones shrink to their
+  header line and lose their screenshot. Action tools gain an optional `memo`
+  argument so facts from a left screen survive.
+- **429:** wait `retry-after` (capped at 60 s) instead of 1/2/4 s. Groq's
+  400 `tool_use_failed` is retried.
+- **Gates:** the model's `irreversible` flag is ignored for press, wait, look,
+  open_app and open_settings; "clear" gates only when another word follows; type +
+  Enter isn't confirmed in a field whose hint, id or description has a word
+  starting with "search", unless the text has `. / : @` or 5+ digits (after
+  review; session log).
+- **Timing:** each step logs `modelMs` and `actMs`.
+- Dropped: skipping the first screenshot (small gain once history is trimmed,
+  breaks several tests).
+- **Part 2 tools:** `phone_info`, `open_settings(page)`, `set_alarm`,
+  `set_timer`, `find_contact` (READ_CONTACTS, optional Setup row; the permission
+  is the owner's consent, no trust check), `open_chat(whatsapp|sms)` built as a
+  link (`whatsapp://send`, `smsto:`) so Send stays a gated tap.
+- **Part 3:** route memory reads past `done` runs from `RunStore` (no new
+  storage; clearing history clears it), matched by shared words, shown as
+  `<memory>` data. Extra tool calls in one reply run only if they target the same
+  screen and their element is unchanged on a fresh read; any gate, denial or
+  change stops the rest.
+
 ## Evidence already verified
 
 - **Android SDK.** `platforms;android-36/android.jar` has: `takeScreenshot`,
@@ -543,6 +580,46 @@ the user hasn't confirmed:
   tools/release/src/apps.ts"). Without a `com.haroon.deputy` entry the Store
   can't see Deputy's installed version, so registering Deputy also changes the
   Store, and CI then releases a new Store on `main`.
+- **Speed research (session 9, 2026-10-29; owner: "Deputy is really slow").**
+  Measured from the Mac with the Keychain key, a realistic step (Deputy's system
+  prompt, all 13 tools, a 74-node WhatsApp chat list, 4,231 chars):
+  - `gemini-3.5-flash-lite` free tier: 25–40 s per call for a 13-token `tap`
+    reply, no reasoning tokens reported, so the time is queueing, not thinking.
+    `reasoning_effort` "none" is a 400 on this model; "minimal" and "low" are no
+    faster. 503 "high demand" on 4 of 9 calls across 3.5 Flash-Lite, the
+    `flash-lite-latest` alias and 3.1 Flash-Lite (one 3.1 call: 3.1 s).
+  - Prompt size grows with history: 2,648 tokens at step 1, 13,008 at step 8
+    (every earlier screen is resent; `AgentLoop` never trims history).
+  - Gemini's thought signature sits in `tool_calls[].extra_content.google`; the
+    message itself has only `role` and `tool_calls`.
+  - Groq (subagent, console.groq.com docs, fetched 2026-10-29; not live-tested):
+    base `https://api.groq.com/openai/v1`. Production tool models
+    `openai/gpt-oss-120b` / `-20b`, **text only**; the only self-serve vision
+    model is preview `qwen/qwen3.8-27b` (max 3 images). Free tier 30 RPM, 1K RPD,
+    **8K TPM**, 200K TPD; 429 carries `retry-after`; cached tokens don't count.
+    gpt-oss-120b $0.15 / $0.075 cached / $0.60, about 0.7 s to first token and
+    470–500 tok/s. Assistant-message schema is `additionalProperties:false`
+    (role, content, name, reasoning, tool_calls), so replaying extra fields may
+    400. Groq doesn't train on API data (Services Agreement §4.2), may log up to
+    30 days, zero retention toggle; preview models are outside that agreement.
+  - Techniques with published numbers (subagent, abstracts only for some):
+    multi-action per reply (UFO2 −11 to −51% calls; "Jev-Mobile",
+    arXiv 2609.30186, −32.7% time, success 84→79%), trajectory replay
+    (SkillDroid, −49% calls), shortcuts (AppAgentX 106→56 s), adb/CLI agents
+    10.7 vs 18.6 steps on CLI-friendly tasks (arXiv 2606.19388). Speculative
+    actions conflict with the approval gate.
+  - **Jev** (owner asked; web, 2026-10-29): TypeSafe AI's hosted "System One"
+    decision model, `POST https://api.typesafe.ai/v1/systemone`, its own format
+    (text `state` + Choice/Score questions, up to 255 options; not chat
+    completions). Weights aren't public, so it can't run on the phone; it takes no
+    images. About $0.042/M input, output free; median 0.2–0.33 s (third-party);
+    access waitlisted; no published data policy. `dougsong/jev-android` is a
+    Kotlin accessibility SDK over it (no screenshots, 220-element cap). The
+    Jev-Mobile paper (VLM sets a goal, Jev picks tree candidates) typed printable
+    ASCII only. A community "openjev" imitates it on a 4B open model.
+  - Policy today: `https`/`http` links (so `wa.me`) are always confirmed;
+    `sms:`, `tel:`, `mailto:`, `geo:` are allowed; the manifest holds no
+    Contacts, SMS or call permission.
 
 ## File map
 
@@ -912,7 +989,56 @@ the user hasn't confirmed:
     Phase 3 uncommitted. Before committing, `git switch deputy-phase-3` (the tree
     carries over); it was left alone so as not to disrupt the other session.
 
+- **Session 9 (2026-10-29/30): speed research and work** (Evidence, "Speed
+  research"; Decisions, "Speed work"). Branch `deputy-speed` off `main`
+  (`6daca33`), uncommitted. Part 1 (speed core) done: JVM 181/181, deputy TS
+  10/10, typecheck clean, `:deputy-agent:compileDebugKotlin` exit 0.
+  Part 2 (phone tools) done: JVM 186/186, deputy TS 11/11, typecheck clean,
+  compile exit 0. New manifest permissions: READ_CONTACTS, SET_ALARM,
+  ACCESS_NETWORK_STATE.
+  Part 3 (route memory, several calls per reply) done. Gate (real output):
+  `./gradlew :deputy-agent:testDebugUnitTest :app:assembleDebug` exit 0, JVM
+  191/191, APK built 01:06; deputy TS 11/11; typecheck exit 0.
+  Reviews: `invariant-reviewer` 1 blocker + 5 major, `code-reviewer` 1 must + 5
+  should; all fixed test-first except as noted:
+  - Search-field Enter: whole word "search" only, and text with `. / : @` or 5+
+    digits is still confirmed (Chrome's bar hint is "Search or type web address").
+  - `whatsapp:` links: only `whatsapp://send?` (group invites act on one tap).
+  - The model's flag counts again on swipe and scroll (a swipe can archive or
+    answer a call); still ignored for press, wait, look, open_app, open_settings.
+  - `find_contact` goes through `Policy.lookup` for the resolved contacts app
+    (blocked, allowed-apps); a blank name is refused.
+  - `<memory>`: `<` escaped; steps in apps blocked now are left out (by label);
+    recall runs in the run's coroutine, off the JS thread.
+  - A reply runs at most 5 calls, never the same call twice, and checks the caps.
+  - "clear" gates when another word follows ("Clear watch history").
+  - Known models match with or without the trailing slash; `actMs` resets after
+    each logged step; tapping a model row fills its prices.
+  - Not fixed (minor, recorded): `open_settings` is judged as AOSP Settings
+    (shortcut comment in `Policy.kt`); a 60 s retry-after can run past the time
+    cap by up to 3 min (Stop still cancels).
+  Gate after fixes (real output): native gate exit 0, JVM 199/199; deputy TS
+  11/11; typecheck exit 0. SPEC/PRD sync handed to `docs-keeper`.
+
 ## Current state + exact next step
+
+- **Speed work (session 9) is the newest state.** Committed on branch
+  `deputy-speed` (the work, then "Deputy 0.2.0"), not merged or pushed. Parts 1–3
+  built, reviewed and gated (session log); repo-wide `pnpm test` and `pnpm
+  typecheck` exit 0. Not on the phone yet. Next:
+  1. Reviews are fixed (session log). Check the docs-keeper's SPEC edits.
+  2. Ask the owner to release 0.2.0 (`pnpm release deputy` after
+     confirming the Cloudflare account), then in Settings pick "GPT-OSS 120B on
+     Groq", save a Groq key (console.groq.com), "Test the key", and allow
+     Contacts in Setup.
+  3. On the phone, time EVAL Part 1 again plus "Send 'test' to <a contact> on
+     WhatsApp" twice (the second run should use `<memory>`), reading
+     `modelMs`/`actMs` from History. Compare with session 7 (49 s for task 1).
+  4. Docs still describe one action per step and verbatim replay: SPEC §6 (tools),
+     §7 (history), §9.3 (replay) need the docs-keeper pass.
+  5. Not built (owner's call later): Jev executor, on-phone OCR, a backup model
+     on Gemini 503s, skipping the first screenshot.
+- Older state, before session 9:
 
 - **Commits:** Phase 1 `0629439` (`deputy-phase-1`); Phase 2 `2b116d5` and voice
   `c705a73` (`deputy-phase-2`). **Phase 3 is on `deputy-phase-3`, uncommitted**

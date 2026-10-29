@@ -23,6 +23,10 @@ class Policy(
     val pkg = when (action) {
       is Action.OpenApp -> action.pkg
       is Action.OpenLink -> action.handler
+      // shortcut: judged as AOSP Settings, though HyperOS opens some pages (battery) in its security centre; resolve the handler if that matters.
+      is Action.OpenSettings -> SETTINGS.first()
+      is Action.SetAlarm -> action.handler
+      is Action.SetTimer -> action.handler
       is Action.Press, is Action.Wait, Action.Look -> null
       else -> target?.pkg ?: screen.pkg
     }
@@ -36,19 +40,27 @@ class Policy(
     if (action is Action.OpenLink) {
       if (allowedApps != null) return Verdict.Deny("This task may only use its listed apps, so it can't open links.")
       if (action.url.substringBefore(':').lowercase() !in SCHEMES) {
-        return Verdict.Deny("Deputy only opens https, http, tel, sms, mailto and geo links.")
+        return Verdict.Deny("Deputy only opens https, http, tel, sms, mailto, geo and whatsapp links.")
+      }
+      // Only open_chat's form: other whatsapp links (group invites, for one) act on a single tap.
+      if (action.url.startsWith("whatsapp:", ignoreCase = true) && !action.url.startsWith("whatsapp://send?")) {
+        return Verdict.Deny("Deputy only opens WhatsApp links that start a chat. Use open_chat.")
       }
     }
     if ((action is Action.Tap || action is Action.LongPress || action is Action.TypeText) && target == null) {
       return Verdict.Deny("That element isn't on the latest screen. Use an index from the latest screen.")
     }
     if (action is Action.TypeText && target?.password == true) return Verdict.Deny("Deputy never types into password fields.")
-    return if (pkg != null && trust(pkg) == TrustLevel.READ_ONLY) readOnly(action, target, modelFlag) else standard(action, target, screen, modelFlag)
+    // Eval: the model flagged Back as irreversible, which gated it. A flag counts on any step that can change something,
+    // swipes and scrolls included (a swipe can archive a mail or answer a call).
+    val flag = modelFlag && action !is Action.Press && action !is Action.Wait && action != Action.Look &&
+      action !is Action.OpenApp && action !is Action.OpenSettings
+    return if (pkg != null && trust(pkg) == TrustLevel.READ_ONLY) readOnly(action, target, flag) else standard(action, target, screen, flag)
   }
 
   private fun readOnly(action: Action, target: NodeRef?, modelFlag: Boolean): Verdict {
     val looks = action is Action.Scroll || action is Action.Swipe || action is Action.Press ||
-      action is Action.Wait || action is Action.Look || action is Action.OpenApp || action is Action.OpenLink
+      action is Action.Wait || action is Action.Look || action is Action.OpenApp || action is Action.OpenLink || action is Action.OpenSettings
     val safeTap = (action is Action.Tap || action is Action.TapAt) && target?.label != null && VerbMatcher.match(target) == null
     return if (!modelFlag && (looks || safeTap)) Verdict.Allow
     else Verdict.Deny("This app is read-only for Deputy, so it can look but not change anything. To allow this, set the app to standard on Deputy's Apps screen.")
@@ -57,7 +69,7 @@ class Policy(
   private fun standard(action: Action, target: NodeRef?, screen: ScreenContext, modelFlag: Boolean): Verdict {
     if (action is Action.OpenLink && action.url.substringBefore(':').lowercase() in WEB) return Verdict.Confirm("Open link", action.url)
     val changes = action is Action.Tap || action is Action.TapAt || action is Action.LongPress || action is Action.TypeText
-    val enter = action is Action.TypeText && action.pressEnter
+    val enter = action is Action.TypeText && action.pressEnter && !(isSearch(target) && plain(action.text))
     val risky = changes && (enter || (target != null && VerbMatcher.match(target) != null) || isSensitive(screen))
     return if (modelFlag || risky) Verdict.Confirm(name(action), target?.label) else Verdict.Allow
   }
@@ -69,6 +81,20 @@ class Policy(
     else -> action::class.simpleName.orEmpty()
   }
 
+  /** find_contact and other lookups read an app's data without its screen: the same trust and task limits as opening it. */
+  fun lookup(pkg: String?): Verdict = when {
+    pkg == null -> Verdict.Deny("Deputy couldn't tell which app keeps the contacts, so it didn't read them.")
+    pkg == self || trust(pkg) == TrustLevel.BLOCKED -> Verdict.Deny("This app is blocked for Deputy.")
+    allowedApps != null && pkg !in allowedApps -> Verdict.Deny("This task may only use these apps: ${allowedApps.joinToString()}.")
+    else -> Verdict.Allow
+  }
+
+  // Enter in a search box runs a search. A browser's address bar is one too, so text that could be an address, or carry
+  // a number, is still asked about: either could send what Deputy read to a site.
+  private fun isSearch(n: NodeRef?) = listOf(n?.hint, n?.viewId, n?.desc).any { it != null && SEARCH.containsMatchIn(it) }
+
+  private fun plain(text: String) = text.none { it in "./:@" } && !DIGITS.containsMatchIn(text)
+
   private fun changesDeputysAccess(s: ScreenContext, target: NodeRef?) =
     ((s.pkg in SETTINGS || s.pkg in PERMISSION_DIALOGS) && s.showsSelf) ||
       (s.pkg in SETTINGS && listOf(s.title, target?.label).any { t -> SELF_PAGES.any { t.orEmpty().contains(it, ignoreCase = true) } })
@@ -78,7 +104,9 @@ class Policy(
     (s.pkg in SETTINGS && SECURITY_PAGES.any { s.title.orEmpty().contains(it, ignoreCase = true) })
 
   private companion object {
-    val SCHEMES = setOf("https", "http", "tel", "sms", "smsto", "mailto", "geo")
+    val SEARCH = Regex("(?i)(?<![a-z])search")
+    val DIGITS = Regex("\\d{5}")
+    val SCHEMES = setOf("https", "http", "tel", "sms", "smsto", "mailto", "geo", "whatsapp")
     val WEB = setOf("https", "http")
     // shortcut: packages and titles cover AOSP and HyperOS as far as known; extend them from the S4 dumps.
     val SETTINGS = setOf("com.android.settings", "com.android.settings.intelligence", "com.miui.securitycenter")

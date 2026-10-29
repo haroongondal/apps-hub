@@ -96,7 +96,7 @@ These seven job types are the owner's choice and become the eval set
   - Observe: the screen as an indexed list of elements, plus a screenshot when the
     list isn't enough.
   - Act: tap, long-press, swipe, scroll, type, Back, Home, Recents, notification
-    shade, open an app by name, open a link (`https`, `tel`, `sms`, `mailto`, `geo`).
+    shade, open an app by name, open a link (`https`, `tel`, `sms`, `mailto`, `geo`, and `whatsapp://send` to open a chat).
   - Prefer a link over tapping through menus when one exists.
 - **FR-3: Confirmation gate.**
   - Before any irreversible step, Deputy stops and asks the owner, showing the
@@ -265,7 +265,7 @@ eval checklist.
 | Apps that detect accessibility services           | An app refuses to open                                    | Deputy stops and says so; "Turn off Deputy" for when the owner needs that app                                |
 | Gemini free tier trains on content                | Screens used to improve Google products                   | Setup warns; the owner uses a paid-billing key                                                               |
 | Gemini price change on 2027-01-01                 | Cost about doubles ($1.50 / $7.50 per 1M)                 | Editable prices; daily cap; cheaper models in the model picker                                               |
-| Gemini 3 needs thought signatures returned        | HTTP 400 on the next step if dropped                      | Replay assistant messages verbatim (SPEC §9.3); spike in Phase 1                                             |
+| Gemini 3 needs thought signatures returned        | HTTP 400 on the next step if dropped                      | Replay assistant messages' tool calls and reasoning details untouched (SPEC §9.3); spike in Phase 1                                             |
 | Model quality on this phone and these apps        | Eval below target                                         | Measure in Phase 2; try Flash, Flash-Lite and a Claude model before adding a planner                         |
 | Lock screen                                       | Scheduled tasks can't run                                 | "Tap to run" notification; auto-run only when unlocked                                                       |
 

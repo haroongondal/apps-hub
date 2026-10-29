@@ -12,6 +12,13 @@ class VerbMatcherTest {
     assertEquals("approve", VerbMatcher.match("Approve sign-in"))
   }
 
+  @Test fun clearOnlyCountsWithWhatItClears() {
+    assertNull("a calculator's C key", VerbMatcher.match("clear"))
+    assertEquals("clear", VerbMatcher.match("Clear chat"))
+    assertEquals("clear", VerbMatcher.match("Clear watch history"))
+    assertEquals("clear", VerbMatcher.match("Clear all"))
+  }
+
   @Test fun ignoresAVerbInsideALongerWord() {
     assertNull(VerbMatcher.match("Sender"))
     assertNull(VerbMatcher.match("Display"))

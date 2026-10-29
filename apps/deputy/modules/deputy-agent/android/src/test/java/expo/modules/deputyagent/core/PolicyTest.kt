@@ -107,6 +107,50 @@ class PolicyTest {
     assertTrue(check(Action.Tap(0), node(text = "Send"), flag = false) is Verdict.Confirm)
   }
 
+  @Test fun theModelsFlagOnlyCountsForStepsThatCanChangeSomething() {
+    listOf(Action.Press(Button.BACK), Action.Wait(1), Action.OpenApp("com.chat"))
+      .forEach { assertEquals(it.toString(), Verdict.Allow, check(it, flag = true)) }
+    assertTrue("a swipe can archive a mail or answer a call", check(Action.Swipe(Direction.LEFT), flag = true) is Verdict.Confirm)
+    assertEquals(Verdict.Allow, check(Action.Press(Button.BACK), on = screen("com.bank"), flag = true))
+    assertEquals(Verdict.Allow, check(Action.OpenApp("com.bank"), on = screen("com.bank"), flag = true))
+  }
+
+  @Test fun enterInASearchFieldIsNotConfirmed() {
+    val search = NodeRef("com.chat", null, null, "Search chats", null, Bounds(0, 0, 100, 50), editable = true)
+    assertEquals(Verdict.Allow, check(Action.TypeText(0, "london", pressEnter = true), search))
+    assertEquals(Verdict.Allow, check(Action.TypeText(0, "london", pressEnter = true), node(viewId = "com.chat:id/search_src_text")))
+  }
+
+  @Test fun enterIsStillConfirmedForAnAddressOrNumbersOrANonSearchField() {
+    val bar = NodeRef("com.browser", null, null, "Search or type web address", null, Bounds(0, 0, 100, 50), editable = true)
+    assertTrue(check(Action.TypeText(0, "evil.example/?c=Ali", pressEnter = true), bar) is Verdict.Confirm)
+    assertTrue(check(Action.TypeText(0, "Ali 923001234567", pressEnter = true), bar) is Verdict.Confirm)
+    val research = NodeRef("com.chat", null, null, "Message #research", null, Bounds(0, 0, 100, 50), editable = true)
+    assertTrue(check(Action.TypeText(0, "hi", pressEnter = true), research) is Verdict.Confirm)
+  }
+
+  @Test fun aChatLinkOpensWithoutAskingSinceSendingIsAGatedTap() {
+    assertEquals(Verdict.Allow, check(Action.OpenLink("whatsapp://send?phone=92300&text=hi", "com.whatsapp")))
+    assertDeny(check(Action.OpenLink("whatsapp://send?phone=92300&text=hi", "com.vault")))
+    assertDeny(check(Action.OpenLink("whatsapp://chat?code=ATTACKER", "com.whatsapp")))
+  }
+
+  @Test fun aLookupFollowsTheTrustTableAndTheTasksApps() {
+    assertEquals(Verdict.Allow, policy().lookup("com.contacts"))
+    assertDeny(policy().lookup("com.vault"))
+    assertDeny(policy(setOf("com.chat")).lookup("com.contacts"))
+    assertDeny(policy().lookup(null))
+  }
+
+  @Test fun settingsPagesAreNavigationAndAlarmsAreJudgedByTheClockApp() {
+    assertEquals(Verdict.Allow, check(Action.OpenSettings("wifi"), on = screen("com.bank"), flag = true))
+    assertEquals(Verdict.Allow, check(Action.SetAlarm(7, 0, null, "com.clock")))
+    assertEquals(Verdict.Allow, check(Action.SetTimer(60, null, "com.clock")))
+    assertDeny(check(Action.SetAlarm(7, 0, null, "com.bank")))
+    assertDeny(check(Action.SetTimer(60, null, "com.vault")))
+    assertDeny(check(Action.SetAlarm(7, 0, null, "com.clock"), allowed = setOf("com.chat")))
+  }
+
   @Test fun rule6SensitiveFlowsAreConfirmed() {
     val perm = "com.google.android.permissioncontroller"
     assertTrue(check(Action.Tap(0), node(perm, text = "While using the app")) is Verdict.Confirm)

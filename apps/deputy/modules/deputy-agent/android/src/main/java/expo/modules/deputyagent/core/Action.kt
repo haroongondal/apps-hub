@@ -42,4 +42,8 @@ sealed interface Action {
   data class Press(val button: Button) : Action
   data class Wait(val seconds: Int) : Action
   data object Look : Action
+  data class OpenSettings(val page: String) : Action
+  /** `handler` is the clock app the phone would ask, filled in before the policy judges the step. */
+  data class SetAlarm(val hour: Int, val minute: Int, val label: String?, val handler: String? = null) : Action
+  data class SetTimer(val seconds: Int, val label: String?, val handler: String? = null) : Action
 }

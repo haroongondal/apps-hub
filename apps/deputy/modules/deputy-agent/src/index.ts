@@ -6,6 +6,8 @@ export interface ServiceState {
   notificationsAllowed: boolean;
   batteryUnrestricted: boolean;
   keySet: boolean;
+  /** Optional: lets find_contact read numbers. */
+  contactsAllowed: boolean;
   runActive: boolean;
 }
 
@@ -31,7 +33,19 @@ export interface Gate {
 }
 
 export type RunEvent =
-  | { type: 'step'; runId: string; n: number; app: string; action: string; verdict: 'allow' | 'confirm' | 'deny' | 'none' | 'question'; result: string; costUsd: number }
+  | {
+      type: 'step';
+      runId: string;
+      n: number;
+      app: string;
+      action: string;
+      verdict: 'allow' | 'confirm' | 'deny' | 'none' | 'question';
+      result: string;
+      costUsd: number;
+      /** The model call that chose the step, and the action plus the wait for the screen to settle. 0 in older runs. */
+      modelMs: number;
+      actMs: number;
+    }
   | { type: 'gate'; runId: string; gate: Gate }
   | { type: 'finished'; runId: string; status: RunStatus; summary: string | null; costUsd: number };
 
@@ -52,10 +66,12 @@ export interface AppTrust {
   financial: boolean;
 }
 
-/** Prices are dollars per million tokens. With `customPrices` false they are Gemini Flash's published prices, which double in 2027. */
+/** Prices are dollars per million tokens. With `customPrices` false they are the known model's published prices. */
 export interface Settings {
   baseUrl: string;
   model: string;
+  /** The known model's name, or '' for one Deputy doesn't know. Read-only. */
+  knownModel: string;
   customPrices: boolean;
   inputPerM: number;
   cachedPerM: number;
@@ -64,6 +80,17 @@ export interface Settings {
   maxCostUsd: number;
   maxMinutes: number;
   dailyCostUsd: number;
+}
+
+/** A model whose prices Deputy knows. A model that can't read `images` works from the screen's text only. */
+export interface KnownModel {
+  name: string;
+  baseUrl: string;
+  model: string;
+  images: boolean;
+  inputPerM: number;
+  cachedPerM: number;
+  outputPerM: number;
 }
 
 export interface RunSummary {
@@ -104,6 +131,7 @@ interface DeputyAgentApi {
   /** Copy for the screen when the change isn't allowed, or null once saved. */
   setAppTrust(pkg: string, level: TrustLevel, typedConfirmation: string | null): Promise<string | null>;
   getSettings(): Settings;
+  knownModels(): KnownModel[];
   /** Copy for the screen when a value isn't valid, or null once saved. A new address removes the saved key. */
   setSettings(settings: Settings): string | null;
   listSavedTasks(): SavedTask[];
