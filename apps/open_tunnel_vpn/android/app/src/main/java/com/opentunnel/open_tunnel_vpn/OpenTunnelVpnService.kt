@@ -8,6 +8,8 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.VpnService
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import com.opentunnel.open_tunnel_vpn.engines.EngineAdapter
 import com.opentunnel.open_tunnel_vpn.engines.EngineConfig
@@ -48,6 +50,11 @@ import org.json.JSONObject
 class OpenTunnelVpnService : VpnService() {
 
   private var engine: TunnelEngine? = null
+  private val main = Handler(Looper.getMainLooper())
+  private val release = Runnable {
+    stopForegroundCompat()
+    stopSelf()
+  }
 
   override fun onCreate() {
     super.onCreate()
@@ -57,6 +64,7 @@ class OpenTunnelVpnService : VpnService() {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     // Foreground guarantee first — the 5-second window is never raced by
     // engine setup.
+    main.removeCallbacks(release)
     startForegroundNow()
     when (intent?.action) {
       ServiceContracts.ACTION_START -> {
@@ -73,8 +81,8 @@ class OpenTunnelVpnService : VpnService() {
         engine?.let { runCatching { it.stop() } }
         engine = null
         TrafficTicker.stop()
-        stopForegroundCompat()
-        stopSelf()
+        // Android 15+ cuts a background app's network about 5 s after its last foreground service ends.
+        if (intent?.getBooleanExtra(ServiceContracts.EXTRA_HOLD, false) == true) main.postDelayed(release, HOLD_MS) else release.run()
       }
       else -> {
         // No active command (e.g. a stale or system-delivered intent):
@@ -150,6 +158,7 @@ class OpenTunnelVpnService : VpnService() {
   }
 
   override fun onDestroy() {
+    main.removeCallbacks(release)
     TrafficTicker.stop()
     val active = engine
     engine = null
@@ -295,5 +304,7 @@ class OpenTunnelVpnService : VpnService() {
   companion object {
     private const val CHANNEL_ID = "tunnel"
     private const val NOTIFICATION_ID = 1
+    // Covers the app's relay refetch and probe sweep after a drop.
+    private const val HOLD_MS = 60_000L
   }
 }

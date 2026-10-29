@@ -167,16 +167,21 @@ class OpenVpnEngine(context: Context) : TunnelEngine {
 
   private fun fail(message: String) {
     if (!started) return
+    val wasUp = TunnelStateRegistry.statusState.let { it == TunnelStatus.CONNECTED || it == TunnelStatus.REASSERTING }
     stop()
     TrafficTicker.stop()
     TunnelStateRegistry.setStatus(TunnelStatus.ERROR, message)
     TunnelEventBus.postStatus(TunnelStatus.ERROR, message)
-    release()
+    // The app answers a dropped tunnel by moving to another relay (App.tsx), which needs the foreground service held.
+    release(hold = wasUp)
   }
 
-  private fun release() {
+  private fun release(hold: Boolean = false) {
     appContext.startService(
-      Intent().setClassName(appContext, ServiceContracts.SERVICE_CLASS_NAME).setAction(ServiceContracts.ACTION_RELEASE),
+      Intent()
+        .setClassName(appContext, ServiceContracts.SERVICE_CLASS_NAME)
+        .setAction(ServiceContracts.ACTION_RELEASE)
+        .putExtra(ServiceContracts.EXTRA_HOLD, hold),
     )
   }
 

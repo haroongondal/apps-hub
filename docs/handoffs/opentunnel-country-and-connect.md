@@ -91,7 +91,24 @@ verified facts below and do not redo that work. Follow the same handoff contract
   `pnpm test` 169/169, `pnpm typecheck` exit 0, JVM 2/2, `:app:assembleRelease` exit 0,
   iOS simulator build exit 0 (Swift unchanged after that build).
 
+- s2 (2026-10-29): auto-reconnect after a mid-session drop. User: "if a relay or auth error
+  disconnects the VPN, connect to a new best relay after a cache refresh". App.tsx: on the switch
+  connected/reasserting -> error, mark the relay failed, refetch the list, run the 3-try failover on
+  it (falls back to the cached list if the refetch fails). Found on the emulator (API 35): ~5 s after
+  the app's last foreground service stops, Android cuts its network in the background, so the
+  refetch and probes died. Fix: OpenVpnEngine.fail() releases with EXTRA_HOLD when the tunnel was up;
+  OpenTunnelVpnService then keeps its foreground service for up to 60 s (any new command cancels it).
+  Verified on the emulator with a temporary hack (openvpn exit -> error, since removed): app in the
+  background, kill openvpn -> new relay in 16 s, list refetched, no socket kill. pnpm test all green,
+  typecheck exit 0, :open-tunnel-native:testDebugUnitTest + :app:assembleDebug exit 0. Not committed
+  (branch deputy-phase-2 carries unrelated Deputy work).
+
 ## Current state + exact next step
+
+- 2026-10-29: 1.2.0 is committed (c09cec4) and on the phone. The s2 change still needs a version bump
+  and `pnpm release open-tunnel` (production deploy: needs the user's go-ahead), then an update
+  through the Store on the phone.
+
 
 - All changes uncommitted on `main`. Phone still on OpenTunnel 1.1.0 and was left
   CONNECTED to public-vpn-37 (Japan) from the s1 test; phone locked, adb can't stop it

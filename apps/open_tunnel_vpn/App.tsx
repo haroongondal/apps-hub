@@ -61,7 +61,9 @@ function OpenTunnelApp() {
   const busy = tunnel.state === 'connecting' || tunnel.state === 'disconnecting';
   const live = tunnel.state === 'connected' || tunnel.state === 'reasserting' || busy;
   const activeId = activeNode?.id ?? null;
-  const shown = country === null ? nodes : nodes.filter((node) => countryCode(node) === country);
+  const inCountry = (list: readonly VpnNode[]) =>
+    country === null ? list : list.filter((node) => countryCode(node) === country);
+  const shown = inCountry(nodes);
 
   const clientRef = useRef<TunnelClient | null>(null);
   if (clientRef.current === null) clientRef.current = createTunnelClient(openTunnelBinding);
@@ -79,12 +81,7 @@ function OpenTunnelApp() {
     };
   }, [client]);
 
-  // Auto-select skips relays that already failed this session, whoever picked them.
-  useEffect(() => {
-    if (tunnel.state === 'error' && activeNode !== null) failedIds.current.add(activeNode.id);
-  }, [tunnel.state, activeNode]);
-
-  const refreshList = useCallback(async (opened: AppDatabase) => {
+  const refreshList = useCallback(async (opened: AppDatabase): Promise<readonly VpnNode[] | null> => {
     setRefreshing(true);
     setLoadError(null);
     try {
@@ -94,10 +91,12 @@ function OpenTunnelApp() {
       // The cache holds one VPN Gate fetch (~100 relays); all of them load so every country is offered.
       const ranked = await prober.probeAndScoreNodes(await opened.nodes.loadNodes());
       if (mountedRef.current) setNodes(ranked);
+      return ranked;
     } catch (error) {
       if (mountedRef.current) {
         setLoadError(error instanceof Error ? error.message : String(error));
       }
+      return null;
     } finally {
       if (mountedRef.current) setRefreshing(false);
     }
@@ -172,7 +171,7 @@ function OpenTunnelApp() {
     [client, database, settings],
   );
 
-  const autoSelect = useCallback(async () => {
+  const autoSelect = useCallback(async (refetch = false) => {
     if (busy || scanning || shown.length === 0) {
       if (shown.length === 0) setActionError('No servers are cached yet. Pull down to load the list.');
       return;
@@ -180,9 +179,11 @@ function OpenTunnelApp() {
     setActionError(null);
     setScanning(true);
     try {
+      // A refetched list comes back probed and ranked; a failed refetch falls back to the cache.
+      const refetched = refetch && database !== null ? await refreshList(database) : null;
       // Bounded native probe (concurrency 8) + fitness scoring; socket work
       // happens in the native module, never on the JS thread.
-      const ranked = await prober.probeAndScoreNodes(shown, { concurrency: 8 });
+      const ranked = refetched !== null ? inCountry(refetched) : await prober.probeAndScoreNodes(shown, { concurrency: 8 });
       const rankedIds = new Set(ranked.map((node) => node.id));
       if (mountedRef.current) setNodes((all) => [...ranked, ...all.filter((node) => !rankedIds.has(node.id))]);
       // VPN Gate lists relays that are down or refuse this client, so a failed start moves on to the next one.
@@ -199,7 +200,18 @@ function OpenTunnelApp() {
     } finally {
       if (mountedRef.current) setScanning(false);
     }
-  }, [busy, scanning, connect, shown, client]);
+  }, [busy, scanning, connect, shown, client, database, refreshList, inCountry]);
+
+  const lastState = useRef(tunnel.state);
+  useEffect(() => {
+    const was = lastState.current;
+    lastState.current = tunnel.state;
+    if (tunnel.state !== 'error' || was === 'error') return;
+    // Auto-select skips relays that already failed this session, whoever picked them.
+    if (activeNode !== null) failedIds.current.add(activeNode.id);
+    // A tunnel that was up and dropped (relay or auth error) moves to the best relay of a fresh list.
+    if (was === 'connected' || was === 'reasserting') void autoSelect(true);
+  }, [tunnel.state, activeNode, autoSelect]);
 
   const selectCountry = useCallback(
     (code: string | null) => {
