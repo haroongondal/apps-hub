@@ -4,7 +4,6 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
-import expo.modules.deputyagent.core.DefaultTrust
 import expo.modules.deputyagent.core.NodeRef
 import expo.modules.deputyagent.core.Policy
 import expo.modules.deputyagent.core.TreeDump
@@ -29,7 +28,7 @@ class DeputyAccessibilityService : AccessibilityService() {
     val now = SystemClock.elapsedRealtime()
     // Rule 2: a heads-up's window belongs to System UI, so screenshots wait out one from a blocked app.
     if (event.eventType != AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) lastEventAt = now
-    else if (DefaultTrust.level(pkg, packageName) == TrustLevel.BLOCKED) blockedNoticeAt = now
+    else if (OwnerStore.trust(this).level(pkg) == TrustLevel.BLOCKED) blockedNoticeAt = now
   }
 
   override fun onInterrupt() = Unit
@@ -37,7 +36,7 @@ class DeputyAccessibilityService : AccessibilityService() {
   fun dumpForeground(): DumpResult {
     val root = rootInActiveWindow ?: return DumpResult(null, 0, "No window could be read. Open an app and try again.")
     val pkg = root.packageName?.toString().orEmpty()
-    val policy = Policy(trust = { DefaultTrust.level(it, packageName) }, allowedApps = null, self = packageName)
+    val policy = Policy(trust = OwnerStore.trust(this)::level, allowedApps = null, self = packageName)
     TreeDump.refusal(policy, pkg)?.let { return DumpResult(pkg, 0, it) }
     val nodes = ArrayList<NodeRef>()
     flatten(root, nodes)

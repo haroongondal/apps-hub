@@ -89,13 +89,8 @@ class DeviceAdapter(private val context: Context) : Device {
     }
   }
 
-  override fun resolveApp(name: String): List<Pair<String, String>> {
-    val pm = context.packageManager
-    return pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
-      .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
-      .distinctBy { it.first }
-      .filter { (pkg, label) -> pkg == name || label.contains(name, ignoreCase = true) }
-  }
+  override fun resolveApp(name: String): List<Pair<String, String>> =
+    launcherApps(context).filter { (pkg, label) -> pkg == name || label.contains(name, ignoreCase = true) }
 
   override fun resolveLink(url: String): String? = context.packageManager
     .resolveActivity(linkIntent(url), PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName?.takeIf { it != "android" }
@@ -274,4 +269,12 @@ internal fun flatten(n: AccessibilityNodeInfo, refs: MutableList<NodeRef>, infos
   refs += toRef(n, depth)
   infos?.add(n)
   for (i in 0 until n.childCount) n.getChild(i)?.let { flatten(it, refs, infos, depth + 1) }
+}
+
+/** Package and label of every app with a launcher icon (the manifest's `<queries>` makes them visible). */
+internal fun launcherApps(context: Context): List<Pair<String, String>> {
+  val pm = context.packageManager
+  return pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+    .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+    .distinctBy { it.first }
 }

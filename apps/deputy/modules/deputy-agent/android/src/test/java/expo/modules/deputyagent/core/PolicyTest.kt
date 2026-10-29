@@ -27,6 +27,11 @@ class PolicyTest {
     assertEquals(Verdict.Allow, check(Action.TapAt(500, 100), on = withKeyboard))
   }
 
+  @Test fun aBlockedAppStaysBlockedWhenTheTaskListsIt() {
+    val v = check(Action.OpenApp("com.vault"), allowed = setOf("com.vault"))
+    assertTrue("expected the blocked reason, got $v", v is Verdict.Deny && v.reason.contains("blocked"))
+  }
+
   @Test fun theSettingsSearchCountsAsSettings() =
     assertDeny(check(Action.Tap(1), node("com.android.settings.intelligence", "Accessibility"), screen("com.android.settings.intelligence")))
 

@@ -51,7 +51,7 @@ export function setupRows(s: ServiceState): SetupRow[] {
     {
       id: 'key',
       title: 'Add your API key',
-      detail: 'Deputy sends each screen to the model with this key. Paste a Gemini API key below.',
+      detail: 'Deputy sends each screen to the model with this key. Tap here, then paste the key below.',
       status: live(s.keySet),
       action: 'key',
     },

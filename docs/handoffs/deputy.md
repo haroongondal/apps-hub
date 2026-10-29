@@ -5,14 +5,11 @@
 Dated 2026-10-29. Read `docs/handoffs/deputy.md` completely first, then
 `docs/deputy/PRD.md`, `docs/deputy/SPEC.md` and `docs/deputy/EVAL.md` (open
 `docs/deputy/RESEARCH.md` only where this file cites it). Trust the verified facts
-and the Phase 2 work below, and don't redo Phase 1, the spikes or the Phase 2
-core and Android side (built, reviewed twice, 144 JVM tests green). Follow the
-handoff contract in `~/.claude/CLAUDE.md`. Read "Current state + exact next step"
-before doing anything, including the safety-classifier rule there, then continue
-from it on branch `deputy-phase-2`: **the Phase 2 phone eval**. First ask the
-user whether to commit, whether to release Deputy 3 through the Store (confirm
-the Cloudflare account first), and whether the Gemini key is in the Keychain for
-S7. Commit or release only when the user says so.
+and the Phase 2 and Phase 3 work below, and don't redo them (Phase 3 is built on
+branch `deputy-phase-3`, JVM 167/167). Follow the handoff contract in
+`~/.claude/CLAUDE.md`. Read "Current state + exact next step" before doing
+anything, including the safety-classifier rule there, then continue from it. Commit
+or release only when the user says so.
 
 ## Goal and fixed constraints
 
@@ -190,6 +187,10 @@ confirmed; **(phone)** means unverified until the eval:
   loop would otherwise spend its first step pressing Back on itself.
 - **Fixed endpoint and model** (Gemini compatible endpoint, `gemini-3.8-flash`,
   no `reasoning_effort`) until Phase 3's Settings (shortcut in `AgentRuntime`).
+- **Default model is `gemini-3.5-flash-lite` (user's choice, session 7, after
+  S7).** `Settings.GEMINI_MODEL` and `Prices.geminiFlashLite` ($0.30 / $0.03 /
+  $2.50, Google's pricing page 2026-10-29, no dated change). Flash's dated prices
+  and their test are gone; 3.8 Flash now needs its prices entered in Settings.
 - **Run button** needs the service on, notifications allowed (the gate's
   heads-up), a key, and no run active (`canRun`, tested). Battery stays advice,
   per S9.
@@ -202,6 +203,54 @@ confirmed; **(phone)** means unverified until the eval:
   palette); before RN pushes one, it falls back to platform grey and black.
 - **Spike probes deleted** (`SpikeProbes.kt`, the probe service and their UI);
   the FGS permissions stay for `RunService`.
+
+Made in Phase 3 (session 8, 2026-10-29). The user chose to build Phase 3 before
+the Phase 2 phone eval, on a new branch `deputy-phase-3` cut from `c705a73`. Rulings
+the user hasn't confirmed:
+
+- **Trust overrides** live in their own prefs file `deputy-trust` (package →
+  level), not a JSON document; setting an app back to its default deletes the
+  override. Deputy's own package is blocked in `TrustTable.level` whatever is
+  stored, and `set` refuses it. The run's Policy, the debug dump and the
+  blocked-notification screenshot check all read `OwnerStore.trust`; nothing reads
+  `DefaultTrust` alone any more.
+- **Money-app promotion:** the typed text must equal the launcher label, ignoring
+  case and surrounding spaces (SPEC said "equals"; case-insensitive is friendlier
+  and just as deliberate). The label comes from `PackageManager`, never JS. Only
+  apps that are read-only *by default* need it; a bank the defaults miss, set
+  read-only by hand, goes back to standard without typing.
+- **Settings** (`core/Settings.kt`) are one flat object over the bridge and in
+  prefs. Ranges: https only; one-word model; prices 0–1000; steps 1–100; $0.01–20
+  per task; 1–60 minutes; $0.01–100 per day. Prices are stored only after the
+  owner edits one (`customPrices`), so January's Gemini doubling still applies by
+  default. **Changing the base URL deletes the saved key**, so a Gemini key is never
+  sent to another host. http is refused even for a LAN server (Android blocks
+  cleartext anyway). After review: **the key is also bound to its address**
+  (`KeyVault` stores the URL; `load`/`has` take the settings), so a settings
+  fallback to Gemini can't send another provider's key to Google; **any model or
+  address other than the Gemini default needs its own prices**, and input and
+  output prices must be above 0, so the cost caps can't undercount or switch off;
+  steps and minutes must be whole.
+- **Clear history carries today's spend** in `filesDir/deputy/spent`, so it can't
+  reset the daily cap (tested; a mutation removing the carry fails the test). The
+  carry is written before deleting, and retention (the 200-run cap) uses the same
+  path, which closes a daily-cap gap Phase 4's notification rules could reach.
+- **Trust is live within a run:** `OwnerStore` caches the table in memory and
+  replaces it on each change; the run's Policy reads it per call, so blocking an
+  app mid-run applies from the next step. Not JVM-testable (Android wiring); EVAL
+  has an "FR-4 mid-run" row.
+- **Run-finished refresh lives in `Home`**, so a run that ends while the Apps or
+  Settings tab is open still re-enables Run.
+- **Not built (shortcut):** FR-8's "keep screens" switch (screens are never saved,
+  which is the default) and editable retention (PRD fixes 30 days / 200 runs).
+- **UI:** three tabs, Tasks (run panel, saved tasks, history), Apps, Settings
+  (Setup checklist, key, model, prices, limits, debug dump, Turn off). The app
+  opens on Settings until setup is complete. A saved task runs from its row's Run
+  button; tapping the row edits it. History shows the newest 50 and opens a past
+  run's steps in a sheet. Writes return error copy instead of throwing (same as
+  `startRun`).
+- `listApps` and `setAppTrust` are async (they query PackageManager); the rest are
+  sync.
 
 ## Evidence already verified
 
@@ -434,6 +483,28 @@ confirmed; **(phone)** means unverified until the eval:
   optional S8 retest with a real message while the phone is locked. That retest
   moves to Phase 4, where notification rules log the events themselves. S7 is
   still open (no key yet: "Not yet, carry on").
+- **S7 (session 7, 2026-10-29, from the Mac with the user's free-tier key read
+  from the Keychain into curl's header; key never printed or written).**
+  - `GET /v1beta/openai/models`: 200; 60 models, including `gemini-3.8-flash`,
+    `gemini-3.7-flash`, `gemini-3.5-flash-lite`, `gemini-flash-latest`, and
+    `gemini-flash-lite-latest`. `gemini-2.5-flash` gives 404: "no longer
+    available to new users".
+  - `gemini-3.8-flash`, "Reply with the word OK", one request at a time: 200 in
+    74 s, then 7.4 s. With `reasoning_effort` "low" or "none", or with three
+    requests in parallel: no answer within 120 s. With tools and an image:
+    **503 "This model is currently experiencing high demand"** after 4 s. The
+    phone's slow 503s (about 45–57 s per attempt) are this overload.
+  - `gemini-3.7-flash`: 200 in 34 s.
+  - **`gemini-3.5-flash-lite`: full pass.** Deputy-style tools (including
+    `look`'s empty `properties`) plus a 720×1600 JPEG: 200 in 3.7 s, 1,317
+    prompt tokens, and a `finish` call carrying
+    `extra_content.google.thought_signature`. Turn 2, with that assistant
+    message replayed verbatim plus tool results: 200 in 2.7 s. `usage` has no
+    `prompt_tokens_details`, so cached tokens aren't reported on this endpoint
+    (NFR-2's caching assumption is unverified). `gemini-flash-lite-latest`:
+    200 in 1.3 s.
+  - The key is still in the Keychain (`deputy-gemini`); delete it with
+    `security delete-generic-password -s deputy-gemini` when the user says.
 - **Q5 answered (session 7): the free tier.** Google may use what Deputy sends
   (screens from messaging and finance apps included) to improve its products
   (Evidence, Gemini). Setup must say so beside the key, and the PRD risk row
@@ -490,6 +561,19 @@ confirmed; **(phone)** means unverified until the eval:
     `android/OkHttpTransportTest.kt`); module manifest, `DeputyAgentModule.kt`,
     `src/index.ts`; `apps/deputy/App.tsx`, `src/RunPanel.tsx`, `src/setup.ts`;
     `docs/deputy/EVAL.md`. `SpikeProbes.kt` deleted.
+
+- Phase 3 code (branch `deputy-phase-3`, uncommitted):
+  - Core: `core/Settings.kt`, `core/TrustTable.kt`, `core/SavedTask.kt`;
+    `core/RunStore.kt` gains `list`, `read`, `clear` and the `spent` carry. Tests:
+    `SettingsTest` 8, `TrustTableTest` 7, `SavedTaskTest` 4, `RunStoreTest` +4.
+  - Android: `android/OwnerStore.kt` (settings, trust, saved tasks, app list);
+    `AgentRuntime` (settings, trust, `allowedApps`, history); the service's trust
+    reads; `launcherApps()` shared in `DeviceAdapter.kt`; module functions.
+  - TS/RN: `modules/deputy-agent/src/index.ts`; `App.tsx` (tabs);
+    `src/SettingsScreen.tsx`, `src/AppsScreen.tsx`, `src/SavedTasks.tsx`,
+    `src/History.tsx`, `src/settingsForm.ts` (+ test); `RunPanel.tsx` exports
+    `StepRow`.
+  - Docs: SPEC §4, §12, §13; EVAL.md Phase 3 section.
 
 ## Session log
 
@@ -731,6 +815,22 @@ confirmed; **(phone)** means unverified until the eval:
     risks detected" (ads, not tapped) → Open. Installed versionCode 3, installer
     `com.haroon.store`. The accessibility service stayed enabled and bound
     through the update; no crash in logcat.
+  - First eval attempt (13:17–13:30 PKT; the user saved a free-tier Gemini key
+    on the phone):
+    - The adb-driven tap missed Run (the page had moved) and opened
+      Accessibility settings, which brought forward the user's own open
+      Settings stack (a HyperOS Google Assistant guide). Nothing was changed;
+      Deputy was brought back with `monkey`. Glide-typing also garbled the task
+      text while the keyboard was up, then it was fixed. Lesson: hide the
+      keyboard and re-read bounds before every adb tap.
+    - Task 1 (AC-1) ran: "Starting" for 236 s, then `failed`: "The model is busy
+      or failing (HTTP 503)". No step was recorded and the cost was $0.0000, so
+      every one of the 4 attempts (1 + 3 retries) got a 503 after about 57 s.
+    - "Test the key" (text only, no tools, no image) also failed with HTTP 503
+      after 192 s (about 45 s per attempt). The phone was on Wi-Fi, with no VPN
+      active. So the endpoint or model returns slow 503s for any request; it
+      isn't the screenshot or the tool schema. Not yet known: the 503 body,
+      which the app doesn't show for 5xx.
 - **2026-10-29, voice to text (user request, overrides PRD §8's "no voice
   input").** A Speak button under the task field calls the new `listen(prompt)`
   in `DeputyAgentModule`, which opens Android's `RecognizerIntent` dialog and
@@ -741,53 +841,91 @@ confirmed; **(phone)** means unverified until the eval:
   `./gradlew :deputy-agent:testDebugUnitTest :app:assembleDebug` built
   `app-debug.apk`, JVM 144/144.
 
+- 2026-10-29 (session 8): the user said "start working on next phase of deputy".
+  Found Phase 2 (`2b116d5`) and voice (`c705a73`) committed and Deputy 3
+  released; the Phase 2 phone eval not run (no key on the phone). Asked: the user
+  chose "Build Phase 3 now, eval later" and a new `deputy-phase-3` branch.
+  - Core test-first: 23 new JVM tests failed on unresolved references, then
+    passed (Settings 8, TrustTable 7, SavedTask 4, RunStore +4). The clear-history
+    test exposed that `spentToday()` summed run files, so clearing would have reset
+    the daily cap; fixed with the `spent` carry, and a mutation removing it fails
+    the test.
+  - TS test-first: `settingsForm.test.ts` failed on the missing module, then 3/3.
+    It guards against `Number('')` turning a cleared price into $0.
+  - Android, TS contract, RN tabs and screens; SPEC §4, §12, §13 and EVAL.md
+    Phase 3 updated.
+  - Verification (real output): `pnpm --filter deputy test` 10/10;
+    `pnpm --filter deputy typecheck` exit 0; `./gradlew
+    :deputy-agent:testDebugUnitTest :app:assembleDebug` exit 0, JVM 167/167,
+    `app-debug.apk` built. Repo-wide `pnpm test` (9 packages, fail 0) and
+    `pnpm typecheck` exit 0.
+  - Reviews. `code-reviewer`: approve with comments (3 should-fix, 3 nits).
+    `invariant-reviewer`: 3 major, 1 minor, plus the pre-existing prune gap. All
+    were fixed, test-first where pure (4 new JVM tests RED on unresolved
+    references, then GREEN):
+    - The key is bound to its base URL.
+    - Another model or address needs its own prices, and input and output prices
+      must be above 0.
+    - Trust is read live during a run.
+    - The run-finished refresh moved into `Home`.
+    - `SavedTask.allowList` is the tested conversion the module calls.
+    - A Policy test checks that a blocked app stays blocked when a task lists it.
+    - Minutes must be whole.
+    - `spent` is written before deleting, and retention carries today's spend too.
+    - The History footer says "newest 50" only when it is cut.
+    `setTrust` is `@Synchronized`.
+  - Final gate (real output): `./gradlew :deputy-agent:testDebugUnitTest
+    :app:assembleDebug` exit 0, JVM 171/171, APK built 13:40; deputy TS 10/10;
+    typecheck exit 0.
+  - **Branch note:** during the session another session ran `checkout main` and
+    fast-forwarded `deputy-phase-2` into `main` (local). `main`, `deputy-phase-2`
+    and `deputy-phase-3` all sit at `c705a73`, and the checkout is `main` with
+    Phase 3 uncommitted. Before committing, `git switch deputy-phase-3` (the tree
+    carries over); it was left alone so as not to disrupt the other session.
+
 ## Current state + exact next step
 
-- **Phase 1 is committed** as `0629439` on `deputy-phase-1`. **Phase 2 work is on
-  `deputy-phase-2`**, uncommitted until the user asks. Leave the untracked
-  `CLAUDE.md` files and `.claude/rules/` out of any commit unless the user says
-  they belong.
+- **Commits:** Phase 1 `0629439` (`deputy-phase-1`); Phase 2 `2b116d5` and voice
+  `c705a73` (`deputy-phase-2`). **Phase 3 is on `deputy-phase-3`, uncommitted**
+  until the user asks. Leave the untracked `CLAUDE.md` files, `.claude/rules/` and
+  the OpenTunnel edits (another session's work) out of any Deputy commit.
 - Earlier classifier stops (recorded in the log above) hit the PRD, the SPEC and
-  an implementation how-to in previous sessions. None fired in sessions 4 to 6. If one
-  fires again, stop, record it here, and don't reword the content.
-- **Phase 1 exit is mostly met:** Deputy is installed through the Store,
-  accessibility is on (S1), and a real app's tree was dumped (Settings, S4). The
-  spikes still open are listed below.
-- **Released (2026-10-29, session 5), on the user's go-ahead ("Commit, then
-  release").** Branch commit `0629439`, then `pnpm release store` → **Store 9**
-  published (58.8 MB), then `pnpm release deputy` → **Deputy versionCode 2**
-  (0.1.0, 66.9 MB; new apps start at 2 by design, `nextVersionCode`). Signer and
-  package checks passed in both. Uploads went to
-  `https://apps-hub-store.haroonmukhtar4.workers.dev`, the personal account. The
-  release changed no tracked file. Not merged to `main`, so the other four apps
-  were not re-released.
-- **Phone spikes are done** (Evidence, session 5's phone work): S1, S2, S3
-  (pass, so keep the `specialUse` foreground service), S4, S5, S8 (WhatsApp) and
-  S9 (pass). Only S7 is open (needs the key). The S8 locked retest moves to
-  Phase 4.
-- **Phase 2 code is done (sessions 6 and 7)** on `deputy-phase-2`, uncommitted:
-  the core, the Android side and the RN Run screen. JVM 144/144, `pnpm test`
-  and `pnpm typecheck` green, both reviews' findings fixed or listed as not
-  taken (session log). Nothing is verified on the phone yet; Decisions marks
-  the parts that need it **(phone)**.
-- **Exact next step: the Phase 2 phone eval.**
-  1. Ask the user whether to commit (leave the untracked `CLAUDE.md` files and
-     `.claude/rules/` out unless they say otherwise), and whether to release.
+  an implementation how-to in previous sessions. None fired in sessions 4 to 8. If
+  one fires again, stop, record it here, and don't reword the content.
+- **Released so far:** Store 9, Deputy 2 (session 5) and Deputy 3 (session 7, the
+  Phase 2 build), all to `https://apps-hub-store.haroonmukhtar4.workers.dev`, the
+  personal account. Not merged to `main`, so the other apps weren't re-released.
+  Voice and Phase 3 aren't released.
+- **Phone spikes are done, S7 included** (Evidence; S7 run from the Mac in
+  session 7). The S8
+  locked retest moves to Phase 4.
+- **Phase 2 is released (Deputy 3) but not phone-verified.** The first eval
+  run failed on Gemini 3.8 Flash's 503s (session log, "First eval attempt");
+  the user then switched the default to 3.5 Flash-Lite (Decisions).
+- **Phase 3 code is done (session 8)**: trust screen, settings, history, saved
+  tasks. Both reviews' findings fixed; JVM 171/171, deputy TS 10/10, typecheck and
+  the native gate green. **The checkout is `main`** (another session moved it),
+  so switch to `deputy-phase-3` before committing (session log, branch note).
+  Local `main` now holds Phase 2: pushing it would make CI release every app the
+  `packages/ui` brand edit touched (Evidence, "Merge side effect").
+- **Exact next step: one phone eval covering Phases 2 and 3.**
+  1. Ask the user whether to commit Phase 3 and whether to release it as Deputy 4.
   2. On their go-ahead, confirm the Cloudflare account, then `pnpm release
-     deputy` (Deputy versionCode 3). The user installs it through the Store.
-  3. The user saves the API key in Setup, taps "Test the key", then runs
-     `docs/deputy/EVAL.md`: five read-only tasks first, then AC-2 to AC-7, then
-     "Also check". Record every result, pass or fail, under Evidence, with the
-     measured median step time and cost per task (NFR-1, NFR-2).
-  4. Fix what the eval finds, test-first where the logic is pure. The likely
-     spots are the **(phone)** items: blank-frame detection, a full-screen
-     System UI window counted as unread, heads-up timing, the chip's position.
-  5. Exit (SPEC §17 row 2): AC-1 to AC-7 on the phone and the numbers recorded.
-     Then Phase 3 (Apps trust screen, Settings with model and prices, history,
-     saved tasks).
-- S7 needs the user's Gemini key, typed by the user into an environment
-  variable. Never write it to a file, a log or this handoff. Ask Q5 (which
-  billing project) at the same time.
+     deputy`. The user installs it through the Store.
+  3. The user saves the API key (Settings tab), taps "Test the key", then runs
+     `docs/deputy/EVAL.md`: Part 1 (five read-only tasks), Part 2 (AC-2 to AC-7),
+     "Also check", then the Phase 3 table. Record every result, pass or fail,
+     under Evidence, with the median step time and cost per task (NFR-1, NFR-2).
+  4. Fix what the eval finds, test-first where the logic is pure. Likely spots:
+     the **(phone)** items (blank-frame detection, a full-screen System UI window
+     counted as unread, heads-up timing, the chip's position), and on the Phase 3
+     side, `Segmented` inside the trust sheet and the app list's load time.
+  5. Exit: SPEC §17 rows 2 and 3 (AC-1 to AC-7, FR-4, FR-5, FR-8 on the phone,
+     numbers recorded). Then Phase 4 (schedules, notification rules, flood
+     control; AC-8 to AC-10), which adds the Automations tab.
+- The Gemini key is still in the Mac's Keychain (`deputy-gemini`) for more
+  endpoint checks; delete it with `security delete-generic-password -s
+  deputy-gemini` when the user says.
 - Done in session 7: `SpikeProbes.kt` and the probe service are deleted; the FGS
   permissions stay for `RunService`.
 - Before each session ends, run `pnpm test`, `pnpm typecheck`, the Deputy native

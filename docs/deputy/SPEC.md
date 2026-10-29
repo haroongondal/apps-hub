@@ -128,25 +128,26 @@ export interface DeputyAgent {
   openBatterySettings(): void;               // ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
   disableService(): void;                    // disableSelf()
 
-  startRun(task: string, opts?: { allowedApps?: string[] }): { runId: string | null; error: string | null };
+  startRun(task: string, allowedApps?: string[] | null): { runId: string | null; error: string | null };
   stopRun(): void;
   resolveGate(gateId: string, approve: boolean, text: string | null): boolean; // false: unknown, used or expired
   getRun(): RunSnapshot;                     // current or last run's events and the pending gate
-  listRuns(limit?: number): RunSummary[];    // Phase 3, read from the run log
-  clearHistory(): void;
+  listRuns(limit: number): RunSummary[];     // read from the run log, newest first
+  getRunLog(runId: string): RunEvent[];      // one past run's steps and end
+  clearHistory(): void;                      // keeps a run in progress and today's spend
 
-  listApps(): { pkg: string; label: string; trust: TrustLevel }[];
-  setAppTrust(pkg: string, level: TrustLevel, typedConfirmation?: string): void;
+  listApps(): Promise<{ pkg: string; label: string; trust: TrustLevel; financial: boolean }[]>;
+  setAppTrust(pkg: string, level: TrustLevel, typedConfirmation: string | null): Promise<string | null>; // error copy or null
 
-  getSettings(): Settings;                   // base URL, model, prices, caps, retention
-  setSettings(patch: Partial<Settings>): void;
+  getSettings(): Settings;                   // base URL, model, prices, caps (flat, see index.ts)
+  setSettings(settings: Settings): string | null; // error copy or null; a new base URL clears the key
   setApiKey(key: string): void;              // stored by KeyVault, never returned
   clearApiKey(): void;
   testProvider(): Promise<{ ok: boolean; message: string }>;
   setPalette(json: string): void;            // tokens for native surfaces (§13)
 
   listSavedTasks(): SavedTask[];
-  saveTask(t: SavedTask): void;
+  saveTask(t: SavedTask & { id: string | null }): { id: string | null; error: string | null };
   deleteTask(id: string): void;
   listAutomations(): Automation[];
   saveAutomation(a: Automation): void;
@@ -154,9 +155,12 @@ export interface DeputyAgent {
 }
 ```
 
-The Phase 2 subset is what `modules/deputy-agent/src/index.ts` declares; the
-rest arrives with Phases 3 and 4. `setAppTrust` rejects `standard` for a financial app unless `typedConfirmation`
-equals the app label. Everything else is a plain read or write of native state.
+`modules/deputy-agent/src/index.ts` declares Phases 2 and 3; the automations
+arrive with Phase 4. `setAppTrust` rejects `standard` for a financial app (read-only
+by default) unless `typedConfirmation` equals the launcher label, ignoring case and
+surrounding spaces; the label comes from `PackageManager`, never from JS. Deputy's
+own package can't be changed. Writes return copy for the screen instead of
+throwing. Everything else is a plain read or write of native state.
 
 ## 5. Observation
 
@@ -403,7 +407,9 @@ data class Usage(val inputTokens: Long, val cachedTokens: Long, val outputTokens
   the model supports it, `reasoning_effort`.
 - Default `baseUrl` = `https://generativelanguage.googleapis.com/v1beta/openai/`
   (handoff, verified: supports tools, base64 images and `reasoning_effort`), default
-  model `gemini-3.8-flash`.
+  model `gemini-3.5-flash-lite`. S7 (2026-10-29): on the owner's free-tier key
+  `gemini-3.8-flash` answered 503 "high demand" or took 7–74 s a reply, while
+  Flash-Lite passed tools, a 720-px JPEG and verbatim replay in 3–4 s a turn.
 - Screenshots go as a user message with an `image_url` data URI part, since
   tool-role messages carry text only. Observations text rides in the tool message.
 - The same provider serves other OpenAI-compatible endpoints the owner configures
@@ -432,8 +438,11 @@ then `failed: offline`. HTTP body logging is off by default.
 ### 9.5 Cost accounting and the estimate
 
 `Guard` multiplies `Usage` by the prices in Settings after every call. The default
-prices for `gemini-3.8-flash` are $0.75 input, $0.075 cached, $3.75 output per 1M
-tokens until 2026-12-31, doubling after (handoff, from Google's pricing page).
+prices are `gemini-3.5-flash-lite`'s: $0.30 input, $0.03 cached, $2.50 output per
+1M tokens, with no dated change (Google's pricing page, 2026-10-29). Any other
+model needs its prices entered in Settings; `gemini-3.8-flash` is $0.75 / $0.075 /
+$3.75 until 2026-12-31, doubling after. S7 found no cached-token count in `usage`
+on the compatible endpoint, so the "with caching" column is unverified.
 
 NFR-2 is an estimate from RESEARCH §5's assumptions (20 steps, about 3.5K new
 tokens and 600 output tokens a step, history appended): about 70K new input, 665K
@@ -441,6 +450,7 @@ cached reads and 12K output tokens a task.
 
 | Model                                      | With caching working | Without caching |
 | ------------------------------------------ | -------------------- | --------------- |
+| `gemini-3.5-flash-lite` (default)          | about $0.07          | about $0.25     |
 | `gemini-3.8-flash`, to 2026-12-31          | about $0.15          | about $0.60     |
 | `gemini-3.8-flash`, from 2027-01-01 (2x)   | about $0.30          | about $1.20     |
 | `gemini-3.1-flash-lite` ($0.25 / $1.50)    | n/a (no cached price on hand) | about $0.20 |
@@ -501,7 +511,9 @@ All native; RN reads through the module.
 
 | What                                     | Where                                                                                   |
 | ---------------------------------------- | --------------------------------------------------------------------------------------- |
-| Settings, trust table, saved tasks, automations | `SharedPreferences` file `deputy-settings`, one JSON document per kind              |
+| Settings, saved tasks, automations       | `SharedPreferences` file `deputy-settings`, one JSON document per kind                  |
+| Trust table (owner's changes only)       | `SharedPreferences` file `deputy-trust`, package name to level; a default is never stored |
+| Spend carried over by "Clear history"    | `filesDir/deputy/spent` (`yyyyMMdd amount`), so clearing never resets the daily cap      |
 | API key                                  | `KeyVault`: AES-GCM with a non-exportable Android Keystore key, alias `deputy-api-key`  |
 | Run log                                  | `filesDir/deputy/runs/<yyyyMMdd-HHmmss>-<id>.jsonl`                                     |
 | Active-run marker                        | `filesDir/deputy/active`                                                                |
@@ -509,10 +521,25 @@ All native; RN reads through the module.
 
 - **Run log lines:** a header (task, model, trigger, start time); one line per step
   (number, package, action, target label, verdict, result text, token usage, cost);
-  a final line (status, summary, total cost). Screens and screenshots aren't
-  written unless the owner turns on "keep screens" (off by default).
+  a final line (status, summary, total cost). Screens and screenshots are never
+  written. **shortcut:** FR-8's "keep screens" switch isn't built (the default, off,
+  is what ships); add it only if the owner asks to review past screens.
 - **Retention:** delete runs older than 30 days or beyond the newest 200 on app
-  start and after each run.
+  start and after each run. Fixed (PRD FR-8), so Settings doesn't offer it.
+- **Settings validation** (`core/Settings.kt`): the base URL must be https; the
+  model one word; input and output prices 0.001 to 1000, cached 0 to 1000; steps
+  1 to 100 and minutes 1 to 60 (whole); dollars per task 0.01 to 20; dollars per
+  day 0.01 to 100. Prices are stored only once the owner edits them, so Gemini
+  Flash's dated prices apply until then, and any other model or address must come
+  with its own prices (the cost caps are counted with them). Stored settings that
+  no longer validate fall back to the defaults.
+- **The key is bound to its address:** `KeyVault` stores the base URL beside the
+  sealed key and returns nothing for any other address (`Settings.ownsKeySavedFor`;
+  a key from before Phase 3 counts as Gemini's). Saving a new address also deletes
+  the key. So a fallback to the defaults can never send another provider's key to
+  Google.
+- **Trust** is cached in memory (`OwnerStore`) and replaced on every change; a
+  run's Policy reads it per call, so a change applies from the run's next step.
 - **KeyVault** is a second copy of the pattern in
   `apps/store/modules/store-installer/android/.../Credentials.kt` (about 40 lines).
   **shortcut:** duplicated because Kotlin isn't shared across Expo modules here;
@@ -531,11 +558,12 @@ active voice; errors say what happened and how to fix it. No emoji icons.
 | Run         | Live step list, current gate with Approve/Deny, Stop, cost `Readout`, final summary                         |
 | Automations | Schedules and notification rules, each with its saved task, apps and auto-run switch                        |
 | Apps        | Installed apps with trust `Segmented` (blocked / read-only / standard); financial apps flagged              |
-| Settings    | Model (base URL, name, key, test), prices, caps, retention, "keep screens", "Turn off Deputy"               |
-| Setup       | The FR-10 checklist with live status rows; shown first until complete                                       |
+| Settings    | Setup checklist, API key (save, test, remove), model (base URL, name), prices, caps, debug tree dump, "Turn off Deputy" |
 
-- **Tab bar:** Tasks, Automations, Apps, Settings. Setup opens from the Tasks
-  banner and Settings.
+- **Tab bar:** Tasks, Apps, Settings (Automations joins in Phase 4). The app opens
+  on Settings, where the Setup checklist lives, until setup is complete; the
+  Tasks banner links there. The Run screen is the Tasks tab's current-task panel,
+  and a past run opens in a sheet from History.
 - **Brand:** add `deputy` to `BrandKey` and `brands` in `packages/ui/src/tokens.ts`
   with a hue unused by the existing five (214, 158, 250, 345, 268) and an accent
   from the launcher icon, then `pnpm --filter @apps-hub/ui build:css`. The contrast

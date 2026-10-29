@@ -7,7 +7,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "prebuild": "expo prebuild --platform android",
-    "test": "node --test src/__tests__/setup.test.ts",
+    "test": "node --test src/__tests__/setup.test.ts src/__tests__/settingsForm.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

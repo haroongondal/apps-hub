@@ -16,7 +16,9 @@ import android.speech.RecognizerIntent
 import expo.modules.deputyagent.android.AgentRuntime
 import expo.modules.deputyagent.android.DeputyAccessibilityService
 import expo.modules.deputyagent.android.KeyVault
+import expo.modules.deputyagent.android.OwnerStore
 import expo.modules.deputyagent.android.StopChip
+import expo.modules.deputyagent.core.SavedTask
 import expo.modules.deputyagent.core.ServiceSetting
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Coroutine
@@ -58,7 +60,7 @@ class DeputyAgentModule : Module() {
         "accessibilityEnabled" to ServiceSetting.isEnabled(enabled, context.packageName, DeputyAccessibilityService::class.java.name),
         "notificationsAllowed" to context.getSystemService(NotificationManager::class.java).areNotificationsEnabled(),
         "batteryUnrestricted" to context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName),
-        "keySet" to KeyVault.has(context),
+        "keySet" to KeyVault.has(context, OwnerStore.settings(context)),
         "runActive" to AgentRuntime.active,
       )
     }
@@ -73,9 +75,9 @@ class DeputyAgentModule : Module() {
 
     Function("disableService") { DeputyAccessibilityService.instance?.let { it.disableSelf(); true } ?: false }
 
-    Function("startRun") { task: String ->
+    Function("startRun") { task: String, allowedApps: List<String>? ->
       try {
-        mapOf("runId" to AgentRuntime.start(context, task), "error" to null)
+        mapOf("runId" to AgentRuntime.start(context, task, SavedTask.allowList(allowedApps)), "error" to null)
       } catch (e: IllegalStateException) {
         mapOf("runId" to null, "error" to e.message)
       }
@@ -83,8 +85,21 @@ class DeputyAgentModule : Module() {
     Function("stopRun") { AgentRuntime.stop() }
     Function("resolveGate") { gateId: String, approve: Boolean, text: String? -> AgentRuntime.resolveGate(context, gateId, approve, text) }
     Function("getRun") { AgentRuntime.snapshot() }
+    Function("listRuns") { limit: Int -> AgentRuntime.history(context, limit) }
+    Function("getRunLog") { runId: String -> AgentRuntime.readRun(context, runId) }
+    Function("clearHistory") { AgentRuntime.clearHistory(context) }
 
-    Function("setApiKey") { key: String -> KeyVault.save(context, key) }
+    AsyncFunction("listApps") { OwnerStore.apps(context) }
+    AsyncFunction("setAppTrust") { pkg: String, level: String, typed: String? -> OwnerStore.setTrust(context, pkg, level, typed) }
+
+    Function("getSettings") { OwnerStore.settings(context).toMap(System.currentTimeMillis()) }
+    Function("setSettings") { input: Map<String, Any?> -> OwnerStore.saveSettings(context, input) }
+
+    Function("listSavedTasks") { OwnerStore.tasks(context).map(OwnerStore::toMap) }
+    Function("saveTask") { input: Map<String, Any?> -> OwnerStore.saveTask(context, input) }
+    Function("deleteTask") { id: String -> OwnerStore.deleteTask(context, id) }
+
+    Function("setApiKey") { key: String -> KeyVault.save(context, key, OwnerStore.settings(context).baseUrl) }
     Function("clearApiKey") { KeyVault.clear(context) }
     AsyncFunction("testProvider") Coroutine { -> AgentRuntime.testProvider(context) }
 

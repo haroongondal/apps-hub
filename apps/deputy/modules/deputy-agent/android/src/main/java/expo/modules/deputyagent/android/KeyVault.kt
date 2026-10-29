@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import expo.modules.deputyagent.core.Settings
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -16,17 +17,20 @@ object KeyVault {
 
   private fun prefs(context: Context) = context.getSharedPreferences("deputy-key", Context.MODE_PRIVATE)
 
-  fun save(context: Context, apiKey: String) {
+  fun save(context: Context, apiKey: String, baseUrl: String) {
     val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()) }
     val sealed = cipher.doFinal(apiKey.trim().toByteArray())
     prefs(context).edit()
       .putString("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
       .putString("key", Base64.encodeToString(sealed, Base64.NO_WRAP))
+      .putString("url", baseUrl)
       .apply()
   }
 
-  fun load(context: Context): String? {
+  /** Null unless the key was saved for this address, so it never reaches another host. */
+  fun load(context: Context, settings: Settings): String? {
     val p = prefs(context)
+    if (!settings.ownsKeySavedFor(p.getString("url", null))) return null
     val iv = p.getString("iv", null) ?: return null
     val sealed = p.getString("key", null) ?: return null
     return try {
@@ -38,10 +42,10 @@ object KeyVault {
     }
   }
 
-  fun has(context: Context) = prefs(context).contains("key")
+  fun has(context: Context, settings: Settings) = prefs(context).let { it.contains("key") && settings.ownsKeySavedFor(it.getString("url", null)) }
 
   fun clear(context: Context) {
-    prefs(context).edit().remove("iv").remove("key").apply()
+    prefs(context).edit().remove("iv").remove("key").remove("url").apply()
   }
 
   private fun key(): SecretKey {

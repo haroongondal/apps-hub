@@ -2,10 +2,7 @@ package expo.modules.deputyagent.core
 
 data class Prices(val inputPerM: Double, val cachedPerM: Double, val outputPerM: Double) {
   companion object {
-    private const val GEMINI_DOUBLES_AT = 1_798_761_600_000L // 2027-01-01T00:00Z, from Google's pricing page
-
-    fun geminiFlash(nowMillis: Long) =
-      if (nowMillis < GEMINI_DOUBLES_AT) Prices(0.75, 0.075, 3.75) else Prices(1.50, 0.15, 7.50)
+    val geminiFlashLite = Prices(0.30, 0.03, 2.50) // Google's pricing page, 2026-10-29
   }
 }
 

@@ -58,3 +58,28 @@ Median cost per task (NFR-2, target $0.20 or less): ____
   window is being counted as unread: note it in the handoff.
 - A screenshot of a secure screen (a banking app, or a Chrome incognito tab) is
   withheld, and the model is told so.
+
+## Phase 3: apps, settings, history and saved tasks
+
+Run these after Part 1 and 2, on the Phase 3 build. Exit (SPEC §17): FR-4, FR-5
+and FR-8 pass on the phone. FR-9's saved tasks are checked here too.
+
+| Req | How to run it | Pass when | Result | Note |
+| --- | ------------- | --------- | ------ | ---- |
+| FR-4 list | Open the Apps tab, search "pay" | NayaPay shows Read-only and "money app"; the Store and any password manager show Blocked; Deputy isn't listed | | |
+| FR-4 promote | Tap NayaPay, choose Standard, tap Save without typing | "Type NayaPay to …" and nothing changes. Type "nayapay", Save: the row shows Standard | | |
+| FR-4 effect | Set the clock app to Blocked, then run Part 1 task 1 | Deputy says the app is blocked and doesn't open it. Set the clock app back to Standard afterwards | | |
+| FR-4 back | Set NayaPay back to Read-only | Saves with no typing; AC-3 behaves as in Part 2 again | | |
+| FR-4 mid-run | Start Part 1 task 3; while it runs, open Deputy, set Settings (the system app) to Blocked | From its next step the run is refused Settings and ends without sending another Settings screen. Set it back to Standard | | |
+| FR-5 key | Settings: Test the key | "The key works" | | |
+| FR-5 model | Change Model name to `gemini-3.1-flash-lite`, Save | Refused: "Enter this model's prices…". Enter 0.25 / 0.25 / 1.5, Save, run Part 1 task 2: it works and History shows it. Then set the name back and tap "Use Gemini Flash's prices", Save | | |
+| FR-5 address | Change Address to `http://example.com`, Save | "The address must start with https://…", nothing saved, the key stays | | |
+| FR-5 key drop | Change Address to `https://example.com/v1`, enter any prices, read the warning, Save | The key row in Setup turns To do (the key is deleted). Restore the Gemini address, use Gemini Flash's prices, save the key again | | |
+| FR-5 prices | Clear the Input price, Save; then type 0, Save | Both refused with the price range; then "Use Gemini Flash's prices" and Save puts the defaults back | | |
+| FR-6 caps | Set Steps per task to 3, Save, run Part 1 task 3 | The run stops at "the 3-step limit". Set it back to 30 | | |
+| FR-8 list | Tasks tab, History | Every task above is listed newest first with status, steps and cost | | |
+| FR-8 detail | Tap a gated run (AC-2) | The sheet lists each step with its verdict (Asked you, Refused …) and the summary | | |
+| FR-8 clear | Clear, confirm | History is empty; a task run straight after still hits the daily limit at the same total (check with Dollars per day set just above today's spend) | | |
+| FR-9 save | Saved tasks, New: name "Alarm", Part 1 task 1, add the clock app, Save | The row shows "Only in one app"; Run starts it | | |
+| FR-9 limit | Edit "Alarm" to "Open Settings and tell me the Android version", keep only the clock app, Run | Deputy refuses Settings ("This task may only use these apps") and ends without opening it | | |
+| FR-9 delete | Edit "Alarm", Delete this task | The row is gone | | |

@@ -4,8 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import expo.modules.deputyagent.core.AgentLoop
-import expo.modules.deputyagent.core.Caps
-import expo.modules.deputyagent.core.DefaultTrust
 import expo.modules.deputyagent.core.Gate
 import expo.modules.deputyagent.core.Gates
 import expo.modules.deputyagent.core.Guard
@@ -13,7 +11,6 @@ import expo.modules.deputyagent.core.Msgs
 import expo.modules.deputyagent.core.ObservationBuilder
 import expo.modules.deputyagent.core.OpenAiCompatProvider
 import expo.modules.deputyagent.core.Policy
-import expo.modules.deputyagent.core.Prices
 import expo.modules.deputyagent.core.Prompt
 import expo.modules.deputyagent.core.ProviderError
 import expo.modules.deputyagent.core.RunEvent
@@ -32,9 +29,6 @@ import kotlinx.coroutines.launch
 
 /** SPEC §3: at most one run, owned natively so it outlives Deputy's UI. Service rebinds don't touch it (spikes S3, S9). */
 object AgentRuntime {
-  // shortcut: endpoint and model are fixed until Phase 3's Settings screen makes them editable (FR-5).
-  private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-  private const val MODEL = "gemini-3.8-flash"
   private val TIME = DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm", Locale.ENGLISH)
 
   private lateinit var app: Context
@@ -62,29 +56,30 @@ object AgentRuntime {
   }
 
   @Synchronized
-  fun start(context: Context, task: String): String {
+  fun start(context: Context, task: String, allowedApps: Set<String>?): String {
     init(context)
     check(!active) { "Deputy is already doing a task. Stop it first." }
     check(task.isNotBlank()) { "Type a task first." }
     val service = checkNotNull(DeputyAccessibilityService.instance) { "Turn on the Deputy accessibility service in Setup first." }
-    val key = checkNotNull(KeyVault.load(app)) { "Add your API key first." }
     val store = store!!
     val id = UUID.randomUUID().toString().take(8)
-    val policy = Policy({ DefaultTrust.level(it, app.packageName) }, null, app.packageName)
+    val settings = OwnerStore.settings(app)
+    val key = checkNotNull(KeyVault.load(app, settings)) { "Add your API key first." }
+    val policy = Policy({ OwnerStore.trust(app).level(it) }, allowedApps, app.packageName)
     val loop = AgentLoop(
       id,
       DeviceAdapter(app),
-      OpenAiCompatProvider(BASE_URL, MODEL, key, null, OkHttpTransport::post),
+      OpenAiCompatProvider(settings.baseUrl, settings.model, key, null, OkHttpTransport::post),
       gates,
       policy,
-      Guard(Caps(), Prices.geminiFlash(System.currentTimeMillis()), System::currentTimeMillis, store.spentToday()),
+      Guard(settings.caps, settings.prices(System.currentTimeMillis()), System::currentTimeMillis, store.spentToday()),
       ObservationBuilder(policy, "Deputy"),
       Prompt.system(Build.VERSION.RELEASE, Locale.getDefault().toLanguageTag(), LocalDateTime.now().format(TIME)),
       ::emit,
     )
     synchronized(events) { events.clear() }
     runId = id
-    store.start(id, task, MODEL, "on_demand")
+    store.start(id, task, settings.model, "on_demand")
     runCatching { app.startForegroundService(Intent(app, RunService::class.java)) }
     StopChip.show(service)
     job = scope.launch {
@@ -118,12 +113,38 @@ object AgentRuntime {
   )
 
   suspend fun testProvider(context: Context): Map<String, Any> {
-    val key = KeyVault.load(context) ?: return mapOf("ok" to false, "message" to "Add your API key first.")
+    val settings = OwnerStore.settings(context)
+    val key = KeyVault.load(context, settings) ?: return mapOf("ok" to false, "message" to "Add your API key first.")
     return try {
-      OpenAiCompatProvider(BASE_URL, MODEL, key, null, OkHttpTransport::post).step(listOf(Msgs.user("Reply with the word OK.")), emptyList())
+      OpenAiCompatProvider(settings.baseUrl, settings.model, key, null, OkHttpTransport::post).step(listOf(Msgs.user("Reply with the word OK.")), emptyList())
       mapOf("ok" to true, "message" to "The model answered, so the key works.")
     } catch (e: ProviderError) {
       mapOf("ok" to false, "message" to e.message.orEmpty())
+    }
+  }
+
+  fun history(context: Context, limit: Int): List<Map<String, Any?>> {
+    init(context)
+    return store!!.list(limit).map {
+      mapOf(
+        "runId" to it.runId, "task" to it.task, "startedAt" to it.startedAt.toDouble(), "status" to it.status,
+        "summary" to it.summary, "costUsd" to it.costUsd, "steps" to it.steps,
+      )
+    }
+  }
+
+  fun readRun(context: Context, runId: String): List<Map<String, Any?>> {
+    init(context)
+    return store!!.read(runId).map(::toMap)
+  }
+
+  @Synchronized
+  fun clearHistory(context: Context) {
+    init(context)
+    store!!.clear()
+    if (!active) {
+      synchronized(events) { events.clear() }
+      runId = null
     }
   }
 

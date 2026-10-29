@@ -8,14 +8,19 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+
+data class RunSummary(val runId: String, val task: String, val startedAt: Long, val status: String, val summary: String?, val costUsd: Double, val steps: Int)
 
 /** SPEC §12: one JSONL file per run, plus a marker that turns a run cut off by process death into `interrupted` (NFR-4). */
 class RunStore(root: File, private val now: () -> Long, zone: ZoneId = ZoneId.systemDefault()) {
   private val runs = File(root, "runs")
   private val active = File(root, "active")
+  private val spent = File(root, "spent")
   private val stamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(zone)
   private var current: File? = null
 
@@ -62,15 +67,66 @@ class RunStore(root: File, private val now: () -> Long, zone: ZoneId = ZoneId.sy
   @Synchronized
   fun prune() {
     val cutoff = stamp(now() - 30 * DAY_MS)
-    runs.listFiles { f -> f.name.endsWith(".jsonl") }.orEmpty().sortedByDescending { it.name }
-      .forEachIndexed { i, f -> if (f != current && (i >= MAX_RUNS || f.name.take(cutoff.length) < cutoff)) f.delete() }
+    drop(files().sortedByDescending { it.name }.filterIndexed { i, f -> f != current && (i >= MAX_RUNS || f.name.take(cutoff.length) < cutoff) })
   }
 
   @Synchronized
   fun spentToday(): Double {
     val today = stamp(now()).take(8)
-    return runs.listFiles { f -> f.name.startsWith(today) && f.name.endsWith(".jsonl") }.orEmpty().sumOf(::lastCost)
+    return files().filter { it.name.startsWith(today) }.sumOf(::lastCost) + carried(today)
   }
+
+  /** FR-8 history, newest first. */
+  @Synchronized
+  fun list(limit: Int): List<RunSummary> = files().sortedByDescending { it.name }.take(limit).mapNotNull { f ->
+    runCatching {
+      val lines = f.readLines().map { Json.parseToJsonElement(it).jsonObject }
+      val head = lines.first()
+      val end = lines.last().takeIf { it.str("type") == "end" }
+      RunSummary(
+        head.str("runId")!!, head.str("task")!!, (head["at"] as JsonPrimitive).longOrNull!!,
+        end?.str("status") ?: if (f == current) "running" else "interrupted", end?.str("summary"), lines.last().cost(), lines.count { it.str("type") == "step" },
+      )
+    }.getOrNull()
+  }
+
+  @Synchronized
+  fun read(runId: String): List<RunEvent> {
+    val file = files().firstOrNull { it.name.endsWith("-$runId.jsonl") } ?: return emptyList()
+    return file.readLines().mapNotNull { line ->
+      runCatching {
+        val o = Json.parseToJsonElement(line).jsonObject
+        when (o.str("type")) {
+          "step" -> RunEvent.Step(runId, o.str("n")!!.toInt(), o.str("app")!!, o.str("action")!!, o.str("verdict")!!, o.str("result")!!, o.cost())
+          "end" -> RunEvent.Finished(runId, RunStatus.valueOf(o.str("status")!!.uppercase()), o.str("summary"), o.cost())
+          else -> null
+        }
+      }.getOrNull()
+    }
+  }
+
+  @Synchronized
+  fun clear() = drop(files().filter { it != current })
+
+  /** Today's spend in deleted runs is carried over first, so neither clearing nor retention resets the daily cap. */
+  private fun drop(gone: List<File>) {
+    if (gone.isEmpty()) return
+    val today = stamp(now()).take(8)
+    spent.parentFile?.mkdirs()
+    spent.writeText("$today ${carried(today) + gone.filter { it.name.startsWith(today) }.sumOf(::lastCost)}")
+    gone.forEach { it.delete() }
+  }
+
+  private fun files() = runs.listFiles { f -> f.name.endsWith(".jsonl") }.orEmpty().toList()
+
+  private fun carried(today: String): Double = runCatching {
+    val (day, usd) = spent.readText().trim().split(' ')
+    if (day == today) usd.toDouble() else 0.0
+  }.getOrDefault(0.0)
+
+  private fun JsonObject.str(k: String) = (this[k] as? JsonPrimitive)?.contentOrNull
+
+  private fun JsonObject.cost() = (this["costUsd"] as? JsonPrimitive)?.doubleOrNull ?: 0.0
 
   private fun stamp(ms: Long) = stamp.format(Instant.ofEpochMilli(ms))
 

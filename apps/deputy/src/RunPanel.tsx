@@ -30,12 +30,9 @@ export function RunPanel({ state, refresh }: { state: ServiceState; refresh: () 
 
   useEffect(() => setRun(DeputyAgent.getRun()), [state]);
   useEffect(() => {
-    const sub = DeputyAgent.addListener('onRunEvent', (e) => {
-      setRun(DeputyAgent.getRun());
-      if (e.type === 'finished') refresh();
-    });
+    const sub = DeputyAgent.addListener('onRunEvent', () => setRun(DeputyAgent.getRun()));
     return () => sub.remove();
-  }, [refresh]);
+  }, []);
 
   const start = () => {
     const { error } = DeputyAgent.startRun(task.trim());
@@ -90,15 +87,15 @@ export function RunPanel({ state, refresh }: { state: ServiceState; refresh: () 
             <Readout value={`$${cost.toFixed(4)}`} label={run.active ? 'Cost so far' : 'Cost'} />
             {run.active && <Button label="Stop" variant="danger" onPress={() => DeputyAgent.stopRun()} block />}
           </View>
-          {steps.map((s, i) =>
-            s.type === 'step' ? (
-              <Row key={i} title={`${s.n}. ${s.action}`} subtitle={`${s.app}: ${s.result}`} trailing={<Pill {...VERDICTS[s.verdict]} />} />
-            ) : null,
-          )}
+          {steps.map((s, i) => (s.type === 'step' ? <StepRow key={i} step={s} /> : null))}
         </Group>
       )}
     </>
   );
+}
+
+export function StepRow({ step: s }: { step: Extract<RunEvent, { type: 'step' }> }) {
+  return <Row title={`${s.n}. ${s.action}`} subtitle={`${s.app}: ${s.result}`} trailing={<Pill {...VERDICTS[s.verdict]} />} />;
 }
 
 function GateCard({ gate, onAnswered }: { gate: Gate; onAnswered: () => void }) {

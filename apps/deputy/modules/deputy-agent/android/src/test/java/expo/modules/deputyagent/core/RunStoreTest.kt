@@ -88,6 +88,62 @@ class RunStoreTest {
     assertTrue(names.any { it.endsWith("-r200.jsonl") })
   }
 
+  @Test fun historyListsRunsNewestFirstWithTheirOutcome() {
+    val s = store()
+    s.start("r1", "next alarm", "m", "on_demand")
+    s.record(RunEvent.Step("r1", 1, "Clock", "Open Clock", "allow", "ok", 0.01))
+    s.record(RunEvent.Step("r1", 2, "Clock", "Look", "none", "ok", 0.02))
+    s.record(RunEvent.Finished("r1", RunStatus.DONE, "07:30", 0.02))
+    clock += 1_000
+    s.start("r2", "free storage", "m", "on_demand")
+    val (open, done) = s.list(10)
+    assertEquals(RunSummary("r2", "free storage", clock, "running", null, 0.0, 0), open)
+    assertEquals(RunSummary("r1", "next alarm", clock - 1_000, "done", "07:30", 0.02, 2), done)
+    assertEquals(listOf("r2"), s.list(1).map { it.runId })
+  }
+
+  @Test fun oneRunReadsBackAsItsEvents() {
+    val s = store()
+    val step = RunEvent.Step("r1", 1, "Chat", "Tap \"Send\"", "confirm", "You said no.", 0.01)
+    val end = RunEvent.Finished("r1", RunStatus.DECLINED, "You said no.", 0.01)
+    s.start("r1", "t", "m", "on_demand")
+    s.record(step)
+    s.record(end)
+    assertEquals(listOf(step, end), s.read("r1"))
+    assertEquals(emptyList<RunEvent>(), s.read("nope"))
+  }
+
+  @Test fun clearingHistoryKeepsTheRunInProgress() {
+    val s = store()
+    s.fullRun("old", 0.5)
+    clock += 1_000
+    s.start("now", "t", "m", "on_demand")
+    s.clear()
+    assertEquals(listOf("now"), s.list(10).map { it.runId })
+    assertTrue(File(tmp.root, "active").exists())
+  }
+
+  @Test fun clearingHistoryDoesNotResetTheDailyCap() {
+    val s = store()
+    s.fullRun("a", 0.5)
+    clock += 1_000
+    s.start("now", "t", "m", "on_demand")
+    s.record(RunEvent.Step("now", 1, "Clock", "Look", "none", "ok", 0.25))
+    s.clear()
+    assertEquals(0.75, s.spentToday(), 1e-9)
+    s.clear()
+    assertEquals("clearing twice doesn't count the open run twice", 0.75, s.spentToday(), 1e-9)
+    clock += day
+    assertEquals(0.0, store().spentToday(), 1e-9)
+  }
+
+  @Test fun retentionDoesNotResetTheDailyCap() {
+    val s = store()
+    repeat(201) { i -> clock += 1_000; s.fullRun("r$i", 0.01) }
+    s.prune()
+    assertEquals(2.01, s.spentToday(), 1e-9)
+  }
+
   @Test fun spentTodayAddsUpTodaysFinishedRunsOnly() {
     val s = store()
     clock -= day

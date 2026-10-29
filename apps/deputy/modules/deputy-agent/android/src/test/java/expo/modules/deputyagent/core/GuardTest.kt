@@ -51,9 +51,4 @@ class GuardTest {
     g.addUsage(Usage(400_000, 0, 0))
     assertEquals(Cap.DAILY, g.tripped())
   }
-
-  @Test fun geminiFlashPricesDoubleFrom2027() {
-    assertEquals(Prices(0.75, 0.075, 3.75), Prices.geminiFlash(nowMillis = 1_798_761_599_999))
-    assertEquals(Prices(1.50, 0.15, 7.50), Prices.geminiFlash(nowMillis = 1_798_761_600_000))
-  }
 }

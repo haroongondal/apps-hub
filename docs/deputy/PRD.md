@@ -76,7 +76,7 @@ These seven job types are the owner's choice and become the eval set
 | Platform                     | Android only; no iOS app                                                                           | RESEARCH §9, handoff      |
 | Phone control                | AccessibilityService; no root, no Shizuku                                                          | RESEARCH §2               |
 | Where the loop runs          | Native Kotlin, not React Native JS (JS timers pause in the background)                             | RESEARCH §6, verified     |
-| Model                        | Model-agnostic; default `gemini-3.8-flash` through Google's OpenAI-compatible endpoint             | Owner, 2026-10-28         |
+| Model                        | Model-agnostic; default `gemini-3.5-flash-lite` through Google's OpenAI-compatible endpoint (was `gemini-3.8-flash`, overloaded on the free tier in S7) | Owner, 2026-10-28; changed 2026-10-29 |
 | Autonomy                     | Ask before irreversible steps: send, pay, buy, delete, post, security settings                     | Owner, 2026-10-28         |
 | Triggers                     | On demand, scheduled, and when a notification arrives                                              | Owner, 2026-10-28         |
 | Credentials                  | Provider API key (a Claude subscription can't be used by third-party apps), kept in the Keystore   | RESEARCH §5               |
@@ -115,7 +115,7 @@ These seven job types are the owner's choice and become the eval set
   - Promoting a read-only financial app to standard needs a typed confirmation.
 - **FR-5: Choose the model.**
   - Settings take a base URL, model name and API key, with a "Test connection"
-    button. Defaults to Gemini 3.8 Flash.
+    button. Defaults to Gemini 3.5 Flash-Lite (owner, 2026-10-29, after S7).
   - Per-million-token prices are editable, because they change (§9).
 - **FR-6: Run limits and Stop.**
   - Per-run caps on steps (default 30), cost (default $1.00) and time (default
@@ -153,7 +153,7 @@ These seven job types are the owner's choice and become the eval set
 - **NFR-1 (Speed):** median step under 8 seconds on the owner's phone including the
   model call; a 20-step task finishes in under 3 minutes (RESEARCH §5 estimates 1–3
   minutes).
-- **NFR-2 (Cost):** median 20-step task at or below $0.20 on Gemini 3.8 Flash.
+- **NFR-2 (Cost):** median 20-step task at or below $0.20 on the default model (Gemini 3.5 Flash-Lite).
   This is an estimate to be measured in Phase 2 (SPEC §9.5); if caching doesn't
   work through the compatible endpoint it is about $0.60, and the cap and the
   cheaper models in FR-5 are the fallback.
