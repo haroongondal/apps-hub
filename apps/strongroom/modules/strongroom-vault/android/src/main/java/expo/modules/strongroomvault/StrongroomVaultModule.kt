@@ -34,6 +34,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
+private const val LOCK_EVENT = "onLock"
 private const val PICK_CSV = 7401
 private const val MAX_CSV_BYTES = 5 * 1024 * 1024
 internal const val KDF_REFUSED =
@@ -53,6 +54,12 @@ class StrongroomVaultModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("StrongroomVault")
+
+    Events(LOCK_EVENT)
+
+    OnCreate { VaultHolder.lockListener = { sendEvent(LOCK_EVENT) } }
+
+    OnDestroy { VaultHolder.lockListener = null }
 
     Function("getStatus") {
       val v = vault()

@@ -45,6 +45,9 @@ object VaultHolder {
 
   @Volatile internal var pendingImport: ImportResult? = null
 
+  /** Set by the module while JS is listening; runs on the main thread, never inside the vault's monitor. */
+  @Volatile internal var lockListener: (() -> Unit)? = null
+
   private val timer = Executors.newSingleThreadScheduledExecutor { Thread(it, "strongroom-autolock").apply { isDaemon = true } }
   private var expiry: ScheduledFuture<*>? = null
   private val pendingFile = Any()
@@ -57,6 +60,7 @@ object VaultHolder {
   fun get(context: Context): Vault = vault ?: synchronized(this) {
     vault ?: Vault(SqliteRecordStore(context.applicationContext), System::currentTimeMillis, SystemClock::elapsedRealtime).also {
       it.autoLockMinutes = prefs(context).getInt(AUTO_LOCK, 5).takeIf(LockPolicy::validTimeout) ?: 5
+      it.onLock = { main.post { lockListener?.invoke() } }
       app = context.applicationContext
       vault = it
     }

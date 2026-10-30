@@ -3,7 +3,7 @@ import { COMMON_PASSWORDS } from './common-passwords.ts';
 
 const TOO_SHORT = 'Use at least 12 characters.';
 const TOO_COMMON = 'That password is too common. Pick something only you would think of.';
-const MISMATCH = "The two passwords don't match.";
+export const MISMATCH = "The two passwords don't match.";
 
 function isRepeatOrRun(codes: number[]): boolean {
   const step = codes[1]! - codes[0]!;

@@ -17,6 +17,11 @@ const KINDS = [
 ] as const;
 
 const NONE: Record<VaultRow['type'], string> = { login: 'No logins yet', card: 'No cards yet', note: 'No notes yet' };
+const EMPTY_BODY: Record<VaultRow['type'], string> = {
+  login: 'Add one, or import your logins from Google in Settings.',
+  card: 'Tap Add to save a card.',
+  note: 'Tap Add to save a note.',
+};
 const KIND_LABEL: Record<VaultRow['type'], string> = { login: 'Login', card: 'Card', note: 'Note' };
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -44,6 +49,16 @@ export function VaultScreen({ status, refresh, view, onView, onOpen, onAdd }: Pr
     }
   }, []);
 
+  const dismissLostSaves = () => {
+    try {
+      Vault.clearLostSaves();
+      refresh();
+    } catch (e) {
+      if (isLocked(e)) refresh();
+      else setError(messageOf(e));
+    }
+  };
+
   const searching = view.query.trim() !== '';
   const shown = rows && (searching ? filterRows(rows, view.query) : rows.filter((r) => r.type === view.kind));
 
@@ -52,7 +67,7 @@ export function VaultScreen({ status, refresh, view, onView, onOpen, onAdd }: Pr
       <Header title="Strongroom" trailing={<Button label="Add" size="sm" onPress={onAdd} />} />
       {status.unreadable > 0 && (
         <Notice tone="warn">
-          {`${count(status.unreadable, "entry can't", "entries can't")} be opened. They're kept unchanged.`}
+          {status.unreadable === 1 ? "1 entry can't be opened. It's kept unchanged." : `${status.unreadable} entries can't be opened. They're kept unchanged.`}
         </Notice>
       )}
       {status.lostSaves > 0 && (
@@ -63,10 +78,7 @@ export function VaultScreen({ status, refresh, view, onView, onOpen, onAdd }: Pr
               label="Dismiss"
               size="sm"
               variant="secondary"
-              onPress={() => {
-                Vault.clearLostSaves();
-                refresh();
-              }}
+              onPress={dismissLostSaves}
             />
           }
         >
@@ -79,7 +91,7 @@ export function VaultScreen({ status, refresh, view, onView, onOpen, onAdd }: Pr
       {shown && shown.length === 0 && (
         <Empty
           title={searching ? 'Nothing found' : NONE[view.kind]}
-          body={searching ? 'Check the spelling, or search for a site or username.' : 'Add one, or import your logins from Google in Settings.'}
+          body={searching ? 'Check the spelling, or search for a site or username.' : EMPTY_BODY[view.kind]}
         />
       )}
       {shown && shown.length > 0 && (

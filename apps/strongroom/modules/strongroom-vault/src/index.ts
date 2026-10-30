@@ -75,6 +75,12 @@ export interface StrongroomVaultApi {
   // JSON.stringify({ light: palette('strongroom', 'light'), dark: palette('strongroom', 'dark') }) from @apps-hub/ui; the autofill unlock screen reads its opaque colours.
   setPalette(json: string): void;
   diagnostics(): Diagnostics;
+  addListener(event: 'onLock', listener: () => void): { remove(): void };
 }
 
-export default requireNativeModule<StrongroomVaultApi>('StrongroomVault');
+const StrongroomVault = requireNativeModule<StrongroomVaultApi>('StrongroomVault');
+
+// Fires each time an unlocked vault locks (auto-lock, Lock now, a failed key check), so screens can drop what they show.
+export const addLockListener = (listener: () => void) => StrongroomVault.addListener('onLock', listener);
+
+export default StrongroomVault;

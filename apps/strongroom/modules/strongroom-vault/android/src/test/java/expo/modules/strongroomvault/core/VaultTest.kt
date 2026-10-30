@@ -439,6 +439,23 @@ class VaultTest {
     assertLocked { v.rows() }
   }
 
+  @Test fun onLockFiresOncePerLiveSession() {
+    val v = setUpVault()
+    var fired = 0
+    v.onLock = { fired++ }
+    v.lock()
+    assertEquals(1, fired)
+    v.lock()
+    assertFalse(v.unlock("wrong password here".toCharArray()))
+    assertEquals(1, fired)
+    assertTrue(v.unlock(password))
+    elapsed = 5 * minute
+    assertFalse(v.isUnlocked)
+    assertEquals(2, fired)
+    assertFalse(v.isUnlocked)
+    assertEquals(2, fired)
+  }
+
   @Test fun touchExtendsTheSession() {
     val v = setUpVault()
     v.put(null, login)

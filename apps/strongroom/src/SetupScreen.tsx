@@ -19,19 +19,43 @@ export function SetupScreen({ status, onFinished }: { status: Status; onFinished
   const [group, setGroup] = useState(0);
   const [typed, setTyped] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [fault, setFault] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const go = (next: Step) => {
     setError(null);
+    setFault(null);
     setStep(next);
   };
 
   const choosePassword = () => {
     const problem = validateMasterPassword(password, confirm);
     if (problem) return setError(problem);
-    setKey(Vault.generateRecoveryKey());
+    try {
+      setKey(Vault.generateRecoveryKey());
+    } catch (e) {
+      return setFault(messageOf(e));
+    }
     setGroup(pickGroupIndex(Math.random));
     go('key');
+  };
+
+  const forgetPassword = () => {
+    setPassword('');
+    setConfirm('');
+  };
+
+  const skipFingerprint = () => {
+    forgetPassword();
+    go('autofill');
+  };
+
+  const openAutofillSettings = () => {
+    try {
+      Vault.openAutofillSettings();
+    } catch (e) {
+      setFault(messageOf(e));
+    }
   };
 
   const verify = async () => {
@@ -41,9 +65,10 @@ export function SetupScreen({ status, onFinished }: { status: Status; onFinished
       await whileDeriving(() => Vault.setUp(password, key));
       setKey('');
       setTyped('');
+      setConfirm('');
       go('fingerprint');
     } catch (e) {
-      setError(messageOf(e));
+      setFault(messageOf(e));
     } finally {
       setBusy(false);
     }
@@ -53,13 +78,13 @@ export function SetupScreen({ status, onFinished }: { status: Status; onFinished
     setBusy(true);
     try {
       if (await whileDeriving(() => Vault.setBiometric(true, password))) {
-        setPassword('');
+        forgetPassword();
         go('autofill');
       } else {
-        setError("Fingerprint wasn't turned on. Try again, or skip it and turn it on later in Settings.");
+        setFault("Fingerprint wasn't turned on. Try again, or skip it and turn it on later in Settings.");
       }
     } catch (e) {
-      setError(messageOf(e));
+      setFault(messageOf(e));
     } finally {
       setBusy(false);
     }
@@ -73,6 +98,7 @@ export function SetupScreen({ status, onFinished }: { status: Status; onFinished
         <>
           <Header title="Create your master password" subtitle="It opens your vault. If you forget it, only your recovery key can." />
           <NewPasswordFields password={password} confirm={confirm} onPassword={setPassword} onConfirm={setConfirm} error={error} />
+          {fault && <Notice tone="danger">{fault}</Notice>}
           <Button label="Continue" onPress={choosePassword} block />
         </>
       )}
@@ -88,6 +114,7 @@ export function SetupScreen({ status, onFinished }: { status: Status; onFinished
         <>
           <Header title="Check your recovery key" subtitle={`Type group ${group + 1} of the key you wrote down. Each group is four characters.`} />
           <SecretField label={`Group ${group + 1}`} value={typed} onChangeText={setTyped} error={error} mono />
+          {fault && <Notice tone="danger">{fault}</Notice>}
           <Button label="Create my vault" onPress={verify} busy={busy} block />
           <Button label="Show the key again" variant="ghost" onPress={() => go('key')} disabled={busy} />
         </>
@@ -95,20 +122,21 @@ export function SetupScreen({ status, onFinished }: { status: Status; onFinished
       {step === 'fingerprint' && (
         <>
           <Header title="Unlock with your fingerprint" subtitle="You type the master password after a restart, or if the fingerprint fails." />
-          {error && <Notice tone="danger">{error}</Notice>}
+          {fault && <Notice tone="danger">{fault}</Notice>}
           <Button label="Turn on fingerprint" onPress={turnOnFingerprint} busy={busy} block />
-          <Button label="Skip for now" variant="ghost" onPress={() => (setPassword(''), go('autofill'))} disabled={busy} />
+          <Button label="Skip for now" variant="ghost" onPress={() => skipFingerprint()} disabled={busy} />
         </>
       )}
       {step === 'autofill' && (
         <>
           <Header title="Fill passwords in other apps" subtitle="Strongroom fills logins through Android's autofill service. Choose Strongroom on the next screen." />
           {status.autofillSelected && <Notice tone="ok">Strongroom is your autofill service.</Notice>}
+          {fault && <Notice tone="danger">{fault}</Notice>}
           {status.autofillSelected ? (
             <Button label="Continue" onPress={() => go('chrome')} block />
           ) : (
             <>
-              <Button label="Open autofill settings" onPress={() => Vault.openAutofillSettings()} block />
+              <Button label="Open autofill settings" onPress={openAutofillSettings} block />
               <Button label="Skip for now" variant="ghost" onPress={() => go('chrome')} />
             </>
           )}

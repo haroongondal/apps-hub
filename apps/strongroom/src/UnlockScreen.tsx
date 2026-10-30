@@ -5,7 +5,7 @@ import { messageOf, whileDeriving } from './call.ts';
 import { validateMasterPassword } from './forms.ts';
 import { BackButton, NewPasswordFields, SecretField } from './parts.tsx';
 
-export function UnlockScreen({ status, onUnlocked }: { status: Status; onUnlocked: () => void }) {
+export function UnlockScreen({ status, notice, onUnlocked }: { status: Status; notice: string | null; onUnlocked: () => void }) {
   const [recovering, setRecovering] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +36,7 @@ export function UnlockScreen({ status, onUnlocked }: { status: Status; onUnlocke
   return (
     <Screen scroll>
       <Header title="Strongroom" subtitle="Enter your master password to open your vault." />
+      {notice && <Notice tone="warn">{notice}</Notice>}
       <SecretField label="Master password" value={password} onChangeText={setPassword} onSubmitEditing={withPassword} error={error} />
       <Button label="Unlock" onPress={withPassword} busy={busy} disabled={password === ''} block />
       {status.biometricEnabled && <Button label="Use fingerprint" variant="secondary" onPress={() => withFingerprint(false)} disabled={busy} block />}
@@ -48,19 +49,23 @@ function Recover({ onBack, onUnlocked }: { onBack: () => void; onUnlocked: () =>
   const [recoveryKey, setRecoveryKey] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [keyError, setKeyError] = useState<string | null>(null);
+  const [rule, setRule] = useState<string | null>(null);
+  const [fault, setFault] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const reset = async () => {
+    setKeyError(null);
+    setFault(null);
     const problem = validateMasterPassword(password, confirm);
-    if (problem) return setError(problem);
+    setRule(problem);
+    if (problem) return;
     setBusy(true);
-    setError(null);
     try {
       if (await whileDeriving(() => Vault.recover(recoveryKey, password))) return onUnlocked();
-      setError("That recovery key doesn't open this vault. Check each group and try again.");
+      setKeyError("That recovery key doesn't open this vault. Check each group and try again.");
     } catch (e) {
-      setError(messageOf(e));
+      setFault(messageOf(e));
     }
     setBusy(false);
   };
@@ -69,9 +74,10 @@ function Recover({ onBack, onUnlocked }: { onBack: () => void; onUnlocked: () =>
     <Screen scroll>
       <BackButton onPress={onBack} />
       <Header title="Reset your master password" subtitle="Enter the recovery key you wrote down, then choose a new master password." />
-      <SecretField label="Recovery key" value={recoveryKey} onChangeText={setRecoveryKey} mono />
-      <NewPasswordFields label="New master password" password={password} confirm={confirm} onPassword={setPassword} onConfirm={setConfirm} error={error} />
+      <SecretField label="Recovery key" value={recoveryKey} onChangeText={setRecoveryKey} error={keyError} mono />
+      <NewPasswordFields label="New master password" password={password} confirm={confirm} onPassword={setPassword} onConfirm={setConfirm} error={rule} />
       <Notice tone="neutral">Your logins, cards and notes stay as they are. Only the master password changes.</Notice>
+      {fault && <Notice tone="danger">{fault}</Notice>}
       <Button label="Reset and unlock" onPress={reset} busy={busy} block />
     </Screen>
   );

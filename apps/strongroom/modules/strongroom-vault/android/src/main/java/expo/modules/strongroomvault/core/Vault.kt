@@ -15,6 +15,9 @@ class Vault(private val store: RecordStore, private val clock: () -> Long, priva
   private var unreadableCount = 0
   private var timeoutMinutes = 5
 
+  /** Called once each time a live session ends (lock, expiry, a key mismatch), never when already locked. Keep it quick: the vault's monitor is held. */
+  @Volatile var onLock: (() -> Unit)? = null
+
   var autoLockMinutes: Int
     @Synchronized get() {
       live()
@@ -85,8 +88,10 @@ class Vault(private val store: RecordStore, private val clock: () -> Long, priva
   }
 
   @Synchronized fun lock() {
+    val wasLive = key != null
     key?.fill(0)
     key = null
+    if (wasLive) onLock?.invoke()
   }
 
   @Synchronized fun rows(): List<Row> =

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 import { Button, Field, Header, Notice, Screen, Segmented } from '@apps-hub/ui';
 import Vault, { type EntryInput } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
@@ -18,8 +19,8 @@ type Draft = typeof BLANK;
 // An empty box means "not set"; anything else must be a whole number in range.
 function whole(text: string, min: number, max: number): number | null | undefined {
   if (text.trim() === '') return null;
-  const n = Number(text);
-  return Number.isInteger(n) && n >= min && n <= max ? n : undefined;
+  const n = /^\d+$/.test(text.trim()) ? Number(text) : NaN;
+  return n >= min && n <= max ? n : undefined;
 }
 
 function build(kind: Kind, d: Draft): EntryInput | string {
@@ -71,6 +72,11 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
     }
   }, [id]);
 
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => s !== 'active' && setShown(false));
+    return () => sub.remove();
+  }, []);
+
   const save = () => {
     const input = build(kind, draft);
     if (typeof input === 'string') return setError(input);
@@ -100,7 +106,6 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
                 onChangeText={(sites) => set({ sites })}
                 autoCapitalize="none"
                 autoCorrect={false}
-                keyboardType="url"
                 multiline
               />
             </>
@@ -115,9 +120,9 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
             </>
           )}
           {kind === 'note' ? (
-            <Field label="Note" value={draft.text} onChangeText={(text) => set({ text })} multiline style={{ minHeight: 160, textAlignVertical: 'top', paddingTop: 12 }} />
+            <Field label="Note" value={draft.text} onChangeText={(text) => set({ text })} autoCorrect={false} importantForAutofill="no" multiline style={{ minHeight: 160, textAlignVertical: 'top', paddingTop: 12 }} />
           ) : (
-            <Field label="Note" value={draft.note} onChangeText={(note) => set({ note })} multiline />
+            <Field label="Note" value={draft.note} onChangeText={(note) => set({ note })} autoCorrect={false} importantForAutofill="no" multiline />
           )}
           {kind !== 'note' && <Button label={shown ? 'Hide secrets' : 'Show secrets'} variant="ghost" onPress={() => setShown((s) => !s)} />}
           {error && <Notice tone="danger">{error}</Notice>}
