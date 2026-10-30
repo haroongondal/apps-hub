@@ -18,6 +18,8 @@ object Matching {
   private val IPV6 = Regex("\\[[0-9a-f.]*:[0-9a-f:.]*\\]")
   private val PORT = Regex("[0-9]{1,5}")
   private val NUMERIC_LABEL = Regex("[0-9]+|0x[0-9a-f]*")
+  // IDNA2003 (java.net.IDN) maps these where browsers (UTS 46) keep them, so "fa\u00df.de" would collapse onto fass.de; such hosts match nothing.
+  private val IDNA_DEVIATIONS = setOf('\u00df', '\u1e9e', '\u03c2', '\u200c', '\u200d')
   private val URL = Regex("(https?)://([^/?#\\\\]*)(?:[/?#\\\\].*)?", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
 
   fun normalizeHost(host: String): String? {
@@ -51,8 +53,10 @@ object Matching {
     } catch (e: IllegalArgumentException) {
       return null
     }
+    val scheme = webScheme?.lowercase(Locale.ROOT)
+    if (scheme != null && scheme != "http" && scheme != "https") return null
     val domain = webDomain?.takeIf { it.isNotEmpty() }
-    if (id in browsers) return domain?.let { site(webScheme.equals("https", ignoreCase = true), it) }?.let { Requester.Web(it) }
+    if (id in browsers) return domain?.let { site(scheme == "https", it) }?.let { Requester.Web(it) }
     return Requester.App(id, domain?.let { registrableDomain(it) ?: normalizeHost(it) ?: return null })
   }
 
@@ -82,6 +86,7 @@ object Matching {
     normalizeHost(hostAndPort)?.let { Site(https, it.removeSuffix(if (https) ":443" else ":80")) }
 
   private fun dnsName(name: String): String? {
+    if (name.any { it in IDNA_DEVIATIONS }) return null
     val ascii = try {
       IDN.toASCII(name.removeSuffix("."))
     } catch (e: IllegalArgumentException) {
@@ -90,6 +95,9 @@ object Matching {
     return ascii.lowercase(Locale.ROOT).takeIf { LABELS.matches(it) }
   }
 }
+
+internal fun Entry.Login.holdsPackageWithOtherCert(id: AppId): Boolean =
+  apps.any { it.app.pkg == id.pkg && it.app.certSha256 != id.certSha256 }
 
 internal fun Requester.toJson(): JsonObject = buildJsonObject {
   when (this@toJson) {

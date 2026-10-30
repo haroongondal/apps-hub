@@ -24,7 +24,8 @@ object Saves {
       login
     } else when (r) {
       is Requester.Web -> login.copy(sites = login.sites + r.site)
-      is Requester.App -> login.copy(apps = login.apps + AppLink(r.id, r.reportedDomain))
+      // The prompt refuses this too; a caller that skipped it still can't give a package a second certificate.
+      is Requester.App -> if (login.holdsPackageWithOtherCert(r.id)) login else login.copy(apps = login.apps + AppLink(r.id, r.reportedDomain))
     }
 
   /** Null when the sealer throws; the caller then fails the save request instead of pretending it was kept. */

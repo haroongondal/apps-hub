@@ -119,6 +119,27 @@ class SavesTest {
     assertFalse(Matching.matches(linked, Requester.App(appId, null)))
   }
 
+  @Test fun linkNeverGivesAPackageASecondCertificate() {
+    val saved = Entry.Login("Bank", "me", "pw", emptyList(), listOf(AppLink(appId, null)), "", 1)
+    val otherCert = AppId("com.bank", "d".repeat(64))
+    assertEquals(saved, Saves.link(saved, Requester.App(otherCert, null)))
+    assertEquals(saved, Saves.link(saved, Requester.App(otherCert, "bank.com")))
+    val otherPackage = Saves.link(saved, Requester.App(AppId("com.other", "d".repeat(64)), null))
+    assertEquals(listOf(AppLink(appId, null), AppLink(AppId("com.other", "d".repeat(64)), null)), otherPackage.apps)
+  }
+
+  @Test fun httpSaveNeverUpdatesAnHttpsOnlyLogin() {
+    val https = Entry.Login("Mail", "me", "orig", listOf(Site(true, "example.com")), emptyList(), "", 1)
+    val id = vault.put(null, https)
+    val http = Requester.Web(Site(false, "example.com"))
+    assertEquals(SaveAction.Create("Example"), Saves.decide(MatchIndex.build(vault.all()), http, "me", "Example"))
+    assertEquals(1, Saves.apply(vault, listOf(pending(http, "me", "other"))))
+    assertEquals("orig", (vault.get(id) as Entry.Login).password)
+    assertEquals(2, logins().size)
+    val created = logins().first { it.password == "other" }
+    assertEquals(listOf(Site(false, "example.com")), created.sites)
+  }
+
   @Test fun linkAddsASiteAndNeverDuplicates() {
     val base = Entry.Login("Example", "me", "pw", emptyList(), emptyList(), "", 1)
     val linked = Saves.link(base, site)

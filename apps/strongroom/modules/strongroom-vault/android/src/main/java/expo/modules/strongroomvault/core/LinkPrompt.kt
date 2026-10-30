@@ -11,7 +11,7 @@ data class LinkPrompt(val pkg: String?, val domain: String?, val installedFromFi
         r.id.pkg,
         r.reportedDomain,
         installedFromFile,
-        SAME_PACKAGE_OTHER_CERT.takeIf { login.apps.any { it.app.pkg == r.id.pkg && it.app.certSha256 != r.id.certSha256 } },
+        SAME_PACKAGE_OTHER_CERT.takeIf { login.holdsPackageWithOtherCert(r.id) },
       )
       is Requester.Web -> LinkPrompt(null, Matching.registrableDomain(r.site.host) ?: Matching.normalizeHost(r.site.host), false, null)
     }

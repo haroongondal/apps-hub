@@ -76,6 +76,25 @@ class MatchingTest {
     assertEquals("[::1]", Matching.normalizeHost("[::1]"))
   }
 
+  @Test fun idnaDeviationCharactersNeverNormalize() {
+    for (h in listOf("fa\u00df.de", "FA\u1e9e.de", "a\u03c2.com", "a\u200cb.com", "a\u200db.com", "fa\u00df.de:8443")) {
+      assertNull(h, Matching.normalizeHost(h))
+      assertNull(h, Matching.registrableDomain(h))
+    }
+    assertEquals("xn--fa-hia.de", Matching.normalizeHost("xn--fa-hia.de"))
+    assertNull(Matching.siteFromUrl("https://fa\u00df.de/"))
+    assertEquals(Site(true, "xn--fa-hia.de"), Matching.siteFromUrl("https://xn--fa-hia.de/"))
+  }
+
+  @Test fun idnaDeviationHostNeverMatchesTheMappedDomain() {
+    assertNull(Matching.requester(chrome.pkg, chrome.certSha256, "fa\u00df.de", "https", Browsers.ALLOWLIST))
+    assertNull(Matching.requester("com.evil", certA, "fa\u00df.de", "https", Browsers.ALLOWLIST))
+    assertFalse(webMatches(Site(true, "fass.de"), web(true, "fa\u00df.de")))
+    assertFalse(webMatches(Site(true, "fa\u00df.de"), web(true, "fass.de")))
+    assertFalse(webMatches(Site(true, "fa\u00df.de"), web(true, "fa\u00df.de")))
+    assertFalse(webMatches(Site(true, "fass.de"), web(true, "xn--fa-hia.de")))
+  }
+
   @Test fun invalidHostsNormalizeToNull() {
     val bad = listOf(
       "", ".", "a..b", "exa mple.com", "example.com:", "example.com:0", "example.com:65536", "example.com:80:90",
@@ -167,6 +186,16 @@ class MatchingTest {
     assertEquals(Requester.Web(Site(false, "example.com")), r)
     assertFalse(webMatches(Site(true, "example.com"), r!!))
     assertTrue(webMatches(Site(false, "example.com"), r))
+  }
+
+  @Test fun onlyHttpAndHttpsSchemesAreAccepted() {
+    for (scheme in listOf("ftp", "file", "chrome-extension", "HTTPS ", " http", "", "https:", "httpss")) {
+      assertNull(scheme, Matching.requester(chrome.pkg, chrome.certSha256, "example.com", scheme, Browsers.ALLOWLIST))
+      assertNull(scheme, Matching.requester("com.evil", certA, "example.com", scheme, Browsers.ALLOWLIST))
+      assertNull(scheme, Matching.requester("com.evil", certA, null, scheme, Browsers.ALLOWLIST))
+    }
+    assertEquals(Requester.Web(Site(false, "example.com")), Matching.requester(chrome.pkg, chrome.certSha256, "example.com", "HTTP", Browsers.ALLOWLIST))
+    assertEquals(Requester.Web(Site(true, "example.com")), Matching.requester(chrome.pkg, chrome.certSha256, "example.com", "Https", Browsers.ALLOWLIST))
   }
 
   @Test fun unknownRequesterCertMatchesNothing() {
