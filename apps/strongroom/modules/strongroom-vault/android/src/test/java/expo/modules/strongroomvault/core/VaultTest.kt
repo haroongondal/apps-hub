@@ -363,6 +363,44 @@ class VaultTest {
     }
   }
 
+  @Test fun setUpCanBeRetriedWhenTheKeyCheckWriteFails() {
+    var failPutAll = true
+    val flaky = object : RecordStore by store {
+      override fun putAll(records: Map<String, ByteArray>) = if (failPutAll) throw IllegalStateException("disk") else store.putAll(records)
+    }
+    val v = vault(flaky)
+    assertEquals("disk", assertThrows(IllegalStateException::class.java) { v.setUp(password, recoveryKey, fast) }.message)
+    assertFalse(v.isSetUp)
+    assertFalse(v.isUnlocked)
+    assertNull(store.header())
+
+    failPutAll = false
+    v.setUp(password, recoveryKey, fast)
+    assertTrue(v.isUnlocked)
+    v.lock()
+    assertTrue(v.unlock(password))
+  }
+
+  @Test fun setUpCanBeRetriedWhenTheHeaderWriteFailsAndOverwritesTheOrphanKeyCheck() {
+    var failPutHeader = true
+    val flaky = object : RecordStore by store {
+      override fun putHeader(json: String) = if (failPutHeader) throw IllegalStateException("disk") else store.putHeader(json)
+    }
+    val v = vault(flaky)
+    assertThrows(IllegalStateException::class.java) { v.setUp(password, recoveryKey, fast) }
+    assertFalse(v.isSetUp)
+    assertEquals(setOf("key-check"), store.records.keys)
+
+    failPutHeader = false
+    v.setUp(password, recoveryKey, fast)
+    assertTrue(v.isUnlocked)
+    assertEquals(0, v.unreadable)
+    assertEquals(setOf("key-check"), store.records.keys)
+    v.lock()
+    assertTrue(v.unlock(password))
+    assertEquals(0, v.unreadable)
+  }
+
   @Test fun aStoreThatThrowsLeavesTheVaultLockedAndRethrows() {
     var failing = false
     val flaky = object : RecordStore by store {

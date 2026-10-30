@@ -44,8 +44,9 @@ class Vault(private val store: RecordStore, private val clock: () -> Long, priva
     check(store.header() == null) { "already set up" }
     val (header, k) = VaultFormat.create(password, recoveryKey, kdf)
     zeroOnThrow(k) {
-      store.putHeader(header.toJson())
+      // Record first: a failed write then leaves no header, so setUp can be retried (the retry overwrites an orphan).
       store.putAll(mapOf(KEY_CHECK_ID to VaultFormat.sealEntry(k, KEY_CHECK_ID, Entry.Deleted(clock()))))
+      store.putHeader(header.toJson())
       install(k, countUnreadable(k))
     }
   }
