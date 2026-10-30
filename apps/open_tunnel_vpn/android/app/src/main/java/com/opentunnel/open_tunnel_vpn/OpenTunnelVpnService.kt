@@ -199,7 +199,7 @@ class OpenTunnelVpnService : VpnService() {
    * exists so the kill-switch semantics stay real, not aspirational). */
   private fun buildHostInterface(config: EngineConfig): ParcelFileDescriptor {
     val builder = Builder()
-    builder.setSession("OpenTunnel")
+    builder.setSession("TunnelWall")
     builder.setMtu(1420)
 
     val dnsServers =
@@ -253,10 +253,10 @@ class OpenTunnelVpnService : VpnService() {
       val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
       val channel = NotificationChannel(
         CHANNEL_ID,
-        "OpenTunnel VPN",
+        "TunnelWall VPN",
         NotificationManager.IMPORTANCE_LOW,
       )
-      channel.description = "Status of the OpenTunnel VPN service."
+      channel.description = "Status of the TunnelWall VPN service."
       manager.createNotificationChannel(channel)
     }
   }
@@ -284,7 +284,7 @@ class OpenTunnelVpnService : VpnService() {
         Notification.Builder(this)
       }
     return builder
-      .setContentTitle("OpenTunnel")
+      .setContentTitle("TunnelWall")
       .setContentText("VPN tunnel service running")
       .setSmallIcon(R.mipmap.ic_launcher)
       .setContentIntent(openApp)

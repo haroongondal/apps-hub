@@ -272,7 +272,7 @@ function OpenTunnelApp() {
   return (
     <>
       <Screen scroll refreshing={refreshing} onRefresh={database ? () => void refreshList(database) : undefined}>
-        <Header title="OpenTunnel" subtitle="Free VPN Gate relays, no account" />
+        <Header title="TunnelWall" subtitle="Free VPN Gate relays, no account" />
         <HomeScreen
           tunnel={tunnel}
           activeNode={activeNode}

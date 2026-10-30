@@ -112,7 +112,7 @@ export default function ScannerScreen() {
         setStoreReady(true);
       })
       .catch((e: unknown) => {
-        if (!cancelled) setErrorNote(`NetLens could not open its device list on this phone: ${e instanceof Error ? e.message : String(e)}`);
+        if (!cancelled) setErrorNote(`HomeNet could not open its device list on this phone: ${e instanceof Error ? e.message : String(e)}`);
       });
     bindingProxy.detectInterface().then((info) => {
       if (!cancelled) setIface(info);
@@ -388,7 +388,7 @@ export default function ScannerScreen() {
   const empty = !hasScanned ? (
     <Empty
       title="Find the devices on your Wi-Fi"
-      body="NetLens asks every address on your network for a reply. Nothing leaves your network."
+      body="HomeNet asks every address on your network for a reply. Nothing leaves your network."
     />
   ) : devices.length === 0 ? (
     scanning ? null : (

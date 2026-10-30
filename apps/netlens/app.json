@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "NetLens",
+    "name": "HomeNet",
     "slug": "netlens",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -12,7 +12,7 @@
       "bundleIdentifier": "app.netlens",
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "NetLens scans your local Wi-Fi network to discover connected devices and services.",
+        "NSLocalNetworkUsageDescription": "HomeNet scans your local Wi-Fi network to discover connected devices and services.",
         "NSBonjourServices": [
           "_services._dns-sd._udp",
           "_http._tcp"

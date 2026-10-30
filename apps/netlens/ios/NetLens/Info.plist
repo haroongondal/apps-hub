@@ -7,7 +7,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
-    <string>NetLens</string>
+    <string>HomeNet</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -51,7 +51,7 @@
       <string>_http._tcp</string>
     </array>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>NetLens scans your local Wi-Fi network to discover connected devices and services.</string>
+    <string>HomeNet scans your local Wi-Fi network to discover connected devices and services.</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UILaunchStoryboardName</key>

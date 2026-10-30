@@ -154,7 +154,7 @@ export default function DiagnosticsScreen() {
       {output === null && !running && note === null ? (
         <Empty
           title="Check where your connection slows down"
-          body="NetLens times your router, two internet servers and a DNS lookup, then tells you which one is the bottleneck."
+          body="HomeNet times your router, two internet servers and a DNS lookup, then tells you which one is the bottleneck."
         />
       ) : null}
 
@@ -183,7 +183,7 @@ export default function DiagnosticsScreen() {
             }
           >
             {gateway === null ? (
-              <Row title="No router found" subtitle="NetLens couldn't detect your router, so this step was skipped." />
+              <Row title="No router found" subtitle="HomeNet couldn't detect your router, so this step was skipped." />
             ) : (
               <Row title={
                 <Readouts>

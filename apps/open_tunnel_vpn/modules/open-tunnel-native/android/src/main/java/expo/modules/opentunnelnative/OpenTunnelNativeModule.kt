@@ -198,7 +198,7 @@ class OpenTunnelNativeModule : Module() {
             if (prepareIntent != null) {
               val activity = appContext.currentActivity
               if (activity == null) {
-                promise.reject(ERR_NO_CONTEXT, "Open OpenTunnel and tap the server again.", null)
+                promise.reject(ERR_NO_CONTEXT, "Open TunnelWall and tap the server again.", null)
                 return@launch
               }
               pendingConsent?.second?.reject(ERR_SERVICE_START_FAILED, "Replaced by a newer connect request.", null)

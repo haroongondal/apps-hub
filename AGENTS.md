@@ -6,9 +6,9 @@ React Native (+ Expo) and Electron. Apps live in `apps/`, shared logic lives
 in `packages/`.
 
 Current apps:
-- **netlens** (`apps/netlens`) — FOSS, zero-telemetry LAN scanner & connectivity
+- **HomeNet** (`apps/netlens`, formerly NetLens) — FOSS, zero-telemetry LAN scanner & connectivity
   diagnostic toolkit. Android-first, iOS second. Feature docs: `docs/netlens/`.
-- **open_tunnel_vpn** (`apps/open_tunnel_vpn`) — zero-registration VPN client
+- **TunnelWall** (`apps/open_tunnel_vpn`, formerly OpenTunnel) — zero-registration VPN client
   aggregating VPN Gate relays + user WireGuard nodes. Migrated from Flutter to
   React Native (Expo SDK 54) on 2026-10-26 (Dart snapshot: commit `a8cf6e9`).
   Domain logic in `packages/open-tunnel-core`; phases in
