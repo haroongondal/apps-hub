@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Build
 import expo.modules.deputyagent.core.AgentLoop
 import expo.modules.deputyagent.core.Gate
+import expo.modules.deputyagent.core.GateKind
 import expo.modules.deputyagent.core.Gates
 import expo.modules.deputyagent.core.Guard
 import expo.modules.deputyagent.core.Msgs
@@ -109,9 +110,15 @@ object AgentRuntime {
 
   fun resolveGate(context: Context, gateId: String, approve: Boolean, text: String?): Boolean {
     val accepted = gates.resolve(gateId, approve, text)
-    if (accepted || gates.pending() == null) Notifier.clearGate(context)
+    if (accepted || gates.pending() == null) {
+      Notifier.clearGate(context)
+      StopChip.clearGate()
+    }
     return accepted
   }
+
+  /** The confirm gate waiting now, so a rebound service can show its card again (overlays go with the old connection). */
+  fun pendingConfirm(): Gate? = gates.pending()?.takeIf { it.kind == GateKind.CONFIRM }
 
   fun snapshot(): Map<String, Any?> = mapOf(
     "runId" to runId,
@@ -164,9 +171,13 @@ object AgentRuntime {
         Notifier.progress(app, "Step ${e.n}: ${e.action}")
         StopChip.step(e.n)
       }
-      is RunEvent.GateOpened -> Notifier.gate(app, e.gate)
+      is RunEvent.GateOpened -> {
+        Notifier.gate(app, e.gate)
+        if (e.gate.kind == GateKind.CONFIRM) DeputyAccessibilityService.instance?.let { StopChip.gate(it, e.gate) }
+      }
       is RunEvent.Finished -> {
         Notifier.clearGate(app)
+        StopChip.clearGate()
         Notifier.finished(app, e.summary ?: e.status.name.lowercase())
       }
     }

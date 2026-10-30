@@ -477,6 +477,61 @@ class AgentLoopTest {
     }
   }
 
+  /** Like `DeviceAdapter.live`: acts only on a target still exactly where the last read saw it. */
+  private class LiveDevice(current: Screen) : Device by FakeDevice(current) {
+    var screen = current
+    val acted = mutableListOf<NodeRef?>()
+    override suspend fun foregroundPkg() = screen.pkg
+    override fun read() = screen
+    override suspend fun perform(action: Action, target: NodeRef?) =
+      if (target != null && DeviceRules.find(screen.nodes, target) == null) "stale_screen: that element changed or went away" else "ok".also { acted += target }
+  }
+
+  /** Each model call changes the screen, the way a 15 s wait on a busy model lets an app animate or take a new message. */
+  private class Moving(val device: LiveDevice, val next: (Screen) -> Screen, vararg turns: List<ToolCall>) : LlmProvider {
+    val script = Script(*turns)
+    override suspend fun step(history: List<Msg>, tools: List<ToolSpec>) = script.step(history, tools).also { device.screen = next(device.screen) }
+  }
+
+  private suspend fun runLive(model: Moving): RunResult {
+    val policy = Policy({ TrustLevel.STANDARD }, null, self)
+    val guard = Guard(Caps(), Prices(1.0, 0.1, 2.0), { 0 }, spentToday = 0.0)
+    return AgentLoop("r1", model.device, model, Gates { 0 }, policy, guard, ObservationBuilder(policy, "Deputy"), "SYSTEM", {}, true) { 0 }.run("t")
+  }
+
+  @Test fun anUngatedStepActsOnItsElementWhereItMovedWhileTheModelThought() = runTest {
+    val model = Moving(LiveDevice(chat), { chat.shifted(300) }, call("tap", """{"index":4}"""), call("finish", """{"status":"done","summary":"x"}"""))
+    assertEquals(RunStatus.DONE, runLive(model).status)
+    assertEquals(Bounds(0, 1200, 1000, 1400), model.device.acted.single()?.bounds)
+    assertEquals("Ali", model.device.acted.single()?.text)
+    assertFalse(model.script.seen[1].contains("stale_screen"))
+  }
+
+  @Test fun aMovedElementIsJudgedAgainOnTheScreenItMovedTo() = runTest {
+    val settings = screen("com.android.settings", "Settings", n("Next", "com.android.settings"), n("Help", "com.android.settings"))
+    val showsDeputy = { _: Screen -> settings.shifted(300).let { it.copy(nodes = it.nodes + n("Deputy", "com.android.settings").copy(bounds = Bounds(0, 100, 1000, 200))) } }
+    val model = Moving(LiveDevice(settings), showsDeputy, call("tap", """{"index":0}"""), call("finish", """{"status":"done","summary":"x"}"""))
+    runLive(model)
+    assertTrue(model.device.acted.isEmpty())
+    assertTrue(model.script.seen[1].contains("stale_screen"))
+  }
+
+  @Test fun aMovedElementOnAPageWithAnotherTitleIsReportedStale() = runTest {
+    val page1 = chat.copy(title = "Step 1 of 2")
+    val model = Moving(LiveDevice(page1), { page1.shifted(300).copy(title = "Step 2 of 2") }, call("tap", """{"index":4}"""), call("finish", """{"status":"done","summary":"x"}"""))
+    runLive(model)
+    assertTrue(model.device.acted.isEmpty())
+    assertTrue(model.script.seen[1].contains("stale_screen"))
+  }
+
+  @Test fun anElementThatChangedIsStillReportedStale() = runTest {
+    val renamed = { _: Screen -> chat.shifted(300) { if (it.text == "Ali") it.copy(text = "Ali, 2 new messages") else it } }
+    val model = Moving(LiveDevice(chat), renamed, call("tap", """{"index":4}"""), call("finish", """{"status":"done","summary":"x"}"""))
+    runLive(model)
+    assertTrue(model.device.acted.isEmpty())
+    assertTrue(model.script.seen[1].contains("stale_screen"))
+  }
+
   @Test fun aTapAtPointIsNeverMovedToWhereItsElementWent() = runTest {
     val pay = screen("com.chat", "Chat", button("Send", "com.chat", Bounds(0, 1000, 1000, 1200)), n("Ali", "com.chat"))
     val device = FakeDevice(pay)

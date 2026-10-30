@@ -102,9 +102,17 @@ These seven job types are the owner's choice and become the eval set
   - Before any irreversible step, Deputy stops and asks the owner, showing the
     app, the action, the exact target and, for sends, the composed text.
   - The app enforces this in native code. The model can ask for more
-    confirmation, never less.
-  - The owner answers from a heads-up notification (works over any app) or the
-    Deputy run screen. No answer within five minutes counts as "no".
+    confirmation, never less, with two exemptions: its request is ignored on
+    steps that change nothing (Back, Home, Recents, the notification shade, wait,
+    look, opening an app or a Settings page) and on typing without Enter, unless
+    the text has 4 or more digits in a row, because a verification box often
+    submits on its last digit (owner, 2026-10-30, after a phone test where plain
+    typing in a chat took a second approval). Enter, a verb in the field's label
+    and erasing more than 20 characters already in the field still ask.
+  - The owner answers from an approval card Deputy shows over any app, a
+    notification (heads-up, shade row or expanded actions, over any app) or the
+    Deputy run screen. A question gets no card. No answer within five minutes
+    counts as "no".
 - **FR-4: Per-app trust.**
   - Three levels: **blocked** (Deputy won't open it or send its screens),
     **read-only** (navigate and read; no typing, no state-changing taps),

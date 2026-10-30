@@ -51,10 +51,10 @@ class Policy(
       return Verdict.Deny("That element isn't on the latest screen. Use an index from the latest screen.")
     }
     if (action is Action.TypeText && target?.password == true) return Verdict.Deny("Deputy never types into password fields.")
-    // Eval: the model flagged Back as irreversible, which gated it. A flag counts on any step that can change something,
-    // swipes and scrolls included (a swipe can archive a mail or answer a call).
+    // Eval: the model flagged Back, and on 0.2.1 plain typing in a chat, which gated them. A flag counts on any step that can
+    // change something, swipes and scrolls included (a swipe can archive a mail); typing without Enter or a code sends nothing.
     val flag = modelFlag && action !is Action.Press && action !is Action.Wait && action != Action.Look &&
-      action !is Action.OpenApp && action !is Action.OpenSettings
+      action !is Action.OpenApp && action !is Action.OpenSettings && !(action is Action.TypeText && !action.pressEnter && !CODE.containsMatchIn(action.text))
     return if (pkg != null && trust(pkg) == TrustLevel.READ_ONLY) readOnly(action, target, flag) else standard(action, target, screen, flag)
   }
 
@@ -109,6 +109,7 @@ class Policy(
     const val PLACEHOLDER_MAX = 20
     val SEARCH = Regex("(?i)(?<![a-z])search")
     val DIGITS = Regex("\\d{5}")
+    private val CODE = Regex("\\d{4}") // verification boxes often submit on the last digit
     val SCHEMES = setOf("https", "http", "tel", "sms", "smsto", "mailto", "geo", "whatsapp")
     val WEB = setOf("https", "http")
     // shortcut: packages and titles cover AOSP and HyperOS as far as known; extend them from the S4 dumps.

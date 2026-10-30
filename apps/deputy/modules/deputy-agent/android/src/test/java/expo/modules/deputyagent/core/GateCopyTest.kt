@@ -15,6 +15,9 @@ class GateCopyTest {
     assertEquals(false, GateCopy.row(gate("Tap", "Send", draft = "My code is 483920, send it to Ali")).second)
   }
 
+  @Test fun theFullTextNamesTheStepTheMessageAndTheModelsReason() =
+    assertEquals("Tap \"Send\" in WhatsApp\nText: hello\nDeputy says: because", GateCopy.full(gate("Tap", "Send", draft = "hello")))
+
   @Test fun aLinkTooLongToShowInFullIsNeverApprovableFromTheRow() =
     assertEquals(false, GateCopy.row(gate("Open link", "https://x.example/?d=contacts")).second)
 }

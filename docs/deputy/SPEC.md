@@ -49,7 +49,7 @@ apps/deputy/                         # package com.haroon.deputy
         ├── main/java/expo/modules/deputyagent/
         │   ├── core/                # pure Kotlin: Policy, Guard, AgentLoop, Observation,
         │   │                        #   Prompt, VerbMatcher, provider interface and models
-        │   ├── android/             # DeputyAccessibilityService, DeviceAdapter, Overlay,
+        │   ├── android/             # DeputyAccessibilityService, DeviceAdapter, StopChip,
         │   │                        #   Notifier, KeyVault, RunStore, Scheduler
         │   ├── provider/            # OpenAiCompatProvider
         │   └── DeputyAgentModule.kt # Expo module definition
@@ -309,7 +309,18 @@ run(task, opts):
   `TYPE_WINDOW_CONTENT_CHANGED` arrives for 400 ms, with a 3 s ceiling.
 - **Stale index:** before dispatch, resolve the index, `refresh()` the node and
   compare `(viewId, text, desc, bounds)` with the recorded `NodeRef`. A mismatch
-  returns `stale_screen` without acting; the loop observes again.
+  returns `stale_screen` without acting.
+  - **Moved while the model thought:** a slow model call lets an app animate or
+    take a new message, and the element comes back `stale_screen` on its bounds
+    alone (the 0.2.1 phone test on Groq: 4 such results in two runs). For the
+    first step of a reply that the policy allows outright (`AgentLoop.moved`; the
+    further steps of a reply have their own check, §6), the loop reads the screen
+    once more. If the same app and the same screen title are in front, it looks
+    for the element with `DeviceRules.relocate` (the one node equal to it in
+    everything but bounds and depth; two matches, or no id and no label, count as
+    lost; a `tap_at` point is never moved), asks the policy again on the fresh
+    screen, and acts only on Allow. In any other case the stale result goes back
+    to the model, which observes again. The step's `actMs` covers both attempts.
 - **After an approval:** the owner may have answered from Deputy's own screen or
   the shade, so the loop checks the screen again before it acts (rule 5: an
   approval covers what the owner was shown).
@@ -409,7 +420,7 @@ class Policy(
      20 characters and the new text doesn't start with them. The gate says "Replace
      the text". Typing replaces the field (§6), and a short placeholder such as
      WhatsApp's "Message" is under the limit, so it never asks.
-   - `modelFlag` is true.
+   - `modelFlag` is true, except on the steps listed below the rules.
    - The action is an http or https `open_link`, shown with its full URL:
      opening it sends whatever the URL carries, so screen text could use it to
      send data out (prompt injection). Other schemes only open a dialer,
@@ -426,8 +437,14 @@ isn't `whatsapp://send?` is Denied (§6).
 
 The model's flag is ignored for `press`, `wait`, `look`, `open_app` and
 `open_settings` in rules 5 and 6: they change nothing, so a flag on them (Back
-flagged as irreversible gated the eval) only costs the owner a prompt. On every
-other step it counts, swipes and scrolls included.
+flagged as irreversible gated the eval) only costs the owner a prompt. It is also
+ignored for `type_text` without `press_enter`, unless the text has a run of 4
+digits or more: typing alone sends nothing, and on 0.2.1 the flag on plain typing
+in a WhatsApp chat made one message cost two approvals (owner, 2026-10-30). A
+verification box often submits on its last digit, so a code keeps the flag. Rule 6
+still confirms such typing for `press_enter` (except a plain search), a verb in the
+field's label, a sensitive flow, and replacing more than 20 characters already in
+the field. On every other step the flag counts, swipes and scrolls included.
 
 **Lookups** (`find_contact`) read an app's data without its screen, so
 `Policy.lookup` gives them the same trust and task limits as opening the app. The
@@ -449,7 +466,8 @@ erase, reset, uninstall, install, "sign out", "log out", call, allow, grant, and
    minutes ahead, and stops dispatching actions (rule 5).
 2. `Notifier` posts a high-importance notification on the Deputy "Approvals"
    channel, `VISIBILITY_PRIVATE`, text only (no screenshot is built). The same
-   gate shows in the Deputy run screen.
+   gate shows in the Deputy run screen, and a confirm gate also opens the approval
+   card (below).
    - **Approvals** use `DecoratedCustomViewStyle` and `res/layout/deputy_gate.xml`
      for the collapsed row and the full view. HyperOS keeps the gate collapsed in
      the shade and hides its actions, so the collapsed row has its own buttons.
@@ -461,10 +479,31 @@ erase, reset, uninstall, install, "sign out", "log out", call, allow, grant, and
      model's reason) and the standard Approve and Deny actions; Approve keeps
      `setAuthenticationRequired`.
    - An approval also carries a full-screen intent (`USE_FULL_SCREEN_INTENT`,
-     §14), so its heads-up stays until it is answered: a plain one left after
-     about 5 s on the owner's phone (2026-10-30).
+     §14) to keep its heads-up on screen, but HyperOS drops the heads-up after 1
+     to 3 s anyway (0.2.1 phone test, 2026-10-30; a plain one left after about 5 s
+     on 0.2.0). The approval card is what stays in view.
    - **Questions** are a plain big-text notification: an inline reply and the
-     first two options as buttons, with no full-screen intent.
+     first two options as buttons, with no full-screen intent and no card.
+   - **Approval card** (`StopChip.gate`, a confirm gate only): an accessibility
+     overlay under the Stop chip, opened when the gate opens and removed when the
+     gate is answered by any path (the card, the notification, Deputy's own
+     screen), when the run ends and on `hide()`. It shows the title "Deputy needs
+     your OK", the gate's full text (`GateCopy.full`: the step, "Text: …", "Deputy
+     says: …") up to 10 lines, scrollable, and Deny and Approve buttons (48 dp).
+     - Approve ignores taps for 600 ms after the card becomes visible, so a finger
+       already moving can't approve it. The 600 ms starts again whenever the card
+       is shown after being hidden for the lock.
+     - The step never shows on the lock screen: the card is hidden while the
+       screen is off or the keyguard is locked, checked when it is built and on
+       `SCREEN_OFF`, `SCREEN_ON` and `USER_PRESENT`. Approve tapped on a locked
+       phone only hides the card.
+     - A step that needs more than 10 lines has no Approve: the card says to open
+       Deputy to read all of it and approve, as the collapsed row does.
+     - It hides with the chip while a screenshot or gesture runs, and
+       `onServiceConnected` shows it again after a service rebind while the gate
+       waits (overlays go with the old connection).
+     - The notification (heads-up, shade row, expanded actions) and Deputy's own
+       gate screen are unchanged and stay as the other ways to answer.
 3. Each action is a `PendingIntent` to a non-exported receiver carrying the gate id.
    The receiver accepts an id once, only while the run is waiting on it, then
    cancels the notification. An unknown, repeated or expired id is dropped. The
@@ -501,6 +540,16 @@ erase, reset, uninstall, install, "sign out", "log out", call, allow, grant, and
   Approve is ignored while the keyguard is locked), and each gate's actions are
   their own PendingIntents, so an old notification can't approve a newer gate. Keep
   notification access for trusted apps only.
+- The approval card (§8.3) is one more way to answer a gate, next to the heads-up,
+  the shade row and Deputy's own screen. The agent can't tap it: the loop is
+  paused in the gate, and Deputy's own windows are never read (§5). Approve
+  ignores the first 600 ms and a locked phone, so the card can't be approved by a
+  tap that was already on its way or from the lock screen.
+- **shortcut:** the model's flag no longer gates `type_text` without Enter (§8.2),
+  so a field that acts on each change of its text can be typed into unasked even
+  when the model flags it: an autosaving note holding 20 characters or fewer
+  (replacing more is still confirmed), or a code box that takes 3 digits or
+  fewer. Upgrade when a run does it by mistake.
 
 ## 9. Provider layer
 
@@ -736,8 +785,12 @@ active voice; errors say what happened and how to fix it. No emoji icons.
 - **Native surfaces:** the Stop chip is a small view in an accessibility overlay
   window (`TYPE_ACCESSIBILITY_OVERLAY`, no `SYSTEM_ALERT_WINDOW`). It sits at a
   screen edge, shows the step count and a Stop button, and is hidden during
-  screenshots. RN pushes the active palette to Kotlin with `setPalette` at start-up
-  and on scheme change, so tokens stay in `tokens.ts` only.
+  screenshots. The approval card (§8.3) is a second view in the same kind of
+  window, full width under the chip, in the same palette, hidden with the chip
+  during screenshots and gestures; `AgentRuntime` opens it on `GateOpened` and
+  `DeputyAccessibilityService.onServiceConnected` after a rebind. RN pushes the
+  active palette to Kotlin with `setPalette` at start-up and on scheme change, so
+  tokens stay in `tokens.ts` only.
   **shortcut:** the chip uses the system typeface; load Atkinson from the vendored
   fonts if it looks wrong next to the app.
 
@@ -751,8 +804,8 @@ In the module's `AndroidManifest.xml` (merged into the app, so no config plugin)
   an optional Setup row, "Allow contacts", which never blocks setup),
   `com.android.alarm.permission.SET_ALARM` (for `set_alarm` and `set_timer`) and
   `ACCESS_NETWORK_STATE` (for `phone_info`'s network line) and
-  `USE_FULL_SCREEN_INTENT` (keeps an approval's heads-up on screen until it is
-  answered, §8.3). Not requested:
+  `USE_FULL_SCREEN_INTENT` (asks the system to keep an approval's heads-up on
+  screen; HyperOS drops it anyway, §8.3). Not requested:
   `SYSTEM_ALERT_WINDOW`, `QUERY_ALL_PACKAGES`, exact alarms, SMS.
 - **`<queries>`:** a `MAIN`/`LAUNCHER` intent, which lists launchable apps without
   `QUERY_ALL_PACKAGES`.
@@ -796,7 +849,9 @@ In the module's `AndroidManifest.xml` (merged into the app, so no config plugin)
     reply (in order; stopped by a gate, a changed screen, a repeat or the 5-step
     limit), gate pause, decline path, the re-check after an approval (keyboard
     moved the target, the message changed, `tap_at` never moved, the shade or
-    Deputy in front, no app in front yet), stale index, no-progress, caps, stop
+    Deputy in front, no app in front yet), stale index (a moved element found
+    again on the same app and screen title, the policy asked again, a changed
+    element still stale), no-progress, caps, stop
     mid-call, only the latest screen sent in full, memory sent with the task, an
     injected "ignore your task" screen still hits the gate (AC-6).
   - `GuardTest`: step, cost, time and daily caps.
@@ -807,7 +862,8 @@ In the module's `AndroidManifest.xml` (merged into the app, so no config plugin)
     400s), a key handed over at its limit, the wait once every key is limited,
     "API key n of m" on a 401, every key redacted from a 400 (§9.4).
   - `GateCopyTest`: the collapsed row's text and the 32-character limit for
-    Approve (§8.3). `DeviceRulesTest`: `relocate` and the next alarm's app.
+    Approve, and the full text the card and the notification show (§8.3).
+    `DeviceRulesTest`: `relocate` and the next alarm's app.
   - `RunStoreTest`: log lines, retention, the interrupted marker, route memory.
   - `SettingsTest` (known models and their prices) and `ToolsTest` (the phone
     tools and `open_chat`'s link).

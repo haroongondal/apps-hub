@@ -14,7 +14,10 @@ class DeputyAccessibilityService : AccessibilityService() {
   override fun onServiceConnected() {
     instance = this
     AgentRuntime.init(this)
-    if (AgentRuntime.active) StopChip.show(this)
+    if (AgentRuntime.active) {
+      StopChip.show(this)
+      AgentRuntime.pendingConfirm()?.let { StopChip.gate(this, it) }
+    }
   }
 
   override fun onUnbind(intent: Intent?): Boolean {

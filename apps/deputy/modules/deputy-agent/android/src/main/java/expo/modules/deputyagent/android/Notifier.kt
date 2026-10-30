@@ -59,7 +59,7 @@ object Notifier {
       .setContentIntent(openApp(c))
       .setTimeoutAfter((g.expiresAt - System.currentTimeMillis()).coerceAtLeast(1))
     if (g.kind == GateKind.CONFIRM) {
-      val text = listOfNotNull(GateCopy.what(g), g.draftText?.let { "Text: $it" }, g.reason?.let { "Deputy says: $it" }).joinToString("\n")
+      val text = GateCopy.full(g)
       // HyperOS keeps the gate collapsed in the shade and shows actions only when expanded, so the collapsed row has its own buttons.
       val (line, approvable) = GateCopy.row(g)
       val row = RemoteViews(c.packageName, R.layout.deputy_gate).apply {
@@ -73,7 +73,7 @@ object Notifier {
         setViewVisibility(R.id.gate_approve, View.GONE)
         setViewVisibility(R.id.gate_deny, View.GONE)
       }
-      // A plain heads-up leaves after about 5 s (phone, 2026-10-30); one with a full-screen intent stays until answered.
+      // A full-screen intent is meant to keep the heads-up until answered; HyperOS drops it after 1–3 s anyway (StopChip.gate).
       b.setContentTitle("Deputy needs your OK").setContentText(text).setFullScreenIntent(openApp(c), true)
         .setStyle(Notification.DecoratedCustomViewStyle()).setCustomContentView(row).setCustomBigContentView(full).setCustomHeadsUpContentView(full)
         .addAction(Notification.Action.Builder(null, "Approve", answer(c, 0, g.id, approve = true)).setAuthenticationRequired(true).build())

@@ -107,3 +107,34 @@ do. Use a chat with yourself for every send.
 | Approve inside Deputy | AC-2b's task; open Deputy and tap Approve on the Run screen | The same: Deputy goes Back to WhatsApp, waits for it, and sends once, with no `stale_screen` | | |
 | Edited before approving | AC-2b's task; while the heads-up waits, change the text in WhatsApp's message box by hand, then Approve | Nothing is sent: the step ends `stale_screen: the screen changed while the owner decided`, and the model looks again | | |
 | WhatsApp typing | AC-2's task; read the text in the heads-up and in the chat box before you answer | The text is "Deputy test", with no "Message" in front of it | | |
+| Locked phone, Approve from the notification | AC-2b's task; when the gate opens, lock the phone with the power button, wake it and look at the lock screen, then pull the notification and tap Approve | The lock screen says only "Deputy is waiting for you", with no step text. Approve asks you to unlock first; after the unlock the message is sent once and the run goes on | | |
+
+Results 2026-10-30 (0.2.1 build 7, GPT-OSS 120B on Groq, one key; handoff,
+Evidence, "Phone checks of 0.2.1"): WhatsApp typing passed (the box held exactly
+the text). Approve from the shade passed, with no `stale_screen`. Collapsed row,
+long step passed for the row (an `open_link` gate: "Expand to read and approve",
+Deny, no Approve). Heads-up stays failed: on HyperOS it was gone within 3 s,
+with the full-screen intent allowed; the approval card in 0.2.2 is the fix. Still
+open: Collapsed row, short step; Approve inside Deputy; Locked phone, Approve
+from the notification; Key rotation on a 429. The other rows have no recorded
+result.
+
+## Deputy 0.2.2: approval card and fewer retries
+
+Run these on the 0.2.2 build, installed through the Store, after the 0.2.1 table.
+SPEC §7 (Stale index), §8.2 (the model's flag) and §8.3 (Approval card) say what
+each should do. Use a chat with yourself for every send. Run the four open 0.2.1
+rows on this build too: Collapsed row, short step; Approve inside Deputy; Locked
+phone, Approve from the notification; Key rotation on a 429.
+
+| Check | How to run it | Pass when | Result | Note |
+| ----- | ------------- | --------- | ------ | ---- |
+| Card shows and stays | AC-2's task; when the gate opens, leave the phone alone for 30 seconds | A card "Deputy needs your OK" sits under the Stop chip over WhatsApp, with the step, "Text: Deputy test", "Deputy says: …", Deny and Approve. It stays until you answer it, after the heads-up has gone | | |
+| Approve on the card | AC-2b's task; tap Approve on the card | The card goes, the message is sent once and the run finishes. The Send step's result in the run log isn't `stale_screen` | | |
+| Deny on the card | AC-2's task; tap Deny on the card | The card goes, the run ends "You said no" and nothing is sent | | |
+| Quick tap does nothing | AC-2b's task; tap Approve the moment the card appears | Within 0.6 s nothing happens: the card stays and the gate still waits. A tap after that approves | | |
+| Card hidden when locked | AC-2b's task; when the gate opens, lock the phone with the power button, wake it, look at the lock screen, then unlock | The lock screen shows no card and no step text. After the unlock the card shows, and Approve works once it has been up for 0.6 s | | |
+| Long step | Task: "Open the link " and a URL of more than 500 characters | The card has Deny and no Approve, and says to open Deputy to read all of it and approve. Approving inside Deputy opens the link | | |
+| Question gate | A task that leaves something out: "Send a message on WhatsApp" | Deputy asks its question in the notification, with the reply box, and no card shows | | |
+| WhatsApp send, one approval | AC-2b's task, three runs on Groq (`openai/gpt-oss-120b`), read each run in History | One approval per run, on the Send step. The typing step shows no "Asked you" (the model's flag varies by run) | | |
+| Fewer retries | The same send with the draft "Testing Deputy approvals, please ignore", on Groq, approved; count the steps that ended `stale_screen` in History | Fewer than 0.2.1, which ended 4 steps `stale_screen` over two such runs (3 of them in the 10-step run with this draft). A step that moved shows its normal result | | |

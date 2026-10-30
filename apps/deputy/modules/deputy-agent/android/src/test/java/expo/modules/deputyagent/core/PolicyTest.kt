@@ -123,6 +123,13 @@ class PolicyTest {
     assertEquals(Verdict.Allow, check(Action.OpenApp("com.bank"), on = screen("com.bank"), flag = true))
   }
 
+  @Test fun theModelsFlagDoesNotGateTypingThatSendsNothing() {
+    assertEquals(Verdict.Allow, check(Action.TypeText(0, "test", pressEnter = false), node(text = "Message"), flag = true))
+    assertTrue(check(Action.TypeText(0, "test", pressEnter = true), node(text = "Message"), flag = true) is Verdict.Confirm)
+    assertTrue(check(Action.TypeText(0, "500", pressEnter = false), node(text = "Send amount"), flag = true) is Verdict.Confirm)
+    assertTrue("code boxes often submit on the last digit", check(Action.TypeText(0, "4839", pressEnter = false), node(text = "Enter code"), flag = true) is Verdict.Confirm)
+  }
+
   @Test fun enterInASearchFieldIsNotConfirmed() {
     val search = NodeRef("com.chat", null, null, "Search chats", null, Bounds(0, 0, 100, 50), editable = true)
     assertEquals(Verdict.Allow, check(Action.TypeText(0, "london", pressEnter = true), search))

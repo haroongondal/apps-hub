@@ -226,7 +226,12 @@ class AgentLoop(
     val target = targetOf(obs, action)
     val what = describe(action, target)
     return when (val v = policy.check(action, target, obs.context, flag)) {
-      Verdict.Allow -> perform(action, target).also { step(obs, what, "allow", it) }
+      Verdict.Allow -> {
+        val start = now()
+        val result = perform(action, target).let { if (it.startsWith(STALE)) moved(obs, action, target, flag) ?: it else it }
+        actMs = now() - start // both attempts, when the element had moved
+        result.also { step(obs, what, "allow", it) }
+      }
       is Verdict.Deny -> "denied: ${v.reason}".also { step(obs, what, "deny", it) }
       is Verdict.Confirm -> {
         val draft = draft(obs, action)
@@ -263,6 +268,19 @@ class AgentLoop(
         perform(action, fresh).also { step(obs, what, "confirm", it) }
       }
     }
+  }
+
+  /**
+   * The element moved while the model thought (an animation, a new message): act on it where it is now, if it is the only
+   * node equal to it in all but place and the policy still allows it outright. Saves a model call (0.2.1 phone test).
+   */
+  private suspend fun moved(obs: Observation, action: Action, target: NodeRef?, flag: Boolean): String? {
+    if (target == null || action is Action.TapAt) return null
+    // Same app and page: a wizard's next page can have the same "Continue" somewhere else.
+    val now = observer.build(device.foregroundPkg()) { device.read() }
+      ?.takeIf { it.context.pkg == obs.context.pkg && it.context.title == obs.context.title } ?: return null
+    val fresh = DeviceRules.relocate(now.all, target) ?: return null
+    return if (policy.check(action, fresh, now.context, flag) == Verdict.Allow) perform(action, fresh) else null
   }
 
   /** The message a gate shows: the text typing puts in the field, or else the last text box's content. */
@@ -323,5 +341,6 @@ class AgentLoop(
     const val MAX_BATCH = 5
     const val SHOT_WIDTH = 720 // screenshots reach the model at this width, so tap_at uses these pixels
     private const val WAITING = "waiting for the owner"
+    private const val STALE = "stale_screen"
   }
 }

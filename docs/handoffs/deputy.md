@@ -3,14 +3,15 @@
 ## Resume prompt
 
 Dated 2026-10-30. Read `docs/handoffs/deputy.md` completely first, especially the
-session log "Session 10" and "Current state + exact next step". Trust the
-verified facts and the session 10 work (findings a–g, bank defaults, several keys
-per provider, the approval notification; JVM 220/220, gate green, both reviews
-fixed); don't redo them. Follow the handoff contract in `~/.claude/CLAUDE.md`.
-Branch `deputy-speed`, Deputy 0.2.1 uncommitted. Commit or release only when the
-owner says so, using the cf profile `personal`; never write the Groq key (Mac
-Keychain `deputy-groq`) to a file, log or doc. Then continue from the exact next
-step (phone checks of 0.2.1 over wireless debugging; never adb install).
+session log "Session 11", Evidence "Phone checks of 0.2.1" and "Current state +
+exact next step". Trust the verified facts and the session 11 work (0.2.1 phone
+checks; approval card on the Stop chip, fewer stale retries, ungated plain
+typing; JVM 226/226, gate green, both reviews fixed); don't redo them. Follow
+the handoff contract in `~/.claude/CLAUDE.md`. Branch `deputy-speed`, the session
+11 work is uncommitted. Commit or release only when the owner says so, using the
+cf profile `personal`; never write a Groq key (Mac Keychain `deputy-groq`,
+`deputy-groq-2`) to a file, log or doc. The owner taps on the phone on request;
+never adb install. Then continue from the exact next step.
 
 ## Goal and fixed constraints
 
@@ -289,6 +290,20 @@ not to be built unless asked. My calls, not confirmed by the owner:
   `<memory>` data. Extra tool calls in one reply run only if they target the same
   screen and their element is unchanged on a fresh read; any gate, denial or
   change stops the rest.
+
+### Session 11 owner decisions (2026-10-30, after the 0.2.1 phone checks)
+
+- **Approvals stay in view on an approval card on the Stop chip** (owner's
+  pick): HyperOS drops the heads-up after 1–3 s even with a full-screen intent.
+  While a confirm gate waits, the chip's accessibility overlay grows into a card
+  with the step text and Approve/Deny; the notification stays as a backup.
+- **Fix now:** fewer `stale_screen` retries on un-gated steps (act on the same
+  element where it moved to, one match only), and ignore the model's
+  `irreversible` flag on typing without Enter (Send stays gated).
+- **Not now:** the next-alarm prompt line and the battery row's effect on Setup.
+- **Phone taps:** the owner does the remaining taps on request (short-step
+  Approve on the shade row, approving inside Deputy, the locked-phone approval);
+  the second Groq key goes in the Keychain as `deputy-groq-2`.
 
 ## Evidence already verified
 
@@ -665,6 +680,67 @@ not to be built unless asked. My calls, not confirmed by the owner:
     ("ClockClock", type_text appends).
   - Seen on the Apps screen: AL Habib Mobile and Al Ameen Funds (banking) are
     "Standard", not read-only. Check `DefaultTrust`'s money-app list.
+
+- **Phone checks of 0.2.1 build 7 (session 11, 2026-10-30, GPT-OSS 120B on
+  Groq, one key; driven over wireless debugging with adb taps, dumps and
+  screenshots; results read from Deputy's run panel and its own notifications).**
+  - Install: see session log. The saved key carried over the `KeyVault`
+    migration (Setup "Add your API key" On; runs work).
+  - **Bluetooth on/off: PASS.** "Is Bluetooth on or off? Check the Bluetooth page
+    in Settings and tell me." → `open_settings(bluetooth)`, "Bluetooth is off.",
+    15 s, 3 steps, $0.0013. True (`dumpsys bluetooth_manager` `enabled: false`;
+    screenshot shows the switch off). GPT-OSS gets no screenshot, so the answer
+    came from the tree's new ` off`.
+  - **Next alarm names the app: PASS for `phone_info`, the answer still misleads.**
+    The system's next alarm clock is Islam360's (Sat 05:01, `dumpsys alarm`
+    showIntent `com.islam360`). "Open the clock app and tell me my next alarm":
+    step 1 `phone_info` returned "Next alarm Saturday 31 October 2026, 05:01, set
+    by Islam360" (0.8 s); step 2 "No tool call"; then finished "Provided the next
+    alarm time: Saturday 31 October 2026 at 05:01 AM." (2 steps, $0.0011). It
+    neither opened Clock (as asked) nor said the alarm is Islam360's.
+  - **Run A, "On WhatsApp, send the message test to Marshmallow" (22:04:16, 9
+    steps, $0.0033, done, "test" sent).** No "Message" prefix: the box showed
+    exactly `test` before Send (screenshot), **PASS** for the typing fix.
+    Approving: **PASS, no `stale_screen`** after either approval: step 5 `TypeText`
+    → "waiting for the owner" → "Typed."; step 6 `Tap "Send"` → waiting →
+    "Tapped." (action 1.3 s). The owner answered both gates on the phone
+    (logcat: real touchscreen `deviceId=6` taps in the `NotificationShade` window
+    at 22:04:38 and 22:05:02, about 3 s after each gate), so heads-up vs. shade row
+    isn't known. My screenshot as gate 1 posted showed no heads-up yet.
+    Findings: **typing into the chat box was gated** (step 5 "Asked you"), so a
+    message costs two approvals; the "Message" box has no verb and 7 characters
+    (under `PLACEHOLDER_MAX`), so the likely cause is GPT-OSS's `irreversible`
+    flag (not yet confirmed from the gate text). Step 1 `Tap "WhatsApp"` on the
+    launcher hit `stale_screen` (retry worked). Step 6's model call took 19 s
+    (probably Groq's TPM wait); one "No tool call" turn before `finish`.
+  - **Run B, the same send with a long draft "Testing Deputy approvals, please
+    ignore" (22:21, 10 steps, $0.0046, sent).** Typing was **not** gated this
+    time (step 8 Allowed), so Run A's typing gate was the model's own flag, which
+    varies by run. Step 9 `Tap "Send"` → "Asked you" → "Tapped." (action 1.1 s):
+    **approving from the shade: PASS**, no `stale_screen`. The owner approved it
+    again by hand (real taps on the status bar 22:23:51, shade 22:23:52–53; then
+    Deputy's own Back closed the shade, run ended 22:24:03). Finding: **3
+    `stale_screen` results on steps that were never gated** (2, 4, 6; Run A's
+    step 1 was a fourth): model calls took 12.8–22.3 s (Groq free-tier TPM waits), WhatsApp's
+    screen moved meanwhile (chat-open animation, a new incoming message), and
+    `DeviceAdapter.live` finds the target only at its exact bounds
+    (`DeviceRules.find` + `changed`). The gate took 109 s to reach.
+  - **Run C, "Open the link https://example.com" (22:27).** Gate text: `Open link
+    "https://example.com" in System launcher` (the app named is where the link
+    starts, not the browser). **Heads-up: FAIL.** With the full-screen intent
+    (`fullscreenIntent` set, `USE_FULL_SCREEN_INTENT` allowed, unlocked phone), the
+    heads-up showed Approve/Deny at +1 s (`headsUpPinned=true`, top-strip frame) and
+    was gone at +3 s (`headsUpPinned=false` at 3, 6, 10, 20 s). HyperOS ignores the
+    full-screen intent's sticky heads-up. **Shade row, long step: PASS.** The gate
+    has its own row (not grouped under the run notice this time): "Expand to read
+    and approve: Open link "https://example.com" in System launcher", a DENY
+    button and Expand, no Approve. The owner then approved by hand again (shade
+    taps 22:28:41–42); the link opened through the system chooser
+    (`intentresolver`) into Chrome; finished "The link https://example.com has
+    been opened successfully in Chrome."
+  - Seen in passing: the app opens on Settings with "Setup isn't finished"
+    because the battery row is "To do", though S9 made battery advice only
+    (`setupComplete` counts it).
 
 ## File map
 
@@ -1149,8 +1225,99 @@ not to be built unless asked. My calls, not confirmed by the owner:
     to-do is closed. It also removed SPEC's never-built gate screenshot (§8.3,
     §12 "Not built"). PRD FR-5 now records several keys per address.
 
+- **Session 11 (2026-10-30), branch `deputy-speed`: phone checks of 0.2.1.**
+  - 21:49: the phone still had build 6; the Store showed "Update ready, Available
+    0.2.1 (7)" (downloaded, never installed). Finished it through the Store's own
+    Update button over adb taps: installer "Do you want to update this app?" →
+    Update → Play Protect "App scan recommended" → Scan app → "This app looks
+    safe" → Install → Xiaomi "No risks detected" (ads, not tapped) → Back.
+    Installed 21:52:38, versionCode 7, installer `com.haroon.store`; the service
+    stayed enabled and bound; `USE_FULL_SCREEN_INTENT` uid mode `allow`.
+  - 21:57–22:05: Bluetooth, next alarm and WhatsApp Run A (Evidence, "Phone
+    checks of 0.2.1"). The owner answered Run A's gates on the phone; asked, they
+    chose to leave later gates to adb, and to do the locked-phone approval and add
+    a second Groq key (`deputy-groq-2`) themselves.
+  - About 22:07 something outside this session reverted `docs/handoffs/deputy.md`
+    to its committed text (and an uncommitted `round2-fixes.md` edit); this
+    session's entries were re-added from a scratchpad copy.
+  - 22:21–22:29: Runs B and C (Evidence). The owner kept answering gates by
+    hand; asked again, they chose to tap on request, the approval card on the
+    Stop chip, and two fixes (Decisions, "Session 11 owner decisions").
+  - Fixes, test-first (4 new JVM tests; 2 RED on assertions, 1 RED on an
+    unresolved reference, 1 a guard that already passed; JVM 224/224):
+    - `Policy`: the model's `irreversible` flag no longer gates `type_text`
+      without Enter; Enter, a verb in the field's label and erasing text still do.
+    - `AgentLoop.moved`: an allowed step that comes back `stale_screen` re-reads
+      once, finds the same element by `DeviceRules.relocate` (equal in all but
+      bounds and depth, one match only, never `tap_at`), re-checks Policy on the
+      fresh screen, and acts only on Allow. A changed element stays stale (test).
+    - `GateCopy.full`: the gate's whole text (step, "Text:", "Deputy says:"),
+      now shared by the notification and the card.
+    - `StopChip.gate` (Android, not JVM-testable): a confirm gate opens a card
+      overlay (accessibility overlay, under the chip) with the full text,
+      scrollable after 10 lines, Deny and Approve (48 dp). Approve ignores taps in
+      the first 600 ms; the card hides while the phone is locked (screen off →
+      hidden, `USER_PRESENT` → shown, Approve on a locked phone hides it), so the
+      step never shows on the lock screen; it hides with the chip during
+      gestures; `resolveGate`, run end and `hide()` remove it. Questions keep
+      the notification only.
+    - Native gate: `:deputy-agent:testDebugUnitTest :app:assembleDebug` exit 0,
+      JVM 224/224, APK built 23:15; card lock handling compiled after.
+  - Reviews. `code-reviewer`: 1 must-fix, 4 should-fix, 2 nits. `invariant-reviewer`:
+    4 major, 2 minor (two overlap the code review). Fixed (2 new JVM tests, each
+    shown to fail with its guard removed; JVM 226/226):
+    - The card's 600 ms arming restarts whenever it becomes visible again (a card
+      built while locked was approvable at once after unlock).
+    - Lock state is `!isInteractive || isKeyguardLocked`, read when the card is
+      built and on SCREEN_OFF, SCREEN_ON and USER_PRESENT (a wake inside the lock
+      delay sends no USER_PRESENT; the keyguard can lock while the screen is off).
+      The receiver is registered exported: all three are protected broadcasts,
+      and SystemUI (not uid 1000) sends USER_PRESENT.
+    - A service rebind re-shows the card for a pending confirm gate
+      (`AgentRuntime.pendingConfirm`).
+    - The model's flag still counts on typing with 4+ digits in a row (code boxes
+      often submit on the last digit; test).
+    - `moved` also requires the same screen title (a wizard's next page can have
+      the same "Continue"; test), and its Policy re-check has a test (a moved
+      element on a Settings page that now shows Deputy is denied).
+    - `actMs` covers both attempts; the moved test also checks the node's text.
+    - The card hides Approve when its text needs more than 10 lines, like the
+      collapsed row.
+    - SPEC §7, §8.2–§8.4, §13, §14, §16, PRD FR-3 and EVAL (new "Deputy 0.2.2"
+      section, 9 rows) updated by `docs-keeper`. Left for the owner: PRD AC-2
+      still names only the heads-up; `Prompt.kt` still tells the model a flagged
+      step is always asked (no longer true for plain typing); SPEC's file map
+      lists `RunStore`/`Scheduler` under `android/` (`RunStore` is in `core/`,
+      `Scheduler.kt` doesn't exist).
+  - Gate after fixes (real output): `:deputy-agent:testDebugUnitTest
+    :app:assembleDebug` exit 0, JVM 226/226, APK 23:28; earlier in the round
+    `pnpm test` exit 0 (9 packages, fail 0) and `pnpm typecheck` exit 0.
+
 ## Current state + exact next step
 
+- **Session 11 is the newest state (2026-10-30).** Deputy 0.2.1 build 7 is on the
+  phone (installed through the Store this session). Phone checks are recorded
+  under Evidence ("Phone checks of 0.2.1"). The approval card, fewer stale
+  retries and ungated plain typing are built, reviewed and gated on
+  `deputy-speed`, **uncommitted**; the version is still 0.2.1 in `app.json`,
+  `package.json` and `android/app/build.gradle`. Exact next step:
+  1. Ask the owner to commit, bump to 0.2.2 (build 8) and release with the cf
+     profile `personal` (the release ran the committed `tools/release` from a
+     temporary copy last time, because the working tree's `tools/release` and
+     `tools/store-api` hold another session's uncommitted edits; keep those out
+     of Deputy commits).
+  2. After the owner installs build 8 through the Store, run EVAL's "Deputy
+     0.2.2" rows over wireless debugging. The owner taps on request (they chose
+     this); use `adb exec-out screencap` raw frames cropped to the top rows
+     (scratchpad `top.py`), never full screenshots of chats.
+  3. Still open from 0.2.1: short-step Approve on the shade row, approving inside
+     Deputy, the locked-phone Approve from the notification, "Edited before
+     approving" (EVAL 0.2.1; a draft changed while the gate waits voids the
+     approval), and a 429 moving to a second key (owner adds `deputy-groq-2` to the Keychain first; read it only
+     via `security … -w` piped into `adb shell` stdin).
+  4. Not fixed, owner's call: the alarm answer dropping "set by Islam360" (prompt
+     line), the battery row keeping Setup "not finished", the gate copy naming
+     the launcher for `open_link`, a "No tool call" turn before `finish` on GPT-OSS.
 - **Session 10 is the newest state (2026-10-30).** Findings a–g, the bank
   defaults, several keys per provider and the approval notification are built,
   reviewed and gated on `deputy-speed`, **uncommitted**, version 0.2.1 (session
