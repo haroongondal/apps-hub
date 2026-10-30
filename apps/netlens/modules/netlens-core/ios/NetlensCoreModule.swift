@@ -285,16 +285,33 @@ public class NetlensCoreModule: Module {
 
         // mDNS meta-query ("_services._dns-sd._udp") via NWBrowser.
         let browser = MdnsBrowser()
-        browser.start { typeName in
-          self.moduleLock.lock()
-          stopRequested = self.serviceStopRequested
-          self.moduleLock.unlock()
-          if stopRequested { return }
-          counter.recordFound()
-          DispatchQueue.main.async {
-            self.sendEvent("onServiceDiscovered", ["kind": "mdns", "serviceName": typeName])
+        browser.start(
+          onServiceType: { typeName in
+            self.moduleLock.lock()
+            stopRequested = self.serviceStopRequested
+            self.moduleLock.unlock()
+            if stopRequested { return }
+            counter.recordFound()
+            DispatchQueue.main.async {
+              self.sendEvent("onServiceDiscovered", ["kind": "mdns", "serviceName": typeName])
+            }
+          },
+          onInstance: { instanceName, serviceType, host in
+            self.moduleLock.lock()
+            let stopped = self.serviceStopRequested
+            self.moduleLock.unlock()
+            if stopped { return }
+            let payload: [String: Any] = [
+              "kind": "mdns-instance",
+              "instanceName": instanceName,
+              "serviceType": serviceType,
+              "host": host,
+            ]
+            DispatchQueue.main.async {
+              self.sendEvent("onServiceDiscovered", payload)
+            }
           }
-        }
+        )
 
         // SSDP M-SEARCH responses.
         SsdpProbe.search(
@@ -390,6 +407,53 @@ public class NetlensCoreModule: Module {
           "success": measurement.success,
         ]
         promise.resolve(payload)
+      }
+    }
+
+    AsyncFunction("udpRequest") { (ip: String, port: Int, payload: [Int], timeoutMs: Int, promise: Promise) in
+      guard port >= 1, port <= 65535 else {
+        promise.reject("INVALID_PARAMS", "port must be in 1..65535")
+        return
+      }
+      guard payload.allSatisfy({ $0 >= 0 && $0 <= 255 }) else {
+        promise.reject("INVALID_PARAMS", "payload bytes must be in 0..255")
+        return
+      }
+      guard timeoutMs >= 1, timeoutMs <= 10_000 else {
+        promise.reject("INVALID_PARAMS", "timeoutMs must be in 1..10000")
+        return
+      }
+      let target = ip.trimmingCharacters(in: .whitespacesAndNewlines)
+      DispatchQueue.global(qos: .userInitiated).async {
+        let reply = NameProbes.udpRequest(ip: target, port: port, payload: payload.map { UInt8($0) }, timeoutMs: timeoutMs)
+        if let reply {
+          promise.resolve(reply.map { Int($0) })
+        } else {
+          promise.resolve(NSNull())
+        }
+      }
+    }
+
+    AsyncFunction("tcpFetch") { (ip: String, port: Int, request: String, timeoutMs: Int, maxBytes: Int, promise: Promise) in
+      guard port >= 1, port <= 65535 else {
+        promise.reject("INVALID_PARAMS", "port must be in 1..65535")
+        return
+      }
+      guard maxBytes > 0 else {
+        promise.reject("INVALID_PARAMS", "maxBytes must be positive")
+        return
+      }
+      guard timeoutMs >= 1, timeoutMs <= 10_000 else {
+        promise.reject("INVALID_PARAMS", "timeoutMs must be in 1..10000")
+        return
+      }
+      let target = ip.trimmingCharacters(in: .whitespacesAndNewlines)
+      NameProbes.tcpFetch(ip: target, port: port, request: request, timeoutMs: timeoutMs, maxBytes: maxBytes) { text in
+        if let text {
+          promise.resolve(text)
+        } else {
+          promise.resolve(NSNull())
+        }
       }
     }
 

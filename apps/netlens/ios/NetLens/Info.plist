@@ -49,6 +49,12 @@
     <array>
       <string>_services._dns-sd._udp</string>
       <string>_http._tcp</string>
+      <string>_googlecast._tcp</string>
+      <string>_airplay._tcp</string>
+      <string>_ipp._tcp</string>
+      <string>_smb._tcp</string>
+      <string>_hap._tcp</string>
+      <string>_companion-link._tcp</string>
     </array>
     <key>NSLocalNetworkUsageDescription</key>
     <string>HomeNet scans your local Wi-Fi network to discover connected devices and services.</string>
