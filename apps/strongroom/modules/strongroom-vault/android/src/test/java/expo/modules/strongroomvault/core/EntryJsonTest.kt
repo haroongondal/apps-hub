@@ -1,9 +1,11 @@
 package expo.modules.strongroomvault.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EntryJsonTest {
@@ -93,8 +95,19 @@ class EntryJsonTest {
       login(apps = """[{"pkg":"p","certSha256":"${digestA.uppercase()}","domain":null}]"""),
       login(apps = """[{"pkg":"p","certSha256":"${digestA}0","domain":null}]"""),
       login(apps = """[{"pkg":"p","certSha256":"${"g".repeat(64)}","domain":null}]"""),
+      "[".repeat(200_000) + "]".repeat(200_000),
+      """{"type":"note","name":""" + "[".repeat(200_000) + "]".repeat(200_000) + ""","text":"t","updatedAt":5}""",
     )
     for (s in bad) assertNull(s, EntryJson.decode(s))
+  }
+
+  @Test fun toStringRedactsPasswordNumberAndCvc() {
+    val l = Entry.Login("site", "someone", "hunter2-secret", emptyList(), emptyList(), "", 1).toString()
+    assertTrue(l, "password=***" in l && "someone" in l)
+    assertFalse(l, "hunter2-secret" in l)
+    val c = Entry.Card("Visa", "A. Holder", "4111111111111111", 12, 2030, "987", "", 1).toString()
+    assertTrue(c, "number=***" in c && "cvc=***" in c && "A. Holder" in c)
+    assertFalse(c, "4111111111111111" in c || "987" in c)
   }
 
   @Test fun appIdRefusesABrokenDigest() {

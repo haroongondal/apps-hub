@@ -84,6 +84,16 @@ class VaultFormatTest {
     assertNotEquals(sealed.toList(), VaultFormat.sealEntry(vaultKey, "a", login).toList())
   }
 
+  @Test fun entryStringsAreSealedAsTextEncoderWouldEncodeThem() {
+    val (_, vaultKey) = newVault()
+    val lone = 0xD800.toChar()
+    val replacement = 0xFFFD.toChar()
+    val sealed = VaultFormat.sealEntry(vaultKey, "a", Entry.Note("n", "a${lone}b", 1))
+    assertEquals(Entry.Note("n", "a${replacement}b", 1), VaultFormat.openEntry(vaultKey, "a", sealed))
+    val decomposed = "o" + 0x308.toChar()
+    assertEquals(Entry.Note("n", decomposed, 1), VaultFormat.openEntry(vaultKey, "a", VaultFormat.sealEntry(vaultKey, "a", Entry.Note("n", decomposed, 1))))
+  }
+
   @Test fun headerJsonRoundTrips() {
     val (header, _) = newVault()
     val json = header.toJson()
@@ -116,8 +126,22 @@ class VaultFormatTest {
       with("salt", "5"),
       with("passwordWrap", "\"***\""),
       with("recoveryWrap", "null"),
+      """{"version":1,"kdf":""" + "[".repeat(2000) + "]".repeat(2000) + "}",
+      """{"version":1,"kdf":""" + "[".repeat(100_000) + "]".repeat(100_000) + "}",
+      header.toJson() + " ".repeat(5000),
     )
     for (s in bad) assertNull(s, Header.fromJson(s))
+  }
+
+  @Test fun headerFromJsonSurvivesStackOverflowOnADeepArrayUnderTheLengthCap() {
+    val json = """{"version":1,"kdf":""" + "[".repeat(2000) + "]".repeat(2000) + "}"
+    var parsed: Header? = Header(1, fast, ByteArray(16), ByteArray(0), ByteArray(0))
+    var thrown: Throwable? = null
+    val worker = Thread(null, { try { parsed = Header.fromJson(json) } catch (e: Throwable) { thrown = e } }, "small-stack", 128 * 1024)
+    worker.start()
+    worker.join()
+    assertNull(thrown?.toString(), thrown)
+    assertNull(parsed)
   }
 
   @Test(timeout = 5000)

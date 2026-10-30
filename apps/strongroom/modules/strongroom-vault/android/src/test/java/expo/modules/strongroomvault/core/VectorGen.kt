@@ -152,6 +152,6 @@ class VectorGen {
     )
     val pretty = Json { prettyPrint = true }.encodeToString(JsonObject.serializer(), build())
     val ascii = pretty.map { if (it.code > 0x7e) "\\u%04x".format(it.code) else it.toString() }.joinToString("")
-    File("src/test/resources/vault-vectors.json").apply { parentFile.mkdirs() }.writeText(ascii + "\n")
+    File("src/test/resources/vault-vectors.json").apply { parentFile?.mkdirs() }.writeText(ascii + "\n")
   }
 }

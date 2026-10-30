@@ -36,7 +36,9 @@ data class Header(
   }.toString()
 
   companion object {
-    fun fromJson(s: String): Header? = try {
+    private const val MAX_JSON_CHARS = 4096
+
+    fun fromJson(s: String): Header? = if (s.length > MAX_JSON_CHARS) null else try { // a real header is about 250 chars
       val o = Json.parseToJsonElement(s).jsonObject
       val k = o.obj("kdf")
       val b64 = Base64.getDecoder()
@@ -52,6 +54,8 @@ data class Header(
       )
     } catch (e: IllegalArgumentException) {
       null // SerializationException, a wrong JSON type and bad Base64 are all IllegalArgumentExceptions
+    } catch (e: StackOverflowError) {
+      null // kotlinx recurses on array nesting; an Error would slip past callers' catch (e: Exception)
     }
   }
 }
@@ -97,7 +101,7 @@ object VaultFormat {
     h.copy(recoveryWrap = recoveryWrap(recoveryKey, vaultKey))
 
   fun sealEntry(vaultKey: ByteArray, id: String, e: Entry): ByteArray {
-    val plain = EntryJson.encode(e).toByteArray(Charsets.UTF_8)
+    val plain = Crypto.utf8(EntryJson.encode(e))
     try {
       return Crypto.seal(vaultKey, plain, recordAad(id))
     } finally {
@@ -114,7 +118,7 @@ object VaultFormat {
     }
   }
 
-  private fun recordAad(id: String) = "strongroom/v1/record/$id".toByteArray(Charsets.UTF_8)
+  private fun recordAad(id: String) = Crypto.utf8("strongroom/v1/record/$id")
 
   private fun passwordWrapKey(password: CharArray, salt: ByteArray, kdf: KdfParams): ByteArray {
     val masterKey = Crypto.argon2id(password, salt, kdf)

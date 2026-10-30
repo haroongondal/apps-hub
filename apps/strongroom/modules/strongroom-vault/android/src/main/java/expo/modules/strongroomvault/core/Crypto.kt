@@ -43,15 +43,18 @@ object Crypto {
 
   fun passwordBytes(password: CharArray): ByteArray {
     // shortcut: the normalised String can't be zeroed (JVM strings are immutable); accepted, the byte arrays are zeroed.
-    val nfc = Normalizer.normalize(CharBuffer.wrap(password), Normalizer.Form.NFC)
-    // An unpaired surrogate becomes U+FFFD (EF BF BD), as WHATWG TextEncoder does, so the Phase 3 extension derives the same key.
+    return utf8(Normalizer.normalize(CharBuffer.wrap(password), Normalizer.Form.NFC))
+  }
+
+  internal fun utf8(s: CharSequence): ByteArray {
+    // An unpaired surrogate becomes U+FFFD (EF BF BD), as WHATWG TextEncoder does, so the Phase 3 extension derives the same bytes.
     val encoder = Charsets.UTF_8.newEncoder()
       .onMalformedInput(CodingErrorAction.REPLACE)
       .onUnmappableCharacter(CodingErrorAction.REPLACE)
       .replaceWith(byteArrayOf(0xEF.toByte(), 0xBF.toByte(), 0xBD.toByte()))
-    val work = ByteBuffer.allocate((nfc.length * encoder.maxBytesPerChar()).toInt())
+    val work = ByteBuffer.allocate((s.length * encoder.maxBytesPerChar()).toInt())
     try {
-      val encoded = encoder.encode(CharBuffer.wrap(nfc), work, true)
+      val encoded = encoder.encode(CharBuffer.wrap(s), work, true)
       val flushed = encoder.flush(work)
       check(encoded.isUnderflow && flushed.isUnderflow)
       return work.array().copyOf(work.position())

@@ -39,7 +39,9 @@ sealed interface Entry {
     val apps: List<AppLink>,
     val note: String,
     override val updatedAt: Long,
-  ) : Entry
+  ) : Entry {
+    override fun toString() = "Login(name=$name, username=$username, password=***, sites=$sites, apps=$apps, note=$note, updatedAt=$updatedAt)"
+  }
 
   data class Card(
     val name: String,
@@ -50,7 +52,10 @@ sealed interface Entry {
     val cvc: String,
     val note: String,
     override val updatedAt: Long,
-  ) : Entry
+  ) : Entry {
+    override fun toString() =
+      "Card(name=$name, holder=$holder, number=***, expMonth=$expMonth, expYear=$expYear, cvc=***, note=$note, updatedAt=$updatedAt)"
+  }
 
   data class Note(val name: String, val text: String, override val updatedAt: Long) : Entry
 
@@ -124,6 +129,8 @@ object EntryJson {
     }
   } catch (e: IllegalArgumentException) {
     null // SerializationException, a wrong JSON type, a bad number and AppId's digest check are all IllegalArgumentExceptions
+  } catch (e: StackOverflowError) {
+    null // kotlinx recurses on array nesting; an Error would slip past callers' catch (e: Exception)
   }
 }
 
