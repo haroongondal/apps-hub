@@ -174,6 +174,10 @@ test('ssdpDescriptionRequest refuses anything outside the trust boundary', () =>
   assert.equal(ssdpDescriptionRequest('http://192.168.1.10:65536/x', ip), null);
   assert.equal(ssdpDescriptionRequest('http://192.168.1.10:80@8.8.8.8/x', ip), null);
   assert.equal(ssdpDescriptionRequest('http://192.168.1.10/x', '192.168.1.11'), null);
+  assert.equal(ssdpDescriptionRequest('http://999.1.1.1/x', '999.1.1.1'), null);
+  for (const bad of ['\x00', '\x01', '\x1f', '\x7f', '\u0085', '\u00e9']) {
+    assert.equal(ssdpDescriptionRequest(`http://192.168.1.10/a${bad}b`, ip), null);
+  }
   assert.ok(ssdpDescriptionRequest('http://192.168.1.10:65535/x', ip));
 });
 
@@ -215,15 +219,35 @@ test('extractDeviceDescription reads the first of each tag and decodes five enti
   );
 });
 
-test('extractDeviceDescription ignores entity declarations and comments', () => {
-  const xml =
-    '<!DOCTYPE r [<!ENTITY x "<friendlyName>Evil</friendlyName>">' +
-    "<!ENTITY y 'a>b'>]><!-- <modelName>Nope</modelName> -->" +
-    '<root><friendlyName>&x;</friendlyName></root>';
-  assert.deepEqual(extractDeviceDescription(xml), {
-    friendlyName: '&x;',
-    manufacturer: null,
-    modelName: null,
-  });
+test('extractDeviceDescription returns nothing for a document with a DOCTYPE or entity declaration', () => {
+  const none = { friendlyName: null, manufacturer: null, modelName: null };
+  const body = '<root><friendlyName>Tv</friendlyName></root>';
+  assert.deepEqual(extractDeviceDescription('<!ENTITY x "y">' + body), none);
+  assert.deepEqual(extractDeviceDescription('<!doctype r [<!entity x "y">]>' + body), none);
+  assert.equal(extractDeviceDescription(body).friendlyName, 'Tv');
+});
+
+test('extractDeviceDescription ignores comments and unclosed tags', () => {
+  assert.deepEqual(
+    extractDeviceDescription(
+      '<!-- <modelName>Nope</modelName> --><root><modelName>Q60</modelName>' +
+        '<!--a--><manufacturer>Sam<!-- x -->sung</manufacturer></root>',
+    ),
+    { friendlyName: null, manufacturer: 'Samsung', modelName: 'Q60' },
+  );
   assert.equal(extractDeviceDescription('<friendlyName>never closed').friendlyName, null);
+  assert.equal(extractDeviceDescription('<friendlyNameX>a</friendlyNameX>').friendlyName, null);
+  assert.equal(extractDeviceDescription('<friendlyName/><x/>').friendlyName, null);
+});
+
+test('extractDeviceDescription stays linear on hostile 64 KB bodies', () => {
+  const none = { friendlyName: null, manufacturer: null, modelName: null };
+  for (const opener of ['<!ENTITY ', '<!--', '<friendlyName ', '<manufacturer a="']) {
+    const hostile = opener.repeat(Math.ceil(65536 / opener.length));
+    const started = performance.now();
+    const result = extractDeviceDescription(hostile);
+    const elapsed = performance.now() - started;
+    assert.deepEqual(result, none, opener);
+    assert.ok(elapsed < 100, `${opener} took ${elapsed.toFixed(0)} ms`);
+  }
 });

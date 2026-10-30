@@ -121,7 +121,7 @@ export function parseNetbiosStatus(bytes: readonly number[], id: number): string
 }
 
 // No URL: React Native's URL lacks hostname and port.
-const SSDP_LOCATION = /^http:\/\/(\d{1,3}(?:\.\d{1,3}){3})(?::(\d{1,5}))?(\/\S*)?$/i;
+const SSDP_LOCATION = /^http:\/\/(\d{1,3}(?:\.\d{1,3}){3})(?::(\d{1,5}))?(\/[\x21-\x7E]*)?$/i;
 
 export function ssdpDescriptionRequest(
   location: string,
@@ -151,13 +151,34 @@ const ENTITIES: Record<string, string> = {
   apos: "'",
 };
 
+function withoutComments(xml: string): string {
+  let out = '';
+  let pos = 0;
+  for (;;) {
+    const open = xml.indexOf('<!--', pos);
+    if (open < 0) return out + xml.slice(pos);
+    out += xml.slice(pos, open);
+    const close = xml.indexOf('-->', open + 4);
+    if (close < 0) return out;
+    pos = close + 3;
+  }
+}
+
 function tagText(xml: string, tag: string): string | null {
-  const open = new RegExp(`<${tag}(?:\\s[^>]*)?>`).exec(xml);
-  if (!open) return null;
-  const from = open.index + open[0].length;
-  const end = xml.indexOf(`</${tag}>`, from);
-  if (end < 0) return null;
-  return xml.slice(from, end).replace(/&(amp|lt|gt|quot|apos);/g, (_, e) => ENTITIES[e]);
+  let from = 0;
+  for (;;) {
+    const at = xml.indexOf(`<${tag}`, from);
+    if (at < 0) return null;
+    const next = xml.charAt(at + tag.length + 1);
+    if (next === '>' || /^\s$/.test(next)) {
+      const start = xml.indexOf('>', at);
+      if (start < 0) return null;
+      const end = xml.indexOf(`</${tag}>`, start);
+      if (end < 0) return null;
+      return xml.slice(start + 1, end).replace(/&(amp|lt|gt|quot|apos);/g, (_, e) => ENTITIES[e]);
+    }
+    from = at + 1;
+  }
 }
 
 export function extractDeviceDescription(xml: string): {
@@ -165,9 +186,9 @@ export function extractDeviceDescription(xml: string): {
   manufacturer: string | null;
   modelName: string | null;
 } {
-  const body = xml
-    .replace(/<!ENTITY\s(?:"[^"]*"|'[^']*'|[^>"'])*>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '');
+  // Real UPnP descriptions never declare entities; refusing them also keeps the scan linear.
+  if (/<!(?:DOCTYPE|ENTITY)/i.test(xml)) return { friendlyName: null, manufacturer: null, modelName: null };
+  const body = withoutComments(xml);
   return {
     friendlyName: tagText(body, 'friendlyName'),
     manufacturer: tagText(body, 'manufacturer'),
