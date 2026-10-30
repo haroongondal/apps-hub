@@ -492,7 +492,8 @@ switched on as the autofill service only for the test (§3):
   offers "Update"; a save while locked is stored after unlock.
 - Matching: a lookalike domain, a different-signature app and a non-browser
   app's WebView showing a saved site all get no suggestion, and a
-  different-signature app can't be linked.
+  different-signature app can't be linked. The last three need fixture apps, so
+  the JVM matching tests check them instead of the phone.
 - Own screens: with Google as the autofill service, nothing offers to save the
   master password during setup or Add, and Deputy's view of Strongroom's
   screens is empty.
