@@ -8,6 +8,8 @@ data class AuthRequest(val mode: String, val entryId: String?, val requester: Re
   init {
     require(mode in MODES) { "unknown mode" }
     require((entryId != null) == (mode == "fill")) { "only fill names an entry" }
+    require(entryId == null || entryId.isNotBlank()) { "blank entry id" }
+    require(requester.hostsAreReadable()) { "unreadable host" }
   }
 
   fun extras(): Map<String, String> = buildMap {
@@ -30,7 +32,7 @@ data class AuthRequest(val mode: String, val entryId: String?, val requester: Re
       val requester = get(REQUESTER) ?: return null
       val label = get(LABEL) ?: return null
       AuthRequest(mode, get(ENTRY_ID), Json.parseToJsonElement(requester).jsonObject.requester(), label)
-    } catch (e: IllegalArgumentException) {
+    } catch (e: RuntimeException) {
       null
     } catch (e: StackOverflowError) {
       null
@@ -39,3 +41,8 @@ data class AuthRequest(val mode: String, val entryId: String?, val requester: Re
 }
 
 fun shouldServe(pkg: String, ownPkg: String): Boolean = pkg != ownPkg
+
+private fun Requester.hostsAreReadable(): Boolean = when (this) {
+  is Requester.Web -> Matching.normalizeHost(site.host) != null
+  is Requester.App -> reportedDomain == null || Matching.normalizeHost(reportedDomain) != null
+}

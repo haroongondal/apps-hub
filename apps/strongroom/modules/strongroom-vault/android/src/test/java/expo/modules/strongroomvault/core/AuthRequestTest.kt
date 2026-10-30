@@ -38,8 +38,7 @@ class AuthRequestTest {
     )
     val parsed = AuthRequest.parse { key -> asked += key; extras[key] }
     assertEquals(AuthRequest("fill", "entry-1", web, "Bank"), parsed)
-    assertTrue(asked.isNotEmpty())
-    for (k in asked) assertTrue(k, k.startsWith("strongroom."))
+    assertEquals(setOf("strongroom.mode", "strongroom.requester", "strongroom.label", "strongroom.entryId"), asked.toSet())
   }
 
   @Test fun parseReadsOnlyOwnExtrasEvenWhenItRejects() {
@@ -75,6 +74,30 @@ class AuthRequestTest {
       "[".repeat(200_000) + "]".repeat(200_000),
     )
     for (h in hostile) assertNull(h.take(40), AuthRequest.parse((good + ("strongroom.requester" to h))::get))
+  }
+
+  @Test fun parseRejectsABlankEntryId() {
+    val good = AuthRequest("fill", "entry-1", web, "Bank").extras()
+    for (blank in listOf("", " ", "\t\n")) assertNull(blank, AuthRequest.parse((good + ("strongroom.entryId" to blank))::get))
+  }
+
+  @Test fun parseRejectsRequestersWithAnUnreadableHost() {
+    val good = AuthRequest("pick", null, web, "Bank").extras()
+    val bad = listOf(
+      Requester.Web(Site(true, "not a host")),
+      Requester.Web(Site(false, "")),
+      Requester.Web(Site(true, "bank.com:99999")),
+      Requester.App(AppId("com.bank", cert), "not a host"),
+    )
+    for (r in bad) assertNull(r.toString(), AuthRequest.parse((good + ("strongroom.requester" to r.toJson().toString()))::get))
+    assertEquals(AuthRequest("pick", null, Requester.Web(Site(false, "localhost:8080")), "Bank"), AuthRequest.parse((good + ("strongroom.requester" to Requester.Web(Site(false, "localhost:8080")).toJson().toString()))::get))
+  }
+
+  @Test fun parseNeverThrowsEvenWhenGetDoes() {
+    assertNull(AuthRequest.parse { throw IllegalStateException("bundle is gone") })
+    assertNull(AuthRequest.parse { throw UnsupportedOperationException() })
+    val good = AuthRequest("fill", "entry-1", web, "Bank").extras()
+    assertNull(AuthRequest.parse { key -> if (key == "strongroom.entryId") throw ClassCastException() else good[key] })
   }
 
   @Test fun ownPackageIsNeverServed() {

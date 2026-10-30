@@ -225,6 +225,65 @@ class FormDetectorTest {
     assertTrue(FormDetector.allTargetsInDomain(nodes, form(username = 0, password = 1), "bank.com"))
   }
 
+  @Test fun visiblePasswordNeverBeatsARealPasswordField() {
+    assertEquals(form(username = 0, password = 1), FormDetector.detect(listOf(node(0, inputType = textVisiblePassword), node(1, inputType = textPassword))))
+    assertEquals(form(username = 0, password = 1), FormDetector.detect(listOf(node(0, inputType = textVisiblePassword), node(1, inputType = textWebPassword))))
+    assertEquals(form(username = 0, password = 1), FormDetector.detect(listOf(node(0, inputType = textVisiblePassword), node(1, htmlType = "password"))))
+    assertEquals(form(username = 0, password = 1), FormDetector.detect(listOf(node(0, inputType = textVisiblePassword), node(1, htmlAutocomplete = "current-password"))))
+    assertEquals(form(username = 0, password = 1), FormDetector.detect(listOf(node(0, inputType = numberPassword), node(1, inputType = textVisiblePassword))))
+    assertEquals(form(username = 0, password = 2), FormDetector.detect(listOf(node(0, inputType = textVisiblePassword), node(1, inputType = numberPassword), node(2, inputType = textPassword))))
+  }
+
+  @Test fun visibleAndNumberPasswordsStillDetectWhenAlone() {
+    assertEquals(form(password = 0), FormDetector.detect(listOf(node(0, inputType = textVisiblePassword))))
+    assertEquals(form(username = 0, password = 1), FormDetector.detect(listOf(node(0, inputType = textEmail), node(1, inputType = textVisiblePassword))))
+    assertEquals(form(password = 0), FormDetector.detect(listOf(node(0, inputType = numberPassword))))
+  }
+
+  @Test fun inputTypeFlagBitsDoNotHideTheVariation() {
+    val noSuggestions = 0x80000
+    assertEquals(form(username = 0, password = 1), FormDetector.detect(listOf(node(0, inputType = textEmail or noSuggestions), node(1, inputType = textPassword or noSuggestions))))
+    assertEquals(form(password = 0), FormDetector.detect(listOf(node(0, inputType = numberPassword or noSuggestions))))
+  }
+
+  @Test fun passwordKeywordIsBoundedAndSkipsSearchBoxes() {
+    val notPasswords = listOf("search_passwords", "Search passengers", "passenger", "passage", "compass", "bypass", "Pass ID", "passport_number", "pass_type")
+    for (s in notPasswords) {
+      assertEquals(s, form(), FormDetector.detect(listOf(node(0, idEntry = s))))
+      assertEquals(s, form(), FormDetector.detect(listOf(node(0, hintText = s))))
+    }
+    for (s in listOf("password", "passwd", "user_pass", "passcode", "etPassword", "loginPassword", "Enter your password", "passphrase")) {
+      assertEquals(s, form(password = 0), FormDetector.detect(listOf(node(0, idEntry = s))))
+      assertEquals(s, form(password = 0), FormDetector.detect(listOf(node(0, hintText = s))))
+    }
+  }
+
+  @Test fun aKnownNonLoginHintNeverFallsThroughToInputType() {
+    assertEquals(form(), FormDetector.detect(listOf(node(0, hints = listOf("smsOTPCode"), inputType = textPassword))))
+    assertEquals(form(), FormDetector.detect(listOf(node(0, hints = listOf("oneTimeCode"), inputType = numberPassword))))
+    assertEquals(form(), FormDetector.detect(listOf(node(0, htmlAutocomplete = "one-time-code", htmlType = "password"))))
+    assertEquals(form(), FormDetector.detect(listOf(node(0, htmlAutocomplete = "section-a one-time-code", inputType = textPassword))))
+    assertEquals(form(), FormDetector.detect(listOf(node(0, htmlAutocomplete = "cc-type", inputType = textPassword))))
+    assertEquals(form(card = card(cvc = 0)), FormDetector.detect(listOf(node(0, hints = listOf("creditCardSecurityCode"), inputType = numberPassword))))
+    assertEquals(form(card = card(cvc = 0)), FormDetector.detect(listOf(node(0, htmlAutocomplete = "cc-csc", inputType = textPassword))))
+    assertEquals(form(username = 0, password = 2), FormDetector.detect(listOf(node(0, inputType = textEmail), node(1, hints = listOf("smsOTPCode")), node(2, inputType = textPassword))))
+  }
+
+  @Test fun fieldsOfNonTextHtmlTypesAreIgnored() {
+    assertEquals(form(), FormDetector.detect(listOf(node(0, htmlType = "checkbox", idEntry = "remember_password"))))
+    assertEquals(form(), FormDetector.detect(listOf(node(0, htmlType = "hidden", htmlAutocomplete = "username"))))
+    assertEquals(form(), FormDetector.detect(listOf(node(0, htmlType = "SEARCH", idEntry = "user"), node(1, htmlType = "submit"))))
+    val nodes = listOf(node(0, inputType = textEmail), node(1, htmlType = "checkbox", idEntry = "remember_password"), node(2, inputType = textPassword))
+    assertEquals(form(username = 0, password = 2), FormDetector.detect(nodes))
+    assertEquals(form(password = 2), FormDetector.detect(listOf(node(0, htmlType = "checkbox"), node(1, htmlType = "radio"), node(2, inputType = textPassword))))
+  }
+
+  @Test fun htmlTypesAreCaseInsensitiveAndABlankOneIsAbsent() {
+    assertEquals(form(username = 0, password = 1), FormDetector.detect(listOf(node(0, htmlType = "Email"), node(1, htmlType = "PASSWORD"))))
+    assertEquals(form(username = 0, password = 1), FormDetector.detect(listOf(node(0, htmlType = ""), node(1, inputType = textPassword))))
+    assertEquals(form(username = 0, password = 2), FormDetector.detect(listOf(node(0, htmlType = "tel", idEntry = "user"), node(1, htmlType = "number"), node(2, htmlType = "password"))))
+  }
+
   @Test fun anEmptyFormOrAnUnreadableHostIsNeverInDomain() {
     val nodes = listOf(node(0, webDomain = "bank.com"))
     assertFalse(FormDetector.allTargetsInDomain(nodes, form(), "bank.com"))
