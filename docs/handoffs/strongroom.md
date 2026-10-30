@@ -89,7 +89,11 @@ no password generator / CSV export / card saving in v1.
   t ≤ 16, p ≤ 4; password bytes encode lone surrogates as U+FFFD like
   TextEncoder). Task 4 vault format + `vault-vectors.json` (c983a25 + ed7ba1b;
   reviewer recomputed every vector in Python and Node). Task 5 vault session
-  (0d55a75) in review. Rulings and deferred minors are in the ledger.
+  (0d55a75 + 6a0bb2d + 8f288d0: a sealed `key-check` tombstone lets a
+  biometric key be verified; header writes compare keys first). Task 6
+  matching (69b67c0 + 8157955: PSL, test_psl and Chrome/Firefox digests match
+  fresh downloads; fails closed on IDNA deviation characters and odd schemes)
+  in re-review. Rulings and deferred minors are in the ledger.
 
 ## Owner items to raise at the end of Phase 1 (from Task 1)
 
