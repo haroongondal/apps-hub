@@ -2,6 +2,8 @@ package com.haroon.strongroom
 
 import android.os.Build
 import android.os.Bundle
+import android.view.View
+import android.view.WindowManager
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -16,7 +18,11 @@ class MainActivity : ReactActivity() {
     // coloring the background, status bar, and navigation bar.
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
+    window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    window.setHideOverlayWindows(true)
     super.onCreate(null)
+    findViewById<View>(android.R.id.content).importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+    if (Build.VERSION.SDK_INT >= 34) window.decorView.setAccessibilityDataSensitive(View.ACCESSIBILITY_DATA_SENSITIVE_YES)
   }
 
   /**
