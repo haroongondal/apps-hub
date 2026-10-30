@@ -96,7 +96,15 @@ no password generator / CSV export / card saving in v1.
   Task 7 import (f02537f + 9b73d29: unlinked logins keyed by raw URL/name,
   rows wider than the header refused, redaction script has a node test;
   the owner's real export is still needed for Step 0). Task 8 form detection
-  (aad67dc) in review. Rulings and deferred minors are in the ledger.
+  (aad67dc + ce4aac2: ranked password signals, bounded keyword). Task 9
+  Android adapters + JS bridge (6724726; emulator: setup/unlock/lock, Chrome
+  trusted, fingerprint and reboot rules, no plaintext in db or index) in
+  review. Rulings and deferred minors are in the ledger.
+
+**The owner's phone is attached over wifi adb.** Every adb/expo command must
+target the emulator explicitly (`-s emulator-5554`). The emulator still holds
+the debug app, a test vault, and a dev-server override to port 8082 (another
+session's Metro holds 8081).
 
 Debug runs use the AVD `apps-hub-test` (android-35 google_apis arm64):
 `~/Library/Android/sdk/emulator/emulator -avd apps-hub-test`. Gradle builds
