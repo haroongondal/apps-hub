@@ -106,6 +106,39 @@ no password generator / CSV export / card saving in v1.
   Android adapters + JS bridge (6724726; emulator: setup/unlock/lock, Chrome
   trusted, fingerprint and reboot rules, no plaintext in db or index) in
   review. Rulings and deferred minors are in the ledger.
+- 2026-10-30: Task 10 autofill service + UnlockActivity (8142517). **Task 10
+  emulator results** (API 35, `apps-hub-test`; app checks used a throwaway
+  native login app built in the scratchpad):
+  - Works: app fill unlocked and locked (match index, then master password or
+    fingerprint); `FLAG_IMMUTABLE` auth intents complete every fill (S6, no
+    mutable intent needed); Other logins: Fill once stores no link, Always use
+    here does; Save after sign-up, Update after a password change, locked save
+    held in `pending.bin` and applied at the next unlock; card fill asks for
+    the master password or fingerprint even when unlocked, and the locked
+    "Unlock to fill a card" path; no "Save to Google" offer for the master
+    password with Google selected; 30 s clipboard clear works with the app in
+    the background (toast unchanged).
+  - Needed `QUERY_ALL_PACKAGES`: without it package visibility hid every
+    requesting app's certificate (`AppsFilter ... BLOCKED`), so nothing filled.
+  - **Chrome not checked:** the emulator has Chrome 124 (third-party autofill
+    starts at 131) and no Play Store. S1 frames, S2 `webScheme`, the port in
+    `webDomain` and a checkout-page card fill in Chrome move to the phone
+    (Task 12).
+  - Firefox 158.0.2 (official Mozilla build, signer matches the allowlist)
+    stood in: it sets `webScheme` (`http`), its `webDomain` has **no port**
+    (`10.0.2.2` for `10.0.2.2:8000`), so a login linked to an IP address fills
+    on any port of that IP (owner to know). A cross-origin iframe is reported
+    under the frame's own origin (`localhost`), so the top page's login wasn't
+    offered there. Firefox sends no card forms to autofill services.
+  - Owner/Task 11–12 notes: right after a reinstall `autofillSelected` reads
+    false until any autofill session runs (system NPE in `isServiceEnabled`);
+    with the Strongroom process dead, the first fill can miss the system's 5 s
+    timeout (debug build; recheck with release on the phone); an
+    augmented-autofill-only session still opens on UnlockActivity's password
+    field (it showed nothing).
+  - Emulator state left: PIN 1234 + one enrolled fingerprint, Firefox and
+    `com.example.logintest` installed, a fresh test vault (master password in
+    the Task 9 check button), Google as the autofill service again.
 
 **The owner's phone is attached over wifi adb.** Every adb/expo command must
 target the emulator explicitly (`-s emulator-5554`). The emulator still holds
