@@ -45,6 +45,11 @@ export interface StoredDevice {
   isTrusted: boolean;
   firstSeenAt: number;
   lastSeenAt: number;
+  /** Names learned after the sweep (see device-names.ts); null until found. */
+  mdnsName: string | null;
+  friendlyName: string | null;
+  model: string | null;
+  netbiosName: string | null;
 }
 
 export interface DeviceStore {
@@ -227,6 +232,10 @@ export async function reconcileScan(
       isTrusted: false,
       firstSeenAt: now,
       lastSeenAt: now,
+      mdnsName: null,
+      friendlyName: null,
+      model: null,
+      netbiosName: null,
     };
     const id = await store.insertDevice(anchor as StoredDevice);
     const inserted: StoredDevice = { ...anchor, id };

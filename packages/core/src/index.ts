@@ -11,3 +11,4 @@ export * from './ping-engine.ts';
 export * from './dns-benchmark.ts';
 export * from './diagnostics.ts';
 export * from './device-repository.ts';
+export * from './device-names.ts';
