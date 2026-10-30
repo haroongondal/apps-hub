@@ -1155,11 +1155,15 @@ not to be built unless asked. My calls, not confirmed by the owner:
   defaults, several keys per provider and the approval notification are built,
   reviewed and gated on `deputy-speed`, **uncommitted**, version 0.2.1 (session
   log, "Session 10"). Exact next step:
-  1. The owner decides on committing and releasing 0.2.1 (asked at the end of
-     session 10). Commit only `apps/deputy`, `docs/deputy` and this file; leave
-     tools/, docs/app-store.md, docs/strongroom and .superpowers (another
-     session's work) out. Release with the cf profile `personal`
-     (`pnpm release deputy`), then the owner installs through the Store.
+  1. **Done:** committed `ad3ca8f` (work) and `6c474a3` (version) on
+     `deputy-speed`, not pushed or merged. **Released Deputy 0.2.1, build 7**
+     (67.8 MB) to `apps-hub-store.haroonmukhtar4.workers.dev` (cf profile
+     `personal`, bound to this repo; account `29ada920…`, Worker checked). The
+     release ran the **committed** `tools/release` from a temporary copy, because
+     the working tree's `main.ts` holds another session's uncommitted "delete the
+     previous APK" step (and a matching Worker DELETE route); that step was not
+     run, so build 6's APK is still in the bucket. Next: the owner installs build 7
+     through the Store.
   2. Phone checks after install (wireless debugging; adb taps, logcat,
      screenshots only): the heads-up stays until answered (full-screen intent;
      check `cmd appops get com.haroon.deputy USE_FULL_SCREEN_INTENT`); the
