@@ -54,6 +54,14 @@ class FakeBinding implements NetLensNativeBinding {
     throw new Error('measureTcpHandshake is not scripted in this suite');
   }
 
+  async udpRequest(): Promise<number[] | null> {
+    return null;
+  }
+
+  async tcpFetch(): Promise<string | null> {
+    return null;
+  }
+
   async resolveHostname(hostname: string): Promise<null> {
     this.resolveCalls.push(hostname);
     throw new Error('resolveHostname is not scripted in this suite');

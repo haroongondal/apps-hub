@@ -45,4 +45,26 @@ export interface NetLensNativeBinding {
    * itself is unavailable; failed lookups resolve with `success: false`.
    */
   resolveHostname(hostname: string): Promise<DnsResolution | null>;
+  /**
+   * Sends one datagram and resolves with the first reply from `ip:port`, or
+   * null on timeout or error. Private targets go out on Wi-Fi when possible.
+   */
+  udpRequest(
+    ip: string,
+    port: number,
+    payload: readonly number[],
+    timeoutMs: number,
+  ): Promise<number[] | null>;
+  /**
+   * Connects, writes `request`, reads until EOF or `maxBytes` (returning what
+   * it read) and decodes UTF-8. Null on connect failure, or timeout before any
+   * byte.
+   */
+  tcpFetch(
+    ip: string,
+    port: number,
+    request: string,
+    timeoutMs: number,
+    maxBytes: number,
+  ): Promise<string | null>;
 }

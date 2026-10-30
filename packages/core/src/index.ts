@@ -13,3 +13,4 @@ export * from './diagnostics.ts';
 export * from './device-repository.ts';
 export * from './device-names.ts';
 export * from './name-formats.ts';
+export * from './name-resolver.ts';
