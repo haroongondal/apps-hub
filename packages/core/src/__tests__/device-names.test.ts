@@ -57,6 +57,16 @@ test('sanitizeName strips bidi overrides but keeps ZWJ, ZWNJ, LRM and RLM', () =
   assert.equal(sanitizeName('a\u200Cb\u200Ec\u200Fd'), 'a\u200Cb\u200Ec\u200Fd');
 });
 
+test('sanitizeName returns null when only invisible characters remain', () => {
+  assert.equal(sanitizeName('\u200B'), null);
+  assert.equal(sanitizeName('\u200D'), null);
+  assert.equal(sanitizeName('\u200F'), null);
+  assert.equal(sanitizeName(' \u200E '), null);
+  assert.equal(sanitizeName('\u00AD\u2060\uFEFF \u200C'), null);
+  assert.equal(sanitizeName('\u202E\u200B'), null);
+  assert.equal(sanitizeName('a\u200Db'), 'a\u200Db');
+});
+
 test('cleanMdnsInstanceName drops a leading MAC-style prefix', () => {
   assert.equal(
     cleanMdnsInstanceName('A1B2C3D4E5F6@Living Room TV'),
@@ -70,7 +80,9 @@ test('isPrivateIpv4 covers the RFC 1918 and link-local ranges only', () => {
   assert.equal(isPrivateIpv4('10.0.0.1'), true);
   assert.equal(isPrivateIpv4('172.31.0.1'), true);
   assert.equal(isPrivateIpv4('169.254.3.4'), true);
+  assert.equal(isPrivateIpv4('172.15.0.1'), false);
   assert.equal(isPrivateIpv4('172.32.0.1'), false);
+  assert.equal(isPrivateIpv4('169.253.0.1'), false);
   assert.equal(isPrivateIpv4('8.8.8.8'), false);
   assert.equal(isPrivateIpv4('tv.local'), false);
 });

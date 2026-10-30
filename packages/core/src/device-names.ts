@@ -20,6 +20,8 @@ const NAME_MAX = 64;
 // ZWJ, ZWNJ, LRM and RLM stay: real names need them.
 const CONTROLS =
   /[\u0000-\u0008\u000e-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g;
+// A name with none of these left is blank to the eye, so it counts as no name.
+const VISIBLE = /[^\s\u00ad\u200b-\u200f\u2060-\u2064\ufeff]/;
 
 /** Trim, strip control characters, collapse whitespace, cap at 64 characters. */
 export function sanitizeName(raw: string | null | undefined): string | null {
@@ -27,7 +29,7 @@ export function sanitizeName(raw: string | null | undefined): string | null {
   const clean = raw.replace(CONTROLS, '').replace(/\s+/g, ' ').trim();
   // Slice by code point so a cut never leaves half a surrogate pair.
   const name = Array.from(clean).slice(0, NAME_MAX).join('').trim();
-  return name || null;
+  return VISIBLE.test(name) ? name : null;
 }
 
 /** AirPlay-style instances start with a MAC (`A1B2C3D4E5F6@Name`); drop it. */
