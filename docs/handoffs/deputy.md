@@ -647,6 +647,24 @@ not to be built unless asked. My calls, not confirmed by the owner:
     Delete); Deputy's gate card buttons move when a new gate replaces the old
     one, so a tap aimed at Deny approved the next gate.
 
+- **Groq test (session 9, 2026-10-30).** The owner's Groq key is in the Mac
+  Keychain (`deputy-groq`, read only via `security … -w` piped into curl or
+  `adb shell` stdin) and saved in Deputy on the phone; Deputy is set to "GPT-OSS
+  120B on Groq" and "Test the key" passes. Never write the key anywhere else.
+  - From the Mac, realistic step 1 (2,087 prompt tokens, effort low): 0.54–0.92 s,
+    correct `tap`. The untrimmed step-8 request (13K tokens) gets **413 "Request
+    too large … tokens per minute"**, so history trimming is required on Groq.
+  - On the phone, clock-alarm task: model calls 0.7, 0.6, 0.9 s, then
+    **9.7–28 s each from step 4** (waiting out the free tier's 8K TPM via
+    retry-after), 12 steps, then **failed** on a 400 `output_parse_failed`
+    (GPT-OSS wrote "We need next alarm info already obtained via phone_info. So
+    just finish." as text). Also: a turn with no tool call; `open_app` with the
+    name `Clock (com.google.android.deskclock)` (Deputy's own hint format) was
+    "not installed"; it typed "Clock" twice into the launcher search
+    ("ClockClock", type_text appends).
+  - Seen on the Apps screen: AL Habib Mobile and Al Ameen Funds (banking) are
+    "Standard", not read-only. Check `DefaultTrust`'s money-app list.
+
 ## File map
 
 - `docs/deputy/RESEARCH.md`: feasibility research, done. It was written before
@@ -1072,7 +1090,19 @@ not to be built unless asked. My calls, not confirmed by the owner:
      d. Prompt: in a chat box type without press_enter, then tap Send.
      e. Gate draft: drop a placeholder copied into the text (WhatsApp's
         "Message") if a cheap rule exists; otherwise leave it recorded.
-     Then time Groq once the owner saves a key (not tested yet).
+     f. Retry Groq's 400 `output_parse_failed` like `tool_use_failed`.
+     g. `open_app`: accept "Label (package)" by taking the bracketed package.
+  4. **New owner requirements (2026-10-30), build after a–g:**
+     - **Several API keys per provider** (from different accounts): when one
+       key hits its limit (429, or Groq's TPM/RPD), the next key takes over
+       automatically. Settings lists the keys (add, remove, test each); keys
+       stay sealed in `KeyVault` and bound to their base URL. This is the main
+       fix for Groq's 8K-TPM waits.
+     - **Approval notifications last longer**, and when the heads-up goes away
+       the notification in the shade must still show Approve and Deny buttons
+       (like WhatsApp's Reply / Mark as read). Check `Notifier.gate`
+       (channel importance, `setTimeoutAfter`, ongoing, public version, actions
+       on the expanded and collapsed views).
   4. Docs still describe one action per step and verbatim replay: SPEC §6 (tools),
      §7 (history), §9.3 (replay) need the docs-keeper pass.
   5. Not built (owner's call later): Jev executor, on-phone OCR, a backup model
