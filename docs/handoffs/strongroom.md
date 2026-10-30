@@ -146,6 +146,14 @@ no password generator / CSV export / card saving in v1.
   re-review clean. Task 10 complete. Chrome checks (S1 frames as a blocker,
   S2, port, card checkout, HyperOS installer name, inline cap) carried to
   Task 12 in the ledger.
+- 2026-10-31: Task 11 screens (022867b) → review (0C/2I/10M) → fix round 1
+  (8c9413b: Settings sub-flows are routes with no tab bar, Back and tabs
+  ignored during a derivation; a native `onLock` event clears revealed values
+  and drafts on auto-lock; `messageOf` pinned to expo-modules-core 3.0.30's
+  real rejection format) → re-review clean. Task 11 complete. Incident: the
+  implementer's first Metro start (`--android=false`) began fetching Expo Go
+  for the phone; killed in seconds, nothing installed. Later dispatches pin
+  `ANDROID_SERIAL=emulator-5554` and start Metro with no platform flags.
 
 **The owner's phone is attached over wifi adb.** Every adb/expo command must
 target the emulator explicitly (`-s emulator-5554`). The emulator still holds
@@ -185,14 +193,15 @@ SDD ledger (task progress, rulings, deferred minors):
 `git log` over memory. Phone installs only via the Store (release builds);
 debug work uses the emulator.
 
-**Exact next step:** Tasks 1–10 are complete (Task 10 re-review clean).
-Task 11 (screens): its brief is already re-extracted from the amended plan
-(`.superpowers/sdd/PHASE-1-PLAN/task-11-brief.md`) with
-`task-11-context.md` beside it (constraints + 7 carries). Record BASE
-(`git rev-parse HEAD`), dispatch the implementer with both files, review,
-then Task 12 (`task-12-brief.md`; carry every ledger line marked "carry to
-Task 12") and the final whole-branch review (opus), pointed at the ledger's
-deferred minors and "carry to final review" lines. Task 12 Steps 4+ need
-the owner (release and phone). Implementers so far: sonnet for Tasks 2–8,
-opus for Tasks 9–10; reviewers opus for crypto/format/session/matching/
-platform, sonnet otherwise.
+**Exact next step:** Tasks 1–11 are complete (Task 11 re-review clean).
+Task 12 runs Steps 1–3 and 5 only (ledger ruling): `task-12-brief.md` with
+`task-12-context.md` beside it (constraints, emulator carries, the phone
+checklist). First the `security-engineer` review (opus, read-only), then one
+implementer for its confirmed fixes, `disk-check.sh`, the emulator checks,
+the gates and the release-APK permission check, then a task review. Then the
+final whole-branch review (opus), pointed at the ledger's deferred minors and
+"carry to final review" lines. Step 4 (`pnpm release strongroom`, Store
+install, phone checklist, DESIGN §13 walk-through) waits for the owner's
+go-ahead. Implementers so far: sonnet for Tasks 2–8 and 11, opus for Tasks
+9–10; reviewers opus for crypto/format/session/matching/platform, sonnet
+otherwise.
