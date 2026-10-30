@@ -2,8 +2,12 @@
 
 ## Resume prompt
 
-Dated 2026-10-29. Read `docs/handoffs/strongroom.md` completely first, then
-`docs/strongroom/DESIGN.md`. Trust the decisions and verified facts below and
+Dated 2026-10-30. Work only in the worktree
+`/Users/outsentia/Documents/apps-hub/.claude/worktrees/strongroom-phase-1`
+(branch `strongroom-phase-1`). Read `docs/handoffs/strongroom.md` there
+completely first, then `docs/strongroom/DESIGN.md`, then the SDD ledger at
+`.superpowers/sdd/PHASE-1-PLAN/progress.md`, and continue executing
+`docs/strongroom/PHASE-1-PLAN.md` with superpowers:subagent-driven-development. Trust the decisions and verified facts below and
 don't re-ask or re-derive them. Follow the handoff contract in
 `~/.claude/CLAUDE.md`. Read "Current state + exact next step" before doing
 anything, then continue from it. Commit or release only when the user says so.
@@ -65,20 +69,56 @@ no password generator / CSV export / card saving in v1.
 
 - `docs/strongroom/DESIGN.md`: the design.
 - `docs/strongroom/PHASE-1-PLAN.md`: Phase 1 plan, 12 tasks (Task 1 = threat-model gate).
-- `.superpowers/brainstorm/6147-1793289451/content/android-flows.html`: mockups (not committed).
+- `.superpowers/brainstorm/6147-1793289451/content/android-flows.html`: mockups (git-ignored).
+- `.superpowers/sdd/PHASE-1-PLAN/`: SDD ledger (`progress.md`), Task 1 rulings,
+  report and review (git-ignored scratch; the git log is the durable record).
 
 ## Session log
 
 - 2026-10-29: brainstorming session; design written; builder check run; owner
   answered its two questions; DESIGN.md updated.
 - 2026-10-30: Windows added to Phase 3 (same Chrome extension); design approved;
-  Phase 1 plan written and self-reviewed.
+  Phase 1 plan written and self-reviewed. Owner chose subagent-driven execution.
+  Worktree created (another session owns the main checkout on deputy-speed).
+  Baseline `pnpm test` exit 0 (181 pass). Task 1: security-engineer threat model
+  (17 findings, 0C/5H/5M/7L) → rulings in `.superpowers/sdd/PHASE-1-PLAN/task-1-rulings.md`
+  → folded into DESIGN.md + plan (commit 5879adb) → review: 1 Important + 11
+  Minor → fix round 1 dispatched to the docs editor.
+
+## Owner items to raise at the end of Phase 1 (from Task 1)
+
+- Before Phase 2: decide whether to add an account key (a second secret typed
+  once per new device). It protects the server copy if the password leaks (A4).
+- "Other logins" defaults to Fill once. "Always use here" is a separate button
+  (A1/A2). Every card fill asks for the fingerprint (B10).
+- Deputy should refuse to operate Strongroom (B5). That's a Deputy change,
+  outside this plan.
+- Mi Browser (HyperOS) isn't on the browser allowlist, so it only gets
+  domain-scoped links.
 
 ## Current state + exact next step
 
-DESIGN.md approved by the owner on 2026-10-30. Phase 1 plan written
-(`docs/strongroom/PHASE-1-PLAN.md`) and waiting for the owner's review and
-choice of execution method (subagent-driven or native). Nothing is committed.
-Next: once the owner approves the plan, create branch `strongroom-phase-1` and
-start at Task 1 (security-engineer threat-model review). Phone installs only via
-the Store (release builds); debug work uses the emulator.
+DESIGN.md and PHASE-1-PLAN.md approved (2026-10-30). The owner chose
+**subagent-driven** execution (superpowers:subagent-driven-development). The
+redacted Google export comes later, so Task 7 uses a hand-made fixture until then.
+
+Work happens in the **worktree**
+`/Users/outsentia/Documents/apps-hub/.claude/worktrees/strongroom-phase-1`
+(branch `strongroom-phase-1`, from main `6daca33`). Another session works on
+`deputy-speed` in the main checkout, so never switch branches there. The
+untracked copies of these docs in the main checkout are stale. This worktree's
+copies are the source of truth.
+
+SDD ledger (task progress, rulings, deferred minors):
+`.superpowers/sdd/PHASE-1-PLAN/progress.md` in the worktree. Trust it and
+`git log` over memory. Phone installs only via the Store (release builds);
+debug work uses the emulator.
+
+**Exact next step:** Task 1 fix round 1 is committed (`20b52ef`; all 12 review
+findings fixed per `task-1-report.md`). Run the SDD scoped re-review: run
+`scripts/review-package docs/strongroom/PHASE-1-PLAN.md 5879adb 20b52ef`, then
+dispatch `re-review-prompt.md` with the findings in `task-1-review.md`.
+
+When the re-review is clean, append `Task 1: complete (commits 12fa7de..<head>, review clean)`
+to the ledger and start Task 2 (scaffold) with the SDD implementer template.
+Then continue through Task 12 without pausing.
