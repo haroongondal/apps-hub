@@ -1,100 +1,104 @@
-import React, { useState } from 'react';
-import { Button, Header, Screen, Text, ThemeProvider } from '@apps-hub/ui';
-import StrongroomVault from 'strongroom-vault';
+import React, { useCallback, useEffect, useState } from 'react';
+import { AppState, BackHandler, View } from 'react-native';
+import { TabBar, ThemeProvider, palette } from '@apps-hub/ui';
+import Vault from 'strongroom-vault';
+import { deriving } from './src/call.ts';
+import { EditScreen } from './src/EditScreen.tsx';
+import { EntryScreen } from './src/EntryScreen.tsx';
+import { ImportScreen } from './src/ImportScreen.tsx';
+import { SettingsScreen } from './src/SettingsScreen.tsx';
+import { SetupScreen } from './src/SetupScreen.tsx';
+import { UnlockScreen } from './src/UnlockScreen.tsx';
+import { VaultScreen, type VaultView } from './src/VaultScreen.tsx';
 
-// Temporary Task 9 bridge check (debug builds only in practice); Task 11 replaces this file with the real screens.
-const CHECK_PASSWORD = 'correct horse battery staple';
+type Tab = 'vault' | 'settings';
+type Route = { name: 'tabs' } | { name: 'entry'; id: string } | { name: 'edit'; id: string | null } | { name: 'import' };
 
-function useCheckLog() {
-  const [lines, setLines] = useState<string[]>([]);
-  const note = (label: string, value: unknown) => {
-    const line = `${label}: ${JSON.stringify(value)}`;
-    console.log(`[strongroom-check] ${line}`);
-    setLines((l) => [...l, line]);
-  };
-  return { lines, note, clear: () => setLines([]) };
-}
+const TABS: ReadonlyArray<{ key: Tab; label: string }> = [
+  { key: 'vault', label: 'Vault' },
+  { key: 'settings', label: 'Settings' },
+];
 
-const codeOf = (e: unknown) => (e as { code?: string }).code ?? String(e);
+const TABS_ROUTE: Route = { name: 'tabs' };
 
 export default function App() {
-  const { lines, note, clear } = useCheckLog();
-
-  const runCheck = async () => {
-    clear();
-    try {
-      note('status', StrongroomVault.getStatus());
-      if (!StrongroomVault.getStatus().setUp) {
-        await StrongroomVault.setUp(CHECK_PASSWORD, StrongroomVault.generateRecoveryKey());
-        note('setUp', 'done');
-      }
-      StrongroomVault.lock();
-      note('locked', !StrongroomVault.getStatus().unlocked);
-      note('wrong password', await StrongroomVault.unlock('not the password at all'));
-      note('unlock', await StrongroomVault.unlock(CHECK_PASSWORD));
-      if (StrongroomVault.rows().length === 0) {
-        note('saved', StrongroomVault.save(null, { type: 'login', name: 'Example', username: 'me@example.com', password: 'check-password-1', sites: ['example.com'], note: '' }));
-      }
-      try {
-        StrongroomVault.save(null, { type: 'login', name: 'Bad', username: '', password: '', sites: ['not a site'], note: '' });
-      } catch (e) {
-        note('bad site', codeOf(e));
-      }
-      const rows = StrongroomVault.rows();
-      note('rows', rows);
-      if (rows[0]) note('entry', StrongroomVault.entry(rows[0].id));
-      note('status', StrongroomVault.getStatus());
-      note('diagnostics', StrongroomVault.diagnostics());
-    } catch (e) {
-      note('error', `${codeOf(e)} ${String(e)}`);
-    }
-  };
-
-  const runImport = async () => {
-    try {
-      const preview = await StrongroomVault.pickGoogleCsv();
-      note('import preview', preview);
-      if (preview) note('imported', StrongroomVault.commitImport());
-      note('rows', StrongroomVault.rows().length);
-    } catch (e) {
-      note('import error', `${codeOf(e)} ${String(e)}`);
-    }
-  };
-
-  const runFingerprint = async () => {
-    try {
-      note('fingerprint, wrong password', await StrongroomVault.setBiometric(true, 'not the password at all'));
-      note('fingerprint on', await StrongroomVault.setBiometric(true, CHECK_PASSWORD));
-      StrongroomVault.lock();
-      note('fingerprint unlock', await StrongroomVault.unlockWithBiometric());
-      note('status', StrongroomVault.getStatus());
-    } catch (e) {
-      note('fingerprint error', `${codeOf(e)} ${String(e)}`);
-    }
-  };
-
   return (
     <ThemeProvider brand="strongroom">
-      <Screen scroll>
-        <Header title="Strongroom" />
-        <Button label="Run bridge check" onPress={runCheck} />
-        <Button label="Import a CSV" variant="secondary" onPress={runImport} />
-        <Button label="Fingerprint" variant="secondary" onPress={runFingerprint} />
-        <Button
-          label="Fingerprint unlock"
-          variant="secondary"
-          onPress={async () => {
-            StrongroomVault.lock();
-            note('fingerprint unlock', await StrongroomVault.unlockWithBiometric());
-            note('status', StrongroomVault.getStatus());
-          }}
-        />
-        {lines.map((line, i) => (
-          <Text key={i} variant="caption">
-            {line}
-          </Text>
-        ))}
-      </Screen>
+      <Home />
     </ThemeProvider>
+  );
+}
+
+function Home() {
+  const [status, setStatus] = useState(() => Vault.getStatus());
+  const [settingUp, setSettingUp] = useState(!status.setUp);
+  const [tab, setTab] = useState<Tab>('vault');
+  const [route, setRoute] = useState<Route>(TABS_ROUTE);
+  const [view, setView] = useState<VaultView>({ kind: 'login', query: '' });
+
+  // Never while a key derivation is pending: the bridge's sync calls would wait on it.
+  const refresh = useCallback(() => {
+    if (!deriving()) setStatus(Vault.getStatus());
+  }, []);
+
+  useEffect(() => Vault.setPalette(JSON.stringify({ light: palette('strongroom', 'light'), dark: palette('strongroom', 'dark') })), []);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => s === 'active' && refresh());
+    return () => sub.remove();
+  }, [refresh]);
+  useEffect(() => {
+    if (!status.unlocked) setRoute(TABS_ROUTE);
+  }, [status.unlocked]);
+  useEffect(() => {
+    if (route.name === 'tabs') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setRoute(route.name === 'edit' && route.id !== null ? { name: 'entry', id: route.id } : TABS_ROUTE);
+      return true;
+    });
+    return () => sub.remove();
+  }, [route]);
+
+  const home = () => setRoute(TABS_ROUTE);
+
+  if (settingUp) {
+    return (
+      <SetupScreen
+        status={status}
+        onFinished={() => {
+          setSettingUp(false);
+          refresh();
+        }}
+      />
+    );
+  }
+  if (!status.unlocked) return <UnlockScreen status={status} onUnlocked={refresh} />;
+
+  if (route.name === 'entry') {
+    return <EntryScreen id={route.id} onBack={home} onEdit={() => setRoute({ name: 'edit', id: route.id })} onLocked={refresh} />;
+  }
+  if (route.name === 'edit') {
+    const { id } = route;
+    return <EditScreen id={id} onBack={() => setRoute(id === null ? TABS_ROUTE : { name: 'entry', id })} onSaved={(saved) => setRoute({ name: 'entry', id: saved })} onLocked={refresh} />;
+  }
+  if (route.name === 'import') return <ImportScreen onBack={home} onDone={home} onLocked={refresh} />;
+
+  return (
+    <>
+      <View style={{ flex: 1 }}>
+        {tab === 'vault' ? (
+          <VaultScreen
+            status={status}
+            refresh={refresh}
+            view={view}
+            onView={setView}
+            onOpen={(id) => setRoute({ name: 'entry', id })}
+            onAdd={() => setRoute({ name: 'edit', id: null })}
+          />
+        ) : (
+          <SettingsScreen status={status} refresh={refresh} onImport={() => setRoute({ name: 'import' })} />
+        )}
+      </View>
+      <TabBar tabs={TABS} value={tab} onChange={setTab} />
+    </>
   );
 }
