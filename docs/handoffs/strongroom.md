@@ -83,7 +83,7 @@ no password generator / CSV export / card saving in v1.
   Baseline `pnpm test` exit 0 (181 pass). Task 1: security-engineer threat model
   (17 findings, 0C/5H/5M/7L) → rulings in `.superpowers/sdd/PHASE-1-PLAN/task-1-rulings.md`
   → folded into DESIGN.md + plan (commit 5879adb) → review: 1 Important + 11
-  Minor → fix round 1 dispatched to the docs editor.
+  Minor → fix round 1 (20b52ef) → re-review clean. Task 1 complete. Task 2 started.
 
 ## Owner items to raise at the end of Phase 1 (from Task 1)
 
@@ -114,11 +114,7 @@ SDD ledger (task progress, rulings, deferred minors):
 `git log` over memory. Phone installs only via the Store (release builds);
 debug work uses the emulator.
 
-**Exact next step:** Task 1 fix round 1 is committed (`20b52ef`; all 12 review
-findings fixed per `task-1-report.md`). Run the SDD scoped re-review: run
-`scripts/review-package docs/strongroom/PHASE-1-PLAN.md 5879adb 20b52ef`, then
-dispatch `re-review-prompt.md` with the findings in `task-1-review.md`.
-
-When the re-review is clean, append `Task 1: complete (commits 12fa7de..<head>, review clean)`
-to the ledger and start Task 2 (scaffold) with the SDD implementer template.
-Then continue through Task 12 without pausing.
+**Exact next step:** Task 1 is complete (re-review clean, 2026-10-30). Tasks
+2–12 run in order with the SDD loop. The ledger's last lines say which task is
+in flight and whether it is at implement, review or a fix round; resume there.
+Minors carried forward from Task 1 (into Tasks 6 and 9–11) are ledgered.
