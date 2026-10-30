@@ -74,7 +74,8 @@ class MdnsProbe(
         }
       }
       synchronized(browsers) {
-        if (!browsing || !browsedTypes.add(type)) return
+        if (!browsing || !shouldBrowse(type, browsedTypes)) return
+        browsedTypes.add(type)
         runCatching { nsdManager.discoverServices(type, NsdManager.PROTOCOL_DNS_SD, browser) }
           .onSuccess { browsers.add(browser) }
       }
@@ -149,6 +150,16 @@ class MdnsProbe(
 
   companion object {
     const val MAX_RESOLVES = 32
+
+    // NSD allows a client about 10 outstanding requests (FAILURE_MAX_LIMIT): 1 meta + 6 browsers + 1 resolve fits.
+    const val MAX_BROWSERS = 6
+    val BROWSE_TYPES = listOf(
+      "_googlecast._tcp", "_airplay._tcp", "_ipp._tcp", "_smb._tcp", "_hap._tcp", "_companion-link._tcp",
+    )
+
+    /** Browse a reported type only if it is a listed one not yet browsed and the browser cap has room. */
+    internal fun shouldBrowse(type: String?, browsed: Set<String>): Boolean =
+      type != null && type in BROWSE_TYPES && type !in browsed && browsed.size < MAX_BROWSERS
     const val RESOLVE_TIMEOUT_MS = 1500L
 
     /**
