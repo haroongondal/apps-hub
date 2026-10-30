@@ -15,8 +15,11 @@ export interface DeviceNames {
 }
 
 const NAME_MAX = 64;
-// Control characters except \t \n \v \f \r, which collapse to a space below.
-const CONTROLS = /[\u0000-\u0008\u000e-\u001f\u007f-\u009f]/g;
+// Control characters except \t \n \v \f \r (collapsed to a space below), plus
+// the bidi embedding/override/isolate characters that can reorder UI text.
+// ZWJ, ZWNJ, LRM and RLM stay: real names need them.
+const CONTROLS =
+  /[\u0000-\u0008\u000e-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g;
 
 /** Trim, strip control characters, collapse whitespace, cap at 64 characters. */
 export function sanitizeName(raw: string | null | undefined): string | null {
@@ -47,12 +50,17 @@ export function isPrivateIpv4(ip: string): boolean {
 }
 
 export function displayNameFor(device: StoredDevice): string {
+  // An IP-literal hostname has no useful first label ("192" of 192.168.1.5).
+  const hostLabel =
+    device.hostname && parseIpv4(device.hostname) === null
+      ? device.hostname.split('.')[0]
+      : null;
   return (
     device.customName ||
     device.mdnsName ||
     device.friendlyName ||
     device.netbiosName ||
-    device.hostname?.split('.')[0] ||
+    hostLabel ||
     device.vendorOrModel ||
     device.lastIp
   );

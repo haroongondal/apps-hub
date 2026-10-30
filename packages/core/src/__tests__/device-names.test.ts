@@ -50,6 +50,13 @@ test('sanitizeName returns null for blank or missing input', () => {
   assert.equal(sanitizeName(undefined), null);
 });
 
+test('sanitizeName strips bidi overrides but keeps ZWJ, ZWNJ, LRM and RLM', () => {
+  assert.equal(sanitizeName('\u202Evt moor gniviL'), 'vt moor gniviL');
+  assert.equal(sanitizeName('a\u2066b\u2069c\u202ad\u202ce'), 'abcde');
+  assert.equal(sanitizeName('a\u200Db'), 'a\u200Db');
+  assert.equal(sanitizeName('a\u200Cb\u200Ec\u200Fd'), 'a\u200Cb\u200Ec\u200Fd');
+});
+
 test('cleanMdnsInstanceName drops a leading MAC-style prefix', () => {
   assert.equal(
     cleanMdnsInstanceName('A1B2C3D4E5F6@Living Room TV'),
@@ -83,6 +90,22 @@ test('displayNameFor follows custom, mDNS, friendly, NetBIOS, hostname, model, I
   assert.equal(displayNameFor(noHostname), 'Linux UPnP/1.0');
   const noModel = { ...noHostname, vendorOrModel: null };
   assert.equal(displayNameFor(noModel), '192.168.7.5');
+});
+
+test('displayNameFor ignores an IPv4-literal hostname', () => {
+  const device = fullDevice({
+    customName: null,
+    mdnsName: null,
+    friendlyName: null,
+    netbiosName: null,
+    hostname: '192.168.1.5',
+    vendorOrModel: null,
+  });
+  assert.equal(displayNameFor(device), '192.168.7.5');
+  assert.equal(
+    displayNameFor({ ...device, vendorOrModel: 'Linux UPnP/1.0' }),
+    'Linux UPnP/1.0',
+  );
 });
 
 test('applyDeviceNames keeps identity and user fields and old names where new ones are null', () => {
