@@ -75,6 +75,15 @@ test('cleanMdnsInstanceName drops a leading MAC-style prefix', () => {
   assert.equal(cleanMdnsInstanceName('HP LaserJet'), 'HP LaserJet');
 });
 
+test('cleanMdnsInstanceName decodes DNS-SD escapes', () => {
+  assert.equal(cleanMdnsInstanceName('Living\\032Room\\032TV'), 'Living Room TV');
+  assert.equal(cleanMdnsInstanceName('A\\.B'), 'A.B');
+  // Decoded before the MAC strip, so an escaped "@" still counts as the separator.
+  assert.equal(cleanMdnsInstanceName('A1B2C3D4E5F6\\064Den'), 'Den');
+  // A lone trailing backslash has nothing to escape: it stays, and nothing throws.
+  assert.equal(cleanMdnsInstanceName('Den\\'), 'Den\\');
+});
+
 test('isPrivateIpv4 covers the RFC 1918 and link-local ranges only', () => {
   assert.equal(isPrivateIpv4('192.168.1.5'), true);
   assert.equal(isPrivateIpv4('10.0.0.1'), true);

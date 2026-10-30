@@ -3,6 +3,7 @@ package expo.modules.netlenscore
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.os.Build
 import java.net.Inet4Address
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CompletableDeferred
@@ -137,8 +138,14 @@ class MdnsProbe(
     return if (started.isSuccess) withTimeoutOrNull(RESOLVE_TIMEOUT_MS) { result.await() } else null
   }
 
-  @Suppress("DEPRECATION") // NsdServiceInfo.host: deprecated in API 34 in favour of hostAddresses
-  private fun ipv4Host(info: NsdServiceInfo): String? = (info.host as? Inet4Address)?.hostAddress
+  // From API 34 `host` is only the first address, which can be IPv6 while an IPv4 exists; hostAddresses has all.
+  @Suppress("DEPRECATION")
+  private fun ipv4Host(info: NsdServiceInfo): String? {
+    val addresses =
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) info.hostAddresses
+      else listOfNotNull(info.host)
+    return addresses.firstNotNullOfOrNull { (it as? Inet4Address)?.hostAddress }
+  }
 
   companion object {
     const val MAX_RESOLVES = 32

@@ -32,9 +32,15 @@ export function sanitizeName(raw: string | null | undefined): string | null {
   return VISIBLE.test(name) ? name : null;
 }
 
-/** AirPlay-style instances start with a MAC (`A1B2C3D4E5F6@Name`); drop it. */
+// DNS-SD escapes: `\DDD` is a decimal char code, `\X` is X itself. A lone trailing backslash stays.
+const DNS_SD_ESCAPE = /\\(\d{3}|[\s\S])/g;
+
+/** Decode DNS-SD escapes, drop an AirPlay-style MAC prefix (`A1B2C3D4E5F6@Name`), then sanitise. */
 export function cleanMdnsInstanceName(raw: string): string | null {
-  return sanitizeName(raw.replace(/^[0-9A-F]{12}@/, ''));
+  const decoded = raw.replace(DNS_SD_ESCAPE, (_, code: string) =>
+    code.length === 3 ? String.fromCharCode(Number(code)) : code,
+  );
+  return sanitizeName(decoded.replace(/^[0-9A-F]{12}@/, ''));
 }
 
 /** 10/8, 172.16/12, 192.168/16 and link-local 169.254/16. */
