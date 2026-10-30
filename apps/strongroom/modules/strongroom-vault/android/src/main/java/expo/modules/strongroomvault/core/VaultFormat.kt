@@ -63,7 +63,7 @@ data class Header(
 object VaultFormat {
   const val VERSION = 1
   internal const val SALT_BYTES = 16
-  private const val VAULT_KEY_BYTES = 32
+  internal const val VAULT_KEY_BYTES = 32
   private const val WRAP_LABEL = "strongroom/v1/wrap"
   private val PASSWORD_WRAP_AAD = "strongroom/v1/password-wrap".toByteArray(Charsets.UTF_8)
   private val RECOVERY_WRAP_AAD = "strongroom/v1/recovery-wrap".toByteArray(Charsets.UTF_8)

@@ -40,7 +40,7 @@ sealed interface Entry {
     val note: String,
     override val updatedAt: Long,
   ) : Entry {
-    override fun toString() = "Login(name=$name, username=$username, password=***, sites=$sites, apps=$apps, note=$note, updatedAt=$updatedAt)"
+    override fun toString() = "Login(name=$name, username=$username, password=***, sites=$sites, apps=$apps, note=***, updatedAt=$updatedAt)"
   }
 
   data class Card(
@@ -54,10 +54,12 @@ sealed interface Entry {
     override val updatedAt: Long,
   ) : Entry {
     override fun toString() =
-      "Card(name=$name, holder=$holder, number=***, expMonth=$expMonth, expYear=$expYear, cvc=***, note=$note, updatedAt=$updatedAt)"
+      "Card(name=$name, holder=$holder, number=***, expMonth=$expMonth, expYear=$expYear, cvc=***, note=***, updatedAt=$updatedAt)"
   }
 
-  data class Note(val name: String, val text: String, override val updatedAt: Long) : Entry
+  data class Note(val name: String, val text: String, override val updatedAt: Long) : Entry {
+    override fun toString() = "Note(name=$name, text=***, updatedAt=$updatedAt)"
+  }
 
   data class Deleted(override val updatedAt: Long) : Entry
 }

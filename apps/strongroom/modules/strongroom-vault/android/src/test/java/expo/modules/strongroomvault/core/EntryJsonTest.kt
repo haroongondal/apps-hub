@@ -110,6 +110,18 @@ class EntryJsonTest {
     assertFalse(c, "4111111111111111" in c || "987" in c)
   }
 
+  @Test fun toStringRedactsNotes() {
+    val l = Entry.Login("site", "someone", "pw", emptyList(), emptyList(), "recovery codes 1234", 1).toString()
+    assertTrue(l, "note=***" in l && "site" in l)
+    assertFalse(l, "recovery codes" in l)
+    val c = Entry.Card("Visa", "A. Holder", "4111", 12, 2030, "987", "pin is 0000", 1).toString()
+    assertTrue(c, "note=***" in c && "Visa" in c)
+    assertFalse(c, "pin is" in c)
+    val n = Entry.Note("Wi-Fi", "the secret text", 1).toString()
+    assertTrue(n, "text=***" in n && "Wi-Fi" in n)
+    assertFalse(n, "secret" in n)
+  }
+
   @Test fun appIdRefusesABrokenDigest() {
     assertEquals(digestA, AppId("p", digestA).certSha256)
     for (d in listOf("", digestA.take(63), digestA + "0", digestA.uppercase(), "g".repeat(64))) {
