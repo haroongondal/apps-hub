@@ -2,10 +2,6 @@
   <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
   <!-- The autofill service reads each requesting app's signing certificate; without this, package visibility hides every app (checked on API 35). -->
   <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
-  <queries>
-    <package android:name="com.android.chrome" />
-    <package android:name="org.mozilla.firefox" />
-  </queries>
   <application>
     <service
       android:name="expo.modules.strongroomvault.android.StrongroomAutofillService"

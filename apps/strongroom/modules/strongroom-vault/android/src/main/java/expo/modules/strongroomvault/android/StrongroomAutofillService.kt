@@ -10,6 +10,7 @@ import android.service.autofill.SaveCallback
 import android.service.autofill.SaveRequest
 import expo.modules.strongroomvault.core.AuthRequest
 import expo.modules.strongroomvault.core.Browsers
+import expo.modules.strongroomvault.core.DetectedForm
 import expo.modules.strongroomvault.core.Entry
 import expo.modules.strongroomvault.core.FormDetector
 import expo.modules.strongroomvault.core.MatchIndex
@@ -22,6 +23,7 @@ import expo.modules.strongroomvault.signerSha256
 import kotlin.concurrent.thread
 
 internal const val SAVE_FAILED = "Strongroom couldn't keep this password. Unlock Strongroom and save it again."
+internal const val SAVE_REFUSED = "Strongroom can't save a password from this screen. Add it in Strongroom instead."
 
 /** Thin by design: every decision is in core/. Never calls VaultHolder.touch(), so other apps' requests don't keep the vault open. */
 class StrongroomAutofillService : AutofillService() {
@@ -43,20 +45,19 @@ class StrongroomAutofillService : AutofillService() {
     val structure = request.fillContexts.last().structure
     if (!shouldServe(structure.activityComponent.packageName, packageName)) return callback.onSuccess()
     thread(name = "strongroom-save") {
-      val kept = try {
+      val failure = try {
         save(StructureReader.read(structure))
       } catch (e: Exception) {
-        false
+        SAVE_FAILED
       }
-      if (kept) callback.onSuccess() else callback.onFailure(SAVE_FAILED)
+      if (failure == null) callback.onSuccess() else callback.onFailure(failure)
     }
   }
 
   private fun respond(request: FillRequest, read: ReadStructure): FillResponse? {
-    val requester = requester(read) ?: return null
     val form = FormDetector.detect(read.nodes)
     if (form.password == null && form.newPassword == null && form.card == null) return null
-    if (requester is Requester.Web && !FormDetector.allTargetsInDomain(read.nodes, form, requester.site.host)) return null
+    val requester = requester(read, form) ?: return null
     val vault = VaultHolder.get(this)
     if (!vault.isSetUp) return null
     val entries = try {
@@ -64,15 +65,15 @@ class StrongroomAutofillService : AutofillService() {
     } catch (e: IllegalStateException) {
       null // locked in between: answer as locked
     }
-    val present = Datasets.Presenter(this, request.inlineSuggestionsRequest)
+    val logins = FillValues.loginRoles(form).mapValues { read.ids[it.value] }
+    val present = Datasets.Presenter(this, request.inlineSuggestionsRequest, reservePending = logins.isNotEmpty())
     val response = FillResponse.Builder()
     var any = false
 
-    val logins = FillValues.loginRoles(form).mapValues { read.ids[it.value] }
     if (logins.isNotEmpty()) {
       val host = (requester as? Requester.Web)?.site?.takeIf(Matching::needsHostLabel)?.host
       if (entries != null) {
-        for ((_, login) in entries.loginsMatching(requester)) {
+        for (login in entries.values.filterIsInstance<Entry.Login>().filter { Matching.matches(it, requester) }.sortedBy { it.name.lowercase() }) {
           Datasets.filled(logins, login, present.of(login.username.ifEmpty { login.name }, host))?.let { response.addDataset(it); any = true }
         }
       } else {
@@ -84,16 +85,16 @@ class StrongroomAutofillService : AutofillService() {
         }
       }
       val auth = Datasets.authIntent(this, AuthRequest("pick", null, requester, OTHER_LOGINS), logins)
-      response.addDataset(Datasets.locked(logins, present.of(OTHER_LOGINS, null), auth))
+      response.addDataset(Datasets.locked(logins, present.of(OTHER_LOGINS, null, reserved = true), auth))
       any = true
     }
 
     val cards = FillValues.cardRoles(form).mapValues { read.ids[it.value] }
     if (cards.isNotEmpty()) {
       if (entries != null) {
-        for (row in vault.rows().filter { it.type == "card" }) {
-          val auth = Datasets.authIntent(this, AuthRequest("fill", row.id, requester, row.name), cards)
-          response.addDataset(Datasets.locked(cards, present.of(row.name, row.subtitle), auth))
+        for ((id, card) in entries.mapNotNull { (id, e) -> (e as? Entry.Card)?.let { id to it } }.sortedBy { it.second.name.lowercase() }) {
+          val auth = Datasets.authIntent(this, AuthRequest("fill", id, requester, card.name), cards)
+          response.addDataset(Datasets.locked(cards, present.of(card.name, "•••• " + card.number.filter(Char::isDigit).takeLast(4)), auth))
           any = true
         }
       } else {
@@ -107,11 +108,11 @@ class StrongroomAutofillService : AutofillService() {
     return if (any) response.build() else null
   }
 
-  private fun save(read: ReadStructure): Boolean {
-    val requester = requester(read) ?: return false
+  /** Null when the password was kept; otherwise the message the save sheet shows. */
+  private fun save(read: ReadStructure): String? {
     val form = FormDetector.detect(read.nodes)
-    if (requester is Requester.Web && !FormDetector.allTargetsInDomain(read.nodes, form, requester.site.host)) return false
-    val password = (form.newPassword ?: form.password)?.let { read.values[it] }?.takeIf { it.isNotEmpty() } ?: return false
+    val requester = requester(read, form) ?: return SAVE_REFUSED
+    val password = (form.newPassword ?: form.password)?.let { read.values[it] }?.takeIf { it.isNotEmpty() } ?: return SAVE_REFUSED
     val username = form.username?.let { read.values[it] }.orEmpty()
     val save = PendingSave(requester, label(requester), username, password, System.currentTimeMillis())
     val vault = VaultHolder.get(this)
@@ -124,11 +125,15 @@ class StrongroomAutofillService : AutofillService() {
     } catch (e: Exception) {
       false // locked in between or a write failed: hold it for the next unlock instead
     }
-    return applied || VaultHolder.addPending(this, save)
+    return if (applied || VaultHolder.addPending(this, save)) null else SAVE_FAILED
   }
 
-  private fun requester(read: ReadStructure): Requester? =
-    Matching.requester(read.pkg, certSha256(read.pkg), read.webDomain, read.webScheme, Browsers.ALLOWLIST)
+  // The web origin comes from the target fields, and a browser's targets must all sit in its domain, so a cross-origin frame gets nothing.
+  private fun requester(read: ReadStructure, form: DetectedForm): Requester? {
+    val origin = FormDetector.origin(read.nodes, form) ?: return null
+    val r = Matching.requester(read.pkg, certSha256(read.pkg), origin.domain, origin.scheme, Browsers.ALLOWLIST) ?: return null
+    return r.takeUnless { it is Requester.Web && !FormDetector.allTargetsInDomain(read.nodes, form, it.site.host) }
+  }
 
   private fun certSha256(pkg: String): String? = try {
     packageManager.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong())).signerSha256()
@@ -144,9 +149,6 @@ class StrongroomAutofillService : AutofillService() {
       r.id.pkg
     }
   }
-
-  private fun Map<String, Entry>.loginsMatching(r: Requester): List<Pair<String, Entry.Login>> =
-    mapNotNull { (id, e) -> (e as? Entry.Login)?.takeIf { Matching.matches(it, r) }?.let { id to it } }.sortedBy { it.second.name.lowercase() }
 
   private companion object {
     const val OTHER_LOGINS = "Other logins"

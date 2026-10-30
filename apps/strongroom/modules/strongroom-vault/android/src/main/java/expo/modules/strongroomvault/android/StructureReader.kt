@@ -5,14 +5,7 @@ import android.view.View
 import android.view.autofill.AutofillId
 import expo.modules.strongroomvault.core.FieldNode
 
-internal class ReadStructure(
-  val pkg: String,
-  val nodes: List<FieldNode>,
-  val ids: List<AutofillId>,
-  val values: List<String?>,
-  val webDomain: String?,
-  val webScheme: String?,
-)
+internal class ReadStructure(val pkg: String, val nodes: List<FieldNode>, val ids: List<AutofillId>, val values: List<String?>)
 
 internal object StructureReader {
   // shortcut: text fields only, so a <select> or spinner expiry is never filled; add list values when a card form needs them.
@@ -20,19 +13,14 @@ internal object StructureReader {
     val nodes = mutableListOf<FieldNode>()
     val ids = mutableListOf<AutofillId>()
     val values = mutableListOf<String?>()
-    var webDomain: String? = null
-    var webScheme: String? = null
-    // Iterative, with each node's nearest web domain: a hostile app can nest views deep enough to overflow a recursive walk.
-    val stack = ArrayDeque<Pair<AssistStructure.ViewNode, String?>>()
-    for (i in structure.windowNodeCount - 1 downTo 0) stack.addLast(structure.getWindowNodeAt(i).rootViewNode to null)
+    // Iterative, with each node's nearest web domain and scheme: a hostile app can nest views deep enough to overflow a recursive walk.
+    val stack = ArrayDeque<Triple<AssistStructure.ViewNode, String?, String?>>()
+    for (i in structure.windowNodeCount - 1 downTo 0) stack.addLast(Triple(structure.getWindowNodeAt(i).rootViewNode, null, null))
     while (stack.isNotEmpty()) {
-      val (node, inherited) = stack.removeLast()
+      val (node, inheritedDomain, inheritedScheme) = stack.removeLast()
       val own = node.webDomain?.takeIf { it.isNotEmpty() }
-      if (own != null && webDomain == null) {
-        webDomain = own
-        webScheme = node.webScheme?.takeIf { it.isNotEmpty() }
-      }
-      val domain = own ?: inherited
+      val domain = own ?: inheritedDomain
+      val scheme = if (own != null) node.webScheme?.takeIf { it.isNotEmpty() } else inheritedScheme
       val id = node.autofillId
       if (id != null && node.autofillType == View.AUTOFILL_TYPE_TEXT) {
         val html = node.htmlInfo?.attributes.orEmpty().associate { it.first to it.second }
@@ -46,12 +34,13 @@ internal object StructureReader {
           idEntry = node.idEntry,
           hintText = node.hint,
           webDomain = domain,
+          webScheme = scheme,
         )
         ids += id
         values += node.autofillValue?.takeIf { it.isText }?.textValue?.toString()
       }
-      for (c in node.childCount - 1 downTo 0) stack.addLast(node.getChildAt(c) to domain)
+      for (c in node.childCount - 1 downTo 0) stack.addLast(Triple(node.getChildAt(c), domain, scheme))
     }
-    return ReadStructure(structure.activityComponent.packageName, nodes, ids, values, webDomain, webScheme)
+    return ReadStructure(structure.activityComponent.packageName, nodes, ids, values)
   }
 }

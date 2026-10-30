@@ -12,7 +12,11 @@ data class FieldNode(
   val idEntry: String?,
   val hintText: String?,
   val webDomain: String?,
+  val webScheme: String? = null,
 )
+
+/** The web domain and scheme a form's target fields report; both null for a native form. */
+data class Origin(val domain: String?, val scheme: String?)
 
 data class CardFields(val number: Int?, val holder: Int?, val expMonth: Int?, val expYear: Int?, val expDate: Int?, val cvc: Int?)
 
@@ -112,12 +116,22 @@ object FormDetector {
 
   fun allTargetsInDomain(nodes: List<FieldNode>, form: DetectedForm, requesterHost: String): Boolean {
     val host = Matching.normalizeHost(requesterHost) ?: return false
-    val c = form.card
-    val targets = listOfNotNull(form.username, form.password, form.newPassword, c?.number, c?.holder, c?.expMonth, c?.expYear, c?.expDate, c?.cvc)
+    val targets = targets(form)
     return targets.isNotEmpty() && targets.all { i ->
       val found = nodes.filter { it.index == i }
       found.isNotEmpty() && found.all { n -> n.webDomain?.let { Matching.normalizeHost(it) } == host }
     }
+  }
+
+  // From the target fields only, so an unrelated WebView elsewhere in the window can't name the requester; null when they disagree.
+  fun origin(nodes: List<FieldNode>, form: DetectedForm): Origin? {
+    val origins = targets(form).flatMap { i -> nodes.filter { it.index == i } }.map { Origin(it.webDomain, it.webScheme) }.distinct()
+    return if (origins.size > 1) null else origins.firstOrNull() ?: Origin(null, null)
+  }
+
+  private fun targets(form: DetectedForm): List<Int> {
+    val c = form.card
+    return listOfNotNull(form.username, form.password, form.newPassword, c?.number, c?.holder, c?.expMonth, c?.expYear, c?.expDate, c?.cvc)
   }
 
   private fun classify(n: FieldNode): Pair<Role, Int>? {

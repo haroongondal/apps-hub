@@ -17,6 +17,15 @@ class LinkPromptTest {
     assertEquals("com.bank", p.pkg)
   }
 
+  @Test fun onlyKnownStoresCountAsNotFromAFile() {
+    for (store in listOf("com.android.vending", "com.haroon.store", "org.fdroid.fdroid", "com.xiaomi.mipicks", "com.xiaomi.market")) {
+      assertFalse(store, LinkPrompt.installedFromFile(store))
+    }
+    for (other in listOf(null, "", "com.miui.packageinstaller", "com.google.android.packageinstaller", "com.android.shell", "com.android.vending.evil")) {
+      assertTrue(other.toString(), LinkPrompt.installedFromFile(other))
+    }
+  }
+
   @Test fun sameCertOrOtherPackageIsNotRefused() {
     assertNull(LinkPrompt.build(login, Requester.App(AppId("com.bank", certA), "bank.com"), false).refusal)
     assertNull(LinkPrompt.build(login, Requester.App(AppId("com.other", certB), null), false).refusal)

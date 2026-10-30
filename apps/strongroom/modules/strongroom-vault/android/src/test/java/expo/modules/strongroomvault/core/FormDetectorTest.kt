@@ -291,4 +291,20 @@ class FormDetectorTest {
     assertFalse(FormDetector.allTargetsInDomain(nodes, form(password = 7), "bank.com"))
     assertFalse(FormDetector.allTargetsInDomain(listOf(node(0, webDomain = "not a host")), form(password = 0), "bank.com"))
   }
+
+  @Test fun originComesFromTheTargetFieldsOnly() {
+    val ad = FieldNode(5, emptyList(), text, null, null, null, null, null, "ads.example", "https")
+    val native = listOf(node(0), node(1), ad)
+    assertEquals(Origin(null, null), FormDetector.origin(native, form(username = 0, password = 1)))
+    val web = listOf(FieldNode(0, emptyList(), text, null, null, null, null, null, "bank.com", "https"), FieldNode(1, emptyList(), text, null, null, null, null, null, "bank.com", "https"), ad)
+    assertEquals(Origin("bank.com", "https"), FormDetector.origin(web, form(username = 0, password = 1)))
+  }
+
+  @Test fun originIsNullWhenTargetFieldsDisagree() {
+    val mixed = listOf(node(0), FieldNode(1, emptyList(), text, null, null, null, null, null, "bank.com", "https"))
+    assertNull(FormDetector.origin(mixed, form(username = 0, password = 1)))
+    val schemes = listOf(FieldNode(0, emptyList(), text, null, null, null, null, null, "bank.com", "http"), FieldNode(1, emptyList(), text, null, null, null, null, null, "bank.com", "https"))
+    assertNull(FormDetector.origin(schemes, form(username = 0, password = 1)))
+    assertNull(FormDetector.origin(mixed, form(card = card(number = 0, cvc = 1))))
+  }
 }

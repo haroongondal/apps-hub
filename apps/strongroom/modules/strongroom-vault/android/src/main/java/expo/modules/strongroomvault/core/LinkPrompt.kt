@@ -5,6 +5,10 @@ data class LinkPrompt(val pkg: String?, val domain: String?, val installedFromFi
   companion object {
     private const val SAME_PACKAGE_OTHER_CERT =
       "This app has the same name as the saved one but a different signature. It may be fake. Strongroom won't fill it."
+    private val STORES = setOf("com.android.vending", "com.haroon.store", "org.fdroid.fdroid", "com.xiaomi.mipicks", "com.xiaomi.market")
+
+    // An allowlist, so an installer we don't know (an OEM package installer, a file manager) still shows the warning.
+    fun installedFromFile(installer: String?): Boolean = installer == null || installer !in STORES
 
     fun build(login: Entry.Login, r: Requester, installedFromFile: Boolean): LinkPrompt = when (r) {
       is Requester.App -> LinkPrompt(

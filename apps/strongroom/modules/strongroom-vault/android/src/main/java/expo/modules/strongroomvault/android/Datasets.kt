@@ -17,9 +17,11 @@ import android.view.inputmethod.InlineSuggestionsRequest
 import android.widget.RemoteViews
 import androidx.autofill.inline.UiVersions
 import androidx.autofill.inline.v1.InlineSuggestionUi
+import androidx.core.os.BundleCompat
 import expo.modules.strongroomvault.core.AuthRequest
 import expo.modules.strongroomvault.core.DetectedForm
 import expo.modules.strongroomvault.core.Entry
+import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -40,9 +42,9 @@ internal object FillValues {
       put(NUMBER, e.number)
       put(HOLDER, e.holder)
       put(CVC, e.cvc)
-      e.expMonth?.let { put(EXP_MONTH, "%02d".format(it)) }
+      e.expMonth?.let { put(EXP_MONTH, String.format(Locale.ROOT, "%02d", it)) }
       e.expYear?.let { put(EXP_YEAR, it.toString()) }
-      if (e.expMonth != null && e.expYear != null) put(EXP_DATE, "%02d/%02d".format(e.expMonth, e.expYear % 100))
+      if (e.expMonth != null && e.expYear != null) put(EXP_DATE, String.format(Locale.ROOT, "%02d/%02d", e.expMonth, e.expYear % 100))
     }
     else -> emptyMap()
   }.filterValues { it.isNotEmpty() }
@@ -86,7 +88,7 @@ internal object Datasets {
 
   fun targets(intent: Intent): Map<String, AutofillId> {
     val b = intent.getBundleExtra(TARGETS) ?: return emptyMap()
-    return FillValues.ROLES.mapNotNull { role -> b.getParcelable(role, AutofillId::class.java)?.let { role to it } }.toMap()
+    return FillValues.ROLES.mapNotNull { role -> BundleCompat.getParcelable(b, role, AutofillId::class.java)?.let { role to it } }.toMap()
   }
 
   fun saveInfo(form: DetectedForm, ids: List<AutofillId>): SaveInfo? {
@@ -99,27 +101,30 @@ internal object Datasets {
       .build()
   }
 
-  class Presenter(private val context: Context, private val inline: InlineSuggestionsRequest?) {
-    private var shown = 0
+  class Presenter(private val context: Context, private val inline: InlineSuggestionsRequest?, private var reservePending: Boolean) {
+    private var inlineUsed = 0
     private val attribution by lazy {
       val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent()
       PendingIntent.getActivity(context, 0, launch, PendingIntent.FLAG_IMMUTABLE)
     }
 
-    fun of(title: String, subtitle: String?): Presentations {
+    // shortcut: the keyboard offers only datasets with an inline presentation, so one of its maxSuggestionCount slots is kept for the
+    // reserved dataset (Other logins) until it's placed; matches or cards past the rest aren't offered inline. Page them if owners hit it.
+    fun of(title: String, subtitle: String?, reserved: Boolean = false): Presentations {
       val menu = RemoteViews(context.packageName, android.R.layout.simple_list_item_1)
       menu.setTextViewText(android.R.id.text1, listOfNotNull(title, subtitle).joinToString(" · "))
       val b = Presentations.Builder().setMenuPresentation(menu)
       val specs = inline?.inlinePresentationSpecs.orEmpty()
-      // shortcut: past maxSuggestionCount a dataset shows only in the dropdown; reserve a slot for "Other logins" if owners miss it.
-      if (inline != null && specs.isNotEmpty() && shown < inline.maxSuggestionCount) {
-        val spec = specs[minOf(shown, specs.size - 1)]
+      val slots = (inline?.maxSuggestionCount ?: 0) - if (reservePending && !reserved) 1 else 0
+      if (reserved) reservePending = false
+      if (specs.isNotEmpty() && inlineUsed < slots) {
+        val spec = specs[minOf(inlineUsed, specs.size - 1)]
         if (UiVersions.INLINE_UI_VERSION_1 in UiVersions.getVersions(spec.style)) {
           val content = InlineSuggestionUi.newContentBuilder(attribution).setTitle(title).apply { subtitle?.let(::setSubtitle) }.build()
           b.setInlinePresentation(InlinePresentation(content.slice, spec, false))
+          inlineUsed++
         }
       }
-      shown++
       return b.build()
     }
   }

@@ -144,8 +144,8 @@ class UnlockActivity : AppCompatActivity() {
   }
 
   private fun list(title: String, empty: String, rows: List<Row>) {
+    if (rows.isEmpty()) return message(empty, title)
     screen(title, null)
-    if (rows.isEmpty()) return message(empty)
     val adapter = object : ArrayAdapter<Row>(this, android.R.layout.simple_list_item_2, android.R.id.text1, rows.toMutableList()) {
       override fun getView(position: Int, convertView: View?, parent: ViewGroup): View = super.getView(position, convertView, parent).apply {
         val row = getItem(position)!!
@@ -225,7 +225,8 @@ class UnlockActivity : AppCompatActivity() {
     finish()
   }
 
-  private fun message(text: String) {
+  private fun message(text: String, title: String = "Strongroom") {
+    screen(title, null)
     body(text, colors["text"])
     button("Cancel") { finish() }
   }
@@ -233,7 +234,7 @@ class UnlockActivity : AppCompatActivity() {
   private fun installedFromFile(): Boolean {
     val pkg = (req.requester as? Requester.App)?.id?.pkg ?: return false
     return try {
-      packageManager.getInstallSourceInfo(pkg).installingPackageName.let { it == null || it in FILE_INSTALLERS }
+      LinkPrompt.installedFromFile(packageManager.getInstallSourceInfo(pkg).installingPackageName)
     } catch (e: PackageManager.NameNotFoundException) {
       true
     }
@@ -320,14 +321,5 @@ class UnlockActivity : AppCompatActivity() {
     const val FAILED = "Strongroom couldn't finish this fill. Try again."
     val PALETTE_KEYS = listOf("bg", "text", "muted", "accent", "onAccent", "danger")
     val HEX = Regex("#[0-9A-Fa-f]{6}")
-    val FILE_INSTALLERS = setOf(
-      "com.android.packageinstaller",
-      "com.google.android.packageinstaller",
-      "com.android.documentsui",
-      "com.google.android.documentsui",
-      "com.google.android.apps.nbu.files",
-      "com.android.fileexplorer",
-      "com.mi.android.globalFileexplorer",
-    )
   }
 }
