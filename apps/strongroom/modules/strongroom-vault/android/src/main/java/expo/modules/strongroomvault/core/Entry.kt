@@ -2,6 +2,7 @@ package expo.modules.strongroomvault.core
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonArrayBuilder
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -72,14 +73,8 @@ object EntryJson {
         put("name", e.name)
         put("username", e.username)
         put("password", e.password)
-        putJsonArray("sites") {
-          e.sites.forEach { addJsonObject { put("https", it.https); put("host", it.host) } }
-        }
-        putJsonArray("apps") {
-          e.apps.forEach {
-            addJsonObject { put("pkg", it.app.pkg); put("certSha256", it.app.certSha256); put("domain", it.domain) }
-          }
-        }
+        putJsonArray("sites") { e.sites.forEach { addSite(it) } }
+        putJsonArray("apps") { e.apps.forEach { addAppLink(it) } }
         put("note", e.note)
       }
       is Entry.Card -> {
@@ -110,8 +105,8 @@ object EntryJson {
         name = o.string("name"),
         username = o.string("username"),
         password = o.string("password"),
-        sites = o.objects("sites").map { Site(it.bool("https"), it.string("host")) },
-        apps = o.objects("apps").map { AppLink(AppId(it.string("pkg"), it.string("certSha256")), it.optString("domain")) },
+        sites = o.objects("sites").map { it.site() },
+        apps = o.objects("apps").map { it.appLink() },
         note = o.string("note"),
         updatedAt = updatedAt,
       )
@@ -135,6 +130,15 @@ object EntryJson {
     null // kotlinx recurses on array nesting; an Error would slip past callers' catch (e: Exception)
   }
 }
+
+internal fun JsonArrayBuilder.addSite(s: Site) = addJsonObject { put("https", s.https); put("host", s.host) }
+
+internal fun JsonArrayBuilder.addAppLink(a: AppLink) =
+  addJsonObject { put("pkg", a.app.pkg); put("certSha256", a.app.certSha256); put("domain", a.domain) }
+
+internal fun JsonObject.site() = Site(bool("https"), string("host"))
+
+internal fun JsonObject.appLink() = AppLink(AppId(string("pkg"), string("certSha256")), optString("domain"))
 
 private fun malformed(key: String): Nothing = throw IllegalArgumentException("malformed field $key")
 

@@ -1,0 +1,42 @@
+package expo.modules.strongroomvault.core
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class LinkPromptTest {
+  private val certA = "a".repeat(64)
+  private val certB = "b".repeat(64)
+  private val login = Entry.Login("Bank", "me", "pw", listOf(Site(true, "bank.com")), listOf(AppLink(AppId("com.bank", certA), null)), "", 1)
+
+  @Test fun linkRefusedForSamePackageOtherCert() {
+    val p = LinkPrompt.build(login, Requester.App(AppId("com.bank", certB), null), false)
+    assertEquals("This app has the same name as the saved one but a different signature. It may be fake. Strongroom won't fill it.", p.refusal)
+    assertEquals("com.bank", p.pkg)
+  }
+
+  @Test fun sameCertOrOtherPackageIsNotRefused() {
+    assertNull(LinkPrompt.build(login, Requester.App(AppId("com.bank", certA), "bank.com"), false).refusal)
+    assertNull(LinkPrompt.build(login, Requester.App(AppId("com.other", certB), null), false).refusal)
+    assertNull(LinkPrompt.build(login, Requester.Web(Site(true, "bank.com")), false).refusal)
+  }
+
+  @Test fun promptShowsPackageAndSideloadFlag() {
+    val app = LinkPrompt.build(login, Requester.App(AppId("com.x", certA), null), true)
+    assertEquals("com.x", app.pkg)
+    assertNull(app.domain)
+    assertTrue(app.installedFromFile)
+    assertNull(app.refusal)
+    assertEquals("bank.com", LinkPrompt.build(login, Requester.App(AppId("com.x", certA), "bank.com"), false).domain)
+    val web = LinkPrompt.build(login, Requester.Web(Site(true, "login.example.com")), false)
+    assertEquals("example.com", web.domain)
+    assertNull(web.pkg)
+    assertFalse(web.installedFromFile)
+  }
+
+  @Test fun siteWithoutRegistrableDomainShowsTheHost() {
+    assertEquals("192.168.1.1:8080", LinkPrompt.build(login, Requester.Web(Site(false, "192.168.1.1:8080")), false).domain)
+  }
+}
