@@ -1,6 +1,10 @@
 package expo.modules.strongroomvault.core
 
+import java.security.MessageDigest
 import java.util.UUID
+
+// Reserved id of the tombstone setUp writes, so unlockWithKey always has a record to verify a key against.
+private const val KEY_CHECK_ID = "key-check"
 
 data class Row(val id: String, val type: String, val name: String, val subtitle: String)
 
@@ -12,61 +16,67 @@ class Vault(private val store: RecordStore, private val clock: () -> Long, priva
   private var timeoutMinutes = 5
 
   var autoLockMinutes: Int
-    @Synchronized get() = timeoutMinutes
+    @Synchronized get() {
+      live()
+      return timeoutMinutes
+    }
     @Synchronized set(m) {
       require(LockPolicy.validTimeout(m)) { "auto-lock is 1, 5 or 15 minutes" }
       live() // an expired session must not be revived by a longer timeout
       timeoutMinutes = m
     }
 
-  @get:Synchronized val isSetUp: Boolean get() = store.header() != null
+  @get:Synchronized val isSetUp: Boolean
+    get() {
+      live()
+      return store.header() != null
+    }
 
   @get:Synchronized val isUnlocked: Boolean get() = live() != null
 
-  @get:Synchronized val unreadable: Int get() = unreadableCount
+  @get:Synchronized val unreadable: Int
+    get() {
+      live()
+      return unreadableCount
+    }
 
   @Synchronized fun setUp(password: CharArray, recoveryKey: ByteArray, kdf: KdfParams = KdfParams.DEFAULT) {
     check(store.header() == null) { "already set up" }
     val (header, k) = VaultFormat.create(password, recoveryKey, kdf)
-    try {
+    zeroOnThrow(k) {
       store.putHeader(header.toJson())
+      store.putAll(mapOf(KEY_CHECK_ID to VaultFormat.sealEntry(k, KEY_CHECK_ID, Entry.Deleted(clock()))))
       install(k, countUnreadable(k))
-    } catch (e: Exception) {
-      k.fill(0)
-      throw e
     }
   }
 
   @Synchronized fun unlock(password: CharArray): Boolean {
     val k = VaultFormat.unlockWithPassword(header(), password) ?: return false
-    install(k, countUnreadable(k))
+    zeroOnThrow(k) { install(k, countUnreadable(k)) }
     return true
   }
 
   @Synchronized fun recover(recoveryKey: ByteArray, newPassword: CharArray): Boolean {
     val h = header()
     val k = VaultFormat.unlockWithRecovery(h, recoveryKey) ?: return false
-    try {
+    zeroOnThrow(k) {
+      val bad = countUnreadable(k) // before the header write, so a failed read changes nothing
       store.putHeader(VaultFormat.withNewPassword(h, k, newPassword).toJson())
-      install(k, countUnreadable(k))
-    } catch (e: Exception) {
-      k.fill(0)
-      throw e
+      install(k, bad)
     }
     return true
   }
 
   @Synchronized fun unlockWithKey(vaultKey: ByteArray): Boolean {
-    if (vaultKey.size != VaultFormat.VAULT_KEY_BYTES) return false
+    if (vaultKey.size != VaultFormat.VAULT_KEY_BYTES || store.header() == null) return false
     val k = vaultKey.copyOf()
-    val records = store.all()
-    val bad = countUnreadable(k, records)
-    if (records.isNotEmpty() && bad == records.size) {
-      k.fill(0)
-      return false
+    return zeroOnThrow(k) {
+      val records = store.all()
+      val bad = countUnreadable(k, records)
+      val opensSomething = bad < records.size
+      if (opensSomething) install(k, bad) else k.fill(0)
+      opensSomething
     }
-    install(k, bad)
-    return true
   }
 
   @Synchronized fun touch() {
@@ -102,6 +112,7 @@ class Vault(private val store: RecordStore, private val clock: () -> Long, priva
 
   @Synchronized fun put(id: String?, e: Entry): String {
     val k = requireKey()
+    require(id != KEY_CHECK_ID) { "reserved id" }
     val rid = id ?: UUID.randomUUID().toString()
     store.putAll(mapOf(rid to VaultFormat.sealEntry(k, rid, e.stamped(clock()))))
     return rid
@@ -109,6 +120,7 @@ class Vault(private val store: RecordStore, private val clock: () -> Long, priva
 
   @Synchronized fun delete(id: String) {
     val k = requireKey()
+    require(id != KEY_CHECK_ID) { "reserved id" }
     store.putAll(mapOf(id to VaultFormat.sealEntry(k, id, Entry.Deleted(clock()))))
   }
 
@@ -125,7 +137,7 @@ class Vault(private val store: RecordStore, private val clock: () -> Long, priva
   @Synchronized fun changePassword(old: CharArray, new: CharArray): Boolean {
     val k = requireKey()
     val h = header()
-    if (!passwordMatches(h, old)) return false
+    if (!passwordMatches(h, old, k)) return false
     store.putHeader(VaultFormat.withNewPassword(h, k, new).toJson())
     return true
   }
@@ -133,7 +145,7 @@ class Vault(private val store: RecordStore, private val clock: () -> Long, priva
   @Synchronized fun newRecoveryKey(password: CharArray): ByteArray? {
     val k = requireKey()
     val h = header()
-    if (!passwordMatches(h, password)) return null
+    if (!passwordMatches(h, password, k)) return null
     val recoveryKey = RecoveryKey.generate()
     store.putHeader(VaultFormat.withNewRecovery(h, k, recoveryKey).toJson())
     return recoveryKey
@@ -141,7 +153,7 @@ class Vault(private val store: RecordStore, private val clock: () -> Long, priva
 
   @Synchronized fun vaultKeyCopy(password: CharArray): ByteArray? {
     val k = requireKey()
-    return if (passwordMatches(header(), password)) k.copyOf() else null
+    return if (passwordMatches(header(), password, k)) k.copyOf() else null
   }
 
   private fun header(): Header {
@@ -162,19 +174,34 @@ class Vault(private val store: RecordStore, private val clock: () -> Long, priva
   private fun requireKey(): ByteArray = live() ?: throw IllegalStateException("locked")
 
   private fun install(k: ByteArray, unreadable: Int) {
+    val now = elapsed()
     key?.fill(0)
     key = k
     unreadableCount = unreadable
-    lastUsedAt = elapsed()
+    lastUsedAt = now
   }
+
+  private inline fun <T> zeroOnThrow(k: ByteArray, block: () -> T): T =
+    try {
+      block()
+    } catch (e: Exception) {
+      k.fill(0)
+      throw e
+    }
 
   private fun countUnreadable(k: ByteArray, records: Map<String, ByteArray> = store.all()) =
     records.count { (id, sealed) -> VaultFormat.openEntry(k, id, sealed) == null }
 
-  private fun passwordMatches(h: Header, password: CharArray): Boolean {
-    val k = VaultFormat.unlockWithPassword(h, password) ?: return false
-    k.fill(0)
-    return true
+  // A password that unwraps a different key than the one in memory means the session key is wrong: lock.
+  private fun passwordMatches(h: Header, password: CharArray, sessionKey: ByteArray): Boolean {
+    val derived = VaultFormat.unlockWithPassword(h, password) ?: return false
+    try {
+      if (MessageDigest.isEqual(derived, sessionKey)) return true
+      lock()
+      return false
+    } finally {
+      derived.fill(0)
+    }
   }
 }
 

@@ -89,7 +89,7 @@ class VaultTest {
     wall += 5
     assertEquals(id, v.put(id, login.copy(username = "other", updatedAt = 99)))
     assertEquals(login.copy(username = "other", updatedAt = wall), v.get(id))
-    assertEquals(1, store.records.size)
+    assertEquals(setOf("key-check", id), store.records.keys)
 
     wall += 5
     v.delete(id)
@@ -132,8 +132,9 @@ class VaultTest {
     v.put(null, card)
     v.put(null, note)
     val secrets = listOf(login.password, card.number, card.cvc, note.text)
+    // row.id is a random UUID, so a short secret like a CVC can occur in it by chance
     for (row in v.rows()) {
-      for (field in listOf(row.id, row.type, row.name, row.subtitle)) {
+      for (field in listOf(row.type, row.name, row.subtitle)) {
         for (s in secrets) assertFalse("$field leaks $s", s in field)
       }
     }
@@ -143,21 +144,25 @@ class VaultTest {
     val v = setUpVault()
     val id = v.put(null, login)
     val garbage = ByteArray(40) { it.toByte() }
+    val garbageBefore = garbage.copyOf()
+    val short = byteArrayOf(1, 2, 3)
+    val shortBefore = short.copyOf()
     store.records["garbage"] = garbage
-    store.records["short"] = byteArrayOf(1, 2, 3)
+    store.records["short"] = short
     v.lock()
 
     assertTrue(v.unlock(password))
     assertEquals(2, v.unreadable)
     assertEquals(listOf(id), v.rows().map { it.id })
-    assertEquals(setOf(id, "garbage", "short"), store.all().keys)
-    assertArrayEquals(garbage, store.all().getValue("garbage"))
+    assertEquals(setOf("key-check", id, "garbage", "short"), store.all().keys)
+    assertArrayEquals(garbageBefore, store.all().getValue("garbage"))
+    assertArrayEquals(shortBefore, store.all().getValue("short"))
     assertEquals(setOf(id), v.all().keys)
   }
 
   @Test fun putManyIsOneTransaction() {
     val v = setUpVault()
-    assertEquals(0, store.putAllCalls)
+    store.putAllCalls = 0
     assertEquals(3, v.putMany(listOf(login, card, note)))
     assertEquals(1, store.putAllCalls)
     assertEquals(3, v.all().size)
@@ -235,6 +240,7 @@ class VaultTest {
   @Test fun setUpRefusesKdfOutOfRange() {
     assertThrows(KdfOutOfRange::class.java) { vault().setUp(password, recoveryKey, KdfParams(1024, 99, 1)) }
     assertNull(store.header())
+    assertTrue(store.records.isEmpty())
   }
 
   @Test fun newRecoveryKeyNeedsCurrentPassword() {
@@ -277,9 +283,103 @@ class VaultTest {
     v.lock()
     assertTrue(v.unlockWithKey(key))
     assertEquals(1, v.unreadable)
+  }
 
-    val emptyStore = MemoryRecordStore().also { it.putHeader(store.header()!!) }
-    assertTrue(vault(emptyStore).unlockWithKey(key))
+  @Test fun unlockWithKeyRefusesAWrongKeyEvenOnAnOtherwiseEmptyVault() {
+    val v = setUpVault()
+    val key = v.vaultKeyCopy(password)!!
+    v.lock()
+    assertEquals(setOf("key-check"), store.records.keys)
+
+    val wrong = ByteArray(32) { 7 }
+    assertFalse(v.unlockWithKey(wrong))
+    assertFalse(v.isUnlocked)
+    assertTrue(v.unlockWithKey(key))
+    assertTrue(v.isUnlocked)
+  }
+
+  @Test fun unlockWithKeyNeedsAHeaderAndARecordToVerifyAgainst() {
+    val key = setUpVault().vaultKeyCopy(password)!!
+    assertFalse(vault(MemoryRecordStore()).unlockWithKey(key))
+    val headerOnly = MemoryRecordStore().also { it.putHeader(store.header()!!) }
+    assertFalse(vault(headerOnly).unlockWithKey(key))
+  }
+
+  @Test fun theKeyCheckRecordIsReservedAndInvisible() {
+    val v = setUpVault()
+    val sealed = store.records.getValue("key-check").copyOf()
+    assertEquals(Entry.Deleted(wall), VaultFormat.openEntry(internalKey(v)!!, "key-check", sealed))
+    assertEquals(emptyMap<String, Entry>(), v.all())
+    assertEquals(emptyList<Row>(), v.rows())
+    assertNull(v.get("key-check"))
+    assertEquals(0, v.unreadable)
+
+    assertThrows(IllegalArgumentException::class.java) { v.put("key-check", login) }
+    assertThrows(IllegalArgumentException::class.java) { v.delete("key-check") }
+    v.putMany(listOf(login, card))
+    assertArrayEquals(sealed, store.records.getValue("key-check"))
+    assertEquals(3, store.records.size)
+  }
+
+  @Test fun aSessionKeyThatDoesNotMatchThePasswordLocksTheVaultAndLeavesTheHeader() {
+    val operations = listOf<Pair<String, (Vault) -> Any?>>(
+      "changePassword" to { it.changePassword(password, "another password!".toCharArray()) },
+      "newRecoveryKey" to { it.newRecoveryKey(password) },
+      "vaultKeyCopy" to { it.vaultKeyCopy(password) },
+    )
+    for ((name, operation) in operations) {
+      store.records.clear()
+      store.headerJson = null
+      val v = setUpVault()
+      val headerBefore = store.header()
+      val foreign = ByteArray(32) { 9 }
+      Vault::class.java.getDeclaredField("key").apply { isAccessible = true }.set(v, foreign)
+
+      val result = operation(v)
+      assertTrue("$name: $result", result == false || result == null)
+      assertEquals(name, headerBefore, store.header())
+      assertFalse(name, v.isUnlocked)
+      assertTrue(name, isZeroed(foreign))
+      assertLocked { v.rows() }
+    }
+  }
+
+  @Test fun expiryIsNoticedByEveryAccessNotJustKeyUse() {
+    val reads = listOf<Pair<String, (Vault) -> Any?>>(
+      "isSetUp" to { it.isSetUp },
+      "unreadable" to { it.unreadable },
+      "autoLockMinutes" to { it.autoLockMinutes },
+    )
+    for ((name, read) in reads) {
+      store.records.clear()
+      store.headerJson = null
+      elapsed = 0
+      val v = setUpVault()
+      val internal = internalKey(v)!!
+      elapsed = 5 * minute
+      read(v)
+      assertTrue(name, isZeroed(internal))
+      assertNull(name, internalKey(v))
+    }
+  }
+
+  @Test fun aStoreThatThrowsLeavesTheVaultLockedAndRethrows() {
+    var failing = false
+    val flaky = object : RecordStore by store {
+      override fun all(): Map<String, ByteArray> = if (failing) throw IllegalStateException("disk") else store.all()
+    }
+    val v = vault(flaky)
+    v.setUp(password, recoveryKey, fast)
+    val key = v.vaultKeyCopy(password)!!
+    v.lock()
+
+    failing = true
+    assertEquals("disk", assertThrows(IllegalStateException::class.java) { v.unlock(password) }.message)
+    assertEquals("disk", assertThrows(IllegalStateException::class.java) { v.recover(recoveryKey, password) }.message)
+    assertEquals("disk", assertThrows(IllegalStateException::class.java) { v.unlockWithKey(key) }.message)
+    assertFalse(v.isUnlocked)
+    failing = false
+    assertTrue(v.unlock(password))
   }
 
   @Test fun expiresAcrossSleepWithElapsedClock() {
