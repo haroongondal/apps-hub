@@ -145,14 +145,12 @@ SDD ledger (task progress, rulings, deferred minors):
 `git log` over memory. Phone installs only via the Store (release builds);
 debug work uses the emulator.
 
-**Exact next step:** Tasks 1–8 are complete. Task 9 fix round 1 (1e1ebe8) was
-in scoped re-review when this session ended. Check the ledger's last Task 9
-lines: if it says `Task 9: complete`, start Task 10 (brief already extracted
-at `.superpowers/sdd/PHASE-1-PLAN/task-10-brief.md`; carry the ledger's
-"carry to Task 10" lines into the dispatch). If not, re-run the re-review
-(`scripts/review-package docs/strongroom/PHASE-1-PLAN.md d39e958 1e1ebe8`,
-findings listed in the ledger's Task 9 review line) and continue the fix loop.
-Re-extract Task 11's brief before dispatching it (Task 9 amended the plan's
+**Exact next step:** Tasks 1–9 are complete (Task 9 re-review clean). Start
+Task 10: record BASE (`git rev-parse HEAD`), dispatch the implementer (opus;
+autofill service + unlock activity is the security-critical integration)
+with the brief at `.superpowers/sdd/PHASE-1-PLAN/task-10-brief.md`, and carry
+every ledger line marked "carry to Task 10" plus the ledger's `NEXT:` line
+into the dispatch. Re-extract Task 11's brief before dispatching it (Task 9 amended the plan's
 TS API: `EntryView.expMonth/expYear`, `clearLostSaves()`). Then Tasks 11–12
 and the final whole-branch review (opus), pointed at the ledger's deferred
 minors. Implementers so far: sonnet for Tasks 2–8, opus for Task 9; reviewers
