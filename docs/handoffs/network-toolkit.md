@@ -3,7 +3,7 @@
 ## Resume prompt
 
 ```
-Today is <date>. Read docs/handoffs/network-toolkit.md completely first, then
+Today is 2026-10-31. Read docs/handoffs/network-toolkit.md completely first, then
 the design at docs/superpowers/specs/2026-10-30-network-toolkit-design.md.
 Trust the verified facts there and do not redo that work. Follow the same
 handoff contract (update the session log and current state as milestones
@@ -34,13 +34,29 @@ land; at ~85% context, finalize and print a new resume prompt). Continue from
   VpnService; filtering inside a tunnel is a separate later project.
 - Visible-name-only rename: changing package IDs would force reinstalls and
   lose data.
+- HomeNet names (built, on branch `homenet-names`): PTR goes to the gateway
+  over raw UDP 53 (the router knows the DHCP names); SSDP descriptions come
+  over raw TCP HTTP/1.0, so Android needs no cleartext network config;
+  mDNS browses six fixed types (`_googlecast`, `_airplay`, `_ipp`, `_smb`,
+  `_hap`, `_companion-link`), max 6 browsers, because NSD allows a client
+  about 10 outstanding requests. Devices that advertise only other types get
+  no Bonjour name on Android. iOS browses the same six, so the platforms
+  match. Spec: `docs/netlens/SPEC.md` section 3.6.
+- Names never touch the identity key, so existing devices keep their rows and
+  show no false "New" badge.
 - firestack (MPL-2.0, Maven Central AAR) as the packet engine: no Go
   toolchain in our build; NetGuard (GPLv3) is incompatible with
   GPL-2.0-only and the repo is public.
 
 ## Verified facts (don't re-derive)
 
-- NetLens label order: `ScannerScreen.tsx:72`; `hostname` never filled
+- Gates reported during the build (last full run at Task 7, 9f800d1):
+  `pnpm test` and `pnpm typecheck` pass in all 19 projects; Android
+  `:app:assembleDebug` succeeds (21 JVM tests green at caac33f); iOS simulator
+  build succeeds. Not run on a phone yet; the mDNS paths are compile-verified
+  only.
+- Before the names work (historical): NetLens label order:
+  `ScannerScreen.tsx:72`; `hostname` never filled
   (`ScannerScreen.tsx:183-188`); mDNS collects types only.
 - `deriveIdentityKey` (`packages/core/src/device-repository.ts:93`) is
   USN → hostname → IP, so filling hostname would re-key known devices.
@@ -67,6 +83,12 @@ land; at ~85% context, finalize and print a new resume prompt). Continue from
   never merged.
 - HomeNet: `apps/netlens/`, `apps/netlens/modules/netlens-core/`,
   `packages/core/`
+- HomeNet names: `packages/core/src/device-names.ts` (sanitise, order, merge),
+  `name-formats.ts` (DNS, NetBIOS, SSDP formats), `name-resolver.ts`
+  (bounded lookups); native `NameProbes.kt` / `NameProbes.swift`
+  (`udpRequest`, `tcpFetch`), `MdnsProbe.kt` / `MdnsBrowser.swift` (instance
+  names); `apps/netlens/src/screens/ScannerScreen.tsx` (wiring),
+  `apps/netlens/src/db/device-store-sqlite.ts` (migration, `user_version` 1).
 - TunnelWall: `apps/open_tunnel_vpn/`,
   `apps/open_tunnel_vpn/modules/open-tunnel-native/`
 
@@ -85,10 +107,30 @@ land; at ~85% context, finalize and print a new resume prompt). Continue from
   and `docs/superpowers/plans/2026-10-31-tunnelwall-firewall-spike.md`
   (4 tasks). The full firewall plan waits for the spike verdict.
 
+- 2026-10-31: owner said "go ahead" (subagent-driven for the HomeNet plan).
+  Worktree `.claude/worktrees/homenet-names`, branch `homenet-names` from
+  `origin/main` 6daca33, upstream unset (never pushed). Tasks 1–6 done and
+  reviewed (commits 1e7abea..635ef6c). Progress ledger with every ruling:
+  `.superpowers/sdd/2026-10-31-homenet-names-and-rename/progress.md` inside
+  the worktree (git-ignored via .git/info/exclude).
+
+- 2026-10-31: HomeNet plan Tasks 1-8 done on branch `homenet-names`. Task 7
+  (app wiring, migration; commits 9f800d1, b211270) and Task 8 (SPEC section
+  3.6 and this handoff) landed after Tasks 1-6. Not merged, not pushed.
+
 ## Current state + exact next step
 
-Plans written and waiting for the owner's review and choice of execution
-method. Next: execute the HomeNet plan from Task 1 in a worktree from `main`.
-The spike can start in parallel in its own `firewall-spike` worktree. Nothing is committed yet; the branch at the
-time was `deputy-speed`, which carries unrelated Deputy work, so branch
-from `main` before committing this.
+HomeNet plan Tasks 1-8 are done and committed on branch `homenet-names`
+(worktree `.claude/worktrees/homenet-names`, never pushed). Next: the final
+whole-branch review. After that the owner decides on merging. Merging to
+`main` auto-releases HomeNet and TunnelWall through the Store, so do not merge
+or push without the owner's go-ahead.
+
+After the Store release, the owner checks on the phone:
+
+1. The existing device list is kept, with no false "New" badges.
+2. Most devices are named, and the detail sheet shows each source.
+3. Leaving the screen mid-scan doesn't crash.
+4. Scanning while TunnelWall is connected to a server shows no invented hosts.
+
+The firewall spike plan has not started.

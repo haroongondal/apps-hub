@@ -152,6 +152,93 @@ Single source of truth for the sweep list:
 - The engine passes `hosts` to `startTcpScan`; native re-validates the ≤256
   bound defensively.
 
+### 3.6 Device Names (`resolveDeviceNames`, after the sweep)
+After the sweep is reconciled and the list is on screen, `ScannerScreen` calls
+`resolveDeviceNames` (`packages/core/src/name-resolver.ts`) for every device
+seen this scan. It is best effort: nothing rejects, and a failed lookup means
+no name. Parsing and sanitising are pure TypeScript (`device-names.ts`,
+`name-formats.ts`); native code only moves bytes.
+
+**Four sources** (each device gets all of them):
+
+1. **Reverse DNS (PTR).** A raw DNS PTR query for `d.c.b.a.in-addr.arpa` goes
+   straight to the gateway on UDP 53, not through the system resolver. The
+   router usually knows the name a device gave DHCP. No gateway, no PTR
+   lookup. The reply must echo the query id, have the response bit set and
+   RCODE 0. Stored as `hostname`.
+2. **mDNS instance names.** Native code browses instances of six types:
+   `_googlecast._tcp`, `_airplay._tcp`, `_ipp._tcp`, `_smb._tcp`, `_hap._tcp`
+   and `_companion-link._tcp`, resolves each to an IPv4 address, and emits
+   `onServiceDiscovered { kind: 'mdns-instance', host, instanceName,
+   serviceType }` (extends §3.3). At most 32 resolves per scan, 1,500 ms each.
+   - Android: a type is browsed only when the meta-query reports it, with at
+     most 6 browsers (`MAX_BROWSERS`; NSD allows a client about 10
+     outstanding requests: 1 meta browser + 6 + 1 resolve). Resolves run one
+     at a time, because `NsdManager` before API 34 rejects a second resolve
+     while one is active. On API 34+ the first IPv4 in `hostAddresses` wins.
+   - iOS: the same six types are browsed directly. `NSBonjourServices` (in
+     `app.json` and `Info.plist`) lists them plus `_services._dns-sd._udp` and
+     `_http._tcp`.
+   - The screen keeps the first usable name per host. Stored as `mdnsName`.
+3. **SSDP device description.** The `LOCATION` URL from the SSDP reply is
+   fetched with `tcpFetch` as a raw `HTTP/1.0` GET. The reply is untrusted,
+   so `ssdpDescriptionRequest` and the parser enforce:
+   - the URL host is the same private IPv4 (10/8, 172.16/12, 192.168/16,
+     169.254/16) that sent the SSDP reply;
+   - `http` only; port 1..65535 (80 when absent);
+   - the path is printable ASCII (`\x21-\x7E`);
+   - no redirects: only status 200 is read;
+   - 64 KB cap on the body (`SSDP_DESCRIPTION_MAX_BYTES`);
+   - a document containing `<!DOCTYPE` or `<!ENTITY` is ignored. The fields
+     are found by a linear string scan, not an XML parser; only the five
+     predefined entities are decoded.
+
+   `friendlyName` is stored as `friendlyName`; `manufacturer` plus
+   `modelName` is stored as `model`.
+4. **NetBIOS node status.** A name-status request (type `0x21`) goes to the
+   device on UDP 137. The first unique name with suffix `0x00` is the name
+   (trailing spaces trimmed). Stored as `netbiosName`.
+
+**Native primitives** (the four-place contract: `NetLensNativeBinding`, the
+`createNetLensNativeBinding` adapter, Kotlin, Swift). `timeoutMs` is 1..10000
+on Android.
+
+| Function | Behaviour |
+|---|---|
+| `udpRequest(ip, port, payload, timeoutMs) → number[] \| null` | Sends one datagram and returns the first reply that comes from that same `ip:port`; null on timeout or error. Android binds the socket to Wi-Fi for private targets when it can and falls back to the default route when binding fails (a VPN can refuse it). |
+| `tcpFetch(ip, port, request, timeoutMs, maxBytes) → string \| null` | Connects, writes `request`, reads until EOF, `maxBytes` or the deadline, decodes UTF-8. Null when the connect fails or no byte arrived. Android uses the Wi-Fi socket factory. |
+
+**Display order** (`displayNameFor`): custom name, mDNS instance name, SSDP
+`friendlyName`, NetBIOS name, first label of the hostname (an IP-literal
+hostname is skipped), SSDP `SERVER` string (`vendorOrModel`), IP. `model` is
+not part of the order; the detail sheet shows each source on its own row
+(Hostname, Bonjour name, UPnP name, Model, Windows name, Vendor or model).
+
+**Sanitising.** Every name passes `sanitizeName`: control characters (C0 other
+than whitespace, DEL, C1) and bidi embedding, override and isolate characters
+(U+202A..202E, U+2066..2069) are removed; whitespace runs collapse to one
+space; the result is trimmed and capped at 64 code points (never cutting a
+surrogate pair). A name with no visible character left (only spaces,
+soft hyphens, zero-width characters) counts as no name. ZWJ, ZWNJ, LRM and RLM
+stay. mDNS names first go through `cleanMdnsInstanceName`: DNS-SD escapes
+decode (`\DDD` is a decimal character code, `\X` is `X`), then an AirPlay
+MAC prefix (`A1B2C3D4E5F6@`) is dropped.
+
+**Timing.** The device list appears when the sweep is reconciled, so naming
+never slows the sweep (NFR-1). Then 16 targets are in flight at a time
+(`NAME_CONCURRENCY`). Per target, PTR, NetBIOS and description lookups run in
+parallel, each with a 1,500 ms native timeout plus a 250 ms JS guard that gives
+up on a call that never settles: at most 1.75 s per target, so `n` devices
+take at most `ceil(n / 16) * 1.75` s. Each target's names are merged into its
+row and saved as soon as they arrive, so names fill in one by one. A result
+from a superseded scan is dropped.
+
+**Identity.** Names never change a device's identity key.
+`deriveIdentityKey` still reads only USN, then enrichment hostname, then IP,
+and the scanner passes no hostname into it, so `applyDeviceNames` touches
+the five name fields and nothing else. Known devices keep their rows and no
+"New" badge appears after the update (FR-4).
+
 ## 4. Database Schema (`expo-sqlite`, Phase 3)
 
 ```sql
@@ -179,6 +266,13 @@ CREATE TABLE devices (
   UNIQUE (network_id, identity_key)
 );
 ```
+
+**Migration (`PRAGMA user_version`).** Version 1 adds four nullable `TEXT`
+columns to `devices`: `mdns_name`, `friendly_name`, `model`, `netbios_name`
+(`hostname` already existed). `openDeviceStore` runs the `ALTER TABLE`
+statements and sets `user_version = 1` in one transaction, and skips them when
+`user_version` is already 1 or higher. Existing rows keep every value, with the
+new columns null until a scan names them. See §3.6.
 
 ## 5. Diagnostic Engine ("Why is my Wi-Fi slow?" — Phase 2)
 
