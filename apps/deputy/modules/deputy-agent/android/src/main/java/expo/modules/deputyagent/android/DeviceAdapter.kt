@@ -41,6 +41,7 @@ import expo.modules.deputyagent.core.DeviceRules
 import expo.modules.deputyagent.core.Direction
 import expo.modules.deputyagent.core.NodeRef
 import expo.modules.deputyagent.core.Screen
+import expo.modules.deputyagent.core.TrustLevel
 import java.io.ByteArrayOutputStream
 import java.time.Instant
 import java.time.ZoneId
@@ -125,7 +126,11 @@ class DeviceAdapter(private val context: Context) : Device {
     val battery = context.getSystemService(BatteryManager::class.java)
     val zone = ZoneId.systemDefault()
     val time = DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm", Locale.ENGLISH).withZone(zone)
-    val alarm = context.getSystemService(AlarmManager::class.java).nextAlarmClock?.let { time.format(Instant.ofEpochMilli(it.triggerTime)) } ?: "none"
+    val next = context.getSystemService(AlarmManager::class.java).nextAlarmClock
+    val setter = next?.showIntent?.creatorPackage
+    val alarm = DeviceRules.nextAlarm(
+      next?.let { time.format(Instant.ofEpochMilli(it.triggerTime)) }, setter?.let(::label), setter != null && OwnerStore.trust(context).level(setter) == TrustLevel.BLOCKED,
+    )
     val net = context.getSystemService(ConnectivityManager::class.java).let { it.getNetworkCapabilities(it.activeNetwork) }
     return listOf(
       "Android ${Build.VERSION.RELEASE} (build ${Build.DISPLAY}), ${Build.MANUFACTURER} ${Build.MODEL}",
@@ -200,12 +205,13 @@ class DeviceAdapter(private val context: Context) : Device {
 
   private suspend fun type(n: AccessibilityNodeInfo, a: Action.TypeText): String {
     if (n.isPassword) return "denied: Deputy never types into password fields."
+    // Replaces rather than appends: WhatsApp reports its empty box as the text "Message" (phone, 2026-10-30).
     val before = shownText(n)
-    val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, before + a.text) }
+    val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, a.text) }
     n.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
     delay(300)
     n.refresh()
-    if (a.text.isNotEmpty() && shownText(n) == before) return CANT_TYPE
+    if (a.text.isNotEmpty() && shownText(n) == before && before != a.text) return CANT_TYPE
     if (a.pressEnter && !n.performAction(AccessibilityAction.ACTION_IME_ENTER.id)) return "Typed, but the field has no Enter action. Tap its send or search button instead."
     return "Typed."
   }
@@ -349,6 +355,7 @@ internal fun toRef(n: AccessibilityNodeInfo, depth: Int): NodeRef {
     password = n.isPassword,
     visible = n.isVisibleToUser,
     depth = depth,
+    checked = if (n.isCheckable) n.isChecked else null,
   )
 }
 

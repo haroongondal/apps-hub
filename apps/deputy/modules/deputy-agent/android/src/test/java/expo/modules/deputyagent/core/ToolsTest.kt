@@ -49,6 +49,9 @@ class ToolsTest {
 
   @Test fun parsesTheCallsTheLoopHandlesItself() {
     assertEquals(Call.OpenApp("Clock"), parse("open_app", """{"name":"Clock"}"""))
+    // Deputy's own "Label (package)" hint, copied back as the name, opens that package.
+    assertEquals(Call.OpenApp("com.google.android.deskclock"), parse("open_app", """{"name":"Clock (com.google.android.deskclock)"}"""))
+    assertEquals(Call.OpenApp("Files (Beta)"), parse("open_app", """{"name":"Files (Beta)"}"""))
     assertEquals(Call.Ask("Which Ali?", listOf("Ali K", "Ali R")), parse("ask_user", """{"question":"Which Ali?","options":["Ali K","Ali R"]}"""))
     assertEquals(Call.Finish(done = true, summary = "07:30"), parse("finish", """{"status":"done","summary":"07:30"}"""))
     assertEquals(Call.Finish(done = false, summary = "No alarm app"), parse("finish", """{"status":"failed","summary":"No alarm app"}"""))

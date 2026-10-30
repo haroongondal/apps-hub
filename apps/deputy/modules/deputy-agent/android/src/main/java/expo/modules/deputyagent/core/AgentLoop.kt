@@ -2,6 +2,7 @@ package expo.modules.deputyagent.core
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 
 /** The phone, as the loop sees it. `read` is only called after `Policy.preObserve` allowed the app in front. */
@@ -228,7 +229,7 @@ class AgentLoop(
       Verdict.Allow -> perform(action, target).also { step(obs, what, "allow", it) }
       is Verdict.Deny -> "denied: ${v.reason}".also { step(obs, what, "deny", it) }
       is Verdict.Confirm -> {
-        val draft = if (action is Action.TypeText) target?.text.orEmpty() + action.text else obs.nodes.values.lastOrNull { it.editable && !it.password && !it.text.isNullOrBlank() }?.text
+        val draft = draft(obs, action)
         val gate = gates.open(runId, GateKind.CONFIRM, obs.app, v.action, v.target, draft, reason)
         emit(RunEvent.GateOpened(gate))
         step(obs, what, "confirm", WAITING)
@@ -236,20 +237,37 @@ class AgentLoop(
           step(obs, what, "confirm", "declined")
           return null
         }
-        // Rule 5: an approval covers the screen the owner was shown; if that changed while they decided, nothing runs.
+        // Rule 5: an approval covers the screen and message the owner was shown; if either changed while they decided, nothing runs.
         var front = device.foregroundPkg()
-        if (front == policy.self) {
-          perform(Action.Press(Button.BACK), null)
+        if (front != obs.context.pkg && (front == policy.self || front == SYSTEM_UI)) {
+          perform(Action.Press(Button.BACK), null) // answered in Deputy or the open shade
           front = device.foregroundPkg()
         }
-        val now = observer.build(front) { device.read() }
-        if (now == null || now.context.pkg != obs.context.pkg || targetOf(now, action) != target) {
+        // The app is only in front once Deputy's window or the shade has animated away, which can outlast the settle.
+        for (i in 1..10) {
+          if (front == obs.context.pkg || front !in setOf(policy.self, SYSTEM_UI, "")) break
+          delay(300)
+          front = device.foregroundPkg()
+        }
+        val now = observer.build(front) { device.read() }?.takeIf { it.context.pkg == obs.context.pkg }
+        val fresh = when {
+          now == null -> null
+          targetOf(now, action) == target -> target
+          action is Action.TapAt -> null // a point can't follow its element
+          else -> target?.let { DeviceRules.relocate(now.all, it) }
+        }
+        val lost = now != null && fresh == null && (target ?: targetOf(now, action)) != null
+        if (now == null || lost || draft(now, action) != draft) {
           return "stale_screen: the screen changed while the owner decided, so nothing was done. Look again.".also { step(obs, what, "confirm", it) }
         }
-        perform(action, target).also { step(obs, what, "confirm", it) }
+        perform(action, fresh).also { step(obs, what, "confirm", it) }
       }
     }
   }
+
+  /** The message a gate shows: the text typing puts in the field, or else the last text box's content. */
+  private fun draft(obs: Observation, action: Action) =
+    if (action is Action.TypeText) action.text else obs.all.lastOrNull { it.visible && it.editable && !it.password && !it.text.isNullOrBlank() }?.text
 
   private fun targetOf(obs: Observation, action: Action): NodeRef? = when (action) {
     is Action.Tap -> action.index.takeIf { it in obs.nodes }?.let(obs::clickTarget)

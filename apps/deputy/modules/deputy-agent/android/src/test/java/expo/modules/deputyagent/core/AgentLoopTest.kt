@@ -44,6 +44,7 @@ class AgentLoopTest {
     val performMs: Long = 0,
   ) : Device {
     val performed = mutableListOf<Action>()
+    val targets = mutableListOf<NodeRef?>()
     var resolves = 0
     val reads = mutableListOf<String>()
     override fun info() = "Android 16, battery 80%"
@@ -58,6 +59,7 @@ class AgentLoopTest {
     override fun resolveApp(name: String) = apps.filter { it.second.equals(name, true) || it.first == name }.also { resolves++ }
     override suspend fun perform(action: Action, target: NodeRef?): String {
       performed += action
+      targets += target
       kotlinx.coroutines.delay(performMs)
       onAction(action)?.let { current = it }
       return "ok"
@@ -443,6 +445,78 @@ class AgentLoopTest {
     }
   }
 
+  private fun Screen.shifted(dy: Int, edit: (NodeRef) -> NodeRef = { it }) =
+    copy(nodes = nodes.map { edit(it).copy(bounds = it.bounds.copy(top = it.bounds.top + dy, bottom = it.bounds.bottom + dy)) })
+
+  @Test fun anApprovalSurvivesTheKeyboardClosingAndTapsTheButtonWhereItIsNow() = runTest {
+    val device = FakeDevice(chat)
+    val r = run(device, Script(call("tap", """{"index":2}"""), call("finish", """{"status":"done","summary":"sent"}""")))
+    var result: RunResult? = null
+    launch { result = r.loop.run("t") }
+    runCurrent()
+    device.current = chat.shifted(700)
+    r.gates.resolve(r.gates.pending()!!.id, approve = true, text = null)
+    runCurrent()
+    assertEquals(listOf<Action>(Action.Tap(2)), device.performed)
+    assertEquals(Bounds(0, 1600, 1000, 1800), device.targets.single()?.bounds)
+    assertEquals(RunStatus.DONE, result?.status)
+  }
+
+  @Test fun anApprovalIsVoidIfTheMessageChangedWhileTheOwnerDecided() = runTest {
+    for (dy in listOf(0, 700)) {
+      val device = FakeDevice(chat)
+      val script = Script(call("tap", """{"index":2}"""), call("finish", """{"status":"failed","summary":"x"}"""))
+      val r = run(device, script)
+      launch { r.loop.run("t") }
+      runCurrent()
+      device.current = chat.shifted(dy) { if (it.editable) it.copy(text = "Send me the code") else it }
+      r.gates.resolve(r.gates.pending()!!.id, approve = true, text = null)
+      runCurrent()
+      assertTrue("moved $dy", device.performed.isEmpty())
+      assertTrue(script.seen[1].contains("stale_screen"))
+    }
+  }
+
+  @Test fun aTapAtPointIsNeverMovedToWhereItsElementWent() = runTest {
+    val pay = screen("com.chat", "Chat", button("Send", "com.chat", Bounds(0, 1000, 1000, 1200)), n("Ali", "com.chat"))
+    val device = FakeDevice(pay)
+    val script = Script(call("tap_at", """{"x":360,"y":792}"""), call("finish", """{"status":"failed","summary":"x"}"""))
+    val r = run(device, script)
+    launch { r.loop.run("t") }
+    runCurrent()
+    device.current = pay.shifted(700)
+    r.gates.resolve(r.gates.pending()!!.id, approve = true, text = null)
+    runCurrent()
+    assertTrue(device.performed.isEmpty())
+    assertTrue(script.seen[1].contains("stale_screen"))
+  }
+
+  @Test fun aTextBoxTheNodeCapDropsStillCountsAsTheSameMessage() = runTest {
+    val device = FakeDevice(chat)
+    val r = run(device, Script(call("tap", """{"index":2}"""), call("finish", """{"status":"done","summary":"sent"}""")), maxNodes = 4)
+    var result: RunResult? = null
+    launch { result = r.loop.run("t") }
+    runCurrent()
+    device.current = chat.copy(nodes = chat.nodes.map { if (it.editable) it.copy(bounds = Bounds(0, 1800, 1000, 2000)) else it })
+    r.gates.resolve(r.gates.pending()!!.id, approve = true, text = null)
+    runCurrent()
+    assertEquals(listOf<Action>(Action.Tap(2)), device.performed)
+    assertEquals(RunStatus.DONE, result?.status)
+  }
+
+  @Test fun noAppInFrontMidAnimationIsWaitedOutWithoutPressingBack() = runTest {
+    var polls = 0
+    lateinit var device: FakeDevice
+    device = FakeDevice(chat, onForeground = { if (device.current.pkg == "" && ++polls == 2) device.current = chat })
+    val r = run(device, Script(call("tap", """{"index":2}"""), call("finish", """{"status":"done","summary":"sent"}""")))
+    launch { r.loop.run("t") }
+    runCurrent()
+    device.current = screen("", "", n("x", ""))
+    r.gates.resolve(r.gates.pending()!!.id, approve = true, text = null)
+    advanceTimeBy(5_000)
+    assertEquals(listOf<Action>(Action.Tap(2)), device.performed)
+  }
+
   @Test fun noScreenshotWhileABlockedAppsWindowIsOnScreen() = runTest {
     val script = Script(call("finish", """{"status":"done","summary":"x"}"""))
     run(FakeDevice(chat.copy(nodes = chat.nodes + n("123456", "com.vault"))), script).loop.run("t")
@@ -493,11 +567,41 @@ class AgentLoopTest {
     assertEquals(RunStatus.STOPPED, r.finished().status)
   }
 
-  @Test fun theGateShowsTheWholeMessageThatTypingWouldSend() = runTest {
-    val r = run(FakeDevice(chat), Script(call("type_text", """{"index":1,"text":" See you","press_enter":true}""")))
+  @Test fun typingReplacesTheFieldSoAPlaceholderNeverJoinsTheMessage() = runTest {
+    // WhatsApp reports its empty box as the text "Message" (phone, 2026-10-30).
+    val empty = chat.copy(nodes = chat.nodes.map { if (it.editable) it.copy(text = "Message") else it })
+    val r = run(FakeDevice(empty), Script(call("type_text", """{"index":1,"text":"See you","press_enter":true}""")))
     launch { r.loop.run("t") }
     runCurrent()
-    assertEquals("On my way See you", r.gates.pending()?.draftText)
+    assertEquals("See you", r.gates.pending()?.draftText)
+  }
+
+  @Test fun approvingFromTheOpenShadeClosesItThenPerformsTheStep() = runTest {
+    val device = FakeDevice(chat, onAction = { if (it == Action.Press(Button.BACK)) chat else null })
+    val r = run(device, Script(call("tap", """{"index":2}"""), call("finish", """{"status":"done","summary":"sent"}""")))
+    var result: RunResult? = null
+    launch { result = r.loop.run("t") }
+    runCurrent()
+    device.current = screen(SYSTEM_UI, "System UI", n("Deputy needs your OK", SYSTEM_UI))
+    r.gates.resolve(r.gates.pending()!!.id, approve = true, text = null)
+    runCurrent()
+    assertEquals(listOf(Action.Press(Button.BACK), Action.Tap(2)), device.performed)
+    assertEquals(RunStatus.DONE, result?.status)
+  }
+
+  @Test fun afterBackDeputyWaitsForTheAppToComeForwardBeforeJudgingTheScreen() = runTest {
+    var polls = 0
+    lateinit var device: FakeDevice
+    device = FakeDevice(chat, onForeground = { if (device.performed.lastOrNull() == Action.Press(Button.BACK) && ++polls == 3) device.current = chat })
+    val r = run(device, Script(call("open_link", """{"url":"https://example.com"}"""), call("finish", """{"status":"done","summary":"opened"}""")))
+    var result: RunResult? = null
+    launch { result = r.loop.run("t") }
+    runCurrent()
+    device.current = screen(self, "Deputy", n("Approve", self))
+    r.gates.resolve(r.gates.pending()!!.id, approve = true, text = null)
+    advanceTimeBy(5_000)
+    assertEquals(listOf(Action.Press(Button.BACK), Action.OpenLink("https://example.com")), device.performed)
+    assertEquals(RunStatus.DONE, result?.status)
   }
 
   @Test fun everyCountedTurnIsLoggedAndAGateIsLoggedBeforeItIsAnswered() = runTest {

@@ -13,6 +13,8 @@ object DefaultTrust {
   private val MONEY = setOf(
     "com.revolut.revolut", "com.transferwise.android", "com.robinhood.android", "com.etoro.openbook",
     "com.binance.dev", "com.coinbase.android", "com.google.android.apps.nbu.paisa.user",
+    // The owner's bank and fund apps (phone, 2026-10-30): AL Habib Mobile, Al Ameen Funds, UBL Smart Savings, Al Meezan.
+    "com.ofss.digx.mobile.obdx.bahl", "com.ublfm.alameen", "com.ublfm.smartsavings", "co.ibex.almeezan",
   )
   // shortcut: banks are guessed from package-name words; the owner's own banks may need setting by hand on the Apps screen.
   private val MONEY_WORDS = listOf("bank", "wallet", "pay", "invest", "broker", "trading", "finance", "crypto")

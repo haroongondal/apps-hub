@@ -18,6 +18,8 @@ data class NodeRef(
   val visible: Boolean = true,
   val depth: Int = 0,
   val childText: String? = null,
+  /** A switch or checkbox: whether it is on; null for anything that can't be checked. */
+  val checked: Boolean? = null,
 ) {
   val label: String? get() = text?.takeIf { it.isNotBlank() } ?: desc?.takeIf { it.isNotBlank() } ?: childText
 }

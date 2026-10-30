@@ -25,6 +25,8 @@ object Tools {
   /** Settings pages the model may open directly; the security and accessibility ones aren't offered. */
   val PAGES = listOf("wifi", "bluetooth", "internet", "airplane", "display", "sound", "volume", "battery", "storage", "apps", "location", "date", "about", "nfc")
 
+  // Deputy lists look-alike apps as "Label (package)", and models send that back whole as the name.
+  private val BRACKETED = Regex("""\(([A-Za-z]\w*(?:\.\w+)+)\)\s*$""")
   private const val INDEX = """"index":{"type":"integer","description":"Element index from the latest screen"}"""
   private const val IRREVERSIBLE = """"irreversible":{"type":"boolean","description":"True if this step can't be undone, such as sending, paying, buying, deleting or posting"}"""
   private const val DIRECTION = """"direction":{"type":"string","enum":["up","down","left","right"]}"""
@@ -50,7 +52,7 @@ object Tools {
     ),
     spec("long_press", "Long-press an element of the latest screen.", INDEX, """"index""""),
     spec(
-      "type_text", "Type text into an editable element, after what it already holds.",
+      "type_text", "Replace the text in an editable element with this text. Include anything already in it that should stay.",
       """$INDEX,"text":{"type":"string"},"press_enter":{"type":"boolean"},$IRREVERSIBLE""", """"index","text"""",
     ),
     spec("scroll", "Scroll an element, or the screen when no index is given.", "$DIRECTION,$INDEX", """"direction""""),
@@ -85,7 +87,7 @@ object Tools {
     val a = call.args
     val flag = a.flag("irreversible")
     when (call.name) {
-      "open_app" -> Call.OpenApp(a.str("name"))
+      "open_app" -> Call.OpenApp(a.str("name").let { BRACKETED.find(it)?.groupValues?.get(1) ?: it })
       "open_link" -> Call.Act(Action.OpenLink(a.str("url")), flag)
       "tap" -> Call.Act(Action.Tap(a.int("index")), flag)
       "tap_at" -> Call.Act(Action.TapAt(a.int("x"), a.int("y")), flag)

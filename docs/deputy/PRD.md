@@ -116,6 +116,8 @@ These seven job types are the owner's choice and become the eval set
 - **FR-5: Choose the model.**
   - Settings take a base URL, model name and API key, with a "Test connection"
     button. Defaults to Gemini 3.5 Flash-Lite (owner, 2026-10-29, after S7).
+  - Several API keys per address (owner, 2026-10-30): when one reaches its
+    limit, the next takes over automatically. Each key can be tested and removed.
   - Per-million-token prices are editable, because they change (§9).
 - **FR-6: Run limits and Stop.**
   - Per-run caps on steps (default 30), cost (default $1.00) and time (default

@@ -99,6 +99,14 @@ class PolicyTest {
     assertEquals(Verdict.Allow, check(Action.TypeText(0, "hi", pressEnter = false), node(text = "Message")))
   }
 
+  @Test fun typingThatDropsTextAlreadyInTheFieldAsksFirst() {
+    val note = node(text = "Shopping: eggs, bread, butter, rice")
+    assertEquals(Verdict.Confirm("Replace the text", note.label), check(Action.TypeText(0, "milk", pressEnter = false), note))
+    assertEquals(Verdict.Confirm("Replace the text", note.label), check(Action.TypeText(0, "", pressEnter = false), note))
+    assertEquals(Verdict.Allow, check(Action.TypeText(0, "Shopping: eggs, bread, butter, rice, milk", pressEnter = false), note))
+    assertEquals("a short placeholder such as WhatsApp's", Verdict.Allow, check(Action.TypeText(0, "hi", pressEnter = false), node(text = "Message")))
+  }
+
   @Test fun rule6EnterAfterTypingIsConfirmedBecauseItCanSend() =
     assertTrue(check(Action.TypeText(0, "hi", pressEnter = true), node(text = "Message")) is Verdict.Confirm)
 

@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Keeps an approval's heads-up on screen until it is answered (Notifier.gate). -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <application>
         <service
             android:name="expo.modules.deputyagent.android.DeputyAccessibilityService"

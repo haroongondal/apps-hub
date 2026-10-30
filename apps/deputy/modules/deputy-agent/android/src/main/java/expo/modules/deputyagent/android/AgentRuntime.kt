@@ -65,12 +65,13 @@ object AgentRuntime {
     val store = store!!
     val id = UUID.randomUUID().toString().take(8)
     val settings = OwnerStore.settings(app)
-    val key = checkNotNull(KeyVault.load(app, settings)) { "Add your API key first." }
+    val keys = KeyVault.load(app, settings)
+    check(keys.isNotEmpty()) { "Add your API key first." }
     val policy = Policy({ OwnerStore.trust(app).level(it) }, allowedApps, app.packageName)
     val loop = AgentLoop(
       id,
       DeviceAdapter(app),
-      OpenAiCompatProvider(settings.baseUrl, settings.model, key, settings.effort, OkHttpTransport::post),
+      OpenAiCompatProvider(settings.baseUrl, settings.model, keys, settings.effort, OkHttpTransport::post),
       gates,
       policy,
       Guard(settings.caps, settings.prices(System.currentTimeMillis()), System::currentTimeMillis, store.spentToday()),
@@ -119,11 +120,11 @@ object AgentRuntime {
     "gate" to gates.pending()?.let(::toMap),
   )
 
-  suspend fun testProvider(context: Context): Map<String, Any> {
+  suspend fun testProvider(context: Context, keyId: String): Map<String, Any> {
     val settings = OwnerStore.settings(context)
-    val key = KeyVault.load(context, settings) ?: return mapOf("ok" to false, "message" to "Add your API key first.")
+    val key = KeyVault.load(context, settings, keyId) ?: return mapOf("ok" to false, "message" to "That key isn't saved for this model's address.")
     return try {
-      OpenAiCompatProvider(settings.baseUrl, settings.model, key, settings.effort, OkHttpTransport::post).step(listOf(Msgs.user("Reply with the word OK.")), emptyList())
+      OpenAiCompatProvider(settings.baseUrl, settings.model, listOf(key), settings.effort, OkHttpTransport::post).step(listOf(Msgs.user("Reply with the word OK.")), emptyList())
       mapOf("ok" to true, "message" to "The model answered, so the key works.")
     } catch (e: ProviderError) {
       mapOf("ok" to false, "message" to e.message.orEmpty())

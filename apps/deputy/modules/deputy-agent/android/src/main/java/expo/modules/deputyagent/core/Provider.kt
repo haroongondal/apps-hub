@@ -115,21 +115,25 @@ class ProviderError(val kind: Kind, message: String) : Exception(message) {
   enum class Kind { AUTH, BAD_REQUEST, SERVER, OFFLINE }
 }
 
-/** SPEC §9.2 and §9.4. `post` is the transport, so request shape and retries run in JVM tests. */
+/** SPEC §9.2 and §9.4. `post` is the transport, so request shape and retries run in JVM tests. `keys` are the owner's for this address. */
 class OpenAiCompatProvider(
   private val baseUrl: String,
   private val model: String,
-  private val key: String,
+  private val keys: List<String>,
   private val reasoningEffort: String?,
   private val post: suspend (url: String, headers: Map<String, String>, body: String) -> HttpReply,
 ) : LlmProvider {
+  private var current = 0 // the key in use; it changes only when that key reaches its limit
+
   override suspend fun step(history: List<Msg>, tools: List<ToolSpec>): ModelTurn {
-    if (key.isBlank()) throw ProviderError(ProviderError.Kind.AUTH, "No API key is set. Add your API key in Settings.")
+    if (keys.isEmpty() || keys.any(String::isBlank)) throw ProviderError(ProviderError.Kind.AUTH, "No API key is set. Add your API key in Settings.")
     val url = baseUrl.trimEnd('/') + "/chat/completions"
-    val headers = mapOf("Authorization" to "Bearer $key", "Content-Type" to "application/json")
     val body = ProviderJson.request(model, history, tools, reasoningEffort)
-    for (attempt in 0..RETRY_DELAYS.size) {
+    var attempt = 0
+    var limited = 0 // keys that answered 429 in a row since the last wait
+    while (true) {
       val last = attempt == RETRY_DELAYS.size
+      val headers = mapOf("Authorization" to "Bearer ${keys[current]}", "Content-Type" to "application/json")
       val reply = try {
         post(url, headers, body)
       } catch (e: IOException) {
@@ -139,21 +143,29 @@ class OpenAiCompatProvider(
       when {
         reply == null -> Unit
         reply.code in 200..299 -> return ProviderJson.parse(reply.body)
-        reply.code == 401 || reply.code == 403 ->
-          throw ProviderError(ProviderError.Kind.AUTH, "The model refused the API key (HTTP ${reply.code}). Check your API key in Settings.")
+        reply.code == 401 || reply.code == 403 -> throw ProviderError(
+          ProviderError.Kind.AUTH,
+          "The model refused ${if (keys.size > 1) "API key ${current + 1} of ${keys.size}" else "the API key"} (HTTP ${reply.code}). Check your API key in Settings.",
+        )
+        // A key at its limit hands over to the next one at once; Deputy only waits once every key is limited.
+        reply.code == 429 && ++limited < keys.size -> {
+          current = (current + 1) % keys.size
+          continue
+        }
         reply.code == 429 && last ->
           throw ProviderError(ProviderError.Kind.SERVER, "The model's rate limit was reached (HTTP 429). Wait a minute, or check your plan's limits.")
         reply.code >= 500 && last -> throw ProviderError(ProviderError.Kind.SERVER, "The model is busy or failing (HTTP ${reply.code}). Try again later.")
-        // Groq answers a tool call the model wrote badly with a 400; a second try usually comes out right.
-        reply.code == 429 || reply.code >= 500 || (!last && "tool_use_failed" in reply.body) -> Unit
+        // Groq answers a tool call or reply the model wrote badly with a 400; a second try usually comes out right.
+        reply.code == 429 || reply.code >= 500 || (!last && ("tool_use_failed" in reply.body || "output_parse_failed" in reply.body)) -> Unit
         else -> throw ProviderError(
           ProviderError.Kind.BAD_REQUEST,
-          "The model rejected the request (HTTP ${reply.code}): " + reply.body.replace(key, "[key]").take(2_000),
+          "The model rejected the request (HTTP ${reply.code}): " + keys.fold(reply.body) { b, k -> b.replace(k, "[key]") }.take(2_000),
         )
       }
       delay(reply?.retryAfterMs?.coerceIn(0, MAX_WAIT_MS) ?: RETRY_DELAYS[attempt])
+      attempt++
+      limited = 0
     }
-    error("unreachable")
   }
 
   private companion object {

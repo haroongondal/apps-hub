@@ -11,6 +11,12 @@ export interface ServiceState {
   runActive: boolean;
 }
 
+export interface ApiKey {
+  id: string;
+  /** The key's last four characters, so the owner can tell keys apart. */
+  ending: string;
+}
+
 export interface TreeDump {
   pkg: string | null;
   nodes: number;
@@ -132,14 +138,17 @@ interface DeputyAgentApi {
   setAppTrust(pkg: string, level: TrustLevel, typedConfirmation: string | null): Promise<string | null>;
   getSettings(): Settings;
   knownModels(): KnownModel[];
-  /** Copy for the screen when a value isn't valid, or null once saved. A new address removes the saved key. */
+  /** Copy for the screen when a value isn't valid, or null once saved. Keys stay with the address they were saved for. */
   setSettings(settings: Settings): string | null;
   listSavedTasks(): SavedTask[];
   saveTask(task: Omit<SavedTask, 'id'> & { id: string | null }): { id: string | null; error: string | null };
   deleteTask(id: string): void;
-  setApiKey(key: string): void;
-  clearApiKey(): void;
-  testProvider(): Promise<{ ok: boolean; message: string }>;
+  /** The keys for the current address, in the order a run tries them; when one reaches its limit, the next takes over. */
+  listApiKeys(): ApiKey[];
+  /** Copy for the screen, or null once saved. */
+  addApiKey(key: string): string | null;
+  removeApiKey(id: string): void;
+  testProvider(keyId: string): Promise<{ ok: boolean; message: string }>;
   setPalette(json: string): void;
   listen(prompt: string): Promise<string | null>;
   /** Debug: waits so the owner can switch apps, then dumps the app in front. Never dumps Deputy's own screens. */

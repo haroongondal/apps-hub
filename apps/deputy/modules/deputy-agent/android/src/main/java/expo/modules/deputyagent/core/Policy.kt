@@ -70,8 +70,10 @@ class Policy(
     if (action is Action.OpenLink && action.url.substringBefore(':').lowercase() in WEB) return Verdict.Confirm("Open link", action.url)
     val changes = action is Action.Tap || action is Action.TapAt || action is Action.LongPress || action is Action.TypeText
     val enter = action is Action.TypeText && action.pressEnter && !(isSearch(target) && plain(action.text))
-    val risky = changes && (enter || (target != null && VerbMatcher.match(target) != null) || isSensitive(screen))
-    return if (modelFlag || risky) Verdict.Confirm(name(action), target?.label) else Verdict.Allow
+    // Typing replaces the field, so dropping text already there asks first; a short placeholder like WhatsApp's "Message" doesn't.
+    val erases = action is Action.TypeText && target?.text.orEmpty().let { it.length > PLACEHOLDER_MAX && !action.text.startsWith(it) }
+    val risky = changes && (enter || erases || (target != null && VerbMatcher.match(target) != null) || isSensitive(screen))
+    return if (modelFlag || risky) Verdict.Confirm(if (erases) "Replace the text" else name(action), target?.label) else Verdict.Allow
   }
 
   private fun name(action: Action) = when (action) {
@@ -104,6 +106,7 @@ class Policy(
     (s.pkg in SETTINGS && SECURITY_PAGES.any { s.title.orEmpty().contains(it, ignoreCase = true) })
 
   private companion object {
+    const val PLACEHOLDER_MAX = 20
     val SEARCH = Regex("(?i)(?<![a-z])search")
     val DIGITS = Regex("\\d{5}")
     val SCHEMES = setOf("https", "http", "tel", "sms", "smsto", "mailto", "geo", "whatsapp")

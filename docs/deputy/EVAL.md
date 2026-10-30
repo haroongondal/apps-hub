@@ -8,7 +8,8 @@ AC-7, NFR-1, NFR-2) and the build is described in `SPEC.md`.
 ## Before you start
 
 - Setup shows every live row as On, including the API key.
-- "Test the key" says the key works.
+- In Settings, tap the Setup row "Add your API key" to open API keys. "Test" on
+  the key's row says the key works.
 - The key is a free-tier key (PRD Q5), so Google may use what Deputy sends. The
   read-only tasks below avoid private content. The gated tasks use a chat with
   yourself, and AC-3 sends NayaPay's screens to the model.
@@ -76,10 +77,10 @@ and FR-8 pass on the phone. FR-9's saved tasks are checked here too.
 | FR-4 effect | Set the clock app to Blocked, then run Part 1 task 1 | Deputy says the app is blocked and doesn't open it. Set the clock app back to Standard afterwards | | |
 | FR-4 back | Set NayaPay back to Read-only | Saves with no typing; AC-3 behaves as in Part 2 again | | |
 | FR-4 mid-run | Start Part 1 task 3; while it runs, open Deputy, set Settings (the system app) to Blocked | From its next step the run is refused Settings and ends without sending another Settings screen. Set it back to Standard | | |
-| FR-5 key | Settings: Test the key | "The key works" | | |
+| FR-5 key | Settings: tap the Setup row "Add your API key", then Test on the key's row | "The key works" under that row | | |
 | FR-5 model | Change Model name to `gemini-3.1-flash-lite`, Save | Refused: "Enter this model's prices…". Enter 0.25 / 0.25 / 1.5, Save, run Part 1 task 2: it works and History shows it. Then set the name back and tap "Use Gemini 3.5 Flash-Lite's prices", Save | | |
 | FR-5 address | Change Address to `http://example.com`, Save | "The address must start with https://…", nothing saved, the key stays | | |
-| FR-5 key drop | Change Address to `https://example.com/v1`, enter any prices, read the warning, Save | The key row in Setup turns To do (the key is deleted). Restore the Gemini address, use Gemini 3.5 Flash-Lite's prices, save the key again | | |
+| FR-5 key binding | Change Address to `https://example.com/v1`, enter any prices, read the warning ("Each address has its own keys"), Save | The key row in Setup turns To do and the API keys list is empty, because no key is saved for this address; the Gemini key isn't deleted. Restore the Gemini address, use Gemini 3.5 Flash-Lite's prices, Save: the key row is On again and the key's row shows the same last four characters, with no need to add it again | | |
 | FR-5 prices | Clear the Input price, Save; then type 0, Save | Both refused with the price range; then "Use Gemini 3.5 Flash-Lite's prices" and Save puts the defaults back | | |
 | FR-6 caps | Set Steps per task to 3, Save, run Part 1 task 3 | The run stops at "the 3-step limit". Set it back to 30 | | |
 | FR-8 list | Tasks tab, History | Every task above is listed newest first with status, steps and cost | | |
@@ -88,3 +89,21 @@ and FR-8 pass on the phone. FR-9's saved tasks are checked here too.
 | FR-9 save | Saved tasks, New: name "Alarm", Part 1 task 1, add the clock app, Save | The row shows "Only in one app"; Run starts it | | |
 | FR-9 limit | Edit "Alarm" to "Open Settings and tell me the Android version", keep only the clock app, Run | Deputy refuses Settings ("This task may only use these apps") and ends without opening it | | |
 | FR-9 delete | Edit "Alarm", Delete this task | The row is gone | | |
+
+## Deputy 0.2.1: keys and approvals
+
+Run these on the 0.2.1 build after the tables above, on the phone, installed
+through the Store. SPEC §7 (After an approval), §8.3 and §9.4 say what each should
+do. Use a chat with yourself for every send.
+
+| Check | How to run it | Pass when | Result | Note |
+| ----- | ------------- | --------- | ------ | ---- |
+| Several keys | Settings: tap the Setup row "Add your API key", paste a second key for the same address, tap "Add the key", then paste the same key again | Each key has a row with "Ends in" and its last four characters, never the key. The second paste is refused with "That key is already saved." Test on one row reports under that row only. Remove deletes only that row | | |
+| Key rotation on a 429 | With two keys for Groq (`openai/gpt-oss-120b`), run tasks back to back until the first key reaches its limit (Groq's free tier limits tokens a minute) | The run goes on at once on the second key: no step waits for the limit, and the summary isn't "rate limit reached". Both keys limited is covered by `OpenAiCompatProviderTest` | | |
+| Collapsed row, short step | Task: "Send 'ok' to myself on WhatsApp". When the heads-up comes, pull the shade down and leave it collapsed | The collapsed row shows the step with the text, and has Approve and Deny buttons. Approve there sends the message once | | |
+| Collapsed row, long step | The AC-2 task ("Send 'Deputy test' …"), shade pulled down and the notification left collapsed | The row says "Expand to read and approve" and has only Deny. Expand it: the full text and the standard Approve and Deny actions show | | |
+| Heads-up stays | AC-2's task; after the heads-up appears, leave the phone alone for 30 seconds | The heads-up stays on screen until you answer it, and doesn't slide away after about 5 seconds. A question from Deputy (`ask_user`) may slide away: its notification stays in the shade with the reply box | | |
+| Approve from the shade | AC-2b's task; approve from the expanded notification in the shade | WhatsApp comes forward and the message is sent once. The Send step's result in the run log isn't `stale_screen` | | |
+| Approve inside Deputy | AC-2b's task; open Deputy and tap Approve on the Run screen | The same: Deputy goes Back to WhatsApp, waits for it, and sends once, with no `stale_screen` | | |
+| Edited before approving | AC-2b's task; while the heads-up waits, change the text in WhatsApp's message box by hand, then Approve | Nothing is sent: the step ends `stale_screen: the screen changed while the owner decided`, and the model looks again | | |
+| WhatsApp typing | AC-2's task; read the text in the heads-up and in the chat box before you answer | The text is "Deputy test", with no "Message" in front of it | | |

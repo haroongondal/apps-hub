@@ -108,9 +108,10 @@ class DeputyAgentModule : Module() {
     Function("saveTask") { input: Map<String, Any?> -> OwnerStore.saveTask(context, input) }
     Function("deleteTask") { id: String -> OwnerStore.deleteTask(context, id) }
 
-    Function("setApiKey") { key: String -> KeyVault.save(context, key, OwnerStore.settings(context).baseUrl) }
-    Function("clearApiKey") { KeyVault.clear(context) }
-    AsyncFunction("testProvider") Coroutine { -> AgentRuntime.testProvider(context) }
+    Function("listApiKeys") { KeyVault.list(context, OwnerStore.settings(context)) }
+    Function("addApiKey") { key: String -> KeyVault.add(context, key, OwnerStore.settings(context)) }
+    Function("removeApiKey") { id: String -> KeyVault.remove(context, id) }
+    AsyncFunction("testProvider") Coroutine { keyId: String -> AgentRuntime.testProvider(context, keyId) }
 
     Function("setPalette") { json: String -> StopChip.setPalette(json) }
 
