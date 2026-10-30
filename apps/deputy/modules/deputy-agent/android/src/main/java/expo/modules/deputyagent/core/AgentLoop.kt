@@ -82,8 +82,17 @@ class AgentLoop(
           if (backs == 2) return end(RunStatus.FAILED, "A blocked app stayed on screen, so Deputy stopped without reading it.")
           backs++
           val own = front == policy.self
-          perform(Action.Press(if (own) Button.HOME else Button.BACK), null)
-          note = if (own) "Deputy's own screen was in front, so Deputy went to the home screen.\n" else "A blocked app was in front, so Deputy pressed Back without reading it.\n"
+          val start = guard.steps == 0
+          // When the owner taps Run, Back returns to the screen they left for Deputy ("the screen is already open", 0.2.1 phone
+          // test). Later in a run Deputy gets Home, since Back could close one of its sheets; so does what that first Back reached.
+          val home = if (own) !(start && backs == 1) else start && backs == 2
+          if (own && !home) backTo(null) else perform(Action.Press(if (home) Button.HOME else Button.BACK), null)
+          note = when {
+            own && home -> "Deputy's own screen was in front, so Deputy went to the home screen.\n"
+            own -> "Deputy's own screen was in front, so Deputy pressed Back to return to the app before it.\n"
+            home -> "A blocked app was in front, so Deputy went to the home screen without reading it.\n"
+            else -> "A blocked app was in front, so Deputy pressed Back without reading it.\n"
+          }
           continue
         }
         backs = 0
@@ -137,9 +146,11 @@ class AgentLoop(
           is Call.Ask -> {
             val gate = gates.open(runId, GateKind.QUESTION, obs.app, call.question, options = call.options)
             emit(RunEvent.GateOpened(gate))
-            step(obs, "Ask the owner", "question", WAITING)
+            val what = "Ask the owner: ${call.question}"
+            step(obs, what, "question", WAITING)
             val answer = gates.await(gate) ?: return end(RunStatus.FAILED, "The owner didn't answer within five minutes.")
-            "The owner answered: ${answer.text.orEmpty()}"
+            backTo(obs.context.pkg) // else the next turn sends Deputy Home and the app is lost (bank runs, 0.2.1 phone test)
+            "The owner answered: ${answer.text.orEmpty()}".also { step(obs, what, "question", it) }
           }
           is Call.OpenApp -> {
             val matches = device.resolveApp(call.name)
@@ -229,6 +240,8 @@ class AgentLoop(
       Verdict.Allow -> {
         val start = now()
         val result = perform(action, target).let { if (it.startsWith(STALE)) moved(obs, action, target, flag) ?: it else it }
+        // A cold start can leave the launcher in front past the settle, and the model then taps the app's icon (Alfa, 0.2.1).
+        if (action is Action.OpenApp) for (i in 1..15) if (device.foregroundPkg().let { it == action.pkg || it !in setOf(obs.context.pkg, "") }) break else delay(300)
         actMs = now() - start // both attempts, when the element had moved
         result.also { step(obs, what, "allow", it) }
       }
@@ -243,17 +256,7 @@ class AgentLoop(
           return null
         }
         // Rule 5: an approval covers the screen and message the owner was shown; if either changed while they decided, nothing runs.
-        var front = device.foregroundPkg()
-        if (front != obs.context.pkg && (front == policy.self || front == SYSTEM_UI)) {
-          perform(Action.Press(Button.BACK), null) // answered in Deputy or the open shade
-          front = device.foregroundPkg()
-        }
-        // The app is only in front once Deputy's window or the shade has animated away, which can outlast the settle.
-        for (i in 1..10) {
-          if (front == obs.context.pkg || front !in setOf(policy.self, SYSTEM_UI, "")) break
-          delay(300)
-          front = device.foregroundPkg()
-        }
+        val front = backTo(obs.context.pkg)
         val now = observer.build(front) { device.read() }?.takeIf { it.context.pkg == obs.context.pkg }
         val fresh = when {
           now == null -> null
@@ -281,6 +284,25 @@ class AgentLoop(
       ?.takeIf { it.context.pkg == obs.context.pkg && it.context.title == obs.context.title } ?: return null
     val fresh = DeviceRules.relocate(now.all, target) ?: return null
     return if (policy.check(action, fresh, now.context, flag) == Verdict.Allow) perform(action, fresh) else null
+  }
+
+  /**
+   * After a gate the owner may have answered in Deputy or the open shade, so press Back once and wait for `pkg`; with no
+   * `pkg`, wait for whatever app Back reveals. Returns what is in front.
+   */
+  private suspend fun backTo(pkg: String?): String {
+    var front = device.foregroundPkg()
+    if (front != pkg && (front == policy.self || front == SYSTEM_UI)) {
+      perform(Action.Press(Button.BACK), null)
+      front = device.foregroundPkg()
+    }
+    // The app is only in front once Deputy's window or the shade has animated away, which can outlast the settle.
+    for (i in 1..10) {
+      if (front == pkg || front !in setOf(policy.self, SYSTEM_UI, "")) break
+      delay(300)
+      front = device.foregroundPkg()
+    }
+    return front
   }
 
   /** The message a gate shows: the text typing puts in the field, or else the last text box's content. */

@@ -15,13 +15,17 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.text.method.ScrollingMovementMethod
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import expo.modules.deputyagent.core.Gate
 import expo.modules.deputyagent.core.GateCopy
+import expo.modules.deputyagent.core.GateKind
 import kotlin.coroutines.resume
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -107,13 +111,14 @@ object StopChip {
     removeCard()
   }
 
-  /** HyperOS drops the heads-up after 1–3 s (0.2.1 phone test), so a confirm gate waits here too; the paused run can't tap it. */
+  /** HyperOS drops the heads-up after 1–3 s and opened Deputy from a question's Answer (phone tests), so every gate waits here too; the paused run can't tap it. */
   fun gate(s: AccessibilityService, g: Gate) = main.post {
     removeCard()
     val dp = s.resources.displayMetrics.density
     val c = colors
+    val question = g.kind == GateKind.QUESTION
     val body = TextView(s).apply {
-      text = GateCopy.full(g)
+      text = if (question) g.action else GateCopy.full(g)
       textSize = 14f
       maxLines = CARD_LINES
       isVerticalScrollBarEnabled = true
@@ -131,49 +136,86 @@ object StopChip {
       if (filled) background = GradientDrawable().apply { cornerRadius = 24 * dp; setColor(c["accent"] ?: Color.DKGRAY) }
       setOnClickListener { onTap() }
     }
-    val deny = button("Deny", filled = false) { AgentRuntime.resolveGate(s, g.id, approve = false, text = null) }
-    val approve = button("Approve", filled = true) {
-      when {
-        // A finger already moving when the card appeared mustn't approve it.
-        SystemClock.uptimeMillis() - cardArmedAt < ARM_MS -> Unit
-        locked(s) -> lockCard(true)
-        else -> AgentRuntime.resolveGate(s, g.id, approve = true, text = null)
-      }
-    }
-    deny.contentDescription = "Deny this step"
-    approve.contentDescription = "Approve this step"
-    // Like the collapsed row: a step too long to show whole is approved only where it can be read whole.
-    body.post {
-      if (body.lineCount > CARD_LINES) {
-        approve.visibility = View.GONE
-        body.text = "Too long to approve here. Open Deputy to read all of it and approve.\n\n${GateCopy.full(g)}"
-      }
-    }
+    // A finger already moving when the card appeared mustn't approve or answer it.
+    fun armed() = SystemClock.uptimeMillis() - cardArmedAt >= ARM_MS
     val card = LinearLayout(s).apply {
       orientation = LinearLayout.VERTICAL
       setPadding((16 * dp).toInt(), (12 * dp).toInt(), (16 * dp).toInt(), (12 * dp).toInt())
       background = GradientDrawable().apply { cornerRadius = 20 * dp; setColor(c["raised"] ?: Color.BLACK) }
       addView(TextView(s).apply {
-        text = "Deputy needs your OK"
+        text = if (question) "Deputy has a question" else "Deputy needs your OK"
         textSize = 16f
         c["text"]?.let(::setTextColor)
       })
       addView(body)
-      addView(LinearLayout(s).apply {
-        gravity = Gravity.END
-        addView(deny)
-        addView(approve)
-      })
     }
     val frame = FrameLayout(s).apply {
       setPadding((8 * dp).toInt(), 0, (8 * dp).toInt(), 0)
       addView(card)
     }
+    if (question) {
+      val reply = { text: String ->
+        if (armed() && text.isNotBlank()) {
+          // Gone before the run resumes: a focused card reads as Deputy in front, and the loop's backTo would press Back in the app.
+          removeCard()
+          AgentRuntime.resolveGate(s, g.id, approve = false, text = text.trim())
+        }
+      }
+      g.options.forEach { o -> card.addView(button(o, filled = false) { reply(o) }) }
+      val imm = s.getSystemService(InputMethodManager::class.java)
+      val field = EditText(s).apply {
+        hint = "Your answer"
+        textSize = 14f
+        minHeight = (48 * dp).toInt()
+        c["text"]?.let(::setTextColor)
+        c["muted"]?.let(::setHintTextColor)
+        setOnFocusChangeListener { _, has -> if (has) typing(true) }
+        viewTreeObserver.addOnWindowFocusChangeListener { focused -> if (focused && hasFocus()) imm.showSoftInput(this, 0) }
+      }
+      frame.setOnTouchListener { _, e ->
+        if (e.action == MotionEvent.ACTION_OUTSIDE && field.hasFocus()) {
+          imm.hideSoftInputFromWindow(field.windowToken, 0)
+          field.clearFocus()
+          typing(false)
+        }
+        false
+      }
+      card.addView(LinearLayout(s).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        addView(field, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        addView(button("Send", filled = true) { reply(field.text.toString()) }.apply { contentDescription = "Send your answer" })
+      })
+    } else {
+      val deny = button("Deny", filled = false) { AgentRuntime.resolveGate(s, g.id, approve = false, text = null) }
+      val approve = button("Approve", filled = true) {
+        when {
+          !armed() -> Unit
+          locked(s) -> lockCard(true)
+          else -> AgentRuntime.resolveGate(s, g.id, approve = true, text = null)
+        }
+      }
+      deny.contentDescription = "Deny this step"
+      approve.contentDescription = "Approve this step"
+      // Like the collapsed row: a step too long to show whole is approved only where it can be read whole.
+      body.post {
+        if (body.lineCount > CARD_LINES) {
+          approve.visibility = View.GONE
+          body.text = "Too long to approve here. Open Deputy to read all of it and approve.\n\n${GateCopy.full(g)}"
+        }
+      }
+      card.addView(LinearLayout(s).apply {
+        gravity = Gravity.END
+        addView(deny)
+        addView(approve)
+      })
+    }
     val lp = WindowManager.LayoutParams(
       WindowManager.LayoutParams.MATCH_PARENT,
       WindowManager.LayoutParams.WRAP_CONTENT,
       WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+      // Focusable only while the owner types (typing): focused, the card holds the keyboard and Back from the app; a tap outside gives them back.
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or (if (question) WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH else 0),
       PixelFormat.TRANSLUCENT,
     ).apply {
       gravity = Gravity.TOP
@@ -201,6 +243,14 @@ object StopChip {
     if (cardLocked && !locked || cardArmedAt == 0L) cardArmedAt = SystemClock.uptimeMillis()
     cardLocked = locked
     aside(cardView, cardParams, cardManager, locked)
+  }
+
+  private fun typing(on: Boolean) {
+    val v = cardView ?: return
+    val p = cardParams ?: return
+    val f = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+    p.flags = if (on) p.flags and f.inv() else p.flags or f
+    runCatching { cardManager?.updateViewLayout(v, p) }
   }
 
   fun clearGate() = main.post { removeCard() }

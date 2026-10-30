@@ -23,6 +23,16 @@ class DeviceRulesTest {
     assertEquals(DeviceRules.line(screen, Direction.LEFT).toList(), DeviceRules.scrollLine(screen, Direction.RIGHT).toList())
   }
 
+  @Test fun anAppIsFoundByLabelPackageOrABrandInsideItsPackage() {
+    val alfa = "com.base.bankalfalah"
+    assertTrue("brand name inside the package", DeviceRules.appMatches("Alfalah", alfa, "Alfa"))
+    assertTrue("spaces dropped", DeviceRules.appMatches("Bank Alfalah", alfa, "Alfa"))
+    assertTrue("label", DeviceRules.appMatches("alfa", alfa, "Alfa"))
+    assertTrue("exact package", DeviceRules.appMatches(alfa, alfa, "Alfa"))
+    assertFalse("3 letters match only labels", DeviceRules.appMatches("com", alfa, "Alfa"))
+    assertFalse(DeviceRules.appMatches("Meezan", alfa, "Alfa"))
+  }
+
   @Test fun aFrameIsBlankOnlyWhenEverySampleIsNearBlack() {
     assertTrue(DeviceRules.isBlank(intArrayOf(0xFF000000.toInt(), 0xFF050505.toInt())))
     assertFalse(DeviceRules.isBlank(intArrayOf(0xFF000000.toInt(), 0xFF000080.toInt())))

@@ -23,10 +23,10 @@ class ProviderJsonTest {
   private val response = """{"choices":[{"index":0,"message":$assistant,"finish_reason":"tool_calls"}],""" +
     """"usage":{"prompt_tokens":1200,"completion_tokens":80,"total_tokens":1280,"prompt_tokens_details":{"cached_tokens":1000}}}"""
 
-  @Test fun requestHasModelMessagesToolsAndAutoChoice() {
+  @Test fun requestHasModelMessagesToolsAndRequiredChoice() {
     val body = Json.parseToJsonElement(ProviderJson.request("gemini-3.8-flash", listOf(Msgs.system("S"), Msgs.user("T")), listOf(tap), "low")).jsonObject
     assertEquals("gemini-3.8-flash", body["model"]!!.jsonPrimitive.content)
-    assertEquals("auto", body["tool_choice"]!!.jsonPrimitive.content)
+    assertEquals("required", body["tool_choice"]!!.jsonPrimitive.content)
     assertEquals("low", body["reasoning_effort"]!!.jsonPrimitive.content)
     assertEquals("""{"role":"system","content":"S"}""", body["messages"]!!.jsonArray[0].toString())
     assertEquals("""{"role":"user","content":"T"}""", body["messages"]!!.jsonArray[1].toString())
@@ -60,6 +60,15 @@ class ProviderJsonTest {
     assertEquals(Usage(5, 0, 2), turn.usage)
     assertEquals("hi", turn.text)
     assertEquals(emptyList<ToolCall>(), turn.toolCalls)
+  }
+
+  @Test fun aToolNameCarryingLeakedChannelSyntaxIsReadAsTheTool() {
+    // GPT-OSS on Groq, 0.2.1 phone test: four turns lost to these names before the run gave up.
+    val names = listOf("intent=functions.finish", "c=functions.finish", "tap").map { n ->
+      ProviderJson.parse("""{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"c","type":"function","function":{"name":"$n","arguments":"{}"}}]}}]}""")
+        .toolCalls.single().name
+    }
+    assertEquals(listOf("finish", "finish", "tap"), names)
   }
 
   @Test fun argumentsThatAreNotJsonBecomeAnEmptyObject() {

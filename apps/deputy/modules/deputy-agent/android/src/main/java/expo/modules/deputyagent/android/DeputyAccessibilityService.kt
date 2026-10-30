@@ -16,7 +16,7 @@ class DeputyAccessibilityService : AccessibilityService() {
     AgentRuntime.init(this)
     if (AgentRuntime.active) {
       StopChip.show(this)
-      AgentRuntime.pendingConfirm()?.let { StopChip.gate(this, it) }
+      AgentRuntime.pendingGate()?.let { StopChip.gate(this, it) }
     }
   }
 

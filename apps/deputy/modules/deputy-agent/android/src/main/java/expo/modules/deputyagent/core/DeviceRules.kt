@@ -53,6 +53,12 @@ object DeviceRules {
     return nodes.singleOrNull { it.copy(bounds = target.bounds, depth = target.depth) == target }
   }
 
+  /** `open_app`'s match. Models use the brand ("Alfalah") where the launcher shows a short label ("Alfa"), so the package counts (0.2.1). */
+  fun appMatches(name: String, pkg: String, label: String): Boolean {
+    val word = name.filter(Char::isLetterOrDigit)
+    return pkg == name || label.contains(name, ignoreCase = true) || (word.length >= 4 && pkg.contains(word, ignoreCase = true))
+  }
+
   suspend fun settle(lastEvent: () -> Long, now: () -> Long) {
     val start = now()
     while (now() - start < 3_000 && now() - maxOf(start, lastEvent()) < 400) delay(50)

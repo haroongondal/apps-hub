@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.Build
 import expo.modules.deputyagent.core.AgentLoop
 import expo.modules.deputyagent.core.Gate
-import expo.modules.deputyagent.core.GateKind
 import expo.modules.deputyagent.core.Gates
 import expo.modules.deputyagent.core.Guard
 import expo.modules.deputyagent.core.Msgs
@@ -117,8 +116,8 @@ object AgentRuntime {
     return accepted
   }
 
-  /** The confirm gate waiting now, so a rebound service can show its card again (overlays go with the old connection). */
-  fun pendingConfirm(): Gate? = gates.pending()?.takeIf { it.kind == GateKind.CONFIRM }
+  /** The gate waiting now, so a rebound service can show its card again (overlays go with the old connection). */
+  fun pendingGate(): Gate? = gates.pending()
 
   fun snapshot(): Map<String, Any?> = mapOf(
     "runId" to runId,
@@ -173,7 +172,7 @@ object AgentRuntime {
       }
       is RunEvent.GateOpened -> {
         Notifier.gate(app, e.gate)
-        if (e.gate.kind == GateKind.CONFIRM) DeputyAccessibilityService.instance?.let { StopChip.gate(it, e.gate) }
+        DeputyAccessibilityService.instance?.let { StopChip.gate(it, e.gate) }
       }
       is RunEvent.Finished -> {
         Notifier.clearGate(app)

@@ -69,7 +69,7 @@ object Tools {
     spec("set_timer", "Start a timer in the clock app.", """"seconds":{"type":"integer","minimum":1,"maximum":86400},"label":{"type":"string"}""", """"seconds""""),
     spec("find_contact", "Look up a contact's phone numbers by name.", """"name":{"type":"string"}""", """"name"""", memo = false),
     spec(
-      "open_chat", "Open a chat with the message already typed in. It never sends: tap Send afterwards.",
+      "open_chat", "Open a chat with the message already typed in, or with empty text to read the chat first. It never sends: tap Send afterwards.",
       """"app":{"type":"string","enum":["whatsapp","sms"]},"phone":{"type":"string","description":"International number, such as +923001234567"},"text":{"type":"string"}""",
       """"app","phone","text"""",
     ),

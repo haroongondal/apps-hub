@@ -6,6 +6,7 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -117,11 +118,74 @@ class AgentLoopTest {
     assertFalse(script.seen[0].contains("data:image"))
   }
 
-  @Test fun deputysOwnScreenInFrontSendsDeputyHomeWithoutReadingIt() = runTest {
+  @Test fun deputysOwnScreenInFrontGoesBackToTheAppBeforeItWithoutReadingIt() = runTest {
+    val device = FakeDevice(screen(self, "Deputy", n("Run", self)), onAction = { if (it == Action.Press(Button.BACK)) clock else null })
+    val script = Script(call("finish", """{"status":"done","summary":"x"}"""))
+    run(device, script).loop.run("t")
+    assertEquals(listOf<Action>(Action.Press(Button.BACK)), device.performed)
+    assertTrue("the owner's open screen is where the run starts", script.seen[0].contains("<screen app=\\\"Clock\\\""))
+    assertFalse(self in device.reads)
+  }
+
+  @Test fun whenBackLeavesDeputyInFrontDeputyGoesHome() = runTest {
     val device = FakeDevice(screen(self, "Deputy", n("Run", self)), onAction = { if (it == Action.Press(Button.HOME)) launcher else null })
     run(device, Script(call("finish", """{"status":"done","summary":"x"}"""))).loop.run("t")
-    assertEquals(listOf<Action>(Action.Press(Button.HOME)), device.performed)
+    assertEquals(listOf<Action>(Action.Press(Button.BACK), Action.Press(Button.HOME)), device.performed)
     assertFalse(self in device.reads)
+  }
+
+  @Test fun deputysWindowStillLeavingAfterTheFirstBackIsWaitedForNotSentHome() = runTest {
+    var back = false
+    var polls = 0
+    lateinit var device: FakeDevice
+    device = FakeDevice(screen(self, "Deputy", n("Run", self)), onForeground = { if (back && ++polls == 3) device.current = clock }, onAction = { if (it == Action.Press(Button.BACK)) back = true; null })
+    run(device, Script(call("finish", """{"status":"done","summary":"x"}"""))).loop.run("t")
+    assertEquals(listOf<Action>(Action.Press(Button.BACK)), device.performed)
+  }
+
+  @Test fun backFromDeputyOntoABlockedAppGoesHomeNext() = runTest {
+    val vault = screen("com.vault", "Vault", n("Passwords", "com.vault"))
+    val device = FakeDevice(screen(self, "Deputy", n("Run", self)), onAction = { when (it) { Action.Press(Button.BACK) -> vault; Action.Press(Button.HOME) -> launcher; else -> null } })
+    val r = run(device, Script(call("finish", """{"status":"done","summary":"x"}""")))
+    assertEquals(RunStatus.DONE, r.loop.run("t").status)
+    assertEquals(listOf<Action>(Action.Press(Button.BACK), Action.Press(Button.HOME)), device.performed)
+    assertFalse("com.vault" in device.reads)
+  }
+
+  @Test fun deputyInFrontMidRunGoesHomeSoBackCantCloseOneOfItsSheets() = runTest {
+    val deputy = screen(self, "Deputy", n("Save", self))
+    val device = FakeDevice(clock, onAction = { when (it) { is Action.Wait -> deputy; Action.Press(Button.HOME) -> launcher; else -> null } })
+    run(device, Script(call("wait", """{"seconds":1}"""), call("finish", """{"status":"done","summary":"x"}"""))).loop.run("t")
+    assertEquals(listOf(Action.Wait(1), Action.Press(Button.HOME)), device.performed)
+  }
+
+  @Test fun anAnswerGivenInDeputyGoesBackToTheAppAndIsLogged() = runTest {
+    val bank = screen("com.bank", "Bank", n("Statement", "com.bank"), n("October", "com.bank"), n("Balance", "com.bank"), n("Cards", "com.bank"), n("More", "com.bank"))
+    val device = FakeDevice(bank, onAction = { if (it == Action.Press(Button.BACK)) bank else null })
+    val script = Script(call("ask_user", """{"question":"Unlock the bank app, please"}"""), call("finish", """{"status":"done","summary":"x"}"""))
+    val r = run(device, script)
+    launch { r.loop.run("t") }
+    runCurrent()
+    device.current = screen(self, "Deputy", n("Answer", self)) // the owner opened Deputy to answer
+    r.gates.resolve(r.gates.pending()!!.id, approve = false, text = "Done")
+    advanceUntilIdle()
+    assertEquals("Back to the bank, not Home", listOf<Action>(Action.Press(Button.BACK)), device.performed)
+    assertTrue("the newest screen is the bank", script.seen[1].substringAfterLast("<screen ").startsWith("app=\\\"Bank\\\""))
+    assertFalse(self in device.reads)
+    val asked = r.events.filterIsInstance<RunEvent.Step>().last()
+    assertEquals("Ask the owner: Unlock the bank app, please", asked.action)
+    assertEquals("The owner answered: Done", asked.result)
+  }
+
+  @Test fun anOpenedAppIsAwaitedBeforeTheNextScreenIsRead() = runTest {
+    var opened = false
+    var polls = 0
+    lateinit var device: FakeDevice
+    // A cold start leaves the launcher in front for a while after the settle (Alfa, 0.2.1 phone test).
+    device = FakeDevice(launcher, onForeground = { if (opened && ++polls == 4) device.current = clock }, onAction = { if (it == Action.OpenApp("com.clock")) opened = true; null })
+    val script = Script(call("open_app", """{"name":"Clock"}"""), call("finish", """{"status":"done","summary":"x"}"""))
+    run(device, script).loop.run("t")
+    assertTrue(script.seen[1].contains("<screen app=\\\"Clock\\\""))
   }
 
   private fun calls(vararg c: Pair<String, String>) = c.mapIndexed { i, (name, args) -> ToolCall("c$i", name, Json.parseToJsonElement(args).jsonObject) }

@@ -738,9 +738,70 @@ not to be built unless asked. My calls, not confirmed by the owner:
     taps 22:28:41–42); the link opened through the system chooser
     (`intentresolver`) into Chrome; finished "The link https://example.com has
     been opened successfully in Chrome."
+  - **Second Groq key (2026-10-30/31, build 7).** The owner pasted a second key
+    in chat (now in the transcript; rotation advised). Saved as Keychain
+    `deputy-groq-2`; SHA-256 prefix differs from `deputy-groq`; `/models` 200.
+    **Separate Groq organization:** after one request on each key, each key's
+    `x-ratelimit-remaining-requests` moved on its own (key 1 999 → 998, key 2
+    999). Added in Deputy over adb (Settings → "Add your API key" row → "Another
+    Groq API key", typed from the Keychain via `adb shell` stdin → "Add the
+    key"): shows "Key 2" with the same last four characters as the Keychain key; **Test: "The key works."**
+  - **429 moves to the second key: PASS on timing.** Deputy doesn't log which key
+    served a call, so it was judged from model times while key 1 was refused:
+    - 23:52: key 1 drained to 429 (`retry-after: 15`); the Bluetooth task run 4 s
+      later answered at 0.7 / 0.8 / 0.7 s per step ("Bluetooth is off.").
+    - 00:07: key 1 held at 429 by a burst plus about 120 requests a minute from
+      the Mac (in 00:07:1x, 15 of 18 calls got 429); the run 00:07:09–00:07:18
+      answered at 0.7 and 0.3 s per step. With one key each 429 waits
+      `retry-after`, so these times mean key 2 answered.
+    - Groq refills both the token and the request budget continuously (a drained
+      key's `retry-after` fell to 2 s within seconds), so one drain alone
+      doesn't block a key for a whole run; two runs at 23:58 and 00:05 used key 1
+      because it had recovered.
   - Seen in passing: the app opens on Settings with "Setup isn't finished"
     because the battery row is "To do", though S9 made battery advice only
     (`setupComplete` counts it).
+
+### Owner's six failed runs on 0.2.1 (read from History, 2026-10-31)
+
+Build 7, GPT-OSS 120B on Groq, run by the owner 00:16–00:26; read over wireless
+debugging with `uiautomator dump` of Deputy's History sheets (the release build
+isn't debuggable, so `run-as` can't reach the run files). Bank screens and
+amounts are left out on purpose.
+
+- **Greetings to Marshmallow from the past day / week / 2 days** (Stopped, You
+  said no, Failed): the model never read the chat. Past day: `find_contact`, then
+  `open_chat` with a generic "Hey Marshmallow! Hope you're having a great day!",
+  then Send. Past week: asked the owner first, opened the chat row, typed the
+  same generic text, owner declined Send. 2 days: asked the owner for a summary,
+  then a text-only turn, then failed "Could not retrieve past two days of
+  conversation". Cause: the prompt's messaging rule (find_contact → open_chat →
+  Send) and "if information is missing, call ask_user", with nothing saying it
+  can read messages.
+- **"analyse my this month transactions on ubl"** (Stopped, 4 steps): tapped
+  Folder → Banking → UBL Digital through the launcher, landed on HyperOS's App
+  lock ("Security") and asked the owner; the owner stopped it.
+- **"… on alfalah"** (Failed, 12 steps) and **"… on alfalah. Screen is already
+  opened"** (Failed, 17 steps): after every question the owner answered, the next
+  step was on the launcher again ("Tap Alfa" on System launcher), so Alfa was
+  reopened from the icon each time. Cause: the answer brought Deputy forward and
+  the loop's own-screen rule pressed Home. The run that said "Screen is already
+  opened" began with that same Home press, so the open statement was lost before
+  step 1. Also seen: `open_app("Alfalah")` failed ("No installed app is called
+  Alfalah": the launcher label is "Alfa"); the first screen after `open_app` was
+  still the launcher (cold start past the settle), so the model tapped the icon
+  and got `stale_screen`; 5 text-only turns; 4 turns named
+  `intent=functions.finish` / `c=functions.finish` (Unknown tool); model calls up
+  to 23 s.
+- **Alfa itself (checked 2026-10-31 00:47):** its home screen exposes labels to
+  accessibility, so a text-only model can read it. Launching it from the launcher
+  after its process died restores the old task, then the app wipes it
+  (`finish-imm:clear-task-all`) and restarts at the splash and a fingerprint
+  prompt (System UI). The `logcat -b events` buffer only reached back to 00:27, so
+  the runs' own app events were gone.
+- `tool_choice: "required"` checked from the Mac with the Keychain keys: Groq
+  `openai/gpt-oss-120b` and Gemini `gemini-3.5-flash-lite` both HTTP 200 with a
+  tool call.
 
 ## File map
 
@@ -1293,8 +1354,74 @@ not to be built unless asked. My calls, not confirmed by the owner:
     :app:assembleDebug` exit 0, JVM 226/226, APK 23:28; earlier in the round
     `pnpm test` exit 0 (9 packages, fail 0) and `pnpm typecheck` exit 0.
 
+### Session 12 (2026-10-31): the owner's six failed runs
+
+The owner asked to analyse and fix the last six History runs (Evidence, "Owner's
+six failed runs on 0.2.1"). A parallel session (question card, mic button) worked
+on Deputy at the same time; files didn't overlap (it owns StopChip, Notifier,
+AgentRuntime, the accessibility service, RunPanel).
+
+- `AgentLoop`: Deputy's own screen before the first model step presses Back
+  (returns to the screen the owner left) and waits for Deputy's window to go;
+  Home if Deputy stays or that Back revealed a blocked app. Mid-run it stays Home
+  (Back could close an unsaved Deputy sheet; review). After an `ask_user` answer the
+  loop goes back to the question's app with the post-approval logic, now the
+  shared `backTo(pkg)`. The ask step logs `Ask the owner: <question>`, then the
+  answer. After an allowed `open_app` the loop waits up to 4.5 s for that package,
+  or any app but the one it was opened from, to be in front.
+- `ProviderJson.parse` keeps the name after the last dot (`intent=functions.finish`),
+  so the one-reply duplicate check sees it too (review).
+- `ProviderJson`: `tool_choice: "required"`.
+- `Prompt`: the model can read what apps show and must read before acting
+  (earlier messages, transactions); for a message that draws on the chat,
+  `open_chat` with empty text, scroll up, read, then type; ask only for what no
+  app shows; an unlock screen needs the owner. `open_chat`'s description allows
+  empty text.
+- `DeviceRules.appMatches` (used by `DeviceAdapter.resolveApp`): a name of 4+
+  letters also matches inside a package name.
+- `RunPanel` `GateCard.answer` calls `Keyboard.dismiss()`: taps reach Send with the
+  keyboard up, and the loop's one Back would only close it (the question-card
+  session owns the rest of that file; it had ended, so this one line is mine).
+- Tests first: 6 new or changed tests failed on the old code (the answer test
+  reproduced the Alfa runs: Home, Home), then passed. Both reviews' findings fixed
+  (above); a mutant without the post-answer `backTo` fails that test. Gate (real
+  output): `:deputy-agent:testDebugUnitTest :app:assembleDebug` exit 0, JVM
+  234/234; deputy TS 11/11, typecheck exit 0.
+- Docs: SPEC §6 (`open_app`), §7 (own screen, after a question), §9.2, §10;
+  EVAL "Next build: the owner's six failed runs".
+- Not done: tapping through launcher folders instead of `open_app` (prompt already
+  says prefer it); Groq waits of ~20 s (the cross-provider fallback the owner asked
+  about at the end of session 11 is still undesigned).
+
 ## Current state + exact next step
 
+- **Session 12 (2026-10-31), uncommitted on `deputy-speed`:** fixes for the
+  owner's six failed runs (session log "Session 12"); JVM 234/234, gate green.
+  Privacy change to know: a run started from Deputy now reads (and, on an image
+  model, screenshots) the app the owner left, not the launcher.
+  Together with the mic button and question card below, this is the next build.
+  Exact next step: the owner says whether to commit and release it as 0.2.3;
+  then run the two new EVAL sections ("mic button and question answers", "the
+  owner's six failed runs") over wireless debugging.
+- **2026-10-31, uncommitted on `deputy-speed`:** the Task group's Speak button is
+  now a big round mic (`MicButton` in `apps/deputy/src/RunPanel.tsx`). Whatever
+  the system speech dialog hears starts the run straight away, with no Run tap;
+  typing plus Run stays as the fallback. Typecheck and tests pass; not yet tried
+  on the phone. Ship it with the next version bump.
+- **2026-10-31, uncommitted, question answers.** The owner reported that the
+  question notification's Answer opens Deputy on HyperOS. On this phone
+  WhatsApp's Reply types inline (owner), and `secure quick_reply=0`. Two changes,
+  both the owner's pick ("Both"): (1) `Notifier.gate` posts a question as a
+  MessagingStyle chat message with a reply-semantic Answer action that has an
+  icon, the shape HyperOS gives an inline box to (unproven for Deputy); (2) the
+  Stop chip shows a question card too (`StopChip.gate`: options, a "Your answer"
+  box, Send). The card's window turns focusable only while the box has focus
+  (`typing`), and a tap outside gives the keyboard and Back back to the app.
+  Send removes the card before `resolveGate`, so the loop's `backTo` (session
+  apps-hub-35) never sees Deputy in front and presses Back in the app.
+  `pendingConfirm` became `pendingGate`. Gate: JVM 226/226, `:app:assembleDebug`
+  exit 0. Not run on a device. Next: the owner says when to bump the version and
+  release, then run EVAL "Next build: mic button and question answers".
 - **Session 11 is the newest state (2026-10-30).** Deputy 0.2.1 build 7 is on the
   phone (installed through the Store this session). Phone checks are recorded
   under Evidence ("Phone checks of 0.2.1"). The approval card, fewer stale
@@ -1318,8 +1445,9 @@ not to be built unless asked. My calls, not confirmed by the owner:
   3. Still open from 0.2.1: short-step Approve on the shade row, approving inside
      Deputy, the locked-phone Approve from the notification, "Edited before
      approving" (EVAL 0.2.1; a draft changed while the gate waits voids the
-     approval), and a 429 moving to a second key (owner adds `deputy-groq-2` to the Keychain first; read it only
-     via `security … -w` piped into `adb shell` stdin).
+     approval). **Done:** a 429 moving to a second key (Evidence, "Second Groq
+     key"); both pasted Groq keys should be rotated, then updated in the
+     Keychain (`deputy-groq`, `deputy-groq-2`) and in Deputy.
   4. Not fixed, owner's call: the alarm answer dropping "set by Islam360" (prompt
      line), the battery row keeping Setup "not finished", the gate copy naming
      the launcher for `open_link`, a "No tool call" turn before `finish` on GPT-OSS.

@@ -5,12 +5,14 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.Person
 import android.app.RemoteInput
 import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.drawable.Icon
 import android.os.IBinder
 import android.view.View
 import android.widget.RemoteViews
@@ -79,10 +81,16 @@ object Notifier {
         .addAction(Notification.Action.Builder(null, "Approve", answer(c, 0, g.id, approve = true)).setAuthenticationRequired(true).build())
         .addAction(Notification.Action.Builder(null, "Deny", answer(c, 1, g.id, approve = false)).build())
     } else {
-      b.setContentTitle("Deputy has a question").setContentText(g.action).setStyle(Notification.BigTextStyle().bigText(g.action))
-      g.options.take(2).forEachIndexed { i, o -> b.addAction(Notification.Action.Builder(null, o, answer(c, 3 + i, g.id, approve = false, text = o)).build()) }
+      // HyperOS opened Deputy from a plain Answer action but types inline into WhatsApp's Reply, so this copies a chat message's shape.
+      val deputy = Person.Builder().setName("Deputy").build()
+      b.setContentTitle("Deputy has a question").setContentText(g.action).setCategory(Notification.CATEGORY_MESSAGE)
+        .setStyle(Notification.MessagingStyle(Person.Builder().setName("You").build()).setConversationTitle("Deputy has a question").addMessage(g.action, System.currentTimeMillis(), deputy))
       val input = RemoteInput.Builder(REPLY).setLabel("Your answer").build()
-      b.addAction(Notification.Action.Builder(null, "Answer", answer(c, 2, g.id, approve = false, mutable = true)).addRemoteInput(input).build())
+      b.addAction(
+        Notification.Action.Builder(Icon.createWithResource(c, ICON), "Answer", answer(c, 2, g.id, approve = false, mutable = true))
+          .addRemoteInput(input).setSemanticAction(Notification.Action.SEMANTIC_ACTION_REPLY).setAllowGeneratedReplies(false).build(),
+      )
+      g.options.take(2).forEachIndexed { i, o -> b.addAction(Notification.Action.Builder(null, o, answer(c, 3 + i, g.id, approve = false, text = o)).build()) }
     }
     nm(c).notify(GATE_ID, b.build())
   }

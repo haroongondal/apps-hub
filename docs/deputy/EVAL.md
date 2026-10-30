@@ -138,3 +138,34 @@ phone, Approve from the notification; Key rotation on a 429.
 | Question gate | A task that leaves something out: "Send a message on WhatsApp" | Deputy asks its question in the notification, with the reply box, and no card shows | | |
 | WhatsApp send, one approval | AC-2b's task, three runs on Groq (`openai/gpt-oss-120b`), read each run in History | One approval per run, on the Send step. The typing step shows no "Asked you" (the model's flag varies by run) | | |
 | Fewer retries | The same send with the draft "Testing Deputy approvals, please ignore", on Groq, approved; count the steps that ended `stale_screen` in History | Fewer than 0.2.1, which ended 4 steps `stale_screen` over two such runs (3 of them in the 10-step run with this draft). A step that moved shows its normal result | | |
+
+## Next build: mic button and question answers
+
+Not built for the phone yet (uncommitted on `deputy-speed`, 2026-10-31). This
+build changes the 0.2.2 "Question gate" row: a question now gets a card too.
+
+| Check | How to run it | Pass when | Result | Note |
+| ----- | ------------- | --------- | ------ | ---- |
+| Mic starts the task | On Tasks, tap the big mic and say "Open the clock app and tell me my next alarm", then stop talking | The speech dialog closes, the text box shows what you said and the task starts with no Run tap | | |
+| Mic cancelled | Tap the mic, then dismiss the speech dialog without speaking | No task starts and nothing is shown as an error | | |
+| Inline answer in the notification | "Send a message on WhatsApp"; when the question comes, pull down the shade and tap Answer | A reply box opens inside the notification (Deputy doesn't open); typing an answer and sending it carries the run on | | |
+| Question card | The same task; when the question comes, leave the shade closed | A card "Deputy has a question" sits under the Stop chip with the question, any option buttons, a "Your answer" box and Send | | |
+| Type on the card | Tap "Your answer" on the card, type a contact name, tap Send | The keyboard opens over the app; after Send the card and keyboard go and the run carries on with that answer | | |
+| Tap outside while typing | Tap "Your answer", then tap the app below the card, then press Back | The keyboard closes on the outside tap, and Back works in the app again | | |
+| Question card when locked | When the question comes, lock and wake the phone | The lock screen shows no card and no question text | | |
+
+## Next build: the owner's six failed runs (0.2.1, 2026-10-31)
+
+Not built for the phone yet (uncommitted on `deputy-speed`). These rerun the six
+tasks that went wrong on build 7, on Groq (`openai/gpt-oss-120b`). Read each run
+in History. Use a chat that won't mind a greeting, and Deny the Send if the text
+is wrong.
+
+| Check | How to run it | Pass when | Result | Note |
+| ----- | ------------- | --------- | ------ | ---- |
+| Greeting from the chat | "Send greetings to marshmallow based on our past 2 days conversation" | Deputy opens the chat (`open_chat` with empty text, or the chat row), scrolls up and reads before it types; the draft refers to what was said. It asks you nothing | | |
+| Same, past week | "…based on our past week conversation" | As above, with more scrolling; no question before reading | | |
+| Answer inside Deputy | A task that makes it ask on a bank or chat screen; answer by opening Deputy | After the answer Deputy presses Back to that app and carries on there; History shows "Ask the owner: <question>" and "The owner answered: …", and no Home press | | |
+| Screen already open | Open Alfa's statement yourself, switch to Deputy with the recents gesture, run "analyse my this month transactions on alfalah. Screen is already opened" | The first screen Deputy reads is the statement, not the launcher; it scrolls and summarises without reopening Alfa | | |
+| Open by brand name | "Open Alfalah and tell me what the home screen shows" from the launcher | `open_app` finds Alfa (`com.base.bankalfalah`), and the next step is on Alfa's screen, not a stale tap on the launcher icon | | |
+| No text-only turns | Any of the runs above | History shows no "No tool call" and no "Unknown tool intent=functions.finish" steps | | |

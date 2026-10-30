@@ -108,7 +108,7 @@ class DeviceAdapter(private val context: Context) : Device {
   }
 
   override fun resolveApp(name: String): List<Pair<String, String>> =
-    launcherApps(context).filter { (pkg, label) -> pkg == name || label.contains(name, ignoreCase = true) }
+    launcherApps(context).filter { (pkg, label) -> DeviceRules.appMatches(name, pkg, label) }
 
   override fun resolveLink(url: String): String? = handler(linkIntent(url))
 

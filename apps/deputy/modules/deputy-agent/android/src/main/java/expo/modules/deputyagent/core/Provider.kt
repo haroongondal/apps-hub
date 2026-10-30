@@ -72,7 +72,8 @@ object ProviderJson {
           },
         ),
       )
-      put("tool_choice", "auto")
+      // GPT-OSS answered in plain text after the owner's answers (0.2.1 phone test); Groq and Gemini both take "required".
+      put("tool_choice", "required")
     }
     reasoningEffort?.let { put("reasoning_effort", it) }
   }.toString()
@@ -91,7 +92,9 @@ object ProviderJson {
         is JsonPrimitive -> runCatching { Json.parseToJsonElement(a.content).jsonObject }.getOrNull()
         else -> null
       }
-      ToolCall(tc.jsonObject["id"]?.jsonPrimitive?.contentOrNull.orEmpty(), fn["name"]!!.jsonPrimitive.content, args ?: JsonObject(emptyMap()))
+      // GPT-OSS on Groq sometimes leaks its channel syntax into the name, as "intent=functions.finish" (0.2.1 phone test).
+      val name = fn["name"]!!.jsonPrimitive.content.substringAfterLast('.')
+      ToolCall(tc.jsonObject["id"]?.jsonPrimitive?.contentOrNull.orEmpty(), name, args ?: JsonObject(emptyMap()))
     }
     val usage = root["usage"] as? JsonObject
     fun count(o: JsonObject?, k: String) = (o?.get(k) as? JsonPrimitive)?.longOrNull ?: 0
