@@ -92,8 +92,15 @@ no password generator / CSV export / card saving in v1.
   (0d55a75 + 6a0bb2d + 8f288d0: a sealed `key-check` tombstone lets a
   biometric key be verified; header writes compare keys first). Task 6
   matching (69b67c0 + 8157955: PSL, test_psl and Chrome/Firefox digests match
-  fresh downloads; fails closed on IDNA deviation characters and odd schemes)
-  in re-review. Rulings and deferred minors are in the ledger.
+  fresh downloads; fails closed on IDNA deviation characters and odd schemes).
+  Task 7 import (f02537f + 9b73d29: unlinked logins keyed by raw URL/name,
+  rows wider than the header refused, redaction script has a node test;
+  the owner's real export is still needed for Step 0). Task 8 form detection
+  (aad67dc) in review. Rulings and deferred minors are in the ledger.
+
+Debug runs use the AVD `apps-hub-test` (android-35 google_apis arm64):
+`~/Library/Android/sdk/emulator/emulator -avd apps-hub-test`. Gradle builds
+keep `ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`.
 
 ## Owner items to raise at the end of Phase 1 (from Task 1)
 
