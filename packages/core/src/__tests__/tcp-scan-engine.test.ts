@@ -35,7 +35,7 @@ class FakeBinding implements NetLensNativeBinding {
   };
   scripts = new Map<string, HostScript>();
   lastStart: TcpScanStartParams | null = null;
-  serviceEvents: { kind: 'mdns' | 'ssdp'; serviceName?: string | null }[] = [];
+  serviceEvents: { kind: 'mdns' | 'ssdp' | 'mdns-instance'; serviceName?: string | null }[] = [];
   stopTcpScanCalls = 0;
   stopServiceCalls = 0;
   canceled = false;
@@ -146,6 +146,13 @@ class FakeBinding implements NetLensNativeBinding {
       if (item.kind === 'mdns') {
         mdnsCount += 1;
         this.emit('onServiceDiscovered', { kind: 'mdns', serviceName: item.serviceName ?? null });
+      } else if (item.kind === 'mdns-instance') {
+        this.emit('onServiceDiscovered', {
+          kind: 'mdns-instance',
+          instanceName: 'TV',
+          serviceType: '_airplay._tcp',
+          host: '192.168.1.5',
+        });
       } else {
         ssdpCount += 1;
         this.emit('onServiceDiscovered', {
@@ -272,6 +279,16 @@ test('discoverServices aggregates mDNS + SSDP events into a bundle', async () =>
   );
   assert.equal(bundle.ssdp[0]?.host, '192.168.7.1');
   assert.match(bundle.ssdp[0]?.location ?? '', /^http:\/\//);
+});
+
+test('discoverServices does not count mdns-instance events as SSDP or mDNS types', async () => {
+  const binding = seededBinding();
+  binding.serviceEvents.push({ kind: 'mdns-instance' });
+  const bundle = await new TcpScanEngine(binding).discoverServices(2750);
+
+  assert.equal(bundle.ssdp.length, 1);
+  assert.equal(bundle.mdns.length, 2);
+  assert.ok(bundle.ssdp.every((e) => e.kind === 'ssdp'));
 });
 
 test('subscription handles detach cleanly', () => {

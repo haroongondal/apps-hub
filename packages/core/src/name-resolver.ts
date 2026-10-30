@@ -14,6 +14,7 @@ import type { NetLensNativeBinding } from './native-binding.ts';
 export const NAME_CONCURRENCY = 16;
 export const NAME_LOOKUP_TIMEOUT_MS = 1500;
 export const SSDP_DESCRIPTION_MAX_BYTES = 65536;
+const GUARD_MS = 250;
 
 export interface NameTarget {
   ip: string;
@@ -25,11 +26,20 @@ type NameBinding = Pick<NetLensNativeBinding, 'udpRequest' | 'tcpFetch'>;
 
 const queryId = (): number => Math.floor(Math.random() * 0x10000);
 
-async function attempt<T>(lookup: () => Promise<T | null>): Promise<T | null> {
+// The native side owns the timeout; this only stops a lookup that never settles.
+async function attempt<T>(lookup: () => Promise<T | null>, timeoutMs: number): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    return await lookup();
+    return await Promise.race([
+      lookup(),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), timeoutMs + GUARD_MS);
+      }),
+    ]);
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -78,14 +88,17 @@ async function lookupNames(
 ): Promise<DeviceNames> {
   const [hostname, netbiosName, description] = await Promise.all([
     gatewayIp
-      ? attempt(() =>
-          udpName(binding, gatewayIp, 53, (id) => buildPtrQuery(target.ip, id), parsePtrAnswer, timeoutMs),
+      ? attempt(
+          () =>
+            udpName(binding, gatewayIp, 53, (id) => buildPtrQuery(target.ip, id), parsePtrAnswer, timeoutMs),
+          timeoutMs,
         )
       : null,
-    attempt(() =>
-      udpName(binding, target.ip, 137, buildNetbiosStatusRequest, parseNetbiosStatus, timeoutMs),
+    attempt(
+      () => udpName(binding, target.ip, 137, buildNetbiosStatusRequest, parseNetbiosStatus, timeoutMs),
+      timeoutMs,
     ),
-    attempt(() => describe(binding, target, timeoutMs)),
+    attempt(() => describe(binding, target, timeoutMs), timeoutMs),
   ]);
   return {
     hostname,

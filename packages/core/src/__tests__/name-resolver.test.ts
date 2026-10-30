@@ -250,7 +250,7 @@ test('only HTTP 200 bodies are read; redirects, junk and null give no name', asy
 
 test('network names are sanitised before they are stored', async () => {
   const binding = new FakeBinding();
-  binding.tcpReply = 'HTTP/1.1 200 OK\r\n\r\n<friendlyName>  Den‮ TV\n </friendlyName>';
+  binding.tcpReply = 'HTTP/1.1 200 OK\r\n\r\n<friendlyName>  Den\u202e TV\n </friendlyName>';
   const result = await resolveDeviceNames(
     binding,
     [target('192.168.1.23', 'http://192.168.1.23/d.xml', '\u0000')],
@@ -259,4 +259,26 @@ test('network names are sanitised before they are stored', async () => {
   const names = result.get('192.168.1.23')!;
   assert.equal(names.friendlyName, 'Den TV');
   assert.equal(names.mdnsName, null);
+});
+
+test('lookups that never settle are cut off shortly after timeoutMs', async () => {
+  const hang = () => new Promise<never>(() => {});
+  const binding = { udpRequest: hang, tcpFetch: hang };
+  const started = performance.now();
+  const result = await resolveDeviceNames(
+    binding,
+    [target('192.168.1.23', 'http://192.168.1.23/d.xml', 'Den TV')],
+    '192.168.1.1',
+    undefined,
+    { timeoutMs: 50 },
+  );
+  assert.deepEqual(result.get('192.168.1.23'), { ...NONE, mdnsName: 'Den TV' });
+  assert.ok(performance.now() - started < 1000);
+});
+
+test('a pass that settles in time leaves no timer behind', async () => {
+  const timers = () => process.getActiveResourcesInfo().filter((r) => r === 'Timeout').length;
+  const before = timers();
+  await resolveDeviceNames(new FakeBinding(), [target('192.168.1.23')], '192.168.1.1');
+  assert.equal(timers(), before);
 });
