@@ -1299,13 +1299,18 @@ not to be built unless asked. My calls, not confirmed by the owner:
   phone (installed through the Store this session). Phone checks are recorded
   under Evidence ("Phone checks of 0.2.1"). The approval card, fewer stale
   retries and ungated plain typing are built, reviewed and gated on
-  `deputy-speed`, **uncommitted**; the version is still 0.2.1 in `app.json`,
-  `package.json` and `android/app/build.gradle`. Exact next step:
-  1. Ask the owner to commit, bump to 0.2.2 (build 8) and release with the cf
-     profile `personal` (the release ran the committed `tools/release` from a
-     temporary copy last time, because the working tree's `tools/release` and
-     `tools/store-api` hold another session's uncommitted edits; keep those out
-     of Deputy commits).
+  `deputy-speed`, committed and released as 0.2.2 (build 8). Exact next step:
+  1. **Done (owner said "commit + release 0.2.2"):** committed `759a1df` (work,
+     docs) and `727d7c9` (version 0.2.2) on `deputy-speed`, not pushed or merged.
+     **Released Deputy 0.2.2, build 8** (67.8 MB, "✔ deputy 8 published") to
+     `apps-hub-store.haroonmukhtar4.workers.dev`; cf profile `personal` (bound to
+     this repo) lists the `apps-hub-store` Worker. As for 0.2.1, the release ran
+     the committed `tools/release/src` from a temporary `tools/release-s11/src`
+     (it needs a `node_modules` symlink to `../release/node_modules`, or
+     `@apps-hub/store-manifest` doesn't resolve), because the working tree's
+     `tools/release` and `tools/store-api` hold another session's uncommitted
+     "delete the previous APK" step; build 7's APK stays in the bucket. The copy
+     was removed. Next: the owner installs build 8 through the Store.
   2. After the owner installs build 8 through the Store, run EVAL's "Deputy
      0.2.2" rows over wireless debugging. The owner taps on request (they chose
      this); use `adb exec-out screencap` raw frames cropped to the top rows
