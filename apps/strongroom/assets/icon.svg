@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect id="plate" width="1024" height="1024" rx="228" fill="#1F0A24"/>
+  <g id="mark" fill="#E879F9">
+    <path fill-rule="evenodd" d="M512 242a270 270 0 1 0 0 540a270 270 0 1 0 0-540ZM512 297a215 215 0 1 1 0 430a215 215 0 1 1 0-430Z"/>
+    <rect x="296" y="494" width="432" height="36"/>
+    <rect x="494" y="296" width="36" height="432"/>
+    <circle cx="512" cy="512" r="64"/>
+    <circle cx="400" cy="400" r="22"/>
+    <circle cx="624" cy="400" r="22"/>
+    <circle cx="400" cy="624" r="22"/>
+    <circle cx="624" cy="624" r="22"/>
+  </g>
+</svg>

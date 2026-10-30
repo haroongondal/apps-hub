@@ -23,6 +23,7 @@ export const APPS: Record<string, ReleasableApp> = {
   },
   store: { name: 'Store', dir: 'apps/store', android: { packageName: 'com.haroon.store' } },
   deputy: { name: 'Deputy', dir: 'apps/deputy', android: { packageName: 'com.haroon.deputy' } },
+  strongroom: { name: 'Strongroom', dir: 'apps/strongroom', android: { packageName: 'com.haroon.strongroom' } },
 };
 
 /** Release ids of the apps whose workspace-relative dir is in `dirs` (the packages pnpm says changed). */
