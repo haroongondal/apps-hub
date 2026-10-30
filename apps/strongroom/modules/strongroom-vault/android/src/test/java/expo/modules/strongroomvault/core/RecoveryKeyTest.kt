@@ -46,10 +46,10 @@ class RecoveryKeyTest {
 
   @Test fun parseRejectsCharactersOutsideTheAlphabet() {
     val formatted = RecoveryKey.format(RecoveryKey.generate())
-    for (bad in listOf('1', '8', '0', '9', '=', '!', 'ß')) {
+    for (bad in listOf('1', '8', '0', '9', '=', '!', '\u00df')) {
       assertNull("char $bad", RecoveryKey.parse(bad + formatted.drop(1)))
     }
-    assertNull(RecoveryKey.parse("ß".repeat(16)))
+    assertNull(RecoveryKey.parse("\u00df".repeat(16)))
   }
 
   @Test fun groupReturnsTheIndexedGroup() {

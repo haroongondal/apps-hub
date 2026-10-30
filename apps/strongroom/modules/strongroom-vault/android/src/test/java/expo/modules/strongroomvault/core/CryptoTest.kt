@@ -119,6 +119,12 @@ class CryptoTest {
     assertFalse(KdfParams(32768, 1, 1).inRange())
     assertFalse(KdfParams(32768, 2, 0).inRange())
     assertFalse(KdfParams(1048577, 2, 1).inRange())
+    assertTrue(KdfParams(32768, 16, 1).inRange())
+    assertTrue(KdfParams(32768, 2, 4).inRange())
+    assertFalse(KdfParams(32768, 17, 1).inRange())
+    assertFalse(KdfParams(32768, 2, 5).inRange())
+    assertFalse(KdfParams(32768, 2, 1_000_000).inRange())
+    assertFalse(KdfParams(32768, Int.MAX_VALUE, 1).inRange())
   }
 
   @Test fun testFloorReplacesTheFloorButNotTheCeiling() {
@@ -173,10 +179,10 @@ class CryptoTest {
     assertFalse(Crypto.randomBytes(32).contentEquals(Crypto.randomBytes(32)))
   }
 
-  // Explicit escapes so an editor can't normalise the source: NFC o-diaeresis (U+00F6) against "o" + U+0308.
+  // Written as escapes, so an editor can't normalise them: NFC is U+00F6, NFD is "o" + U+0308.
   @Test fun nfcAndNfdPasswordsDeriveSameKey() {
-    val nfc = "passwörd"
-    val nfd = "passwörd"
+    val nfc = "passw\u00f6rd"
+    val nfd = "passwo\u0308rd"
     assertNotEquals(nfc, nfd)
     val salt = ByteArray(16) { 9 }
     val params = KdfParams(1024, 1, 1)
@@ -187,9 +193,14 @@ class CryptoTest {
   }
 
   @Test fun passwordBytesIsNfcThenUtf8() {
-    assertArrayEquals(
-      "passwörd".toByteArray(Charsets.UTF_8),
-      Crypto.passwordBytes("passwörd".toCharArray()),
-    )
+    assertEquals("7061737377c3b67264", Crypto.passwordBytes("passwo\u0308rd".toCharArray()).toHex())
+  }
+
+  @Test fun passwordBytesReplacesUnpairedSurrogatesLikeTextEncoder() {
+    assertEquals("61efbfbd62", Crypto.passwordBytes("a\uD800b".toCharArray()).toHex())
+    assertEquals("61efbfbd62", Crypto.passwordBytes("a\uDC00b".toCharArray()).toHex())
+    assertEquals("61efbfbd", Crypto.passwordBytes("a\uD800".toCharArray()).toHex())
+    assertEquals("efbfbdefbfbd", Crypto.passwordBytes("\uD800\uD800".toCharArray()).toHex())
+    assertEquals("f09f9880", Crypto.passwordBytes("\uD83D\uDE00".toCharArray()).toHex())
   }
 }

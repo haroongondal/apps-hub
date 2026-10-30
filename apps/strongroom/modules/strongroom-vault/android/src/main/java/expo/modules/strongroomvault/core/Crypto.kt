@@ -5,7 +5,9 @@ import org.bouncycastle.crypto.generators.Argon2BytesGenerator
 import org.bouncycastle.crypto.generators.HKDFBytesGenerator
 import org.bouncycastle.crypto.params.Argon2Parameters
 import org.bouncycastle.crypto.params.HKDFParameters
+import java.nio.ByteBuffer
 import java.nio.CharBuffer
+import java.nio.charset.CodingErrorAction
 import java.security.SecureRandom
 import java.text.Normalizer
 import javax.crypto.BadPaddingException
@@ -17,13 +19,16 @@ data class KdfParams(val memoryKiB: Int, val iterations: Int, val parallelism: I
   fun inRange(): Boolean {
     val floor = testFloor ?: FLOOR
     return memoryKiB >= floor.memoryKiB && iterations >= floor.iterations &&
-      parallelism >= floor.parallelism && memoryKiB <= MAX_MEMORY_KIB
+      parallelism >= floor.parallelism && memoryKiB <= MAX_MEMORY_KIB &&
+      iterations <= MAX_ITERATIONS && parallelism <= MAX_PARALLELISM
   }
 
   companion object {
     val DEFAULT = KdfParams(65536, 3, 1)
     val FLOOR = KdfParams(32768, 2, 1)
     const val MAX_MEMORY_KIB = 1048576
+    const val MAX_ITERATIONS = 16
+    const val MAX_PARALLELISM = 4
     internal var testFloor: KdfParams? = null
   }
 }
@@ -39,7 +44,20 @@ object Crypto {
   fun passwordBytes(password: CharArray): ByteArray {
     // shortcut: the normalised String can't be zeroed (JVM strings are immutable); accepted, the byte arrays are zeroed.
     val nfc = Normalizer.normalize(CharBuffer.wrap(password), Normalizer.Form.NFC)
-    return nfc.toByteArray(Charsets.UTF_8)
+    // An unpaired surrogate becomes U+FFFD (EF BF BD), as WHATWG TextEncoder does, so the Phase 3 extension derives the same key.
+    val encoder = Charsets.UTF_8.newEncoder()
+      .onMalformedInput(CodingErrorAction.REPLACE)
+      .onUnmappableCharacter(CodingErrorAction.REPLACE)
+      .replaceWith(byteArrayOf(0xEF.toByte(), 0xBF.toByte(), 0xBD.toByte()))
+    val work = ByteBuffer.allocate((nfc.length * encoder.maxBytesPerChar()).toInt())
+    try {
+      val encoded = encoder.encode(CharBuffer.wrap(nfc), work, true)
+      val flushed = encoder.flush(work)
+      check(encoded.isUnderflow && flushed.isUnderflow)
+      return work.array().copyOf(work.position())
+    } finally {
+      work.array().fill(0)
+    }
   }
 
   fun argon2id(password: CharArray, salt: ByteArray, p: KdfParams): ByteArray {

@@ -130,7 +130,7 @@ Phase 1. Phase 3's TS tests read the same file.
   format change. Tune them so unlocking with the master password takes about 1–2 s
   on the phone.
 - A device refuses KDF params below the floor (m = 32 MiB, t = 2, p = 1) or above
-  the ceiling (m = 1 GiB) **before deriving anything**, and never accepts a header
+  the ceiling (m = 1 GiB, t = 16, p = 4) **before deriving anything**, and never accepts a header
   whose params are lower than the one it holds. Otherwise a tampered header, or
   the server in Phase 2, could make the password cheap to guess. *(Reviewer's
   point, adopted.)*
