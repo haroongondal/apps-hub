@@ -52,6 +52,10 @@ interface DeviceRow {
   is_trusted: number;
   first_seen_at: number;
   last_seen_at: number;
+  mdns_name: string | null;
+  friendly_name: string | null;
+  model: string | null;
+  netbios_name: string | null;
 }
 
 function rowToDevice(row: DeviceRow): StoredDevice {
@@ -68,6 +72,10 @@ function rowToDevice(row: DeviceRow): StoredDevice {
     isTrusted: row.is_trusted === 1,
     firstSeenAt: row.first_seen_at,
     lastSeenAt: row.last_seen_at,
+    mdnsName: row.mdns_name,
+    friendlyName: row.friendly_name,
+    model: row.model,
+    netbiosName: row.netbios_name,
   };
 }
 
@@ -84,6 +92,10 @@ function deviceToParams(device: StoredDevice): SQLiteBindValue[] {
     device.isTrusted ? 1 : 0,
     device.firstSeenAt,
     device.lastSeenAt,
+    device.mdnsName,
+    device.friendlyName,
+    device.model,
+    device.netbiosName,
   ];
 }
 
@@ -120,8 +132,9 @@ function createStore(db: SQLiteDatabase): DeviceStore {
         `INSERT INTO devices (
            network_id, identity_key, last_ip, hostname, custom_name,
            vendor_or_model, open_ports_csv, mdns_services_csv,
-           is_trusted, first_seen_at, last_seen_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           is_trusted, first_seen_at, last_seen_at,
+           mdns_name, friendly_name, model, netbios_name
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         deviceToParams(device),
       );
       return Number(result.lastInsertRowId);
@@ -136,12 +149,25 @@ function createStore(db: SQLiteDatabase): DeviceStore {
            network_id = ?, identity_key = ?, last_ip = ?, hostname = ?,
            custom_name = ?, vendor_or_model = ?, open_ports_csv = ?,
            mdns_services_csv = ?, is_trusted = ?, first_seen_at = ?,
-           last_seen_at = ?
+           last_seen_at = ?, mdns_name = ?, friendly_name = ?, model = ?,
+           netbios_name = ?
          WHERE id = ?`,
         [...deviceToParams(device), device.id],
       );
     },
   };
+}
+
+/** Version 1 adds the four name columns; user_version 0 means they aren't there yet. */
+async function migrate(db: SQLiteDatabase): Promise<void> {
+  const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
+  if ((row?.user_version ?? 0) >= 1) return;
+  await db.withTransactionAsync(async () => {
+    for (const column of ['mdns_name', 'friendly_name', 'model', 'netbios_name']) {
+      await db.execAsync(`ALTER TABLE devices ADD COLUMN ${column} TEXT`);
+    }
+    await db.execAsync('PRAGMA user_version = 1');
+  });
 }
 
 /**
@@ -152,5 +178,6 @@ function createStore(db: SQLiteDatabase): DeviceStore {
 export async function openDeviceStore(): Promise<DeviceStore> {
   const db = await openDatabaseAsync(DATABASE_NAME);
   await db.execAsync(SCHEMA_SQL);
+  await migrate(db);
   return createStore(db);
 }

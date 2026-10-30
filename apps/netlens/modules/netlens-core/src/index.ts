@@ -96,5 +96,16 @@ export function createNetLensNativeBinding(): NetLensNativeBinding {
         success: raw.success === true && addresses.length > 0,
       };
     },
+    /** Only a clean byte array counts as a reply; anything else is no reply. */
+    async udpRequest(ip, port, payload, timeoutMs) {
+      const raw: unknown = await NetLensCore.udpRequest(ip, port, [...payload], timeoutMs);
+      const isByte = (n: unknown): n is number =>
+        typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 255;
+      return Array.isArray(raw) && raw.every(isByte) ? raw : null;
+    },
+    async tcpFetch(ip, port, request, timeoutMs, maxBytes) {
+      const raw: unknown = await NetLensCore.tcpFetch(ip, port, request, timeoutMs, maxBytes);
+      return typeof raw === 'string' ? raw : null;
+    },
   };
 }

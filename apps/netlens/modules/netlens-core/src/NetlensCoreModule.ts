@@ -28,6 +28,21 @@ export interface NetlensCoreApi {
    * IPv4-first. Payload: hostname, addresses, durationMs, success.
    */
   resolveHostname(hostname: string): Promise<Record<string, unknown> | null>;
+  /** One datagram out, first reply back as bytes; null on timeout or error. */
+  udpRequest(
+    ip: string,
+    port: number,
+    payload: number[],
+    timeoutMs: number,
+  ): Promise<number[] | null>;
+  /** Connect, write `request`, read up to `maxBytes`; UTF-8 text, or null on failure. */
+  tcpFetch(
+    ip: string,
+    port: number,
+    request: string,
+    timeoutMs: number,
+    maxBytes: number,
+  ): Promise<string | null>;
   addListener(
     eventName: string,
     listener: (...args: any[]) => void,

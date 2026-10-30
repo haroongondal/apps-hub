@@ -2,8 +2,10 @@
  * ScannerScreen — FR-1/FR-2/FR-4 composition (Phase 4).
  * Flow: detect interface → sweep the clamped /24 (live events) →
  * enrich alive hosts with SSDP/mDNS facts → reconcile into the local
- * store → render. Custom names and trust survive rescans via the store
- * port (AC-3); unknown identities surface the NEW badge (AC-2).
+ * store → render → look up device names in the background and fill them in
+ * as they arrive. Custom names and trust survive rescans via the store
+ * port (AC-3); unknown identities surface the NEW badge (AC-2). Names never
+ * feed the reconcile enrichment, so they cannot change a device's identity.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, FlatList, Switch, View } from 'react-native';
@@ -30,13 +32,19 @@ import {
 
 import {
   TcpScanEngine,
+  applyDeviceNames,
+  cleanMdnsInstanceName,
   computeSubnetForHost,
+  displayNameFor,
   hashNetworkId,
   reconcileScan,
+  resolveDeviceNames,
+  type DeviceNames,
   type DeviceStore,
   type DiscoveredHost,
   type HostEnrichment,
   type InterfaceInfo,
+  type NameTarget,
   type ReconciledDevice,
   type ServiceEvent,
   type SubnetPlan,
@@ -68,10 +76,6 @@ function detailPort(device: ReconciledDevice): number {
 }
 const DEFAULT_PING_PORT = 80;
 
-function deviceName(device: ReconciledDevice): string {
-  return device.customName ?? device.vendorOrModel ?? device.hostname ?? device.lastIp;
-}
-
 function ms(value: number): string {
   return value.toFixed(1);
 }
@@ -87,12 +91,20 @@ export default function ScannerScreen() {
   const bindingProxy = useRef(createNetLensNativeBinding()).current;
   const engineProxy = useRef(new TcpScanEngine(bindingProxy)).current;
   const storeProxy = useRef<DeviceStore | null>(null);
+  // Bumped when a scan starts and on unmount; a name lookup from an older scan sees a mismatch and does nothing.
+  const scanGeneration = useRef(0);
+  // Latest rows, updated in step with state, so name merges and edits build on current data.
+  const devicesRef = useRef<ReconciledDevice[]>([]);
 
   const [iface, setIface] = useState<InterfaceInfo | null>(null);
   const [plan, setPlan] = useState<SubnetPlan | null>(null);
   const [phase, setPhase] = useState<Phase>('idle');
   const [discovered, setDiscovered] = useState(0);
   const [devices, setDevices] = useState<ReconciledDevice[]>([]);
+  const commitDevices = useCallback((rows: ReconciledDevice[]): void => {
+    devicesRef.current = rows;
+    setDevices(rows);
+  }, []);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [errorNote, setErrorNote] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReconciledDevice | null>(null);
@@ -119,6 +131,7 @@ export default function ScannerScreen() {
     });
     return () => {
       cancelled = true;
+      scanGeneration.current += 1;
     };
   }, [bindingProxy]);
 
@@ -128,6 +141,8 @@ export default function ScannerScreen() {
   const runScan = useCallback(async () => {
     const store = storeProxy.current;
     if (!store || scanning) return;
+    scanGeneration.current += 1;
+    const generation = scanGeneration.current;
     setErrorNote(null);
     setDiscovered(0);
     setPhase('scanning');
@@ -141,21 +156,35 @@ export default function ScannerScreen() {
       setPlan(planned);
 
       // Enrichment buffers, filled by native events while the sweep runs.
-      const ssdpByIp = new Map<string, { usn: string | null; vendor: string | null }>();
+      const ssdpByIp = new Map<
+        string,
+        { usn: string | null; vendor: string | null; location: string | null }
+      >();
+      const mdnsByIp = new Map<string, string>();
       const mdns = new Set<string>();
       const collectedTargets: DiscoveredHost[] = [];
 
       const serviceHandle = bindingProxy.addListener(
         'onServiceDiscovered',
         (event: ServiceEvent): void => {
-          if (event.kind === 'mdns' && typeof event.serviceName === 'string') {
-            mdns.add(event.serviceName);
+          if (event.kind === 'mdns') {
+            if (typeof event.serviceName === 'string') mdns.add(event.serviceName);
             return;
           }
-          if (typeof event.host === 'string' && event.host) {
+          if (typeof event.host !== 'string' || !event.host) return;
+          if (event.kind === 'mdns-instance') {
+            // First usable name per host wins; a device announces many services.
+            if (typeof event.instanceName === 'string' && !mdnsByIp.has(event.host)) {
+              const name = cleanMdnsInstanceName(event.instanceName);
+              if (name !== null) mdnsByIp.set(event.host, name);
+            }
+            return;
+          }
+          if (event.kind === 'ssdp') {
             ssdpByIp.set(event.host, {
               usn: typeof event.usn === 'string' ? event.usn : null,
               vendor: typeof event.server === 'string' ? event.server : null,
+              location: typeof event.location === 'string' ? event.location : null,
             });
           }
         },
@@ -200,8 +229,40 @@ export default function ScannerScreen() {
           },
           store,
         );
-        setDevices(result.devices);
+        commitDevices(result.devices);
         setPhase('done');
+
+        // Names come after the sweep so they can't slow it down. Each one is
+        // merged and saved as it arrives; lookup failures just mean no name.
+        const onNames = (ip: string, names: DeviceNames): void => {
+          if (scanGeneration.current !== generation) return;
+          const row = devicesRef.current.find((d) => d.seenThisScan && d.lastIp === ip);
+          if (!row) return;
+          const merged: ReconciledDevice = { ...row, ...applyDeviceNames(row, names) };
+          if (
+            merged.hostname === row.hostname &&
+            merged.mdnsName === row.mdnsName &&
+            merged.friendlyName === row.friendlyName &&
+            merged.model === row.model &&
+            merged.netbiosName === row.netbiosName
+          ) {
+            return;
+          }
+          commitDevices(devicesRef.current.map((d) => (d.id === merged.id ? merged : d)));
+          setDetail((open) => (open !== null && open.id === merged.id ? merged : open));
+          store.updateDevice(merged).catch((e: unknown) => {
+            if (scanGeneration.current !== generation) return;
+            setErrorNote(`HomeNet could not save the device names it found: ${e instanceof Error ? e.message : String(e)}`);
+          });
+        };
+        const nameTargets: NameTarget[] = result.devices
+          .filter((d) => d.seenThisScan)
+          .map((d) => ({
+            ip: d.lastIp,
+            ssdpLocation: ssdpByIp.get(d.lastIp)?.location ?? null,
+            mdnsName: mdnsByIp.get(d.lastIp) ?? null,
+          }));
+        void resolveDeviceNames(bindingProxy, nameTargets, info.gatewayIp, onNames);
       } finally {
         serviceHandle.remove();
         hostHandle.remove();
@@ -210,7 +271,7 @@ export default function ScannerScreen() {
       setErrorNote(error instanceof Error ? error.message : String(error));
       setPhase('error');
     }
-  }, [bindingProxy, engineProxy, scanning]);
+  }, [bindingProxy, commitDevices, engineProxy, scanning]);
 
   const stopScan = useCallback(async () => {
     await Promise.allSettled([
@@ -252,17 +313,21 @@ export default function ScannerScreen() {
   const saveDetail = useCallback(async (): Promise<void> => {
     const store = storeProxy.current;
     if (!store || detail === null) return;
+    // Build on the latest row: names may have arrived since the sheet opened.
     const updated: ReconciledDevice = {
-      ...detail,
+      ...(devicesRef.current.find((row) => row.id === detail.id) ?? detail),
       customName: nameDraft.trim() || null,
       isTrusted: trustDraft,
     };
-    await store.updateDevice(updated);
-    setDevices((rows) =>
-      rows.map((row) => (row.id === updated.id ? updated : row)),
-    );
+    // Commit before the write so a name arriving meanwhile builds on this edit.
+    commitDevices(devicesRef.current.map((row) => (row.id === updated.id ? updated : row)));
     setDetail(null);
-  }, [detail, nameDraft, trustDraft]);
+    try {
+      await store.updateDevice(updated);
+    } catch (e: unknown) {
+      setErrorNote(`HomeNet could not save your changes to this device: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [commitDevices, detail, nameDraft, trustDraft]);
 
   const pingTarget = useCallback(async (): Promise<void> => {
     if (detail === null || pingTargetBusy) return;
@@ -432,7 +497,7 @@ export default function ScannerScreen() {
         renderItem={({ item, index }) => {
           const first = index === 0;
           const last = index === visible.length - 1;
-          const name = deviceName(item);
+          const name = displayNameFor(item);
           const facts = [
             item.isNew ? 'new' : null,
             item.isTrusted ? 'trusted' : null,
@@ -493,7 +558,7 @@ export default function ScannerScreen() {
         onClose={() => setDetail(null)}
         onDone={() => void saveDetail()}
         doneLabel="Save"
-        title={detail ? deviceName(detail) : 'Device'}
+        title={detail ? displayNameFor(detail) : 'Device'}
       >
         {detail !== null ? (
           <>
@@ -526,6 +591,10 @@ export default function ScannerScreen() {
               <Fact label="IP address" value={detail.lastIp} />
               {detail.openPortsCsv ? <Fact label="Open port" value={detail.openPortsCsv} /> : null}
               {detail.hostname ? <Fact label="Hostname" value={detail.hostname} /> : null}
+              {detail.mdnsName ? <Fact label="Bonjour name" value={detail.mdnsName} /> : null}
+              {detail.friendlyName ? <Fact label="UPnP name" value={detail.friendlyName} /> : null}
+              {detail.model ? <Fact label="Model" value={detail.model} /> : null}
+              {detail.netbiosName ? <Fact label="Windows name" value={detail.netbiosName} /> : null}
               {detail.vendorOrModel ? <Fact label="Vendor or model" value={detail.vendorOrModel} /> : null}
               {detail.mdnsServicesCsv ? (
                 <Fact label="Services" value={detail.mdnsServicesCsv.split(',').join('\n')} />
