@@ -68,7 +68,73 @@ class GoogleImportTest {
   @Test fun otherUrlsImportWithNoSiteAndNoApp() {
     val r = import("a,ftp://files.example.com/,me,pw1,\r\nb,example.com,me,pw2,\r\nc,,me,pw3,\r\n")
     assertEquals(3, r.logins.size)
+    assertEquals(0, r.merged)
+    assertEquals(0, r.flagged)
     assertTrue(r.logins.all { it.sites.isEmpty() && it.apps.isEmpty() })
+    assertEquals(listOf("Imported from ftp://files.example.com/", "Imported from example.com", ""), r.logins.map { it.note })
+  }
+
+  @Test fun unlinkedLoginsOnDifferentUrlsAreNotMerged() {
+    val r = import("Router,192.168.1.1,admin,admin,\r\nNAS,192.168.1.2,admin,admin,\r\n")
+    assertEquals(2, r.logins.size)
+    assertEquals(0, r.merged)
+    assertEquals(0, r.flagged)
+  }
+
+  @Test fun unlinkedLoginsOnDifferentUrlsAreNotFlagged() {
+    val r = import("Bank A,ftp://a.example/,me,pw1,\r\nBank B,b.example,me,pw2,\r\n")
+    assertEquals(2, r.logins.size)
+    assertEquals(0, r.flagged)
+    assertTrue(r.logins.all { !it.note.startsWith(flagPrefix) })
+  }
+
+  @Test fun unlinkedLoginsWithBlankUrlsAreKeptApartByName() {
+    val r = import("A,,me,pw,\r\nB,,me,pw,\r\nC,,me,other,\r\n")
+    assertEquals(3, r.logins.size)
+    assertEquals(0, r.merged)
+    assertEquals(0, r.flagged)
+    assertEquals(listOf("", "", ""), r.logins.map { it.note })
+  }
+
+  @Test fun identicalUnlinkedLoginsStillMergeAndSameUrlDifferentPasswordIsFlagged() {
+    val same = import("Router,192.168.1.1,admin,admin,\r\nRouter,192.168.1.1,admin,admin,\r\n")
+    assertEquals(1, same.logins.size)
+    assertEquals(1, same.merged)
+    val blank = import("A,,me,pw,\r\nA,,me,pw,\r\n")
+    assertEquals(1, blank.logins.size)
+    assertEquals(1, blank.merged)
+    val clash = import("Router,192.168.1.1,admin,one,\r\nRouter,192.168.1.1,admin,two,\r\n")
+    assertEquals(2, clash.logins.size)
+    assertEquals(2, clash.flagged)
+    assertEquals(flagPrefix + "Imported from 192.168.1.1", clash.logins[0].note)
+  }
+
+  @Test fun unlinkedLoginKeepsItsUrlOnItsOwnNoteLine() {
+    val r = import("Router,192.168.1.1,admin,pw1,my note\r\nNas,,admin,pw2,\r\n")
+    assertEquals("my note\nImported from 192.168.1.1", r.logins[0].note)
+    assertEquals("", r.logins[1].note)
+  }
+
+  @Test fun mergedDuplicatesKeepEveryDistinctNote() {
+    val r = import("a,https://example.org/,me,pw,first\r\nb,https://example.org/,me,pw,second\r\nc,https://example.org/,me,pw,first\r\nd,https://example.org/,me,pw,\r\n")
+    assertEquals(1, r.logins.size)
+    assertEquals(3, r.merged)
+    assertEquals("first\nsecond", r.logins.single().note)
+    val unlinked = import("R,10.0.0.1,me,pw,n1\r\nR,10.0.0.1,me,pw,n2\r\n").logins.single()
+    assertEquals("n1\nn2\nImported from 10.0.0.1", unlinked.note)
+  }
+
+  @Test fun androidUrlSplitsOnTheFirstAt() {
+    val r = import("x,android://$hashB64@com.example/login@home,me,pw,\r\n")
+    assertEquals(listOf(AppLink(AppId("com.example", hash), null)), r.logins.single().apps)
+  }
+
+  @Test fun rowWithMoreCellsThanTheHeaderIsRefusedWithoutEchoingIt() {
+    val message = "Row 2 of this file has more columns than its header, so a value may be split. Export again from Google Password Manager."
+    val e = importError(header + "a,https://example.org/,me,pw,\r\n\r\nx,https://example.org/,me,hunter2,ss,note\r\n")
+    assertEquals(message, e.message)
+    assertFalse(e.message!!.contains("hunter2"))
+    assertEquals(message.replace("Row 2", "Row 1"), importError(header + "x,https://example.org/,me,pa,ss,note\r\n").message)
   }
 
   @Test fun exactDuplicatesMerge() {
@@ -133,7 +199,7 @@ class GoogleImportTest {
   }
 
   @Test fun blankLinesAreSkippedAndShortRowsArePadded() {
-    val csv = "\r\nname,url,username,password,note\r\n\r\nx,https://example.org/,me\r\n\r\ny,https://example.net/,you,pw,n,extra,cells\r\n\r\n"
+    val csv = "\r\nname,url,username,password,note\r\n\r\nx,https://example.org/,me\r\n\r\ny,https://example.net/,you,pw,n\r\n\r\n"
     val r = GoogleImport.parse(csv, 1L)
     assertEquals(2, r.logins.size)
     assertEquals("", r.logins[0].password)
@@ -177,6 +243,7 @@ class GoogleImportTest {
     assertEquals("Shared with \"ops\", rotate monthly.\nSecond line of the note", r.logins[2].note)
     assertEquals(listOf(AppLink(AppId("com.example.app", hash), null)), r.logins[3].apps)
     assertTrue(r.logins[4].apps.isEmpty() && r.logins[4].sites.isEmpty())
+    assertEquals("Imported from android://not-base64!@com.example.broken/", r.logins[4].note)
     assertTrue(r.logins[6].note.startsWith(flagPrefix) && r.logins[7].note.startsWith(flagPrefix))
     assertTrue(r.logins.all { it.password.startsWith("pw") })
   }

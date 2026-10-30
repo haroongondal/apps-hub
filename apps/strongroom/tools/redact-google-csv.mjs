@@ -60,7 +60,7 @@ function scan(s) {
   return rows;
 }
 
-const bom = text.startsWith('﻿') ? '﻿' : '';
+const bom = text.startsWith('\uFEFF') ? '\uFEFF' : '';
 const rows = scan(text.slice(bom.length));
 const headerAt = rows.findIndex((row) => row.cells.some((cell) => cell.value !== ''));
 const names = headerAt < 0 ? [] : rows[headerAt].cells.map((cell) => cell.value.trim().toLowerCase());
@@ -73,7 +73,14 @@ if (columns.some((column) => column.at < 0)) {
   fail("This file isn't a Google Passwords export: it needs username and password columns. Export again from Google Password Manager and pick that file.");
 }
 
-for (const row of rows.slice(headerAt + 1)) {
+const dataRows = rows.slice(headerAt + 1).filter((row) => row.cells.some((cell) => cell.value !== ''));
+dataRows.forEach((row, n) => {
+  if (row.cells.length > names.length) {
+    fail(`Row ${n + 1} of this file has more columns than its header, so a value may be split. Export again from Google Password Manager.`);
+  }
+});
+
+for (const row of dataRows) {
   for (const { at, label, numbers } of columns) {
     const cell = row.cells[at];
     if (!cell || cell.value === '') continue;
@@ -83,5 +90,10 @@ for (const row of rows.slice(headerAt + 1)) {
   }
 }
 
-writeFileSync(outPath, bom + rows.map((row) => row.cells.map((cell) => cell.raw).join(',') + row.eol).join(''));
-console.log(`Wrote ${outPath}. It is safe to share. Delete ${inPath} now: it holds your real passwords.`);
+try {
+  writeFileSync(outPath, bom + rows.map((row) => row.cells.map((cell) => cell.raw).join(',') + row.eol).join(''));
+} catch (e) {
+  fail(`Can't write ${outPath} (${e.code ?? 'unknown error'}). Check that the folder exists and you can write to it.`);
+}
+console.log(`Wrote ${outPath}. Only usernames and passwords are replaced. Check the notes and URLs for secrets before you share it.`);
+console.log(`Delete ${inPath} now: it holds your real passwords.`);
