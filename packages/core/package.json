@@ -6,7 +6,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "test": "node --test src/__tests__/subnet-calculator.test.ts src/__tests__/tcp-scan-engine.test.ts src/__tests__/ping-engine.test.ts src/__tests__/dns-benchmark.test.ts src/__tests__/diagnostics.test.ts src/__tests__/device-repository.test.ts src/__tests__/device-names.test.ts",
+    "test": "node --test src/__tests__/subnet-calculator.test.ts src/__tests__/tcp-scan-engine.test.ts src/__tests__/ping-engine.test.ts src/__tests__/dns-benchmark.test.ts src/__tests__/diagnostics.test.ts src/__tests__/device-repository.test.ts src/__tests__/device-names.test.ts src/__tests__/name-formats.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
