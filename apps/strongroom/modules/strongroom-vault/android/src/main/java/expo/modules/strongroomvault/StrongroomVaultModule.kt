@@ -9,10 +9,8 @@ import android.net.Uri
 import android.provider.Settings
 import android.view.autofill.AutofillManager
 import androidx.fragment.app.FragmentActivity
-import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.functions.Coroutine
-import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.strongroomvault.android.BiometricKey
@@ -31,21 +29,21 @@ import expo.modules.strongroomvault.core.Vault
 import java.io.IOException
 import java.security.MessageDigest
 import kotlin.coroutines.resume
+import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
 private const val PICK_CSV = 7401
 private const val MAX_CSV_BYTES = 5 * 1024 * 1024
-private const val KDF_REFUSED =
+internal const val KDF_REFUSED =
   "Strongroom won't open this vault: its security settings are weaker than it allows. The vault file may have been changed."
 
 class StrongroomVaultModule : Module() {
   private val context: Context
     get() = requireNotNull(appContext.reactContext) { "React context unavailable" }
 
-  private var pendingPick: Promise? = null
+  private var pendingPick: CancellableContinuation<Uri?>? = null
 
   // Vault.touch() runs the expiry check before it refreshes, so a session that has run out is locked, not revived.
   private fun vault(): Vault = VaultHolder.get(context).also { VaultHolder.touch() }
@@ -110,7 +108,7 @@ class StrongroomVaultModule : Module() {
       if (activity == null) {
         false
       } else {
-        withContext(Dispatchers.Main) { suspendCancellableCoroutine { cont -> VaultHolder.biometricUnlock(activity) { cont.resume(it) } } }
+        withContext(Dispatchers.Main) { awaitPrompt { done -> VaultHolder.biometricUnlock(activity, done) } }
       }
     }
 
@@ -159,42 +157,48 @@ class StrongroomVaultModule : Module() {
       }
     }
 
-    AsyncFunction("pickGoogleCsv") { promise: Promise ->
-      vault()
+    AsyncFunction("pickGoogleCsv") Coroutine { ->
+      withContext(Dispatchers.IO) { vault() }
       val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
         .addCategory(Intent.CATEGORY_OPENABLE)
         .setType("text/*")
         .putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("text/csv", "text/comma-separated-values"))
-      appContext.throwingActivity.startActivityForResult(intent, PICK_CSV)
-      pendingPick?.resolve(null)
-      pendingPick = promise
-    }.runOnQueue(Queues.MAIN)
+      val uri = withContext(Dispatchers.Main) {
+        suspendCancellableCoroutine { cont ->
+          appContext.throwingActivity.startActivityForResult(intent, PICK_CSV)
+          pendingPick?.let { if (it.isActive) it.resume(null) }
+          pendingPick = cont
+        }
+      }
+      if (uri == null) {
+        null
+      } else {
+        withContext(Dispatchers.IO) {
+          val parsed = try {
+            readGoogleCsv(uri)
+          } catch (e: CodedException) {
+            throw e
+          } catch (e: Exception) {
+            throw CodedException("IMPORT_UNREADABLE", "Strongroom couldn't read that file. Pick it again, or export again from Google Password Manager.", e)
+          }
+          guard { check(VaultHolder.get(context).isUnlocked) { "locked" } }
+          VaultHolder.pendingImport = parsed
+          mapOf("found" to parsed.logins.size, "merged" to parsed.merged, "flagged" to parsed.flagged)
+        }
+      }
+    }
 
     OnActivityResult { _, result ->
       if (result.requestCode != PICK_CSV) return@OnActivityResult
-      val promise = pendingPick ?: return@OnActivityResult
+      val cont = pendingPick ?: return@OnActivityResult
       pendingPick = null
-      val uri = result.data?.data
-      if (result.resultCode != Activity.RESULT_OK || uri == null) return@OnActivityResult promise.resolve(null)
-      appContext.backgroundCoroutineScope.launch {
-        try {
-          val parsed = readGoogleCsv(uri)
-          if (!VaultHolder.get(context).isUnlocked) throw IllegalStateException("locked")
-          VaultHolder.pendingImport = parsed
-          promise.resolve(mapOf("found" to parsed.logins.size, "merged" to parsed.merged, "flagged" to parsed.flagged))
-        } catch (e: CodedException) {
-          promise.reject(e)
-        } catch (e: IllegalStateException) {
-          promise.reject(coded(e) as? CodedException ?: CodedException("IMPORT_ERROR", e.message, e))
-        } catch (e: Exception) {
-          promise.reject("IMPORT_UNREADABLE", "Strongroom couldn't read that file. Pick it again, or export again from Google Password Manager.", e)
-        }
-      }
+      if (cont.isActive) cont.resume(result.data?.data?.takeIf { result.resultCode == Activity.RESULT_OK })
     }
 
     Function("commitImport") {
       guard {
         val v = vault()
+        check(v.isUnlocked) { "locked" }
         val parsed = VaultHolder.pendingImport ?: throw CodedException("NO_IMPORT", "Pick the Google Passwords file first.", null)
         VaultHolder.pendingImport = null
         val count = v.putMany(parsed.logins)
@@ -222,7 +226,7 @@ class StrongroomVaultModule : Module() {
           pw.fill('\u0000')
         }
         key != null && try {
-          withContext(Dispatchers.Main) { suspendCancellableCoroutine { cont -> VaultHolder.enableBiometric(activity, key) { cont.resume(it) } } }
+          withContext(Dispatchers.Main) { awaitPrompt { done -> VaultHolder.enableBiometric(activity, key, done) } }
         } finally {
           key.fill(0)
         }
@@ -263,6 +267,11 @@ class StrongroomVaultModule : Module() {
       } finally {
         pw.fill('\u0000')
       }
+    }
+
+    Function("clearLostSaves") {
+      vault()
+      VaultHolder.prefs(context).edit().putInt(VaultHolder.LOST_SAVES, 0).apply()
     }
 
     Function("openAutofillSettings") {
@@ -309,7 +318,7 @@ class StrongroomVaultModule : Module() {
   }
 }
 
-private fun coded(e: IllegalStateException): Exception = when (e.message) {
+internal fun coded(e: IllegalStateException): Exception = when (e.message) {
   "locked" -> CodedException("LOCKED", "Strongroom is locked. Unlock it and try again.", e)
   "not set up" -> CodedException("NOT_SET_UP", "Strongroom isn't set up on this phone yet. Set it up first.", e)
   "already set up" -> CodedException("ALREADY_SET_UP", "Strongroom is already set up on this phone.", e)
@@ -318,19 +327,25 @@ private fun coded(e: IllegalStateException): Exception = when (e.message) {
   else -> e
 }
 
-private inline fun <T> guard(block: () -> T): T = try {
+internal inline fun <T> guard(block: () -> T): T = try {
   block()
 } catch (e: IllegalStateException) {
   throw coded(e)
 }
 
 // A header at the 1 GiB ceiling can exhaust the heap; that is refused like any out-of-range header, not a crash.
-private inline fun <T> derive(block: () -> T): T = try {
+internal inline fun <T> derive(block: () -> T): T = try {
   guard(block)
 } catch (e: KdfOutOfRange) {
   throw CodedException("KDF_OUT_OF_RANGE", KDF_REFUSED, e)
 } catch (e: OutOfMemoryError) {
   throw CodedException("KDF_OUT_OF_RANGE", KDF_REFUSED, e)
+}
+
+// Settles once: the owner's answer, a prompt that couldn't show, or the caller giving up (which closes the prompt).
+private suspend fun awaitPrompt(start: ((Boolean) -> Unit) -> Unit): Boolean = suspendCancellableCoroutine { cont ->
+  cont.invokeOnCancellation { VaultHolder.cancelBiometric() }
+  start { if (cont.isActive) cont.resume(it) }
 }
 
 private fun secret(v: Vault, id: String, field: String): String {
@@ -353,7 +368,7 @@ private fun view(id: String, e: Entry): Map<String, Any?>? = when (e) {
   )
   is Entry.Card -> mapOf(
     "id" to id, "type" to "card", "name" to e.name, "holder" to e.holder,
-    "last4" to e.number.filter(Char::isDigit).takeLast(4), "note" to e.note,
+    "last4" to e.number.filter(Char::isDigit).takeLast(4), "expMonth" to e.expMonth, "expYear" to e.expYear, "note" to e.note,
   )
   is Entry.Note -> mapOf("id" to id, "type" to "note", "name" to e.name, "note" to "", "text" to e.text)
   is Entry.Deleted -> null

@@ -341,7 +341,7 @@ export type EntryInput =
   | { type: 'login'; name: string; username: string; password: string; sites: string[]; note: string }
   | { type: 'card'; name: string; holder: string; number: string; expMonth: number | null; expYear: number | null; cvc: string; note: string }
   | { type: 'note'; name: string; text: string };
-export interface EntryView { id: string; type: Row['type']; name: string; username?: string; sites?: string[]; apps?: string[]; holder?: string; last4?: string; note: string; text?: string }
+export interface EntryView { id: string; type: Row['type']; name: string; username?: string; sites?: string[]; apps?: string[]; holder?: string; last4?: string; expMonth?: number | null; expYear?: number | null; note: string; text?: string }
 export interface ImportPreview { found: number; merged: number; flagged: number }
 // default export StrongroomVault:
 getStatus(): Status; generateRecoveryKey(): string; setUp(password: string, recoveryKey: string): Promise<void>;
@@ -352,7 +352,7 @@ pickGoogleCsv(): Promise<ImportPreview | null>; commitImport(): number;
 setBiometric(enabled: boolean, password?: string): Promise<boolean>; // password required to turn it on; false when it's wrong
 setAutoLockMinutes(m: 1 | 5 | 15): void; changePassword(oldPw: string, newPw: string): Promise<boolean>;
 newRecoveryKey(password: string): Promise<string | null>; // null when the password is wrong
-openAutofillSettings(): void; setPalette(json: string): void;
+clearLostSaves(): void; openAutofillSettings(): void; setPalette(json: string): void;
 diagnostics(): { lastUnlockMs: number | null; browsers: { pkg: string; installed: boolean; trusted: boolean }[] }; // trusted = installed cert digest is in Browsers.ALLOWLIST
 ```
 

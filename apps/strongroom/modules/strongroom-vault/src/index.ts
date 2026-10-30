@@ -31,6 +31,8 @@ export interface EntryView {
   apps?: string[];
   holder?: string;
   last4?: string;
+  expMonth?: number | null;
+  expYear?: number | null;
   note: string;
   text?: string;
 }
@@ -68,6 +70,7 @@ export interface StrongroomVaultApi {
   setAutoLockMinutes(m: 1 | 5 | 15): void;
   changePassword(oldPw: string, newPw: string): Promise<boolean>;
   newRecoveryKey(password: string): Promise<string | null>;
+  clearLostSaves(): void;
   openAutofillSettings(): void;
   setPalette(json: string): void;
   diagnostics(): Diagnostics;

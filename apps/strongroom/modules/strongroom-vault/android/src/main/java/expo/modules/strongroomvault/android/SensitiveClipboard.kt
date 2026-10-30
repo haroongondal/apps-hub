@@ -25,7 +25,9 @@ internal object SensitiveClipboard {
     }
     clipboard.setPrimaryClip(clip)
     main.postDelayed({
-      if (clipboard.primaryClipDescription?.extras?.getString(MARKER) == token) clipboard.clearPrimaryClip()
+      // Since API 29 an app in the background reads null here; clearing then beats leaving a password behind.
+      val current = clipboard.primaryClipDescription
+      if (current == null || current.extras?.getString(MARKER) == token) clipboard.clearPrimaryClip()
     }, CLEAR_AFTER_MS)
   }
 }

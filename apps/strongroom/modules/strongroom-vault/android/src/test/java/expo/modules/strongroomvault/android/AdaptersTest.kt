@@ -5,6 +5,10 @@ import expo.modules.strongroomvault.core.AppId
 import expo.modules.strongroomvault.core.AppLink
 import expo.modules.strongroomvault.core.Entry
 import expo.modules.strongroomvault.core.Matching
+import expo.modules.strongroomvault.core.PendingSave
+import expo.modules.strongroomvault.core.Requester
+import expo.modules.strongroomvault.core.Saves
+import expo.modules.strongroomvault.core.Sealer
 import expo.modules.strongroomvault.core.Site
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -47,6 +51,52 @@ class AdaptersTest {
     assertEquals(listOf(listOf<Byte>(9)), read.map { it.toList() })
     assertEquals(1, damaged)
     assertEquals(1, PendingFile.split(byteArrayOf(-1, -1, -1, -1)).second)
+  }
+
+  private val copying = object : Sealer {
+    override fun seal(plain: ByteArray) = plain.copyOf()
+
+    override fun open(sealed: ByteArray) = sealed.copyOf()
+  }
+
+  private fun pending(user: String) = Saves.seal(copying, PendingSave(Requester.Web(Site(true, "example.com")), "Example", user, "pw-$user", 1))!!
+
+  // The first byte says what the device key would do with the blob: A opens to the rest, L is gone for good, R failed for now.
+  private fun blob(kind: Char, body: ByteArray = ByteArray(0)) = byteArrayOf(kind.code.toByte()) + body
+
+  private val deviceKey: (ByteArray) -> PendingPlan.Open = { b ->
+    when (b[0].toInt().toChar()) {
+      'A' -> PendingPlan.Open.Plain(b.copyOfRange(1, b.size))
+      'L' -> PendingPlan.Open.Lost
+      else -> PendingPlan.Open.Retry
+    }
+  }
+
+  @Test fun pendingPlanAppliesWhatOpensKeepsWhatMayOpenLaterAndCountsOnlyWhatNeverWill() {
+    val keep1 = blob('R', byteArrayOf(1))
+    val keep2 = blob('R', byteArrayOf(2))
+    val blobs = listOf(blob('A', pending("a")), keep1, blob('L'), blob('A', "not a save".toByteArray()), keep2, blob('A', pending("b")))
+    val plan = PendingPlan.of(PendingFile.join(blobs), deviceKey)
+    assertEquals(listOf("a", "b"), plan.apply.map { it.username })
+    assertEquals(listOf(keep1, keep2).map { it.toList() }, plan.keep.map { it.toList() })
+    assertEquals(2, plan.lost)
+  }
+
+  @Test fun aPhoneThatLockedMidUnlockLosesNoSave() {
+    val blobs = listOf(blob('R', pending("a")), blob('R', pending("b")))
+    val plan = PendingPlan.of(PendingFile.join(blobs), deviceKey)
+    assertTrue(plan.apply.isEmpty())
+    assertEquals(0, plan.lost)
+    assertEquals(blobs.map { it.toList() }, PendingFile.split(PendingFile.join(plan.keep)).first.map { it.toList() })
+  }
+
+  @Test fun aTornTailIsLostWhileTheRestStillApplies() {
+    val kept = blob('R')
+    val file = PendingFile.join(listOf(blob('A', pending("a")), kept)) + byteArrayOf(0, 0, 0, 9, 1)
+    val plan = PendingPlan.of(file, deviceKey)
+    assertEquals(listOf("a"), plan.apply.map { it.username })
+    assertEquals(listOf(kept.toList()), plan.keep.map { it.toList() })
+    assertEquals(1, plan.lost)
   }
 
   @Test fun typedSiteWithoutSchemeIsHttps() {

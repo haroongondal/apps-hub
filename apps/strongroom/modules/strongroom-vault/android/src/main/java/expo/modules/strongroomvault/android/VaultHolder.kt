@@ -1,11 +1,15 @@
 package expo.modules.strongroomvault.android
 
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.util.AtomicFile
+import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.FragmentActivity
 import expo.modules.strongroomvault.core.ImportResult
 import expo.modules.strongroomvault.core.IndexItem
@@ -13,8 +17,10 @@ import expo.modules.strongroomvault.core.LockPolicy
 import expo.modules.strongroomvault.core.MatchIndex
 import expo.modules.strongroomvault.core.PendingSave
 import expo.modules.strongroomvault.core.Saves
+import expo.modules.strongroomvault.core.Sealer
 import expo.modules.strongroomvault.core.Vault
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.concurrent.Executors
@@ -35,6 +41,7 @@ object VaultHolder {
 
   @Volatile private var vault: Vault? = null
   @Volatile private var app: Context? = null
+  @Volatile private var prompt: BiometricPrompt? = null
 
   @Volatile internal var pendingImport: ImportResult? = null
 
@@ -42,6 +49,7 @@ object VaultHolder {
   private var expiry: ScheduledFuture<*>? = null
   private val pendingFile = Any()
   private val indexFile = Any()
+  private val main = Handler(Looper.getMainLooper())
 
   internal fun prefs(context: Context): SharedPreferences =
     context.applicationContext.getSharedPreferences("strongroom", Context.MODE_PRIVATE)
@@ -63,7 +71,7 @@ object VaultHolder {
   val lostSaves: Int get() = app?.let { prefs(it).getInt(LOST_SAVES, 0) } ?: 0
 
   fun index(context: Context): List<IndexItem> {
-    val plain = file(context, INDEX_FILE).readOrNull()?.let(DeviceKey::open)
+    val plain = synchronized(indexFile) { file(context, INDEX_FILE).readOrNull() }?.let(DeviceKey::open)
     return try {
       MatchIndex.decode(plain)
     } finally {
@@ -94,7 +102,12 @@ object VaultHolder {
     return try {
       synchronized(pendingFile) {
         val f = file(context, PENDING_FILE)
-        f.write(PendingFile.append(f.readOrNull() ?: ByteArray(0), blob))
+        val existing = try {
+          f.readFully()
+        } catch (e: FileNotFoundException) {
+          ByteArray(0)
+        }
+        f.write(PendingFile.append(existing, blob))
       }
       true
     } catch (e: IOException) {
@@ -103,19 +116,23 @@ object VaultHolder {
   }
 
   fun applyPending(context: Context): Int {
+    if (context.getSystemService(KeyguardManager::class.java)?.isDeviceLocked == true) return 0 // the device key can't open anything yet
     synchronized(pendingFile) {
       val f = file(context, PENDING_FILE)
       val bytes = f.readOrNull() ?: return 0
-      val (blobs, damaged) = PendingFile.split(bytes)
-      val (opened, lost) = Saves.openAll(DeviceKey, blobs)
+      val plan = PendingPlan.of(bytes, DeviceKey::openPending)
       val written = try {
-        Saves.apply(get(context), opened)
+        Saves.apply(get(context), plan.apply)
       } catch (e: Exception) {
         return 0 // the file stays for the next unlock; applying twice changes nothing
       }
       val p = prefs(context)
-      if (lost + damaged > 0) p.edit().putInt(LOST_SAVES, p.getInt(LOST_SAVES, 0) + lost + damaged).commit()
-      f.delete()
+      if (plan.lost > 0 && !p.edit().putInt(LOST_SAVES, p.getInt(LOST_SAVES, 0) + plan.lost).commit()) return written
+      try {
+        if (plan.keep.isEmpty()) f.delete() else f.write(PendingFile.join(plan.keep))
+      } catch (e: IOException) {
+        // the old file stays: re-applying is a no-op, and a lost save may be counted again
+      }
       return written
     }
   }
@@ -143,7 +160,8 @@ object VaultHolder {
       disableBiometric(context)
       return onResult(false)
     }
-    BiometricKey.prompt(activity, cipher, "Unlock Strongroom", "Use master password") { done ->
+    prompt = BiometricKey.prompt(activity, cipher, "Unlock Strongroom", "Use master password") { done ->
+      prompt = null
       if (done == null) return@prompt onResult(false)
       thread(name = "strongroom-unlock") {
         val ok = try {
@@ -171,17 +189,32 @@ object VaultHolder {
   internal fun enableBiometric(activity: FragmentActivity, vaultKey: ByteArray, onResult: (Boolean) -> Unit) {
     val context = activity.applicationContext
     disableBiometric(context) // a cancelled prompt then leaves fingerprint off rather than half on
-    val cipher = BiometricKey.encrypter()
+    val key = vaultKey.copyOf() // ours until the prompt ends, so a caller that gives up can't zero it under the prompt
+    val cipher = try {
+      BiometricKey.encrypter()
+    } catch (e: Exception) {
+      key.fill(0)
+      throw e
+    }
     val iv = cipher.iv
-    BiometricKey.prompt(activity, cipher, "Turn on fingerprint unlock", "Cancel") { done ->
-      val ok = done != null && try {
-        file(context, BIOMETRIC_FILE).write(iv + done.doFinal(vaultKey))
-        prefs(context).edit().putBoolean(BIOMETRIC, true).commit()
+    prompt = BiometricKey.prompt(activity, cipher, "Turn on fingerprint unlock", "Cancel") { done ->
+      prompt = null
+      val ok = try {
+        done != null && run {
+          file(context, BIOMETRIC_FILE).write(iv + done.doFinal(key))
+          prefs(context).edit().putBoolean(BIOMETRIC, true).commit()
+        }
       } catch (e: Exception) {
         false
+      } finally {
+        key.fill(0)
       }
       onResult(ok)
     }
+  }
+
+  internal fun cancelBiometric() {
+    main.post { prompt?.cancelAuthentication() }
   }
 
   internal fun disableBiometric(context: Context) {
@@ -205,13 +238,10 @@ object VaultHolder {
     val v = vault ?: return
     synchronized(timer) {
       expiry?.cancel(false)
-      expiry = if (v.isUnlocked) timer.schedule(Runnable { lockIfExpired() }, v.autoLockMinutes * 60_000L, TimeUnit.MILLISECONDS) else null
+      val live = v.isUnlocked
+      if (!live) pendingImport = null
+      expiry = if (live) timer.schedule(Runnable { scheduleLock() }, v.autoLockMinutes * 60_000L, TimeUnit.MILLISECONDS) else null
     }
-  }
-
-  private fun lockIfExpired() {
-    scheduleLock()
-    if (vault?.isUnlocked != true) pendingImport = null
   }
 
   private fun bootCount(context: Context): Int? =
@@ -241,6 +271,8 @@ object VaultHolder {
 internal object PendingFile {
   fun append(file: ByteArray, blob: ByteArray): ByteArray = file + ByteBuffer.allocate(4).putInt(blob.size).array() + blob
 
+  fun join(blobs: List<ByteArray>): ByteArray = blobs.fold(ByteArray(0), ::append)
+
   fun split(file: ByteArray): Pair<List<ByteArray>, Int> {
     val buf = ByteBuffer.wrap(file)
     val blobs = mutableListOf<ByteArray>()
@@ -250,5 +282,42 @@ internal object PendingFile {
       blobs += ByteArray(n).also { buf.get(it) }
     }
     return blobs to if (buf.hasRemaining()) 1 else 0
+  }
+}
+
+/** One unlock's pass over pending.bin: apply what opens, keep what may open later, count only what never will. */
+internal object PendingPlan {
+  sealed interface Open {
+    class Plain(val bytes: ByteArray) : Open
+
+    object Lost : Open
+
+    object Retry : Open
+  }
+
+  class Plan(val apply: List<PendingSave>, val keep: List<ByteArray>, val lost: Int)
+
+  fun of(file: ByteArray, open: (ByteArray) -> Open): Plan {
+    val (blobs, damaged) = PendingFile.split(file)
+    val apply = mutableListOf<PendingSave>()
+    val keep = mutableListOf<ByteArray>()
+    var lost = damaged
+    for (blob in blobs) {
+      when (val o = open(blob)) {
+        is Open.Plain -> Saves.openAll(AlreadyOpen, listOf(o.bytes)).let { (saves, bad) ->
+          apply += saves
+          lost += bad
+        }
+        Open.Lost -> lost++
+        Open.Retry -> keep += blob
+      }
+    }
+    return Plan(apply, keep, lost)
+  }
+
+  private object AlreadyOpen : Sealer {
+    override fun seal(plain: ByteArray): ByteArray = throw UnsupportedOperationException()
+
+    override fun open(sealed: ByteArray): ByteArray = sealed
   }
 }

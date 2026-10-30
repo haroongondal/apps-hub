@@ -8,7 +8,7 @@ import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.FragmentActivity
 import expo.modules.strongroomvault.core.Sealer
 import java.security.KeyStore
-import java.security.UnrecoverableKeyException
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -44,22 +44,25 @@ internal object DeviceKey : Sealer {
       c.init(Cipher.ENCRYPT_MODE, stored(ALIAS) ?: create())
     } catch (e: KeyPermanentlyInvalidatedException) {
       c.init(Cipher.ENCRYPT_MODE, create()) // a key that has gone is replaced; what it sealed is counted as lost
-    } catch (e: UnrecoverableKeyException) {
-      c.init(Cipher.ENCRYPT_MODE, create())
     }
     return c.iv + c.doFinal(plain)
   }
 
-  override fun open(sealed: ByteArray): ByteArray? {
-    if (sealed.size < IV_BYTES) return null
+  override fun open(sealed: ByteArray): ByteArray? = (openPending(sealed) as? PendingPlan.Open.Plain)?.bytes
+
+  fun openPending(sealed: ByteArray): PendingPlan.Open {
+    if (sealed.size < IV_BYTES + TAG_BITS / 8) return PendingPlan.Open.Lost
     return try {
-      val key = stored(ALIAS) ?: return null
-      Cipher.getInstance(GCM).run {
-        init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, sealed, 0, IV_BYTES))
-        doFinal(sealed, IV_BYTES, sealed.size - IV_BYTES)
-      }
+      val key = stored(ALIAS) ?: return PendingPlan.Open.Lost
+      val c = Cipher.getInstance(GCM)
+      c.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, sealed, 0, IV_BYTES))
+      PendingPlan.Open.Plain(c.doFinal(sealed, IV_BYTES, sealed.size - IV_BYTES))
+    } catch (e: AEADBadTagException) {
+      PendingPlan.Open.Lost
+    } catch (e: KeyPermanentlyInvalidatedException) {
+      PendingPlan.Open.Lost
     } catch (e: Exception) {
-      null
+      PendingPlan.Open.Retry // the phone locking mid-unlock, or a Keystore hiccup: it may open next time
     }
   }
 }
@@ -87,7 +90,11 @@ internal object BiometricKey {
 
   fun delete() = keyStore().deleteEntry(ALIAS)
 
-  fun prompt(activity: FragmentActivity, cipher: Cipher, title: String, negative: String, onDone: (Cipher?) -> Unit) {
+  fun prompt(activity: FragmentActivity, cipher: Cipher, title: String, negative: String, onDone: (Cipher?) -> Unit): BiometricPrompt? {
+    if (activity.isFinishing || activity.isDestroyed || activity.supportFragmentManager.isStateSaved) {
+      onDone(null) // authenticate() silently shows nothing then, and the caller would wait forever
+      return null
+    }
     val info = BiometricPrompt.PromptInfo.Builder()
       .setTitle(title)
       .setNegativeButtonText(negative)
@@ -98,6 +105,6 @@ internal object BiometricKey {
 
       override fun onAuthenticationError(errorCode: Int, errString: CharSequence) = onDone(null)
     }
-    BiometricPrompt(activity, activity.mainExecutor, callback).authenticate(info, BiometricPrompt.CryptoObject(cipher))
+    return BiometricPrompt(activity, activity.mainExecutor, callback).also { it.authenticate(info, BiometricPrompt.CryptoObject(cipher)) }
   }
 }
