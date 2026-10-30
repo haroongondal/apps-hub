@@ -83,7 +83,13 @@ no password generator / CSV export / card saving in v1.
   Baseline `pnpm test` exit 0 (181 pass). Task 1: security-engineer threat model
   (17 findings, 0C/5H/5M/7L) → rulings in `.superpowers/sdd/PHASE-1-PLAN/task-1-rulings.md`
   → folded into DESIGN.md + plan (commit 5879adb) → review: 1 Important + 11
-  Minor → fix round 1 (20b52ef) → re-review clean. Task 1 complete. Task 2 started.
+  Minor → fix round 1 (20b52ef) → re-review clean. Task 1 complete.
+- 2026-10-30 (cont.): Task 2 scaffold (fcdc2ab: bcprov 1.86, biometric 1.1.0,
+  autofill 1.3.0). Task 3 crypto (aefc01d + 51da896: KDF ceiling now also
+  t ≤ 16, p ≤ 4; password bytes encode lone surrogates as U+FFFD like
+  TextEncoder). Task 4 vault format + `vault-vectors.json` (c983a25 + ed7ba1b;
+  reviewer recomputed every vector in Python and Node). Task 5 vault session
+  (0d55a75) in review. Rulings and deferred minors are in the ledger.
 
 ## Owner items to raise at the end of Phase 1 (from Task 1)
 
