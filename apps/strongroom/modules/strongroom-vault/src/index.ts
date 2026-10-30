@@ -72,6 +72,7 @@ export interface StrongroomVaultApi {
   newRecoveryKey(password: string): Promise<string | null>;
   clearLostSaves(): void;
   openAutofillSettings(): void;
+  // JSON.stringify({ light: palette('strongroom', 'light'), dark: palette('strongroom', 'dark') }) from @apps-hub/ui; the autofill unlock screen reads its opaque colours.
   setPalette(json: string): void;
   diagnostics(): Diagnostics;
 }

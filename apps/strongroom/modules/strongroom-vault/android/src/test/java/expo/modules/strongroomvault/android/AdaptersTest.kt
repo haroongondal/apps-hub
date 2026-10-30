@@ -3,6 +3,8 @@ package expo.modules.strongroomvault.android
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.strongroomvault.core.AppId
 import expo.modules.strongroomvault.core.AppLink
+import expo.modules.strongroomvault.core.CardFields
+import expo.modules.strongroomvault.core.DetectedForm
 import expo.modules.strongroomvault.core.Entry
 import expo.modules.strongroomvault.core.Matching
 import expo.modules.strongroomvault.core.PendingSave
@@ -138,5 +140,23 @@ class AdaptersTest {
     val card = EntryInput.toEntry(input, null) as Entry.Card
     assertEquals(7, card.expMonth)
     assertNull(card.expYear)
+  }
+
+  @Test fun fillValuesFormatCardExpiryAndDropEmptyFields() {
+    val card = Entry.Card("Visa", "", "4111111111111111", 7, 2029, "123", "", 0)
+    assertEquals(
+      mapOf("number" to "4111111111111111", "cvc" to "123", "expMonth" to "07", "expYear" to "2029", "expDate" to "07/29"),
+      FillValues.of(card),
+    )
+    assertEquals(mapOf("number" to "4111111111111111", "cvc" to "123", "expMonth" to "07"), FillValues.of(card.copy(expYear = null)))
+    assertEquals(mapOf("password" to "pw"), FillValues.of(Entry.Login("Bank", "", "pw", emptyList(), emptyList(), "", 0)))
+    assertEquals(emptyMap<String, String>(), FillValues.of(Entry.Note("n", "secret", 0)))
+  }
+
+  @Test fun fillRolesFollowTheDetectedForm() {
+    val form = DetectedForm(username = 0, password = null, newPassword = 1, card = CardFields(2, null, null, null, 3, 4))
+    assertEquals(mapOf("username" to 0), FillValues.loginRoles(form))
+    assertEquals(mapOf("number" to 2, "expDate" to 3, "cvc" to 4), FillValues.cardRoles(form))
+    assertEquals(emptyMap<String, Int>(), FillValues.cardRoles(form.copy(card = null)))
   }
 }
