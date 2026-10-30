@@ -621,6 +621,32 @@ not to be built unless asked. My calls, not confirmed by the owner:
     `sms:`, `tel:`, `mailto:`, `geo:` are allowed; the manifest holds no
     Contacts, SMS or call permission.
 
+- **Phone test of 0.2.0 build 6 (session 9, 2026-10-30, Gemini 3.5 Flash-Lite,
+  driven over wireless debugging; owner allowed everything incl. sending).**
+  Installed through the Store at 17:18; Contacts allowed via the Setup row.
+  - Clock "next alarm": 1 step (`phone_info`), about 12 s, $0.0020 (was 49 s, 5
+    steps). **Wrong source:** the 18:41 alarm is Islam360's (prayer app, from
+    `dumpsys alarm`), not the Clock app's; the model trusted phone_info.
+  - Bluetooth: `open_settings` worked (1 step) but answered "on" while
+    `dumpsys bluetooth_manager` says `enabled: false`. **The tree has no
+    switch state**: the switch node is `checked="false"`, `NodeRef`/`TreeDump`
+    carry nothing for it, so the model guessed (even with a screenshot).
+  - Marshmallow ("read the last three messages, send a fitting reply"): reply
+    "Haanji, abhi free hota hoon toh baat karte hain!" was sent at 17:34 and
+    fits. Model calls 0.8–5.5 s, actions 0.4–1.7 s (Gemini was fast this time;
+    earlier the first call took 12–17 s). **Most of the time went to approval
+    round trips:** 3 × "stale_screen: the screen changed while the owner
+    decided" after approvals made from Deputy's screen (WhatsApp's keyboard
+    closes, so bounds move and `DeviceRules.find`/rule 5 see a new element).
+    The model also used type + press Enter in the chat box (gated; Enter adds a
+    newline in WhatsApp).
+  - The gate's draft showed "MessageHaanji…": WhatsApp reports its placeholder
+    "Message" as the field's text (no `hint`), so `target.text + typed` and the
+    last-editable draft include it. The sent text was right.
+  - Harness notes: the task field keeps the last task (clear it with Ctrl+A,
+    Delete); Deputy's gate card buttons move when a new gate replaces the old
+    one, so a tap aimed at Deny approved the next gate.
+
 ## File map
 
 - `docs/deputy/RESEARCH.md`: feasibility research, done. It was written before
@@ -1027,13 +1053,26 @@ not to be built unless asked. My calls, not confirmed by the owner:
   built, reviewed and gated (session log); repo-wide `pnpm test` and `pnpm
   typecheck` exit 0. Not on the phone yet. Next:
   1. Reviews are fixed (session log). Check the docs-keeper's SPEC edits.
-  2. Ask the owner to release 0.2.0 (`pnpm release deputy` after
-     confirming the Cloudflare account), then in Settings pick "GPT-OSS 120B on
+  2. **Released 2026-10-30: Deputy 0.2.0, build 6**, from `be99a91` to
+     `apps-hub-store.haroonmukhtar4.workers.dev` (cf profile `personal`, account
+     `29ada920…`, checked). The owner installs it through the Store, then in Settings pick "GPT-OSS 120B on
      Groq", save a Groq key (console.groq.com), "Test the key", and allow
      Contacts in Setup.
-  3. On the phone, time EVAL Part 1 again plus "Send 'test' to <a contact> on
-     WhatsApp" twice (the second run should use `<memory>`), reading
-     `modelMs`/`actMs` from History. Compare with session 7 (49 s for task 1).
+  3. **Phone test done** (Evidence, "Phone test of 0.2.0"). **Exact next step:
+     fix its findings, test-first, then release 0.2.1:**
+     a. `phone_info`: name the app that set the next alarm
+        (`nextAlarmClock.showIntent?.creatorPackage` → label; "another app"
+        if blocked), so "the clock app's alarm" isn't answered with Islam360's.
+     b. Add switch state: `NodeRef.checked: Boolean?` from
+        `isCheckable`/`isChecked` in `toRef`, and `TreeDump.line` appends
+        ` on`/` off`; matters most for text-only Groq models.
+     c. Rule 5 / stale loop: after an approval, accept the target when it is
+        the unique node with the same pkg, viewId and label even if its bounds
+        moved (keyboard), in both `AgentLoop.act` and `DeviceRules.find`.
+     d. Prompt: in a chat box type without press_enter, then tap Send.
+     e. Gate draft: drop a placeholder copied into the text (WhatsApp's
+        "Message") if a cheap rule exists; otherwise leave it recorded.
+     Then time Groq once the owner saves a key (not tested yet).
   4. Docs still describe one action per step and verbatim replay: SPEC §6 (tools),
      §7 (history), §9.3 (replay) need the docs-keeper pass.
   5. Not built (owner's call later): Jev executor, on-phone OCR, a backup model
