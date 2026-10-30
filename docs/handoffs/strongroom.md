@@ -139,6 +139,13 @@ no password generator / CSV export / card saving in v1.
   - Emulator state left: PIN 1234 + one enrolled fingerprint, Firefox and
     `com.example.logintest` installed, a fresh test vault (master password in
     the Task 9 check button), Google as the autofill service again.
+- 2026-10-30 (third session): Task 10 review (0C/1I/10M) → fix round 1
+  (249682b: sideload warning is now an allowlist of known stores in
+  `LinkPrompt.installedFromFile`; requester domain comes from the target
+  fields via `FormDetector.origin`; "Other logins" keeps an inline slot) →
+  re-review clean. Task 10 complete. Chrome checks (S1 frames as a blocker,
+  S2, port, card checkout, HyperOS installer name, inline cap) carried to
+  Task 12 in the ledger.
 
 **The owner's phone is attached over wifi adb.** Every adb/expo command must
 target the emulator explicitly (`-s emulator-5554`). The emulator still holds
@@ -178,13 +185,14 @@ SDD ledger (task progress, rulings, deferred minors):
 `git log` over memory. Phone installs only via the Store (release builds);
 debug work uses the emulator.
 
-**Exact next step:** Tasks 1–9 are complete (Task 9 re-review clean). Start
-Task 10: record BASE (`git rev-parse HEAD`), dispatch the implementer (opus;
-autofill service + unlock activity is the security-critical integration)
-with the brief at `.superpowers/sdd/PHASE-1-PLAN/task-10-brief.md`, and carry
-every ledger line marked "carry to Task 10" plus the ledger's `NEXT:` line
-into the dispatch. Re-extract Task 11's brief before dispatching it (Task 9 amended the plan's
-TS API: `EntryView.expMonth/expYear`, `clearLostSaves()`). Then Tasks 11–12
-and the final whole-branch review (opus), pointed at the ledger's deferred
-minors. Implementers so far: sonnet for Tasks 2–8, opus for Task 9; reviewers
-opus for crypto/format/session/matching/platform, sonnet otherwise.
+**Exact next step:** Tasks 1–10 are complete (Task 10 re-review clean).
+Task 11 (screens): its brief is already re-extracted from the amended plan
+(`.superpowers/sdd/PHASE-1-PLAN/task-11-brief.md`) with
+`task-11-context.md` beside it (constraints + 7 carries). Record BASE
+(`git rev-parse HEAD`), dispatch the implementer with both files, review,
+then Task 12 (`task-12-brief.md`; carry every ledger line marked "carry to
+Task 12") and the final whole-branch review (opus), pointed at the ledger's
+deferred minors and "carry to final review" lines. Task 12 Steps 4+ need
+the owner (release and phone). Implementers so far: sonnet for Tasks 2–8,
+opus for Tasks 9–10; reviewers opus for crypto/format/session/matching/
+platform, sonnet otherwise.
