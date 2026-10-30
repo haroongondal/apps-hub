@@ -2,15 +2,21 @@
 
 ## Resume prompt
 
-Dated 2026-10-30. Work only in the worktree
+Dated 2026-10-30 (second session). Work only in the worktree
 `/Users/outsentia/Documents/apps-hub/.claude/worktrees/strongroom-phase-1`
-(branch `strongroom-phase-1`). Read `docs/handoffs/strongroom.md` there
-completely first, then `docs/strongroom/DESIGN.md`, then the SDD ledger at
-`.superpowers/sdd/PHASE-1-PLAN/progress.md`, and continue executing
-`docs/strongroom/PHASE-1-PLAN.md` with superpowers:subagent-driven-development. Trust the decisions and verified facts below and
-don't re-ask or re-derive them. Follow the handoff contract in
-`~/.claude/CLAUDE.md`. Read "Current state + exact next step" before doing
-anything, then continue from it. Commit or release only when the user says so.
+(branch `strongroom-phase-1`; enter it with EnterWorktree path). Read
+`docs/handoffs/strongroom.md` there completely first, then
+`docs/strongroom/DESIGN.md`, then the SDD ledger at
+`.superpowers/sdd/PHASE-1-PLAN/progress.md` (its rulings, carries and
+deferred minors bind later tasks), and continue executing
+`docs/strongroom/PHASE-1-PLAN.md` with superpowers:subagent-driven-development
+(implementer and task-reviewer templates, a review after every task, explicit
+models). Trust the decisions, verified facts and ledger and don't redo that
+work. Follow the handoff contract in `~/.claude/CLAUDE.md`. Read "Current state
++ exact next step" before doing anything, then continue from it. Commit per
+task on the branch; never push, merge or release without the owner's word;
+phone installs only via the Store; debug runs on the emulator only, and the
+owner's phone is attached over adb, so always target `-s emulator-5554`.
 
 ## Goal and fixed constraints
 
@@ -139,7 +145,15 @@ SDD ledger (task progress, rulings, deferred minors):
 `git log` over memory. Phone installs only via the Store (release builds);
 debug work uses the emulator.
 
-**Exact next step:** Task 1 is complete (re-review clean, 2026-10-30). Tasks
-2–12 run in order with the SDD loop. The ledger's last lines say which task is
-in flight and whether it is at implement, review or a fix round; resume there.
-Minors carried forward from Task 1 (into Tasks 6 and 9–11) are ledgered.
+**Exact next step:** Tasks 1–8 are complete. Task 9 fix round 1 (1e1ebe8) was
+in scoped re-review when this session ended. Check the ledger's last Task 9
+lines: if it says `Task 9: complete`, start Task 10 (brief already extracted
+at `.superpowers/sdd/PHASE-1-PLAN/task-10-brief.md`; carry the ledger's
+"carry to Task 10" lines into the dispatch). If not, re-run the re-review
+(`scripts/review-package docs/strongroom/PHASE-1-PLAN.md d39e958 1e1ebe8`,
+findings listed in the ledger's Task 9 review line) and continue the fix loop.
+Re-extract Task 11's brief before dispatching it (Task 9 amended the plan's
+TS API: `EntryView.expMonth/expYear`, `clearLostSaves()`). Then Tasks 11–12
+and the final whole-branch review (opus), pointed at the ledger's deferred
+minors. Implementers so far: sonnet for Tasks 2–8, opus for Task 9; reviewers
+opus for crypto/format/session/matching/platform, sonnet otherwise.
