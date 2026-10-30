@@ -174,9 +174,13 @@ export default function ScannerScreen() {
           if (typeof event.host !== 'string' || !event.host) return;
           if (event.kind === 'mdns-instance') {
             // First usable name per host wins; a device announces many services.
-            if (typeof event.instanceName === 'string' && !mdnsByIp.has(event.host)) {
-              const name = cleanMdnsInstanceName(event.instanceName);
-              if (name !== null) mdnsByIp.set(event.host, name);
+            // Keep the raw text: resolveDeviceNames is the one place that cleans it.
+            if (
+              typeof event.instanceName === 'string' &&
+              !mdnsByIp.has(event.host) &&
+              cleanMdnsInstanceName(event.instanceName) !== null
+            ) {
+              mdnsByIp.set(event.host, event.instanceName);
             }
             return;
           }
