@@ -281,6 +281,15 @@ Phone results (fill in as they come):
   `pnpm release strongroom`. Not yet installed: the owner was using the phone,
   so no taps were sent. Install from the Store app (or hand the screen over and
   the controller taps through it). The Store app itself wasn't re-released.
+- 2026-10-31 ~15:33 phone time: installed on the owner's phone (Xiaomi
+  24116RACCG, HyperOS 3.0 / Android 16) through the Store: versionCode 2,
+  `installerPackageName=initiatingPackageName=com.haroon.store`. The Store
+  download was 74 MB; Play Protect showed "App scan recommended" with the new
+  icon rendering correctly. The phone's `autofill_service` is already
+  `com.haroon.strongroom/…StrongroomAutofillService`. Wireless adb dropped
+  mid-install and came back on a new port (the serial in `adb devices` is the
+  mDNS name `adb-49kjmnuwonkffqzh-zHnffO._adb-tls-connect._tcp`; always pin it
+  with `-s`). The checklist items above are still to do.
 
 ## Owner items to raise at the end of Phase 1 (from Task 1)
 
