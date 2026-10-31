@@ -56,6 +56,12 @@ class LinkPromptTest {
     assertNull(LinkPrompt.build(router, Requester.Web(Site(false, "192.168.1.2")), false).refusal)
   }
 
+  @Test fun httpOnlyLoginIsNotRefusedOnAnHttpPage() {
+    val httpOnly = login.copy(sites = listOf(Site(false, "bank.com")))
+    assertNull(LinkPrompt.build(httpOnly, Requester.Web(Site(false, "www.bank.com")), false).refusal)
+    assertNull(LinkPrompt.build(httpOnly.copy(sites = listOf(Site(false, "192.168.1.1"))), Requester.Web(Site(false, "192.168.1.1:8080")), false).refusal)
+  }
+
   @Test fun siteWithoutRegistrableDomainShowsTheHost() {
     assertEquals("192.168.1.1:8080", LinkPrompt.build(login, Requester.Web(Site(false, "192.168.1.1:8080")), false).domain)
   }

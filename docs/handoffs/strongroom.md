@@ -264,6 +264,9 @@ Fill, save and platform:
     and cancel, wait 35 s more, open it again: it must ask for the master password.
   - Firefox: on a normal login page, the username fills as well as the
     password (on the emulator only the password filled).
+  - A save on a two-step login page with a hidden username input still
+    updates the existing login rather than creating a new one (U4 skips
+    non-VISIBLE nodes, so a browser that marks that input hidden drops the username).
 
 Then walk through DESIGN §13 together and record pass/fail for each line. No
 fixture apps exist for the §13 matching lines about a different-signature app

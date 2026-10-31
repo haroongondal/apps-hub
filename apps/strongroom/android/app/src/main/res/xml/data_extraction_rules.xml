@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The vault leaves the phone only through Strongroom's own sync (DESIGN §6): allowBackup="false" doesn't stop Android 12+ device transfer.
-     shortcut: set in the committed prebuild only, so a re-run expo prebuild drops the manifest attribute; Task 12's aapt2 xmltree check catches that. -->
+     shortcut: set in the committed prebuild only, so a re-run expo prebuild drops the manifest attribute; apps/strongroom/tools/__tests__/backup-rules.test.mjs (pnpm test) catches that. -->
 <data-extraction-rules>
   <cloud-backup>
     <exclude domain="root" path="." />

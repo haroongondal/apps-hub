@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Debug build only (run-as): finds a known username/password as plain, UTF-16 or Base64 bytes in Strongroom's data. Exit 1 on a hit, 2 if unreadable.
+# Debug build only (run-as): finds a known username/password as plain, UTF-16 or Base64 (also line-wrapped) bytes in Strongroom's data. Exit 1 on a hit, 2 if unreadable.
+# Covers the credential-encrypted app data directory only (run-as's working directory), not /data/user_de or /sdcard/Android/data.
 set -euo pipefail
 export LC_ALL=C
 
@@ -19,6 +20,7 @@ if ! tar -tf "$tmp/data.tar" > "$tmp/list" 2>/dev/null || [ ! -s "$tmp/list" ]; 
 fi
 # shortcut: UTF-16 is found by deleting NUL bytes, which works for ASCII secrets only; add a UTF-16 needle for a non-ASCII test secret.
 tr -d '\000' < "$tmp/data.tar" > "$tmp/nonul"
+tr -d '\r\n' < "$tmp/data.tar" > "$tmp/nolf"
 
 base64_needles() {
   local k enc start end
@@ -43,7 +45,7 @@ for label in username password; do
   echo "$label, plain or UTF-16: $n"
   hits=$((hits + n))
   n=0
-  while read -r needle; do n=$((n + $(count "$tmp/data.tar" "$needle"))); done < <(base64_needles "$secret" | sort -u)
+  while read -r needle; do n=$((n + $(count "$tmp/nolf" "$needle"))); done < <(base64_needles "$secret" | sort -u)
   echo "$label, Base64: $n"
   hits=$((hits + n))
 done

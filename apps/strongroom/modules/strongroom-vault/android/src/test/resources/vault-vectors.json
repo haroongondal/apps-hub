@@ -19,11 +19,11 @@
         "masterKey": "776cd791ebb22338a7f4ce630eefefaab95916e95eae346d852d629cddd06b6a"
     },
     "urduPassword": {
-        "text": "میرا خفیہ کوڈ 7731",
+        "text": "\u0645\u06cc\u0631\u0627 \u062e\u0641\u06cc\u06c1 \u06a9\u0648\u0688 7731",
         "masterKey": "e3af5ebed29909671ba599cb82ad0ca36305b8e1c0200c41d5079694e287578e"
     },
     "emojiPassword": {
-        "text": "🔐 vault 👨‍👩‍👧 👍🏽",
+        "text": "\ud83d\udd10 vault \ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67 \ud83d\udc4d\ud83c\udffd",
         "masterKey": "d54842323c37006d3badb50cd41e96e787dd2b51caff98c8bf9db90a68572658"
     },
     "recovery": {
