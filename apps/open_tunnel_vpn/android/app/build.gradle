@@ -170,6 +170,8 @@ dependencies {
     implementation("com.wireguard.android:tunnel:1.0.20260102")
     // OpenVPN 2 engine (ics-openvpn v0.7.69, GPLv2), built by vendor/ics-openvpn/build-aar.sh.
     implementation(files("libs/ics-openvpn.aar"))
+    // SPIKE (throwaway, never merged): userspace firewall engine, MPL-2.0, version pinned by RethinkDNS v0.5.8.
+    implementation("com.celzero:firestack:d3d530ea3e@aar")
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
