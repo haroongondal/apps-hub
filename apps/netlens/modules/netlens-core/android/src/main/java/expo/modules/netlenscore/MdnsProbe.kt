@@ -122,21 +122,24 @@ class MdnsProbe(
   @Suppress("DEPRECATION")
   private suspend fun resolve(nsdManager: NsdManager, info: NsdServiceInfo): NsdServiceInfo? {
     val result = CompletableDeferred<NsdServiceInfo?>()
-    val started = runCatching {
-      nsdManager.resolveService(
-        info,
-        object : NsdManager.ResolveListener {
-          override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-            result.complete(null)
-          }
+    val listener = object : NsdManager.ResolveListener {
+      override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+        result.complete(null)
+      }
 
-          override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-            result.complete(serviceInfo)
-          }
-        },
-      )
+      override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
+        result.complete(serviceInfo)
+      }
     }
-    return if (started.isSuccess) withTimeoutOrNull(RESOLVE_TIMEOUT_MS) { result.await() } else null
+    if (runCatching { nsdManager.resolveService(info, listener) }.isFailure) return null
+    try {
+      return withTimeoutOrNull(RESOLVE_TIMEOUT_MS) { result.await() }
+    } finally {
+      // A hung resolve otherwise holds one of the client's ~10 NSD slots.
+      if (!result.isCompleted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        runCatching { nsdManager.stopServiceResolution(listener) }
+      }
+    }
   }
 
   // From API 34 `host` is only the first address, which can be IPv6 while an IPv4 exists; hostAddresses has all.
