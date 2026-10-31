@@ -276,6 +276,9 @@ JVM-only, covered by `MatchingTest` (`appNeedsPackageAndCert`,
 (`linkRefusedForSamePackageOtherCert`). Tell the owner the items in the next
 section. Afterwards the owner switches autofill and Chrome back to Google.
 
+Phone results (fill in as they come):
+- (none yet)
+
 ## Owner items to raise at the end of Phase 1 (from Task 1)
 
 - Before Phase 2: decide whether to add an account key (a second secret typed
@@ -305,15 +308,23 @@ SDD ledger (task progress, rulings, deferred minors):
 `git log` over memory. Phone installs only via the Store (release builds);
 debug work uses the emulator.
 
-**Exact next step:** Tasks 1–11 are complete (Task 11 re-review clean).
-Task 12 runs Steps 1–3 and 5 only (ledger ruling): `task-12-brief.md` with
-`task-12-context.md` beside it (constraints, emulator carries, the phone
-checklist). First the `security-engineer` review (opus, read-only), then one
-implementer for its confirmed fixes, `disk-check.sh`, the emulator checks,
-the gates and the release-APK permission check, then a task review. Then the
-final whole-branch review (opus), pointed at the ledger's deferred minors and
-"carry to final review" lines. Step 4 (`pnpm release strongroom`, Store
-install, phone checklist, DESIGN §13 walk-through) waits for the owner's
-go-ahead. Implementers so far: sonnet for Tasks 2–8 and 11, opus for Tasks
-9–10; reviewers opus for crypto/format/session/matching/platform, sonnet
-otherwise.
+**Exact next step:** Tasks 1–11 and Task 12 Steps 1–3 and 5 are complete
+(Task 12 re-review clean; commits up to 036eff7, plus the launcher icon
+142fc7c). The owner asked on 2026-10-31 to test on the phone instead of the
+emulator, which is the go-ahead for Step 4: `pnpm release store` (so the Store
+lists Strongroom; the branch differs from main only by that `<queries>` line),
+then `pnpm release strongroom`, then the owner installs from the Store (never
+`adb install`; adb on the phone only for logcat, screenshots and taps). Walk
+the phone checklist above with the owner and record each result there. Before
+typing the master password the owner sets the phone's autofill service to
+Strongroom (or None): Android 15 sent Strongroom's own password-type fields
+to Google autofill on the emulator despite the exclusion flags. If the phone
+shows Google offering to save any Strongroom secret, build the native secret
+field next (an `EditText` whose `getAutofillType()` is `AUTOFILL_TYPE_NONE`,
+for every secret input including `UnlockActivity`'s). Fix whatever the phone
+shows, then the final whole-branch review (opus), pointed at the ledger's
+deferred minors and "carry to final review" lines. Then
+superpowers:finishing-a-development-branch: never merge or push without the
+owner's word (CI releases registered apps on main). Implementers so far:
+sonnet for Tasks 2–8 and 11, opus for Tasks 9–10 and 12; reviewers opus for
+crypto/format/session/matching/platform, sonnet otherwise.
