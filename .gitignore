@@ -58,6 +58,13 @@ coverage/
 /apps/deputy/android/**/.cxx/
 /apps/deputy/modules/*/android/build/
 /apps/deputy/.expo/
+/apps/strongroom/android/.gradle/
+/apps/strongroom/android/app/build/
+/apps/strongroom/android/build/
+/apps/strongroom/android/local.properties
+/apps/strongroom/android/**/.cxx/
+/apps/strongroom/modules/*/android/build/
+/apps/strongroom/.expo/
 /tools/store-api/.cloudflare/
 /tools/store-api/.wrangler/
 /tools/store-api/dist/
@@ -78,3 +85,4 @@ coverage/
 
 # release APKs are build outputs; the store pipeline uploads its own builds
 /apps/*/releases/*.apk
+/.superpowers/

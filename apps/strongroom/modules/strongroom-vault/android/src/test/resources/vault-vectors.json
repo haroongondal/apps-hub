@@ -1,0 +1,132 @@
+{
+    "note": "Shared Strongroom vault test vectors (format v1, DESIGN section 6). Kotlin and TypeScript tests read this same file. Byte values are lowercase hex unless noted. masterKey = Argon2id(password as UTF-8 after NFC normalisation, salt, kdf, 32 bytes, version 0x13). wrapKey = HKDF-SHA-256(ikm = masterKey, no salt, info = UTF-8 'strongroom/v1/wrap', 32 bytes); loginToken is the same with info 'strongroom/v1/login'. recovery.wrapKey and recovery.loginToken use recovery.key as ikm with the same two labels (no Argon2). Every sealed value is nonce(12) || ciphertext || tag(16): AES-256-GCM under the stated nonce with AAD = UTF-8 of the aad field. passwordWrap seals vaultKey under wrapKey; recoveryWrap seals vaultKey under recovery.wrapKey. Each record seals the compact JSON of its entry (UTF-8, keys in the order shown) under vaultKey. header is the exact Header JSON, with salt and both wraps as standard padded Base64 (the only non-hex bytes). nfdPassword.masterKey is the Argon2id key of both its NFD and its NFC form, so a client must normalise to NFC first. urduPassword and emojiPassword were computed with argon2-cffi, not Strongroom's code; the Urdu one uses the Urdu keyboard's U+06CC, U+06A9 and U+06C1, which NFC never maps to the Arabic layout's U+064A, U+0643 and U+0647. Passwords are written with \\u escapes so an editor cannot normalise them.",
+    "kdf": {
+        "memoryKiB": 1024,
+        "iterations": 1,
+        "parallelism": 1
+    },
+    "salt": "000102030405060708090a0b0c0d0e0f",
+    "vaultKey": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+    "password": {
+        "text": "correct horse battery staple",
+        "masterKey": "f0d1525842159cef972608e2f8bc1cb2c8230f81eea76f124789f6beb42403b2",
+        "wrapKey": "2cae926f62cd2d828d7de1d316e2d00612a6f094072592e8c03e2b4c239d0bf3",
+        "loginToken": "9d5aaf81d773c2a3dd4ac455f7dfd9d984b3553669d63cc96d1fe152a4590a98"
+    },
+    "nfdPassword": {
+        "nfd": "Cre\u0300me bru\u0302le\u0301e 2026",
+        "nfc": "Cr\u00e8me br\u00fbl\u00e9e 2026",
+        "masterKey": "776cd791ebb22338a7f4ce630eefefaab95916e95eae346d852d629cddd06b6a"
+    },
+    "urduPassword": {
+        "text": "\u0645\u06cc\u0631\u0627 \u062e\u0641\u06cc\u06c1 \u06a9\u0648\u0688 7731",
+        "masterKey": "e3af5ebed29909671ba599cb82ad0ca36305b8e1c0200c41d5079694e287578e"
+    },
+    "emojiPassword": {
+        "text": "\ud83d\udd10 vault \ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67 \ud83d\udc4d\ud83c\udffd",
+        "masterKey": "d54842323c37006d3badb50cd41e96e787dd2b51caff98c8bf9db90a68572658"
+    },
+    "recovery": {
+        "key": "101112131415161718191a1b1c1d1e1f20212223",
+        "wrapKey": "ec5ad8f0bc28c0fae388602c8ca9c3f8d2590f0e18c3010dba5f798e1ce74086",
+        "loginToken": "58a3ea954b9c6f31c3539fde70dea7732cdd6ad29e697471046bc3332e394511"
+    },
+    "passwordWrap": {
+        "aad": "strongroom/v1/password-wrap",
+        "nonce": "010101010101010101010101",
+        "sealed": "010101010101010101010101b8fadda5c893fc2ea736043ad758d6f5b06fe123ba65e33aedfb45ec33f2b42877bbc94915987e6082fad2852c473adf"
+    },
+    "recoveryWrap": {
+        "aad": "strongroom/v1/recovery-wrap",
+        "nonce": "020202020202020202020202",
+        "sealed": "020202020202020202020202df830317b1b8832acc2cb252124e685424619f22ba9051cc431b491cfc22d6b03055dc590294b7c32941764f4ac42d0c"
+    },
+    "header": {
+        "version": 1,
+        "kdf": {
+            "memoryKiB": 1024,
+            "iterations": 1,
+            "parallelism": 1
+        },
+        "salt": "AAECAwQFBgcICQoLDA0ODw==",
+        "passwordWrap": "AQEBAQEBAQEBAQEBuPrdpciT/C6nNgQ611jW9bBv4SO6ZeM67ftF7DPytCh3u8lJFZh+YIL60oUsRzrf",
+        "recoveryWrap": "AgICAgICAgICAgIC34MDF7G4gyrMLLJSEk5oVCRhnyK6kFHMQxtJHPwi1rAwVdxZApS3wylBdk9KxC0M"
+    },
+    "records": [
+        {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "aad": "strongroom/v1/record/00000000-0000-4000-8000-000000000001",
+            "nonce": "030303030303030303030303",
+            "entry": {
+                "type": "login",
+                "name": "Caf\u00e9 Example",
+                "username": "me@example.com",
+                "password": "p\u00e4ss\\w0rd \"quoted\" \u2713 \ud83d\ude00",
+                "sites": [
+                    {
+                        "https": true,
+                        "host": "example.com"
+                    },
+                    {
+                        "https": false,
+                        "host": "intranet.local"
+                    }
+                ],
+                "apps": [
+                    {
+                        "pkg": "com.example.app",
+                        "certSha256": "9e46001e8e7f565052e904f02fcaa84deaee3360da187c9c7ca863bd48b94e49",
+                        "domain": "example.com"
+                    },
+                    {
+                        "pkg": "com.example.other",
+                        "certSha256": "3d775d01e19fd360ed2c9f31cc420e70da38fae55343f0a1249854890eaa1dc4",
+                        "domain": null
+                    }
+                ],
+                "note": "line one\nline two",
+                "updatedAt": 1700000000000
+            },
+            "sealed": "030303030303030303030303ed1a74339b7ae27e9280212f41170022fbe2efa225a8c5a0eed493810419ef719487438e3d41c50d33aea86d9cbfdd897bc4e55e3952ea6d26c4e847db4b0330645630c7f6e2bdf8a2eac0025bfa8609604092770706af9cd67ffc93983a0a1c8cf9f1fd4d89db90fb878b1157b1dca912923aafa70a9adc8ceecb65bbed20ce28a669834b2d0baddf9cbf202c45af2a7a192c15c8fd57c7fecdcb912a505b86e0807229c1c9d4c1585847abac0025c2432b6dcf5196a1fdf3cd139128f9ea100d76a6398d2a6b4047a7430d2e891c4027c3f76c35286b52a1f4188fedf244d153525532a960bcb67d3f7ab9b2cc7c0dd136876bf2af436d0defb2175d3445010fa4f6b845e00964db2a86aa11d18a5fa48e0bf8754d809620a939e9e14a0051aad8c905a84e9859c5d39bc300a08dcbb3a0d1895a3b1991841bc1ce576aedad64a30b92b95f46d34bc592023d26616ad4168d446c8298c22e0e620527e99cf3cd8382e8f6f969c44724e42d2af5277578135e58c1edc9f7c117b21b140cff2c1922d5b300df519eac9d57a71053655b17b76a7a8aba227a30b6bde63bc8582cb351d9e6b13ba8fd6bc06445cc42038924b3f82f89843fdccf35430790cdf888f65fd3b2d69c767eec9712bd29c1505f9d0ebb43444c271cecc8f6502a49689574912574bfe679644205cc9043393f3582ca84f159402dd91a376490615c06ee6ad62a1af8de67cae681de54f69c4757"
+        },
+        {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "aad": "strongroom/v1/record/00000000-0000-4000-8000-000000000002",
+            "nonce": "040404040404040404040404",
+            "entry": {
+                "type": "card",
+                "name": "Visa",
+                "holder": "A. Holder",
+                "number": "4111111111111111",
+                "expMonth": 12,
+                "expYear": 2030,
+                "cvc": "123",
+                "note": "test number",
+                "updatedAt": 1700000001000
+            },
+            "sealed": "040404040404040404040404d578635c3b024c215e3d86934192970158edc5d99b6b48ffe946402f873954c33315a9c966159d0128146caf474d4ff9aa823bc90d99085b0f48a0f86ee05f8b39b7eedbe0a83d2050bb375a8b3f2e6d143f0951c8918b202d4c43398c370d46a8350afe1e43eb0213de2a8e6087a400af0b01e8a0eef20114be003b9e25a31fce09f44d135acef38c9e11329d3dbcc3053e02d3ce2ceb2a25d971a116ae966eeac77d55a154efd1696a30c0a5601cca7ee1fc5ddfb4"
+        },
+        {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "aad": "strongroom/v1/record/00000000-0000-4000-8000-000000000003",
+            "nonce": "050505050505050505050505",
+            "entry": {
+                "type": "note",
+                "name": "Wi-Fi",
+                "text": "SSID: home\nkey: correct horse",
+                "updatedAt": 1700000002000
+            },
+            "sealed": "05050505050505050505050595fe8c178a332ead066660e0143c0fe051e88da02ab5405a4677d941d7e863aa77fd70d74ecaa2ce78990938d53f93330367141275d8194202afc6ef5bd12425f1bbec5cd105b44638211e9f88e4e4e648d9dccdc603f6887f1012091c4ef42ecc00f2c61cc6626bd3e16de9b02b360f"
+        },
+        {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "aad": "strongroom/v1/record/00000000-0000-4000-8000-000000000004",
+            "nonce": "060606060606060606060606",
+            "entry": {
+                "type": "deleted",
+                "updatedAt": 1700000003000
+            },
+            "sealed": "060606060606060606060606e3264143d82b08b5e7fd2ac41569981f7d8a1df5df379762ebdfcfeeca59a15070c30f7379b06388621daec475c97011af6d1e69b08201fe169c3408"
+        }
+    ]
+}

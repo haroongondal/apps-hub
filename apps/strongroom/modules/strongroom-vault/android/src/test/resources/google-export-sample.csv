@@ -1,0 +1,11 @@
+﻿name,url,username,password,note
+example.org,https://example.org,alice@gmail.test,Fake-pass-One!,
+accounts.example.com,https://accounts.example.com/login,,Fake-pass-Two,
+Team wiki,https://wiki.example.net/home,bob,"Fake,pass""Three""","Shared with ""ops"", rotate monthly.
+Second line of the note"
+Example app,android://AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=@com.example.app/,carol,Fake-pass-Four,
+Broken hash,android://not-base64!@com.example.broken/,dave,Fake-pass-Five,
+Mail,https://mail.example.org/,erin,Fake-pass-Six,
+Mail,https://mail.example.org/,erin,Fake-pass-Six,
+Forum,https://forum.example.org/,frank,Fake-pass-Seven,old account
+Forum,https://forum.example.org/,frank,Fake-pass-Eight,new account

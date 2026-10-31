@@ -1,0 +1,24 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
+  <!-- The autofill service reads each requesting app's signing certificate; without this, package visibility hides every app (checked on API 35). -->
+  <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+  <application>
+    <service
+      android:name="expo.modules.strongroomvault.android.StrongroomAutofillService"
+      android:label="Strongroom"
+      android:exported="true"
+      android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+      <intent-filter>
+        <action android:name="android.service.autofill.AutofillService" />
+      </intent-filter>
+      <meta-data android:name="android.autofill" android:resource="@xml/strongroom_autofill_service" />
+    </service>
+    <activity
+      android:name="expo.modules.strongroomvault.android.UnlockActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize"
+      android:windowSoftInputMode="adjustResize"
+      android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
+  </application>
+</manifest>

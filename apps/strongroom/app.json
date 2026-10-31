@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Strongroom",
+    "slug": "strongroom",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": [
+      "android"
+    ],
+    "android": {
+      "package": "com.haroon.strongroom",
+      "allowBackup": false,
+      "edgeToEdgeEnabled": true,
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#1F0A24",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      }
+    },
+    "icon": "./assets/icon.png"
+  }
+}

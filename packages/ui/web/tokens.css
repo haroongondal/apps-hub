@@ -390,3 +390,63 @@
   --c-warn-soft: #FBBF2429;
   --c-danger-soft: #F8717129;
 }
+
+[data-brand='strongroom'], [data-brand='strongroom'][data-theme='light'] {
+  color-scheme: light;
+  --c-bg: #F7F2F7;
+  --c-surface: #FFFFFF;
+  --c-raised: #EFE6EF;
+  --c-line: #DFD3DF;
+  --c-text: #271127;
+  --c-muted: #675167;
+  --c-faint: #958395;
+  --c-accent: #A21CAF;
+  --c-on-accent: #FFFFFF;
+  --c-accent-soft: #A21CAF1A;
+  --c-ok: #15803D;
+  --c-warn: #8F5600;
+  --c-danger: #B91C1C;
+  --c-ok-soft: #15803D1A;
+  --c-warn-soft: #8F56001A;
+  --c-danger-soft: #B91C1C1A;
+}
+@media (prefers-color-scheme: dark) {
+  [data-brand='strongroom']:not([data-theme='light']) {
+  color-scheme: dark;
+  --c-bg: #190B19;
+  --c-surface: #241424;
+  --c-raised: #331E33;
+  --c-line: #462F46;
+  --c-text: #F8F2F8;
+  --c-muted: #C2AEC2;
+  --c-faint: #8C738C;
+  --c-accent: #E879F9;
+  --c-on-accent: #2A0530;
+  --c-accent-soft: #E879F929;
+  --c-ok: #4ADE80;
+  --c-warn: #FBBF24;
+  --c-danger: #F87171;
+  --c-ok-soft: #4ADE8029;
+  --c-warn-soft: #FBBF2429;
+  --c-danger-soft: #F8717129;
+  }
+}
+[data-brand='strongroom'][data-theme='dark'] {
+  color-scheme: dark;
+  --c-bg: #190B19;
+  --c-surface: #241424;
+  --c-raised: #331E33;
+  --c-line: #462F46;
+  --c-text: #F8F2F8;
+  --c-muted: #C2AEC2;
+  --c-faint: #8C738C;
+  --c-accent: #E879F9;
+  --c-on-accent: #2A0530;
+  --c-accent-soft: #E879F929;
+  --c-ok: #4ADE80;
+  --c-warn: #FBBF24;
+  --c-danger: #F87171;
+  --c-ok-soft: #4ADE8029;
+  --c-warn-soft: #FBBF2429;
+  --c-danger-soft: #F8717129;
+}

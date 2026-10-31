@@ -25,6 +25,10 @@ Current apps:
   Store only (`com.haroon.deputy`). Kotlin owns the agent loop and the
   confirmation gate; RN only renders. Specs: `docs/deputy/` (PRD, SPEC);
   phases and spike results: `docs/handoffs/deputy.md`.
+- **strongroom** (`apps/strongroom`) — personal password manager, all own code
+  (Kotlin owns the vault; RN only renders). Android only, private Store only
+  (`com.haroon.strongroom`). Design: `docs/strongroom/DESIGN.md`; phases:
+  `docs/strongroom/PHASE-1-PLAN.md` and `docs/handoffs/strongroom.md`.
 
 Not here on purpose: `~/Documents/browser-automation` (stays standalone) and
 `~/Documents/agent-harness` (deferred until its phase branches are merged).
@@ -41,7 +45,7 @@ Planned (do not scaffold yet):
 - Tokens live in `src/tokens.ts` only. After changing them run
   `pnpm --filter @apps-hub/ui build:css`; the test fails if `web/tokens.css` is
   stale, and it enforces WCAG AA contrast for every brand in light and dark.
-- Brands: netlens, opentunnel, store, pdf, design, deputy (hue + accent from each
+- Brands: netlens, opentunnel, store, pdf, design, deputy, strongroom (hue + accent from each
   launcher icon). Light and dark follow the system.
 - Copy is sentence case, active voice; errors say what happened and how to fix
   it. No emoji icons, no ALL-CAPS labels.
@@ -117,6 +121,9 @@ cd apps/open_tunnel_vpn/android && JAVA_HOME=$JAVA_HOME ./gradlew :app:assembleD
 # Native compile gate (Deputy):
 cd apps/deputy/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :deputy-agent:testDebugUnitTest :app:assembleDebug
+# Native compile gate (Strongroom):
+cd apps/strongroom/android && JAVA_HOME=$JAVA_HOME ./gradlew \
+  :strongroom-vault:testDebugUnitTest :app:assembleDebug
 # Electron apps (open real windows, so not part of `pnpm test`):
 pnpm --filter pdf-editor-desktop test:e2e   # desktop + Electron + mobile-bridge suites
 pnpm --filter design-editor test:e2e
