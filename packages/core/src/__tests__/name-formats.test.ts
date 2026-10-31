@@ -219,6 +219,18 @@ test('extractDeviceDescription reads the first of each tag and decodes five enti
   );
 });
 
+test('extractDeviceDescription unwraps CDATA and decodes numeric character references', () => {
+  const name = (text: string): string | null =>
+    extractDeviceDescription(`<friendlyName>${text}</friendlyName>`).friendlyName;
+  assert.equal(name('<![CDATA[Den TV]]>'), 'Den TV');
+  assert.equal(name('<![CDATA[Bob&#39;s &amp; TV]]>'), 'Bob&#39;s &amp; TV');
+  assert.equal(name('Bob&#39;s TV'), "Bob's TV");
+  assert.equal(name('&#x41;&#67;'), 'AC');
+  assert.equal(name('&#x1F600;'), '\u{1F600}');
+  assert.equal(name('&#xD800; &#0; &#x110000; &#99999999999999999999; &#;'), '&#xD800; &#0; &#x110000; &#99999999999999999999; &#;');
+  assert.equal(name('&#38;lt;'), '&lt;');
+});
+
 test('extractDeviceDescription returns nothing for a document with a DOCTYPE or entity declaration', () => {
   const none = { friendlyName: null, manufacturer: null, modelName: null };
   const body = '<root><friendlyName>Tv</friendlyName></root>';

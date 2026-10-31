@@ -148,3 +148,41 @@ test('applyDeviceNames keeps identity and user fields and old names where new on
   assert.equal(merged.model, 'QN60Q60');
   assert.equal(merged.netbiosName, 'ALI-LAPTOP');
 });
+
+const noNames = {
+  hostname: null,
+  mdnsName: null,
+  friendlyName: null,
+  model: null,
+  netbiosName: null,
+};
+
+test('applyDeviceNames replaces every name when the hostname changed (IP reuse)', () => {
+  const tv = fullDevice({ hostname: 'tv.lan' });
+  const merged = applyDeviceNames(tv, { ...noNames, hostname: 'phone.lan' });
+  assert.equal(merged.hostname, 'phone.lan');
+  assert.equal(merged.mdnsName, null);
+  assert.equal(merged.friendlyName, null);
+  assert.equal(merged.model, null);
+  assert.equal(merged.netbiosName, null);
+  assert.equal(merged.identityKey, tv.identityKey);
+  assert.equal(merged.id, tv.id);
+  assert.equal(merged.customName, 'My TV');
+  assert.equal(merged.isTrusted, true);
+});
+
+test('applyDeviceNames keeps stored names when the hostname is unchanged, ignoring case', () => {
+  const tv = fullDevice({ hostname: 'tv.lan' });
+  assert.equal(applyDeviceNames(tv, { ...noNames, hostname: 'tv.lan' }).mdnsName, 'Living Room TV');
+  assert.equal(applyDeviceNames(tv, { ...noNames, hostname: 'TV.lan' }).mdnsName, 'Living Room TV');
+});
+
+test('applyDeviceNames keeps the stored hostname and names when the new hostname is null', () => {
+  const tv = fullDevice({ hostname: 'tv.lan' });
+  const merged = applyDeviceNames(tv, { ...noNames, friendlyName: 'Fresh friendly' });
+  assert.equal(merged.hostname, 'tv.lan');
+  assert.equal(merged.mdnsName, 'Living Room TV');
+  assert.equal(merged.friendlyName, 'Fresh friendly');
+  assert.equal(merged.model, 'QN60Q60');
+  assert.equal(merged.netbiosName, 'ALI-LAPTOP');
+});

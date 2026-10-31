@@ -151,6 +151,16 @@ const ENTITIES: Record<string, string> = {
   apos: "'",
 };
 
+const CDATA = /^\s*<!\[CDATA\[([\s\S]*)\]\]>\s*$/;
+const REFERENCE = /&(?:(amp|lt|gt|quot|apos)|#(\d+)|#x([0-9a-fA-F]+));/g;
+
+// Out-of-range or surrogate code points stay as written.
+function decodeReference(match: string, named?: string, dec?: string, hex?: string): string {
+  if (named) return ENTITIES[named];
+  const cp = dec ? Number(dec) : parseInt(hex as string, 16);
+  return cp >= 1 && cp <= 0x10ffff && (cp < 0xd800 || cp > 0xdfff) ? String.fromCodePoint(cp) : match;
+}
+
 function withoutComments(xml: string): string {
   let out = '';
   let pos = 0;
@@ -175,7 +185,9 @@ function tagText(xml: string, tag: string): string | null {
       if (start < 0) return null;
       const end = xml.indexOf(`</${tag}>`, start);
       if (end < 0) return null;
-      return xml.slice(start + 1, end).replace(/&(amp|lt|gt|quot|apos);/g, (_, e) => ENTITIES[e]);
+      const text = xml.slice(start + 1, end);
+      const cdata = CDATA.exec(text);
+      return cdata ? cdata[1] : text.replace(REFERENCE, decodeReference);
     }
     from = at + 1;
   }

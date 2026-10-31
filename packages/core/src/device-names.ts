@@ -80,6 +80,15 @@ export function applyDeviceNames(
   device: StoredDevice,
   names: DeviceNames,
 ): StoredDevice {
+  // A different hostname means another machine took over this IP: drop the old machine's names.
+  if (
+    names.hostname !== null &&
+    device.hostname !== null &&
+    names.hostname.toLowerCase() !== device.hostname.toLowerCase()
+  ) {
+    const { hostname, mdnsName, friendlyName, model, netbiosName } = names;
+    return { ...device, hostname, mdnsName, friendlyName, model, netbiosName };
+  }
   return {
     ...device,
     hostname: names.hostname ?? device.hostname,

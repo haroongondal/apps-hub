@@ -198,8 +198,9 @@ moves bytes; for mDNS it also browses and resolves instances.
    - 64 KB cap on the total bytes read, headers included
      (`SSDP_DESCRIPTION_MAX_BYTES`);
    - a document containing `<!DOCTYPE` or `<!ENTITY` is ignored. The fields
-     are found by a linear string scan, not an XML parser; only the five
-     predefined entities are decoded.
+     are found by a linear string scan, not an XML parser; the five
+     predefined entities and numeric character references (`&#39;`,
+     `&#x41;`) are decoded, and a `<![CDATA[ ... ]]>` wrapper is removed.
 
    `friendlyName` is stored as `friendlyName`; `manufacturer` plus
    `modelName` is stored as `model`.
@@ -239,7 +240,9 @@ parallel, each with a 1,500 ms native timeout plus a 250 ms JS guard that gives
 up on a call that never settles: at most 1.75 s per target, so `n` devices
 take at most `ceil(n / 16) * 1.75` s. Each target's names are merged into its
 row and saved as soon as they arrive, so names fill in one by one. A result
-from a superseded scan is dropped.
+from a superseded scan is dropped. A lookup that finds nothing keeps the
+stored name, unless it returns a hostname different from the stored one:
+another machine has taken over that IP, so its names replace the old ones.
 
 **Identity.** Names never change a device's identity key.
 `deriveIdentityKey` still reads only USN, then enrichment hostname, then IP,
