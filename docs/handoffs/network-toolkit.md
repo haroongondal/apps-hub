@@ -42,6 +42,10 @@ land; at ~85% context, finalize and print a new resume prompt). Continue from
   about 10 outstanding requests. Devices that advertise only other types get
   no Bonjour name on Android. iOS browses the same six, so the platforms
   match. Spec: `docs/netlens/SPEC.md` section 3.6.
+- Where the code departs from the design: PTR goes to the gateway instead of
+  the system resolver; six mDNS types instead of nine; `model` is not in the
+  display order; the timing bound is ceil(n/16) × 1.75 s, which passes the
+  design's 5 s above 32 devices.
 - Names never touch the identity key, so existing devices keep their rows and
   show no false "New" badge.
 - firestack (MPL-2.0, Maven Central AAR) as the packet engine: no Go
@@ -58,10 +62,12 @@ land; at ~85% context, finalize and print a new resume prompt). Continue from
 - Before the names work (historical): NetLens label order:
   `ScannerScreen.tsx:72`; `hostname` never filled
   (`ScannerScreen.tsx:183-188`); mDNS collects types only.
-- `deriveIdentityKey` (`packages/core/src/device-repository.ts:93`) is
-  USN → hostname → IP, so filling hostname would re-key known devices.
-- iOS NetLens `NSBonjourServices`: `_services._dns-sd._udp`, `_http._tcp`
-  only (app.json + Info.plist).
+- `deriveIdentityKey` (`packages/core/src/device-repository.ts:98`) is
+  USN → hostname → IP. Names are written after reconcile and nothing passes a
+  hostname into the enrichment, so identity keys don't change.
+- Before the names work (historical): iOS NetLens `NSBonjourServices` held
+  only `_services._dns-sd._udp` and `_http._tcp`. On `homenet-names` it holds
+  eight entries: those two plus the six browse types (app.json + Info.plist).
 - `OpenTunnelVpnService` builds its own tun for hosted engines
   (`buildHostInterface`); WireGuard GoBackend hosts its own VpnService;
   ics-openvpn hosts its own too.

@@ -22,7 +22,8 @@
   `DiscoveredHost` event stream.
 - **Tests:** `node --test` with native TypeScript stripping (no test framework
   dependency needed); Gradle JVM JUnit tests for native invariants.
-- **Database (Phase 3):** `expo-sqlite` (schema below unchanged in columns).
+- **Database (Phase 3):** `expo-sqlite` (schema below plus the version 1 name
+  columns, see §4).
 
 ## 2. Repository Structure
 
@@ -116,9 +117,12 @@ Combined mDNS + SSDP sweep emitting `onServiceDiscovered` events:
 
 ```ts
 onServiceDiscovered {
-  kind: 'mdns' | 'ssdp',
+  kind: 'mdns' | 'ssdp' | 'mdns-instance',
   serviceName?: string,   // mdns: service TYPE from meta-query (e.g. "_http._tcp")
-  host?: string, location?: string, server?: string, usn?: string  // ssdp headers
+  host?: string,          // ssdp: the responder's address; mdns-instance: the instance's IPv4
+  location?: string, server?: string, usn?: string,  // ssdp headers
+  instanceName?: string,  // mdns-instance: the name before cleaning (§3.6)
+  serviceType?: string    // mdns-instance: type it answered for (e.g. "_airplay._tcp")
 }
 ```
 
@@ -157,9 +161,10 @@ After the sweep is reconciled and the list is on screen, `ScannerScreen` calls
 `resolveDeviceNames` (`packages/core/src/name-resolver.ts`) for every device
 seen this scan. It is best effort: nothing rejects, and a failed lookup means
 no name. Parsing and sanitising are pure TypeScript (`device-names.ts`,
-`name-formats.ts`); native code only moves bytes.
+`name-formats.ts`). For PTR, NetBIOS and the SSDP description, native code only
+moves bytes; for mDNS it also browses and resolves instances.
 
-**Four sources** (each device gets all of them):
+**Four sources** (a device gets whichever of them it answers):
 
 1. **Reverse DNS (PTR).** A raw DNS PTR query for `d.c.b.a.in-addr.arpa` goes
    straight to the gateway on UDP 53, not through the system resolver. The
@@ -170,7 +175,9 @@ no name. Parsing and sanitising are pure TypeScript (`device-names.ts`,
    `_googlecast._tcp`, `_airplay._tcp`, `_ipp._tcp`, `_smb._tcp`, `_hap._tcp`
    and `_companion-link._tcp`, resolves each to an IPv4 address, and emits
    `onServiceDiscovered { kind: 'mdns-instance', host, instanceName,
-   serviceType }` (extends §3.3). At most 32 resolves per scan, 1,500 ms each.
+   serviceType }` (see §3.3). At most 32 resolves per scan, 1,500 ms each. Instances
+   are collected during the 4 s service-discovery window, alongside the sweep;
+   an instance resolved after the window closes is lost.
    - Android: a type is browsed only when the meta-query reports it, with at
      most 6 browsers (`MAX_BROWSERS`; NSD allows a client about 10
      outstanding requests: 1 meta browser + 6 + 1 resolve). Resolves run one
@@ -188,7 +195,8 @@ no name. Parsing and sanitising are pure TypeScript (`device-names.ts`,
    - `http` only; port 1..65535 (80 when absent);
    - the path is printable ASCII (`\x21-\x7E`);
    - no redirects: only status 200 is read;
-   - 64 KB cap on the body (`SSDP_DESCRIPTION_MAX_BYTES`);
+   - 64 KB cap on the total bytes read, headers included
+     (`SSDP_DESCRIPTION_MAX_BYTES`);
    - a document containing `<!DOCTYPE` or `<!ENTITY` is ignored. The fields
      are found by a linear string scan, not an XML parser; only the five
      predefined entities are decoded.
@@ -201,7 +209,7 @@ no name. Parsing and sanitising are pure TypeScript (`device-names.ts`,
 
 **Native primitives** (the four-place contract: `NetLensNativeBinding`, the
 `createNetLensNativeBinding` adapter, Kotlin, Swift). `timeoutMs` is 1..10000
-on Android.
+on both platforms.
 
 | Function | Behaviour |
 |---|---|

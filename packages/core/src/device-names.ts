@@ -1,7 +1,8 @@
 /**
  * Device name rules: how raw network text becomes a safe name, which name a
  * device shows, and how fresh names merge into a stored row. Pure TypeScript.
- * Order shown: custom, mDNS, SSDP friendlyName, NetBIOS, hostname, model, IP.
+ * Order shown: custom, mDNS, SSDP friendlyName, NetBIOS, hostname first label,
+ * vendorOrModel, IP.
  */
 import type { StoredDevice } from './device-repository.ts';
 import { parseIpv4 } from './ipv4.ts';
