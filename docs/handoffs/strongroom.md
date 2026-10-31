@@ -70,12 +70,22 @@ no password generator / CSV export / card saving in v1.
 - Apps register for release in `tools/release/src/apps.ts`.
 - Deputy sets `android.minSdkVersion=33` in `apps/deputy/android/gradle.properties`.
 - No crypto dependency exists in the repo yet.
+- Task 12, on the emulator's ART (API 35), running the debug APK's own classes through `app_process`:
+  Android's ICU-backed `java.net.IDN` gives `bücher.de` ↔ `xn--bcher-kva.de`, and `Matching`
+  matches them both ways (`ß` still matches nothing). AndroidKeyStore throws
+  `AEADBadTagException` (cause `android.security.KeyStoreException`) for a bad GCM tag.
+- Android 15 Google image: `device_config` autofill has `trigger_fill_request_on_unimportant_view=true`
+  and `include_all_autofill_type_not_none_views_in_assist_structure=true`, so the system opens
+  autofill sessions for Strongroom's own password-type fields despite `importantForAutofill="no"`
+  and the content view's `NO_EXCLUDE_DESCENDANTS` (seen in verbose autofill logs).
 
 ## File map
 
 - `docs/strongroom/DESIGN.md`: the design.
 - `docs/strongroom/PHASE-1-PLAN.md`: Phase 1 plan, 12 tasks (Task 1 = threat-model gate).
 - `.superpowers/brainstorm/6147-1793289451/content/android-flows.html`: mockups (git-ignored).
+- `apps/strongroom/tools/disk-check.sh <username> <password> [serial]`: debug-build
+  on-disk scan (plain, UTF-16, Base64); serial defaults to `emulator-5554`.
 - `.superpowers/sdd/PHASE-1-PLAN/`: SDD ledger (`progress.md`), Task 1 rulings,
   report and review (git-ignored scratch; the git log is the durable record).
 
@@ -154,15 +164,114 @@ no password generator / CSV export / card saving in v1.
   implementer's first Metro start (`--android=false`) began fetching Expo Go
   for the phone; killed in seconds, nothing installed. Later dispatches pin
   `ANDROID_SERIAL=emulator-5554` and start Metro with no platform flags.
+- 2026-10-31: Task 12 Steps 1–3 (Step 4 waits for the owner). Step 1:
+  security-engineer review (0C/0H/1M/1L, 4 unconfirmed; findings and rulings in
+  `.superpowers/sdd/PHASE-1-PLAN/task-12-security-findings.md`) → fixes 411bd51:
+  F1 an http page is refused, never filled or linked, for a login saved for the
+  same site over https; F2 `dataExtractionRules` (committed prebuild only); U1
+  the unlock screen touches the vault only on the owner's taps; U3 Urdu and emoji
+  derivation vectors from argon2-cffi, plus a non-blocking keyboard notice for a
+  non-ASCII master password; U4 hidden nodes are skipped. **Task 12 emulator results:**
+  - Another session drove emulator-5554 from 13:05 (it installed
+    `dev.spike.clipprobe`, typed into Strongroom's setup field), so the UI
+    checks ran on a dedicated AVD `strongroom-task12` (emulator-5556, same
+    android-35 google_apis image; PIN 1234, Firefox 158, `com.example.logintest`,
+    a test vault). emulator-5554 itself went down at about 13:23, not stopped
+    by this session.
+  - `disk-check.sh disk-check-user Disk-Check-Pass-7731 emulator-5556`, with the
+    vault locked and one pending save: `0 hits in 21 files`, exit 0. Same for
+    the master password and a recovery-key group. Positive controls planted in
+    `files/` (plain, UTF-16LE, Base64 at an offset) each hit, exit 1.
+  - Fresh install, Google as the autofill service, setup then Add: no save UI
+    in any session (`mSaveUiShownReason=0`, `mSaveInfoCount=-1`). That proves
+    little: the emulator has no Google account, and Android 15 still sent
+    Google a FillRequest (`FLAG_PASSWORD_INPUT_TYPE`) for the recovery-key group
+    field and tracked its 4 typed characters (flags in the verified facts).
+    Phone check added below.
+  - IDN on Android's ICU: passes (verified facts). Keystore bad tag:
+    `AEADBadTagException`. Lock mid-unlock: Enter and the screen lock sent
+    together; the unlock finished with `deviceLocked=1`, `pending.bin` stayed
+    untouched, `index.bin` was deleted (`refreshIndex` fails closed); the next
+    unlock applied the save (password 7731 → 7732), no lost save.
+  - U1: launched on a locked vault, the unlock screen shows the password form,
+    then the list after unlock. The 1-minute timing check couldn't run there
+    (Gboard drops into its hardware-keyboard toolbar after adb key events and
+    hides suggestions): phone check below.
+  - U4: Firefox fills the password on a plain http login page. The filter only
+    skips Firefox's own GONE chrome stubs (an A/B build logged them; no web
+    input is skipped). **The username field isn't detected** on that page with
+    or without U4 (datasets target only the password field): existing
+    behaviour, for the final review.
+  - Step 3: `pnpm test` exit 0 (204 pass), `pnpm typecheck` exit 0, Gradle
+    254 JVM tests / 0 failures + `:app:assembleDebug`. Release APK: no
+    `android.permission.INTERNET`; `dataExtractionRules=@xml/data_extraction_rules`,
+    and the rules XML is in the APK.
 
 **The owner's phone is attached over wifi adb.** Every adb/expo command must
-target the emulator explicitly (`-s emulator-5554`). The emulator still holds
-the debug app, a test vault, and a dev-server override to port 8082 (another
-session's Metro holds 8081).
+target the emulator explicitly (`-s emulator-5554`). After Task 12, emulator-5554's
+Strongroom has no vault (`pm clear`), its autofill service is Google and verbose
+autofill logging is on; the dev-server override to port 8082 is restored (another
+session's Metro holds 8081). To put Strongroom back: `adb -s emulator-5554 shell
+settings put secure autofill_service com.haroon.strongroom/expo.modules.strongroomvault.android.StrongroomAutofillService`.
 
 Debug runs use the AVD `apps-hub-test` (android-35 google_apis arm64):
 `~/Library/Android/sdk/emulator/emulator -avd apps-hub-test`. Gradle builds
 keep `ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`.
+
+## Task 12 Step 4: the owner's phone checklist (record each result here)
+
+Only with the owner's go-ahead: `pnpm release strongroom`, install from the
+Store (never `adb install`). Phone: Android 16, HyperOS.
+
+Settings → Checks:
+- Unlock time is 1–2 s. If not, change `KdfParams.DEFAULT` (m 32768–131072 KiB,
+  t 2–6, never below `KdfParams.FLOOR`), update the vectors note, release again.
+  The header stores the params, so an existing vault keeps working.
+- Chrome (and Firefox if installed) shows "Recognised".
+
+Fill, save and platform:
+- Chrome 131+ with "use another autofill service" on: fill on a site.
+  - **S1 (blocker):** a login form inside a cross-origin iframe gets no
+    top-page login. `StructureReader` gives each field its nearest ancestor's
+    `webDomain`, so Chrome must mark frame nodes with their own domain. If it
+    reports a domain only on the root, web fill in Chrome can't ship.
+  - S2: does Chrome set `webScheme`? (Without it, https logins never fill.)
+  - Does `webDomain` carry a port? (Firefox's doesn't, so an IP-address login
+    fills on any port of that IP.)
+  - A checkout-page card fill asks for the fingerprint even when unlocked.
+- First fill with a cold Strongroom process lands within Android's 5 s limit (release build).
+- `autofillSelected` right after the Store install (on the emulator it reads
+  false until an autofill session runs).
+- What `getInstallSourceInfo` reports for an APK sideloaded on HyperOS
+  (allowlist: Play, com.haroon.store, F-Droid, Xiaomi GetApps).
+- Gboard's inline suggestion cap: with more matching logins than the cap,
+  "Other logins" stays visible (reserved last slot).
+- B5: Deputy's tree dump of Strongroom's main screen with a password shown,
+  and of the unlock screen, is empty.
+- S6: the `FLAG_IMMUTABLE` authentication intents complete a fill.
+- S4: after Show and after typing the master password, the keyboard doesn't
+  suggest the password back.
+- S5: after Copy, the keyboard's clipboard history doesn't show the password.
+  If it does, say so in the copy toast.
+- U2: remove and re-add the screen lock, unlock Strongroom, and confirm locked
+  suggestions come back.
+- From Task 12 Step 2 (the emulator couldn't settle these):
+  - With Google as the autofill service and a signed-in Google account: setup
+    (or Settings → Change master password) and Add never offer "Save to
+    Google". Android 15+ sends Strongroom's password fields to the autofill
+    service despite the exclusion flags, and the emulator had no account.
+  - U1: auto-lock 1 minute, unlock, wait 40 s, open "Other logins" in an app
+    and cancel, wait 35 s more, open it again: it must ask for the master password.
+  - Firefox: on a normal login page, the username fills as well as the
+    password (on the emulator only the password filled).
+
+Then walk through DESIGN §13 together and record pass/fail for each line. No
+fixture apps exist for the §13 matching lines about a different-signature app
+(no suggestion, can't be linked) or a non-browser app's WebView: record those as
+JVM-only, covered by `MatchingTest` (`appNeedsPackageAndCert`,
+`webDomainFromNonBrowserIsIgnored`) and `LinkPromptTest`
+(`linkRefusedForSamePackageOtherCert`). Tell the owner the items in the next
+section. Afterwards the owner switches autofill and Chrome back to Google.
 
 ## Owner items to raise at the end of Phase 1 (from Task 1)
 
