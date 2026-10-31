@@ -1400,9 +1400,16 @@ AgentRuntime, the accessibility service, RunPanel).
   Privacy change to know: a run started from Deputy now reads (and, on an image
   model, screenshots) the app the owner left, not the launcher.
   Together with the mic button and question card below, this is the next build.
-  Exact next step: the owner says whether to commit and release it as 0.2.3;
-  then run the two new EVAL sections ("mic button and question answers", "the
-  owner's six failed runs") over wireless debugging.
+  **Done:** committed `e1469f6` (work, docs and version 0.2.3) on
+  `deputy-speed`, not pushed or merged. **Released Deputy 0.2.3, build 9**
+  (67.8 MB, "✔ deputy 9 published") to `apps-hub-store.haroonmukhtar4.workers.dev`,
+  again from a temporary copy of the committed `tools/release/src` (the working
+  tree's "delete the previous APK" step was not run; build 8's APK stays in the
+  bucket). **Installed through the Store** on 2026-10-31 12:55 by adb taps (owner's
+  request): Store → Deputy → Update → system "Update" → Play Protect "Scan app"
+  → HyperOS "Passed security tests"; `versionCode=9`, accessibility service still
+  on. Exact next step: run the two new EVAL sections ("mic button and question
+  answers", "the owner's six failed runs") over wireless debugging.
 - **2026-10-31, uncommitted on `deputy-speed`:** the Task group's Speak button is
   now a big round mic (`MicButton` in `apps/deputy/src/RunPanel.tsx`). Whatever
   the system speech dialog hears starts the run straight away, with no Run tap;
