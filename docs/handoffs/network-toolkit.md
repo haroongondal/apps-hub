@@ -124,13 +124,29 @@ land; at ~85% context, finalize and print a new resume prompt). Continue from
   (app wiring, migration; commits 9f800d1, b211270) and Task 8 (SPEC section
   3.6 and this handoff) landed after Tasks 1-6. Not merged, not pushed.
 
+- 2026-10-31: final whole-branch review (opus): ready to merge, no
+  Critical or Important findings. One fix wave applied its follow-ups
+  (commits 8dbaa3e..3835197): stale names dropped when a different hostname
+  answers at an IP, Android NSD resolves stopped on timeout, CDATA and
+  numeric references decoded in UPnP names, SQLite writes serialized, no
+  lookups for a dead scan, README rename. Full checks at head: `pnpm test`
+  228 pass / 0 fail, `pnpm typecheck` clean, netlens Gradle gate green.
+
 ## Current state + exact next step
 
-HomeNet plan Tasks 1-8 are done and committed on branch `homenet-names`
-(worktree `.claude/worktrees/homenet-names`, never pushed). Next: the final
-whole-branch review. After that the owner decides on merging. Merging to
-`main` auto-releases HomeNet and TunnelWall through the Store, so do not merge
-or push without the owner's go-ahead.
+HomeNet plan is complete on branch `homenet-names` (worktree
+`.claude/worktrees/homenet-names`, never pushed), reviewed and verified.
+Next: the owner decides whether to merge. Merging to `main` auto-releases
+HomeNet and TunnelWall through the Store, so do not merge or push without the
+owner's go-ahead.
+
+Open product decision for the owner: when a different machine takes over an
+IP, the row keeps the old custom name and trusted flag (identity is IP-based,
+FR-4, unchanged by this branch).
+
+Known follow-ups (not blocking): save-failure copy reuses "The scan didn't
+finish"; `\DDD` escapes decode per byte (UTF-8 names would garble, rare);
+pre-API-34 NSD resolves are not stopped on timeout.
 
 After the Store release, the owner checks on the phone:
 
@@ -139,4 +155,6 @@ After the Store release, the owner checks on the phone:
 3. Leaving the screen mid-scan doesn't crash.
 4. Scanning while TunnelWall is connected to a server shows no invented hosts.
 
-The firewall spike plan has not started.
+Then: the firewall spike plan
+(`docs/superpowers/plans/2026-10-31-tunnelwall-firewall-spike.md`), which has
+not started.
