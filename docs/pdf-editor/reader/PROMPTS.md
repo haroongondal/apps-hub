@@ -34,6 +34,8 @@ Rules that bite:
 - No dependency beyond SPEC §1.2, and only after the owner's approval is
   recorded in the handoff. Use the upgrading-dependencies skill.
 - android/ is a committed prebuild: edit it by hand, don't regenerate it.
+- Before a release, set expo.version in apps/pdf-editor-mobile/app.json above
+  the version already shipped (docs/pdf-editor/MERGE.md, "App version").
 - Never adb install on the owner's phone. The phone gets Store releases only;
   debug work uses the emulator.
 
@@ -102,7 +104,9 @@ offline article. There is no reader view yet.
      timeout, 4 at a time, and a size check after each download with deletion
      over the cap.
    - <CaptureHost/> in app/_layout.tsx (§4.3), behind the stack, with
-     show(true) for "Show page" and "Save now".
+     show(true) for "Show page" and "Save now". Deny WebView media capture
+     with the §4.3 react-native-webview patch, and set
+     mediaCapturePermissionGrantType="deny" on it for iOS.
    - app/save.tsx (§13): entry, progress, partial, saved, duplicate.
    - "Save a web page" in the Library "+" sheet.
    - The "Articles" filter entry and article rows (§7). A tap on an article says
@@ -110,8 +114,11 @@ offline article. There is no reader view yet.
 6. Share target (§14): the SEND text/plain intent filter in AndroidManifest.xml
    and rewriteShare in MainActivity.kt. Scan Phase 2 already changed that manifest
    (CAMERA, the tools:node="remove" entries, allowBackup="false") and set arm64
-   only; keep all of it. app/save.tsx reads the "text" and
-   "title" params through parseShared and starts at once.
+   only; keep all of it. rewriteShare writes pending-share.json with a fresh id
+   and opens pdfeditor://save?share=<id> (§14). app/save.tsx, in an effect keyed
+   on "share", reads and deletes that file and, only when its id equals share,
+   runs the text through parseShared and starts at once. It never reads text
+   from the URL.
 7. Verify (report ACTUAL outputs):
    pnpm test
    pnpm typecheck
@@ -126,6 +133,25 @@ offline article. There is no reader view yet.
    - Share a page from Chrome on the emulator. The Save screen opens, and the
      article is saved with its images.
    - pdfeditor://save routes to app/save.tsx (SPEC §14 assumption).
+   - Each of these opens the Save screen with no capture started and no item
+     created (one command per line):
+     adb shell "am start -a android.intent.action.VIEW -d 'pdfeditor://save?text=https://example.com&share=1'"
+     adb shell "am start -a android.intent.action.VIEW -d 'pdfeditor://save?text=https://example.com&sh%61re=1'"
+     adb shell "am start -a android.intent.action.VIEW -d 'pdfeditor://save?text=https%3A%2F%2Fexample.com%2526share%253D1'"
+   - With the Save screen showing Saved, a second share starts:
+     adb shell "am start -a android.intent.action.SEND -t text/plain -n com.haroon.pdfeditor/.MainActivity --es android.intent.extra.TEXT 'https://example.com/b'"
+   - A stale file starts nothing and is removed:
+     printf '%s' '{"id":"stale","text":"https://example.com"}' | adb shell "run-as com.haroon.pdfeditor sh -c 'cat > files/pending-share.json'"
+     adb shell "am start -a android.intent.action.VIEW -d 'pdfeditor://save?share=x'"
+     adb shell "run-as com.haroon.pdfeditor ls files" lists no pending-share.json.
+   - A share with # and & in its URL and % in its title starts a capture of that
+     exact URL with that exact title:
+     adb shell "am start -a android.intent.action.SEND -t text/plain -n com.haroon.pdfeditor/.MainActivity --es android.intent.extra.TEXT 'https://example.com/a?x=1&y=2#top' --es android.intent.extra.TITLE '100% done'"
+   - Share a page, press Home, run adb shell am kill com.haroon.pdfeditor, then
+     reopen from Recents and from the launcher icon: the Library opens and
+     nothing starts. Kill it again and share a new page: that page starts.
+   - With CAMERA granted, a captured page that calls
+     navigator.mediaDevices.getUserMedia({ video: true }) gets NotAllowedError.
    - The CaptureHost WebView loads and lays out while behind the stack. If it
      doesn't, use the §4.3 fallback and note it in the handoff.
    Record "HyperOS browser share (AC-2)" as an owner check after the Phase 2
@@ -172,8 +198,8 @@ adjustable view.
    apply() changes the computed font size. Progress messages carry the nonce.
 5. Emulator spike, recorded in the handoff's verified facts:
    - With chrome://inspect, confirm injectJavaScript runs under the CSP. If it
-     doesn't, implement the §8.4 re-render fallback, and note that Phase 5
-     highlighting must use it.
+     doesn't, implement the §8.4 re-render fallback, and note that Phase 2b and
+     Phase 5 highlighting must use it.
    - Confirm file:// images render with baseUrl.
    - Confirm a 10,000-word fixture paints in under 1 s.
 6. Verify (report ACTUAL outputs): the Phase 1 command list, unchanged.
@@ -334,11 +360,9 @@ notification.
 5. Verify (report ACTUAL outputs):
    the Phase 1 command list, but finish with
    cd apps/pdf-editor-mobile/android && ./gradlew :reader-speech:testDebugUnitTest :app:assembleDebug
-6. A release is optional here; background listening comes in Phase 6. If the
-   owner wants it:
-   pnpm release pdf-editor -m "Reader: listen to articles"
-   On the phone, the owner records the default engine and whether words
-   highlight.
+6. No release here (SPEC §18); background listening comes in Phase 6, on the
+   same branch. After the Phase 6 release, the owner records on the phone the
+   default engine and whether words highlight.
 ```
 
 ## Phase 6: Listen everywhere (FR-13, FR-14, FR-15; AC-12, AC-13, AC-14, AC-16)
@@ -381,6 +405,7 @@ reads PDFs and scans too.
    - AC-14: force-stop, then resume.
    - AC-16: a 12-page PDF.
    - NFR-6: 60 minutes.
+   - The default engine and whether words highlight (moved from Phase 5).
    Record the results in the handoff.
 ```
 

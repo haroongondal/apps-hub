@@ -19,7 +19,7 @@ questions), SPEC.md (design and contracts) and PROMPTS.md (one prompt per phase)
 
 - **Scan → PDF Editor.** The output of a scan is a PDF. The editor opens scans
   for markup, and PDF.js gives imported PDFs a search body. The only new runtime
-  permission is CAMERA. (Scan RESEARCH Q8, SPEC §5.)
+  permission is CAMERA. (Scan RESEARCH §8 and §10, SPEC §10.)
 - **Reader → PDF Editor.** It reuses the WebView, file system, sharing, the
   Library and PDF.js, which also gives read-aloud for PDFs. "Save as PDF" opens
   in the editor. It adds about 0.7 MB. (Reader RESEARCH, SPEC §11.)
@@ -103,7 +103,8 @@ Every question below was answered on 2026-10-31. Each feature's answers are unde
    `fflate` 0.8.3, `expo-print` ~15.0.8, `androidx.media` 1.7.0 and the sepia token.
 
 Answers that touch the whole app: Android backup is off (`allowBackup="false"`, Scan Q5), so
-scans and articles stay only on the phone.
+scans and articles stay only on the phone. The Design Editor's Android app turns backup off too
+(owner, 2026-10-31; `docs/handoffs/design-editor-media.md`).
 
 **B. Scan only** (`docs/pdf-editor/scan/PRD.md` §10): Kotlin edge detector, Tesseract with
 English fast from JitPack, editor saves become library items, backup off, English only in v1

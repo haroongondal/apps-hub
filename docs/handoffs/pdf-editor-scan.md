@@ -100,8 +100,8 @@ by the owner on 2026-10-31 (above).
   one may change on VACUUM; `items.id` (TEXT, unique) stays the public id.
 - **Per-feature migration tracks** (`library`, `scan`, `reader`) so Scan and Reader can add
   tables on parallel branches.
-- **Body text lives only in `items_fts`;** triggers keep titles and deletes in sync;
-  `setBody` sets the body.
+- **Body text lives only in `items_fts`;** a delete trigger keeps deletes in sync, Library
+  writes keep titles in sync (normalised), and `setBody` sets the body.
 - **No foreground service for OCR:** a queue in TS resumes pending pages at start-up.
 - **Permissions:** add CAMERA; remove RECORD_AUDIO, SYSTEM_ALERT_WINDOW and both storage
   permissions with `tools:node="remove"` (libraries merge them back otherwise).
@@ -135,7 +135,7 @@ In this repo or SDK (2026-10-30):
 - Vendored pdf-lib exports `setTextRenderingMode`, `TextRenderingMode.Invisible`,
   `setCharacterSqueeze` (Tz); `embedFont` writes CID = glyph id; StandardFonts are WinAnsi only.
 - The only emulator (`apps-hub-test`) is arm64-v8a, Android 35, on an Apple Silicon Mac.
-- `tools/release` takes `versionName` from `expo.version` in `app.json` (`main.ts:98`); the
+- `tools/release` takes `versionName` from `expo.version` in `app.json` (`main.ts:77`); the
   release APK lands at `android/app/build/outputs/apk/release/app-release.apk`.
 - SDK 54 pins `expo-clipboard` ~8.0.8 and `react-native-worklets` 0.5.1.
 - iOS: workspace `PDFEditor.xcworkspace`, scheme `PDFEditor`, `ios/PDFEditor/Info.plist`.
@@ -180,7 +180,7 @@ External (full list with URLs in RESEARCH):
   combined owner questions.
 - 2026-10-31 (session S0): the owner answered PRD Q1–Q8, the shared questions and the
   dependencies (see "Decisions made"). Docs updated for the scanner first, Arabic and Urdu
-  search in v1 and backup off. The docs went to `main` through a PR from branch
+  search in v1 and backup off. The docs go to `main` through a PR from branch
   `docs-offline-tools`.
 
 ## Current state + exact next step

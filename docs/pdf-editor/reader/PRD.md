@@ -104,6 +104,9 @@ Wants no telemetry and no accounts.
   - PDF Editor appears as a share target for text.
   - The app takes the last `http(s)` URL in the shared text and the shared
     title, opens the Save screen and starts at once.
+  - Only a real share starts at once. A `pdfeditor://save` link from a web page
+    or another app only opens the Save screen; nothing is fetched until the
+    owner taps Save (owner, 2026-10-31).
   - Works with Chrome and the HyperOS browser.
 - **FR-3: Clean extraction.**
   - The app loads the page, waits for it to settle, and keeps the article only.

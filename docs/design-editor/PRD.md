@@ -161,8 +161,8 @@ Numbers marked "assumed" in RESEARCH become firm once Phases 1 and 2 measure the
 - **NFR-6 (Compatibility):** Android 15+ (minSdk 35; the phone runs 16). The owner's Apple Silicon
   Mac. Inputs the phone's decoders handle: H.264, HEVC, VP9 video; anything else fails with a
   clear message.
-- **NFR-7 (Size):** the Android APK stays under 90 MB universal (PDF Editor is 83.4 MB; Media3
-  adds an assumed 3–5 MB).
+- **NFR-7 (Size):** the Android APK (arm64 only, Q8) stays under 90 MB (PDF Editor is 83.4 MB
+  universal; Media3 adds an assumed 3–5 MB).
 - **NFR-8 (Licences):** FOSS only. A GPL FFmpeg binary is never committed or given to anyone
   else; it stays gitignored on the owner's Mac.
 - **NFR-9 (UI):** `@apps-hub/ui` only, brand `design`; sentence case; errors say what happened
@@ -173,7 +173,8 @@ Numbers marked "assumed" in RESEARCH become firm once Phases 1 and 2 measure the
 1. **Originals are read-only.** No job opens an input for writing, and an output path is never an
    input path.
 2. **Write only where allowed.** Mac: only into folders and paths the user picked in a dialog.
-   Android: only the app's cache and its own `MediaStore` items.
+   Android: only the app's cache and its own `MediaStore` items. Plus the app's own private
+   state (Android `filesDir/`, Mac `userData/`), such as the queue, encoder stats and autosave.
 3. **Nothing above the target is delivered.**
 4. **No partial file is published.** Work goes to a temporary file that is renamed or published
    only after the job succeeds.

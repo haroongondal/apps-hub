@@ -87,8 +87,8 @@ contract in SPEC §4 exactly: names, schema, tracks, file layout and API.
    (src/editor/bridge.ts; packages/pdf-editor-engine/core.js and mobile.html; the desktop
    adapter stays without it), extend apps/pdf-editor-desktop/test/mobile.mjs to assert
    one docInfo, handle docInfo in app/editor.tsx (body, page count, thumb.jpg, size), add
-   the 28 MB size guard, and on save add the edited PDF as a new item before sharing,
-   unless the owner's answer to PRD Q4 in the handoff says share only.
+   the 28 MB size guard, and on save add the edited PDF as a new item before sharing
+   (owner, PRD Q4).
 4. Docs: packages/pdf-editor-engine/README.md (docInfo), apps/pdf-editor-mobile/CLAUDE.md
    (the library, src/library), AGENTS.md (the PDF Editor line mentions the library).
 5. Set expo.version to 1.1.0 in apps/pdf-editor-mobile/app.json.
@@ -252,9 +252,8 @@ We are executing Phase 4: Text recognition and a searchable PDF.
    failure continues, edits reset or keep text, body order).
 4. App: start runOcr after Library.open and after saves and retries; pause it while the
    capture screen is open; progress and "Try again" in app/scan/[id].tsx; "Copy text"
-   with expo-clipboard (pnpm --filter pdf-editor-mobile exec expo install
-   expo-clipboard) if the owner approved it, otherwise React Native's Share.share with
-   the text, labelled "Share text"; app/about.tsx
+   with expo-clipboard (approved; pnpm --filter pdf-editor-mobile exec expo install
+   expo-clipboard); app/about.tsx
    with the notices in SPEC §11 (the IJG sentence is required), linked from the Library.
 5. Spikes S5 (on the phone: seconds and PSS per page, standard vs OpenMP flavour, PSM 3
    vs 6, WER on the five-page set) and S6 (text selection in the editor, Chrome and

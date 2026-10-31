@@ -55,7 +55,8 @@ no media screens yet.
 2. apps/design-editor-mobile: Expo SDK 54 app copied in shape from apps/pdf-editor-mobile
    (expo-router, metro.config.js, eslint, lint/typecheck/doctor scripts), package
    com.haroon.designeditor, ThemeProvider brand="design", android.minSdkVersion=35,
-   reactNativeArchitectures=arm64-v8a (PRD Q8), blockedPermissions from SPEC §12.1. Draw one
+   reactNativeArchitectures=arm64-v8a (PRD Q8), blockedPermissions and allowBackup="false"
+   (manifest and app.json) from SPEC §12.1. Draw one
    new icon mark for both Design Editor apps as assets/icon.svg (SPEC §13.3; the Mac app has
    none) and render it with node tools/icons/render-icon.mjs. One tab only for now: "Media lab" (SPEC §13.2).
    Commit android/ after prebuild (repo convention). Depends on @apps-hub/media-core.
@@ -250,7 +251,8 @@ Read the prelude files, then SPEC §7.3, RESEARCH §13 and docs/app-store.md "iO
 We are executing Phase 6, only if the owner asks: the iOS side of design-editor-mobile. No
 installs on an iPhone without a paid Apple developer account; the simulator only.
 
-1. Add "ios" to app.json platforms; expo prebuild for iOS; commit ios/ (repo convention).
+1. Add "ios" to app.json platforms; npx expo prebuild --platform ios (leave the committed
+   android/ alone); commit ios/ (repo convention).
 2. modules/design-media/ios: the Swift functions and events of SPEC §7.3 with AVFoundation
    pipelines and BGContinuedProcessingTask for batches (iOS 26). The same media-core plans; the
    GIF encoder ported to Swift or ImageIO.

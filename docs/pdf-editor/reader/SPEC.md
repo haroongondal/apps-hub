@@ -24,7 +24,7 @@ Written 2026-10-30.
 | Native        | An Expo local module in `apps/pdf-editor-mobile/modules/*`. Kotlin now, Swift in Phase 8. Pure Kotlin core tested with Gradle JVM tests, following Deputy's layout (`apps/deputy/modules/deputy-agent`) |
 | PDF           | PDF.js 3.11.174 + pdf-lib 1.17.1 in `packages/pdf-editor-engine`                                                                                                                                              |
 
-### 1.2 New dependency proposals (need the owner's approval, PRD Q6)
+### 1.2 New dependency proposals (approved by the owner on 2026-10-31, PRD Q6)
 
 Licences were checked in each package's repo or tarball on 2026-10-30
 (R§3, R§5, R§7, R§8).
@@ -51,7 +51,8 @@ directory and never committed.
 - Media3: size (R§8.4).
 - Any consent-rule list: licences, and no need in v1 (R§3.4).
 
-**Size:** about +0.7 MB on the 82.9 MB universal APK (R§10, NFR-5).
+**Size:** about +0.7 MB, measured against the 82.9 MB universal APK (R§10,
+NFR-5); the app is arm64 only from Scan Phase 2.
 
 ## 2. Repository layout
 
@@ -377,7 +378,7 @@ nonce stays in a closure. The steps, in order:
    Ids are forbidden, so footnote links (`href="#fn1"`) lose their targets.
    The script unwraps those `<a>` elements, which keeps their text and avoids
    epubcheck RSC-012. Phase 1 can relax this to keep `id` with a per-article
-   prefix if footnotes matter on the eval sites.
+   prefix if footnotes matter in practice.
 8. **Clean the DOM.** Parse the string into
    `document.implementation.createHTMLDocument('')`, then:
    - remove comments;
@@ -431,6 +432,7 @@ There is one capture WebView for the whole app, rendered by `<CaptureHost/>` in
 | `injectedJavaScriptForMainFrameOnly`          | `true`                                                                                                     |
 | `onShouldStartLoadWithRequest`                | Allows only `http:` and `https:`. Refuses `intent:`, `market:`, `file:`, `content:` and `javascript:`.     |
 | `onRenderProcessGone`                         | Counts as a failed attempt                                                                                 |
+| `onPermissionRequest` (media capture)         | Denied. react-native-webview 13.15.0 grants the camera at once when the app holds CAMERA (`RNCWebChromeClient.onPermissionRequest`), and Scan Phase 2 grants it first. Phase 1 patches that method (`pnpm patch react-native-webview`, then `pnpm patch-commit <dir>`) to deny audio and video capture; no WebView in the workspace uses them. Phase 1 also sets `mediaCapturePermissionGrantType="deny"`, which iOS honours and Android ignores. |
 | `onMessage`                                   | Parses JSON, ignores anything without the nonce                                                            |
 
 **Placement:**
@@ -673,7 +675,8 @@ The output looks like this:
   works under this CSP (R§5.3). If it doesn't, a change rebuilds the page with
   `restoreBlock` set to the current block. That costs one render, about 1 s.
   Every other `__reader` call would need the same treatment, so Phase 2 must
-  settle this before Phase 5 relies on `highlight`.
+  settle this before Phase 2b (`setHighlights`, `clearSelection`) and Phase 5
+  (`highlight`) rely on it.
 
 ### 8.5 Highlights and notes (Phase 2b, FR-18)
 
@@ -1190,26 +1193,65 @@ second intent filter goes on `.MainActivity`, which is already `singleTask`:
 </intent-filter>
 ```
 
-**`MainActivity.kt`** turns a share into the deep link `pdfeditor://save`, which
-expo-router routes to `app/save.tsx` with the params `text` and `title`. That
-routing is assumed and is checked in Phase 1. The original intent is replaced,
-so React Native's `Linking` sees an ordinary `VIEW` URL.
+**`MainActivity.kt`** turns a share into the deep link `pdfeditor://save?share=<id>`,
+which expo-router routes to `app/save.tsx`. That routing is assumed and is
+checked in Phase 1. The original intent is replaced, so React Native's
+`Linking` sees an ordinary `VIEW` URL.
+
+`pdfeditor://` is also an exported, browsable `VIEW` filter, so any web page or
+app can open `pdfeditor://save`, and expo-router 6 decodes query values more
+than once, so nothing in that URL can be trusted. The share travels in an
+app-private file instead (owner, 2026-10-31):
+
+- `rewriteShare` writes `{ id, text, title }`, with `id` a random UUID, to
+  `filesDir/pending-share.json` (expo-file-system's `Paths.document`) through a
+  `.tmp` file and a rename, then opens `pdfeditor://save?share=<id>`. A share
+  without a title writes no `title` key. If the file can't be written (storage
+  full), the link carries no id and Save opens empty for a paste.
+- `app/save.tsx` runs an effect keyed on the `share` param. It reads the file,
+  deletes it, and starts at once only when the file's `id` equals `share`.
+  Otherwise it waits for Save. It never reads text from the URL.
+- Every share has a new id, so the param changes and the effect runs again even
+  while the Save screen is open. A forged link can't know the id, so neither a
+  pending nor a stale file starts from one.
+- Android re-delivers the original share when it rebuilds the activity after
+  the process died (`savedInstanceState` is set) or relaunches it from Recents
+  (`FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`). Neither is rewritten, so the Library
+  opens.
+- `onNewIntent` calls `setIntent`, so a share that arrives before React is
+  ready is the one `Linking` reads at start-up. If two shares land in that
+  window, the later one wins. Android also rebuilds the activity with that
+  intent, so a config change after a share (font size, split screen, language)
+  reopens an empty Save screen instead of the Library; nothing restarts.
 
 ```kotlin
+import android.content.Intent
+import android.net.Uri
+import java.io.File
+import java.util.UUID
+import org.json.JSONObject
+
 override fun onCreate(savedInstanceState: Bundle?) {
-  rewriteShare(intent)
+  if (savedInstanceState == null) rewriteShare(intent)
   SplashScreenManager.registerOnActivity(this)
   super.onCreate(null)
 }
-override fun onNewIntent(intent: Intent) { rewriteShare(intent); super.onNewIntent(intent) }
+override fun onNewIntent(intent: Intent) { rewriteShare(intent); setIntent(intent); super.onNewIntent(intent) }
+// The share travels in an app-private file under a fresh id; the URL carries only the id (§15).
 private fun rewriteShare(i: Intent?) {
   if (i?.action != Intent.ACTION_SEND || i.type != "text/plain") return
-  val text = i.getStringExtra(Intent.EXTRA_TEXT)?.take(8192) ?: return
-  val title = (i.getStringExtra(Intent.EXTRA_TITLE) ?: i.getStringExtra(Intent.EXTRA_SUBJECT))?.take(1000)
+  if ((i.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
+  val text = i.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.take(8192) ?: return
+  val title = (i.getCharSequenceExtra(Intent.EXTRA_TITLE) ?: i.getCharSequenceExtra(Intent.EXTRA_SUBJECT))?.toString()?.take(1000)
+  val id = UUID.randomUUID().toString()
+  val saved = runCatching {
+    val tmp = File(filesDir, "pending-share.json.tmp")
+    tmp.writeText(JSONObject().put("id", id).put("text", text).put("title", title).toString())
+    tmp.renameTo(File(filesDir, "pending-share.json"))
+  }.getOrDefault(false)
   i.action = Intent.ACTION_VIEW
   i.data = Uri.Builder().scheme("pdfeditor").authority("save")
-    .appendQueryParameter("text", text)
-    .apply { if (title != null) appendQueryParameter("title", title) }.build()
+    .apply { if (saved) appendQueryParameter("share", id) }.build()
 }
 ```
 
@@ -1239,8 +1281,10 @@ media-session notifications are exempt from `POST_NOTIFICATIONS` (R§8.4).
 | A saved page phones home (tracking pixels, remote CSS, fonts)  | Reader, exports    | CSP `default-src 'none'`, images only from `file:` and `data:`, remote `<img>` removed at capture, navigation cancelled (safety rule 2)                                                                  |
 | The capture page forges or alters the result                   | Capture            | Per-run nonce in a closure; `validateCaptureResult` limits; the result treated as untrusted and re-sanitised at render (safety rule 3)                                                                    |
 | The capture page navigates to `intent:` or `file:`, or opens windows | Capture      | `onShouldStartLoadWithRequest` allows `http(s)` only; `setSupportMultipleWindows={false}`; `allowFileAccess={false}`                                                                                     |
+| The capture page opens the camera (`getUserMedia`)             | Capture            | `onPermissionRequest` denies audio and video capture (patched react-native-webview on Android, `mediaCapturePermissionGrantType="deny"` on iOS; §4.3); RECORD_AUDIO is removed (Scan Phase 2) |
 | A crafted image URL reads local files into an export           | Images             | `http(s)` image URLs only; downloads go only into `library/<id>/img/`                                                                                                                                    |
 | A share or import carries `file:`, `content:` or `javascript:` | Input              | `isFetchableUrl` (safety rule 4); share text capped at 8 KB                                                                                                                                             |
+| A web page or another app opens `pdfeditor://save` to start a capture | Input       | The share travels only in `filesDir/pending-share.json` under a fresh UUID and the URL carries only that id; `app/save.tsx` deletes the file and starts only when its id equals `share`, and never reads text from the URL (§14) |
 | A huge page or image fills storage                             | Images, content    | NFR-4 caps, enforced after each download                                                                                                                                                                 |
 | A zip bomb on import                                           | Import             | 50 MB compressed, 200 MB uncompressed caps                                                                                                                                                              |
 | Article text sent to a cloud voice                             | TTS                | Explicit offline voice by default; network voices only by opt-in (safety rule 5)                                                                                                                         |
@@ -1357,7 +1401,8 @@ Each phase lists its own. They cover every unverified item in R§11:
 ## 18. Phases
 
 **Prerequisite for all of them:** Scan Phase 1 (Library) has landed
-(`docs/pdf-editor/scan/PROMPTS.md` Phase 1). The full prompts are in
+(`docs/pdf-editor/scan/PROMPTS.md` Phase 1). The owner's order (S0) also runs
+Scan Phases 2–4 first (`docs/build-sessions.md`). The full prompts are in
 `PROMPTS.md`.
 
 | Phase                         | Delivers                                                                                                                                                                                         | Requirements                       | Release?          |

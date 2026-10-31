@@ -80,6 +80,25 @@ Pocket, Instapaper and Matter at $5–$8/month.
   Reader passes raw text to `setBody` (SPEC §5.1).
 - **Android backup (Scan Q5):** off for the whole app, so articles stay only on
   the phone too.
+- **Share link: an app-private file plus a one-time id (owner, 2026-10-31,
+  after the docs PR review).** `rewriteShare` writes `{ id, text, title }` (a
+  random UUID, through `.tmp` and a rename) to `filesDir/pending-share.json` and
+  opens `pdfeditor://save?share=<id>`. `app/save.tsx` reads and deletes the file
+  in an effect keyed on `share` and starts only when the ids match; it never
+  reads text from the URL. It reads `EXTRA_TEXT` with `getCharSequenceExtra`,
+  skips a rebuilt activity or a relaunch from history, calls `setIntent` in
+  `onNewIntent`, and opens an empty Save screen if the file can't be written. Why: `pdfeditor://` is an exported browsable
+  filter and expo-router 6 decodes query values more than once, so a marker in
+  the URL can be forged, and a fixed URL would drop a second share while Save
+  is open. Changed: SPEC §14 and §15, PRD FR-2, PROMPTS Phase 1 steps 6 and 8,
+  RESEARCH §4.2.
+- **WebView camera and microphone: denied (owner, 2026-10-31, after the docs PR
+  review).** Phase 1 patches react-native-webview 13.15.0's
+  `RNCWebChromeClient.onPermissionRequest` (`pnpm patch`, then `pnpm
+  patch-commit`) and sets `mediaCapturePermissionGrantType="deny"` for iOS. Why:
+  the unpatched WebView grants the camera to any page once the app holds CAMERA,
+  which Scan Phase 2 grants first. Changed: SPEC §4.3 and §15, PROMPTS Phase 1
+  steps 5 and 8.
 
 The Reader agent made these calls on 2026-10-30 from research. The owner can
 override any of them.
@@ -162,10 +181,10 @@ Sources are in `docs/pdf-editor/reader/RESEARCH.md` §11. Don't redo these.
 | File | Contents |
 | ---- | -------- |
 | `docs/pdf-editor/reader/RESEARCH.md` | Sourced findings, a verdict per question, verified-vs-assumed marks |
-| `docs/pdf-editor/reader/PRD.md` | Vision, problem, decisions, FR-1–17, NFR-1–8, safety rules, AC-1–18, owner questions Q1–Q8 |
+| `docs/pdf-editor/reader/PRD.md` | Vision, problem, decisions, FR-1–18, NFR-1–8, safety rules, AC-1–21, owner questions Q1–Q8 |
 | `docs/pdf-editor/reader/SPEC.md` | Stack, dependency proposals (§1.2), layout, schema and migrations, capture pipeline, Library needs, URL rules, reader rendering and CSP, the TTS module contract (TS, Kotlin, Swift), EPUB and PDF, PDF and scan read-aloud, import, UI, manifest, security, testing, phases |
-| `docs/pdf-editor/reader/PROMPTS.md` | Prelude plus 8 phase prompts with verification commands |
-| `docs/pdf-editor/scan/` | Owned by the Scan feature (Library = Scan Phase 1); being written in parallel |
+| `docs/pdf-editor/reader/PROMPTS.md` | Prelude plus 9 phase prompts (1–8 and 2b) with verification commands |
+| `docs/pdf-editor/scan/` | Owned by the Scan feature (Library = Scan Phase 1) |
 
 **Code to create later:** `packages/reader-core`,
 `apps/pdf-editor-mobile/modules/reader-speech`, `app/save.tsx`,
@@ -210,7 +229,7 @@ Reconciled against the final Scan SPEC (§4.4–§4.7, §5.1). Reader SPEC §3.2
 - **2026-10-31 (session S0):** The owner answered PRD Q1–Q8, the shared questions
   and the dependencies (see "Decisions made"). Docs updated for highlights and
   notes (Phase 2b), the scanner-first order, import running and no site list.
-  The docs went to `main` through a PR from branch `docs-offline-tools`.
+  The docs go to `main` through a PR from branch `docs-offline-tools`.
 
 ## Current state + exact next step
 

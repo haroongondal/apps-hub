@@ -10,6 +10,10 @@ this repo. **Assumed** means a secondary source or our own inference. Keys in
 square brackets point to the sources list in §11. Every source was accessed on
 2026-10-30.
 
+The owner's answers of 2026-10-31 (session S0) supersede two verdicts here:
+highlights and notes are in v1 (Reader Phase 2b), and import (Phase 7) runs.
+See `docs/handoffs/pdf-editor-reader.md`.
+
 ---
 
 ## 1. Verdicts at a glance
@@ -179,7 +183,7 @@ URL into a field. Use canonical URLs for duplicates and refresh.
 
 | Option                                  | Facts                                                                                                                                                                                         | Verdict      |
 | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| Own intent filter + `MainActivity` rewrite | RN `Linking` only exposes `ACTION_VIEW` data [32] (verified). Rewriting `ACTION_SEND` to `ACTION_VIEW pdfeditor://save?url=…&title=…` before `super.onCreate`/`onNewIntent` lets expo-router route it. About 15 lines of Kotlin plus a manifest entry. | **Chosen**   |
+| Own intent filter + `MainActivity` rewrite | RN `Linking` only exposes `ACTION_VIEW` data [32] (verified). Rewriting `ACTION_SEND` to `ACTION_VIEW pdfeditor://save?share=<id>` before `super.onCreate`/`onNewIntent` lets expo-router route it; the text and title travel in an app-private file, not the URL (SPEC §14; owner, 2026-10-31). About 15 lines of Kotlin plus a manifest entry. | **Chosen**   |
 | expo-share-intent 5.1.1 (MIT)           | 5.x is the SDK 54 line; 9.0.0 targets SDK 58. Its plugin only adds `SEND` filters; it reads `EXTRA_TEXT` and `EXTRA_TITLE`. iOS needs a share extension [31] (verified).                     | Fallback     |
 | react-native-share-menu, react-native-receive-sharing-intent | Last published 2022-05 and 2021-05 [31] (verified).                                                                                                        | No           |
 

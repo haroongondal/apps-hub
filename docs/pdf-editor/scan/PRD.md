@@ -71,14 +71,14 @@ There is no secondary user. Sharing a library between people is out of scope (§
 | Platform order             | Android first; iOS last and optional (no paid Apple developer account)                                                        | Owner; AGENTS.md                         |
 | Distribution               | Private Store only (`pnpm release pdf-editor`); never Play, never `adb install` on the phone                                   | AGENTS.md; memory                        |
 | Camera                     | CameraX 1.6.2 inside our own Expo module                                                                                      | RESEARCH §4                              |
-| Edge detection and warp    | Pure Kotlin detector and filters; the platform's 4-point perspective warp. No OpenCV in v1                                    | RESEARCH §2; owner to confirm (Q1)       |
-| OCR                        | Tesseract4Android 4.9.0, English `tessdata_fast` in the APK, behind a port so the engine can change                            | RESEARCH §3; owner to confirm (Q2)       |
+| Edge detection and warp    | Pure Kotlin detector and filters; the platform's 4-point perspective warp. No OpenCV in v1                                    | RESEARCH §2; owner, 2026-10-31 (Q1)      |
+| OCR                        | Tesseract4Android 4.9.0, English `tessdata_fast` in the APK, behind a port so the engine can change                            | RESEARCH §3; owner, 2026-10-31 (Q2)      |
 | Excluded                   | ML Kit (text and document scanner), Google Play services, Firebase, vision-camera, expo-camera, any GPL model                 | RESEARCH §2–§4; AGENTS.md rule 5         |
 | Searchable PDF             | Written by a TypeScript writer outside the WebView: JPEG pages untouched plus an invisible text layer                          | RESEARCH §5                              |
-| ABIs                       | arm64-v8a only for the whole app (82.9 MB → about 32 MB before Scan)                                                          | RESEARCH §9; owner to confirm (Q3)       |
+| ABIs                       | arm64-v8a only for the whole app (82.9 MB → about 32 MB before Scan)                                                          | RESEARCH §9; owner, 2026-10-31 (Q3)      |
 | Permissions                | CAMERA added; RECORD_AUDIO, SYSTEM_ALERT_WINDOW, READ and WRITE_EXTERNAL_STORAGE removed                                       | RESEARCH §8                              |
 | Export                     | Through the system share sheet (covers Files, Drive, email, other apps)                                                       | RESEARCH §8                              |
-| Editor saves               | An edited PDF is saved to the Library as a new item, then the share sheet opens as today. The original is never changed       | This PRD; owner to confirm (Q4)          |
+| Editor saves               | An edited PDF is saved to the Library as a new item, then the share sheet opens as today. The original is never changed       | This PRD; owner, 2026-10-31 (Q4)         |
 
 ## 5. Scope and requirements
 
@@ -261,8 +261,8 @@ No telemetry: the owner measures these on the phone and records them in
 ## 8. Out of scope
 
 - Cloud sync, backup service, accounts, sharing a library between people.
-- Languages other than English in v1. The engine, storage and settings allow more later
-  (Q6). Next: Urdu and Arabic, downloaded from the Tesseract repository when the owner asks
+- OCR languages other than English in v1 (Arabic and Urdu search is in v1, FR-5). The
+  engine, storage and settings allow more later (Q6). Next: Urdu and Arabic, downloaded from the Tesseract repository when the owner asks
   (owner, 2026-10-31).
 - Handwriting recognition, tables to Excel, export to Word, fax, ID-card and QR modes.
 - Page-curve dewarping (book spines); multi-column reading order beyond what Tesseract does.

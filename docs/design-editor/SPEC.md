@@ -76,7 +76,7 @@ docs/design-editor/                      # RESEARCH, PRD, SPEC, PROMPTS
 `.gitignore` additions: `/apps/design-editor/vendor/ffmpeg/`, `/apps/design-editor-mobile/assets/editor/`,
 and the usual Android build paths for `apps/design-editor-mobile` (copy the NetLens block).
 
-## 3. Dependencies (proposals; each needs the owner's approval)
+## 3. Dependencies (approved by the owner on 2026-10-31)
 
 | Name | Version | Licence | Size impact | Why | Alternatives considered |
 | --- | --- | --- | --- | --- | --- |
@@ -88,7 +88,7 @@ and the usual Android build paths for `apps/design-editor-mobile` (copy the NetL
 | `expo-document-picker` | ~14.0.8 | MIT | already in the workspace (PDF Editor) | Pick video and audio without copying | Photo picker via the module (no audio) |
 | `react-native-webview` | 13.15.0 | MIT | already in the workspace | Canvas WebView; supports `<input type=file>` (verified, `RNCWebChromeClient.onShowFileChooser`) | none |
 | `expo-router`, `expo-asset`, `expo-file-system`, `expo-sharing`, `expo-haptics` etc. | as PDF Editor | MIT | already in the workspace | Same shell pattern as PDF Editor | n/a |
-| `expo-video` (optional, PRD Q7) | SDK 54 version | MIT | not measured | In-app clip preview | Thumbnail strip + system player (default) |
+| `expo-video` (not added, PRD Q7) | SDK 54 version | MIT | not measured | In-app clip preview | Thumbnail strip + system player (default) |
 
 No npm dependency is added to the Mac app. `media-core` has no runtime dependencies.
 
@@ -411,6 +411,10 @@ including location (PRD Q10).
 | GIF | `GifRunner` | `FrameExtractor` frames at `start + i / fps`, scaled to `width`; global palette (256 colours) from 8 evenly spaced frames; Bayer 4×4 dither; LZW per frame; streamed to the temp file. One frame in memory at a time. Fallback: `MediaMetadataRetriever.getScaledFrameAtTime(OPTION_CLOSEST)`. |
 | Convert | `CopyRunner` (remux when `canRemux`) or `TransformerRunner` | MP4 H.264/HEVC + AAC; audio-only `.m4a`. |
 
+Outputs carry no location metadata (PRD FR-10, Q10). `CopyRunner` never calls
+`MediaMuxer.setLocation`; Phase 4 must verify a `TransformerRunner` output made from a clip
+with location (`ffprobe -show_format` shows no `location` tag).
+
 Progress: `Transformer.getProgress(ProgressHolder)` polled every 500 ms on the service's Looper;
 copy and GIF runners report bytes or frames done.
 
@@ -524,6 +528,9 @@ Covered in §6.3: child processes, `powerSaveBlocker`, quit confirmation.
   `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`, `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`,
   `READ_MEDIA_AUDIO`, `CAMERA`, `SYSTEM_ALERT_WINDOW`, `VIBRATE` (as Deputy does for the ones it
   doesn't use).
+- **Backup:** off, `allowBackup="false"` in the manifest and `android.allowBackup: false` in
+  `app.json` (owner, 2026-10-31), as in Deputy and the Store, and in PDF Editor from Scan Phase 2
+  (Scan Q5).
 
 ### 12.2 Mac
 
@@ -631,7 +638,7 @@ type WebCommand =
 ## 15. Build, release and Store
 
 - `apps/design-editor-mobile/app.json`: name "Design Editor", slug `design-editor`, `android.package`
-  `com.haroon.designeditor`, `platforms: ["android"]` until Phase 6, `blockedPermissions` (§12.1).
+  `com.haroon.designeditor`, `platforms: ["android"]` until Phase 6, `blockedPermissions` and `android.allowBackup: false` (§12.1).
 - `android/gradle.properties`: `android.minSdkVersion=35`; `reactNativeArchitectures=arm64-v8a`
   (owner, PRD Q8, 2026-10-31).
 - `package.json` scripts: `prestart` and `prepare`-equivalent run

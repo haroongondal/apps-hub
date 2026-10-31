@@ -60,6 +60,10 @@ Owner answers, 2026-10-31 (session S0; shared answers are also in `docs/pdf-edit
   Mac; and the ones already in the repo (kotlinx-serialization-json 1.8.1,
   expo-document-picker ~14.0.8, react-native-webview 13.15.0, expo-router and the PDF
   Editor's other Expo modules). `expo-video` is not added (Q7).
+- **Android backup: off (owner, 2026-10-31, after the docs PR review).** `allowBackup="false"`
+  in `apps/design-editor-mobile`'s manifest and `app.json`, as in PDF Editor (Scan Q5). Why:
+  designs, the media queue and autosave stay on the phone. Changed: SPEC §12.1 and §15,
+  PROMPTS Phase 1 step 2.
 
 Research and docs session (Claude's recommendations, owner can override; PRD §10 lists the open
 questions):
@@ -70,7 +74,7 @@ questions):
 - **Mac engine: pinned static FFmpeg + FFprobe 9.0.2 (Martin Riedl build) from the main process;
   libx264 two-pass for target size, VideoToolbox otherwise.** Why: two-pass hits the bitrate
   within about 0.1% on the one published test vs about +20% for one pass; GPL is fine while the
-  binary stays on the owner's Mac (gitignored, never shared). Pending PRD Q2.
+  binary stays on the owner's Mac (gitignored, never shared). Approved (PRD Q2, S0).
 - **Target size = encode, measure, retry (≤ 3), never deliver above the target**, with margins
   0.90 (hardware) / 0.97 (x264), overhead 64 KiB + 1%, ladder floors hw-h264 0.05, hw-hevc 0.035,
   x264 0.04 bpp (assumed, tuned in Phase 1), and a per-encoder correction factor. Why: MediaTek
@@ -82,7 +86,7 @@ questions):
   audio, already in the workspace; expo-image-picker copies videos into the cache.
 - **Plain foreground service, not WorkManager.** Why: transcodes can't resume mid-file and an FGS
   can't start from the background anyway; Deputy's `RunService` pattern.
-- **Presets in decimal MB: Discord 20, Discord Nitro Basic 50, Email 18.** Why: Discord is 20 MB
+- **Presets in decimal MB: Discord 20, Discord Nitro Basic 50, Email 18, WhatsApp 16 (Q4).** Why: Discord is 20 MB
   since 2026-08-13; email base64 overhead (pending the Gmail check, PRD Q3).
 - **No new app name.** "SnapCompress" collides (snapcompress.io and others); the feature is
   "Media tools".
@@ -158,7 +162,7 @@ From sources (details and links in RESEARCH):
   Build session prompts for all three features are in `docs/build-sessions.md`.
 - **2026-10-31 (session S0).** The owner answered PRD Q1–Q10 and approved the dependencies
   (see "Decisions made"). Docs updated for the WhatsApp 16 MB preset, arm64 only and one new
-  icon for both apps. The docs went to `main` through a PR from branch `docs-offline-tools`.
+  icon for both apps. The docs go to `main` through a PR from branch `docs-offline-tools`.
 
 ## Current state + exact next step
 

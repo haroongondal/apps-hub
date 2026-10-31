@@ -24,13 +24,13 @@ Written 2026-10-30.
 - **Principle:** native code owns pixels (camera, detection, warp, filters, OCR); TypeScript
   owns records (library rows, page order, recognition queue, the PDF file). Only file paths,
   corner coordinates and recognised words cross the bridge.
-- **ABIs:** arm64-v8a only (`reactNativeArchitectures=arm64-v8a`), pending owner question Q3.
+- **ABIs:** arm64-v8a only (`reactNativeArchitectures=arm64-v8a`), the owner's answer to Q3 (2026-10-31).
 - **minSdk:** unchanged (the app's current 24); nothing below needs more. Tested on Android
   13+ (NFR-8).
 
 ## 2. Dependencies
 
-All are **proposals until the owner approves them** (PRD Q1–Q3; CLAUDE.md for this app).
+All were **approved by the owner on 2026-10-31** (session S0; PRD Q1–Q3; CLAUDE.md for this app).
 
 | Name                                                        | Version             | Licence (checked)                                                                 | Size impact (arm64)                     | Why                                                                         | Alternatives considered                                                                                                    |
 | ----------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -196,7 +196,7 @@ CREATE TABLE item_tags (
 CREATE INDEX item_tags_tag ON item_tags (tag_id);
 
 -- Body text lives only here (OCR text, extracted PDF text, article text), normalised (§4.3).
--- Library writes the row: createItem inserts (rid, normalizeForSearch(title), ''),
+-- Library writes the row: createItem inserts (rid, normalizeForSearch(title), normalizeForSearch(body ?? '')),
 -- updateItem rewrites title, setBody rewrites body. No insert or title trigger.
 CREATE VIRTUAL TABLE items_fts USING fts5(
   title, body,
@@ -247,8 +247,8 @@ export function ftsQuery(input: string): string | null;
   (verified: `'"parking"* "-"*'` matches like `'"parking"*'`).
 - Accents are ignored by the tokenizer (`"cafe"*` finds "café", verified).
 - **Arabic and Urdu normalisation, in v1 (owner, 2026-10-31).** `normalizeForSearch(text)`
-  runs on the query tokens in `ftsQuery`, on the body in `setBody` and on the title that
-  `createItem` and `updateItem` write to `items_fts`. In order: NFKC; strip harakat
+  runs on the query tokens in `ftsQuery`, on the body that `setBody` or `createItem` writes,
+  and on the title that `createItem` and `updateItem` write to `items_fts`. In order: NFKC; strip harakat
   U+064B–U+065F and U+0670, tatweel U+0640, ZWNJ U+200C and ZWJ U+200D; map ي (U+064A) → ی
   (U+06CC) and ك (U+0643) → ک (U+06A9). Latin text passes through unchanged apart from NFKC
   folding (ligatures such as "ﬁ", full-width forms). It is pure TS, so `node --test` covers it.
@@ -461,7 +461,7 @@ side (the schema is frozen otherwise):
 - **save** (unchanged share behaviour, plus): with an `itemId`, write the bytes to a new
   `library/<newId>/document.pdf`, `createItem({ kind: 'pdf', title: '<source title> (edited)',
   folderId: source folder, body: last docInfo text })`, then share as today. The source file
-  is never touched (PRD invariant 5). Subject to PRD Q4.
+  is never touched (PRD invariant 5). Approved by the owner (PRD Q4, 2026-10-31).
 - **Size guard:** opening any item whose PDF is over 28 MB asks first: "This PDF is 34 MB.
   The editor may not open files over about 28 MB." [Cancel] [Open anyway].
 
@@ -1022,7 +1022,7 @@ anywhere.
 - Release id `pdf-editor`, already registered in `tools/release/src/apps.ts` (with the
   `prepare` step that rebuilds the editor page). `pnpm release pdf-editor -m "…"` builds,
   signs and publishes; install on the phone from the Store only.
-- `versionName` comes from `expo.version` in `app.json` (`tools/release/src/main.ts:98`):
+- `versionName` comes from `expo.version` in `app.json` (`tools/release/src/main.ts:77`):
   1.1.0 for Library, 1.2.0 for capture, 1.3.0 for pages and PDF, 2.0.0 for recognition and
   the finished feature.
 - CI auto-releases changed Store apps on push to `main` (`docs/app-store.md`). Merge a
@@ -1044,7 +1044,7 @@ Store release the owner tests, and a handoff update.
 
 | Phase | Build                                                                                                                                                                                                                         | Exit criteria                                                                                                     |
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| 1     | **Library foundation:** `library-core` (§4), `library.db`, Library home, add sheet with "Open a PDF", folders, tags, search (with Arabic and Urdu normalisation), item sheet, start-up sweep, `docInfo` event, editor save to library                             | TS tests green; e2e green; AC-1, AC-2, AC-3 and AC-14 (with a PDF) on the phone; release 1.1.0. Reader can start. |
+| 1     | **Library foundation:** `library-core` (§4), `library.db`, Library home, add sheet with "Open a PDF", folders, tags, search (with Arabic and Urdu normalisation), item sheet, start-up sweep, `docInfo` event, editor save to library                             | TS tests green; e2e green; AC-1, AC-2, AC-3 and AC-14 (with a PDF) on the phone; release 1.1.0. Reader starts after Phase 4 (S0 order). |
 | 2     | **Camera and detection:** `pdf-scan` module (Android), `ScanCameraView`, `QuadDetector`, `QuadStabilizer`, permission flow, manifest clean-up, backup off, arm64 only, capture screen, session file; spikes S1–S4                        | JVM tests green; AC-4, AC-5, AC-12, AC-13 (size so far) on the phone; release 1.2.0                                  |
 | 3     | **Pages and PDF:** `importImage`, `processPage`, filters, review screen and crop editor, `scan-core` store, service and PDF writer (images only), scan view, Share PDF, Open in editor, Import photos, Add pages; spike S7     | TS and JVM tests green; AC-6, AC-7, AC-14 (with a scan), AC-15; release 1.3.0                                       |
 | 4     | **Text recognition and searchable PDF:** Tesseract4Android, the English asset, `recognize`, the queue, body → search, the text layer, Copy text, retry, About screen; spikes S5, S6                                          | AC-8, AC-9, AC-10, AC-11, AC-1 with scan text; release 2.0.0                                                       |
