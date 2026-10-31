@@ -277,7 +277,10 @@ JVM-only, covered by `MatchingTest` (`appNeedsPackageAndCert`,
 section. Afterwards the owner switches autofill and Chrome back to Google.
 
 Phone results (fill in as they come):
-- (none yet)
+- 2026-10-31: Strongroom 0.1.0 (versionCode 2) published to the Store with
+  `pnpm release strongroom`. Not yet installed: the owner was using the phone,
+  so no taps were sent. Install from the Store app (or hand the screen over and
+  the controller taps through it). The Store app itself wasn't re-released.
 
 ## Owner items to raise at the end of Phase 1 (from Task 1)
 
