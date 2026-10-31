@@ -2,7 +2,9 @@
 
 One block below = one new Claude Code chat. Open the chat in
 `/Users/outsentia/Documents/apps-hub`, paste the block, and nothing else. The
-session reads its own prelude and phase prompt from the docs.
+session reads its own prelude and phase prompt from the docs. These docs are on
+`main`, and that checkout may be on another branch that doesn't have them, so
+the session makes its worktree first (rule 1) and reads every doc from there.
 
 Plan: `docs/pdf-editor/MERGE.md`. Phase prompts: `docs/pdf-editor/scan/PROMPTS.md`,
 `docs/pdf-editor/reader/PROMPTS.md`, `docs/design-editor/PROMPTS.md`. Progress is kept
@@ -66,6 +68,11 @@ around the phase prompt.
    - a new branch: `git worktree add .claude/worktrees/<branch> -b <branch> origin/main`;
    - an existing branch: `git worktree add .claude/worktrees/<branch> <branch>`,
      or reuse that worktree if it is already there.
+
+   Do this before reading any doc. The main checkout can be on a branch without
+   these docs, so read this file, your handoff and the PROMPTS.md from the
+   worktree (if the paths aren't in the checkout yet, `git show origin/main:<path>`
+   gets you started).
 
    Work only in that worktree and run `pnpm install` there. Wherever the docs
    say "Project root: /Users/outsentia/Documents/apps-hub", read the worktree path.
