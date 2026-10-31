@@ -1,6 +1,6 @@
 # Network toolkit: HomeNet and TunnelWall
 
-Date: 2026-10-30. Status: draft, waiting for owner approval.
+Date: 2026-10-30. Status: approved by the owner on 2026-10-31.
 
 ## Two apps, split by what they look after
 
