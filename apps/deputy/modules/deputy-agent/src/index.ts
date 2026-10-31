@@ -6,7 +6,15 @@ export interface ServiceState {
   notificationsAllowed: boolean;
   batteryUnrestricted: boolean;
   keySet: boolean;
+  /** Optional: lets find_contact read numbers. */
+  contactsAllowed: boolean;
   runActive: boolean;
+}
+
+export interface ApiKey {
+  id: string;
+  /** The key's last four characters, so the owner can tell keys apart. */
+  ending: string;
 }
 
 export interface TreeDump {
@@ -31,7 +39,19 @@ export interface Gate {
 }
 
 export type RunEvent =
-  | { type: 'step'; runId: string; n: number; app: string; action: string; verdict: 'allow' | 'confirm' | 'deny' | 'none' | 'question'; result: string; costUsd: number }
+  | {
+      type: 'step';
+      runId: string;
+      n: number;
+      app: string;
+      action: string;
+      verdict: 'allow' | 'confirm' | 'deny' | 'none' | 'question';
+      result: string;
+      costUsd: number;
+      /** The model call that chose the step, and the action plus the wait for the screen to settle. 0 in older runs. */
+      modelMs: number;
+      actMs: number;
+    }
   | { type: 'gate'; runId: string; gate: Gate }
   | { type: 'finished'; runId: string; status: RunStatus; summary: string | null; costUsd: number };
 
@@ -52,10 +72,12 @@ export interface AppTrust {
   financial: boolean;
 }
 
-/** Prices are dollars per million tokens. With `customPrices` false they are Gemini Flash's published prices, which double in 2027. */
+/** Prices are dollars per million tokens. With `customPrices` false they are the known model's published prices. */
 export interface Settings {
   baseUrl: string;
   model: string;
+  /** The known model's name, or '' for one Deputy doesn't know. Read-only. */
+  knownModel: string;
   customPrices: boolean;
   inputPerM: number;
   cachedPerM: number;
@@ -64,6 +86,17 @@ export interface Settings {
   maxCostUsd: number;
   maxMinutes: number;
   dailyCostUsd: number;
+}
+
+/** A model whose prices Deputy knows. A model that can't read `images` works from the screen's text only. */
+export interface KnownModel {
+  name: string;
+  baseUrl: string;
+  model: string;
+  images: boolean;
+  inputPerM: number;
+  cachedPerM: number;
+  outputPerM: number;
 }
 
 export interface RunSummary {
@@ -104,14 +137,18 @@ interface DeputyAgentApi {
   /** Copy for the screen when the change isn't allowed, or null once saved. */
   setAppTrust(pkg: string, level: TrustLevel, typedConfirmation: string | null): Promise<string | null>;
   getSettings(): Settings;
-  /** Copy for the screen when a value isn't valid, or null once saved. A new address removes the saved key. */
+  knownModels(): KnownModel[];
+  /** Copy for the screen when a value isn't valid, or null once saved. Keys stay with the address they were saved for. */
   setSettings(settings: Settings): string | null;
   listSavedTasks(): SavedTask[];
   saveTask(task: Omit<SavedTask, 'id'> & { id: string | null }): { id: string | null; error: string | null };
   deleteTask(id: string): void;
-  setApiKey(key: string): void;
-  clearApiKey(): void;
-  testProvider(): Promise<{ ok: boolean; message: string }>;
+  /** The keys for the current address, in the order a run tries them; when one reaches its limit, the next takes over. */
+  listApiKeys(): ApiKey[];
+  /** Copy for the screen, or null once saved. */
+  addApiKey(key: string): string | null;
+  removeApiKey(id: string): void;
+  testProvider(keyId: string): Promise<{ ok: boolean; message: string }>;
   setPalette(json: string): void;
   listen(prompt: string): Promise<string | null>;
   /** Debug: waits so the owner can switch apps, then dumps the app in front. Never dumps Deputy's own screens. */

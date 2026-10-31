@@ -1,6 +1,9 @@
 package expo.modules.deputyagent.android
 
+import android.Manifest
 import android.accessibilityservice.AccessibilityService
+import android.app.AlarmManager
+import android.app.usage.StorageStatsManager
 import android.accessibilityservice.GestureDescription
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -9,9 +12,19 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Path
 import android.graphics.Rect
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
+import android.os.BatteryManager
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.os.storage.StorageManager
+import android.provider.AlarmClock
+import android.provider.ContactsContract.CommonDataKinds.Phone
+import android.provider.Settings
+import android.telephony.PhoneNumberUtils
+import android.telephony.TelephonyManager
 import android.util.Base64
 import android.view.Display
 import android.view.WindowManager
@@ -28,7 +41,12 @@ import expo.modules.deputyagent.core.DeviceRules
 import expo.modules.deputyagent.core.Direction
 import expo.modules.deputyagent.core.NodeRef
 import expo.modules.deputyagent.core.Screen
+import expo.modules.deputyagent.core.TrustLevel
 import java.io.ByteArrayOutputStream
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.coroutines.resume
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -90,10 +108,58 @@ class DeviceAdapter(private val context: Context) : Device {
   }
 
   override fun resolveApp(name: String): List<Pair<String, String>> =
-    launcherApps(context).filter { (pkg, label) -> pkg == name || label.contains(name, ignoreCase = true) }
+    launcherApps(context).filter { (pkg, label) -> DeviceRules.appMatches(name, pkg, label) }
 
-  override fun resolveLink(url: String): String? = context.packageManager
-    .resolveActivity(linkIntent(url), PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName?.takeIf { it != "android" }
+  override fun resolveLink(url: String): String? = handler(linkIntent(url))
+
+  override fun resolveClock(): String? = handler(Intent(AlarmClock.ACTION_SET_ALARM))
+
+  override fun resolveContacts(): String? = handler(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CONTACTS))
+
+  private fun handler(intent: Intent) = context.packageManager
+    .resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName?.takeIf { it != "android" }
+
+  override fun info(): String {
+    val gb = { bytes: Long -> "%.1f GB".format(Locale.ENGLISH, bytes / 1e9) }
+    val stats = context.getSystemService(StorageStatsManager::class.java)
+    val storage = runCatching { "${gb(stats.getFreeBytes(StorageManager.UUID_DEFAULT))} free of ${gb(stats.getTotalBytes(StorageManager.UUID_DEFAULT))}" }.getOrDefault("unknown")
+    val battery = context.getSystemService(BatteryManager::class.java)
+    val zone = ZoneId.systemDefault()
+    val time = DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm", Locale.ENGLISH).withZone(zone)
+    val next = context.getSystemService(AlarmManager::class.java).nextAlarmClock
+    val setter = next?.showIntent?.creatorPackage
+    val alarm = DeviceRules.nextAlarm(
+      next?.let { time.format(Instant.ofEpochMilli(it.triggerTime)) }, setter?.let(::label), setter != null && OwnerStore.trust(context).level(setter) == TrustLevel.BLOCKED,
+    )
+    val net = context.getSystemService(ConnectivityManager::class.java).let { it.getNetworkCapabilities(it.activeNetwork) }
+    return listOf(
+      "Android ${Build.VERSION.RELEASE} (build ${Build.DISPLAY}), ${Build.MANUFACTURER} ${Build.MODEL}",
+      "Battery ${battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)}%${if (battery.isCharging) ", charging" else ""}",
+      "Storage $storage",
+      "Next alarm $alarm",
+      "Network " + when {
+        net == null -> "offline"
+        net.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
+        net.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "mobile data"
+        else -> "connected"
+      },
+      "Time ${time.format(Instant.now())} ($zone)",
+    ).joinToString("\n")
+  }
+
+  override fun contacts(name: String): String {
+    if (context.checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+      return "Deputy may not read contacts. The owner can allow it in Deputy's Settings, under Setup."
+    }
+    // Numbers go out in international form, which open_chat needs; a local "0300…" gets the SIM's country code.
+    val country = context.getSystemService(TelephonyManager::class.java)?.let { it.simCountryIso.ifEmpty { it.networkCountryIso } }
+      .orEmpty().ifEmpty { Locale.getDefault().country }.uppercase()
+    val rows = context.contentResolver.query(
+      Phone.CONTENT_URI, arrayOf(Phone.DISPLAY_NAME, Phone.NUMBER), "${Phone.DISPLAY_NAME} LIKE ?", arrayOf("%$name%"), Phone.DISPLAY_NAME,
+    )?.use { c -> buildList { while (size < 40 && c.moveToNext()) add(c.getString(0).orEmpty() to c.getString(1).orEmpty()) } }.orEmpty()
+    val found = rows.map { (n, num) -> "$n: ${PhoneNumberUtils.formatNumberToE164(num, country) ?: num}" }.distinct().take(8)
+    return if (found.isEmpty()) "No contact matches $name." else found.joinToString("\n")
+  }
 
   override suspend fun perform(action: Action, target: NodeRef?): String {
     val s = awaitService()
@@ -109,6 +175,19 @@ class DeviceAdapter(private val context: Context) : Device {
       is Action.Press -> if (s.performGlobalAction(global(action.button))) "Pressed ${action.button.name.lowercase()}." else "The phone didn't press ${action.button.name.lowercase()}."
       is Action.Wait -> delay(action.seconds * 1_000L).let { "Waited ${action.seconds} s." }
       Action.Look -> "A screenshot comes with the next screen."
+      is Action.OpenSettings -> start(s, Intent(SETTINGS_PAGES.getValue(action.page)), "Opened ${action.page} settings.")
+      is Action.SetAlarm -> start(
+        s,
+        Intent(AlarmClock.ACTION_SET_ALARM).putExtra(AlarmClock.EXTRA_HOUR, action.hour).putExtra(AlarmClock.EXTRA_MINUTES, action.minute)
+          .putExtra(AlarmClock.EXTRA_SKIP_UI, true).putExtra(AlarmClock.EXTRA_MESSAGE, action.label),
+        "Asked the clock app to set the alarm.",
+      )
+      is Action.SetTimer -> start(
+        s,
+        Intent(AlarmClock.ACTION_SET_TIMER).putExtra(AlarmClock.EXTRA_LENGTH, action.seconds)
+          .putExtra(AlarmClock.EXTRA_SKIP_UI, true).putExtra(AlarmClock.EXTRA_MESSAGE, action.label),
+        "Asked the clock app to start the timer.",
+      )
     }
   }
 
@@ -126,12 +205,13 @@ class DeviceAdapter(private val context: Context) : Device {
 
   private suspend fun type(n: AccessibilityNodeInfo, a: Action.TypeText): String {
     if (n.isPassword) return "denied: Deputy never types into password fields."
+    // Replaces rather than appends: WhatsApp reports its empty box as the text "Message" (phone, 2026-10-30).
     val before = shownText(n)
-    val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, before + a.text) }
+    val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, a.text) }
     n.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
     delay(300)
     n.refresh()
-    if (a.text.isNotEmpty() && shownText(n) == before) return CANT_TYPE
+    if (a.text.isNotEmpty() && shownText(n) == before && before != a.text) return CANT_TYPE
     if (a.pressEnter && !n.performAction(AccessibilityAction.ACTION_IME_ENTER.id)) return "Typed, but the field has no Enter action. Tap its send or search button instead."
     return "Typed."
   }
@@ -238,11 +318,24 @@ private fun global(b: Button) = when (b) {
   Button.NOTIFICATIONS -> AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS
 }
 
+/** Keyed by `Tools.PAGES`. */
+private val SETTINGS_PAGES = mapOf(
+  "wifi" to Settings.ACTION_WIFI_SETTINGS, "bluetooth" to Settings.ACTION_BLUETOOTH_SETTINGS,
+  "internet" to Settings.Panel.ACTION_INTERNET_CONNECTIVITY, "airplane" to Settings.ACTION_AIRPLANE_MODE_SETTINGS,
+  "display" to Settings.ACTION_DISPLAY_SETTINGS, "sound" to Settings.ACTION_SOUND_SETTINGS, "volume" to Settings.Panel.ACTION_VOLUME,
+  "battery" to Intent.ACTION_POWER_USAGE_SUMMARY, "storage" to Settings.ACTION_INTERNAL_STORAGE_SETTINGS,
+  "apps" to Settings.ACTION_APPLICATION_SETTINGS, "location" to Settings.ACTION_LOCATION_SOURCE_SETTINGS,
+  "date" to Settings.ACTION_DATE_SETTINGS, "about" to Settings.ACTION_DEVICE_INFO_SETTINGS, "nfc" to Settings.ACTION_NFC_SETTINGS,
+)
+
 internal fun linkIntent(url: String): Intent {
   val uri = Uri.parse(url)
   return when (uri.scheme?.lowercase()) {
     "tel" -> Intent(Intent.ACTION_DIAL, uri)
-    "sms", "smsto", "mailto" -> Intent(Intent.ACTION_SENDTO, uri)
+    // The body goes in the extra every messaging app reads; left in the address, some apps take it as part of the number.
+    "sms", "smsto" -> Intent(Intent.ACTION_SENDTO, Uri.parse(url.substringBefore('?')))
+      .apply { url.substringAfter("?body=", "").takeIf { it.isNotEmpty() }?.let { putExtra("sms_body", Uri.decode(it)) } }
+    "mailto" -> Intent(Intent.ACTION_SENDTO, uri)
     else -> Intent(Intent.ACTION_VIEW, uri)
   }
 }
@@ -262,6 +355,7 @@ internal fun toRef(n: AccessibilityNodeInfo, depth: Int): NodeRef {
     password = n.isPassword,
     visible = n.isVisibleToUser,
     depth = depth,
+    checked = if (n.isCheckable) n.isChecked else null,
   )
 }
 

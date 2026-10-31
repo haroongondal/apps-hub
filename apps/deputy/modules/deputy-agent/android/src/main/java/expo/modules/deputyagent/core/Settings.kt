@@ -8,14 +8,24 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 
-/** FR-5 and FR-6: what the owner can change. `prices` stays null until the owner sets them, so Gemini 3.5 Flash-Lite's prices apply. */
+/** A model Deputy knows: its prices, whether it reads screenshots, and the thinking level that keeps its steps fast. */
+data class KnownModel(val name: String, val baseUrl: String, val model: String, val prices: Prices, val images: Boolean, val effort: String?)
+
+/** FR-5 and FR-6: what the owner can change. `prices` stays null until the owner sets them, so a known model's prices apply. */
 data class Settings(
   val baseUrl: String = GEMINI_URL,
   val model: String = GEMINI_MODEL,
   val prices: Prices? = null,
   val caps: Caps = Caps(),
 ) {
-  fun prices(now: Long) = prices ?: Prices.geminiFlashLite
+  val known get() = known(baseUrl, model)
+
+  /** An unknown model is assumed to read screenshots, as Deputy did before it knew any that can't. */
+  val images get() = known?.images ?: true
+
+  val effort get() = known?.effort
+
+  fun prices(now: Long) = prices ?: known?.prices ?: Prices.geminiFlashLite
 
   /** A key saved before Phase 3 has no address and was a Gemini key. */
   fun ownsKeySavedFor(url: String?) = (url ?: GEMINI_URL) == baseUrl
@@ -23,7 +33,7 @@ data class Settings(
   fun toMap(now: Long): Map<String, Any> {
     val p = prices(now)
     return mapOf(
-      "baseUrl" to baseUrl, "model" to model, "customPrices" to (prices != null),
+      "baseUrl" to baseUrl, "model" to model, "knownModel" to known?.name.orEmpty(), "customPrices" to (prices != null),
       "inputPerM" to p.inputPerM, "cachedPerM" to p.cachedPerM, "outputPerM" to p.outputPerM,
       "maxSteps" to caps.maxSteps, "maxCostUsd" to caps.maxCostUsd, "maxMinutes" to caps.maxMillis / 60_000, "dailyCostUsd" to caps.dailyCostUsd,
     )
@@ -36,6 +46,16 @@ data class Settings(
   companion object {
     const val GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
     const val GEMINI_MODEL = "gemini-3.5-flash-lite"
+    const val GROQ_URL = "https://api.groq.com/openai/v1/"
+
+    // Groq's model cards, 2026-10-29. GPT-OSS reads no images; "low" thinking keeps a step near a second.
+    val KNOWN = listOf(
+      KnownModel("Gemini 3.5 Flash-Lite", GEMINI_URL, GEMINI_MODEL, Prices.geminiFlashLite, images = true, effort = null),
+      KnownModel("GPT-OSS 120B on Groq", GROQ_URL, "openai/gpt-oss-120b", Prices(0.15, 0.075, 0.60), images = false, effort = "low"),
+      KnownModel("GPT-OSS 20B on Groq", GROQ_URL, "openai/gpt-oss-20b", Prices(0.075, 0.037, 0.30), images = false, effort = "low"),
+    )
+
+    fun known(baseUrl: String, model: String) = KNOWN.firstOrNull { it.baseUrl.trimEnd('/') == baseUrl.trimEnd('/') && it.model == model }
 
     fun fromMap(m: Map<String, Any?>): Settings {
       val url = (m["baseUrl"] as? String)?.trim().orEmpty()
@@ -44,8 +64,8 @@ data class Settings(
       }
       val model = (m["model"] as? String)?.trim().orEmpty()
       require(model.isNotEmpty() && model.length <= 100 && model.none(Char::isWhitespace)) { "Type the model's name, with no spaces." }
-      require(m["customPrices"] == true || (url == GEMINI_URL && model == GEMINI_MODEL)) {
-        "Enter this model's prices. Deputy only knows Gemini 3.5 Flash-Lite's, and the cost limits are counted with them."
+      require(m["customPrices"] == true || known(url, model) != null) {
+        "Enter this model's prices. Deputy only knows the prices of ${KNOWN.joinToString { it.name }}, and the cost limits are counted with them."
       }
       val prices = if (m["customPrices"] == true) {
         Prices(price(m, "inputPerM", "input", 0.001), price(m, "cachedPerM", "cached input", 0.0), price(m, "outputPerM", "output", 0.001))

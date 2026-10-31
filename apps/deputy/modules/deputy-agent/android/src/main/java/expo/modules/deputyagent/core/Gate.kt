@@ -68,3 +68,19 @@ class Gates(private val now: () -> Long) {
     const val TIMEOUT_MS = 5 * 60_000L
   }
 }
+
+object GateCopy {
+  // About two lines beside the buttons in the notification's collapsed row.
+  private const val ROW_MAX = 32
+
+  fun what(g: Gate) = "${g.action}${g.target?.let { " \"$it\"" }.orEmpty()} in ${g.app}"
+
+  /** Everything the owner approves: the step, the message it carries and the model's reason. */
+  fun full(g: Gate) = listOfNotNull(what(g), g.draftText?.let { "Text: $it" }, g.reason?.let { "Deputy says: $it" }).joinToString("\n")
+
+  /** The collapsed row's text, and whether it may offer Approve: only when all of it fits, so a cut message or link is never approved. */
+  fun row(g: Gate): Pair<String, Boolean> {
+    val text = what(g) + g.draftText?.let { ": \"$it\"" }.orEmpty()
+    return text to (text.length <= ROW_MAX)
+  }
+}

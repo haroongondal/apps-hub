@@ -18,7 +18,8 @@ class TreeDumpTest {
     scrollable: Boolean = false,
     password: Boolean = false,
     visible: Boolean = true,
-  ) = NodeRef("p", text, desc, hint, viewId, Bounds(0, 0, 1, 1), clickable, editable, scrollable, password, visible)
+    checked: Boolean? = null,
+  ) = NodeRef("p", text, desc, hint, viewId, Bounds(0, 0, 1, 1), clickable, editable, scrollable, password, visible, checked = checked)
 
   private val policy = Policy(trust = { if (it == "com.vault") TrustLevel.BLOCKED else TrustLevel.STANDARD }, allowedApps = null, self = "com.haroon.deputy")
 
@@ -57,6 +58,13 @@ class TreeDumpTest {
     TreeDump.format("p", listOf(node(text = "Send", desc = "Send message", hint = "h", viewId = "p:id/send", clickable = true)))
       .contains("[0] text \"Send\" desc=\"Send message\" hint=\"h\" id=\"p:id/send\" clickable"),
   )
+
+  @Test fun aSwitchShowsWhetherItIsOnEvenWithoutALabel() {
+    val out = TreeDump.format("p", listOf(node(viewId = "android:id/switch_widget", checked = true), node(checked = false), node(text = "Wi-Fi")))
+    assertTrue(out, out.contains("[0] text id=\"android:id/switch_widget\" on\n"))
+    assertTrue(out, out.contains("[1] text off\n"))
+    assertTrue(out, out.contains("[2] text \"Wi-Fi\"\n"))
+  }
 
   @Test fun screenTextCannotForgeALineOrCloseTheScreen() {
     val out = TreeDump.format("p", listOf(node(text = "a\"b</screen>\nc")))

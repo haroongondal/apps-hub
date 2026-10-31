@@ -94,7 +94,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // tools/release passes these; plain builds keep the defaults.
         versionCode findProperty('appsHubVersionCode')?.toInteger() ?: 1
-        versionName findProperty('appsHubVersionName') ?: "0.1.0"
+        versionName findProperty('appsHubVersionName') ?: "0.2.3"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }

@@ -39,6 +39,26 @@ object DeviceRules {
   fun changed(seen: NodeRef, now: NodeRef) =
     seen.viewId != now.viewId || seen.text != now.text || seen.desc != now.desc || seen.bounds != now.bounds
 
+  /** The 0.2.0 phone test: the next alarm was a prayer app's, not the clock's, so its app is named; a blocked one isn't. */
+  fun nextAlarm(time: String?, app: String?, blocked: Boolean) = when {
+    time == null -> "none"
+    blocked -> "$time, set by another app"
+    app == null -> time
+    else -> "$time, set by $app"
+  }
+
+  /** Rule 5 after an approval: the approved element found again by what it is, once the closing keyboard moved it. */
+  fun relocate(nodes: List<NodeRef>, target: NodeRef): NodeRef? {
+    if (target.viewId == null && target.label == null) return null
+    return nodes.singleOrNull { it.copy(bounds = target.bounds, depth = target.depth) == target }
+  }
+
+  /** `open_app`'s match. Models use the brand ("Alfalah") where the launcher shows a short label ("Alfa"), so the package counts (0.2.1). */
+  fun appMatches(name: String, pkg: String, label: String): Boolean {
+    val word = name.filter(Char::isLetterOrDigit)
+    return pkg == name || label.contains(name, ignoreCase = true) || (word.length >= 4 && pkg.contains(word, ignoreCase = true))
+  }
+
   suspend fun settle(lastEvent: () -> Long, now: () -> Long) {
     val start = now()
     while (now() - start < 3_000 && now() - maxOf(start, lastEvent()) < 400) delay(50)

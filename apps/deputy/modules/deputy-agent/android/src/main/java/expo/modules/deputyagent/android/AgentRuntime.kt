@@ -15,6 +15,7 @@ import expo.modules.deputyagent.core.Prompt
 import expo.modules.deputyagent.core.ProviderError
 import expo.modules.deputyagent.core.RunEvent
 import expo.modules.deputyagent.core.RunStore
+import expo.modules.deputyagent.core.TrustLevel
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -64,18 +65,20 @@ object AgentRuntime {
     val store = store!!
     val id = UUID.randomUUID().toString().take(8)
     val settings = OwnerStore.settings(app)
-    val key = checkNotNull(KeyVault.load(app, settings)) { "Add your API key first." }
+    val keys = KeyVault.load(app, settings)
+    check(keys.isNotEmpty()) { "Add your API key first." }
     val policy = Policy({ OwnerStore.trust(app).level(it) }, allowedApps, app.packageName)
     val loop = AgentLoop(
       id,
       DeviceAdapter(app),
-      OpenAiCompatProvider(settings.baseUrl, settings.model, key, null, OkHttpTransport::post),
+      OpenAiCompatProvider(settings.baseUrl, settings.model, keys, settings.effort, OkHttpTransport::post),
       gates,
       policy,
       Guard(settings.caps, settings.prices(System.currentTimeMillis()), System::currentTimeMillis, store.spentToday()),
       ObservationBuilder(policy, "Deputy"),
       Prompt.system(Build.VERSION.RELEASE, Locale.getDefault().toLanguageTag(), LocalDateTime.now().format(TIME)),
       ::emit,
+      settings.images,
     )
     synchronized(events) { events.clear() }
     runId = id
@@ -84,7 +87,8 @@ object AgentRuntime {
     StopChip.show(service)
     job = scope.launch {
       try {
-        loop.run(task)
+        // Off the JS thread: recall reads every kept run. The new run has no end line yet, so it is never recalled.
+        loop.run(task, store.recall(task, blockedLabels()))
       } finally {
         app.stopService(Intent(app, RunService::class.java))
         StopChip.hide()
@@ -95,15 +99,25 @@ object AgentRuntime {
     return id
   }
 
+  /** Steps log app labels, so the apps blocked now are named the way the log names them. */
+  private fun blockedLabels(): Set<String> = launcherApps(app).map { it.first }.filter { OwnerStore.trust(app).level(it) == TrustLevel.BLOCKED }
+    .mapNotNull { runCatching { app.packageManager.run { getApplicationLabel(getApplicationInfo(it, 0)).toString() } }.getOrNull() }.toSet()
+
   fun stop() {
     job?.cancel()
   }
 
   fun resolveGate(context: Context, gateId: String, approve: Boolean, text: String?): Boolean {
     val accepted = gates.resolve(gateId, approve, text)
-    if (accepted || gates.pending() == null) Notifier.clearGate(context)
+    if (accepted || gates.pending() == null) {
+      Notifier.clearGate(context)
+      StopChip.clearGate()
+    }
     return accepted
   }
+
+  /** The gate waiting now, so a rebound service can show its card again (overlays go with the old connection). */
+  fun pendingGate(): Gate? = gates.pending()
 
   fun snapshot(): Map<String, Any?> = mapOf(
     "runId" to runId,
@@ -112,11 +126,11 @@ object AgentRuntime {
     "gate" to gates.pending()?.let(::toMap),
   )
 
-  suspend fun testProvider(context: Context): Map<String, Any> {
+  suspend fun testProvider(context: Context, keyId: String): Map<String, Any> {
     val settings = OwnerStore.settings(context)
-    val key = KeyVault.load(context, settings) ?: return mapOf("ok" to false, "message" to "Add your API key first.")
+    val key = KeyVault.load(context, settings, keyId) ?: return mapOf("ok" to false, "message" to "That key isn't saved for this model's address.")
     return try {
-      OpenAiCompatProvider(settings.baseUrl, settings.model, key, null, OkHttpTransport::post).step(listOf(Msgs.user("Reply with the word OK.")), emptyList())
+      OpenAiCompatProvider(settings.baseUrl, settings.model, listOf(key), settings.effort, OkHttpTransport::post).step(listOf(Msgs.user("Reply with the word OK.")), emptyList())
       mapOf("ok" to true, "message" to "The model answered, so the key works.")
     } catch (e: ProviderError) {
       mapOf("ok" to false, "message" to e.message.orEmpty())
@@ -156,9 +170,13 @@ object AgentRuntime {
         Notifier.progress(app, "Step ${e.n}: ${e.action}")
         StopChip.step(e.n)
       }
-      is RunEvent.GateOpened -> Notifier.gate(app, e.gate)
+      is RunEvent.GateOpened -> {
+        Notifier.gate(app, e.gate)
+        DeputyAccessibilityService.instance?.let { StopChip.gate(it, e.gate) }
+      }
       is RunEvent.Finished -> {
         Notifier.clearGate(app)
+        StopChip.clearGate()
         Notifier.finished(app, e.summary ?: e.status.name.lowercase())
       }
     }
@@ -168,7 +186,7 @@ object AgentRuntime {
   fun toMap(e: RunEvent): Map<String, Any?> = when (e) {
     is RunEvent.Step -> mapOf(
       "type" to "step", "runId" to e.runId, "n" to e.n, "app" to e.app, "action" to e.action,
-      "verdict" to e.verdict, "result" to e.result, "costUsd" to e.costUsd,
+      "verdict" to e.verdict, "result" to e.result, "costUsd" to e.costUsd, "modelMs" to e.modelMs.toDouble(), "actMs" to e.actMs.toDouble(),
     )
     is RunEvent.GateOpened -> mapOf("type" to "gate", "runId" to e.gate.runId, "gate" to toMap(e.gate))
     is RunEvent.Finished -> mapOf("type" to "finished", "runId" to e.runId, "status" to e.status.name.lowercase(), "summary" to e.summary, "costUsd" to e.costUsd)

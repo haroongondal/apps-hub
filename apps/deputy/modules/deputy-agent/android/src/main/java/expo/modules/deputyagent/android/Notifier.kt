@@ -1,17 +1,24 @@
 package expo.modules.deputyagent.android
 
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.Person
 import android.app.RemoteInput
 import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.drawable.Icon
 import android.os.IBinder
+import android.view.View
+import android.widget.RemoteViews
+import expo.modules.deputyagent.R
 import expo.modules.deputyagent.core.Gate
+import expo.modules.deputyagent.core.GateCopy
 import expo.modules.deputyagent.core.GateKind
 
 object Notifier {
@@ -54,19 +61,36 @@ object Notifier {
       .setContentIntent(openApp(c))
       .setTimeoutAfter((g.expiresAt - System.currentTimeMillis()).coerceAtLeast(1))
     if (g.kind == GateKind.CONFIRM) {
-      val text = listOfNotNull(
-        "${g.action}${g.target?.let { " \"$it\"" }.orEmpty()} in ${g.app}",
-        g.draftText?.let { "Text: $it" },
-        g.reason?.let { "Deputy says: $it" },
-      ).joinToString("\n")
-      b.setContentTitle("Deputy needs your OK").setContentText(text).setStyle(Notification.BigTextStyle().bigText(text))
+      val text = GateCopy.full(g)
+      // HyperOS keeps the gate collapsed in the shade and shows actions only when expanded, so the collapsed row has its own buttons.
+      val (line, approvable) = GateCopy.row(g)
+      val row = RemoteViews(c.packageName, R.layout.deputy_gate).apply {
+        setTextViewText(R.id.gate_text, if (approvable) line else "Expand to read and approve: $line")
+        if (approvable) setOnClickPendingIntent(R.id.gate_approve, answer(c, 5, g.id, approve = true, row = true)) else setViewVisibility(R.id.gate_approve, View.GONE)
+        setOnClickPendingIntent(R.id.gate_deny, answer(c, 6, g.id, approve = false))
+      }
+      val full = RemoteViews(c.packageName, R.layout.deputy_gate).apply {
+        setTextViewText(R.id.gate_text, text)
+        setInt(R.id.gate_text, "setMaxLines", 12)
+        setViewVisibility(R.id.gate_approve, View.GONE)
+        setViewVisibility(R.id.gate_deny, View.GONE)
+      }
+      // A full-screen intent is meant to keep the heads-up until answered; HyperOS drops it after 1–3 s anyway (StopChip.gate).
+      b.setContentTitle("Deputy needs your OK").setContentText(text).setFullScreenIntent(openApp(c), true)
+        .setStyle(Notification.DecoratedCustomViewStyle()).setCustomContentView(row).setCustomBigContentView(full).setCustomHeadsUpContentView(full)
         .addAction(Notification.Action.Builder(null, "Approve", answer(c, 0, g.id, approve = true)).setAuthenticationRequired(true).build())
         .addAction(Notification.Action.Builder(null, "Deny", answer(c, 1, g.id, approve = false)).build())
     } else {
-      b.setContentTitle("Deputy has a question").setContentText(g.action).setStyle(Notification.BigTextStyle().bigText(g.action))
-      g.options.take(2).forEachIndexed { i, o -> b.addAction(Notification.Action.Builder(null, o, answer(c, 3 + i, g.id, approve = false, text = o)).build()) }
+      // HyperOS opened Deputy from a plain Answer action but types inline into WhatsApp's Reply, so this copies a chat message's shape.
+      val deputy = Person.Builder().setName("Deputy").build()
+      b.setContentTitle("Deputy has a question").setContentText(g.action).setCategory(Notification.CATEGORY_MESSAGE)
+        .setStyle(Notification.MessagingStyle(Person.Builder().setName("You").build()).setConversationTitle("Deputy has a question").addMessage(g.action, System.currentTimeMillis(), deputy))
       val input = RemoteInput.Builder(REPLY).setLabel("Your answer").build()
-      b.addAction(Notification.Action.Builder(null, "Answer", answer(c, 2, g.id, approve = false, mutable = true)).addRemoteInput(input).build())
+      b.addAction(
+        Notification.Action.Builder(Icon.createWithResource(c, ICON), "Answer", answer(c, 2, g.id, approve = false, mutable = true))
+          .addRemoteInput(input).setSemanticAction(Notification.Action.SEMANTIC_ACTION_REPLY).setAllowGeneratedReplies(false).build(),
+      )
+      g.options.take(2).forEachIndexed { i, o -> b.addAction(Notification.Action.Builder(null, o, answer(c, 3 + i, g.id, approve = false, text = o)).build()) }
     }
     nm(c).notify(GATE_ID, b.build())
   }
@@ -82,8 +106,11 @@ object Notifier {
     )
   }
 
-  private fun answer(c: Context, code: Int, gateId: String, approve: Boolean, text: String? = null, mutable: Boolean = false) =
-    receiver(c, code, Intent(GateReceiver.ANSWER).setIdentifier("$gateId/$code").putExtra("gate", gateId).putExtra("approve", approve).putExtra("text", text), mutable)
+  private fun answer(c: Context, code: Int, gateId: String, approve: Boolean, text: String? = null, mutable: Boolean = false, row: Boolean = false) = receiver(
+    c, code,
+    Intent(GateReceiver.ANSWER).setIdentifier("$gateId/$code").putExtra("gate", gateId).putExtra("approve", approve).putExtra("text", text).putExtra("row", row),
+    mutable,
+  )
 
   private fun receiver(c: Context, code: Int, intent: Intent, mutable: Boolean): PendingIntent = PendingIntent.getBroadcast(
     c,
@@ -103,8 +130,11 @@ class GateReceiver : BroadcastReceiver() {
       STOP -> AgentRuntime.stop()
       ANSWER -> {
         val gate = intent.getStringExtra("gate") ?: return
+        val approve = intent.getBooleanExtra("approve", false)
+        // The collapsed row's Approve can't ask for an unlock the way the action's does, so on a locked phone it does nothing.
+        if (approve && intent.getBooleanExtra("row", false) && context.getSystemService(KeyguardManager::class.java).isKeyguardLocked) return
         val reply = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(Notifier.REPLY)?.toString()
-        AgentRuntime.resolveGate(context, gate, intent.getBooleanExtra("approve", false), reply ?: intent.getStringExtra("text"))
+        AgentRuntime.resolveGate(context, gate, approve, reply ?: intent.getStringExtra("text"))
       }
     }
   }

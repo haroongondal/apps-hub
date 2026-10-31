@@ -61,6 +61,7 @@ class DeputyAgentModule : Module() {
         "notificationsAllowed" to context.getSystemService(NotificationManager::class.java).areNotificationsEnabled(),
         "batteryUnrestricted" to context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName),
         "keySet" to KeyVault.has(context, OwnerStore.settings(context)),
+        "contactsAllowed" to (context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) == android.content.pm.PackageManager.PERMISSION_GRANTED),
         "runActive" to AgentRuntime.active,
       )
     }
@@ -93,15 +94,24 @@ class DeputyAgentModule : Module() {
     AsyncFunction("setAppTrust") { pkg: String, level: String, typed: String? -> OwnerStore.setTrust(context, pkg, level, typed) }
 
     Function("getSettings") { OwnerStore.settings(context).toMap(System.currentTimeMillis()) }
+    Function("knownModels") {
+      expo.modules.deputyagent.core.Settings.KNOWN.map {
+        mapOf(
+          "name" to it.name, "baseUrl" to it.baseUrl, "model" to it.model, "images" to it.images,
+          "inputPerM" to it.prices.inputPerM, "cachedPerM" to it.prices.cachedPerM, "outputPerM" to it.prices.outputPerM,
+        )
+      }
+    }
     Function("setSettings") { input: Map<String, Any?> -> OwnerStore.saveSettings(context, input) }
 
     Function("listSavedTasks") { OwnerStore.tasks(context).map(OwnerStore::toMap) }
     Function("saveTask") { input: Map<String, Any?> -> OwnerStore.saveTask(context, input) }
     Function("deleteTask") { id: String -> OwnerStore.deleteTask(context, id) }
 
-    Function("setApiKey") { key: String -> KeyVault.save(context, key, OwnerStore.settings(context).baseUrl) }
-    Function("clearApiKey") { KeyVault.clear(context) }
-    AsyncFunction("testProvider") Coroutine { -> AgentRuntime.testProvider(context) }
+    Function("listApiKeys") { KeyVault.list(context, OwnerStore.settings(context)) }
+    Function("addApiKey") { key: String -> KeyVault.add(context, key, OwnerStore.settings(context)) }
+    Function("removeApiKey") { id: String -> KeyVault.remove(context, id) }
+    AsyncFunction("testProvider") Coroutine { keyId: String -> AgentRuntime.testProvider(context, keyId) }
 
     Function("setPalette") { json: String -> StopChip.setPalette(json) }
 
