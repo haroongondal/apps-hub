@@ -290,6 +290,31 @@ Phone results (fill in as they come):
   mid-install and came back on a new port (the serial in `adb devices` is the
   mDNS name `adb-49kjmnuwonkffqzh-zHnffO._adb-tls-connect._tcp`; always pin it
   with `-s`). The checklist items above are still to do.
+- 2026-10-31 ~15:45 phone time, first checks (controller driving over wireless
+  adb; the owner had already set up the vault, imported Google logins and
+  unlocked by fingerprint):
+  - Settings → Checks: **Chrome: Recognised** (Chrome 156.0.8078.47; no
+    Firefox installed). "Last unlock: Not timed yet" because only a
+    master-password unlock is timed (the owner unlocked by fingerprint), so
+    the 1–2 s check still needs a master-password unlock.
+  - Chrome's own setting "Autofill service provider" is already "Autofill
+    using another service" (Chrome → Settings → Autofill and passwords →
+    Autofill settings), and the phone's `autofill_service` is Strongroom.
+  - Added a throwaway login **`sg-test-lan`** (username `sg-test-user`, site
+    `http://192.168.18.242`) to the owner's vault for the fill test.
+    **DELETE IT when the tests end.** Test pages were served from the Mac
+    (`login.html`; `frame.html` with a cross-origin iframe on
+    `192-168-18-242.nip.io`), server stopped now; recreate from the scratchpad
+    or rewrite them (a username + password form, autocomplete attributes set).
+  - Chrome fill, first try: tapping the Username field on
+    `http://192.168.18.242/login.html` (landscape, Gboard) showed **no
+    Strongroom suggestion** after 3 s. Not diagnosed yet: next, verbose
+    autofill logging (`cmd autofill set log_level verbose`), retry in
+    portrait with a longer wait, and check whether the unlock/locked state or
+    the 5 s cold-start limit explains it.
+  - Wireless adb dropped twice (once mid-install, once here); the phone
+    answers ping but stops advertising. A reconnect needs Wireless debugging
+    toggled off/on.
 
 ## Owner items to raise at the end of Phase 1 (from Task 1)
 
