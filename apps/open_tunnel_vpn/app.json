@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "TunnelWall",
+    "name": "Firewall spike",
     "slug": "open_tunnel_vpn",
     "version": "1.2.1",
     "orientation": "portrait",
@@ -28,7 +28,7 @@
       }
     },
     "android": {
-      "package": "com.opentunnel.open_tunnel_vpn",
+      "package": "com.opentunnel.open_tunnel_vpn.spike",
       "adaptiveIcon": {
         "backgroundColor": "#0f2e1f",
         "foregroundImage": "./assets/android-icon-foreground.png"
