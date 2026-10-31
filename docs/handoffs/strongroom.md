@@ -315,6 +315,53 @@ Phone results (fill in as they come):
   - Wireless adb dropped twice (once mid-install, once here); the phone
     answers ping but stops advertising. A reconnect needs Wireless debugging
     toggled off/on.
+- 2026-10-31 ~16:00 phone time, second round (portrait; the phone's IP had
+  changed .209 → .94, which explains the drops; the test server now runs on the
+  Mac's loopback only (`python3 -m http.server 8080 --bind 127.0.0.1`) and the
+  phone reaches it through `adb -s <phone> reverse tcp:80 tcp:8080` as
+  `http://localhost/…`; the auto-mode classifier blocked serving it on the LAN):
+  - **Chrome fill works** (vault unlocked): `login.html` on `localhost`, tap
+    Username → inline suggestions "sg-test-user · localhost" and "Other
+    logins"; tapping the login filled the username and the 17-character
+    password. Chrome's `webDomain` carries no port and the page scheme matched
+    an `http://` login.
+  - **S1 PASS (the blocker):** with the login saved for `localhost` and a
+    cross-origin frame on `127.0.0.1`, the frame's fields got no suggestion; with
+    the login re-pointed to `127.0.0.1`, the frame's fields offered it (its own
+    origin) and the top page (`localhost`) offered nothing from it. So Chrome
+    marks frame nodes with their own domain and the top page's login never
+    enters the frame.
+  - **NEW BUG (open): no answer when no login matches.** On pages with no
+    matching login the strip shows nothing, not even "Other logins". The log
+    (`logcat`, verbose autofill) shows `finishing session due to service
+    timeout`: fill request sent 16:00:00.962, timed out 16:00:05.968
+    (`mLatencyFillResponseReceivedMillis=5026`). Matching cases answered in
+    time. `Presenter` is non-blocking and the wrapper in
+    `StrongroomAutofillService.onFillRequest` catches only `Exception`, so an
+    `Error` in the worker thread would look identical (thread dies, no
+    callback). Needs a device repro with timing logs (or a JVM test with a
+    vault of a few hundred logins and a non-matching requester): suspect
+    `Matching.matches` over all entries (the owner imported hundreds) when none
+    matches, or a first-use cost; also make the wrapper catch `Throwable`
+    and always call the callback.
+  - **Augmented autofill sessions on the real phone:** `dumpsys autofill`
+    request history shows repeated `aug:` sessions (Google's
+    `AiAiAugmentedAutofillService`, Android System Intelligence) on
+    `com.haroon.strongroom/.MainActivity` from 15:13 to 15:54 while the
+    owner and the controller used the app's own screens. Task 12 verdict 3
+    only reasoned about password-type fields; the Add form (name, username,
+    Show secrets, search) and revealed passwords (visible-password input) are
+    other fields. Decide whether to build the native secret field
+    (`getAutofillType() = AUTOFILL_TYPE_NONE`) plus
+    `importantForAutofill="noExcludeDescendants"` fixes before wider use.
+  - Still to do: S2 (does Chrome set `webScheme`: needs an https page, e.g.
+    save a login for `https://the-internet.herokuapp.com` and open its
+    `/login`), card fill asks for the fingerprint, save/update prompts, the
+    master-password unlock time ("Last unlock" still said "Not timed yet"
+    after the owner unlocked, perhaps by fingerprint), Deputy's view, S4/S5,
+    U1, U2. The throwaway `sg-test-lan` login is still in the vault (site now
+    `http://127.0.0.1`): **delete it at the end**. Verbose autofill logging is
+    on (`cmd autofill set log_level verbose`, resets on reboot).
 
 ## Owner items to raise at the end of Phase 1 (from Task 1)
 
