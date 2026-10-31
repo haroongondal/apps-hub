@@ -266,6 +266,7 @@ export default function ScannerScreen() {
             ssdpLocation: ssdpByIp.get(d.lastIp)?.location ?? null,
             mdnsName: mdnsByIp.get(d.lastIp) ?? null,
           }));
+        if (scanGeneration.current !== generation) return;
         void resolveDeviceNames(bindingProxy, nameTargets, info.gatewayIp, onNames);
       } finally {
         serviceHandle.remove();
