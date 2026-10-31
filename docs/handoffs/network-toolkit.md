@@ -132,29 +132,32 @@ land; at ~85% context, finalize and print a new resume prompt). Continue from
   lookups for a dead scan, README rename. Full checks at head: `pnpm test`
   228 pass / 0 fail, `pnpm typecheck` clean, netlens Gradle gate green.
 
+- 2026-10-31: HomeNet names and the rename merged to `main` and released (HomeNet build 7,
+  TunnelWall build 8). Firewall spike started in worktree `.claude/worktrees/firewall-spike`,
+  branch `firewall-spike` (never merged, never pushed). Spike Tasks 1 and 2 done on the
+  emulator; results and the integration rules are in
+  `docs/handoffs/firewall-spike-results.md` on that branch.
+
 ## Current state + exact next step
 
-HomeNet plan is complete on branch `homenet-names` (worktree
-`.claude/worktrees/homenet-names`, never pushed), reviewed and verified.
-Next: the owner decides whether to merge. Merging to `main` auto-releases
-HomeNet and TunnelWall through the Store, so do not merge or push without the
-owner's go-ahead.
+Spike plan: Tasks 1 and 2 done. Headline: firestack and WireGuard's Go runtimes crash if they
+share a process; running the firewall service in its own process (`android:process=":firewall"`)
+fixes it in both orders, so the full plan must use a separate firewall process. Size (+6.5 MB
+arm64), traffic, app attribution and per-app blocking all pass on the emulator.
 
-Open product decision for the owner: when a different machine takes over an
-IP, the row keeps the old custom name and trusted flag (identity is IP-based,
-FR-4, unchanged by this branch).
+Next, owner-dependent (Task 3, nothing started): release the spike through the Store as its own
+app (`com.opentunnel.open_tunnel_vpn.spike`, needs a `tools/release/src/apps.ts` entry and a
+`<queries>` package entry in the Store installer, then `pnpm release store` and
+`pnpm release tunnelwall-spike` from the spike worktree). The owner then installs it and checks
+UIDs on the phone's ROM, Private DNS modes, Always-on after a reboot, and runs two overnight
+battery tests (spike firewall on, then off). Then Task 4: verdict on `main`, clean up the Store
+entry, keep the branch.
 
-Known follow-ups (not blocking): save-failure copy reuses "The scan didn't
-finish"; `\DDD` escapes decode per byte (UTF-8 names would garble, rare);
-pre-API-34 NSD resolves are not stopped on timeout.
+Do not merge or push `firewall-spike`. Releasing anything from it is a publish to the owner's
+Store: ask first.
 
-After the Store release, the owner checks on the phone:
+Open product decision for the owner: when a different machine takes over an IP, the HomeNet row
+keeps the old custom name and trusted flag (identity is IP-based, FR-4).
 
-1. The existing device list is kept, with no false "New" badges.
-2. Most devices are named, and the detail sheet shows each source.
-3. Leaving the screen mid-scan doesn't crash.
-4. Scanning while TunnelWall is connected to a server shows no invented hosts.
-
-Then: the firewall spike plan
-(`docs/superpowers/plans/2026-10-31-tunnelwall-firewall-spike.md`), which has
-not started.
+Known HomeNet follow-ups (not blocking): save-failure copy reuses "The scan didn't finish";
+`\DDD` escapes decode per byte; pre-API-34 NSD resolves are not stopped on timeout.
