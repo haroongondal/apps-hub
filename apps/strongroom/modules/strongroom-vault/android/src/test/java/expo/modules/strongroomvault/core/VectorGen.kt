@@ -87,6 +87,8 @@ class VectorGen {
           "Each record seals the compact JSON of its entry (UTF-8, keys in the order shown) under vaultKey. " +
           "header is the exact Header JSON, with salt and both wraps as standard padded Base64 (the only non-hex bytes). " +
           "nfdPassword.masterKey is the Argon2id key of both its NFD and its NFC form, so a client must normalise to NFC first. " +
+          "urduPassword and emojiPassword were computed with argon2-cffi, not Strongroom's code; the Urdu one uses the Urdu keyboard's " +
+          "U+06CC, U+06A9 and U+06C1, which NFC never maps to the Arabic layout's U+064A, U+0643 and U+0647. " +
           "Passwords are written with \\u escapes so an editor cannot normalise them.",
       )
       putJsonObject("kdf") {
@@ -106,6 +108,15 @@ class VectorGen {
         put("nfd", nfd)
         put("nfc", nfc)
         put("masterKey", Crypto.argon2id(nfc.toCharArray(), salt, kdf).toHex())
+      }
+      // Literals from argon2-cffi, never recomputed here, so a regeneration can't make them agree with a bug in Crypto.
+      putJsonObject("urduPassword") {
+        put("text", "میرا خفیہ کوڈ 7731")
+        put("masterKey", "e3af5ebed29909671ba599cb82ad0ca36305b8e1c0200c41d5079694e287578e")
+      }
+      putJsonObject("emojiPassword") {
+        put("text", "🔐 vault 👨‍👩‍👧 👍🏽")
+        put("masterKey", "d54842323c37006d3badb50cd41e96e787dd2b51caff98c8bf9db90a68572658")
       }
       putJsonObject("recovery") {
         put("key", recoveryKey.toHex())

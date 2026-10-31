@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { COMMON_PASSWORDS } from '../common-passwords.ts';
-import { filterRows, pickGroupIndex, recoveryGroupMatches, validateMasterPassword } from '../forms.ts';
+import { filterRows, keyboardNotice, pickGroupIndex, recoveryGroupMatches, validateMasterPassword } from '../forms.ts';
 
 const TOO_SHORT = 'Use at least 12 characters.';
 const TOO_COMMON = 'That password is too common. Pick something only you would think of.';
@@ -61,6 +61,16 @@ test('filterRows matches name and username, case-insensitive', () => {
 test('filterRows with empty query returns all rows', () => {
   assert.deepEqual(filterRows(ROWS, ''), ROWS);
   assert.deepEqual(filterRows(ROWS, '  '), ROWS);
+});
+
+test('keyboardNotice warns about letters outside A-Z, without blocking', () => {
+  const warning = "This password uses letters outside A–Z. Type it with the same keyboard on every device, or Strongroom won't recognise it.";
+  assert.equal(keyboardNotice('x7Kq-m2Vw-p9Zt ~!@#$%^&*()'), null);
+  assert.equal(keyboardNotice(''), null);
+  for (const pw of ['میرا خفیہ کوڈ 7731', 'Crème brûlée 2026', 'vault \u{1F510} 2026']) {
+    assert.equal(keyboardNotice(pw), warning, pw);
+    assert.equal(same(pw), null, pw);
+  }
 });
 
 test('pickGroupIndex covers 0 to 7', () => {

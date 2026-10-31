@@ -212,6 +212,11 @@ class VaultFormatTest {
     assertEquals(nfd.text("nfc"), Normalizer.normalize(nfd.text("nfd"), Normalizer.Form.NFC))
     assertEquals("NFC form", nfd.text("masterKey"), Crypto.argon2id(nfd.text("nfc").toCharArray(), salt, kdf).toHex())
     assertEquals("NFD form", nfd.text("masterKey"), Crypto.argon2id(nfd.text("nfd").toCharArray(), salt, kdf).toHex())
+    for (name in listOf("urduPassword", "emojiPassword")) {
+      val p = v[name]!!.jsonObject
+      assertEquals("$name is NFC", p.text("text"), Normalizer.normalize(p.text("text"), Normalizer.Form.NFC))
+      assertEquals(name, p.text("masterKey"), Crypto.argon2id(p.text("text").toCharArray(), salt, kdf).toHex())
+    }
 
     val recovery = v["recovery"]!!.jsonObject
     val recoveryWrapKey = Crypto.hkdf(recovery.hex("key"), "strongroom/v1/wrap")

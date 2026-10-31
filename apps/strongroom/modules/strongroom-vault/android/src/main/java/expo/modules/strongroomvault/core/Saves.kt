@@ -23,8 +23,8 @@ object Saves {
     if (Matching.matches(login, r)) {
       login
     } else when (r) {
-      is Requester.Web -> login.copy(sites = login.sites + r.site)
-      // The prompt refuses this too; a caller that skipped it still can't give a package a second certificate.
+      // The prompt refuses these too; a caller that skipped it still can't add http beside https or give a package a second certificate.
+      is Requester.Web -> if (login.holdsHttpsSiteFor(r.site)) login else login.copy(sites = login.sites + r.site)
       is Requester.App -> if (login.holdsPackageWithOtherCert(r.id)) login else login.copy(apps = login.apps + AppLink(r.id, r.reportedDomain))
     }
 

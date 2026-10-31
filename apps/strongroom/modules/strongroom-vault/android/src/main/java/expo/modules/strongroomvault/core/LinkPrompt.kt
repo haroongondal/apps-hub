@@ -5,6 +5,7 @@ data class LinkPrompt(val pkg: String?, val domain: String?, val installedFromFi
   companion object {
     private const val SAME_PACKAGE_OTHER_CERT =
       "This app has the same name as the saved one but a different signature. It may be fake. Strongroom won't fill it."
+    private const val INSECURE_PAGE = "This page isn't secure (http). Strongroom won't fill a login saved for the secure site."
     private val STORES = setOf("com.android.vending", "com.haroon.store", "org.fdroid.fdroid", "com.xiaomi.mipicks", "com.xiaomi.market")
 
     // An allowlist, so an installer we don't know (an OEM package installer, a file manager) still shows the warning.
@@ -17,7 +18,12 @@ data class LinkPrompt(val pkg: String?, val domain: String?, val installedFromFi
         installedFromFile,
         SAME_PACKAGE_OTHER_CERT.takeIf { login.holdsPackageWithOtherCert(r.id) },
       )
-      is Requester.Web -> LinkPrompt(null, Matching.registrableDomain(r.site.host) ?: Matching.normalizeHost(r.site.host), false, null)
+      is Requester.Web -> LinkPrompt(
+        null,
+        Matching.registrableDomain(r.site.host) ?: Matching.normalizeHost(r.site.host),
+        false,
+        INSECURE_PAGE.takeIf { login.holdsHttpsSiteFor(r.site) },
+      )
     }
   }
 }

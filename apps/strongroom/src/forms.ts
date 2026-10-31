@@ -17,6 +17,10 @@ export function validateMasterPassword(pw: string, confirm: string): string | nu
   return pw === confirm ? null : MISMATCH;
 }
 
+// NFC can't unify keyboard variants (Urdu U+06CC vs Arabic U+064A), so the owner is warned, never blocked.
+export const keyboardNotice = (pw: string): string | null =>
+  /[^\x00-\x7f]/.test(pw) ? "This password uses letters outside A–Z. Type it with the same keyboard on every device, or Strongroom won't recognise it." : null;
+
 const squash = (s: string) => s.replace(/\s/g, '').toUpperCase();
 
 export function recoveryGroupMatches(formatted: string, groupIndex: number, typed: string): boolean {

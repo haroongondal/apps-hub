@@ -1,5 +1,5 @@
 {
-    "note": "Shared Strongroom vault test vectors (format v1, DESIGN section 6). Kotlin and TypeScript tests read this same file. Byte values are lowercase hex unless noted. masterKey = Argon2id(password as UTF-8 after NFC normalisation, salt, kdf, 32 bytes, version 0x13). wrapKey = HKDF-SHA-256(ikm = masterKey, no salt, info = UTF-8 'strongroom/v1/wrap', 32 bytes); loginToken is the same with info 'strongroom/v1/login'. recovery.wrapKey and recovery.loginToken use recovery.key as ikm with the same two labels (no Argon2). Every sealed value is nonce(12) || ciphertext || tag(16): AES-256-GCM under the stated nonce with AAD = UTF-8 of the aad field. passwordWrap seals vaultKey under wrapKey; recoveryWrap seals vaultKey under recovery.wrapKey. Each record seals the compact JSON of its entry (UTF-8, keys in the order shown) under vaultKey. header is the exact Header JSON, with salt and both wraps as standard padded Base64 (the only non-hex bytes). nfdPassword.masterKey is the Argon2id key of both its NFD and its NFC form, so a client must normalise to NFC first. Passwords are written with \\u escapes so an editor cannot normalise them.",
+    "note": "Shared Strongroom vault test vectors (format v1, DESIGN section 6). Kotlin and TypeScript tests read this same file. Byte values are lowercase hex unless noted. masterKey = Argon2id(password as UTF-8 after NFC normalisation, salt, kdf, 32 bytes, version 0x13). wrapKey = HKDF-SHA-256(ikm = masterKey, no salt, info = UTF-8 'strongroom/v1/wrap', 32 bytes); loginToken is the same with info 'strongroom/v1/login'. recovery.wrapKey and recovery.loginToken use recovery.key as ikm with the same two labels (no Argon2). Every sealed value is nonce(12) || ciphertext || tag(16): AES-256-GCM under the stated nonce with AAD = UTF-8 of the aad field. passwordWrap seals vaultKey under wrapKey; recoveryWrap seals vaultKey under recovery.wrapKey. Each record seals the compact JSON of its entry (UTF-8, keys in the order shown) under vaultKey. header is the exact Header JSON, with salt and both wraps as standard padded Base64 (the only non-hex bytes). nfdPassword.masterKey is the Argon2id key of both its NFD and its NFC form, so a client must normalise to NFC first. urduPassword and emojiPassword were computed with argon2-cffi, not Strongroom's code; the Urdu one uses the Urdu keyboard's U+06CC, U+06A9 and U+06C1, which NFC never maps to the Arabic layout's U+064A, U+0643 and U+0647. Passwords are written with \\u escapes so an editor cannot normalise them.",
     "kdf": {
         "memoryKiB": 1024,
         "iterations": 1,
@@ -17,6 +17,14 @@
         "nfd": "Cre\u0300me bru\u0302le\u0301e 2026",
         "nfc": "Cr\u00e8me br\u00fbl\u00e9e 2026",
         "masterKey": "776cd791ebb22338a7f4ce630eefefaab95916e95eae346d852d629cddd06b6a"
+    },
+    "urduPassword": {
+        "text": "میرا خفیہ کوڈ 7731",
+        "masterKey": "e3af5ebed29909671ba599cb82ad0ca36305b8e1c0200c41d5079694e287578e"
+    },
+    "emojiPassword": {
+        "text": "🔐 vault 👨‍👩‍👧 👍🏽",
+        "masterKey": "d54842323c37006d3badb50cd41e96e787dd2b51caff98c8bf9db90a68572658"
     },
     "recovery": {
         "key": "101112131415161718191a1b1c1d1e1f20212223",

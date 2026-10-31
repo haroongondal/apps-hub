@@ -1,7 +1,7 @@
 import React from 'react';
 import { Platform, View } from 'react-native';
-import { Button, Field, Text, radius, space, useTheme, type FieldProps } from '@apps-hub/ui';
-import { MISMATCH } from './forms.ts';
+import { Button, Field, Notice, Text, radius, space, useTheme, type FieldProps } from '@apps-hub/ui';
+import { MISMATCH, keyboardNotice } from './forms.ts';
 
 // Android 13 has no accessibility-sensitive flag on the window, so a shown secret hides itself from accessibility services.
 export const HIDE_FROM_ACCESSIBILITY = Platform.OS === 'android' && Platform.Version < 34 ? ({ importantForAccessibility: 'no-hide-descendants' } as const) : {};
@@ -23,6 +23,7 @@ export function SecretField({ shown, ...props }: FieldProps & { shown?: boolean 
 }
 
 export function NewPasswordFields(p: { password: string; confirm: string; onPassword: (v: string) => void; onConfirm: (v: string) => void; error: string | null; label?: string }) {
+  const notice = keyboardNotice(p.password);
   return (
     <>
       <SecretField
@@ -33,6 +34,7 @@ export function NewPasswordFields(p: { password: string; confirm: string; onPass
         error={p.error === MISMATCH ? null : p.error}
       />
       <SecretField label="Type it again" value={p.confirm} onChangeText={p.onConfirm} error={p.error === MISMATCH ? p.error : null} />
+      {notice && <Notice tone="warn">{notice}</Notice>}
     </>
   );
 }

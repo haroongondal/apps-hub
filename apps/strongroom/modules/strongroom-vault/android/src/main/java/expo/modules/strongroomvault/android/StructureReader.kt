@@ -18,6 +18,8 @@ internal object StructureReader {
     for (i in structure.windowNodeCount - 1 downTo 0) stack.addLast(Triple(structure.getWindowNodeAt(i).rootViewNode, null, null))
     while (stack.isNotEmpty()) {
       val (node, inheritedDomain, inheritedScheme) = stack.removeLast()
+      // A hidden field (or anything under a hidden view) is never detected or filled; a browser that misreports visibility gets no fill.
+      if (node.visibility != View.VISIBLE) continue
       val own = node.webDomain?.takeIf { it.isNotEmpty() }
       val domain = own ?: inheritedDomain
       val scheme = if (own != null) node.webScheme?.takeIf { it.isNotEmpty() } else inheritedScheme

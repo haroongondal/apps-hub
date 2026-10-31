@@ -128,6 +128,13 @@ class SavesTest {
     assertEquals(listOf(AppLink(appId, null), AppLink(AppId("com.other", "d".repeat(64)), null)), otherPackage.apps)
   }
 
+  @Test fun linkNeverAddsHttpBesideHttpsForTheSameDomain() {
+    val saved = Entry.Login("Mail", "me", "pw", listOf(Site(true, "example.com")), emptyList(), "", 1)
+    assertEquals(saved, Saves.link(saved, Requester.Web(Site(false, "example.com"))))
+    assertEquals(saved, Saves.link(saved, Requester.Web(Site(false, "login.example.com:8080"))))
+    assertEquals(listOf(Site(true, "example.com"), Site(false, "other.com")), Saves.link(saved, Requester.Web(Site(false, "other.com"))).sites)
+  }
+
   @Test fun httpSaveNeverUpdatesAnHttpsOnlyLogin() {
     val https = Entry.Login("Mail", "me", "orig", listOf(Site(true, "example.com")), emptyList(), "", 1)
     val id = vault.put(null, https)
@@ -146,8 +153,6 @@ class SavesTest {
     assertEquals(listOf(Site(true, "login.example.com")), linked.sites)
     assertEquals(linked, Saves.link(linked, site))
     assertEquals(linked, Saves.link(linked, Requester.Web(Site(true, "www.example.com"))))
-    val http = Saves.link(linked, Requester.Web(Site(false, "example.com")))
-    assertEquals(listOf(Site(true, "login.example.com"), Site(false, "example.com")), http.sites)
   }
 
   @Test fun saveFromNonBrowserPageDoesNotUpdateOtherSitesLogin() {

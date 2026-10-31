@@ -99,6 +99,10 @@ object Matching {
 internal fun Entry.Login.holdsPackageWithOtherCert(id: AppId): Boolean =
   apps.any { it.app.pkg == id.pkg && it.app.certSha256 != id.certSha256 }
 
+/** An http page this login would fill if it were https: filling or linking it would send the secure site's password over http. */
+internal fun Entry.Login.holdsHttpsSiteFor(site: Site): Boolean =
+  !site.https && Matching.matches(sites.filter { it.https }, emptyList(), Requester.Web(site.copy(https = true)))
+
 internal fun Requester.toJson(): JsonObject = buildJsonObject {
   when (this@toJson) {
     is Requester.App -> {

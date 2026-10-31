@@ -45,6 +45,17 @@ class LinkPromptTest {
     assertFalse(web.installedFromFile)
   }
 
+  @Test fun httpPageOfAnHttpsLoginIsRefused() {
+    val insecure = "This page isn't secure (http). Strongroom won't fill a login saved for the secure site."
+    for (host in listOf("bank.com", "www.bank.com", "bank.com:8080")) {
+      assertEquals(host, insecure, LinkPrompt.build(login, Requester.Web(Site(false, host)), false).refusal)
+    }
+    val router = login.copy(sites = listOf(Site(true, "192.168.1.1")))
+    assertEquals(insecure, LinkPrompt.build(router, Requester.Web(Site(false, "192.168.1.1")), false).refusal)
+    assertNull(LinkPrompt.build(login, Requester.Web(Site(false, "other.com")), false).refusal)
+    assertNull(LinkPrompt.build(router, Requester.Web(Site(false, "192.168.1.2")), false).refusal)
+  }
+
   @Test fun siteWithoutRegistrableDomainShowsTheHost() {
     assertEquals("192.168.1.1:8080", LinkPrompt.build(login, Requester.Web(Site(false, "192.168.1.1:8080")), false).domain)
   }

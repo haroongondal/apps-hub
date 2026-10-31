@@ -71,7 +71,8 @@ class UnlockActivity : AppCompatActivity() {
     start()
   }
 
-  private fun vault(): Vault = VaultHolder.get(this).also { VaultHolder.touch() }
+  // No touch here: the auth intent is reusable, so a relaunch nobody tapped must not keep the vault open (§6). Only the owner's taps touch.
+  private fun vault(): Vault = VaultHolder.get(this)
 
   private fun start() {
     screen(UNLOCK_TITLE, req.label)
@@ -183,6 +184,7 @@ class UnlockActivity : AppCompatActivity() {
 
   private fun pick(row: Row) {
     work({
+      VaultHolder.touch()
       val e = vault().get(row.id)
       val prompt = (e as? Entry.Login)?.takeIf { !Matching.matches(it, req.requester) }?.let { LinkPrompt.build(it, req.requester, installedFromFile()) }
       e to prompt
@@ -210,6 +212,7 @@ class UnlockActivity : AppCompatActivity() {
     button("Fill once", primary = true) { fill(login) }.filterTouchesWhenObscured = true
     button("Always use here") {
       work({
+        VaultHolder.touch()
         val linked = Saves.link(login, req.requester)
         vault().put(id, linked)
         VaultHolder.refreshIndex(this)
