@@ -42,18 +42,15 @@ data class AuthRequest(val mode: String, val entryId: String?, val requester: Re
 
 fun shouldServe(pkg: String, ownPkg: String): Boolean = pkg != ownPkg
 
-/** Answers a fill or save request exactly once: the fallback when work throws anything (an Error included), and nothing crashes if the system has already given up. */
-inline fun <T> answerOnce(fallback: T, work: () -> T, answer: (T) -> Unit) {
+/** Answers a fill or save request exactly once: the fallback when work throws anything (an Error included, handed to onError), and nothing crashes if the system has already given up. */
+fun <T> answerOnce(fallback: T, work: () -> T, onError: (Throwable) -> Unit, answer: (T) -> Unit) {
   val result = try {
     work()
   } catch (e: Throwable) {
+    runCatching { onError(e) } // a report that fails must not cost the answer
     fallback
   }
-  try {
-    answer(result)
-  } catch (e: Throwable) {
-    // the request timed out or its caller died; there is no one left to tell
-  }
+  runCatching { answer(result) } // throws when the request timed out or its caller died; there is no one left to tell
 }
 
 private fun Requester.hostsAreReadable(): Boolean = when (this) {

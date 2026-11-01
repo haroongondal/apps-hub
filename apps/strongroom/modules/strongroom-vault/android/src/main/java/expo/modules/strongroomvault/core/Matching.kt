@@ -60,12 +60,11 @@ object Matching {
     return Requester.App(id, domain?.let { registrableDomain(it) ?: normalizeHost(it) ?: return null })
   }
 
-  /** The one predicate: autofill, the match index and the unlock screen's re-check all go through it. */
   fun matches(sites: List<Site>, apps: List<AppLink>, r: Requester): Boolean = matcher(r)(sites, apps)
 
   fun matches(login: Entry.Login, r: Requester): Boolean = matches(login.sites, login.apps, r)
 
-  /** matches() for one requester over many logins: the requester's host is normalized and looked up once, not once per saved site. */
+  /** The one predicate: autofill, the match index and the unlock screen's re-check (through matches) all go through it. Build it once per request: the requester's host is normalized and looked up once, not once per saved site. */
   fun matcher(r: Requester): (sites: List<Site>, apps: List<AppLink>) -> Boolean = when (r) {
     is Requester.App -> { _, apps -> apps.any { it.app == r.id && it.domain == r.reportedDomain } }
     is Requester.Web -> webMatcher(r.site)

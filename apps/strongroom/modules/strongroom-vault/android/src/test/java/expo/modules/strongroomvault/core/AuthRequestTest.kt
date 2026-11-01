@@ -106,23 +106,31 @@ class AuthRequestTest {
   }
 
   @Test fun everyRequestIsAnsweredExactlyOnce() {
-    for ((work, expected) in listOf<Pair<() -> String?, String?>>(
-      { "filled" } to "filled",
-      { null } to null,
-      { throw IllegalStateException("locked") } to "fallback",
-      { throw StackOverflowError() } to "fallback",
-      { throw OutOfMemoryError() } to "fallback",
-      { throw ExceptionInInitializerError() } to "fallback",
-    )) {
+    for (result in listOf("filled", null)) {
       val answers = mutableListOf<String?>()
-      answerOnce("fallback", work) { answers += it }
-      assertEquals(listOf(expected), answers)
+      val errors = mutableListOf<Throwable>()
+      answerOnce("fallback", { result }, { errors += it }) { answers += it }
+      assertEquals(listOf(result), answers)
+      assertEquals(emptyList<Throwable>(), errors)
     }
+    for (thrown in listOf(IllegalStateException("locked"), StackOverflowError(), OutOfMemoryError(), ExceptionInInitializerError())) {
+      val answers = mutableListOf<String?>()
+      val errors = mutableListOf<Throwable>()
+      answerOnce("fallback", { throw thrown }, { errors += it }) { answers += it }
+      assertEquals(listOf("fallback"), answers)
+      assertEquals(listOf(thrown), errors)
+    }
+  }
+
+  @Test fun aFailingErrorReportStillAnswers() {
+    val answers = mutableListOf<String?>()
+    answerOnce("fallback", { throw IllegalStateException("locked") }, { throw OutOfMemoryError() }) { answers += it }
+    assertEquals(listOf("fallback"), answers)
   }
 
   @Test fun anAnswerTheSystemRefusesDoesNotCrash() {
     var tries = 0
-    answerOnce(null, { "late" }) {
+    answerOnce(null, { "late" }, { }) {
       tries++
       throw IllegalStateException("the system already timed this request out")
     }
