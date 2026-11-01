@@ -104,4 +104,28 @@ class AuthRequestTest {
     assertFalse(shouldServe("com.haroon.strongroom", "com.haroon.strongroom"))
     assertTrue(shouldServe("com.bank", "com.haroon.strongroom"))
   }
+
+  @Test fun everyRequestIsAnsweredExactlyOnce() {
+    for ((work, expected) in listOf<Pair<() -> String?, String?>>(
+      { "filled" } to "filled",
+      { null } to null,
+      { throw IllegalStateException("locked") } to "fallback",
+      { throw StackOverflowError() } to "fallback",
+      { throw OutOfMemoryError() } to "fallback",
+      { throw ExceptionInInitializerError() } to "fallback",
+    )) {
+      val answers = mutableListOf<String?>()
+      answerOnce("fallback", work) { answers += it }
+      assertEquals(listOf(expected), answers)
+    }
+  }
+
+  @Test fun anAnswerTheSystemRefusesDoesNotCrash() {
+    var tries = 0
+    answerOnce(null, { "late" }) {
+      tries++
+      throw IllegalStateException("the system already timed this request out")
+    }
+    assertEquals(1, tries)
+  }
 }

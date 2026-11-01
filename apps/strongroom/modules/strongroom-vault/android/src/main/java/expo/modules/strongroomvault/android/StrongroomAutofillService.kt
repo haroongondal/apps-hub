@@ -18,6 +18,7 @@ import expo.modules.strongroomvault.core.Matching
 import expo.modules.strongroomvault.core.PendingSave
 import expo.modules.strongroomvault.core.Requester
 import expo.modules.strongroomvault.core.Saves
+import expo.modules.strongroomvault.core.answerOnce
 import expo.modules.strongroomvault.core.shouldServe
 import expo.modules.strongroomvault.signerSha256
 import kotlin.concurrent.thread
@@ -32,12 +33,8 @@ class StrongroomAutofillService : AutofillService() {
     if (!shouldServe(structure.activityComponent.packageName, packageName)) return callback.onSuccess(null)
     // Off the main thread: the vault can be busy for seconds under an Argon2 unlock.
     thread(name = "strongroom-fill") {
-      val response = try {
-        respond(request, StructureReader.read(structure))
-      } catch (e: Exception) {
-        null // a missing PSL or anything unexpected from core fails closed: no fill
-      }
-      if (!cancellationSignal.isCanceled) callback.onSuccess(response)
+      // A missing PSL or anything unexpected from core fails closed: no fill, but still an answer, so the system never waits out its 5 s.
+      answerOnce(null, { respond(request, StructureReader.read(structure)) }, callback::onSuccess)
     }
   }
 
@@ -45,12 +42,7 @@ class StrongroomAutofillService : AutofillService() {
     val structure = request.fillContexts.last().structure
     if (!shouldServe(structure.activityComponent.packageName, packageName)) return callback.onSuccess()
     thread(name = "strongroom-save") {
-      val failure = try {
-        save(StructureReader.read(structure))
-      } catch (e: Exception) {
-        SAVE_FAILED
-      }
-      if (failure == null) callback.onSuccess() else callback.onFailure(failure)
+      answerOnce(SAVE_FAILED, { save(StructureReader.read(structure)) }) { failure -> if (failure == null) callback.onSuccess() else callback.onFailure(failure) }
     }
   }
 
@@ -73,7 +65,8 @@ class StrongroomAutofillService : AutofillService() {
     if (logins.isNotEmpty()) {
       val host = (requester as? Requester.Web)?.site?.takeIf(Matching::needsHostLabel)?.host
       if (entries != null) {
-        for (login in entries.values.filterIsInstance<Entry.Login>().filter { Matching.matches(it, requester) }.sortedBy { it.name.lowercase() }) {
+        val match = Matching.matcher(requester)
+        for (login in entries.values.filterIsInstance<Entry.Login>().filter { match(it.sites, it.apps) }.sortedBy { it.name.lowercase() }) {
           Datasets.filled(logins, login, present.of(login.username.ifEmpty { login.name }, host))?.let { response.addDataset(it); any = true }
         }
       } else {

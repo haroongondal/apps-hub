@@ -42,6 +42,20 @@ data class AuthRequest(val mode: String, val entryId: String?, val requester: Re
 
 fun shouldServe(pkg: String, ownPkg: String): Boolean = pkg != ownPkg
 
+/** Answers a fill or save request exactly once: the fallback when work throws anything (an Error included), and nothing crashes if the system has already given up. */
+inline fun <T> answerOnce(fallback: T, work: () -> T, answer: (T) -> Unit) {
+  val result = try {
+    work()
+  } catch (e: Throwable) {
+    fallback
+  }
+  try {
+    answer(result)
+  } catch (e: Throwable) {
+    // the request timed out or its caller died; there is no one left to tell
+  }
+}
+
 private fun Requester.hostsAreReadable(): Boolean = when (this) {
   is Requester.Web -> Matching.normalizeHost(site.host) != null
   is Requester.App -> reportedDomain == null || Matching.normalizeHost(reportedDomain) != null

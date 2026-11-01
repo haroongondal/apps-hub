@@ -8,8 +8,11 @@ object PublicSuffix {
 
   private val rules: Rules by lazy { load() }
 
+  internal var lookups = 0 // read by FillCostTest: a request costs one lookup per saved site plus one, not two per saved site
+
   /** The registrable domain of a normalized (lowercase, punycode) host; null for one label or a bare public suffix. */
   fun registrableDomain(asciiHost: String): String? {
+    lookups++
     val labels = asciiHost.split('.')
     if (labels.any { it.isEmpty() }) return null
     val n = labels.size
