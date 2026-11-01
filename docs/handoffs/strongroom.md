@@ -2,21 +2,22 @@
 
 ## Resume prompt
 
-Dated 2026-10-30 (second session). Work only in the worktree
+Dated 2026-11-01 (fourth session). Work only in the worktree
 `/Users/outsentia/Documents/apps-hub/.claude/worktrees/strongroom-phase-1`
 (branch `strongroom-phase-1`; enter it with EnterWorktree path). Read
 `docs/handoffs/strongroom.md` there completely first, then
 `docs/strongroom/DESIGN.md`, then the SDD ledger at
 `.superpowers/sdd/PHASE-1-PLAN/progress.md` (its rulings, carries and
-deferred minors bind later tasks), and continue executing
-`docs/strongroom/PHASE-1-PLAN.md` with superpowers:subagent-driven-development
-(implementer and task-reviewer templates, a review after every task, explicit
-models). Trust the decisions, verified facts and ledger and don't redo that
-work. Follow the handoff contract in `~/.claude/CLAUDE.md`. Read "Current state
-+ exact next step" before doing anything, then continue from it. Commit per
-task on the branch; never push, merge or release without the owner's word;
-phone installs only via the Store; debug runs on the emulator only, and the
-owner's phone is attached over adb, so always target `-s emulator-5554`.
+deferred minors bind the remaining work). The 12 plan tasks are done; what is
+left is the numbered list in "Current state + exact next step". Use
+superpowers:subagent-driven-development for code work (implementer and
+task-reviewer templates, a review after every change, explicit models) and
+ledger every ruling. Trust the decisions, verified facts and ledger and don't
+redo that work. Follow the handoff contract in `~/.claude/CLAUDE.md`. Commit on
+the branch; never push, merge or release (`pnpm release`) without the owner's
+explicit word in this chat; phone installs only via the Store; adb on the
+phone only for logcat, screenshots, taps and uiautomator dumps, always with
+`-s <phone serial>`; debug builds only on an emulator.
 
 ## Goal and fixed constraints
 
@@ -78,6 +79,41 @@ no password generator / CSV export / card saving in v1.
   and `include_all_autofill_type_not_none_views_in_assist_structure=true`, so the system opens
   autofill sessions for Strongroom's own password-type fields despite `importantForAutofill="no"`
   and the content view's `NO_EXCLUDE_DESCENDANTS` (seen in verbose autofill logs).
+- **Owner's phone:** Xiaomi 24116RACCG (`obsidian`), HyperOS 3.0 / Android 16,
+  Chrome 156, Gboard, no Firefox. adb serial is the mDNS name
+  `adb-49kjmnuwonkffqzh-zHnffO._adb-tls-connect._tcp`. Its Wi-Fi IP changes
+  (DHCP; .209 → .94 on 2026-10-31) and wireless adb then drops; `adb connect` to
+  the advertised ip:port can time out, so ask the owner to toggle Wireless
+  debugging and keep the screen on. FLAG_SECURE blacks out screenshots of
+  Strongroom; read its screens with `adb -s <serial> exec-out uiautomator dump
+  /dev/tty` and parse the XML (attribute order varies; parse each `<node>`
+  into a dict). The dump shows vault rows (names, usernames), so read only
+  what a check needs.
+- **Autofill debugging on the phone:** `cmd autofill set log_level verbose`
+  (resets on reboot), `logcat -c`, reproduce, then `logcat -d | grep -i
+  autofill`; `dumpsys autofill` shows the request history incl. `aug:`
+  (augmented) sessions.
+- **Test pages for Chrome:** the auto-mode classifier blocks serving on the LAN
+  (`0.0.0.0:80`). Serve on the Mac's loopback (`python3 -m http.server 8080
+  --bind 127.0.0.1` from a scratch dir) and tunnel with `adb -s <serial>
+  reverse tcp:80 tcp:8080`; the phone opens `http://localhost/…`, and
+  `http://127.0.0.1/…` works as a second origin for frame tests. Chrome's
+  `webDomain` has no port; frame fields carry the frame's own domain.
+- **Releases:** run `pnpm release strongroom` from this worktree (main's
+  `tools/release/src/apps.ts` has no `strongroom` entry). The classifier blocks
+  it as a production deploy unless the owner has said to release in the chat.
+  The release APK is 73.6 MB (four ABIs: `reactNativeArchitectures` in
+  `apps/strongroom/android/gradle.properties`, same in every app). The Store
+  downloads with a 15 s connect / 60 s read timeout
+  (`apps/store/modules/store-installer/.../Installer.kt:48-49`), and Play
+  Protect's "Scan app" prompt must be answered within ~17 s. A GET of the live
+  manifest with the release token returned 403 on 2026-10-31 (not explained).
+- **Emulators:** `emulator-5554` (`apps-hub-test`) is shared with another
+  session that drove it during Task 12; Strongroom has its own AVD
+  `strongroom-task12` (emulator-5556, same image).
+- **Sandbox:** compound shell commands that mix adb with variables, pipes into
+  other interpreters, or globbed URLs get refused as unverifiable; split them
+  into plain commands and quote URLs.
 
 ## File map
 
