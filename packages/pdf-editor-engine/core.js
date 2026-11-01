@@ -43,9 +43,13 @@ window.pdfEditorShell = function (main) {
       const text = [];
       let total = 0;
       for (const pg of snapshot) {
-        const content = await pg.pdfPage.getTextContent();
-        text.push(content.items.map(it => it.str + (it.hasEOL ? '\n' : '')).join(''));
-        total += text[text.length - 1].length;
+        let pageText = '';
+        try {
+          const content = await pg.pdfPage.getTextContent();
+          pageText = content.items.map(it => it.str + (it.hasEOL ? '\n' : '')).join('');
+        } catch (err) { console.warn('docInfo text failed on a page', err); }
+        text.push(pageText);
+        total += pageText.length;
         if (total >= 1000000) break;
       }
       let thumb;
