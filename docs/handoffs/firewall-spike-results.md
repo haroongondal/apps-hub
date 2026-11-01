@@ -86,3 +86,20 @@ is not on `main` yet.
 
 Always-on start after a reboot (which service class starts), Private DNS automatic and strict
 modes on the phone, and battery over two nights (firewall on, then off).
+
+## Build 3, Private DNS Automatic (owner's phone, 2026-11-01)
+
+Settings: Private DNS `opportunistic` (Automatic). Router 192.168.18.1 (no DoT).
+Browsed in Gmail and Play Store (Chrome is blocked by design in this build).
+
+- PASS: sites and Google apps load; `dns <name> status=1 via 192.168.18.1:53` lines present;
+  flows carry domains and verdict `Exit` (Gmail, Play, Dynamite, Google Play services).
+- Not exercised: the DoT rule. No `private dns: blocked` line, because Android sent no
+  DNS-over-TLS to the tun address. The router is the network DNS and sits in the LAN exclusion,
+  so opportunistic DoT never reached the firewall. Lookups went to the router on plain port 53,
+  which is what Android does when the network does not answer DoT.
+- Chrome flows show `Block` by design (the spike blocks Chrome).
+- Log limit: the Copy log view holds the last 200 lines, so the `started:` line was not in
+  the paste. logcat dropped the early spike lines (busy log buffer).
+
+Still to run: Private DNS strict (`dns.google`), Always-on after a reboot, two battery nights.
