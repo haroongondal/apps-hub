@@ -17,7 +17,11 @@ Current apps:
 - **pdf-editor** — offline PDF editor, moved in from `~/Documents/pdf-editor`
   on 2026-10-26: `apps/pdf-editor-desktop` (Electron), `apps/pdf-editor-mobile`
   (Expo + WebView), both booting the shared engine in
-  `packages/pdf-editor-engine` (`build.mjs` inlines it for mobile).
+  `packages/pdf-editor-engine` (`build.mjs` inlines it for mobile). The mobile
+  app's home screen is a searchable **Library** (folders, tags, full-text search,
+  Arabic and Urdu normalised) over one `library.db`: logic in
+  `packages/library-core`, app glue in `apps/pdf-editor-mobile/src/library`. Scan
+  and Reader build on it; specs `docs/pdf-editor/`, progress `docs/handoffs/pdf-editor-scan.md`.
 - **design-editor** (`apps/design-editor`) — offline Canva-style editor for the
   Mac (Electron), moved in from `~/Documents/design-editor` on 2026-10-26.
 - **deputy** (`apps/deputy`) — personal Android agent that carries out tasks by
