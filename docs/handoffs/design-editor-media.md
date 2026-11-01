@@ -65,6 +65,11 @@ Owner answers, 2026-10-31 (session S0; shared answers are also in `docs/pdf-edit
   designs, the media queue and autosave stay on the phone. Changed: SPEC §12.1 and §15,
   PROMPTS Phase 1 step 2.
 
+Owner, 2026-11-01 (session B1 start):
+- **No Store release for this app in Phase 1.** The Store sees every installed app through
+  `QUERY_ALL_PACKAGES` (PR #5, merged 2026-11-01), so Phase 1 step 7's `pnpm release store` and any
+  `<queries>` edit are skipped. Step 5's `tools/release/src/apps.ts` entry still applies.
+
 Research and docs session (Claude's recommendations, owner can override; PRD §10 lists the open
 questions):
 - **Android engine: Media3 Transformer 1.11.1 + `MediaExtractor`/`MediaMuxer` + a Kotlin GIF
@@ -163,11 +168,17 @@ From sources (details and links in RESEARCH):
 - **2026-10-31 (session S0).** The owner answered PRD Q1–Q10 and approved the dependencies
   (see "Decisions made"). Docs updated for the WhatsApp 16 MB preset, arm64 only and one new
   icon for both apps. The docs go to `main` through a PR from branch `docs-offline-tools`.
+- **2026-11-01 (session B1, Phase 1 start).** Worktree `design-media-phase-1` from `origin/main`
+  (03d1c7f); `pnpm install` in the worktree: 1050 packages added, exit 0. Owner correction: no Store
+  release for this app (see "Decisions made"). Branch tracks `origin/main` by default, so set its
+  upstream before any push. Stopped before step 7 (needs the Redmi Note 14 Pro 4G and the five test
+  clips).
 
 ## Current state + exact next step
 
-- State: docs written; nothing scaffolded; branch `deputy-speed` has unrelated uncommitted Deputy
-  work, so start this work on its own branch from `main`.
+- State (2026-11-01): the S0 docs are on `main` (PR #1 merged). Session B1 runs on branch
+  `design-media-phase-1` in worktree `.claude/worktrees/design-media-phase-1`, from `origin/main`
+  (03d1c7f). Phase 1 steps 1–6 are in progress; step 7 (the phone encoder spike) waits for the owner.
 - **Unmerged Design Editor work exists (found 2026-10-31).** Branch `design-editor-phase-2`
   (2026-10-28, handoff `docs/handoffs/design-editor-phase-2.md` on that branch) adds multi-page
   designs (file format v2), bundled fonts and real PDF text. It is e2e green and waits for the
@@ -176,6 +187,6 @@ From sources (details and links in RESEARCH):
   extraction) must start after that branch is merged, and Phase 3 must extract the multi-page
   editor. Use `design-media-phase-<n>` branch names to avoid the clash.
 - **Owner answers recorded** (S0, 2026-10-31; see "Decisions made").
-- **Next step:** once the S0 docs PR (branch `docs-offline-tools`) is merged, run session B1
-  (Phase 1) on branch `design-media-phase-1`, and B0 (ship the multi-page branch) whenever the
-  owner is ready. B0 and B1 must both be merged before B2.
+- **Next step:** finish Phase 1 steps 1–6 (session B1) on branch `design-media-phase-1`, then stop
+  before step 7. B0 (ship the multi-page branch) whenever the owner is ready. B0 and B1 must both be
+  merged before B2.
