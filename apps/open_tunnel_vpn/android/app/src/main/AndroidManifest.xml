@@ -46,6 +46,21 @@
         </intent-filter>
     </service>
 
+    <!-- Firewall: its own process, because firestack's and WireGuard's Go runtimes crash each other in one. -->
+    <service
+        android:name=".firewall.FirewallService"
+        android:process=":firewall"
+        android:permission="android.permission.BIND_VPN_SERVICE"
+        android:exported="false"
+        android:foregroundServiceType="specialUse">
+        <property
+            android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+            android:value="Firewall" />
+        <intent-filter>
+            <action android:name="android.net.VpnService" />
+        </intent-filter>
+    </service>
+
     <!-- ics-openvpn (OpenVPN engine): run in the app process, drop its remote-control API. -->
     <service android:name="de.blinkt.openvpn.core.OpenVPNService" tools:remove="android:process"/>
     <service android:name="de.blinkt.openvpn.core.OpenVPNStatusService" tools:remove="android:process"/>
