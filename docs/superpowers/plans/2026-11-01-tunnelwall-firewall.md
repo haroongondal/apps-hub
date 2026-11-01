@@ -135,7 +135,7 @@ class LogRetentionTest {
 
 **Interfaces:**
 - Consumes: `FirewallStore`, `FirewallDecision`, `FirewallNetworks`, UID resolver (Task 5).
-- Produces: `class FirewallEngine(service: VpnService, store: FirewallStore) { fun start(tunFd: ParcelFileDescriptor, systemDns: String): Boolean; fun stop(); }`. Inside it, the `Bridge` implementation (`bind4`, `bind6`, `protect`, `preflow`, `flow`, `onQuery`, `onResponse`) and the DNS rules, ported from the spike with the 7 integration rules from the spec.
+- Produces: `class FirewallEngine(service: VpnService, store: FirewallStore) { fun start(tunFd: ParcelFileDescriptor, systemDns: String): Boolean; fun stop(); }`. On reload, for each UID whose rule changed, it closes that UID's open flows when `FirewallDecision.shouldCloseOpen(newRule, onCellular)` is true (Review Focus 3). Inside it, the `Bridge` implementation (`bind4`, `bind6`, `protect`, `preflow`, `flow`, `onQuery`, `onResponse`) and the DNS rules, ported from the spike with the 7 integration rules from the spec.
 
 - [ ] **Step 1: No JVM test possible** (firestack is an AAR the JVM test classpath doesn't load). The check is the on-phone acceptance in Task 13. Note this in the commit message.
 
@@ -170,7 +170,7 @@ class LogRetentionTest {
 
 **Interfaces:**
 - Consumes: `FirewallStore.readState` (Task 2).
-- Produces: `object FirewallHandover { fun canStartEngine(running: String?, nowMs: Long, startedAtMs: Long, timeoutMs: Long): Boolean; fun shouldRestartAfterEngine(enabled: String?): Boolean }`. Rule: the engine may start when `running` is `"false"`, or when `running` is absent; while `running` is `"true"` it waits up to `timeoutMs` (3000) and then the engine start fails with a typed error `FIREWALL_HELD_SLOT` that the UI shows as "The firewall didn't stop in time; try again". Hmm — spec says server connection must never fail because the firewall held the slot. So: on timeout, the controller force-stops the firewall service and then starts the engine. Make `canStartEngine` return false only while the wait is inside the timeout; after the timeout the controller calls `stopService` and starts the engine anyway. Test that.
+- Produces: `object FirewallHandover { fun canStartEngine(running: String?, nowMs: Long, startedAtMs: Long, timeoutMs: Long): Boolean; fun shouldRestartAfterEngine(enabled: String?): Boolean }`. Rule: `running` is `"true"` while the firewall is up. `canStartEngine` is true when `running` is not `"true"`, or when `timeoutMs` (3000) has passed since `startedAtMs`. `shouldForceStop` is true when `running` is `"true"` and the timeout has passed: the controller then stops the firewall service and starts the engine anyway. A server connection never fails because the firewall held the slot.
 
 - [ ] **Step 1: Write the failing tests** `FirewallHandoverTest`: (a) `running == "false"` → start now; (b) `running == null` → start now; (c) `running == "true"` within timeout → wait; (d) `running == "true"` after timeout → `shouldForceStop` true and the engine still starts; (e) `shouldRestartAfterEngine("true")` true and `("false")` false.
 
@@ -288,7 +288,7 @@ class LogRetentionTest {
 
 **Interfaces:**
 - Consumes: none.
-- Produces: `object DataUseReader { fun rows(stats: List<Triple<Int, Long, Long>> /* uid, wifiBytes, cellBytes */): List<DataUseRow> }` (pure: merges and drops zero rows), and a Kotlin `fun query(context: Context, startMs: Long, endMs: Long): List<Triple<Int, Long, Long>>` that calls `NetworkStatsManager.querySummary` for `TYPE_WIFI` and `TYPE_MOBILE` (needs `PACKAGE_USAGE_STATS`; returns empty and a reason when not granted).
+- Produces: `data class DataUseRow(val uid: Int, val wifiBytes: Long, val cellBytes: Long)` (in `DataUseReader.kt`; the TS `DataUseRow` has the same three fields); `object DataUseReader { fun rows(stats: List<Triple<Int, Long, Long>> /* uid, wifiBytes, cellBytes */): List<DataUseRow> }` (pure: merges and drops zero rows), and a Kotlin `fun query(context: Context, startMs: Long, endMs: Long): List<Triple<Int, Long, Long>>` that calls `NetworkStatsManager.querySummary` for `TYPE_WIFI` and `TYPE_MOBILE` (needs `PACKAGE_USAGE_STATS`; returns empty and a reason when not granted).
 
 - [ ] **Step 1: Write the failing tests** for `rows`: merges by UID; drops rows where both are zero; keeps Wi-Fi and cellular separate.
 
