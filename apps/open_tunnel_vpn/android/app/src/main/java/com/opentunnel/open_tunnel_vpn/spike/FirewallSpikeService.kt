@@ -43,8 +43,10 @@ class FirewallSpikeService : VpnService() {
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    append("onStartCommand action=${intent?.action}")
     when (intent?.action) {
-      ACTION_START -> start()
+      // A start with no action is what Always-on sends after a reboot.
+      ACTION_START, null -> start()
       ACTION_STOP -> stop()
     }
     return START_NOT_STICKY
