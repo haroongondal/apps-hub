@@ -556,7 +556,8 @@ export function Sheet({ visible, onClose, title, doneLabel = 'Done', onDone, chi
             borderWidth: 1,
             borderColor: c.line,
             maxHeight: '88%',
-            paddingBottom: keyboard > 0 ? keyboard : insets.bottom,
+            // RN's Android keyboard height leaves out the navigation bar, which this edge-to-edge sheet draws under.
+            paddingBottom: keyboard > 0 ? keyboard + (Platform.OS === 'android' ? insets.bottom : 0) : insets.bottom,
           }}
         >
           <View style={{ alignItems: 'center', paddingTop: space.sm }}>
