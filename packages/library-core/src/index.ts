@@ -1,0 +1,12 @@
+export { LibraryError } from './errors.ts';
+export type { LibraryErrorCode } from './errors.ts';
+export { ftsQuery } from './fts-query.ts';
+export { Library } from './library.ts';
+export type { Folder, Item, ItemKind, LibraryDeps, SearchHit, Tag } from './library.ts';
+export { migrate } from './migrate.ts';
+export { normalizeForSearch } from './normalize.ts';
+export { ITEM_ID, orphanDirs } from './orphan-dirs.ts';
+export { snippetParts } from './snippet.ts';
+export type { SnippetPart } from './snippet.ts';
+export { serialPort } from './sql.ts';
+export type { RawSql, Row, SqlPort, SqlValue } from './sql.ts';

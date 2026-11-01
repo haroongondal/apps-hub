@@ -2,7 +2,7 @@
 
 ## Resume prompt
 
-Dated 2026-10-31. Read `docs/handoffs/pdf-editor-scan.md` completely first, then
+Dated 2026-11-01. Read `docs/handoffs/pdf-editor-scan.md` completely first, then
 `docs/pdf-editor/scan/PRD.md` and `docs/pdf-editor/scan/SPEC.md`; use
 `docs/pdf-editor/scan/RESEARCH.md` for facts. Trust the decisions and the verified facts
 below and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md`: keep
@@ -67,6 +67,31 @@ says so.
 - **Dependencies approved (SPEC §2):** expo-sqlite ~16.0.10; CameraX 1.6.2 (core, camera2,
   lifecycle, view); Tesseract4Android 4.9.0 from JitPack with `eng.traineddata` (fast) and
   the GlyphLessFont; expo-clipboard ~8.0.8.
+
+**Session A1 (2026-10-31 and 2026-11-01).** The owner approved removing the Store-installed PDF
+Editor 1.0.0 from the `apps-hub-test` emulator (only) so the debug build could be installed for
+the Hermes check; the emulator now holds the debug build, and the Store can reinstall 1.0.0.
+Below, where SPEC §4 was silent (the contract itself is unchanged):
+
+- Deleting an item also deletes tags no other item uses (FR-4: a tag lives only while an item
+  uses it). `setItemTags` already did.
+- `deleteFolder` throws `duplicate_name` and changes nothing if a subfolder's name would clash
+  with a sibling one level up. Items are never deleted to resolve it; the owner renames first.
+  A subfolder with the deleted folder's own name ("Work" inside "Work") is not a clash and
+  moves up (ship review, 2026-11-01).
+- Moving items out of a deleted folder does not bump their `updated_at` (it is not an edit).
+  Changing tags does not bump it either. `updateItem` with nothing to change returns the item
+  unchanged, and so does a value equal to the stored one, so opening a PDF again (which
+  re-indexes it) doesn't move it to the top of Recent (ship review, 2026-11-01).
+- `Library.open` refuses a connection whose `PRAGMA foreign_keys` is not 1, because cascades
+  would silently not run (SPEC §4.1).
+- `createItem` checks a caller-supplied id against `ITEM_ID` (it becomes a directory name).
+  Item, folder and tag names count characters, not UTF-16 units.
+- `list` defaults to 500 rows, `search` to 30. `list` ties sort by `rid`, so paging is stable.
+- **A Library method must not be called inside a `library.db.transaction` callback.** Each
+  method opens its own transaction and the queue is held by the outer one, so the call never
+  returns. Scan Phase 4's `runOcr` ("per page, in one transaction ... then `setBody`") must call
+  `setBody` after its own transaction commits.
 
 Made in the research and docs session, 2026-10-30. Items marked **(owner)** were confirmed
 by the owner on 2026-10-31 (above).
@@ -140,6 +165,40 @@ In this repo or SDK (2026-10-30):
 - SDK 54 pins `expo-clipboard` ~8.0.8 and `react-native-worklets` 0.5.1.
 - iOS: workspace `PDFEditor.xcworkspace`, scheme `PDFEditor`, `ios/PDFEditor/Info.plist`.
 
+Verified in session A1 (2026-10-31):
+- `pnpm --filter @apps-hub/library-core test`: 86 tests, all passing, on Node 22 `node:sqlite`;
+  `tsc --noEmit` clean. Writes serialise, a throwing transaction rolls back, FTS operators typed
+  by a user are literal, AC-2 and AC-3 hold at library level.
+- Search cost is `snippet()`: about 8 ms a row when a document has a few hundred match
+  instances. On 500 items of 20 pages (10,000 pages, 20 MB), a whole word takes about 20 ms;
+  a two-letter prefix ("w1 w2": every document matches) takes about 550 ms on the Mac for 50
+  rows. NFR-1's 300 ms holds for real words, not for one or two typed letters. The UI should
+  debounce (about 200 ms) and Phase 5 measures it on the phone. Not changed in the contract:
+  `ftsQuery` keeps its exact output.
+- Hermes (emulator `apps-hub-test`, Android 15, arm64, debug build): `'\u{FEFC}'.normalize('NFKC')`
+  is U+0644 U+0627 ("لا"), and `normalizeForSearch` gives U+06A9 U+062A U+06CC for kaf, fatha,
+  teh, ZWNJ, tatweel, Arabic yeh. So `String.prototype.normalize` exists and the `/u` regex with
+  `\u{...}` escapes works; no fallback needed. The temporary log was removed.
+- On that build the Library opened `library.db` through expo-sqlite (migration and FTS5 table
+  created), the empty state rendered, and New folder, Save created "Work" and the list reloaded,
+  with no JS warning or error.
+- `./gradlew :app:assembleDebug` in `apps/pdf-editor-mobile/android`: BUILD SUCCESSFUL in 4m 9s
+  (327 tasks); expo-sqlite autolinks with no native edit. Debug APK 183 MB (still four ABIs until
+  Phase 2).
+- `pnpm --filter pdf-editor-mobile doctor` (the line in PROMPTS) runs pnpm's own built-in
+  `doctor`, not expo-doctor, and passes. The real check is `pnpm --filter pdf-editor-mobile run
+  doctor`: 17 of 18 pass; the failing one ("app config fields that may not be synced in a
+  non-CNG project") fails identically on a clean `origin/main`, so it predates Phase 1.
+- `pnpm --filter pdf-editor-desktop test:e2e` exits 0 ("electron ok", "mobile bridge ok") with
+  the new `docInfo` assertions. Its canvas warnings come from `canvas: false` in `allowBuilds`.
+- The `adb` default target can be the owner's phone (wireless debugging, model 24116RACCG).
+  Always pass `-s emulator-5554` and check `adb -s … emu avd name` first. The emulator needs
+  `ANDROID_HOME=$HOME/Library/Android/sdk` to boot; port 8081 may belong to another session's
+  Metro, so use another port and set `debug_http_host` in the app's shared prefs.
+- This session's tool channel decodes a literal `\uXXXX` in file content into the character.
+  `\u{XXXX}`, `\x41` and `\\u064B` survive. All invisible or look-alike characters in
+  library-core sources and tests are written as `\u{...}` for that reason; keep it that way.
+
 External (full list with URLs in RESEARCH):
 - Tesseract4Android 4.9.0 (2025-06-11, Tesseract 5.5.1), JitPack only, Apache-2.0; IJG
   notice required for libjpeg. Phone benchmark (Snapdragon 845): 3.4 s/page fast, CER 0.13%.
@@ -182,16 +241,121 @@ External (full list with URLs in RESEARCH):
   dependencies (see "Decisions made"). Docs updated for the scanner first, Arabic and Urdu
   search in v1 and backup off. The docs go to `main` through a PR from branch
   `docs-offline-tools`.
+- 2026-10-31 (session A1, branch `scan-phase-1` in `.claude/worktrees/scan-phase-1`, from
+  `origin/main` 9f754dd): `packages/library-core` built test-first (sql-port, migrate,
+  normalize, fts-query, orphan-dirs, library-items/folders/tags/search; 86 tests). Added
+  `@apps-hub/library-core` and `expo-sqlite ~16.0.10` to the app.
+- 2026-11-01 (session A1 continued): `snippetParts` added to library-core (92 tests). App wired:
+  `src/library/` (ids, sql-expo, paths, files, sweep, open-library, open-item, add-actions,
+  format, use-library, icon-button, rows, sheets), Library home in `app/index.tsx`, `docInfo`
+  (bridge.ts, core.js, mobile.html, mobile.mjs), editor indexing and save-as-new-item in
+  `app/editor.tsx`, docs, `expo.version` 1.1.0. All PROMPTS step 6 commands run (results under
+  verified facts); Hermes check done on the emulator. Nothing committed.
+- 2026-11-01: owner chose a phone-test release and confirmed the Cloudflare account (Worker
+  `apps-hub-store.haroonmukhtar4.workers.dev`, personal account). `pnpm release pdf-editor -m
+  "Library: folders, tags and search"` from the worktree: BUILD SUCCESSFUL in 4m 3s, then
+  "pdf-editor 7 published" (1.1.0, versionCode 7, 90.6 MB, still four ABIs until Phase 2).
+- 2026-11-01: owner asked me to install and test over wireless debugging. Installed through
+  the Store only (its Update button, Play Protect "Scan app", then Install; no `adb install`);
+  adb was used for taps, screenshots and UI dumps only. Pushed three small PDFs to
+  `/sdcard/Download/apps-hub-a1-test/` for the test. AC-1, AC-2, AC-3 and AC-14 passed (below).
+- 2026-11-01: fixed findings 1 to 3 (`Sheet` lifts above the keyboard; tag field
+  `autoCapitalize="none"`; a filter whose tag is gone clears itself), `expo.version` 1.1.1.
+  Gates: `pnpm test` and `pnpm typecheck` exit 0, lint clean, e2e green, ui 15 of 15, library-core
+  92 of 92. Owner confirmed the Cloudflare account again; `pnpm release pdf-editor` published
+  1.1.1 (versionCode 8). Updated the phone through the Store and re-tested there (below).
+- 2026-11-01 (ship): committed in five commits and rebased onto `origin/main` 67537c0, then
+  onto 7d5c039 after PR #5 landed (no conflicts either time). The review panel's findings were fixed with tests where the code allows:
+  `deleteFolder` with a same-named subfolder, `updateItem` no longer bumps `updated_at` for
+  unchanged values, the edited copy is written atomically and gets no stale page count, a failure
+  to add it is an alert after the share sheet closes (a toast was hidden by it), the Tags sheet
+  saves the typed name and can't save before its tags load, `docInfo` survives one unreadable
+  page, and on Android the `Sheet` lift adds the navigation-bar inset. library-core 95 of 95.
+  These fixes are not on the phone yet. Left open: a failed "Open" inside the editor unlinks the
+  open item even though the old PDF can stay on screen, so its Save adds no copy; keeping the
+  link safely needs `loadPdf` in core.js to keep its old pages until the new file has loaded.
+
+## Phone test results (2026-11-01, PDF Editor 1.1.0 versionCode 7, Redmi Note 14 Pro, Store install)
+
+Install: Store "Update ready" 1.0.0 (6) to 1.1.0 (7); Play Protect asked to scan, said "looks safe";
+installer `com.haroon.store`; the Xiaomi post-install scan passed. The app opened on the Library.
+
+- **AC-1 (search): pass, with one part not measured.** Three PDFs added with "Open a PDF"; each
+  showed a cover and "2 pages". Typing `zephyrine`, a word only in the Bank statement, returned only
+  that item with the snippet "...Transfer reference **zephyrine** received on the 3rd." (matched word
+  in semibold); the prefix `zeph` found it too; clearing the box restored the list. Not measured:
+  the 300 ms bound (3 items, visually instant; Phase 5 measures it) and the scan-text half of AC-1
+  (Phase 4).
+- **AC-2 (folders): pass.** Created "Work", moved two items in ("1 item", "2 items"), added the
+  subfolder "Sub", deleted "Work" from its Folder actions after the confirmation. Both items and
+  "Sub" were then at the top level, nothing lost, the app back on the top-level Library.
+- **AC-3 (tags): pass.** Tagged two items "Tax" (the second by picking the existing tag); the
+  filter listed "Tax, 2 items" and showed only those two (library-wide, folders hidden). After
+  removing the tag from both, the filter sheet listed only "All tags".
+- **AC-14 (editor round trip): pass.** Opened the Council letter, added the text "Signed by me",
+  tapped Share: the system share sheet opened with "A1 Council letter-edited.pdf" (closed without
+  sharing) and a new "A1 Council letter (edited)" item appeared; the original was unchanged (4 KB,
+  same cover); opening the copy shows "Signed by me" on page 1.
+
+Findings from the test (none fails an AC):
+1. **(Fixed in 1.1.1.) Save and Done are hidden behind the soft keyboard** in sheets with a field (New folder, Rename,
+   Tags): the Sheet modal does not move up, so on the phone the button sits under Gboard. The
+   keyboard's check key submits, so it works, but it is not discoverable. The headless emulator
+   has no soft keyboard, so only the phone showed it. The fix is in the shared `Sheet`
+   (`packages/ui`), which every app uses; the new folder, rename and tag flows depend on it.
+2. **(Fixed in 1.1.1.)** The Tags field auto-capitalises, so "tax" became "Tax" (matching is case-insensitive, so this is
+   cosmetic). Set `autoCapitalize="none"` on that field.
+3. **(Fixed in 1.1.1.)** When the filtered tag disappears (its last item loses it) the chip stays on "Tag: removed" over
+   an empty "Nothing found" list until "All tags" is picked. Clear the filter when its tag is gone.
+4. A copy made by the editor shows a placeholder icon, not a cover, until it is opened once
+   (the cover comes from `docInfo`). Since the ship review it also has no page count until then,
+   because pages deleted in the editor made the old count wrong.
+
+Left on the phone: the app holds the test items and the folder "Sub"; the three PDFs are in
+`Download/apps-hub-a1-test/`.
+
+## Phone re-test of 1.1.1 (2026-11-01, versionCode 8, Store install)
+
+Installed through the Store's Update button (Play Protect, then the Xiaomi scan); package shows
+versionName 1.1.1, versionCode 8, installer `com.haroon.store`.
+
+- Finding 1 fixed: with the keyboard up the sheet sits above it, and "New folder", Save and the
+  field are all visible; typing a name and tapping Save created the folder.
+- Finding 2 fixed: typing `tax` gives the row "tax".
+- Finding 3 fixed: after the last item lost "tax", the "Tag: tax" chip cleared itself and the full
+  list came back (no "Tag: removed", no "Nothing found").
+- The throwaway folder used for the check was deleted again.
+
+Test notes for the next session that drives the phone:
+- adb's default target can be the phone; always pass the serial. Wireless debugging dropped once
+  ("device offline") and came back by itself after about a minute.
+- The Store list only refreshes on a slow pull (`input swipe 540 650 540 1150 1200`). A fast long
+  swipe from mid-screen opened HyperOS recents; never tap the clear-all cross there (it kills
+  background apps such as Deputy's accessibility service).
+- The headless emulator is in hardware-keyboard mode, so Gboard shows a floating toolbar and the
+  covered-Save bug cannot be reproduced there; only the phone shows it.
+- WebView content (the editor's tools) is not in the UI tree; tap it by coordinates.
 
 ## Current state + exact next step
 
-All five documents are written and the owner's answers are recorded (S0, 2026-10-31). No
-code and no dependencies yet. Reader's docs (`docs/pdf-editor/reader/`, `docs/handoffs/pdf-editor-reader.md`)
-were checked on 2026-10-31: they build on SPEC §4 and say they will use a Scan-defined
-migration registry; SPEC §4.7 maps each Reader request to the contract (track `reader`
-instead of `reader_meta`; per-page scan text from `ScanStore.pageTexts`, no `text.json`).
+Phase 1 (session A1) is built, released as 1.1.1 (versionCode 8) and phone-tested on branch
+`scan-phase-1`, worktree `/Users/outsentia/Documents/apps-hub/.claude/worktrees/scan-phase-1`.
+It is committed there, rebased onto `origin/main` 7d5c039, with the ship review's fixes (session
+log, 2026-11-01), and goes to `main` through one PR. AC-1, AC-2, AC-3 and AC-14 pass; findings 1
+to 3 are fixed and verified; finding 4 (a copy made by the editor shows a placeholder icon, and
+now no page count, until it is opened once) is open and cosmetic.
 
-Next step: once the S0 docs PR (branch `docs-offline-tools`) is merged, run session A1 from
-`docs/build-sessions.md`: Phase 1 (Library foundation, with Arabic and Urdu normalisation)
-on branch `scan-phase-1` in its own worktree, not on `deputy-speed`. Then A2–A4 (Scan
-Phases 2–4) come before the Reader.
+Merging releases six apps, not one: `packages/ui` changed (the `Sheet` keyboard lift), so CI
+publishes netlens, open-tunnel, pdf-editor, store, deputy and strongroom
+(`node tools/release/src/changed.ts 7d5c039`).
+
+Not measured: the 300 ms search bound on a large library and the scan-text half of AC-1 (Phase 4;
+Phase 5 measures NFR-1). Not tried on the phone: the 28 MB guard and a PDF PDF.js can't open.
+
+Left on the phone: the Library holds "Sub", the three "A1 ..." PDFs and "A1 Council letter
+(edited)"; the PDFs are in `Download/apps-hub-a1-test/`. The `apps-hub-test` emulator holds the
+debug build in place of the Store's 1.0.0 (owner approved).
+
+Next step: the owner reviews and merges the PR (merging makes CI publish the six builds above).
+Then the next session is A2 (Scan Phase 2, camera and detection) on `scan-phase-2`, new from
+`main` once this PR is merged.

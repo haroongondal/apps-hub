@@ -2,7 +2,7 @@
   "expo": {
     "name": "PDF Editor",
     "slug": "pdf-editor",
-    "version": "1.0.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "pdfeditor",
@@ -42,7 +42,8 @@
           }
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,

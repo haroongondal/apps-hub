@@ -59,6 +59,9 @@ packages/library-core/                    @apps-hub/library-core (Phase 1)
     ├── migrate.ts                        per-feature migration tracks (§4.4)
     ├── schema.ts                         the 'library' track (§4.2)
     ├── fts-query.ts                      ftsQuery() (§4.3)
+    ├── normalize.ts                      normalizeForSearch() (§4.3)
+    ├── snippet.ts                        snippetParts() for the result rows
+    ├── orphan-dirs.ts                    orphanDirs(), ITEM_ID (§4.5)
     ├── library.ts                        class Library
     ├── errors.ts                         LibraryError
     └── __tests__/                        node-sql.ts (test helper over node:sqlite) + *.test.ts
@@ -81,8 +84,9 @@ apps/pdf-editor-mobile/
 │   └── scan/capture.tsx, review.tsx, [id].tsx, page.tsx   (Phases 2–4)
 ├── src/
 │   ├── editor/bridge.ts                  + docInfo event (Phase 1)
-│   ├── library/                          sql-expo.ts, open-library.ts, files.ts, ids.ts,
-│   │                                     add-actions.ts, open-item.ts, use-library.ts, sweep.ts
+│   ├── library/                          sql-expo.ts, open-library.ts, files.ts, ids.ts, paths.ts,
+│   │                                     add-actions.ts, open-item.ts, use-library.ts, sweep.ts,
+│   │                                     format.ts, icon-button.tsx, rows.tsx, sheets.tsx
 │   └── scan/                             native.ts (re-export), session.ts, crop-editor.tsx,
 │                                         use-scan.ts
 └── modules/pdf-scan/                     Expo local module (Phase 2)
@@ -379,7 +383,7 @@ export class Library {
   createFolder(name: string, parentId: string | null): Promise<Folder>;
   renameFolder(id: string, name: string): Promise<void>;
   moveFolder(id: string, parentId: string | null): Promise<void>; // rejects a move into itself or a descendant ('cycle')
-  deleteFolder(id: string): Promise<void>;                         // moves items and subfolders to its parent first
+  deleteFolder(id: string): Promise<void>;                         // moves items and subfolders to its parent, same transaction
   listFolders(parentId: string | null): Promise<Folder[]>;
   folderPath(id: string): Promise<Folder[]>;                       // root → id, for the breadcrumb
 
@@ -395,11 +399,14 @@ export function migrate(db: SqlPort, track: string, steps: readonly string[]): P
 export function serialPort(raw: RawSql): SqlPort;
 export function orphanDirs(dirNames: readonly string[], ids: ReadonlySet<string>): string[];
 export const ITEM_ID = /^[0-9a-z]{16}$/;
+export interface SnippetPart { text: string; hit: boolean }
+export function snippetParts(snippet: string): SnippetPart[];     // splits a snippet at U+0002 / U+0003
 ```
 
 Validation (throws `invalid_name`): titles and names are trimmed, 1–200 characters for
 titles, 1–100 for folder and tag names, no `/` in folder names, no control characters.
-Every write that changes an item bumps `updated_at`, except `setBody`.
+Every write that changes an item bumps `updated_at`, except `setBody`. An `updateItem` value
+equal to the stored one is not a change.
 
 ### 4.7 Rules for features (Scan now, Reader in parallel)
 
@@ -423,7 +430,7 @@ with Scan") and where it is:
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | Create, update, delete items; set body text   | `createItem`, `updateItem`, `deleteItem`, `setBody`                                                      |
 | List by kind, folder or tag; search with snippet | `list`, `search`                                                                                     |
-| Add a PDF file as an item                     | The app helper `addPdf(uri, folderId)` in `src/library/files.ts` (Phase 1), used by "Open a PDF"        |
+| Add a PDF file as an item                     | The app helper `addPdf(uri, folderId, name?)` in `src/library/files.ts` (Phase 1), used by "Open a PDF" |
 | Read OCR text and page count                  | `Item.pageCount`; per-page text from `ScanStore.pageTexts(itemId)` (string[] in page order, Phase 3). Scan does not also write a `text.json`: the rows are the one copy. |
 | A migration hook                              | Migration tracks (§4.4): Reader's steps go in track `reader`, replacing its own `reader_meta` version key |
 | "+" sheet and filter extension points         | `add-actions.ts`, `open-item.ts`; the kind filter shows every kind present                              |
@@ -966,6 +973,7 @@ Each new file is added to its package's `test` script (CLAUDE.md gotcha).
   Latin text unchanged. `library-search.test.ts` adds: a query with harakat finds a body and a
   title without them and the reverse, and "كتاب" finds "کتاب".
 - `orphan-dirs.test.ts`: only id-shaped names without rows.
+- `snippet.test.ts`: `snippetParts` splits at the markers and drops stray ones.
 
 `packages/scan-core/src/__tests__/`:
 - `pdf-writer.test.ts`: header, xref offsets equal byte positions, `startxref`; the output

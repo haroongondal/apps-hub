@@ -59,6 +59,13 @@ assert.equal(loaded.ok, true);
 assert.equal(loaded.pages, 2);
 assert.equal(loaded.name, 'mob.pdf');
 
+// docInfo feeds the Library: page count, per-page text and a bare-base64 JPEG cover, once per load
+const info = await page.evaluate(() => window.__bridge.wait('docInfo'));
+assert.equal(info.pages, 2);
+assert.match(info.text.join(' '), /MobileDoc[\s\S]*SecondPage/);
+assert.ok(info.thumb.startsWith('/9j/'), 'thumb is base64 JPEG without a data: prefix');
+assert.equal(await page.evaluate(() => window.__bridge.inbox.map(JSON.parse).filter(m => m.type === 'docInfo').length), 1);
+
 // image round-trip: page posts pickImage, native answers the image command
 const layer = page.locator('.layer').first();
 const bb = await layer.boundingBox();
@@ -115,6 +122,21 @@ assert.equal(await page.evaluate(() => document.querySelector('#toast').classLis
 // Open button posts through the bridge for the native document picker
 await page.click('#docopen');
 assert.deepEqual(await page.evaluate(() => window.__bridge.wait('pickPdf')), { type: 'pickPdf', append: false });
+
+// a page whose text PDF.js can't read costs only that page's text: docInfo still carries the count and cover
+await page.evaluate(async base64 => {
+  const probe = await pdfjsLib.getDocument({ data: Uint8Array.from(atob(base64), c => c.charCodeAt(0)) }).promise;
+  const proto = Object.getPrototypeOf(await probe.getPage(1));
+  const getTextContent = proto.getTextContent;
+  proto.getTextContent = function (...args) {
+    return this.pageNumber === 2 ? Promise.reject(new Error('unreadable page')) : getTextContent.apply(this, args);
+  };
+  window.__editorCommand('open', { name: 'unreadable.pdf', base64, append: false });
+}, b64);
+const partial = await page.evaluate(() => window.__bridge.wait('docInfo', m => m.text[1] === ''));
+assert.equal(partial.pages, 2);
+assert.match(partial.text[0], /MobileDoc/);
+assert.ok(partial.thumb.startsWith('/9j/'));
 
 await browser.close();
 assert.deepEqual(errors, [], 'no JS dialogs or errors (WKWebView implements none of them)');

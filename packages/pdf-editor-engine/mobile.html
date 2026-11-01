@@ -175,6 +175,7 @@ const mobileAdapter = {
   alert(message) { toast(message); },
   confirm(message) { return confirmSheet(message); },
   emitDocumentLoaded(info) { post({ type: 'documentLoaded', ...info }); },
+  emitDocInfo(info) { post({ type: 'docInfo', ...info, thumb: info.thumb && info.thumb.split(',')[1] }); },
   supports: { dragDrop: false, keyboard: false, fileInputs: false },
 };
 pdfEditorShell(mobileAdapter);
