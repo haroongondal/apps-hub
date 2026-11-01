@@ -27,7 +27,9 @@ export async function addPdf(uri: string, folderId: string | null, name?: string
   dir.create({ intermediates: true });
   try {
     const source = new File(uri);
-    source.copy(itemFile(id, 'document.pdf'));
+    const tmp = itemFile(id, 'document.pdf.tmp');
+    source.copy(tmp);
+    tmp.move(itemFile(id, 'document.pdf'));
     const title = titleOf(name ?? decodeURIComponent(source.uri.split('/').pop() ?? ''));
     // Files first, row second: a crash in between leaves a directory the start-up sweep removes.
     return await lib.createItem({ id, kind: 'pdf', title, folderId, sizeBytes: dirSize(id) });

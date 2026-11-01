@@ -218,6 +218,7 @@ export function TagsSheet({
   const [selected, setSelected] = useState<string[]>([]);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | undefined>();
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -225,23 +226,31 @@ export function TagsSheet({
       const [all, mine] = await Promise.all([lib.listTags(), lib.tagsFor(item.id)]);
       setKnown(all.map((t) => t.name));
       setSelected(mine.map((t) => t.name));
+      setLoaded(true);
     })().catch((err) => setError(errorMessage(err)));
   }, [item.id]);
 
-  const add = () => {
+  // The typed name, spelt like an existing tag when one matches ignoring case.
+  const draftTag = () => {
     const name = draft.trim();
-    if (!name) return;
-    const match = known.find((k) => k.toLowerCase() === name.toLowerCase()) ?? name;
-    if (match === name) setKnown((k) => [...k, name]);
-    setSelected((s) => (s.includes(match) ? s : [...s, match]));
+    return name ? (known.find((k) => k.toLowerCase() === name.toLowerCase()) ?? name) : null;
+  };
+  const add = () => {
+    const tag = draftTag();
+    if (!tag) return;
+    if (!known.includes(tag)) setKnown((k) => [...k, tag]);
+    setSelected((s) => (s.includes(tag) ? s : [...s, tag]));
     setDraft('');
   };
   const toggle = (name: string) =>
     setSelected((s) => (s.includes(name) ? s.filter((n) => n !== name) : [...s, name]));
 
   const save = async () => {
+    // Saving before the item's tags have loaded would replace them with nothing.
+    if (!loaded) return;
+    const tag = draftTag();
     try {
-      await onSave(selected);
+      await onSave(tag && !selected.includes(tag) ? [...selected, tag] : selected);
       onClose();
     } catch (err) {
       setError(errorMessage(err));

@@ -42,17 +42,17 @@ async function indexItem(itemId: string, info: DocInfo) {
 async function saveEditedCopy(sourceId: string, base64: string, info: DocInfo | null) {
   const lib = await openLibrary();
   const source = await lib.getItem(sourceId);
-  if (!source) return;
+  if (!source) throw new Error('Its original is no longer in the library. To keep the edited PDF here, share it to your files, then add it with + and Open a PDF.');
   const id = newId();
   itemDir(id).create({ intermediates: true });
   try {
-    await FileSystem.writeAsStringAsync(itemFile(id, 'document.pdf').uri, base64, { encoding: FileSystem.EncodingType.Base64 });
+    await writeBase64Atomic(itemFile(id, 'document.pdf'), base64);
+    // No page count: pages may have been deleted since docInfo; the copy's first open fills it in.
     await lib.createItem({
       id,
       kind: 'pdf',
       title: `${Array.from(source.title).slice(0, 190).join('')} (edited)`,
       folderId: source.folderId,
-      pageCount: info?.pages ?? null,
       sizeBytes: dirSize(id),
       body: info?.text.join('\n\n'),
     });
@@ -174,18 +174,24 @@ export default function EditorScreen() {
             // name is built in-page as "<file>-edited.pdf"; keep it flat for the cache dir
             const fileUri = FileSystem.cacheDirectory! + msg.name.replace(/[\\/]+/g, '-');
             await FileSystem.writeAsStringAsync(fileUri, msg.base64, { encoding: FileSystem.EncodingType.Base64 });
+            let copyError: unknown = null;
             if (activeItem.current) {
               try {
                 await saveEditedCopy(activeItem.current, msg.base64, lastInfo.current);
               } catch (err) {
-                injectCommand(webRef, { type: 'toast', message: 'Could not add the edited copy to the library: ' + (err instanceof Error ? err.message : String(err)) });
+                copyError = err;
               }
             }
-            if (await Sharing.isAvailableAsync()) {
-              await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: 'Share edited PDF', UTI: 'com.adobe.pdf' });
-              injectCommand(webRef, { type: 'toast', message: `Ready to share: ${msg.name}` });
-            } else {
-              injectCommand(webRef, { type: 'toast', message: `Saved in app cache: ${msg.name}` });
+            try {
+              if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: 'Share edited PDF', UTI: 'com.adobe.pdf' });
+                injectCommand(webRef, { type: 'toast', message: `Ready to share: ${msg.name}` });
+              } else {
+                injectCommand(webRef, { type: 'toast', message: `Saved in app cache: ${msg.name}` });
+              }
+            } finally {
+              // An alert once the share sheet has closed: a toast would be hidden, and an alert shown before it can block it on iOS.
+              if (copyError) Alert.alert('Could not add the edited copy to the library', copyError instanceof Error ? copyError.message : String(copyError));
             }
           } catch (err) {
             injectCommand(webRef, { type: 'toast', message: 'Save failed: ' + (err instanceof Error ? err.message : String(err)) });
