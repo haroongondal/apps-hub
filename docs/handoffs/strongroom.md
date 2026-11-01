@@ -476,7 +476,11 @@ order (ledger "Post-plan work" has the rulings and P-briefs):
    (79d52eb, f728b59: `SecretEditText` reports `AUTOFILL_TYPE_NONE` and writes
    nothing to assist/autofill/content-capture structures; every `SecretField`,
    both notes and `UnlockActivity`'s password), version bump a4c490c.
-2. **0.1.1 (5) is installed on the phone** (the owner installed it from the
+2. **PR #7 is open** (`strongroom-phase-1` → `main`, Strongroom 0.1.1; the owner
+   merges it, which makes CI release the next versionCode). Merged `origin/main`
+   into the branch first (2ddbcb5, no conflicts). Tests: strongroom 25/25,
+   typecheck clean. Do not merge or release without the owner's word.
+   **0.1.1 (5) is installed on the phone** (the owner installed it from the
    Store at 17:56; installer com.haroon.store; Strongroom is still the autofill
    service). **DOWNGRADE TRAP, needs the owner's decision (found 18:50):**
    `origin/main` already contains the Strongroom branch up to 036eff7 (PR #4
