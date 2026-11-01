@@ -2,11 +2,12 @@ import type { RefObject } from 'react';
 import type WebView from 'react-native-webview';
 
 // The frozen bridge schema between the Expo shell and packages/pdf-editor-engine/mobile.html.
-// Web -> Native: ready / documentLoaded / pickPdf / pickImage / save
+// Web -> Native: ready / documentLoaded / docInfo / pickPdf / pickImage / save
 // Native -> Web: open / image / toast (delivered through window.__editorCommand)
 export type PageEvent =
   | { type: 'ready' }
   | { type: 'documentLoaded'; ok: boolean; name?: string; pages?: number; error?: string }
+  | { type: 'docInfo'; pages: number; text: string[]; thumb?: string } // thumb: base64 JPEG of page 1, 320 px wide
   | { type: 'pickPdf'; append: boolean }
   | { type: 'pickImage'; pageIndex: number; x: number; y: number }
   | { type: 'save'; name: string; base64: string };

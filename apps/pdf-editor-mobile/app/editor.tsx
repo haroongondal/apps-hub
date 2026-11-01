@@ -11,7 +11,13 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import WebView, { type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 
-import { injectCommand, parseMessage } from '../src/editor/bridge';
+import { injectCommand, parseMessage, type PageEvent } from '../src/editor/bridge';
+import { dirSize, writeBase64Atomic } from '../src/library/files';
+import { newId } from '../src/library/ids';
+import { openLibrary } from '../src/library/open-library';
+import { itemDir, itemFile } from '../src/library/paths';
+
+type DocInfo = Extract<PageEvent, { type: 'docInfo' }>;
 
 // Survives hot reloads: on the ready handshake after a reload the editor is
 // re-opened with this doc instead of stranding an empty page.
@@ -21,8 +27,43 @@ async function readPdfBase64(uri: string) {
   return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
 }
 
+async function indexItem(itemId: string, info: DocInfo) {
+  try {
+    const lib = await openLibrary();
+    await lib.setBody(itemId, info.text.join('\n\n'));
+    const thumb = itemFile(itemId, 'thumb.jpg');
+    if (info.thumb && !thumb.exists) await writeBase64Atomic(thumb, info.thumb);
+    await lib.updateItem(itemId, { pageCount: info.pages, sizeBytes: dirSize(itemId) });
+  } catch (err) {
+    console.warn('Could not index the PDF', err);
+  }
+}
+
+async function saveEditedCopy(sourceId: string, base64: string, info: DocInfo | null) {
+  const lib = await openLibrary();
+  const source = await lib.getItem(sourceId);
+  if (!source) return;
+  const id = newId();
+  itemDir(id).create({ intermediates: true });
+  try {
+    await FileSystem.writeAsStringAsync(itemFile(id, 'document.pdf').uri, base64, { encoding: FileSystem.EncodingType.Base64 });
+    await lib.createItem({
+      id,
+      kind: 'pdf',
+      title: `${Array.from(source.title).slice(0, 190).join('')} (edited)`,
+      folderId: source.folderId,
+      pageCount: info?.pages ?? null,
+      sizeBytes: dirSize(id),
+      body: info?.text.join('\n\n'),
+    });
+  } catch (err) {
+    itemDir(id).delete();
+    throw err;
+  }
+}
+
 export default function EditorScreen() {
-  const params = useLocalSearchParams<{ uri?: string; name?: string }>();
+  const params = useLocalSearchParams<{ uri?: string; name?: string; itemId?: string }>();
   const { c } = useTheme();
   const [assetUri, setAssetUri] = useState<string | null>(null);
   const [assetError, setAssetError] = useState<string | null>(null);
@@ -30,6 +71,10 @@ export default function EditorScreen() {
   const [sharing, setSharing] = useState(false);
   const webRef = useRef<WebView>(null);
   const picking = useRef(false);
+  // Which library item the editor holds; opening another PDF in it, or merging one, breaks that link.
+  const activeItem = useRef<string | null>(params.itemId ?? null);
+  const merged = useRef(false);
+  const lastInfo = useRef<DocInfo | null>(null);
   const sharingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -76,6 +121,10 @@ export default function EditorScreen() {
           Alert.alert('Could not open PDF', msg.error ?? 'Unknown error', [{ text: 'OK' }, { text: 'Back', onPress: () => router.back() }]);
         }
         break;
+      case 'docInfo':
+        lastInfo.current = msg;
+        if (activeItem.current && !merged.current) void indexItem(activeItem.current, msg);
+        break;
       case 'pickPdf':
         void (async () => {
           if (picking.current) return;
@@ -85,6 +134,8 @@ export default function EditorScreen() {
             const asset = res.assets?.[0];
             if (!res.canceled && asset) {
               lastDoc = { uri: asset.uri, name: asset.name, append: msg.append };
+              if (msg.append) merged.current = true;
+              else activeItem.current = null;
               setDocName(asset.name);
               injectCommand(webRef, { type: 'open', name: asset.name, base64: await readPdfBase64(asset.uri), append: msg.append });
             }
@@ -123,6 +174,13 @@ export default function EditorScreen() {
             // name is built in-page as "<file>-edited.pdf"; keep it flat for the cache dir
             const fileUri = FileSystem.cacheDirectory! + msg.name.replace(/[\\/]+/g, '-');
             await FileSystem.writeAsStringAsync(fileUri, msg.base64, { encoding: FileSystem.EncodingType.Base64 });
+            if (activeItem.current) {
+              try {
+                await saveEditedCopy(activeItem.current, msg.base64, lastInfo.current);
+              } catch (err) {
+                injectCommand(webRef, { type: 'toast', message: 'Could not add the edited copy to the library: ' + (err instanceof Error ? err.message : String(err)) });
+              }
+            }
             if (await Sharing.isAvailableAsync()) {
               await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: 'Share edited PDF', UTI: 'com.adobe.pdf' });
               injectCommand(webRef, { type: 'toast', message: `Ready to share: ${msg.name}` });
