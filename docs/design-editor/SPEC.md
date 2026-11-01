@@ -69,7 +69,6 @@ apps/design-editor-mobile/               # package com.haroon.designeditor (new)
         └── src/main/{AndroidManifest.xml, java/expo/modules/designmedia/...}  src/test/...
 
 tools/release/src/apps.ts                # + 'design-editor' entry (§15)
-apps/store/modules/store-installer/android/src/main/AndroidManifest.xml   # + <package> in <queries>
 docs/design-editor/                      # RESEARCH, PRD, SPEC, PROMPTS
 ```
 
@@ -657,9 +656,7 @@ type WebCommand =
   Phase 1 registers it without `prepare` (no engine yet), because the spike must install through
   the Store. **CI auto-releases changed Store apps on pushes to `main`**: keep the work on a branch
   until each phase is ready to ship.
-- Add `<package android:name="com.haroon.designeditor" />` to the Store's `<queries>`
-  (`apps/store/modules/store-installer/android/src/main/AndroidManifest.xml`), then
-  `pnpm release store` **before** the first `pnpm release design-editor`.
+- The Store needs no change: it sees every app through `QUERY_ALL_PACKAGES` (since 2026-11-01).
 - Add `com.haroon.designeditor` to the developer-verification checklist in `docs/app-store.md` §6,
   and list the app under "Current apps" in `AGENTS.md` with its verification commands.
 - The Mac app stays out of the Store and `pnpm release`; `pnpm --filter design-editor dist` builds

@@ -154,9 +154,11 @@ What the Store checks before every install: SHA-256 of the downloaded file = man
 signer = the **pinned** cert compiled into the Store (it ignores whatever cert the manifest claims).
 
 Store permissions: `INTERNET`, `REQUEST_INSTALL_PACKAGES`, `UPDATE_PACKAGES_WITHOUT_USER_ACTION`,
-`POST_NOTIFICATIONS`, plus `WAKE_LOCK`, `ACCESS_NETWORK_STATE` and `RECEIVE_BOOT_COMPLETED`, which WorkManager merges in
-so its scheduling keeps working. Package visibility uses a `<queries>` list
-([docs](https://developer.android.com/training/package-visibility)), not `QUERY_ALL_PACKAGES`.
+`POST_NOTIFICATIONS`, `QUERY_ALL_PACKAGES`, plus `WAKE_LOCK`, `ACCESS_NETWORK_STATE` and `RECEIVE_BOOT_COMPLETED`, which WorkManager merges in
+so its scheduling keeps working. `QUERY_ALL_PACKAGES` lets the Store read the installed version of every app it
+lists ([package visibility](https://developer.android.com/training/package-visibility)). It replaced a per-app
+`<queries>` list on 2026-11-01: a new app went unseen until someone added it, and a Store release from an older branch
+dropped entries. Play restricts this permission; the Store is sideloaded only.
 
 ---
 
@@ -181,9 +183,7 @@ so its scheduling keeps working. Package visibility uses a `<queries>` list
    You don't edit Gradle by hand. Each release patches `android/app/build.gradle` with the shared signing key and
    the `appsHubVersion*` overrides (`applyAppsHubGradle`, which does nothing if they're already there), and fails
    loudly if the file has drifted from the Expo template.
-3. Add its package to `<queries>` in `apps/store/modules/store-installer/android/src/main/AndroidManifest.xml`,
-   then `pnpm release store` so the Store can see it.
-4. `pnpm release <app>`.
+3. `pnpm release <app>`. The Store sees it with no change of its own (`QUERY_ALL_PACKAGES`, §3).
 
 ---
 

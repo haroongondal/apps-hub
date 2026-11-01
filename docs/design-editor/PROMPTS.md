@@ -73,7 +73,7 @@ no media screens yet.
    codecReport and probe output, run a 20 MB size job in H.264 or HEVC, show per-attempt planned
    vs actual bytes, seconds and attempts, a "Copy results" button. Buttons for spikes S1–S8.
 5. Release plumbing: add 'design-editor' to tools/release/src/apps.ts (no prepare step yet),
-   add com.haroon.designeditor to the Store's <queries>, add it to the developer-verification
+   add it to the developer-verification
    checklist in docs/app-store.md and to "Current apps" in AGENTS.md.
 6. Verify (report ACTUAL output):
    pnpm --filter @apps-hub/media-core test
