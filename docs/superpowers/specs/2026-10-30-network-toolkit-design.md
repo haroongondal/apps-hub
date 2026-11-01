@@ -214,18 +214,34 @@ as the reference integration.
   app is throwaway, so OpenTunnel rule 6 (no placeholders) doesn't apply to
   it.
 
+**Spike outcome (2026-11-01; `docs/handoffs/firewall-spike-results.md`).** Go, with one
+change to this design: the firewall runs in its own process (below). Build, traffic,
+tuples, UIDs, per-app blocking and the WireGuard hand-over passed on the emulator and the
+owner's phone; the arm64 APK grew 6.5 MB (the Store's universal APK grows about 29 MB,
+accepted). Still to run, on the spike, before the plan is final (owner's call
+2026-11-01): Private DNS automatic and strict, Always-on after a reboot, and the
+two-night battery comparison (3 points or less). Their results amend the Reboot, DNS and
+Risks sections.
+
 **App attribution.** `ConnectivityManager.getConnectionOwnerUid` (API 29+,
 callable only by the active VPN app). The firewall needs Android 10 or newer;
 older versions get a typed "not supported" state.
 
-**Service.** A new firewall role in `OpenTunnelVpnService`. It builds its own
-`Builder`; `buildHostInterface` has no IPv4 route and isn't reused. The
-firewall tun:
+**Service.** A new `VpnService` class, separate from `OpenTunnelVpnService`, declared
+`android:process=":firewall"`. firestack's and WireGuard's Go runtimes crash each other
+inside one process (SIGSEGV within ~120 ms, either start order); in two processes they
+coexisted in both orders. It builds its own `Builder`; `buildHostInterface` has no IPv4
+route and isn't reused. The firewall tun:
 - routes all internet IPv4 and IPv6;
+- uses `100.127.222.0/24` and `fd66:f83a:c650::/120` (firestack's default
+  `10.111.222.0/24` sits inside the LAN exclusion);
 - never calls the bypass opt-out (OpenTunnel rule 3);
 - hands its descriptor to firestack.
 
-OpenTunnel's own sockets are protected.
+OpenTunnel's own sockets are protected. The UI process and the firewall process share
+nothing in memory: rules, the activity log and the firewall's state (on, paused, stopped)
+live in storage (see "Rules are enforced in Kotlin" and "Activity log storage"). The
+process costs about 150 to 180 MB resident, 0.0% CPU when idle.
 
 **Leave the LAN and HomeNet alone (my call).** Otherwise a userspace stack
 in the path breaks HomeNet's scan (the "RST means alive" rule, mDNS and
@@ -258,14 +274,19 @@ DNS, are logged as connections to that DNS provider, not by website name.
   firewall is paused while you're connected to a VPN server."
 - Disconnecting: the firewall starts again if it was on.
 - A server connection must never fail because the firewall held the slot.
-- WireGuard's GoBackend runs its own `VpnService` class, so verify on the
-  phone that the hand-over between the two services of the same app works
-  in both directions.
+- WireGuard's GoBackend runs its own `VpnService` class. Verified on the phone:
+  both processes stay alive and WireGuard becomes the active VPN. The
+  firewall's service gets **no `onRevoke`** when another service of the same
+  app establishes, in either direction. So the controller must stop the
+  firewall, and see it stopped in the shared state, before it starts an
+  engine; and start it again after disconnect.
 
 **Rules are enforced in Kotlin**, because the service runs with the UI
 closed.
-- Rules are stored natively; JS reads and writes them through the native
-  module.
+- Rules are stored natively in the same SQLite database as the log (WAL mode,
+  so both processes can use it); JS reads and writes them through the native
+  module, which then tells the `:firewall` service to reload (an intent to the
+  service), because nothing is shared in memory.
 - The decision is a pure function of (rule, current network is cellular,
   UID), with JVM unit tests.
 - "Mobile data" means the default network has `TRANSPORT_CELLULAR`.
@@ -276,8 +297,9 @@ closed.
 - Shared system UIDs (Android system, media and similar) appear as one
   entry each and can carry a rule like any app.
 
-**Activity log storage.** A native SQLite database written by the service in
-batches, never once per packet. Keep 7 days or 100,000 entries, whichever
+**Activity log storage.** A native SQLite database written by the service (in
+the `:firewall` process, read by the UI process) in batches, never once per
+packet. Keep 7 days or 100,000 entries, whichever
 limit comes first. The log has a clear button, never leaves the phone, and
 is excluded from backups (`allowBackup="false"` is already set).
 
@@ -317,6 +339,24 @@ area on iOS.
   attribution fallbacks.
 - JS formatting and aggregation gets `node --test` tests, each file added to
   the package's `test` script.
+
+### Integration rules from the spike (each one broke a spike run)
+
+1. Flows to the tun's own DNS address: port 853 returns `Backend.Block` (Android's
+   Private DNS "Automatic" then falls back to port 53); port 53 returns `Backend.Base`,
+   never `Exit` (otherwise firestack redials the tun address and floods: 11,552 flows in
+   18 s, then SIGABRT).
+2. `fakedns` is `host:port`: `"100.127.222.3:53,[fd66:f83a:c650::3]:53"`. A bare IP
+   leaves firestack's DNS list empty.
+3. `Intra.setSystemDNS(tunnel, csv)` takes the DNS servers of a non-VPN network, not
+   `activeNetwork`'s (that is the other VPN's while one is up).
+4. `bind4`, `bind6` and `protect` must all call `VpnService.protect(fd)`.
+5. No `onRevoke` on hand-over between the app's two services: the controller stops the
+   firewall before starting an engine.
+6. Package names need `QUERY_ALL_PACKAGES` (re-allowed through the config plugin).
+7. Tun range as in "Service".
+
+The spike's `FirewallSpikeService.kt` is the reference implementation for 1 to 4.
 
 ### Consent on first enable
 
@@ -368,7 +408,9 @@ These are named so they aren't forgotten:
   version and the single wrapper class.
 - **Battery and throughput cost of a userspace stack.** Measured in the
   spike.
-- **Two Go runtimes in one APK.** Checked in the spike.
+- **Two Go runtimes.** In one APK they build fine; in one process they crash.
+  Resolved by the `:firewall` process. Cost: a second process, shared storage
+  instead of shared memory.
 - **VPN slot hand-over between `OpenTunnelVpnService` and GoBackend's
   service.** Checked on the phone.
 - **Always-on may start the wrong service.** The WireGuard and ics-openvpn
