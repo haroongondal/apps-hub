@@ -138,7 +138,7 @@ Done this session: the owner's three answers (Decisions) and the design amendmen
 below, uncommitted in this worktree: `git diff docs/superpowers/specs/`).
 
 1. **Release Firewall spike build 3 through the Store** (ask the owner first; the Store entry
-   `tunnelwall-spike` is `manualOnly`, and confirm the Cloudflare account before deploying). The
+   `tunnelwall-spike` is `manualOnly`; run `pnpm release tunnelwall-spike -m "<what changed>"` from this worktree. It only talks to the Store Worker over HTTPS with `RELEASE_TOKEN`, so no Cloudflare login or account choice is involved). The
    owner then runs `docs/handoffs/firewall-spike-checks.md` (Private DNS automatic and strict,
    Always-on after a reboot, two battery nights) and pastes the logs. Fold the results into
    `firewall-spike-results.md` and the design's Reboot, DNS and Risks sections.
