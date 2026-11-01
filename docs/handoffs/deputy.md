@@ -1395,6 +1395,18 @@ AgentRuntime, the accessibility service, RunPanel).
 
 ## Current state + exact next step
 
+- **2026-11-01, Deputy 0.2.4 (build 12) released**, committed `eef7004` on
+  `deputy-speed`, not pushed or merged. The mic now has two gestures: touch and
+  hold runs the task when the speech dialog closes; a tap only dictates into the
+  task field and waits for Run (`speak(runNow)` in `RunPanel.tsx`; no native
+  change, because the system speech dialog takes over touch and so can't give
+  release-to-stop). Released from a temporary copy of the committed
+  `tools/release/src`, since the working tree's `main.ts` has another session's
+  unfinished GitHub-mirror and delete-old-APK edits. The first upload died with
+  `fetch failed … EPIPE` after the build (nothing published, manifest still
+  build 11); the retry published. **Not installed on the phone yet** (Store →
+  Deputy → Update, with the owner's OK). EVAL rows "Mic hold starts the task"
+  and "Mic tap only dictates" are unrun.
 - **Session 12 (2026-10-31), uncommitted on `deputy-speed`:** fixes for the
   owner's six failed runs (session log "Session 12"); JVM 234/234, gate green.
   Privacy change to know: a run started from Deputy now reads (and, on an image
