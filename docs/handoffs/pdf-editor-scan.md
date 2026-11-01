@@ -77,14 +77,17 @@ Below, where SPEC §4 was silent (the contract itself is unchanged):
   uses it). `setItemTags` already did.
 - `deleteFolder` throws `duplicate_name` and changes nothing if a subfolder's name would clash
   with a sibling one level up. Items are never deleted to resolve it; the owner renames first.
+  A subfolder with the deleted folder's own name ("Work" inside "Work") is not a clash and
+  moves up (ship review, 2026-11-01).
 - Moving items out of a deleted folder does not bump their `updated_at` (it is not an edit).
   Changing tags does not bump it either. `updateItem` with nothing to change returns the item
-  unchanged.
+  unchanged, and so does a value equal to the stored one, so opening a PDF again (which
+  re-indexes it) doesn't move it to the top of Recent (ship review, 2026-11-01).
 - `Library.open` refuses a connection whose `PRAGMA foreign_keys` is not 1, because cascades
   would silently not run (SPEC §4.1).
 - `createItem` checks a caller-supplied id against `ITEM_ID` (it becomes a directory name).
   Item, folder and tag names count characters, not UTF-16 units.
-- `list` defaults to 500 rows, `search` to 30. Ties sort by `rid`, so paging is stable.
+- `list` defaults to 500 rows, `search` to 30. `list` ties sort by `rid`, so paging is stable.
 - **A Library method must not be called inside a `library.db.transaction` callback.** Each
   method opens its own transaction and the queue is held by the outer one, so the call never
   returns. Scan Phase 4's `runOcr` ("per page, in one transaction ... then `setBody`") must call
@@ -261,6 +264,16 @@ External (full list with URLs in RESEARCH):
   Gates: `pnpm test` and `pnpm typecheck` exit 0, lint clean, e2e green, ui 15 of 15, library-core
   92 of 92. Owner confirmed the Cloudflare account again; `pnpm release pdf-editor` published
   1.1.1 (versionCode 8). Updated the phone through the Store and re-tested there (below).
+- 2026-11-01 (ship): committed in five commits and rebased onto `origin/main` 67537c0, then
+  onto 7d5c039 after PR #5 landed (no conflicts either time). The review panel's findings were fixed with tests where the code allows:
+  `deleteFolder` with a same-named subfolder, `updateItem` no longer bumps `updated_at` for
+  unchanged values, the edited copy is written atomically and gets no stale page count, a failure
+  to add it is an alert after the share sheet closes (a toast was hidden by it), the Tags sheet
+  saves the typed name and can't save before its tags load, `docInfo` survives one unreadable
+  page, and on Android the `Sheet` lift adds the navigation-bar inset. library-core 95 of 95.
+  These fixes are not on the phone yet. Left open: a failed "Open" inside the editor unlinks the
+  open item even though the old PDF can stay on screen, so its Save adds no copy; keeping the
+  link safely needs `loadPdf` in core.js to keep its old pages until the new file has loaded.
 
 ## Phone test results (2026-11-01, PDF Editor 1.1.0 versionCode 7, Redmi Note 14 Pro, Store install)
 
@@ -295,7 +308,8 @@ Findings from the test (none fails an AC):
 3. **(Fixed in 1.1.1.)** When the filtered tag disappears (its last item loses it) the chip stays on "Tag: removed" over
    an empty "Nothing found" list until "All tags" is picked. Clear the filter when its tag is gone.
 4. A copy made by the editor shows a placeholder icon, not a cover, until it is opened once
-   (the cover comes from `docInfo`).
+   (the cover comes from `docInfo`). Since the ship review it also has no page count until then,
+   because pages deleted in the editor made the old count wrong.
 
 Left on the phone: the app holds the test items and the folder "Sub"; the three PDFs are in
 `Download/apps-hub-a1-test/`.
@@ -326,9 +340,14 @@ Test notes for the next session that drives the phone:
 
 Phase 1 (session A1) is built, released as 1.1.1 (versionCode 8) and phone-tested on branch
 `scan-phase-1`, worktree `/Users/outsentia/Documents/apps-hub/.claude/worktrees/scan-phase-1`.
-Nothing is committed. AC-1, AC-2, AC-3 and AC-14 pass; findings 1 to 3 are fixed and verified;
-finding 4 (a copy made by the editor shows a placeholder icon until it is opened once) is open
-and cosmetic.
+It is committed there, rebased onto `origin/main` 7d5c039, with the ship review's fixes (session
+log, 2026-11-01), and goes to `main` through one PR. AC-1, AC-2, AC-3 and AC-14 pass; findings 1
+to 3 are fixed and verified; finding 4 (a copy made by the editor shows a placeholder icon, and
+now no page count, until it is opened once) is open and cosmetic.
+
+Merging releases six apps, not one: `packages/ui` changed (the `Sheet` keyboard lift), so CI
+publishes netlens, open-tunnel, pdf-editor, store, deputy and strongroom
+(`node tools/release/src/changed.ts 7d5c039`).
 
 Not measured: the 300 ms search bound on a large library and the scan-text half of AC-1 (Phase 4;
 Phase 5 measures NFR-1). Not tried on the phone: the 28 MB guard and a PDF PDF.js can't open.
@@ -337,6 +356,6 @@ Left on the phone: the Library holds "Sub", the three "A1 ..." PDFs and "A1 Coun
 (edited)"; the PDFs are in `Download/apps-hub-a1-test/`. The `apps-hub-test` emulator holds the
 debug build in place of the Store's 1.0.0 (owner approved).
 
-Next step: ship with the pr-shipper agent (one PR into `main`; merging releases the app through CI,
-which will publish another build). Then the next session is A2 (Scan Phase 2, camera and
-detection) on `scan-phase-2`, new from `main` once this PR is merged.
+Next step: the owner reviews and merges the PR (merging makes CI publish the six builds above).
+Then the next session is A2 (Scan Phase 2, camera and detection) on `scan-phase-2`, new from
+`main` once this PR is merged.
