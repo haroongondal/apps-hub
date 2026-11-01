@@ -399,6 +399,27 @@ Phone results (fill in as they come):
     `http://127.0.0.1`): **delete it at the end**. Verbose autofill logging is
     on (`cmd autofill set log_level verbose`, resets on reboot).
 
+- 2026-11-01 (fifth session): **P1 no-match fill timeout** (ledger "Post-plan
+  work"). The emulator release build (680 fake logins, no-match page) answered in
+  time uncontended and reproduced the phone's exact timeout once under host load:
+  Android's 5 s clock starts when the request is queued, before Strongroom's
+  process exists; fork + `bindApplication` took ~2.9 s and `MainApplication`'s
+  React Native init ~1.2 s, so `onFillRequest` arrived 4.5 s in. "No match" was
+  a coincidence: the phone's no-match test came after a gap, i.e. a cold process.
+  Fixes: 567320a + 57b8d17 (requester PSL lookup once per request, fill/save
+  catch `Throwable` and answer exactly once, a fallback logs only the exception's
+  class name, PSL warmed from `onConnected`); 271cd8f P1b (React Native starts
+  from `MainActivity`, not `Application.onCreate`; a node test guards it): cold
+  fills load no React Native. Owner: Autostart is ON for Strongroom; P3 native
+  secret field "Build it now". A phone test of the cold fill was aborted because
+  another session started driving the phone (Store work) at 13:13; the Store then
+  listed Strongroom "Not installed, Available 0.1.0 (4)" (likely the Store's
+  `<queries>` lacks Strongroom; versionCode 4 unexplained, we published 2).
+  emulator-5556 now holds the 271cd8f release build (signed with the release key:
+  `~/.gradle/gradle.properties` holds the `APPS_HUB_RELEASE_*` props), a 680-login
+  test vault (master password `EmulatorProbeVault77`), locked, Strongroom as its
+  autofill service.
+
 ## Owner items to raise at the end of Phase 1 (from Task 1)
 
 - Before Phase 2: decide whether to add an account key (a second secret typed
@@ -428,25 +449,23 @@ SDD ledger (task progress, rulings, deferred minors):
 `git log` over memory. Phone installs only via the Store (release builds);
 debug work uses the emulator.
 
-**Exact next step (updated 2026-11-01):** Tasks 1–12 (Steps 1–3, 5) are
-done and reviewed; 0.1.0 (2) is installed on the phone via the Store; Chrome
-fill and the S1 frame check pass on the phone. Open work, in order:
-1. **Fix the no-match fill timeout** (phone results above): with no matching
-   login Strongroom misses Android's 5 s limit, so "Other logins" never shows.
-   Reproduce in a JVM test (a vault of a few hundred logins, a non-matching
-   `Web` requester, time `respond`'s matching loop), fix the slow path, and
-   make `onFillRequest` catch `Throwable` and always call the callback.
-2. **Smaller APK** (owner asked; awaiting go-ahead): the release APK is 73.6
-   MB because it ships four ABIs; the Store's download stalls and hits its
-   60 s read timeout (`apps/store/.../Installer.kt:49`) on the owner's phone.
-   Build Strongroom's release for `arm64-v8a` only (~20 MB), keeping x86_64
-   for emulator debug builds. Releases run from this worktree, not the main
-   checkout (main's `tools/release/src/apps.ts` has no `strongroom`).
-3. **Owner decision: native secret field.** Google's autofill (emulator) and
-   Android System Intelligence's augmented autofill (phone, `dumpsys autofill`
-   `aug:` sessions) open sessions on Strongroom's own screens despite the
-   exclusion flags. Fix: a native `EditText` with `getAutofillType() =
-   AUTOFILL_TYPE_NONE` for every secret input, `UnlockActivity`'s included.
+**Exact next step (updated 2026-11-01, fifth session):** Tasks 1–12 (Steps
+1–3, 5) are done and reviewed; 0.1.0 (2) is installed on the phone via the
+Store; Chrome fill and the S1 frame check pass on the phone. Open work, in
+order (ledger "Post-plan work" has the rulings and P-briefs):
+1. **P1 fill timeout: done** (567320a, 57b8d17, review clean). **P1b** (271cd8f,
+   React Native deferred to `MainActivity`) is in review; close it, then the
+   phone retest of a cold fill comes with the next release (when the phone is free).
+2. **P2 smaller APK:** `reactNativeArchitectures=arm64-v8a` in
+   `apps/strongroom/android/gradle.properties` (the phone and both AVDs are
+   arm64; ruling in the ledger). The 73.6 MB four-ABI APK stalls the Store's
+   download (60 s read timeout, `apps/store/.../Installer.kt:49`). Releases run
+   from this worktree. **Ask the owner before releasing.**
+3. **P3 native secret field: owner said build it now** (brief
+   `.superpowers/sdd/PHASE-1-PLAN/p3-brief.md`): an `EditText` subclass with
+   `getAutofillType() = AUTOFILL_TYPE_NONE` behind every `SecretField` and both
+   note fields, plus `UnlockActivity`'s password field; `packages/ui` untouched.
+   Then one release (owner's go-ahead) carries P1, P1b, P2 and P3.
 4. **Rest of the phone checklist:** S2 (https page), card fill asks for the
    fingerprint, save/update prompts, the master-password unlock time, B5
    (Deputy's view), S4/S5, U1, U2, the two-step save. Then delete the
