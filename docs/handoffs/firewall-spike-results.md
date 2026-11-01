@@ -1,4 +1,4 @@
-# TunnelWall firewall spike: results so far (2026-10-31)
+# TunnelWall firewall spike: results so far (2026-10-31, phone run 2026-11-01)
 
 Branch `firewall-spike` (never merged, never pushed to `main`). Plan:
 `docs/superpowers/plans/2026-10-31-tunnelwall-firewall-spike.md`. Engine: firestack
@@ -57,7 +57,25 @@ already does this (`files/spike.log`).
   scans. Devices-responding counts on the emulator are too noisy to compare (on: 161, 110;
   off: 106, 99, 120).
 
+## Owner's phone (2026-11-01, Redmi 24116RACCG, HyperOS 3.0, Android 16)
+
+Installed over wireless debugging at the owner's request (a one-off exception to the Store-only
+rule; separate package `com.opentunnel.open_tunnel_vpn.spike`, debug build).
+
+| Check | Result |
+|---|---|
+| Firewall starts in its own process | PASS: system DNS taken from the router (192.168.18.1), no crash |
+| Traffic flows | PASS: 22 of 22 DNS answers complete; Android marks the VPN network VALIDATED |
+| Real app names on this ROM | PASS: Google Play services, Gmail, Play Store, Google app, Xiaomi push (`com.xiaomi.xmsf`), `com.miui.analytics`, `com.facebook.services` |
+| Domain names on flows | PASS (for example `mtalk.google.com`, `z-m-gateway.facebook.com`, an Aliyun load balancer for Xiaomi push) |
+| Block one app | PASS: 25 of 25 Chrome flows blocked (QUIC and TCP, with domains); Chrome shows "This site can't be reached" |
+| WireGuard starts while the firewall runs | PASS: no crash, both processes alive; WireGuard becomes the active VPN; the firewall again gets no `onRevoke` |
+| Restore after the hand-over | PASS: stop + start the firewall, VALIDATED again |
+| Idle firewall process | 0.0% CPU, 176 MB resident |
+
+Private DNS was off on the phone, so the DNS-over-TLS rule was not exercised there.
+
 ## Not verified yet
 
-Always-on start (which service class starts), Private DNS strict mode, a page load in a second
-browser (the emulator has only Chrome), battery over a night, and everything on the owner's phone.
+Always-on start after a reboot (which service class starts), Private DNS automatic and strict
+modes on the phone, and battery over two nights (firewall on, then off).
