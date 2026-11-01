@@ -9,9 +9,16 @@ const application = readFileSync(join(src, 'MainApplication.kt'), 'utf8');
 const activity = readFileSync(join(src, 'MainActivity.kt'), 'utf8');
 
 test('MainApplication.onCreate does not start React Native', () => {
-  const body = application.match(/override fun onCreate\(\) \{([\s\S]*?)\n  \}/)?.[1] ?? '';
+  const match = application.match(/override fun onCreate\(\) \{([\s\S]*?)\n  \}/);
+  if (!match) {
+    // No parseable onCreate is fine only when MainApplication really has none.
+    assert.doesNotMatch(application, /override fun onCreate/, 'onCreate exists but the test cannot parse it');
+    return;
+  }
+  const body = match[1];
   assert.doesNotMatch(body, /loadReactNative/);
   assert.doesNotMatch(body, /ApplicationLifecycleDispatcher/);
+  assert.doesNotMatch(body, /startReactNative/);
 });
 
 test('React Native still starts, from MainActivity before it is created', () => {
