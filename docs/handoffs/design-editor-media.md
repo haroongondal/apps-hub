@@ -236,13 +236,24 @@ Verified 2026-11-01 (session B1, Phase 1 steps 1–6; output was read, not predi
 - **2026-11-01 (session B1, Phase 1 steps 1–6).** Built media-core (34 tests), the app shell with
   prebuild and the rendered icon, the Kotlin module (built by a forked worker, reviewed by the parent,
   two fixes), the Media lab, the release registry entry, and the SPEC §5.1, §7.1 and §10.2 updates.
-  Verification is under "Verified 2026-11-01". Stopped before step 7. Nothing pushed or released.
+  Verification is under "Verified 2026-11-01". Stopped before step 7.
+- **2026-11-01 (session B1, step 7: release).** Owner said "go ahead", then "also release the store". Pushed the
+  branch. Confirmed the target with the owner: Cloudflare account "Haroonmukhtar4@gmail.com's Account"
+  (ID 29ada9205500…), Store API `apps-hub-store.haroonmukhtar4.workers.dev`. `pnpm release store -m "Store:
+  see Design Editor"` printed "published" on its first attempt, but that write was lost (see below). Its
+  third attempt is the one that stuck: 0.1.0 (14). `pnpm release design-editor -m "Design Editor: media lab"`
+  published 1.0.0 (2) on its fourth attempt (43.2 MB APK).
+  Upload problems: connect timeout once, then `write EPIPE` on large PUTs (small PUT to an empty key returned 400,
+  so auth and transport work). The first Store attempt printed "published", but a later manifest write (about
+  two minutes after it, from a read that predated it) overwrote the Store entry back to 13. Re-running
+  the Store fixed it. Verified after the last release: `store` 14 and `design-editor` 2 both in `manifest.json`.
 
 ## Current state + exact next step
 
 - State (2026-11-01): the S0 docs are on `main` (PR #1 merged). Phase 1 steps 1–6 are done on branch
   `design-media-phase-1` (worktree `.claude/worktrees/design-media-phase-1`, from `origin/main` 03d1c7f).
-  Commits are local; nothing is pushed or released. Step 7 (the phone encoder spike) waits for the owner.
+  Pushed to `origin/design-media-phase-1`. Step 7 is released: Store 0.1.0 (14) and Design Editor 1.0.0 (2),
+  both verified in `manifest.json` on the Store account. The phone spike (S1–S8) waits for the owner.
 - **Unmerged Design Editor work exists (found 2026-10-31).** Branch `design-editor-phase-2`
   (2026-10-28, handoff `docs/handoffs/design-editor-phase-2.md` on that branch) adds multi-page
   designs (file format v2), bundled fonts and real PDF text. It is e2e green and waits for the
@@ -251,11 +262,11 @@ Verified 2026-11-01 (session B1, Phase 1 steps 1–6; output was read, not predi
   extraction) must start after that branch is merged, and Phase 3 must extract the multi-page
   editor. Use `design-media-phase-<n>` branch names to avoid the clash.
 - **Owner answers recorded** (S0, 2026-10-31; see "Decisions made").
-- **Next step (owner gate):** step 7 needs the owner's Redmi Note 14 Pro 4G and the five test clips
-  (SPEC §16.3). When the owner says so, confirm the Cloudflare account, commit, then
-  `pnpm release design-editor -m "Design Editor: media lab"` (no `pnpm release store`, per the
-  correction above). The owner installs from the Store and runs S1–S8 in the Media lab. Paste the
+- **Next step (owner gate):** the owner installs Design Editor from the Store (never `adb install`) on the
+  Redmi Note 14 Pro 4G, with the five test clips (SPEC §16.3), and runs S1–S8 in the Media lab. Paste the
   results here, then tune `budget.ts` (FLOOR, margin, overhead) and the fixtures, and re-run step 6.
+  Release note: the Store was released too (owner request, 2026-11-01), so the Store carries
+  origin/main's code, not the uncommitted Store work in the main checkout.
   B0 (ship the multi-page branch) whenever the owner is ready. B0 and B1 must both be merged before B2.
 - **Open for later phases:** the Mac probe must report display dimensions, as Android does now.
   Verify FrameDropEffect on lower-fps sources (S5). `SYSTEM_ALERT_WINDOW` is debug-only (release clean).
