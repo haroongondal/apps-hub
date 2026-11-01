@@ -60,25 +60,32 @@ object Matching {
     return Requester.App(id, domain?.let { registrableDomain(it) ?: normalizeHost(it) ?: return null })
   }
 
-  /** The one predicate: autofill, the match index and the unlock screen's re-check all go through it. */
-  fun matches(sites: List<Site>, apps: List<AppLink>, r: Requester): Boolean = when (r) {
-    is Requester.Web -> sites.any { siteMatches(it, r.site) }
-    is Requester.App -> apps.any { it.app == r.id && it.domain == r.reportedDomain }
-  }
+  fun matches(sites: List<Site>, apps: List<AppLink>, r: Requester): Boolean = matcher(r)(sites, apps)
 
   fun matches(login: Entry.Login, r: Requester): Boolean = matches(login.sites, login.apps, r)
+
+  /** The one predicate: autofill, the match index and the unlock screen's re-check (through matches) all go through it. Build it once per request: the requester's host is normalized and looked up once, not once per saved site. */
+  fun matcher(r: Requester): (sites: List<Site>, apps: List<AppLink>) -> Boolean = when (r) {
+    is Requester.App -> { _, apps -> apps.any { it.app == r.id && it.domain == r.reportedDomain } }
+    is Requester.Web -> webMatcher(r.site)
+  }
 
   fun needsHostLabel(site: Site): Boolean {
     val host = normalizeHost(site.host) ?: return true
     return registrableDomain(host) == null || host.substringBefore(':').endsWith(".local")
   }
 
-  private fun siteMatches(saved: Site, requested: Site): Boolean {
-    if (saved.https && !requested.https) return false
+  private fun webMatcher(requested: Site): (List<Site>, List<AppLink>) -> Boolean {
+    val b = normalizeHost(requested.host) ?: return { _, _ -> false }
+    val rb = lazy { registrableDomain(b) } // the PSL lookup can throw (list missing), so only once a saved site gets that far, as before
+    return { sites, _ -> sites.any { siteMatches(it, requested.https, b, rb) } }
+  }
+
+  private fun siteMatches(saved: Site, requestedHttps: Boolean, b: String, requestedDomain: Lazy<String?>): Boolean {
+    if (saved.https && !requestedHttps) return false
     val a = normalizeHost(saved.host) ?: return false
-    val b = normalizeHost(requested.host) ?: return false
     val ra = registrableDomain(a)
-    val rb = registrableDomain(b)
+    val rb = requestedDomain.value
     return if (ra != null && rb != null) ra == rb else ra == null && rb == null && a == b
   }
 

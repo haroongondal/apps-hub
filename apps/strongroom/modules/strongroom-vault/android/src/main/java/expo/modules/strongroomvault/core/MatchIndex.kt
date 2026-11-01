@@ -48,5 +48,5 @@ object MatchIndex {
     }
   }
 
-  fun find(items: List<IndexItem>, r: Requester): List<IndexItem> = items.filter { Matching.matches(it.sites, it.apps, r) }
+  fun find(items: List<IndexItem>, r: Requester): List<IndexItem> = Matching.matcher(r).let { match -> items.filter { match(it.sites, it.apps) } }
 }

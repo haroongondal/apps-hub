@@ -1,4 +1,5 @@
-import { requireNativeModule } from 'expo';
+import { requireNativeModule, requireNativeView } from 'expo';
+import type { NativeSyntheticEvent, ViewProps } from 'react-native';
 
 export interface Status {
   setUp: boolean;
@@ -82,5 +83,29 @@ const StrongroomVault = requireNativeModule<StrongroomVaultApi>('StrongroomVault
 
 // Fires each time an unlocked vault locks (auto-lock, Lock now, a failed key check), so screens can drop what they show.
 export const addLockListener = (listener: () => void) => StrongroomVault.addListener('onLock', listener);
+
+// mostRecentEventCount is the eventCount of the last change JS has seen; a value sent with an older count is ignored, so it can't overwrite newer typing.
+export interface SecretInputProps extends ViewProps {
+  value: string;
+  mostRecentEventCount: number;
+  shown: boolean;
+  numeric: boolean;
+  multiline: boolean;
+  fontFamily: string;
+  fontSize: number;
+  textInset: number;
+  textColor: string;
+  placeholder?: string;
+  placeholderColor: string;
+  selectionColor: string;
+  label: string;
+  onChangeValue: (e: NativeSyntheticEvent<{ text: string; eventCount: number }>) => void;
+  onSubmit: () => void;
+  onFocusChange: (e: NativeSyntheticEvent<{ focused: boolean }>) => void;
+  onContentHeight: (e: NativeSyntheticEvent<{ height: number }>) => void;
+}
+
+// An input no autofill service sees (its autofill type is NONE), for every secret and note on Strongroom's own screens.
+export const SecretInput = requireNativeView<SecretInputProps>('StrongroomVault');
 
 export default StrongroomVault;

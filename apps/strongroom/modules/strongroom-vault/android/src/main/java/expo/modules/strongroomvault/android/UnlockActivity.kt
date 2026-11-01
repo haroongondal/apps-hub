@@ -96,10 +96,9 @@ class UnlockActivity : AppCompatActivity() {
   private fun passwordForm(error: String?) {
     screen(UNLOCK_TITLE, req.label)
     error?.let { body(it, colors["danger"]) }
-    val field = AppCompatEditText(this).apply {
+    val field = SecretEditText(this).apply {
       inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
       imeOptions = EditorInfo.IME_ACTION_DONE or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
-      importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
       hint = "Master password"
       colors["text"]?.let(::setTextColor)
     }

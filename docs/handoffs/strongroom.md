@@ -2,21 +2,22 @@
 
 ## Resume prompt
 
-Dated 2026-10-30 (second session). Work only in the worktree
+Dated 2026-11-01 (fourth session). Work only in the worktree
 `/Users/outsentia/Documents/apps-hub/.claude/worktrees/strongroom-phase-1`
 (branch `strongroom-phase-1`; enter it with EnterWorktree path). Read
 `docs/handoffs/strongroom.md` there completely first, then
 `docs/strongroom/DESIGN.md`, then the SDD ledger at
 `.superpowers/sdd/PHASE-1-PLAN/progress.md` (its rulings, carries and
-deferred minors bind later tasks), and continue executing
-`docs/strongroom/PHASE-1-PLAN.md` with superpowers:subagent-driven-development
-(implementer and task-reviewer templates, a review after every task, explicit
-models). Trust the decisions, verified facts and ledger and don't redo that
-work. Follow the handoff contract in `~/.claude/CLAUDE.md`. Read "Current state
-+ exact next step" before doing anything, then continue from it. Commit per
-task on the branch; never push, merge or release without the owner's word;
-phone installs only via the Store; debug runs on the emulator only, and the
-owner's phone is attached over adb, so always target `-s emulator-5554`.
+deferred minors bind the remaining work). The 12 plan tasks are done; what is
+left is the numbered list in "Current state + exact next step". Use
+superpowers:subagent-driven-development for code work (implementer and
+task-reviewer templates, a review after every change, explicit models) and
+ledger every ruling. Trust the decisions, verified facts and ledger and don't
+redo that work. Follow the handoff contract in `~/.claude/CLAUDE.md`. Commit on
+the branch; never push, merge or release (`pnpm release`) without the owner's
+explicit word in this chat; phone installs only via the Store; adb on the
+phone only for logcat, screenshots, taps and uiautomator dumps, always with
+`-s <phone serial>`; debug builds only on an emulator.
 
 ## Goal and fixed constraints
 
@@ -78,6 +79,41 @@ no password generator / CSV export / card saving in v1.
   and `include_all_autofill_type_not_none_views_in_assist_structure=true`, so the system opens
   autofill sessions for Strongroom's own password-type fields despite `importantForAutofill="no"`
   and the content view's `NO_EXCLUDE_DESCENDANTS` (seen in verbose autofill logs).
+- **Owner's phone:** Xiaomi 24116RACCG (`obsidian`), HyperOS 3.0 / Android 16,
+  Chrome 156, Gboard, no Firefox. adb serial is the mDNS name
+  `adb-49kjmnuwonkffqzh-zHnffO._adb-tls-connect._tcp`. Its Wi-Fi IP changes
+  (DHCP; .209 → .94 on 2026-10-31) and wireless adb then drops; `adb connect` to
+  the advertised ip:port can time out, so ask the owner to toggle Wireless
+  debugging and keep the screen on. FLAG_SECURE blacks out screenshots of
+  Strongroom; read its screens with `adb -s <serial> exec-out uiautomator dump
+  /dev/tty` and parse the XML (attribute order varies; parse each `<node>`
+  into a dict). The dump shows vault rows (names, usernames), so read only
+  what a check needs.
+- **Autofill debugging on the phone:** `cmd autofill set log_level verbose`
+  (resets on reboot), `logcat -c`, reproduce, then `logcat -d | grep -i
+  autofill`; `dumpsys autofill` shows the request history incl. `aug:`
+  (augmented) sessions.
+- **Test pages for Chrome:** the auto-mode classifier blocks serving on the LAN
+  (`0.0.0.0:80`). Serve on the Mac's loopback (`python3 -m http.server 8080
+  --bind 127.0.0.1` from a scratch dir) and tunnel with `adb -s <serial>
+  reverse tcp:80 tcp:8080`; the phone opens `http://localhost/…`, and
+  `http://127.0.0.1/…` works as a second origin for frame tests. Chrome's
+  `webDomain` has no port; frame fields carry the frame's own domain.
+- **Releases:** run `pnpm release strongroom` from this worktree (main's
+  `tools/release/src/apps.ts` has no `strongroom` entry). The classifier blocks
+  it as a production deploy unless the owner has said to release in the chat.
+  The release APK is 73.6 MB (four ABIs: `reactNativeArchitectures` in
+  `apps/strongroom/android/gradle.properties`, same in every app). The Store
+  downloads with a 15 s connect / 60 s read timeout
+  (`apps/store/modules/store-installer/.../Installer.kt:48-49`), and Play
+  Protect's "Scan app" prompt must be answered within ~17 s. A GET of the live
+  manifest with the release token returned 403 on 2026-10-31 (not explained).
+- **Emulators:** `emulator-5554` (`apps-hub-test`) is shared with another
+  session that drove it during Task 12; Strongroom has its own AVD
+  `strongroom-task12` (emulator-5556, same image).
+- **Sandbox:** compound shell commands that mix adb with variables, pipes into
+  other interpreters, or globbed URLs get refused as unverifiable; split them
+  into plain commands and quote URLs.
 
 ## File map
 
@@ -363,6 +399,43 @@ Phone results (fill in as they come):
     `http://127.0.0.1`): **delete it at the end**. Verbose autofill logging is
     on (`cmd autofill set log_level verbose`, resets on reboot).
 
+- 2026-11-01 (fifth session): **P1 no-match fill timeout** (ledger "Post-plan
+  work"). The emulator release build (680 fake logins, no-match page) answered in
+  time uncontended and reproduced the phone's exact timeout once under host load:
+  Android's 5 s clock starts when the request is queued, before Strongroom's
+  process exists; fork + `bindApplication` took ~2.9 s and `MainApplication`'s
+  React Native init ~1.2 s, so `onFillRequest` arrived 4.5 s in. "No match" was
+  a coincidence: the phone's no-match test came after a gap, i.e. a cold process.
+  Fixes: 567320a + 57b8d17 (requester PSL lookup once per request, fill/save
+  catch `Throwable` and answer exactly once, a fallback logs only the exception's
+  class name, PSL warmed from `onConnected`); 271cd8f P1b (React Native starts
+  from `MainActivity`, not `Application.onCreate`; a node test guards it): cold
+  fills load no React Native. Owner: Autostart is ON for Strongroom; P3 native
+  secret field "Build it now". A phone test of the cold fill was aborted because
+  another session started driving the phone (Store work) at 13:13; the Store then
+  listed Strongroom "Not installed, Available 0.1.0 (4)" (likely the Store's
+  `<queries>` lacks Strongroom; versionCode 4 unexplained, we published 2).
+  emulator-5556 now holds the 271cd8f release build (signed with the release key:
+  `~/.gradle/gradle.properties` holds the `APPS_HUB_RELEASE_*` props), a 680-login
+  test vault (master password `EmulatorProbeVault77`), locked, Strongroom as its
+  autofill service.
+- 2026-11-01 (fifth session, cont.): P1b review round 1 (4720aa3: delegate gets
+  `BuildConfig.IS_NEW_ARCHITECTURE_ENABLED`, stricter start-up test); P2 arm64
+  only (4306a33, APK 36.6 MB); P3 native secret field (79d52eb + f728b59). P3
+  emulator proof: with Google selected, 19 field steps opened no session (all did
+  before); a manual "Autofill" request's Save structure carried a test password
+  and note before f728b59 and neither after. emulator-5556 now: release build of
+  f728b59, a 1-login vault (same master password), locked, Strongroom autofill.
+  `pnpm release strongroom` was denied once by the auto-mode classifier on a bare
+  "go ahead"; the owner's explicit "Yes, release 0.1.1 now" let it run. Published
+  0.1.1 (5). The phone's wireless adb then dropped.
+  Verified 2026-11-01 ~18:00: no adb devices at all, no emulator process, no mDNS
+  advertisement. emulator-5556 aborted (exit 134, netsim "Wifi is gone" errors),
+  not caused by us; its AVD disk state should be intact. To bring it back:
+  `~/Library/Android/sdk/emulator/emulator -avd strongroom-task12 -port 5556
+  -no-snapshot-save &`, then unlock it with PIN 1234. Nothing needs it until a
+  code change is made after the phone checks.
+
 ## Owner items to raise at the end of Phase 1 (from Task 1)
 
 - Before Phase 2: decide whether to add an account key (a second secret typed
@@ -392,23 +465,56 @@ SDD ledger (task progress, rulings, deferred minors):
 `git log` over memory. Phone installs only via the Store (release builds);
 debug work uses the emulator.
 
-**Exact next step:** Tasks 1–11 and Task 12 Steps 1–3 and 5 are complete
-(Task 12 re-review clean; commits up to 036eff7, plus the launcher icon
-142fc7c). The owner asked on 2026-10-31 to test on the phone instead of the
-emulator, which is the go-ahead for Step 4: `pnpm release store` (so the Store
-lists Strongroom; the branch differs from main only by that `<queries>` line),
-then `pnpm release strongroom`, then the owner installs from the Store (never
-`adb install`; adb on the phone only for logcat, screenshots and taps). Walk
-the phone checklist above with the owner and record each result there. Before
-typing the master password the owner sets the phone's autofill service to
-Strongroom (or None): Android 15 sent Strongroom's own password-type fields
-to Google autofill on the emulator despite the exclusion flags. If the phone
-shows Google offering to save any Strongroom secret, build the native secret
-field next (an `EditText` whose `getAutofillType()` is `AUTOFILL_TYPE_NONE`,
-for every secret input including `UnlockActivity`'s). Fix whatever the phone
-shows, then the final whole-branch review (opus), pointed at the ledger's
-deferred minors and "carry to final review" lines. Then
-superpowers:finishing-a-development-branch: never merge or push without the
-owner's word (CI releases registered apps on main). Implementers so far:
-sonnet for Tasks 2–8 and 11, opus for Tasks 9–10 and 12; reviewers opus for
-crypto/format/session/matching/platform, sonnet otherwise.
+**Exact next step (updated 2026-11-01, fifth session):** Tasks 1–12 (Steps
+1–3, 5) are done and reviewed; 0.1.0 (2) is installed on the phone via the
+Store; Chrome fill and the S1 frame check pass on the phone. Open work, in
+order (ledger "Post-plan work" has the rulings and P-briefs):
+1. **Done and reviewed, released as Strongroom 0.1.1 (versionCode 5, 36.7 MB,
+   published 2026-11-01 ~17:48 with the owner's explicit yes):** P1 fill timeout
+   (567320a, 57b8d17), P1b React Native deferred to `MainActivity` (271cd8f,
+   4720aa3), P2 arm64-only APK (4306a33; was 73.6 MB), P3 native secret field
+   (79d52eb, f728b59: `SecretEditText` reports `AUTOFILL_TYPE_NONE` and writes
+   nothing to assist/autofill/content-capture structures; every `SecretField`,
+   both notes and `UnlockActivity`'s password), version bump a4c490c.
+2. **PR #7 is open** (`strongroom-phase-1` → `main`, Strongroom 0.1.1; the owner
+   merges it, which makes CI release the next versionCode). Merged `origin/main`
+   into the branch first (2ddbcb5, no conflicts). Tests: strongroom 25/25,
+   typecheck clean. Do not merge or release without the owner's word.
+   **0.1.1 (5) is installed on the phone** (the owner installed it from the
+   Store at 17:56; installer com.haroon.store; Strongroom is still the autofill
+   service). **DOWNGRADE TRAP, needs the owner's decision (found 18:50):**
+   `origin/main` already contains the Strongroom branch up to 036eff7 (PR #4
+   "Strongroom Phase 1", merged on GitHub, not by this session) and registers
+   `strongroom` in `tools/release/src/apps.ts`, so CI releases Strongroom from
+   main on every push that touches its folder or dependencies. That explains the
+   unexplained versionCodes 3, 4 and 6: CI builds of the OLD code (0.1.0, four
+   ABIs, no P1/P1b/P2/P3). The Store now says "Installed 0.1.1 (5), Available
+   0.1.0 (6)" with changelog "Merge pull request #6 from
+   haroongondal/scan-phase-1". Tapping Update would install the old build over
+   0.1.1, and going back to a lower versionCode needs an uninstall, which wipes the
+   local-only vault. Fix: merge `strongroom-phase-1` into main through a PR (after
+   merging `origin/main` into the branch; owner's word needed for the push and
+   merge), so CI releases the fixed code as 0.1.1 (7 or later); or release again
+   by hand from this worktree (versionCode 7). Until then: don't tap Update on
+   Strongroom. The local `main` branch is behind `origin/main`.
+3. **Phone retests for this release:** a cold fill on a no-match page shows
+   "Other logins" in time (swipe Strongroom away first; logcat
+   `Start proc …strongroom` then the fill); `dumpsys autofill` shows no `aug:`
+   sessions on Strongroom's screens; typing speed in the new secret fields with
+   Gboard (adb-typed input was ~215 ms/char on a loaded emulator). Tell the
+   owner: an outside tap no longer closes the keyboard on secret fields; notes
+   use the visible-password keyboard (no emoji row, no auto-caps).
+4. **Rest of the phone checklist:** S2 (https page), card fill asks for the
+   fingerprint, save/update prompts, the master-password unlock time, B5
+   (Deputy's view), S4/S5, U1, U2, the two-step save. Then delete the
+   `sg-test-lan` test login, and the owner switches autofill back to Google.
+5. **Final whole-branch review** (opus) over the ledger's deferred minors and
+   "carry to final review" lines; one fix wave; then
+   superpowers:finishing-a-development-branch (never merge or push without the
+   owner's word: CI releases registered apps on main).
+6. **Owner items before Phase 2:** the account-key question (§10); Deputy
+   refusing to operate Strongroom; card import (only if a Google Pay/Takeout
+   export holds full card numbers; owner checks first).
+Implementers so far: sonnet for Tasks 2–8 and 11, opus for Tasks 9–10 and
+12; reviewers opus for crypto/format/session/matching/platform, sonnet
+otherwise.

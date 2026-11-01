@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.net.Uri
 import android.provider.Settings
 import android.view.autofill.AutofillManager
@@ -15,6 +16,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.strongroomvault.android.BiometricKey
 import expo.modules.strongroomvault.android.EntryInput
+import expo.modules.strongroomvault.android.SecretFieldView
 import expo.modules.strongroomvault.android.SensitiveClipboard
 import expo.modules.strongroomvault.android.VaultHolder
 import expo.modules.strongroomvault.core.AppId
@@ -60,6 +62,24 @@ class StrongroomVaultModule : Module() {
     OnCreate { VaultHolder.lockListener = { sendEvent(LOCK_EVENT) } }
 
     OnDestroy { VaultHolder.lockListener = null }
+
+    View(SecretFieldView::class) {
+      Events("onChangeValue", "onSubmit", "onFocusChange", "onContentHeight")
+      Prop("value") { view: SecretFieldView, value: String -> view.value = value }
+      Prop("mostRecentEventCount") { view: SecretFieldView, count: Int -> view.jsEventCount = count }
+      Prop("shown") { view: SecretFieldView, shown: Boolean -> view.shown = shown }
+      Prop("numeric") { view: SecretFieldView, numeric: Boolean -> view.numeric = numeric }
+      Prop("multiline") { view: SecretFieldView, multiline: Boolean -> view.multiline = multiline }
+      Prop("fontFamily") { view: SecretFieldView, family: String -> view.fontFamily = family }
+      Prop("fontSize") { view: SecretFieldView, size: Float -> view.fontSize = size }
+      Prop("textInset") { view: SecretFieldView, inset: Float -> view.textInset = inset }
+      Prop("textColor") { view: SecretFieldView, color: Color -> view.input.setTextColor(color.toArgb()) }
+      Prop("placeholder") { view: SecretFieldView, text: String? -> view.input.hint = text }
+      Prop("placeholderColor") { view: SecretFieldView, color: Color -> view.input.setHintTextColor(color.toArgb()) }
+      Prop("selectionColor") { view: SecretFieldView, color: Color -> view.setSelectionColor(color.toArgb()) }
+      Prop("label") { view: SecretFieldView, label: String -> view.input.contentDescription = label }
+      OnViewDidUpdateProps { view: SecretFieldView -> view.update() }
+    }
 
     Function("getStatus") {
       val v = vault()

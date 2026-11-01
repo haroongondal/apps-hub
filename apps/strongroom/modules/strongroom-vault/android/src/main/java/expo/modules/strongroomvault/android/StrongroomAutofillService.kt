@@ -1,13 +1,16 @@
 package expo.modules.strongroomvault.android
 
+import android.app.assist.AssistStructure
 import android.content.pm.PackageManager
 import android.os.CancellationSignal
 import android.service.autofill.AutofillService
 import android.service.autofill.FillCallback
+import android.service.autofill.FillContext
 import android.service.autofill.FillRequest
 import android.service.autofill.FillResponse
 import android.service.autofill.SaveCallback
 import android.service.autofill.SaveRequest
+import android.util.Log
 import expo.modules.strongroomvault.core.AuthRequest
 import expo.modules.strongroomvault.core.Browsers
 import expo.modules.strongroomvault.core.DetectedForm
@@ -18,6 +21,7 @@ import expo.modules.strongroomvault.core.Matching
 import expo.modules.strongroomvault.core.PendingSave
 import expo.modules.strongroomvault.core.Requester
 import expo.modules.strongroomvault.core.Saves
+import expo.modules.strongroomvault.core.answerOnce
 import expo.modules.strongroomvault.core.shouldServe
 import expo.modules.strongroomvault.signerSha256
 import kotlin.concurrent.thread
@@ -27,31 +31,33 @@ internal const val SAVE_REFUSED = "Strongroom can't save a password from this sc
 
 /** Thin by design: every decision is in core/. Never calls VaultHolder.touch(), so other apps' requests don't keep the vault open. */
 class StrongroomAutofillService : AutofillService() {
+  // A cold start's first request needs the suffix list: load it beside that request's Keystore read. A failed load stays quiet here and fails closed at the real lookup.
+  override fun onConnected() {
+    thread(name = "strongroom-psl") { runCatching { Matching.registrableDomain("example.com") } }
+  }
+
   override fun onFillRequest(request: FillRequest, cancellationSignal: CancellationSignal, callback: FillCallback) {
-    val structure = request.fillContexts.last().structure
-    if (!shouldServe(structure.activityComponent.packageName, packageName)) return callback.onSuccess(null)
     // Off the main thread: the vault can be busy for seconds under an Argon2 unlock.
     thread(name = "strongroom-fill") {
-      val response = try {
-        respond(request, StructureReader.read(structure))
-      } catch (e: Exception) {
-        null // a missing PSL or anything unexpected from core fails closed: no fill
-      }
-      if (!cancellationSignal.isCanceled) callback.onSuccess(response)
+      // A missing PSL or anything unexpected from core fails closed: no fill, but still an answer, so the system never waits out its 5 s.
+      answerOnce(null, { served(request.fillContexts)?.let { respond(request, StructureReader.read(it)) } }, { failed("fill", it) }, callback::onSuccess)
     }
   }
 
   override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
-    val structure = request.fillContexts.last().structure
-    if (!shouldServe(structure.activityComponent.packageName, packageName)) return callback.onSuccess()
     thread(name = "strongroom-save") {
-      val failure = try {
-        save(StructureReader.read(structure))
-      } catch (e: Exception) {
-        SAVE_FAILED
+      answerOnce(SAVE_FAILED, { served(request.fillContexts)?.let { save(StructureReader.read(it)) } }, { failed("save", it) }) { failure ->
+        if (failure == null) callback.onSuccess() else callback.onFailure(failure)
       }
-      if (failure == null) callback.onSuccess() else callback.onFailure(failure)
     }
+  }
+
+  private fun served(contexts: List<FillContext>): AssistStructure? =
+    contexts.last().structure.takeIf { shouldServe(it.activityComponent.packageName, packageName) }
+
+  // The class name only: a message or stack trace can quote decrypted record text (kotlinx JSON errors include their input).
+  private fun failed(what: String, e: Throwable) {
+    Log.w("Strongroom", "$what failed: ${e.javaClass.name}")
   }
 
   private fun respond(request: FillRequest, read: ReadStructure): FillResponse? {
@@ -71,13 +77,15 @@ class StrongroomAutofillService : AutofillService() {
     var any = false
 
     if (logins.isNotEmpty()) {
+      val index = if (entries == null) VaultHolder.index(this) else emptyList() // before the first PSL use, so a cold start's Keystore read overlaps the list loading
       val host = (requester as? Requester.Web)?.site?.takeIf(Matching::needsHostLabel)?.host
       if (entries != null) {
-        for (login in entries.values.filterIsInstance<Entry.Login>().filter { Matching.matches(it, requester) }.sortedBy { it.name.lowercase() }) {
+        val match = Matching.matcher(requester)
+        for (login in entries.values.filterIsInstance<Entry.Login>().filter { match(it.sites, it.apps) }.sortedBy { it.name.lowercase() }) {
           Datasets.filled(logins, login, present.of(login.username.ifEmpty { login.name }, host))?.let { response.addDataset(it); any = true }
         }
       } else {
-        for (item in MatchIndex.find(VaultHolder.index(this), requester)) {
+        for (item in MatchIndex.find(index, requester)) {
           val title = item.username.ifEmpty { item.name }
           val auth = Datasets.authIntent(this, AuthRequest("fill", item.id, requester, title), logins)
           response.addDataset(Datasets.locked(logins, present.of(title, host), auth))
