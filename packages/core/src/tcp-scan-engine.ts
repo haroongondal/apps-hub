@@ -158,7 +158,7 @@ export class TcpScanEngine {
 
     const onService = (event: ServiceEvent): void => {
       if (event.kind === 'mdns') mdns.push(event);
-      else ssdp.push(event);
+      else if (event.kind === 'ssdp') ssdp.push(event);
     };
     const onComplete = (payload: ServiceScanCompletePayload): void => {
       completion = payload;

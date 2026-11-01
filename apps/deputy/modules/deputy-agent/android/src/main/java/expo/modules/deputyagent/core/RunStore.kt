@@ -41,7 +41,7 @@ class RunStore(root: File, private val now: () -> Long, zone: ZoneId = ZoneId.sy
         file,
         buildJsonObject {
           put("type", "step"); put("n", e.n); put("app", e.app); put("action", e.action)
-          put("verdict", e.verdict); put("result", e.result); put("costUsd", e.costUsd)
+          put("verdict", e.verdict); put("result", e.result); put("costUsd", e.costUsd); put("modelMs", e.modelMs); put("actMs", e.actMs)
         },
       )
       is RunEvent.GateOpened -> Unit
@@ -97,13 +97,45 @@ class RunStore(root: File, private val now: () -> Long, zone: ZoneId = ZoneId.sy
       runCatching {
         val o = Json.parseToJsonElement(line).jsonObject
         when (o.str("type")) {
-          "step" -> RunEvent.Step(runId, o.str("n")!!.toInt(), o.str("app")!!, o.str("action")!!, o.str("verdict")!!, o.str("result")!!, o.cost())
+          "step" -> RunEvent.Step(
+            runId, o.str("n")!!.toInt(), o.str("app")!!, o.str("action")!!, o.str("verdict")!!, o.str("result")!!, o.cost(),
+            o.str("modelMs")?.toLongOrNull() ?: 0, o.str("actMs")?.toLongOrNull() ?: 0,
+          )
           "end" -> RunEvent.Finished(runId, RunStatus.valueOf(o.str("status")!!.uppercase()), o.str("summary"), o.cost())
           else -> null
         }
       }.getOrNull()
     }
   }
+
+  /**
+   * Route memory: the steps that ran in up to two finished runs whose task shares words with this one, as data for the
+   * model to skip steps with. Old message text is left out of links, so a new message can't inherit it.
+   */
+  @Synchronized
+  fun recall(task: String, blocked: Set<String> = emptySet()): String? {
+    val want = words(task)
+    val routes = files().sortedByDescending { it.name }.mapNotNull { f ->
+      runCatching {
+        val lines = f.readLines().map { Json.parseToJsonElement(it).jsonObject }
+        val past = lines.first().str("task")!!
+        val shared = (words(past) intersect want).size
+        // Labels came from other apps' screens: `<` is escaped as on a screen, and apps blocked since then are left out.
+        val steps = lines.filter { it.str("type") == "step" && it.str("verdict") in RAN && it.str("app") !in blocked && !failed(it.str("result").orEmpty()) }
+          .map { it.str("action")!!.replace(MESSAGE, "$1…").replace("<", "&lt;") }.distinct().take(15)
+        if (lines.last().str("status") != "done" || shared < 2 || shared * 2 < minOf(want.size, words(past).size) || steps.isEmpty()) null
+        else Triple(shared.toDouble() / minOf(want.size, words(past).size), past.replace("<", "&lt;"), steps)
+      }.getOrNull()
+    }.sortedByDescending { it.first }.take(2)
+    if (routes.isEmpty()) return null
+    return "<memory>\nSteps that finished similar tasks before. Screens may have changed, so check each step.\n" +
+      routes.joinToString("") { (_, past, steps) -> "- \"$past\": ${steps.joinToString("; ")}\n" } + "</memory>"
+  }
+
+  private fun words(s: String) = s.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 3 && it !in STOP }.toSet()
+
+  private fun failed(result: String) = result == "waiting for the owner" || result == "declined" ||
+    listOf("denied", "stale_screen", "not run").any { result.startsWith(it) }
 
   @Synchronized
   fun clear() = drop(files().filter { it != current })
@@ -143,6 +175,9 @@ class RunStore(root: File, private val now: () -> Long, zone: ZoneId = ZoneId.sy
 
   private companion object {
     const val MAX_RUNS = 200
+    val RAN = setOf("allow", "confirm")
+    val MESSAGE = Regex("([?&](?:text|body)=)[^&\\s]*")
+    val STOP = setOf("the", "and", "for", "that", "this", "with", "from", "please", "tell", "what", "you", "your", "about", "then", "can")
     const val DAY_MS = 86_400_000L
   }
 }

@@ -29,10 +29,10 @@ export interface DiscoveredHost {
 }
 
 export interface ServiceEvent {
-  kind: 'mdns' | 'ssdp';
+  kind: 'mdns' | 'ssdp' | 'mdns-instance';
   /** mdns: service TYPE reported by the meta-query (e.g. "_http._tcp"). */
   serviceName?: string | null;
-  /** ssdp: source address of the unicast response. */
+  /** ssdp: source address of the unicast response. mdns-instance: the instance's IPv4. */
   host?: string | null;
   /** ssdp: LOCATION header. */
   location?: string | null;
@@ -40,6 +40,10 @@ export interface ServiceEvent {
   server?: string | null;
   /** ssdp: USN header. */
   usn?: string | null;
+  /** mdns-instance: the instance's name, before cleaning. */
+  instanceName?: string | null;
+  /** mdns-instance: service type the instance answered for (e.g. "_airplay._tcp"). */
+  serviceType?: string | null;
 }
 
 export interface ScanCompletePayload {

@@ -1,4 +1,4 @@
-# OpenTunnel VPN & Privacy Guard — Agent Rules & Architecture
+# TunnelWall (formerly OpenTunnel) VPN & Privacy Guard — Agent Rules & Architecture
 
 ## Workspace
 

@@ -6,6 +6,7 @@ import { fromForm, toForm } from '../settingsForm.ts';
 const settings: Settings = {
   baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
   model: 'gemini-3.8-flash',
+  knownModel: '',
   customPrices: false,
   inputPerM: 0.75,
   cachedPerM: 0.075,

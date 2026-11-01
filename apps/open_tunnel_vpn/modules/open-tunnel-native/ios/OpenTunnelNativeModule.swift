@@ -400,7 +400,7 @@ final class VpnManagerBridge {
         "updatedAtMs": Int(Date().timeIntervalSince1970 * 1000),
       ]
       manager.protocolConfiguration = protocolConfig
-      manager.localizedDescription = "OpenTunnel"
+      manager.localizedDescription = "TunnelWall"
       manager.isEnabled = true
 
       // Kill switch: on-demand CONNECT keeps the tunnel up whenever the

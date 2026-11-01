@@ -1,12 +1,12 @@
 import type { ServiceState } from 'deputy-agent';
 
-export type SetupAction = 'accessibility' | 'appInfo' | 'notifications' | 'battery' | 'key';
+export type SetupAction = 'accessibility' | 'appInfo' | 'notifications' | 'battery' | 'key' | 'contacts';
 
 export interface SetupRow {
-  id: 'accessibility' | 'restricted' | 'notifications' | 'battery' | 'autostart' | 'key';
+  id: 'accessibility' | 'restricted' | 'notifications' | 'battery' | 'autostart' | 'key' | 'contacts';
   title: string;
   detail: string;
-  status: 'ok' | 'todo' | 'manual';
+  status: 'ok' | 'todo' | 'manual' | 'optional';
   action: SetupAction;
 }
 
@@ -54,6 +54,13 @@ export function setupRows(s: ServiceState): SetupRow[] {
       detail: 'Deputy sends each screen to the model with this key. Tap here, then paste the key below.',
       status: live(s.keySet),
       action: 'key',
+    },
+    {
+      id: 'contacts',
+      title: 'Allow contacts (optional)',
+      detail: "Lets Deputy find a person's number and open their chat directly, which is much faster than searching in the app.",
+      status: s.contactsAllowed ? 'ok' : 'optional',
+      action: 'contacts',
     },
   ];
 }

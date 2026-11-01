@@ -78,7 +78,7 @@ class OpenVpnEngine(context: Context) : TunnelEngine {
           fail("The server rejected the connection (authentication failed). Pick another server.")
         }
         ConnectionStatus.LEVEL_WAITING_FOR_USER_INPUT -> main.post {
-          fail("This server asks for a username and password, which OpenTunnel does not support. Pick another server.")
+          fail("This server asks for a username and password, which TunnelWall does not support. Pick another server.")
         }
         ConnectionStatus.LEVEL_NOTCONNECTED -> {
           ended?.countDown()
@@ -110,7 +110,7 @@ class OpenVpnEngine(context: Context) : TunnelEngine {
     val parser = ConfigParser()
     parser.parseConfig(StringReader(config.configText))
     val profile = parser.convertProfile()
-    profile.mName = "OpenTunnel"
+    profile.mName = "TunnelWall"
     if (config.disallowedApps.isNotEmpty()) {
       profile.mAllowedAppsVpn = HashSet(config.disallowedApps)
       profile.mAllowedAppsVpnAreDisallowed = true
@@ -132,7 +132,7 @@ class OpenVpnEngine(context: Context) : TunnelEngine {
     ProfileManager.setTemporaryProfile(appContext, profile)
     deleteProfileFiles(appContext)
     started = true
-    VPNLaunchHelper.startOpenVpn(profile, appContext, "OpenTunnel", true)
+    VPNLaunchHelper.startOpenVpn(profile, appContext, "TunnelWall", true)
     main.postDelayed(connectTimeout, CONNECT_TIMEOUT_MS)
     appContext.bindService(
       Intent(appContext, OpenVPNService::class.java).setAction(OpenVPNService.START_SERVICE),

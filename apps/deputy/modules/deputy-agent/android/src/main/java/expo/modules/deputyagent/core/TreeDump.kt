@@ -21,7 +21,7 @@ object TreeDump {
     val hint = n.hint?.takeIf { it.isNotBlank() }
     val id = n.viewId?.takeIf { it.isNotBlank() }
     val labelled = n.text?.isNotBlank() == true || n.desc?.isNotBlank() == true || hint != null || id != null
-    if (!n.visible || !(labelled || n.clickable || n.editable || n.scrollable)) return null
+    if (!n.visible || !(labelled || n.clickable || n.editable || n.scrollable || n.checked != null)) return null
     val role = if (n.password) "password" else if (n.editable) "editable" else "text"
     return buildString {
       append("[$i] $role")
@@ -31,6 +31,7 @@ object TreeDump {
       if (id != null) append(" id=\"${esc(id)}\"")
       if (n.clickable) append(" clickable")
       if (n.scrollable) append(" scrollable")
+      n.checked?.let { append(if (it) " on" else " off") }
     }
   }
 

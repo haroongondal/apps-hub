@@ -1,4 +1,4 @@
-# OpenTunnel VPN & Privacy Guard
+# TunnelWall (formerly OpenTunnel) VPN & Privacy Guard
 
 Zero-registration, zero-telemetry VPN client that aggregates academic and
 community relays (VPN Gate) alongside user-supplied WireGuard nodes.
@@ -70,7 +70,7 @@ the app.
 
 ## Licensing and release blockers
 
-- OpenTunnel is GPL-2.0-only (`LICENSE`, decided 2026-10-27) because the
+- TunnelWall is GPL-2.0-only (`LICENSE`, decided 2026-10-27) because the
   Android OpenVPN engine is `ics-openvpn` v0.7.69 (GPLv2 with additional
   terms, `vendor/ics-openvpn/LICENSE-ics-openvpn.txt`). Anyone who gets the
   APK must be able to get this source; the repo is public.

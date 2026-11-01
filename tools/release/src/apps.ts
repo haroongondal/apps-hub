@@ -9,9 +9,9 @@ export interface ReleasableApp {
 }
 
 export const APPS: Record<string, ReleasableApp> = {
-  netlens: { name: 'NetLens', dir: 'apps/netlens', android: { packageName: 'app.netlens' } },
+  netlens: { name: 'HomeNet', dir: 'apps/netlens', android: { packageName: 'app.netlens' } },
   'open-tunnel': {
-    name: 'OpenTunnel',
+    name: 'TunnelWall',
     dir: 'apps/open_tunnel_vpn',
     android: { packageName: 'com.opentunnel.open_tunnel_vpn' },
   },

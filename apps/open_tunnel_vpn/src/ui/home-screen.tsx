@@ -196,7 +196,7 @@ export function HomeScreen({
         accessibilityHint="Deep-links to the system VPN settings"
       />
       <Text variant="caption" tone="faint" align="center">
-        OpenTunnel is free software under the GPLv2. Source: github.com/haroongondal/apps-hub
+        TunnelWall is free software under the GPLv2. Source: github.com/haroongondal/apps-hub
       </Text>
     </View>
   );

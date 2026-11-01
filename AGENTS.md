@@ -6,9 +6,9 @@ React Native (+ Expo) and Electron. Apps live in `apps/`, shared logic lives
 in `packages/`.
 
 Current apps:
-- **netlens** (`apps/netlens`) — FOSS, zero-telemetry LAN scanner & connectivity
+- **HomeNet** (`apps/netlens`, formerly NetLens) — FOSS, zero-telemetry LAN scanner & connectivity
   diagnostic toolkit. Android-first, iOS second. Feature docs: `docs/netlens/`.
-- **open_tunnel_vpn** (`apps/open_tunnel_vpn`) — zero-registration VPN client
+- **TunnelWall** (`apps/open_tunnel_vpn`, formerly OpenTunnel) — zero-registration VPN client
   aggregating VPN Gate relays + user WireGuard nodes. Migrated from Flutter to
   React Native (Expo SDK 54) on 2026-10-26 (Dart snapshot: commit `a8cf6e9`).
   Domain logic in `packages/open-tunnel-core`; phases in
@@ -17,7 +17,11 @@ Current apps:
 - **pdf-editor** — offline PDF editor, moved in from `~/Documents/pdf-editor`
   on 2026-10-26: `apps/pdf-editor-desktop` (Electron), `apps/pdf-editor-mobile`
   (Expo + WebView), both booting the shared engine in
-  `packages/pdf-editor-engine` (`build.mjs` inlines it for mobile).
+  `packages/pdf-editor-engine` (`build.mjs` inlines it for mobile). The mobile
+  app's home screen is a searchable **Library** (folders, tags, full-text search,
+  Arabic and Urdu normalised) over one `library.db`: logic in
+  `packages/library-core`, app glue in `apps/pdf-editor-mobile/src/library`. Scan
+  and Reader build on it; specs `docs/pdf-editor/`, progress `docs/handoffs/pdf-editor-scan.md`.
 - **design-editor** (`apps/design-editor`) — offline Canva-style editor for the
   Mac (Electron), moved in from `~/Documents/design-editor` on 2026-10-26.
 - **deputy** (`apps/deputy`) — personal Android agent that carries out tasks by

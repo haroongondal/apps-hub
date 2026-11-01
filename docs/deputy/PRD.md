@@ -96,15 +96,23 @@ These seven job types are the owner's choice and become the eval set
   - Observe: the screen as an indexed list of elements, plus a screenshot when the
     list isn't enough.
   - Act: tap, long-press, swipe, scroll, type, Back, Home, Recents, notification
-    shade, open an app by name, open a link (`https`, `tel`, `sms`, `mailto`, `geo`).
+    shade, open an app by name, open a link (`https`, `tel`, `sms`, `mailto`, `geo`, and `whatsapp://send` to open a chat).
   - Prefer a link over tapping through menus when one exists.
 - **FR-3: Confirmation gate.**
   - Before any irreversible step, Deputy stops and asks the owner, showing the
     app, the action, the exact target and, for sends, the composed text.
   - The app enforces this in native code. The model can ask for more
-    confirmation, never less.
-  - The owner answers from a heads-up notification (works over any app) or the
-    Deputy run screen. No answer within five minutes counts as "no".
+    confirmation, never less, with two exemptions: its request is ignored on
+    steps that change nothing (Back, Home, Recents, the notification shade, wait,
+    look, opening an app or a Settings page) and on typing without Enter, unless
+    the text has 4 or more digits in a row, because a verification box often
+    submits on its last digit (owner, 2026-10-30, after a phone test where plain
+    typing in a chat took a second approval). Enter, a verb in the field's label
+    and erasing more than 20 characters already in the field still ask.
+  - The owner answers from an approval card Deputy shows over any app, a
+    notification (heads-up, shade row or expanded actions, over any app) or the
+    Deputy run screen. A question gets no card. No answer within five minutes
+    counts as "no".
 - **FR-4: Per-app trust.**
   - Three levels: **blocked** (Deputy won't open it or send its screens),
     **read-only** (navigate and read; no typing, no state-changing taps),
@@ -116,6 +124,8 @@ These seven job types are the owner's choice and become the eval set
 - **FR-5: Choose the model.**
   - Settings take a base URL, model name and API key, with a "Test connection"
     button. Defaults to Gemini 3.5 Flash-Lite (owner, 2026-10-29, after S7).
+  - Several API keys per address (owner, 2026-10-30): when one reaches its
+    limit, the next takes over automatically. Each key can be tested and removed.
   - Per-million-token prices are editable, because they change (§9).
 - **FR-6: Run limits and Stop.**
   - Per-run caps on steps (default 30), cost (default $1.00) and time (default
@@ -265,7 +275,7 @@ eval checklist.
 | Apps that detect accessibility services           | An app refuses to open                                    | Deputy stops and says so; "Turn off Deputy" for when the owner needs that app                                |
 | Gemini free tier trains on content                | Screens used to improve Google products                   | Setup warns; the owner uses a paid-billing key                                                               |
 | Gemini price change on 2027-01-01                 | Cost about doubles ($1.50 / $7.50 per 1M)                 | Editable prices; daily cap; cheaper models in the model picker                                               |
-| Gemini 3 needs thought signatures returned        | HTTP 400 on the next step if dropped                      | Replay assistant messages verbatim (SPEC §9.3); spike in Phase 1                                             |
+| Gemini 3 needs thought signatures returned        | HTTP 400 on the next step if dropped                      | Replay assistant messages' tool calls and reasoning details untouched (SPEC §9.3); spike in Phase 1                                             |
 | Model quality on this phone and these apps        | Eval below target                                         | Measure in Phase 2; try Flash, Flash-Lite and a Claude model before adding a planner                         |
 | Lock screen                                       | Scheduled tasks can't run                                 | "Tap to run" notification; auto-run only when unlocked                                                       |
 

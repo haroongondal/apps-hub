@@ -14,6 +14,8 @@ class DefaultTrustTest {
   @Test fun startsMoneyAppsReadOnly() = listOf(
     "com.meezanbank.mobile", "com.google.android.apps.walletnfcrel", "com.paypal.android.p2pmobile",
     "com.revolut.revolut", "com.robinhood.android", "com.binance.dev",
+    // The owner's bank and fund apps (phone, 2026-10-30), whose package names hold no money word.
+    "com.ofss.digx.mobile.obdx.bahl", "com.ublfm.alameen", "com.ublfm.smartsavings", "co.ibex.almeezan",
   ).forEach { assertEquals(it, TrustLevel.READ_ONLY, level(it)) }
 
   @Test fun everythingElseIsStandard() = listOf(

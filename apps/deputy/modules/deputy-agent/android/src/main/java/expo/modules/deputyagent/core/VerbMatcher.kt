@@ -9,7 +9,7 @@ object VerbMatcher {
     "place order", "sign out", "log out",
     "send", "post", "publish", "reply", "share", "pay", "buy", "purchase", "order", "checkout", "confirm",
     "transfer", "withdraw", "deposit", "invest", "sell", "trade", "submit", "book", "reserve", "subscribe",
-    "delete", "remove", "erase", "clear", "reset", "uninstall", "install", "call", "allow", "grant", "approve",
+    "delete", "remove", "erase", "reset", "uninstall", "install", "call", "allow", "grant", "approve",
   ).map { it.split(' ') }
 
   private val CAMEL = Regex("([a-z])([A-Z])")
@@ -19,6 +19,8 @@ object VerbMatcher {
     if (label.isNullOrBlank()) return null
     val words = label.substringAfter(":id/").replace(CAMEL, "$1 $2").lowercase().split(NON_LETTERS).filter { it.isNotEmpty() }
     return VERBS.firstOrNull { verb -> words.windowed(verb.size).any { it == verb } }?.joinToString(" ")
+      // "Clear" with what it clears ("Clear chat", "Clear watch history"); alone it is a calculator's C key.
+      ?: "clear".takeIf { "clear" in words.dropLast(1) }
   }
 
   fun match(node: NodeRef): String? = listOf(node.text, node.desc, node.childText, node.hint, node.viewId).firstNotNullOfOrNull { match(it) }

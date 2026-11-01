@@ -39,7 +39,7 @@ class WireGuardEngine(context: Context) : TunnelEngine {
   override val hostsThroughAppService = false
 
   private val appContext = context.applicationContext
-  private val tunnel = ActiveTunnel("OpenTunnel")
+  private val tunnel = ActiveTunnel("TunnelWall")
   private var backend: GoBackend? = null
 
   override fun start(config: EngineConfig): EngineStart {

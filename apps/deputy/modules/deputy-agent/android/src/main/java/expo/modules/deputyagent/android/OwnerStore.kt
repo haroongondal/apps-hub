@@ -19,8 +19,6 @@ object OwnerStore {
 
   fun saveSettings(c: Context, input: Map<String, Any?>): String? {
     val next = try { Settings.fromMap(input) } catch (e: IllegalArgumentException) { return e.message }
-    // The key belongs to the old provider: never send it to a new address.
-    if (next.baseUrl != settings(c).baseUrl) KeyVault.clear(c)
     prefs(c).edit().putString("settings", next.toJson(System.currentTimeMillis())).apply()
     return null
   }

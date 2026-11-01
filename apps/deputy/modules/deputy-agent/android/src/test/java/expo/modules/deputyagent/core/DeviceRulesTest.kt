@@ -23,6 +23,16 @@ class DeviceRulesTest {
     assertEquals(DeviceRules.line(screen, Direction.LEFT).toList(), DeviceRules.scrollLine(screen, Direction.RIGHT).toList())
   }
 
+  @Test fun anAppIsFoundByLabelPackageOrABrandInsideItsPackage() {
+    val alfa = "com.base.bankalfalah"
+    assertTrue("brand name inside the package", DeviceRules.appMatches("Alfalah", alfa, "Alfa"))
+    assertTrue("spaces dropped", DeviceRules.appMatches("Bank Alfalah", alfa, "Alfa"))
+    assertTrue("label", DeviceRules.appMatches("alfa", alfa, "Alfa"))
+    assertTrue("exact package", DeviceRules.appMatches(alfa, alfa, "Alfa"))
+    assertFalse("3 letters match only labels", DeviceRules.appMatches("com", alfa, "Alfa"))
+    assertFalse(DeviceRules.appMatches("Meezan", alfa, "Alfa"))
+  }
+
   @Test fun aFrameIsBlankOnlyWhenEverySampleIsNearBlack() {
     assertTrue(DeviceRules.isBlank(intArrayOf(0xFF000000.toInt(), 0xFF050505.toInt())))
     assertFalse(DeviceRules.isBlank(intArrayOf(0xFF000000.toInt(), 0xFF000080.toInt())))
@@ -41,6 +51,29 @@ class DeviceRulesTest {
     assertTrue(DeviceRules.changed(send, send.copy(desc = "Delete")))
     assertTrue(DeviceRules.changed(send, send.copy(viewId = "id/delete")))
     assertTrue(DeviceRules.changed(send, send.copy(bounds = Bounds(1, 0, 10, 10))))
+  }
+
+  @Test fun theNextAlarmNamesTheAppThatSetItUnlessThatAppIsBlocked() {
+    assertEquals("none", DeviceRules.nextAlarm(null, "Islam360", blocked = false))
+    assertEquals("Thursday 18:41, set by Islam360", DeviceRules.nextAlarm("Thursday 18:41", "Islam360", blocked = false))
+    assertEquals("Thursday 18:41, set by another app", DeviceRules.nextAlarm("Thursday 18:41", "Vault", blocked = true))
+    assertEquals("Thursday 18:41", DeviceRules.nextAlarm("Thursday 18:41", null, blocked = false))
+  }
+
+  @Test fun anApprovedElementIsFoundAgainByWhatItIsAfterItMoved() {
+    val moved = send.copy(bounds = Bounds(0, 1800, 10, 1810), depth = 5)
+    assertEquals(moved, DeviceRules.relocate(listOf(send.copy(text = "Archive"), moved), send))
+    assertNull("two matches", DeviceRules.relocate(listOf(moved, moved.copy(bounds = Bounds(0, 0, 5, 5))), send))
+    assertNull("another app", DeviceRules.relocate(listOf(moved.copy(pkg = "com.other")), send))
+    assertNull("now editable", DeviceRules.relocate(listOf(moved.copy(editable = true)), send))
+    val bare = send.copy(text = null, viewId = null)
+    assertNull("nothing to know it by", DeviceRules.relocate(listOf(bare), bare))
+  }
+
+  @Test fun anApprovedElementMustMatchInEverythingButWhereItIs() {
+    val moved = send.copy(bounds = Bounds(0, 1800, 10, 1810), depth = 5)
+    listOf(moved.copy(desc = "Send to Bob"), moved.copy(checked = true), moved.copy(visible = false), moved.copy(hint = "h"), moved.copy(childText = "x"))
+      .forEach { assertNull(it.toString(), DeviceRules.relocate(listOf(it), send)) }
   }
 
   @Test fun settleWaitsForQuietButNotForever() = runTest {

@@ -92,6 +92,14 @@ class ScriptedBinding implements NetLensNativeBinding {
     return { outcome: script.outcome, rttMs: script.rttMs };
   }
 
+  async udpRequest(): Promise<number[] | null> {
+    return null;
+  }
+
+  async tcpFetch(): Promise<string | null> {
+    return null;
+  }
+
   async resolveHostname(hostname: string): Promise<DnsResolution | null> {
     this.resolveCalls.push(hostname);
     throw new Error('not scripted in this suite');

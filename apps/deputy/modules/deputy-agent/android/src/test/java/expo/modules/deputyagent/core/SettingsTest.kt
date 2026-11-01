@@ -62,6 +62,22 @@ class SettingsTest {
     assertEquals(0.0, Settings.fromMap(form("customPrices" to true, "cachedPerM" to 0.0)).prices!!.cachedPerM, 0.0)
   }
 
+  @Test fun groqsGptOssIsKnownSoItNeedsNoPricesSeesNoImagesAndThinksLittle() {
+    val s = Settings.fromMap(form("baseUrl" to Settings.GROQ_URL, "model" to "openai/gpt-oss-120b"))
+    assertEquals(Prices(0.15, 0.075, 0.60), s.prices(now))
+    assertFalse(s.images)
+    assertEquals("low", s.effort)
+    assertEquals("GPT-OSS 120B on Groq", s.toMap(now)["knownModel"])
+    assertFalse("Groq documents its address without the slash", Settings.fromMap(form("baseUrl" to "https://api.groq.com/openai/v1", "model" to "openai/gpt-oss-120b")).images)
+  }
+
+  @Test fun anUnknownModelIsAssumedToSeeImagesAndKeepsTheServicesThinkingLevel() {
+    val s = Settings.fromMap(form("model" to "gemini-3.1-pro", "customPrices" to true))
+    assertTrue(s.images)
+    assertNull(s.effort)
+    assertEquals("", s.toMap(now)["knownModel"])
+  }
+
   @Test fun anotherModelOrAddressNeedsItsOwnPrices() {
     assertTrue(rejects("model" to "gemini-3.1-pro").contains("prices"))
     rejects("baseUrl" to "https://openrouter.ai/api/v1")

@@ -54,6 +54,14 @@ class FakeBinding implements NetLensNativeBinding {
     throw new Error('not scripted in this suite');
   }
 
+  async udpRequest(): Promise<number[] | null> {
+    return null;
+  }
+
+  async tcpFetch(): Promise<string | null> {
+    return null;
+  }
+
   async resolveHostname(hostname: string): Promise<DnsResolution | null> {
     this.resolveCalls.push(hostname);
     if (this.shutdownQueue || this.queue.length === 0) return null;
