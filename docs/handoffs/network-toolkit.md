@@ -130,16 +130,21 @@ worktree /Users/outsentia/Documents/apps-hub/.claude/worktrees/firewall-spike.
 - 2026-11-01 (new chat): read the handoff, results and spec Part 2. Asked the owner the three
   questions (answers in Decisions). Amended the design (Part 2) for the `:firewall` process,
   storage-shared rules/log/state, the seven integration rules, the tun range, the spike outcome
-  and the accepted APK growth. Nothing committed yet, nothing deleted.
+  and the accepted APK growth. Committed on `firewall-spike` (not pushed).
+- 2026-11-01: owner said "go ahead" (keep the spike) and then OK'd the release. Wrote
+  `docs/handoffs/firewall-spike-checks.md`, made the three-line spike change (compiles), released
+  **Firewall spike build 3** through the Store (`pnpm release tunnelwall-spike`; the Store manifest
+  now lists versionCode 3, 75,398,872 bytes). The first attempt built fine but the 75 MB upload
+  died with `EPIPE` before the manifest update (Store still at build 2, nothing half-published);
+  the identical retry succeeded. Nothing deleted.
 
 ## Current state + exact next step
 
 Done this session: the owner's three answers (Decisions) and the design amendment (step 3
 below, uncommitted in this worktree: `git diff docs/superpowers/specs/`).
 
-1. **Release Firewall spike build 3 through the Store** (ask the owner first; the Store entry
-   `tunnelwall-spike` is `manualOnly`; run `pnpm release tunnelwall-spike -m "<what changed>"` from this worktree. It only talks to the Store Worker over HTTPS with `RELEASE_TOKEN`, so no Cloudflare login or account choice is involved). The
-   owner then runs `docs/handoffs/firewall-spike-checks.md` (Private DNS automatic and strict,
+1. **Wait for the owner's check results.** Firewall spike build 3 is released (2026-11-01); the
+   owner installs it from the Store and runs `docs/handoffs/firewall-spike-checks.md` (Private DNS automatic and strict,
    Always-on after a reboot, two battery nights) and pastes the logs. Fold the results into
    `firewall-spike-results.md` and the design's Reboot, DNS and Risks sections.
    Afterwards the owner uninstalls the spike and you delete the `tunnelwall-spike` manifest
