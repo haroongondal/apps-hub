@@ -120,9 +120,9 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
             </>
           )}
           {kind === 'note' ? (
-            <Field label="Note" value={draft.text} onChangeText={(text) => set({ text })} autoCorrect={false} importantForAutofill="no" multiline style={{ minHeight: 160, textAlignVertical: 'top', paddingTop: 12 }} />
+            <SecretField label="Note" value={draft.text} onChangeText={(text) => set({ text })} shown multiline minHeight={160} />
           ) : (
-            <Field label="Note" value={draft.note} onChangeText={(note) => set({ note })} autoCorrect={false} importantForAutofill="no" multiline />
+            <SecretField label="Note" value={draft.note} onChangeText={(note) => set({ note })} shown multiline />
           )}
           {kind !== 'note' && <Button label={shown ? 'Hide secrets' : 'Show secrets'} variant="ghost" onPress={() => setShown((s) => !s)} />}
           {error && <Notice tone="danger">{error}</Notice>}
