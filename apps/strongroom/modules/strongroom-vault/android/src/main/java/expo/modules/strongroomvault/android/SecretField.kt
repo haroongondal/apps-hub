@@ -9,6 +9,7 @@ import android.text.TextWatcher
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.ViewStructure
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
@@ -23,9 +24,20 @@ import kotlin.math.roundToInt
 class SecretEditText(context: Context) : AppCompatEditText(context) {
   init {
     importantForAutofill = IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+    importantForContentCapture = IMPORTANT_FOR_CONTENT_CAPTURE_NO_EXCLUDE_DESCENDANTS
+    // An EditText freezes its text into saved state; this field's text must never reach a Bundle.
+    isSaveEnabled = false
   }
 
   override fun getAutofillType() = AUTOFILL_TYPE_NONE
+
+  // A manual request, PCC or compat mode puts even this field in the assist structure, and the Save request carries its text unsanitised: write nothing.
+  override fun onProvideAutofillStructure(structure: ViewStructure, flags: Int) = Unit
+
+  // Content capture and the assistant read the same text through their own structure calls (content capture's text-change events are stopped by the importance flag above).
+  override fun onProvideContentCaptureStructure(structure: ViewStructure, flags: Int) = Unit
+
+  override fun onProvideStructure(structure: ViewStructure) = Unit
 
   override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? =
     super.onCreateInputConnection(outAttrs).also { outAttrs.imeOptions = outAttrs.imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING }
@@ -39,6 +51,10 @@ internal fun secretInputType(shown: Boolean, numeric: Boolean, multiline: Boolea
       (if (shown) InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD else InputType.TYPE_TEXT_VARIATION_PASSWORD) or
       (if (multiline) InputType.TYPE_TEXT_FLAG_MULTI_LINE else 0)
   }
+
+/** JS's value is stale when it hasn't seen the latest keystroke (applying it would drop what was just typed); an equal value is a no-op. */
+internal fun shouldApplyValue(jsEventCount: Int, eventCount: Int, current: CharSequence?, value: String): Boolean =
+  jsEventCount >= eventCount && current?.contentEquals(value) != true
 
 class SecretFieldView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
   private val onChangeValue by EventDispatcher()
@@ -109,8 +125,7 @@ class SecretFieldView(context: Context, appContext: AppContext) : ExpoView(conte
     input.setPadding(pad, if (multiline) pad else 0, pad, if (multiline) pad else 0)
     if (fontFamily.isNotEmpty()) input.typeface = ReactFontManager.getInstance().getTypeface(fontFamily, Typeface.NORMAL, context.assets)
     input.setTextSize(TypedValue.COMPLEX_UNIT_SP, fontSize)
-    // A value from a render that hasn't seen the latest keystroke is stale; applying it would drop what was just typed.
-    if (jsEventCount >= eventCount && input.text?.contentEquals(value) != true) {
+    if (shouldApplyValue(jsEventCount, eventCount, input.text, value)) {
       quietly {
         input.setText(value)
         input.setSelection(value.length)

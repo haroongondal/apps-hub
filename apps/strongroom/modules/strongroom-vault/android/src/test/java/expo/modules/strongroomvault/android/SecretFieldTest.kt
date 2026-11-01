@@ -8,6 +8,8 @@ import android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
 import android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
 import android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SecretFieldTest {
@@ -25,4 +27,14 @@ class SecretFieldTest {
     assertEquals(TYPE_CLASS_NUMBER or TYPE_NUMBER_VARIATION_PASSWORD, secretInputType(shown = false, numeric = true, multiline = false))
 
   @Test fun shownNumberIsPlainDigits() = assertEquals(TYPE_CLASS_NUMBER, secretInputType(shown = true, numeric = true, multiline = false))
+
+  @Test fun staleValueIsSkipped() = assertFalse(shouldApplyValue(jsEventCount = 2, eventCount = 3, current = "abc", value = "ab"))
+
+  @Test fun equalValueIsANoOp() = assertFalse(shouldApplyValue(jsEventCount = 3, eventCount = 3, current = "abc", value = "abc"))
+
+  @Test fun programmaticValueWithACurrentCountIsApplied() = assertTrue(shouldApplyValue(jsEventCount = 3, eventCount = 3, current = "abc", value = "xyz"))
+
+  @Test fun valueIntoAnEmptyFieldIsApplied() = assertTrue(shouldApplyValue(jsEventCount = 0, eventCount = 0, current = null, value = "xyz"))
+
+  @Test fun valueAheadOfTheCountIsApplied() = assertTrue(shouldApplyValue(jsEventCount = 5, eventCount = 3, current = "abc", value = "xyz"))
 }
