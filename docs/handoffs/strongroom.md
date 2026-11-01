@@ -476,10 +476,23 @@ order (ledger "Post-plan work" has the rulings and P-briefs):
    (79d52eb, f728b59: `SecretEditText` reports `AUTOFILL_TYPE_NONE` and writes
    nothing to assist/autofill/content-capture structures; every `SecretField`,
    both notes and `UnlockActivity`'s password), version bump a4c490c.
-2. **Install 0.1.1 on the phone through the Store** (the phone's wireless adb
-   dropped after the release: the owner toggles Wireless debugging, or installs
-   from the Store app themselves; the installed Store lists Strongroom as "Not
-   installed" because its `<queries>` lacks it, but Install still updates).
+2. **0.1.1 (5) is installed on the phone** (the owner installed it from the
+   Store at 17:56; installer com.haroon.store; Strongroom is still the autofill
+   service). **DOWNGRADE TRAP, needs the owner's decision (found 18:50):**
+   `origin/main` already contains the Strongroom branch up to 036eff7 (PR #4
+   "Strongroom Phase 1", merged on GitHub, not by this session) and registers
+   `strongroom` in `tools/release/src/apps.ts`, so CI releases Strongroom from
+   main on every push that touches its folder or dependencies. That explains the
+   unexplained versionCodes 3, 4 and 6: CI builds of the OLD code (0.1.0, four
+   ABIs, no P1/P1b/P2/P3). The Store now says "Installed 0.1.1 (5), Available
+   0.1.0 (6)" with changelog "Merge pull request #6 from
+   haroongondal/scan-phase-1". Tapping Update would install the old build over
+   0.1.1, and going back to a lower versionCode needs an uninstall, which wipes the
+   local-only vault. Fix: merge `strongroom-phase-1` into main through a PR (after
+   merging `origin/main` into the branch; owner's word needed for the push and
+   merge), so CI releases the fixed code as 0.1.1 (7 or later); or release again
+   by hand from this worktree (versionCode 7). Until then: don't tap Update on
+   Strongroom. The local `main` branch is behind `origin/main`.
 3. **Phone retests for this release:** a cold fill on a no-match page shows
    "Other logins" in time (swipe Strongroom away first; logcat
    `Start proc …strongroom` then the fill); `dumpsys autofill` shows no `aug:`
