@@ -392,23 +392,36 @@ SDD ledger (task progress, rulings, deferred minors):
 `git log` over memory. Phone installs only via the Store (release builds);
 debug work uses the emulator.
 
-**Exact next step:** Tasks 1–11 and Task 12 Steps 1–3 and 5 are complete
-(Task 12 re-review clean; commits up to 036eff7, plus the launcher icon
-142fc7c). The owner asked on 2026-10-31 to test on the phone instead of the
-emulator, which is the go-ahead for Step 4: `pnpm release store` (so the Store
-lists Strongroom; the branch differs from main only by that `<queries>` line),
-then `pnpm release strongroom`, then the owner installs from the Store (never
-`adb install`; adb on the phone only for logcat, screenshots and taps). Walk
-the phone checklist above with the owner and record each result there. Before
-typing the master password the owner sets the phone's autofill service to
-Strongroom (or None): Android 15 sent Strongroom's own password-type fields
-to Google autofill on the emulator despite the exclusion flags. If the phone
-shows Google offering to save any Strongroom secret, build the native secret
-field next (an `EditText` whose `getAutofillType()` is `AUTOFILL_TYPE_NONE`,
-for every secret input including `UnlockActivity`'s). Fix whatever the phone
-shows, then the final whole-branch review (opus), pointed at the ledger's
-deferred minors and "carry to final review" lines. Then
-superpowers:finishing-a-development-branch: never merge or push without the
-owner's word (CI releases registered apps on main). Implementers so far:
-sonnet for Tasks 2–8 and 11, opus for Tasks 9–10 and 12; reviewers opus for
-crypto/format/session/matching/platform, sonnet otherwise.
+**Exact next step (updated 2026-11-01):** Tasks 1–12 (Steps 1–3, 5) are
+done and reviewed; 0.1.0 (2) is installed on the phone via the Store; Chrome
+fill and the S1 frame check pass on the phone. Open work, in order:
+1. **Fix the no-match fill timeout** (phone results above): with no matching
+   login Strongroom misses Android's 5 s limit, so "Other logins" never shows.
+   Reproduce in a JVM test (a vault of a few hundred logins, a non-matching
+   `Web` requester, time `respond`'s matching loop), fix the slow path, and
+   make `onFillRequest` catch `Throwable` and always call the callback.
+2. **Smaller APK** (owner asked; awaiting go-ahead): the release APK is 73.6
+   MB because it ships four ABIs; the Store's download stalls and hits its
+   60 s read timeout (`apps/store/.../Installer.kt:49`) on the owner's phone.
+   Build Strongroom's release for `arm64-v8a` only (~20 MB), keeping x86_64
+   for emulator debug builds. Releases run from this worktree, not the main
+   checkout (main's `tools/release/src/apps.ts` has no `strongroom`).
+3. **Owner decision: native secret field.** Google's autofill (emulator) and
+   Android System Intelligence's augmented autofill (phone, `dumpsys autofill`
+   `aug:` sessions) open sessions on Strongroom's own screens despite the
+   exclusion flags. Fix: a native `EditText` with `getAutofillType() =
+   AUTOFILL_TYPE_NONE` for every secret input, `UnlockActivity`'s included.
+4. **Rest of the phone checklist:** S2 (https page), card fill asks for the
+   fingerprint, save/update prompts, the master-password unlock time, B5
+   (Deputy's view), S4/S5, U1, U2, the two-step save. Then delete the
+   `sg-test-lan` test login, and the owner switches autofill back to Google.
+5. **Final whole-branch review** (opus) over the ledger's deferred minors and
+   "carry to final review" lines; one fix wave; then
+   superpowers:finishing-a-development-branch (never merge or push without the
+   owner's word: CI releases registered apps on main).
+6. **Owner items before Phase 2:** the account-key question (§10); Deputy
+   refusing to operate Strongroom; card import (only if a Google Pay/Takeout
+   export holds full card numbers; owner checks first).
+Implementers so far: sonnet for Tasks 2–8 and 11, opus for Tasks 9–10 and
+12; reviewers opus for crypto/format/session/matching/platform, sonnet
+otherwise.
