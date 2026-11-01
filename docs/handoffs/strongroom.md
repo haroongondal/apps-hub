@@ -419,6 +419,16 @@ Phone results (fill in as they come):
   `~/.gradle/gradle.properties` holds the `APPS_HUB_RELEASE_*` props), a 680-login
   test vault (master password `EmulatorProbeVault77`), locked, Strongroom as its
   autofill service.
+- 2026-11-01 (fifth session, cont.): P1b review round 1 (4720aa3: delegate gets
+  `BuildConfig.IS_NEW_ARCHITECTURE_ENABLED`, stricter start-up test); P2 arm64
+  only (4306a33, APK 36.6 MB); P3 native secret field (79d52eb + f728b59). P3
+  emulator proof: with Google selected, 19 field steps opened no session (all did
+  before); a manual "Autofill" request's Save structure carried a test password
+  and note before f728b59 and neither after. emulator-5556 now: release build of
+  f728b59, a 1-login vault (same master password), locked, Strongroom autofill.
+  `pnpm release strongroom` was denied once by the auto-mode classifier on a bare
+  "go ahead"; the owner's explicit "Yes, release 0.1.1 now" let it run. Published
+  0.1.1 (5). The phone's wireless adb then dropped.
 
 ## Owner items to raise at the end of Phase 1 (from Task 1)
 
@@ -453,19 +463,24 @@ debug work uses the emulator.
 1–3, 5) are done and reviewed; 0.1.0 (2) is installed on the phone via the
 Store; Chrome fill and the S1 frame check pass on the phone. Open work, in
 order (ledger "Post-plan work" has the rulings and P-briefs):
-1. **P1 fill timeout: done** (567320a, 57b8d17, review clean). **P1b** (271cd8f,
-   React Native deferred to `MainActivity`) is in review; close it, then the
-   phone retest of a cold fill comes with the next release (when the phone is free).
-2. **P2 smaller APK:** `reactNativeArchitectures=arm64-v8a` in
-   `apps/strongroom/android/gradle.properties` (the phone and both AVDs are
-   arm64; ruling in the ledger). The 73.6 MB four-ABI APK stalls the Store's
-   download (60 s read timeout, `apps/store/.../Installer.kt:49`). Releases run
-   from this worktree. **Ask the owner before releasing.**
-3. **P3 native secret field: owner said build it now** (brief
-   `.superpowers/sdd/PHASE-1-PLAN/p3-brief.md`): an `EditText` subclass with
-   `getAutofillType() = AUTOFILL_TYPE_NONE` behind every `SecretField` and both
-   note fields, plus `UnlockActivity`'s password field; `packages/ui` untouched.
-   Then one release (owner's go-ahead) carries P1, P1b, P2 and P3.
+1. **Done and reviewed, released as Strongroom 0.1.1 (versionCode 5, 36.7 MB,
+   published 2026-11-01 ~17:48 with the owner's explicit yes):** P1 fill timeout
+   (567320a, 57b8d17), P1b React Native deferred to `MainActivity` (271cd8f,
+   4720aa3), P2 arm64-only APK (4306a33; was 73.6 MB), P3 native secret field
+   (79d52eb, f728b59: `SecretEditText` reports `AUTOFILL_TYPE_NONE` and writes
+   nothing to assist/autofill/content-capture structures; every `SecretField`,
+   both notes and `UnlockActivity`'s password), version bump a4c490c.
+2. **Install 0.1.1 on the phone through the Store** (the phone's wireless adb
+   dropped after the release: the owner toggles Wireless debugging, or installs
+   from the Store app themselves; the installed Store lists Strongroom as "Not
+   installed" because its `<queries>` lacks it, but Install still updates).
+3. **Phone retests for this release:** a cold fill on a no-match page shows
+   "Other logins" in time (swipe Strongroom away first; logcat
+   `Start proc …strongroom` then the fill); `dumpsys autofill` shows no `aug:`
+   sessions on Strongroom's screens; typing speed in the new secret fields with
+   Gboard (adb-typed input was ~215 ms/char on a loaded emulator). Tell the
+   owner: an outside tap no longer closes the keyboard on secret fields; notes
+   use the visible-password keyboard (no emoji row, no auto-caps).
 4. **Rest of the phone checklist:** S2 (https page), card fill asks for the
    fingerprint, save/update prompts, the master-password unlock time, B5
    (Deputy's view), S4/S5, U1, U2, the two-step save. Then delete the
