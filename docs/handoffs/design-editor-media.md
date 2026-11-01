@@ -2,7 +2,7 @@
 
 ## Resume prompt
 
-Dated 2026-10-31. Read `docs/handoffs/design-editor-media.md` completely first, then
+Dated 2026-11-01. Read `docs/handoffs/design-editor-media.md` completely first, then
 `docs/design-editor/PRD.md` and `docs/design-editor/SPEC.md`; read `docs/design-editor/RESEARCH.md`
 sections as a step cites them. Trust the decisions and verified facts below and don't re-research
 or re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` (keep this file's session
@@ -69,6 +69,25 @@ Owner, 2026-11-01 (session B1 start):
 - **No Store release for this app in Phase 1.** The Store sees every installed app through
   `QUERY_ALL_PACKAGES` (PR #5, merged 2026-11-01), so Phase 1 step 7's `pnpm release store` and any
   `<queries>` edit are skipped. Step 5's `tools/release/src/apps.ts` entry still applies.
+
+Session B1, 2026-11-01 (Claude's calls inside the brief; the owner can override):
+- **Lab spikes:** S1–S4 run in the Media lab. S3, S7 and S8 need the phone and a manual procedure, so
+  the lab logs their steps. S5's frame-rate half and S6 wait for Phase 4 (FrameExtractor, CopyRunner).
+- **TS contract additions (SPEC §7.1 updated):** `enqueue(jobsJson, cbrFirst)` (spike S4 runs CBR with
+  no VBR fallback) and `NativeJobStatus.attempts` (per-attempt planned against actual bytes for the lab).
+- **`SizePlan.fpsCap`** added (SPEC §5.1 updated). A retry walks the ladder with the plan's frame-rate cap.
+- **Widths round to even, not to 16** (SPEC §10.2 updated). The §10.3 refusal figure (1,297 s) uses 426 px
+  for 240p; 16-alignment gives 432 px and 1,287 s.
+- **Probe reports display dimensions:** rotation 90 or 270 swaps width and height. A portrait phone clip
+  planned as landscape would be letterboxed. Found in review of the Kotlin and fixed in B1.
+- **Presentation uses the planned size** (`createForWidthAndHeight`, scale to fit), not SPEC §9.2's
+  `createForHeight`, so the output matches the plan. Revisit if S2 shows a problem.
+- **No new dependency approvals needed:** expo-constants and expo-system-ui are the PDF Editor's pinned
+  Expo modules; JUnit 4.13.2 is used by Deputy, OpenTunnel, NetLens and Strongroom.
+- **Media lab is one screen** (Stack root, no tab bar); tabs come with Phase 3–4. The share button is
+  labelled "Share results" because the share sheet can copy.
+- **Commits stay local.** Nothing pushed, no release. Set the upstream when pushing:
+  `git push -u origin design-media-phase-1` (the branch was created tracking `origin/main`).
 
 Research and docs session (Claude's recommendations, owner can override; PRD §10 lists the open
 questions):
@@ -137,6 +156,44 @@ From sources (details and links in RESEARCH):
 - Premiere Rush discontinued (support ended 2026-09-30); Canva free asks to upgrade to change MP4
   quality.
 
+Verified 2026-11-01 (session B1, Phase 1 steps 1–6; output was read, not predicted):
+- `pnpm install` in the worktree: 1050 packages added, exit 0. Node v22.23.4; zsh, so exit codes need `set -o pipefail`.
+- `pnpm --filter @apps-hub/media-core test`: 34 pass, 0 fail. Its typecheck is clean.
+- RESEARCH §6.6 A by test: attempt 1 overshoot of 15% gives attempt 2 at 1,886,519 bit/s, 720p30
+  (RESEARCH says about 1,886,000). The 30-min refusal gives `maxDurationS` 1297.
+- Root `pnpm typecheck` exit 0; root `pnpm test` exit 0.
+- `pnpm --filter design-editor-mobile typecheck` exit 0; `lint` exit 0.
+- `./gradlew :design-media:cleanTestDebugUnitTest :design-media:testDebugUnitTest :app:assembleDebug`
+  (in `apps/design-editor-mobile/android`): BUILD SUCCESSFUL. JUnit XML: 32 tests, 0 failures
+  (DataSafetyRulesTest 6, DisplayTest 2, EncoderStatsMathTest 4, JobQueueTest 7, OutputNameTest 5,
+  PlanJsonTest 3, QueueStoreTest 3, RetryRuleTest 2).
+- Release merged manifest (`:app:processReleaseManifest`): minSdk 35, targetSdk 36, `MediaJobService`
+  with `exported="false"` and `foregroundServiceType="mediaProcessing"`. Permissions: FOREGROUND_SERVICE,
+  FOREGROUND_SERVICE_MEDIA_PROCESSING, POST_NOTIFICATIONS, INTERNET, ACCESS_NETWORK_STATE, WAKE_LOCK.
+  `SYSTEM_ALERT_WINDOW` is in the debug and debugOptimized source sets (React Native's dev menu), so it
+  appears only in debug merges. The release manifest has none. Store builds are release.
+- `expo-doctor` (run as `pnpm --filter design-editor-mobile run doctor`): 16 of 18. Two failures:
+  (a) "config fields not synced in a non-CNG project": PDF Editor shows the same warning. (b) "module
+  android dirs are gitignored": a false positive. The check globs `modules/**/android/build.gradle`
+  and reaches `modules/design-media/node_modules/expo-modules-core`, an ignored pnpm symlink. NetLens
+  fails the same check. Root `pnpm doctor` runs pnpm's built-in doctor, not expo-doctor.
+- Android: `ANDROID_HOME=/Users/outsentia/Library/Android/sdk`. Its android-36 `android.jar` is identical
+  to the Homebrew copy named in the brief.
+- Media3 1.11.1, checked with javap by the worker: `Transformer.Builder` setters (video and audio MIME,
+  encoder factory, looper, listener); `EditedMediaItem.Builder.setRemoveAudio`; `DefaultEncoderFactory`
+  settings; `VideoEncoderSettings.Builder.setBitrate/setBitrateMode(int)`; `Presentation.createForWidthAndHeight`
+  with `LAYOUT_SCALE_TO_FIT`; `FrameDropEffect.createDefaultFrameDropEffect(float)`;
+  `ExportException.getErrorCodeName(int)` (static).
+- Platform (android.jar 36): `Service.onTimeout(int, int)`; `FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING`;
+  `MediaCodecInfo.EncoderCapabilities` BITRATE_MODE_VBR and CBR; `FEATURE_HdrEditing`;
+  `MediaStore.MediaColumns` IS_PENDING and RELATIVE_PATH.
+- Review fixes (parent, before commit): `Probe` display size (rotation); `MediaJobService.publish` now
+  fails the one job on a MediaStore error instead of throwing on the Transformer looper.
+- Not verified yet, and needs the phone or a real encode: foreground start and the time limit (S8),
+  Transformer output sizes and orientation (S2, S4), FrameDropEffect on a lower-fps source (S5),
+  MediaStore publish on device, Probe on real `content://` URIs, CodecReport values, notification UI.
+  Kotlin lint (NewApi) was not run.
+
 ## File map
 
 - `docs/design-editor/RESEARCH.md`: findings, verdicts, verified vs assumed, sources.
@@ -146,9 +203,12 @@ From sources (details and links in RESEARCH):
   queue, pipelines, target-size algorithm with worked numbers, background, UI, engine extraction,
   release, testing, phases, spikes S1..S8.
 - `docs/design-editor/PROMPTS.md`: prelude + Phase 1..6 prompts with verification commands.
-- Code to come: `packages/media-core`, `packages/design-editor-engine`, `apps/design-editor`
-  (`media.js`, `media.html`, `scripts/fetch-ffmpeg.mjs`), `apps/design-editor-mobile`
-  (`modules/design-media`), `tools/release/src/apps.ts` (the Store needs no change since 2026-11-01).
+- Code (Phase 1, B1): `packages/media-core` (types, presets, budget, retry, names, validate, queue,
+  fixtures, tests); `apps/design-editor-mobile` (app shell, `app/index.tsx` Media lab, `assets/icon.svg`,
+  `android/` prebuild, `modules/design-media` with the Kotlin under `android/` and the TS contract in
+  `src/index.ts`); `tools/release/src/apps.ts` (entry, no `prepare`; the Store needs no change since 2026-11-01).
+- Still to come: `packages/design-editor-engine`, `apps/design-editor` (`media.js`, `media.html`,
+  `scripts/fetch-ffmpeg.mjs`).
 - Research scratch notes (not in the repo, may be gone):
   `/private/tmp/claude-501/-Users-outsentia-Documents-apps-hub/73fd9f91-fb79-4c73-bea1-6e4165d4b657/scratchpad/media-research-notes.md`.
 
@@ -173,12 +233,16 @@ From sources (details and links in RESEARCH):
   release for this app (see "Decisions made"). Branch tracks `origin/main` by default, so set its
   upstream before any push. Stopped before step 7 (needs the Redmi Note 14 Pro 4G and the five test
   clips).
+- **2026-11-01 (session B1, Phase 1 steps 1–6).** Built media-core (34 tests), the app shell with
+  prebuild and the rendered icon, the Kotlin module (built by a forked worker, reviewed by the parent,
+  two fixes), the Media lab, the release registry entry, and the SPEC §5.1, §7.1 and §10.2 updates.
+  Verification is under "Verified 2026-11-01". Stopped before step 7. Nothing pushed or released.
 
 ## Current state + exact next step
 
-- State (2026-11-01): the S0 docs are on `main` (PR #1 merged). Session B1 runs on branch
-  `design-media-phase-1` in worktree `.claude/worktrees/design-media-phase-1`, from `origin/main`
-  (03d1c7f). Phase 1 steps 1–6 are in progress; step 7 (the phone encoder spike) waits for the owner.
+- State (2026-11-01): the S0 docs are on `main` (PR #1 merged). Phase 1 steps 1–6 are done on branch
+  `design-media-phase-1` (worktree `.claude/worktrees/design-media-phase-1`, from `origin/main` 03d1c7f).
+  Commits are local; nothing is pushed or released. Step 7 (the phone encoder spike) waits for the owner.
 - **Unmerged Design Editor work exists (found 2026-10-31).** Branch `design-editor-phase-2`
   (2026-10-28, handoff `docs/handoffs/design-editor-phase-2.md` on that branch) adds multi-page
   designs (file format v2), bundled fonts and real PDF text. It is e2e green and waits for the
@@ -187,6 +251,11 @@ From sources (details and links in RESEARCH):
   extraction) must start after that branch is merged, and Phase 3 must extract the multi-page
   editor. Use `design-media-phase-<n>` branch names to avoid the clash.
 - **Owner answers recorded** (S0, 2026-10-31; see "Decisions made").
-- **Next step:** finish Phase 1 steps 1–6 (session B1) on branch `design-media-phase-1`, then stop
-  before step 7. B0 (ship the multi-page branch) whenever the owner is ready. B0 and B1 must both be
-  merged before B2.
+- **Next step (owner gate):** step 7 needs the owner's Redmi Note 14 Pro 4G and the five test clips
+  (SPEC §16.3). When the owner says so, confirm the Cloudflare account, commit, then
+  `pnpm release design-editor -m "Design Editor: media lab"` (no `pnpm release store`, per the
+  correction above). The owner installs from the Store and runs S1–S8 in the Media lab. Paste the
+  results here, then tune `budget.ts` (FLOOR, margin, overhead) and the fixtures, and re-run step 6.
+  B0 (ship the multi-page branch) whenever the owner is ready. B0 and B1 must both be merged before B2.
+- **Open for later phases:** the Mac probe must report display dimensions, as Android does now.
+  Verify FrameDropEffect on lower-fps sources (S5). `SYSTEM_ALERT_WINDOW` is debug-only (release clean).
