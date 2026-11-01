@@ -145,15 +145,13 @@ share a process; running the firewall service in its own process (`android:proce
 fixes it in both orders, so the full plan must use a separate firewall process. Size (+6.5 MB
 arm64), traffic, app attribution and per-app blocking all pass on the emulator.
 
-Next, owner-dependent (Task 3, nothing started): release the spike through the Store as its own
-app (`com.opentunnel.open_tunnel_vpn.spike`, needs a `tools/release/src/apps.ts` entry and a
-`<queries>` package entry in the Store installer, then `pnpm release store` and
-`pnpm release tunnelwall-spike` from the spike worktree). The owner then installs it and checks
-UIDs on the phone's ROM, Private DNS modes, Always-on after a reboot, and runs two overnight
-battery tests (spike firewall on, then off). Then Task 4: verdict on `main`, clean up the Store
-entry, keep the branch.
+Task 3 progress: the phone run passed (see the results file); the spike is released through the Store
+(Store build 11, Firewall spike build 2) and branch `firewall-spike` is pushed to origin (never to
+`main`). Next, owner-dependent: install Firewall spike from the Store, then Private DNS automatic and
+strict, Always-on after a reboot, and two overnight battery runs (firewall on, then off). Then Task 4:
+verdict on `main`, remove the Store entry, keep the branch.
 
-Do not merge or push `firewall-spike`. Releasing anything from it is a publish to the owner's
+Do not merge `firewall-spike` or push it to `main`. Releasing anything from it is a publish to the owner's
 Store: ask first.
 
 Open product decision for the owner: when a different machine takes over an IP, the HomeNet row

@@ -76,6 +76,12 @@ rule; separate package `com.opentunnel.open_tunnel_vpn.spike`, debug build).
 
 Private DNS was off on the phone, so the DNS-over-TLS rule was not exercised there.
 
+Released through the Store on 2026-11-01: Store build 11 (its `<queries>` lists the spike) and
+Firewall spike build 2 (`com.opentunnel.open_tunnel_vpn.spike`, 75.4 MB universal APK, release-signed;
+the Store entry `tunnelwall-spike` is `manualOnly`, so CI never picks it). The wireless-debugging debug
+copy was uninstalled first because its signing key differs. No GitHub `apks` copy: that upload step
+is not on `main` yet.
+
 ## Not verified yet
 
 Always-on start after a reboot (which service class starts), Private DNS automatic and strict
