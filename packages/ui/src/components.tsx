@@ -2,7 +2,9 @@ import React, { Children, Fragment, isValidElement, useEffect, useRef, useState,
 import {
   ActivityIndicator,
   Animated,
+  Keyboard,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -528,6 +530,19 @@ export interface SheetProps {
 export function Sheet({ visible, onClose, title, doneLabel = 'Done', onDone, children }: SheetProps) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
+  const [keyboard, setKeyboard] = useState(0);
+  // A Modal is its own window, so the activity's keyboard resize doesn't reach it: lift the sheet by hand.
+  useEffect(() => {
+    if (!visible) return;
+    const ios = Platform.OS === 'ios';
+    const show = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', (e) => setKeyboard(e.endCoordinates.height));
+    const hide = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboard(0));
+    return () => {
+      show.remove();
+      hide.remove();
+      setKeyboard(0);
+    };
+  }, [visible]);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
@@ -541,7 +556,7 @@ export function Sheet({ visible, onClose, title, doneLabel = 'Done', onDone, chi
             borderWidth: 1,
             borderColor: c.line,
             maxHeight: '88%',
-            paddingBottom: insets.bottom,
+            paddingBottom: keyboard > 0 ? keyboard : insets.bottom,
           }}
         >
           <View style={{ alignItems: 'center', paddingTop: space.sm }}>
