@@ -6,7 +6,7 @@
 
 **Architecture:** The packet engine (firestack) and the VPN service run in their own process (`:firewall`), because firestack and WireGuard's Go runtimes crash each other in one process. The two processes share nothing in memory: rules, the log and the firewall state live in one SQLite database (WAL mode). Pure decisions and retention live in the Expo module (`modules/open-tunnel-native`) with JVM tests. The app module (`android/app`) holds the service and the firestack wrapper. The UI reads and writes through the native module's TS contract.
 
-**Tech Stack:** Kotlin (Android `VpnService`, `NetworkStatsManager`, `ConnectivityManager`, `android.database.sqlite`), firestack `com.celzero:firestack:d3d530ea3e` (MPL-2.0), React Native 0.81 + Expo SDK 54, TypeScript, `node --test`, Gradle JVM unit tests, `@apps-hub/ui` (`opentunnel` brand).
+**Tech Stack:** Kotlin (Android `VpnService`, `NetworkStatsManager`, `ConnectivityManager`, `android.database.sqlite`), firestack `com.celzero:firestack:d3d530ea3e@aar` (MPL-2.0), React Native 0.81 + Expo SDK 54, TypeScript, `node --test`, Gradle JVM unit tests, `@apps-hub/ui` (`opentunnel` brand).
 
 **Spec:** `docs/superpowers/specs/2026-10-30-network-toolkit-design.md` (Part 2, as amended on the `firewall-spike` branch). The spike results are in `docs/handoffs/firewall-spike-results.md`. The reference implementation is `apps/open_tunnel_vpn/android/app/src/main/java/com/opentunnel/open_tunnel_vpn/spike/FirewallSpikeService.kt` on the `firewall-spike` branch. Read both before Task 3.
 
@@ -109,7 +109,7 @@ class LogRetentionTest {
 - Create: `apps/open_tunnel_vpn/android/app/src/main/java/com/opentunnel/open_tunnel_vpn/firewall/FirewallService.kt`
 - Create: `apps/open_tunnel_vpn/android/app/src/main/java/com/opentunnel/open_tunnel_vpn/firewall/FirewallNetworks.kt`
 - Test: `apps/open_tunnel_vpn/android/app/src/test/java/com/opentunnel/open_tunnel_vpn/firewall/FirewallNetworksTest.kt`
-- Modify: `apps/open_tunnel_vpn/android/app/build.gradle` (add `com.celzero:firestack:d3d530ea3e`; Maven Central)
+- Modify: `apps/open_tunnel_vpn/android/app/build.gradle` (add `com.celzero:firestack:d3d530ea3e@aar`; Maven Central)
 
 **Interfaces:**
 - Consumes: `FirewallStore` (Task 2), `FirewallDecision` (Task 1).
