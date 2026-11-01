@@ -429,6 +429,12 @@ Phone results (fill in as they come):
   `pnpm release strongroom` was denied once by the auto-mode classifier on a bare
   "go ahead"; the owner's explicit "Yes, release 0.1.1 now" let it run. Published
   0.1.1 (5). The phone's wireless adb then dropped.
+  Verified 2026-11-01 ~18:00: no adb devices at all, no emulator process, no mDNS
+  advertisement. emulator-5556 aborted (exit 134, netsim "Wifi is gone" errors),
+  not caused by us; its AVD disk state should be intact. To bring it back:
+  `~/Library/Android/sdk/emulator/emulator -avd strongroom-task12 -port 5556
+  -no-snapshot-save &`, then unlock it with PIN 1234. Nothing needs it until a
+  code change is made after the phone checks.
 
 ## Owner items to raise at the end of Phase 1 (from Task 1)
 
