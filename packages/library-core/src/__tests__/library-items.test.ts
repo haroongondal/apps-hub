@@ -84,6 +84,22 @@ test('updateItem with nothing to change does not bump updated_at; an unknown id 
   assert.deepEqual(await lib.getItem(a.id), a);
 });
 
+test('updateItem with the values the item already has does not bump updated_at', async () => {
+  const { lib } = await openLibrary();
+  const folder = await lib.createFolder('Work', null);
+  const a = await lib.createItem({ kind: 'pdf', title: 'A', folderId: folder.id, pageCount: 3, sizeBytes: 10 });
+  assert.deepEqual(await lib.updateItem(a.id, { title: 'A', folderId: folder.id, pageCount: 3, sizeBytes: 10 }), a);
+});
+
+test('indexing an item again with the same page count and size keeps its place in recent', async () => {
+  const { lib } = await openLibrary();
+  const older = await lib.createItem({ kind: 'pdf', title: 'Older', pageCount: 2, sizeBytes: 5 });
+  await lib.createItem({ kind: 'pdf', title: 'Newer' });
+  await lib.setBody(older.id, 'text');
+  await lib.updateItem(older.id, { pageCount: 2, sizeBytes: 5 });
+  assert.deepEqual((await lib.list({})).map((i) => i.title), ['Newer', 'Older']);
+});
+
 test('touch bumps updated_at', async () => {
   const { lib } = await openLibrary();
   const a = await lib.createItem({ kind: 'pdf', title: 'A' });

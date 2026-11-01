@@ -127,6 +127,18 @@ test('deleteFolder with a clashing subfolder name changes nothing', async () => 
   await assert.rejects(lib.deleteFolder('nope'), code('not_found'));
 });
 
+test('deleteFolder moves up a subfolder that has its own name, ignoring case', async () => {
+  const { lib, db } = await openLibrary();
+  const work = await lib.createFolder('Work', null);
+  const inner = await lib.createFolder('work', work.id);
+  const item = await lib.createItem({ kind: 'pdf', title: 'X', folderId: inner.id });
+  await lib.deleteFolder(work.id);
+  assert.deepEqual((await lib.listFolders(null)).map((f) => [f.id, f.name]), [[inner.id, 'work']]);
+  assert.equal((await lib.getItem(item.id))!.folderId, inner.id);
+  assert.deepEqual(await db.all('PRAGMA foreign_key_check'), []);
+  assert.equal((await db.first('PRAGMA defer_foreign_keys'))!.defer_foreign_keys, 0);
+});
+
 test('folderPath runs from the root to the folder', async () => {
   const { lib } = await openLibrary();
   const a = await lib.createFolder('A', null);

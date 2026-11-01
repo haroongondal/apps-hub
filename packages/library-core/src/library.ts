@@ -193,21 +193,30 @@ export class Library {
     const title = patch.title === undefined ? undefined : cleanName(patch.title, MAX_TITLE, 'Title');
     return this.db.transaction(async (tx) => {
       const rid = await ridOf(tx, id);
+      const current = (await itemIn(tx, id))!;
       const sets: string[] = [];
       const params: SqlValue[] = [];
-      if (title !== undefined) (sets.push('title = ?'), params.push(title));
-      if (patch.folderId !== undefined) {
+      // A value equal to the stored one is not a change, so it doesn't bump updated_at.
+      const newTitle = title !== undefined && title !== current.title;
+      if (newTitle) (sets.push('title = ?'), params.push(title));
+      if (patch.folderId !== undefined && patch.folderId !== current.folderId) {
         if (patch.folderId !== null) await folderIn(tx, patch.folderId);
         sets.push('folder_id = ?');
         params.push(patch.folderId);
       }
-      if (patch.pageCount !== undefined) (sets.push('page_count = ?'), params.push(patch.pageCount));
-      if (patch.sizeBytes !== undefined) (sets.push('size_bytes = ?'), params.push(patch.sizeBytes));
+      if (patch.pageCount !== undefined && patch.pageCount !== current.pageCount) {
+        sets.push('page_count = ?');
+        params.push(patch.pageCount);
+      }
+      if (patch.sizeBytes !== undefined && patch.sizeBytes !== current.sizeBytes) {
+        sets.push('size_bytes = ?');
+        params.push(patch.sizeBytes);
+      }
       if (sets.length) {
         sets.push('updated_at = ?');
         params.push(this.deps.now());
         await tx.run(`UPDATE items SET ${sets.join(', ')} WHERE id = ?`, [...params, id]);
-        if (title !== undefined) {
+        if (newTitle) {
           await tx.run('UPDATE items_fts SET title = ? WHERE rowid = ?', [normalizeForSearch(title), rid]);
         }
       }
@@ -344,7 +353,7 @@ export class Library {
     });
   }
 
-  /** Moves items and subfolders to its parent first, so nothing is deleted with it (PRD invariant 4). */
+  /** Moves items and subfolders to its parent in the same transaction, so nothing is deleted with it (PRD invariant 4). */
   async deleteFolder(id: string): Promise<void> {
     await this.db.transaction(async (tx) => {
       const { parentId } = await folderIn(tx, id);
@@ -360,8 +369,10 @@ export class Library {
         throw new LibraryError('duplicate_name', `A folder named "${clash.name}" already exists one level up; rename one of them first`);
       }
       await tx.run('UPDATE items SET folder_id = ? WHERE folder_id = ?', [parentId, id]);
-      await tx.run('UPDATE folders SET parent_id = ? WHERE parent_id = ?', [parentId, id]);
+      // A subfolder may share this folder's name, so it moves up only after this one is gone.
+      await tx.exec('PRAGMA defer_foreign_keys = ON');
       await tx.run('DELETE FROM folders WHERE id = ?', [id]);
+      await tx.run('UPDATE folders SET parent_id = ? WHERE parent_id = ?', [parentId, id]);
     });
   }
 
