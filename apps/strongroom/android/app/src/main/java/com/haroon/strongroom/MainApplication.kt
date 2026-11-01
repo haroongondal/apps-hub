@@ -38,8 +38,12 @@ class MainApplication : Application(), ReactApplication {
   override val reactHost: ReactHost
     get() = ReactNativeHostWrapper.createReactHost(applicationContext, reactNativeHost)
 
-  override fun onCreate() {
-    super.onCreate()
+  private var reactNativeStarted = false
+
+  // Not in onCreate: a process started only for autofill (service or UnlockActivity) never needs React Native, and its init eats the 5 s fill budget.
+  fun startReactNative() {
+    if (reactNativeStarted) return
+    reactNativeStarted = true
     DefaultNewArchitectureEntryPoint.releaseLevel = try {
       ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
     } catch (e: IllegalArgumentException) {
@@ -51,6 +55,6 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
-    ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig)
+    if (reactNativeStarted) ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig)
   }
 }
