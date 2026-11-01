@@ -53,10 +53,18 @@ worktree /Users/outsentia/Documents/apps-hub/.claude/worktrees/firewall-spike.
   WireGuard's Go runtimes crash each other in one process. This changes the design's "new firewall
   role in OpenTunnelVpnService"; the full plan must use a separate service class in that process and
   share rules and the log through storage (not memory).
-- 2026-11-01: the owner called the spike "tested" and asked what's next. My reading (confirm with
-  the owner): the three checks the spike did not do (Private DNS automatic and strict, Always-on
-  after a reboot, the two-night battery comparison) move into the acceptance checks of the real
-  TunnelWall build.
+- 2026-11-01: the owner called the spike "tested" and asked what's next. Asked three questions;
+  answers: (a) run the three untested checks (Private DNS automatic and strict, Always-on after a
+  reboot, the two-night battery comparison) **on the spike first**, before the plan is final;
+  (b) "remove the spike now"; (c) accept the +~29 MB universal Store APK, no arm64-only build.
+  (a) and (b) conflicted (the checks need the spike installed). Resolved the same day: I
+  recommended keeping the spike, run the checks, then remove it; the owner said "go ahead".
+  So: **the spike stays until the checks are done; nothing is deleted yet.**
+- 2026-11-01: reading the spike code showed build 2 cannot answer the Always-on question (its
+  `onStartCommand` ignores a start with no action), so the checks need **spike build 3** (a
+  three-line change, on the branch). The battery night overstates the engine's cost (the spike
+  writes a file per flow; the real build batches into SQLite), so a pass is meaningful and a small
+  miss is not conclusive.
 
 ## Verified facts (don't re-derive)
 
@@ -119,26 +127,34 @@ worktree /Users/outsentia/Documents/apps-hub/.claude/worktrees/firewall-spike.
   passed. Released through the Store: Store build 11 (its `<queries>` lists the spike) and
   Firewall spike build 2. Branch `firewall-spike` pushed to `origin/firewall-spike`.
 - 2026-11-01: owner: "it's tested now, what's next"; asked for this handoff.
+- 2026-11-01 (new chat): read the handoff, results and spec Part 2. Asked the owner the three
+  questions (answers in Decisions). Amended the design (Part 2) for the `:firewall` process,
+  storage-shared rules/log/state, the seven integration rules, the tun range, the spike outcome
+  and the accepted APK growth. Nothing committed yet, nothing deleted.
 
 ## Current state + exact next step
 
-The spike is effectively done; the firewall goes into TunnelWall next. In order:
+Done this session: the owner's three answers (Decisions) and the design amendment (step 3
+below, uncommitted in this worktree: `git diff docs/superpowers/specs/`).
 
-1. **Confirm with the owner** (one message): (a) the three untested checks move into the real
-   build's acceptance tests; (b) remove the Firewall spike now (owner uninstalls it; you delete its
-   Store manifest entry and APK through the same admin API `tools/release` uses, since there is no
-   CLI command) or keep it for one battery night first; (c) Store APK: accept +~29 MB universal, or
-   switch TunnelWall's Store build to arm64-only.
-2. **Spike Task 4 (close-out):** write a short verdict ("go, firewall in its own process", plus the
-   seven integration rules) into `docs/handoffs/network-toolkit.md` on `main`. Pushing that to
-   `main` releases nothing (docs only) but still needs the owner's OK. Keep branch
+1. **Release Firewall spike build 3 through the Store** (ask the owner first; the Store entry
+   `tunnelwall-spike` is `manualOnly`, and confirm the Cloudflare account before deploying). The
+   owner then runs `docs/handoffs/firewall-spike-checks.md` (Private DNS automatic and strict,
+   Always-on after a reboot, two battery nights) and pastes the logs. Fold the results into
+   `firewall-spike-results.md` and the design's Reboot, DNS and Risks sections.
+   Afterwards the owner uninstalls the spike and you delete the `tunnelwall-spike` manifest
+   entry and its APK through the admin API `tools/release` uses (no CLI command). Confirm before
+   deleting anything.
+2. **Show the owner the design delta** (done in chat; committed on `firewall-spike`).
+3. **Spike Task 4 (close-out):** put the verdict ("go, firewall in its own process", plus the
+   seven integration rules, now in the spec) into `docs/handoffs/network-toolkit.md` on `main`.
+   Pushing to `main` releases nothing (docs only) but needs the owner's OK. Keep branch
    `firewall-spike`; do not merge it.
-3. **Amend the design** (Part 2, "Service" and "Architecture") for the separate `:firewall`
-   process, storage-shared rules and log, and the seven integration rules. Show the owner the delta.
 4. **Write the full firewall plan** with superpowers:writing-plans, branch from `main` in a new
-   worktree, using the spike service as the reference implementation. Acceptance checks must
-   include Private DNS automatic and strict, Always-on after a reboot, and the two-night battery
-   comparison (≤ 3 points), on the owner's phone through the Store.
+   worktree, using the spike service as the reference. If (i), wait for the check results first
+   (they amend the Reboot, DNS and Risks sections). Include a task for the controller hand-over
+   (stop the firewall and see it stopped in the shared state before an engine starts). Store APK:
+   universal, +~29 MB accepted, no release-tool change.
 
 Also open, not blocking:
 - HomeNet: the owner's four phone checks (device list kept with no false "New" badges, names shown
