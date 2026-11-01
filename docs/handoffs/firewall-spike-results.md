@@ -3,7 +3,8 @@
 Branch `firewall-spike` (never merged, never pushed to `main`). Plan:
 `docs/superpowers/plans/2026-10-31-tunnelwall-firewall-spike.md`. Engine: firestack
 `com.celzero:firestack:d3d530ea3e` (MPL-2.0; the version RethinkDNS v0.5.8 pins).
-Emulator: `apps-hub-test`, Android 35 arm64. Phone checks are still open.
+Emulator: `apps-hub-test`, Android 35 arm64, plus the owner's phone (section below). Still open:
+Private DNS modes, Always-on after a reboot, overnight battery.
 
 ## Pass line
 
