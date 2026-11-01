@@ -143,7 +143,7 @@ From sources (details and links in RESEARCH):
 - `docs/design-editor/PROMPTS.md`: prelude + Phase 1..6 prompts with verification commands.
 - Code to come: `packages/media-core`, `packages/design-editor-engine`, `apps/design-editor`
   (`media.js`, `media.html`, `scripts/fetch-ffmpeg.mjs`), `apps/design-editor-mobile`
-  (`modules/design-media`), `tools/release/src/apps.ts`, the Store's `<queries>`.
+  (`modules/design-media`), `tools/release/src/apps.ts` (the Store needs no change since 2026-11-01).
 - Research scratch notes (not in the repo, may be gone):
   `/private/tmp/claude-501/-Users-outsentia-Documents-apps-hub/73fd9f91-fb79-4c73-bea1-6e4165d4b657/scratchpad/media-research-notes.md`.
 

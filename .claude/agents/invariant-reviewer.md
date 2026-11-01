@@ -78,8 +78,8 @@ root `AGENTS.md` ("Hard Architectural & OS Constraints — NetLens"), `apps/open
   validated (`isKey`) before any R2 read or write. Any route that lets `STORE_TOKEN` write is a blocker.
 - Secrets never enter git: `release.jks`, `~/.gradle/gradle.properties`, `.dev.vars`,
   `~/.config/apps-hub/release.env`. The Store keeps its token Keystore-encrypted.
-- Store permissions stay as documented in `docs/app-store.md`: no `QUERY_ALL_PACKAGES`; package
-  visibility is the `<queries>` list.
+- Store permissions stay as documented in `docs/app-store.md`. Package visibility is
+  `QUERY_ALL_PACKAGES` (owner decision, 2026-11-01); a per-app `<queries>` list coming back is a finding.
 
 ## Every app
 
