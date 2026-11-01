@@ -4,6 +4,14 @@ node_modules/
 .npm/
 
 # expo / react-native builds (root-anchored: DO NOT match apps/*/modules/*/android|ios)
+/apps/design-editor-mobile/android/.gradle/
+/apps/design-editor-mobile/android/app/build/
+/apps/design-editor-mobile/android/build/
+/apps/design-editor-mobile/android/local.properties
+/apps/design-editor-mobile/android/**/.cxx/
+/apps/design-editor-mobile/modules/*/android/build/
+/apps/design-editor-mobile/.expo/
+/apps/design-editor-mobile/assets/editor/
 /apps/netlens/android/.gradle/
 /apps/netlens/android/app/build/
 /apps/netlens/android/build/

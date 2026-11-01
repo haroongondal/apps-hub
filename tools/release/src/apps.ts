@@ -21,6 +21,11 @@ export const APPS: Record<string, ReleasableApp> = {
     android: { packageName: 'com.haroon.pdfeditor' },
     prepare: [['node', '../../packages/pdf-editor-engine/build.mjs']],
   },
+  'design-editor': {
+    name: 'Design Editor',
+    dir: 'apps/design-editor-mobile',
+    android: { packageName: 'com.haroon.designeditor' },
+  },
   store: { name: 'Store', dir: 'apps/store', android: { packageName: 'com.haroon.store' } },
   deputy: { name: 'Deputy', dir: 'apps/deputy', android: { packageName: 'com.haroon.deputy' } },
   strongroom: { name: 'Strongroom', dir: 'apps/strongroom', android: { packageName: 'com.haroon.strongroom' } },

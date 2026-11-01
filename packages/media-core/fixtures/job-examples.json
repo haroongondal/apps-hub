@@ -1,0 +1,53 @@
+[
+  {
+    "id": "job-1", "inputId": "content://media/external/video/media/101", "inputName": "Trip.mp4",
+    "plan": { "tool": "size", "targetBytes": 20000000, "encoder": "hw-h264", "rung": { "shortSide": 720, "fps": 30 },
+      "width": 1280, "height": 720, "videoBps": 2236595, "audio": { "mode": "aac", "bps": 128000 },
+      "overheadBytes": 265536, "plannedVideoBytes": 16774463, "plannedBytes": 17999999,
+      "attempt": 1, "margin": 0.9, "fpsCap": 30 },
+    "state": "queued", "progress": 0, "attempt": 1, "outputs": []
+  },
+  {
+    "id": "job-2", "inputId": "content://media/external/video/media/102", "inputName": "Walk.mp4",
+    "plan": { "tool": "size", "targetBytes": 20000000, "encoder": "hw-h264", "rung": { "shortSide": 720, "fps": 30 },
+      "width": 1280, "height": 720, "videoBps": 1886519, "audio": { "mode": "aac", "bps": 128000 },
+      "overheadBytes": 265536, "plannedVideoBytes": 14148893, "plannedBytes": 15374429,
+      "attempt": 2, "margin": 0.9, "fpsCap": 30 },
+    "state": "running", "progress": 0.4, "attempt": 2, "outputs": [], "startedAt": 1793500000000
+  },
+  {
+    "id": "job-3", "inputId": "content://media/external/video/media/103", "inputName": "Party.mp4",
+    "plan": { "tool": "size", "targetBytes": 20000000, "encoder": "hw-h264", "rung": { "shortSide": 720, "fps": 30 },
+      "width": 1280, "height": 720, "videoBps": 2236595, "audio": { "mode": "copy" },
+      "overheadBytes": 265536, "plannedVideoBytes": 16774463, "plannedBytes": 17999999,
+      "attempt": 1, "margin": 0.9, "fpsCap": 30 },
+    "state": "done", "progress": 1, "attempt": 1,
+    "outputs": [ { "name": "Party (compressed).mp4", "ref": "content://media/external/video/media/204", "bytes": 19650000 } ],
+    "startedAt": 1793500000000, "finishedAt": 1793500090000
+  },
+  {
+    "id": "job-4", "inputId": "content://media/external/video/media/104", "inputName": "Concert.mp4",
+    "plan": { "tool": "size", "targetBytes": 20000000, "encoder": "hw-hevc", "rung": { "shortSide": 1080, "fps": 30 },
+      "width": 1920, "height": 1080, "videoBps": 2236595, "audio": { "mode": "aac", "bps": 128000 },
+      "overheadBytes": 265536, "plannedVideoBytes": 16774463, "plannedBytes": 17999999,
+      "attempt": 3, "margin": 0.9, "fpsCap": 30 },
+    "state": "failed", "progress": 0.2, "attempt": 3, "outputs": [],
+    "error": "Couldn't fit under 20 MB.", "startedAt": 1793500000000, "finishedAt": 1793500200000
+  },
+  {
+    "id": "job-5", "inputId": "content://media/external/video/media/105", "inputName": "Lecture.mp4",
+    "plan": { "tool": "size", "targetBytes": 20000000, "encoder": "hw-h264", "rung": { "shortSide": 720, "fps": 30 },
+      "width": 1280, "height": 720, "videoBps": 2236595, "audio": { "mode": "aac", "bps": 128000 },
+      "overheadBytes": 265536, "plannedVideoBytes": 16774463, "plannedBytes": 17999999,
+      "attempt": 1, "margin": 0.9, "fpsCap": 30 },
+    "state": "paused", "progress": 0.6, "attempt": 1, "outputs": []
+  },
+  {
+    "id": "job-6", "inputId": "content://media/external/video/media/106", "inputName": "Kids.mp4",
+    "plan": { "tool": "size", "targetBytes": 20000000, "encoder": "hw-h264", "rung": { "shortSide": 720, "fps": 30 },
+      "width": 1280, "height": 720, "videoBps": 2236595, "audio": { "mode": "aac", "bps": 128000 },
+      "overheadBytes": 265536, "plannedVideoBytes": 16774463, "plannedBytes": 17999999,
+      "attempt": 1, "margin": 0.9, "fpsCap": 30 },
+    "state": "interrupted", "progress": 0.3, "attempt": 1, "outputs": [], "startedAt": 1793500000000
+  }
+]

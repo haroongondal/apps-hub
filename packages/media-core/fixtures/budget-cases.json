@@ -1,0 +1,71 @@
+{
+  "_source": "SPEC §10.3 and RESEARCH §6.6, worked by hand: total = (target x margin - overhead) x 8 / duration; audio tier from total; video = total - audio.",
+  "cases": [
+    {
+      "name": "60 s 1080p30 to 20 MB, hw-h264: 720p30, 2,236,595 bit/s, audio 128k",
+      "info": { "id": "in-60s", "name": "clip-60.mp4", "bytes": 120000000, "durationS": 60, "container": "mp4",
+        "tracks": [
+          { "index": 0, "kind": "video", "codec": "h264", "width": 1920, "height": 1080, "fps": 30 },
+          { "index": 1, "kind": "audio", "codec": "aac", "channels": 2, "sampleRate": 48000, "bitrate": 256000 }
+        ] },
+      "targetBytes": 20000000, "encoder": "hw-h264",
+      "expect": { "ok": true, "rung": { "shortSide": 720, "fps": 30 }, "width": 1280, "height": 720,
+        "videoBps": 2236595, "audio": { "mode": "aac", "bps": 128000 }, "overheadBytes": 265536,
+        "plannedVideoBytes": 16774463, "plannedBytes": 17999999, "fpsCap": 30, "margin": 0.9 }
+    },
+    {
+      "name": "same clip, hw-hevc: 1080p30, same bitrates",
+      "info": { "id": "in-60s", "name": "clip-60.mp4", "bytes": 120000000, "durationS": 60, "container": "mp4",
+        "tracks": [
+          { "index": 0, "kind": "video", "codec": "h264", "width": 1920, "height": 1080, "fps": 30 },
+          { "index": 1, "kind": "audio", "codec": "aac", "channels": 2, "sampleRate": 48000, "bitrate": 256000 }
+        ] },
+      "targetBytes": 20000000, "encoder": "hw-hevc",
+      "expect": { "ok": true, "rung": { "shortSide": 1080, "fps": 30 }, "width": 1920, "height": 1080,
+        "videoBps": 2236595, "audio": { "mode": "aac", "bps": 128000 } }
+    },
+    {
+      "name": "180 s to 20 MB, hw-h264: 480p30, video 692,198 bit/s, audio 96k",
+      "info": { "id": "in-180s", "name": "clip-180.mp4", "bytes": 360000000, "durationS": 180, "container": "mp4",
+        "tracks": [
+          { "index": 0, "kind": "video", "codec": "h264", "width": 1920, "height": 1080, "fps": 30 },
+          { "index": 1, "kind": "audio", "codec": "aac", "channels": 2, "sampleRate": 48000, "bitrate": 256000 }
+        ] },
+      "targetBytes": 20000000, "encoder": "hw-h264",
+      "expect": { "ok": true, "rung": { "shortSide": 480, "fps": 30 }, "width": 854, "height": 480,
+        "videoBps": 692198, "audio": { "mode": "aac", "bps": 96000 } }
+    },
+    {
+      "name": "180 s to 20 MB, hw-hevc: 540p30",
+      "info": { "id": "in-180s", "name": "clip-180.mp4", "bytes": 360000000, "durationS": 180, "container": "mp4",
+        "tracks": [
+          { "index": 0, "kind": "video", "codec": "h264", "width": 1920, "height": 1080, "fps": 30 },
+          { "index": 1, "kind": "audio", "codec": "aac", "channels": 2, "sampleRate": 48000, "bitrate": 256000 }
+        ] },
+      "targetBytes": 20000000, "encoder": "hw-hevc",
+      "expect": { "ok": true, "rung": { "shortSide": 540, "fps": 30 }, "width": 960, "height": 540,
+        "videoBps": 692198, "audio": { "mode": "aac", "bps": 96000 } }
+    },
+    {
+      "name": "30 min to 20 MB: refused, about 21 minutes is the longest that fits",
+      "info": { "id": "in-30min", "name": "clip-30min.mp4", "bytes": 1500000000, "durationS": 1800, "container": "mp4",
+        "tracks": [
+          { "index": 0, "kind": "video", "codec": "h264", "width": 1920, "height": 1080, "fps": 30 },
+          { "index": 1, "kind": "audio", "codec": "aac", "channels": 2, "sampleRate": 48000, "bitrate": 256000 }
+        ] },
+      "targetBytes": 20000000, "encoder": "hw-h264",
+      "expect": { "ok": false, "reason": "too-long", "maxDurationS": 1297 }
+    },
+    {
+      "name": "60 s 1080p60 to 50 MB, x264: fps capped to 30, 1080p30, video 6.3 Mbit/s",
+      "info": { "id": "in-60s-60fps", "name": "clip-60-60fps.mp4", "bytes": 120000000, "durationS": 60, "container": "mp4",
+        "tracks": [
+          { "index": 0, "kind": "video", "codec": "h264", "width": 1920, "height": 1080, "fps": 60 },
+          { "index": 1, "kind": "audio", "codec": "aac", "channels": 2, "sampleRate": 48000, "bitrate": 256000 }
+        ] },
+      "targetBytes": 50000000, "encoder": "x264",
+      "expect": { "ok": true, "rung": { "shortSide": 1080, "fps": 30 }, "width": 1920, "height": 1080,
+        "videoBps": 6263262, "audio": { "mode": "aac", "bps": 128000 }, "fpsCap": 30, "margin": 0.97 }
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+package expo.modules.designmedia
+
+import android.net.Uri
+import expo.modules.designmedia.android.Access
+import expo.modules.designmedia.android.CodecReport
+import expo.modules.designmedia.android.MediaJobService
+import expo.modules.designmedia.android.Probe
+import expo.modules.designmedia.core.AtomicFile
+import expo.modules.designmedia.core.EncoderStatsStore
+import expo.modules.designmedia.core.QueueStore
+import expo.modules.designmedia.core.decodeJobs
+import expo.modules.designmedia.core.toStatusMap
+import expo.modules.kotlin.modules.Module
+import expo.modules.kotlin.modules.ModuleDefinition
+import java.io.File
+
+class DesignMediaModule : Module() {
+  private val context
+    get() = requireNotNull(appContext.reactContext) { "React context unavailable" }
+
+  override fun definition() = ModuleDefinition {
+    Name("DesignMedia")
+
+    Events(MediaJobService.EVENT_PROGRESS, MediaJobService.EVENT_QUEUE)
+
+    OnCreate {
+      MediaJobService.listener = { name, body -> sendEvent(name, body) }
+    }
+
+    OnDestroy {
+      MediaJobService.listener = null
+    }
+
+    AsyncFunction("probe") { uri: String -> Probe.read(context, Uri.parse(uri)) }
+
+    AsyncFunction("codecReport") { CodecReport.list() }
+
+    AsyncFunction("persistAccess") { uri: String -> Access.persist(context, Uri.parse(uri)) }
+
+    AsyncFunction("freeBytes") { context.cacheDir.usableSpace }
+
+    AsyncFunction("encoderStats") {
+      EncoderStatsStore(AtomicFile(File(context.filesDir, "encoder-stats.json"))).all()
+    }
+
+    AsyncFunction("enqueue") { jobsJson: String, cbrFirst: Boolean ->
+      val ids = decodeJobs(jobsJson).map { it.id }
+      MediaJobService.enqueue(context, jobsJson, cbrFirst)
+      ids
+    }
+
+    AsyncFunction("cancel") { id: String -> MediaJobService.cancel(context, id) }
+
+    AsyncFunction("queue") {
+      QueueStore(AtomicFile(File(context.filesDir, "media-queue.json"))).load().map { it.toStatusMap() }
+    }
+  }
+}
