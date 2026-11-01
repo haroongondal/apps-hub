@@ -20,7 +20,7 @@ apps-hub/
 
 Both shells boot the same `core.js`; they differ only in the adapter they hand
 it (`savePdf`, `pickPdf`, `pickImage`, `alert`, `confirm`, `emitDocumentLoaded`,
-`supports`). `core.js` classic-scripts PDF.js and pdf-lib — no ES modules — so
+`supports`, and on mobile only `emitDocInfo`). `core.js` classic-scripts PDF.js and pdf-lib — no ES modules — so
 the desktop app still works from `file://` with no server and no build step.
 
 ## Features
@@ -73,6 +73,23 @@ drive of `mobile.html` over a fake `ReactNativeWebView` bridge. Device
 behaviour (Expo Go, iOS + Android) is a manual checklist: open → replace /
 merge, each tool incl. in-place text edit, rotate/move/delete pages,
 save→share sheet, dark/light, keyboard readability of the tool bars.
+
+## The `docInfo` event (mobile)
+
+After a document finishes loading, `core.js` calls the adapter's optional `emitDocInfo`
+with the page count, the text of each page and a 320 px wide cover of page 1. `mobile.html`
+posts it as `{ type: 'docInfo', pages, text: string[], thumb? }`, with `thumb` as bare
+base64 JPEG (no `data:` prefix). The shell uses it to make a PDF searchable in the Library
+and to give it a cover; it is the only addition to the bridge since the schema was frozen.
+
+- It runs after `documentLoaded` and never blocks it. If reading the text fails the event is
+  skipped (a console warning only), so the document simply lacks text search.
+- Text stops accumulating once it reaches 1,000,000 characters; `pages` still counts them all.
+- Merging a PDF in sends another `docInfo` for the merged document. The shell ignores it for
+  indexing, because the library item is still the original file.
+- The desktop adapter has no `emitDocInfo`, so the Electron app is unchanged.
+  `apps/pdf-editor-desktop/test/mobile.mjs` asserts one event with the fixture's page count,
+  its text and a JPEG cover.
 
 ## How text editing works
 

@@ -33,6 +33,33 @@ window.pdfEditorShell = function (main) {
     layout();
     if (tool === 'edittext') analyzeAll();
     A.emitDocumentLoaded({ ok: true, name: displayName, pages: pages.length });
+    void reportDocInfo(pages.slice());
+  }
+
+  // Failure here only costs the document its text search, so it must never reach the user.
+  async function reportDocInfo(snapshot) {
+    if (!A.emitDocInfo) return;
+    try {
+      const text = [];
+      let total = 0;
+      for (const pg of snapshot) {
+        const content = await pg.pdfPage.getTextContent();
+        text.push(content.items.map(it => it.str + (it.hasEOL ? '\n' : '')).join(''));
+        total += text[text.length - 1].length;
+        if (total >= 1000000) break;
+      }
+      let thumb;
+      try {
+        const first = snapshot[0].pdfPage;
+        const vp = first.getViewport({ scale: 320 / first.getViewport({ scale: 1 }).width });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(vp.width);
+        canvas.height = Math.ceil(vp.height);
+        await first.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+        thumb = canvas.toDataURL('image/jpeg', 0.7);
+      } catch (err) { console.warn('docInfo cover failed', err); }
+      A.emitDocInfo({ pages: snapshot.length, text, thumb });
+    } catch (err) { console.warn('docInfo failed', err); }
   }
 
   async function analyzeAll() {
