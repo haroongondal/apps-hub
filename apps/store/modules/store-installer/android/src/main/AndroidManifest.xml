@@ -5,6 +5,7 @@
     <queries>
         <package android:name="app.netlens" />
         <package android:name="com.opentunnel.open_tunnel_vpn" />
+        <package android:name="com.opentunnel.open_tunnel_vpn.spike" />
         <package android:name="com.haroon.pdfeditor" />
         <package android:name="com.haroon.deputy" />
     </queries>

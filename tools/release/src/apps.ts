@@ -6,6 +6,8 @@ export interface ReleasableApp {
   prepare?: string[][];
   /** android/ is not committed, so each release regenerates it with `expo prebuild --clean`. */
   prebuild?: boolean;
+  /** Released only when named on the command line; never picked by the changed-dirs mapping. */
+  manualOnly?: boolean;
 }
 
 export const APPS: Record<string, ReleasableApp> = {
@@ -21,6 +23,12 @@ export const APPS: Record<string, ReleasableApp> = {
     android: { packageName: 'com.haroon.pdfeditor' },
     prepare: [['node', '../../packages/pdf-editor-engine/build.mjs']],
   },
+  'tunnelwall-spike': {
+    name: 'Firewall spike',
+    dir: 'apps/open_tunnel_vpn',
+    android: { packageName: 'com.opentunnel.open_tunnel_vpn.spike' },
+    manualOnly: true,
+  },
   store: { name: 'Store', dir: 'apps/store', android: { packageName: 'com.haroon.store' } },
   deputy: { name: 'Deputy', dir: 'apps/deputy', android: { packageName: 'com.haroon.deputy' } },
 };
@@ -28,5 +36,5 @@ export const APPS: Record<string, ReleasableApp> = {
 /** Release ids of the apps whose workspace-relative dir is in `dirs` (the packages pnpm says changed). */
 export function releaseIdsForDirs(dirs: string[]): string[] {
   const changed = new Set(dirs);
-  return Object.keys(APPS).filter((id) => changed.has(APPS[id].dir));
+  return Object.keys(APPS).filter((id) => changed.has(APPS[id].dir) && !APPS[id].manualOnly);
 }
