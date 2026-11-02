@@ -23,6 +23,7 @@ export function useFirewall(api: FirewallApi, view: ActivityView) {
   const [apps, setApps] = useState<AppUseRow[] | null>(null);
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
   const [readError, setReadError] = useState<string | null>(null);
+  const [appsError, setAppsError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,9 +49,12 @@ export function useFirewall(api: FirewallApi, view: ActivityView) {
   const readApps = useCallback(async () => {
     try {
       const [rules, use] = await Promise.all([api.getAppRules(), api.getDataUse()]);
-      if (mounted.current) setApps(joinAppUse(rules, use));
+      if (!mounted.current) return;
+      setApps(joinAppUse(rules, use));
+      setAppsError(null);
     } catch (error) {
-      if (mounted.current) setReadError(message(error));
+      // Its own error: the 2 s live read must not clear it while apps is still null.
+      if (mounted.current) setAppsError(message(error));
     }
   }, [api]);
 
@@ -114,10 +118,12 @@ export function useFirewall(api: FirewallApi, view: ActivityView) {
     apps,
     activity,
     readError,
+    appsError,
     actionError,
     busy,
     refreshing,
     reload,
+    reloadApps: readApps,
     dismissActionError: () => setActionError(null),
     enable: () => act(() => api.setFirewallEnabled(true)),
     disable: () => act(() => api.setFirewallEnabled(false)),

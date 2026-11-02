@@ -125,6 +125,8 @@ export function FirewallScreen({ api, serverConnected }: FirewallScreenProps) {
 
             <AppsGroup
               apps={apps}
+              error={fw.appsError}
+              onRetry={fw.reloadApps}
               usageAccess={status.usageAccess}
               onSetRule={fw.setRule}
               onShowActivity={showActivityFor}
@@ -242,11 +244,15 @@ function StatusGroup({
 
 const AppsGroup = memo(function AppsGroup({
   apps,
+  error,
+  onRetry,
   usageAccess,
   onSetRule,
   onShowActivity,
 }: {
   apps: AppUseRow[] | null;
+  error: string | null;
+  onRetry(): void;
   usageAccess: boolean;
   onSetRule(uid: number, rule: FirewallRuleKind): void;
   onShowActivity(uid: number): void;
@@ -254,57 +260,71 @@ const AppsGroup = memo(function AppsGroup({
   const [openUid, setOpenUid] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
 
+  const failure = error !== null && (
+    <Notice
+      tone="danger"
+      title="Couldn't load apps"
+      action={<Button label="Try again" variant="secondary" size="sm" onPress={onRetry} />}
+    >
+      {error}
+    </Notice>
+  );
   if (apps === null) {
     return (
-      <Group title="Apps">
-        <Row title="Loading apps" />
-      </Group>
+      failure || (
+        <Group title="Apps">
+          <Row title="Loading apps" />
+        </Group>
+      )
     );
   }
   const shown = showAll ? apps : apps.slice(0, APPS_SHOWN);
   return (
-    <Group title="Apps" footer={usageAccess ? 'Data use covers the last 30 days, most mobile data first.' : undefined}>
-      {shown.map((app) => {
-        const pill = RULE_PILL[app.rule];
-        const open = openUid === app.uid;
-        return (
+    <>
+      {failure}
+      <Group title="Apps" footer={usageAccess ? 'Data use covers the last 30 days, most mobile data first.' : undefined}>
+        {shown.map((app) => {
+          const pill = RULE_PILL[app.rule];
+          const open = openUid === app.uid;
+          return (
+            <Row
+              key={app.uid}
+              title={app.label}
+              subtitle={
+                usageAccess ? `Wi-Fi ${formatBytes(app.wifiBytes)} · Mobile ${formatBytes(app.cellBytes)}` : app.pkg
+              }
+              mono={!usageAccess}
+              trailing={<Pill label={pill.label} tone={pill.tone} />}
+              onPress={() => setOpenUid(open ? null : app.uid)}
+              accessibilityLabel={`${app.label}, ${pill.label}, ${open ? 'expanded' : 'collapsed'}`}
+              accessibilityHint="Shows the rule for this app"
+            >
+              {open && (
+                <View style={{ gap: space.md }}>
+                  <Segmented
+                    options={RULE_OPTIONS}
+                    value={app.rule}
+                    onChange={(rule) => onSetRule(app.uid, rule)}
+                    accessibilityLabel={`Rule for ${app.label}`}
+                  />
+                  <Button
+                    label="Show this app's activity"
+                    variant="secondary"
+                    size="sm"
+                    onPress={() => onShowActivity(app.uid)}
+                  />
+                </View>
+              )}
+            </Row>
+          );
+        })}
+        {apps.length > APPS_SHOWN && (
           <Row
-            key={app.uid}
-            title={app.label}
-            subtitle={
-              usageAccess ? `Wi-Fi ${formatBytes(app.wifiBytes)} · Mobile ${formatBytes(app.cellBytes)}` : app.pkg
-            }
-            mono={!usageAccess}
-            trailing={<Pill label={pill.label} tone={pill.tone} />}
-            onPress={() => setOpenUid(open ? null : app.uid)}
-            accessibilityLabel={`${app.label}, ${pill.label}, ${open ? 'expanded' : 'collapsed'}`}
-            accessibilityHint="Shows the rule for this app"
-          >
-            {open && (
-              <View style={{ gap: space.md }}>
-                <Segmented
-                  options={RULE_OPTIONS}
-                  value={app.rule}
-                  onChange={(rule) => onSetRule(app.uid, rule)}
-                  accessibilityLabel={`Rule for ${app.label}`}
-                />
-                <Button
-                  label="Show this app's activity"
-                  variant="secondary"
-                  size="sm"
-                  onPress={() => onShowActivity(app.uid)}
-                />
-              </View>
-            )}
-          </Row>
-        );
-      })}
-      {apps.length > APPS_SHOWN && (
-        <Row
-          title={showAll ? 'Show fewer apps' : `Show all ${apps.length} apps`}
-          onPress={() => setShowAll((all) => !all)}
-        />
-      )}
-    </Group>
+            title={showAll ? 'Show fewer apps' : `Show all ${apps.length} apps`}
+            onPress={() => setShowAll((all) => !all)}
+          />
+        )}
+      </Group>
+    </>
   );
 });
