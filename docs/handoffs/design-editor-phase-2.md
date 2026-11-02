@@ -87,7 +87,9 @@ contains each page's heading, font file embedded, errors == []) + hand check of 
 
 ## 7. Current state and next step
 
-Phase 2 is implemented, e2e green, nothing committed (user commits when ready). Next: the user's hand check with
-`pnpm --filter design-editor start` (page strip; download a template with text as PDF and select its text), then commit on
-`design-editor-phase-2` when asked. Known limits kept on purpose: text inside groups goes into the page image; the
-whole document is re-serialised on every edit (fine for a few pages, slow for many image-heavy pages).
+Phase 2 is shipped on 2026-11-02. The owner did the hand check (page strip, PDF download with selectable text)
+and asked to ship. The branch was rebased onto origin/main (single commit 9034a3e, now rebased), and on it: the design-editor
+e2e suite passes (`e2e ok`), `pnpm test` and `pnpm typecheck` exit 0. Ship path: a PR into main via gh, merged after CI.
+The Mac app is not a Store app, so the merge releases nothing. Known limits kept on purpose: text inside groups goes into the
+page image; the whole document is re-serialised on every edit (fine for a few pages, slow for many image-heavy pages).
+Next: Media Phase 2 (session B2, branch design-media-phase-2) can start once this PR and PR #8 are both merged (PR #8 is already merged).
