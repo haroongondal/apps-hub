@@ -20,6 +20,7 @@
  * Kotlin class exists.
  */
 const {
+  AndroidConfig,
   withAndroidManifest,
   withDangerousMod,
 } = require('expo/config-plugins');
@@ -77,6 +78,8 @@ function configureManifest(manifest) {
     'android:networkSecurityConfig': '@xml/network_security_config',
   };
 
+  // `tools:ignore` below needs the namespace declared on the manifest root; the Expo helper adds it only when absent.
+  AndroidConfig.Manifest.ensureToolsAvailable(manifest);
   // A plain declaration replaces any `tools:node="remove"` left by the ics-openvpn merge fix.
   const permissions = (manifest.manifest['uses-permission'] ??= []);
   upsertByName(permissions, { $: { 'android:name': 'android.permission.QUERY_ALL_PACKAGES' } });

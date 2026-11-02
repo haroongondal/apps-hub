@@ -16,6 +16,7 @@ type Attrs = Record<string, string>;
 type El = { $: Attrs; [child: string]: unknown };
 type Manifest = {
   manifest: {
+    $: Attrs;
     'uses-permission'?: El[];
     application: Array<{ $: Attrs; service?: El[] }>;
   };
@@ -23,10 +24,13 @@ type Manifest = {
 
 const COMMITTED_MANIFEST = join(import.meta.dirname, '../../android/app/src/main/AndroidManifest.xml');
 
-/** What `expo prebuild` starts from: an application element and no firewall entries. */
+/** What `expo prebuild` starts from: the android namespace only, an application element, no firewall entries. */
 function bareManifest(): Manifest {
   return {
-    manifest: { application: [{ $: { 'android:name': '.MainApplication', 'android:allowBackup': 'true' } }] },
+    manifest: {
+      $: { 'xmlns:android': 'http://schemas.android.com/apk/res/android' },
+      application: [{ $: { 'android:name': '.MainApplication', 'android:allowBackup': 'true' } }],
+    },
   };
 }
 
@@ -64,6 +68,16 @@ test('package visibility and usage access are declared, and nothing else is adde
   ]);
   const all = m.manifest['uses-permission']!.find((p) => p.$['android:name'].endsWith('QUERY_ALL_PACKAGES'))!;
   assert.equal(all.$['tools:node'], undefined);
+});
+
+test('the tools namespace is declared on the root, so the tools:ignore on PACKAGE_USAGE_STATS resolves', () => {
+  const m = bareManifest();
+  assert.equal(m.manifest.$['xmlns:tools'], undefined);
+  configure(m);
+  assert.equal(m.manifest.$['xmlns:tools'], 'http://schemas.android.com/tools');
+  assert.equal(m.manifest.$['xmlns:android'], 'http://schemas.android.com/apk/res/android');
+  const usage = m.manifest['uses-permission']!.find((p) => p.$['android:name'].endsWith('PACKAGE_USAGE_STATS'))!;
+  assert.equal(usage.$['tools:ignore'], 'ProtectedPermissions');
 });
 
 test('backups stay off and the cleartext policy stays scoped', () => {
