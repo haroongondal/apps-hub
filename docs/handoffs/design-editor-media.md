@@ -302,6 +302,14 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
   (passes). That narrows the queue loss to the service lifecycle, not the store. It needs device logs to settle, and
   those need a release. Not merged: merging releases the app, and the batch defect is still open. 36 module JVM tests pass.
 
+- **2026-11-02 (correction and S8 re-test on code 3).** The "queue loss" in the entries above was a reading error,
+  not a service bug. Outputs 4 to 18 show every batch finished: 16:51 to 16:58 (outputs 4 to 8), 17:17 to 17:23 (9 to 13),
+  and 18:04 to 18:06 (14 to 18). My earlier checks used a name-sorted `tail` that dropped outputs 10 to 13, and the lab's
+  queue rows need scrolling to read. The queue file keeps every batch. The S8 re-test on code 3 (15 s limit, app
+  backgrounded during a CBR job): "Stop FGS timeout" at 18:44:10 with no DidNotStopInTime exception, and the app's
+  process kept the same PID (30693). The paused state was not read on screen. The override was removed afterwards, so the
+  default is back.
+
 ## Current state + exact next step
 
 - State (2026-11-01): the S0 docs are on `main` (PR #1 merged). Phase 1 steps 1–6 are done on branch
@@ -317,13 +325,11 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
   extraction) must start after that branch is merged, and Phase 3 must extract the multi-page
   editor. Use `design-media-phase-<n>` branch names to avoid the clash.
 - **Owner answers recorded** (S0, 2026-10-31; see "Decisions made").
-- **PR #8 merged into `main` (merge commit 757c5d1, 2026-11-02).** CI released Design Editor 1.0.0 (3) on
-  the merge (manifest verified; Store 0.1.0 (14) unchanged). It carries the `onTimeout` fix, CBR-first encoding,
-  and the queue logs (logcat tag `DesignMediaQueue`). Still open, in order:
-  (a) the owner updates Design Editor from the Store, then runs a five-job batch in the foreground; (b) the
-  queue-loss cause, from those logs (the store and reducer pass BatchSequenceTest, so the cause is in the service
-  lifecycle); (c) re-test S8 on code 3; (d) the B0 hand check, which is its own session on
-  `design-editor-phase-2`. Phase 2 waits for (d).
+- **PR #8 merged into `main` (merge commit 757c5d1, 2026-11-02); PR #9 merged the handoff (8271e62).**
+  CI released Design Editor 1.0.0 (3) (manifest verified; Store 0.1.0 (14) unchanged). The phone now runs 1.0.0 (3).
+  Batches work. The earlier "queue loss" was not real (see the correction below). Still open, in order:
+  (a) re-check the lab's queue rows on screen (the rows need scrolling, and the S8 row was not read); (b) the
+  B0 hand check, which is its own session on `design-editor-phase-2`; Phase 2 waits for (b).
 - **Current (2026-11-02):** the phone check ran over adb (see "Phone check 2026-11-02"). Owner gates, in order:
   (1) unlock the phone (it is locked behind a PIN and the lab queue can't be read until then); (2) decide the default encoder
   order (S4 favours CBR first); (3) release go for a new build with the onTimeout fix (1.0.0 code 3), so S8 can be re-tested
