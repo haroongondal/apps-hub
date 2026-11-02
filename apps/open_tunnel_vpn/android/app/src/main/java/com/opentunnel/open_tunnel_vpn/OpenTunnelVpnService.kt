@@ -63,7 +63,10 @@ class OpenTunnelVpnService : VpnService() {
   /** True once this service stopped a running firewall to take the VPN slot; it is given back when the engine ends. */
   private var firewallStopped = false
   private var pendingStart: Runnable? = null
+  // A hold means the app is moving to another relay: the firewall returns only when the hold really ends,
+  // since a new START removes this Runnable and keeps firewallStopped.
   private val release = Runnable {
+    restoreFirewall()
     stopForegroundCompat()
     stopSelf()
   }
@@ -93,7 +96,6 @@ class OpenTunnelVpnService : VpnService() {
         engine?.let { runCatching { it.stop() } }
         engine = null
         TrafficTicker.stop()
-        restoreFirewall()
         // Android 15+ cuts a background app's network about 5 s after its last foreground service ends.
         if (intent?.getBooleanExtra(ServiceContracts.EXTRA_HOLD, false) == true) main.postDelayed(release, HOLD_MS) else release.run()
       }

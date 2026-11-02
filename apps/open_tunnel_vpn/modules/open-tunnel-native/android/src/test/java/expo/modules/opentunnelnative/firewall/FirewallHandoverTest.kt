@@ -39,6 +39,15 @@ class FirewallHandoverTest {
   }
 
   @Test
+  fun neverForcesAStopWhenTheFirewallIsNotRunningEvenAfterTheTimeout() {
+    val now = started + timeout
+    assertTrue(FirewallHandover.canStartEngine("false", now, started, timeout))
+    assertFalse(FirewallHandover.shouldForceStop("false", now, started, timeout))
+    assertTrue(FirewallHandover.canStartEngine(null, now, started, timeout))
+    assertFalse(FirewallHandover.shouldForceStop(null, now, started, timeout))
+  }
+
+  @Test
   fun restartsTheFirewallOnlyWhenItIsEnabled() {
     assertTrue(FirewallHandover.shouldRestartAfterEngine("true"))
     assertFalse(FirewallHandover.shouldRestartAfterEngine("false"))
