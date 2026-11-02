@@ -58,7 +58,10 @@ class FirewallService : VpnService() {
       .onFailure { Log.e(TAG, "could not save the start action: ${it.message}") }
     if (startsOn(intent?.action)) {
       // Always-on and boot are implicit starts: they run only while the user's switch is on.
-      if (isImplicitStart(intent?.action) && !FirewallStartPolicy.startOnNullAction(store.readState(STATE_ENABLED))) {
+      // A failed read is null, which the policy treats as off: fail closed, never crash the :firewall process.
+      if (isImplicitStart(intent?.action) &&
+        !FirewallStartPolicy.startOnNullAction(runCatching { store.readState(STATE_ENABLED) }.getOrNull())
+      ) {
         Log.i(TAG, "implicit start while the firewall is off: stopping")
         stop()
       } else {
