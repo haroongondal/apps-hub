@@ -28,7 +28,6 @@ import expo.modules.opentunnelnative.firewall.FirewallStore
 import expo.modules.opentunnelnative.firewall.LogEntry
 import expo.modules.opentunnelnative.firewall.Verdict
 import java.net.InetAddress
-import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.LinkedBlockingQueue
@@ -206,25 +205,12 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
   }
 
   private fun ownerUid(protocol: Int, src: String?, dst: String?): Int {
-    val local = socketAddress(src) ?: return -1
-    val remote = socketAddress(dst) ?: return -1
-    return runCatching { connectivity.getConnectionOwnerUid(protocol, local, remote) }.getOrDefault(-1)
+    val local = UidResolver.socketAddress(src) ?: return -1
+    val remote = UidResolver.socketAddress(dst) ?: return -1
+    return UidResolver.ownerUid(connectivity, protocol, local, remote)
   }
 
-  private fun socketAddress(hostPort: String?): InetSocketAddress? {
-    val split = hostPort?.lastIndexOf(':') ?: return null
-    if (split < 0) return null
-    val port = hostPort.substring(split + 1).toIntOrNull() ?: return null
-    val host = hostPort.substring(0, split).trim('[', ']')
-    return runCatching { InetSocketAddress(InetAddress.getByName(host), port) }.getOrNull()
-  }
-
-  private fun appLabel(uid: Int): String =
-    if (uid < 0) {
-      FirewallDecision.UNKNOWN_APP_LABEL
-    } else {
-      labels.getOrPut(uid) { service.packageManager.getPackagesForUid(uid)?.firstOrNull() ?: "uid:$uid" }
-    }
+  private fun appLabel(uid: Int): String = labels.getOrPut(uid) { UidResolver.packageFor(service.packageManager, uid) }
 
   private fun protoName(protocol: Int): String = when (protocol) {
     OsConstants.IPPROTO_TCP -> Intra.ProtoTypeTCP
@@ -267,7 +253,7 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
       isAlg: Boolean,
     ): Mark {
       val owner = if (uid >= 0) uid else ownerUid(protocol, src, dst)
-      val target = socketAddress(dst)
+      val target = UidResolver.socketAddress(dst)
       val cid = "c${nextConnId.getAndIncrement()}"
       val toTunDns = target != null && TUN_DNS.contains(target.address)
       val pid = when {
