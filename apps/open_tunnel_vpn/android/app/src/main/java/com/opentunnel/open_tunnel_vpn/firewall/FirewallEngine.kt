@@ -35,6 +35,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 @RequiresApi(Build.VERSION_CODES.Q)
@@ -50,7 +51,12 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
   private var lastRetentionMs = 0L
 
   private val nextConnId = AtomicLong()
-  private val openAllowedFlows = ConcurrentHashMap<String, LogEntry>()
+  // Guarded by itself; insertion order picks the eldest entry to evict at the cap.
+  private val openAllowedFlows = LinkedHashMap<String, LogEntry>()
+  private val flushQueued = AtomicBoolean(false)
+  private val unmatchedPostflows = AtomicLong()
+  private val untrackedFlows = AtomicLong()
+  private val evictedFlows = AtomicLong()
   private val labels = ConcurrentHashMap<Int, String>()
   private val pending = LinkedBlockingQueue<LogEntry>()
 
@@ -68,6 +74,12 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
     return try {
       rules = store.rules()
       labels.clear()
+      unmatchedPostflows.set(0)
+      untrackedFlows.set(0)
+      evictedFlows.set(0)
+      onCellular = connectivity.activeNetwork
+        ?.let { connectivity.getNetworkCapabilities(it) }
+        ?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
       connectivity.registerDefaultNetworkCallback(networkWatcher)
       writer = Executors.newSingleThreadScheduledExecutor().also {
         it.scheduleWithFixedDelay(::flush, FLUSH_INTERVAL_MS, FLUSH_INTERVAL_MS, TimeUnit.MILLISECONDS)
@@ -86,18 +98,33 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
       Log.i(TAG, "firestack connected with ${rules.size} rules, system dns [$systemDns]")
       true
     } catch (failure: Exception) {
-      Log.e(TAG, "firestack did not start: ${failure.javaClass.simpleName}: ${failure.message}")
-      stop()
-      false
+      startFailed(failure)
+    } catch (failure: LinkageError) {
+      startFailed(failure)
     }
   }
 
+  private fun startFailed(failure: Throwable): Boolean {
+    Log.e(TAG, "firestack did not start: ${failure.javaClass.simpleName}: ${failure.message}")
+    stop()
+    return false
+  }
+
   fun stop() {
+    val wasRunning = tunnel != null
     runCatching { connectivity.unregisterNetworkCallback(networkWatcher) }
     runCatching { tunnel?.disconnect() }
     tunnel = null
     // Flows still open at stop get an entry with no byte counts rather than vanishing from the log.
-    openAllowedFlows.keys.toList().forEach { id -> openAllowedFlows.remove(id)?.let(pending::add) }
+    val leftOpen = synchronized(openAllowedFlows) { openAllowedFlows.values.toList().also { openAllowedFlows.clear() } }
+    leftOpen.forEach(pending::add)
+    if (wasRunning) {
+      Log.i(
+        TAG,
+        "postflow unmatched: ${unmatchedPostflows.get()}, flows not tracked: ${untrackedFlows.get()}, " +
+          "evicted: ${evictedFlows.get()}",
+      )
+    }
     writer?.shutdown()
     writer = null
     flush()
@@ -114,9 +141,11 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
 
   private fun closeBlocked(uids: Set<Int>?) {
     val running = tunnel ?: return
-    val ids = openAllowedFlows.filterValues {
-      (uids == null || it.uid in uids) && FirewallDecision.shouldCloseOpen(ruleOf(rules, it.uid), onCellular)
-    }.keys
+    val ids = synchronized(openAllowedFlows) {
+      openAllowedFlows.filterValues {
+        (uids == null || it.uid in uids) && FirewallDecision.shouldCloseOpen(ruleOf(rules, it.uid), onCellular)
+      }.keys.toList()
+    }
     // An empty list would close every flow.
     if (ids.isEmpty()) return
     running.closeConns(ids.joinToString(","))
@@ -127,11 +156,35 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
 
   private fun record(entry: LogEntry) {
     pending.add(entry)
-    if (pending.size < BATCH_SIZE) return
-    try {
-      writer?.execute(::flush)
-    } catch (_: RejectedExecutionException) {
+    if (pending.size < BATCH_SIZE || !flushQueued.compareAndSet(false, true)) return
+    val executor = writer
+    if (executor == null) {
+      flushQueued.set(false)
       return
+    }
+    try {
+      executor.execute {
+        flushQueued.set(false)
+        flush()
+      }
+    } catch (_: RejectedExecutionException) {
+      flushQueued.set(false)
+    }
+  }
+
+  private fun trackOpen(cid: String, entry: LogEntry) {
+    val evicted = synchronized(openAllowedFlows) {
+      openAllowedFlows[cid] = entry
+      if (openAllowedFlows.size <= MAX_OPEN_FLOWS) {
+        null
+      } else {
+        val eldest = openAllowedFlows.keys.first()
+        openAllowedFlows.remove(eldest)
+      }
+    }
+    if (evicted != null) {
+      evictedFlows.incrementAndGet()
+      record(evicted)
     }
   }
 
@@ -219,8 +272,12 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
       val toTunDns = target != null && TUN_DNS.contains(target.address)
       val pid = when {
         // Integration rule 1: Exit would redial the tun address and flood.
-        toTunDns && target?.port == DNS_PORT -> Backend.Base
+        toTunDns && target?.port == DNS_PORT -> {
+          untrackedFlows.incrementAndGet()
+          Backend.Base
+        }
         toTunDns -> {
+          untrackedFlows.incrementAndGet()
           if (!dnsPortNoticeLogged) {
             dnsPortNoticeLogged = true
             Log.i(TAG, "blocked port ${target?.port} to the tun DNS address from uid $owner (logged once)")
@@ -242,10 +299,11 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
             verdict = verdict,
           )
           if (verdict == Verdict.BLOCK) {
+            untrackedFlows.incrementAndGet()
             record(entry)
             Backend.Block
           } else {
-            openAllowedFlows[cid] = entry
+            trackOpen(cid, entry)
             Backend.Exit
           }
         }
@@ -258,6 +316,7 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
     }
 
     override fun inflow(protocol: Int, uid: Int, src: String?, dst: String?): Mark {
+      untrackedFlows.incrementAndGet()
       val owner = if (uid >= 0) uid else ownerUid(protocol, src, dst)
       return Mark().also {
         it.setPIDCSV(Backend.Ingress)
@@ -270,7 +329,11 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
 
     override fun postflow(summary: FlowSummary?) {
       val ended = summary ?: return
-      val entry = openAllowedFlows.remove(ended.getID()) ?: return
+      val entry = synchronized(openAllowedFlows) { openAllowedFlows.remove(ended.getID()) }
+      if (entry == null) {
+        unmatchedPostflows.incrementAndGet()
+        return
+      }
       record(entry.copy(bytesOut = ended.getTx(), bytesIn = ended.getRx()))
     }
 
@@ -305,6 +368,7 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
     const val TAG = "FirewallEngine"
     const val DNS_PORT = 53
     const val BATCH_SIZE = 200
+    const val MAX_OPEN_FLOWS = 4096
     const val FLUSH_INTERVAL_MS = 2_000L
     const val RETENTION_INTERVAL_MS = 60_000L
     const val TUN_ADDRESSES =
