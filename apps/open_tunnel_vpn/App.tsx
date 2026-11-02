@@ -245,6 +245,16 @@ function OpenTunnelApp() {
     [database],
   );
 
+  const confirmFirewallConsent = useCallback(async () => {
+    if (database === null) return;
+    try {
+      await database.settings.setFirewallConsented();
+      setSettings((current) => (current === null ? current : { ...current, firewallConsented: true }));
+    } catch {
+      // The flag stays unset, so the sheet shows again on the next turn-on.
+    }
+  }, [database]);
+
   const addDisallowedApp = useCallback(
     async (packageName: string) => {
       if (database === null) return;
@@ -306,7 +316,12 @@ function OpenTunnelApp() {
 
       {FIREWALL_TAB && tab === 'firewall' && (
         <View style={{ flex: 1 }}>
-          <FirewallScreen api={firewallBinding} serverConnected={serverHoldsSlot(tunnel.state)} />
+          <FirewallScreen
+            api={firewallBinding}
+            serverConnected={serverHoldsSlot(tunnel.state)}
+            consented={settings?.firewallConsented ?? false}
+            onConsent={() => void confirmFirewallConsent()}
+          />
         </View>
       )}
       {FIREWALL_TAB && <TabBar tabs={TABS} value={tab} onChange={setTab} />}

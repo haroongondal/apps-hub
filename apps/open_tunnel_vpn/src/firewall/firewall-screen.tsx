@@ -28,6 +28,10 @@ export interface FirewallScreenProps {
   api: FirewallApi;
   /** True while a server tunnel holds the VPN slot (`serverHoldsSlot(tunnel.state)`). */
   serverConnected: boolean;
+  /** True once the owner confirmed the consent sheet; it shows on the first turn-on only. */
+  consented: boolean;
+  /** Called when the owner confirms the consent sheet, to remember it. */
+  onConsent(): void;
 }
 
 const LABEL_TONE: Record<FirewallLabel, Tone> = { On: 'ok', Paused: 'warn', Off: 'neutral' };
@@ -51,7 +55,7 @@ const FILTER_OPTIONS = [
 
 const APPS_SHOWN = 25;
 
-export function FirewallScreen({ api, serverConnected }: FirewallScreenProps) {
+export function FirewallScreen({ api, serverConnected, consented, onConsent }: FirewallScreenProps) {
   const [view, setView] = useState<ActivityView>({ blockedOnly: false });
   const [consentOpen, setConsentOpen] = useState(false);
   const fw = useFirewall(api, view);
@@ -62,6 +66,7 @@ export function FirewallScreen({ api, serverConnected }: FirewallScreenProps) {
 
   const confirmConsent = () => {
     setConsentOpen(false);
+    onConsent();
     void fw.enable();
   };
 
@@ -97,7 +102,7 @@ export function FirewallScreen({ api, serverConnected }: FirewallScreenProps) {
               status={status}
               serverConnected={serverConnected}
               busy={fw.busy}
-              onTurnOn={() => setConsentOpen(true)}
+              onTurnOn={() => (consented ? void fw.enable() : setConsentOpen(true))}
               onRestart={() => void fw.enable()}
               onTurnOff={() => void fw.disable()}
               onPause={() => void fw.setPaused(true)}
