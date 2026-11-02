@@ -126,6 +126,14 @@ test('an unknown rule kind or wire string is a typed error, not a guess', () => 
   assert.throws(() => ruleFromWire('BLOCK_NEVER'), { code: OPEN_TUNNEL_ERROR_CODES.FIREWALL_FAILED });
 });
 
+test('a prototype property name is an unknown rule or verdict, never a lookup hit', () => {
+  for (const name of ['constructor', 'toString', '__proto__']) {
+    assert.throws(() => ruleToWire(name as FirewallRuleKind), { code: OPEN_TUNNEL_ERROR_CODES.INVALID_PARAMS }, name);
+    assert.throws(() => ruleFromWire(name), { code: OPEN_TUNNEL_ERROR_CODES.FIREWALL_FAILED }, name);
+    assert.throws(() => verdictFromWire(name), { code: OPEN_TUNNEL_ERROR_CODES.FIREWALL_FAILED }, name);
+  }
+});
+
 test("Kotlin Verdict.ALLOW and Verdict.BLOCK map to 'allowed' and 'blocked'", () => {
   assert.deepEqual(enumNames(kotlinDecision, 'Verdict').sort(), ['ALLOW', 'BLOCK']);
   assert.equal(verdictFromWire('ALLOW'), 'allowed');

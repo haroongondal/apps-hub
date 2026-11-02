@@ -390,11 +390,11 @@ export const MAX_ACTIVITY_LIMIT = 10_000;
 
 /** The one place a TS rule kind becomes the Kotlin `FirewallRule` name. */
 export function ruleToWire(kind: FirewallRuleKind): string {
-  const wire = RULE_WIRE[kind];
-  if (wire === undefined) {
+  // Object.hasOwn: a plain lookup of 'constructor' would return a function, not throw.
+  if (!Object.hasOwn(RULE_WIRE, kind)) {
     throw new OpenTunnelError(OPEN_TUNNEL_ERROR_CODES.INVALID_PARAMS, `unknown firewall rule ${String(kind)}`);
   }
-  return wire;
+  return RULE_WIRE[kind];
 }
 
 export function ruleFromWire(wire: string): FirewallRuleKind {
@@ -407,11 +407,10 @@ export function ruleFromWire(wire: string): FirewallRuleKind {
 
 /** A row is `blocked` only when Kotlin says BLOCK; an unknown verdict is an error, never a guess. */
 export function verdictFromWire(wire: string): FirewallVerdict {
-  const verdict = VERDICT_FROM_WIRE[wire];
-  if (verdict === undefined) {
+  if (!Object.hasOwn(VERDICT_FROM_WIRE, wire)) {
     throw new OpenTunnelError(OPEN_TUNNEL_ERROR_CODES.FIREWALL_FAILED, `unknown verdict ${wire} from the native module`);
   }
-  return verdict;
+  return VERDICT_FROM_WIRE[wire];
 }
 
 function toActivityEntry(row: NativeLogRow): ActivityEntry {
