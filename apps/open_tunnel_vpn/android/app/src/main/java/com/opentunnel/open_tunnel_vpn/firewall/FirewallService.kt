@@ -8,7 +8,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
+import android.net.ConnectivityManager
 import android.net.IpPrefix
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.net.VpnService
 import android.os.Build
@@ -17,7 +19,6 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import com.opentunnel.open_tunnel_vpn.MainActivity
 import com.opentunnel.open_tunnel_vpn.R
-import expo.modules.opentunnelnative.firewall.FirewallRule
 import expo.modules.opentunnelnative.firewall.FirewallStore
 import java.net.InetAddress
 
@@ -26,24 +27,22 @@ import java.net.InetAddress
  * WireGuard's Go runtimes crash each other inside one process. It shares nothing in memory with the
  * UI process: rules and the `running` and `paused` state live in [FirewallStore].
  *
- * It never calls the bypass opt-out (AGENTS rule 3). The packet engine is wired in a later task, so
- * for now the tun is built and held without an engine behind it. Android 10 or newer: app
- * attribution (`getConnectionOwnerUid`) starts at API 29, and the UI never starts this on older ones.
+ * It never calls the bypass opt-out (AGENTS rule 3). The tun is handed to [FirewallEngine], which is the
+ * only code that calls firestack. Android 10 or newer: app attribution (`getConnectionOwnerUid`) starts
+ * at API 29, and the UI never starts this on older ones.
  */
 @RequiresApi(Build.VERSION_CODES.Q)
 class FirewallService : VpnService() {
 
   private lateinit var store: FirewallStore
+  private lateinit var engine: FirewallEngine
   private var tun: ParcelFileDescriptor? = null
   private var paused = false
-
-  /** Re-read from the store on start and on [ACTION_RELOAD]; the engine reads it per flow. */
-  @Volatile
-  private var rules: Map<Int, FirewallRule> = emptyMap()
 
   override fun onCreate() {
     super.onCreate()
     store = FirewallStore(this)
+    engine = FirewallEngine(this, store)
     ensureChannel()
   }
 
@@ -86,12 +85,14 @@ class FirewallService : VpnService() {
     startForegroundNow()
     if (tun != null) return
     try {
-      rules = store.rules()
-      tun = buildTun()
+      // Read before the tun exists: afterwards the default network is the tun itself.
+      val systemDns = systemDns()
+      val established = buildTun().also { tun = it }
+      check(engine.start(established, systemDns)) { "firestack did not start" }
       // Not saveState: on the success path a failed write must fail loudly and land in stop() below.
       store.writeState(STATE_RUNNING, "true")
       store.writeState(STATE_PAUSED, "false")
-      Log.i(TAG, "started: tun up with ${rules.size} rules (sdk ${Build.VERSION.SDK_INT})")
+      Log.i(TAG, "started: tun and engine up (sdk ${Build.VERSION.SDK_INT})")
     } catch (failure: Exception) {
       Log.e(TAG, "start failed: ${failure.javaClass.simpleName}: ${failure.message}")
       stop()
@@ -107,10 +108,7 @@ class FirewallService : VpnService() {
     Log.i(TAG, "paused")
   }
 
-  private fun reload() {
-    rules = store.rules()
-    Log.i(TAG, "reloaded ${rules.size} rules")
-  }
+  private fun reload() = engine.reload()
 
   private fun stop() {
     release()
@@ -122,6 +120,7 @@ class FirewallService : VpnService() {
 
   private fun release() {
     if (tun != null) Log.i(TAG, "tun closed")
+    engine.stop()
     runCatching { tun?.close() }
     tun = null
   }
@@ -132,6 +131,25 @@ class FirewallService : VpnService() {
       store.writeState(STATE_RUNNING, running.toString())
       store.writeState(STATE_PAUSED, paused.toString())
     }.onFailure { Log.e(TAG, "could not save the firewall state: ${it.message}") }
+  }
+
+  /**
+   * The DNS servers of a network that is not a VPN, comma separated. While another VPN is up the active
+   * network is that VPN's, whose DNS would loop; then the first validated non-VPN network is used.
+   */
+  @Suppress("DEPRECATION")
+  private fun systemDns(): String {
+    val manager = getSystemService(ConnectivityManager::class.java)
+    val plain = manager.allNetworks.filter {
+      val caps = manager.getNetworkCapabilities(it)
+      caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN) &&
+        caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+    val chosen = plain.firstOrNull { it == manager.activeNetwork }
+      ?: plain.firstOrNull { manager.getNetworkCapabilities(it)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true }
+      ?: plain.firstOrNull()
+      ?: return ""
+    return manager.getLinkProperties(chosen)?.dnsServers?.mapNotNull { it.hostAddress }?.joinToString(",").orEmpty()
   }
 
   private fun buildTun(): ParcelFileDescriptor {
