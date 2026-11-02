@@ -191,7 +191,7 @@ class LogRetentionTest {
 
 **Interfaces:**
 - Consumes: `firewall_state` (`enabled`), Task 6's `FirewallHandover`.
-- Produces: `object FirewallStartPolicy { fun startOnNullAction(enabled: String?): Boolean }`. True only when `enabled == "true"`. A start with no action while disabled stops the service, so a reboot with Always-on and the firewall off does nothing.
+- Produces: `object FirewallStartPolicy { fun startOnNullAction(enabled: String?): Boolean }`. True only when `enabled == "true"`. The same gate applies to every implicit start: a start with no action and a start with `VpnService.SERVICE_INTERFACE` (Ruling R18). A start while disabled stops the service, so a reboot with Always-on and the firewall off does nothing.
 
 - [ ] **Step 1: Write the failing tests**: `startOnNullAction("true")` is true; `("false")` and `(null)` are false.
 
