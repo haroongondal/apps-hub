@@ -25,6 +25,7 @@ import expo.modules.opentunnelnative.TunnelStatus
 import expo.modules.opentunnelnative.TrafficTicker
 import expo.modules.opentunnelnative.firewall.FirewallContract
 import expo.modules.opentunnelnative.firewall.FirewallHandover
+import expo.modules.opentunnelnative.firewall.FirewallStartPolicy
 import expo.modules.opentunnelnative.firewall.FirewallStore
 import org.json.JSONArray
 import org.json.JSONObject
@@ -105,6 +106,11 @@ class OpenTunnelVpnService : VpnService() {
         // No active command (e.g. a stale or system-delivered intent):
         // tear down the notice and end this instance cleanly; the registry
         // keeps its true state.
+        val engineRunning = engine != null || pendingStart != null
+        if (forwardsToFirewall(intent?.action, engineRunning, firewallState(FirewallService.STATE_ENABLED))) {
+          Log.i(TAG, "system start ${intent?.action}: forwarded to the firewall")
+          sendToFirewall(FirewallService.ACTION_START)
+        }
         stopForegroundCompat()
         stopSelf()
       }
@@ -410,6 +416,13 @@ class OpenTunnelVpnService : VpnService() {
   }
 
   companion object {
+    /**
+     * Always-on and the boot start reach this service, the first `android.net.VpnService` filter in the manifest,
+     * not FirewallService. They belong to the firewall when no server engine runs and its switch is on.
+     */
+    fun forwardsToFirewall(action: String?, engineRunning: Boolean, enabled: String?): Boolean =
+      FirewallService.isImplicitStart(action) && !engineRunning && FirewallStartPolicy.startOnNullAction(enabled)
+
     private const val TAG = "OpenTunnelVpnService"
     private const val CHANNEL_ID = "tunnel"
     private const val NOTIFICATION_ID = 1
