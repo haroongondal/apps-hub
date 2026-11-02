@@ -240,6 +240,7 @@ class FirewallService : VpnService() {
     /** `firewall_state` keys the UI process and the controller read. */
     const val STATE_RUNNING = "running"
     const val STATE_PAUSED = "paused"
+    const val STATE_ENABLED = "enabled"
 
     private const val TAG = "FirewallService"
     private const val CHANNEL_ID = "firewall"
