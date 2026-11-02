@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { ActivityEntry } from '../../../modules/open-tunnel-native/src/OpenTunnelNativeModule.ts';
 
-import { appLabel, filterActivity } from '../activity.ts';
+import { activityRow, appLabel, filterActivity, NO_DOMAIN_LABEL } from '../activity.ts';
 
 function entry(over: Partial<ActivityEntry>): ActivityEntry {
   return {
@@ -74,4 +74,32 @@ test('unknown owners display as Unknown app', () => {
 
 test('a real package name is shown as is', () => {
   assert.equal(appLabel('com.example.chat'), 'com.example.chat');
+});
+
+test('a missing domain is labelled as missing, never blank', () => {
+  const row = activityRow(entry({ domain: null }));
+  assert.ok(row.subtitle.startsWith(NO_DOMAIN_LABEL));
+  assert.ok(row.subtitle.includes('93.184.216.34:443'));
+});
+
+test('a known domain leads the line, with the address after it', () => {
+  const row = activityRow(entry({ domain: 'example.com', proto: 'udp', dstPort: 53 }));
+  assert.equal(row.subtitle.split('\n')[0], 'example.com \u00b7 93.184.216.34:53 \u00b7 UDP');
+});
+
+test('an IPv6 address is bracketed so the port stays readable', () => {
+  const row = activityRow(entry({ dst: '2001:db8::1', domain: 'example.com' }));
+  assert.ok(row.subtitle.includes('[2001:db8::1]:443'));
+});
+
+test('the title is the app name when known, else the package, else Unknown app', () => {
+  assert.equal(activityRow(entry({}), 'Chat').title, 'Chat');
+  assert.equal(activityRow(entry({})).title, 'com.example.chat');
+  assert.equal(activityRow(entry({ pkg: 'unknown' })).title, 'Unknown app');
+});
+
+test('the second line carries the clock time and both byte counts', () => {
+  const at = new Date(2026, 10, 2, 9, 5, 7).getTime();
+  const row = activityRow(entry({ timestampMs: at, bytesOut: 2048, bytesIn: 512 }));
+  assert.equal(row.subtitle.split('\n')[1], '09:05:07 \u00b7 Sent 2 KB \u00b7 Received 512 B');
 });

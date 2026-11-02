@@ -3,9 +3,9 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { DataUseRow } from '../../../modules/open-tunnel-native/src/OpenTunnelNativeModule.ts';
+import type { AppRule, DataUseRow } from '../../../modules/open-tunnel-native/src/OpenTunnelNativeModule.ts';
 
-import { sortByMobile, totalBytes } from '../data-use.ts';
+import { joinAppUse, sortByMobile, totalBytes } from '../data-use.ts';
 
 const rows: DataUseRow[] = [
   { uid: 1, wifiBytes: 900, cellBytes: 10 },
@@ -33,4 +33,42 @@ test('sortByMobile does not mutate its input', () => {
 
 test('totalBytes adds Wi-Fi and cellular', () => {
   assert.equal(totalBytes({ uid: 3, wifiBytes: 50, cellBytes: 200 }), 250);
+});
+
+const apps: AppRule[] = [
+  { uid: 1, pkg: 'com.b', label: 'Beta', rule: 'allow' },
+  { uid: 2, pkg: 'com.a', label: 'alpha', rule: 'block_always' },
+  { uid: 3, pkg: 'com.c', label: 'Chat', rule: 'block_on_mobile' },
+  { uid: 4, pkg: 'com.d', label: 'Delta', rule: 'allow' },
+];
+
+test('joinAppUse lists every installed app, with zero use when there is no row', () => {
+  const joined = joinAppUse(apps, [{ uid: 3, wifiBytes: 5, cellBytes: 700 }]);
+  assert.equal(joined.length, apps.length);
+  assert.deepEqual(joined.find((a) => a.uid === 1), {
+    uid: 1,
+    pkg: 'com.b',
+    label: 'Beta',
+    rule: 'allow',
+    wifiBytes: 0,
+    cellBytes: 0,
+  });
+});
+
+test('joinAppUse puts mobile use first, then ties by name ignoring case', () => {
+  const joined = joinAppUse(apps, [
+    { uid: 3, wifiBytes: 0, cellBytes: 700 },
+    { uid: 4, wifiBytes: 9, cellBytes: 100 },
+  ]);
+  assert.deepEqual(joined.map((a) => a.label), ['Chat', 'Delta', 'alpha', 'Beta']);
+});
+
+test('joinAppUse ignores use rows for UIDs that are not in the app list', () => {
+  const joined = joinAppUse(apps, [{ uid: 999, wifiBytes: 1, cellBytes: 1 }]);
+  assert.equal(joined.some((a) => a.uid === 999), false);
+});
+
+test('joinAppUse keeps each app\'s rule', () => {
+  const joined = joinAppUse(apps, []);
+  assert.equal(joined.find((a) => a.uid === 2)?.rule, 'block_always');
 });
