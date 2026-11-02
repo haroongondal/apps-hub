@@ -96,6 +96,12 @@ Session B1, 2026-11-01 (Claude's calls inside the brief; the owner can override)
 - **Commits stay local.** Nothing pushed, no release. Set the upstream when pushing:
   `git push -u origin design-media-phase-1` (the branch was created tracking `origin/main`).
 
+Session B1, 2026-11-02 (phone check over adb; decisions for the owner):
+- **Encoder order is open.** S4 (CBR, no fallback) was accurate at +0.6%, while VBR was +45% on try 1. The
+  default should probably be CBR first, with VBR as the fallback. The owner decides. Until then the code keeps VBR first.
+- **onTimeout fix** (commit c73ba0b): `stopForeground(STOP_FOREGROUND_REMOVE)` before `stopSelf()`. Found on the phone.
+- **Time-limit fallback:** the job pauses on the time limit and the app shows bare `paused`. Reason copy is a Phase 5 item.
+
 Research and docs session (Claude's recommendations, owner can override; PRD §10 lists the open
 questions):
 - **Android engine: Media3 Transformer 1.11.1 + `MediaExtractor`/`MediaMuxer` + a Kotlin GIF
@@ -201,6 +207,34 @@ Verified 2026-11-01 (session B1, Phase 1 steps 1–6; output was read, not predi
   MediaStore publish on device, Probe on real `content://` URIs, CodecReport values, notification UI.
   Kotlin lint (NewApi) was not run.
 
+Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACCG, HyperOS, Android 16; real output):
+- Build: `com.haroon.designeditor` 1.0.0 (versionCode 2), installer `com.haroon.store`, Store 0.1.0 (14). Battery
+  mode is the default (RUN_ANY_IN_BACKGROUND allow, not whitelisted). No lab outputs or logs existed before this run.
+- S1 (codec report): hardware encoders `c2.mtk.avc.encoder` / `OMX.MTK.VIDEO.ENCODER.AVC` and
+  `c2.mtk.hevc.encoder` / `OMX.MTK.VIDEO.ENCODER.HEVC`, modes cq/vbr/cbr, up to 2560×2560. Software: `c2.android.*`,
+  `OMX.google.*`. The hardware HEVC encoder exists. An earlier note saying there was none was my misread (I had cut the list short).
+- Clip: `VID_20260208_130059.mp4`, 115.7 s, 135.7 MB, portrait. The probe planned 540×960 at 30 fps, so the
+  display-size fix works on a real phone clip. This is not the 60 s clip in the plan.
+- S2 (H.264, VBR first): done on try 3. Try 1 planned 18.0 MB, actual 26.1 MB (+45%). Try 2 planned 12.3 MB, actual
+  23.6 MB (+92%). Try 3 planned 6.8 MB, actual 14.2 MB (+108%). Published 14.2 MB, under the 20 MB target. A repeat run gave the same sizes.
+- S4 (H.264, CBR first, no fallback): done on try 1. Planned 18.0 MB, actual 18.1 MB (+0.6%), 32 s, published.
+  This contradicts the VBR-first rule (SPEC §9.2, RESEARCH §6.4), which came from Compressor's MediaTek reports. The owner decides the default.
+- S3 (five-job batch): all five published between 16:51 and 16:58 with the app swiped out of Recents and the screen
+  locked from 16:50:32. The service stayed foreground (`mediaProcessing`) until the last job, then stopped at 16:58:54.
+  The swipe and lock were adb input events, not a hand test. The phone is now locked behind a PIN, so the lab queue
+  couldn't be read after the batch.
+- S7 (APK): release APK 43,228,999 bytes (43.2 MB), arm64-v8a only. The DEX holds 22,199 classes, of which 3,452
+  (15.5%) are `androidx.media3`. That's a class-count estimate of about 3.9 MB of the 25.1 MB of DEX. No build without Media3 exists to measure the delta.
+- S8 (60 s media_processing limit): run 1 was in the foreground. It finished 3 attempts in 92 s, so the limit never
+  applied. Run 2 was backgrounded. The limit fired and the job paused (queue state `paused, try 1`). Then the app crashed
+  with `ForegroundServiceDidNotStopInTimeException`, because `onTimeout` called `stopSelf` but never `stopForeground`.
+  Fix: commit c73ba0b calls `stopForeground(STOP_FOREGROUND_REMOVE)` first, and a source-scan test pins the order.
+  Not yet re-tested on the phone: that needs a new release (see Current state). The device_config override was removed afterwards.
+- S5: FrameDropEffect is compiled into TransformerRunner, and the build passes. FrameExtractor's frame rate is a Phase 4 item.
+  S6 (CopyRunner) is Phase 4.
+- Open: the lab shows a bare `paused` with no reason copy. The lab's picked file and queue reset when the process dies.
+  Not tested: S2 with HEVC (the hardware encoder exists).
+
 ## File map
 
 - `docs/design-editor/RESEARCH.md`: findings, verdicts, verified vs assumed, sources.
@@ -258,6 +292,10 @@ Verified 2026-11-01 (session B1, Phase 1 steps 1–6; output was read, not predi
   in the chat, so they are not recorded yet. The next session asks for them (the lab's Share results) before tuning
   `budget.ts`. Gates before Phase 2: no PR is open for B1 or B0, and neither is merged. The resume prompt was
   rewritten for the next chat.
+- **2026-11-02 (session B1, phone check over adb).** The owner enabled Wireless debugging. I ran S1–S8 over adb and the
+  lab UI, and recorded the output under "Phone check 2026-11-02". S8 found a crash in `onTimeout`. The fix is committed
+  (c73ba0b) and pushed, with a regression test (33 JVM tests pass, the debug build succeeds). Nothing was released
+  this session. The phone was left locked behind a PIN.
 
 ## Current state + exact next step
 
@@ -274,7 +312,11 @@ Verified 2026-11-01 (session B1, Phase 1 steps 1–6; output was read, not predi
   extraction) must start after that branch is merged, and Phase 3 must extract the multi-page
   editor. Use `design-media-phase-<n>` branch names to avoid the clash.
 - **Owner answers recorded** (S0, 2026-10-31; see "Decisions made").
-- **Next step (owner gate):** the owner installs Design Editor from the Store (never `adb install`) on the
+- **Current (2026-11-02):** the phone check ran over adb (see "Phone check 2026-11-02"). Owner gates, in order:
+  (1) unlock the phone (it is locked behind a PIN and the lab queue can't be read until then); (2) decide the default encoder
+  order (S4 favours CBR first); (3) release go for a new build with the onTimeout fix (1.0.0 code 3), so S8 can be re-tested
+  on the phone; (4) then the B1 PR, B0 hand check and merges, as before.
+- _Superseded 2026-11-02 (kept for history):_ the owner installs Design Editor from the Store (never `adb install`) on the
   Redmi Note 14 Pro 4G, with the five test clips (SPEC §16.3), and runs S1–S8 in the Media lab. Paste the
   results here, then tune `budget.ts` (FLOOR, margin, overhead) and the fixtures, and re-run step 6.
   Release note: the Store was released too (owner request, 2026-11-01), so the Store carries
