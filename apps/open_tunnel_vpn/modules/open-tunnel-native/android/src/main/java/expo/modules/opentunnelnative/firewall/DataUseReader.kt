@@ -18,6 +18,7 @@ object DataUseReader {
       .map { (uid, parts) -> DataUseRow(uid, parts.sumOf { it.second }, parts.sumOf { it.third }) }
       .filter { it.wifiBytes != 0L || it.cellBytes != 0L }
 
+  @Suppress("DEPRECATION") // unsafeCheckOpNoThrow is deprecated in API 36; it still reads the Usage access grant without noting the op.
   fun hasUsageAccess(context: Context): Boolean {
     val ops = context.getSystemService(AppOpsManager::class.java)
     return ops.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName) ==
