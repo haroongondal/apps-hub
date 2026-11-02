@@ -224,6 +224,79 @@ importers:
         specifier: 1.49.1
         version: 1.49.1
 
+  apps/design-editor-mobile:
+    dependencies:
+      '@apps-hub/media-core':
+        specifier: workspace:*
+        version: link:../../packages/media-core
+      '@apps-hub/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      design-media:
+        specifier: workspace:*
+        version: link:modules/design-media
+      expo:
+        specifier: ~54.0.36
+        version: 54.0.38(@babel/core@7.29.7(supports-color@8.1.1))(@expo/metro-runtime@6.1.2)(expo-router@6.0.24)(react-native-webview@13.15.0(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)(supports-color@8.1.1)(typescript@5.9.3)
+      expo-constants:
+        specifier: ~18.0.14
+        version: 18.0.14(expo@54.0.38)(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      expo-document-picker:
+        specifier: ~14.0.8
+        version: 14.0.8(expo@54.0.38)
+      expo-font:
+        specifier: ~14.0.12
+        version: 14.0.12(expo@54.0.38)(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
+      expo-linking:
+        specifier: ~8.0.12
+        version: 8.0.12(expo@54.0.38)(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)(supports-color@8.1.1)
+      expo-router:
+        specifier: ~6.0.24
+        version: 6.0.24(74f9b8e3509d40ec4092b8a12ffe9fc1)
+      expo-status-bar:
+        specifier: ~3.0.9
+        version: 3.0.9(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
+      expo-system-ui:
+        specifier: ~6.0.9
+        version: 6.0.9(expo@54.0.38)(react-native-web@0.21.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      react:
+        specifier: 19.1.0
+        version: 19.1.0
+      react-native:
+        specifier: 0.81.5
+        version: 0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1)
+      react-native-safe-area-context:
+        specifier: ~5.6.0
+        version: 5.6.2(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
+      react-native-screens:
+        specifier: ~4.16.0
+        version: 4.16.0(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
+    devDependencies:
+      '@types/react':
+        specifier: ~19.1.0
+        version: 19.1.17
+      eslint:
+        specifier: ^9.25.0
+        version: 9.39.5(supports-color@8.1.1)
+      eslint-config-expo:
+        specifier: ~10.0.0
+        version: 10.0.0(eslint@9.39.5(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
+      expo-doctor:
+        specifier: ^1.21.5
+        version: 1.21.5
+      typescript:
+        specifier: ~5.9.2
+        version: 5.9.3
+
+  apps/design-editor-mobile/modules/design-media:
+    dependencies:
+      '@apps-hub/media-core':
+        specifier: workspace:*
+        version: link:../../../../packages/media-core
+      expo-modules-core:
+        specifier: ~3.0.30
+        version: 3.0.30(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
+
   apps/netlens:
     dependencies:
       '@apps-hub/core':
@@ -562,6 +635,15 @@ importers:
         version: 5.9.3
 
   packages/library-core:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.10.10
+      typescript:
+        specifier: ~5.9.2
+        version: 5.9.3
+
+  packages/media-core:
     devDependencies:
       '@types/node':
         specifier: ^22.10.0

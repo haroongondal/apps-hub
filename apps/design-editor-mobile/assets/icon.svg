@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect id="plate" x="0" y="0" width="1024" height="1024" rx="228" fill="#5B34D6"/>
+  <g id="mark">
+    <rect x="232" y="319" width="560" height="400" rx="72" fill="#FFFFFF"/>
+    <path d="M440 407 L440 631 L624 519 Z" fill="#5B34D6"/>
+  </g>
+</svg>

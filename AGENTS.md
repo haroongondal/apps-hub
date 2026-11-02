@@ -24,6 +24,11 @@ Current apps:
   and Reader build on it; specs `docs/pdf-editor/`, progress `docs/handoffs/pdf-editor-scan.md`.
 - **design-editor** (`apps/design-editor`) — offline Canva-style editor for the
   Mac (Electron), moved in from `~/Documents/design-editor` on 2026-10-26.
+  Its Android sibling `apps/design-editor-mobile` (`com.haroon.designeditor`, Store
+  release id `design-editor`) runs the same canvas in a WebView plus the media tools
+  as a Kotlin foreground queue (`modules/design-media`). Pure logic in
+  `packages/media-core`. Specs: `docs/design-editor/`; progress:
+  `docs/handoffs/design-editor-media.md`.
 - **deputy** (`apps/deputy`) — personal Android agent that carries out tasks by
   operating other apps through an AccessibilityService. Android only, private
   Store only (`com.haroon.deputy`). Kotlin owns the agent loop and the
@@ -128,6 +133,9 @@ cd apps/deputy/android && JAVA_HOME=$JAVA_HOME ./gradlew \
 # Native compile gate (Strongroom):
 cd apps/strongroom/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :strongroom-vault:testDebugUnitTest :app:assembleDebug
+# Native compile gate (Design Editor mobile):
+cd apps/design-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
+  :design-media:testDebugUnitTest :app:assembleDebug
 # Electron apps (open real windows, so not part of `pnpm test`):
 pnpm --filter pdf-editor-desktop test:e2e   # desktop + Electron + mobile-bridge suites
 pnpm --filter design-editor test:e2e

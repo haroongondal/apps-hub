@@ -143,6 +143,7 @@ export interface SizePlan {
   width: number; height: number; videoBps: number; audio: { mode: 'copy' } | { mode: 'aac'; bps: number } | { mode: 'none' };
   overheadBytes: number; plannedVideoBytes: number; plannedBytes: number;
   attempt: 1 | 2 | 3; margin: number;
+  fpsCap: number;   // min(source fps, maxFps); retry walks the ladder with it (B1, 2026-11-01)
 }
 export type Refusal =
   | { ok: false; reason: 'too-long'; maxDurationS: number }
@@ -271,7 +272,8 @@ import type { MediaInfo, Job, Output } from '@apps-hub/media-core';
 
 export interface CodecInfo { name: string; mime: string; encoder: boolean; hardware: boolean; vendor: boolean;
   bitrateModes: ('cq' | 'vbr' | 'cbr' | 'cbr_fd')[]; maxWidth: number; maxHeight: number; maxFps1080?: number; hdrEditing: boolean }
-export interface NativeJobStatus { id: string; state: Job['state']; progress: number; attempt: number; outputs: Output[]; error?: string }
+export interface NativeJobStatus { id: string; state: Job['state']; progress: number; attempt: number; outputs: Output[]; error?: string;
+  attempts: { attempt: number; plannedBytes: number; actualBytes: number; seconds: number; mode: 'vbr' | 'cbr' }[] }   // per-attempt log for the Media lab (B1)
 
 export interface DesignMediaModule {
   probe(uri: string): Promise<MediaInfo>;
@@ -281,7 +283,7 @@ export interface DesignMediaModule {
   codecReport(): Promise<CodecInfo[]>;
   encoderStats(): Promise<Record<string, number[]>>;                            // key "<codec name>/<mode>"
   freeBytes(): Promise<number>;
-  enqueue(jobsJson: string): Promise<string[]>;      // JSON array of media-core Job; starts the service
+  enqueue(jobsJson: string, cbrOnly: boolean): Promise<string[]>;   // JSON array of media-core Job; starts the service. cbrOnly runs CBR with no VBR fallback (spike S4). Otherwise CBR first, VBR once on failure.
   cancel(id: string): Promise<void>;                 // job id or "all"
   resume(): Promise<void>;                           // re-queues paused and interrupted jobs
   queue(): Promise<NativeJobStatus[]>;
@@ -402,7 +404,7 @@ including location (PRD Q10).
 
 | Tool | Runner | Details |
 | --- | --- | --- |
-| Size | `TransformerRunner` | `EditedMediaItem` with `Presentation.createForHeight(h)` when downscaling and `FrameDropEffect` when lowering fps (**spike S5** confirms the class in 1.11.1); `Transformer.Builder.setVideoMimeType(AVC or HEVC)`, `setAudioMimeType(AAC)` unless audio is copied; `DefaultEncoderFactory` with `VideoEncoderSettings(bitrate = videoBps, VBR)` and `AudioEncoderSettings(bitrate)`. If the encoder fails to start or produces no output in VBR, the same attempt runs once in CBR (Compressor's MediaTek finding inverted, R§6.4). Output `cacheDir/jobs/<id>/attempt-<n>.mp4`. |
+| Size | `TransformerRunner` | `EditedMediaItem` with `Presentation.createForHeight(h)` when downscaling and `FrameDropEffect` when lowering fps (**spike S5** confirms the class in 1.11.1); `Transformer.Builder.setVideoMimeType(AVC or HEVC)`, `setAudioMimeType(AAC)` unless audio is copied; `DefaultEncoderFactory` with `VideoEncoderSettings(bitrate = videoBps, VBR)` and `AudioEncoderSettings(bitrate)`. CBR first (the default since 2026-11-02, after the phone check). If the encoder fails to start or produces no output in CBR, the same attempt runs once in VBR (Compressor's MediaTek finding inverted, R§6.4). Output `cacheDir/jobs/<id>/attempt-<n>.mp4`. |
 | Quality | `TransformerRunner` | Same, bitrate from the rung (High: Media3's default heuristic; Medium 0.10 bpp at ≤1080p30; Small 0.07 bpp at ≤720p30). |
 | Clip, copy | `CopyRunner` | All video and audio tracks into `MediaMuxer` (MP4, or WebM for VP8/VP9 sources); `setOrientationHint(rotation)`; `seekTo(keyframeUs, SEEK_TO_PREVIOUS_SYNC)`; write samples with `pts − keyframeUs` until each track passes `endUs`. |
 | Clip, exact | `TransformerRunner` | `ClippingConfiguration(start, end)`, `experimentalSetTrimOptimizationEnabled(true)`, bitrate = source video bitrate; result reports whether the optimisation applied. |
@@ -446,7 +448,7 @@ copy and GIF runners report bytes or frames done.
 7. Frame rate = min(source fps, `maxFps`). Walk `LADDER` (1080/30, 720/30, 540/30, 480/30,
    360/30, 360/24, 240/24, skipping rungs above the source) and take the first whose
    `videoBps / (w × h × fps)` ≥ `FLOOR[encoder]` (hw-h264 0.05, hw-hevc 0.035, x264 0.04;
-   **assumed**, tuned in Phase 1). Width keeps the aspect ratio, rounded to even (16 for hw).
+   **assumed**, tuned in Phase 1). Width keeps the aspect ratio, rounded to even, not to 16 (B1, 2026-11-01): the §10.3 refusal figure (1,297 s) is computed with 426 px for 240p, and 16-alignment would give 432 px and 1,287 s.
 8. None passes, and the lowest rung is below half the floor → refuse `too-long` with
    `maxDurationS = (targetBytes × margin − overheadBytes) × 8 / (FLOOR × w × h × fps / 2 + 48,000)`
    at the lowest rung. Otherwise use the lowest rung.
