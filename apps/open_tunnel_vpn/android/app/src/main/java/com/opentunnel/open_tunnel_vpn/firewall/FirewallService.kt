@@ -51,9 +51,13 @@ class FirewallService : VpnService() {
     // The 5-second foreground window comes first, whatever the action is.
     startForegroundNow()
     val idle = tun == null && !paused
+    // Task 13 reads this line on the phone to see which action Always-on really sends.
+    Log.i(TAG, "onStartCommand action=${intent?.action}")
+    if (startsOn(intent?.action)) {
+      start()
+      return START_NOT_STICKY
+    }
     when (intent?.action) {
-      // A start with no action is what Always-on sends after a reboot.
-      ACTION_START, ACTION_RESUME, null -> start()
       ACTION_STOP -> stop()
       ACTION_PAUSE -> if (idle) stop() else pause()
       ACTION_RELOAD -> if (idle) stop() else reload()
@@ -84,6 +88,7 @@ class FirewallService : VpnService() {
     try {
       rules = store.rules()
       tun = buildTun()
+      // Not saveState: on the success path a failed write must fail loudly and land in stop() below.
       store.writeState(STATE_RUNNING, "true")
       store.writeState(STATE_PAUSED, "false")
       Log.i(TAG, "started: tun up with ${rules.size} rules (sdk ${Build.VERSION.SDK_INT})")
@@ -200,6 +205,14 @@ class FirewallService : VpnService() {
   }
 
   companion object {
+    /**
+     * True for the actions that start the firewall: ACTION_START, ACTION_RESUME, no action, and the
+     * system's VpnService action. Always-on may deliver either of the last two after a reboot; which
+     * one is unverified until the Task 13 phone check reads the logged action.
+     */
+    fun startsOn(action: String?): Boolean =
+      action == null || action == VpnService.SERVICE_INTERFACE || action == ACTION_START || action == ACTION_RESUME
+
     const val ACTION_START = "com.opentunnel.open_tunnel_vpn.firewall.START"
     const val ACTION_STOP = "com.opentunnel.open_tunnel_vpn.firewall.STOP"
     const val ACTION_PAUSE = "com.opentunnel.open_tunnel_vpn.firewall.PAUSE"

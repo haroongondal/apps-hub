@@ -40,5 +40,10 @@ class FirewallNetworksTest {
   fun tunAddressesAreTheDocumentedOnes() {
     assertEquals("100.127.222.1", FirewallNetworks.TUN_IPV4)
     assertEquals("fd66:f83a:c650::1", FirewallNetworks.TUN_IPV6)
+    assertEquals(24, FirewallNetworks.TUN_IPV4_PREFIX)
+    assertEquals(120, FirewallNetworks.TUN_IPV6_PREFIX)
+    assertEquals("100.127.222.3", FirewallNetworks.TUN_DNS_IPV4)
+    assertEquals("fd66:f83a:c650::3", FirewallNetworks.TUN_DNS_IPV6)
+    assertEquals(1500, FirewallNetworks.MTU)
   }
 }
