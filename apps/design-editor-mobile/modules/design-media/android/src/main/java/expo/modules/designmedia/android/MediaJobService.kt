@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.util.Log
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
@@ -44,6 +45,7 @@ class MediaJobService : Service() {
 
   override fun onCreate() {
     super.onCreate()
+    Log.i(TAG, "create ${System.identityHashCode(this)}")
     thread = HandlerThread("design-media").apply { start() }
     handler = Handler(thread.looper)
     store = QueueStore(AtomicFile(File(filesDir, QUEUE_FILE)))
@@ -88,6 +90,7 @@ class MediaJobService : Service() {
   }
 
   override fun onDestroy() {
+    Log.i(TAG, "destroy ${System.identityHashCode(this)}")
     handler.post { current?.let { abort(it) } }
     thread.quitSafely()
     super.onDestroy()
@@ -121,6 +124,7 @@ class MediaJobService : Service() {
     if (current != null) return
     val next = nextRunnable(store.load())
     if (next == null) {
+      Log.i(TAG, "pump: nothing runnable, stopping")
       stopForeground(STOP_FOREGROUND_REMOVE)
       stopSelf(lastStartId)
       return
@@ -250,12 +254,20 @@ class MediaJobService : Service() {
   }
 
   private fun record(event: QueueEvent) {
-    store.save(reduce(store.load(), event))
+    val before = store.load()
+    val after = reduce(before, event)
+    store.save(after)
+    Log.i(TAG, "${event::class.simpleName}: ${before.size} -> ${after.size} ${after.groupingBy { it.state.wire }.eachCount()}")
     emit()
   }
 
+  // A failed delivery to JS must never stop the queue: the state is already saved.
   private fun emit() {
-    listener?.invoke(EVENT_QUEUE, mapOf("jobs" to store.load().map { it.toStatusMap() }))
+    try {
+      listener?.invoke(EVENT_QUEUE, mapOf("jobs" to store.load().map { it.toStatusMap() }))
+    } catch (e: Exception) {
+      Log.w(TAG, "queue event not delivered", e)
+    }
   }
 
   private fun cancelIntent(): PendingIntent = PendingIntent.getService(
@@ -292,6 +304,7 @@ class MediaJobService : Service() {
     const val EVENT_PROGRESS = "onJobProgress"
     const val EVENT_QUEUE = "onQueue"
 
+    private const val TAG = "DesignMediaQueue"
     private const val TITLE = "Media jobs"
     private const val QUEUE_FILE = "media-queue.json"
     private const val STATS_FILE = "encoder-stats.json"
