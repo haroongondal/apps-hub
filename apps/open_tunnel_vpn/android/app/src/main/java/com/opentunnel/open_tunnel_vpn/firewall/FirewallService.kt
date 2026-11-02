@@ -19,6 +19,7 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import com.opentunnel.open_tunnel_vpn.MainActivity
 import com.opentunnel.open_tunnel_vpn.R
+import expo.modules.opentunnelnative.firewall.FirewallStartPolicy
 import expo.modules.opentunnelnative.firewall.FirewallStore
 import java.net.InetAddress
 
@@ -50,10 +51,18 @@ class FirewallService : VpnService() {
     // The 5-second foreground window comes first, whatever the action is.
     startForegroundNow()
     val idle = tun == null && !paused
-    // Task 13 reads this line on the phone to see which action Always-on really sends.
+    // Task 13 reads this line, and the saved action, on the phone to see which action Always-on really sends.
     Log.i(TAG, "onStartCommand action=${intent?.action}")
+    runCatching { store.writeState(STATE_LAST_START_ACTION, intent?.action ?: "null") }
+      .onFailure { Log.e(TAG, "could not save the start action: ${it.message}") }
     if (startsOn(intent?.action)) {
-      start()
+      // Always-on and boot are implicit starts: they run only while the user's switch is on.
+      if (isImplicitStart(intent?.action) && !FirewallStartPolicy.startOnNullAction(store.readState(STATE_ENABLED))) {
+        Log.i(TAG, "implicit start while the firewall is off: stopping")
+        stop()
+      } else {
+        start()
+      }
       return START_NOT_STICKY
     }
     when (intent?.action) {
@@ -231,6 +240,9 @@ class FirewallService : VpnService() {
     fun startsOn(action: String?): Boolean =
       action == null || action == VpnService.SERVICE_INTERFACE || action == ACTION_START || action == ACTION_RESUME
 
+    /** A start the user did not ask for in the UI: no action, or the system's VpnService action. */
+    fun isImplicitStart(action: String?): Boolean = action == null || action == VpnService.SERVICE_INTERFACE
+
     const val ACTION_START = "com.opentunnel.open_tunnel_vpn.firewall.START"
     const val ACTION_STOP = "com.opentunnel.open_tunnel_vpn.firewall.STOP"
     const val ACTION_PAUSE = "com.opentunnel.open_tunnel_vpn.firewall.PAUSE"
@@ -241,6 +253,7 @@ class FirewallService : VpnService() {
     const val STATE_RUNNING = "running"
     const val STATE_PAUSED = "paused"
     const val STATE_ENABLED = "enabled"
+    const val STATE_LAST_START_ACTION = "last_start_action"
 
     private const val TAG = "FirewallService"
     private const val CHANNEL_ID = "firewall"

@@ -17,6 +17,15 @@ class FirewallServiceActionsTest {
   }
 
   @Test
+  fun onlyNoActionAndTheVpnServiceActionAreImplicitStarts() {
+    assertTrue(FirewallService.isImplicitStart(null))
+    assertTrue(FirewallService.isImplicitStart(VpnService.SERVICE_INTERFACE))
+    assertFalse(FirewallService.isImplicitStart(FirewallService.ACTION_START))
+    assertFalse(FirewallService.isImplicitStart(FirewallService.ACTION_RESUME))
+    assertFalse(FirewallService.isImplicitStart(FirewallService.ACTION_STOP))
+  }
+
+  @Test
   fun startsOnStartAndResume() {
     assertTrue(FirewallService.startsOn(FirewallService.ACTION_START))
     assertTrue(FirewallService.startsOn(FirewallService.ACTION_RESUME))
