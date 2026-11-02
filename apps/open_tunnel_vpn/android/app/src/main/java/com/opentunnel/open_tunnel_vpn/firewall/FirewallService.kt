@@ -98,6 +98,9 @@ class FirewallService : VpnService() {
     startForegroundNow()
     if (tun != null) return
     try {
+      // Claimed before the server check: the controller writes server_active and then waits while running is
+      // "true", so either this start sees the server, or the controller waits for its STOP. Never neither.
+      store.writeState(STATE_RUNNING, "true")
       // The in-app switch has its own guard; this one also covers the notification's Resume and Always-on.
       if (FirewallStartPolicy.refusesStart(store.readState(FirewallContract.STATE_SERVER_ACTIVE))) {
         Log.i(TAG, "paused while a server is connected: start refused")
@@ -109,7 +112,6 @@ class FirewallService : VpnService() {
       val established = buildTun().also { tun = it }
       check(engine.start(established, systemDns)) { "firestack did not start" }
       // Not saveState: on the success path a failed write must fail loudly and land in stop() below.
-      store.writeState(STATE_RUNNING, "true")
       store.writeState(STATE_PAUSED, "false")
       Log.i(TAG, "started: tun and engine up (sdk ${Build.VERSION.SDK_INT})")
     } catch (failure: Exception) {

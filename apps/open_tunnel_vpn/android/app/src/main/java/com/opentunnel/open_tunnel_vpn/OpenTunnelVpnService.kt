@@ -157,10 +157,16 @@ class OpenTunnelVpnService : VpnService() {
    */
   private fun handOverFromFirewall(start: () -> Unit) {
     val startedAt = SystemClock.elapsedRealtime()
-    if (firewallState(FirewallService.STATE_RUNNING) == "true") {
-      firewallStopped = true
+    if (FirewallHandover.shouldStopFirewall(
+        firewallState(FirewallService.STATE_RUNNING),
+        firewallState(FirewallService.STATE_ENABLED),
+      )
+    ) {
+      // A firewall the user paused stays off afterwards (R21); one that was on, or on its way back, returns.
+      if (firewallState(FirewallService.STATE_PAUSED) != "true") firewallStopped = true
       sendToFirewall(FirewallService.ACTION_STOP)
     }
+    // Polled only after the STOP: a start under way has claimed running (FirewallService.start), so it is waited out.
     val poll = object : Runnable {
       override fun run() {
         val running = firewallState(FirewallService.STATE_RUNNING)

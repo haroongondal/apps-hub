@@ -48,6 +48,26 @@ class FirewallHandoverTest {
   }
 
   @Test
+  fun stopsTheFirewallWheneverItsSwitchIsOnEvenIfItDoesNotReportRunning() {
+    // A restore START may still be queued or building its tun: running is not "true" yet.
+    assertTrue(FirewallHandover.shouldStopFirewall("false", "true"))
+    assertTrue(FirewallHandover.shouldStopFirewall(null, "true"))
+    assertTrue(FirewallHandover.shouldStopFirewall("true", "true"))
+  }
+
+  @Test
+  fun stopsARunningFirewallWhoseSwitchIsGoingOff() {
+    assertTrue(FirewallHandover.shouldStopFirewall("true", "false"))
+    assertTrue(FirewallHandover.shouldStopFirewall("true", null))
+  }
+
+  @Test
+  fun sendsNoStopWhenTheFirewallIsOffAndNotRunning() {
+    assertFalse(FirewallHandover.shouldStopFirewall("false", "false"))
+    assertFalse(FirewallHandover.shouldStopFirewall(null, null))
+  }
+
+  @Test
   fun restartsTheFirewallOnlyWhenItIsEnabled() {
     assertTrue(FirewallHandover.shouldRestartAfterEngine("true"))
     assertFalse(FirewallHandover.shouldRestartAfterEngine("false"))

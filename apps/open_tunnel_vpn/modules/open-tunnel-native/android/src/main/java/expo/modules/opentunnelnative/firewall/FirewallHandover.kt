@@ -22,6 +22,12 @@ object FirewallHandover {
   fun shouldForceStop(running: String?, nowMs: Long, startedAtMs: Long, timeoutMs: Long): Boolean =
     running == "true" && timedOut(nowMs, startedAtMs, timeoutMs)
 
+  /**
+   * Not only while it reports running: a restore START may still be queued or building its tun, and `running`
+   * turns "true" only once the tun is up. A STOP sent now is delivered after that START.
+   */
+  fun shouldStopFirewall(running: String?, enabled: String?): Boolean = running == "true" || enabled == "true"
+
   /** `enabled` is the `firewall_state` value the user's switch writes. */
   fun shouldRestartAfterEngine(enabled: String?): Boolean = enabled == "true"
 }
