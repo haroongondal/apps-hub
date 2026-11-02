@@ -336,7 +336,13 @@ class OpenTunnelNativeModule : Module() {
         if (rejectIfServerConnected(promise)) return@firewall
         val start = {
           store.writeState(FirewallContract.STATE_ENABLED, "true")
-          sendToFirewall(context, FirewallContract.ACTION_START)
+          try {
+            sendToFirewall(context, FirewallContract.ACTION_START)
+          } catch (error: Exception) {
+            // A start that never left must not leave the switch on: an Always-on start would run the firewall later.
+            runCatching { store.writeState(FirewallContract.STATE_ENABLED, "false") }.onFailure(error::addSuppressed)
+            throw error
+          }
         }
         val prepareIntent = VpnService.prepare(context)
         if (prepareIntent == null) {
