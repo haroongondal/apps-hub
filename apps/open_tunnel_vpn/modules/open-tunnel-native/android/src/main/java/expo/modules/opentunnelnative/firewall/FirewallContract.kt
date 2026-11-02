@@ -20,6 +20,8 @@ object FirewallContract {
   const val STATE_PAUSED = "paused"
   const val STATE_ENABLED = "enabled"
   const val STATE_LAST_START_ACTION = "last_start_action"
+  /** "true" while the VPN controller runs a server connection; only the main process writes it. */
+  const val STATE_SERVER_ACTIVE = "server_active"
 
   /** Attribution (`getConnectionOwnerUid`) starts at Android 10. */
   const val MIN_SDK = 29

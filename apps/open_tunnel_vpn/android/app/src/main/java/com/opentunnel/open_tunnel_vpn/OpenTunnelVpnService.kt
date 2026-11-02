@@ -23,6 +23,7 @@ import expo.modules.opentunnelnative.TunnelEventBus
 import expo.modules.opentunnelnative.TunnelStateRegistry
 import expo.modules.opentunnelnative.TunnelStatus
 import expo.modules.opentunnelnative.TrafficTicker
+import expo.modules.opentunnelnative.firewall.FirewallContract
 import expo.modules.opentunnelnative.firewall.FirewallHandover
 import expo.modules.opentunnelnative.firewall.FirewallStore
 import org.json.JSONArray
@@ -95,6 +96,7 @@ class OpenTunnelVpnService : VpnService() {
       ServiceContracts.ACTION_RELEASE -> {
         engine?.let { runCatching { it.stop() } }
         engine = null
+        setServerActive(false)
         TrafficTicker.stop()
         // Android 15+ cuts a background app's network about 5 s after its last foreground service ends.
         if (intent?.getBooleanExtra(ServiceContracts.EXTRA_HOLD, false) == true) main.postDelayed(release, HOLD_MS) else release.run()
@@ -123,6 +125,7 @@ class OpenTunnelVpnService : VpnService() {
     TunnelStateRegistry.setStatus(TunnelStatus.CONNECTING)
     TunnelEventBus.postStatus(TunnelStatus.CONNECTING, null)
 
+    setServerActive(true)
     handOverFromFirewall { startEngine(config) }
   }
 
@@ -202,6 +205,13 @@ class OpenTunnelVpnService : VpnService() {
       .getOrNull()
   }
 
+  /** The firewall refuses every start while this is "true"; it is cleared before any restore START is sent. */
+  private fun setServerActive(active: Boolean) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+    runCatching { firewallStore.writeState(FirewallContract.STATE_SERVER_ACTIVE, active.toString()) }
+      .onFailure { Log.w(TAG, "could not save the server state: ${it.message}") }
+  }
+
   private fun sendToFirewall(action: String) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
     runCatching { startForegroundService(Intent(this, FirewallService::class.java).setAction(action)) }
@@ -222,6 +232,7 @@ class OpenTunnelVpnService : VpnService() {
     TrafficTicker.stop()
     TunnelStateRegistry.setStatus(TunnelStatus.DISCONNECTED)
     TunnelEventBus.postStatus(TunnelStatus.DISCONNECTED, null)
+    setServerActive(false)
     restoreFirewall()
 
     stopForegroundCompat()
@@ -250,6 +261,8 @@ class OpenTunnelVpnService : VpnService() {
     val active = engine
     engine = null
     if (active != null) runCatching { active.stop() }
+    // Revoke and a stale intent end here with the engine stopped but no stopTunnel.
+    setServerActive(false)
 
     // Final convergence: leave the registry only on true terminal states.
     val status = TunnelStateRegistry.statusState
@@ -267,6 +280,7 @@ class OpenTunnelVpnService : VpnService() {
     TrafficTicker.stop()
     TunnelStateRegistry.setStatus(TunnelStatus.ERROR, message)
     TunnelEventBus.postStatus(TunnelStatus.ERROR, message)
+    setServerActive(false)
     restoreFirewall()
     stopForegroundCompat()
     stopSelf()

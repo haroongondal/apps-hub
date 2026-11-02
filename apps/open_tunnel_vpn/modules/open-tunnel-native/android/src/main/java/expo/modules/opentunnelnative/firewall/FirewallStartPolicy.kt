@@ -8,4 +8,7 @@ package expo.modules.opentunnelnative.firewall
 object FirewallStartPolicy {
 
   fun startOnNullAction(enabled: String?): Boolean = enabled == "true"
+
+  /** `serverActive` is the controller's `server_active` value: a firewall tun now would take the server's VPN slot. */
+  fun refusesStart(serverActive: String?): Boolean = serverActive == "true"
 }

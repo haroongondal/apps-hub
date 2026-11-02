@@ -1,6 +1,7 @@
 package com.opentunnel.open_tunnel_vpn.firewall
 
 import android.net.VpnService
+import expo.modules.opentunnelnative.firewall.FirewallStartPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -29,6 +30,15 @@ class FirewallServiceActionsTest {
   fun startsOnStartAndResume() {
     assertTrue(FirewallService.startsOn(FirewallService.ACTION_START))
     assertTrue(FirewallService.startsOn(FirewallService.ACTION_RESUME))
+  }
+
+  @Test
+  fun everyStartActionMeetsTheServerCheck() {
+    // Each of these runs start(), and start() refuses while server_active is "true": no action is exempt.
+    for (action in listOf(null, VpnService.SERVICE_INTERFACE, FirewallService.ACTION_START, FirewallService.ACTION_RESUME)) {
+      assertTrue("$action", FirewallService.startsOn(action))
+    }
+    assertTrue(FirewallStartPolicy.refusesStart("true"))
   }
 
   @Test

@@ -98,6 +98,12 @@ class FirewallService : VpnService() {
     startForegroundNow()
     if (tun != null) return
     try {
+      // The in-app switch has its own guard; this one also covers the notification's Resume and Always-on.
+      if (FirewallStartPolicy.refusesStart(store.readState(FirewallContract.STATE_SERVER_ACTIVE))) {
+        Log.i(TAG, "paused while a server is connected: start refused")
+        stop()
+        return
+      }
       // Read before the tun exists: afterwards the default network is the tun itself.
       val systemDns = systemDns()
       val established = buildTun().also { tun = it }
