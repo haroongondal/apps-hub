@@ -15,9 +15,9 @@
  *    per-app rules; ics-openvpn's merge would otherwise drop it) and
  *    `PACKAGE_USAGE_STATS` (NetworkStatsManager, for data use).
  *
- * The `<service>` declaration for OpenTunnelVpnService is intentionally NOT
- * added here: it is created with the native module in Phase 2, when the
- * Kotlin class exists.
+ * Only the `<service>` declaration for OpenTunnelVpnService is intentionally
+ * NOT added here: it is created with the native module in Phase 2, when the
+ * Kotlin class exists. The firewall service above is added by this plugin.
  */
 const {
   AndroidConfig,
