@@ -307,7 +307,7 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
   and 18:04 to 18:06 (14 to 18). My earlier checks used a name-sorted `tail` that dropped outputs 10 to 13, and the lab's
   queue rows need scrolling to read. The queue file keeps every batch. The S8 re-test on code 3 (15 s limit, app
   backgrounded during a CBR job): "Stop FGS timeout" at 18:44:10 with no DidNotStopInTime exception, and the app's
-  process kept the same PID (30693). The paused state was not read on screen. The override was removed afterwards, so the
+  process kept the same PID (30693). On screen the job then showed `paused, try 1`, which confirms the time-limit pause. The override was removed afterwards, so the
   default is back.
 
 ## Current state + exact next step
