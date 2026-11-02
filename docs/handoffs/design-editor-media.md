@@ -2,13 +2,20 @@
 
 ## Resume prompt
 
-Dated 2026-11-01. Read `docs/handoffs/design-editor-media.md` completely first, then
-`docs/design-editor/PRD.md` and `docs/design-editor/SPEC.md`; read `docs/design-editor/RESEARCH.md`
-sections as a step cites them. Trust the decisions and verified facts below and don't re-research
-or re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` (keep this file's session
-log, evidence and next step current; hand off before context runs out). Read "Current state +
-exact next step" before doing anything, then continue from it. Commit, push or release only when
-the owner says so; install on the phone only through the Store, never `adb install`.
+Dated 2026-11-02. Read `docs/handoffs/design-editor-media.md` completely first, then
+`docs/design-editor/PRD.md`, `docs/design-editor/SPEC.md` and the prelude plus your phase in
+`docs/design-editor/PROMPTS.md`. Read `docs/design-editor/RESEARCH.md` sections as a step cites them.
+Trust the decisions and verified facts below and don't re-research or re-derive them. Follow the
+handoff contract in `~/.claude/CLAUDE.md` and "How every session runs" in `docs/build-sessions.md`
+(keep this file's session log, evidence and next step current; hand off before context runs out).
+Read "Current state + exact next step" before doing anything, then continue from it.
+
+Gates: Phase 2 (session B2) needs B0 (`design-editor-phase-2`) and B1 (`design-media-phase-1`)
+merged into `origin/main`. Check with `gh pr list` and `git log origin/main` before any Phase 2 work.
+If they aren't merged, do the gate work the owner asks for and stop before Phase 2. Commit, push,
+merge or release only when the owner says so. A merge to `main` makes CI release Design Editor. Install
+on the phone only through the Store, never `adb install`. Never touch the main checkout, or
+`design-editor-phase-2` in a session that isn't B0. Never stash, reset or commit changes you didn't make.
 
 ## Goal and fixed constraints
 
@@ -247,13 +254,18 @@ Verified 2026-11-01 (session B1, Phase 1 steps 1–6; output was read, not predi
   so auth and transport work). The first Store attempt printed "published", but a later manifest write (about
   two minutes after it, from a read that predated it) overwrote the Store entry back to 13. Re-running
   the Store fixed it. Verified after the last release: `store` 14 and `design-editor` 2 both in `manifest.json`.
+- **2026-11-02 (session B1, phone check).** The owner reports the phone check completed. The results were not
+  in the chat, so they are not recorded yet. The next session asks for them (the lab's Share results) before tuning
+  `budget.ts`. Gates before Phase 2: no PR is open for B1 or B0, and neither is merged. The resume prompt was
+  rewritten for the next chat.
 
 ## Current state + exact next step
 
 - State (2026-11-01): the S0 docs are on `main` (PR #1 merged). Phase 1 steps 1–6 are done on branch
   `design-media-phase-1` (worktree `.claude/worktrees/design-media-phase-1`, from `origin/main` 03d1c7f).
   Pushed to `origin/design-media-phase-1`. Step 7 is released: Store 0.1.0 (14) and Design Editor 1.0.0 (2),
-  both verified in `manifest.json` on the Store account. The phone spike (S1–S8) waits for the owner.
+  both verified in `manifest.json` on the Store account. The owner completed the phone check on 2026-11-02,
+  but the S1–S8 results are not recorded here yet.
 - **Unmerged Design Editor work exists (found 2026-10-31).** Branch `design-editor-phase-2`
   (2026-10-28, handoff `docs/handoffs/design-editor-phase-2.md` on that branch) adds multi-page
   designs (file format v2), bundled fonts and real PDF text. It is e2e green and waits for the
