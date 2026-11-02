@@ -97,8 +97,9 @@ Session B1, 2026-11-01 (Claude's calls inside the brief; the owner can override)
   `git push -u origin design-media-phase-1` (the branch was created tracking `origin/main`).
 
 Session B1, 2026-11-02 (phone check over adb; decisions for the owner):
-- **Encoder order is open.** S4 (CBR, no fallback) was accurate at +0.6%, while VBR was +45% on try 1. The
-  default should probably be CBR first, with VBR as the fallback. The owner decides. Until then the code keeps VBR first.
+- **Encoder order: CBR first (decided 2026-11-02 under the owner's instruction to proceed on their own).** S4 (CBR, no fallback) was accurate at +0.6%, while VBR was +45% on try 1. The
+  code now runs CBR first, and VBR once if CBR fails to start or yields nothing. The `cbrOnly` flag (was `cbrFirst`)
+  is the S4 spike mode, with no fallback. Tests: EncoderOrderTest (source scan). Not yet verified on the phone.
 - **onTimeout fix** (commit c73ba0b): `stopForeground(STOP_FOREGROUND_REMOVE)` before `stopSelf()`. Found on the phone.
 - **Time-limit fallback:** the job pauses on the time limit and the app shows bare `paused`. Reason copy is a Phase 5 item.
 
@@ -296,6 +297,10 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
   lab UI, and recorded the output under "Phone check 2026-11-02". S8 found a crash in `onTimeout`. The fix is committed
   (c73ba0b) and pushed, with a regression test (33 JVM tests pass, the debug build succeeds). Nothing was released
   this session. The phone was left locked behind a PIN.
+- **2026-11-02 (session B1, autonomous run).** Draft PR #8 opened. Encoder order flipped to CBR first, with a VBR
+  fallback. Added BatchSequenceTest: the queue's save, load and reduce path keeps all entries through a five-job batch
+  (passes). That narrows the queue loss to the service lifecycle, not the store. It needs device logs to settle, and
+  those need a release. Not merged: merging releases the app, and the batch defect is still open. 36 module JVM tests pass.
 
 ## Current state + exact next step
 

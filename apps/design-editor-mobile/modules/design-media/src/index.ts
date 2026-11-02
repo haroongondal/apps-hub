@@ -19,7 +19,7 @@ export interface DesignMediaModule {
   persistAccess(uri: string): Promise<boolean>;
   freeBytes(): Promise<number>;
   encoderStats(): Promise<Record<string, number[]>>;
-  enqueue(jobsJson: string, cbrFirst: boolean): Promise<string[]>;
+  enqueue(jobsJson: string, cbrOnly: boolean): Promise<string[]>;
   cancel(id: string): Promise<void>;
   queue(): Promise<NativeJobStatus[]>;
   addListener(name: 'onJobProgress', fn: (e: JobProgressEvent) => void): { remove(): void };

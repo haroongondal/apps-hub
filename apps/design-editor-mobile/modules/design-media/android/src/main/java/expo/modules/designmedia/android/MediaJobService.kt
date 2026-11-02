@@ -37,7 +37,7 @@ class MediaJobService : Service() {
   private lateinit var store: QueueStore
   private lateinit var notifier: Notifier
   private var current: Run? = null
-  private var cbrFirst = false
+  private var cbrOnly = false
   @Volatile private var lastStartId = 0
 
   override fun onBind(intent: Intent?): IBinder? = null
@@ -65,7 +65,7 @@ class MediaJobService : Service() {
     val action = intent?.action
     val jobs = intent?.getStringExtra(EXTRA_JOBS).orEmpty()
     val id = intent?.getStringExtra(EXTRA_ID).orEmpty()
-    val cbr = intent?.getBooleanExtra(EXTRA_CBR_FIRST, false) == true
+    val cbr = intent?.getBooleanExtra(EXTRA_CBR_ONLY, false) == true
     guard {
       when (action) {
         ACTION_ENQUEUE -> enqueue(jobs, cbr)
@@ -105,7 +105,7 @@ class MediaJobService : Service() {
   }
 
   private fun enqueue(json: String, cbr: Boolean) {
-    cbrFirst = cbr
+    cbrOnly = cbr
     val jobs = decodeJobs(json).map {
       it.copy(state = JobState.QUEUED, progress = 0.0, attempt = 1, outputs = emptyList(), error = null)
     }
@@ -131,7 +131,7 @@ class MediaJobService : Service() {
       pump()
       return
     }
-    val run = Run(next, next.plan, if (cbrFirst) CBR else VBR)
+    val run = Run(next, next.plan, CBR)
     current = run
     record(QueueEvent.Start(next.id, now()))
     attempt(run)
@@ -188,10 +188,10 @@ class MediaJobService : Service() {
     encoderFailed(r, "The encoder failed: ${ExportException.getErrorCodeName(e.errorCode)}")
   }
 
-  // VBR first; the same attempt runs once in CBR when VBR fails to start or yields nothing (SPEC §9.2, MediaTek).
+  // CBR first: on the phone VBR overshot by 45% and CBR landed within 1% (2026-11-02). VBR runs once if CBR fails to start or yields nothing, unless cbrOnly (spike S4).
   private fun encoderFailed(r: Run, message: String) {
-    if (r.mode == VBR && !cbrFirst) {
-      r.mode = CBR
+    if (r.mode == CBR && !cbrOnly) {
+      r.mode = VBR
       attempt(r)
     } else {
       fail(r.job.id, message)
@@ -304,15 +304,15 @@ class MediaJobService : Service() {
     private const val ACTION_CANCEL = "expo.modules.designmedia.CANCEL"
     private const val ACTION_CANCEL_ALL = "expo.modules.designmedia.CANCEL_ALL"
     private const val EXTRA_JOBS = "jobs"
-    private const val EXTRA_CBR_FIRST = "cbrFirst"
+    private const val EXTRA_CBR_ONLY = "cbrOnly"
     private const val EXTRA_ID = "id"
 
-    fun enqueue(context: Context, jobsJson: String, cbrFirst: Boolean) {
+    fun enqueue(context: Context, jobsJson: String, cbrOnly: Boolean) {
       context.startForegroundService(
         Intent(context, MediaJobService::class.java)
           .setAction(ACTION_ENQUEUE)
           .putExtra(EXTRA_JOBS, jobsJson)
-          .putExtra(EXTRA_CBR_FIRST, cbrFirst),
+          .putExtra(EXTRA_CBR_ONLY, cbrOnly),
       )
     }
 

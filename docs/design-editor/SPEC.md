@@ -283,7 +283,7 @@ export interface DesignMediaModule {
   codecReport(): Promise<CodecInfo[]>;
   encoderStats(): Promise<Record<string, number[]>>;                            // key "<codec name>/<mode>"
   freeBytes(): Promise<number>;
-  enqueue(jobsJson: string, cbrFirst: boolean): Promise<string[]>;   // JSON array of media-core Job; starts the service. cbrFirst runs CBR with no VBR fallback (spike S4)
+  enqueue(jobsJson: string, cbrOnly: boolean): Promise<string[]>;   // JSON array of media-core Job; starts the service. cbrOnly runs CBR with no VBR fallback (spike S4). Otherwise CBR first, VBR once on failure.
   cancel(id: string): Promise<void>;                 // job id or "all"
   resume(): Promise<void>;                           // re-queues paused and interrupted jobs
   queue(): Promise<NativeJobStatus[]>;
@@ -404,7 +404,7 @@ including location (PRD Q10).
 
 | Tool | Runner | Details |
 | --- | --- | --- |
-| Size | `TransformerRunner` | `EditedMediaItem` with `Presentation.createForHeight(h)` when downscaling and `FrameDropEffect` when lowering fps (**spike S5** confirms the class in 1.11.1); `Transformer.Builder.setVideoMimeType(AVC or HEVC)`, `setAudioMimeType(AAC)` unless audio is copied; `DefaultEncoderFactory` with `VideoEncoderSettings(bitrate = videoBps, VBR)` and `AudioEncoderSettings(bitrate)`. If the encoder fails to start or produces no output in VBR, the same attempt runs once in CBR (Compressor's MediaTek finding inverted, R§6.4). Output `cacheDir/jobs/<id>/attempt-<n>.mp4`. |
+| Size | `TransformerRunner` | `EditedMediaItem` with `Presentation.createForHeight(h)` when downscaling and `FrameDropEffect` when lowering fps (**spike S5** confirms the class in 1.11.1); `Transformer.Builder.setVideoMimeType(AVC or HEVC)`, `setAudioMimeType(AAC)` unless audio is copied; `DefaultEncoderFactory` with `VideoEncoderSettings(bitrate = videoBps, VBR)` and `AudioEncoderSettings(bitrate)`. CBR first (the default since 2026-11-02, after the phone check). If the encoder fails to start or produces no output in CBR, the same attempt runs once in VBR (Compressor's MediaTek finding inverted, R§6.4). Output `cacheDir/jobs/<id>/attempt-<n>.mp4`. |
 | Quality | `TransformerRunner` | Same, bitrate from the rung (High: Media3's default heuristic; Medium 0.10 bpp at ≤1080p30; Small 0.07 bpp at ≤720p30). |
 | Clip, copy | `CopyRunner` | All video and audio tracks into `MediaMuxer` (MP4, or WebM for VP8/VP9 sources); `setOrientationHint(rotation)`; `seekTo(keyframeUs, SEEK_TO_PREVIOUS_SYNC)`; write samples with `pts − keyframeUs` until each track passes `endUs`. |
 | Clip, exact | `TransformerRunner` | `ClippingConfiguration(start, end)`, `experimentalSetTrimOptimizationEnabled(true)`, bitrate = source video bitrate; result reports whether the optimisation applied. |

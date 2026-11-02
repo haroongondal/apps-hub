@@ -43,9 +43,9 @@ class DesignMediaModule : Module() {
       EncoderStatsStore(AtomicFile(File(context.filesDir, "encoder-stats.json"))).all()
     }
 
-    AsyncFunction("enqueue") { jobsJson: String, cbrFirst: Boolean ->
+    AsyncFunction("enqueue") { jobsJson: String, cbrOnly: Boolean ->
       val ids = decodeJobs(jobsJson).map { it.id }
-      MediaJobService.enqueue(context, jobsJson, cbrFirst)
+      MediaJobService.enqueue(context, jobsJson, cbrOnly)
       ids
     }
 

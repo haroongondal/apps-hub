@@ -93,7 +93,7 @@ export default function MediaLab() {
     });
   }
 
-  function startJobs(label: string, count: number, cbrFirst: boolean) {
+  function startJobs(label: string, count: number, cbrOnly: boolean) {
     if (!info) {
       setError('Pick a file first.');
       return;
@@ -121,8 +121,8 @@ export default function MediaLab() {
         attempt: 1,
         outputs: [],
       }));
-      await DesignMedia.enqueue(JSON.stringify(jobs), cbrFirst);
-      log(`${label}: queued ${count} × ${info.name} with ${encoder}${cbrFirst ? ', CBR first' : ''}`);
+      await DesignMedia.enqueue(JSON.stringify(jobs), cbrOnly);
+      log(`${label}: queued ${count} × ${info.name} with ${encoder}${cbrOnly ? ', CBR only' : ''}`);
     });
   }
 
