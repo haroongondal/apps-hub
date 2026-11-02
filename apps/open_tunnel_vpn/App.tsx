@@ -6,7 +6,7 @@
  * snapshot or a native event.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { PermissionsAndroid, Platform, View } from 'react-native';
+import { Linking, PermissionsAndroid, Platform, View } from 'react-native';
 import { Header, Screen, TabBar, ThemeProvider } from '@apps-hub/ui';
 
 import { LatencyProber, VpnGateService, type VpnNode } from 'open-tunnel-core';
@@ -39,6 +39,8 @@ const TABS = [
   { key: 'firewall', label: 'Firewall' },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
+// The firewall notification opens this link (FirewallService.FIREWALL_LINK).
+const FIREWALL_LINK = 'opentunnel://firewall';
 
 export default function App() {
   return (
@@ -90,6 +92,16 @@ function OpenTunnelApp() {
       handle.remove();
     };
   }, [client]);
+
+  useEffect(() => {
+    if (!FIREWALL_TAB) return;
+    const open = (url: string | null) => {
+      if (url === FIREWALL_LINK) setTab('firewall');
+    };
+    void Linking.getInitialURL().then(open);
+    const subscription = Linking.addEventListener('url', ({ url }) => open(url));
+    return () => subscription.remove();
+  }, []);
 
   const refreshList = useCallback(async (opened: AppDatabase): Promise<readonly VpnNode[] | null> => {
     setRefreshing(true);
