@@ -78,11 +78,13 @@ class MediaJobService : Service() {
   }
 
   override fun onTimeout(startId: Int, fgsType: Int) {
+    // Leave the foreground state before returning, or Android kills the app (ForegroundServiceDidNotStopInTimeException).
+    stopForeground(STOP_FOREGROUND_REMOVE)
+    stopSelf()
     handler.post {
       current?.let { abort(it) }
       record(QueueEvent.Pause)
     }
-    stopSelf()
   }
 
   override fun onDestroy() {
