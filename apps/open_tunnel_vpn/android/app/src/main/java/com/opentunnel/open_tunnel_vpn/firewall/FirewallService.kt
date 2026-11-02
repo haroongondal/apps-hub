@@ -44,7 +44,7 @@ class FirewallService : VpnService() {
   override fun onCreate() {
     super.onCreate()
     store = FirewallStore(this)
-    engine = FirewallEngine(this, store)
+    engine = FirewallEngine(this, store, ::systemDns)
     ensureChannel()
   }
 
@@ -156,7 +156,8 @@ class FirewallService : VpnService() {
 
   /**
    * The DNS servers of a network that is not a VPN, comma separated. While another VPN is up the active
-   * network is that VPN's, whose DNS would loop; then the first validated non-VPN network is used.
+   * network is that VPN's, whose DNS would loop; then the non-VPN network on the VPN's transport is used, or
+   * else the first validated one.
    */
   @Suppress("DEPRECATION")
   private fun systemDns(): String {
@@ -166,7 +167,16 @@ class FirewallService : VpnService() {
       caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN) &&
         caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
-    val chosen = plain.firstOrNull { it == manager.activeNetwork }
+    val active = manager.activeNetwork
+    // With this tun up the active network is the tun; a VPN's capabilities carry the transport of the network
+    // under it, so mobile data kept up in the background is not taken for the Wi-Fi in use.
+    val activeCaps = active?.let { manager.getNetworkCapabilities(it) }
+    val chosen = plain.firstOrNull { it == active }
+      ?: plain.firstOrNull { network ->
+        UNDERLYING_TRANSPORTS.any {
+          activeCaps?.hasTransport(it) == true && manager.getNetworkCapabilities(network)?.hasTransport(it) == true
+        }
+      }
       ?: plain.firstOrNull { manager.getNetworkCapabilities(it)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true }
       ?: plain.firstOrNull()
       ?: return ""
@@ -272,6 +282,11 @@ class FirewallService : VpnService() {
     private const val NOTIFICATION_ID = 2
     private const val SESSION_NAME = "TunnelWall firewall"
     private const val FIREWALL_LINK = "opentunnel://firewall"
+    private val UNDERLYING_TRANSPORTS = listOf(
+      NetworkCapabilities.TRANSPORT_WIFI,
+      NetworkCapabilities.TRANSPORT_CELLULAR,
+      NetworkCapabilities.TRANSPORT_ETHERNET,
+    )
 
     @Volatile
     private var lanNoticeLogged = false

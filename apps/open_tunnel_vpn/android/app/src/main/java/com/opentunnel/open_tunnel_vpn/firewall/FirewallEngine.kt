@@ -1,8 +1,10 @@
 package com.opentunnel.open_tunnel_vpn.firewall
 
 import android.net.ConnectivityManager
+import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -38,7 +40,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 @RequiresApi(Build.VERSION_CODES.Q)
-class FirewallEngine(private val service: VpnService, private val store: FirewallStore) {
+class FirewallEngine(
+  private val service: VpnService,
+  private val store: FirewallStore,
+  private val readSystemDns: () -> String,
+) {
 
   private val connectivity = service.getSystemService(ConnectivityManager::class.java)
 
@@ -47,6 +53,7 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
   @Volatile private var rules: Map<Int, FirewallRule> = emptyMap()
   @Volatile private var onCellular = false
   @Volatile private var dnsPortNoticeLogged = false
+  @Volatile private var upstreamDns = ""
   private var lastRetentionMs = 0L
 
   private val nextConnId = AtomicLong()
@@ -61,11 +68,20 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
 
   private val networkWatcher = object : ConnectivityManager.NetworkCallback() {
     override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+      // The tun's capabilities follow the network under it, so a change here can mean other DNS servers.
+      refreshDns()
       val cellular = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
       if (cellular == onCellular) return
       onCellular = cellular
       closeBlocked(null)
     }
+  }
+
+  // This process's default network is the firewall's own tun, so upstream DNS follows the non-VPN networks.
+  private val dnsWatcher = object : ConnectivityManager.NetworkCallback() {
+    override fun onAvailable(network: Network) = refreshDns()
+    override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) = refreshDns()
+    override fun onLost(network: Network) = refreshDns()
   }
 
   fun start(tunFd: ParcelFileDescriptor, systemDns: String): Boolean {
@@ -94,6 +110,14 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
       )
       tunnel = connected
       if (systemDns.isNotEmpty()) Intra.setSystemDNS(connected, systemDns)
+      upstreamDns = systemDns
+      connectivity.registerNetworkCallback(
+        NetworkRequest.Builder()
+          .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+          .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+          .build(),
+        dnsWatcher,
+      )
       Log.i(TAG, "firestack connected with ${rules.size} rules, system dns [$systemDns]")
       true
     } catch (failure: Exception) {
@@ -112,6 +136,7 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
   fun stop() {
     val wasRunning = tunnel != null
     runCatching { connectivity.unregisterNetworkCallback(networkWatcher) }
+    runCatching { connectivity.unregisterNetworkCallback(dnsWatcher) }
     runCatching { tunnel?.disconnect() }
     tunnel = null
     // Flows still open at stop get an entry with no byte counts rather than vanishing from the log.
@@ -136,6 +161,20 @@ class FirewallEngine(private val service: VpnService, private val store: Firewal
     val changed = (before.keys + after.keys).filter { ruleOf(before, it) != ruleOf(after, it) }.toSet()
     closeBlocked(changed)
     Log.i(TAG, "reloaded ${after.size} rules, ${changed.size} changed")
+  }
+
+  /** A new Wi-Fi, mobile data, or new DNS on the same network: the tun stays up, only the upstream changes. */
+  private fun refreshDns() {
+    val running = tunnel ?: return
+    try {
+      val servers = readSystemDns()
+      if (servers.isEmpty() || servers == upstreamDns) return
+      Intra.setSystemDNS(running, servers)
+      upstreamDns = servers
+      Log.i(TAG, "system dns now [$servers]")
+    } catch (failure: Exception) {
+      Log.e(TAG, "could not update the system dns: ${failure.message}")
+    }
   }
 
   private fun closeBlocked(uids: Set<Int>?) {
