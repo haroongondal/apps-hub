@@ -312,6 +312,10 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
   extraction) must start after that branch is merged, and Phase 3 must extract the multi-page
   editor. Use `design-media-phase-<n>` branch names to avoid the clash.
 - **Owner answers recorded** (S0, 2026-10-31; see "Decisions made").
+- **Draft PR #8 is open into `main` (2026-11-02).** Phone testing is stopped for now. Still open, in order:
+  (a) the owner's encoder-order decision; (b) a release go for the `onTimeout` fix, which needs a diagnostic
+  build for the queue-loss question as well; (c) the B0 hand check, which is its own session on
+  `design-editor-phase-2`; (d) the owner's go to merge PR #8 (a merge releases Design Editor).
 - **Current (2026-11-02):** the phone check ran over adb (see "Phone check 2026-11-02"). Owner gates, in order:
   (1) unlock the phone (it is locked behind a PIN and the lab queue can't be read until then); (2) decide the default encoder
   order (S4 favours CBR first); (3) release go for a new build with the onTimeout fix (1.0.0 code 3), so S8 can be re-tested
