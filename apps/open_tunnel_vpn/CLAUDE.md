@@ -9,7 +9,7 @@ The engineering rules, VPN Gate CSV contract and scoring formula are in the impo
 ## Commands
 
 ```bash
-pnpm --filter open_tunnel_vpn test        # node --test, six files listed in package.json
+pnpm --filter open_tunnel_vpn test        # node --test, seven files listed in package.json
 pnpm --filter open_tunnel_vpn typecheck
 cd apps/open_tunnel_vpn/android && ./gradlew :open-tunnel-native:testDebugUnitTest :app:assembleDebug   # needs JAVA_HOME
 ```

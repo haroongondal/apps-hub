@@ -48,7 +48,101 @@ export interface VpnTrafficPayload {
   connectedDurationSec: number;
 }
 
-export interface OpenTunnelNativeApi {
+export type FirewallRuleKind = 'allow' | 'block_on_mobile' | 'block_always';
+
+export type FirewallVerdict = 'allowed' | 'blocked';
+
+export interface FirewallStatus {
+  /** The user's switch. */
+  enabled: boolean;
+  /** The firewall process is up and filtering. */
+  running: boolean;
+  /** Stopped by the user's Pause; the notification stays with Resume. */
+  paused: boolean;
+  /** The Usage access grant that data use needs. */
+  usageAccess: boolean;
+}
+
+export interface AppRule {
+  uid: number;
+  pkg: string;
+  label: string;
+  rule: FirewallRuleKind;
+}
+
+export interface ActivityEntry {
+  timestampMs: number;
+  uid: number;
+  /** Package name, or `Unknown app` when the owner could not be resolved. */
+  pkg: string;
+  proto: string;
+  dst: string;
+  dstPort: number;
+  domain: string | null;
+  bytesOut: number;
+  bytesIn: number;
+  verdict: FirewallVerdict;
+}
+
+export interface DataUseRow {
+  uid: number;
+  wifiBytes: number;
+  cellBytes: number;
+}
+
+export interface ActivityFilter {
+  uid?: number;
+  blockedOnly: boolean;
+  /** Newest first; defaults to 1000, at most 10000. */
+  limit?: number;
+}
+
+export interface FirewallApi {
+  getFirewallStatus(): Promise<FirewallStatus>;
+  setFirewallEnabled(on: boolean): Promise<void>;
+  setPaused(paused: boolean): Promise<void>;
+  getAppRules(): Promise<AppRule[]>;
+  setAppRule(uid: number, rule: FirewallRuleKind): Promise<void>;
+  getActivityLog(filter: ActivityFilter): Promise<ActivityEntry[]>;
+  clearActivityLog(): Promise<void>;
+  getDataUse(): Promise<DataUseRow[]>;
+  openUsageAccessSettings(): Promise<void>;
+}
+
+/** Rows as Kotlin sends them: enum names, unmapped (`FirewallRule`, `Verdict`). */
+export interface NativeAppRule {
+  uid: number;
+  pkg: string;
+  label: string;
+  rule: string;
+}
+
+export interface NativeLogRow {
+  timestampMs: number;
+  uid: number;
+  pkg: string;
+  proto: string;
+  dst: string;
+  dstPort: number;
+  domain: string | null;
+  bytesOut: number;
+  bytesIn: number;
+  verdict: string;
+}
+
+export interface FirewallNativeApi {
+  getFirewallStatus(): Promise<FirewallStatus>;
+  setFirewallEnabled(on: boolean): Promise<null>;
+  setPaused(paused: boolean): Promise<null>;
+  getAppRules(): Promise<NativeAppRule[]>;
+  setAppRule(uid: number, rule: string): Promise<null>;
+  getActivityLog(uid: number | null, blockedOnly: boolean, limit: number): Promise<NativeLogRow[]>;
+  clearActivityLog(): Promise<null>;
+  getDataUse(): Promise<DataUseRow[]>;
+  openUsageAccessSettings(): Promise<null>;
+}
+
+export interface OpenTunnelNativeApi extends FirewallNativeApi {
   startTunnel(config: VpnTunnelConfig): Promise<null>;
   stopTunnel(): Promise<null>;
   getState(): Promise<VpnStatusState>;
@@ -75,6 +169,8 @@ export const OPEN_TUNNEL_ERROR_CODES = {
   ENGINE_UNAVAILABLE: 'ERR_ENGINE_UNAVAILABLE',
   SERVICE_START_FAILED: 'ERR_SERVICE_START_FAILED',
   PROBE_FAILED: 'ERR_PROBE_FAILED',
+  FIREWALL_NOT_SUPPORTED: 'ERR_FIREWALL_NOT_SUPPORTED',
+  FIREWALL_FAILED: 'ERR_FIREWALL_FAILED',
 } as const;
 
 export type OpenTunnelErrorCode =

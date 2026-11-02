@@ -19,6 +19,7 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import com.opentunnel.open_tunnel_vpn.MainActivity
 import com.opentunnel.open_tunnel_vpn.R
+import expo.modules.opentunnelnative.firewall.FirewallContract
 import expo.modules.opentunnelnative.firewall.FirewallStartPolicy
 import expo.modules.opentunnelnative.firewall.FirewallStore
 import java.net.InetAddress
@@ -243,17 +244,17 @@ class FirewallService : VpnService() {
     /** A start the user did not ask for in the UI: no action, or the system's VpnService action. */
     fun isImplicitStart(action: String?): Boolean = action == null || action == VpnService.SERVICE_INTERFACE
 
-    const val ACTION_START = "com.opentunnel.open_tunnel_vpn.firewall.START"
-    const val ACTION_STOP = "com.opentunnel.open_tunnel_vpn.firewall.STOP"
-    const val ACTION_PAUSE = "com.opentunnel.open_tunnel_vpn.firewall.PAUSE"
-    const val ACTION_RESUME = "com.opentunnel.open_tunnel_vpn.firewall.RESUME"
-    const val ACTION_RELOAD = "com.opentunnel.open_tunnel_vpn.firewall.RELOAD"
+    const val ACTION_START = FirewallContract.ACTION_START
+    const val ACTION_STOP = FirewallContract.ACTION_STOP
+    const val ACTION_PAUSE = FirewallContract.ACTION_PAUSE
+    const val ACTION_RESUME = FirewallContract.ACTION_RESUME
+    const val ACTION_RELOAD = FirewallContract.ACTION_RELOAD
 
     /** `firewall_state` keys the UI process and the controller read. */
-    const val STATE_RUNNING = "running"
-    const val STATE_PAUSED = "paused"
-    const val STATE_ENABLED = "enabled"
-    const val STATE_LAST_START_ACTION = "last_start_action"
+    const val STATE_RUNNING = FirewallContract.STATE_RUNNING
+    const val STATE_PAUSED = FirewallContract.STATE_PAUSED
+    const val STATE_ENABLED = FirewallContract.STATE_ENABLED
+    const val STATE_LAST_START_ACTION = FirewallContract.STATE_LAST_START_ACTION
 
     private const val TAG = "FirewallService"
     private const val CHANNEL_ID = "firewall"

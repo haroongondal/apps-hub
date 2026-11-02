@@ -18,6 +18,17 @@ import {
   OPEN_TUNNEL_ERROR_CODES,
   OPEN_TUNNEL_MODULE_NAME,
   OpenTunnelError,
+  type ActivityEntry,
+  type ActivityFilter,
+  type AppRule,
+  type DataUseRow,
+  type FirewallApi,
+  type FirewallNativeApi,
+  type FirewallRuleKind,
+  type FirewallStatus,
+  type FirewallVerdict,
+  type NativeAppRule,
+  type NativeLogRow,
   type OpenTunnelNativeApi,
   type VpnProtocol,
   type VpnStatusPayload,
@@ -32,6 +43,17 @@ export {
   OpenTunnelError,
 } from './OpenTunnelNativeModule.ts';
 export type {
+  ActivityEntry,
+  ActivityFilter,
+  AppRule,
+  DataUseRow,
+  FirewallApi,
+  FirewallNativeApi,
+  FirewallRuleKind,
+  FirewallStatus,
+  FirewallVerdict,
+  NativeAppRule,
+  NativeLogRow,
   OpenTunnelErrorCode,
   OpenTunnelNativeApi,
   VpnProtocol,
@@ -349,4 +371,122 @@ export function createOpenTunnelBinding(options?: BindingOptions): OpenTunnelBin
       return { remove: () => subscription.remove() };
     },
   };
+}
+
+const RULE_WIRE: Record<FirewallRuleKind, string> = {
+  allow: 'ALLOW',
+  block_on_mobile: 'BLOCK_ON_MOBILE',
+  block_always: 'BLOCK_ALWAYS',
+};
+
+const VERDICT_FROM_WIRE: Record<string, FirewallVerdict> = {
+  ALLOW: 'allowed',
+  BLOCK: 'blocked',
+};
+
+export const UNKNOWN_APP_LABEL = 'Unknown app';
+export const DEFAULT_ACTIVITY_LIMIT = 1000;
+export const MAX_ACTIVITY_LIMIT = 10_000;
+
+/** The one place a TS rule kind becomes the Kotlin `FirewallRule` name. */
+export function ruleToWire(kind: FirewallRuleKind): string {
+  const wire = RULE_WIRE[kind];
+  if (wire === undefined) {
+    throw new OpenTunnelError(OPEN_TUNNEL_ERROR_CODES.INVALID_PARAMS, `unknown firewall rule ${String(kind)}`);
+  }
+  return wire;
+}
+
+export function ruleFromWire(wire: string): FirewallRuleKind {
+  const kind = (Object.keys(RULE_WIRE) as FirewallRuleKind[]).find((key) => RULE_WIRE[key] === wire);
+  if (kind === undefined) {
+    throw new OpenTunnelError(OPEN_TUNNEL_ERROR_CODES.FIREWALL_FAILED, `unknown firewall rule ${wire} from the native module`);
+  }
+  return kind;
+}
+
+/** A row is `blocked` only when Kotlin says BLOCK; an unknown verdict is an error, never a guess. */
+export function verdictFromWire(wire: string): FirewallVerdict {
+  const verdict = VERDICT_FROM_WIRE[wire];
+  if (verdict === undefined) {
+    throw new OpenTunnelError(OPEN_TUNNEL_ERROR_CODES.FIREWALL_FAILED, `unknown verdict ${wire} from the native module`);
+  }
+  return verdict;
+}
+
+function toActivityEntry(row: NativeLogRow): ActivityEntry {
+  // The log stores the machine string for a UID it could not resolve; the UI shows the label.
+  const unresolved = row.uid < 0 || row.pkg === 'unknown';
+  return { ...row, pkg: unresolved ? UNKNOWN_APP_LABEL : row.pkg, verdict: verdictFromWire(row.verdict) };
+}
+
+function invalidParams(message: string): OpenTunnelError {
+  return new OpenTunnelError(OPEN_TUNNEL_ERROR_CODES.INVALID_PARAMS, message);
+}
+
+export function bindFirewall(native: FirewallNativeApi): FirewallApi {
+  return {
+    getFirewallStatus: () => native.getFirewallStatus(),
+    async setFirewallEnabled(on): Promise<void> {
+      await native.setFirewallEnabled(on);
+    },
+    async setPaused(paused): Promise<void> {
+      await native.setPaused(paused);
+    },
+    async getAppRules() {
+      const rows = await native.getAppRules();
+      return rows.map((row) => ({ ...row, rule: ruleFromWire(row.rule) }));
+    },
+    async setAppRule(uid, rule): Promise<void> {
+      if (!Number.isSafeInteger(uid) || uid < 0) throw invalidParams('uid must be a non-negative integer');
+      await native.setAppRule(uid, ruleToWire(rule));
+    },
+    async getActivityLog(filter) {
+      const limit = filter.limit ?? DEFAULT_ACTIVITY_LIMIT;
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_ACTIVITY_LIMIT) {
+        throw invalidParams(`limit must be 1..${MAX_ACTIVITY_LIMIT}`);
+      }
+      const rows = await native.getActivityLog(filter.uid ?? null, filter.blockedOnly, limit);
+      return rows.map(toActivityEntry);
+    },
+    async clearActivityLog(): Promise<void> {
+      await native.clearActivityLog();
+    },
+    getDataUse: () => native.getDataUse(),
+    async openUsageAccessSettings(): Promise<void> {
+      await native.openUsageAccessSettings();
+    },
+  };
+}
+
+function unsupportedFirewall(platform: RuntimePlatform): FirewallApi {
+  const unsupported = () =>
+    new OpenTunnelError(
+      OPEN_TUNNEL_ERROR_CODES.FIREWALL_NOT_SUPPORTED,
+      platform === 'ios'
+        ? "The firewall isn't available on iOS."
+        : "The firewall isn't available in this runtime.",
+    );
+  const reject = async (): Promise<never> => {
+    throw unsupported();
+  };
+  return {
+    getFirewallStatus: reject,
+    setFirewallEnabled: reject,
+    setPaused: reject,
+    getAppRules: reject,
+    setAppRule: reject,
+    getActivityLog: reject,
+    clearActivityLog: reject,
+    getDataUse: reject,
+    openUsageAccessSettings: reject,
+  };
+}
+
+/** The firewall seam the Firewall screen consumes; typed `FIREWALL_NOT_SUPPORTED` where there is no firewall. */
+export function createFirewallBinding(options?: BindingOptions): FirewallApi {
+  const platform = options?.platform ?? runtimePlatform();
+  if (platform !== 'android') return unsupportedFirewall(platform);
+  const native = resolveNativeModule(platform);
+  return native == null ? unsupportedFirewall(platform) : bindFirewall(native);
 }

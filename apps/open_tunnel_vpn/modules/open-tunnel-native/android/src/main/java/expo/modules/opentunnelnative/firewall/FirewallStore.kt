@@ -88,15 +88,15 @@ class FirewallStore(context: Context) {
     }
   }
 
-  /** Newest first. */
-  fun log(filter: LogFilter): List<LogEntry> {
+  /** Newest first, at most [limit] rows: the table holds up to 100,000. */
+  fun log(filter: LogFilter, limit: Int): List<LogEntry> {
     val where = ArrayList<String>()
     val args = ArrayList<String>()
     filter.uid?.let { where += "uid = ?"; args += it.toString() }
     if (filter.blockedOnly) { where += "verdict = ?"; args += Verdict.BLOCK.name }
     val clause = if (where.isEmpty()) "" else " WHERE " + where.joinToString(" AND ")
     val sql = "SELECT ts, uid, pkg, proto, dst, dst_port, domain, bytes_out, bytes_in, verdict " +
-      "FROM log$clause ORDER BY ts DESC, id DESC"
+      "FROM log$clause ORDER BY ts DESC, id DESC LIMIT $limit"
     return db.rawQuery(sql, args.toTypedArray()).use { c ->
       buildList {
         while (c.moveToNext()) {
