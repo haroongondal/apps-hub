@@ -12,4 +12,7 @@ export * from './audio.ts';
 export * from './gif.ts';
 export * from './convert.ts';
 export * from './frame.ts';
+export * from './volume.ts';
+export * from './reverse.ts';
+export * from './stabilize.ts';
 export * from './quality.ts';

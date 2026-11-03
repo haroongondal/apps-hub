@@ -23,6 +23,9 @@
     <button data-tool="gif">Make a GIF</button>
     <button data-tool="convert">Convert</button>
     <button data-tool="frame">Still frame</button>
+    <button data-tool="volume">Volume</button>
+    <button data-tool="reverse">Reverse</button>
+    <button data-tool="stabilize">Stabilize</button>
   </nav>
   <section class="setup">
     <div class="row">
@@ -107,6 +110,28 @@
           <select id="frameFormat">
             <option value="png">PNG (lossless)</option>
             <option value="jpg">JPEG</option>
+          </select>
+        </label>
+      </section>
+      <section data-tool="volume" hidden>
+        <label class="ui-field">Change
+          <select id="volumeMode">
+            <option value="normalize">Normalize loudness to -23 LUFS</option>
+            <option value="gain">Change the volume by dB</option>
+          </select>
+        </label>
+        <label class="ui-field" id="volumeGainField" hidden>Change in dB (-20 to +20)<input id="volumeGain" class="ui-input" type="number" min="-20" max="20" step="0.5" value="0"></label>
+      </section>
+      <section data-tool="reverse" hidden>
+        <label class="ui-field"><input id="reverseSound" type="checkbox" checked> Reverse the sound too</label>
+        <p class="ui-meta">Clips up to 10 seconds, at 1920×1080 or below. Clip a longer file first.</p>
+      </section>
+      <section data-tool="stabilize" hidden>
+        <label class="ui-field">Level
+          <select id="stabilizeLevel">
+            <option value="recommended">Recommended</option>
+            <option value="minimum">Minimum cut</option>
+            <option value="most">Most stable</option>
           </select>
         </label>
       </section>

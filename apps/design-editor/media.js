@@ -6,8 +6,8 @@ import fs from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import path from 'node:path';
 import {
-  DESTINATIONS, ffmpegArgs, ffprobeArgs, fromFfprobe, keyframeArgs, nextGifAttempt, nextRunnable, nextSizeAttempt, outputName,
-  parseKeyframe, parseProgress, planAudio, planClip, planConvert, planFrame, planGif, planQuality, planSize, reduce, thumbArgs, validateSpec,
+  DESTINATIONS, ffmpegArgs, ffprobeArgs, fromFfprobe, keyframeArgs, loudnormMeasureArgs, nextGifAttempt, nextRunnable, nextSizeAttempt, outputName,
+  parseKeyframe, parseLoudnorm, parseProgress, planAudio, planClip, planConvert, planFrame, planGif, planQuality, planReverse, planSize, planStabilize, planVolume, reduce, thumbArgs, validateSpec,
 } from './vendor/media-core/index.ts';
 
 // Electron cannot run a binary inside app.asar; the packager unpacks vendor/ffmpeg beside it.
@@ -15,7 +15,7 @@ const BIN = path.join(import.meta.dirname, 'vendor/ffmpeg').replace('app.asar', 
 const FFMPEG = path.join(BIN, 'ffmpeg');
 const FFPROBE = path.join(BIN, 'ffprobe');
 const INPUT_EXTENSIONS = ['mp4', 'm4v', 'mov', 'mkv', 'webm', 'mp3', 'm4a', 'aac', 'ogg', 'opus', 'wav', 'flac', 'ac3', 'eac3', 'mka'];
-const LABELS = { size: 'compressed', quality: 'compressed', clip: 'clip', convert: 'converted', frame: 'frame' };
+const LABELS = { size: 'compressed', quality: 'compressed', clip: 'clip', convert: 'converted', frame: 'frame', volume: 'volume', reverse: 'reversed', stabilize: 'stabilized' };
 const STATS_PATH = () => path.join(app.getPath('userData'), 'media-stats.json');
 
 // The renderer only ever sends ids; the paths stay here (PRD AC-11).
@@ -130,6 +130,9 @@ async function planFor(spec) {
     case 'gif': return planGif(input.info, spec);
     case 'convert': return planConvert(input.info, spec.target, { videoCodec: spec.videoCodec, muted: spec.muted === true });
     case 'frame': return planFrame(input.info, spec.timeS, spec.format);
+    case 'volume': return planVolume(input.info, spec.mode, spec.gainDb);
+    case 'reverse': return planReverse(input.info, spec.sound);
+    case 'stabilize': return planStabilize(input.info, spec.level);
     default: return { ok: false, reason: 'invalid', detail: "This job type isn't supported yet." };
   }
 }
@@ -171,6 +174,7 @@ async function runJob(job) {
   try {
     await fs.mkdir(tmp, { recursive: true });
     let plan = job.plan;
+    if (plan.tool === 'volume' && plan.mode === 'normalize') plan = { ...plan, measured: await measureLoudness(input.path) };
     for (let attempt = 1; ; attempt++) {
       const out = path.join(tmp, `attempt-${attempt}.${extOf(plan)}`);
       await encode(job.id, plan, input, out, tmp);
@@ -310,7 +314,7 @@ function labelFor(plan, info) {
 }
 
 function extOf(plan) {
-  return { size: 'mp4', quality: 'mp4', clip: plan.ext, audio: plan.ext, gif: 'gif', convert: plan.ext, frame: plan.ext }[plan.tool];
+  return { size: 'mp4', quality: 'mp4', clip: plan.ext, audio: plan.ext, gif: 'gif', convert: plan.ext, frame: plan.ext, volume: plan.ext, reverse: 'mp4', stabilize: 'mp4' }[plan.tool];
 }
 
 function refusalText(r) {
@@ -355,6 +359,17 @@ async function showOpen(options) {
 function showMessageSync(options) {
   const win = BrowserWindow.getFocusedWindow();
   return win ? dialog.showMessageBoxSync(win, options) : dialog.showMessageBoxSync(options);
+}
+
+// loudnorm's first pass prints its measurements to stderr, so this reads stderr.
+function measureLoudness(file) {
+  return new Promise((resolve, reject) => {
+    execFile(FFMPEG, loudnormMeasureArgs(file), { encoding: 'utf8', maxBuffer: 64 << 20 }, (err, _stdout, stderr) => {
+      const measured = err ? undefined : parseLoudnorm(stderr);
+      if (measured) resolve(measured);
+      else reject(new Error("Couldn't measure this file's loudness."));
+    });
+  });
 }
 
 function execText(file, args, label) {

@@ -22,11 +22,11 @@ Dated 2026-11-03, session B2.1. Written for: the owner and the next build sessio
 | 4 | GIF export | Share a short loop | Yes | No | No | No | Covered: Make a GIF. CapCut's own GIF option was not verified |
 | 5 | Remove sound (mute) | Post a silent clip, or drop a noisy track | Yes | No | No | No | **Added in this session** (Convert > Without sound) |
 | 6 | Still frame or screenshot | Save one frame as an image for a thumbnail | Yes | No | No | No (animated images are out, still images are not) | **Added in this session** (Still frame, PNG or JPEG) |
-| 7 | Volume change and loudness normalisation | Even out quiet and loud clips | Yes | No | No (the `volume` and `loudnorm` filters ship with FFmpeg) | Arguably "filters", which §8 excludes | Not added. Owner decision (see below) |
-| 8 | Reverse playback | Play a clip backwards | Yes | No | No | Arguably "filters" or "speed changes" | Not added. Needs a memory cap, and a scope decision |
+| 7 | Volume change and loudness normalisation | Even out quiet and loud clips | Yes | No | No (the `volume` and `loudnorm` filters ship with FFmpeg) | Arguably "filters", which §8 excludes | Built in B2.2 after the owner's yes: Volume, normalize to -23 LUFS or a gain in dB |
+| 8 | Reverse playback | Play a clip backwards | Yes | No | No | Arguably "filters" or "speed changes" | Built in B2.2 after the owner's yes: Reverse, clips up to 10 s at 1920×1080 |
 | 9 | Crop, rotate, flip | Reframe for a different shape | Yes | No | No | Yes ("crop") | Out of scope |
 | 10 | Speed change and speed ramp | Slow or fast motion | Yes | No | No | Yes ("speed changes") | Out of scope |
-| 11 | Stabilisation | Steady shaky footage | Yes | Some builds use AI | Yes. The pinned build has no libvidstab | No | Not added. A new binary is a new dependency, which needs the owner's yes |
+| 11 | Stabilisation | Steady shaky footage | Yes | Some builds use AI | Yes. The pinned build has no libvidstab | No | Built in B2.2 after the owner's yes, with FFmpeg's built-in deshake, so no new binary |
 | 12 | Noise reduction, background removal, auto captions, AI upscaling, AI voice | Clean up or generate content | No (cloud or model) | Yes | Yes | No | Rejected: needs a cloud or AI model |
 | 13 | Subtitles and captions (typed or imported) | On-screen text | Yes | No | No | Yes ("subtitles") | Out of scope |
 | 14 | Merge clips | Join several clips | Yes | No | No | Yes ("merging"); PRD later idea 4 | Out of scope for v1 |
@@ -37,15 +37,16 @@ Rows 1–4 are covered already. Rows 5 and 6 are the top two gaps that fit, and 
 
 ## Ranking of the gaps by fit for the Mac media tools
 
-1. **Remove sound (row 5).** Offline, FFmpeg args only, inside PRD scope. Done.
-2. **Still frame (row 6).** Offline, FFmpeg args only, inside PRD scope. Done.
-3. **Loudness normalisation (row 7).** Fits offline and needs no new binary. It is an audio filter, so PRD §8 ("filters") is ambiguous. **Owner decision:** does a loudness fix count as a v1 filter, or is it a scope change?
-4. **Reverse playback (row 8).** The FFmpeg reverse filter keeps the whole clip in memory, so it needs a length cap. **Owner decision:** scope, plus a length cap if yes.
-5. **Stabilisation (row 11).** Needs a build of FFmpeg with libvidstab. **Owner decision:** a new binary and its licence, before any work.
+1. **Remove sound (row 5).** Built in B2.1.
+2. **Still frame (row 6).** Built in B2.1.
+3. **Volume and loudness normalization (row 7).** Built in B2.2 after the owner's yes. Two-pass `loudnorm` to -23 LUFS, which measured -23.0 LUFS in the e2e, or a gain of ±20 dB. The gain has no limiter, so a boost past full scale clips.
+4. **Reverse (row 8).** Built in B2.2 after the owner's yes. Picture and sound run backwards, sound on by default as in CapCut. Clips up to 10 s at 1920×1080. Measured peak memory at the cap: 1.05 GB.
+5. **Stabilization (row 11).** Built in B2.2 after the owner's yes, with FFmpeg's built-in `deshake`, so no new binary. Three levels named as CapCut names them; the search ranges are ours. libvidstab is stronger, but it needs a new build, which is still the owner's call.
 
-Rejected for v1: rows 12 and 16 (cloud or AI). Out of scope under PRD §8: rows 9, 10, 13, 14 and 15.
+Rejected for v1: rows 12 and 16 (cloud or AI). Out of scope under PRD §8, not touched: rows 9, 10, 13, 14 and 15.
 
 ## Open for the owner
 
-- Grant Screen Recording and Accessibility to the terminal, or export two or three clips from CapCut and share the ffprobe output. Either lets the next session do the measurements this study skipped.
-- Decide rows 7, 8 and 11 above.
+- Grant Screen Recording and Accessibility to the terminal, or share CapCut export files. This is the one part of the study still open (blocked on 2026-11-03).
+- Optional: libvidstab for stabilization. It needs a new FFmpeg build and its licence check, so it needs a yes.
+- With the screen or files available, compare the three new tools with CapCut on the same clip.

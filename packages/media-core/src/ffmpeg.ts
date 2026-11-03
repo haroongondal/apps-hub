@@ -1,4 +1,6 @@
-import type { Codec, ConvertPlan, Encoder, GifPlan, Plan, SizePlan } from './types.ts';
+import { LOUDNESS_TARGET_LUFS } from './volume.ts';
+import type { Codec, ConvertPlan, Encoder, GifPlan, Plan, ReversePlan, SizePlan, StabilizePlan, VolumePlan } from './types.ts';
+
 
 const GLOBAL = ['-hide_banner', '-nostats', '-progress', 'pipe:1', '-y'];
 // An output option: drops location and other container metadata from every output (PRD Q10).
@@ -47,7 +49,14 @@ export function ffmpegArgs(plan: Plan, input: string, output: string, pass?: { n
     case 'convert': return convertArgs(plan, input, output);
     case 'frame': return [...GLOBAL, '-ss', plan.timeS.toFixed(3), '-i', input, '-map', '0:v:0', '-frames:v', '1',
       ...(plan.format === 'jpg' ? ['-q:v', '2'] : []), '-an', ...STRIP, output];
+    case 'volume': return volumeArgs(plan, input, output);
+    case 'reverse': return reverseArgs(plan, input, output);
+    case 'stabilize': return stabilizeArgs(plan, input, output);
   }
+}
+
+export function loudnormMeasureArgs(input: string): string[] {
+  return ['-hide_banner', '-nostats', '-i', input, '-vn', '-map', '0:a:0', '-af', `loudnorm=I=${LOUDNESS_TARGET_LUFS}:LRA=11:TP=-1.5:print_format=json`, '-f', 'null', '-'];
 }
 
 export function parseProgress(chunk: string): { outTimeUs?: number; end: boolean } {
@@ -102,4 +111,32 @@ function videoConvertArgs(v: NonNullable<ConvertPlan['video']>): string[] {
   if (v.encoder === 'vp9') return ['-c:v', 'libvpx-vp9', '-crf', String(v.quality), '-b:v', '0', '-pix_fmt', 'yuv420p'];
   if (v.encoder === 'hw-hevc') return ['-c:v', 'hevc_videotoolbox', '-q:v', String(v.quality), '-tag:v', 'hvc1', '-pix_fmt', 'yuv420p'];
   return ['-c:v', 'h264_videotoolbox', '-q:v', String(v.quality), '-pix_fmt', 'yuv420p'];
+}
+
+// Pass two applies the measured loudness linearly; without a measure it falls back to loudnorm's one-pass mode, which misses on short clips.
+function loudnormGraph(measured?: VolumePlan['measured']): string {
+  const base = `loudnorm=I=${LOUDNESS_TARGET_LUFS}:LRA=11:TP=-1.5`;
+  if (!measured) return base;
+  return `${base}:measured_I=${measured.inputI}:measured_TP=${measured.inputTp}:measured_LRA=${measured.inputLra}`
+    + `:measured_thresh=${measured.inputThresh}:offset=${measured.offset}:linear=true`;
+}
+
+function volumeArgs(plan: VolumePlan, input: string, output: string): string[] {
+  const af = plan.mode === 'normalize' ? loudnormGraph(plan.measured) : `volume=${plan.gainDb}dB`;
+  const audio = ['-map', '0:a:0', '-af', af, '-c:a', 'aac', '-b:a', '192k'];
+  if (!plan.video) return [...GLOBAL, '-i', input, '-vn', ...audio, ...STRIP, output];
+  const video = plan.video === 'copy' ? ['-c:v', 'copy'] : ['-c:v', 'h264_videotoolbox', '-q:v', '65', '-pix_fmt', 'yuv420p'];
+  return [...GLOBAL, '-i', input, '-map', '0:v:0', ...video, ...audio, '-movflags', '+faststart', ...STRIP, output];
+}
+
+function reverseArgs(plan: ReversePlan, input: string, output: string): string[] {
+  const sound = plan.sound ? ['-map', '0:a:0?', '-af', 'areverse', '-c:a', 'aac', '-b:a', '192k'] : ['-an'];
+  return [...GLOBAL, '-i', input, '-map', '0:v:0', '-vf', 'reverse', '-c:v', 'h264_videotoolbox', '-q:v', String(plan.quality),
+    '-pix_fmt', 'yuv420p', ...sound, '-movflags', '+faststart', ...STRIP, output];
+}
+
+function stabilizeArgs(plan: StabilizePlan, input: string, output: string): string[] {
+  return [...GLOBAL, '-i', input, '-map', '0:v:0', '-vf', `deshake=rx=${plan.search}:ry=${plan.search}:edge=mirror`,
+    '-c:v', 'h264_videotoolbox', '-q:v', String(plan.quality), '-pix_fmt', 'yuv420p', '-map', '0:a:0?', '-c:a', 'aac', '-b:a', '192k',
+    '-movflags', '+faststart', ...STRIP, output];
 }

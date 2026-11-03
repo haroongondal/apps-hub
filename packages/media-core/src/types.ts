@@ -1,5 +1,5 @@
 export type Platform = 'mac' | 'android';
-export type Tool = 'size' | 'quality' | 'clip' | 'audio' | 'gif' | 'convert' | 'frame';
+export type Tool = 'size' | 'quality' | 'clip' | 'audio' | 'gif' | 'convert' | 'frame' | 'volume' | 'reverse' | 'stabilize';
 export type Codec = 'h264' | 'hevc' | 'vp8' | 'vp9' | 'av1' | 'mpeg4' | 'prores'
   | 'aac' | 'alac' | 'mp3' | 'opus' | 'vorbis' | 'ac3' | 'eac3' | 'flac' | 'pcm' | 'dts' | 'truehd' | 'other';
 
@@ -40,7 +40,13 @@ export type ConvertTarget = 'mp4' | 'mov' | 'mkv' | 'webm' | 'm4a' | 'mp3' | 'op
 export interface QualityPlan { tool: 'quality'; encoder: Encoder; rung: Rung; width: number; height: number; quality: number /* VT -q:v, or bpp on Android */ }
 // One frame at timeS as a PNG or JPEG still. Video only; the sound is never read.
 export interface FramePlan { tool: 'frame'; timeS: number; format: 'png' | 'jpg'; ext: 'png' | 'jpg' }
-export type Plan = SizePlan | QualityPlan | ClipPlan | AudioPlan | GifPlan | ConvertPlan | FramePlan;
+// volume: video 'copy' when the codec fits MP4, else 'hw-h264'; absent for audio only.
+export interface LoudnessMeasure { inputI: number; inputTp: number; inputLra: number; inputThresh: number; offset: number }
+export interface VolumePlan { tool: 'volume'; mode: 'normalize' | 'gain'; gainDb: number; video?: 'copy' | 'hw-h264'; ext: 'mp4' | 'm4a'; measured?: LoudnessMeasure }
+// reverse holds the whole clip in memory, so the planner caps its length and size (see reverse.ts).
+export interface ReversePlan { tool: 'reverse'; sound: boolean; quality: number; ext: 'mp4' }
+export interface StabilizePlan { tool: 'stabilize'; level: 'minimum' | 'recommended' | 'most'; search: number; quality: number; ext: 'mp4' }
+export type Plan = SizePlan | QualityPlan | ClipPlan | AudioPlan | GifPlan | ConvertPlan | FramePlan | VolumePlan | ReversePlan | StabilizePlan;
 
 export type JobState = 'queued' | 'running' | 'done' | 'failed' | 'cancelled' | 'interrupted' | 'paused';
 export interface Output { name: string; ref: string /* Mac path or Android content URI */; bytes: number; note?: string /* "converted to AAC" */ }
