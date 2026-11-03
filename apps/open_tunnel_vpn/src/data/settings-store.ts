@@ -3,7 +3,8 @@
  * sqlite database as the node cache (phase-4 plan G4). The store keeps only
  * opaque, non-sensitive choices: the kill-switch preference, the excluded
  * app-id list, and the node id (sha256 of `ip:port`) of the last start
- * attempt so a restart can label a still-connected tunnel. It never stores
+ * attempt so a restart can label a still-connected tunnel, and whether the
+ * owner has confirmed the firewall's first-enable sheet. It never stores
  * tunnel configs, keys, or credentials; the whole database dies with the
  * app and OS backups are disabled (privacy rule #5).
  */
@@ -23,17 +24,21 @@ export interface TunnelSettings {
   readonly disallowedApps: readonly string[];
   /** Node id of the last start attempt, or null before the first start. */
   readonly lastNodeId: string | null;
+  /** True once the owner confirmed the firewall's consent sheet (shown on the first enable only). */
+  readonly firewallConsented: boolean;
 }
 
 export const DEFAULT_SETTINGS: TunnelSettings = {
   killSwitchEnabled: true,
   disallowedApps: [],
   lastNodeId: null,
+  firewallConsented: false,
 };
 
 const KEY_KILL_SWITCH = 'killSwitchEnabled';
 const KEY_DISALLOWED_APPS = 'disallowedApps';
 const KEY_LAST_NODE_ID = 'lastNodeId';
+const KEY_FIREWALL_CONSENT = 'firewallConsented';
 
 export class AppSettingsStore {
   private readonly driver: SqliteDriver;
@@ -57,10 +62,12 @@ export class AppSettingsStore {
     const killSwitchEnabled = await this.readBool(KEY_KILL_SWITCH, DEFAULT_SETTINGS.killSwitchEnabled);
     const disallowedApps = await this.readStringList(KEY_DISALLOWED_APPS);
     const lastNodeId = await this.readString(KEY_LAST_NODE_ID);
+    const firewallConsented = await this.readBool(KEY_FIREWALL_CONSENT, DEFAULT_SETTINGS.firewallConsented);
     return {
       killSwitchEnabled,
       disallowedApps,
       lastNodeId: lastNodeId === '' ? null : lastNodeId,
+      firewallConsented,
     };
   }
 
@@ -84,6 +91,12 @@ export class AppSettingsStore {
   async setLastNodeId(nodeId: string | null): Promise<void> {
     await this.open();
     await this.writeValue(KEY_LAST_NODE_ID, nodeId ?? '');
+  }
+
+  /** Remembers that the owner confirmed the firewall's consent sheet; it never un-sets. */
+  async setFirewallConsented(): Promise<void> {
+    await this.open();
+    await this.writeValue(KEY_FIREWALL_CONSENT, 'true');
   }
 
   private async readValue(key: string): Promise<string | null> {

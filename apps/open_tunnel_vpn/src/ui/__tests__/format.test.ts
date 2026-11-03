@@ -49,6 +49,7 @@ test('formatBytes reads like a meter', () => {
   assert.equal(formatBytes(512), '512 B');
   assert.equal(formatBytes(2048), '2 KB');
   assert.equal(formatBytes(3 * 1024 * 1024), '3.0 MB');
+  assert.equal(formatBytes(5 * 1024 ** 3), '5.0 GB');
   assert.equal(formatBytes(-5), '0 B');
   assert.equal(formatBytes(Number.NaN), '0 B');
 });
