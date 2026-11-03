@@ -594,6 +594,12 @@ iconset → `iconutil`) and passes `--icon=build/icon.icns` to electron-packager
 - `apps/design-editor/vendor/engine` symlinks to the package; `main.js` loads
   `vendor/engine/desktop.html`. In dev the relative `../ui/...` resolves to
   `apps/design-editor/vendor/ui/...` (existing symlink); `dist` dereferences both (R§11).
+- **As built (2026-11-03, Phase 3 step 1):** the engine is the multi-page page from `main` (B0), not
+  the single-page `index.html` this section was written against. It is `desktop.html` + `app.js` +
+  `vendor/` (Fabric, pdf-lib, fontkit, bundled fonts), with no build step. Font URLs are page-relative:
+  `vendor/fonts/...` for the bundled fonts and `../ui/fonts/...` for the shared Atkinson files. The
+  stylesheet is `../ui/web/tokens.css`. `apps/design-editor/vendor/engine` is the symlink; `main.js`
+  loads `vendor/engine/desktop.html`.
 - `mobile.html`: same markup, mobile CSS (rail as a bottom strip, drawer as a bottom sheet,
   inspector as a sheet), plus `touch.js`.
 - `build.mjs`: copy of PDF Editor's, scripts `['vendor/fabric.min.js', 'vendor/pdf-lib.min.js',

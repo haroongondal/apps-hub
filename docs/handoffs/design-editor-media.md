@@ -2,21 +2,25 @@
 
 ## Resume prompt
 
-Dated 2026-11-03. Build session B3 (Media Phase 3, engine extraction and mobile canvas), once PR #16 is merged. Until then, check the owner's answers below.
+Dated 2026-11-03. Build session B3.2: Phase 3 step 2 onward (the mobile canvas), on branch `design-media-phase-3` (draft PR, base `main`). Step 1 (engine extraction) is done and committed.
 
-Read `docs/handoffs/design-editor-media.md` completely first. It lives in the worktree `.claude/worktrees/design-media-phase-2`, on branch `design-media-capcut` (PR #16, base `main`). Then read `docs/design-editor/PRD.md`, `docs/design-editor/SPEC.md`, `docs/design-editor/CAPCUT-GAPS.md` and the prelude plus your phase in `docs/design-editor/PROMPTS.md`. Trust the decisions and verified facts in the handoff and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` and "How every session runs" in `docs/build-sessions.md`. Read "Current state + exact next step" before doing anything.
+Read `docs/handoffs/design-editor-media.md` completely first. It lives in the worktree `.claude/worktrees/design-media-phase-3`, on branch `design-media-phase-3` (from `origin/main`, which includes PR #16). Then read `docs/design-editor/PRD.md`, `docs/design-editor/SPEC.md` §14 and §15, `docs/design-editor/CAPCUT-GAPS.md`, and the prelude plus Phase 3 in `docs/design-editor/PROMPTS.md`. Trust the verified facts and decisions in the handoff and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` and "How every session runs" in `docs/build-sessions.md`. Read "Current state + exact next step" before doing anything.
 
 Gates and rules:
-- The owner said to proceed without waiting for approval on routine work: commit, push and open PRs with `gh`. Never merge to `main` yourself, never force-push, and never add Claude attribution lines to commits or PR bodies. Merge only when the owner says so.
-- Don't touch the main checkout, the `clipboard`, `firewall-spike`, `tunnelwall-firewall` or `deputy-speed` worktrees, or the `design-editor-phase-2` worktree.
-- B3 starts only when PR #16 is on `main`. That needs the owner's yes to merge.
-- New npm, Gradle or CocoaPods dependencies need the owner's yes first. FFmpeg filters and encoders inside the pinned 9.0.2 binary are not new dependencies. A new FFmpeg build (libvidstab) is a new dependency.
-- The Bash shell here is zsh and may have `ELECTRON_RUN_AS_NODE` set. Strip it when running Electron, and don't use `timeout` (not installed).
+- The owner said to proceed without waiting for approval on routine work: commit, push and open or update PRs with `gh`. Never merge to `main` yourself, never force-push, and never add Claude attribution lines to commits or PR bodies. Merge only when the owner says so.
+- Don't touch the main checkout, the `clipboard`, `firewall-spike`, `tunnelwall-firewall`, `deputy-speed`, `cancel-connecting` or `strongroom-phase-1` worktrees, or the `design-editor-phase-2` worktree.
+- The mobile canvas is checked on the phone only, through the Store. Don't run `pnpm release design-editor` until the owner says so.
+- New npm, Gradle or CocoaPods dependencies need the owner's yes. FFmpeg filters and encoders in the pinned 9.0.2 binary are not new dependencies.
+- The Bash shell is zsh and may have `ELECTRON_RUN_AS_NODE` set: strip it when running Electron. `timeout` isn't installed.
+- Android APIs are checked against `/opt/homebrew/share/android-commandlinetools/platforms/android-36/android.jar` (javap) before use.
 
-Open items, in order:
-1. Owner: merge PR #16 when ready. Then start B3 on `.claude/worktrees/design-media-phase-3` from `origin/main`, on branch `design-media-phase-3`, `pnpm install` there, and follow PROMPTS.md Phase 3. Extract the multi-page editor on `main` (file format v2, page strip, bundled fonts) into `packages/design-editor-engine`, not the single-page version the SPEC describes, and update SPEC §14. The Mac e2e must stay green. The mobile canvas checks run on the phone only, through the Store.
-2. CapCut measurements, still blocked on 2026-11-03: no Screen Recording permission for this terminal (`screencapture` fails), and CapCut's accessibility tree is almost empty. Needs the owner to grant the permission, or to share CapCut export files. Until then, compare the new tools with CapCut only from public descriptions.
-3. Optional, needs a yes: libvidstab for Stabilize (a new FFmpeg build with its licence check). The current stabilizer is FFmpeg's built-in `deshake`.
+Next steps, in order:
+1. Phase 3 step 2: `mobile.html` (bottom strip, sheets), `touch.js` (pinch zoom around the midpoint, two-finger pan; check that Fabric 7 supports `touchCornerSize`, else use `cornerSize` 44 on mobile), `shell-mobile.js` (`window.native` over `postMessage` with `reqId`s, SPEC §14.3), and `build.mjs` (copy of PDF Editor's checks) writing `apps/design-editor-mobile/assets/editor/editor.html` (gitignored). Exports over 30 MB are refused with the SPEC's message.
+2. Phase 3 step 3: the Designs tab and Editor screen (WebView, native top bar, bottom toolbar), `src/editor/bridge.ts` (frozen schema), autosave file, open and save `.json` through the document picker, exports through Outputs and Share. Add the engine build as `prepare` for the `design-editor` entry in `tools/release/src/apps.ts`.
+3. Phase 3 step 4: a mobile smoke test like PDF Editor's `test/mobile.mjs` (system Chrome, fake `ReactNativeWebView`, open a template, export a PNG through the fake bridge), added to `test:e2e` only if system Chrome exists here.
+4. Phase 3 step 5: the verification commands in PROMPTS.md, with the actual output.
+
+Owner checks, not ours: the phone run of AC-13 and AC-14 through the Store, and how drag and pinch feel. Stop and report if editing is sluggish.
 
 At about 85% context, stop starting work, update the handoff and print its resume prompt in a fenced block.
 
@@ -267,6 +271,13 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
 - Custom scheme probe (throwaway Electron app, scratchpad only): a privileged `mediain` scheme that answers `Range` requests with 206 seeks to 30.00 s. Without range support the seek stays at 0, so the handler must serve byte ranges itself (`net.fetch` on `file:` returned 200 with no `content-range`).
 - CapCut UI access: `screencapture` still fails ("could not create image from display"). No CapCut export was made or measured.
 
+### Verified 2026-11-03 (session B3.1; output was read, not predicted)
+
+- `pnpm install` in `.claude/worktrees/design-media-phase-3`: 1054 packages, exit 0. A second `pnpm install` after adding the engine package: exit 0.
+- `pnpm --filter design-editor ffmpeg`: exit 0. The `ffmpeg.zip` and `ffprobe.zip` hashes matched the published `.sha256` files (`ffprobe` sha256 `fcbe8395…7ea6`, the same as before).
+- `pnpm --filter design-editor test:e2e`: exit 0, with nothing skipped. The editor suite ran (`e2e ok`). The media suite ran (HEVC 17.94 MB, GIF fit 469 kB, volume normalize -23.0 LUFS, +6 dB moved by 6.00 dB, reverse 47.1 dB vs 21.4 dB, stabilize 9.80 → 7.22, preview seek 30.00 s). Input hashes unchanged.
+- After the move: root `pnpm test` exit 0, root `pnpm typecheck` exit 0, `pnpm --filter design-editor dist` exit 0. `app.asar` contains `vendor/engine/desktop.html`, so the symlink is packed. The packaged binary's e2e was not run.
+
 ### Verified 2026-11-03 (session B2.3; output was read, not predicted)
 
 - `pnpm --filter @apps-hub/media-core test`: 70 pass, 0 fail (was 61). `pnpm typecheck` (media-core and root): exit 0. Root `pnpm test`: exit 0.
@@ -415,7 +426,8 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
 
 ## Current state + exact next step
 
-- **State (2026-11-03, session B2.3):** Volume, Reverse and Stabilize are built and tested on branch `design-media-capcut` (PR #16). They are the owner's yes to CapCut rows 7, 8 and 11 (see Decisions B2.3). The Mac e2e is green, with real measurements (below). PR #16 is still open on `main`. B3 waits for it to merge. The CapCut UI measurements are still blocked.
+- **State (2026-11-03, session B3.1, Phase 3 step 1 done):** the B2.3 work is merged (PR #16, merge commit `eddf464`). On branch `design-media-phase-3`, worktree `.claude/worktrees/design-media-phase-3` (from `origin/main`, `pnpm install` done): the editor page moved into `packages/design-editor-engine` (`desktop.html`, `app.js`, `vendor/`, `package.json`, README), with `apps/design-editor/vendor/engine` as the symlink and `main.js` loading `vendor/engine/desktop.html`. The Mac e2e passes with the pinned FFmpeg fetched (media suite runs, not skipped). Next: step 2 in the resume prompt.
+- **State (2026-11-03, session B2.3, superseded):** Volume, Reverse and Stabilize are built and tested on branch `design-media-capcut` (PR #16). They are the owner's yes to CapCut rows 7, 8 and 11 (see Decisions B2.3). The Mac e2e is green, with real measurements (below). PR #16 is still open on `main`. B3 waits for it to merge. The CapCut UI measurements are still blocked.
 
 - **State (2026-11-03, session B2, Phase 2 done, committed and pushed as PR #15):** the Mac media tools are on branch `design-media-phase-2` (commit 91d37c7, from `origin/main` 8fb7b38), PR https://github.com/haroongondal/apps-hub/pull/15 into `main`. Not merged, not released (the Mac app is not a Store app). The changed files are in `packages/media-core` (ffmpeg, probe, clip, audio, gif, convert, quality, plus validate and names changes and tests), `apps/design-editor` (`media.js`, `media.html`, `media-ui.js`, `media.css`, `scripts/fetch-ffmpeg.mjs`, `test/media.mjs`, `main.js`, `preload.cjs`, `app.js`, `index.html`, `package.json`, `.gitignore`, `build/icon.icns`) and this handoff. Verification is under "Verified 2026-11-03 (session B2)".
 - **Next step:** the owner decides. (a) Commit, push and open the PR with `gh` (no Claude attribution, owner's rule). Merging into `main` releases no app, because the Mac app is not in the Store and CI only releases changed Store apps. Use the pr-shipper agent when the owner says ship. (b) Or stop here. Then the next session is B3 (Media Phase 3, engine extraction and mobile canvas) on `design-media-phase-3`, from `main` after B2 is merged. Before B3, decide the open Phase 2 items above: the `<video>` preview and CSP check, and whether to test HEVC size and GIF fit-under on the Mac.
@@ -463,3 +475,4 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
   B0 (ship the multi-page branch) whenever the owner is ready. B0 and B1 must both be merged before B2.
 - **Open for later phases:** the Mac probe must report display dimensions, as Android does now.
   Verify FrameDropEffect on lower-fps sources (S5). `SYSTEM_ALERT_WINDOW` is debug-only (release clean).
+- **2026-11-03 (session B3.1, Phase 3 step 1: engine extraction).** PR #16 merged, so B3 started. Worktree `.claude/worktrees/design-media-phase-3` from `origin/main` (eddf464), branch `design-media-phase-3`, `pnpm install` (1054 packages, exit 0). Moved `index.html` → `packages/design-editor-engine/desktop.html`, `app.js` and the vendor files (Fabric, pdf-lib, fontkit, fonts) with `git mv`, added the engine's `package.json` and README, and the `vendor/engine` symlink. Font URLs and the stylesheet path were made page-relative. `main.js` loads `vendor/engine/desktop.html`. Fetched the pinned FFmpeg (`pnpm --filter design-editor ffmpeg`, hash-checked). The full Mac e2e passed. Verification is under "Verified 2026-11-03 (session B3.1)". Stopped at a milestone on the owner's request, before step 2. SPEC §14.1 records the as-built layout.

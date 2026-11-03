@@ -7,14 +7,14 @@ const $$ = s => [...document.querySelectorAll(s)];
 const PROPS = ['lockMovementX', 'lockMovementY', 'lockScalingX', 'lockScalingY', 'lockRotation', 'hasControls', 'name'];
 const SANS = 'Atkinson Hyperlegible Next';
 const BUNDLED = {
-  [SANS]: 'ui/fonts/AtkinsonHyperlegibleNext_400Regular ui/fonts/AtkinsonHyperlegibleNext_600SemiBold ui/fonts/AtkinsonHyperlegibleNext_800ExtraBold fonts/AtkinsonHyperlegibleNext_700Bold fonts/AtkinsonHyperlegibleNext_400Regular_Italic fonts/AtkinsonHyperlegibleNext_700Bold_Italic',
-  Jost: 'fonts/Jost_400Regular fonts/Jost_700Bold fonts/Jost_400Regular_Italic fonts/Jost_700Bold_Italic',
-  'Playfair Display': 'fonts/PlayfairDisplay_400Regular fonts/PlayfairDisplay_700Bold fonts/PlayfairDisplay_400Regular_Italic fonts/PlayfairDisplay_700Bold_Italic',
-  'Dancing Script': 'fonts/DancingScript_400Regular fonts/DancingScript_700Bold',
+  [SANS]: '../ui/fonts/AtkinsonHyperlegibleNext_400Regular ../ui/fonts/AtkinsonHyperlegibleNext_600SemiBold ../ui/fonts/AtkinsonHyperlegibleNext_800ExtraBold vendor/fonts/AtkinsonHyperlegibleNext_700Bold vendor/fonts/AtkinsonHyperlegibleNext_400Regular_Italic vendor/fonts/AtkinsonHyperlegibleNext_700Bold_Italic',
+  Jost: 'vendor/fonts/Jost_400Regular vendor/fonts/Jost_700Bold vendor/fonts/Jost_400Regular_Italic vendor/fonts/Jost_700Bold_Italic',
+  'Playfair Display': 'vendor/fonts/PlayfairDisplay_400Regular vendor/fonts/PlayfairDisplay_700Bold vendor/fonts/PlayfairDisplay_400Regular_Italic vendor/fonts/PlayfairDisplay_700Bold_Italic',
+  'Dancing Script': 'vendor/fonts/DancingScript_400Regular vendor/fonts/DancingScript_700Bold',
 };
 const FACES = Object.entries(BUNDLED).flatMap(([family, files]) => files.split(' ').map(f => {
   const [, weight, italic] = /_(\d+)\D+?(_Italic)?$/.exec(f);
-  return { family, src: `vendor/${f}.ttf`, weight: +weight, italic: !!italic };
+  return { family, src: `${f}.ttf`, weight: +weight, italic: !!italic };
 }));
 const SYSTEM_FONTS = ['Avenir Next', 'Helvetica Neue', 'Futura', 'Gill Sans', 'Georgia', 'Baskerville', 'Didot', 'Times New Roman', 'American Typewriter', 'Marker Felt', 'Impact', 'Menlo', 'Arial', 'Verdana', 'Trebuchet MS', 'Courier New'];
 const fontOptions = sel => [['Included with the app', Object.keys(BUNDLED)], ['This Mac only', SYSTEM_FONTS]]
