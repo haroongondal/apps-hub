@@ -476,6 +476,16 @@ order (ledger "Post-plan work" has the rulings and P-briefs):
    (79d52eb, f728b59: `SecretEditText` reports `AUTOFILL_TYPE_NONE` and writes
    nothing to assist/autofill/content-capture structures; every `SecretField`,
    both notes and `UnlockActivity`'s password), version bump a4c490c.
+2a. **Phone check 2026-11-03 15:44 (controller, adb, 0.1.1 versionCode 7 from the
+   Store, Strongroom still the autofill service):** PASS cold fill. Strongroom
+   had no process; Chrome on https://the-internet.herokuapp.com/login, tap
+   Username: fill response in 378 ms (`mLatencyFillResponseReceivedMillis=378`,
+   one dataset = "Other logins"), no service timeout, the Strongroom process
+   started and its autofill service ran. Screenshot confirms "Other logins" in
+   the keyboard strip. Not done: matching fill (needs the owner's fingerprint or
+   master password to unlock), typing feel, Save/Update, card, Deputy, keyboard
+   and clipboard checks (owner). Verbose autofill logging left on (resets on
+   reboot).
 2. **PR #7 is open** (`strongroom-phase-1` → `main`, Strongroom 0.1.1; the owner
    merges it, which makes CI release the next versionCode). Merged `origin/main`
    into the branch first (2ddbcb5, no conflicts). Tests: strongroom 25/25,
