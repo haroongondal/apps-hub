@@ -2,7 +2,7 @@
 <html lang="en" data-brand="design" data-theme="light">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' data: blob:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' mediain:; connect-src 'self' data: blob:">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Media tools</title>
 <link rel="stylesheet" href="vendor/ui/web/tokens.css">
@@ -64,6 +64,8 @@
           </select>
         </label>
         <div id="thumbs" class="thumbs"></div>
+        <button id="clipPreview" class="ui-btn ui-btn--ghost" type="button">Preview in player</button>
+        <video id="clipVideo" class="clip-video" controls preload="metadata" hidden></video>
       </section>
       <section data-tool="audio" hidden>
         <fieldset id="tracks" class="tracks"><legend class="ui-meta">Tracks, one file each</legend></fieldset>

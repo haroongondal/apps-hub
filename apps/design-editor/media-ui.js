@@ -132,10 +132,20 @@ function renderTracks() {
   });
 }
 
+// The player plays through the mediain scheme: the renderer sends an input id, and the main process owns the path (PRD AC-11).
+$('clipPreview').onclick = () => {
+  const f = selectedFiles()[0];
+  if (!f) return;
+  $('clipVideo').src = `mediain://${f.id}/`;
+  $('clipVideo').hidden = false;
+};
+
 async function renderThumbs() {
   const box = $('thumbs');
   const token = ++thumbToken;
   box.replaceChildren();
+  $('clipVideo').pause();
+  $('clipVideo').hidden = true;
   const f = selectedFiles()[0];
   if (state.tool !== 'clip' || !f || !f.tracks.some(t => t.kind === 'video')) return;
   const times = Array.from({ length: 10 }, (_, i) => f.durationS * (i + 0.5) / 10);

@@ -146,6 +146,37 @@ const [jpgJob] = await settle(await enqueue([{ tool: 'frame', inputId: shortInfo
 assert.equal(jpgJob.state, 'done', jpgJob.error);
 assert.equal(probe(path.join(folder, jpgJob.outputs[0].name)).streams[0].codec_name, 'mjpeg');
 
+// Phase 2 open items: the HEVC size job and the GIF fit-under job. Both must publish under their target.
+const [hevcJob] = await settle(await enqueue([{ tool: 'size', inputId: info.id, targetBytes: 20 * MB, encoder: 'hw-hevc' }]));
+assert.equal(hevcJob.state, 'done', hevcJob.error);
+const hevcBytes = fs.statSync(path.join(folder, hevcJob.outputs[0].name)).size;
+assert.ok(hevcBytes <= 20 * MB, `HEVC output ${hevcBytes} is over 20 MB`);
+assert.equal(probe(path.join(folder, hevcJob.outputs[0].name)).streams[0].codec_name, 'hevc');
+console.log(`hevc size: ${(hevcBytes / MB).toFixed(2)} MB, ${hevcJob.attempt} attempt(s)`);
+const [gifFitJob] = await settle(await enqueue([{ tool: 'gif', inputId: info.id, startS: 0, endS: 3, width: 480, fps: 12, targetBytes: 1 * MB }]));
+assert.equal(gifFitJob.state, 'done', gifFitJob.error);
+const gifFitBytes = fs.statSync(path.join(folder, gifFitJob.outputs[0].name)).size;
+assert.ok(gifFitBytes <= 1 * MB, `GIF output ${gifFitBytes} is over 1 MB`);
+console.log(`gif fit 1 MB: ${(gifFitBytes / 1e3).toFixed(0)} kB, ${gifFitJob.attempt} attempt(s)`);
+
+// The player plays through the mediain scheme, and an id that was never picked gets nothing.
+const preview = await m.evaluate(async id => {
+  const v = document.getElementById('clipVideo');
+  v.src = `mediain://${id}/`;
+  await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('metadata failed')); });
+  await new Promise(res => { v.onseeked = res; v.currentTime = 30; });
+  const seeked = v.currentTime;
+  const unknown = document.createElement('video');
+  unknown.src = 'mediain://00000000-0000-0000-0000-000000000000/';
+  await new Promise(res => { unknown.onerror = res; unknown.onloadedmetadata = res; });
+  return { duration: v.duration, width: v.videoWidth, seeked, unknownError: unknown.error ? unknown.error.code : null };
+}, info.id);
+assert.equal(preview.duration, 60);
+assert.equal(preview.width, 1280);
+assert.ok(Math.abs(preview.seeked - 30) < 0.01, `seek landed at ${preview.seeked}`);
+assert.notEqual(preview.unknownError, null, 'an unknown input id must not play');
+console.log(`preview: ${preview.width} px, seek to ${preview.seeked.toFixed(2)} s, unknown id refused`);
+
 await assert.rejects(enqueue([{ tool: 'size', inputId: 'not-a-file', targetBytes: 20 * MB, encoder: 'x264' }]), /changed since you picked it/);
 await assert.rejects(m.evaluate(() => window.native.media.enqueue([{ folderId: 'nope', spec: { tool: 'quality', inputId: 'x', preset: 'small' } }])), /output folder/);
 await assert.rejects(enqueue([{ tool: 'size', inputId: shortInfo.id, targetBytes: 20 * MB, encoder: 'x264' }]), /below this file's size/);

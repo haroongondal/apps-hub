@@ -1,8 +1,9 @@
-import { app, BrowserWindow, dialog, ipcMain, powerSaveBlocker, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, powerSaveBlocker, protocol, shell } from 'electron';
 import { execFile, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import fs from 'node:fs/promises';
+import { Readable } from 'node:stream';
 import path from 'node:path';
 import {
   DESTINATIONS, ffmpegArgs, ffprobeArgs, fromFfprobe, keyframeArgs, nextGifAttempt, nextRunnable, nextSizeAttempt, outputName,
@@ -44,7 +45,27 @@ export function openMediaWindow() {
   mediaWin.loadFile('media.html');
 }
 
+// The player's scheme. Its privileges must be set before the app is ready, so registerMedia runs at startup.
+const MEDIA_SCHEME = 'mediain';
+
+// Serves a picked input by its id, with byte ranges so the player can seek. An unknown id gets a 404.
+function serveInput(req) {
+  const input = inputs.get(new URL(req.url).hostname);
+  if (!input) return new Response('Not found', { status: 404 });
+  const size = statSync(input.path).size;
+  const [, from, to] = /^bytes=(\d*)-(\d*)$/.exec(req.headers.get('range') ?? '') ?? [];
+  const ranged = from !== undefined || to !== undefined;
+  const start = from ? Number(from) : to ? Math.max(0, size - Number(to)) : 0;
+  const end = from && to ? Math.min(Number(to), size - 1) : size - 1;
+  if (start > end) return new Response(null, { status: 416, headers: { 'content-range': `bytes */${size}` } });
+  const headers = { 'content-type': 'video/mp4', 'accept-ranges': 'bytes', 'content-length': String(end - start + 1) };
+  if (ranged) headers['content-range'] = `bytes ${start}-${end}/${size}`;
+  return new Response(Readable.toWeb(createReadStream(input.path, { start, end })), { status: ranged ? 206 : 200, headers });
+}
+
 export function registerMedia() {
+  protocol.registerSchemesAsPrivileged([{ scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, stream: true } }]);
+  app.whenReady().then(() => protocol.handle(MEDIA_SCHEME, serveInput));
   ipcMain.handle('media-status', () => ({ ready: existsSync(FFMPEG) && existsSync(FFPROBE), destinations: DESTINATIONS }));
   ipcMain.handle('media-pick', async () => {
     const r = await showOpen({ properties: ['openFile', 'multiSelections'], filters: [{ name: 'Video and audio', extensions: INPUT_EXTENSIONS }] });
