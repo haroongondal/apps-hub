@@ -5,3 +5,5 @@ test/out/
 /graft/
 dist/
 .claude-trash/
+# Pinned FFmpeg binaries, GPL, kept on this Mac (pnpm --filter design-editor ffmpeg)
+vendor/ffmpeg/

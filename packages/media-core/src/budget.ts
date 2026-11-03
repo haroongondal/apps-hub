@@ -17,7 +17,8 @@ export function walkLadder(src: { width: number; height: number; fps: number }, 
   const fitting = LADDER.filter(r => r.shortSide <= shortSrc);
   const rungs = fitting.length ? fitting : [LADDER[LADDER.length - 1]];
   const walks = rungs.map((r): Walk => {
-    const shortSide = Math.min(r.shortSide, shortSrc);
+    // even, because yuv420p needs even sides; a 1079-px source would otherwise plan an odd height
+    const shortSide = 2 * Math.floor(Math.min(r.shortSide, shortSrc) / 2);
     const fps = Math.min(r.fps, src.fps);
     const { width, height } = dimsFor(src.width, src.height, shortSide);
     const bpp = videoBps / (width * height * fps);
@@ -65,7 +66,7 @@ function audioFor(tracks: Track[], totalBps: number): { audio: SizePlan['audio']
 }
 
 // Rounded to even, not to 16: the 30-min refusal figure (1,297 s) is computed with 426 px, not 432.
-function dimsFor(w: number, h: number, shortSide: number): { width: number; height: number } {
+export function dimsFor(w: number, h: number, shortSide: number): { width: number; height: number } {
   const long = 2 * Math.round(shortSide * Math.max(w, h) / Math.min(w, h) / 2);
   return w >= h ? { width: long, height: shortSide } : { width: shortSide, height: long };
 }

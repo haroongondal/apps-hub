@@ -1,0 +1,71 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { ffmpegArgs, parseKeyframe, parseProgress } from '../ffmpeg.ts';
+import type { ClipPlan, ConvertPlan, GifPlan, QualityPlan, SizePlan } from '../types.ts';
+
+const size: SizePlan = {
+  tool: 'size', targetBytes: 20_000_000, encoder: 'x264', rung: { shortSide: 720, fps: 30 }, width: 1280, height: 720,
+  videoBps: 2_236_595, audio: { mode: 'copy' }, overheadBytes: 265_536, plannedVideoBytes: 16_000_000, plannedBytes: 18_000_000,
+  attempt: 1, margin: 0.97, fpsCap: 30,
+};
+
+test('ffmpeg: the two-pass size job runs pass 1 to nowhere and pass 2 to the output', () => {
+  const p1 = ffmpegArgs(size, 'in.mp4', 'out.mp4', { n: 1, log: '/t/x264' });
+  assert.ok(p1.includes('-pass') && p1[p1.indexOf('-pass') + 1] === '1');
+  assert.equal(p1.at(-1), '/dev/null');
+  const p2 = ffmpegArgs(size, 'in.mp4', '/t/out.mp4', { n: 2, log: '/t/x264' });
+  assert.equal(p2[p2.indexOf('-pass') + 1], '2');
+  assert.equal(p2.at(-1), '/t/out.mp4');
+  assert.ok(p2.includes('libx264') && p2.includes('-c:a') && p2[p2.indexOf('-c:a') + 1] === 'copy');
+});
+
+test('ffmpeg: a hardware HEVC size job is one pass and tags hvc1 for Apple players', () => {
+  const args = ffmpegArgs({ ...size, encoder: 'hw-hevc' }, 'in.mp4', 'out.mp4');
+  assert.ok(args.includes('hevc_videotoolbox'));
+  assert.equal(args[args.indexOf('-tag:v') + 1], 'hvc1');
+  assert.ok(!args.includes('-pass'));
+});
+
+test('ffmpeg: a lossless clip starts at the keyframe and copies every kept track', () => {
+  const clip: ClipPlan = { tool: 'clip', mode: 'copy', startS: 13, endS: 43, keyframeS: 12.4, container: 'mp4', ext: 'mp4', tracks: [0, 1, 2] };
+  const args = ffmpegArgs(clip, 'in.mp4', 'out.mp4');
+  assert.equal(args[args.indexOf('-ss') + 1], '12.400000');
+  assert.equal(args[args.indexOf('-t') + 1], '30.600000');
+  assert.deepEqual(args.filter((_, i) => args[i - 1] === '-map'), ['0:0', '0:1', '0:2']);
+  assert.equal(args[args.indexOf('-c') + 1], 'copy');
+});
+
+test('ffmpeg: quality uses VideoToolbox at the preset quality', () => {
+  const q: QualityPlan = { tool: 'quality', encoder: 'hw-h264', rung: { shortSide: 720, fps: 30 }, width: 1280, height: 720, quality: 45 };
+  const args = ffmpegArgs(q, 'in.mp4', 'out.mp4');
+  assert.equal(args[args.indexOf('-q:v') + 1], '45');
+  assert.ok(args.includes('h264_videotoolbox'));
+});
+
+test('ffmpeg: GIFs use one filter graph with a palette and no audio', () => {
+  const gif: GifPlan = { tool: 'gif', startS: 1, endS: 7, width: 480, fps: 12, attempt: 1 };
+  const args = ffmpegArgs(gif, 'in.mp4', 'out.gif');
+  assert.match(args[args.indexOf('-filter_complex') + 1], /palettegen=stats_mode=diff.*paletteuse/);
+  assert.ok(args.includes('-an'));
+});
+
+test('ffmpeg: WebM transcodes video to VP9 and audio to Opus', () => {
+  const convert: ConvertPlan = {
+    tool: 'convert', mode: 'transcode', container: 'webm', ext: 'webm',
+    video: { encoder: 'vp9', quality: 33 }, audio: { codec: 'opus', bps: 128_000, copy: false },
+  };
+  const args = ffmpegArgs(convert, 'in.mkv', 'out.webm');
+  assert.equal(args[args.indexOf('-c:v') + 1], 'libvpx-vp9');
+  assert.equal(args[args.indexOf('-c:a') + 1], 'libopus');
+});
+
+test('ffmpeg: progress reads out_time_us and the end marker, and ignores N/A', () => {
+  assert.deepEqual(parseProgress('out_time_us=1500000\nprogress=continue\n'), { outTimeUs: 1_500_000, end: false });
+  assert.deepEqual(parseProgress('out_time_us=N/A\nprogress=end\n'), { outTimeUs: undefined, end: true });
+});
+
+test('ffmpeg: the cut point is the last keyframe at or before the time', () => {
+  assert.equal(parseKeyframe('0.000000,\n2.000000,\n4.000000,\n', 3.5), 2);
+  assert.equal(parseKeyframe('0.000000\n2.000000\n4.000000\n', 3.5), 2);
+  assert.equal(parseKeyframe('', 3.5), 0);
+});

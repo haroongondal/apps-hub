@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { openMediaWindow, registerMedia } from './media.js';
 
 if (process.env.DESIGN_EDITOR_DATA) app.setPath('userData', process.env.DESIGN_EDITOR_DATA);
 const autosavePath = () => path.join(app.getPath('userData'), 'autosave.json');
@@ -18,6 +19,8 @@ const menu = Menu.buildFromTemplate([
     { id: 'save', label: 'Save', accelerator: 'CmdOrCtrl+S', click: send('save') },
     { id: 'saveAs', label: 'Save As…', accelerator: 'Shift+CmdOrCtrl+S', click: send('saveAs') },
     { id: 'export', label: 'Download…', accelerator: 'Shift+CmdOrCtrl+E', click: send('export') },
+    { type: 'separator' },
+    { id: 'media', label: 'Media Tools…', accelerator: 'Shift+CmdOrCtrl+M', click: openMediaWindow },
     ...(isMac ? [] : [{ type: 'separator' }, { role: 'quit' }]),
   ] },
   // undo and redo go to the editor's own history, not Chromium's, unless a text field has focus
@@ -102,6 +105,7 @@ ipcMain.handle('autosave-write', (_, saved) => {
   });
   return autosaving;
 });
+registerMedia();
 ipcMain.on('doc-state', (_, { title, dirty, filePath }) => {
   if (!win) return;
   win.setTitle(title);

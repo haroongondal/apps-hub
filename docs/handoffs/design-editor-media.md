@@ -2,24 +2,29 @@
 
 ## Resume prompt
 
-Dated 2026-11-03. Read `docs/handoffs/design-editor-media.md` completely first, then `docs/design-editor/PRD.md`,
-`docs/design-editor/SPEC.md` and the prelude plus your phase in `docs/design-editor/PROMPTS.md`. Trust the decisions and
-verified facts below and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` and "How every session
-runs" in `docs/build-sessions.md`. Read "Current state + exact next step" before doing anything, then continue from it.
+Dated 2026-11-03. Build session B2.1: Design Editor media tools, CapCut feature gap pass, then Phase 3 (B3) once B2 is merged.
 
-Gates: Phase 1 (B1, PR #8) and Phase 2 prerequisite B0 (PR #12, squash 0f9cd68) are merged, so Phase 2 (B2, Mac media tools)
-can start. Create its worktree from `origin/main` on branch `design-media-phase-2`. Never touch the main checkout (it has
-someone else's uncommitted work), `clipboard`, `firewall-spike`, `tunnelwall-firewall` or `deputy-speed`. Use `gh` for PRs.
-A merge into `main` releases any changed Store app (CI); the Mac app releases nothing. No Claude attribution in commits or
-PR bodies (owner's rule). Never force-push or rewrite shared history without explicit owner approval (a force-push was denied
-on 2026-11-02). Dependencies beyond the ones approved in "Decisions made" need the owner's yes first.
+Read `docs/handoffs/design-editor-media.md` completely first. Until PR #15 merges, that file is on branch `design-media-phase-2`, so run `git fetch origin && git show origin/design-media-phase-2:docs/handoffs/design-editor-media.md` if your checkout doesn't have it. Then read `docs/design-editor/PRD.md`, `docs/design-editor/SPEC.md`, and the prelude plus your phase in `docs/design-editor/PROMPTS.md`. Trust the decisions and verified facts in the handoff and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` and "How every session runs" in `docs/build-sessions.md`. Read "Current state + exact next step" before doing anything.
 
-Gates: Phase 2 (session B2) needs B0 (`design-editor-phase-2`) and B1 (`design-media-phase-1`)
-merged into `origin/main`. Check with `gh pr list` and `git log origin/main` before any Phase 2 work.
-If they aren't merged, do the gate work the owner asks for and stop before Phase 2. Commit, push,
-merge or release only when the owner says so. A merge to `main` makes CI release Design Editor. Install
-on the phone only through the Store, never `adb install`. Never touch the main checkout, or
-`design-editor-phase-2` in a session that isn't B0. Never stash, reset or commit changes you didn't make.
+Gates and rules:
+- The owner said to proceed without waiting for approval on routine work: commit, push and open PRs with `gh`. Never merge to `main` yourself, never force-push, and never add Claude attribution lines to commits or PR bodies.
+- Don't touch the main checkout, the `clipboard`, `firewall-spike`, `tunnelwall-firewall` or `deputy-speed` worktrees, or the `design-editor-phase-2` worktree.
+- Don't start Phase 3 until PR #15 (`design-media-phase-2`) is merged. If it isn't, do the CapCut pass below on a stacked branch.
+- New npm, Gradle or CocoaPods dependencies need the owner's yes first. FFmpeg filters and encoders inside the pinned 9.0.2 binary are not new dependencies.
+
+Task 1: CapCut gap study (desktop app at `/Applications/CapCut.app`, installed on this Mac).
+- Use the app as a user would: its UI, export settings and feature list. Export test clips from it and measure the results with `ffprobe` (size, bitrate, codec, resolution, fps, duration, audio tracks).
+- Don't decompile, unpack or copy CapCut's code, models, templates, fonts or other assets, and don't bypass its licence or paywalls. Write findings in your own words.
+- Write `docs/design-editor/CAPCUT-GAPS.md`. For each CapCut media feature, record: the user job, whether it works offline, whether it needs a cloud or AI model (reject if it does), whether it needs a new dependency or only FFmpeg args, and whether PRD §8 puts it out of scope.
+- Rank the gaps by fit for the Mac media tools.
+
+Task 2: add the top gaps that fit (offline, FOSS, pinned FFmpeg only).
+- Each new job type touches: `validate.ts`, a planner in media-core with tests, `ffmpeg.ts` args with tests, `planFor` and `enqueue` in `media.js`, the controls in `media-ui.js` and `media.html`, and a case in `test/media.mjs`.
+- Anything that moves past PRD §8 is a scope change. Record it in the handoff as an owner decision, with the reason.
+
+Verify with the real output, not predicted output: `pnpm --filter @apps-hub/media-core test`, `pnpm test`, `pnpm typecheck`, `pnpm --filter design-editor test:e2e`. If you change the packaged app, run `pnpm --filter design-editor dist`.
+
+Finish: update the handoff's session log, "Current state + exact next step" and this resume prompt. Commit, push, and open or update the PR. At about 85% context, stop starting work, update the handoff and print its resume prompt in a fenced block.
 
 ## Goal and fixed constraints
 
@@ -240,6 +245,34 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
 - Open: the lab shows a bare `paused` with no reason copy. The lab's picked file and queue reset when the process dies.
   Not tested: S2 with HEVC (the hardware encoder exists).
 
+### Verified 2026-11-03 (session B2, Mac media tools; output was read, not predicted)
+
+- FFmpeg 9.0.2 (Martin Riedl, macOS arm64, GPL): `ffmpeg.zip` sha256 `c8ed4c4e…d924`, `ffprobe.zip` sha256 `fcbe8395…7ea6`, both equal the published `.sha256` files. `pnpm --filter design-editor ffmpeg` downloads, checks the hash, writes `vendor/ffmpeg/VERSION` (configure line includes `--enable-gpl --enable-libx264 --enable-libvpx --enable-libopus --enable-libmp3lame`, no nonfree). The `-h encoder=h264_videotoolbox` check from PROMPTS step 1 was not run.
+- `packages/media-core`: 55 tests pass; typecheck clean. Root `pnpm test` and `pnpm typecheck`: exit 0.
+- `pnpm --filter design-editor test:e2e` (editor suite + `test/media.mjs`): exit 0. Media suite on a generated 60 s 1280×720 clip with two AAC tracks: Discord 20 MB size job published 19.19 MB in 1 attempt, 5.1–5.5 s; quality, lossless clip (keyframe-accurate, both audio tracks kept), exact clip, two audio tracks, GIF, MKV remux, WebM VP9, refusals, cancel with no `.part` left, the quit prompt, and input SHA-256 unchanged.
+- Packaged app (`pnpm --filter design-editor dist`, exit 0): the icon is applied (`Resources/electron.icns` equals `build/icon.icns`; the packager's "`.icon` not found" line is only its Icon Composer probe). AC-10 on a generated 60 s 1920×1080 clip (6 Mbit/s testsrc2): 19,205,072 bytes, 1 attempt, 6.9 s, inside 18–20 MB; original SHA-256 unchanged. This is not the owner's phone clip.
+- Bugs found and fixed while testing: enqueue stored the `Planned` wrapper `{ok, plan}` as the job plan (so ffmpeg args were undefined); `parseKeyframe` dropped ffprobe's trailing commas (lossless clips started at 0); clip times need six decimals, because a keyframe at 8.333333 s seeks back to the previous keyframe when passed as 8.333; the packaged app cannot run a binary inside `app.asar`, so `dist` uses `--asar.unpackDir=vendor/ffmpeg` and `media.js` resolves `app.asar.unpacked`.
+- The security review finding (an audio language tag in a file's metadata could steer the output name out of the folder) is fixed: `outputName` sanitizes labels, `labelFor` accepts only language-shaped tags, and `publish` refuses a destination outside the chosen folder. Regression test in `names.test.ts`.
+
+### Decisions made in session B2 (Claude's calls; the owner can override)
+
+- Mac size: H.264 uses libx264 two-pass (margin 0.97); HEVC uses `hevc_videotoolbox` in one pass (margin 0.90), both with the retry rule. Quality uses VideoToolbox `-q:v` 65/55/45 for High/Medium/Small. Every video encode adds `-pix_fmt yuv420p` and strips container metadata (`-map_metadata -1`, PRD Q10).
+- Phase 2 planners are Mac-only. The `platform` parameter and the Android tables in SPEC §5.2 are Phase 4's job, so the signatures differ from the SPEC for now.
+- WebM is a VP9 transcode (`libvpx-vp9`, CRF 33) with Opus audio, because the SPEC's encoder list had no VP9. `ConvertPlan.video` now also takes `'vp9'` and `'copy'`.
+- Clip preview on the Mac is a 10-frame thumbnail strip only. The `<video>` preview and the `file://` CSP check (RESEARCH §11) are not done; the next session decides whether to add them or a `media:` protocol.
+- Output publish: rename into the folder when on the same volume; across volumes, copy to `<name>.part` and rename.
+- Encoder stats: median of the last five overshoot ratios, no clamp (the 0.8–1.5 clamp is a Phase 5 Android item).
+- Icon: `apps/design-editor/build/icon.icns` (105 KB) is committed, built with `sips` and `iconutil` from `apps/design-editor-mobile/assets/icon.png`. `dist` passes `--icon=build/icon` (the packager adds `.icns`).
+- The FFmpeg folder `vendor/ffmpeg/` is gitignored and never shared (NFR-8).
+
+### Known gaps (not fixed in Phase 2)
+
+- HDR 10-bit sources are encoded to 8-bit SDR without tone mapping, so colours can shift (PRD test clip 4 is a phone check).
+- Subtitles and data tracks are dropped. A multi-audio convert uses one codec for every track.
+- A process killed during a cross-volume copy can leave a `.part` file in the output folder. Same-volume publishes (the normal case) are a single rename.
+- Quit with a running job is tested by emitting `before-quit`, not by a real Cmd-Q.
+- Not tested yet: HEVC size, GIF "fit under N MB", and any owner clip (the owner's phone clips are not on this Mac).
+
 ## File map
 
 - `docs/design-editor/RESEARCH.md`: findings, verdicts, verified vs assumed, sources.
@@ -318,8 +351,17 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
   all-pages overwrite prompt, autosave kept before a new design, PDF text in transforms, `constructor` font names, toast copy).
   Stale branches and worktrees were deleted earlier in the day, except the B0 ones listed under Current state. A force-push to
   the B0 ship branch was denied, so the trailer was removed by squash-merging instead. Context reached 85%, so this handoff was written.
+- **2026-11-03 (session B2, Phase 2 start).** Gates checked: PR #8 (B1) and PR #12 (B0) merged; `origin/main` is 8fb7b38. Worktree
+  `.claude/worktrees/design-media-phase-2` on branch `design-media-phase-2` from `origin/main`; `pnpm install` there: 1054 packages, exit 0.
+  Nothing committed or pushed (the owner says when). FFmpeg pin fetched and checked (see Verified 2026-11-03).
+- **2026-11-03 (session B2, Phase 2 built and verified).** media-core planners and tests, the Mac media window and main process, the e2e
+  suite `test/media.mjs` chained into `test:e2e`, the packaged app with FFmpeg unpacked, and AC-10 on the packaged app. Four real bugs
+  were found by the e2e and fixed (see Verified). A security review finding about the output name was fixed. Handoff written; nothing committed.
 
 ## Current state + exact next step
+
+- **State (2026-11-03, session B2, Phase 2 done, committed and pushed as PR #15):** the Mac media tools are on branch `design-media-phase-2` (commit 91d37c7, from `origin/main` 8fb7b38), PR https://github.com/haroongondal/apps-hub/pull/15 into `main`. Not merged, not released (the Mac app is not a Store app). The changed files are in `packages/media-core` (ffmpeg, probe, clip, audio, gif, convert, quality, plus validate and names changes and tests), `apps/design-editor` (`media.js`, `media.html`, `media-ui.js`, `media.css`, `scripts/fetch-ffmpeg.mjs`, `test/media.mjs`, `main.js`, `preload.cjs`, `app.js`, `index.html`, `package.json`, `.gitignore`, `build/icon.icns`) and this handoff. Verification is under "Verified 2026-11-03 (session B2)".
+- **Next step:** the owner decides. (a) Commit, push and open the PR with `gh` (no Claude attribution, owner's rule). Merging into `main` releases no app, because the Mac app is not in the Store and CI only releases changed Store apps. Use the pr-shipper agent when the owner says ship. (b) Or stop here. Then the next session is B3 (Media Phase 3, engine extraction and mobile canvas) on `design-media-phase-3`, from `main` after B2 is merged. Before B3, decide the open Phase 2 items above: the `<video>` preview and CSP check, and whether to test HEVC size and GIF fit-under on the Mac.
 
 - State (2026-11-03): Phase 1 (B1) is done and merged (PR #8). Design Editor 1.0.0 (3) is released through CI and on the phone.
   The phone checks passed: batches, time-limit pause, and the S8 crash fix. B0 (Design Editor phase 2, multi-page, fonts, real

@@ -1,37 +1,90 @@
-import type { Encoder, MediaInfo, Platform } from './types.ts';
+import { GIF_MAX_S } from './gif.ts';
+import type { ConvertTarget, Encoder, MediaInfo, Platform } from './types.ts';
 
-// The only job type in Phase 1. Phase 2 adds the other tools to this union.
 export interface SizeSpec { tool: 'size'; inputId: string; targetBytes: number; encoder: Encoder }
-export type JobSpec = SizeSpec;
+export interface QualitySpec { tool: 'quality'; inputId: string; preset: 'high' | 'medium' | 'small' }
+export interface ClipSpec { tool: 'clip'; inputId: string; startS: number; endS: number; mode: 'copy' | 'exact' }
+export interface AudioSpec { tool: 'audio'; inputId: string; trackIndex: number }
+export interface GifSpec { tool: 'gif'; inputId: string; startS: number; endS: number; width: number; fps: number; targetBytes?: number }
+export interface ConvertSpec { tool: 'convert'; inputId: string; target: ConvertTarget; videoCodec: 'h264' | 'hevc' }
+export type JobSpec = SizeSpec | QualitySpec | ClipSpec | AudioSpec | GifSpec | ConvertSpec;
 
 const MIN_TARGET_BYTES = 1_000_000;
 const ENCODERS: Record<Platform, readonly Encoder[]> = {
   android: ['hw-h264', 'hw-hevc'],
   mac: ['x264', 'hw-h264', 'hw-hevc'],
 };
+const AUDIO_TARGETS: readonly ConvertTarget[] = ['m4a', 'mp3', 'opus', 'flac', 'wav'];
+const VIDEO_TARGETS: readonly ConvertTarget[] = ['mp4', 'mov', 'mkv', 'webm'];
 
 // Trust boundary: the spec arrives as JSON from the UI or the bridge, so every field is checked at runtime.
 export function validateSpec(spec: unknown, info: MediaInfo, platform: Platform): string[] {
-  if (!isSizeSpec(spec)) return ["This job type isn't supported yet."];
+  if (typeof spec !== 'object' || spec === null) return ["This job type isn't supported yet."];
+  const s = spec as Record<string, unknown>;
   const errors: string[] = [];
-  if (spec.inputId !== info.id) errors.push('The file changed since you picked it. Pick it again.');
-  if (!info.tracks.some(t => t.kind === 'video')) {
-    errors.push("This file has no video track, so it can't be compressed to a size. Use Extract audio instead.");
-  }
+  if (s.inputId !== info.id) errors.push('The file changed since you picked it. Pick it again.');
   if (!(info.durationS > 0)) errors.push("The file's length couldn't be read. Pick another file.");
-  if (!(spec.targetBytes >= MIN_TARGET_BYTES)) {
-    errors.push('Pick a size of at least 1 MB.');
-  } else if (spec.targetBytes >= info.bytes) {
-    errors.push(`Pick a size below this file's size, which is ${(info.bytes / 1_000_000).toFixed(1)} MB.`);
-  }
-  if (!ENCODERS[platform].includes(spec.encoder)) {
-    errors.push(`This encoder isn't available on ${platform === 'android' ? 'this phone' : 'this Mac'}.`);
+  const hasVideo = info.tracks.some(t => t.kind === 'video');
+  const hasAudio = info.tracks.some(t => t.kind === 'audio');
+  switch (s.tool) {
+    case 'size': {
+      if (!hasVideo) errors.push("This file has no video track, so it can't be compressed to a size. Use Extract audio instead.");
+      const target = n(s.targetBytes);
+      if (!(target >= MIN_TARGET_BYTES)) errors.push('Pick a size of at least 1 MB.');
+      else if (target >= info.bytes) errors.push(`Pick a size below this file's size, which is ${(info.bytes / 1_000_000).toFixed(1)} MB.`);
+      if (!ENCODERS[platform].includes(s.encoder as Encoder)) {
+        errors.push(`This encoder isn't available on ${platform === 'android' ? 'this phone' : 'this Mac'}.`);
+      }
+      break;
+    }
+    case 'quality':
+      if (!hasVideo) errors.push("This file has no video track, so there's nothing to shrink. Use Extract audio instead.");
+      if (s.preset !== 'high' && s.preset !== 'medium' && s.preset !== 'small') errors.push('Pick High, Medium or Small.');
+      break;
+    case 'clip':
+      if (!hasVideo) errors.push("This file has no video track, so there's nothing to clip.");
+      if (!inSpan(s, info)) errors.push('Pick a start and an end inside the file, at least 0.1 s apart.');
+      if (s.mode !== 'copy' && s.mode !== 'exact') errors.push('Pick Lossless or Exact.');
+      break;
+    case 'audio': {
+      const track = info.tracks.find(t => t.index === s.trackIndex);
+      if (!track || track.kind !== 'audio') errors.push('Pick an audio track in this file.');
+      break;
+    }
+    case 'gif': {
+      if (!hasVideo) errors.push("This file has no video track, so it can't make a GIF.");
+      if (!inSpan(s, info)) errors.push('Pick a start and an end inside the file, at least 0.1 s apart.');
+      else if (n(s.endS) - n(s.startS) > GIF_MAX_S) errors.push(`GIFs are capped at ${GIF_MAX_S} seconds. Shorten the range.`);
+      if (!(n(s.width) >= 16 && n(s.width) <= 1920)) errors.push('Pick a width from 16 to 1920 px.');
+      if (!(n(s.fps) >= 1 && n(s.fps) <= 30)) errors.push('Pick a frame rate from 1 to 30 fps.');
+      if (s.targetBytes !== undefined && !(n(s.targetBytes) >= MIN_TARGET_BYTES)) errors.push('Pick a size of at least 1 MB.');
+      break;
+    }
+    case 'convert': {
+      const target = s.target;
+      if (typeof target === 'string' && AUDIO_TARGETS.includes(target as ConvertTarget)) {
+        if (!hasAudio) errors.push('This file has no audio to convert.');
+      } else if (typeof target === 'string' && VIDEO_TARGETS.includes(target as ConvertTarget)) {
+        if (!hasVideo) errors.push("This file has no video, so it can't become a video.");
+        if (s.videoCodec !== 'h264' && s.videoCodec !== 'hevc') errors.push('Pick H.264 or HEVC.');
+      } else {
+        errors.push('Pick a format to convert to.');
+      }
+      break;
+    }
+    default:
+      errors.push("This job type isn't supported yet.");
   }
   return errors;
 }
 
-function isSizeSpec(x: unknown): x is SizeSpec {
-  if (typeof x !== 'object' || x === null) return false;
-  const s = x as Record<string, unknown>;
-  return s.tool === 'size' && typeof s.inputId === 'string' && typeof s.targetBytes === 'number' && typeof s.encoder === 'string';
+function n(x: unknown): number {
+  return typeof x === 'number' && Number.isFinite(x) ? x : NaN;
+}
+
+// The UI rounds times to 0.1 s, so an end up to 0.05 s past the length still counts.
+function inSpan(s: Record<string, unknown>, info: MediaInfo): boolean {
+  const start = n(s.startS);
+  const end = n(s.endS);
+  return start >= 0 && end - start >= 0.1 && end <= info.durationS + 0.05;
 }

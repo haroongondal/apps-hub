@@ -34,7 +34,9 @@ export type Planned<P> = { ok: true; plan: P } | Refusal;
 export interface ClipPlan { tool: 'clip'; mode: 'copy' | 'exact'; startS: number; endS: number; keyframeS: number; container: string; ext: string; tracks: number[] }
 export interface AudioPlan { tool: 'audio'; trackIndex: number; mode: 'copy' | 'raw' | 'wav' | 'aac'; container: 'mp4' | 'ogg' | 'webm' | 'mka' | 'raw'; ext: string; bps?: number }
 export interface GifPlan { tool: 'gif'; startS: number; endS: number; width: number; fps: number; targetBytes?: number; attempt: number }
-export interface ConvertPlan { tool: 'convert'; mode: 'remux' | 'transcode'; container: string; ext: string; video?: { encoder: Encoder; quality: number }; audio?: { codec: Codec; bps?: number } }
+// video is absent for the audio-only targets. encoder 'copy' keeps the stream; quality is VideoToolbox -q:v, or CRF for vp9.
+export interface ConvertPlan { tool: 'convert'; mode: 'remux' | 'transcode'; container: string; ext: string; video?: { encoder: Encoder | 'vp9' | 'copy'; quality: number }; audio?: { codec: Codec; bps?: number; copy: boolean } }
+export type ConvertTarget = 'mp4' | 'mov' | 'mkv' | 'webm' | 'm4a' | 'mp3' | 'opus' | 'flac' | 'wav';
 export interface QualityPlan { tool: 'quality'; encoder: Encoder; rung: Rung; width: number; height: number; quality: number /* VT -q:v, or bpp on Android */ }
 export type Plan = SizePlan | QualityPlan | ClipPlan | AudioPlan | GifPlan | ConvertPlan;
 

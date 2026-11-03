@@ -38,7 +38,8 @@ test('validate: an audio-only file is refused for a size job', () => {
     ["This file has no video track, so it can't be compressed to a size. Use Extract audio instead."]);
 });
 
-test('validate: untrusted JSON that is not a size spec is refused', () => {
-  assert.deepEqual(validateSpec({ tool: 'size', inputId: 7 }, clip, 'android'), ["This job type isn't supported yet."]);
+test('validate: untrusted JSON is refused', () => {
+  assert.notDeepEqual(validateSpec({ tool: 'size', inputId: 7 }, clip, 'android'), []);
+  assert.deepEqual(validateSpec({ tool: 'nope', inputId: clip.id }, clip, 'android'), ["This job type isn't supported yet."]);
   assert.deepEqual(validateSpec(null, clip, 'android'), ["This job type isn't supported yet."]);
 });
