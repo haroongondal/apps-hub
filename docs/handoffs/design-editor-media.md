@@ -2,24 +2,29 @@
 
 ## Resume prompt
 
-Dated 2026-11-03. Read `docs/handoffs/design-editor-media.md` completely first, then `docs/design-editor/PRD.md`,
-`docs/design-editor/SPEC.md` and the prelude plus your phase in `docs/design-editor/PROMPTS.md`. Trust the decisions and
-verified facts below and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` and "How every session
-runs" in `docs/build-sessions.md`. Read "Current state + exact next step" before doing anything, then continue from it.
+Dated 2026-11-03. Build session B2.1: Design Editor media tools, CapCut feature gap pass, then Phase 3 (B3) once B2 is merged.
 
-Gates: Phase 1 (B1, PR #8) and Phase 2 prerequisite B0 (PR #12, squash 0f9cd68) are merged, so Phase 2 (B2, Mac media tools)
-can start. Create its worktree from `origin/main` on branch `design-media-phase-2`. Never touch the main checkout (it has
-someone else's uncommitted work), `clipboard`, `firewall-spike`, `tunnelwall-firewall` or `deputy-speed`. Use `gh` for PRs.
-A merge into `main` releases any changed Store app (CI); the Mac app releases nothing. No Claude attribution in commits or
-PR bodies (owner's rule). Never force-push or rewrite shared history without explicit owner approval (a force-push was denied
-on 2026-11-02). Dependencies beyond the ones approved in "Decisions made" need the owner's yes first.
+Read `docs/handoffs/design-editor-media.md` completely first. Until PR #15 merges, that file is on branch `design-media-phase-2`, so run `git fetch origin && git show origin/design-media-phase-2:docs/handoffs/design-editor-media.md` if your checkout doesn't have it. Then read `docs/design-editor/PRD.md`, `docs/design-editor/SPEC.md`, and the prelude plus your phase in `docs/design-editor/PROMPTS.md`. Trust the decisions and verified facts in the handoff and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` and "How every session runs" in `docs/build-sessions.md`. Read "Current state + exact next step" before doing anything.
 
-Gates: Phase 2 (session B2) needs B0 (`design-editor-phase-2`) and B1 (`design-media-phase-1`)
-merged into `origin/main`. Check with `gh pr list` and `git log origin/main` before any Phase 2 work.
-If they aren't merged, do the gate work the owner asks for and stop before Phase 2. Commit, push,
-merge or release only when the owner says so. A merge to `main` makes CI release Design Editor. Install
-on the phone only through the Store, never `adb install`. Never touch the main checkout, or
-`design-editor-phase-2` in a session that isn't B0. Never stash, reset or commit changes you didn't make.
+Gates and rules:
+- The owner said to proceed without waiting for approval on routine work: commit, push and open PRs with `gh`. Never merge to `main` yourself, never force-push, and never add Claude attribution lines to commits or PR bodies.
+- Don't touch the main checkout, the `clipboard`, `firewall-spike`, `tunnelwall-firewall` or `deputy-speed` worktrees, or the `design-editor-phase-2` worktree.
+- Don't start Phase 3 until PR #15 (`design-media-phase-2`) is merged. If it isn't, do the CapCut pass below on a stacked branch.
+- New npm, Gradle or CocoaPods dependencies need the owner's yes first. FFmpeg filters and encoders inside the pinned 9.0.2 binary are not new dependencies.
+
+Task 1: CapCut gap study (desktop app at `/Applications/CapCut.app`, installed on this Mac).
+- Use the app as a user would: its UI, export settings and feature list. Export test clips from it and measure the results with `ffprobe` (size, bitrate, codec, resolution, fps, duration, audio tracks).
+- Don't decompile, unpack or copy CapCut's code, models, templates, fonts or other assets, and don't bypass its licence or paywalls. Write findings in your own words.
+- Write `docs/design-editor/CAPCUT-GAPS.md`. For each CapCut media feature, record: the user job, whether it works offline, whether it needs a cloud or AI model (reject if it does), whether it needs a new dependency or only FFmpeg args, and whether PRD §8 puts it out of scope.
+- Rank the gaps by fit for the Mac media tools.
+
+Task 2: add the top gaps that fit (offline, FOSS, pinned FFmpeg only).
+- Each new job type touches: `validate.ts`, a planner in media-core with tests, `ffmpeg.ts` args with tests, `planFor` and `enqueue` in `media.js`, the controls in `media-ui.js` and `media.html`, and a case in `test/media.mjs`.
+- Anything that moves past PRD §8 is a scope change. Record it in the handoff as an owner decision, with the reason.
+
+Verify with the real output, not predicted output: `pnpm --filter @apps-hub/media-core test`, `pnpm test`, `pnpm typecheck`, `pnpm --filter design-editor test:e2e`. If you change the packaged app, run `pnpm --filter design-editor dist`.
+
+Finish: update the handoff's session log, "Current state + exact next step" and this resume prompt. Commit, push, and open or update the PR. At about 85% context, stop starting work, update the handoff and print its resume prompt in a fenced block.
 
 ## Goal and fixed constraints
 
