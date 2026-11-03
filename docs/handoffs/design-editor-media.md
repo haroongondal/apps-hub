@@ -2,21 +2,22 @@
 
 ## Resume prompt
 
-Dated 2026-11-03. Build session B2.2: close the B2.1 items, then Phase 3 (B3) once PR #15 is merged.
+Dated 2026-11-03. Build session B3 (Media Phase 3, engine extraction and mobile canvas), once PR #16 is merged. Before that, close the owner decisions below.
 
-Read `docs/handoffs/design-editor-media.md` completely first. It lives in the worktree `.claude/worktrees/design-media-phase-2`, which is now on branch `design-media-capcut` (stacked on `design-media-phase-2`, PR #15). Then read `docs/design-editor/PRD.md`, `docs/design-editor/SPEC.md`, `docs/design-editor/CAPCUT-GAPS.md` and the prelude plus your phase in `docs/design-editor/PROMPTS.md`. Trust the decisions and verified facts in the handoff and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` and "How every session runs" in `docs/build-sessions.md`. Read "Current state + exact next step" before doing anything.
+Read `docs/handoffs/design-editor-media.md` completely first. It lives in the worktree `.claude/worktrees/design-media-phase-2`, on branch `design-media-capcut` (PR #16, base `main`, stacked on PR #15, which is merged). Then read `docs/design-editor/PRD.md`, `docs/design-editor/SPEC.md`, `docs/design-editor/CAPCUT-GAPS.md` and the prelude plus your phase in `docs/design-editor/PROMPTS.md`. Trust the decisions and verified facts in the handoff and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` and "How every session runs" in `docs/build-sessions.md`. Read "Current state + exact next step" before doing anything.
 
 Gates and rules:
-- The owner said to proceed without waiting for approval on routine work: commit, push and open PRs with `gh`. Never merge to `main` yourself, never force-push, and never add Claude attribution lines to commits or PR bodies.
+- The owner said to proceed without waiting for approval on routine work: commit, push and open PRs with `gh`. Never merge to `main` yourself, never force-push, and never add Claude attribution lines to commits or PR bodies. Merge only when the owner says so.
 - Don't touch the main checkout, the `clipboard`, `firewall-spike`, `tunnelwall-firewall` or `deputy-speed` worktrees, or the `design-editor-phase-2` worktree.
-- Don't start Phase 3 until PR #15 (`design-media-phase-2`) is merged.
+- B3 starts only when PR #16 is on `main`. That needs the owner's yes to merge.
 - New npm, Gradle or CocoaPods dependencies need the owner's yes first. FFmpeg filters and encoders inside the pinned 9.0.2 binary are not new dependencies.
+- Don't implement CapCut rows 7 (loudness), 8 (reverse) or 11 (stabilisation) without the owner's yes.
+- The Bash shell here is zsh and may have `ELECTRON_RUN_AS_NODE` set. Strip it when running Electron, and don't use `timeout` (not installed).
 
 Open items, in order:
-1. Owner decisions on CAPCUT-GAPS rows 7 (loudness), 8 (reverse) and 11 (stabilisation). Each is a scope or dependency call; don't implement one without a yes.
-2. CapCut measurements, the part of the study that was blocked: the owner grants Screen Recording and Accessibility to the terminal, or shares CapCut export files for ffprobe. Then walk the UI, measure, and update `CAPCUT-GAPS.md`.
-3. If PR #15 is merged: retarget this branch's PR to `main` (or rebase), then start B3 on `design-media-phase-3` from `main`, per PROMPTS.md Phase 3.
-4. Before B3: the open Phase 2 items (the `<video>` preview and CSP check, and whether to test HEVC size and GIF fit-under on the Mac).
+1. Owner: merge PR #16 when ready. Then retarget nothing (it is already on `main`); start B3 on `.claude/worktrees/design-media-phase-3` from `origin/main`, on branch `design-media-phase-3`, `pnpm install` there, and follow PROMPTS.md Phase 3. Extract the multi-page editor on `main` (file format v2, page strip, bundled fonts) into `packages/design-editor-engine`, not the single-page version the SPEC describes, and update SPEC §14. The Mac e2e must stay green. The mobile canvas checks run on the phone only, through the Store.
+2. Owner decisions, pending (ask, don't guess): CapCut rows 7, 8 and 11 in `CAPCUT-GAPS.md`.
+3. CapCut measurements (still blocked on 2026-11-03): this terminal has no Screen Recording permission (`screencapture` fails) and CapCut's accessibility tree is almost empty. Needs the owner to grant the permission, or to share CapCut export files for ffprobe. Until then `CAPCUT-GAPS.md` stays desk-based.
 
 At about 85% context, stop starting work, update the handoff and print its resume prompt in a fenced block.
 
@@ -258,6 +259,21 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
 - CapCut: desktop 9.5.0. Its window's accessibility tree had 4 labels; setting `AXManualAccessibility` returned error -10006; `screencapture` failed with "could not create image from display". No CapCut file was exported or measured.
 - Web sources for CapCut's export options were thin. The help page covers 2K/4K and frame rate. One guide mentions H.264 or HEVC and MP4 or MOV. None found GIF export or a 2026 desktop feature list.
 
+### Verified 2026-11-03 (session B2.2; output was read, not predicted)
+
+- After the merge with `main`: `pnpm --filter @apps-hub/media-core test` 61 pass, 0 fail; `pnpm typecheck` (root) exit 0; root `pnpm test` exit 0 (its tail shows only subtest output, and the exit code is 0); `pnpm --filter design-editor test:e2e` exit 0 (editor suite ok, media suite ok, input hashes unchanged).
+- After the preview commit: the e2e exit 0 again. New e2e results: HEVC size job, 20 MB target, published **17.94 MB in 1 attempt** (H.264 published 19.19 MB in the same suite); GIF with a 1 MB fit, published **469 kB in 1 attempt**; preview: the video reads 1280 px wide and 60 s, seeks to 30.00 s; an id that was never picked is refused (media error).
+- `pnpm --filter design-editor dist` after the preview: exit 0, FFmpeg unpacked beside the app. The packaged binary's e2e was not run.
+- `<video>` on `file://`: a probe in the media window, with the window's CSP, loaded the 60 s clip (readyState 4, 1280×720, no `securitypolicyviolation`). So the CSP does not block `file://` media. The renderer would still need the path, which AC-11 forbids.
+- Custom scheme probe (throwaway Electron app, scratchpad only): a privileged `mediain` scheme that answers `Range` requests with 206 seeks to 30.00 s. Without range support the seek stays at 0, so the handler must serve byte ranges itself (`net.fetch` on `file:` returned 200 with no `content-range`).
+- CapCut UI access: `screencapture` still fails ("could not create image from display"). No CapCut export was made or measured.
+
+### Decisions made in session B2.2 (Claude's calls; the owner can override)
+
+- **Clip preview: through a privileged scheme, not a `file://` URL.** The `<video>` preview needs a URL, and AC-11 keeps paths in the main process. So `mediain://<input id>/` is served by the main process from the `inputs` map, with byte ranges. Unknown ids get 404. This is the Mac version of the owner's Q7 choice ("Preview in player", recommended, approved 2026-10-31); it is not a new scope item.
+- **Merged `origin/main` into the branch instead of rebasing.** The branch was already pushed, and a rebase would need a force-push. Where `main`'s squash of PR #15 and the branch's files differed, the branch's version was kept, since the differences were only the B2.1 lines.
+- **B3 waits for PR #16 on `main`.** The gate is in the resume prompt. Starting B3 on a stacked branch would have bypassed it.
+
 ### Decisions made in session B2.1 (Claude's calls; the owner can override)
 
 - Two gaps added, both inside PRD §8. **Remove sound:** an option on Convert. The video is copied when its codec fits, and no audio map is written. **Still frame:** a new tool `frame`, one PNG or JPEG at a chosen time, video only, the sound is never read. A still image is not an animated image, so the §8 line about animated images does not cover it. PRD FR-8 and a still-frame bullet record both.
@@ -269,7 +285,7 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
 - Mac size: H.264 uses libx264 two-pass (margin 0.97); HEVC uses `hevc_videotoolbox` in one pass (margin 0.90), both with the retry rule. Quality uses VideoToolbox `-q:v` 65/55/45 for High/Medium/Small. Every video encode adds `-pix_fmt yuv420p` and strips container metadata (`-map_metadata -1`, PRD Q10).
 - Phase 2 planners are Mac-only. The `platform` parameter and the Android tables in SPEC §5.2 are Phase 4's job, so the signatures differ from the SPEC for now.
 - WebM is a VP9 transcode (`libvpx-vp9`, CRF 33) with Opus audio, because the SPEC's encoder list had no VP9. `ConvertPlan.video` now also takes `'vp9'` and `'copy'`.
-- Clip preview on the Mac is a 10-frame thumbnail strip only. The `<video>` preview and the `file://` CSP check (RESEARCH §11) are not done; the next session decides whether to add them or a `media:` protocol.
+- Clip preview on the Mac: a 10-frame thumbnail strip, plus "Preview in player" through the `mediain` scheme (B2.2). The `file://` CSP check passed (see Verified 2026-11-03 B2.2).
 - Output publish: rename into the folder when on the same volume; across volumes, copy to `<name>.part` and rename.
 - Encoder stats: median of the last five overshoot ratios, no clamp (the 0.8–1.5 clamp is a Phase 5 Android item).
 - Icon: `apps/design-editor/build/icon.icns` (105 KB) is committed, built with `sips` and `iconutil` from `apps/design-editor-mobile/assets/icon.png`. `dist` passes `--icon=build/icon` (the packager adds `.icns`).
@@ -281,7 +297,7 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
 - Subtitles and data tracks are dropped. A multi-audio convert uses one codec for every track.
 - A process killed during a cross-volume copy can leave a `.part` file in the output folder. Same-volume publishes (the normal case) are a single rename.
 - Quit with a running job is tested by emitting `before-quit`, not by a real Cmd-Q.
-- Not tested yet: HEVC size, GIF "fit under N MB", and any owner clip (the owner's phone clips are not on this Mac).
+- Tested on synthetic clips in B2.2: HEVC size (17.94 MB of a 20 MB target, 1 attempt) and GIF fit under 1 MB (469 kB). Not tested: any owner clip (the phone clips are not on this Mac).
 
 ## File map
 
@@ -368,10 +384,11 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
   suite `test/media.mjs` chained into `test:e2e`, the packaged app with FFmpeg unpacked, and AC-10 on the packaged app. Four real bugs
   were found by the e2e and fixed (see Verified). A security review finding about the output name was fixed. Handoff written; nothing committed.
 - **2026-11-03 (session B2.1, CapCut gap pass and two media jobs).** Stacked branch `design-media-capcut` from `design-media-phase-2`. PR #15 is still open, so B3 did not start. The CapCut study is in `docs/design-editor/CAPCUT-GAPS.md`. The UI walk-through and the ffprobe measurements were blocked: no Screen Recording permission (screencapture fails), a sparse accessibility tree, and `AXManualAccessibility` refused. Added Remove sound (Convert > Without sound) and Still frame (PNG or JPEG), with planner, validator, FFmpeg args, UI, tests and e2e. PRD FR-8 and a still-frame bullet updated. Verification is under "Verified 2026-11-03 (session B2.1)".
+- **2026-11-03 (session B2.2, close B2.1, Phase 2 open items).** PR #15 merged (146db86). PR #16 retargeted to `main`. The rebase would have needed a force-push, so `origin/main` was merged into the branch instead (5760a0a), with the branch's media files kept (see Decisions B2.2). Verified the merged branch: media-core 61 pass, typecheck and root test exit 0, e2e exit 0. CapCut measurements still blocked (screencapture fails; no owner files). Phase 2 open items closed: the `file://` CSP check passes; the preview goes through `mediain` (8ecf695, with the HEVC size, GIF fit-under and seek checks). B3 not started: it waits for PR #16 on `main`, which needs the owner's yes.
 
 ## Current state + exact next step
 
-- **State (2026-11-03, session B2.1):** branch `design-media-capcut` stacked on `design-media-phase-2`, PR https://github.com/haroongondal/apps-hub/pull/16 (base `design-media-phase-2`, retarget to `main` after #15 merges). It has the CapCut study (`docs/design-editor/CAPCUT-GAPS.md`, desk-based, the UI was not reached), two new jobs (Remove sound and Still frame), their tests and e2e cases, the PRD FR-8 update and this handoff. Phase 3 still waits for PR #15. Next steps are in the resume prompt (open items 1 and 2).
+- **State (2026-11-03, session B2.2):** PR #16 (`design-media-capcut`) is retargeted to `main`. `main` (146db86) has PR #15, so `origin/main` was merged into the branch (merge commit 5760a0a) to avoid a force-push, with the branch's media files kept where the squash on `main` differed only by the B2.1 lines. The media diff against `main` is the B2.1 work. Then: the clip preview through the `mediain` scheme (8ecf695). The CapCut measurements are still blocked. PR #16 is not merged; B3 waits for that (see the resume prompt).
 
 - **State (2026-11-03, session B2, Phase 2 done, committed and pushed as PR #15):** the Mac media tools are on branch `design-media-phase-2` (commit 91d37c7, from `origin/main` 8fb7b38), PR https://github.com/haroongondal/apps-hub/pull/15 into `main`. Not merged, not released (the Mac app is not a Store app). The changed files are in `packages/media-core` (ffmpeg, probe, clip, audio, gif, convert, quality, plus validate and names changes and tests), `apps/design-editor` (`media.js`, `media.html`, `media-ui.js`, `media.css`, `scripts/fetch-ffmpeg.mjs`, `test/media.mjs`, `main.js`, `preload.cjs`, `app.js`, `index.html`, `package.json`, `.gitignore`, `build/icon.icns`) and this handoff. Verification is under "Verified 2026-11-03 (session B2)".
 - **Next step:** the owner decides. (a) Commit, push and open the PR with `gh` (no Claude attribution, owner's rule). Merging into `main` releases no app, because the Mac app is not in the Store and CI only releases changed Store apps. Use the pr-shipper agent when the owner says ship. (b) Or stop here. Then the next session is B3 (Media Phase 3, engine extraction and mobile canvas) on `design-media-phase-3`, from `main` after B2 is merged. Before B3, decide the open Phase 2 items above: the `<video>` preview and CSP check, and whether to test HEVC size and GIF fit-under on the Mac.
