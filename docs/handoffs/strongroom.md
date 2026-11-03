@@ -2,22 +2,28 @@
 
 ## Resume prompt
 
-Dated 2026-11-01 (fourth session). Work only in the worktree
-`/Users/outsentia/Documents/apps-hub/.claude/worktrees/strongroom-phase-1`
-(branch `strongroom-phase-1`; enter it with EnterWorktree path). Read
-`docs/handoffs/strongroom.md` there completely first, then
-`docs/strongroom/DESIGN.md`, then the SDD ledger at
-`.superpowers/sdd/PHASE-1-PLAN/progress.md` (its rulings, carries and
-deferred minors bind the remaining work). The 12 plan tasks are done; what is
-left is the numbered list in "Current state + exact next step". Use
-superpowers:subagent-driven-development for code work (implementer and
-task-reviewer templates, a review after every change, explicit models) and
-ledger every ruling. Trust the decisions, verified facts and ledger and don't
-redo that work. Follow the handoff contract in `~/.claude/CLAUDE.md`. Commit on
-the branch; never push, merge or release (`pnpm release`) without the owner's
-explicit word in this chat; phone installs only via the Store; adb on the
-phone only for logcat, screenshots, taps and uiautomator dumps, always with
-`-s <phone serial>`; debug builds only on an emulator.
+Dated 2026-11-03 (sixth session). Work only in the worktree
+`/Users/outsentia/Documents/apps-hub/.claude/worktrees/strongroom-phase-1`.
+Its branch `strongroom-phase-1` was recreated from `origin/main` (146db86) on
+2026-11-03 because the old branch was deleted after PR #7 merged; it has no
+upstream on purpose, so never `git push` from it without naming the remote
+branch. Read `docs/handoffs/strongroom.md` completely first, then
+`docs/strongroom/DESIGN.md`. The Phase 1 work and its releases are done (0.1.1,
+versionCode 7, is in the Store and on the phone). The open problem is the one
+under "Current state + exact next step", item 1: a fill request is queued but
+never reaches Strongroom's service within Android's 5 s, after a login form is
+submitted. Trust the verified facts and decisions in the handoff and don't redo
+that work. Use superpowers:systematic-debugging first (evidence before a fix),
+then superpowers:subagent-driven-development for code changes (implementer and
+task-reviewer, a review after every change, explicit models), ledgering every
+ruling in the handoff. Follow the handoff contract in `~/.claude/CLAUDE.md`.
+Commit on the branch; never push, merge or release (`pnpm release`) without the
+owner's explicit word in this chat; phone installs only via the Store (the
+owner's phone, Xiaomi 24116RACCG, serial `adb-49kjmnuwonkffqzh-zHnffO._adb-tls-connect._tcp`);
+adb on the phone only for logcat, screenshots, taps, uiautomator dumps and
+reading settings, always with `-s <phone serial>`; never type the master
+password or use the fingerprint (only the owner does); debug builds only on an
+emulator (`emulator-5556`, AVD `strongroom-task12`).
 
 ## Goal and fixed constraints
 
@@ -476,6 +482,24 @@ order (ledger "Post-plan work" has the rulings and P-briefs):
    (79d52eb, f728b59: `SecretEditText` reports `AUTOFILL_TYPE_NONE` and writes
    nothing to assist/autofill/content-capture structures; every `SecretField`,
    both notes and `UnlockActivity`'s password), version bump a4c490c.
+1a. **OPEN BUG (phone, 2026-11-03 16:05–16:07), the next step.** On
+   `https://the-internet.herokuapp.com/login`, typing a username and password
+   then Login (fake credentials; the site rejects them) gave one fill request
+   (id 1374, queued 16:07:09.245) that Strongroom never received: no
+   `calling onFillRequest() for id=1374`, and Android logged
+   `TimeoutException` / `finishing session due to service timeout` at 5055 ms.
+   Strongroom's process (pid 5842) was already running, so this is NOT a cold
+   start, and P1's fixes (cold start, PSL warm-up, RN deferred) don't cover it.
+   The earlier request on the same page (id 1372, 16:05 and 16:07 runs) was
+   answered in 2 ms with zero items and no save info, so the service either
+   answered early or the request never bound. No Save prompt appeared, so the
+   Save and Update checks are still untested. Phone state: 0.1.1 versionCode 7;
+   Strongroom is the autofill service; the vault is unlocked; no test entry was
+   saved; Chrome is on the practice login page; verbose autofill logging is on.
+   Next: read `RemoteFillService` / `onFillRequest` in the logs for both ids,
+   find where the request stops (binding, `strongroom-fill` thread, a callback
+   that never runs), reproduce on `emulator-5556` with a warm process and a
+   form submit, fix the root cause, then repeat the phone save test.
 2a. **Phone check 2026-11-03 15:44 (controller, adb, 0.1.1 versionCode 7 from the
    Store, Strongroom still the autofill service):** PASS cold fill. Strongroom
    had no process; Chrome on https://the-internet.herokuapp.com/login, tap
