@@ -497,6 +497,13 @@ order (ledger "Post-plan work" has the rulings and P-briefs):
    card fill, auto-lock 1 min (U1), S4/S5, U2, two-step save, Deputy's view (B5),
    S2 (https login fill: needs a saved https login), Firefox username, then delete
    `sg-test-lan`.
+2c. **Phone check 2026-11-03, owner unlocked (controller, read-only + Settings taps):**
+   Settings → Checks: Chrome **Recognised** (PASS); "Last unlock: Took 0.6 seconds"
+   (below the 1–2 s target: a tuning decision, not a failure; a higher KDF is
+   stronger, so the owner decides before changing `KdfParams.DEFAULT`). Matching
+   fill NOT tested: accounts.google.com shows the signed-in account page (no login
+   form). Next: a site with a saved login and a sign-in form (e.g. adobe.com or
+   academia.edu), for the matching strip and S2 (https scheme).
 2. **PR #7 is open** (`strongroom-phase-1` → `main`, Strongroom 0.1.1; the owner
    merges it, which makes CI release the next versionCode). Merged `origin/main`
    into the branch first (2ddbcb5, no conflicts). Tests: strongroom 25/25,
