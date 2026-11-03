@@ -8,9 +8,10 @@ export const DESTINATIONS: readonly Destination[] = [
   { id: 'whatsapp', label: 'WhatsApp', bytes: 16_000_000 },
 ];
 
-// Frame-rate and short-side caps for "compress by quality" (PRD FR-4); bpp is the Android bitrate per pixel.
+// Frame-rate and short-side caps for "compress by quality" (PRD FR-4). vt is the Mac's VideoToolbox -q:v (SPEC §9.1);
+// bpp is the Android bitrate per pixel.
 export const QUALITY_PRESETS = {
-  high: { maxShortSide: Infinity, maxFps: Infinity },
-  medium: { maxShortSide: 1080, maxFps: 30, bpp: 0.10 },
-  small: { maxShortSide: 720, maxFps: 30, bpp: 0.07 },
+  high: { maxShortSide: Infinity, maxFps: Infinity, vt: 65 },
+  medium: { maxShortSide: 1080, maxFps: 30, vt: 55, bpp: 0.10 },
+  small: { maxShortSide: 720, maxFps: 30, vt: 45, bpp: 0.07 },
 } as const;

@@ -16,13 +16,13 @@ const clip = (durationS: number): MediaInfo => ({
 });
 
 test('rule 1: an output name is never the input name', () => {
-  assert.notEqual(outputName('Trip.mp4', () => false), 'Trip.mp4');
-  assert.notEqual(outputName('Trip', () => false), 'Trip');
+  assert.notEqual(outputName('Trip.mp4', 'compressed', 'mp4', () => false), 'Trip.mp4');
+  assert.notEqual(outputName('Trip', 'compressed', 'mp4', () => false), 'Trip');
 });
 
 test('rule 2: output names carry no path separators, so they stay in the chosen folder', () => {
-  assert.doesNotMatch(outputName('../../etc/passwd', () => false), /[\\/]/);
-  assert.doesNotMatch(outputName('a\\b:c.mov', () => false), /[\\/]/);
+  assert.doesNotMatch(outputName('../../etc/passwd', 'compressed', 'mp4', () => false), /[\\/]/);
+  assert.doesNotMatch(outputName('a\\b:c.mov', 'compressed', 'mp4', () => false), /[\\/]/);
 });
 
 test('rule 3: a planned output never exceeds the target', () => {

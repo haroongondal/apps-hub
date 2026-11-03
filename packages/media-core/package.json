@@ -6,7 +6,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "test": "node --test src/__tests__/presets.test.ts src/__tests__/budget.test.ts src/__tests__/retry.test.ts src/__tests__/names.test.ts src/__tests__/validate.test.ts src/__tests__/queue.test.ts src/__tests__/data-safety.test.ts",
+    "test": "node --test src/__tests__/presets.test.ts src/__tests__/budget.test.ts src/__tests__/retry.test.ts src/__tests__/names.test.ts src/__tests__/validate.test.ts src/__tests__/queue.test.ts src/__tests__/data-safety.test.ts src/__tests__/probe.test.ts src/__tests__/ffmpeg.test.ts src/__tests__/plans.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

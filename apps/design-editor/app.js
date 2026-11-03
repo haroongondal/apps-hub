@@ -791,10 +791,11 @@ const MENU = {
 };
 native.onMenu(cmd => MENU[cmd]?.());
 
-$$('nav.rail button').forEach(b => b.onclick = () => {
-  $$('nav.rail button').forEach(x => x.classList.toggle('on', x === b));
+$$('nav.rail button[data-tab]').forEach(b => b.onclick = () => {
+  $$('nav.rail button[data-tab]').forEach(x => x.classList.toggle('on', x === b));
   $$('.drawer section').forEach(p => p.classList.toggle('on', p.dataset.panel === b.dataset.tab));
 });
+$('#openMedia').onclick = () => native.media.openWindow();
 
 (async () => {
   // fabric caches glyph widths per font, so nothing may measure text before the bundled fonts are in
