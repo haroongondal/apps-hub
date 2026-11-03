@@ -4,6 +4,10 @@ import { test } from 'node:test';
 import { planAudio } from '../audio.ts';
 import { planClip } from '../clip.ts';
 import { planConvert } from '../convert.ts';
+import { planFrame } from '../frame.ts';
+import { planReverse, reverseProblem } from '../reverse.ts';
+import { planStabilize } from '../stabilize.ts';
+import { parseLoudnorm, planVolume } from '../volume.ts';
 import { planGif, nextGifAttempt } from '../gif.ts';
 import { fromFfprobe } from '../probe.ts';
 import { planQuality } from '../quality.ts';
@@ -75,6 +79,21 @@ test('convert: an audio target takes the first audio track and encodes it when i
   assert.equal(mp3.plan.video, undefined);
 });
 
+test('convert: muted drops every audio track and still remuxes a video whose codec fits', () => {
+  const muted = planConvert(film(), 'mp4', { videoCodec: 'h264', muted: true });
+  assert.ok(muted.ok);
+  assert.equal(muted.plan.mode, 'remux');
+  assert.equal(muted.plan.audio, undefined);
+  assert.deepEqual(muted.plan.video, { encoder: 'copy', quality: 0 });
+});
+
+test('frame: a still needs a video track and keeps its time and format', () => {
+  const still = planFrame(film(), 1.5, 'jpg');
+  assert.deepEqual(still, { ok: true, plan: { tool: 'frame', timeS: 1.5, format: 'jpg', ext: 'jpg' } });
+  const audioOnly: MediaInfo = { ...film(), tracks: film().tracks.filter(t => t.kind === 'audio') };
+  assert.deepEqual(planFrame(audioOnly, 0, 'png'), { ok: false, reason: 'no-video' });
+});
+
 test('quality: the preset caps the short side and keeps the displayed orientation', () => {
   const small = planQuality(portrait(), 'small');
   assert.ok(small.ok);
@@ -82,4 +101,46 @@ test('quality: the preset caps the short side and keeps the displayed orientatio
   const high = planQuality(portrait(), 'high');
   assert.ok(high.ok);
   assert.deepEqual([high.plan.width, high.plan.height, high.plan.quality], [1080, 1920, 65]);
+});
+
+test('volume: the picture is copied when it fits MP4, re-encoded otherwise, and audio-only files give M4A', () => {
+  const copy = planVolume(film(), 'normalize', 0);
+  assert.deepEqual(copy, { ok: true, plan: { tool: 'volume', mode: 'normalize', gainDb: 0, video: 'copy', ext: 'mp4' } });
+  const vp9 = { ...film(), tracks: film().tracks.map(t => t.kind === 'video' ? { ...t, codec: 'vp9' as const } : t) };
+  const reencoded = planVolume(vp9, 'gain', 6);
+  assert.deepEqual(reencoded, { ok: true, plan: { tool: 'volume', mode: 'gain', gainDb: 6, video: 'hw-h264', ext: 'mp4' } });
+  const audioOnly = planVolume({ ...film(), tracks: film().tracks.filter(t => t.kind === 'audio') }, 'normalize', 0);
+  assert.ok(audioOnly.ok);
+  assert.equal(audioOnly.plan.ext, 'm4a');
+  assert.equal(audioOnly.plan.video, undefined);
+  assert.deepEqual(planVolume({ ...film(), tracks: film().tracks.filter(t => t.kind === 'video') }, 'normalize', 0),
+    { ok: false, reason: 'invalid', detail: 'This file has no audio to change.' });
+});
+
+test('reverse: a clip up to 10 s at 1080p or below is planned; longer or bigger clips are refused with the reason', () => {
+  assert.deepEqual(planReverse(film(), true), { ok: true, plan: { tool: 'reverse', sound: true, quality: 65, ext: 'mp4' } });
+  assert.equal(reverseProblem({ ...film(), durationS: 10.02 }), undefined);
+  assert.match(reverseProblem({ ...film(), durationS: 12 }) ?? '', /up to 10 seconds/);
+  const uhd = { ...film(), tracks: film().tracks.map(t => t.kind === 'video' ? { ...t, width: 3840, height: 2160 } : t) };
+  assert.match(reverseProblem(uhd) ?? '', /up to 1920×1080/);
+  assert.deepEqual(planReverse({ ...film(), tracks: film().tracks.filter(t => t.kind === 'audio') }, true),
+    { ok: false, reason: 'invalid', detail: 'Reverse needs a video track.' });
+});
+
+test('stabilize: each level maps to its search range, and an audio-only file is refused', () => {
+  assert.deepEqual(planStabilize(film(), 'recommended'), { ok: true, plan: { tool: 'stabilize', level: 'recommended', search: 16, quality: 65, ext: 'mp4' } });
+  const most = planStabilize(film(), 'most');
+  const minimum = planStabilize(film(), 'minimum');
+  assert.ok(most.ok && minimum.ok);
+  assert.equal(most.plan.search, 40);
+  assert.equal(minimum.plan.search, 8);
+  assert.equal(planStabilize({ ...film(), tracks: film().tracks.filter(t => t.kind === 'audio') }, 'most').ok, false);
+});
+
+test('volume: the loudnorm measure is read from its JSON, and a missing field means no measure', () => {
+  const stderr = `[Parsed_loudnorm_0 @ 0x1] \n{\n\t"input_i" : "-31.45",\n\t"input_tp" : "-12.07",\n\t"input_lra" : "0.00",\n`
+    + `\t"input_thresh" : "-41.45",\n\t"target_offset" : "0.33"\n}\n`;
+  assert.deepEqual(parseLoudnorm(stderr), { inputI: -31.45, inputTp: -12.07, inputLra: 0, inputThresh: -41.45, offset: 0.33 });
+  assert.equal(parseLoudnorm('no measure here'), undefined);
+  assert.equal(parseLoudnorm(stderr.replace('"input_thresh" : "-41.45",', '')), undefined);
 });

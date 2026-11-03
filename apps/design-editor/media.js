@@ -1,12 +1,13 @@
-import { app, BrowserWindow, dialog, ipcMain, powerSaveBlocker, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, powerSaveBlocker, protocol, shell } from 'electron';
 import { execFile, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import fs from 'node:fs/promises';
+import { Readable } from 'node:stream';
 import path from 'node:path';
 import {
-  DESTINATIONS, ffmpegArgs, ffprobeArgs, fromFfprobe, keyframeArgs, nextGifAttempt, nextRunnable, nextSizeAttempt, outputName,
-  parseKeyframe, parseProgress, planAudio, planClip, planConvert, planGif, planQuality, planSize, reduce, thumbArgs, validateSpec,
+  DESTINATIONS, ffmpegArgs, ffprobeArgs, fromFfprobe, keyframeArgs, loudnormMeasureArgs, nextGifAttempt, nextRunnable, nextSizeAttempt, outputName,
+  parseKeyframe, parseLoudnorm, parseProgress, planAudio, planClip, planConvert, planFrame, planGif, planQuality, planReverse, planSize, planStabilize, planVolume, reduce, thumbArgs, validateSpec,
 } from './vendor/media-core/index.ts';
 
 // Electron cannot run a binary inside app.asar; the packager unpacks vendor/ffmpeg beside it.
@@ -14,7 +15,7 @@ const BIN = path.join(import.meta.dirname, 'vendor/ffmpeg').replace('app.asar', 
 const FFMPEG = path.join(BIN, 'ffmpeg');
 const FFPROBE = path.join(BIN, 'ffprobe');
 const INPUT_EXTENSIONS = ['mp4', 'm4v', 'mov', 'mkv', 'webm', 'mp3', 'm4a', 'aac', 'ogg', 'opus', 'wav', 'flac', 'ac3', 'eac3', 'mka'];
-const LABELS = { size: 'compressed', quality: 'compressed', clip: 'clip', convert: 'converted' };
+const LABELS = { size: 'compressed', quality: 'compressed', clip: 'clip', convert: 'converted', frame: 'frame', volume: 'volume', reverse: 'reversed', stabilize: 'stabilized' };
 const STATS_PATH = () => path.join(app.getPath('userData'), 'media-stats.json');
 
 // The renderer only ever sends ids; the paths stay here (PRD AC-11).
@@ -44,7 +45,27 @@ export function openMediaWindow() {
   mediaWin.loadFile('media.html');
 }
 
+// The player's scheme. Its privileges must be set before the app is ready, so registerMedia runs at startup.
+const MEDIA_SCHEME = 'mediain';
+
+// Serves a picked input by its id, with byte ranges so the player can seek. An unknown id gets a 404.
+function serveInput(req) {
+  const input = inputs.get(new URL(req.url).hostname);
+  if (!input) return new Response('Not found', { status: 404 });
+  const size = statSync(input.path).size;
+  const [, from, to] = /^bytes=(\d*)-(\d*)$/.exec(req.headers.get('range') ?? '') ?? [];
+  const ranged = from !== undefined || to !== undefined;
+  const start = from ? Number(from) : to ? Math.max(0, size - Number(to)) : 0;
+  const end = from && to ? Math.min(Number(to), size - 1) : size - 1;
+  if (start > end) return new Response(null, { status: 416, headers: { 'content-range': `bytes */${size}` } });
+  const headers = { 'content-type': 'video/mp4', 'accept-ranges': 'bytes', 'content-length': String(end - start + 1) };
+  if (ranged) headers['content-range'] = `bytes ${start}-${end}/${size}`;
+  return new Response(Readable.toWeb(createReadStream(input.path, { start, end })), { status: ranged ? 206 : 200, headers });
+}
+
 export function registerMedia() {
+  protocol.registerSchemesAsPrivileged([{ scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, stream: true } }]);
+  app.whenReady().then(() => protocol.handle(MEDIA_SCHEME, serveInput));
   ipcMain.handle('media-status', () => ({ ready: existsSync(FFMPEG) && existsSync(FFPROBE), destinations: DESTINATIONS }));
   ipcMain.handle('media-pick', async () => {
     const r = await showOpen({ properties: ['openFile', 'multiSelections'], filters: [{ name: 'Video and audio', extensions: INPUT_EXTENSIONS }] });
@@ -107,7 +128,11 @@ async function planFor(spec) {
     case 'clip': return planClip(input.info, spec.startS, spec.endS, await keyframeAt(input.path, spec.startS), spec.mode);
     case 'audio': return planAudio(input.info.tracks.find(t => t.index === spec.trackIndex));
     case 'gif': return planGif(input.info, spec);
-    case 'convert': return planConvert(input.info, spec.target, { videoCodec: spec.videoCodec });
+    case 'convert': return planConvert(input.info, spec.target, { videoCodec: spec.videoCodec, muted: spec.muted === true });
+    case 'frame': return planFrame(input.info, spec.timeS, spec.format);
+    case 'volume': return planVolume(input.info, spec.mode, spec.gainDb);
+    case 'reverse': return planReverse(input.info, spec.sound);
+    case 'stabilize': return planStabilize(input.info, spec.level);
     default: return { ok: false, reason: 'invalid', detail: "This job type isn't supported yet." };
   }
 }
@@ -149,6 +174,7 @@ async function runJob(job) {
   try {
     await fs.mkdir(tmp, { recursive: true });
     let plan = job.plan;
+    if (plan.tool === 'volume' && plan.mode === 'normalize') plan = { ...plan, measured: await measureLoudness(input.path) };
     for (let attempt = 1; ; attempt++) {
       const out = path.join(tmp, `attempt-${attempt}.${extOf(plan)}`);
       await encode(job.id, plan, input, out, tmp);
@@ -288,7 +314,7 @@ function labelFor(plan, info) {
 }
 
 function extOf(plan) {
-  return { size: 'mp4', quality: 'mp4', clip: plan.ext, audio: plan.ext, gif: 'gif', convert: plan.ext }[plan.tool];
+  return { size: 'mp4', quality: 'mp4', clip: plan.ext, audio: plan.ext, gif: 'gif', convert: plan.ext, frame: plan.ext, volume: plan.ext, reverse: 'mp4', stabilize: 'mp4' }[plan.tool];
 }
 
 function refusalText(r) {
@@ -333,6 +359,17 @@ async function showOpen(options) {
 function showMessageSync(options) {
   const win = BrowserWindow.getFocusedWindow();
   return win ? dialog.showMessageBoxSync(win, options) : dialog.showMessageBoxSync(options);
+}
+
+// loudnorm's first pass prints its measurements to stderr, so this reads stderr.
+function measureLoudness(file) {
+  return new Promise((resolve, reject) => {
+    execFile(FFMPEG, loudnormMeasureArgs(file), { encoding: 'utf8', maxBuffer: 64 << 20 }, (err, _stdout, stderr) => {
+      const measured = err ? undefined : parseLoudnorm(stderr);
+      if (measured) resolve(measured);
+      else reject(new Error("Couldn't measure this file's loudness."));
+    });
+  });
 }
 
 function execText(file, args, label) {

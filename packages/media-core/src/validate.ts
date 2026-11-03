@@ -1,4 +1,6 @@
 import { GIF_MAX_S } from './gif.ts';
+import { reverseProblem } from './reverse.ts';
+import { GAIN_LIMIT_DB } from './volume.ts';
 import type { ConvertTarget, Encoder, MediaInfo, Platform } from './types.ts';
 
 export interface SizeSpec { tool: 'size'; inputId: string; targetBytes: number; encoder: Encoder }
@@ -6,8 +8,12 @@ export interface QualitySpec { tool: 'quality'; inputId: string; preset: 'high' 
 export interface ClipSpec { tool: 'clip'; inputId: string; startS: number; endS: number; mode: 'copy' | 'exact' }
 export interface AudioSpec { tool: 'audio'; inputId: string; trackIndex: number }
 export interface GifSpec { tool: 'gif'; inputId: string; startS: number; endS: number; width: number; fps: number; targetBytes?: number }
-export interface ConvertSpec { tool: 'convert'; inputId: string; target: ConvertTarget; videoCodec: 'h264' | 'hevc' }
-export type JobSpec = SizeSpec | QualitySpec | ClipSpec | AudioSpec | GifSpec | ConvertSpec;
+export interface ConvertSpec { tool: 'convert'; inputId: string; target: ConvertTarget; videoCodec: 'h264' | 'hevc'; muted?: boolean }
+export interface FrameSpec { tool: 'frame'; inputId: string; timeS: number; format: 'png' | 'jpg' }
+export interface VolumeSpec { tool: 'volume'; inputId: string; mode: 'normalize' | 'gain'; gainDb: number }
+export interface ReverseSpec { tool: 'reverse'; inputId: string; sound: boolean }
+export interface StabilizeSpec { tool: 'stabilize'; inputId: string; level: 'minimum' | 'recommended' | 'most' }
+export type JobSpec = SizeSpec | QualitySpec | ClipSpec | AudioSpec | GifSpec | ConvertSpec | FrameSpec | VolumeSpec | ReverseSpec | StabilizeSpec;
 
 const MIN_TARGET_BYTES = 1_000_000;
 const ENCODERS: Record<Platform, readonly Encoder[]> = {
@@ -64,14 +70,39 @@ export function validateSpec(spec: unknown, info: MediaInfo, platform: Platform)
       const target = s.target;
       if (typeof target === 'string' && AUDIO_TARGETS.includes(target as ConvertTarget)) {
         if (!hasAudio) errors.push('This file has no audio to convert.');
+        if (s.muted === true) errors.push('An audio format needs sound. Turn off Without sound or pick a video format.');
       } else if (typeof target === 'string' && VIDEO_TARGETS.includes(target as ConvertTarget)) {
         if (!hasVideo) errors.push("This file has no video, so it can't become a video.");
         if (s.videoCodec !== 'h264' && s.videoCodec !== 'hevc') errors.push('Pick H.264 or HEVC.');
       } else {
         errors.push('Pick a format to convert to.');
       }
+      if (s.muted !== undefined && typeof s.muted !== 'boolean') errors.push('Without sound must be on or off.');
       break;
     }
+    case 'frame': {
+      if (!hasVideo) errors.push("This file has no video track, so there's no frame to save.");
+      const t = n(s.timeS);
+      if (!(t >= 0 && t < info.durationS)) errors.push('Pick a time inside the file.');
+      if (s.format !== 'png' && s.format !== 'jpg') errors.push('Pick PNG or JPEG.');
+      break;
+    }
+    case 'volume': {
+      if (!hasAudio) errors.push('This file has no audio to change.');
+      if (s.mode !== 'normalize' && s.mode !== 'gain') errors.push('Pick normalize or a gain in dB.');
+      if (s.mode === 'gain' && !(Math.abs(n(s.gainDb)) <= GAIN_LIMIT_DB)) errors.push(`Pick a change from -${GAIN_LIMIT_DB} to +${GAIN_LIMIT_DB} dB.`);
+      break;
+    }
+    case 'reverse': {
+      const problem = reverseProblem(info);
+      if (problem) errors.push(problem);
+      if (typeof s.sound !== 'boolean') errors.push('Reverse the sound on or off.');
+      break;
+    }
+    case 'stabilize':
+      if (!hasVideo) errors.push("This file has no video track, so there's nothing to stabilize.");
+      if (s.level !== 'minimum' && s.level !== 'recommended' && s.level !== 'most') errors.push('Pick Minimum cut, Recommended or Most stable.');
+      break;
     default:
       errors.push("This job type isn't supported yet.");
   }

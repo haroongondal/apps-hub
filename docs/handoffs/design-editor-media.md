@@ -2,29 +2,23 @@
 
 ## Resume prompt
 
-Dated 2026-11-03. Build session B2.1: Design Editor media tools, CapCut feature gap pass, then Phase 3 (B3) once B2 is merged.
+Dated 2026-11-03. Build session B3 (Media Phase 3, engine extraction and mobile canvas), once PR #16 is merged. Until then, check the owner's answers below.
 
-Read `docs/handoffs/design-editor-media.md` completely first. Until PR #15 merges, that file is on branch `design-media-phase-2`, so run `git fetch origin && git show origin/design-media-phase-2:docs/handoffs/design-editor-media.md` if your checkout doesn't have it. Then read `docs/design-editor/PRD.md`, `docs/design-editor/SPEC.md`, and the prelude plus your phase in `docs/design-editor/PROMPTS.md`. Trust the decisions and verified facts in the handoff and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` and "How every session runs" in `docs/build-sessions.md`. Read "Current state + exact next step" before doing anything.
+Read `docs/handoffs/design-editor-media.md` completely first. It lives in the worktree `.claude/worktrees/design-media-phase-2`, on branch `design-media-capcut` (PR #16, base `main`). Then read `docs/design-editor/PRD.md`, `docs/design-editor/SPEC.md`, `docs/design-editor/CAPCUT-GAPS.md` and the prelude plus your phase in `docs/design-editor/PROMPTS.md`. Trust the decisions and verified facts in the handoff and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` and "How every session runs" in `docs/build-sessions.md`. Read "Current state + exact next step" before doing anything.
 
 Gates and rules:
-- The owner said to proceed without waiting for approval on routine work: commit, push and open PRs with `gh`. Never merge to `main` yourself, never force-push, and never add Claude attribution lines to commits or PR bodies.
+- The owner said to proceed without waiting for approval on routine work: commit, push and open PRs with `gh`. Never merge to `main` yourself, never force-push, and never add Claude attribution lines to commits or PR bodies. Merge only when the owner says so.
 - Don't touch the main checkout, the `clipboard`, `firewall-spike`, `tunnelwall-firewall` or `deputy-speed` worktrees, or the `design-editor-phase-2` worktree.
-- Don't start Phase 3 until PR #15 (`design-media-phase-2`) is merged. If it isn't, do the CapCut pass below on a stacked branch.
-- New npm, Gradle or CocoaPods dependencies need the owner's yes first. FFmpeg filters and encoders inside the pinned 9.0.2 binary are not new dependencies.
+- B3 starts only when PR #16 is on `main`. That needs the owner's yes to merge.
+- New npm, Gradle or CocoaPods dependencies need the owner's yes first. FFmpeg filters and encoders inside the pinned 9.0.2 binary are not new dependencies. A new FFmpeg build (libvidstab) is a new dependency.
+- The Bash shell here is zsh and may have `ELECTRON_RUN_AS_NODE` set. Strip it when running Electron, and don't use `timeout` (not installed).
 
-Task 1: CapCut gap study (desktop app at `/Applications/CapCut.app`, installed on this Mac).
-- Use the app as a user would: its UI, export settings and feature list. Export test clips from it and measure the results with `ffprobe` (size, bitrate, codec, resolution, fps, duration, audio tracks).
-- Don't decompile, unpack or copy CapCut's code, models, templates, fonts or other assets, and don't bypass its licence or paywalls. Write findings in your own words.
-- Write `docs/design-editor/CAPCUT-GAPS.md`. For each CapCut media feature, record: the user job, whether it works offline, whether it needs a cloud or AI model (reject if it does), whether it needs a new dependency or only FFmpeg args, and whether PRD §8 puts it out of scope.
-- Rank the gaps by fit for the Mac media tools.
+Open items, in order:
+1. Owner: merge PR #16 when ready. Then start B3 on `.claude/worktrees/design-media-phase-3` from `origin/main`, on branch `design-media-phase-3`, `pnpm install` there, and follow PROMPTS.md Phase 3. Extract the multi-page editor on `main` (file format v2, page strip, bundled fonts) into `packages/design-editor-engine`, not the single-page version the SPEC describes, and update SPEC §14. The Mac e2e must stay green. The mobile canvas checks run on the phone only, through the Store.
+2. CapCut measurements, still blocked on 2026-11-03: no Screen Recording permission for this terminal (`screencapture` fails), and CapCut's accessibility tree is almost empty. Needs the owner to grant the permission, or to share CapCut export files. Until then, compare the new tools with CapCut only from public descriptions.
+3. Optional, needs a yes: libvidstab for Stabilize (a new FFmpeg build with its licence check). The current stabilizer is FFmpeg's built-in `deshake`.
 
-Task 2: add the top gaps that fit (offline, FOSS, pinned FFmpeg only).
-- Each new job type touches: `validate.ts`, a planner in media-core with tests, `ffmpeg.ts` args with tests, `planFor` and `enqueue` in `media.js`, the controls in `media-ui.js` and `media.html`, and a case in `test/media.mjs`.
-- Anything that moves past PRD §8 is a scope change. Record it in the handoff as an owner decision, with the reason.
-
-Verify with the real output, not predicted output: `pnpm --filter @apps-hub/media-core test`, `pnpm test`, `pnpm typecheck`, `pnpm --filter design-editor test:e2e`. If you change the packaged app, run `pnpm --filter design-editor dist`.
-
-Finish: update the handoff's session log, "Current state + exact next step" and this resume prompt. Commit, push, and open or update the PR. At about 85% context, stop starting work, update the handoff and print its resume prompt in a fenced block.
+At about 85% context, stop starting work, update the handoff and print its resume prompt in a fenced block.
 
 ## Goal and fixed constraints
 
@@ -254,12 +248,70 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
 - Bugs found and fixed while testing: enqueue stored the `Planned` wrapper `{ok, plan}` as the job plan (so ffmpeg args were undefined); `parseKeyframe` dropped ffprobe's trailing commas (lossless clips started at 0); clip times need six decimals, because a keyframe at 8.333333 s seeks back to the previous keyframe when passed as 8.333; the packaged app cannot run a binary inside `app.asar`, so `dist` uses `--asar.unpackDir=vendor/ffmpeg` and `media.js` resolves `app.asar.unpacked`.
 - The security review finding (an audio language tag in a file's metadata could steer the output name out of the folder) is fixed: `outputName` sanitizes labels, `labelFor` accepts only language-shaped tags, and `publish` refuses a destination outside the chosen folder. Regression test in `names.test.ts`.
 
+### Verified 2026-11-03 (session B2.1; output was read, not predicted)
+
+- `pnpm --filter @apps-hub/media-core test`: 61 pass, 0 fail (was 55; six new: convert mute, frame plan, validate mute and frame, ffmpeg mute and frame).
+- `pnpm --filter @apps-hub/media-core typecheck` and root `pnpm typecheck`: exit 0.
+- Root `pnpm test`: exit 0.
+- `pnpm --filter design-editor test:e2e`: exit 0. The editor suite and the media suite both pass. In the media suite: the Discord 20 MB job published 19.19 MB in 1 attempt; the muted MP4 keeps only its video stream; the PNG frame at 1 s is 1280 px wide with codec png; the JPEG frame has codec mjpeg. The tool-button count went from 6 to 7.
+- `pnpm --filter design-editor dist`: exit 0. The packaged binary was built but its e2e was not re-run on it.
+- CapCut: desktop 9.5.0. Its window's accessibility tree had 4 labels; setting `AXManualAccessibility` returned error -10006; `screencapture` failed with "could not create image from display". No CapCut file was exported or measured.
+- Web sources for CapCut's export options were thin. The help page covers 2K/4K and frame rate. One guide mentions H.264 or HEVC and MP4 or MOV. None found GIF export or a 2026 desktop feature list.
+
+### Verified 2026-11-03 (session B2.2; output was read, not predicted)
+
+- After the merge with `main`: `pnpm --filter @apps-hub/media-core test` 61 pass, 0 fail; `pnpm typecheck` (root) exit 0; root `pnpm test` exit 0 (its tail shows only subtest output, and the exit code is 0); `pnpm --filter design-editor test:e2e` exit 0 (editor suite ok, media suite ok, input hashes unchanged).
+- After the preview commit: the e2e exit 0 again. New e2e results: HEVC size job, 20 MB target, published **17.94 MB in 1 attempt** (H.264 published 19.19 MB in the same suite); GIF with a 1 MB fit, published **469 kB in 1 attempt**; preview: the video reads 1280 px wide and 60 s, seeks to 30.00 s; an id that was never picked is refused (media error).
+- `pnpm --filter design-editor dist` after the preview: exit 0, FFmpeg unpacked beside the app. The packaged binary's e2e was not run.
+- `<video>` on `file://`: a probe in the media window, with the window's CSP, loaded the 60 s clip (readyState 4, 1280×720, no `securitypolicyviolation`). So the CSP does not block `file://` media. The renderer would still need the path, which AC-11 forbids.
+- Custom scheme probe (throwaway Electron app, scratchpad only): a privileged `mediain` scheme that answers `Range` requests with 206 seeks to 30.00 s. Without range support the seek stays at 0, so the handler must serve byte ranges itself (`net.fetch` on `file:` returned 200 with no `content-range`).
+- CapCut UI access: `screencapture` still fails ("could not create image from display"). No CapCut export was made or measured.
+
+### Verified 2026-11-03 (session B2.3; output was read, not predicted)
+
+- `pnpm --filter @apps-hub/media-core test`: 70 pass, 0 fail (was 61). `pnpm typecheck` (media-core and root): exit 0. Root `pnpm test`: exit 0.
+- `pnpm --filter design-editor test:e2e`: exit 0. The new checks, with the numbers the run printed:
+  - Volume normalize: **-23.0 LUFS** (target -23). A one-pass `loudnorm` gave -21.1 LUFS on the same clip, so the job now measures first and applies the measured values linearly.
+  - Volume +6 dB: the mean moved **by 6.00 dB**. With the first test tone at full scale, +6 dB clipped and the mean moved by 3.4 dB. That is the gain's clipping limit, recorded below. The check uses a tone with 12 dB of headroom.
+  - Reverse: the first output frame matches the input's last frame at **47.1 dB** PSNR, against 21.4 dB for the input's first frame. The sound's start is **60.7 dB** quieter than the input's start, so the fade runs backwards. Without sound, the output has only video. The 60 s clip is refused with "up to 10 seconds".
+  - Stabilize (recommended): frame-to-frame difference **9.80 → 7.22** on the shaky clip, with the frame size kept at 640×360.
+  - The media window has 10 tool buttons. The earlier checks still pass: the 20 MB size job (19.19 MB), HEVC (17.94 MB), GIF fit (469 kB), and the preview seek.
+- Reverse memory, measured, not estimated: a 10 s 1080p30 clip reverses with a **peak resident set of 1.05 GB** (`/usr/bin/time -l`, FFmpeg 9.0.2, `reverse` with VideoToolbox H.264). The cap of 10 s and 1920×1080 stands.
+- `pnpm --filter design-editor dist`: exit 0. The packaged binary's e2e was not run.
+- CapCut: `screencapture` still fails ("could not create image from display"). The feature behaviour used for these tools comes from CapCut's public help and resource pages, found by search. Those are marketing and blog pages, not its help-center articles, so the specifics are approximations.
+
+### Decisions made in session B2.3 (the owner's yes, 2026-11-03: "go ahead and build those features the way they are built in CapCut")
+
+- **Scope:** rows 7, 8 and 11 of `CAPCUT-GAPS.md` are built. Each one moves past PRD §8's "filters" and "speed changes" lines, so each is recorded as a scope change under FR-8 with the owner's yes.
+- **Volume:** normalize to -23 LUFS (EBU R128, CapCut's public target) or a gain of ±20 dB. Two-pass `loudnorm`, because one pass misses on short clips. The picture is copied when it fits MP4, else re-encoded to H.264. The sound goes to AAC.
+- **Reverse:** picture and sound run backwards, with the sound on by default (CapCut's default, per its public docs). Clips up to 10 s at 1920×1080 or below. The clip is held in memory, so the cap is the limit. A longer clip is clipped first, then reversed.
+- **Stabilize:** three levels named after CapCut's (Minimum cut, Recommended, Most stable), with Recommended as the default. The built-in FFmpeg `deshake` does the work, so no new binary. The search ranges (8, 16, 40 px) are ours, tuned on a shaky clip. The edges are mirrored, so the frame keeps its size, where CapCut crops.
+
+### Known limits (not fixed; each is a shortcut comment in the code)
+
+- Volume gain has no limiter. A boost past full scale clips. The e2e check uses a tone with headroom.
+- Reverse: whole-clip memory, capped at 10 s and 1080p. Chunked reverse is the upgrade.
+- Stabilize: `deshake` is weaker than libvidstab. Its levels are our ranges, not CapCut's.
+- Loudness: one measure per job, no re-measure, and no true-peak limiter beyond `loudnorm`'s own TP -1.5 dBTP setting.
+
+### Decisions made in session B2.2 (Claude's calls; the owner can override)
+
+- **Clip preview: through a privileged scheme, not a `file://` URL.** The `<video>` preview needs a URL, and AC-11 keeps paths in the main process. So `mediain://<input id>/` is served by the main process from the `inputs` map, with byte ranges. Unknown ids get 404. This is the Mac version of the owner's Q7 choice ("Preview in player", recommended, approved 2026-10-31); it is not a new scope item.
+- **Merged `origin/main` into the branch instead of rebasing.** The branch was already pushed, and a rebase would need a force-push. Where `main`'s squash of PR #15 and the branch's files differed, the branch's version was kept, since the differences were only the B2.1 lines.
+- **B3 waits for PR #16 on `main`.** The gate is in the resume prompt. Starting B3 on a stacked branch would have bypassed it.
+
+### Decisions made in session B2.1 (Claude's calls; the owner can override)
+
+- Two gaps added, both inside PRD §8. **Remove sound:** an option on Convert. The video is copied when its codec fits, and no audio map is written. **Still frame:** a new tool `frame`, one PNG or JPEG at a chosen time, video only, the sound is never read. A still image is not an animated image, so the §8 line about animated images does not cover it. PRD FR-8 and a still-frame bullet record both.
+- Not added, waiting for the owner: loudness normalisation (an audio filter, and §8 excludes "filters", so it is a scope change), reverse playback (needs a memory cap and a scope call), stabilisation (needs a libvidstab build, so a new binary). Rejected: cloud or AI features and the music library. Details in CAPCUT-GAPS.md.
+- The branch is stacked on `design-media-phase-2`, not `main`, so the PR diff shows only B2.1. Retarget it to `main` once PR #15 merges.
+
 ### Decisions made in session B2 (Claude's calls; the owner can override)
 
 - Mac size: H.264 uses libx264 two-pass (margin 0.97); HEVC uses `hevc_videotoolbox` in one pass (margin 0.90), both with the retry rule. Quality uses VideoToolbox `-q:v` 65/55/45 for High/Medium/Small. Every video encode adds `-pix_fmt yuv420p` and strips container metadata (`-map_metadata -1`, PRD Q10).
 - Phase 2 planners are Mac-only. The `platform` parameter and the Android tables in SPEC §5.2 are Phase 4's job, so the signatures differ from the SPEC for now.
 - WebM is a VP9 transcode (`libvpx-vp9`, CRF 33) with Opus audio, because the SPEC's encoder list had no VP9. `ConvertPlan.video` now also takes `'vp9'` and `'copy'`.
-- Clip preview on the Mac is a 10-frame thumbnail strip only. The `<video>` preview and the `file://` CSP check (RESEARCH §11) are not done; the next session decides whether to add them or a `media:` protocol.
+- Clip preview on the Mac: a 10-frame thumbnail strip, plus "Preview in player" through the `mediain` scheme (B2.2). The `file://` CSP check passed (see Verified 2026-11-03 B2.2).
 - Output publish: rename into the folder when on the same volume; across volumes, copy to `<name>.part` and rename.
 - Encoder stats: median of the last five overshoot ratios, no clamp (the 0.8–1.5 clamp is a Phase 5 Android item).
 - Icon: `apps/design-editor/build/icon.icns` (105 KB) is committed, built with `sips` and `iconutil` from `apps/design-editor-mobile/assets/icon.png`. `dist` passes `--icon=build/icon` (the packager adds `.icns`).
@@ -271,7 +323,7 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
 - Subtitles and data tracks are dropped. A multi-audio convert uses one codec for every track.
 - A process killed during a cross-volume copy can leave a `.part` file in the output folder. Same-volume publishes (the normal case) are a single rename.
 - Quit with a running job is tested by emitting `before-quit`, not by a real Cmd-Q.
-- Not tested yet: HEVC size, GIF "fit under N MB", and any owner clip (the owner's phone clips are not on this Mac).
+- Tested on synthetic clips in B2.2: HEVC size (17.94 MB of a 20 MB target, 1 attempt) and GIF fit under 1 MB (469 kB). Not tested: any owner clip (the phone clips are not on this Mac).
 
 ## File map
 
@@ -357,8 +409,13 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
 - **2026-11-03 (session B2, Phase 2 built and verified).** media-core planners and tests, the Mac media window and main process, the e2e
   suite `test/media.mjs` chained into `test:e2e`, the packaged app with FFmpeg unpacked, and AC-10 on the packaged app. Four real bugs
   were found by the e2e and fixed (see Verified). A security review finding about the output name was fixed. Handoff written; nothing committed.
+- **2026-11-03 (session B2.1, CapCut gap pass and two media jobs).** Stacked branch `design-media-capcut` from `design-media-phase-2`. PR #15 is still open, so B3 did not start. The CapCut study is in `docs/design-editor/CAPCUT-GAPS.md`. The UI walk-through and the ffprobe measurements were blocked: no Screen Recording permission (screencapture fails), a sparse accessibility tree, and `AXManualAccessibility` refused. Added Remove sound (Convert > Without sound) and Still frame (PNG or JPEG), with planner, validator, FFmpeg args, UI, tests and e2e. PRD FR-8 and a still-frame bullet updated. Verification is under "Verified 2026-11-03 (session B2.1)".
+- **2026-11-03 (session B2.2, close B2.1, Phase 2 open items).** PR #15 merged (146db86). PR #16 retargeted to `main`. The rebase would have needed a force-push, so `origin/main` was merged into the branch instead (5760a0a), with the branch's media files kept (see Decisions B2.2). Verified the merged branch: media-core 61 pass, typecheck and root test exit 0, e2e exit 0. CapCut measurements still blocked (screencapture fails; no owner files). Phase 2 open items closed: the `file://` CSP check passes; the preview goes through `mediain` (8ecf695, with the HEVC size, GIF fit-under and seek checks). B3 not started: it waits for PR #16 on `main`, which needs the owner's yes.
+- **2026-11-03 (session B2.3, CapCut rows 7, 8, 11 built).** The owner said "go ahead and build those features the way they are built in CapCut". Built Volume (two-pass loudness to -23 LUFS, or gain), Reverse (picture and sound, clips up to 10 s at 1080p), and Stabilize (`deshake`, three levels), each with a planner and tests, FFmpeg args and tests, validation, the planFor and enqueue path, the UI and e2e checks. Measured the reverse's memory (1.05 GB at the cap) and the loudness (-23.0 LUFS). The one-pass loudnorm missed by 1.9 LU, so the job now measures first. Found and recorded the gain's clipping at full scale. PRD FR-8 and the §8 note updated, and CAPCUT-GAPS.md rows 7, 8 and 11 marked built. Verification is under "Verified 2026-11-03 (session B2.3)".
 
 ## Current state + exact next step
+
+- **State (2026-11-03, session B2.3):** Volume, Reverse and Stabilize are built and tested on branch `design-media-capcut` (PR #16). They are the owner's yes to CapCut rows 7, 8 and 11 (see Decisions B2.3). The Mac e2e is green, with real measurements (below). PR #16 is still open on `main`. B3 waits for it to merge. The CapCut UI measurements are still blocked.
 
 - **State (2026-11-03, session B2, Phase 2 done, committed and pushed as PR #15):** the Mac media tools are on branch `design-media-phase-2` (commit 91d37c7, from `origin/main` 8fb7b38), PR https://github.com/haroongondal/apps-hub/pull/15 into `main`. Not merged, not released (the Mac app is not a Store app). The changed files are in `packages/media-core` (ffmpeg, probe, clip, audio, gif, convert, quality, plus validate and names changes and tests), `apps/design-editor` (`media.js`, `media.html`, `media-ui.js`, `media.css`, `scripts/fetch-ffmpeg.mjs`, `test/media.mjs`, `main.js`, `preload.cjs`, `app.js`, `index.html`, `package.json`, `.gitignore`, `build/icon.icns`) and this handoff. Verification is under "Verified 2026-11-03 (session B2)".
 - **Next step:** the owner decides. (a) Commit, push and open the PR with `gh` (no Claude attribution, owner's rule). Merging into `main` releases no app, because the Mac app is not in the Store and CI only releases changed Store apps. Use the pr-shipper agent when the owner says ship. (b) Or stop here. Then the next session is B3 (Media Phase 3, engine extraction and mobile canvas) on `design-media-phase-3`, from `main` after B2 is merged. Before B3, decide the open Phase 2 items above: the `<video>` preview and CSP check, and whether to test HEVC size and GIF fit-under on the Mac.

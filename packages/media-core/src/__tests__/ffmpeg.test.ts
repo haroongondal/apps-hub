@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ffmpegArgs, parseKeyframe, parseProgress } from '../ffmpeg.ts';
+import { ffmpegArgs, loudnormMeasureArgs, parseKeyframe, parseProgress } from '../ffmpeg.ts';
 import type { ClipPlan, ConvertPlan, GifPlan, QualityPlan, SizePlan } from '../types.ts';
 
 const size: SizePlan = {
@@ -68,4 +68,55 @@ test('ffmpeg: the cut point is the last keyframe at or before the time', () => {
   assert.equal(parseKeyframe('0.000000,\n2.000000,\n4.000000,\n', 3.5), 2);
   assert.equal(parseKeyframe('0.000000\n2.000000\n4.000000\n', 3.5), 2);
   assert.equal(parseKeyframe('', 3.5), 0);
+});
+
+test('ffmpeg: a muted convert maps no audio stream', () => {
+  const args = ffmpegArgs({ tool: 'convert', mode: 'remux', container: 'mp4', ext: 'mp4', video: { encoder: 'copy', quality: 0 } }, 'in.mp4', 'out.mp4');
+  assert.ok(!args.includes('0:a?') && !args.includes('-c:a'));
+  assert.deepEqual(args.slice(args.indexOf('-map'), args.indexOf('-map') + 2), ['-map', '0:v?']);
+});
+
+test('ffmpeg: a still frame is one video frame, with JPEG quality 2 only for JPEG', () => {
+  const png = ffmpegArgs({ tool: 'frame', timeS: 12.5, format: 'png', ext: 'png' }, 'in.mp4', 'out.png');
+  assert.equal(png[png.indexOf('-ss') + 1], '12.500');
+  assert.equal(png[png.indexOf('-frames:v') + 1], '1');
+  assert.ok(png.includes('-an') && !png.includes('-q:v'));
+  assert.equal(png.at(-1), 'out.png');
+  const jpg = ffmpegArgs({ tool: 'frame', timeS: 0, format: 'jpg', ext: 'jpg' }, 'in.mp4', 'out.jpg');
+  assert.equal(jpg[jpg.indexOf('-q:v') + 1], '2');
+});
+
+test('ffmpeg: volume normalises to -23 LUFS or adds a gain, copies the picture when it can, and keeps M4A for audio-only', () => {
+  const norm = ffmpegArgs({ tool: 'volume', mode: 'normalize', gainDb: 0, video: 'copy', ext: 'mp4' }, 'in.mp4', 'out.mp4');
+  assert.equal(norm[norm.indexOf('-af') + 1], 'loudnorm=I=-23:LRA=11:TP=-1.5');
+  assert.equal(norm[norm.indexOf('-c:v') + 1], 'copy');
+  const gain = ffmpegArgs({ tool: 'volume', mode: 'gain', gainDb: -3.5, video: 'hw-h264', ext: 'mp4' }, 'in.mkv', 'out.mp4');
+  assert.equal(gain[gain.indexOf('-af') + 1], 'volume=-3.5dB');
+  assert.equal(gain[gain.indexOf('-c:v') + 1], 'h264_videotoolbox');
+  const audio = ffmpegArgs({ tool: 'volume', mode: 'gain', gainDb: 2, ext: 'm4a' }, 'in.mp4', 'out.m4a');
+  assert.ok(audio.includes('-vn') && !audio.includes('-c:v'));
+});
+
+test('ffmpeg: reverse runs the video and, when asked, the sound backwards; without sound it drops the audio', () => {
+  const withSound = ffmpegArgs({ tool: 'reverse', sound: true, quality: 65, ext: 'mp4' }, 'in.mp4', 'out.mp4');
+  assert.equal(withSound[withSound.indexOf('-vf') + 1], 'reverse');
+  assert.equal(withSound[withSound.indexOf('-af') + 1], 'areverse');
+  const silent = ffmpegArgs({ tool: 'reverse', sound: false, quality: 65, ext: 'mp4' }, 'in.mp4', 'out.mp4');
+  assert.ok(silent.includes('-an') && !silent.includes('areverse'));
+});
+
+test('ffmpeg: stabilize uses deshake with the level search range and mirrored edges, so the frame keeps its size', () => {
+  const args = ffmpegArgs({ tool: 'stabilize', level: 'most', search: 40, quality: 65, ext: 'mp4' }, 'in.mp4', 'out.mp4');
+  assert.equal(args[args.indexOf('-vf') + 1], 'deshake=rx=40:ry=40:edge=mirror');
+  assert.equal(args[args.indexOf('-c:v') + 1], 'h264_videotoolbox');
+});
+
+test('ffmpeg: a measured normalize runs the second pass linearly with the measured values', () => {
+  const measured = { inputI: -31.45, inputTp: -12.07, inputLra: 0, inputThresh: -41.45, offset: 0.33 };
+  const args = ffmpegArgs({ tool: 'volume', mode: 'normalize', gainDb: 0, video: 'copy', ext: 'mp4', measured }, 'in.mp4', 'out.mp4');
+  const af = args[args.indexOf('-af') + 1];
+  assert.equal(af, 'loudnorm=I=-23:LRA=11:TP=-1.5:measured_I=-31.45:measured_TP=-12.07:measured_LRA=0:measured_thresh=-41.45:offset=0.33:linear=true');
+  const measure = loudnormMeasureArgs('in.mp4');
+  assert.equal(measure[measure.indexOf('-af') + 1], 'loudnorm=I=-23:LRA=11:TP=-1.5:print_format=json');
+  assert.deepEqual(measure.slice(-3), ['-f', 'null', '-']);
 });

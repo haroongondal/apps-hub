@@ -115,6 +115,14 @@ hardware encoders; §6.6 works the numbers for a one-minute clip into 20 MB (720
     change container without re-encoding when the codecs allow it.
   - Android: video to MP4 (H.264 or HEVC); audio to M4A; change container to MP4 without
     re-encoding when the codecs allow it.
+  - Mac, added 2026-11-03 (B2.1): "Without sound" on a video convert drops every audio track,
+    with no re-encode when the video codec fits.
+- **Still frame (Mac, added 2026-11-03, B2.1):** one PNG or JPEG at a chosen time, written as
+  `<name> (frame).png`. A still image is not an animated image, so PRD §8 does not cover it.
+- **Volume, reverse and stabilize (Mac, added 2026-11-03 by the owner's yes, B2.2):**
+  - Volume: normalize the sound to -23 LUFS (two-pass loudnorm) or change it by -20 to +20 dB. The picture is copied when it fits MP4, else re-encoded to H.264.
+  - Reverse: the picture and, by default, the sound run backwards. Clips up to 10 s, at 1920×1080 or below.
+  - Stabilize: FFmpeg's `deshake` at three levels (Minimum cut, Recommended, Most stable). Edges are mirrored, so the frame keeps its size.
 - **FR-9: Batch queue.**
   - The same settings apply to every selected file; each file is one job.
   - Jobs run one at a time, with progress per job and for the batch.
@@ -247,7 +255,7 @@ test log in the handoff.
 - **A video timeline inside the design canvas** and **exporting designs as MP4 or animated
   images.** Later ideas, below.
 - **FFmpeg on Android**, MP3, WebM and animated WebP output on the phone, AV1 output anywhere.
-- Multi-segment cuts, merging, subtitles, filters, crop, speed changes.
+- Multi-segment cuts, merging, subtitles, filters, crop, speed changes. (Exception: volume, reverse and stabilize, the owner's yes on 2026-11-03; see FR-8.)
 - Uploading, cloud sync, accounts.
 - Play Store release; Windows or Linux builds of Design Editor.
 - **iOS** until the owner has a paid Apple developer account (SPEC Phase 6, optional).

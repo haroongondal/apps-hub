@@ -19,6 +19,7 @@ body { margin: 0; background: var(--c-bg); color: var(--c-text); }
 .tracks { border: 0; padding: 0; display: grid; gap: 6px; }
 .thumbs { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
 .thumbs img { width: 100%; border-radius: 4px; }
+.clip-video { width: 100%; border-radius: 4px; margin-top: 8px; }
 .plan { min-height: 1.4em; margin: 12px 0; }
 .plan[data-error] { color: var(--c-danger); }
 .job-name { font-weight: 600; overflow-wrap: anywhere; }
