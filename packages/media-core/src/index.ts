@@ -11,4 +11,5 @@ export * from './clip.ts';
 export * from './audio.ts';
 export * from './gif.ts';
 export * from './convert.ts';
+export * from './frame.ts';
 export * from './quality.ts';

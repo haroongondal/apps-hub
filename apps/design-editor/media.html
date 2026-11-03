@@ -22,6 +22,7 @@
     <button data-tool="audio">Extract audio</button>
     <button data-tool="gif">Make a GIF</button>
     <button data-tool="convert">Convert</button>
+    <button data-tool="frame">Still frame</button>
   </nav>
   <section class="setup">
     <div class="row">
@@ -94,6 +95,16 @@
           <select id="convertCodec">
             <option value="h264">H.264</option>
             <option value="hevc">HEVC</option>
+          </select>
+        </label>
+        <label class="ui-field"><input id="convertMute" type="checkbox"> Without sound</label>
+      </section>
+      <section data-tool="frame" hidden>
+        <label class="ui-field">Time (m:ss.s)<input id="frameTime" class="ui-input" value="0"></label>
+        <label class="ui-field">Format
+          <select id="frameFormat">
+            <option value="png">PNG (lossless)</option>
+            <option value="jpg">JPEG</option>
           </select>
         </label>
       </section>

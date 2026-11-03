@@ -115,6 +115,10 @@ hardware encoders; §6.6 works the numbers for a one-minute clip into 20 MB (720
     change container without re-encoding when the codecs allow it.
   - Android: video to MP4 (H.264 or HEVC); audio to M4A; change container to MP4 without
     re-encoding when the codecs allow it.
+  - Mac, added 2026-11-03 (B2.1): "Without sound" on a video convert drops every audio track,
+    with no re-encode when the video codec fits.
+- **Still frame (Mac, added 2026-11-03, B2.1):** one PNG or JPEG at a chosen time, written as
+  `<name> (frame).png`. A still image is not an animated image, so PRD §8 does not cover it.
 - **FR-9: Batch queue.**
   - The same settings apply to every selected file; each file is one job.
   - Jobs run one at a time, with progress per job and for the batch.

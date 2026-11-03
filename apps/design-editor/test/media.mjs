@@ -52,7 +52,7 @@ for (let i = 0; i < 100 && !m; i++) {
 }
 assert.ok(m, 'the media window opens from File > Media Tools');
 await m.waitForLoadState('domcontentloaded');
-assert.equal(await m.locator('.tools button').count(), 6);
+assert.equal(await m.locator('.tools button').count(), 7);
 assert.equal(await m.isDisabled('#start'), true);
 
 const status = await m.evaluate(() => window.native.media.status());
@@ -131,6 +131,20 @@ assert.equal(mkvJob.state, 'done', mkvJob.error);
 const [webmJob] = await settle(await enqueue([{ tool: 'convert', inputId: shortInfo.id, target: 'webm', videoCodec: 'h264' }]));
 assert.equal(webmJob.state, 'done', webmJob.error);
 assert.equal(probe(path.join(folder, webmJob.outputs[0].name)).streams[0].codec_name, 'vp9');
+
+const [mutedJob] = await settle(await enqueue([{ tool: 'convert', inputId: info.id, target: 'mp4', videoCodec: 'h264', muted: true }]));
+assert.equal(mutedJob.state, 'done', mutedJob.error);
+const mutedStreams = probe(path.join(folder, mutedJob.outputs[0].name)).streams;
+assert.deepEqual(mutedStreams.map(s => s.codec_type), ['video'], 'the muted MP4 keeps only its video');
+
+const [pngJob] = await settle(await enqueue([{ tool: 'frame', inputId: info.id, timeS: 1, format: 'png' }]));
+assert.equal(pngJob.state, 'done', pngJob.error);
+assert.equal(pngJob.outputs[0].name, 'Clip (frame).png');
+assert.equal(probe(path.join(folder, pngJob.outputs[0].name)).streams[0].codec_name, 'png');
+assert.equal(probe(path.join(folder, pngJob.outputs[0].name)).streams[0].width, 1280);
+const [jpgJob] = await settle(await enqueue([{ tool: 'frame', inputId: shortInfo.id, timeS: 0.5, format: 'jpg' }]));
+assert.equal(jpgJob.state, 'done', jpgJob.error);
+assert.equal(probe(path.join(folder, jpgJob.outputs[0].name)).streams[0].codec_name, 'mjpeg');
 
 await assert.rejects(enqueue([{ tool: 'size', inputId: 'not-a-file', targetBytes: 20 * MB, encoder: 'x264' }]), /changed since you picked it/);
 await assert.rejects(m.evaluate(() => window.native.media.enqueue([{ folderId: 'nope', spec: { tool: 'quality', inputId: 'x', preset: 'small' } }])), /output folder/);

@@ -16,7 +16,8 @@ const VIDEO_TARGETS: Partial<Record<ConvertTarget, { copyFrom: Codec[] | 'any'; 
   webm: { copyFrom: ['opus', 'vorbis'], encode: 'opus', bps: 128_000 },
 };
 
-export function planConvert(info: MediaInfo, target: ConvertTarget, opts: { videoCodec?: 'h264' | 'hevc' } = {}): Planned<ConvertPlan> {
+// muted drops every audio track from a video target (the plan has no audio entry, so ffmpegArgs maps none).
+export function planConvert(info: MediaInfo, target: ConvertTarget, opts: { videoCodec?: 'h264' | 'hevc'; muted?: boolean } = {}): Planned<ConvertPlan> {
   const audio = info.tracks.filter(t => t.kind === 'audio');
   const video = info.tracks.find(t => t.kind === 'video');
   const audioTarget = AUDIO_TARGETS[target];
@@ -39,13 +40,14 @@ export function planConvert(info: MediaInfo, target: ConvertTarget, opts: { vide
   const videoPlan = videoCopy ? { encoder: 'copy' as const, quality: 0 }
     : target === 'webm' ? { encoder: 'vp9' as const, quality: 33 }
     : { encoder: wanted === 'hevc' ? 'hw-hevc' as const : 'hw-h264' as const, quality: 65 };
-  const audioPlan = audio.length === 0 ? undefined
+  const audioPlan = audio.length === 0 || opts.muted ? undefined
     : audioCopy ? { codec: audio[0].codec, copy: true }
     : { codec: rules.encode, bps: rules.bps, copy: false };
+  const mode = videoCopy && (audioCopy || opts.muted) ? 'remux' : 'transcode';
   return {
     ok: true,
     plan: {
-      tool: 'convert', mode: videoCopy && audioCopy ? 'remux' : 'transcode', container: target, ext: target,
+      tool: 'convert', mode, container: target, ext: target,
       video: videoPlan, ...(audioPlan ? { audio: audioPlan } : {}),
     },
   };

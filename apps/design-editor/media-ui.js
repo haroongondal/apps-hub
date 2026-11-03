@@ -2,7 +2,7 @@ const api = window.native.media;
 const $ = id => document.getElementById(id);
 const $$ = sel => [...document.querySelectorAll(sel)];
 const MB = 1e6;
-const TOOL_LABELS = { size: 'Compress to size', quality: 'Compress by quality', clip: 'Clip', audio: 'Extract audio', gif: 'Make a GIF', convert: 'Convert' };
+const TOOL_LABELS = { size: 'Compress to size', quality: 'Compress by quality', clip: 'Clip', audio: 'Extract audio', gif: 'Make a GIF', convert: 'Convert', frame: 'Still frame' };
 const STATE_TEXT = { queued: 'Queued', running: 'Working', done: 'Done', failed: 'Failed', cancelled: 'Cancelled', interrupted: 'Interrupted', paused: 'Paused' };
 const state = { tool: 'size', files: [], selected: new Set(), folder: null, jobs: [], destinations: [], specs: new Map() };
 let planTimer = 0;
@@ -87,6 +87,7 @@ function setDefaults(f) {
   $('clipEnd').value = fmt(f.durationS);
   $('gifStart').value = fmt(0);
   $('gifEnd').value = fmt(Math.min(f.durationS, 10));
+  $('frameTime').value = fmt(0);
 }
 
 function renderFiles() {
@@ -185,7 +186,11 @@ function buildSpec(f) {
       return spec;
     }
     case 'convert':
-      return { tool: 'convert', inputId: f.id, target: $('convertTarget').value, videoCodec: $('convertCodec').value };
+      return {
+        tool: 'convert', inputId: f.id, target: $('convertTarget').value, videoCodec: $('convertCodec').value, muted: $('convertMute').checked,
+      };
+    case 'frame':
+      return { tool: 'frame', inputId: f.id, timeS: parseTime($('frameTime').value), format: $('frameFormat').value };
     default:
       throw new Error("This job type isn't supported yet.");
   }
@@ -211,8 +216,12 @@ function describePlan(p) {
       return `Saves this track as .${p.ext}${p.mode === 'copy' ? ', copied without re-encoding' : ''}`;
     case 'gif':
       return `${p.width} px wide, ${p.fps} fps${p.targetBytes ? `, fit under ${(p.targetBytes / MB).toFixed(0)} MB` : ''}`;
-    case 'convert':
-      return p.mode === 'remux' ? `Saves as .${p.ext} without re-encoding` : `Re-encodes to .${p.ext}`;
+    case 'convert': {
+      const sound = p.audio ? '' : ', without sound';
+      return p.mode === 'remux' ? `Saves as .${p.ext} without re-encoding${sound}` : `Re-encodes to .${p.ext}${sound}`;
+    }
+    case 'frame':
+      return `One ${p.format === 'jpg' ? 'JPEG' : 'PNG'} frame at ${fmt(p.timeS)}`;
     default:
       return 'Ready';
   }

@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { planAudio } from '../audio.ts';
 import { planClip } from '../clip.ts';
 import { planConvert } from '../convert.ts';
+import { planFrame } from '../frame.ts';
 import { planGif, nextGifAttempt } from '../gif.ts';
 import { fromFfprobe } from '../probe.ts';
 import { planQuality } from '../quality.ts';
@@ -73,6 +74,21 @@ test('convert: an audio target takes the first audio track and encodes it when i
   assert.equal(mp3.plan.mode, 'transcode');
   assert.deepEqual(mp3.plan.audio, { codec: 'mp3', bps: 192_000, copy: false });
   assert.equal(mp3.plan.video, undefined);
+});
+
+test('convert: muted drops every audio track and still remuxes a video whose codec fits', () => {
+  const muted = planConvert(film(), 'mp4', { videoCodec: 'h264', muted: true });
+  assert.ok(muted.ok);
+  assert.equal(muted.plan.mode, 'remux');
+  assert.equal(muted.plan.audio, undefined);
+  assert.deepEqual(muted.plan.video, { encoder: 'copy', quality: 0 });
+});
+
+test('frame: a still needs a video track and keeps its time and format', () => {
+  const still = planFrame(film(), 1.5, 'jpg');
+  assert.deepEqual(still, { ok: true, plan: { tool: 'frame', timeS: 1.5, format: 'jpg', ext: 'jpg' } });
+  const audioOnly: MediaInfo = { ...film(), tracks: film().tracks.filter(t => t.kind === 'audio') };
+  assert.deepEqual(planFrame(audioOnly, 0, 'png'), { ok: false, reason: 'no-video' });
 });
 
 test('quality: the preset caps the short side and keeps the displayed orientation', () => {

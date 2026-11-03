@@ -6,8 +6,9 @@ export interface QualitySpec { tool: 'quality'; inputId: string; preset: 'high' 
 export interface ClipSpec { tool: 'clip'; inputId: string; startS: number; endS: number; mode: 'copy' | 'exact' }
 export interface AudioSpec { tool: 'audio'; inputId: string; trackIndex: number }
 export interface GifSpec { tool: 'gif'; inputId: string; startS: number; endS: number; width: number; fps: number; targetBytes?: number }
-export interface ConvertSpec { tool: 'convert'; inputId: string; target: ConvertTarget; videoCodec: 'h264' | 'hevc' }
-export type JobSpec = SizeSpec | QualitySpec | ClipSpec | AudioSpec | GifSpec | ConvertSpec;
+export interface ConvertSpec { tool: 'convert'; inputId: string; target: ConvertTarget; videoCodec: 'h264' | 'hevc'; muted?: boolean }
+export interface FrameSpec { tool: 'frame'; inputId: string; timeS: number; format: 'png' | 'jpg' }
+export type JobSpec = SizeSpec | QualitySpec | ClipSpec | AudioSpec | GifSpec | ConvertSpec | FrameSpec;
 
 const MIN_TARGET_BYTES = 1_000_000;
 const ENCODERS: Record<Platform, readonly Encoder[]> = {
@@ -64,12 +65,21 @@ export function validateSpec(spec: unknown, info: MediaInfo, platform: Platform)
       const target = s.target;
       if (typeof target === 'string' && AUDIO_TARGETS.includes(target as ConvertTarget)) {
         if (!hasAudio) errors.push('This file has no audio to convert.');
+        if (s.muted === true) errors.push('An audio format needs sound. Turn off Without sound or pick a video format.');
       } else if (typeof target === 'string' && VIDEO_TARGETS.includes(target as ConvertTarget)) {
         if (!hasVideo) errors.push("This file has no video, so it can't become a video.");
         if (s.videoCodec !== 'h264' && s.videoCodec !== 'hevc') errors.push('Pick H.264 or HEVC.');
       } else {
         errors.push('Pick a format to convert to.');
       }
+      if (s.muted !== undefined && typeof s.muted !== 'boolean') errors.push('Without sound must be on or off.');
+      break;
+    }
+    case 'frame': {
+      if (!hasVideo) errors.push("This file has no video track, so there's no frame to save.");
+      const t = n(s.timeS);
+      if (!(t >= 0 && t < info.durationS)) errors.push('Pick a time inside the file.');
+      if (s.format !== 'png' && s.format !== 'jpg') errors.push('Pick PNG or JPEG.');
       break;
     }
     default:

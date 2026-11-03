@@ -69,3 +69,19 @@ test('ffmpeg: the cut point is the last keyframe at or before the time', () => {
   assert.equal(parseKeyframe('0.000000\n2.000000\n4.000000\n', 3.5), 2);
   assert.equal(parseKeyframe('', 3.5), 0);
 });
+
+test('ffmpeg: a muted convert maps no audio stream', () => {
+  const args = ffmpegArgs({ tool: 'convert', mode: 'remux', container: 'mp4', ext: 'mp4', video: { encoder: 'copy', quality: 0 } }, 'in.mp4', 'out.mp4');
+  assert.ok(!args.includes('0:a?') && !args.includes('-c:a'));
+  assert.deepEqual(args.slice(args.indexOf('-map'), args.indexOf('-map') + 2), ['-map', '0:v?']);
+});
+
+test('ffmpeg: a still frame is one video frame, with JPEG quality 2 only for JPEG', () => {
+  const png = ffmpegArgs({ tool: 'frame', timeS: 12.5, format: 'png', ext: 'png' }, 'in.mp4', 'out.png');
+  assert.equal(png[png.indexOf('-ss') + 1], '12.500');
+  assert.equal(png[png.indexOf('-frames:v') + 1], '1');
+  assert.ok(png.includes('-an') && !png.includes('-q:v'));
+  assert.equal(png.at(-1), 'out.png');
+  const jpg = ffmpegArgs({ tool: 'frame', timeS: 0, format: 'jpg', ext: 'jpg' }, 'in.mp4', 'out.jpg');
+  assert.equal(jpg[jpg.indexOf('-q:v') + 1], '2');
+});

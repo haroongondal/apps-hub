@@ -45,6 +45,8 @@ export function ffmpegArgs(plan: Plan, input: string, output: string, pass?: { n
     case 'gif': return [...GLOBAL, '-ss', plan.startS.toFixed(3), '-t', (plan.endS - plan.startS).toFixed(3), '-i', input,
       '-filter_complex', gifGraph(plan), '-loop', '0', '-an', ...STRIP, output];
     case 'convert': return convertArgs(plan, input, output);
+    case 'frame': return [...GLOBAL, '-ss', plan.timeS.toFixed(3), '-i', input, '-map', '0:v:0', '-frames:v', '1',
+      ...(plan.format === 'jpg' ? ['-q:v', '2'] : []), '-an', ...STRIP, output];
   }
 }
 

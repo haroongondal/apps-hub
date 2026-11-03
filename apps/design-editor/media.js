@@ -6,7 +6,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
   DESTINATIONS, ffmpegArgs, ffprobeArgs, fromFfprobe, keyframeArgs, nextGifAttempt, nextRunnable, nextSizeAttempt, outputName,
-  parseKeyframe, parseProgress, planAudio, planClip, planConvert, planGif, planQuality, planSize, reduce, thumbArgs, validateSpec,
+  parseKeyframe, parseProgress, planAudio, planClip, planConvert, planFrame, planGif, planQuality, planSize, reduce, thumbArgs, validateSpec,
 } from './vendor/media-core/index.ts';
 
 // Electron cannot run a binary inside app.asar; the packager unpacks vendor/ffmpeg beside it.
@@ -14,7 +14,7 @@ const BIN = path.join(import.meta.dirname, 'vendor/ffmpeg').replace('app.asar', 
 const FFMPEG = path.join(BIN, 'ffmpeg');
 const FFPROBE = path.join(BIN, 'ffprobe');
 const INPUT_EXTENSIONS = ['mp4', 'm4v', 'mov', 'mkv', 'webm', 'mp3', 'm4a', 'aac', 'ogg', 'opus', 'wav', 'flac', 'ac3', 'eac3', 'mka'];
-const LABELS = { size: 'compressed', quality: 'compressed', clip: 'clip', convert: 'converted' };
+const LABELS = { size: 'compressed', quality: 'compressed', clip: 'clip', convert: 'converted', frame: 'frame' };
 const STATS_PATH = () => path.join(app.getPath('userData'), 'media-stats.json');
 
 // The renderer only ever sends ids; the paths stay here (PRD AC-11).
@@ -107,7 +107,8 @@ async function planFor(spec) {
     case 'clip': return planClip(input.info, spec.startS, spec.endS, await keyframeAt(input.path, spec.startS), spec.mode);
     case 'audio': return planAudio(input.info.tracks.find(t => t.index === spec.trackIndex));
     case 'gif': return planGif(input.info, spec);
-    case 'convert': return planConvert(input.info, spec.target, { videoCodec: spec.videoCodec });
+    case 'convert': return planConvert(input.info, spec.target, { videoCodec: spec.videoCodec, muted: spec.muted === true });
+    case 'frame': return planFrame(input.info, spec.timeS, spec.format);
     default: return { ok: false, reason: 'invalid', detail: "This job type isn't supported yet." };
   }
 }
@@ -288,7 +289,7 @@ function labelFor(plan, info) {
 }
 
 function extOf(plan) {
-  return { size: 'mp4', quality: 'mp4', clip: plan.ext, audio: plan.ext, gif: 'gif', convert: plan.ext }[plan.tool];
+  return { size: 'mp4', quality: 'mp4', clip: plan.ext, audio: plan.ext, gif: 'gif', convert: plan.ext, frame: plan.ext }[plan.tool];
 }
 
 function refusalText(r) {

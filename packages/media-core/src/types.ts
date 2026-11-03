@@ -1,5 +1,5 @@
 export type Platform = 'mac' | 'android';
-export type Tool = 'size' | 'quality' | 'clip' | 'audio' | 'gif' | 'convert';
+export type Tool = 'size' | 'quality' | 'clip' | 'audio' | 'gif' | 'convert' | 'frame';
 export type Codec = 'h264' | 'hevc' | 'vp8' | 'vp9' | 'av1' | 'mpeg4' | 'prores'
   | 'aac' | 'alac' | 'mp3' | 'opus' | 'vorbis' | 'ac3' | 'eac3' | 'flac' | 'pcm' | 'dts' | 'truehd' | 'other';
 
@@ -38,7 +38,9 @@ export interface GifPlan { tool: 'gif'; startS: number; endS: number; width: num
 export interface ConvertPlan { tool: 'convert'; mode: 'remux' | 'transcode'; container: string; ext: string; video?: { encoder: Encoder | 'vp9' | 'copy'; quality: number }; audio?: { codec: Codec; bps?: number; copy: boolean } }
 export type ConvertTarget = 'mp4' | 'mov' | 'mkv' | 'webm' | 'm4a' | 'mp3' | 'opus' | 'flac' | 'wav';
 export interface QualityPlan { tool: 'quality'; encoder: Encoder; rung: Rung; width: number; height: number; quality: number /* VT -q:v, or bpp on Android */ }
-export type Plan = SizePlan | QualityPlan | ClipPlan | AudioPlan | GifPlan | ConvertPlan;
+// One frame at timeS as a PNG or JPEG still. Video only; the sound is never read.
+export interface FramePlan { tool: 'frame'; timeS: number; format: 'png' | 'jpg'; ext: 'png' | 'jpg' }
+export type Plan = SizePlan | QualityPlan | ClipPlan | AudioPlan | GifPlan | ConvertPlan | FramePlan;
 
 export type JobState = 'queued' | 'running' | 'done' | 'failed' | 'cancelled' | 'interrupted' | 'paused';
 export interface Output { name: string; ref: string /* Mac path or Android content URI */; bytes: number; note?: string /* "converted to AAC" */ }

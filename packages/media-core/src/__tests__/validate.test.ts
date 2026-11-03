@@ -43,3 +43,19 @@ test('validate: untrusted JSON is refused', () => {
   assert.deepEqual(validateSpec({ tool: 'nope', inputId: clip.id }, clip, 'android'), ["This job type isn't supported yet."]);
   assert.deepEqual(validateSpec(null, clip, 'android'), ["This job type isn't supported yet."]);
 });
+
+test('validate: a muted video conversion needs no audio, but a muted audio format is refused', () => {
+  const av: MediaInfo = { ...clip, tracks: [...clip.tracks, { index: 1, kind: 'audio', codec: 'aac', channels: 2 }] };
+  assert.deepEqual(validateSpec({ tool: 'convert', inputId: av.id, target: 'mp4', videoCodec: 'h264', muted: true }, av, 'mac'), []);
+  assert.deepEqual(validateSpec({ tool: 'convert', inputId: av.id, target: 'mp3', videoCodec: 'h264', muted: true }, av, 'mac'),
+    ['An audio format needs sound. Turn off Without sound or pick a video format.']);
+  assert.deepEqual(validateSpec({ tool: 'convert', inputId: av.id, target: 'mp4', videoCodec: 'h264', muted: 'yes' }, av, 'mac'),
+    ['Without sound must be on or off.']);
+});
+
+test('validate: a still frame needs a time inside the file and PNG or JPEG', () => {
+  assert.deepEqual(validateSpec({ tool: 'frame', inputId: clip.id, timeS: 30, format: 'png' }, clip, 'mac'), []);
+  assert.deepEqual(validateSpec({ tool: 'frame', inputId: clip.id, timeS: 60, format: 'png' }, clip, 'mac'), ['Pick a time inside the file.']);
+  assert.deepEqual(validateSpec({ tool: 'frame', inputId: clip.id, timeS: -1, format: 'png' }, clip, 'mac'), ['Pick a time inside the file.']);
+  assert.deepEqual(validateSpec({ tool: 'frame', inputId: clip.id, timeS: 1, format: 'gif' }, clip, 'mac'), ['Pick PNG or JPEG.']);
+});
