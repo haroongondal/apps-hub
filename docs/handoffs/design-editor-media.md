@@ -2,13 +2,17 @@
 
 ## Resume prompt
 
-Dated 2026-11-02. Read `docs/handoffs/design-editor-media.md` completely first, then
-`docs/design-editor/PRD.md`, `docs/design-editor/SPEC.md` and the prelude plus your phase in
-`docs/design-editor/PROMPTS.md`. Read `docs/design-editor/RESEARCH.md` sections as a step cites them.
-Trust the decisions and verified facts below and don't re-research or re-derive them. Follow the
-handoff contract in `~/.claude/CLAUDE.md` and "How every session runs" in `docs/build-sessions.md`
-(keep this file's session log, evidence and next step current; hand off before context runs out).
-Read "Current state + exact next step" before doing anything, then continue from it.
+Dated 2026-11-03. Read `docs/handoffs/design-editor-media.md` completely first, then `docs/design-editor/PRD.md`,
+`docs/design-editor/SPEC.md` and the prelude plus your phase in `docs/design-editor/PROMPTS.md`. Trust the decisions and
+verified facts below and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` and "How every session
+runs" in `docs/build-sessions.md`. Read "Current state + exact next step" before doing anything, then continue from it.
+
+Gates: Phase 1 (B1, PR #8) and Phase 2 prerequisite B0 (PR #12, squash 0f9cd68) are merged, so Phase 2 (B2, Mac media tools)
+can start. Create its worktree from `origin/main` on branch `design-media-phase-2`. Never touch the main checkout (it has
+someone else's uncommitted work), `clipboard`, `firewall-spike`, `tunnelwall-firewall` or `deputy-speed`. Use `gh` for PRs.
+A merge into `main` releases any changed Store app (CI); the Mac app releases nothing. No Claude attribution in commits or
+PR bodies (owner's rule). Never force-push or rewrite shared history without explicit owner approval (a force-push was denied
+on 2026-11-02). Dependencies beyond the ones approved in "Decisions made" need the owner's yes first.
 
 Gates: Phase 2 (session B2) needs B0 (`design-editor-phase-2`) and B1 (`design-media-phase-1`)
 merged into `origin/main`. Check with `gh pr list` and `git log origin/main` before any Phase 2 work.
@@ -310,7 +314,25 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
   process kept the same PID (30693). On screen the job then showed `paused, try 1`, which confirms the time-limit pause. The override was removed afterwards, so the
   default is back.
 
+- **2026-11-03 (handoff).** B0 merged as PR #12 (squash 0f9cd68, no trailer): the review fixes landed (page-load race,
+  all-pages overwrite prompt, autosave kept before a new design, PDF text in transforms, `constructor` font names, toast copy).
+  Stale branches and worktrees were deleted earlier in the day, except the B0 ones listed under Current state. A force-push to
+  the B0 ship branch was denied, so the trailer was removed by squash-merging instead. Context reached 85%, so this handoff was written.
+
 ## Current state + exact next step
+
+- State (2026-11-03): Phase 1 (B1) is done and merged (PR #8). Design Editor 1.0.0 (3) is released through CI and on the phone.
+  The phone checks passed: batches, time-limit pause, and the S8 crash fix. B0 (Design Editor phase 2, multi-page, fonts, real
+  PDF text) is merged as PR #12 (0f9cd68). Owner's accepted limit: a brand kit saved before this change keeps Avenir Next, so
+  its text stays a picture in PDFs (documented in the app README and the B0 handoff).
+- **Next step:** start Phase 2 (B2) per `docs/design-editor/PROMPTS.md` "Phase 2" (Mac media tools). Branch `design-media-phase-2`
+  from `origin/main`, worktree `.claude/worktrees/design-media-phase-2`. Its FFmpeg choice (Martin Riedl 9.0.2, GPL, gitignored)
+  is already approved (PRD Q2). Open item for it: the Mac probe must report displayed dimensions, as Android does now.
+- **Cleanup pending (merged content only):** local branches `design-editor-phase-2` and `design-editor-phase-2-ff`, worktree
+  `.claude/worktrees/design-editor-phase-2`, and remote `design-editor-phase-2-ship`. Their content is in 0f9cd68. Verified 2026-11-03
+  that main has the same design-editor files, and the worktree is clean. Delete them when convenient.
+- **Not ours, don't touch:** `clipboard` worktree (83 uncommitted files from another session), `firewall-spike` and
+  `tunnelwall-firewall` (unmerged), `deputy-speed` (main checkout, unmerged, uncommitted).
 
 - State (2026-11-01): the S0 docs are on `main` (PR #1 merged). Phase 1 steps 1–6 are done on branch
   `design-media-phase-1` (worktree `.claude/worktrees/design-media-phase-1`, from `origin/main` 03d1c7f).
