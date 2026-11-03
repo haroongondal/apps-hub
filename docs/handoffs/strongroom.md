@@ -486,6 +486,17 @@ order (ledger "Post-plan work" has the rulings and P-briefs):
    master password to unlock), typing feel, Save/Update, card, Deputy, keyboard
    and clipboard checks (owner). Verbose autofill logging left on (resets on
    reboot).
+2b. **Phone check 2026-11-03 15:45, read-only part (controller):** PASS: Android
+   logged `Start proc … for service StrongroomAutofillService` (cold start, from
+   the fill above); opening Strongroom shows the unlock screen with its master
+   password field marked as a password; the autofill history has no session whose
+   requester is Strongroom's own package (`a=com.haroon.strongroom` count 0).
+   Owner still to do (needs the master password or fingerprint, or is a
+   person-only check): matching fill and the locked-match strip, typing feel,
+   Settings → Checks (1–2 s unlock, Chrome Recognised), Save and Update prompts,
+   card fill, auto-lock 1 min (U1), S4/S5, U2, two-step save, Deputy's view (B5),
+   S2 (https login fill: needs a saved https login), Firefox username, then delete
+   `sg-test-lan`.
 2. **PR #7 is open** (`strongroom-phase-1` → `main`, Strongroom 0.1.1; the owner
    merges it, which makes CI release the next versionCode). Merged `origin/main`
    into the branch first (2ddbcb5, no conflicts). Tests: strongroom 25/25,
