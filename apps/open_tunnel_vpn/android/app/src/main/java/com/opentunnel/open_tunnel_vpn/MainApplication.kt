@@ -2,6 +2,7 @@ package com.opentunnel.open_tunnel_vpn
 
 import android.app.Application
 import android.content.res.Configuration
+import android.os.Build
 
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
@@ -15,6 +16,8 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
+import expo.modules.opentunnelnative.firewall.FirewallContract
+import expo.modules.opentunnelnative.firewall.FirewallStore
 
 class MainApplication : Application(), ReactApplication {
 
@@ -40,7 +43,15 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
-    com.opentunnel.open_tunnel_vpn.engines.OpenVpnEngine.initProcess(this)
+    // The :firewall process runs this too; OpenVPN's process setup belongs where its engine runs. Below Android 9
+    // there is no process name to read, and no :firewall process (it needs Android 10).
+    val mainProcess = Build.VERSION.SDK_INT < Build.VERSION_CODES.P || Application.getProcessName() == packageName
+    if (mainProcess) com.opentunnel.open_tunnel_vpn.engines.OpenVpnEngine.initProcess(this)
+    // Every server engine runs in this process, so a fresh one has none: a "true" left by a kill or a reboot
+    // would otherwise refuse every firewall start, Always-on included.
+    if (mainProcess && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      runCatching { FirewallStore(this).writeState(FirewallContract.STATE_SERVER_ACTIVE, "false") }
+    }
     DefaultNewArchitectureEntryPoint.releaseLevel = try {
       ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
     } catch (e: IllegalArgumentException) {

@@ -85,8 +85,8 @@ land; at ~85% context, finalize and print a new resume prompt). Continue from
 - Design: `docs/superpowers/specs/2026-10-30-network-toolkit-design.md`
 - Plans: `docs/superpowers/plans/2026-10-31-homenet-names-and-rename.md`,
   `docs/superpowers/plans/2026-10-31-tunnelwall-firewall-spike.md`
-- CI: a push to `main` auto-releases affected apps; the spike branch is
-  never merged.
+- CI: a push to `main` auto-releases affected apps; the spike is never
+  merged (its branch is deleted; the code is kept at tag `archive/firewall-spike`).
 - HomeNet: `apps/netlens/`, `apps/netlens/modules/netlens-core/`,
   `packages/core/`
 - HomeNet names: `packages/core/src/device-names.ts` (sanitise, order, merge),
@@ -132,13 +132,26 @@ land; at ~85% context, finalize and print a new resume prompt). Continue from
   lookups for a dead scan, README rename. Full checks at head: `pnpm test`
   228 pass / 0 fail, `pnpm typecheck` clean, netlens Gradle gate green.
 
+- 2026-11-03: deleted the local and remote `firewall-spike` branches and its
+  worktree. The last spike commit (`a3e09f1`) is kept at tag
+  `archive/firewall-spike` on origin. The spike's code is not on this branch;
+  the firewall here is a new implementation that uses the same firestack
+  version. The spike's open device checks are still open.
+
+- 2026-11-03: the owner gave autonomy, so the three spec gaps the final review
+  parked for the owner were built as spec-literal calls (commit `0bcdbd8`):
+  Private DNS mode and provider in `FirewallStatus.privateDns` (strict mode
+  shows the "set Private DNS to Automatic" line); data use since a start time,
+  Today or This month (`getDataUse(sinceMs)`, validated in the adapter and in
+  Kotlin); a Clear log row on the existing native clear. Gates on the branch:
+  `pnpm --filter open_tunnel_vpn test` 99/0, `typecheck` clean, Gradle
+  `:open-tunnel-native:testDebugUnitTest` and `:app:assembleDebug` green
+  (PrivateDnsTest 2/0, DataUseReaderTest 4/0). Not on a phone.
+
 ## Current state + exact next step
 
-HomeNet plan is complete on branch `homenet-names` (worktree
-`.claude/worktrees/homenet-names`, never pushed), reviewed and verified.
-Next: the owner decides whether to merge. Merging to `main` auto-releases
-HomeNet and TunnelWall through the Store, so do not merge or push without the
-owner's go-ahead.
+HomeNet names are merged to `main` (the `homenet-names` branch is gone). The
+owner's four phone checks below are still open.
 
 Open product decision for the owner: when a different machine takes over an
 IP, the row keeps the old custom name and trusted flag (identity is IP-based,
@@ -155,6 +168,19 @@ After the Store release, the owner checks on the phone:
 3. Leaving the screen mid-scan doesn't crash.
 4. Scanning while TunnelWall is connected to a server shows no invented hosts.
 
-Then: the firewall spike plan
-(`docs/superpowers/plans/2026-10-31-tunnelwall-firewall-spike.md`), which has
-not started.
+TunnelWall firewall, branch `tunnelwall-firewall` (three commits ahead of origin's
+`d76b901`, none pushed: `f4e5116`, `0bcdbd8`, `ab53d26`):
+
+- Final review passed (`progress.md` in `.superpowers/sdd/2026-11-01-tunnelwall-firewall/`).
+  The spec gaps R35 to R37 are built (2026-11-03 log).
+- Left as the reviewer found them, to accept before release: R39 (a failed
+  start keeps the switch on, so Always-on retries at boot) and the change that
+  a paused firewall ends Off after a server connection. Claude's default is
+  to keep both.
+- The spike's open device checks still apply to this build: Private DNS strict
+  (`dns.google`), Always-on after a reboot, two battery nights.
+
+Next, in order: (1) the owner's go-ahead to release. Pushing or merging to
+`main` auto-releases both apps through the Store, so do not push or merge
+without it. (2) Phone check: the firewall checks above, plus the HomeNet checks
+if HomeNet has not been checked yet.

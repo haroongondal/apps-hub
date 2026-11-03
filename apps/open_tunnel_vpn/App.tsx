@@ -6,14 +6,16 @@
  * snapshot or a native event.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { PermissionsAndroid, Platform } from 'react-native';
-import { Header, Screen, ThemeProvider } from '@apps-hub/ui';
+import { Linking, PermissionsAndroid, Platform, View } from 'react-native';
+import { Header, Screen, TabBar, ThemeProvider } from '@apps-hub/ui';
 
 import { LatencyProber, VpnGateService, type VpnNode } from 'open-tunnel-core';
 import { openAppDatabase, type AppDatabase } from './src/data/open-database.ts';
 import type { TunnelSettings } from './src/data/settings-store.ts';
 import { xhrVpnGateFetcher } from './src/data/vpngate-fetcher.ts';
-import { openTunnelBinding, nativeTcpProbe } from './src/tunnel/native-tcp-probe.ts';
+import { FirewallScreen } from './src/firewall/firewall-screen.tsx';
+import { serverHoldsSlot } from './src/firewall/status.ts';
+import { firewallBinding, openTunnelBinding, nativeTcpProbe } from './src/tunnel/native-tcp-probe.ts';
 import {
   createTunnelClient,
   OpenTunnelError,
@@ -30,6 +32,15 @@ const prober = new LatencyProber(nativeTcpProbe);
 const MAX_ATTEMPTS = 3;
 
 type SheetKind = 'none' | 'servers' | 'settings';
+
+const FIREWALL_TAB = Platform.OS === 'android';
+const TABS = [
+  { key: 'home', label: 'Connection' },
+  { key: 'firewall', label: 'Firewall' },
+] as const;
+type TabKey = (typeof TABS)[number]['key'];
+// The firewall notification opens this link (FirewallService.FIREWALL_LINK).
+const FIREWALL_LINK = 'opentunnel://firewall';
 
 export default function App() {
   return (
@@ -51,6 +62,7 @@ function OpenTunnelApp() {
     traffic: null,
   });
   const [sheet, setSheet] = useState<SheetKind>('none');
+  const [tab, setTab] = useState<TabKey>('home');
   const [scanning, setScanning] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -80,6 +92,16 @@ function OpenTunnelApp() {
       handle.remove();
     };
   }, [client]);
+
+  useEffect(() => {
+    if (!FIREWALL_TAB) return;
+    const open = (url: string | null) => {
+      if (url === FIREWALL_LINK) setTab('firewall');
+    };
+    void Linking.getInitialURL().then(open);
+    const subscription = Linking.addEventListener('url', ({ url }) => open(url));
+    return () => subscription.remove();
+  }, []);
 
   const refreshList = useCallback(async (opened: AppDatabase): Promise<readonly VpnNode[] | null> => {
     setRefreshing(true);
@@ -235,6 +257,16 @@ function OpenTunnelApp() {
     [database],
   );
 
+  const confirmFirewallConsent = useCallback(async () => {
+    if (database === null) return;
+    try {
+      await database.settings.setFirewallConsented();
+      setSettings((current) => (current === null ? current : { ...current, firewallConsented: true }));
+    } catch {
+      // The flag stays unset, so the sheet shows again on the next turn-on.
+    }
+  }, [database]);
+
   const addDisallowedApp = useCallback(
     async (packageName: string) => {
       if (database === null) return;
@@ -270,27 +302,41 @@ function OpenTunnelApp() {
   }, [client]);
 
   return (
-    <>
-      <Screen scroll refreshing={refreshing} onRefresh={database ? () => void refreshList(database) : undefined}>
-        <Header title="TunnelWall" subtitle="Free VPN Gate relays, no account" />
-        <HomeScreen
-          tunnel={tunnel}
-          activeNode={activeNode}
-          nodeCount={shown.length}
-          countries={countryOptions(nodes)}
-          country={country}
-          onSelectCountry={selectCountry}
-          scanning={scanning}
-          loadError={loadError}
-          actionError={actionError}
-          onConnect={(node) => void connect(node)}
-          onAutoSelect={() => void autoSelect()}
-          onDisconnect={disconnect}
-          onOpenServers={() => setSheet('servers')}
-          onOpenSettings={() => setSheet('settings')}
-          onOpenSystemSettings={openSystemSettings}
-        />
-      </Screen>
+    <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, display: tab === 'home' ? 'flex' : 'none' }}>
+        <Screen scroll refreshing={refreshing} onRefresh={database ? () => void refreshList(database) : undefined}>
+          <Header title="TunnelWall" subtitle="Free VPN Gate relays, no account" />
+          <HomeScreen
+            tunnel={tunnel}
+            activeNode={activeNode}
+            nodeCount={shown.length}
+            countries={countryOptions(nodes)}
+            country={country}
+            onSelectCountry={selectCountry}
+            scanning={scanning}
+            loadError={loadError}
+            actionError={actionError}
+            onConnect={(node) => void connect(node)}
+            onAutoSelect={() => void autoSelect()}
+            onDisconnect={disconnect}
+            onOpenServers={() => setSheet('servers')}
+            onOpenSettings={() => setSheet('settings')}
+            onOpenSystemSettings={openSystemSettings}
+          />
+        </Screen>
+      </View>
+
+      {FIREWALL_TAB && tab === 'firewall' && (
+        <View style={{ flex: 1 }}>
+          <FirewallScreen
+            api={firewallBinding}
+            serverConnected={serverHoldsSlot(tunnel.state)}
+            consented={settings?.firewallConsented ?? false}
+            onConsent={() => void confirmFirewallConsent()}
+          />
+        </View>
+      )}
+      {FIREWALL_TAB && <TabBar tabs={TABS} value={tab} onChange={setTab} />}
 
       <ServerSheet
         visible={sheet === 'servers'}
@@ -317,7 +363,7 @@ function OpenTunnelApp() {
           }}
         />
       )}
-    </>
+    </View>
   );
 }
 
