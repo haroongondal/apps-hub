@@ -15,7 +15,10 @@ private enum ErrorCode {
   static let engineUnavailable = "ERR_ENGINE_UNAVAILABLE"
   static let serviceStartFailed = "ERR_SERVICE_START_FAILED"
   static let probeFailed = "ERR_PROBE_FAILED"
+  static let firewallNotSupported = "ERR_FIREWALL_NOT_SUPPORTED"
 }
+
+private let firewallNotSupportedMessage = "The firewall isn't available on iOS."
 
 // MARK: - TunnelStateRegistry (Kotlin TunnelStateRegistry mirror)
 //
@@ -836,6 +839,44 @@ public class OpenTunnelNativeModule: Module {
         // where null means no measurement (the JS binding maps null to null).
         promise.resolve(rttMs.map { NSNumber(value: $0) })
       }
+    }
+
+    // The firewall is Android only (it needs a VpnService and the per-app owner lookup). Each function
+    // rejects with the typed code, never a no-op or a fake value (OpenTunnel rule 6).
+    AsyncFunction("getFirewallStatus") { (promise: Promise) in
+      promise.reject(ErrorCode.firewallNotSupported, firewallNotSupportedMessage)
+    }
+
+    AsyncFunction("setFirewallEnabled") { (on: Bool, promise: Promise) in
+      promise.reject(ErrorCode.firewallNotSupported, firewallNotSupportedMessage)
+    }
+
+    AsyncFunction("setPaused") { (paused: Bool, promise: Promise) in
+      promise.reject(ErrorCode.firewallNotSupported, firewallNotSupportedMessage)
+    }
+
+    AsyncFunction("getAppRules") { (promise: Promise) in
+      promise.reject(ErrorCode.firewallNotSupported, firewallNotSupportedMessage)
+    }
+
+    AsyncFunction("setAppRule") { (uid: Int, rule: String, promise: Promise) in
+      promise.reject(ErrorCode.firewallNotSupported, firewallNotSupportedMessage)
+    }
+
+    AsyncFunction("getActivityLog") { (uid: Int?, blockedOnly: Bool, limit: Int, promise: Promise) in
+      promise.reject(ErrorCode.firewallNotSupported, firewallNotSupportedMessage)
+    }
+
+    AsyncFunction("clearActivityLog") { (promise: Promise) in
+      promise.reject(ErrorCode.firewallNotSupported, firewallNotSupportedMessage)
+    }
+
+    AsyncFunction("getDataUse") { (sinceMs: Double, promise: Promise) in
+      promise.reject(ErrorCode.firewallNotSupported, firewallNotSupportedMessage)
+    }
+
+    AsyncFunction("openUsageAccessSettings") { (promise: Promise) in
+      promise.reject(ErrorCode.firewallNotSupported, firewallNotSupportedMessage)
     }
   }
 }

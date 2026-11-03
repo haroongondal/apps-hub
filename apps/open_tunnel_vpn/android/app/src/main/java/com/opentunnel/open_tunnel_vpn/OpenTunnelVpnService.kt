@@ -11,6 +11,9 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.os.SystemClock
+import android.util.Log
+import com.opentunnel.open_tunnel_vpn.firewall.FirewallService
 import com.opentunnel.open_tunnel_vpn.engines.EngineAdapter
 import com.opentunnel.open_tunnel_vpn.engines.EngineConfig
 import com.opentunnel.open_tunnel_vpn.engines.EngineUnavailableException
@@ -20,6 +23,10 @@ import expo.modules.opentunnelnative.TunnelEventBus
 import expo.modules.opentunnelnative.TunnelStateRegistry
 import expo.modules.opentunnelnative.TunnelStatus
 import expo.modules.opentunnelnative.TrafficTicker
+import expo.modules.opentunnelnative.firewall.FirewallContract
+import expo.modules.opentunnelnative.firewall.FirewallHandover
+import expo.modules.opentunnelnative.firewall.FirewallStartPolicy
+import expo.modules.opentunnelnative.firewall.FirewallStore
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -51,7 +58,17 @@ class OpenTunnelVpnService : VpnService() {
 
   private var engine: TunnelEngine? = null
   private val main = Handler(Looper.getMainLooper())
+
+  // The firewall lives in the :firewall process and shares only this store (plan Task 6).
+  private val firewallStore by lazy { FirewallStore(this) }
+
+  /** True once this service stopped a running firewall to take the VPN slot; it is given back when the engine ends. */
+  private var firewallStopped = false
+  private var pendingStart: Runnable? = null
+  // A hold means the app is moving to another relay: the firewall returns only when the hold really ends,
+  // since a new START removes this Runnable and keeps firewallStopped.
   private val release = Runnable {
+    restoreFirewall()
     stopForegroundCompat()
     stopSelf()
   }
@@ -80,6 +97,7 @@ class OpenTunnelVpnService : VpnService() {
       ServiceContracts.ACTION_RELEASE -> {
         engine?.let { runCatching { it.stop() } }
         engine = null
+        setServerActive(false)
         TrafficTicker.stop()
         // Android 15+ cuts a background app's network about 5 s after its last foreground service ends.
         if (intent?.getBooleanExtra(ServiceContracts.EXTRA_HOLD, false) == true) main.postDelayed(release, HOLD_MS) else release.run()
@@ -88,6 +106,11 @@ class OpenTunnelVpnService : VpnService() {
         // No active command (e.g. a stale or system-delivered intent):
         // tear down the notice and end this instance cleanly; the registry
         // keeps its true state.
+        val engineRunning = engine != null || pendingStart != null
+        if (forwardsToFirewall(intent?.action, engineRunning, firewallState(FirewallService.STATE_ENABLED))) {
+          Log.i(TAG, "system start ${intent?.action}: forwarded to the firewall")
+          sendToFirewall(FirewallService.ACTION_START)
+        }
         stopForegroundCompat()
         stopSelf()
       }
@@ -95,9 +118,10 @@ class OpenTunnelVpnService : VpnService() {
     return START_NOT_STICKY
   }
 
-  /** Starts the selected engine; state transitions flow through engine
+  /** Stops a running firewall, then starts the selected engine; state transitions flow through engine
    * callbacks while failures converge on the typed error path. */
   private fun startTunnel(config: EngineConfig) {
+    cancelPendingStart()
     val previous = engine
     if (previous != null) {
       engine = null
@@ -107,6 +131,11 @@ class OpenTunnelVpnService : VpnService() {
     TunnelStateRegistry.setStatus(TunnelStatus.CONNECTING)
     TunnelEventBus.postStatus(TunnelStatus.CONNECTING, null)
 
+    setServerActive(true)
+    handOverFromFirewall { startEngine(config) }
+  }
+
+  private fun startEngine(config: EngineConfig) {
     try {
       val selected = EngineAdapter.engineFor(config.protocol, this)
       var hostFd: ParcelFileDescriptor? = null
@@ -125,9 +154,86 @@ class OpenTunnelVpnService : VpnService() {
     }
   }
 
+  /**
+   * A running firewall holds the VPN slot. Asks it to stop, then runs [start] once it reports stopped, or
+   * after [FirewallHandover.STOP_TIMEOUT_MS] whatever it reports (stopping the firewall service outright
+   * first): a server connection never fails because the firewall held the slot. A stale `running` left by a
+   * dead `:firewall` process is cleared by that stop request, because the process restarts only to stop and
+   * write "false"; the timeout covers the rest.
+   */
+  private fun handOverFromFirewall(start: () -> Unit) {
+    val startedAt = SystemClock.elapsedRealtime()
+    if (FirewallHandover.shouldStopFirewall(
+        firewallState(FirewallService.STATE_RUNNING),
+        firewallState(FirewallService.STATE_ENABLED),
+      )
+    ) {
+      // A firewall the user paused stays off afterwards (R21); one that was on, or on its way back, returns.
+      if (firewallState(FirewallService.STATE_PAUSED) != "true") firewallStopped = true
+      sendToFirewall(FirewallService.ACTION_STOP)
+    }
+    // Polled only after the STOP: a start under way has claimed running (FirewallService.start), so it is waited out.
+    val poll = object : Runnable {
+      override fun run() {
+        val running = firewallState(FirewallService.STATE_RUNNING)
+        val now = SystemClock.elapsedRealtime()
+        val timeout = FirewallHandover.STOP_TIMEOUT_MS
+        if (!FirewallHandover.canStartEngine(running, now, startedAt, timeout)) {
+          main.postDelayed(this, FirewallHandover.POLL_MS)
+          return
+        }
+        pendingStart = null
+        if (FirewallHandover.shouldForceStop(running, now, startedAt, timeout)) {
+          Log.w(TAG, "the firewall did not stop within ${timeout} ms: stopping its service")
+          runCatching { stopService(Intent(this@OpenTunnelVpnService, FirewallService::class.java)) }
+            .onFailure { Log.w(TAG, "could not stop the firewall service: ${it.message}") }
+        }
+        start()
+      }
+    }
+    pendingStart = poll
+    poll.run()
+  }
+
+  private fun cancelPendingStart() {
+    pendingStart?.let { main.removeCallbacks(it) }
+    pendingStart = null
+  }
+
+  /** Gives the VPN slot back when the engine ends, if this service took it and the user still has the firewall on. */
+  private fun restoreFirewall() {
+    if (!firewallStopped || pendingStart != null) return
+    firewallStopped = false
+    if (FirewallHandover.shouldRestartAfterEngine(firewallState(FirewallService.STATE_ENABLED))) {
+      sendToFirewall(FirewallService.ACTION_START)
+    }
+  }
+
+  /** A failed read counts as no firewall state: a server connection never waits on a store it cannot read. */
+  private fun firewallState(key: String): String? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+    return runCatching { firewallStore.readState(key) }
+      .onFailure { Log.w(TAG, "could not read the firewall state: ${it.message}") }
+      .getOrNull()
+  }
+
+  /** The firewall refuses every start while this is "true"; it is cleared before any restore START is sent. */
+  private fun setServerActive(active: Boolean) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+    runCatching { firewallStore.writeState(FirewallContract.STATE_SERVER_ACTIVE, active.toString()) }
+      .onFailure { Log.w(TAG, "could not save the server state: ${it.message}") }
+  }
+
+  private fun sendToFirewall(action: String) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+    runCatching { startForegroundService(Intent(this, FirewallService::class.java).setAction(action)) }
+      .onFailure { Log.w(TAG, "could not send $action to the firewall: ${it.message}") }
+  }
+
   /** Tidy stop: disconnecting → engine down → disconnected, notification
    * removed, ticker stopped, service ends itself. */
   private fun stopTunnel() {
+    cancelPendingStart()
     TunnelStateRegistry.setStatus(TunnelStatus.DISCONNECTING)
     TunnelEventBus.postStatus(TunnelStatus.DISCONNECTING, null)
 
@@ -138,6 +244,8 @@ class OpenTunnelVpnService : VpnService() {
     TrafficTicker.stop()
     TunnelStateRegistry.setStatus(TunnelStatus.DISCONNECTED)
     TunnelEventBus.postStatus(TunnelStatus.DISCONNECTED, null)
+    setServerActive(false)
+    restoreFirewall()
 
     stopForegroundCompat()
     stopSelf()
@@ -145,7 +253,8 @@ class OpenTunnelVpnService : VpnService() {
 
   /** The system revoked the VPN (another app started one, or the user
    * disconnected OS-side). The engine must not linger; state reports the
-   * true (system-owned) outcome. */
+   * true (system-owned) outcome. The firewall is not restored here: another VPN holds the slot and a
+   * firewall start would take it back. */
   override fun onRevoke() {
     val active = engine
     engine = null
@@ -159,10 +268,13 @@ class OpenTunnelVpnService : VpnService() {
 
   override fun onDestroy() {
     main.removeCallbacks(release)
+    cancelPendingStart()
     TrafficTicker.stop()
     val active = engine
     engine = null
     if (active != null) runCatching { active.stop() }
+    // Revoke and a stale intent end here with the engine stopped but no stopTunnel.
+    setServerActive(false)
 
     // Final convergence: leave the registry only on true terminal states.
     val status = TunnelStateRegistry.statusState
@@ -180,6 +292,8 @@ class OpenTunnelVpnService : VpnService() {
     TrafficTicker.stop()
     TunnelStateRegistry.setStatus(TunnelStatus.ERROR, message)
     TunnelEventBus.postStatus(TunnelStatus.ERROR, message)
+    setServerActive(false)
+    restoreFirewall()
     stopForegroundCompat()
     stopSelf()
   }
@@ -302,6 +416,14 @@ class OpenTunnelVpnService : VpnService() {
   }
 
   companion object {
+    /**
+     * Always-on and the boot start reach this service, the first `android.net.VpnService` filter in the manifest,
+     * not FirewallService. They belong to the firewall when no server engine runs and its switch is on.
+     */
+    fun forwardsToFirewall(action: String?, engineRunning: Boolean, enabled: String?): Boolean =
+      FirewallService.isImplicitStart(action) && !engineRunning && FirewallStartPolicy.startOnNullAction(enabled)
+
+    private const val TAG = "OpenTunnelVpnService"
     private const val CHANNEL_ID = "tunnel"
     private const val NOTIFICATION_ID = 1
     // Covers the app's relay refetch and probe sweep after a drop.

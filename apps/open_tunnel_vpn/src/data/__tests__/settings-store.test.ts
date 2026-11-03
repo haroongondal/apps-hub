@@ -64,3 +64,23 @@ test('lastNodeId persists and clears on null', async () => {
   await store.setLastNodeId(null);
   assert.equal((await store.loadSettings()).lastNodeId, null);
 });
+
+test('the firewall consent flag is unset until the owner confirms, then persists', async () => {
+  const driver = nodeSqliteDriver(DatabaseSync)(':memory:');
+  const store = new AppSettingsStore(driver);
+  assert.equal((await store.loadSettings()).firewallConsented, false);
+  await store.setFirewallConsented();
+  assert.equal((await store.loadSettings()).firewallConsented, true);
+  // A new store over the same database is a relaunch: the consent is still there.
+  assert.equal((await new AppSettingsStore(driver).loadSettings()).firewallConsented, true);
+  const rows = await driver.all('SELECT value FROM app_settings WHERE key = ?', ['firewallConsented']);
+  assert.equal(rows[0]?.value, 'true');
+});
+
+test('an unreadable consent value counts as unset, so the sheet shows again', async () => {
+  const driver = nodeSqliteDriver(DatabaseSync)(':memory:');
+  const store = new AppSettingsStore(driver);
+  await store.setFirewallConsented();
+  await driver.run('UPDATE app_settings SET value = ? WHERE key = ?', ['yes?', 'firewallConsented']);
+  assert.equal((await store.loadSettings()).firewallConsented, false);
+});
