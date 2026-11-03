@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('native', {
   openDesign: () => ipcRenderer.invoke('open-design'),
   readAutosave: () => ipcRenderer.invoke('autosave-read'),
   writeAutosave: text => ipcRenderer.invoke('autosave-write', text),
+  keepAutosave: () => ipcRenderer.invoke('autosave-keep'),
   setDocState: state => ipcRenderer.send('doc-state', state),
   onMenu: fn => ipcRenderer.on('menu', (_, cmd) => fn(cmd)),
 });

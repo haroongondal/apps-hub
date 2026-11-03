@@ -41,7 +41,7 @@ contains each page's heading, font file embedded, errors == []) + hand check of 
   text is measured. System fonts stay in the picker under "This Mac only".
 - **Missing fonts on open**: any text font that is neither bundled nor installed on this Mac is replaced with Atkinson
   Hyperlegible Next and a toast names the replaced fonts.
-- **PDF approach: image runs + real text in z-order.** Objects are flattened in stacking order (groups recursed);
+- **PDF approach: image runs + real text in z-order.** Top-level objects are taken in stacking order (a group goes into the image layer whole);
   each run of consecutive non-text objects becomes one transparent PNG layer of the page, and each text object in a
   bundled font is drawn as real PDF text (subset-embedded TTF via fontkit) between them. Why: keeps exact stacking and
   Fabric's look for shapes/images/filters with no SVG-to-PDF converter to write. Text positions use Fabric's own
@@ -85,11 +85,18 @@ contains each page's heading, font file embedded, errors == []) + hand check of 
   ad-hoc page with rotation, opacity, right/justify, underline, charSpacing, lineHeight, rgba fill, synthetic italic).
   Fabric's `justify` also stretches the last line; the PDF copies that. README updated (features, limitations, licences).
 
+- s2 (2026-11-02): ship review fixes, each pinned by an e2e check: page actions, undo/redo, resize, open, new and
+  downloads wait while a page loads (a second click used to store the old canvas as another page); an all-pages download
+  asks before replacing existing `name-N` files; an autosave that can't be restored is saved as
+  `autosave-unreadable-<ms>.json` before the new design's autosave; File > Download… refreshes "All pages"; PDF text needs
+  a finite font size and transform; bundled-font lookups use `Object.hasOwn`.
+
 ## 7. Current state and next step
 
-Phase 2 is shipped on 2026-11-02. The owner did the hand check (page strip, PDF download with selectable text)
-and asked to ship. The branch was rebased onto origin/main (single commit 9034a3e, now rebased), and on it: the design-editor
-e2e suite passes (`e2e ok`), `pnpm test` and `pnpm typecheck` exit 0. Ship path: a PR into main via gh, merged after CI.
-The Mac app is not a Store app, so the merge releases nothing. Known limits kept on purpose: text inside groups goes into the
+Phase 2 goes to main by PR on 2026-11-02. The owner did the hand check (page strip, PDF download with selectable text)
+and asked to ship. The branch was rebased onto origin/main (commits b223714 and 8df07c7, then the s2 review fixes), and on it: the design-editor
+e2e suite passes (`e2e ok`); `pnpm test` and `pnpm typecheck` exit 0 but don't cover design-editor, which has no test or
+typecheck script. Ship path: a PR into main via gh, merged after CI.
+The Mac app is not a Store app, so the merge releases nothing. Known limits kept on purpose (decided 2026-11-03): a brand kit saved before this change keeps its Avenir Next heading and body font, so text in that font stays as a picture in PDFs; the owner accepted that as a documented limit.  text inside groups goes into the
 page image; the whole document is re-serialised on every edit (fine for a few pages, slow for many image-heavy pages).
 Next: Media Phase 2 (session B2, branch design-media-phase-2) can start once this PR and PR #8 are both merged (PR #8 is already merged).

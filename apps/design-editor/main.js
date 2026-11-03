@@ -60,6 +60,15 @@ ipcMain.handle('save-file', async (_, { name, ext, data, filePath }) => {
   }
   // one file per page: name-1.png, name-2.png, … next to the path picked in the dialog
   const files = Array.isArray(data) ? data.map((_, i) => filePath.replace(/(\.\w+)?$/, `-${i + 1}$1`)) : [filePath];
+  // the dialog only confirmed filePath, so ask before replacing any of the per-page files
+  const taken = Array.isArray(data) ? (await Promise.all(files.map(f => fs.access(f).then(() => f, () => null)))).filter(Boolean) : [];
+  if (taken.length) {
+    const r = await dialog.showMessageBox(win, {
+      type: 'warning', message: `Replace ${taken.length} ${taken.length > 1 ? 'files that already exist' : 'file that already exists'}?`,
+      detail: taken.map(f => path.basename(f)).join('\n'), buttons: ['Replace', 'Cancel'], defaultId: 1, cancelId: 1,
+    });
+    if (r.response !== 0) return null;
+  }
   const list = Array.isArray(data) ? data : [data];
   await Promise.all(files.map((f, i) => fs.writeFile(f, typeof list[i] === 'string' ? list[i] : Buffer.from(list[i]))));
   return files[0];
@@ -76,6 +85,13 @@ ipcMain.handle('autosave-read', async () => {
     if (saved.filePath) granted.add(saved.filePath);
     return saved;
   } catch { return null; }
+});
+// a session this build can't restore is saved aside as a design file before the new design's autosave replaces it
+ipcMain.handle('autosave-keep', async () => {
+  const { doc } = JSON.parse(await fs.readFile(autosavePath(), 'utf8'));
+  const kept = path.join(app.getPath('userData'), `autosave-unreadable-${Date.now()}.json`);
+  await fs.writeFile(kept, typeof doc === 'string' ? doc : JSON.stringify(doc));
+  return kept;
 });
 let autosaving = Promise.resolve();
 ipcMain.handle('autosave-write', (_, saved) => {

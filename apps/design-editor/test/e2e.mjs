@@ -1,6 +1,6 @@
 import { _electron } from 'playwright-core';
 import { PDFDocument, PDFDict, PDFName } from 'pdf-lib';
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,6 +20,7 @@ async function launch() {
   await app.evaluate(({ dialog }, out) => {
     dialog.showSaveDialog = async (_, o) => ({ canceled: false, filePath: out + (o.defaultPath.endsWith('.json') ? 'My poster.json' : o.defaultPath) });
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [globalThis.nextOpen || out + 'My poster.json'] });
+    dialog.showMessageBox = async () => ({ response: 1 });
   }, out);
   const page = await app.firstWindow();
   page.on('pageerror', e => errors.push(e.message));
@@ -121,9 +122,32 @@ await page.click('#pageLeft'); await settle(page);
 assert.deepEqual([await pageOf(), await count()], [[2, 4], 6]);
 await page.click('#pageDel'); await settle(page);
 assert.deepEqual(await pageOf(), [2, 3]);
+await page.click('#pageLeft'); await settle(page);
+assert.deepEqual([await pageOf(), await count()], [[1, 3], 6], 'a moved page takes its content with it');
+await page.click('#pageRight'); await settle(page);
+assert.deepEqual([await pageOf(), await count()], [[2, 3], 6]);
 await page.focus('#pageAdd');
 await page.keyboard.press('Shift+Tab');
 assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Page 3 of 3', 'page thumbnails are keyboard reachable');
+await thumb(0); await settle(page);
+// the second click lands while the first page is still loading, so it must not store the old canvas as a page
+await page.evaluate(() => { const b = document.querySelectorAll('#pageList button'); b[1].click(); b[2].click(); });
+await settle(page);
+assert.deepEqual([await pageOf(), await count()], [[1, 3], 3], 'a page click during a page load is ignored');
+await page.evaluate(() => {
+  document.querySelector('#toast').textContent = ''; document.querySelector('#cw').value = document.querySelector('#ch').value = '100';
+  document.querySelectorAll('#pageList button')[2].click(); editor.MENU.undo(); document.querySelector('#applySize').click();
+});
+await settle(page);
+assert.deepEqual([await pageOf(), await count(), await page.evaluate(() => editor.size)], [[2, 3], 6, [540, 1920]], 'undo and resize wait for a page load');
+assert.equal(await page.textContent('#toast'), '', 'and a skipped resize says nothing');
+await page.click('[data-tab="resize"]');
+await page.fill('#cw', '1080'); await page.fill('#ch', '3840');
+await page.click('#applySize'); await settle(page);
+await thumb(0); await settle(page);
+assert.ok(Math.abs(await page.evaluate(() => editor.canvas.getObjects()[1].getScaledWidth()) - after * 2) < 1, 'magic resize scales every page, not only the one on screen');
+await menu('undo'); await settle(page);
+assert.deepEqual(await page.evaluate(() => editor.size), [540, 1920]);
 await thumb(0); await settle(page);
 
 await menu('save'); await settle(page);
@@ -161,6 +185,19 @@ await page.click('#download');
 await until(() => document.querySelector('#toast').textContent === 'Downloaded one file per page, starting with My poster-1.png');
 assert.ok([1, 2, 3].every(n => fs.existsSync(out + `My poster-${n}.png`)), 'one PNG per page');
 await page.evaluate(() => { document.querySelector('#toast').textContent = ''; });
+// the save dialog only confirmed "My poster.png", so replacing the per-page files needs a yes
+fs.writeFileSync(out + 'My poster-2.png', 'keep me');
+await app.evaluate(({ dialog }) => { globalThis.asked = 0; dialog.showMessageBox = async () => ({ response: globalThis.asked++ ? 0 : 1 }); });
+const asked = () => app.evaluate(() => globalThis.asked);
+await page.click('#exportBtn'); await page.click('#download');
+for (let i = 0; i < 100 && !(await asked()); i++) await page.waitForTimeout(50);
+await settle(page);
+assert.equal(fs.readFileSync(out + 'My poster-2.png', 'utf8'), 'keep me', 'cancel keeps the files already there');
+await page.click('#exportBtn'); await page.click('#download');
+await until(() => document.querySelector('#toast').textContent.startsWith('Downloaded one file per page'));
+assert.equal(await asked(), 2, 'asked again before replacing');
+assert.notEqual(fs.readFileSync(out + 'My poster-2.png', 'utf8'), 'keep me', 'replace writes the new files');
+await page.evaluate(() => { document.querySelector('#toast').textContent = ''; });
 await page.click('#exportBtn'); await page.uncheck('#allPages'); await page.click('#exportBtn');
 assert.match((await exportAs('svg', 'My poster.svg')).toString(), /<svg[^>]+width="540"/);
 assert.ok((await exportAs('jpeg', 'My poster.jpg')).subarray(0, 2).equals(Buffer.from([0xff, 0xd8])));
@@ -180,6 +217,9 @@ await app.close();
 assert.equal(await count(), 10, 'autosave restores unsaved work after relaunch');
 assert.deepEqual(await pageOf(), [0, 3], 'with every page');
 assert.deepEqual(await win(), { title: 'My poster', edited: true });
+await menu('export');
+assert.ok(await page.isVisible('#allPages'), 'Download… from the File menu offers one file per page');
+await page.evaluate(() => document.querySelector('#exportMenu').classList.remove('open'));
 await menu('save'); await settle(page);
 assert.equal((await win()).edited, false, 'save goes straight to the remembered file');
 assert.equal(JSON.parse(fs.readFileSync(out + 'My poster.json', 'utf8')).pages[0].objects.length, 10);
@@ -193,6 +233,21 @@ await menu('open'); await settle(page);
 assert.deepEqual([await count(), await pageOf(), await page.evaluate(() => editor.size)], [2, [0, 1], [600, 400]], 'a v1 file opens');
 assert.match(await page.textContent('#toast'), /^Comic Papyrus Pro isn’t on this Mac/);
 assert.equal(await page.evaluate(() => editor.canvas.getObjects()[1].fontFamily), 'Atkinson Hyperlegible Next');
+// a design file's numbers reach the PDF only as numbers, and a font named after an Object.prototype key is replaced
+await app.evaluate((_, p) => { globalThis.nextOpen = p; }, root + 'test/untrusted.json');
+await menu('open'); await settle(page);
+const untrusted = await getDocument({ data: new Uint8Array(await exportAs('pdf', 'untrusted.pdf')) }).promise;
+assert.ok(!(await (await untrusted.getPage(1)).getOperatorList()).fnArray.includes(OPS.constructPath), 'no drawing commands smuggled in through a font size');
+await app.close();
+
+// a last session this build can't read is kept, not overwritten by the new design
+const badDoc = JSON.stringify({ version: 2, W: 100, H: 100, pages: [] });
+fs.writeFileSync(path.join(data, 'autosave.json'), JSON.stringify({ filePath: null, dirty: true, doc: badDoc }));
+({ app, page, menu, win } = await launch());
+const kept = fs.readdirSync(data).filter(f => /^autosave-unreadable-.*\.json$/.test(f));
+assert.equal(kept.length, 1, 'the unreadable session is kept');
+assert.equal(fs.readFileSync(path.join(data, kept[0]), 'utf8'), badDoc, 'as a design file that File > Open takes');
+assert.equal(await page.textContent('#toast'), `Design Editor couldn’t restore your last session, so it started a new design. It saved that session to ${path.join(data, kept[0])}. Open it with File > Open in the version that made it.`);
 await app.close();
 
 fs.rmSync(data, { recursive: true, force: true });

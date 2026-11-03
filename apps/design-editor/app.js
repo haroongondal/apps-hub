@@ -38,7 +38,7 @@ function pickFace(family, weight, italic) {
 }
 const probe = document.createElement('canvas').getContext('2d');
 function hasFont(f) {
-  if (BUNDLED[f]) return true;
+  if (Object.hasOwn(BUNDLED, f)) return true;
   return ['monospace', 'serif'].some(g => {
     probe.font = `40px ${g}`; const w = probe.measureText('mmmwwwlli10O@').width;
     probe.font = `40px "${f}", ${g}`; return probe.measureText('mmmwwwlli10O@').width !== w;
@@ -65,9 +65,10 @@ const store = {
 let W = 1080, H = 1080;
 const canvas = new Canvas('c', { preserveObjectStacking: true, backgroundColor: '#ffffff' });
 const brand = store.get('brand', { colors: ['#1d2433', '#2f54d8', '#ffd43b', '#ffffff'], heading: 'Jost', body: SANS });
-// every page as canvas JSON; the current one lives in `canvas` and pages[cur] is stale until we leave it
-let pages = [{}], cur = 0;
-const pagesNow = () => pages.map((p, i) => i === cur ? canvas.toObject(PROPS) : p);
+// every page as canvas JSON; the current one lives in `canvas` and pages[cur] is stale until we leave it.
+// While `loading`, the canvas can still hold another page, so `pages` alone is the design and page actions wait.
+let pages = [{}], cur = 0, loading = false;
+const pagesNow = () => loading ? pages : pages.map((p, i) => i === cur ? canvas.toObject(PROPS) : p);
 
 function toast(msg, ms = 1800) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
@@ -131,29 +132,31 @@ async function load(d, page = 0) {
 }
 const restore = (s, page) => load(parseDoc(s), page);
 async function undo() {
+  if (loading) return;
   commit();
   if (undoStack.length < 2) return;
   const u = undoStack.pop(); redoStack.push(u);
   await restore(undoStack.at(-1).s, u.page); docChanged(undoStack.at(-1).s);
 }
 async function redo() {
-  if (!redoStack.length) return;
+  if (loading || !redoStack.length) return;
   const r = redoStack.pop(); undoStack.push(r);
   await restore(r.s, r.page); docChanged(r.s);
 }
 
 async function openPage(i) {
-  restoring = true;
-  try { cur = i; await canvas.loadFromJSON(pages[i]); } finally { restoring = false; }
+  restoring = loading = true;
+  try { await canvas.loadFromJSON(pages[i]); cur = i; } finally { restoring = loading = false; }
   canvas.requestRenderAll(); inspect(); renderPages();
 }
 async function showPage(i) {
-  if (i === cur || !pages[i]) return;
+  if (loading || i === cur || !pages[i]) return;
   commit(); canvas.discardActiveObject();
   pages[cur] = canvas.toObject(PROPS);
   await openPage(i);
 }
 async function pageOp(op) {
+  if (loading) return;
   commit(); canvas.discardActiveObject();
   pages[cur] = canvas.toObject(PROPS);
   let to = cur + 1;
@@ -317,6 +320,7 @@ const TEMPLATES = [
   ] },
 ];
 async function applyTemplate(t) {
+  if (loading) return;
   if (canvas.getObjects().length) await pageOp('add');
   restoring = true;
   canvas.clear();
@@ -351,6 +355,7 @@ $('#presets').replaceChildren(...PRESETS.map(([n, w, h]) => {
   return b;
 }));
 async function resizePage(nw, nh, scaleContent) {
+  if (loading) return false;
   canvas.discardActiveObject();
   const k = Math.min(nw / W, nh / H);
   const move = objs => { for (const o of objs) {
@@ -360,16 +365,22 @@ async function resizePage(nw, nh, scaleContent) {
     o.setPositionByOrigin(nc, 'center', 'center');
     o.setCoords();
   } };
-  for (const [i, p] of pages.entries()) if (i !== cur) pages[i] = await withPage(p, sc => { move(sc.getObjects()); return sc.toObject(PROPS); });
+  // the other pages resize off screen into a new list, so anything that reads the design meanwhile sees the old one
+  pages[cur] = canvas.toObject(PROPS); loading = true;
+  try {
+    const next = [];
+    for (const [i, p] of pages.entries()) next.push(i === cur ? p : await withPage(p, sc => { move(sc.getObjects()); return sc.toObject(PROPS); }));
+    pages = next;
+  } finally { loading = false; }
   move(canvas.getObjects());
   W = nw; H = nh;
   updateSize(); fit(); renderTemplates(); renderPages(); record();
+  return true;
 }
 $('#applySize').onclick = async () => {
   const w = Math.round(+$('#cw').value), h = Math.round(+$('#ch').value);
   if (!(w >= 16 && h >= 16 && w <= 8000 && h <= 8000)) return toast('Use a size between 16 and 8000 px');
-  await resizePage(w, h, $('#magic').checked);
-  toast(`Resized to ${w} × ${h}`);
+  if (await resizePage(w, h, $('#magic').checked)) toast(`Resized to ${w} × ${h}`);
 };
 
 function saveBrand() { store.set('brand', brand); }
@@ -650,8 +661,10 @@ const fontFile = src => {
   return fontData.get(src);
 };
 async function pdfFont(o, doc, embedded) {
-  if (!(o instanceof FabricText && BUNDLED[o.fontFamily] && rgba(o.fill) && !(o.stroke && o.strokeWidth) && !o.shadow && !o.path
-    && !o.clipPath && !o.backgroundColor && !o.textBackgroundColor && o.direction !== 'rtl' && o.isEmptyStyles())) return null;
+  if (!(o instanceof FabricText && Object.hasOwn(BUNDLED, o.fontFamily) && rgba(o.fill) && !(o.stroke && o.strokeWidth) && !o.shadow && !o.path
+    && !o.clipPath && !o.backgroundColor && !o.textBackgroundColor && o.direction !== 'rtl' && o.isEmptyStyles()
+    // pdf-lib writes these into the page as given, so a string from the file would become PDF commands
+    && [o.fontSize, ...o.calcTransformMatrix()].every(Number.isFinite))) return null;
   const italic = o.fontStyle === 'italic' || o.fontStyle === 'oblique', face = pickFace(o.fontFamily, o.fontWeight, italic);
   const { bytes, fk } = await fontFile(face.src);
   if (![...o.text].every(c => c === '\n' || fk.hasGlyphForCodePoint(c.codePointAt(0)))) return null;
@@ -705,6 +718,7 @@ async function pdfPage(doc, sc, scale, embedded) {
   await flush();
 }
 async function exportAs(fmt, scale, all) {
+  if (loading) return;
   canvas.discardActiveObject(); canvas.renderAll();
   if (fmt === 'pdf') {
     const doc = await PDFLib.PDFDocument.create(), embedded = new Map();
@@ -743,6 +757,7 @@ async function save(as) {
   docChanged(snap); toast('Saved');
 }
 async function open() {
+  if (loading) return;
   commit();
   if (!discardOk()) return;
   const r = await native.openDesign();
@@ -760,6 +775,7 @@ async function open() {
   docChanged(savedSnap); renderTemplates();
 }
 async function newDesign() {
+  if (loading) return;
   commit();
   if (!discardOk()) return;
   await load({ W, H, pages: [{ objects: [], background: '#ffffff' }] });
@@ -769,7 +785,7 @@ async function newDesign() {
 const typingOr = (cmd, fn) => () => isTyping() ? document.execCommand(cmd) : fn();
 const MENU = {
   new: newDesign, open, save: () => save(false), saveAs: () => save(true),
-  export: () => { menu.classList.add('open'); $('#fmt').focus(); },
+  export: () => { allPagesShown(); menu.classList.add('open'); $('#fmt').focus(); },
   undo: typingOr('undo', undo), redo: typingOr('redo', redo), duplicate: () => isTyping() || duplicate(),
   zoomIn: () => setZoom(zoom * 1.25), zoomOut: () => setZoom(zoom / 1.25), zoomFit: fit,
 };
@@ -791,8 +807,10 @@ $$('nav.rail button').forEach(b => b.onclick = () => {
       replaceMissingFonts(d);
       await load(d); filePath = saved.filePath || null;
     } catch {
+      const kept = await native.keepAutosave().catch(e => { console.error(e); return null; });
       await load({ W, H, pages: [{ objects: [], background: '#ffffff' }] });
-      toast('The last session couldn’t be restored, so this is a new design.', 5000);
+      toast(kept ? `Design Editor couldn’t restore your last session, so it started a new design. It saved that session to ${kept}. Open it with File > Open in the version that made it.`
+        : 'Design Editor couldn’t restore your last session or save a copy of it, so it started a new design. Check that your Mac has free disk space.', kept ? 10000 : 5000);
     }
   }
   updateSize(); fit(); renderTemplates(); inspect(); renderPages();

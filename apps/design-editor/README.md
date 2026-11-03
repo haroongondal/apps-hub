@@ -54,6 +54,8 @@ To run it from source without building, use `npm start`.
 - Text in a "This Mac only" font may look different on another computer. If that font is missing there, the editor switches the text to Atkinson Hyperlegible Next and says which font it replaced.
 - In PDF downloads, these kinds of text are part of the page image, so they can't be selected: text in a "This Mac only" font, text inside a group, text with an outline, shadow or gradient, text with mixed styles inside one box, and characters the font doesn't have, such as emoji. Use a font that comes with the app, and ungroup text, to keep it selectable.
 - Shapes and images in PDF downloads are images at the download scale, not vector art.
+- SVG downloads name the fonts they use but don't include them, so their text looks right only where those fonts are installed.
+- A brand kit saved before this version keeps its Avenir Next heading and body font. Text in that font stays a picture in PDFs, so it can't be selected. New text uses the bundled fonts.
 - Each window holds one design.
 - Builds are for Apple Silicon Macs.
 
