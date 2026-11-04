@@ -581,6 +581,8 @@ Copy examples: "Couldn't fit under 20 MB. This video can hold about 21 minutes a
 quality." "Starts at 0:12.4, the closest point before 0:13.0 that keeps full quality." "Converted to AAC: this audio
 format can't be copied on Android."
 
+**As built (2026-11-04, Phase 4, screens):** the app shell is a Tabs layout (`app/(tabs)`: Designs, Media, Queue) drawn with the shared `TabBar`; the Queue label carries a count while jobs run. `app/media/[tool].tsx` is one setup screen for nine tools, named Make smaller (fit a size or pick a quality), Trim, Get the sound, Make a GIF, Change format, Save a picture, Change the volume, Play backwards and Steady a shaky video; every tool plans through `planFor` in media-core with the phone tables. `app/queue/all.tsx` is the full list; the Queue tab shows `visibleQueue(jobs, 5)` and a "See all n" row; "Clear queue" confirms while something runs or waits and calls `clearQueue()`, which never touches an output file. "Try again" re-enqueues from `documentDirectory/media-jobs.json` (the newest 200 jobs this app started). The Media lab is `src/lab/MediaLab.tsx`, reachable only through `app/lab.tsx` and `__DEV__`. The editor page's phone wording lives in `packages/design-editor-engine/copy.js` (a phone and a Mac column), and `plain-words.test.ts` reads the phone column, the screens and the phone page against the banned list.
+
 **Owner's requirements (2026-11-04):** plain words in every release screen (PRD FR-13, AC-16), the
 five-row Queue with a full-list screen and Clear queue (FR-9, AC-15), and a calmer Design Editor
 overall: tab bar (Designs, Media, Queue), page sizes when starting a design, touch wording in the
