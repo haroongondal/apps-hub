@@ -296,6 +296,20 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
 - Workspace: root `pnpm test` exit 0; root `pnpm typecheck` exit 0; `pnpm --filter @apps-hub/release test` 5 pass, 0 fail, typecheck exit 0.
 - `expo-doctor`: the same two failures Phase 1 recorded (non-CNG config fields; the `modules/**/android` gitignore glob reaching ignored symlinked deps) — no new finding.
 
+### Decisions made in session B4.1 (owner answers, 2026-11-04)
+
+- **Phone tools: all of them, including FFmpeg.** The owner answered "All of them, including FFmpeg" to the one open Phase 4 question (remove sound, still frame and volume on Media3; reverse and stabilize need FFmpeg, which PRD §8 had ruled out on Android). PRD §8 now carries the exception.
+- **FFmpeg source: the pinned community AAR, not our own build.** The owner picked `dev.ffmpegkit-maintained:ffmpeg-kit-min:8.1.7` over "build our own LGPL". Recorded in SPEC §3. Why it is acceptable: LGPL-3.0, no x264, MediaCodec encoders only, on Maven Central. The trust is the same kind as the Mac download: one publisher (Jokobee), self-reported 16 KB support, no signature we can check (`gpg` is not installed here; an `.asc` exists on Central). Limits: reverse and stabilize output goes through `h264_mediacodec`, so it follows the phone's encoder quirks.
+- **Added by the owner mid-session (2026-11-04), not built in Phase 4:** background music and several sounds on one video, join clips, cut into pieces, change orientation, CapCut-style templates, and a question about Spotify. Answer on Spotify: not possible (PRD "Requested by the owner" block). Claude's sequencing, which the owner can override: finish Phase 4 as scoped, then session B4.2 for Add music, Join clips and Orientation, then a designed phase for templates.
+
+### Verified 2026-11-04 (session B4.1; output was read, not predicted)
+
+- The merge: `origin/main` (`ec23cbd`) and `origin/docs/canvas-perf-release` merged into `design-media-phase-4`; the handoff conflict resolved with the docs version; `pnpm install` exit 0.
+- `ffmpeg-kit-min` 8.1.7 AAR, downloaded from Maven Central into a scratch folder: 16,151,151 bytes; computed sha256 `591ddcf3698028e838b854dc775e60aedaf43fffd59689cb59b8af632aba3d76` equals the published `.sha256`. Metadata lists 6.0.3, 6.0.4, 7.1.6, 7.1.7, 8.1.7, 8.1.8, 8.1.9 (latest 8.1.9, updated 2026-09-26). Pinned at 8.1.7 because it is the one inspected.
+- Inside it: `jni/arm64-v8a` and `jni/x86_64` (nine `.so` each; arm64 `libavcodec.so` 8.9 MB, `libavfilter.so` 2.9 MB), FFmpeg `n8.1.2`, configured `--enable-version3 --enable-jni --enable-mediacodec --enable-small --disable-autodetect --disable-programs` (no `--enable-gpl`, no `libx264`). The filters `deshake`, `reverse`, `areverse`, `loudnorm`, `volume`, `scale`, `trim`, `atrim` and the encoders `h264_mediacodec`, `hevc_mediacodec`, `mpeg4`, `mjpeg` and `aacenc.c` are present in the arm64 libraries (string match, not a run; nothing was executed).
+- The Java layer (`com.arthenica.ffmpegkit`) has classes upstream did not ship: `TranslationProvider`, `DeepLTranslationProvider`, `GoogleTranslateProvider`, `LibreTranslateProvider`, `WhisperKit`, `CameraSupport`. No class references `java/net` or contains a URL, and nothing refers to the three providers. We never call them. Not verified: whether R8 strips them in the release build.
+- Not verified yet: that a reverse or stabilize job actually runs on the phone with this AAR (needs a release and the phone), whether `abiFilters` removes the x86_64 libraries from our APK, and the APK size after adding it.
+
 ### Decisions made in session B3.2 (Claude's calls; the owner can override)
 
 - **The bridge's ask-and-answer set is complete in the app**: every `reqId` gets a reply — `saveFile` (json → `DesignMedia.saveJson`, else `saveExport`), `confirm` (an Alert with Keep editing / Discard), `readAutosave`/`writeAutosave`/`keepAutosave` (expo-file-system/legacy), `openDesign` (DocumentPicker). An error replies `ok:false`, so the page's own catch paths run instead of hanging.

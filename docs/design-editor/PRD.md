@@ -274,11 +274,20 @@ test log in the handoff.
 
 - **A video timeline inside the design canvas** and **exporting designs as MP4 or animated
   images.** Later ideas, below.
-- **FFmpeg on Android**, MP3, WebM and animated WebP output on the phone, AV1 output anywhere.
+- **FFmpeg on Android**, MP3, WebM and animated WebP output on the phone, AV1 output anywhere. (Exception, the owner's yes on 2026-11-04: the LGPL `ffmpeg-kit-min` 8.1.7 AAR, used only for reverse and stabilize on the phone, with hardware encoders and no x264; SPEC §3.)
 - Multi-segment cuts, merging, subtitles, filters, crop, speed changes. (Exception: volume, reverse and stabilize, the owner's yes on 2026-11-03; see FR-8.)
 - Uploading, cloud sync, accounts.
 - Play Store release; Windows or Linux builds of Design Editor.
 - **iOS** until the owner has a paid Apple developer account (SPEC Phase 6, optional).
+
+### Requested by the owner on 2026-11-04, not scheduled yet (needs a plan before any build)
+
+These lift parts of the list above; the owner's message is the yes. They are the next session (B4.2), after Phase 4.
+
+- **Add music and mix several sounds on one video** (a background track, more than one sound, a level per sound). Music comes from files on the phone.
+- **Join clips** (PRD later idea 4), **cut a clip into pieces**, **change a video's orientation** (rotate, flip, fit to a vertical or horizontal frame).
+- **Video templates in the CapCut style.** A template needs a timeline (clip slots, text, music), so it is its own designed phase. CapCut's own templates are not copied; ours are original.
+- **Spotify: not possible.** Spotify's developer policy bars syncing its content with video and mixing it with other audio, its SDKs only control playback inside Spotify, and it needs a network, an account and a closed SDK (PRD NFR-4, NFR-8, AGENTS.md).
 
 ### Later ideas
 
