@@ -748,7 +748,9 @@ $('#download').onclick = async () => {
   } catch (e) { console.error(e); toast('The download didn’t finish. Try again, or pick another format.', 5000); }
 };
 
-const discardOk = () => undoStack.at(-1).s === savedSnap || confirm(`Discard unsaved changes to “${docName()}”?`);
+// on the desktop confirm() is Chromium's own sync dialog; the mobile shell swaps it for a
+// bridged promise, so every caller can await
+const discardOk = async () => undoStack.at(-1).s === savedSnap || (await confirm(`Discard unsaved changes to “${docName()}”?`));
 async function save(as) {
   const snap = snapshot();
   const p = await native.saveFile({ name: docName() + '.json', ext: 'json', data: snap, filePath: as ? null : filePath });
@@ -759,7 +761,7 @@ async function save(as) {
 async function open() {
   if (loading) return;
   commit();
-  if (!discardOk()) return;
+  if (!(await discardOk())) return;
   const r = await native.openDesign();
   if (!r) return;
   const before = undoStack.at(-1);
@@ -777,7 +779,7 @@ async function open() {
 async function newDesign() {
   if (loading) return;
   commit();
-  if (!discardOk()) return;
+  if (!(await discardOk())) return;
   await load({ W, H, pages: [{ objects: [], background: '#ffffff' }] });
   filePath = null; savedSnap = snapshot(); undoStack = [{ s: savedSnap, page: 0 }]; redoStack = [];
   docChanged(savedSnap);
@@ -819,4 +821,6 @@ $('#openMedia').onclick = () => native.media.openWindow();
   savedSnap = saved?.dirty ? null : undoStack[0].s;
   docChanged(undoStack[0].s);
 })();
-window.editor = { canvas, MENU, removeBackground, resizePage, exportAs, applyTemplate, pickFace, TEMPLATES, get size() { return [W, H]; }, get page() { return [cur, pages.length]; } };
+// setZoom exports for touch.js: pinch zoom and pan stay in sync with app.js's zoom variable,
+// the element size and the zoom label through the same function the buttons use
+window.editor = { canvas, MENU, removeBackground, resizePage, exportAs, applyTemplate, pickFace, TEMPLATES, setZoom, get size() { return [W, H]; }, get page() { return [cur, pages.length]; } };

@@ -3,6 +3,7 @@ package expo.modules.designmedia
 import android.net.Uri
 import expo.modules.designmedia.android.Access
 import expo.modules.designmedia.android.CodecReport
+import expo.modules.designmedia.android.DesignSaves
 import expo.modules.designmedia.android.MediaJobService
 import expo.modules.designmedia.android.Probe
 import expo.modules.designmedia.core.AtomicFile
@@ -53,6 +54,15 @@ class DesignMediaModule : Module() {
 
     AsyncFunction("queue") {
       QueueStore(AtomicFile(File(context.filesDir, "media-queue.json"))).load().map { it.toStatusMap() }
+    }
+
+    // saveFile posts from the editor page: designs cross as text, exports as base64 (SPEC §14.3)
+    AsyncFunction("saveJson") { name: String, text: String, filePath: String? ->
+      DesignSaves.publish(context, name, "json", text, null, filePath)
+    }
+
+    AsyncFunction("saveExport") { name: String, ext: String, base64: String ->
+      DesignSaves.publish(context, name, ext, null, base64, null)
     }
   }
 }

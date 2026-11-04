@@ -2,25 +2,26 @@
 
 ## Resume prompt
 
-Dated 2026-11-03. Build session B3.2: Phase 3 step 2 onward (the mobile canvas), on branch `design-media-phase-3` (draft PR, base `main`). Step 1 (engine extraction) is done and committed.
+Dated 2026-11-04. Build session B3.3: Phase 3 is built through step 5 on branch `design-media-phase-3` (PR #18, base `main`); what remains is the owner's phone check, the PR hand check and merge, and then Phase 4.
 
-Read `docs/handoffs/design-editor-media.md` completely first. It lives in the worktree `.claude/worktrees/design-media-phase-3`, on branch `design-media-phase-3` (from `origin/main`, which includes PR #16). Then read `docs/design-editor/PRD.md`, `docs/design-editor/SPEC.md` §14 and §15, `docs/design-editor/CAPCUT-GAPS.md`, and the prelude plus Phase 3 in `docs/design-editor/PROMPTS.md`. Trust the verified facts and decisions in the handoff and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` and "How every session runs" in `docs/build-sessions.md`. Read "Current state + exact next step" before doing anything.
+Read `docs/handoffs/design-editor-media.md` completely first. It lives in the worktree `.claude/worktrees/design-media-phase-3`, on branch `design-media-phase-3` (from `origin/main`, which includes PR #16). Then read `docs/design-editor/PRD.md`, `docs/design-editor/SPEC.md` §14–§16 (as-built paragraphs included), `docs/design-editor/CAPCUT-GAPS.md`, and the prelude plus Phase 4 in `docs/design-editor/PROMPTS.md`. Trust the verified facts and decisions in the handoff and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` and "How every session runs" in `docs/build-sessions.md`. Read "Current state + exact next step" before doing anything.
 
 Gates and rules:
-- The owner said to proceed without waiting for approval on routine work: commit, push and open or update PRs with `gh`. Never merge to `main` yourself, never force-push, and never add Claude attribution lines to commits or PR bodies. Merge only when the owner says so.
-- Don't touch the main checkout, the `clipboard`, `firewall-spike`, `tunnelwall-firewall`, `deputy-speed`, `cancel-connecting` or `strongroom-phase-1` worktrees, or the `design-editor-phase-2` worktree.
-- The mobile canvas is checked on the phone only, through the Store. Don't run `pnpm release design-editor` until the owner says so.
-- New npm, Gradle or CocoaPods dependencies need the owner's yes. FFmpeg filters and encoders in the pinned 9.0.2 binary are not new dependencies.
+- The owner said to proceed without approval on routine work: commit, push and update PRs with `gh`. Never merge to `main` yourself, never force-push, no Claude attribution lines. Merge only when the owner says so, and never run `pnpm release design-editor` until the owner says so.
+- Don't touch the main checkout, or the `clipboard`, `firewall-spike`, `tunnelwall-firewall`, `deputy-speed`, `cancel-connecting` or `strongroom-phase-1` worktrees.
+- New npm, Gradle or CocoaPods dependencies need the owner's yes (Phase 3's three are already approved and pinned).
 - The Bash shell is zsh and may have `ELECTRON_RUN_AS_NODE` set: strip it when running Electron. `timeout` isn't installed.
 - Android APIs are checked against `/opt/homebrew/share/android-commandlinetools/platforms/android-36/android.jar` (javap) before use.
 
-Next steps, in order:
-1. Phase 3 step 2: `mobile.html` (bottom strip, sheets), `touch.js` (pinch zoom around the midpoint, two-finger pan; check that Fabric 7 supports `touchCornerSize`, else use `cornerSize` 44 on mobile), `shell-mobile.js` (`window.native` over `postMessage` with `reqId`s, SPEC §14.3), and `build.mjs` (copy of PDF Editor's checks) writing `apps/design-editor-mobile/assets/editor/editor.html` (gitignored). Exports over 30 MB are refused with the SPEC's message.
-2. Phase 3 step 3: the Designs tab and Editor screen (WebView, native top bar, bottom toolbar), `src/editor/bridge.ts` (frozen schema), autosave file, open and save `.json` through the document picker, exports through Outputs and Share. Add the engine build as `prepare` for the `design-editor` entry in `tools/release/src/apps.ts`.
-3. Phase 3 step 4: a mobile smoke test like PDF Editor's `test/mobile.mjs` (system Chrome, fake `ReactNativeWebView`, open a template, export a PNG through the fake bridge), added to `test:e2e` only if system Chrome exists here.
-4. Phase 3 step 5: the verification commands in PROMPTS.md, with the actual output.
+State:
+- Phase 3 steps 1–5 are done. The engine (`mobile.html`, `touch.js`, `shell-mobile.js`, `build.mjs`) builds `apps/design-editor-mobile/assets/editor/editor.html` (gitignored). The smoke test `apps/design-editor/test/mobile.mjs` runs in `test:e2e` (three suites green). The RN side: Designs home, editor screen with the native bars and toolbar, `src/editor/bridge.ts`, `src/editor/files.ts`; Kotlin `saveJson`/`saveExport` in `modules/design-media`. All verification gates green (see "Verified 2026-11-04 (session B3.2)").
+- The phone checks (AC-13, AC-14, and how drag/pinch feel) belong to the owner: the app installs through the Store only.
 
-Owner checks, not ours: the phone run of AC-13 and AC-14 through the Store, and how drag and pinch feel. Stop and report if editing is sluggish.
+Next steps, in order:
+1. Owner hands on the PR (PR #18), then merge into `main` when the owner says so. CI then releases a new Design Editor build with the editor UI for the Store phone check — no `pnpm release` by hand.
+2. The owner's phone check through the Store: open a design, apply a template, save as .json (Documents/Design Editor), export a PNG 2×, new/open/continue flows, long-press actions, pinch feel. Paste the results into the handoff's phone section.
+3. After the owner's yes: Phase 4 per `docs/design-editor/PROMPTS.md` (the media rewrite of the mobile shell — screens, tabs, queue UI, six tools on the phone), on the same worktree/branch pattern; start a fresh branch per phase rules.
+4. Keep the known limits list (below) in mind; they are accepted for this phase and stay unhidden.
 
 At about 85% context, stop starting work, update the handoff and print its resume prompt in a fenced block.
 
@@ -278,6 +279,25 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
 - `pnpm --filter design-editor test:e2e`: exit 0, with nothing skipped. The editor suite ran (`e2e ok`). The media suite ran (HEVC 17.94 MB, GIF fit 469 kB, volume normalize -23.0 LUFS, +6 dB moved by 6.00 dB, reverse 47.1 dB vs 21.4 dB, stabilize 9.80 → 7.22, preview seek 30.00 s). Input hashes unchanged.
 - After the move: root `pnpm test` exit 0, root `pnpm typecheck` exit 0, `pnpm --filter design-editor dist` exit 0. `app.asar` contains `vendor/engine/desktop.html`, so the symlink is packed. The packaged binary's e2e was not run.
 
+### Verified 2026-11-04 (session B3.2; output was read, not predicted)
+
+- Engine: `node packages/design-editor-engine/build.mjs` exit 0 → `assets/editor/editor.html`, 3.99 MB, 18 fonts, inlined order fabric → pdf-lib → fontkit → `__fontsData` → shell-mobile → app.js → touch.js, CSS link replaced, no CSP meta (checked by reading the product page).
+- `pnpm --filter design-editor test:e2e`: exit 0, three suites — `e2e ok` (editor), `media e2e ok` (HEVC 17.94 MB, GIF fit 469 kB, volume -23.0 LUFS, reverse 47.1 dB, stabilize 9.80 → 7.22, preview seek), and `mobile bridge ok — 5 template items, png 2×, refuse path, long-press, pinch 234%` (the new `test/mobile.mjs`, system Chrome, device viewport, fake `ReactNativeWebView`). The mobile suite asserts: embedded layout (header hidden, rail a row, media + page reorder hidden), template apply → autosave (dirty, W 1080, five items, no `cornerSize` in the JSON, `touchCornerSize` 44 stamped) + docState, menu undo/redo, `saveAs` json round-trip (text, docState title changes on the replied path), bridged confirm (refuse keeps three items, discard empties), PNG 2× export via base64 through the page's own export sheet, the >30 MB refusal (nothing crosses, "Too large to save on the phone: try 2×"), long-press action sheet duplicate (and the Fabric wall released after the sheet closes), pinch zoom (mid > 1.4× start, label follows, wall `none` during, released after lifting).
+- Mobile app: `npx tsc --noEmit` exit 0; `npx expo lint` exit 0 (after clearing `.expo/cache/eslint` — its parse cache served a stale copy of `src/editor/files.ts` after an edit; no real lint finding).
+- Kotlin: `./gradlew :design-media:testDebugUnitTest :app:assembleDebug` (JDK 21) → BUILD SUCCESSFUL; 44 unit tests including the eight `SavesTest` rules (`DataSafetyRulesTest` rule 1 now reads `setOf("Outputs.kt", "DesignSaves.kt")` for `openOutputStream(`).
+- Workspace: root `pnpm test` exit 0; root `pnpm typecheck` exit 0; `pnpm --filter @apps-hub/release test` 5 pass, 0 fail, typecheck exit 0.
+- `expo-doctor`: the same two failures Phase 1 recorded (non-CNG config fields; the `modules/**/android` gitignore glob reaching ignored symlinked deps) — no new finding.
+
+### Decisions made in session B3.2 (Claude's calls; the owner can override)
+
+- **The bridge's ask-and-answer set is complete in the app**: every `reqId` gets a reply — `saveFile` (json → `DesignMedia.saveJson`, else `saveExport`), `confirm` (an Alert with Keep editing / Discard), `readAutosave`/`writeAutosave`/`keepAutosave` (expo-file-system/legacy), `openDesign` (DocumentPicker). An error replies `ok:false`, so the page's own catch paths run instead of hanging.
+- **The Designs home is a file list, not a library database** (that is a later phase): `documentDirectory/autosave.json` holds the page's own record; `documentDirectory/designs/index.json` (≤50 rows) lists saves, each with a mirror file `<id>.json` so opening never reads MediaStore. A re-save overwrites its row's mirror (dedup by display path, `recordSaved` returns the surviving id).
+- **Open flows seed the autosave slot and let the page boot restore**: Home "New design" clears the autosave; opening a list row or a picked file writes `{ filePath, dirty: false, doc: text }` and pushes the editor. No new bridge command was invented for "load this doc" — the page's existing boot path is the load path.
+- **Saved designs live in `Documents/Design Editor/`**, image exports in `Pictures/Design Editor/` (pure rule in `core/Saves.kt`, `SavesTest`). A re-save whose `filePath` points inside our folders replaces the own MediaStore row in place (title stays stable, no "(1)" copies); the desktop overwrite semantics carry over because MediaStore only lets the writer touch its own rows.
+- **The editor's native toolbar carries only what the page can still do without the hidden desktop header**: Undo, Redo, Duplicate, Zoom out/in, Fit as `menu` commands; Save and Download on the top bar. `#exportBtn` is hidden in embedded mode, so `menu: 'export'` opens the page's own bottom-sheet popover.
+- **The action sheet closes through `closeSheet()`** so closing also un-walls Fabric — found by walking the interaction, fixed in touch.js, covered by the smoke test.
+- **DataSafetyRulesTest rule 1 was amended**, not relaxed: two MediaStore writers are now allowed (`Outputs.kt`, `DesignSaves.kt`), each still only writing its own new or own-row files, and no source may still carry a `w`-family open-mode string (the rules' intent is untouched).
+
 ### Verified 2026-11-03 (session B2.3; output was read, not predicted)
 
 - `pnpm --filter @apps-hub/media-core test`: 70 pass, 0 fail (was 61). `pnpm typecheck` (media-core and root): exit 0. Root `pnpm test`: exit 0.
@@ -345,6 +365,13 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
   queue, pipelines, target-size algorithm with worked numbers, background, UI, engine extraction,
   release, testing, phases, spikes S1..S8.
 - `docs/design-editor/PROMPTS.md`: prelude + Phase 1..6 prompts with verification commands.
+- Code (Phase 3, B3, this branch): `packages/design-editor-engine` (`desktop.html`, `mobile.html`, `app.js`, `touch.js`,
+  `shell-mobile.js`, `build.mjs`, `vendor/` files and fonts, `package.json`, README); `apps/design-editor`
+  (`vendor/engine` symlink, `test/mobile.mjs`); `apps/design-editor-mobile` (`app/index.tsx` Designs home,
+  `app/editor.tsx`, `app/media.tsx` Phase 1 lab, `src/editor/bridge.ts` + `src/editor/files.ts`,
+  `assets/editor/editor.html` gitignored, `modules/design-media` with `android/DesignSaves.kt`,
+  `android/core/Saves.kt`, `SavesTest.kt`, and the TS contract in `src/index.ts`); `tools/release/src/apps.ts`
+  (entry now with `prepare`).
 - Code (Phase 1, B1): `packages/media-core` (types, presets, budget, retry, names, validate, queue,
   fixtures, tests); `apps/design-editor-mobile` (app shell, `app/index.tsx` Media lab, `assets/icon.svg`,
   `android/` prebuild, `modules/design-media` with the Kotlin under `android/` and the TS contract in
@@ -426,6 +453,9 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
 
 ## Current state + exact next step
 
+- **State (2026-11-04, session B3.2, Phase 3 steps 2–5 done, committed and pushed as PR #18 update):** on branch `design-media-phase-3`, PR https://github.com/haroongondal/apps-hub/pull/18 (draft, base `main`). Built this session: the engine's mobile page (`mobile.html`, `touch.js`, `shell-mobile.js`, `build.mjs`) → `assets/editor/editor.html` (3.99 MB, gitignored), the smoke test `apps/design-editor/test/mobile.mjs` chained into `test:e2e`, two shared `app.js` changes (`discardOk` async, `setZoom` export), the RN side (`app/index.tsx` Designs home, `app/media.tsx` the verbatim Phase 1 lab, `app/editor.tsx` the editor screen, `src/editor/bridge.ts`, `src/editor/files.ts`), Kotlin `saveJson`/`saveExport` (`DesignSaves.kt` + `core/Saves.kt` + `SavesTest`), the pinned deps (react-native-webview 13.15.0, expo-file-system ~19.0.24, expo-asset ~12.0.14, @expo/vector-icons ^15.0.3), and the `prepare` entry in `tools/release/src/apps.ts`. SPEC §13.2/§14/§15 carry as-built paragraphs. All verification gates green (Verified 2026-11-04). Phase 3's device checks (AC-13, AC-14) are the owner's phone run through the Store after merge.
+- **Next step:** the owner hands on PR #18 (see the resume prompt at the top). After the merge, CI releases the Store build for the phone check; Phase 4 starts a fresh branch.
+
 - **State (2026-11-03, session B3.1, Phase 3 step 1 done):** the B2.3 work is merged (PR #16, merge commit `eddf464`). On branch `design-media-phase-3`, worktree `.claude/worktrees/design-media-phase-3` (from `origin/main`, `pnpm install` done): the editor page moved into `packages/design-editor-engine` (`desktop.html`, `app.js`, `vendor/`, `package.json`, README), with `apps/design-editor/vendor/engine` as the symlink and `main.js` loading `vendor/engine/desktop.html`. The Mac e2e passes with the pinned FFmpeg fetched (media suite runs, not skipped). Next: step 2 in the resume prompt.
 - **State (2026-11-03, session B2.3, superseded):** Volume, Reverse and Stabilize are built and tested on branch `design-media-capcut` (PR #16). They are the owner's yes to CapCut rows 7, 8 and 11 (see Decisions B2.3). The Mac e2e is green, with real measurements (below). PR #16 is still open on `main`. B3 waits for it to merge. The CapCut UI measurements are still blocked.
 
@@ -476,3 +506,12 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
 - **Open for later phases:** the Mac probe must report display dimensions, as Android does now.
   Verify FrameDropEffect on lower-fps sources (S5). `SYSTEM_ALERT_WINDOW` is debug-only (release clean).
 - **2026-11-03 (session B3.1, Phase 3 step 1: engine extraction).** PR #16 merged, so B3 started. Worktree `.claude/worktrees/design-media-phase-3` from `origin/main` (eddf464), branch `design-media-phase-3`, `pnpm install` (1054 packages, exit 0). Moved `index.html` → `packages/design-editor-engine/desktop.html`, `app.js` and the vendor files (Fabric, pdf-lib, fontkit, fonts) with `git mv`, added the engine's `package.json` and README, and the `vendor/engine` symlink. Font URLs and the stylesheet path were made page-relative. `main.js` loads `vendor/engine/desktop.html`. Fetched the pinned FFmpeg (`pnpm --filter design-editor ffmpeg`, hash-checked). The full Mac e2e passed. Verification is under "Verified 2026-11-03 (session B3.1)". Stopped at a milestone on the owner's request, before step 2. SPEC §14.1 records the as-built layout.
+- **2026-11-04 (session B3.2, Phase 3 steps 2–5: mobile canvas + RN shell).** Built the mobile page and its
+  touch layer (`mobile.html` with embedded CSS, `touch.js`, `shell-mobile.js`, `build.mjs`), the smoke test
+  `test/mobile.mjs` (three-suite e2e green), the RN designs home/editor/media routes with the bridge and file
+  layers, and Kotlin saveJson/saveExport with MediaStore placement. Three real bugs were found by walking the
+  interactions and the smoke test, and fixed: the embedded class sat on `<html>` (never matched the
+  `body.embedded` CSS), the action sheet bypassed `closeSheet()` so Fabric stayed walled after an action, and
+  the smoke test's first draft mis-assumed the wire schema (rewritten against `shell-mobile.js` as the truth).
+  The hand control stays with the owner: PR #18, then the Store phone check after merge. Verification is under
+  "Verified 2026-11-04 (session B3.2)".

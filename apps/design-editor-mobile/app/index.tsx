@@ -1,221 +1,149 @@
-import DesignMedia, { type CodecInfo, type NativeJobStatus } from 'design-media';
-import {
-  DESTINATIONS,
-  planSize,
-  validateSpec,
-  type Job,
-  type MediaInfo,
-  type Planned,
-  type Refusal,
-  type SizePlan,
-  type SizeSpec,
-} from '@apps-hub/media-core';
-import { Button, Group, Header, Notice, Progress, Readout, Row, Screen, Segmented } from '@apps-hub/ui';
+import { Button, Group, Header, Notice, Row, Screen } from '@apps-hub/ui';
 import * as DocumentPicker from 'expo-document-picker';
-import { useEffect, useState } from 'react';
-import { Share } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 
-type Encoder = SizeSpec['encoder'];
+import {
+  clearAutosave,
+  designTitle,
+  readAutosave,
+  readDesignText,
+  readSavedList,
+  writeAutosave,
+  type SavedDesign,
+} from '../src/editor/files';
 
-const TARGET_BYTES = DESTINATIONS[0].bytes;
-const ENCODERS: { key: Encoder; label: string }[] = [
-  { key: 'hw-h264', label: 'H.264' },
-  { key: 'hw-hevc', label: 'HEVC' },
-];
-const MANUAL_STEPS: Record<string, string> = {
-  S3: 'S3: start five jobs, swipe the app away, lock the phone for 10 minutes, then reopen and read the queue.',
-  S5: 'S5: FrameDropEffect is compiled into TransformerRunner. FrameExtractor frame rate is measured in Phase 4.',
-  S6: 'S6: the lossless CopyRunner lands in Phase 4. Nothing to run here yet.',
-  S7: 'S7: build the release APK, record its size and the Media3 share from unzip -l, then compare with the previous release.',
-  S8: 'S8: adb shell device_config put activity_manager media_processing_fgs_timeout_duration 60000, start a job, and expect a clean stop on onTimeout. Reset with device_config delete.',
-};
-
-const mb = (bytes: number) => (bytes / 1_000_000).toFixed(1);
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-function refusalText(r: Refusal): string {
-  if (r.reason === 'too-long') {
-    return `Couldn't fit under ${mb(TARGET_BYTES)} MB. This file can hold about ${Math.floor(r.maxDurationS / 60)} minutes at the lowest quality.`;
-  }
-  return r.detail ?? `This file can't be planned (${r.reason}).`;
-}
-
-function codecLine(c: CodecInfo): string {
-  const role = c.encoder ? 'encoder' : 'decoder';
-  return `${c.name} (${role}): ${c.hardware ? 'hardware' : 'software'}, modes ${c.bitrateModes.join(', ') || 'none'}, up to ${c.maxWidth}×${c.maxHeight}, HDR editing ${c.hdrEditing ? 'yes' : 'no'}`;
-}
-
-function attemptText(job: NativeJobStatus): string {
-  return job.attempts
-    .map(a => `Try ${a.attempt} (${a.mode.toUpperCase()}): planned ${mb(a.plannedBytes)} MB, actual ${mb(a.actualBytes)} MB, ${a.seconds.toFixed(0)} s`)
-    .join('\n');
-}
-
-export default function MediaLab() {
-  const [info, setInfo] = useState<MediaInfo | null>(null);
-  const [encoder, setEncoder] = useState<Encoder>('hw-h264');
-  const [queue, setQueue] = useState<NativeJobStatus[]>([]);
-  const [results, setResults] = useState<string[]>([]);
+export default function DesignsHome() {
+  const [resumable, setResumable] = useState<Awaited<ReturnType<typeof readAutosave>>>(null);
+  const [designs, setDesigns] = useState<SavedDesign[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
 
-  useEffect(() => {
-    DesignMedia.queue().then(setQueue, e => setError(message(e)));
-    const sub = DesignMedia.addListener('onQueue', e => setQueue(e.jobs));
-    return () => sub.remove();
-  }, []);
+  // Re-read whenever the tab gains focus: a save made in the editor shows up on return.
+  useFocusEffect(
+    useCallback(() => {
+      readAutosave().then(setResumable, e => setError(message(e)));
+      readSavedList().then(
+        list => setDesigns(list),
+        e => {
+          setDesigns([]);
+          setError(message(e));
+        },
+      );
+    }, []),
+  );
 
-  const log = (line: string) => setResults(r => [...r, line]);
-
-  async function run(label: string, task: () => Promise<void>) {
-    setBusy(label);
-    setError(null);
-    try {
-      await task();
-    } catch (e) {
-      setError(message(e));
-    } finally {
-      setBusy(null);
-    }
+  function resume() {
+    router.push({ pathname: '/editor', params: { name: designTitle(resumable?.filePath) } });
   }
 
-  function pick() {
-    return run('pick', async () => {
-      const picked = await DocumentPicker.getDocumentAsync({
-        type: ['video/*'],
-        copyToCacheDirectory: false,
-        multiple: false,
-      });
-      if (picked.canceled) return;
-      const probed = await DesignMedia.probe(picked.assets[0].uri);
-      setInfo(probed);
-      log(`Probed ${probed.name}: ${probed.durationS.toFixed(1)} s, ${mb(probed.bytes)} MB`);
-    });
+  function newDesign() {
+    void (async () => {
+      setError(null);
+      try {
+        // A blank start must not inherit the previous session's autosave slot.
+        await clearAutosave();
+        router.push({ pathname: '/editor', params: { name: 'Untitled' } });
+      } catch (e) {
+        setError(message(e));
+      }
+    })();
   }
 
-  function startJobs(label: string, count: number, cbrOnly: boolean) {
-    if (!info) {
-      setError('Pick a file first.');
-      return;
-    }
-    const spec: SizeSpec = { tool: 'size', inputId: info.id, targetBytes: TARGET_BYTES, encoder };
-    const errors = validateSpec(spec, info, 'android');
-    if (errors.length) {
-      setError(errors.join(' '));
-      return;
-    }
-    const plan = planSize(info, TARGET_BYTES, encoder);
-    if (!plan.ok) {
-      setError(refusalText(plan));
-      return;
-    }
-    return run(label, async () => {
-      await DesignMedia.persistAccess(info.id);
-      const jobs: Job[] = Array.from({ length: count }, (_, i) => ({
-        id: `${label.toLowerCase()}-${Date.now()}-${i}`,
-        inputId: info.id,
-        inputName: info.name,
-        plan: plan.plan,
-        state: 'queued',
-        progress: 0,
-        attempt: 1,
-        outputs: [],
-      }));
-      await DesignMedia.enqueue(JSON.stringify(jobs), cbrOnly);
-      log(`${label}: queued ${count} × ${info.name} with ${encoder}${cbrOnly ? ', CBR only' : ''}`);
-    });
+  function openFile() {
+    void (async () => {
+      setError(null);
+      try {
+        const res = await DocumentPicker.getDocumentAsync({
+          type: ['application/json'],
+          copyToCacheDirectory: false,
+          multiple: false,
+        });
+        const asset = res.assets?.[0];
+        if (res.canceled || !asset) return;
+        const text = await fetchText(asset.uri);
+        if (!text) throw new Error('That file did not open. Pick a design saved from this editor.');
+        // The picked file's own name becomes the title; a later Save starts a fresh file in this
+        // app's folder, because the picked location is outside Documents/Design Editor.
+        await writeAutosave({ filePath: asset.name, dirty: false, doc: text });
+        router.push({ pathname: '/editor', params: { name: designTitle(asset.name) } });
+      } catch (e) {
+        setError(message(e));
+      }
+    })();
   }
 
-  const plan: Planned<SizePlan> | null = info
-    ? planSize(info, TARGET_BYTES, encoder)
-    : null;
-
-  const spikes: { id: string; title: string; action: string; run: () => void }[] = [
-    {
-      id: 'S1',
-      title: 'Codec report',
-      action: 'Run',
-      run: () => run('S1', async () => {
-        const codecs = await DesignMedia.codecReport();
-        codecs
-          .filter(c => c.mime.startsWith('video/avc') || c.mime.startsWith('video/hevc'))
-          .forEach(c => log(`S1 ${codecLine(c)}`));
-      }),
-    },
-    { id: 'S2', title: 'Size job to 20 MB, selected encoder', action: 'Run', run: () => startJobs('S2', 1, false) },
-    { id: 'S3', title: 'Five-job batch survives the swipe and lock', action: 'Run', run: () => startJobs('S3', 5, false) },
-    { id: 'S4', title: 'CBR on this encoder', action: 'Run', run: () => startJobs('S4', 1, true) },
-    { id: 'S5', title: 'Media3 classes and frame-rate tools', action: 'Log steps', run: () => log(MANUAL_STEPS.S5) },
-    { id: 'S6', title: 'Lossless copy', action: 'Log steps', run: () => log(MANUAL_STEPS.S6) },
-    { id: 'S7', title: 'APK size of Media3', action: 'Log steps', run: () => log(MANUAL_STEPS.S7) },
-    { id: 'S8', title: 'Foreground time limit', action: 'Log steps', run: () => log(MANUAL_STEPS.S8) },
-  ];
+  function openSaved(design: SavedDesign) {
+    void (async () => {
+      setError(null);
+      try {
+        const text = await readDesignText(design);
+        if (!text) throw new Error('The design file is no longer on this phone.');
+        await writeAutosave({ filePath: design.path, dirty: false, doc: text });
+        router.push({ pathname: '/editor', params: { name: designTitle(design.path) } });
+      } catch (e) {
+        setError(message(e));
+      }
+    })();
+  }
 
   return (
     <Screen scroll>
-      <Header title="Media lab" subtitle="Phase 1 checks on this phone. Not for everyday use." />
-
+      <Header title="Designs" subtitle="Everything stays on this phone." />
       {error ? <Notice tone="danger" title="Something went wrong">{error}</Notice> : null}
 
-      <Group title="File" footer="Originals are never changed. Outputs go to Movies/Design Editor.">
-        <Row title={info ? info.name : 'No file picked'} subtitle={info ? `${info.durationS.toFixed(1)} s, ${mb(info.bytes)} MB` : 'Pick one video to probe it.'} />
-        <Button label="Pick a video" variant="secondary" block busy={busy === 'pick'} onPress={pick} />
-      </Group>
-
-      {info ? (
-        <Group title="Size job" footer={`Target ${mb(TARGET_BYTES)} MB, the Discord preset.`}>
-          <Segmented options={ENCODERS} value={encoder} onChange={setEncoder} accessibilityLabel="Encoder" />
-          {plan?.ok ? (
-            <>
-              <Readout value={mb(plan.plan.plannedBytes)} unit="MB" label="Planned size" />
-              <Row
-                title={`${plan.plan.width}×${plan.plan.height}, ${plan.plan.rung.fps} fps`}
-                subtitle={`Video ${(plan.plan.videoBps / 1_000_000).toFixed(2)} Mbit/s, audio ${plan.plan.audio.mode}`}
-              />
-            </>
-          ) : (
-            <Notice tone="warn" title="Plan refused">{plan ? refusalText(plan) : ''}</Notice>
-          )}
-          <Button label="Start 20 MB job" block busy={busy === 'S2'} onPress={() => startJobs('S2', 1, false)} />
+      {resumable ? (
+        <Group title="Continue" footer="Your last edits are always here, even without a save.">
+          <Row
+            title={designTitle(resumable.filePath) + (resumable.dirty ? ' — not saved' : '')}
+            subtitle={resumable.dirty ? 'Pick up where you left off.' : 'Saved copy intact.'}
+            onPress={resume}
+            accessibilityHint="Opens the editor with this design"
+          />
         </Group>
       ) : null}
 
-      <Group title="Queue" footer="Attempts show planned against actual bytes, seconds and the encoder mode.">
-        {queue.length === 0 ? <Row title="Queue is empty" /> : null}
-        {queue.map(job => (
-          <Row
-            key={job.id}
-            title={job.id}
-            subtitle={`${job.state}, try ${job.attempt}${job.error ? `: ${job.error}` : ''}${job.attempts.length ? `\n${attemptText(job)}` : ''}`}
-            trailing={job.state === 'running' || job.state === 'queued' ? (
-              <Button label="Cancel" variant="ghost" onPress={() => DesignMedia.cancel(job.id).catch(e => setError(message(e)))} />
-            ) : undefined}
-          >
-            {job.state === 'running' ? <Progress value={job.progress} /> : null}
-          </Row>
-        ))}
+      <Group>
+        <Button label="New design" block onPress={newDesign} />
+        <Button label="Open a design file" variant="secondary" block onPress={openFile} />
       </Group>
 
-      <Group title="Spikes" footer="Phone-only spikes list their steps in the results below.">
-        {spikes.map(s => (
-          <Row key={s.id} title={`${s.id}: ${s.title}`} trailing={
-            <Button label={s.action} variant="secondary" busy={busy === s.id} onPress={s.run} />
-          } />
-        ))}
+      <Group title="Saved designs" footer="Designs land in Documents/Design Editor on the phone.">
+        {designs === null ? (
+          <Row title="Checking the phone…" />
+        ) : designs.length === 0 ? (
+          <Row title="No designs yet" subtitle="A design appears here after you save one in the editor." />
+        ) : (
+          designs.map(design => (
+            <Row
+              key={design.id}
+              title={design.name}
+              subtitle={new Date(design.added).toLocaleDateString()}
+              onPress={() => openSaved(design)}
+              accessibilityHint="Opens this design in the editor"
+            />
+          ))
+        )}
       </Group>
 
-      <Group title="Results" footer="Copy these into the handoff's evidence section.">
-        {results.length === 0 ? <Row title="No results yet" /> : null}
-        {results.map((line, i) => (
-          <Row key={`${i}-${line}`} title={line} />
-        ))}
-        <Button
-          label="Share results"
-          variant="secondary"
-          block
-          onPress={() => { void Share.share({ message: results.join('\n') || 'No results yet.' }); }}
-        />
+      <Group title="Media tools" footer="Video tools from the first phase; the six design-oriented tools arrive with the media phase rewrite.">
+        <Row title="Media lab" subtitle="Phase 1 checks on this phone." onPress={() => router.push('/media')} accessibilityHint="Opens the phase 1 media lab" />
       </Group>
     </Screen>
   );
+}
+
+// Reads a picked .json design; null when it cannot be read or does not look like one
+// (the editor's own parseDoc gives it the final verdict).
+async function fetchText(uri: string): Promise<string | null> {
+  try {
+    const text = await FileSystem.readAsStringAsync(uri);
+    const design = JSON.parse(text) as { W?: unknown; pages?: unknown };
+    if (typeof design.W !== 'number' || !Array.isArray(design.pages)) return null;
+    return text;
+  } catch {
+    return null;
+  }
 }

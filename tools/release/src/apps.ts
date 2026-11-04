@@ -25,6 +25,8 @@ export const APPS: Record<string, ReleasableApp> = {
     name: 'Design Editor',
     dir: 'apps/design-editor-mobile',
     android: { packageName: 'com.haroon.designeditor' },
+    // the canvas page inlines itself into assets/editor/editor.html before a build (SPEC §14.1)
+    prepare: [['node', '../../packages/design-editor-engine/build.mjs']],
   },
   store: { name: 'Store', dir: 'apps/store', android: { packageName: 'com.haroon.store' } },
   deputy: { name: 'Deputy', dir: 'apps/deputy', android: { packageName: 'com.haroon.deputy' } },

@@ -13,6 +13,9 @@ export interface NativeJobStatus {
 export interface JobProgressEvent { id: string; fraction: number; attempt: number }
 export interface QueueEvent { jobs: NativeJobStatus[] }
 
+// Phase 3 additions (SPEC §14.3): the page's saveFile for reals — designs written through
+// MediaStore where the Files app shows them. saveJson returns the display path; saveExport the
+// same for image/vector/pdf exports. base64 crosses the RN bridge already (page refuse cap 30 MB).
 export interface DesignMediaModule {
   probe(uri: string): Promise<MediaInfo>;
   codecReport(): Promise<CodecInfo[]>;
@@ -22,6 +25,8 @@ export interface DesignMediaModule {
   enqueue(jobsJson: string, cbrOnly: boolean): Promise<string[]>;
   cancel(id: string): Promise<void>;
   queue(): Promise<NativeJobStatus[]>;
+  saveJson(name: string, text: string, filePath: string | null): Promise<string>;
+  saveExport(name: string, ext: string, base64: string): Promise<string>;
   addListener(name: 'onJobProgress', fn: (e: JobProgressEvent) => void): { remove(): void };
   addListener(name: 'onQueue', fn: (e: QueueEvent) => void): { remove(): void };
 }
