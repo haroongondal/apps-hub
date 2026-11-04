@@ -274,7 +274,7 @@ test log in the handoff.
 
 - **A video timeline inside the design canvas** and **exporting designs as MP4 or animated
   images.** Later ideas, below.
-- **FFmpeg on Android**, MP3, WebM and animated WebP output on the phone, AV1 output anywhere. (Exception, the owner's yes on 2026-11-04: the LGPL `ffmpeg-kit-min` 8.1.7 AAR, used only for reverse and stabilize on the phone, with hardware encoders and no x264; SPEC §3.)
+- **FFmpeg on Android**, MP3, WebM and animated WebP output on the phone, AV1 output anywhere. (Exception, the owner's yes on 2026-11-04: the LGPL `ffmpeg-kit-min` 8.1.7 AAR, used only for volume, reverse and stabilize on the phone, with hardware encoders and no x264; SPEC §3.)
 - Multi-segment cuts, merging, subtitles, filters, crop, speed changes. (Exception: volume, reverse and stabilize, the owner's yes on 2026-11-03; see FR-8.)
 - Uploading, cloud sync, accounts.
 - Play Store release; Windows or Linux builds of Design Editor.

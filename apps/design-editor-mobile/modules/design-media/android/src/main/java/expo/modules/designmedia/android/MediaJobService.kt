@@ -184,7 +184,8 @@ class MediaJobService : Service() {
       pump()
       return
     }
-    r.startPolling()
+    // a runner that fails while starting has already finished and aborted this run; polling it would never stop
+    if (!r.aborted && !r.finished) r.startPolling()
   }
 
   private fun finishedWith(r: Run, out: File, outcome: Outcome) {

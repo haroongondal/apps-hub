@@ -13,8 +13,9 @@ import {
   type SavedDesign,
 } from "../../src/editor/files";
 import { PAGE_SIZES, blankDesign } from '../../src/editor/pageSizes';
+import { plainError } from '../../src/media/errors';
 
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+const message = (e: unknown) => plainError(e, 'That didn\'t work. Try again.');
 
 export default function DesignsHome() {
   const [resumable, setResumable] = useState<Awaited<ReturnType<typeof readAutosave>>>(null);

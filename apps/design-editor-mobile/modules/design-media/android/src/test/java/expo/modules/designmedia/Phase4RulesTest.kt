@@ -22,7 +22,9 @@ class Phase4RulesTest {
   @Test
   fun ffmpegIsUsedOnlyByItsRunnerAndOnlyToRead() {
     val users = sources.filter { it.readText().contains("com.arthenica") }.map { it.name }
-    assertEquals(listOf("FfmpegRunner.kt"), users)
+    // Exceptions.kt is the stand-in for the one class the AAR calls but never declares; it imports nothing from the library
+    assertEquals(listOf("Exceptions.kt", "FfmpegRunner.kt"), users.sorted())
+    assertFalse(source("Exceptions.kt").contains("import com.arthenica"))
     val runner = source("FfmpegRunner.kt")
     assertTrue(runner.contains("getSafParameterForRead"))
     assertFalse(runner.contains("getSafParameterForWrite"))

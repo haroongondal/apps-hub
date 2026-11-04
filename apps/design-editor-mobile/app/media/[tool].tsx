@@ -8,12 +8,13 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Image, ScrollView, Pressable } from 'react-native';
 
+import { plainError } from '../../src/media/errors';
 import { pickFiles, startJobs } from '../../src/media/jobs';
 import { loadPrefs, savePrefs } from '../../src/media/prefs';
 import { parseTime, TOOLS, timeText, type ToolKey } from '../../src/media/tools';
 
 const median = (xs: number[]) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : 1);
-const say = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Try again.');
+const say = (e: unknown) => plainError(e, 'Something went wrong. Try again.');
 
 export default function ToolSetup() {
   const { tool } = useLocalSearchParams<{ tool: ToolKey }>();

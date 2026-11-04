@@ -6,8 +6,8 @@ import android.net.Uri
 import android.provider.MediaStore
 import expo.modules.designmedia.core.Kind
 import expo.modules.designmedia.core.Output
+import expo.modules.designmedia.core.PendingLog
 import expo.modules.designmedia.core.Target
-import expo.modules.designmedia.core.folderOf
 import java.io.File
 
 object Outputs {
@@ -35,6 +35,8 @@ object Outputs {
       put(MediaStore.MediaColumns.IS_PENDING, 1)
     }
     val uri = requireNotNull(resolver.insert(collection, values)) { "MediaStore refused the output." }
+    val pending = pendingLog(context)
+    pending.add(uri.toString())
     val bytes = temp.length()
     try {
       requireNotNull(resolver.openOutputStream(uri)) { "MediaStore couldn't open the output." }.use { out ->
@@ -43,21 +45,22 @@ object Outputs {
       resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
     } catch (e: Exception) {
       resolver.delete(uri, null, null)
+      pending.remove(uri.toString())
       throw e
     }
+    pending.remove(uri.toString())
     temp.delete()
     val landed = resolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)
       ?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: name
     return Output(landed, uri.toString(), bytes)
   }
 
+  private fun pendingLog(context: Context) = PendingLog(File(context.filesDir, "pending-outputs.txt"))
+
+  // Only rows this queue inserted and never finished (a crash mid-copy). Never a folder-wide delete.
   fun deletePending(context: Context) {
-    Kind.entries.forEach { kind ->
-      context.contentResolver.delete(
-        collectionOf(kind),
-        "${MediaStore.MediaColumns.IS_PENDING} = 1 AND ${MediaStore.MediaColumns.RELATIVE_PATH} = ?",
-        arrayOf(folderOf(kind)),
-      )
-    }
+    val log = pendingLog(context)
+    log.all().forEach { context.contentResolver.delete(Uri.parse(it), "${MediaStore.MediaColumns.IS_PENDING} = 1", null) }
+    log.clear()
   }
 }

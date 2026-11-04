@@ -2,10 +2,11 @@ import DesignMedia, { type NativeJobStatus } from 'design-media';
 import { Button, Pill, Progress, Row } from '@apps-hub/ui';
 import { Alert } from 'react-native';
 
+import { plainError } from './errors';
 import { tryAgain } from './jobs';
 import { jobText } from './status';
 
-const say = (e: unknown) => Alert.alert('Something went wrong', e instanceof Error ? e.message : 'Try again.');
+const say = (e: unknown) => Alert.alert('Something went wrong', plainError(e, 'Try again.'));
 
 export function JobRow({ job }: { job: NativeJobStatus }) {
   const { line, tone, label } = jobText(job);
