@@ -16,3 +16,5 @@ export * from './volume.ts';
 export * from './reverse.ts';
 export * from './stabilize.ts';
 export * from './quality.ts';
+export * from './format.ts';
+export * from './remux.ts';

@@ -27,3 +27,15 @@ export function nextRunnable(jobs: Job[]): Job | undefined {
 function update(jobs: Job[], id: string, f: (j: Job) => Job): Job[] {
   return jobs.map(j => (j.id === id ? f(j) : j));
 }
+
+// The Queue screen shows at most `limit` jobs: running first, then waiting, then the newest finished or failed
+// (PRD FR-9, AC-15). `hidden` is how many more the "See all" screen holds. Stopped jobs (paused, interrupted)
+// sit with the waiting ones because the person can resume them.
+export function visibleQueue<T extends Pick<Job, 'state' | 'finishedAt'>>(jobs: T[], limit = 5): { shown: T[]; hidden: number } {
+  const rank = (j: T) => j.state === 'running' ? 0 : j.state === 'queued' || j.state === 'paused' || j.state === 'interrupted' ? 1 : 2;
+  const ordered = jobs
+    .map((job, i) => ({ job, i, rank: rank(job) }))
+    .sort((a, b) => a.rank - b.rank || (a.rank === 2 ? (b.job.finishedAt ?? 0) - (a.job.finishedAt ?? 0) || b.i - a.i : a.i - b.i))
+    .map(x => x.job);
+  return { shown: ordered.slice(0, limit), hidden: Math.max(0, ordered.length - limit) };
+}
