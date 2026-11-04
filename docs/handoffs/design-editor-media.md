@@ -364,6 +364,68 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
 - Quit with a running job is tested by emitting `before-quit`, not by a real Cmd-Q.
 - Tested on synthetic clips in B2.2: HEVC size (17.94 MB of a 20 MB target, 1 attempt) and GIF fit under 1 MB (469 kB). Not tested: any owner clip (the phone clips are not on this Mac).
 
+### Phase 4 audit, step 0 (2026-11-04, session B4.1): strings that break FR-13, with the plain replacement
+
+Read from the merged tree (`ec23cbd` + docs PR #20). "Page" = `packages/design-editor-engine` (`mobile.html`, `app.js`, `shell-mobile.js`).
+`app.js` is shared with the Mac, so a phone-only wording is picked through one module-level flag
+(`document.body.classList.contains('embedded')`, the same test `setZoom` already makes locally at
+`app.js:83`), and the Mac copy stays as it is.
+
+Home and editor screens (`apps/design-editor-mobile/app`):
+
+| Where | Now | Plain replacement |
+| --- | --- | --- |
+| `index.tsx` Media tools group | "Video tools from the first phase; the six design-oriented tools arrive with the media phase rewrite." | Group removed; Media is its own tab |
+| `index.tsx` Media lab row | "Media lab", "Phase 1 checks on this phone.", hint "Opens the phase 1 media lab" | Debug builds only (`__DEV__`), moved to `app/lab.tsx`; no row in release |
+| `index.tsx` Saved designs footer | "Designs land in Documents/Design Editor on the phone." | "Saved designs are in the Design Editor folder on this phone." |
+| `index.tsx` Continue row | "Saved copy intact." | "All changes saved." |
+| `index.tsx` loading row | "Checking the phone…" | "Loading your designs…" |
+| `editor.tsx` top bar | label "Download", hint "Opens the export sheet with format and size" | label "Save image", hint "Choose a format and size, then save or share" |
+| `editor.tsx` load failure | body = raw `assetError` text + "Go back and open the design again." | Only "Go back and open the design again." (no raw error text) |
+| `editor.tsx` page confirm | Alert title "Design Editor", buttons Keep editing / Discard | Keep (already plain) |
+
+The lab itself (`app/media.tsx`, all strings): "Media lab", "Phase 1 checks…", spikes S1 to S8, "Size job", "Start 20 MB job", encoder labels H.264 / HEVC, job ids as row titles, "try n", "planned … actual … MB", CBR/VBR, "Video 2.31 Mbit/s", "HDR editing", "Spikes", "Results". All stay, debug builds only, and the route is not in the release route table.
+
+Editor page (phone only; the Mac keeps its own copy):
+
+| Where | Now | Plain replacement (phone) |
+| --- | --- | --- |
+| `mobile.html` header/menus | Undo `title="Undo (⌘Z)"`, Redo `(⇧⌘Z)` | Header is hidden on the phone; drop the shortcut text from the attribute for the phone page |
+| `mobile.html` Text panel | "Double-click text on the page to edit it." | "Tap text on the page to edit it." |
+| `mobile.html` Uploads panel | "Drop images here, paste them, or choose files" | "Choose pictures from this phone" |
+| `mobile.html` Brand panel | "Click a colour to apply it to the selection. Right-click to remove it." | "Tap a colour to use it on the selected item. Press and hold to remove it." (needs a long-press handler on swatches) |
+| `mobile.html` Resize panel | "Custom size (px)", "Scale content to fit (magic resize)" | "Custom size", "Fit the content to the new size" |
+| `mobile.html` export menu | button "Download", select "Format"/"Scale", button "Download file" | "Save image", "Format", "Size", "Save image" |
+| `app.js:20` font list | optgroup "This Mac only" | "On this phone" (phone: system fonts are empty anyway; check) |
+| `app.js:52` | "… isn't on this Mac, so that text now uses …" | "… isn't on this phone, so that text now uses …" |
+| `app.js:211` size label | "1080 × 1080 px" | "1080 × 1080" (keep px only where a person types a size) |
+| `app.js:551` page inspector | "Shortcuts: ⌘Z undo, ⇧⌘Z redo, ⌘D … Delete removes." (also shown on the phone) | Phone: no Shortcuts block; the sheet shows page colour and size only |
+| `app.js:758` | "Downloaded to <file>" | Phone: "Saved <file> to Pictures/Design Editor"? No paths: "Saved. Find it in the Design Editor folder on this phone." plus Share (step 5) |
+| `app.js:759` | "The download didn't finish. Try again, or pick another format." | "Couldn't save the image. Try again, or pick another format." |
+| `app.js:785` | "That file is not a design saved from this editor. Open a .json file you saved here." | "That file isn't a design from this editor. Pick a design you saved here." |
+| `app.js:826` | "… It saved that session to <path>. Open it with File > Open in the version that made it." | Phone: "Design Editor couldn't restore your last session, so it started a new design. The old one is kept in the Designs list." (mobile `keepAutosave` already writes a rescue copy) |
+| `app.js:394` | "Use a size between 16 and 8000 px" | Keep (a person typed the numbers) |
+| `shell-mobile.js:92` | "Too large to save on the phone: try 2×" | "This image is too big to save. Choose a smaller size." |
+| `shell-mobile.js` toasts via `app.js:27` | "Some bundled fonts didn't load. Reinstall the app to fix this." | "Some fonts didn't load. Restart the app; if it keeps happening, reinstall it from the Store." |
+| `app.js` page inspector | "Page", "Background", "W × H px. Change it in Resize." | Keep; "Change it in Resize" stays true |
+
+Native strings that reach a person (Kotlin; shown as a job's `error` or a notification):
+
+| Where | Now | Plain replacement |
+| --- | --- | --- |
+| `MediaJobService.encoderFailed` | "The encoder produced no output." | "This video couldn't be made smaller. Try a different setting." |
+| `MediaJobService.errored` | "The encoder failed: <ERROR_CODE_NAME>" | "This phone couldn't process that video. Try a different setting." (the code name goes to logcat) |
+| `MediaJobService.publish` | "Couldn't save the output: <exception text>" | "Couldn't save the result. Check that the phone has free space, then try again." |
+| `MediaJobService.guard` | "Unexpected error." | "Something went wrong. Try again." |
+| Notification | title "Media jobs" (channel), "Starting", "Compressing n of m" for every tool | Channel "Video and audio jobs"; "Working on n of m"; "Starting" is fine |
+| `Plans.kt:79` | "Only size jobs are supported in Phase 1." | Removed with the other tools |
+| `validate.ts:42` | "This encoder isn't available on this phone." | "This phone can't make that kind of file." |
+| `validate.ts:76` | "Pick H.264 or HEVC." (unreachable through the UI) | "Pick Works everywhere or Smaller file." |
+
+Not a problem (already plain): `validate.ts` range messages, `reverse.ts`, `retry.ts` ("The output has no room left for video." is close to the line; becomes "This video can't get that small. Pick a bigger size."), the Designs list, "Leave the editor?" alert.
+
+Editor behaviour findings from reading the code (to confirm on the phone or by screenshot before changing, step 5): New design starts a 1080 × 1080 page with no choice; the keyboard resize path in `app.js` calls `fit()` through the `resize` listener; the property sheet (`body.obj`) covers the lower half of the board; marquee select is off (`canvas.selection = false`), so there is no way to select several objects; no pinch hint exists; `PHONE_PX` stays 8 Mpx until the owner reports build 6.
+
 ## File map
 
 - `docs/design-editor/RESEARCH.md`: findings, verdicts, verified vs assumed, sources.
