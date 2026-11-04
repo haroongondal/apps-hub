@@ -177,38 +177,92 @@ run it in the Android app by touch. The Mac app must behave exactly as before.
    the phone. If editing is sluggish, stop and report before Phase 4.
 ```
 
-## Phase 4: Android media screens (PRD FR-2 to FR-10 on the phone, AC-2 to AC-5; SPEC §9.2, §13.2)
+## Phase 4: Android media screens in plain words, the five-row queue and a calmer editor (PRD FR-2 to FR-10, FR-13, AC-2 to AC-5, AC-15, AC-16; SPEC §9.2, §13.2)
 
 ```text
-Read the prelude files, then SPEC §7, §9.2, §9.3, §10.5, §12.1, §13.2 and RESEARCH §4.3, §7, §8.
+Read the prelude files, then SPEC §7, §9.2, §9.3, §10.5, §12.1, §13.2 and RESEARCH §4.3, §7, §8,
+and PRD FR-9, FR-13, AC-15 and AC-16.
 
-We are executing Phase 4: every media tool on the phone, as React Native screens beside the
-canvas. Media bytes never cross a bridge.
+We are executing Phase 4: every media tool on the phone as React Native screens beside the canvas,
+written for people who have never heard of a codec, with a calmer Design Editor around them. Media
+bytes never cross a bridge.
 
+Owner's requirements (2026-11-04, after the Store build 5 and 6 checks):
+A. Plain words. A release build shows no engineering information: no phase, spike or lab names, job
+   ids, codec, bitrate, encoder or keyframe words, planned-against-actual byte counts, attempt
+   counters or storage paths. Today the home screen has a "Media lab" row ("Phase 1 checks on this
+   phone") and the lab shows spikes S1 to S8, job ids, "try 2" and encoder modes. The lab stays only
+   in debug builds (gate it on __DEV__ and keep it out of the release route table). Failures say
+   what happened and what to do.
+B. The Queue screen shows at most five jobs (running first, then waiting, then the newest finished
+   or failed). More than five: a "See all n" row opens a separate screen (queue/all) with every job.
+   "Clear queue" empties the list; it asks first when a job runs or waits, then stops them; it never
+   deletes an output file (data-safety rule 1 and the Share and Open rows keep working until cleared).
+C. A better Design Editor overall, not only the media screens. Walk every screen and fix what you
+   find; the starting list is below.
+
+Ask the owner before step 3 (one question, with your recommendation): the Mac has remove sound,
+still frame and volume, which Media3 can do on Android; reverse and stabilize need FFmpeg, which PRD
+section 8 rules out on Android. Recommend bringing remove sound, still frame and volume and skipping
+reverse and stabilize. A CapCut-style timeline editor is out of scope unless the owner says so.
+
+Steps:
+0. Audit, no code first. List every string a person sees in apps/design-editor-mobile/app,
+   src and the editor page (packages/design-editor-engine/mobile.html, app.js, shell-mobile.js) that
+   breaks FR-13, with the plain replacement. Known ones: "Phase 1 checks on this phone", "Opens the
+   phase 1 media lab", the home footer about "the media phase rewrite", "Documents/Design Editor"
+   (say "the Design Editor folder on this phone"), "Saved copy intact", "Right-click to remove it",
+   "Double-click text on the page to edit it", "Drop images here", "(magic resize)", "Custom size
+   (px)", "aren't on this Mac" shown on the phone, "Too large to save on the phone: try 2x",
+   accessibility hints such as "Opens the export sheet with format and size". Put the list in the
+   handoff.
 1. design-media: keyframeAtOrBefore, thumbnails, share, open, clearFinished, resume; runners for
    quality, clip copy (CopyRunner), clip exact (trim optimisation), audio (CopyRunner,
    RawAudioWriter, Transformer audio-only), GIF (GifRunner with FrameExtractor or the fallback
    chosen in spike S5; GifEncoder, Quantizer, Dither ported from gifenc with its MIT notice),
-   convert (remux or transcode). JVM tests: GifEncoderTest, QuantizerTest, DitherTest, and
-   RetryRuleTest extended with gif-cases.json.
+   convert (remux or transcode), plus the owner's answer on remove sound, still frame and volume.
+   JVM tests: GifEncoderTest, QuantizerTest, DitherTest, and RetryRuleTest extended with
+   gif-cases.json.
 2. media-core: planGif/nextGifAttempt, planClip, planAudio, planConvert/canRemux for the Android
-   platform tables, with tests and fixtures.
-3. Screens: Media tab, media/[tool] setup (SPEC §13.2), Queue tab with results, Share and Open.
-   Clip preview per the owner's answer to PRD Q7.
-4. Verify (report ACTUAL output):
+   platform tables, and visibleQueue(jobs, 5) returning { shown, hidden } in the order of
+   requirement B, all with tests and fixtures (add each test file to the package's "test" script).
+3. Screens: a TabBar shell (Designs, Media, Queue; a count badge on Queue while jobs run), the Media
+   tab with one row per tool, media/[tool] setup (SPEC §13.2), the Queue tab and queue/all, Share
+   and Open. Tool names say what they do: Make smaller, Trim, Get the sound, Make a GIF, Change
+   format. Clip preview per the owner's answer to PRD Q7. Sizes in MB and times as m:ss.
+4. Plain-words test: a node --test over the string literals of the screens and the engine page
+   against a banned list (codec, bitrate, CBR, VBR, keyframe, encoder, spike, phase, MediaStore,
+   LUFS, remux, transcode, click, right-click, "this Mac" in the phone page). It must fail on
+   today's strings before you fix them.
+5. Editor UX pass. Starting list, all to confirm on the phone or by screenshot before changing:
+   - New design asks for a page size, using the presets the Resize panel already has.
+   - The property sheet must not hide what is being edited: scroll the board so the selected
+     object stays above the sheet.
+   - The soft keyboard fires a resize that calls fit() and resets the zoom while typing; refit
+     only when the width changes. Check on the phone first.
+   - A one-time hint for pinch to zoom and one-finger drag to move around.
+   - "Download" becomes "Save image" on the phone, says where the file went, and offers Share.
+   - Marquee select is off on the phone (since build 6): offer a way to select several objects, or
+     tell the owner it is missing.
+   - Tune PHONE_PX (app.js, 8 Mpx) from the owner's build 6 check; do not raise it without a
+     measurement on the phone.
+   Keep every touch target at 44 px or more and every control labelled.
+6. Verify (report ACTUAL output):
    pnpm --filter @apps-hub/media-core test
    pnpm test
    pnpm typecheck
+   pnpm --filter design-editor test:e2e
    pnpm --filter design-editor-mobile lint
    pnpm --filter design-editor-mobile typecheck
    pnpm --filter design-editor-mobile doctor
    cd apps/design-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
      :design-media:testDebugUnitTest :app:assembleDebug
-5. When the owner says so: pnpm release design-editor -m "Design Editor: media tools". On the
-   phone: AC-2, AC-3, AC-4, AC-5 with the test clips, plus the Gmail check (attach an 18 MB and a
-   24 MB output; note which becomes a Drive link) for PRD Q3, and one WhatsApp send of a 16 MB
-   output (PRD Q4; if WhatsApp takes more, the owner may raise the preset). Record results in
-   the handoff.
+7. When the owner says so: merge with [skip ci] in the squash subject (so CI does not also
+   release), then from a clean checkout of merged main run
+   pnpm release design-editor -m "Design Editor: media tools". On the phone: AC-2, AC-3, AC-4,
+   AC-5, AC-15 and AC-16 with the test clips, plus the Gmail check (attach an 18 MB and a 24 MB
+   output; note which becomes a Drive link) for PRD Q3, and one WhatsApp send of a 16 MB output
+   (PRD Q4; if WhatsApp takes more, the owner may raise the preset). Record results in the handoff.
 ```
 
 ## Phase 5: batch queue and background work (PRD FR-9, FR-12, AC-1, AC-6 to AC-8; SPEC §8, §11.1)

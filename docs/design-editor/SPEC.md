@@ -567,8 +567,8 @@ the `<video>` preview needs it (§11 of RESEARCH).
 | Editor | The canvas WebView full screen; native top bar (back, name, Save, Download) and a bottom toolbar (Templates, Elements, Text, Uploads, Brand, Resize, Undo, Redo) that send `menu` and panel commands to the page |
 | Media (tab) | Six tool rows; "Add files" per tool |
 | Tool setup (`media/[tool]`) | Picked files as `Row`s (name, duration, resolution, size); options (`Segmented` for preset and codec, `Field`s for times and size); the plan as `Readout` ("18.0 MB", "720p 30 fps"); for Clip, a thumbnail strip with tap-to-set start and end and the snapped keyframe; Start |
-| Queue (tab) | Running job with `Progress`, attempt "Try 2 of 3", Cancel; queued jobs; results with Share and Open; failed with reason and Try again; `Notice` for paused or interrupted jobs with Resume |
-| Media lab (debug, Phase 1) | `codecReport`, encoder stats, a "Run spike" button per spike (§18) with results as text to copy into the handoff |
+| Queue (tab) | At most five rows (running with `Progress` and Cancel, then waiting, then the newest results with Share and Open or the failure reason and Try again; `Notice` for paused or interrupted jobs with Resume), no attempt counters (a plain "Trying a smaller size" line at most), a "See all n" row to the full-list screen (`queue/all`) and "Clear queue" (PRD FR-9, AC-15) |
+| Media lab (debug builds only, never in a release build: PRD FR-13) | `codecReport`, encoder stats, a "Run spike" button per spike (§18) with results as text to copy into the handoff |
 
 **As built (2026-11-04, Phase 3 step 3):** the Designs screen is not a tab bar tab yet —
 `app/index.tsx` is the home (Continue row fed by the autosave record, New design, Open a design
@@ -577,8 +577,15 @@ and `app/editor.tsx` is the editor. TabBar and the media tool screens arrive wit
 phase rewrite of the app shell.
 
 Copy examples: "Couldn't fit under 20 MB. This video can hold about 21 minutes at the lowest
-quality." "Starts at 0:12.4, the nearest keyframe before 0:13.0." "Converted to AAC: this audio
+quality." "Starts at 0:12.4, the closest point before 0:13.0 that keeps full quality." "Converted to AAC: this audio
 format can't be copied on Android."
+
+**Owner's requirements (2026-11-04):** plain words in every release screen (PRD FR-13, AC-16), the
+five-row Queue with a full-list screen and Clear queue (FR-9, AC-15), and a calmer Design Editor
+overall: tab bar (Designs, Media, Queue), page sizes when starting a design, touch wording in the
+editor page, the page kept visible above the property sheet, the zoom kept while the keyboard is up.
+`pnpm test` covers the pure rule (`visibleQueue`) and the banned-words list; the screens are walked on
+the phone.
 
 ### 13.3 Brand
 

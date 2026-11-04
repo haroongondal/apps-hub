@@ -131,6 +131,10 @@ hardware encoders; §6.6 works the numbers for a one-minute clip into 20 MB (720
     with a progress notification ("Compressing 2 of 5, 43%") carrying a Cancel action, and a
     summary notification at the end.
   - Mac: the batch continues with the Media tools window closed; quitting asks first.
+  - Android, owner's requirement 2026-11-04: the Queue screen shows at most five jobs (the running
+    one first, then the waiting ones, then the newest finished or failed). When there are more, a
+    "See all" row opens a separate screen with every job. "Clear queue" empties the list: it asks
+    first when a job is running or waiting, and then stops them; it never deletes an output file.
 - **FR-10: Results.**
   - The original is never changed. Outputs go to `Movies`, `Music` or `Pictures` under
     "Design Editor" on Android, and to a folder the user picks on the Mac.
@@ -145,6 +149,14 @@ hardware encoders; §6.6 works the numbers for a one-minute clip into 20 MB (720
   - Usable by touch: tap to select, drag to move, handles at least 44 px, pinch to zoom,
     two fingers to pan, a bottom toolbar instead of the Mac menus.
   - Design files (`.json`) open on either device.
+- **FR-13: Plain words (owner's requirement 2026-11-04).** A person who has never heard of a codec
+  can use every screen. A release build shows no engineering information: no phase, spike or lab
+  names, no job ids, no codec, bitrate, encoder or keyframe words, no byte counts of a plan against
+  its result, no attempt counters, no storage paths or API names. Sizes are in MB, times are
+  m:ss, tool names say what they do ("Make smaller", "Trim", "Get the sound", "Make a GIF",
+  "Change format"). Failures say what happened and what to do. The debug Media lab stays in debug
+  builds only. The same rule covers the editor page's own copy on the phone (it was written for the
+  Mac: no "click", "right-click", "double-click" or "this Mac").
 - **FR-12: Setup on Android.** Ask for notification permission before the first batch. If the
   Phase 1 spike shows HyperOS kills swiped batches, show a one-time note with a button to the
   app's battery settings.
@@ -235,6 +247,14 @@ samples).
   of twice the page size is saved under `Pictures/Design Editor`.
 - **AC-14 (design files):** Given a design saved on the Mac, when opened on the phone (and the
   reverse), then it has the same objects, text and page size.
+
+- **AC-15 (queue of five):** Given twelve jobs in the list, when the owner opens the Queue screen,
+  then exactly five rows show with the running job first, a "See all 12" row opens the full list on
+  its own screen, and "Clear queue" empties the list (after a confirm while a job runs or waits)
+  with every output file still in `Movies/Design Editor`.
+- **AC-16 (plain words):** Given a release build, when the owner walks every screen and the editor
+  page, then none shows a word from the banned list in FR-13, and the Media lab row is absent. A
+  test over the screens' string literals enforces the list.
 
 ## 7. Success metrics
 
