@@ -837,7 +837,8 @@ $('#openMedia').onclick = () => native.media.openWindow();
     }
   }
   updateSize(); fit(); renderTemplates(); inspect(); renderPages();
-  if (PHONE && COPY.hint && !store.get('hint', false)) { store.set('hint', true); toast(COPY.hint, 7000); }
+  // not over a message the boot just showed (there is one toast); it comes next time
+  if (PHONE && COPY.hint && !store.get('hint', false) && !$('#toast').classList.contains('show')) { store.set('hint', true); toast(COPY.hint, 7000); }
   undoStack = [{ s: snapshot(), page: cur }];
   savedSnap = saved?.dirty ? null : undoStack[0].s;
   docChanged(undoStack[0].s);

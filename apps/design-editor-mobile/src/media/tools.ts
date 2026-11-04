@@ -31,5 +31,16 @@ export function parseTime(text: string): number | undefined {
   const value = Number(m[1] ?? 0) * 60 + Number(m[2]);
   return Number.isFinite(value) ? value : undefined;
 }
-// Times with a tenth of a second, as m:ss.s (PRD FR-5).
-export const timeText = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
+// Times with a tenth of a second, as m:ss.s (PRD FR-5). Rounds first, so 59.97 is 1:00.0 and never 0:60.0.
+export function timeText(s: number): string {
+  const tenths = Math.round(Math.max(0, s) * 10);
+  return `${Math.floor(tenths / 600)}:${((tenths % 600) / 10).toFixed(1).padStart(4, '0')}`;
+}
+
+// The encoder's measured overshoot, the same rule as the native EncoderStatsMath: the last five, their median, kept between 0.8 and 1.5.
+export function correctionFrom(ratios: number[]): number {
+  if (!ratios.length) return 1;
+  const last = ratios.slice(-5).sort((a, b) => a - b), mid = Math.floor(last.length / 2);
+  const median = last.length % 2 ? last[mid] : (last[mid - 1] + last[mid]) / 2;
+  return Math.min(1.5, Math.max(0.8, median));
+}

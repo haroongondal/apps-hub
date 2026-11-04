@@ -111,3 +111,9 @@ test('planFor: one entry for every tool, with the phone tables and a plain refus
   assert.match(refusalText(size, 20_000_000), /Couldn't fit under 20 MB/);
   assert.doesNotMatch(refusalText(size, 20_000_000), /bitrate|codec|encoder/i);
 });
+
+test('refusal text: seconds for a short limit, minutes for a long one, and the size as the person typed it', () => {
+  assert.match(refusalText({ ok: false, reason: 'too-long', maxDurationS: 40 }, 20_000_000), /about 40 seconds/);
+  assert.match(refusalText({ ok: false, reason: 'too-long', maxDurationS: 1297 }, 20_000_000), /about 21 minutes/);
+  assert.match(refusalText({ ok: false, reason: 'too-long', maxDurationS: 1297 }, 1_500_000), /under 1\.5 MB/);
+});

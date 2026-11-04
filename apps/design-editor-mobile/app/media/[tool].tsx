@@ -1,7 +1,7 @@
 import DesignMedia from 'design-media';
 import {
-  DESTINATIONS, formatClock, formatMb, planFor, refusalText,
-  type JobSpec, type MediaInfo, type Plan, type QualityName,
+  DESTINATIONS, GIF_WARN_S, formatClock, formatMb, planAudio, planFor, refusalText,
+  type MediaInfo, type Plan, type QualityName,
 } from '@apps-hub/media-core';
 import { Button, Field, Group, Header, Notice, Readout, Row, Screen, Segmented } from '@apps-hub/ui';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -11,9 +11,9 @@ import { Image, ScrollView, Pressable } from 'react-native';
 import { plainError } from '../../src/media/errors';
 import { pickFiles, startJobs } from '../../src/media/jobs';
 import { loadPrefs, savePrefs } from '../../src/media/prefs';
-import { parseTime, TOOLS, timeText, type ToolKey } from '../../src/media/tools';
+import { specsFor, soundTracksOf, type Options } from '../../src/media/specs';
+import { correctionFrom, parseTime, TOOLS, timeText, type ToolKey } from '../../src/media/tools';
 
-const median = (xs: number[]) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : 1);
 const say = (e: unknown) => plainError(e, 'Something went wrong. Try again.');
 
 export default function ToolSetup() {
@@ -36,7 +36,7 @@ export default function ToolSetup() {
   const [end, setEnd] = useState('0:10.0');
   const [setting, setSetting] = useState<'start' | 'end'>('start');
   const [cut, setCut] = useState<'copy' | 'exact'>('copy');
-  const [tracks, setTracks] = useState<number[]>([]);
+  const [skipped, setSkipped] = useState<Record<string, number[]>>({});
   const [gifWidth, setGifWidth] = useState('480');
   const [gifFps, setGifFps] = useState('12');
   const [gifMb, setGifMb] = useState('');
@@ -50,8 +50,8 @@ export default function ToolSetup() {
   const info = files[0];
   useEffect(() => { void loadPrefs().then(p => setSmaller(p.smallerFile)); }, []);
   useEffect(() => {
-    DesignMedia.encoderStats().then(s => setCorrection(Math.min(1.5, Math.max(0.8, median(s['hw-h264/cbr'] ?? [])))), () => undefined);
-  }, []);
+    DesignMedia.encoderStats().then(s => setCorrection(correctionFrom(s[`${smaller ? 'hw-hevc' : 'hw-h264'}/cbr`] ?? [])), () => undefined);
+  }, [smaller]);
 
   const startS = parseTime(start);
   useEffect(() => {
@@ -72,35 +72,25 @@ export default function ToolSetup() {
       const picked = await pickFiles(def.accept, !single);
       if (!picked.length) return;
       setFiles(single ? picked.slice(0, 1) : [...files, ...picked]);
-      const first = picked[0];
-      setStart('0:00.0'); setEnd(timeText(Math.min(first.durationS, def.key === 'gif' ? 10 : first.durationS)));
-      setTracks(first.tracks.filter(t => t.kind === 'audio').map(t => t.index));
+      if (!files.length || single) { // a second pick keeps the choices already made
+        const first = picked[0];
+        setStart('0:00.0'); setEnd(timeText(Math.min(first.durationS, def.key === 'gif' ? 10 : first.durationS)));
+      }
     } catch (e) { setError(say(e)); }
   }
 
   const targetBytes = dest === 'custom' ? Math.round(Number(customMb) * 1_000_000) : DESTINATIONS.find(d => d.id === dest)!.bytes;
 
-  // The spec for one file; the same options apply to every picked file (PRD FR-9).
-  const specs = (f: MediaInfo): JobSpec[] => {
-    switch (def.key) {
-      case 'smaller': return [how === 'size'
-        ? { tool: 'size', inputId: f.id, targetBytes, encoder: smaller ? 'hw-hevc' : 'hw-h264' }
-        : { tool: 'quality', inputId: f.id, preset: quality }];
-      case 'trim': return [{ tool: 'clip', inputId: f.id, startS: startS ?? -1, endS: parseTime(end) ?? -1, mode: cut }];
-      case 'sound': return tracks.filter(i => f.tracks.some(t => t.index === i)).map(i => ({ tool: 'audio' as const, inputId: f.id, trackIndex: i }));
-      case 'gif': return [{ tool: 'gif', inputId: f.id, startS: startS ?? -1, endS: parseTime(end) ?? -1, width: Number(gifWidth), fps: Number(gifFps), ...(gifMb ? { targetBytes: Math.round(Number(gifMb) * 1_000_000) } : {}) }];
-      case 'format': return [{ tool: 'convert', inputId: f.id, target: kind === 'sound' ? 'm4a' : 'mp4', videoCodec: smaller ? 'hevc' : 'h264', muted }];
-      case 'picture': return [{ tool: 'frame', inputId: f.id, timeS: startS ?? -1, format }];
-      case 'volume': return [louder === 'even' ? { tool: 'volume', inputId: f.id, mode: 'normalize', gainDb: 0 } : { tool: 'volume', inputId: f.id, mode: 'gain', gainDb: Number(louder) }];
-      case 'backwards': return [{ tool: 'reverse', inputId: f.id, sound: withSound }];
-      case 'steady': return [{ tool: 'stabilize', inputId: f.id, level }];
-    }
+  const options: Options = {
+    targetBytes, how, quality, smaller, startS, endS: parseTime(end), cut, skippedSounds: skipped,
+    gifWidth: Number(gifWidth), gifFps: Number(gifFps), gifMb, kind, muted, format, louder, withSound, level,
   };
+  const specs = (f: MediaInfo) => specsFor(def.key, f, options);
 
   const planned = useMemo(() => info
     ? specs(info).map(s => planFor(s, info, { platform: 'android', keyframeS: keyframe, correction }))
     : [], // eslint-disable-next-line react-hooks/exhaustive-deps
-  [info, def.key, how, targetBytes, quality, smaller, start, end, cut, tracks, gifWidth, gifFps, gifMb, kind, muted, format, louder, withSound, level, keyframe, correction]);
+  [info, def.key, how, targetBytes, quality, smaller, start, end, cut, skipped, gifWidth, gifFps, gifMb, kind, muted, format, louder, withSound, level, keyframe, correction]);
 
   const refusal = planned.find(p => !p.ok);
   const first = planned[0]?.ok ? planned[0].plan : undefined;
@@ -111,7 +101,7 @@ export default function ToolSetup() {
     for (const f of files) {
       for (const s of specs(f)) {
         const p = planFor(s, f, { platform: 'android', keyframeS: f === info ? keyframe : undefined, correction });
-        if (!p.ok) return setError(refusalText(p, s.tool === 'size' ? s.targetBytes : undefined));
+        if (!p.ok) return setError((files.length > 1 ? `${f.name}: ` : '') + refusalText(p, s.tool === 'size' ? s.targetBytes : undefined));
         items.push({ info: f, plan: p.plan });
       }
     }
@@ -119,7 +109,7 @@ export default function ToolSetup() {
     setBusy(true);
     try {
       await startJobs(items);
-      router.replace('/queue');
+      router.dismissTo('/queue'); // back to the tabs, not a second copy of them
     } catch (e) { setError(say(e)); } finally { setBusy(false); }
   }
 
@@ -134,8 +124,8 @@ export default function ToolSetup() {
       {error ? <Notice tone="danger" title="This can't start yet">{error}</Notice> : null}
 
       <Group title={single ? 'File' : 'Files'} footer="Your original files are never changed.">
-        {files.map(f => (
-          <Row key={f.id} title={f.name} subtitle={`${formatClock(f.durationS)} · ${formatMb(f.bytes)}${f.tracks.find(t => t.kind === 'video')?.width ? ` · ${f.tracks.find(t => t.kind === 'video')!.width}×${f.tracks.find(t => t.kind === 'video')!.height}` : ''}`} />
+        {files.map((f, n) => (
+          <Row key={`${f.id}-${n}`} trailing={<Button label="Remove" variant="ghost" onPress={() => setFiles(files.filter((_, i) => i !== n))} />} title={f.name} subtitle={`${formatClock(f.durationS)} · ${formatMb(f.bytes)}${f.tracks.find(t => t.kind === 'video')?.width ? ` · ${f.tracks.find(t => t.kind === 'video')!.width}×${f.tracks.find(t => t.kind === 'video')!.height}` : ''}`} />
         ))}
         <Button label={files.length ? (single ? 'Choose another file' : 'Add more files') : 'Choose a file'} variant="secondary" block onPress={add} />
       </Group>
@@ -168,7 +158,7 @@ export default function ToolSetup() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   {thumbs.map((uri, i) => (
                     <Pressable
-                      key={uri}
+                      key={`${i}-${uri}`}
                       accessibilityRole="button"
                       accessibilityLabel={`Use ${formatClock((info.durationS * (i + 0.5)) / 10)}`}
                       onPress={() => { const t = timeText((info.durationS * (i + 0.5)) / 10); if (def.key === 'picture' || setting === 'start') setStart(t); else setEnd(t); }}
@@ -193,6 +183,7 @@ export default function ToolSetup() {
                   {choose([{ key: '320', label: 'Small' }, { key: '480', label: 'Medium' }, { key: '640', label: 'Large' }], gifWidth, setGifWidth, 'GIF size')}
                   {choose([{ key: '8', label: 'Smooth 8' }, { key: '12', label: 'Smooth 12' }, { key: '15', label: 'Smooth 15' }], gifFps, setGifFps, 'Smoothness')}
                   <Field label="Keep under (MB, optional)" keyboardType="numeric" value={gifMb} onChangeText={setGifMb} />
+                  {startS !== undefined && parseTime(end) !== undefined && parseTime(end)! - startS > GIF_WARN_S ? <Notice tone="warn">{`A GIF longer than ${GIF_WARN_S} seconds gets big. A shorter range works best.`}</Notice> : null}
                 </>
               ) : null}
               {def.key === 'picture' ? choose([{ key: 'png', label: 'PNG' }, { key: 'jpg', label: 'JPEG' }], format, setFormat, 'Picture type') : null}
@@ -201,11 +192,21 @@ export default function ToolSetup() {
 
           {def.key === 'sound' ? (
             <Group title="Sounds to save" footer="Each one is saved as its own file.">
-              {info.tracks.filter(t => t.kind === 'audio').map((t, n) => (
-                <Row key={t.index} title={`Sound ${n + 1}${t.language ? ` (${t.language})` : ''}`} subtitle={tracks.includes(t.index) ? 'Will be saved' : 'Skipped'}
-                  onPress={() => setTracks(tracks.includes(t.index) ? tracks.filter(i => i !== t.index) : [...tracks, t.index])} />
-              ))}
-              {info.tracks.every(t => t.kind !== 'audio') ? <Notice tone="warn">This file has no sound.</Notice> : null}
+              {files.flatMap(f => soundTracksOf(f).map((idx, n) => {
+                const off = skipped[f.id]?.includes(idx);
+                const track = f.tracks.find(t => t.index === idx)!;
+                const planned = planAudio(track, 'android');
+                const converts = planned.ok && planned.plan.mode === 'aac';
+                return (
+                  <Row
+                    key={`${f.id}-${idx}`}
+                    title={`${files.length > 1 ? `${f.name} · ` : ''}Sound ${n + 1}${track.language ? ` (${track.language})` : ''}`}
+                    subtitle={off ? 'Skipped' : converts ? 'Will be saved, converted so it plays everywhere' : 'Will be saved'}
+                    onPress={() => setSkipped({ ...skipped, [f.id]: off ? (skipped[f.id] ?? []).filter(k => k !== idx) : [...(skipped[f.id] ?? []), idx] })}
+                  />
+                );
+              }))}
+              {files.some(f => !soundTracksOf(f).length) ? <Notice tone="warn">A file you picked has no sound.</Notice> : null}
             </Group>
           ) : null}
 

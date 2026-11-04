@@ -232,7 +232,8 @@ assert.equal(await page.evaluate(() => localStorage.getItem('design-editor:hint'
 
 // a selected item stays above the property sheet
 await page.evaluate(() => { window.editor.applyTemplate(window.editor.TEMPLATES[0]); });
-await page.evaluate(() => window.__editorCommand('menu', { cmd: 'zoomFit' }));
+// zoomed in, the lowest item starts below the screen: the sheet opening must scroll it into view
+await page.evaluate(() => { window.editor.setZoom(2); document.querySelector('#board').scrollTop = 0; });
 await page.waitForTimeout(300);
 const above = await page.evaluate(async () => {
   const c = window.editor.canvas;
@@ -240,8 +241,9 @@ const above = await page.evaluate(async () => {
   c.setActiveObject(lowest); c.requestRenderAll();
   await new Promise(r => setTimeout(r, 500));
   const w = c.wrapperEl.getBoundingClientRect(), r = lowest.getBoundingRect(), z = c.getZoom();
-  return { bottom: w.top + (r.top + r.height) * z, sheetTop: document.querySelector('#inspector').getBoundingClientRect().top };
+  return { scrolled: document.querySelector('#board').scrollTop, bottom: w.top + (r.top + r.height) * z, sheetTop: document.querySelector('#inspector').getBoundingClientRect().top };
 });
+assert.ok(above.scrolled > 0, 'the board scrolled to bring the selected item up');
 assert.ok(above.bottom <= above.sheetTop, `the selected item sits above the sheet ${JSON.stringify(above)}`);
 await page.evaluate(() => window.editor.canvas.discardActiveObject());
 

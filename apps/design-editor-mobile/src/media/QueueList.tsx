@@ -12,7 +12,8 @@ import { isBusy, refreshQueue, useQueue } from './queue';
 export function QueueList({ all }: { all?: boolean }) {
   const jobs = useQueue();
   const { shown, hidden } = visibleQueue(jobs, all ? jobs.length : 5);
-  const busy = jobs.some(isBusy);
+  // paused and interrupted jobs can be resumed, so clearing them is also asked about
+  const busy = jobs.some(j => isBusy(j) || j.state === 'paused' || j.state === 'interrupted');
 
   function clear() {
     const run = () => { DesignMedia.clearQueue().then(forgetJobs).then(refreshQueue, () => undefined); };
