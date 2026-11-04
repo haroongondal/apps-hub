@@ -1,6 +1,6 @@
 import DesignMedia, { type NativeJobStatus } from 'design-media';
 import { Button, Pill, Progress, Row } from '@apps-hub/ui';
-import { Alert } from 'react-native';
+import { Alert, View } from 'react-native';
 
 import { plainError } from './errors';
 import { tryAgain } from './jobs';
@@ -15,10 +15,10 @@ export function JobRow({ job }: { job: NativeJobStatus }) {
     ? <Button label="Stop" variant="ghost" onPress={() => DesignMedia.cancel(job.id).catch(say)} />
     : job.state === 'done' && out
       ? (
-        <>
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           <Button label="Share" variant="secondary" onPress={() => DesignMedia.share(out.ref).catch(say)} />
           <Button label="Open" variant="ghost" onPress={() => DesignMedia.open(out.ref).catch(say)} />
-        </>
+        </View>
       )
       : job.state === 'failed' || job.state === 'cancelled'
         ? <Button label="Try again" variant="secondary" onPress={() => { tryAgain(job.id).then(ok => { if (!ok) Alert.alert('Pick the file again', 'Start this from its tool.'); }, say); }} />

@@ -122,7 +122,7 @@ test('reverse: a clip up to 10 s at 1080p or below is planned; longer or bigger 
   assert.equal(reverseProblem({ ...film(), durationS: 10.02 }), undefined);
   assert.match(reverseProblem({ ...film(), durationS: 12 }) ?? '', /up to 10 seconds/);
   const uhd = { ...film(), tracks: film().tracks.map(t => t.kind === 'video' ? { ...t, width: 3840, height: 2160 } : t) };
-  assert.match(reverseProblem(uhd) ?? '', /up to 1920×1080/);
+  assert.match(reverseProblem(uhd) ?? '', /up to 1080p/);
   assert.deepEqual(planReverse({ ...film(), tracks: film().tracks.filter(t => t.kind === 'audio') }, true),
     { ok: false, reason: 'invalid', detail: 'Reverse needs a video track.' });
 });

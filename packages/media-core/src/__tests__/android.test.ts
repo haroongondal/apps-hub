@@ -5,6 +5,7 @@ import { planClip } from '../clip.ts';
 import { planConvert } from '../convert.ts';
 import { formatClock, formatMb } from '../format.ts';
 import { planQuality } from '../quality.ts';
+import { planReverse } from '../reverse.ts';
 import { visibleQueue } from '../queue.ts';
 import { androidContainerFor, canRemux } from '../remux.ts';
 import type { Codec, Job, JobState, MediaInfo } from '../types.ts';
@@ -116,4 +117,13 @@ test('refusal text: seconds for a short limit, minutes for a long one, and the s
   assert.match(refusalText({ ok: false, reason: 'too-long', maxDurationS: 40 }, 20_000_000), /about 40 seconds/);
   assert.match(refusalText({ ok: false, reason: 'too-long', maxDurationS: 1297 }, 20_000_000), /about 21 minutes/);
   assert.match(refusalText({ ok: false, reason: 'too-long', maxDurationS: 1297 }, 1_500_000), /under 1\.5 MB/);
+});
+
+test('reverse: the size cap holds either way up, so a portrait phone clip is not refused', () => {
+  const sized = (width: number, height: number): MediaInfo => ({ ...file('h264', ['aac']), durationS: 10, tracks: [{ index: 0, kind: 'video', codec: 'h264', width, height, fps: 30 }] });
+  assert.ok(planReverse(sized(720, 1280), true).ok, 'portrait 720p');
+  assert.ok(planReverse(sized(1080, 1920), true).ok, 'portrait 1080p');
+  assert.ok(planReverse(sized(1920, 1080), true).ok, 'landscape 1080p');
+  assert.equal(planReverse(sized(2160, 3840), true).ok, false, 'portrait 4K is still too big');
+  assert.equal(planReverse(sized(1440, 1440), true).ok, false, 'a 1440 square is too big');
 });

@@ -3,7 +3,7 @@ import {
   DESTINATIONS, GIF_WARN_S, formatClock, formatMb, planAudio, planFor, refusalText,
   type MediaInfo, type Plan, type QualityName,
 } from '@apps-hub/media-core';
-import { Button, Field, Group, Header, Notice, Readout, Row, Screen, Segmented } from '@apps-hub/ui';
+import { Button, Field, Group, Header, Notice, Pill, Readout, Row, Screen, Segmented } from '@apps-hub/ui';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Image, ScrollView, Pressable } from 'react-native';
@@ -200,7 +200,7 @@ export default function ToolSetup() {
                 return (
                   <Row
                     key={`${f.id}-${idx}`}
-                    title={`${files.length > 1 ? `${f.name} · ` : ''}Sound ${n + 1}${track.language ? ` (${track.language})` : ''}`}
+                    title={`${files.length > 1 ? `${f.name} · ` : ''}Sound ${n + 1}${track.language && track.language !== 'und' ? ` (${track.language})` : ''}`}
                     subtitle={off ? 'Skipped' : converts ? 'Will be saved, converted so it plays everywhere' : 'Will be saved'}
                     onPress={() => setSkipped({ ...skipped, [f.id]: off ? (skipped[f.id] ?? []).filter(k => k !== idx) : [...(skipped[f.id] ?? []), idx] })}
                   />
@@ -224,7 +224,9 @@ export default function ToolSetup() {
 
           {def.key === 'volume' ? (
             <Group title="Change">
-              {choose([{ key: 'even', label: 'Even it out' }, { key: '-12', label: 'Much quieter' }, { key: '-6', label: 'Quieter' }, { key: '6', label: 'Louder' }, { key: '12', label: 'Much louder' }], louder, setLouder, 'Volume change')}
+              {([['even', 'Even it out', 'Make quiet and loud parts closer'], ['-12', 'Much quieter', 'About a quarter as loud'], ['-6', 'Quieter', 'About half as loud'], ['6', 'Louder', 'About twice as loud'], ['12', 'Much louder', 'About four times as loud']] as const).map(([key, title, about]) => (
+                <Row key={key} title={title} subtitle={about} trailing={louder === key ? <Pill label="Chosen" tone="accent" /> : undefined} onPress={() => setLouder(key)} />
+              ))}
             </Group>
           ) : null}
           {def.key === 'backwards' ? (
