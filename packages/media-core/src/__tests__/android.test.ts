@@ -94,3 +94,20 @@ test('quality on the phone: bitrate per pixel, not a VideoToolbox number', () =>
   assert.equal(r.plan.quality, 0.07);
   assert.equal(r.plan.height, 1280);
 });
+
+import { planFor } from '../plan-for.ts';
+import { refusalText } from '../format.ts';
+
+test('planFor: one entry for every tool, with the phone tables and a plain refusal', () => {
+  const f = file('h264', ['aac']);
+  const ctx = { platform: 'android' as const, keyframeS: 4 };
+  const clip = planFor({ tool: 'clip', inputId: f.id, startS: 5, endS: 9, mode: 'copy' }, f, ctx);
+  assert.ok(clip.ok && clip.plan.tool === 'clip' && clip.plan.keyframeS === 4);
+  const bad = planFor({ tool: 'frame', inputId: f.id, timeS: 99, format: 'png' }, f, ctx);
+  assert.ok(!bad.ok && bad.reason === 'invalid' && /inside the file/.test(bad.detail ?? ''));
+  const long = { ...f, durationS: 1800, bytes: 900_000_000 };
+  const size = planFor({ tool: 'size', inputId: f.id, targetBytes: 20_000_000, encoder: 'hw-h264' }, long, ctx);
+  assert.ok(!size.ok);
+  assert.match(refusalText(size, 20_000_000), /Couldn't fit under 20 MB/);
+  assert.doesNotMatch(refusalText(size, 20_000_000), /bitrate|codec|encoder/i);
+});

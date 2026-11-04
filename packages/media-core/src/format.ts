@@ -7,3 +7,14 @@ export function formatClock(seconds: number): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }
+
+import type { Refusal } from './types.ts';
+
+// The plain sentence for a refusal (PRD FR-3, FR-13): what happened, and what to do.
+export function refusalText(r: Refusal, targetBytes?: number): string {
+  const size = targetBytes ? `${(targetBytes / 1_000_000).toFixed(0)} MB` : 'that size';
+  if (r.reason === 'too-long') return `Couldn't fit under ${size}. This video can hold about ${Math.max(1, Math.floor(r.maxDurationS / 60))} minutes at the lowest quality. Trim it first, or pick a bigger size.`;
+  if (r.reason === 'gave-up') return r.detail ?? `Couldn't fit under ${size}. Pick a bigger size.`;
+  if (r.reason === 'no-video') return "This file has no picture, so this tool can't use it.";
+  return r.detail ?? "This file can't be used with this tool.";
+}
