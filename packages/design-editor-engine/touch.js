@@ -14,9 +14,9 @@
   const editor = window.editor;
   const canvas = editor.canvas;
   const board = document.querySelector('#board');
-  const clamp = z => Math.min(4, Math.max(0.05, z));
   const TOUCH = { cornerSize: 24, touchCornerSize: 44, padding: 8 };
   canvas.on('object:added', ({ target: o }) => o.set(TOUCH));
+  canvas.selection = false; // no marquee on a phone: a drag on empty space pans the board instead
 
   // the inspector sheet only matters while something is selected (mobile.html hides it otherwise)
   const syncSelected = () => document.body.classList.toggle('obj', !!canvas.getActiveObject());
@@ -61,19 +61,22 @@
 
   // ---- pinch and pan ----
   const pts = new Map(); // pointerId → { x, y }
-  let gest = null; // { mid, dist, z }
+  let gest = null; // { mid, dist, z0, z }
+  let pan = null; // one finger down on empty space: { x, y, sl, st }
   let press = null; // { x, y, timer }
   const wall = () => { canvas.upperCanvasEl.style.pointerEvents = 'none'; };
   const unwall = () => { canvas.upperCanvasEl.style.pointerEvents = ''; };
 
   function startGesture() {
     closeSheet();
+    pan = null;
     const [a, b] = [...pts.values()];
     gest = {
       mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
       dist: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)),
-      z: canvas.getZoom(),
+      z0: canvas.getZoom(),
     };
+    gest.z = gest.z0;
     canvas.discardActiveObject();
     canvas._currentTransform = null;
     wall();
@@ -82,17 +85,20 @@
     const [a, b] = [...pts.values()];
     const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
     const dist = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y));
-    const z = clamp(gest.z * dist / gest.dist);
-    // scale anchored on the previous midpoint (fabric keeps the translate), then sizes and the
-    // zoom label sync through app.js's setZoom, then follow the fingers' midpoint move
-    canvas.zoomToPoint(gest.mid, z);
-    editor.setZoom(z);
-    canvas.relativePan({ x: mid.x - gest.mid.x, y: mid.y - gest.mid.y });
+    // scale from the zoom at the start (never from the last frame's), keep the page point under
+    // the previous midpoint, then follow the midpoint's move, all by scrolling the board
+    const box = canvas.wrapperEl;
+    const r0 = box.getBoundingClientRect();
+    const fx = (gest.mid.x - r0.left) / r0.width, fy = (gest.mid.y - r0.top) / r0.height;
+    gest.z = editor.setZoom(gest.z0 * dist / gest.dist, true);
+    const r1 = box.getBoundingClientRect();
+    board.scrollLeft += r1.left + fx * r1.width - mid.x;
+    board.scrollTop += r1.top + fy * r1.height - mid.y;
     gest.mid = mid;
-    gest.z = z;
   }
   function endGesture() {
     if (pts.size > 1) return; // a finger went down before the last one lifted
+    editor.setZoom(gest.z); // the one sharp redraw
     gest = null;
     if (sheet.hidden) unwall(); // otherwise the release of the wall goes with the sheet's own close
   }
@@ -106,11 +112,11 @@
     clearTimeout(press?.timer);
     press = null;
   }
+  const hit = e => { const f = canvas.findTarget(e); return f?.target ?? f?.currentTarget; };
   function openSheet(e) {
     press = null;
     if (gest || pts.size > 1) return;
-    const found = canvas.findTarget(e);
-    const target = found?.target ?? found?.currentTarget;
+    const target = hit(e);
     if (target) {
       canvas.setActiveObject(target);
       canvas.requestRenderAll();
@@ -127,17 +133,24 @@
     if (sheet.hidden === false) closeSheet();
     disarmPress();
     if (pts.size === 2) startGesture();
-    else if (pts.size === 1) armPress(e);
+    else if (pts.size === 1) {
+      armPress(e);
+      pan = hit(e) ? null : { x: e.clientX, y: e.clientY, sl: board.scrollLeft, st: board.scrollTop };
+    }
   }, true);
   board.addEventListener('pointermove', e => {
     const p = pts.get(e.pointerId);
     if (!p) return;
     p.x = e.clientX; p.y = e.clientY;
     if (gest) stepGesture();
-    else if (press && Math.hypot(p.x - press.x, p.y - press.y) > 12) disarmPress();
+    else {
+      if (press && Math.hypot(p.x - press.x, p.y - press.y) > 12) disarmPress();
+      if (pan) { board.scrollLeft = pan.sl - (p.x - pan.x); board.scrollTop = pan.st - (p.y - pan.y); }
+    }
   }, true);
   const lift = e => {
     pts.delete(e.pointerId);
+    pan = null;
     if (gest) endGesture();
     else if (sheet.hidden) unwall();
     disarmPress();

@@ -57,7 +57,8 @@ assert.equal(await page.evaluate(() => document.body.classList.contains('embedde
 assert.equal((await page.evaluate(() => window.__bridge.wait('ready'))).type, 'ready');
 
 // boot completes, templates render, and the shell's native surface is in place
-await page.waitForSelector('.tpl >> nth=3');
+await page.waitForSelector('.tpl >> nth=3', { state: 'attached' });
+assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.drawer')).display), 'none', 'no sheet covers the page on launch');
 assert.ok(await page.evaluate(() => 'native' in window && typeof window.native.saveFile === 'function'));
 const layouts = await page.evaluate(() => ({
   header: getComputedStyle(document.querySelector('header')).display,
@@ -176,28 +177,54 @@ const pinch = await page.evaluate(point => {
     new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: id, isPrimary: id === 1, pointerType: 'touch', clientX: px, clientY: py, buttons: type === 'pointerup' ? 0 : 1 }));
   const bx = point.x, by = point.y;
   const z0 = window.editor.canvas.getZoom();
+  const backing0 = window.editor.canvas.lowerCanvasEl.width;
   fire('pointerdown', 1, bx + 120, by + 300);
   fire('pointerdown', 2, bx + 180, by + 300);
   fire('pointermove', 1, bx + 100, by + 300);
   fire('pointermove', 2, bx + 200, by + 300);
   fire('pointermove', 1, bx + 90, by + 300);
   fire('pointermove', 2, bx + 210, by + 300);
-  const mid = window.editor.canvas.getZoom();
+  const live = () => window.editor.canvas.wrapperEl.getBoundingClientRect().width / window.editor.size[0];
+  const mid = live();
+  const backing = window.editor.canvas.lowerCanvasEl.width;
+  for (let i = 0; i < 40; i++) { fire('pointermove', 1, bx + 90, by + 300); fire('pointermove', 2, bx + 210, by + 300); }
+  const held = live();
   const wall = window.editor.canvas.upperCanvasEl.style.pointerEvents;
   const label = document.querySelector('#zoomLabel').textContent;
   fire('pointerup', 1, bx + 90, by + 300);
-  return { z0, mid, wall, label };
+  return { z0, mid, held, backing0, backing, wall, label };
 }, spot);
 const zEnd = await page.evaluate(() => window.editor.canvas.getZoom());
 await page.evaluate(point => {
   document.querySelector('#board').dispatchEvent(
     new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerId: 2, pointerType: 'touch', clientX: point.x + 210, clientY: point.y + 300, buttons: 0 }));
 }, spot);
-assert.ok(pinch.mid > pinch.z0 * 1.4, `two-finger spread zoomed in (${pinch.z0} → ${pinch.mid})`);
+assert.ok(Math.abs(pinch.mid - pinch.z0 * 2) < 0.01, `a 2x spread zoomed 2x (${pinch.z0} → ${pinch.mid})`);
+assert.ok(Math.abs(pinch.held - pinch.mid) < 1e-6, `holding the pinch does not compound (${pinch.mid} → ${pinch.held})`);
+assert.equal(await page.evaluate(() => window.editor.canvas.lowerCanvasEl.width), await page.evaluate(() => Math.round(window.editor.size[0] * window.editor.canvas.getZoom() * window.devicePixelRatio)), 'sharp redraw after release');
 assert.equal(pinch.label, Math.round(pinch.mid * 100) + '%', `zoom label followed (${pinch.label})`);
+assert.equal(pinch.backing, pinch.backing0, 'preview frames left the backing store alone');
 assert.equal(pinch.wall, 'none', 'fabric stayed walled during the gesture');
-assert.ok(Math.abs(zEnd - pinch.mid) < 1e-9, 'the zoom survives the first finger lifting');
+assert.ok(Math.abs(zEnd - pinch.held) < 1e-9, 'the committed zoom matches the last frame once the fingers lift');
 assert.equal(await page.evaluate(() => window.editor.canvas.upperCanvasEl.style.pointerEvents), '', 'fabric released after the fingers lifted');
+
+// the phone's pixel budget: even at max zoom a layer stays under 8 Mpx, and the page can be scrolled
+const budget = await page.evaluate(() => {
+  const c = window.editor.canvas;
+  window.editor.setZoom(4);
+  return { z: c.getZoom(), mpx: c.lowerCanvasEl.width * c.lowerCanvasEl.height / 1e6, upper: c.upperCanvasEl.width * c.upperCanvasEl.height / 1e6 };
+});
+assert.ok(budget.mpx <= 8.1 && budget.upper <= 8.1, `layers stay in budget at max zoom (${budget.mpx.toFixed(1)} Mpx, zoom ${budget.z})`);
+
+// one finger on empty space pans the board; one finger on an object still belongs to fabric
+const panned = await page.evaluate(() => {
+  const board = document.querySelector('#board');
+  const fire = (type, x, y) => board.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 7, isPrimary: true, pointerType: 'touch', clientX: x, clientY: y, buttons: type === 'pointerup' ? 0 : 1 }));
+  board.scrollLeft = 0; board.scrollTop = 0;
+  fire('pointerdown', 10, 10); fire('pointermove', 10, 30); fire('pointermove', -40, -80); fire('pointerup', -40, -80);
+  return { left: board.scrollLeft, top: board.scrollTop };
+});
+assert.deepEqual(panned, { left: 50, top: 90 }, 'a drag on empty space scrolls the board by the finger move');
 
 await browser.close();
 assert.deepEqual(errors, [], 'no JS dialogs or errors');
