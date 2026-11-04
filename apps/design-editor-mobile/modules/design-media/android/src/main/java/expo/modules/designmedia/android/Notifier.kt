@@ -6,12 +6,13 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.graphics.drawable.Icon
+import expo.modules.designmedia.core.Messages
 
 class Notifier(private val context: Context) {
   private val manager = context.getSystemService(NotificationManager::class.java)
 
   init {
-    manager.createNotificationChannel(NotificationChannel(CHANNEL, "Media jobs", NotificationManager.IMPORTANCE_LOW))
+    manager.createNotificationChannel(NotificationChannel(CHANNEL, Messages.CHANNEL, NotificationManager.IMPORTANCE_LOW))
   }
 
   fun build(title: String, text: String, percent: Int, cancel: PendingIntent): Notification =
@@ -24,7 +25,7 @@ class Notifier(private val context: Context) {
       .addAction(
         Notification.Action.Builder(
           Icon.createWithResource(context, android.R.drawable.ic_menu_close_clear_cancel),
-          "Cancel",
+          Messages.CANCEL,
           cancel,
         ).build(),
       )

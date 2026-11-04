@@ -4,8 +4,10 @@ import android.net.Uri
 import expo.modules.designmedia.android.Access
 import expo.modules.designmedia.android.CodecReport
 import expo.modules.designmedia.android.DesignSaves
+import expo.modules.designmedia.android.Intents
 import expo.modules.designmedia.android.MediaJobService
 import expo.modules.designmedia.android.Probe
+import expo.modules.designmedia.android.Thumbs
 import expo.modules.designmedia.core.AtomicFile
 import expo.modules.designmedia.core.EncoderStatsStore
 import expo.modules.designmedia.core.QueueStore
@@ -34,6 +36,10 @@ class DesignMediaModule : Module() {
 
     AsyncFunction("probe") { uri: String -> Probe.read(context, Uri.parse(uri)) }
 
+    AsyncFunction("keyframeAtOrBefore") { uri: String, timeS: Double -> Probe.keyframeAtOrBefore(context, Uri.parse(uri), timeS) }
+
+    AsyncFunction("thumbnails") { uri: String, timesS: List<Double>, width: Int -> Thumbs.write(context, Uri.parse(uri), timesS, width) }
+
     AsyncFunction("codecReport") { CodecReport.list() }
 
     AsyncFunction("persistAccess") { uri: String -> Access.persist(context, Uri.parse(uri)) }
@@ -51,6 +57,14 @@ class DesignMediaModule : Module() {
     }
 
     AsyncFunction("cancel") { id: String -> MediaJobService.cancel(context, id) }
+
+    AsyncFunction("resume") { MediaJobService.resume(context) }
+
+    AsyncFunction("clearQueue") { MediaJobService.clearQueue(context) }
+
+    AsyncFunction("share") { uri: String -> Intents.share(context, Uri.parse(uri)) }
+
+    AsyncFunction("open") { uri: String -> Intents.view(context, Uri.parse(uri)) }
 
     AsyncFunction("queue") {
       QueueStore(AtomicFile(File(context.filesDir, "media-queue.json"))).load().map { it.toStatusMap() }

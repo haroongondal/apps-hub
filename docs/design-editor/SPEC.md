@@ -80,9 +80,9 @@ and the usual Android build paths for `apps/design-editor-mobile` (copy the NetL
 | Name | Version | Licence | Size impact | Why | Alternatives considered |
 | --- | --- | --- | --- | --- | --- |
 | `androidx.media3:media3-transformer` (+ `-effect`, `-common`) | 1.11.1 | Apache-2.0 (verified) | 4.49 MB of AARs with its transitive Media3 modules (verified); APK +3–5 MB assumed | Hardware transcode, trim, resize, audio-only export | FFmpegKitNext (+15–30 MB/ABI, Nix build, same hardware encoders); raw MediaCodec (far more code) |
-| `androidx.media3:media3-inspector` | 1.11.1 | Apache-2.0 | 40 KB AAR | `FrameExtractor` for GIF frames | `MediaMetadataRetriever.getScaledFrameAtTime` (platform; slower, the fallback) |
+| `androidx.media3:media3-inspector` | 1.11.1 | Apache-2.0 | 40 KB AAR | Metadata reading. **As built (Phase 4): `FrameExtractor` is not in 1.11.1** (the jar has `MediaExtractorCompat` and `MetadataRetriever` only), so GIF frames and thumbnails use `MediaMetadataRetriever.getScaledFrameAtTime(OPTION_CLOSEST)` | `MediaMetadataRetriever` (platform; exact, slower than `CLOSEST_SYNC`) |
 | `org.jetbrains.kotlinx:kotlinx-serialization-json` | 1.8.1 | Apache-2.0 | already in the repo (Deputy) | Parse plan JSON from TS; persist the queue | `org.json` (non-OSI licence, stubs throw in JVM tests; Deputy rejected it) |
-| GIF encoder, ported from `gifenc` 1.0.3 to Kotlin | n/a (code port, ~300 lines) | MIT (verified); keep the notice | none | Palette, LZW, GIF writer without native code | gifski (AGPL), `com.squareup:gifencoder` (unmaintained), FFmpeg |
+| GIF encoder, ported from `gifenc` 1.0.3 to Kotlin | n/a (code port) | The header and LZW port is MIT (notice kept in `core/THIRD_PARTY_NOTICES.txt`). **Correction (Phase 4):** gifenc's quantizer is derived from PnnQuant.js, which the implementer read as MPL-2.0 (not checked by the parent), so `Quantizer.kt` is an original median-cut quantizer instead | none | Palette, LZW, GIF writer without native code | gifski (AGPL), `com.squareup:gifencoder` (unmaintained), FFmpeg |
 | FFmpeg + FFprobe static, macOS arm64 | 9.0.2 (Martin Riedl build) | GPL (includes x264, x265) | Mac app only; size measured in Phase 2 (full static builds run 37–80 MB each, assumed) | Every Mac media job; x264 two-pass | Own LGPL build (no x264, no two-pass); `ffmpeg-static` 5.3.0 (FFmpeg 6.1.1, install script); Mediabunny (no lossless cut, no GIF) |
 | `dev.ffmpegkit-maintained:ffmpeg-kit-min` (approved by the owner 2026-11-04, Phase 4) | 8.1.7 (FFmpeg n8.1.2), pinned; AAR sha256 `591ddcf3698028e838b854dc775e60aedaf43fffd59689cb59b8af632aba3d76` (equal to Maven Central's published `.sha256`) | LGPL-3.0 (no x264, no GPL libraries; MediaCodec encoders only) | arm64-v8a `.so` files 15.8 MB uncompressed (the AAR also carries x86_64, which `abiFilters` drops) | Reverse and stabilize on the phone, which Media3 cannot do | Build our own (the owner chose the pinned AAR); `ffmpeg-kit` 6.x by arthenica (retired, binaries pulled) |
 | `expo-document-picker` | ~14.0.8 | MIT | already in the workspace (PDF Editor) | Pick video and audio without copying | Photo picker via the module (no audio) |
@@ -288,7 +288,7 @@ export interface DesignMediaModule {
   cancel(id: string): Promise<void>;                 // job id or "all"
   resume(): Promise<void>;                           // re-queues paused and interrupted jobs
   queue(): Promise<NativeJobStatus[]>;
-  clearFinished(): Promise<void>;
+  clearQueue(): Promise<void>;                       // stops the running job, drops waiting ones, empties the list; never deletes an output (Phase 4; replaces clearFinished)
   share(outputUri: string): Promise<void>;           // ACTION_SEND with FLAG_GRANT_READ_URI_PERMISSION
   open(outputUri: string): Promise<void>;            // ACTION_VIEW
 }
@@ -319,7 +319,7 @@ class DesignMediaModule : Module() {
     AsyncFunction("cancel") { id: String -> MediaJobService.cancel(ctx, id) }
     AsyncFunction("resume") { MediaJobService.resume(ctx) }
     AsyncFunction("queue") { QueueStore(ctx.filesDir).load().map { it.toStatusMap() } }
-    AsyncFunction("clearFinished") { QueueStore(ctx.filesDir).clearFinished() }
+    AsyncFunction("clearQueue") { MediaJobService.clear(ctx) }   // cancels the running job and every waiting one, then empties the list; outputs stay
     AsyncFunction("share") { uri: String -> Intents.share(currentActivity, Uri.parse(uri)) }
     AsyncFunction("open") { uri: String -> Intents.view(currentActivity, Uri.parse(uri)) }
   }
@@ -410,7 +410,7 @@ including location (PRD Q10).
 | Clip, copy | `CopyRunner` | All video and audio tracks into `MediaMuxer` (MP4, or WebM for VP8/VP9 sources); `setOrientationHint(rotation)`; `seekTo(keyframeUs, SEEK_TO_PREVIOUS_SYNC)`; write samples with `pts − keyframeUs` until each track passes `endUs`. |
 | Clip, exact | `TransformerRunner` | `ClippingConfiguration(start, end)`, `experimentalSetTrimOptimizationEnabled(true)`, bitrate = source video bitrate; result reports whether the optimisation applied. |
 | Audio | `CopyRunner` / `RawAudioWriter` / `TransformerRunner` | AAC → MP4 `.m4a`; Opus → OGG; Vorbis → WebM; MP3, AC-3, E-AC-3 → raw frames; PCM → WAV; else Transformer with `setRemoveVideo(true)` to AAC 192 kbit/s. |
-| GIF | `GifRunner` | `FrameExtractor` frames at `start + i / fps`, scaled to `width`; global palette (256 colours) from 8 evenly spaced frames; Bayer 4×4 dither; LZW per frame; streamed to the temp file. One frame in memory at a time. Fallback: `MediaMetadataRetriever.getScaledFrameAtTime(OPTION_CLOSEST)`. |
+| GIF | `GifRunner` | Frames at `start + i / fps` (as built: `MediaMetadataRetriever.getScaledFrameAtTime`, since `FrameExtractor` is not in Media3 1.11.1), scaled to `width`; global palette (256 colours) from 8 evenly spaced frames; Bayer 4×4 dither; LZW per frame; streamed to the temp file. One frame in memory at a time. Fallback: `MediaMetadataRetriever.getScaledFrameAtTime(OPTION_CLOSEST)`. |
 | Convert | `CopyRunner` (remux when `canRemux`) or `TransformerRunner` | MP4 H.264/HEVC + AAC; audio-only `.m4a`. |
 
 Outputs carry no location metadata (PRD FR-10, Q10). `CopyRunner` never calls

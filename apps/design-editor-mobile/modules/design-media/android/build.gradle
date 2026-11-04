@@ -21,6 +21,8 @@ dependencies {
   implementation("androidx.media3:media3-transformer:1.11.1")
   implementation("androidx.media3:media3-effect:1.11.1")
   implementation("androidx.media3:media3-inspector:1.11.1")
+  // Reverse, stabilize and volume only. Pinned: LGPL-3.0, AAR sha256 591ddcf3698028e838b854dc775e60aedaf43fffd59689cb59b8af632aba3d76 (SPEC §3).
+  implementation("dev.ffmpegkit-maintained:ffmpeg-kit-min:8.1.7")
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
   testImplementation("junit:junit:4.13.2")
 }

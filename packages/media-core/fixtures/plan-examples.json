@@ -1,0 +1,200 @@
+{
+ "_source": "One plan per tool and mode, produced by running the media-core planners (Android platform) on a 1080p30 H.264 + AAC + AC-3 clip; volumeMeasured is volumeNormalize plus a loudnorm measure. Kotlin PlanJsonTest decodes each one.",
+ "plans": {
+  "size": {
+   "tool": "size",
+   "targetBytes": 20000000,
+   "encoder": "hw-h264",
+   "rung": {
+    "shortSide": 1080,
+    "fps": 30
+   },
+   "width": 1920,
+   "height": 1080,
+   "videoBps": 17606464,
+   "audio": {
+    "mode": "copy"
+   },
+   "overheadBytes": 265536,
+   "plannedVideoBytes": 17606464,
+   "plannedBytes": 18000000,
+   "attempt": 1,
+   "margin": 0.9,
+   "fpsCap": 30
+  },
+  "quality": {
+   "tool": "quality",
+   "encoder": "hw-h264",
+   "rung": {
+    "shortSide": 1080,
+    "fps": 30
+   },
+   "width": 1920,
+   "height": 1080,
+   "quality": 0.1
+  },
+  "clipCopy": {
+   "tool": "clip",
+   "mode": "copy",
+   "startS": 1.5,
+   "endS": 6.25,
+   "keyframeS": 1,
+   "container": "mp4",
+   "ext": "mp4",
+   "tracks": [
+    0,
+    1
+   ]
+  },
+  "clipExact": {
+   "tool": "clip",
+   "mode": "exact",
+   "startS": 1.5,
+   "endS": 6.25,
+   "keyframeS": 1,
+   "container": "mp4",
+   "ext": "mp4",
+   "tracks": [
+    0,
+    1,
+    2
+   ]
+  },
+  "audioCopy": {
+   "tool": "audio",
+   "trackIndex": 1,
+   "mode": "copy",
+   "container": "mp4",
+   "ext": "m4a"
+  },
+  "audioRaw": {
+   "tool": "audio",
+   "trackIndex": 2,
+   "mode": "raw",
+   "container": "raw",
+   "ext": "ac3"
+  },
+  "audioAac": {
+   "tool": "audio",
+   "trackIndex": 3,
+   "mode": "aac",
+   "container": "mp4",
+   "ext": "m4a",
+   "bps": 192000
+  },
+  "gif": {
+   "tool": "gif",
+   "startS": 1,
+   "endS": 4,
+   "width": 480,
+   "fps": 12,
+   "targetBytes": 8000000,
+   "attempt": 1
+  },
+  "gifNoTarget": {
+   "tool": "gif",
+   "startS": 1,
+   "endS": 4,
+   "width": 320,
+   "fps": 10,
+   "attempt": 1
+  },
+  "convertRemux": {
+   "tool": "convert",
+   "mode": "transcode",
+   "container": "mp4",
+   "ext": "mp4",
+   "video": {
+    "encoder": "hw-h264",
+    "quality": 0
+   },
+   "audio": {
+    "codec": "aac",
+    "bps": 192000,
+    "copy": false
+   }
+  },
+  "convertMuted": {
+   "tool": "convert",
+   "mode": "remux",
+   "container": "mp4",
+   "ext": "mp4",
+   "video": {
+    "encoder": "copy",
+    "quality": 0
+   }
+  },
+  "convertHevc": {
+   "tool": "convert",
+   "mode": "transcode",
+   "container": "mp4",
+   "ext": "mp4",
+   "video": {
+    "encoder": "hw-hevc",
+    "quality": 0
+   },
+   "audio": {
+    "codec": "aac",
+    "bps": 192000,
+    "copy": false
+   }
+  },
+  "convertM4a": {
+   "tool": "convert",
+   "mode": "remux",
+   "container": "m4a",
+   "ext": "m4a",
+   "audio": {
+    "codec": "aac",
+    "copy": true
+   }
+  },
+  "frame": {
+   "tool": "frame",
+   "timeS": 2.5,
+   "format": "png",
+   "ext": "png"
+  },
+  "volumeNormalize": {
+   "tool": "volume",
+   "mode": "normalize",
+   "gainDb": 0,
+   "video": "copy",
+   "ext": "mp4"
+  },
+  "volumeGain": {
+   "tool": "volume",
+   "mode": "gain",
+   "gainDb": -6.5,
+   "video": "copy",
+   "ext": "mp4"
+  },
+  "reverse": {
+   "tool": "reverse",
+   "sound": true,
+   "quality": 65,
+   "ext": "mp4"
+  },
+  "stabilize": {
+   "tool": "stabilize",
+   "level": "recommended",
+   "search": 16,
+   "quality": 65,
+   "ext": "mp4"
+  },
+  "volumeMeasured": {
+   "tool": "volume",
+   "mode": "normalize",
+   "gainDb": 0,
+   "video": "copy",
+   "ext": "mp4",
+   "measured": {
+    "inputI": -27.5,
+    "inputTp": -3.1,
+    "inputLra": 6.2,
+    "inputThresh": -38.1,
+    "offset": 0.4
+   }
+  }
+ }
+}

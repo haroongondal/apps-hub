@@ -7,6 +7,8 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.OpenableColumns
 import expo.modules.designmedia.core.displaySize
+import expo.modules.designmedia.core.estimateVideoBps
+import expo.modules.designmedia.core.microseconds
 
 object Probe {
   fun read(context: Context, uri: Uri): Map<String, Any?> {
@@ -41,6 +43,69 @@ object Probe {
       "tracks" to tracks,
     )
   }
+
+  // The largest keyframe time at or before timeS, in seconds; 0 when the file has no video or no keyframe is found.
+  fun keyframeAtOrBefore(context: Context, uri: Uri, timeS: Double): Double {
+    val extractor = MediaExtractor()
+    try {
+      extractor.setDataSource(context, uri, null)
+      val video = (0 until extractor.trackCount).firstOrNull {
+        extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME).orEmpty().startsWith("video/")
+      } ?: return 0.0
+      extractor.selectTrack(video)
+      extractor.seekTo(microseconds(timeS.coerceAtLeast(0.0)), MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+      return extractor.sampleTime.coerceAtLeast(0L) / 1_000_000.0
+    } finally {
+      extractor.release()
+    }
+  }
+
+  fun bytesOf(context: Context, uri: Uri): Long = context.contentResolver
+    .query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
+    ?.use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else 0L } ?: 0L
+
+  // What a runner needs to know about its input: shown size (rotation applied), length, and the picture's own bit rate.
+  fun source(context: Context, uri: Uri): Source {
+    val bytes = bytesOf(context, uri)
+    val retriever = MediaMetadataRetriever()
+    var durationS = 0.0
+    var rotation = 0
+    var coded = 0 to 0
+    try {
+      retriever.setDataSource(context, uri)
+      durationS = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toDoubleOrNull()?.div(1000) ?: 0.0
+      rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+      coded = (retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0) to
+        (retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0)
+    } finally {
+      retriever.release()
+    }
+    var videoTrackBps: Int? = null
+    var audioBps: Int? = null
+    var fps: Int? = null
+    val extractor = MediaExtractor()
+    try {
+      extractor.setDataSource(context, uri, null)
+      for (i in 0 until extractor.trackCount) {
+        val f = extractor.getTrackFormat(i)
+        val mime = f.getString(MediaFormat.KEY_MIME).orEmpty()
+        if (mime.startsWith("video/") && videoTrackBps == null) {
+          videoTrackBps = f.intOrNull(MediaFormat.KEY_BIT_RATE)
+          fps = f.intOrNull(MediaFormat.KEY_FRAME_RATE)
+        } else if (mime.startsWith("audio/") && audioBps == null) {
+          audioBps = f.intOrNull(MediaFormat.KEY_BIT_RATE)
+        }
+      }
+    } finally {
+      extractor.release()
+    }
+    val (w, h) = displaySize(coded.first, coded.second, rotation)
+    return Source(bytes, durationS, rotation, w, h, fps, estimateVideoBps(videoTrackBps, bytes, durationS, audioBps))
+  }
+
+  class Source(
+    val bytes: Long, val durationS: Double, val rotation: Int, val width: Int, val height: Int, val fps: Int?, val videoBps: Int?,
+  )
 
   private fun track(index: Int, f: MediaFormat, rotation: Int): Map<String, Any?> {
     val mime = f.getString(MediaFormat.KEY_MIME).orEmpty()

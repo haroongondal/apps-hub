@@ -5,7 +5,7 @@ sealed interface QueueEvent {
   data class Enqueue(val jobs: List<Job>) : QueueEvent
   data class Start(val id: String, val at: Long) : QueueEvent
   data class Progress(val id: String, val fraction: Double) : QueueEvent
-  data class Retry(val id: String, val plan: SizePlan) : QueueEvent
+  data class Retry(val id: String, val plan: Plan) : QueueEvent
   data class Attempt(val id: String, val log: AttemptLog) : QueueEvent
   data class Done(val id: String, val outputs: List<Output>, val at: Long) : QueueEvent
   data class Fail(val id: String, val error: String, val at: Long) : QueueEvent

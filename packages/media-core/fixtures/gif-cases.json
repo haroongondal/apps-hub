@@ -1,0 +1,209 @@
+{
+ "_source": "SPEC §10.5 and packages/media-core/src/gif.ts (GIF_LADDER 480/12, 360/12, 320/10, 240/10; at most 4 attempts). Expectations were produced by running nextGifAttempt.",
+ "cases": [
+  {
+   "name": "no target: publish the same plan",
+   "plan": {
+    "tool": "gif",
+    "startS": 1,
+    "endS": 4,
+    "width": 480,
+    "fps": 12,
+    "attempt": 1
+   },
+   "actualBytes": 50000000,
+   "expect": {
+    "ok": true,
+    "attempt": 1,
+    "width": 480,
+    "fps": 12
+   }
+  },
+  {
+   "name": "within the target: publish",
+   "plan": {
+    "tool": "gif",
+    "startS": 1,
+    "endS": 4,
+    "width": 480,
+    "fps": 12,
+    "targetBytes": 8000000,
+    "attempt": 1
+   },
+   "actualBytes": 7900000,
+   "expect": {
+    "ok": true,
+    "attempt": 1,
+    "width": 480,
+    "fps": 12
+   }
+  },
+  {
+   "name": "exactly the target: publish",
+   "plan": {
+    "tool": "gif",
+    "startS": 1,
+    "endS": 4,
+    "width": 480,
+    "fps": 12,
+    "targetBytes": 8000000,
+    "attempt": 1
+   },
+   "actualBytes": 8000000,
+   "expect": {
+    "ok": true,
+    "attempt": 1,
+    "width": 480,
+    "fps": 12
+   }
+  },
+  {
+   "name": "over at 480/12: step to 360/12",
+   "plan": {
+    "tool": "gif",
+    "startS": 1,
+    "endS": 4,
+    "width": 480,
+    "fps": 12,
+    "targetBytes": 8000000,
+    "attempt": 1
+   },
+   "actualBytes": 9000000,
+   "expect": {
+    "ok": true,
+    "attempt": 2,
+    "width": 360,
+    "fps": 12
+   }
+  },
+  {
+   "name": "over at 360/12: step to 320/10",
+   "plan": {
+    "tool": "gif",
+    "startS": 1,
+    "endS": 4,
+    "width": 360,
+    "fps": 12,
+    "targetBytes": 8000000,
+    "attempt": 2
+   },
+   "actualBytes": 9000000,
+   "expect": {
+    "ok": true,
+    "attempt": 3,
+    "width": 320,
+    "fps": 10
+   }
+  },
+  {
+   "name": "over at 320/10: step to 240/10",
+   "plan": {
+    "tool": "gif",
+    "startS": 1,
+    "endS": 4,
+    "width": 320,
+    "fps": 10,
+    "targetBytes": 8000000,
+    "attempt": 3
+   },
+   "actualBytes": 9000000,
+   "expect": {
+    "ok": true,
+    "attempt": 4,
+    "width": 240,
+    "fps": 10
+   }
+  },
+  {
+   "name": "over at attempt 4: gave up",
+   "plan": {
+    "tool": "gif",
+    "startS": 1,
+    "endS": 4,
+    "width": 240,
+    "fps": 10,
+    "targetBytes": 8000000,
+    "attempt": 4
+   },
+   "actualBytes": 9000000,
+   "expect": {
+    "ok": false,
+    "reason": "gave-up"
+   }
+  },
+  {
+   "name": "over at the bottom rung before attempt 4: gave up",
+   "plan": {
+    "tool": "gif",
+    "startS": 1,
+    "endS": 4,
+    "width": 240,
+    "fps": 10,
+    "targetBytes": 8000000,
+    "attempt": 3
+   },
+   "actualBytes": 9000000,
+   "expect": {
+    "ok": false,
+    "reason": "gave-up"
+   }
+  },
+  {
+   "name": "off-ladder 400/15 steps to 360/12",
+   "plan": {
+    "tool": "gif",
+    "startS": 1,
+    "endS": 4,
+    "width": 400,
+    "fps": 15,
+    "targetBytes": 8000000,
+    "attempt": 1
+   },
+   "actualBytes": 9000000,
+   "expect": {
+    "ok": true,
+    "attempt": 2,
+    "width": 360,
+    "fps": 12
+   }
+  },
+  {
+   "name": "480/15 steps down in fps only, to 480/12",
+   "plan": {
+    "tool": "gif",
+    "startS": 1,
+    "endS": 4,
+    "width": 480,
+    "fps": 15,
+    "targetBytes": 8000000,
+    "attempt": 1
+   },
+   "actualBytes": 9000000,
+   "expect": {
+    "ok": true,
+    "attempt": 2,
+    "width": 480,
+    "fps": 12
+   }
+  },
+  {
+   "name": "300/12 skips to 240/10 (nothing between)",
+   "plan": {
+    "tool": "gif",
+    "startS": 1,
+    "endS": 4,
+    "width": 300,
+    "fps": 12,
+    "targetBytes": 8000000,
+    "attempt": 1
+   },
+   "actualBytes": 9000000,
+   "expect": {
+    "ok": true,
+    "attempt": 2,
+    "width": 240,
+    "fps": 10
+   }
+  }
+ ]
+}
