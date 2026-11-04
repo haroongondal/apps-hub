@@ -7,14 +7,14 @@ const $$ = s => [...document.querySelectorAll(s)];
 const PROPS = ['lockMovementX', 'lockMovementY', 'lockScalingX', 'lockScalingY', 'lockRotation', 'hasControls', 'name'];
 const SANS = 'Atkinson Hyperlegible Next';
 const BUNDLED = {
-  [SANS]: 'ui/fonts/AtkinsonHyperlegibleNext_400Regular ui/fonts/AtkinsonHyperlegibleNext_600SemiBold ui/fonts/AtkinsonHyperlegibleNext_800ExtraBold fonts/AtkinsonHyperlegibleNext_700Bold fonts/AtkinsonHyperlegibleNext_400Regular_Italic fonts/AtkinsonHyperlegibleNext_700Bold_Italic',
-  Jost: 'fonts/Jost_400Regular fonts/Jost_700Bold fonts/Jost_400Regular_Italic fonts/Jost_700Bold_Italic',
-  'Playfair Display': 'fonts/PlayfairDisplay_400Regular fonts/PlayfairDisplay_700Bold fonts/PlayfairDisplay_400Regular_Italic fonts/PlayfairDisplay_700Bold_Italic',
-  'Dancing Script': 'fonts/DancingScript_400Regular fonts/DancingScript_700Bold',
+  [SANS]: '../ui/fonts/AtkinsonHyperlegibleNext_400Regular ../ui/fonts/AtkinsonHyperlegibleNext_600SemiBold ../ui/fonts/AtkinsonHyperlegibleNext_800ExtraBold vendor/fonts/AtkinsonHyperlegibleNext_700Bold vendor/fonts/AtkinsonHyperlegibleNext_400Regular_Italic vendor/fonts/AtkinsonHyperlegibleNext_700Bold_Italic',
+  Jost: 'vendor/fonts/Jost_400Regular vendor/fonts/Jost_700Bold vendor/fonts/Jost_400Regular_Italic vendor/fonts/Jost_700Bold_Italic',
+  'Playfair Display': 'vendor/fonts/PlayfairDisplay_400Regular vendor/fonts/PlayfairDisplay_700Bold vendor/fonts/PlayfairDisplay_400Regular_Italic vendor/fonts/PlayfairDisplay_700Bold_Italic',
+  'Dancing Script': 'vendor/fonts/DancingScript_400Regular vendor/fonts/DancingScript_700Bold',
 };
 const FACES = Object.entries(BUNDLED).flatMap(([family, files]) => files.split(' ').map(f => {
   const [, weight, italic] = /_(\d+)\D+?(_Italic)?$/.exec(f);
-  return { family, src: `vendor/${f}.ttf`, weight: +weight, italic: !!italic };
+  return { family, src: `${f}.ttf`, weight: +weight, italic: !!italic };
 }));
 const SYSTEM_FONTS = ['Avenir Next', 'Helvetica Neue', 'Futura', 'Gill Sans', 'Georgia', 'Baskerville', 'Didot', 'Times New Roman', 'American Typewriter', 'Marker Felt', 'Impact', 'Menlo', 'Arial', 'Verdana', 'Trebuchet MS', 'Courier New'];
 const fontOptions = sel => [['Included with the app', Object.keys(BUNDLED)], ['This Mac only', SYSTEM_FONTS]]
@@ -748,7 +748,9 @@ $('#download').onclick = async () => {
   } catch (e) { console.error(e); toast('The download didn’t finish. Try again, or pick another format.', 5000); }
 };
 
-const discardOk = () => undoStack.at(-1).s === savedSnap || confirm(`Discard unsaved changes to “${docName()}”?`);
+// on the desktop confirm() is Chromium's own sync dialog; the mobile shell swaps it for a
+// bridged promise, so every caller can await
+const discardOk = async () => undoStack.at(-1).s === savedSnap || (await confirm(`Discard unsaved changes to “${docName()}”?`));
 async function save(as) {
   const snap = snapshot();
   const p = await native.saveFile({ name: docName() + '.json', ext: 'json', data: snap, filePath: as ? null : filePath });
@@ -759,7 +761,7 @@ async function save(as) {
 async function open() {
   if (loading) return;
   commit();
-  if (!discardOk()) return;
+  if (!(await discardOk())) return;
   const r = await native.openDesign();
   if (!r) return;
   const before = undoStack.at(-1);
@@ -777,7 +779,7 @@ async function open() {
 async function newDesign() {
   if (loading) return;
   commit();
-  if (!discardOk()) return;
+  if (!(await discardOk())) return;
   await load({ W, H, pages: [{ objects: [], background: '#ffffff' }] });
   filePath = null; savedSnap = snapshot(); undoStack = [{ s: savedSnap, page: 0 }]; redoStack = [];
   docChanged(savedSnap);
@@ -819,4 +821,6 @@ $('#openMedia').onclick = () => native.media.openWindow();
   savedSnap = saved?.dirty ? null : undoStack[0].s;
   docChanged(undoStack[0].s);
 })();
-window.editor = { canvas, MENU, removeBackground, resizePage, exportAs, applyTemplate, pickFace, TEMPLATES, get size() { return [W, H]; }, get page() { return [cur, pages.length]; } };
+// setZoom exports for touch.js: pinch zoom and pan stay in sync with app.js's zoom variable,
+// the element size and the zoom label through the same function the buttons use
+window.editor = { canvas, MENU, removeBackground, resizePage, exportAs, applyTemplate, pickFace, TEMPLATES, setZoom, get size() { return [W, H]; }, get page() { return [cur, pages.length]; } };

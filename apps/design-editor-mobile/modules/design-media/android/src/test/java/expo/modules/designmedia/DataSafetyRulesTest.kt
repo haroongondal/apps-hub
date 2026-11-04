@@ -34,7 +34,9 @@ class DataSafetyRulesTest {
   fun rule1OriginalsAreOpenedReadOnly() {
     val writeMode = Regex("\"(w|rw|wt|wa)\"")
     sources.forEach { assertFalse(it.name, writeMode.containsMatchIn(it.readText())) }
-    assertEquals(listOf("Outputs.kt"), sourcesContaining("openOutputStream("))
+    // Outputs.kt (video exports, Phase 1) and DesignSaves.kt (designs and export files, Phase 3)
+    // are the two MediaStore writers; both only ever write brand-new or own-row files
+    assertEquals(setOf("Outputs.kt", "DesignSaves.kt"), sourcesContaining("openOutputStream(").toSet())
     assertTrue(source("Outputs.kt").contains("resolver.insert(collection, values)"))
   }
 

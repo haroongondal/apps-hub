@@ -570,6 +570,12 @@ the `<video>` preview needs it (§11 of RESEARCH).
 | Queue (tab) | Running job with `Progress`, attempt "Try 2 of 3", Cancel; queued jobs; results with Share and Open; failed with reason and Try again; `Notice` for paused or interrupted jobs with Resume |
 | Media lab (debug, Phase 1) | `codecReport`, encoder stats, a "Run spike" button per spike (§18) with results as text to copy into the handoff |
 
+**As built (2026-11-04, Phase 3 step 3):** the Designs screen is not a tab bar tab yet —
+`app/index.tsx` is the home (Continue row fed by the autosave record, New design, Open a design
+file, the saved-designs list, one row into `app/media.tsx`, which is the unchanged Phase 1 lab),
+and `app/editor.tsx` is the editor. TabBar and the media tool screens arrive with the media
+phase rewrite of the app shell.
+
 Copy examples: "Couldn't fit under 20 MB. This video can hold about 21 minutes at the lowest
 quality." "Starts at 0:12.4, the nearest keyframe before 0:13.0." "Converted to AAC: this audio
 format can't be copied on Android."
@@ -594,11 +600,29 @@ iconset → `iconutil`) and passes `--icon=build/icon.icns` to electron-packager
 - `apps/design-editor/vendor/engine` symlinks to the package; `main.js` loads
   `vendor/engine/desktop.html`. In dev the relative `../ui/...` resolves to
   `apps/design-editor/vendor/ui/...` (existing symlink); `dist` dereferences both (R§11).
+- **As built (2026-11-03, Phase 3 step 1):** the engine is the multi-page page from `main` (B0), not
+  the single-page `index.html` this section was written against. It is `desktop.html` + `app.js` +
+  `vendor/` (Fabric, pdf-lib, fontkit, bundled fonts), with no build step. Font URLs are page-relative:
+  `vendor/fonts/...` for the bundled fonts and `../ui/fonts/...` for the shared Atkinson files. The
+  stylesheet is `../ui/web/tokens.css`. `apps/design-editor/vendor/engine` is the symlink; `main.js`
+  loads `vendor/engine/desktop.html`.
 - `mobile.html`: same markup, mobile CSS (rail as a bottom strip, drawer as a bottom sheet,
   inspector as a sheet), plus `touch.js`.
 - `build.mjs`: copy of PDF Editor's, scripts `['vendor/fabric.min.js', 'vendor/pdf-lib.min.js',
   'app.js', 'touch.js', 'shell-mobile.js']`, output
   `apps/design-editor-mobile/assets/editor/editor.html`; same `</script>` and `url()` checks.
+- **Amended 2026-11-04 (as-built script order, verified in the product page):** the mobile page's
+  true order is `vendor/fabric.min.js → vendor/pdf-lib.min.js → vendor/fontkit.min.js →
+  __fontsData (inlined table) → shell-mobile.js → app.js → touch.js`, not the list above:
+  `shell-mobile.js` must precede `app.js` because `app.js` calls `native.onMenu()` while its own
+  body runs, and `app.js` must precede `touch.js` because `window.editor` exists only when
+  `app.js` ends. `build.mjs` inlines those scripts plus `tokens.css` (fonts as data: URLs, read
+  through `window.__fontsData` by the shell's shims). The page carries no CSP meta and its
+  viewport is `user-scalable=no` (pinch is the editor's own zoom). Embedded layout lives on
+  `body.embedded` — the class sits on **body** (set by `shell-mobile.js`; on 2026-11-04 it moved
+  off documentElement, which never matched the CSS), the rail becomes a bottom strip, the header
+  hides, and `#exportMenu` moved out of the `<header>` markup to body level as a fixed bottom
+  sheet (`app.js` queries ids only, so the move is invisible to it).
 
 ### 14.2 Touch (`touch.js`, mobile page only)
 
@@ -608,6 +632,28 @@ iconset → `iconutil`) and passes `--icon=build/icon.icns` to electron-packager
 - Larger controls: `cornerSize` 24, `touchCornerSize` 44 (**check** Fabric 7 supports it; else
   `cornerSize` 44 on mobile), `padding` 8.
 - Long-press (500 ms) opens the object's actions sheet (duplicate, delete, layer up/down).
+
+**As built (2026-11-03/04, Phase 3 steps 1–2):**
+
+- Fabric 7 supports `touchCornerSize` (verified in the vendor bundle); the interaction props are
+  stamped through `object:added` (set on load, template, undo, open and restore), and Fabric's
+  `toObject` never serialises them, so saves and undo stay clean with no snapshot replacer.
+- Pinch: `touch.js` keeps a pointer map of its own on `#board` capture listeners; while two
+  fingers are down Fabric is walled (`upperCanvasEl` gets `pointer-events: none` and any stale
+  `_currentTransform` is dropped with the active object), zoom is anchored on the *previous*
+  midpoint (Fabric's `zoomToPoint` anchors on the old transform) and `editor.setZoom(z)` — the
+  shared `app.js` export — re-syncs zoom state, canvas element size and the `#zoomLabel`. Fabric
+  is released once every finger lifts (`endGesture`), or with the action sheet's own close.
+- Long-press (500 ms, within 12 px) uses Fabric's `findTarget` (which returns
+  `{ target?, currentTarget, … }` — prefer `.target`) and shows an action sheet:
+  **duplicate, bring forward, send backward, delete**. The sheet must close through
+  `closeSheet()`, which also un-walls Fabric — writing `hidden` directly left the canvas
+  unreachable until the next board tap (fixed 2026-11-04).
+- The inspector drawer is only mounted while a selection exists (`body.obj`, toggled by
+  `touch.js`), drawer sections get a real "Done" closer appended by `touch.js`
+  (`body.embedded .drawer .sheetdone`), and the native layer owns Undo/Redo/Download
+  (`body.embedded header { display: none }`). `#openMedia`, `#pageLeft`, `#pageRight` stay
+  desktop-only.
 
 ### 14.3 `window.native` on mobile (`shell-mobile.js` + `src/editor/bridge.ts`)
 
@@ -635,6 +681,35 @@ type WebCommand =
 - Image uploads use the page's own `<input type="file">` (the WebView's file chooser, verified
   supported), so photos never cross the bridge.
 - Autosave: `documentDirectory/autosave.json` written by the shell.
+
+**As built (2026-11-04, Phase 3 step 3):**
+
+- Two calls were added to the six: `confirm` — the page's `discardOk()` awaits `window.confirm`,
+  which is sync on the desktop and a bridged promise here; the app shows an Alert and replies
+  — and `keepAutosave`, which `app.js` calls when an autosave cannot be restored (the desktop
+  answers it in `main.js` as `autosave-keep`; mobile rescues the doc into
+  `documentDirectory/designs/rescue-<id>.json`). `shell-mobile.js` posts `ready` after the
+  `page`'s own boot-up runs `readAutosave`; the Chrome smoke test answers the boot-time calls.
+- The `Designs` home gets its list from `documentDirectory/designs/index.json`. A design save
+  (`saveFile` json, after `saveJson` writes it to `Documents/Design Editor`) is mirrored to
+  `documentDirectory/designs/<id>.json` and recorded into the list, so opening a design needs no
+  MediaStore read; `filePath` stays the design's display path, and `docName()` reads it (title
+  plus "Continue" rows). "New design" clears the autosave slot so the page boots blank.
+- The editor screen (`app/editor.tsx`) is the same WebView recipe as PDF Editor (asset via
+  `expo-asset`, `textZoom=100`, navigation allowed only for own `file:` URLs), plus a native
+  toolbar: Undo, Redo, Duplicate, Zoom out, Zoom in, Fit — sent as `menu` commands
+  (`new/save/saveAs/export/undo/redo/duplicate/zoomIn/zoomOut/zoomFit` are the accepted ids).
+- `saveJson`/`saveExport` (module `design-media`, `DesignSaves.kt`) place files with MediaStore:
+  png/jpg → `Pictures/Design Editor/`; json, svg, pdf → `Documents/Design Editor/`. A
+  re-download with the page's `filePath` pointing at one of our folders replaces the previous
+  own row in place (the insert path may be renamed by MediaStore on a collision, so the final
+  name is always read back); foreign `filePath`s insert a new file. The pure folder/mime/replace rules live in
+  `core/Saves.kt` with `SavesTest`; `DataSafetyRulesTest` rule 1 now names two MediaStore
+  writers (`Outputs.kt`, `DesignSaves.kt`) — same rule, unchanged intent.
+- The toolbar's `menu` and the reply paths are exercised on device with no further bridge code:
+  `saveAs` → MediaStore json → docState title change; `export` → the page's own sheet
+  (`#exportBtn` is hidden in embedded mode; the sheet opens from the top bar's Download via
+  `menu: 'export'`).
 
 ## 15. Build, release and Store
 
