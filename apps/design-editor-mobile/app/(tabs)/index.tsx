@@ -12,7 +12,7 @@ import {
   readSavedList,
   writeAutosave,
   type SavedDesign,
-} from '../src/editor/files';
+} from "../../src/editor/files";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -98,7 +98,7 @@ export default function DesignsHome() {
         <Group title="Continue" footer="Your last edits are always here, even without a save.">
           <Row
             title={designTitle(resumable.filePath) + (resumable.dirty ? ' — not saved' : '')}
-            subtitle={resumable.dirty ? 'Pick up where you left off.' : 'Saved copy intact.'}
+            subtitle={resumable.dirty ? 'Pick up where you left off.' : 'All changes saved.'}
             onPress={resume}
             accessibilityHint="Opens the editor with this design"
           />
@@ -110,9 +110,9 @@ export default function DesignsHome() {
         <Button label="Open a design file" variant="secondary" block onPress={openFile} />
       </Group>
 
-      <Group title="Saved designs" footer="Designs land in Documents/Design Editor on the phone.">
+      <Group title="Saved designs" footer="Saved designs are in the Design Editor folder on this phone.">
         {designs === null ? (
-          <Row title="Checking the phone…" />
+          <Row title="Loading your designs…" />
         ) : designs.length === 0 ? (
           <Row title="No designs yet" subtitle="A design appears here after you save one in the editor." />
         ) : (
@@ -128,9 +128,8 @@ export default function DesignsHome() {
         )}
       </Group>
 
-      <Group title="Media tools" footer="Video tools from the first phase; the six design-oriented tools arrive with the media phase rewrite.">
-        <Row title="Media lab" subtitle="Phase 1 checks on this phone." onPress={() => router.push('/media')} accessibilityHint="Opens the phase 1 media lab" />
-      </Group>
+      {/* eslint-disable-next-line @typescript-eslint/no-require-imports -- dev-only: a release bundle drops the lab */}
+      {__DEV__ ? require('../../src/lab/LabRow').LabRow() : null}
     </Screen>
   );
 }

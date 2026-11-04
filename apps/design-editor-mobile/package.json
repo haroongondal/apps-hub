@@ -8,6 +8,7 @@
     "android": "expo run:android",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
+    "test": "node --test src/__tests__/plain-words.test.ts",
     "doctor": "expo-doctor",
     "prebuild": "expo prebuild --no-install",
     "ios": "expo run:ios"

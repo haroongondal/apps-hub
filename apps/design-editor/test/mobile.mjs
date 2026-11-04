@@ -112,7 +112,7 @@ assert.equal(pngPost.name, 'Poster.png', 'exports carry the saved title');
 assert.ok(pngPost.base64 && !pngPost.text, 'png crosses as base64');
 assert.ok(pngPost.base64.length * 3 / 4 < 30_000_000, 'a template export is small');
 await reply(pngPost, 'Poster.png');
-await page.waitForFunction(() => document.querySelector('#toast').textContent === 'Downloaded to Poster.png');
+await page.waitForFunction(() => document.querySelector('#toast').textContent === 'Saved in the Design Editor folder on this phone.');
 
 // the over-30 MB refusal fires before anything is posted, with the SPEC copy
 await page.evaluate(() => window.__bridge.fresh());
@@ -123,7 +123,7 @@ const refused = await page.evaluate(() =>
   ));
 assert.equal(refused, null, 'refused exports resolve null, page-side');
 assert.deepEqual(await page.evaluate(() => window.__bridge.inbox), [], 'nothing crossed the bridge');
-assert.equal(await page.evaluate(() => document.querySelector('#toast').textContent), 'Too large to save on the phone: try 2×');
+assert.equal(await page.evaluate(() => document.querySelector('#toast').textContent), 'This image is too big to save. Choose a smaller size.');
 
 // window.confirm routes through the bridge: cancel holds the design, discard clears it.
 // The canvas is empty here, so the quote template stays on page 1 with three items.

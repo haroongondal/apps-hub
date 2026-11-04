@@ -17,14 +17,14 @@ const FACES = Object.entries(BUNDLED).flatMap(([family, files]) => files.split('
   return { family, src: `${f}.ttf`, weight: +weight, italic: !!italic };
 }));
 const SYSTEM_FONTS = ['Avenir Next', 'Helvetica Neue', 'Futura', 'Gill Sans', 'Georgia', 'Baskerville', 'Didot', 'Times New Roman', 'American Typewriter', 'Marker Felt', 'Impact', 'Menlo', 'Arial', 'Verdana', 'Trebuchet MS', 'Courier New'];
-const fontOptions = sel => [['Included with the app', Object.keys(BUNDLED)], ['This Mac only', SYSTEM_FONTS]]
+const fontOptions = sel => [['Included with the app', Object.keys(BUNDLED)], [COPY.systemFonts, SYSTEM_FONTS]].filter(([label]) => label)
   .map(([label, list]) => `<optgroup label="${label}">${list.map(f => `<option ${f === sel ? 'selected' : ''}>${esc(f)}</option>`).join('')}</optgroup>`).join('');
 async function loadFonts() {
   await Promise.all(FACES.map(f => {
     const face = new FontFace(f.family, `url("${f.src}")`, { weight: String(f.weight), style: f.italic ? 'italic' : 'normal' });
     document.fonts.add(face);
     return face.load();
-  })).catch(() => toast('Some bundled fonts didn’t load. Reinstall the app to fix this.', 6000));
+  })).catch(() => toast(COPY.fontsFailed, 6000));
 }
 const cssWeight = w => w === 'bold' ? 700 : +w || 400;
 // the CSS font matching rules, so the PDF embeds the same face the canvas drew with
@@ -49,7 +49,7 @@ function replaceMissingFonts(d) {
   const missing = new Set();
   for (const t of d.pages.flatMap(p => textsIn(p.objects))) if (!hasFont(t.fontFamily)) { missing.add(t.fontFamily); t.fontFamily = SANS; }
   const names = [...missing];
-  if (names.length) toast(`${names.join(', ')} ${names.length > 1 ? 'aren’t' : 'isn’t'} on this Mac, so that text now uses ${SANS}.`, 6000);
+  if (names.length) toast(COPY.fontMissing(names, SANS), 6000);
 }
 const PRESETS = [
   ['Instagram post', 1080, 1080], ['Instagram story', 1080, 1920], ['Facebook post', 1200, 630],
@@ -113,7 +113,7 @@ const docName = () => filePath ? filePath.split(/[\\/]/).pop().replace(/\.json$/
 function docChanged(snap) {
   const dirty = snap !== savedSnap;
   native.setDocState({ title: docName(), dirty, filePath });
-  native.writeAutosave({ filePath, dirty, doc: snap }).catch(() => toast('Autosave failed. Save to a file to keep your work.'));
+  native.writeAutosave({ filePath, dirty, doc: snap }).catch(() => toast(COPY.autosaveFailed));
 }
 function record() {
   if (restoring) return;
@@ -208,7 +208,7 @@ canvas.on('object:modified', record);
 canvas.on('text:changed', record);
 
 function updateSize() {
-  $('#sizeLabel').textContent = `${W} × ${H} px`;
+  $('#sizeLabel').textContent = COPY.sizeLabel(W, H);
   $('#cw').value = W; $('#ch').value = H;
 }
 
@@ -400,7 +400,12 @@ function renderBrand() {
     const b = document.createElement('button');
     b.className = 'swatch'; b.style.background = c; b.title = c; b.setAttribute('aria-label', 'Apply ' + c);
     b.onclick = () => applyColor(c);
-    b.oncontextmenu = e => { e.preventDefault(); brand.colors.splice(i, 1); saveBrand(); renderBrand(); };
+    let gone = false, held;
+    const remove = () => { if (gone) return; gone = true; brand.colors.splice(i, 1); saveBrand(); renderBrand(); };
+    b.oncontextmenu = e => { e.preventDefault(); remove(); };
+    // a phone has no right button: press and hold removes the colour (desktop keeps the right-click)
+    b.onpointerdown = e => { if (e.pointerType === 'touch') held = setTimeout(remove, 600); };
+    b.onpointerup = b.onpointerleave = b.onpointercancel = () => clearTimeout(held);
     return b;
   }));
   for (const id of ['brandHeading', 'brandBody']) {
@@ -547,8 +552,7 @@ function inspect() {
       <h2>Page</h2>
       <div class="row"><label for="pbg">Background</label><input type="color" id="pbg" value="${hex(canvas.backgroundColor)}"></div>
       <p class="hint">${W} × ${H} px. Change it in Resize.</p>
-      <h3>Shortcuts</h3>
-      <p class="hint">⌘Z undo, ⇧⌘Z redo, ⌘D duplicate, ⌘C and ⌘V copy and paste, ⌘G group, ⇧⌘G ungroup, arrows nudge, Delete removes.</p>`));
+      ${COPY.shortcuts ? `<h3>Shortcuts</h3><p class="hint">${COPY.shortcuts}</p>` : ''}`));
     $('#pbg').oninput = e => { canvas.backgroundColor = e.target.value; canvas.requestRenderAll(); record(); };
     return;
   }
@@ -755,8 +759,8 @@ $('#download').onclick = async () => {
   const all = !$('#allPagesRow').hidden && $('#allPages').checked;
   try {
     const saved = await exportAs($('#fmt').value, +$('#scale').value, all);
-    if (saved) toast((all ? 'Downloaded one file per page, starting with ' : 'Downloaded to ') + saved.split(/[\\/]/).pop());
-  } catch (e) { console.error(e); toast('The download didn’t finish. Try again, or pick another format.', 5000); }
+    if (saved) toast(COPY.downloaded(all, saved.split(/[\\/]/).pop()));
+  } catch (e) { console.error(e); toast(COPY.downloadFailed, 5000); }
 };
 
 // on the desktop confirm() is Chromium's own sync dialog; the mobile shell swaps it for a
@@ -782,7 +786,7 @@ async function open() {
     await load(d);
   } catch {
     await restore(before.s, before.page).catch(() => {});
-    return toast('That file is not a design saved from this editor. Open a .json file you saved here.', 5000);
+    return toast(COPY.notADesign, 5000);
   }
   filePath = r.filePath; savedSnap = snapshot(); undoStack = [{ s: savedSnap, page: 0 }]; redoStack = [];
   docChanged(savedSnap); renderTemplates();
@@ -823,8 +827,7 @@ $('#openMedia').onclick = () => native.media.openWindow();
     } catch {
       const kept = await native.keepAutosave().catch(e => { console.error(e); return null; });
       await load({ W, H, pages: [{ objects: [], background: '#ffffff' }] });
-      toast(kept ? `Design Editor couldn’t restore your last session, so it started a new design. It saved that session to ${kept}. Open it with File > Open in the version that made it.`
-        : 'Design Editor couldn’t restore your last session or save a copy of it, so it started a new design. Check that your Mac has free disk space.', kept ? 10000 : 5000);
+      toast(kept ? COPY.sessionKept(kept) : COPY.sessionLost, kept ? 10000 : 5000);
     }
   }
   updateSize(); fit(); renderTemplates(); inspect(); renderPages();

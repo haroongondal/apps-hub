@@ -144,8 +144,8 @@ body.embedded .toast { bottom: calc(var(--rail) + 12px); }
 <header>
   <span class="name">Design Editor</span>
   <span class="size" id="sizeLabel"></span>
-  <button id="undo" title="Undo (⌘Z)">Undo</button>
-  <button id="redo" title="Redo (⇧⌘Z)">Redo</button>
+  <button id="undo" title="Undo">Undo</button>
+  <button id="redo" title="Redo">Redo</button>
   <span class="spacer"></span>
 </header>
 
@@ -179,12 +179,12 @@ body.embedded .toast { bottom: calc(var(--rail) + 12px); }
         <button data-text="subheading" style="font-size:16px;font-weight:600;text-align:left">Add a subheading</button>
         <button data-text="body" style="text-align:left">Add body text</button>
       </div>
-      <p class="hint">Double-click text on the page to edit it.</p>
+      <p class="hint">Tap text on the page to edit it.</p>
     </section>
 
     <section data-panel="uploads">
       <h2>Uploads</h2>
-      <label class="drop" id="drop">Drop images here, paste them, or <u>choose files</u>
+      <label class="drop" id="drop">Choose pictures from this phone
         <input type="file" id="imgFile" accept="image/*" multiple hidden>
       </label>
       <div class="uploads" id="uploads"></div>
@@ -195,7 +195,7 @@ body.embedded .toast { bottom: calc(var(--rail) + 12px); }
       <h3>Colours</h3>
       <div class="swatches" id="brandColors"></div>
       <div class="row" style="margin-top:8px"><input type="color" id="brandPick" value="#2f54d8" aria-label="Brand colour"><button id="brandAdd">Add colour</button></div>
-      <p class="hint">Click a colour to apply it to the selection. Right-click to remove it.</p>
+      <p class="hint">Tap a colour to use it on the selected item. Press and hold a colour to remove it.</p>
       <h3>Fonts</h3>
       <div class="row"><label for="brandHeading">Headings</label><select id="brandHeading"></select></div>
       <div class="row"><label for="brandBody">Body</label><select id="brandBody"></select></div>
@@ -205,9 +205,9 @@ body.embedded .toast { bottom: calc(var(--rail) + 12px); }
     <section data-panel="resize">
       <h2>Resize</h2>
       <div class="stack" id="presets"></div>
-      <h3>Custom size (px)</h3>
+      <h3>Custom size</h3>
       <div class="grid2"><input type="number" id="cw" min="16" max="8000" aria-label="Width"><input type="number" id="ch" min="16" max="8000" aria-label="Height"></div>
-      <label class="row" style="margin-top:8px"><input type="checkbox" id="magic" checked> Scale content to fit (magic resize)</label>
+      <label class="row" style="margin-top:8px"><input type="checkbox" id="magic" checked> Fit the content to the new size</label>
       <button class="primary" id="applySize" style="width:100%">Resize page</button>
     </section>
   </aside>
@@ -235,7 +235,7 @@ body.embedded .toast { bottom: calc(var(--rail) + 12px); }
 </main>
 <div class="toast" id="toast" role="status"></div>
 <div class="menu" id="exportMenu">
-  <button class="primary" id="exportBtn" aria-haspopup="true" aria-expanded="false">Download</button>
+  <button class="primary" id="exportBtn" aria-haspopup="true" aria-expanded="false">Save image</button>
   <div class="pop" role="menu">
     <label>Format
       <select id="fmt">
@@ -246,11 +246,11 @@ body.embedded .toast { bottom: calc(var(--rail) + 12px); }
         <option value="pdf">PDF</option>
       </select>
     </label>
-    <label>Scale
+    <label>Size
       <select id="scale"><option value="1">1×</option><option value="2" selected>2×</option><option value="3">3×</option></select>
     </label>
     <label id="allPagesRow" hidden>All pages, one file each <input type="checkbox" id="allPages"></label>
-    <button class="primary" id="download">Download file</button>
+    <button class="primary" id="download">Save image</button>
   </div>
 </div>
 
@@ -258,6 +258,7 @@ body.embedded .toast { bottom: calc(var(--rail) + 12px); }
 <script src="vendor/pdf-lib.min.js"></script>
 <script src="vendor/fontkit.min.js"></script>
 <script src="shell-mobile.js"></script>
+<script src="copy.js"></script>
 <script src="app.js"></script>
 <script src="touch.js"></script>
 </body>

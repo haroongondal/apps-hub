@@ -89,7 +89,7 @@
       let base64 = null, text = null;
       if (data instanceof Uint8Array) {
         if (data.length > 30_000_000) {
-          toast('Too large to save on the phone: try 2×');
+          toast('This image is too big to save. Choose a smaller size.');
           return Promise.resolve(null);
         }
         base64 = b64(data);
