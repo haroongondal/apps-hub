@@ -1,6 +1,8 @@
 'use strict';
 const { Canvas, StaticCanvas, FabricText, Textbox, Rect, Circle, Triangle, Polygon, Line, FabricImage, Group, Point, filters } = fabric;
 const $ = s => document.querySelector(s);
+const PHONE = document.body.classList.contains('embedded'); // the phone page: shell-mobile.js sets the class first
+let selectMany = false;
 const $$ = s => [...document.querySelectorAll(s)];
 
 // fabric leaves these out of toObject, so locks would vanish on undo and save
@@ -100,7 +102,9 @@ function fit() {
 $('#zoomIn').onclick = () => setZoom(zoom * 1.25);
 $('#zoomOut').onclick = () => setZoom(zoom / 1.25);
 $('#zoomFit').onclick = fit;
-window.addEventListener('resize', fit);
+// the phone's keyboard shrinks the page's height: refit on a width change only, so typing keeps the zoom
+let lastWidth = window.innerWidth;
+window.addEventListener('resize', () => { if (!PHONE || window.innerWidth !== lastWidth) fit(); lastWidth = window.innerWidth; });
 
 let undoStack = [], redoStack = [], restoring = false, saveTimer;
 let filePath = null, savedSnap = null;
@@ -805,6 +809,8 @@ const MENU = {
   export: () => { allPagesShown(); menu.classList.add('open'); $('#fmt').focus(); },
   undo: typingOr('undo', undo), redo: typingOr('redo', redo), duplicate: () => isTyping() || duplicate(),
   zoomIn: () => setZoom(zoom * 1.25), zoomOut: () => setZoom(zoom / 1.25), zoomFit: fit,
+  // a tap adds or removes an item: Fabric treats any event property as the "extend selection" key
+  selectMany: () => { selectMany = !selectMany; canvas.selection = selectMany; canvas.selectionKey = selectMany ? 'isTrusted' : 'shiftKey'; document.body.classList.toggle('many', selectMany); toast(COPY.selectMany(selectMany)); },
 };
 native.onMenu(cmd => MENU[cmd]?.());
 
@@ -831,10 +837,11 @@ $('#openMedia').onclick = () => native.media.openWindow();
     }
   }
   updateSize(); fit(); renderTemplates(); inspect(); renderPages();
+  if (PHONE && COPY.hint && !store.get('hint', false)) { store.set('hint', true); toast(COPY.hint, 7000); }
   undoStack = [{ s: snapshot(), page: cur }];
   savedSnap = saved?.dirty ? null : undoStack[0].s;
   docChanged(undoStack[0].s);
 })();
 // setZoom exports for touch.js: pinch zoom and pan stay in sync with app.js's zoom variable,
 // the element size and the zoom label through the same function the buttons use
-window.editor = { canvas, MENU, removeBackground, resizePage, exportAs, applyTemplate, pickFace, TEMPLATES, setZoom, get size() { return [W, H]; }, get page() { return [cur, pages.length]; } };
+window.editor = { get selectMany() { return selectMany; }, canvas, MENU, removeBackground, resizePage, exportAs, applyTemplate, pickFace, TEMPLATES, setZoom, get size() { return [W, H]; }, get page() { return [cur, pages.length]; } };

@@ -128,6 +128,10 @@ body.embedded .drawer, body.embedded .inspector {
   box-shadow: 0 -8px 24px rgba(29,36,51,.18); z-index: 30; padding: 8px 14px 14px; overscroll-behavior: contain;
 }
 body.embedded .drawer:not(:has(section.on)), body.embedded:not(.obj) .inspector { display: none; }
+/* the 900 px rule above hides the inspector for the desktop layout; on a phone the sheet shows while something is selected */
+body.embedded.obj .inspector { display: block; }
+/* room under the page for the sheet, so a selected item can scroll up above it (touch.js, keepVisible) */
+body.embedded.obj.room #board { padding-bottom: calc(46vh + 12px); }
 body.embedded .drawer, body.embedded .inspector { -webkit-overflow-scrolling: touch; }
 /* a close button per drawer section, added by touch.js (class sheetdone); the inspector dismisses by tapping the board */
 body.embedded .drawer section::before { content: ""; display: block; width: 36px; height: 4px; margin: 0 auto 10px; border-radius: 2px; background: var(--ink-soft); }

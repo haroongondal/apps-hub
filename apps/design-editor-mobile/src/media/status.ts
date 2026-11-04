@@ -1,7 +1,7 @@
 import { formatMb, type JobState } from '@apps-hub/media-core';
 import type { NativeJobStatus } from 'design-media';
 
-import { planTitle } from './tools';
+import { planTitle } from './tools.ts';
 
 type Tone = 'neutral' | 'accent' | 'ok' | 'warn' | 'danger';
 

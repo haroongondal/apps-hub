@@ -198,6 +198,7 @@ export default function EditorScreen() {
               ['undo', 'arrow-undo-outline', 'Undo'],
               ['redo', 'arrow-redo-outline', 'Redo'],
               ['duplicate', 'copy-outline', 'Duplicate the selected item'],
+              ['selectMany', 'layers-outline', 'Select several items'],
               ['zoomOut', 'remove-outline', 'Zoom out'],
               ['zoomIn', 'add-outline', 'Zoom in'],
               ['zoomFit', 'resize-outline', 'Fit the design on the screen'],

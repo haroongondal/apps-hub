@@ -16,6 +16,8 @@ const COPY_TABLE = {
     notADesign: 'That file is not a design saved from this editor. Open a .json file you saved here.',
     sessionKept: kept => `Design Editor couldn’t restore your last session, so it started a new design. It saved that session to ${kept}. Open it with File > Open in the version that made it.`,
     sessionLost: 'Design Editor couldn’t restore your last session or save a copy of it, so it started a new design. Check that your Mac has free disk space.',
+    hint: '',
+    selectMany: () => '',
   },
   phone: {
     systemFonts: null, // the Mac's system fonts are not on a phone
@@ -29,6 +31,8 @@ const COPY_TABLE = {
     notADesign: 'That file isn’t a design from this editor. Pick a design you saved here.',
     sessionKept: () => 'Design Editor couldn’t restore your last session, so it started a new design.',
     sessionLost: 'Design Editor couldn’t restore your last session, so it started a new design. Check that your phone has free space.',
+    hint: 'Pinch with two fingers to zoom. Drag empty space with one finger to move around.',
+    selectMany: on => (on ? 'Select several: tap items to add or remove them.' : 'Select several is off.'),
   },
 };
 if (typeof window !== 'undefined') window.COPY = COPY_TABLE[document.body.classList.contains('embedded') ? 'phone' : 'desktop'];

@@ -1,11 +1,10 @@
-import { Button, Group, Header, Notice, Row, Screen } from '@apps-hub/ui';
+import { Button, Group, Header, Notice, Row, Screen, Sheet } from '@apps-hub/ui';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 
 import {
-  clearAutosave,
   designTitle,
   readAutosave,
   readDesignText,
@@ -13,6 +12,7 @@ import {
   writeAutosave,
   type SavedDesign,
 } from "../../src/editor/files";
+import { PAGE_SIZES, blankDesign } from '../../src/editor/pageSizes';
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -20,6 +20,7 @@ export default function DesignsHome() {
   const [resumable, setResumable] = useState<Awaited<ReturnType<typeof readAutosave>>>(null);
   const [designs, setDesigns] = useState<SavedDesign[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [choosing, setChoosing] = useState(false);
 
   // Re-read whenever the tab gains focus: a save made in the editor shows up on return.
   useFocusEffect(
@@ -39,12 +40,14 @@ export default function DesignsHome() {
     router.push({ pathname: '/editor', params: { name: designTitle(resumable?.filePath) } });
   }
 
-  function newDesign() {
+  // A new design starts at a size the person picks (the same sizes as the editor's Resize panel).
+  function newDesign(w: number, h: number) {
     void (async () => {
       setError(null);
+      setChoosing(false);
       try {
-        // A blank start must not inherit the previous session's autosave slot.
-        await clearAutosave();
+        // a blank start must not inherit the previous session's autosave slot
+        await writeAutosave({ filePath: null, dirty: false, doc: blankDesign(w, h) });
         router.push({ pathname: '/editor', params: { name: 'Untitled' } });
       } catch (e) {
         setError(message(e));
@@ -106,7 +109,7 @@ export default function DesignsHome() {
       ) : null}
 
       <Group>
-        <Button label="New design" block onPress={newDesign} />
+        <Button label="New design" block onPress={() => setChoosing(true)} />
         <Button label="Open a design file" variant="secondary" block onPress={openFile} />
       </Group>
 
@@ -130,6 +133,11 @@ export default function DesignsHome() {
 
       {/* eslint-disable-next-line @typescript-eslint/no-require-imports -- dev-only: a release bundle drops the lab */}
       {__DEV__ ? require('../../src/lab/LabRow').LabRow() : null}
+      <Sheet visible={choosing} onClose={() => setChoosing(false)} title="Choose a page size" doneLabel="Cancel" onDone={() => setChoosing(false)}>
+        {PAGE_SIZES.map(([name, w, h]) => (
+          <Row key={name} title={name} subtitle={`${w} × ${h}`} onPress={() => newDesign(w, h)} accessibilityHint="Starts a new design at this size" />
+        ))}
+      </Sheet>
     </Screen>
   );
 }

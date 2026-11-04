@@ -226,6 +226,59 @@ const panned = await page.evaluate(() => {
 });
 assert.deepEqual(panned, { left: 50, top: 90 }, 'a drag on empty space scrolls the board by the finger move');
 
+// ---- Phase 4 editor behaviour ----
+// the one-time gesture hint was shown and remembered
+assert.equal(await page.evaluate(() => localStorage.getItem('design-editor:hint')), 'true', 'the pinch and drag hint is shown once and remembered');
+
+// a selected item stays above the property sheet
+await page.evaluate(() => { window.editor.applyTemplate(window.editor.TEMPLATES[0]); });
+await page.evaluate(() => window.__editorCommand('menu', { cmd: 'zoomFit' }));
+await page.waitForTimeout(300);
+const above = await page.evaluate(async () => {
+  const c = window.editor.canvas;
+  const lowest = [...c.getObjects()].sort((a, b) => (b.top + b.height * b.scaleY) - (a.top + a.height * a.scaleY))[0];
+  c.setActiveObject(lowest); c.requestRenderAll();
+  await new Promise(r => setTimeout(r, 500));
+  const w = c.wrapperEl.getBoundingClientRect(), r = lowest.getBoundingRect(), z = c.getZoom();
+  return { bottom: w.top + (r.top + r.height) * z, sheetTop: document.querySelector('#inspector').getBoundingClientRect().top };
+});
+assert.ok(above.bottom <= above.sheetTop, `the selected item sits above the sheet ${JSON.stringify(above)}`);
+await page.evaluate(() => window.editor.canvas.discardActiveObject());
+
+// select several: with the mode on, real taps add items to the selection
+await page.evaluate(() => window.__editorCommand('menu', { cmd: 'selectMany' }));
+assert.match(await page.evaluate(() => document.querySelector('#toast').textContent), /Select several/);
+await page.evaluate(() => window.__editorCommand('menu', { cmd: 'zoomFit' }));
+await page.waitForTimeout(300);
+// choose two items that are on top at their own centres; the page moves when the sheet opens, so each tap re-measures
+const picks = await page.evaluate(() => {
+  const c = window.editor.canvas, objs = c.getObjects();
+  const centre = o => { const r = o.getBoundingRect(); return new fabric.Point(r.left + r.width / 2, r.top + r.height / 2); };
+  const top = p => [...objs].reverse().find(o => o.containsPoint(p));
+  return objs.map((o, i) => [o, i]).filter(([o]) => top(centre(o)) === o).map(([, i]) => i).slice(0, 2);
+});
+assert.equal(picks.length, 2, 'two items can be tapped');
+for (const i of picks) {
+  const p = await page.evaluate(i => {
+    const c = window.editor.canvas, o = c.getObjects()[i], w = c.wrapperEl.getBoundingClientRect(), r = o.getBoundingRect(), z = c.getZoom();
+    return { x: w.left + (r.left + r.width / 2) * z, y: w.top + (r.top + r.height / 2) * z };
+  }, i);
+  await page.touchscreen.tap(p.x, p.y);
+  await page.waitForTimeout(350);
+}
+assert.equal(await page.evaluate(() => window.editor.canvas.getActiveObjects().length), 2, 'two taps in select-several mode select two items');
+await page.evaluate(() => { window.__editorCommand('menu', { cmd: 'selectMany' }); window.editor.canvas.discardActiveObject(); });
+
+// the keyboard changes only the height: the zoom stays; a width change refits
+await page.evaluate(() => window.editor.setZoom(2));
+const zoomBefore = await page.evaluate(() => document.querySelector('#zoomLabel').textContent);
+await page.setViewportSize({ width: 390, height: 520 });
+await page.waitForTimeout(250);
+assert.equal(await page.evaluate(() => document.querySelector('#zoomLabel').textContent), zoomBefore, 'a height-only resize keeps the zoom');
+await page.setViewportSize({ width: 360, height: 844 });
+await page.waitForTimeout(250);
+assert.notEqual(await page.evaluate(() => document.querySelector('#zoomLabel').textContent), zoomBefore, 'a width change refits');
+
 await browser.close();
 assert.deepEqual(errors, [], 'no JS dialogs or errors');
 console.log('mobile bridge ok —', doc.pages[0].objects.length, 'template items, png 2×, refuse path, long-press, pinch', pinch.label);
