@@ -640,10 +640,17 @@ iconset → `iconutil`) and passes `--icon=build/icon.icns` to electron-packager
   `toObject` never serialises them, so saves and undo stay clean with no snapshot replacer.
 - Pinch: `touch.js` keeps a pointer map of its own on `#board` capture listeners; while two
   fingers are down Fabric is walled (`upperCanvasEl` gets `pointer-events: none` and any stale
-  `_currentTransform` is dropped with the active object), zoom is anchored on the *previous*
-  midpoint (Fabric's `zoomToPoint` anchors on the old transform) and `editor.setZoom(z)` — the
-  shared `app.js` export — re-syncs zoom state, canvas element size and the `#zoomLabel`. Fabric
-  is released once every finger lifts (`endGesture`), or with the action sheet's own close.
+  `_currentTransform` is dropped with the active object). Each frame scales from the zoom at the
+  gesture's start (never from the previous frame's) and calls `editor.setZoom(z, true)`, which
+  resizes only the CSS box of Fabric's layers (no pixel work) and updates `#zoomLabel`; the board is
+  scrolled so the page point under the fingers' midpoint stays under them. The release calls
+  `editor.setZoom(z)` once to redraw sharp. Fabric is released once every finger lifts (`endGesture`),
+  or with the action sheet's own close. One finger on empty space (`findTarget` finds nothing) pans
+  the board by scrolling it; marquee selection is off on the phone (`canvas.selection = false`).
+- Pixel budget (phone only, `body.embedded`): `setZoom` keeps each layer's backing store under
+  `PHONE_PX` (8 Mpx) by lowering the canvas's own `getRetinaScaling` as the zoom rises, and caps the
+  zoom at `sqrt(PHONE_PX / (W × H))` (never below 100%, never above 400%). Uncapped, a 1080 px page at
+  400% on a 2.75x screen was 141 Mpx a layer and froze the WebView. The Mac editor is unchanged.
 - Long-press (500 ms, within 12 px) uses Fabric's `findTarget` (which returns
   `{ target?, currentTarget, … }` — prefer `.target`) and shows an action sheet:
   **duplicate, bring forward, send backward, delete**. The sheet must close through

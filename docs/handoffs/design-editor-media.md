@@ -2,26 +2,34 @@
 
 ## Resume prompt
 
-Dated 2026-11-04. Build session B3.3 (continued): PR #18 is merged (squash `7051761` on `main`); CI's release job published Design Editor build 5 (45.8 MB APK) to the Store. What remains is the owner's phone check (results into the handoff) and then Phase 4 on branch `design-media-phase-4`.
+Dated 2026-11-04. Build session B4.1: Phase 4 of the Design Editor media work. Phone media screens in plain words, a Queue that shows five jobs, and a calmer Design Editor around them. Phase 3 (PR #18) and the canvas fix (PR #19) are merged into `main` (`ec23cbd`). Design Editor build 6 is released and waits for the owner's phone check.
 
-Read `docs/handoffs/design-editor-media.md` completely first. It lives in the worktree `.claude/worktrees/design-media-phase-4`, on branch `design-media-phase-4` (from `origin/main` at `7051761`, which includes PR #18). Then read `docs/design-editor/PRD.md`, `docs/design-editor/SPEC.md` §14–§16 (as-built paragraphs included), `docs/design-editor/CAPCUT-GAPS.md`, and the prelude plus Phase 4 in `docs/design-editor/PROMPTS.md`. Trust the verified facts and decisions in the handoff and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` and "How every session runs" in `docs/build-sessions.md`. Read "Current state + exact next step" before doing anything.
+Read `docs/handoffs/design-editor-media.md` completely first. Then read `docs/design-editor/PRD.md` (FR-9, FR-13, AC-15, AC-16), `docs/design-editor/SPEC.md` §7, §9.2, §10.5, §12.1, §13.2 and §14 (as-built paragraphs included), `docs/design-editor/CAPCUT-GAPS.md`, and the prelude plus Phase 4 in `docs/design-editor/PROMPTS.md`. Trust the verified facts and decisions in the handoff and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md` and "How every session runs" in `docs/build-sessions.md`. Read "Current state + exact next step" before doing anything.
+
+Where to work: worktree `.claude/worktrees/design-media-phase-4`, branch `design-media-phase-4`. It holds one old docs commit (8560b09). First `git fetch origin` and merge `origin/main` into it; if the docs PR that carries this handoff is not merged yet, merge `origin/docs/canvas-perf-release` as well. A conflict in the handoff file is expected: keep this version. Then run `pnpm install`.
 
 Gates and rules:
-- The owner said to proceed without approval on routine work: commit, push and update PRs with `gh`. Never merge to `main` yourself, never force-push, no Claude attribution lines. Merge only when the owner says so, and never run `pnpm release design-editor` until the owner says so.
-- Don't touch the main checkout, or the `clipboard`, `firewall-spike`, `tunnelwall-firewall`, `deputy-speed`, `cancel-connecting` or `strongroom-phase-1` worktrees.
-- New npm, Gradle or CocoaPods dependencies need the owner's yes (Phase 3's three are already approved and pinned).
-- The Bash shell is zsh and may have `ELECTRON_RUN_AS_NODE` set: strip it when running Electron. `timeout` isn't installed.
-- Android APIs are checked against `/opt/homebrew/share/android-commandlinetools/platforms/android-36/android.jar` (javap) before use.
+- Routine work (commit, push, update PRs with `gh`) needs no approval. Never merge to `main` yourself, never force-push, and no Claude attribution lines in commits or PRs. Merge and release only when the owner says so.
+- The owner releases with the local command. When told to merge, use a squash subject ending in `[skip ci]` so CI does not also release, then run `pnpm release design-editor -m "<message>"` from a clean checkout of merged `main` (needs `JAVA_HOME` and `ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`). Install on the phone through the Store only, never `adb install`.
+- Don't touch the main checkout or the `clipboard`, `firewall-spike`, `tunnelwall-firewall`, `deputy-speed`, `cancel-connecting`, `strongroom-phase-1` or `design-media-phase-3` worktrees.
+- New npm, Gradle or CocoaPods dependencies need the owner's yes. The Bash shell is zsh and may have `ELECTRON_RUN_AS_NODE` set: strip it when running Electron. `timeout` isn't installed.
+- Check Android APIs against `/opt/homebrew/share/android-commandlinetools/platforms/android-36/android.jar` (javap) before use.
 
 State:
-- PR #18 (Phase 3) is merged into `main` (squash commit `7051761`). The squash message carries no attribution trailers. CI on `main` passed (`test` + `release` jobs, run 41842060084), and the release log printed `✔ design-editor 5 published` — versionCode 5, APK 45.8 MB, including the engine `prepare` step's bundle. The phone last ran 1.0.0 (3), so it sees an update from the Store.
-- The branch `design-media-phase-4` exists (worktree `.claude/worktrees/design-media-phase-4`, from `origin/main` at `7051761`); its `pnpm install` has NOT been run yet. The handoff update marking the merge landed as its first commit.
-- The phone checks (AC-13, AC-14, and how drag/pinch feel) belong to the owner: the app installs through the Store only.
+- The phone app is one app, "Design Editor" (`apps/design-editor-mobile`): Designs home, canvas editor, and a debug-style "Media lab" row. The six real media tools exist only on the Mac. The phone screens for them are this phase.
+- Build 6 fixed the canvas freeze (8 Mpx pixel budget `PHONE_PX` in `app.js`, CSS-only pinch frames, pinch no longer compounds, board scrolls, one-finger pan, Templates sheet closed on launch). It is not phone-checked yet.
+- Wireless debugging works for reading only: adb shows the phone only after the owner gives its IP:port; screenshots, taps and logcat are fine.
+
+Owner's requirements for this phase (2026-11-04), written into PRD FR-13, FR-9, AC-15, AC-16 and SPEC §13.2:
+- Plain words: no engineering information in a release build (no phase or spike names, job ids, codec, bitrate, encoder or keyframe words, byte counts, attempt counters, storage paths). The debug lab stays in debug builds only.
+- Queue: at most five jobs on the Queue screen, "See all n" opens a separate screen, "Clear queue" empties the list (asks first if something runs or waits, never deletes output files).
+- A better Design Editor overall: audit every screen and fix what you find (starting list in PROMPTS.md Phase 4, step 5).
 
 Next steps, in order:
-1. The owner's phone check through the Store (update the app from the Store first — never `adb install`): open a design, apply a template, retype a heading, drag an element, pinch feel, long-press actions (duplicate / forward / backward / delete), save as .json (lands in Documents/Design Editor; a re-save replaces its own row instead of adding "(1)"), export a PNG 2× (lands in Pictures/Design Editor at twice the page size), new/open/continue flows, opening a Mac-saved .json on the phone. Paste the results into the handoff's phone section. If something breaks, the session can read adb logs (`adb shell` is allowed for logs; no install).
-2. After the owner's yes: Phase 4 per `docs/design-editor/PROMPTS.md` (the media rewrite of the mobile shell — screens, tabs, queue UI, six tools on the phone), in the same worktree `.claude/worktrees/design-media-phase-4` on the already-created branch `design-media-phase-4` (`pnpm install` there first).
-3. Keep the known limits list (below) in mind; they are accepted for this phase and stay unhidden.
+1. Merge and rebase as above, run the Phase 4 audit (step 0) and write the string list into the handoff.
+2. Ask the owner the one open question: bring remove sound, still frame and volume to the phone (recommended) and skip reverse and stabilize (they need FFmpeg, which PRD §8 rules out on Android)?
+3. Build Phase 4 steps 1 to 6 on the branch, report ACTUAL command output, update the handoff as milestones land.
+4. Stop before any merge or release. The owner's phone check comes after a release.
 
 At about 85% context, stop starting work, update the handoff and print its resume prompt in a fenced block.
 
@@ -453,23 +461,11 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
 
 ## Current state + exact next step
 
-- **State (2026-11-04, session B3.3, Phase 3 merged and released):** PR #18 is merged into `main` as squash
-  commit `7051761`. CI run 41842060084 passed (`test` and `release`); the release published **Design Editor
-  build 5** (versionCode 5, APK 45.8 MB) with the editor UI, the engine bundle included. Nothing else is
-  open. Branch `design-media-phase-4` (worktree `.claude/worktrees/design-media-phase-4`) was cut from
-  `origin/main` at `7051761` and currently holds only the handoff update marking the merge; its install has
-  not run. The old worktree `.claude/worktrees/design-media-phase-3` exists and may be removed whenever
-  convenient (its content is merged).
-- **Next step:** the owner's phone check through the Store — update the Design Editor app from the Store
-  (only Store installs), then: open a design, apply a template, retype a heading, drag an element, rate the
-  pinch/drag feel, long-press actions, save as .json (Documents/Design Editor; re-save replaces its row),
-  export a PNG 2× (Pictures/Design Editor, twice the page size), new/open/continue flows, and open a
-  Mac-saved .json on the phone (AC-14). Paste the results into this handoff (a "Phone check" section below
-  or under Evidence). After the owner's yes, Phase 4 runs in `.claude/worktrees/design-media-phase-4` per
-  PROMPTS.md "Phase 4" (an `pnpm install` there is the first step).
+- **State (2026-11-04, session B3.4, canvas fix released):** PR #18 (Phase 3) and PR #19 (canvas performance: pixel budget, CSS-only pinch frames, pinch no longer compounds, board scrolls, Templates sheet closed on launch) are merged into `main` (`ec23cbd`). The #19 merge commit carries `[skip ci]` on purpose so CI's own release would not race the owner's local one; `pnpm release design-editor -m "Design Editor: faster zoom and pan on the canvas"` was run locally from `ec23cbd` and published **Design Editor build 6** (45.8 MB APK). Not yet checked on the phone: the owner updates through the Store and re-runs the canvas check (zoom, pinch, one-finger pan, drag at high zoom). `PHONE_PX` in `app.js` (8 Mpx) is a first guess to tune from that check.
+- **Next step:** the owner's phone check of build 6 (paste results into the phone section). Then Phase 4 on `design-media-phase-4` (its worktree is not touched by this session), rebased onto `main` first.
 
 - **State (2026-11-04, session B3.2, Phase 3 steps 2–5 done, committed and pushed as PR #18 update):** on branch `design-media-phase-3`, PR https://github.com/haroongondal/apps-hub/pull/18 (draft, base `main`). Built this session: the engine's mobile page (`mobile.html`, `touch.js`, `shell-mobile.js`, `build.mjs`) → `assets/editor/editor.html` (3.99 MB, gitignored), the smoke test `apps/design-editor/test/mobile.mjs` chained into `test:e2e`, two shared `app.js` changes (`discardOk` async, `setZoom` export), the RN side (`app/index.tsx` Designs home, `app/media.tsx` the verbatim Phase 1 lab, `app/editor.tsx` the editor screen, `src/editor/bridge.ts`, `src/editor/files.ts`), Kotlin `saveJson`/`saveExport` (`DesignSaves.kt` + `core/Saves.kt` + `SavesTest`), the pinned deps (react-native-webview 13.15.0, expo-file-system ~19.0.24, expo-asset ~12.0.14, @expo/vector-icons ^15.0.3), and the `prepare` entry in `tools/release/src/apps.ts`. SPEC §13.2/§14/§15 carry as-built paragraphs. All verification gates green (Verified 2026-11-04). Phase 3's device checks (AC-13, AC-14) are the owner's phone run through the Store after merge.
-- **Next step:** ~~the owner hands on PR #18~~ (merged as `7051761`; see the state above). After the merge, CI releases the Store build for the phone check; Phase 4 starts a fresh branch.
+- **Next step:** the owner hands on PR #18 (see the resume prompt at the top). After the merge, CI releases the Store build for the phone check; Phase 4 starts a fresh branch.
 
 - **State (2026-11-03, session B3.1, Phase 3 step 1 done):** the B2.3 work is merged (PR #16, merge commit `eddf464`). On branch `design-media-phase-3`, worktree `.claude/worktrees/design-media-phase-3` (from `origin/main`, `pnpm install` done): the editor page moved into `packages/design-editor-engine` (`desktop.html`, `app.js`, `vendor/`, `package.json`, README), with `apps/design-editor/vendor/engine` as the symlink and `main.js` loading `vendor/engine/desktop.html`. The Mac e2e passes with the pinned FFmpeg fetched (media suite runs, not skipped). Next: step 2 in the resume prompt.
 - **State (2026-11-03, session B2.3, superseded):** Volume, Reverse and Stabilize are built and tested on branch `design-media-capcut` (PR #16). They are the owner's yes to CapCut rows 7, 8 and 11 (see Decisions B2.3). The Mac e2e is green, with real measurements (below). PR #16 is still open on `main`. B3 waits for it to merge. The CapCut UI measurements are still blocked.
@@ -530,14 +526,5 @@ Phone check 2026-11-02 (adb over Wireless debugging; the owner's Redmi 24116RACC
   the smoke test's first draft mis-assumed the wire schema (rewritten against `shell-mobile.js` as the truth).
   The hand control stays with the owner: PR #18, then the Store phone check after merge. Verification is under
   "Verified 2026-11-04 (session B3.2)".
-- **2026-11-04 (session B3.3, merge and Store release).** Read the required docs (handoff, contract,
-  build-sessions rules, PRD, SPEC §14–§16, CAPCUT-GAPS, PROMPTS prelude + Phase 4) and verified the state:
-  worktree clean, PR #18 CI green (test + GitGuardian; release skipped on a branch as designed), and it was
-  the only open PR (no shared-file conflicts). The owner said merge: marked the draft ready and squash-merged
-  — `main` has `7051761` ("Design Editor: the engine and the phone-side Design Editor (Phase 3) (#18)",
-  no attribution trailers). CI run 41842060084 on `main` passed both jobs; the release log printed
-  `✔ design-editor 5 published` — versionCode 5, APK 45.8 MB, the engine `prepare` step's bundle re-built in
-  CI. The phone (1.0.0, code 3) will see the update through the Store. Branch `design-media-phase-4` was
-  created from `origin/main` (worktree `.claude/worktrees/design-media-phase-4`) and carries the handoff
-  update as its first commit (no Phase 4 build work before the owner's phone-check yes). The phase-3 worktree
-  is left in place for cleanup later.
+- **2026-11-04 (session B3.4, canvas performance, branch `design-canvas-perf` from `main` after PR #18).** The owner's phone check of Store build 5 reported a slow, unresponsive canvas on zoom and poor canvas UX. Reproduced in `test/mobile.mjs`'s device setup at 2.75x: the backing store reached 141 Mpx a layer at 400% (551 ms a zoom step on the Mac). Causes found and fixed in `app.js`, `touch.js`, `mobile.html`: (1) no pixel budget, now 8 Mpx a layer on the phone (zoom steps at 3-4x: 32-50 ms); (2) every pinch frame resized the backing store, now CSS-only frames plus one sharp redraw on release; (3) the pinch multiplied the already-updated zoom by the same distance ratio on every move event, so a held pinch compounded (the old smoke test even logged "pinch 234%" for a 2x spread), now scaled from the zoom at gesture start; (4) zoom panned by `relativePan` inside a canvas the size of the page, so zoomed-in content was clipped and `touch-action: none` blocked scrolling, now the board scrolls (two-finger pan, one finger on empty space); (5) the Templates sheet was open on launch and hid the lower half of the page, now closed. Marquee select is off on the phone. Gates: `test:e2e` three suites, `pnpm test`, `pnpm typecheck` (exit 0). Not on a real phone yet: the fix needs a Store release (owner's go). Tune `PHONE_PX` after the phone check.
+- **2026-11-04 (session B3.4, release).** PR #19 squash-merged (`ec23cbd`, `[skip ci]`), then released locally: Design Editor build 6 published (exit 0). The Store build 5 problems the owner reported are fixed in code and covered by `test/mobile.mjs`; the real-phone confirmation is still open.

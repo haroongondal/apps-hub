@@ -76,11 +76,22 @@ function toast(msg, ms = 1800) {
 }
 
 let zoom = 1;
-function setZoom(z) {
-  zoom = Math.min(4, Math.max(0.05, z));
-  canvas.setZoom(zoom);
-  canvas.setDimensions({ width: Math.round(W * zoom), height: Math.round(H * zoom) });
+// uncapped, a 1080 px page at 4x was a 141 Mpx backing store per layer and froze the phone's WebView
+const PHONE_PX = 8e6;
+// preview resizes only the CSS box (no pixel work) for the frames of a pinch; the release redraws sharp
+function setZoom(z, preview) {
+  const phone = document.body.classList.contains('embedded');
+  const fitPx = phone ? Math.sqrt(PHONE_PX / (W * H)) : Infinity;
+  zoom = Math.min(phone ? Math.max(1, Math.min(4, fitPx)) : 4, Math.max(0.05, z));
+  const size = { width: Math.round(W * zoom), height: Math.round(H * zoom) };
+  if (preview) canvas.setDimensions(size, { cssOnly: true });
+  else {
+    if (phone) canvas.getRetinaScaling = () => Math.max(1, Math.min(window.devicePixelRatio, fitPx / zoom));
+    canvas.setZoom(zoom);
+    canvas.setDimensions(size);
+  }
   $('#zoomLabel').textContent = Math.round(zoom * 100) + '%';
+  return zoom;
 }
 function fit() {
   const b = $('#board');
