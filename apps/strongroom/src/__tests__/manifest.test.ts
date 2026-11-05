@@ -9,14 +9,18 @@ const read = (...path: string[]) => readFileSync(join(app, ...path), 'utf8');
 const main = read('android', 'app', 'src', 'main', 'AndroidManifest.xml');
 const release = read('android', 'app', 'src', 'release', 'AndroidManifest.xml');
 const vaultModule = read('modules', 'strongroom-vault', 'android', 'src', 'main', 'AndroidManifest.xml');
+const syncConfig = read('modules', 'strongroom-vault', 'android', 'src', 'main', 'java', 'expo', 'modules', 'strongroomvault', 'android', 'SyncConfig.kt');
 
 const permissions = (xml: string) => [...xml.matchAll(/<uses-permission\b[^>]*android:name="([^"]+)"[^>]*>/g)].map((m) => m[1]);
 const services = (xml: string) => [...xml.matchAll(/<service\b([^>]*)>/g)].map((m) => m[1]);
 const attr = (tag: string, name: string) => tag.match(new RegExp(`${name}="([^"]*)"`))?.[1];
 
-test('the release build keeps INTERNET', () => {
+// Until sync has a server, INTERNET in release only helps a bad dependency send secrets out, so release drops it until BASE_URL is set.
+test('the release build gets INTERNET only once sync has a server', () => {
   assert.ok(permissions(main).includes('android.permission.INTERNET'));
-  assert.deepEqual(permissions(release), [], 'the release manifest no longer removes (or adds) any permission');
+  const hasServer = !/const val BASE_URL = ""/.test(syncConfig);
+  assert.deepEqual(permissions(release), hasServer ? [] : ['android.permission.INTERNET'], 'release removes INTERNET while BASE_URL is empty, and nothing else');
+  if (!hasServer) assert.match(release, /android:name="android\.permission\.INTERNET" tools:node="remove"/);
 });
 
 test('the release build refuses cleartext traffic', () => {
@@ -43,7 +47,6 @@ test('backup stays off', () => {
 const gradle = read('android', 'app', 'build.gradle');
 const moduleGradle = read('modules', 'strongroom-vault', 'android', 'build.gradle');
 const mainActivity = read('android', 'app', 'src', 'main', 'java', 'com', 'haroon', 'strongroom', 'MainActivity.kt');
-const syncConfig = read('modules', 'strongroom-vault', 'android', 'src', 'main', 'java', 'expo', 'modules', 'strongroomvault', 'android', 'SyncConfig.kt');
 const syncTestManifest = read('android', 'app', 'src', 'syncTest', 'AndroidManifest.xml');
 const syncTestNetwork = read('android', 'app', 'src', 'syncTest', 'res', 'xml', 'strongroom_sync_test_network.xml');
 const PROOF_SWITCHES = ['strongroomIdSuffix', 'strongroomScreenshots', 'strongroomSyncUrl', 'strongroomSyncCa'];

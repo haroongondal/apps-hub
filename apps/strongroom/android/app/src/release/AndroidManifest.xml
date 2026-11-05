@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-  <!-- Phase 2 syncs, so release keeps the main manifest's INTERNET; the sync client speaks HTTPS only and the app refuses cleartext. Debug turns cleartext back on for Metro. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+  <!-- Sync has no server until Task 8 sets SyncConfig.BASE_URL, so release drops INTERNET until then and a bad dependency can't send anything out; Task 8 deletes the uses-permission line (manifest.test.ts checks the pair). The sync client speaks HTTPS only and the app refuses cleartext. Debug turns cleartext back on for Metro. -->
+  <uses-permission android:name="android.permission.INTERNET" tools:node="remove"/>
   <application android:usesCleartextTraffic="false"/>
 </manifest>

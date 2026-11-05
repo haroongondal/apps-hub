@@ -179,6 +179,10 @@ All in the plan's "Decisions"; the owner delegated them on 2026-11-05 ("do what 
 
 ## Task 8 deploy notes
 
+- **Give release builds INTERNET back.** Security review, 2026-11-06: until `SyncConfig.BASE_URL` is set,
+  `apps/strongroom/android/app/src/release/AndroidManifest.xml` removes `INTERNET` again, so a bad
+  dependency can't send secrets out of a release build with no sync server. When Task 8 sets `BASE_URL`,
+  delete that `uses-permission` line; `manifest.test.ts` fails until the two agree.
 - **Setup code.** The Worker's `SETUP_TOKEN` secret must be at least 32 characters; the Worker refuses a
   shorter one as if none were set. Make it with `openssl rand -base64 32` (44 characters). Call it the
   **setup code** when talking to the owner: that is the name on the phone's Turn on sync screen. It is
