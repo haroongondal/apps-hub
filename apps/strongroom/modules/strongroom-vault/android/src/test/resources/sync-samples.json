@@ -98,5 +98,19 @@
       }
     },
     "response": { "status": 200, "body": { "headerRev": 2 } }
+  },
+  "accountUpdateKeepRecovery": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/account",
+      "authorization": "Bearer BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ=",
+      "body": {
+        "header": "{\"version\":1,\"kdf\":{\"memoryKiB\":65536,\"iterations\":3,\"parallelism\":1},\"salt\":\"ICEiIyQlJicoKSorLC0uLw==\",\"passwordWrap\":\"bmV3ZXIgcGFzc3dvcmQgd3JhcA==\",\"recoveryWrap\":\"cmVjb3Zlcnkgd3JhcA==\",\"accountKey\":true}",
+        "loginHash": "+EnWcyX6zwQXe8ZjstxUQFGDHFie9YHUEvLrpEg053w=",
+        "readHash": "ZIqlxXn7MPOK90TZfW7IQMepEnekmaDXgPPnMU7KCQs=",
+        "ifRev": 2
+      }
+    },
+    "response": { "status": 200, "body": { "headerRev": 3 } }
   }
 }

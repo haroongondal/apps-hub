@@ -1,4 +1,4 @@
-import type { AccountCreate, PullResponse, PushConflict, PushResponse, Upsert, WireRecord } from 'strongroom-core/src/sync/protocol.ts';
+import type { AccountCreate, AccountUpdate, PullResponse, PushConflict, PushResponse, Upsert, WireRecord } from 'strongroom-core/src/sync/protocol.ts';
 
 export type Row = Record<string, unknown>;
 export interface Result { results: Row[] }
@@ -32,13 +32,13 @@ export async function createAccount(db: Db, a: AccountCreate): Promise<boolean> 
   }
 }
 
-export const updateAccount = async (db: Db, a: AccountCreate, ifRev: number): Promise<number | null> =>
+export const updateAccount = async (db: Db, a: Omit<AccountUpdate, 'ifRev'>, ifRev: number): Promise<number | null> =>
   (
     await db
       .prepare(
-        'UPDATE account SET header = ?, header_rev = header_rev + 1, login_hash = ?, recovery_hash = ?, read_hash = ? WHERE id = 1 AND header_rev = ? RETURNING header_rev AS headerRev',
+        'UPDATE account SET header = ?, header_rev = header_rev + 1, login_hash = ?, recovery_hash = COALESCE(?, recovery_hash), read_hash = ? WHERE id = 1 AND header_rev = ? RETURNING header_rev AS headerRev',
       )
-      .bind(a.header, a.loginHash, a.recoveryHash, a.readHash, ifRev)
+      .bind(a.header, a.loginHash, a.recoveryHash ?? null, a.readHash, ifRev)
       .first<{ headerRev: number }>()
   )?.headerRev ?? null;
 

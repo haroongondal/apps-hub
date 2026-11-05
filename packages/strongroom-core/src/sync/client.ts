@@ -58,14 +58,14 @@ export async function syncOnce(d: { store: SyncStore; transport: Transport; vaul
     skipped += pulled.skipped;
     for (const id of plan.blocked) blocked.add(id);
 
-    // Never upload over a server version this device could not read, including one quarantined by an earlier sync.
+    // Never upload over a server version this device could not read (even one quarantined by an earlier sync), and never send a record over the size limit, whose 413 would fail the whole batch.
     const quarantine = await store.getQuarantine();
-    const push = plan.push.filter((p) => {
-      const over = quarantine.some((q) => q.id === p.id && q.rev > p.baseRev);
-      if (over) blocked.add(p.id);
-      return !over;
-    });
     const sealedOf = new Map(local.map((r) => [r.id, r.sealed]));
+    const push = plan.push.filter((p) => {
+      const skip = quarantine.some((q) => q.id === p.id && q.rev > p.baseRev) || Math.ceil(sealedOf.get(p.id)!.length / 3) * 4 > LIMITS.maxCiphertextChars;
+      if (skip) blocked.add(p.id);
+      return !skip;
+    });
     let conflicted = false;
     for (let i = 0; i < push.length && !conflicted; i += LIMITS.maxUpserts) {
       const chunk = push.slice(i, i + LIMITS.maxUpserts).map((p) => ({ ...p, sealed: sealedOf.get(p.id)! }));

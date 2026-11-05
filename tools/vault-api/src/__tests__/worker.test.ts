@@ -235,11 +235,27 @@ test('headerCompareAndSwap', async () => {
   assert.deepEqual(await w.call('PUT', '/v1/account', RECOVERY, { ...change, ifRev: 2 }), { status: 200, body: { headerRev: 3 } });
 });
 
+test('updateWithoutRecoveryHashKeepsIt', async () => {
+  const w = world();
+  await setUp(w);
+  const { recoveryHash: _, ...change } = account({ loginHash: tokenHash(NEW_LOGIN) });
+  assert.equal((await w.call('PUT', '/v1/account', LOGIN, { ...change, recoveryHash: 'abc', ifRev: 1 })).status, 400);
+  assert.deepEqual(await w.call('PUT', '/v1/account', LOGIN, { ...change, ifRev: 1 }), { status: 200, body: { headerRev: 2 } });
+  assert.equal((await w.call('GET', '/v1/records', RECOVERY)).status, 200);
+
+  const NEW_RECOVERY = tok(5);
+  const replaced = { ...change, recoveryHash: tokenHash(NEW_RECOVERY), ifRev: 2 };
+  assert.deepEqual(await w.call('PUT', '/v1/account', NEW_LOGIN, replaced), { status: 200, body: { headerRev: 3 } });
+  assert.equal((await w.call('GET', '/v1/records', RECOVERY)).status, 401);
+  assert.equal((await w.call('GET', '/v1/records', NEW_RECOVERY)).status, 200);
+});
+
 test('inputLimits', async () => {
   const w = world();
   for (const bad of [
     account({ loginHash: 'abc' }),
     account({ readHash: undefined }),
+    account({ recoveryHash: undefined }),
     account({ header: 'not json' }),
     account({ header: header({ accountKey: 'yes' }) }),
     account({ header: header({ pad: 'x'.repeat(4096) }) }),
@@ -325,7 +341,7 @@ test('noCorsHeadersAndNoStoreCaching', async () => {
 test('responsesMatchTheSharedSamples', async () => {
   const url = new URL('../../../../apps/strongroom/modules/strongroom-vault/android/src/test/resources/sync-samples.json', import.meta.url);
   const samples = JSON.parse(readFileSync(url, 'utf8')) as Record<string, { request: Body; response: Body }>;
-  const order = ['accountCreate', 'prelogin', 'push', 'pull', 'pushConflict', 'accountUpdate'];
+  const order = ['accountCreate', 'prelogin', 'push', 'pull', 'pushConflict', 'accountUpdate', 'accountUpdateKeepRecovery'];
   assert.deepEqual(Object.keys(samples).sort(), [...order].sort());
 
   const w = world();

@@ -76,7 +76,7 @@ export function fetchTransport(baseUrl: string, fetchFn: typeof fetch = fetch): 
       const r = await call('POST', '/v1/records', token, req);
       return r.status === 409 ? r.data : ok(r);
     },
-    putAccount: async (auth: Uint8Array | { setupToken: string }, body: AccountCreate) =>
+    putAccount: async (auth: Uint8Array | { setupToken: string }, body: AccountCreate | AccountUpdate) =>
       ok(await call('PUT', '/v1/account', auth instanceof Uint8Array ? auth : auth.setupToken, body)),
   };
 }

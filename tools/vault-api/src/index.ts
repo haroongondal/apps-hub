@@ -1,5 +1,5 @@
 import { LIMITS } from 'strongroom-core/src/sync/protocol.ts';
-import type { AccountCreate, Prelogin, Upsert } from 'strongroom-core/src/sync/protocol.ts';
+import type { AccountUpdate, Prelogin, Upsert } from 'strongroom-core/src/sync/protocol.ts';
 import { authorize, BASE64_32_BYTES } from './auth.ts';
 import { createAccount, getAccount, pull, push, updateAccount, type Db } from './db.ts';
 
@@ -25,10 +25,11 @@ export function preloginOf(header: string): Prelogin | null {
   }
 }
 
-function accountPutOf(o: any): (AccountCreate & { ifRev?: number }) | null {
+function accountPutOf(o: any): (Omit<AccountUpdate, 'ifRev'> & { ifRev?: number }) | null {
   const { header, loginHash, recoveryHash, readHash, ifRev } = o ?? {};
   if (typeof header !== 'string' || header.length > LIMITS.maxHeaderChars || !preloginOf(header)) return null;
-  if (![loginHash, recoveryHash, readHash].every((h) => typeof h === 'string' && BASE64_32_BYTES.test(h))) return null;
+  const hashes = recoveryHash === undefined ? [loginHash, readHash] : [loginHash, recoveryHash, readHash];
+  if (!hashes.every((h) => typeof h === 'string' && BASE64_32_BYTES.test(h))) return null;
   if (ifRev !== undefined && !(Number.isSafeInteger(ifRev) && ifRev >= 0)) return null;
   return { header, loginHash, recoveryHash, readHash, ifRev };
 }
@@ -63,9 +64,10 @@ async function route(req: Request, env: Env, now: () => number, sleep: (ms: numb
     const role = await authorize(req, db, env.SETUP_TOKEN, ['setup', 'login', 'recovery'], sleep);
     if (!role) return unauthorized();
     const body = accountPutOf(await req.json().catch(() => null));
-    if (!body) return fail(400, 'The account needs a valid header and three token hashes.');
+    if (!body || (role === 'setup' && body.recoveryHash === undefined)) return fail(400, 'The account needs a valid header and three token hashes.');
     if (role === 'setup') {
-      return (await createAccount(db, body)) ? json({ headerRev: 1 }) : fail(403, 'The account already exists. Sign in instead.');
+      const created = await createAccount(db, { ...body, recoveryHash: body.recoveryHash! });
+      return created ? json({ headerRev: 1 }) : fail(403, 'The account already exists. Sign in instead.');
     }
     if (body.ifRev === undefined) return fail(400, 'Send ifRev, the header revision this change is based on.');
     const headerRev = await updateAccount(db, body, body.ifRev);

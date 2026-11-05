@@ -13,8 +13,8 @@ export const LIMITS = {
 export type Prelogin = { version: number; kdf: KdfParams; salt: string; accountKey: boolean };
 
 export type AccountCreate = { header: string; loginHash: string; recoveryHash: string; readHash: string };
-// An update names the header revision it replaces (the Worker answers 400 without it), so it never overwrites blindly.
-export type AccountUpdate = AccountCreate & { ifRev: number };
+// An update names the header revision it replaces (the Worker answers 400 without it), so it never overwrites blindly; devices don't hold the recovery key, so without recoveryHash the Worker keeps the stored one.
+export type AccountUpdate = Omit<AccountCreate, 'recoveryHash'> & { recoveryHash?: string; ifRev: number };
 export type AccountPutResponse = { headerRev: number };
 
 export type WireRecord = { id: string; rev: number; ciphertext: string; updatedAt: number };

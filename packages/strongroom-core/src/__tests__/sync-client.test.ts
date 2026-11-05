@@ -220,3 +220,22 @@ test('differentHeaderIsReportedNotWritten', async () => {
   assert.equal((await sync(store, s.t)).headerChanged, true);
   assert.equal(store.header, HEADER);
 });
+
+test('oversizeLocalRecordIsSkippedAndReported', async () => {
+  const s = server();
+  const strict: Transport = {
+    ...s.t,
+    push: async (token, req) => {
+      if (req.upserts.some((u) => u.ciphertext.length > 90_000)) throw new SyncHttpError(413);
+      return s.t.push(token, req);
+    },
+  };
+  const store = await device();
+  const huge = await seal(2, { type: 'note', name: 'huge', text: 'x'.repeat(70_000), updatedAt: T });
+  await store.commit({ records: [{ id: id(1), sealed: await seal(1) }, { id: id(2), sealed: huge }] });
+  const report = await sync(store, strict);
+  assert.deepEqual([report.pushed, report.blocked], [1, 1]);
+  assert.deepEqual([...s.rows.keys()], [id(1)]);
+  assert.deepEqual(store.records.get(id(2)), { sealed: huge, rev: 0, dirty: true });
+  assert.equal((await sync(store, strict)).blocked, 1);
+});

@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import {
   adoptHeader, createVault, fetchTransport, generateRecoveryKey, headerToJson, KDF_FLOOR, newId, openWithPassword, randomBytes,
-  readEntries, recoveryLoginToken, signInWithPassword, SyncAuthError, syncOnce, tokenHash, withNewPassword, writeEntries,
+  readEntries, recoveryLoginToken, signInWithPassword, signInWithRecovery, SyncAuthError, syncOnce, tokenHash, withNewPassword, writeEntries,
 } from 'strongroom-core';
 import type { Entry, Transport } from 'strongroom-core';
 import { MemorySyncStore } from 'strongroom-core/src/__tests__/memory-sync-store.ts';
@@ -37,7 +37,7 @@ async function world() {
   const loginId = newId();
   await writeEntries(phone.store, vaultKey, [{ id: loginId, entry: login('Mail', 1000) }]);
   assert.equal((await sync(phone, t)).pushed, 1);
-  return { t, accountKey, recoveryHash, loginId };
+  return { t, accountKey, recoveryKey, loginId };
 }
 
 async function signIn(t: Transport, password: string, accountKey: Uint8Array): Promise<Device> {
@@ -69,7 +69,7 @@ test('twoDevicesEditAndDeleteTheSameLoginAndConverge', async () => {
 });
 
 test('passwordChangeOnOneDeviceMeansSignInAgainOnTheOther', async () => {
-  const { t, accountKey, recoveryHash } = await world();
+  const { t, accountKey, recoveryKey } = await world();
   const a = await signIn(t, PASSWORD, accountKey);
   const b = await signIn(t, PASSWORD, accountKey);
 
@@ -78,9 +78,10 @@ test('passwordChangeOnOneDeviceMeansSignInAgainOnTheOther', async () => {
   const keys = await openWithPassword(changed, NEW_PASSWORD, undefined, accountKey);
   assert.ok(keys);
   const { headerRev, lastRev } = await a.store.getSyncMeta();
-  const put = await t.putAccount(a.token, { header: headerToJson(changed), loginHash: tokenHash(keys.loginToken), recoveryHash, readHash: tokenHash(keys.readToken), ifRev: headerRev });
+  const put = await t.putAccount(a.token, { header: headerToJson(changed), loginHash: tokenHash(keys.loginToken), readHash: tokenHash(keys.readToken), ifRev: headerRev });
   await a.store.applyPull({ header: changed, headerRev: put.headerRev, records: [], quarantine: [], lastRev });
   a.token = keys.loginToken;
+  assert.deepEqual((await signInWithRecovery(t, recoveryKey)).vaultKey, a.vaultKey);
 
   const noteId = newId();
   await writeEntries(b.store, b.vaultKey, [{ id: noteId, entry: { type: 'note', name: 'Wifi', text: 'written before the 401', updatedAt: 4000 } }]);
