@@ -150,9 +150,15 @@ All in the plan's "Decisions"; the owner delegated them on 2026-11-05 ("do what 
   Vault.kt still passes no account key: Task 6 wires it. Ruling R16: `applyPull` adopts only if the local
   bytes are unchanged since the snapshot (Kotlin in Task 5, TS + extension in Task 7).
 
+- 2026-11-05: **Task 5 done** (`0811245`): Kotlin `SyncMerge`, `SyncClient` (+ `adoptHeader`, sign-in),
+  `SyncProtocol` (wire decoders), schema 2 in `SqliteRecordStore` (rev, dirty, meta, quarantine; upgrade
+  marks every record dirty), R16 guard in one transaction with the `lastRev` hold-back. Gradle 283 → 326.
+  Opus review approved. `key-check` (non-UUID) never leaves the phone. Task 6 is split 6a/6b/6c (R17); the
+  locked job stages downloads in a `pending` table merged at unlock (R18).
+
 ## Current state + exact next step
 
-State: Tasks 1 to 4 complete; Task 5 (Kotlin sync: store schema 2, merge, client, sign-in) dispatched (opus). The owner has not pushed `strongroom-extension` or merged
+State: Tasks 1 to 5 complete; Task 6a (Android native wiring) dispatched (opus). The owner has not pushed `strongroom-extension` or merged
 anything.
 
 **Next:** follow the ledger: resume at the first task without a `Task N: complete` line. Tasks 1 to 7 run
