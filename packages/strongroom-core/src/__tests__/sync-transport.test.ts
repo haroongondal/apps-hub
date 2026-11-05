@@ -67,8 +67,8 @@ test('malformedServerBodiesAreRefused', async () => {
   await assert.rejects(with_(200, { version: 1, kdf: {}, salt: 's' }).prelogin(), refused(200));
   const pre = { version: 1, kdf: { memoryKiB: 65536, iterations: 3, parallelism: 1 }, salt: 'AAECAwQFBgcICQoLDA0ODw==', accountKey: true };
   assert.deepEqual(await with_(200, pre).prelogin(), pre);
-  for (const salt of ['not*base64*salt*here*!==', 'AAECAwQFBgc=', 'AAECAwQFBgcICQoLDA0ODw', 'AAECAwQFBgcICQoLDA0ODxAR']) {
-    await assert.rejects(with_(200, { ...pre, salt }).prelogin(), refused(200), salt);
+  for (const salt of ['not*base64*salt*here*!==', 'AAECAwQFBgc=', 'AAECAwQFBgcICQoLDA0ODw', 'AAECAwQFBgcICQoLDA0ODxAR', [pre.salt]]) {
+    await assert.rejects(with_(200, { ...pre, salt }).prelogin(), refused(200), JSON.stringify(salt));
   }
   await assert.rejects(with_(200, { headerRev: '2' }).putAccount({ setupToken: 's' }, ACCOUNT), refused(200));
 });

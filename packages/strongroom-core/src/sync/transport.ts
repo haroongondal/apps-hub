@@ -71,7 +71,7 @@ export function fetchTransport(baseUrl: string, fetchFn: typeof fetch = fetch): 
   return {
     async prelogin() {
       const r = await call('GET', '/v1/prelogin');
-      return r.status === 404 ? null : ok(r, (d) => isObj(d.kdf) && SALT.test(String(d.salt)) && typeof d.accountKey === 'boolean');
+      return r.status === 404 ? null : ok(r, (d) => isObj(d.kdf) && typeof d.salt === 'string' && SALT.test(d.salt) && typeof d.accountKey === 'boolean');
     },
     pull: async (token, since) =>
       ok(
