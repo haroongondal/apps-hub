@@ -16,6 +16,7 @@ import {
   fieldsOf,
   keyProblem,
   lastSynced,
+  offerSignIn,
   syncFooter,
   syncView,
   verifyCopy,
@@ -37,6 +38,10 @@ const rejected = (code: string, message = 'Owner-ready text from the module.') =
 const OWN_COPY: [FormName, string][] = [
   ['turnOn', 'WRONG_RECOVERY_KEY'],
   ['finish', 'WRONG_RECOVERY_KEY'],
+  ['turnOn', 'WRONG_SETUP_TOKEN'],
+  ['finish', 'WRONG_SETUP_TOKEN'],
+  ['turnOn', 'SYNC_ACCOUNT_EXISTS'],
+  ['finish', 'SYNC_ACCOUNT_EXISTS'],
   ['signIn', 'SYNC_SIGN_IN'],
   ['recover', 'SYNC_SIGN_IN'],
   ['recover', 'ACCOUNT_KEY_REQUIRED'],
@@ -50,29 +55,31 @@ test('a build without a vault server offers nothing', () => {
   assert.equal(syncFooter(status({ available: false, state: 'off' }), NOW), null);
 });
 
-test('sync that is off offers to turn it on and shows no footer', () => {
-  assert.deepEqual(syncView(status({ state: 'off' }), NOW).actions, ['turnOn']);
+test('sync that is off offers to turn it on or to sign in to an account that exists, and shows no footer', () => {
+  assert.deepEqual(syncView(status({ state: 'off' }), NOW).actions, ['turnOn', 'signIn']);
   assert.equal(syncFooter(status({ state: 'off' }), NOW), null);
 });
 
-test('pendingSetup offers "Finish setting up sync", which asks again for the token, password and recovery key', () => {
+test('pendingSetup offers "Finish setting up sync", which asks again for the setup code, password and recovery key', () => {
   const v = syncView(status({ state: 'pendingSetup' }), NOW);
   assert.equal(v.actions[0], 'finish');
   assert.equal(ACTION_LABEL.finish, 'Finish setting up sync');
   assert.equal(FORM_COPY.finish.button, 'Finish setting up sync');
   assert.deepEqual(fieldsOf('finish'), ['setupToken', 'password', 'recoveryKey']);
   assert.deepEqual(fieldsOf('finish'), fieldsOf('turnOn'));
-  assert.ok(v.actions.includes('showKey'), 'the account key can be shown before the setup is finished');
+  assert.deepEqual(v.actions, ['finish', 'signIn', 'showKey'], 'the account key can be shown, and an existing account can be signed in to, before the setup is finished');
 });
 
 test('needsSignIn offers the password and account-key form and says a local change may not have reached other devices', () => {
   const v = syncView(status({ state: 'needsSignIn' }), NOW);
-  assert.equal(v.actions[0], 'signIn');
+  assert.deepEqual(v.actions, ['signIn', 'recover', 'showKey']);
   assert.deepEqual(fieldsOf('signIn'), ['password', 'accountKey']);
   assert.equal(v.body, NEEDS_SIGN_IN_BODY);
   assert.match(NEEDS_SIGN_IN_BODY, /may not have reached/);
   assert.match(NEEDS_SIGN_IN_BODY, /master password or recovery key/);
   assert.match(NEEDS_SIGN_IN_BODY, /replaces it/);
+  assert.match(NEEDS_SIGN_IN_BODY, /master password your other devices use, with your account key/, 'it asks for what the sign-in form asks for');
+  assert.doesNotMatch(NEEDS_SIGN_IN_BODY, /recovery key your other devices/);
   assert.equal(v.tone, 'warn');
   assert.equal(syncFooter(status({ state: 'needsSignIn' }), NOW)?.title, 'Sign in to sync again');
 });
@@ -98,19 +105,22 @@ test('pendingSetup has a footer that says the setup is not finished', () => {
   assert.equal(syncFooter(status({ state: 'pendingSetup' }), NOW)?.title, "Sync setup isn't finished");
 });
 
-test('entries that did not sync or cannot be read are counted in plain words, only when there are some', () => {
-  const none = syncView(status({ lastSyncAt: NOW }), NOW);
-  assert.deepEqual(none.notes, []);
+test('entries that did not sync are counted once, in plain words, and the advice fits every cause', () => {
+  assert.deepEqual(syncView(status({ lastSyncAt: NOW }), NOW).notes, []);
+  // One entry the phone can't open is both blocked and quarantined (SyncMerge): it is one entry, not two.
   const one = syncView(status({ lastSyncAt: NOW, blocked: 1, quarantined: 1 }), NOW);
-  assert.deepEqual(one.notes, [
-    "1 entry from the vault server can't be opened on this phone. It's kept unchanged.",
-    "1 entry hasn't synced. It's kept unchanged on this phone. Update Strongroom on your other devices, then sync again.",
-  ]);
-  const many = syncView(status({ lastSyncAt: NOW, blocked: 3, quarantined: 2 }), NOW);
-  assert.match(many.notes[0]!, /^2 entries from the vault server can't be opened/);
-  assert.match(many.notes[1]!, /^3 entries haven't synced/);
-  assert.equal(syncFooter(status({ lastSyncAt: NOW, blocked: 3, quarantined: 2 }), NOW)?.subtitle, "5 entries aren't synced.");
-  assert.equal(syncFooter(status({ lastSyncAt: NOW, blocked: 1 }), NOW)?.subtitle, "1 entry isn't synced.");
+  assert.equal(one.notes.length, 1);
+  assert.equal(
+    one.notes[0],
+    "1 entry isn't synced. Strongroom leaves it unchanged and doesn't upload it. If an entry is very large, shorten it. The rest of your vault syncs as usual.",
+  );
+  assert.match(syncView(status({ lastSyncAt: NOW, blocked: 3, quarantined: 2 }), NOW).notes[0]!, /^3 entries aren't synced\. Strongroom leaves them unchanged and doesn't upload them\./);
+  assert.match(syncView(status({ lastSyncAt: NOW, blocked: 0, quarantined: 2 }), NOW).notes[0]!, /^2 entries aren't synced\./);
+  assert.match(syncView(status({ lastSyncAt: NOW, blocked: 4, quarantined: 0 }), NOW).notes[0]!, /^4 entries aren't synced\./);
+  for (const note of [one.notes[0]!, syncView(status({ blocked: 2 }), NOW).notes[0]!]) assert.doesNotMatch(note, /Update Strongroom/, 'no advice that fits only one cause');
+  assert.equal(syncFooter(status({ lastSyncAt: NOW, blocked: 1, quarantined: 1 }), NOW)?.subtitle, "1 entry isn't synced.");
+  assert.equal(syncFooter(status({ lastSyncAt: NOW, blocked: 3, quarantined: 2 }), NOW)?.subtitle, "3 entries aren't synced.");
+  assert.equal(syncFooter(status({ lastSyncAt: NOW, quarantined: 2 }), NOW)?.subtitle, "2 entries aren't synced.");
   assert.equal(syncFooter(status({ lastSyncAt: NOW, blocked: 1 }), NOW)?.tone, 'warn');
 });
 
@@ -160,10 +170,11 @@ test('every flow lists the fields it asks for, and the recovery form adds the ac
   assert.deepEqual(fieldsOf('signIn', true), ['password', 'accountKey']);
 });
 
-test('turn on needs the setup token, the master password and a complete recovery key', () => {
+test('turn on needs the setup code, the master password and a complete recovery key', () => {
   const empty = checkForm('turnOn', values());
   assert.deepEqual(Object.keys(empty).sort(), ['password', 'recoveryKey', 'setupToken']);
-  assert.equal(empty.setupToken, 'Enter the setup token.');
+  assert.equal(empty.setupToken, 'Enter the setup code.');
+  assert.equal(FIELD_LABEL.setupToken, 'Setup code');
   assert.equal(empty.password, 'Enter your master password.');
   assert.deepEqual(checkForm('turnOn', values({ setupToken: 'abc', password: 'x', recoveryKey: RECOVERY })), {});
   assert.deepEqual(Object.keys(checkForm('finish', values({ setupToken: 'abc', password: 'x', recoveryKey: 'AAAA' }))), ['recoveryKey']);
@@ -195,7 +206,35 @@ test('a wrong recovery key at turn-on is explained and points to Settings, New r
   assert.match(e.message, /Settings/);
   assert.match(e.message, /New recovery key/);
   assert.equal(explain('finish', rejected('WRONG_RECOVERY_KEY')).field, 'recoveryKey');
-  assert.equal(explain('turnOn', rejected('WRONG_SETUP_TOKEN', 'The vault server didn’t accept that setup token. Check it and try again.')).field, 'setupToken');
+  assert.match(e.message, /then turn on sync again\.$/);
+});
+
+test('each message names the screen it appears on', () => {
+  assert.match(explain('finish', rejected('WRONG_RECOVERY_KEY')).message, /then finish setting up sync again\.$/);
+  for (const form of ['turnOn', 'finish'] as const) {
+    const token = explain(form, rejected('WRONG_SETUP_TOKEN', "The vault server didn't accept that setup token. Check it and try again."));
+    assert.equal(token.field, 'setupToken');
+    assert.equal(token.message, "The vault server didn't accept that setup code. Check it and try again.");
+    const exists = explain(form, rejected('SYNC_ACCOUNT_EXISTS', 'Sign in with your master password and account key instead.'));
+    assert.equal(exists.field, null);
+    assert.match(exists.message, /^The vault server already has a sync account\. Go back and choose Sign in to sync, then enter your master password and account key\.$/);
+  }
+  // The copy points at a button, so the home screen it sends the owner back to must have that button.
+  assert.ok(syncView(status({ state: 'off' }), NOW).actions.includes('signIn'));
+  assert.ok(syncView(status({ state: 'pendingSetup' }), NOW).actions.includes('signIn'));
+  assert.equal(ACTION_LABEL.signIn, 'Sign in to sync');
+});
+
+test('Sign in to sync is offered on the unlock screen only when it can help', () => {
+  const failed = (code: string) => rejected(code);
+  assert.equal(offerSignIn(status({ state: 'needsSignIn' }), null), true);
+  assert.equal(offerSignIn(status({ state: 'idle' }), failed('ACCOUNT_KEY_REQUIRED')), true, 'the phone lost its account key');
+  assert.equal(offerSignIn(null, failed('ACCOUNT_KEY_REQUIRED')), true);
+  for (const state of STATES.filter((s) => s !== 'needsSignIn')) assert.equal(offerSignIn(status({ state }), null), false, state);
+  assert.equal(offerSignIn(status({ state: 'idle' }), failed('LOCKED')), false);
+  assert.equal(offerSignIn(status({ state: 'idle' }), new Error('wrong password')), false);
+  assert.equal(offerSignIn(status({ state: 'needsSignIn', available: false }), null), false);
+  assert.equal(offerSignIn(null, null), false);
 });
 
 test('a failed sign-in blames the password or the account key, never one of them', () => {
@@ -261,8 +300,7 @@ test('copy is sentence case, with no ALL-CAPS words and no emoji', () => {
 
 test('copy uses no engineering words', () => {
   for (const text of allCopy()) {
-    const plain = text.replace(/setup token/gi, 'setup code');
-    assert.doesNotMatch(plain, /quarantin|\brev\b|\bblocked\b|\btokens?\b|\b[45]\d\d\b|hash|keystore|argon|hkdf|header|ciphertext|payload/i, text);
+    assert.doesNotMatch(text, /quarantin|\brev\b|\bblocked\b|\btokens?\b|\b[45]\d\d\b|hash|keystore|argon|hkdf|header|ciphertext|payload/i, text);
   }
 });
 

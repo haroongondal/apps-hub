@@ -108,7 +108,11 @@ function SyncForm({ form, note, onBack, onLocked, onEnabled, onDone, onForgot }:
     return true;
   };
 
+  const fields = fieldsOf(form, askAccountKey);
+  const last = fields[fields.length - 1];
+
   const submit = async () => {
+    if (busy) return;
     const found = checkForm(form, values, askAccountKey);
     setProblems(found);
     setFault(null);
@@ -137,7 +141,7 @@ function SyncForm({ form, note, onBack, onLocked, onEnabled, onDone, onForgot }:
       <BackButton onPress={onBack} />
       <Header title={copy.title} subtitle={copy.intro} />
       {note}
-      {fieldsOf(form, askAccountKey).map((field) => {
+      {fields.map((field) => {
         if (field === 'confirm') return null;
         if (field === 'newPassword') {
           return (
@@ -149,13 +153,21 @@ function SyncForm({ form, note, onBack, onLocked, onEnabled, onDone, onForgot }:
               onPassword={change('newPassword')}
               onConfirm={change('confirm')}
               error={problems.newPassword ?? null}
+              onSubmit={last === 'confirm' ? submit : undefined}
             />
           );
         }
         return (
           <React.Fragment key={field}>
             {field === 'accountKey' && needKey && <Notice tone="warn">{needKey}</Notice>}
-            <SecretField label={FIELD_LABEL[field]} value={values[field]} onChangeText={change(field)} error={problems[field]} mono={MONO.includes(field)} />
+            <SecretField
+              label={FIELD_LABEL[field]}
+              value={values[field]}
+              onChangeText={change(field)}
+              onSubmitEditing={field === last ? submit : undefined}
+              error={problems[field]}
+              mono={MONO.includes(field)}
+            />
           </React.Fragment>
         );
       })}
@@ -261,7 +273,7 @@ export function SyncScreen({ start, onBack, onDone, onLocked, onHold }: Props) {
     return (
       <Screen scroll>
         <Header title={copy.title} subtitle={copy.intro} />
-        <SecretField label={copy.label} value={typed} onChangeText={setTyped} error={typedError} mono />
+        <SecretField label={copy.label} value={typed} onChangeText={setTyped} onSubmitEditing={verify} error={typedError} mono />
         <Button label={copy.button} onPress={verify} block />
         <Button label={copy.again} variant="ghost" onPress={() => setStep('key')} />
       </Screen>

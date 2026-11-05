@@ -21,7 +21,7 @@ export const ACTION_LABEL: Record<SyncAction, string> = {
 };
 
 export const FIELD_LABEL: Record<FieldName, string> = {
-  setupToken: 'Setup token',
+  setupToken: 'Setup code',
   password: 'Master password',
   recoveryKey: 'Recovery key',
   accountKey: 'Account key',
@@ -34,7 +34,7 @@ export const FORM_COPY: Record<FormName, { title: string; intro: string; button:
   turnOn: {
     title: 'Turn on sync',
     intro:
-      'Sync keeps an encrypted copy of your vault on your own vault server, so your other devices can open it. Enter the setup token from when you set the server up, your master password and your recovery key.',
+      'Sync keeps an encrypted copy of your vault on your own vault server, so your other devices can open it. Enter the setup code from when you set the server up, your master password and your recovery key.',
     button: 'Turn on sync',
   },
   finish: {
@@ -55,7 +55,7 @@ export const FORM_COPY: Record<FormName, { title: string; intro: string; button:
 };
 
 export const NEEDS_SIGN_IN_BODY =
-  "This phone's saved sign-in no longer works. If you changed your master password or recovery key on this phone, that change may not have reached your other devices. Signing in replaces it with the settings on the vault server, so use the master password and recovery key your other devices use. Your logins, cards and notes on this phone are kept and sync after you sign in.";
+  "This phone's saved sign-in no longer works. If you changed your master password or recovery key on this phone, that change may not have reached your other devices. Signing in replaces it with the settings on the vault server, so enter the master password your other devices use, with your account key. Your logins, cards and notes on this phone are kept and sync after you sign in.";
 
 const OFF_BODY = 'Sync keeps an encrypted copy of your vault on your own vault server, so your other devices can open it. The server never sees your passwords.';
 const PENDING_BODY = "This phone is ready, but the vault server didn't finish creating your account. Finish setting up sync to get your account key and start syncing.";
@@ -64,7 +64,10 @@ const ERROR_BODY = "The last sync didn't finish. Check that this phone is online
 export const ALREADY_USE = 'I already use Strongroom on another device';
 
 export const WRONG_PASSWORD = 'That password is wrong. Try again.';
-const WRONG_RECOVERY = "That recovery key doesn't open this vault. In Settings, choose New recovery key, write the new key down, then turn on sync again.";
+const wrongRecovery = (form: FormName) =>
+  `That recovery key doesn't open this vault. In Settings, choose New recovery key, write the new key down, then ${form === 'finish' ? 'finish setting up sync' : 'turn on sync'} again.`;
+const WRONG_SETUP_CODE = "The vault server didn't accept that setup code. Check it and try again.";
+const ACCOUNT_EXISTS = `The vault server already has a sync account. Go back and choose ${ACTION_LABEL.signIn}, then enter your master password and account key.`;
 const SIGN_IN_REFUSED = "That password or account key isn't right. Check both and try again.";
 const RECOVERY_REFUSED = "The vault server didn't accept that recovery key. Check each group and try again.";
 const NEEDS_ACCOUNT_KEY = "This phone doesn't have your account key. Type it below, twice. It can't be checked here, so compare it with the key you wrote down.";
@@ -110,17 +113,14 @@ export interface SyncView {
   notes: string[];
 }
 
+// A remote entry this phone can't open is counted in both, so the larger of the two is the honest number.
+const unsyncedCount = (s: SyncStatus) => Math.max(s.blocked, s.quarantined);
+
 function notesOf(s: SyncStatus): string[] {
-  const out: string[] = [];
-  if (s.quarantined > 0) {
-    out.push(`${plural(s.quarantined, 'entry', 'entries')} from the vault server can't be opened on this phone. ${s.quarantined === 1 ? "It's" : "They're"} kept unchanged.`);
-  }
-  if (s.blocked > 0) {
-    out.push(
-      `${plural(s.blocked, 'entry', 'entries')} ${s.blocked === 1 ? "hasn't" : "haven't"} synced. ${s.blocked === 1 ? "It's" : "They're"} kept unchanged on this phone. Update Strongroom on your other devices, then sync again.`,
-    );
-  }
-  return out;
+  const n = unsyncedCount(s);
+  if (n === 0) return [];
+  const it = n === 1 ? 'it' : 'them';
+  return [`${plural(n, 'entry', 'entries')} ${n === 1 ? "isn't" : "aren't"} synced. Strongroom leaves ${it} unchanged and doesn't upload ${it}. If an entry is very large, shorten it. The rest of your vault syncs as usual.`];
 }
 
 export function syncView(s: SyncStatus, now: number): SyncView {
@@ -128,11 +128,11 @@ export function syncView(s: SyncStatus, now: number): SyncView {
   const notes = notesOf(s);
   switch (s.state) {
     case 'off':
-      return { title: 'Sync is off', body: OFF_BODY, tone: 'neutral', actions: ['turnOn'], notes: [] };
+      return { title: 'Sync is off', body: OFF_BODY, tone: 'neutral', actions: ['turnOn', 'signIn'], notes: [] };
     case 'pendingSetup':
-      return { title: "Sync setup isn't finished", body: PENDING_BODY, tone: 'warn', actions: ['finish', 'showKey'], notes: [] };
+      return { title: "Sync setup isn't finished", body: PENDING_BODY, tone: 'warn', actions: ['finish', 'signIn', 'showKey'], notes: [] };
     case 'needsSignIn':
-      return { title: 'Sign in to sync again', body: NEEDS_SIGN_IN_BODY, tone: 'warn', actions: ['signIn', 'recover'], notes: [] };
+      return { title: 'Sign in to sync again', body: NEEDS_SIGN_IN_BODY, tone: 'warn', actions: ['signIn', 'recover', 'showKey'], notes: [] };
     case 'syncing':
       return { title: 'Syncing…', body: null, tone: 'neutral', actions: ['showKey'], notes };
     case 'error':
@@ -150,7 +150,7 @@ export interface FooterLine {
 
 export function syncFooter(s: SyncStatus, now: number): FooterLine | null {
   if (!s.available || s.state === 'off') return null;
-  const count = s.blocked + s.quarantined;
+  const count = unsyncedCount(s);
   const unsynced = count > 0 ? `${plural(count, 'entry', 'entries')} ${count === 1 ? "isn't" : "aren't"} synced.` : null;
   switch (s.state) {
     case 'pendingSetup':
@@ -190,7 +190,7 @@ export function checkForm(form: FormName, v: Values, askAccountKey = false): Pro
     if (message) problems[field] = message;
   };
   if (form === 'turnOn' || form === 'finish') {
-    set('setupToken', v.setupToken.trim() === '' ? 'Enter the setup token.' : null);
+    set('setupToken', v.setupToken.trim() === '' ? 'Enter the setup code.' : null);
     set('password', v.password === '' ? 'Enter your master password.' : null);
     set('recoveryKey', keyProblem(v.recoveryKey, 'recovery key'));
   } else if (form === 'signIn') {
@@ -212,6 +212,9 @@ export function checkForm(form: FormName, v: Values, askAccountKey = false): Pro
 export const accountKeyGroupProblem = (key: string, group: number, typed: string): string | null =>
   recoveryGroupMatches(key, group, typed) ? null : `That isn't group ${group + 1}. Check the key you wrote down and try again.`;
 
+export const offerSignIn = (status: SyncStatus | null, failure: unknown): boolean =>
+  hasCode(failure, 'ACCOUNT_KEY_REQUIRED') || (status?.available === true && status.state === 'needsSignIn');
+
 export interface Explained {
   field: FieldName | null;
   message: string;
@@ -221,9 +224,10 @@ export interface Explained {
 // A wrong password and a wrong account key look the same to the vault server, so a refused sign-in blames both.
 export function explain(form: FormName, e: unknown): Explained {
   const say = (field: FieldName | null, message = messageOf(e), askAccountKey = false): Explained => ({ field, message, askAccountKey });
-  if (hasCode(e, 'WRONG_RECOVERY_KEY')) return say('recoveryKey', WRONG_RECOVERY);
+  if (hasCode(e, 'WRONG_RECOVERY_KEY')) return say('recoveryKey', wrongRecovery(form));
   if (hasCode(e, 'BAD_RECOVERY_KEY')) return say('recoveryKey');
-  if (hasCode(e, 'WRONG_SETUP_TOKEN')) return say('setupToken');
+  if (hasCode(e, 'WRONG_SETUP_TOKEN')) return say('setupToken', WRONG_SETUP_CODE);
+  if (hasCode(e, 'SYNC_ACCOUNT_EXISTS')) return say(null, ACCOUNT_EXISTS);
   if (hasCode(e, 'BAD_ACCOUNT_KEY')) return say('accountKey');
   if (hasCode(e, 'SYNC_SIGN_IN') && form === 'signIn') return say(null, SIGN_IN_REFUSED);
   if (hasCode(e, 'SYNC_SIGN_IN') && form === 'recover') return say('recoveryKey', RECOVERY_REFUSED);

@@ -5,11 +5,12 @@ import { messageOf, whileDeriving } from './call.ts';
 import { validateMasterPassword } from './forms.ts';
 import { BackButton, NewPasswordFields, SecretField } from './parts.tsx';
 import { SyncScreen, useSyncStatus } from './SyncScreen.tsx';
-import { ACTION_LABEL } from './sync-flow.ts';
+import { ACTION_LABEL, offerSignIn } from './sync-flow.ts';
 
 export function UnlockScreen({ status, notice, onUnlocked }: { status: Status; notice: string | null; onUnlocked: () => void }) {
   const [recovering, setRecovering] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
+  const [failure, setFailure] = useState<unknown>(null);
   const { status: sync } = useSyncStatus();
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -18,10 +19,12 @@ export function UnlockScreen({ status, notice, onUnlocked }: { status: Status; n
   const attempt = async (call: () => Promise<boolean>, wrong: string) => {
     setBusy(true);
     setError(null);
+    setFailure(null);
     try {
       if (await whileDeriving(call)) return onUnlocked();
       setError(wrong);
     } catch (e) {
+      setFailure(e);
       setError(messageOf(e));
     }
     setBusy(false);
@@ -35,7 +38,18 @@ export function UnlockScreen({ status, notice, onUnlocked }: { status: Status; n
     if (status.biometricEnabled) void withFingerprint(true);
   }, []);
 
-  if (recovering) return <Recover onBack={() => setRecovering(false)} onUnlocked={onUnlocked} />;
+  if (recovering) {
+    return (
+      <Recover
+        onBack={() => setRecovering(false)}
+        onUnlocked={onUnlocked}
+        onSignIn={() => {
+          setRecovering(false);
+          setSigningIn(true);
+        }}
+      />
+    );
+  }
   if (signingIn) return <SyncScreen start="signIn" onBack={() => setSigningIn(false)} onDone={() => onUnlocked()} onLocked={() => setSigningIn(false)} />;
 
   return (
@@ -46,23 +60,25 @@ export function UnlockScreen({ status, notice, onUnlocked }: { status: Status; n
       <Button label="Unlock" onPress={withPassword} busy={busy} disabled={password === ''} block />
       {status.biometricEnabled && <Button label="Use fingerprint" variant="secondary" onPress={() => withFingerprint(false)} disabled={busy} block />}
       <Button label="Forgot master password" variant="ghost" onPress={() => setRecovering(true)} disabled={busy} />
-      {sync?.available && sync.state !== 'off' && <Button label={ACTION_LABEL.signIn} variant="ghost" onPress={() => setSigningIn(true)} disabled={busy} />}
+      {offerSignIn(sync, failure) && <Button label={ACTION_LABEL.signIn} variant="secondary" onPress={() => setSigningIn(true)} disabled={busy} block />}
     </Screen>
   );
 }
 
-function Recover({ onBack, onUnlocked }: { onBack: () => void; onUnlocked: () => void }) {
+function Recover({ onBack, onUnlocked, onSignIn }: { onBack: () => void; onUnlocked: () => void; onSignIn: () => void }) {
   const [recoveryKey, setRecoveryKey] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [keyError, setKeyError] = useState<string | null>(null);
   const [rule, setRule] = useState<string | null>(null);
   const [fault, setFault] = useState<string | null>(null);
+  const [failure, setFailure] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
   const reset = async () => {
     setKeyError(null);
     setFault(null);
+    setFailure(null);
     const problem = validateMasterPassword(password, confirm);
     setRule(problem);
     if (problem) return;
@@ -71,6 +87,7 @@ function Recover({ onBack, onUnlocked }: { onBack: () => void; onUnlocked: () =>
       if (await whileDeriving(() => Vault.recover(recoveryKey, password))) return onUnlocked();
       setKeyError("That recovery key doesn't open this vault. Check each group and try again.");
     } catch (e) {
+      setFailure(e);
       setFault(messageOf(e));
     }
     setBusy(false);
@@ -84,6 +101,7 @@ function Recover({ onBack, onUnlocked }: { onBack: () => void; onUnlocked: () =>
       <NewPasswordFields label="New master password" password={password} confirm={confirm} onPassword={setPassword} onConfirm={setConfirm} error={rule} />
       <Notice tone="neutral">Your logins, cards and notes stay as they are. Only the master password changes.</Notice>
       {fault && <Notice tone="danger">{fault}</Notice>}
+      {offerSignIn(null, failure) && <Button label={ACTION_LABEL.signIn} variant="secondary" onPress={onSignIn} disabled={busy} block />}
       <Button label="Reset and unlock" onPress={reset} busy={busy} block />
     </Screen>
   );
