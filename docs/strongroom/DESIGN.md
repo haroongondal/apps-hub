@@ -448,6 +448,14 @@ local copy is the defence against loss.
 
 ## 11. Browser extensions (Phases 3–4), design level only
 
+**As built (2026-11-04), Chrome only, before sync:** `apps/strongroom-extension` keeps
+its own local vault (same format as §6, `packages/strongroom-core` passes the shared
+vectors). The Android vault has no export and the release app has no network access, so
+the two vaults are separate until sync exists; joining them later means re-sealing one
+vault's entries under the other's key. Cut for now: cards and notes in the UI, change
+master password, new recovery key, clipboard auto-clear, adjustable auto-lock (fixed 5
+minutes), and the 10,000-common-passwords check (only repeated and straight-run passwords are refused). Details and next steps: `docs/handoffs/strongroom-extension.md`.
+
 - One WebExtension code base (Manifest V3) for Chrome, then Firefox. TS vault
   logic in a new pure package, `packages/strongroom-core`, Hermes-safe like
   `open-tunnel-core`, so a future iPhone app can reuse it. It passes the shared

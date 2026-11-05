@@ -1,0 +1,21 @@
+{
+  "name": "strongroom-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Strongroom for Chrome (Manifest V3): fills and saves logins from a local encrypted vault",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test src/__tests__/service.test.ts",
+    "test:e2e": "node test/e2e.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "strongroom-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "0.28.2",
+    "typescript": "~5.9.2"
+  }
+}

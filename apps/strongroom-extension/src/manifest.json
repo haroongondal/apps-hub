@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Strongroom",
+  "version": "0.1.0",
+  "description": "Fills and saves your logins from an encrypted vault that stays on this computer.",
+  "minimum_chrome_version": "127",
+  "icons": { "16": "icon.png", "32": "icon.png", "48": "icon.png", "128": "icon.png" },
+  "action": { "default_title": "Strongroom", "default_popup": "popup.html" },
+  "background": { "service_worker": "background.js" },
+  "permissions": ["storage", "alarms", "activeTab"],
+  "content_scripts": [
+    { "matches": ["http://*/*", "https://*/*"], "js": ["content.js"], "run_at": "document_idle", "all_frames": false }
+  ]
+}

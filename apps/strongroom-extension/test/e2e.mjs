@@ -1,0 +1,229 @@
+// Opens real Chromium with the built extension (run `pnpm build` first). Not part of `pnpm test`.
+// Needs playwright-core and a Chromium: set PLAYWRIGHT_CORE and CHROMIUM_PATH if yours live elsewhere; screenshots go to SHOTS.
+import http from 'node:http';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const { chromium } = await import(process.env.PLAYWRIGHT_CORE ?? join(homedir(), 'Documents/browser-automation/node_modules/playwright-core/index.mjs'));
+const CHROMIUM = process.env.CHROMIUM_PATH ?? join(homedir(), 'Library/Caches/ms-playwright/chromium-1228/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
+const SCRATCH = process.env.SHOTS ?? tmpdir();
+const EXT = fileURLToPath(new URL('../dist', import.meta.url));
+const CSV = fileURLToPath(new URL('../../strongroom/modules/strongroom-vault/android/src/test/resources/google-export-redacted.csv', import.meta.url));
+const MASTER = 'correct horse battery staple';
+
+const results = [];
+const check = (name, cond, extra = '') => {
+  results.push({ name, ok: !!cond });
+  console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${cond ? '' : `  ${extra}`}`);
+};
+
+const page_html = `<!doctype html><title>Sign in</title><body style="font:16px sans-serif;padding:40px">
+<form id="f" action="/welcome" method="post" novalidate><p><label>Email <input id="u" name="email" type="email"></label></p>
+<p><label>Password <input id="p" name="pw" type="password"></label></p><button id="go" type="submit">Sign in</button></form></body>`;
+const server = http.createServer((req, res) => {
+  res.setHeader('content-type', 'text/html');
+  res.end(req.url.startsWith('/login') ? page_html : '<h1>Welcome</h1>');
+});
+await new Promise((r) => server.listen(0, '127.0.0.1', r));
+const PORT = server.address().port;
+const GOOD = `http://localhost:${PORT}/login.html`;
+const OTHER = `http://127.0.0.1:${PORT}/login.html`;
+
+const profile = mkdtempSync(join(tmpdir(), 'sg-e2e-'));
+const launch = async () => {
+  const ctx = await chromium.launchPersistentContext(profile, {
+    executablePath: CHROMIUM, headless: true,
+    args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
+  });
+  let [sw] = ctx.serviceWorkers();
+  if (!sw) sw = await ctx.waitForEvent('serviceworker');
+  return { ctx, sw, id: new URL(sw.url()).host };
+};
+
+const menuShown = (page) => page.evaluate(() => document.documentElement.lastElementChild?.style?.zIndex === '2147483647');
+const errors = [];
+
+try {
+  let { ctx, sw, id } = await launch();
+  const openPopup = async () => {
+    const p = await ctx.newPage();
+    p.on('pageerror', (e) => errors.push(`popup: ${e.message}`));
+    await p.goto(`chrome-extension://${id}/popup.html`);
+    return p;
+  };
+
+  let popup = await openPopup();
+  await popup.getByRole('heading', { name: 'Create your vault' }).waitFor();
+  await popup.locator('input[type=password]').nth(0).fill('short');
+  await popup.locator('input[type=password]').nth(1).fill('short');
+  await popup.getByRole('button', { name: 'Create vault' }).click();
+  await popup.locator('.msg:not(:empty)').waitFor();
+  check('a short master password is refused with a message', (await popup.locator('.msg').innerText()).includes('12 characters'));
+  await popup.locator('input[type=password]').nth(0).fill(MASTER);
+  await popup.locator('input[type=password]').nth(1).fill(MASTER);
+  await popup.getByRole('button', { name: 'Create vault' }).click();
+  await popup.getByRole('heading', { name: 'Save your recovery key' }).waitFor();
+  const key = (await popup.locator('.key').innerText()).trim();
+  check('the recovery key is shown as eight groups', /^([A-Z2-7]{4}-){7}[A-Z2-7]{4}$/.test(key), key);
+  await popup.screenshot({ path: `${SCRATCH}/1-recovery.png` });
+  await popup.locator('input').first().fill('ZZZZ');
+  await popup.getByRole('button', { name: "I've saved it" }).click();
+  await popup.locator('.msg:not(:empty)').waitFor();
+  check('a wrong first group is refused', (await popup.locator('.msg').innerText()).includes("doesn't match"));
+  await popup.locator('input').first().fill(key.slice(0, 4));
+  await popup.getByRole('button', { name: "I've saved it" }).click();
+  await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+  check('after setup the vault is open and empty', await popup.getByText('No logins yet').isVisible());
+
+  await popup.getByRole('button', { name: 'Add', exact: true }).click();
+  const fields = popup.locator('input.ui-input, textarea.ui-input');
+  await fields.nth(0).fill('Local test');
+  await fields.nth(1).fill('tester');
+  await fields.nth(2).fill('p4ssw0rd-local');
+  await popup.locator('textarea').first().fill(`http://localhost:${PORT}`);
+  await popup.getByRole('button', { name: 'Save', exact: true }).click();
+  await popup.getByRole('heading', { name: 'Local test' }).waitFor();
+  check('the saved login shows its username and hides the password', (await popup.innerText('body')).includes('tester') && !(await popup.innerText('body')).includes('p4ssw0rd-local'));
+  await popup.getByRole('button', { name: 'Show' }).click();
+  check('Show reveals the password', (await popup.innerText('body')).includes('p4ssw0rd-local'));
+  await popup.screenshot({ path: `${SCRATCH}/2-detail.png` });
+
+  const page = await ctx.newPage();
+  page.on('pageerror', (e) => errors.push(`page: ${e.message}`));
+  await page.goto(GOOD);
+  await page.locator('#u').click();
+  await page.waitForTimeout(1500);
+  check('the menu opens on a matching site', await menuShown(page));
+  await page.screenshot({ path: `${SCRATCH}/3-menu.png` });
+  const box = await page.locator('#u').boundingBox();
+  await page.mouse.click(box.x + 30, box.y + box.height + 18);
+  await page.waitForTimeout(800);
+  check('clicking the suggestion fills the username', (await page.inputValue('#u')) === 'tester', await page.inputValue('#u'));
+  check('clicking the suggestion fills the password', (await page.inputValue('#p')) === 'p4ssw0rd-local');
+  check('the menu closes after filling', !(await menuShown(page)));
+
+  await page.goto(GOOD);
+  await page.locator('#u').click();
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => { document.documentElement.lastElementChild.style.opacity = '0'; });
+  await page.waitForTimeout(500);
+  const hiddenBox = await page.locator('#u').boundingBox();
+  await page.mouse.click(hiddenBox.x + 30, hiddenBox.y + hiddenBox.height + 18);
+  await page.waitForTimeout(800);
+  check('a page that hides the menu cannot get it clicked into filling', (await page.inputValue('#u')) === '' && (await page.inputValue('#p')) === '');
+
+  const other = await ctx.newPage();
+  await other.goto(OTHER);
+  await other.locator('#u').click();
+  await other.waitForTimeout(1500);
+  check('no menu on a host the login is not saved for', !(await menuShown(other)));
+
+  await other.locator('#u').fill('newuser@example.com');
+  await other.locator('#p').fill('brand-new-pass-1');
+  await Promise.all([other.waitForURL('**/welcome'), other.locator('#go').click()]);
+  await other.waitForTimeout(800);
+  const pendingKeys = await sw.evaluate(async () => Object.keys(JSON.parse((await chrome.storage.session.get('pending')).pending ?? '{}')));
+  check('the submitted sign-in is waiting in session memory', pendingKeys.length === 1, JSON.stringify(pendingKeys));
+  const tabId = Number(pendingKeys[0]);
+  let badge = '';
+  for (let i = 0; i < 25 && badge !== '1'; i++) {
+    badge = await sw.evaluate((t) => chrome.action.getBadgeText({ tabId: t }), tabId);
+    if (badge !== '1') await other.waitForTimeout(200);
+  }
+  check('the toolbar badge flags it', badge === '1', badge);
+  const send = (msg) => popup.evaluate((m) => chrome.runtime.sendMessage(m), msg);
+  const pending = await send({ type: 'pending', tabId });
+  check('the popup is told to offer a new login for that host', pending.ok && pending.data.intent === 'new' && pending.data.host === `127.0.0.1:${PORT}` && !JSON.stringify(pending).includes('brand-new-pass-1'), JSON.stringify(pending));
+  await send({ type: 'resolvePending', tabId, action: 'save' });
+  const list = await send({ type: 'list' });
+  check('saving adds it to the vault', list.ok && list.data.rows.some((r) => r.username === 'newuser@example.com'), JSON.stringify(list.data?.rows?.map((r) => r.name)));
+
+  const localId = list.data.rows.find((r) => r.name === 'Local test').id;
+  await other.goto(OTHER);
+  await other.waitForTimeout(500);
+  await popup.evaluate(([t, i]) => chrome.tabs.sendMessage(t, { type: 'fillForm', id: i }), [tabId, localId]);
+  await other.waitForTimeout(800);
+  check('the popup cannot make a page fill a login saved for another site', (await other.inputValue('#u')) === '' && (await other.inputValue('#p')) === '');
+  await page.goto(GOOD);
+  await page.locator('#u').fill('tester');
+  await page.locator('#p').fill('rotated-pass-2');
+  await Promise.all([page.waitForURL('**/welcome'), page.locator('#go').click()]);
+  await page.waitForTimeout(800);
+  const pendingNow = await sw.evaluate(async () => Object.keys(JSON.parse((await chrome.storage.session.get('pending')).pending ?? '{}')));
+  const pageTabId = Number(pendingNow[0]);
+  const update = await send({ type: 'pending', tabId: pageTabId });
+  check('a changed password for a saved login is offered as an update', pendingNow.length === 1 && update.ok && update.data.intent === 'update' && update.data.name === 'Local test', JSON.stringify(update));
+  await send({ type: 'resolvePending', tabId: pageTabId, action: 'dismiss' });
+  await page.goto(GOOD);
+  await page.waitForTimeout(500);
+  await popup.evaluate(([t, i]) => chrome.tabs.sendMessage(t, { type: 'fillForm', id: i }), [pageTabId, localId]);
+  await page.waitForTimeout(800);
+  check('the popup can fill a page whose site the login is saved for', (await page.inputValue('#u')) === 'tester' && (await page.inputValue('#p')) === 'p4ssw0rd-local');
+  const here = await send({ type: 'candidates', page: { url: GOOD, tabId } });
+  check('the popup can ask which logins match a tab', here.ok && here.data.rows.map((r) => r.name).join() === 'Local test', JSON.stringify(here));
+  const lookalike = await send({ type: 'candidates', page: { url: `http://localhost.evil.test:${PORT}/`, tabId } });
+  check('a lookalike host matches nothing', lookalike.ok && lookalike.data.rows.length === 0, JSON.stringify(lookalike));
+  const alarms = await sw.evaluate(() => chrome.alarms.getAll());
+  const ahead = (alarms.find((a) => a.name === 'auto-lock')?.scheduledTime ?? 0) - Date.now();
+  check('the five-minute auto-lock alarm is set while unlocked', ahead > 4 * 60_000 && ahead <= 5 * 60_000 + 5_000, String(ahead));
+
+  const noApi = await page.evaluate(() => typeof chrome === 'undefined' || typeof chrome.runtime?.sendMessage !== 'function');
+  check('the web page itself has no way to message the extension', noApi);
+
+  await popup.reload();
+  await popup.getByRole('button', { name: 'Lock' }).click();
+  await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
+  await page.reload();
+  await page.locator('#u').click();
+  await page.waitForTimeout(1500);
+  check('while locked the page offers only an unlock prompt', await menuShown(page));
+  await page.screenshot({ path: `${SCRATCH}/4-locked-menu.png` });
+  await popup.locator('input[type=password]').fill('the wrong password');
+  await popup.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await popup.locator('.msg:not(:empty)').waitFor();
+  check('a wrong master password is refused', (await popup.locator('.msg').innerText()).includes("isn't right"));
+  await popup.locator('input[type=password]').fill(MASTER);
+  await popup.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+  check('the right master password unlocks', true);
+
+  await popup.getByRole('button', { name: 'Import' }).click();
+  await popup.locator('input[type=file]').setInputFiles(CSV);
+  await popup.getByText('logins found').waitFor();
+  const summary = await popup.getByText('logins found').innerText();
+  check('the import preview counts match the Android tests', summary === '9 logins found, 1 duplicates merged, 2 need review.', summary);
+  await popup.getByRole('button', { name: 'Import 8 logins' }).click();
+  await popup.getByText('Imported 8 logins.').waitFor();
+  check('the import warns about the plain-text file', await popup.getByText('Delete the exported file now').isVisible());
+  await popup.getByRole('button', { name: 'Done' }).click();
+  await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+  const rows = await popup.locator('.row').count();
+  check('the imported logins are listed', rows === 10, String(rows));
+  check('flagged duplicates are marked for review', (await popup.getByText('Review', { exact: true }).count()) === 2);
+  await popup.screenshot({ path: `${SCRATCH}/5-list.png` });
+
+  await ctx.close();
+  ({ ctx, sw, id } = await launch());
+  popup = await openPopup();
+  await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
+  check('after a browser restart the vault is locked', true);
+  await popup.locator('input[type=password]').fill(MASTER);
+  await popup.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+  const after = await popup.locator('.row').count();
+  check('the logins survive the restart', after === 10, String(after));
+  const onDisk = await sw.evaluate(async () => JSON.stringify(await chrome.storage.local.get(null)));
+  check('nothing readable is stored on disk', !onDisk.includes('p4ssw0rd-local') && !onDisk.includes('tester') && !onDisk.includes('brand-new-pass-1') && !onDisk.includes('Local test'));
+  await ctx.close();
+} catch (e) {
+  check('the run finished without an exception', false, String(e?.stack ?? e).split('\n').slice(0, 4).join(' | '));
+} finally {
+  server.close();
+  rmSync(profile, { recursive: true, force: true });
+}
+
+if (errors.length) console.log('page errors:', errors);
+console.log(`\n${results.filter((r) => r.ok).length}/${results.length} checks passed`);
+process.exit(results.every((r) => r.ok) ? 0 : 1);
