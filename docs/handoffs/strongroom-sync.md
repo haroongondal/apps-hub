@@ -144,9 +144,15 @@ All in the plan's "Decisions"; the owner delegated them on 2026-11-05 ("do what 
   `MergePlan.rebase` in the same atomic `applyPull` as the `lastRev` advance, in three fix rounds.
   The rules Kotlin must copy are listed at the end of `.superpowers/sdd/PHASE-2-PLAN/task-3-report.md`.
 
+- 2026-11-05: **Task 4 done** (`fe8520d`): Kotlin account key, `derivePasswordKeys(…, flagged)`,
+  `openPasswordWrap`, tokens, `tokenHash`, flagged header JSON (last field). Gradle 271 → 283, 0 failures;
+  `VectorGen` keeps `vault-vectors.json` byte-identical. Opus review approved (vectors recomputed in Python).
+  Vault.kt still passes no account key: Task 6 wires it. Ruling R16: `applyPull` adopts only if the local
+  bytes are unchanged since the snapshot (Kotlin in Task 5, TS + extension in Task 7).
+
 ## Current state + exact next step
 
-State: Tasks 1 to 3 complete; Task 4 (account key and tokens in Kotlin) dispatched (opus). The owner has not pushed `strongroom-extension` or merged
+State: Tasks 1 to 4 complete; Task 5 (Kotlin sync: store schema 2, merge, client, sign-in) dispatched (opus). The owner has not pushed `strongroom-extension` or merged
 anything.
 
 **Next:** follow the ledger: resume at the first task without a `Task N: complete` line. Tasks 1 to 7 run
