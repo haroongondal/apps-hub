@@ -1,4 +1,4 @@
-import type { SyncStatus } from 'strongroom-vault';
+import type { SyncState, SyncStatus } from 'strongroom-vault';
 import { hasCode, messageOf } from './call.ts';
 import { recoveryGroupMatches, validateMasterPassword } from './forms.ts';
 
@@ -57,6 +57,11 @@ export const FORM_COPY: Record<FormName, { title: string; intro: string; button:
 export const NEEDS_SIGN_IN_BODY =
   "This phone's saved sign-in no longer works. If you changed your master password or recovery key on this phone, that change may not have reached your other devices. Signing in replaces it with the settings on the vault server, so enter the master password your other devices use, with your account key. Your logins, cards and notes on this phone are kept and sync after you sign in.";
 
+const PENDING_SIGN_IN_NOTE =
+  'If you changed your master password or recovery key on this phone since you started setting up sync, signing in replaces that change with the settings on the vault server.';
+const PENDING_SIGN_IN_INTRO = "Enter your master password and your account key. This phone hasn't shown you the key yet, so go back and choose Show account key first.";
+const NO_ACCOUNT_KEY = "This phone doesn't have your account key any more. Use the copy you wrote down to sign in.";
+
 const OFF_BODY = 'Sync keeps an encrypted copy of your vault on your own vault server, so your other devices can open it. The server never sees your passwords.';
 const PENDING_BODY = "This phone is ready, but the vault server didn't finish creating your account. Finish setting up sync to get your account key and start syncing.";
 const ERROR_BODY = "The last sync didn't finish. Check that this phone is online, then choose Sync now. If it fails again, the reason shows here.";
@@ -67,7 +72,7 @@ export const WRONG_PASSWORD = 'That password is wrong. Try again.';
 const wrongRecovery = (form: FormName) =>
   `That recovery key doesn't open this vault. In Settings, choose New recovery key, write the new key down, then ${form === 'finish' ? 'finish setting up sync' : 'turn on sync'} again.`;
 const WRONG_SETUP_CODE = "The vault server didn't accept that setup code. Check it and try again.";
-const ACCOUNT_EXISTS = `The vault server already has a sync account. Go back and choose ${ACTION_LABEL.signIn}, then enter your master password and account key.`;
+const ACCOUNT_EXISTS = `The vault server already has a sync account. Go back and choose ${ACTION_LABEL.signIn}, then enter your master password and account key. If this phone set the account up earlier, choose ${ACTION_LABEL.showKey} first.`;
 const SIGN_IN_REFUSED = "That password or account key isn't right. Check both and try again.";
 const RECOVERY_REFUSED = "The vault server didn't accept that recovery key. Check each group and try again.";
 const NEEDS_ACCOUNT_KEY = "This phone doesn't have your account key. Type it below, twice. It can't be checked here, so compare it with the key you wrote down.";
@@ -113,7 +118,7 @@ export interface SyncView {
   notes: string[];
 }
 
-// A remote entry this phone can't open is counted in both, so the larger of the two is the honest number.
+// A lower bound: a remote entry this phone can't open is in both counts, but the two sets can also differ.
 const unsyncedCount = (s: SyncStatus) => Math.max(s.blocked, s.quarantined);
 
 function notesOf(s: SyncStatus): string[] {
@@ -214,6 +219,16 @@ export const accountKeyGroupProblem = (key: string, group: number, typed: string
 
 export const offerSignIn = (status: SyncStatus | null, failure: unknown): boolean =>
   hasCode(failure, 'ACCOUNT_KEY_REQUIRED') || (status?.available === true && status.state === 'needsSignIn');
+
+export function signInNote(state: SyncState | undefined): string | null {
+  if (state === 'needsSignIn') return NEEDS_SIGN_IN_BODY;
+  return state === 'pendingSetup' ? PENDING_SIGN_IN_NOTE : null;
+}
+
+export const introFor = (form: FormName, state: SyncState | undefined): string =>
+  form === 'signIn' && state === 'pendingSetup' ? PENDING_SIGN_IN_INTRO : FORM_COPY[form].intro;
+
+export const showKeyProblem = (e: unknown): string => (hasCode(e, 'SYNC_OFF') ? NO_ACCOUNT_KEY : messageOf(e));
 
 export interface Explained {
   field: FieldName | null;

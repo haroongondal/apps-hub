@@ -12,12 +12,14 @@ import {
   FIELD_LABEL,
   FORM_COPY,
   KEY_SCREEN,
-  NEEDS_SIGN_IN_BODY,
   WRONG_PASSWORD,
   accountKeyGroupProblem,
   checkForm,
   explain,
   fieldsOf,
+  introFor,
+  showKeyProblem,
+  signInNote,
   syncFooter,
   syncView,
   verifyCopy,
@@ -39,6 +41,7 @@ const readStatus = (): SyncStatus | null => {
 export function useSyncStatus() {
   const [status, setStatus] = useState(readStatus);
   const [now, setNow] = useState(Date.now);
+  const reload = () => setStatus(readStatus());
   useEffect(() => {
     const sub = addSyncListener((s) => {
       setStatus(s);
@@ -51,7 +54,7 @@ export function useSyncStatus() {
       clearInterval(tick);
     };
   }, []);
-  return { status, now };
+  return { status, now, reload };
 }
 
 export function SyncSettingsRow({ onOpen }: { onOpen: () => void }) {
@@ -73,6 +76,7 @@ export function SyncFooter({ onPress }: { onPress: () => void }) {
 
 interface FormProps {
   form: FormName;
+  intro: string;
   note?: ReactNode;
   onBack: () => void;
   onLocked: () => void;
@@ -83,7 +87,7 @@ interface FormProps {
 
 const MONO: FieldName[] = ['setupToken', 'recoveryKey', 'accountKey', 'accountKeyAgain'];
 
-function SyncForm({ form, note, onBack, onLocked, onEnabled, onDone, onForgot }: FormProps) {
+function SyncForm({ form, intro, note, onBack, onLocked, onEnabled, onDone, onForgot }: FormProps) {
   const [values, setValues] = useState<Values>(EMPTY_VALUES);
   const [problems, setProblems] = useState<Problems>({});
   const [fault, setFault] = useState<string | null>(null);
@@ -139,7 +143,7 @@ function SyncForm({ form, note, onBack, onLocked, onEnabled, onDone, onForgot }:
   return (
     <Screen scroll>
       <BackButton onPress={onBack} />
-      <Header title={copy.title} subtitle={copy.intro} />
+      <Header title={copy.title} subtitle={intro} />
       {note}
       {fields.map((field) => {
         if (field === 'confirm') return null;
@@ -202,7 +206,7 @@ interface Props {
 }
 
 export function SyncScreen({ start, onBack, onDone, onLocked, onHold }: Props) {
-  const { status, now } = useSyncStatus();
+  const { status, now, reload } = useSyncStatus();
   const [step, setStep] = useState<Step>(start);
   const [accountKey, setAccountKey] = useState<string | null>(null);
   const [group, setGroup] = useState(0);
@@ -216,6 +220,10 @@ export function SyncScreen({ start, onBack, onDone, onLocked, onHold }: Props) {
     onHold?.(holding);
     return () => onHold?.(false);
   }, [holding]);
+
+  useEffect(() => {
+    if (step === 'home') reload();
+  }, [step]);
 
   const goHome = () => {
     setAccountKey(null);
@@ -246,11 +254,13 @@ export function SyncScreen({ start, onBack, onDone, onLocked, onHold }: Props) {
   };
 
   if (step === 'turnOn' || step === 'finish' || step === 'signIn' || step === 'recover') {
+    const note = step === 'signIn' ? signInNote(status?.state) : null;
     return (
       <SyncForm
         key={step}
         form={step}
-        note={step === 'signIn' && status?.state === 'needsSignIn' ? <Notice tone="warn">{NEEDS_SIGN_IN_BODY}</Notice> : null}
+        intro={introFor(step, status?.state)}
+        note={note ? <Notice tone="warn">{note}</Notice> : null}
         onBack={back}
         onLocked={onLocked}
         onEnabled={(key) => {
@@ -288,6 +298,7 @@ export function SyncScreen({ start, onBack, onDone, onLocked, onHold }: Props) {
         intro={KEY_SCREEN.askIntro}
         action={KEY_SCREEN.askAction}
         wrong={WRONG_PASSWORD}
+        explain={showKeyProblem}
         run={async (password) => {
           const key = await whileDeriving(() => Vault.showAccountKey(password));
           if (key === null) return false;

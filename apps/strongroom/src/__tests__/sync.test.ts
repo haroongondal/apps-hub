@@ -14,9 +14,12 @@ import {
   checkForm,
   explain,
   fieldsOf,
+  introFor,
   keyProblem,
   lastSynced,
   offerSignIn,
+  showKeyProblem,
+  signInNote,
   syncFooter,
   syncView,
   verifyCopy,
@@ -217,12 +220,41 @@ test('each message names the screen it appears on', () => {
     assert.equal(token.message, "The vault server didn't accept that setup code. Check it and try again.");
     const exists = explain(form, rejected('SYNC_ACCOUNT_EXISTS', 'Sign in with your master password and account key instead.'));
     assert.equal(exists.field, null);
-    assert.match(exists.message, /^The vault server already has a sync account\. Go back and choose Sign in to sync, then enter your master password and account key\.$/);
+    assert.equal(
+      exists.message,
+      'The vault server already has a sync account. Go back and choose Sign in to sync, then enter your master password and account key. If this phone set the account up earlier, choose Show account key first.',
+    );
   }
-  // The copy points at a button, so the home screen it sends the owner back to must have that button.
+  // The copy points at buttons, so the home screen it sends the owner back to (a failed turn-on leaves pendingSetup) must have them.
+  const home = syncView(status({ state: 'pendingSetup' }), NOW).actions;
+  assert.ok(home.includes('signIn') && home.includes('showKey'));
   assert.ok(syncView(status({ state: 'off' }), NOW).actions.includes('signIn'));
-  assert.ok(syncView(status({ state: 'pendingSetup' }), NOW).actions.includes('signIn'));
   assert.equal(ACTION_LABEL.signIn, 'Sign in to sync');
+  assert.equal(ACTION_LABEL.showKey, 'Show account key');
+});
+
+test('signing in warns before it replaces a change made on this phone', () => {
+  assert.equal(signInNote('needsSignIn'), NEEDS_SIGN_IN_BODY);
+  const pending = signInNote('pendingSetup') ?? '';
+  assert.match(pending, /^If you changed your master password or recovery key on this phone since you started setting up sync, signing in replaces that change with the settings on the vault server\.$/);
+  for (const state of ['off', 'idle', 'syncing', 'error', undefined] as const) assert.equal(signInNote(state), null, String(state));
+});
+
+test('the sign-in intro says where to get the account key when the phone has never shown it', () => {
+  assert.equal(introFor('signIn', 'idle'), FORM_COPY.signIn.intro);
+  assert.equal(introFor('signIn', undefined), FORM_COPY.signIn.intro);
+  assert.equal(introFor('signIn', 'needsSignIn'), FORM_COPY.signIn.intro);
+  assert.match(introFor('signIn', 'pendingSetup'), /go back and choose Show account key first/);
+  assert.doesNotMatch(introFor('signIn', 'pendingSetup'), /wrote down/);
+  for (const form of ['turnOn', 'finish', 'recover'] as const) assert.equal(introFor(form, 'pendingSetup'), FORM_COPY[form].intro);
+});
+
+test('Show account key on a phone that lost its key says so in plain words', () => {
+  const lost = showKeyProblem(rejected('SYNC_OFF', 'Sync is off. Turn it on in Settings first.'));
+  assert.equal(lost, "This phone doesn't have your account key any more. Use the copy you wrote down to sign in.");
+  const offline = "Strongroom couldn't reach the vault server. Check your connection and try again.";
+  assert.equal(showKeyProblem(rejected('SYNC_OFFLINE', offline)), offline);
+  assert.match(showKeyProblem(rejected('ERR_UNEXPECTED', 'java.lang.NullPointerException')), /^Something went wrong/);
 });
 
 test('Sign in to sync is offered on the unlock screen only when it can help', () => {
@@ -276,6 +308,7 @@ function allCopy(): string[] {
     }
   }
   out.push(syncView(status({ available: false }), NOW).title, lastSynced(null, NOW), NEEDS_SIGN_IN_BODY, WRONG_PASSWORD, ALREADY_USE);
+  out.push(signInNote('pendingSetup')!, introFor('signIn', 'pendingSetup'), showKeyProblem(rejected('SYNC_OFF')));
   out.push(...Object.values(ACTION_LABEL), ...Object.values(FIELD_LABEL));
   for (const f of Object.values(FORM_COPY)) out.push(f.title, f.intro, f.button);
   out.push(...Object.values(KEY_SCREEN), ...Object.values(DONE), ...Object.values(verifyCopy(2)));
@@ -310,6 +343,6 @@ test('every problem says what to do next', () => {
   for (const form of Object.keys(FORM_COPY) as FormName[]) {
     messages.push(...Object.values(checkForm(form, values({ recoveryKey: 'AAAA', accountKey: 'AAAA' }), true)));
   }
-  messages.push(...ownMessages(), NEEDS_SIGN_IN_BODY, WRONG_PASSWORD, accountKeyGroupProblem(KEY, 0, 'ZZZZ')!);
+  messages.push(...ownMessages(), showKeyProblem(rejected('SYNC_OFF')), NEEDS_SIGN_IN_BODY, WRONG_PASSWORD, accountKeyGroupProblem(KEY, 0, 'ZZZZ')!);
   for (const m of messages) assert.match(m, fix, m);
 });
