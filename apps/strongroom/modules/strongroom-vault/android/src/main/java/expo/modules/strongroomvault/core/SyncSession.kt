@@ -213,12 +213,13 @@ class SyncSession(
   // Every local header change goes through the session, so its sync bookkeeping is in place before the vault writes the header (prepare).
   @Synchronized fun changePassword(old: CharArray, new: CharArray): Boolean = vault.changePassword(old, new) { prepare(it, new, null) }
 
+  // The password too, so the tokens sent are derived from the header sent, even when a dropped change left this phone's password unsent.
   @Synchronized fun newRecoveryKey(password: CharArray): ByteArray? =
-    vault.newRecoveryKey(password) { h, rk -> prepare(h, null, hashOf(VaultFormat.recoveryLoginToken(rk))) }
+    vault.newRecoveryKey(password) { h, rk -> prepare(h, password, hashOf(VaultFormat.recoveryLoginToken(rk))) }
 
   /**
    * Forgot master password, on this phone. [accountKey] is the typed one, used only on a flagged vault whose Keystore copy is gone. It is kept
-   * last before the header that needs it, so a reset that fails keeps no typo and a retry can correct it. Nothing can check it, so ask for it twice.
+   * last, just before the header write, so a reset that fails before then keeps no typo and a retry can correct it. Nothing can check it, so ask for it twice.
    */
   @Synchronized fun recoverLocally(recoveryKey: ByteArray, newPassword: CharArray, accountKey: ByteArray? = null): Boolean {
     val held = secrets.get(SyncSecret.ACCOUNT_KEY)?.also { it.fill(0) } != null
@@ -256,10 +257,8 @@ class SyncSession(
     }
     try {
       update { it.copy(pendingHeader = fingerprint(h.toJson()), recoveryHash = recoveryHash ?: it.recoveryHash) }
-      if (o != null) {
-        secrets.put(SyncSecret.NEXT_LOGIN, o.loginToken)
-        secrets.put(SyncSecret.NEXT_READ, o.readToken)
-      }
+      // storeAll: on a Keystore key the system dropped, the offline reset (the typed key's whole point) must still work.
+      if (o != null) storeAll(listOf(SyncSecret.NEXT_LOGIN to o.loginToken, SyncSecret.NEXT_READ to o.readToken))
     } finally {
       o?.wipe()
     }

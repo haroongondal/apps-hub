@@ -415,6 +415,21 @@ class SyncSessionTest {
 
   @Test fun aSecondChangeStoppedBeforeItsHeaderWriteSendsNoMismatch() = aSecondChangeCutShort { p, on -> p.store.headerWriteFails = on }
 
+  @Test fun aNewRecoveryKeyAfterADroppedChangeSendsTokensThatMatchItsHeader() {
+    val (a, ak) = syncedPhone("Bank")
+    w.offline = true
+    assertTrue(a.session.changePassword(password, newPassword))
+    a.secrets.failOn = SyncSecret.NEXT_LOGIN
+    refused("disk full") { a.session.changePassword(newPassword, "a third master password, long".toCharArray()) }
+    a.secrets.failOn = null
+    val rk2 = a.session.newRecoveryKey(newPassword)!!
+    w.offline = false
+    a.session.sync()
+    assertEquals(a.store.header(), w.header)
+    assertEquals(Crypto.tokenHash(VaultFormat.recoveryLoginToken(rk2)), w.recoveryHash)
+    TestPhone(w.t).session.signIn(newPassword, ak)
+  }
+
   @Test fun aHeaderWriteThatFailsDropsItsPendingUpdateAtTheNextSync() {
     val (a, ak) = syncedPhone("Bank")
     val before = a.store.header()
@@ -497,6 +512,27 @@ class SyncSessionTest {
     a.vault.lock()
     assertTrue(a.vault.unlock(newPassword))
     a.session.sync()
+    TestPhone(w.t).session.signIn(newPassword, ak)
+  }
+
+  // The lost Keystore key took the login token too, so the update waits for a sign-in; it never goes up with a hash that doesn't match.
+  @Test fun anOfflineResetStillWorksAfterTheKeystoreLostItsKey() {
+    val (a, ak) = syncedPhone("Bank")
+    val before = w.header
+    a.vault.lock()
+    a.secrets.keyLost = true
+    assertTrue(a.session.recoverLocally(recoveryKey, newPassword, ak))
+    assertTrue(a.settings.state.accountPending)
+    assertArrayEquals(ak, a.secrets.get(SyncSecret.ACCOUNT_KEY))
+    a.vault.lock()
+    assertTrue(a.vault.unlock(newPassword))
+
+    w.calls.clear()
+    assertThrows(SyncAuthError::class.java) { a.session.sync() }
+    assertFalse(w.calls.any { it.startsWith("update") })
+    assertEquals(before, w.header)
+    a.session.recover(recoveryKey, newPassword)
+    assertEquals(a.store.header(), w.header)
     TestPhone(w.t).session.signIn(newPassword, ak)
   }
 

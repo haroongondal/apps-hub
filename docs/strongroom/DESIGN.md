@@ -514,8 +514,9 @@ local copy is the defence against loss. One more, on the phone: if a master-pass
 or recovery-key change is cut short (its write fails, or the app stops) while an
 earlier change still waits to go up, sync can drop both, quietly. That phone keeps its
 new password or recovery key while the server and the other devices keep the old
-ones; the next such change made on that phone sends its whole header and ends the
-difference.
+ones. Making a new recovery key on that phone ends the difference: it sends the whole
+header with tokens and a recovery hash to match. A new master password does too,
+unless what was dropped included a new recovery key.
 
 ## 11. Browser extensions (Phases 3–4), design level only
 
