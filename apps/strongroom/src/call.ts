@@ -3,7 +3,9 @@ const UNEXPECTED = 'Something went wrong inside Strongroom. Close the app, open 
 
 const codeOf = (e: unknown) => (e as { code?: unknown } | null)?.code;
 
-export const isLocked = (e: unknown) => codeOf(e) === 'LOCKED';
+export const hasCode = (e: unknown, code: string) => codeOf(e) === code;
+
+export const isLocked = (e: unknown) => hasCode(e, 'LOCKED');
 
 // The bridge's own codes carry an owner-ready message; Expo's ERR_* codes (an unexpected crash) don't.
 export function messageOf(e: unknown): string {

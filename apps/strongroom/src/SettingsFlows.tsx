@@ -22,7 +22,7 @@ interface AskProps {
   onLocked: () => void;
 }
 
-function AskPassword({ title, intro, action, wrong, run, onSuccess, onBack, onLocked }: AskProps) {
+export function AskPassword({ title, intro, action, wrong, run, onSuccess, onBack, onLocked }: AskProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

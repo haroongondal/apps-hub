@@ -4,9 +4,13 @@ import Vault, { type Status } from 'strongroom-vault';
 import { messageOf, whileDeriving } from './call.ts';
 import { validateMasterPassword } from './forms.ts';
 import { BackButton, NewPasswordFields, SecretField } from './parts.tsx';
+import { SyncScreen, useSyncStatus } from './SyncScreen.tsx';
+import { ACTION_LABEL } from './sync-flow.ts';
 
 export function UnlockScreen({ status, notice, onUnlocked }: { status: Status; notice: string | null; onUnlocked: () => void }) {
   const [recovering, setRecovering] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const { status: sync } = useSyncStatus();
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -32,6 +36,7 @@ export function UnlockScreen({ status, notice, onUnlocked }: { status: Status; n
   }, []);
 
   if (recovering) return <Recover onBack={() => setRecovering(false)} onUnlocked={onUnlocked} />;
+  if (signingIn) return <SyncScreen start="signIn" onBack={() => setSigningIn(false)} onDone={() => onUnlocked()} onLocked={() => setSigningIn(false)} />;
 
   return (
     <Screen scroll>
@@ -41,6 +46,7 @@ export function UnlockScreen({ status, notice, onUnlocked }: { status: Status; n
       <Button label="Unlock" onPress={withPassword} busy={busy} disabled={password === ''} block />
       {status.biometricEnabled && <Button label="Use fingerprint" variant="secondary" onPress={() => withFingerprint(false)} disabled={busy} block />}
       <Button label="Forgot master password" variant="ghost" onPress={() => setRecovering(true)} disabled={busy} />
+      {sync?.available && sync.state !== 'off' && <Button label={ACTION_LABEL.signIn} variant="ghost" onPress={() => setSigningIn(true)} disabled={busy} />}
     </Screen>
   );
 }

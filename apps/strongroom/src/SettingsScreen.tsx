@@ -3,6 +3,7 @@ import { Switch, View } from 'react-native';
 import { Button, Group, Header, Notice, Pill, Row, Screen, Segmented, space, useTheme } from '@apps-hub/ui';
 import Vault, { type Diagnostics, type Status } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
+import { SyncSettingsRow } from './SyncScreen.tsx';
 
 const MINUTES = [
   { key: '1', label: '1 minute' },
@@ -12,7 +13,7 @@ const MINUTES = [
 
 const BROWSERS: Record<string, string> = { 'com.android.chrome': 'Chrome', 'org.mozilla.firefox': 'Firefox' };
 
-export type SettingsFlow = 'password' | 'fingerprint' | 'newKey' | 'import';
+export type SettingsFlow = 'password' | 'fingerprint' | 'newKey' | 'import' | 'sync';
 
 interface Props {
   status: Status;
@@ -91,6 +92,9 @@ export function SettingsScreen({ status, refresh, notice, onOpen }: Props) {
       <Group title="Master password and recovery key">
         <Row title="Change master password" onPress={() => onOpen('password')} />
         <Row title="New recovery key" subtitle="Replaces the key you wrote down." onPress={() => onOpen('newKey')} />
+      </Group>
+      <Group title="Sync">
+        <SyncSettingsRow onOpen={() => onOpen('sync')} />
       </Group>
       <Group title="Your passwords">
         <Row title="Import from Google" subtitle="Move your saved passwords out of Google Password Manager." onPress={() => onOpen('import')} />

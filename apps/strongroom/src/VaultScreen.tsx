@@ -4,6 +4,7 @@ import { Button, Empty, Field, Group, Header, Notice, Pill, Row, Screen, Segment
 import Vault, { type Row as VaultRow, type Status } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
 import { filterRows } from './forms.ts';
+import { SyncFooter } from './SyncScreen.tsx';
 
 export interface VaultView {
   kind: VaultRow['type'];
@@ -33,9 +34,10 @@ interface Props {
   onView: (v: VaultView) => void;
   onOpen: (id: string) => void;
   onAdd: () => void;
+  onOpenSync: () => void;
 }
 
-export function VaultScreen({ status, refresh, view, onView, onOpen, onAdd }: Props) {
+export function VaultScreen({ status, refresh, view, onView, onOpen, onAdd, onOpenSync }: Props) {
   const { c } = useTheme();
   const [rows, setRows] = useState<VaultRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +117,7 @@ export function VaultScreen({ status, refresh, view, onView, onOpen, onAdd }: Pr
           ))}
         </Group>
       )}
+      <SyncFooter onPress={onOpenSync} />
     </Screen>
   );
 }
