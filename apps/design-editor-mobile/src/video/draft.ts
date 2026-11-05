@@ -14,3 +14,12 @@ export async function dropUnreadable(project: Project, readable: (uri: string) =
 
 export const restoreDraft = (text: string | undefined, readable: (uri: string) => Promise<boolean>) =>
   dropUnreadable((text && parseDraft(text)) || emptyProject(), readable);
+
+export function queued<A>(run: (a: A) => Promise<void>): (a: A) => Promise<void> {
+  let last: Promise<unknown> = Promise.resolve();
+  return a => {
+    const next = last.then(() => run(a), () => run(a));
+    last = next;
+    return next;
+  };
+}

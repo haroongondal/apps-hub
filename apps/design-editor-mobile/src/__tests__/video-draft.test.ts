@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { addClip, emptyProject, type Source } from '@apps-hub/media-core';
-import { droppedNote, dropUnreadable, restoreDraft } from '../video/draft.ts';
+import { droppedNote, dropUnreadable, queued, restoreDraft } from '../video/draft.ts';
 
 const src = (n: string): Source => ({ uri: `content://${n}`, name: `${n}.mp4`, durationS: 5, width: 1280, height: 720, fps: 30, hasAudio: true });
 const draft = (...names: string[]) => JSON.stringify(names.reduce((p, n, i) => addClip(p, src(n), `c${i}`), emptyProject()));
@@ -32,4 +32,23 @@ test('dropUnreadable: Save checks every clip first, so a deleted file never star
   assert.deepEqual([got.project.clips.map(c => c.id), got.dropped], [['c0'], 1]);
   assert.equal(droppedNote(1), '1 clip could not be opened and was removed.');
   assert.equal(droppedNote(3), '3 clips could not be opened and were removed.');
+});
+
+test('queued: saves run one at a time in the order asked, and a failed one does not stop the next', async () => {
+  const log: string[] = [];
+  const open: Record<string, () => void> = {};
+  const tick = () => new Promise(r => setTimeout(r, 0));
+  const save = queued(async (s: string) => {
+    log.push(`start ${s}`);
+    await new Promise<void>(r => { open[s] = r; });
+    if (s === 'b') throw new Error('disk full');
+    log.push(`end ${s}`);
+  });
+  const a = save('a'), b = save('b'), c = save('c');
+  await tick();
+  assert.deepEqual(log, ['start a']);
+  open.a(); await a; await tick();
+  open.b(); await assert.rejects(b); await tick();
+  open.c(); await c;
+  assert.deepEqual(log, ['start a', 'end a', 'start b', 'start c', 'end c']);
 });
