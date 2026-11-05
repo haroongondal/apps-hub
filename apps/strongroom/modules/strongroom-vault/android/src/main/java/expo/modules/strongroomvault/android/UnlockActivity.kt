@@ -49,6 +49,7 @@ class UnlockActivity : AppCompatActivity() {
   private lateinit var targets: Map<String, AutofillId>
   private lateinit var root: LinearLayout
   private val colors by lazy { palette() }
+  private val who by lazy { LinkPrompt.of(req.requester, installedFromFile()) }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -77,6 +78,7 @@ class UnlockActivity : AppCompatActivity() {
   private fun start() {
     screen(UNLOCK_TITLE, req.label)
     work({
+      who // the installer lookup is a system call, so it runs here, off the main thread
       val v = vault()
       when {
         !v.isSetUp -> Step.NOT_SET_UP
@@ -87,14 +89,24 @@ class UnlockActivity : AppCompatActivity() {
     }) { step ->
       when (step) {
         Step.NOT_SET_UP -> message(NOT_SET_UP)
-        Step.AUTHENTICATE -> if (VaultHolder.biometricAllowed(this)) VaultHolder.biometricUnlock(this) { ok -> if (ok) unlocked() else passwordForm(null) } else passwordForm(null)
+        Step.AUTHENTICATE -> {
+          unlockScreen()
+          val prompt = forWhom(FILL_FOR, who).apply { if (who.installedFromFile) append(' ').append(FROM_FILE) }
+          if (VaultHolder.biometricAllowed(this)) VaultHolder.biometricUnlock(this, prompt) { ok -> if (ok) unlocked() else passwordForm(null) } else passwordForm(null)
+        }
         Step.READY -> unlocked()
       }
     }
   }
 
-  private fun passwordForm(error: String?) {
+  // Cards have no match check, so the owner must see who asks before the fingerprint: a fake app or site gets caught here.
+  private fun unlockScreen() {
     screen(UNLOCK_TITLE, req.label)
+    asker(FILL_FOR, who)
+  }
+
+  private fun passwordForm(error: String?) {
+    unlockScreen()
     error?.let { body(it, colors["danger"]) }
     val field = SecretEditText(this).apply {
       inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
@@ -185,7 +197,7 @@ class UnlockActivity : AppCompatActivity() {
     work({
       VaultHolder.touch()
       val e = vault().get(row.id)
-      val prompt = (e as? Entry.Login)?.takeIf { !Matching.matches(it, req.requester) }?.let { LinkPrompt.build(it, req.requester, installedFromFile()) }
+      val prompt = (e as? Entry.Login)?.takeIf { !Matching.matches(it, req.requester) }?.let { LinkPrompt.build(it, req.requester, who.installedFromFile) }
       e to prompt
     }) { (e, prompt) ->
       when {
@@ -203,11 +215,7 @@ class UnlockActivity : AppCompatActivity() {
       button("Cancel") { finish() }
       return
     }
-    val text = SpannableStringBuilder("This login isn't saved for ")
-    bold(text, prompt.pkg ?: prompt.domain.orEmpty())
-    if (prompt.pkg != null && prompt.domain != null) bold(text.append(" on "), prompt.domain)
-    body(text.append('.'), colors["text"])
-    if (prompt.installedFromFile) body("This app was installed from a file, not from an app store.", colors["danger"])
+    asker("This login isn't saved for ", prompt)
     button("Fill once", primary = true) { fill(login) }.filterTouchesWhenObscured = true
     button("Always use here") {
       work({
@@ -294,6 +302,18 @@ class UnlockActivity : AppCompatActivity() {
     return b
   }
 
+  private fun asker(lead: String, p: LinkPrompt) {
+    body(forWhom(lead, p), colors["text"])
+    if (p.installedFromFile) body(FROM_FILE, colors["danger"])
+  }
+
+  private fun forWhom(lead: String, p: LinkPrompt): SpannableStringBuilder {
+    val text = SpannableStringBuilder(lead)
+    bold(text, p.pkg ?: p.domain.orEmpty())
+    if (p.pkg != null && p.domain != null) bold(text.append(" on "), p.domain)
+    return text.append('.')
+  }
+
   private fun bold(text: SpannableStringBuilder, part: String) {
     val start = text.length
     text.append(part).setSpan(StyleSpan(Typeface.BOLD), start, text.length, 0)
@@ -315,6 +335,8 @@ class UnlockActivity : AppCompatActivity() {
 
   private companion object {
     const val UNLOCK_TITLE = "Unlock Strongroom"
+    const val FILL_FOR = "This fill is for "
+    const val FROM_FILE = "This app was installed from a file, not from an app store."
     const val WRONG_PASSWORD = "That isn't the master password. Try again."
     const val NOT_SET_UP = "Strongroom isn't set up on this phone yet. Open Strongroom and set it up first."
     const val GONE = "That entry is no longer in Strongroom. Pick another one."

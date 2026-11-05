@@ -246,6 +246,12 @@ owner to the system setting
   for the fingerprint, even when the vault is unlocked. While locked there is one
   generic "Unlock to fill a card" item, because the match index holds no cards.
   *(Reviewer's point, adopted.)*
+- Cards aren't tied to an app or site, so nothing checks who asks for one. Instead
+  the unlock screen and the fingerprint prompt say who the fill is for, as the link
+  prompt below does: "This fill is for **package** (on **domain**)." or the site's
+  registrable domain, plus "This app was installed from a file, not from an app
+  store." when it was. Every unlock screen shows it, logins too, because a locked
+  vault can't tell a card from a login until it opens. *(Security review, adopted.)*
 - Always add an **"Other logins"** item that opens a picker (after unlocking), for
   logins that don't match automatically. Picking one for an app or site it wasn't
   saved for offers **Fill once**, the default, which stores nothing, and a
@@ -326,10 +332,20 @@ not-important views still see them. It stays only as the API 33 fallback on a
 shown password. *(Reviewer's point, adopted.)*
 
 **Clipboard (fallback only)**: copy marks the clip sensitive
-(`ClipDescription.EXTRA_IS_SENSITIVE`) and clears it after 30 s. Check on the
-device that clearing works when the app is in the background. If it doesn't,
-rely on the sensitive flag and say so in the toast. Also check whether the
-phone's keyboard keeps the clip in its own clipboard history despite the flag.
+(`ClipDescription.EXTRA_IS_SENSITIVE`) with a random token in its extras, stores
+the token and time, and clears it after 30 s: a timer while the process lives and
+a `JobScheduler` job that survives Android killing it. Since Android 10 an app in
+the background can't read the clipboard but may still clear it, so the 30 s clear
+can only check that the clip is still Strongroom's while Strongroom has focus;
+from the background it clears without looking, which can wipe something the owner
+copied after the secret (accepted: better than a password left behind). The job only
+has a minimum delay, so Doze or the app standby bucket can run it minutes later and
+widen that window well past 30 s. When
+Strongroom's window next gains focus, it clears an overdue clip that still carries
+its token and nothing else, for the case where the job was killed too (HyperOS
+can cancel a swiped app's jobs). *(Security review, adopted.)* Check on the
+device that the job clears after a swipe from recents, and whether the phone's
+keyboard keeps the clip in its own clipboard history despite the flag.
 
 ## 8. Google import (Phase 1)
 

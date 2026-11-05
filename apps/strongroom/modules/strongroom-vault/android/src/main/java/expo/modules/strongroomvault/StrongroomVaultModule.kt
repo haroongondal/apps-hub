@@ -63,6 +63,9 @@ class StrongroomVaultModule : Module() {
 
     OnDestroy { VaultHolder.lockListener = null }
 
+    // Also on a cold start: a killed process can leave a copied secret that no timer or job will clear.
+    OnActivityEntersForeground { appContext.currentActivity?.let { a -> a.runOnUiThread { SensitiveClipboard.whenFocused(a) } } }
+
     View(SecretFieldView::class) {
       Events("onChangeValue", "onSubmit", "onFocusChange", "onContentHeight")
       Prop("value") { view: SecretFieldView, value: String -> view.value = value }
@@ -135,7 +138,7 @@ class StrongroomVaultModule : Module() {
       if (activity == null) {
         false
       } else {
-        withContext(Dispatchers.Main) { awaitPrompt { done -> VaultHolder.biometricUnlock(activity, done) } }
+        withContext(Dispatchers.Main) { awaitPrompt { done -> VaultHolder.biometricUnlock(activity, onResult = done) } }
       }
     }
 
