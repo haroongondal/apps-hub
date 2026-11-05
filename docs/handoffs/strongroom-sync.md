@@ -179,13 +179,17 @@ All in the plan's "Decisions"; the owner delegated them on 2026-11-05 ("do what 
 
 ## Current state + exact next step
 
-State: Tasks 1 to 5 and 6a complete. 6b (screens) committed `3b10bd5` (strongroom 52 tests), its sonnet
-review running. 7a (TS core: R16 guard + lastRev hold-back, headerRev test, vault.ts account key) running
-(opus) from `3b10bd5`. Next: finish 6b review (fixes only after 7a reports), review 7a, then 7b (extension
-wiring, common passwords, e2e; sonnet; brief to write from `task-7-brief.md` minus 7a's scope, carrying the
-ledger's Task 7 notes); 6c (phone proof, opus, R25 HTTPS harness + R26 side-by-side build) when apps-hub-63
-says "phone free"; then the final whole-branch review (opus) with the ledger's deferred minors; then stop
-for the owner (Task 8: reviews, Cloudflare account, deploy, release, live checks — each on their word). The SDD ledger `.superpowers/sdd/PHASE-2-PLAN/progress.md` has every ruling,
+State (2026-11-05, late): Tasks 1–5, 6a and 7a complete (7a `f4f9790`: R16 guard + lastRev hold-back in
+TS, vault.ts account key, sign-in refuses a dropped flag; opus approved). 6b (screens, `3b10bd5`) reviewed:
+**fix round 1 queued** (double-counted "not synced" footer + copy fixes, ruling R28; resume/redo from
+`task-6b-report.md` and the ledger's 6b lines). 6c (phone proof, opus) is doing the OFF-PHONE prep only
+(side-by-side build property, debug-only FLAG_SECURE switch, HTTPS harness, debug network config + BASE_URL
+override, both test APKs, disk-check update) and will report BLOCKED "waiting for the phone": the owner gave
+the phone back to apps-hub-63, which will send "phone free" to strongroom-sync-dc. 7b brief is ready
+(`task-7b-brief.md`, rulings R29 and the vault.ts `keyed` gate).
+Next, one implementer at a time: 7b (sonnet) → 6b fix round + re-review → 6c phone part when "phone free"
+(then "phone back"/"phone free" hand-offs per the ledger) → final whole-branch review (opus) with the
+ledger's deferred minors → stop for the owner (Task 8, each step on their word). The SDD ledger `.superpowers/sdd/PHASE-2-PLAN/progress.md` has every ruling,
 deferred minor and carry-forward note. The owner has not pushed `strongroom-extension` or merged
 anything.
 
