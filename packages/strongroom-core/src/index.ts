@@ -6,4 +6,5 @@ export * from './google-import.ts';
 export * from './matching.ts';
 export * from './public-suffix.ts';
 export * from './recovery-key.ts';
+export * from './sync/protocol.ts';
 export * from './vault.ts';
