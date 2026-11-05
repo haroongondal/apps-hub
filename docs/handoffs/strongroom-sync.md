@@ -156,9 +156,20 @@ All in the plan's "Decisions"; the owner delegated them on 2026-11-05 ("do what 
   Opus review approved. `key-check` (non-UUID) never leaves the phone. Task 6 is split 6a/6b/6c (R17); the
   locked job stages downloads in a `pending` table merged at unlock (R18).
 
+- 2026-11-05: **Task 6a built** (`28b7e58`, under opus review): HttpSyncTransport, SyncKeys, SyncJobService,
+  SyncConfig (BASE_URL empty), SyncSession orchestration, module API (`syncStatus` with `available`,
+  `enableSync(setupToken, password, recoveryKey)`, `showAccountKey`, `signInSync`, `recoverSync`,
+  `syncNow`, `onSync`), release manifest keeps INTERNET. Gradle 326 → 350; release APK = Phase 1 permissions +
+  INTERNET. Rulings: R19 job has no network constraint and is not persisted (no new permission); **R20
+  (provisional, for the owner and Task 8's security review): the loginToken is stored under the
+  unlocked-device Keystore key so a fingerprint unlock can upload**; R21 recoverSync uses only the Keystore
+  account key; R22 a 409 on an account update → "sign in again" (copy must say the change didn't reach other
+  devices); R23 6c may add a debug-only localhost http path + BASE_URL override for the emulator proof.
+
 ## Current state + exact next step
 
-State: Tasks 1 to 5 complete; Task 6a (Android native wiring) dispatched (opus). The owner has not pushed `strongroom-extension` or merged
+State: Tasks 1 to 5 complete; Task 6a committed, review running (opus). Then 6b (screens, sonnet),
+6c (emulator proof, opus), Task 7 (extension, sonnet), final review (opus), then stop for the owner (Task 8). The owner has not pushed `strongroom-extension` or merged
 anything.
 
 **Next:** follow the ledger: resume at the first task without a `Task N: complete` line. Tasks 1 to 7 run
