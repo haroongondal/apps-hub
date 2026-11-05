@@ -66,7 +66,7 @@ class Vault(
     return true
   }
 
-  /** [accountKey] is a typed one, used only on a flagged vault whose Keystore copy is gone. [beforeWrite] gets the new header before it is written; a throw there changes nothing (as for changePassword and newRecoveryKey). */
+  /** [accountKey] is a typed one, used only on a flagged vault whose Keystore copy is gone. [beforeWrite] gets the new header before it is written; a throw there stops the write (as for changePassword and newRecoveryKey). */
   @Synchronized fun recover(recoveryKey: ByteArray, newPassword: CharArray, accountKey: ByteArray? = null, beforeWrite: (Header) -> Unit = {}): Boolean {
     val h = header()
     val k = VaultFormat.unlockWithRecovery(h, recoveryKey) ?: return false

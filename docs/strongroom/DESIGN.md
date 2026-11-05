@@ -510,7 +510,12 @@ mixed ──HKDF "wrap" | "login" | "read"──▶ wrapKey, loginToken, readTok
 
 **Accepted limits** (single owner, own account): the server could withhold or
 roll back records, or delete them. It can't read or forge them. Every device's
-local copy is the defence against loss.
+local copy is the defence against loss. One more, on the phone: if a master-password
+or recovery-key change is cut short (its write fails, or the app stops) while an
+earlier change still waits to go up, sync can drop both, quietly. That phone keeps its
+new password or recovery key while the server and the other devices keep the old
+ones; the next such change made on that phone sends its whole header and ends the
+difference.
 
 ## 11. Browser extensions (Phases 3–4), design level only
 

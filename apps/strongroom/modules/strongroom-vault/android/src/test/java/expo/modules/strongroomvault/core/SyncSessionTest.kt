@@ -376,16 +376,44 @@ class SyncSessionTest {
     refused("disk full") { a.session.newRecoveryKey(password) }
     a.settings.failSave = false
     assertEquals(before, a.store.header())
-    assertFalse(a.settings.state.accountPending)
     assertArrayEquals(login, a.secrets.get(SyncSecret.LOGIN_TOKEN))
 
     w.calls.clear()
     a.session.sync()
     assertFalse(w.calls.any { it.startsWith("update") })
+    assertFalse(a.settings.state.accountPending) // a mark left for a header never written is dropped
+    assertNull(a.secrets.get(SyncSecret.NEXT_LOGIN))
     a.vault.lock()
     assertTrue(a.vault.unlock(password))
     TestPhone(w.t).session.signIn(password, ak)
   }
+
+  // Residual: whatever step of a second change is cut short while a first one waits, the server's login hash still belongs to the header it holds.
+  private fun aSecondChangeCutShort(cut: (TestPhone, Boolean) -> Unit) {
+    val (a, ak) = syncedPhone("Bank")
+    val third = "a third master password, long".toCharArray()
+    w.offline = true
+    assertTrue(a.session.changePassword(password, newPassword))
+    cut(a, true)
+    refused("disk full") { a.session.changePassword(newPassword, third) }
+    cut(a, false)
+    w.offline = false
+    a.session.sync()
+    val server = Header.fromJson(w.header!!)!!
+    val opens = listOf(password, newPassword, third).mapNotNull { VaultFormat.openWithPassword(server, it, ak) }
+    assertEquals(1, opens.size)
+    assertEquals(w.loginHash, Crypto.tokenHash(opens.single().loginToken))
+    a.session.sync()
+    assertEquals("idle", a.session.status().state)
+  }
+
+  @Test fun aSecondChangeCutShortAtItsLoginTokenSendsNoMismatch() = aSecondChangeCutShort { p, on -> p.secrets.failOn = SyncSecret.NEXT_LOGIN.takeIf { on } }
+
+  @Test fun aSecondChangeCutShortAtItsReadTokenSendsNoMismatch() = aSecondChangeCutShort { p, on -> p.secrets.failOn = SyncSecret.NEXT_READ.takeIf { on } }
+
+  @Test fun aSecondChangeCutShortAtItsMarkSendsNoMismatch() = aSecondChangeCutShort { p, on -> p.settings.failSave = on }
+
+  @Test fun aSecondChangeStoppedBeforeItsHeaderWriteSendsNoMismatch() = aSecondChangeCutShort { p, on -> p.store.headerWriteFails = on }
 
   @Test fun aHeaderWriteThatFailsDropsItsPendingUpdateAtTheNextSync() {
     val (a, ak) = syncedPhone("Bank")
@@ -468,6 +496,20 @@ class SyncSessionTest {
     assertArrayEquals(ak, a.secrets.get(SyncSecret.ACCOUNT_KEY))
     a.vault.lock()
     assertTrue(a.vault.unlock(newPassword))
+    a.session.sync()
+    TestPhone(w.t).session.signIn(newPassword, ak)
+  }
+
+  @Test fun aLocalResetThatFailsKeepsNoTypedKeySoARetryCanCorrectIt() {
+    val (a, ak) = syncedPhone("Bank")
+    a.vault.lock()
+    a.secrets.values.remove(SyncSecret.ACCOUNT_KEY)
+    a.secrets.failOn = SyncSecret.NEXT_LOGIN
+    refused("disk full") { a.session.recoverLocally(recoveryKey, newPassword, AccountKey.generate()) } // a typo, then a failure
+    a.secrets.failOn = null
+    assertNull(a.secrets.get(SyncSecret.ACCOUNT_KEY))
+    assertTrue(a.session.recoverLocally(recoveryKey, newPassword, ak))
+    assertArrayEquals(ak, a.secrets.get(SyncSecret.ACCOUNT_KEY))
     a.session.sync()
     TestPhone(w.t).session.signIn(newPassword, ak)
   }

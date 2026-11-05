@@ -216,13 +216,17 @@ class SyncSession(
   @Synchronized fun newRecoveryKey(password: CharArray): ByteArray? =
     vault.newRecoveryKey(password) { h, rk -> prepare(h, null, hashOf(VaultFormat.recoveryLoginToken(rk))) }
 
-  /** Forgot master password, on this phone. [accountKey] is the typed one, used only on a flagged vault whose Keystore copy is gone, and kept before the header that needs it. Nothing can check it, so ask for it twice. */
+  /**
+   * Forgot master password, on this phone. [accountKey] is the typed one, used only on a flagged vault whose Keystore copy is gone. It is kept
+   * last before the header that needs it, so a reset that fails keeps no typo and a retry can correct it. Nothing can check it, so ask for it twice.
+   */
   @Synchronized fun recoverLocally(recoveryKey: ByteArray, newPassword: CharArray, accountKey: ByteArray? = null): Boolean {
     val held = secrets.get(SyncSecret.ACCOUNT_KEY)?.also { it.fill(0) } != null
     val typed = accountKey.takeUnless { held }
     return vault.recover(recoveryKey, newPassword, typed) { h ->
-      if (typed != null && h.accountKey) storeAll(listOf(SyncSecret.ACCOUNT_KEY to typed))
-      prepare(h, newPassword, null)
+      val keep = typed?.takeIf { h.accountKey }
+      prepare(h, newPassword, null, keep)
+      keep?.let { storeAll(listOf(SyncSecret.ACCOUNT_KEY to it)) }
     }
   }
 
@@ -237,26 +241,28 @@ class SyncSession(
   private fun commitHeader(h: Header?, headerRev: Long) =
     store.applyPull(PullApplied(h, headerRev, emptyList(), emptyList(), emptyList(), store.syncMeta().lastRev))
 
-  // Before the header write, and a throw here stops it: the new tokens wait under NEXT_*, then the mark names the header they belong to.
-  // What a mark for another header holds is dropped first (a header write that failed), so tokens or a recovery hash never go up with the wrong header.
-  private fun prepare(h: Header, newPassword: CharArray?, recoveryHash: String?) {
+  // Before the header write; a throw stops it. A mark for another header (a write that failed) is dropped first. The mark moves before NEXT_*
+  // do: cut short in between, the mark names a header never written and the next sync drops it, instead of sending NEXT_* with the old header.
+  private fun prepare(h: Header, newPassword: CharArray?, recoveryHash: String?, typedAccountKey: ByteArray? = null) {
     if (!isOn) return
     if (settings.load().pendingHeader != fingerprint(storedHeader())) dropPending()
-    if (newPassword != null) {
-      val ak = secrets.get(SyncSecret.ACCOUNT_KEY) ?: throw AccountKeyRequired()
-      val o = try {
-        VaultFormat.openWithPassword(h, newPassword, ak) ?: throw IllegalStateException(HEADER_CHECK)
+    val o = newPassword?.let {
+      val ak = typedAccountKey?.copyOf() ?: secrets.get(SyncSecret.ACCOUNT_KEY) ?: throw AccountKeyRequired()
+      try {
+        VaultFormat.openWithPassword(h, it, ak) ?: throw IllegalStateException(HEADER_CHECK)
       } finally {
         ak.fill(0)
       }
-      try {
+    }
+    try {
+      update { it.copy(pendingHeader = fingerprint(h.toJson()), recoveryHash = recoveryHash ?: it.recoveryHash) }
+      if (o != null) {
         secrets.put(SyncSecret.NEXT_LOGIN, o.loginToken)
         secrets.put(SyncSecret.NEXT_READ, o.readToken)
-      } finally {
-        o.wipe()
       }
+    } finally {
+      o?.wipe()
     }
-    update { it.copy(pendingHeader = fingerprint(h.toJson()), recoveryHash = recoveryHash ?: it.recoveryHash) }
   }
 
   private fun dropPending() {
