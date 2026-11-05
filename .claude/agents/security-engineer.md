@@ -41,7 +41,8 @@ the user's traffic.
   the pinned cert, a downgrade (lower versionCode) or a package swap, an APK written somewhere another
   app can replace it before install, OpenVPN directives that run scripts or exfiltrate
   (`up`, `down`, `script-security`, `plugin`, `management`), secrets or configs in logs, an exported
-  Android component or receiver, cleartext traffic beyond the scoped exception, a LAN sweep outside
+  Android component or receiver, any cleartext traffic (TunnelWall has no exception, vpngate.net
+  included), an OpenVPN config missing the relay identity check, a LAN sweep outside
   the clamp, fail-open defaults (`?? null`, `== null`, `catch {}`).
 - **Release readiness**: walk `docs/app-store.md` against the repo: signing config in each
   `android/app/build.gradle`, `SIGNING_CERT_SHA256`, `.gitignore` covering `*.jks`, `.dev.vars`,

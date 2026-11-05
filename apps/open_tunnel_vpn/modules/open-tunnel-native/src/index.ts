@@ -12,7 +12,7 @@
  * directly; nothing at import time touches the native registry except on
  * Android. (requireNativeModule reads 'expo'.)
  */
-import { detectVpnProtocol, extractRemote, type VpnNode } from 'open-tunnel-core';
+import { detectVpnProtocol, extractRemote, sanitizeOpenVpnConfig, type VpnNode } from 'open-tunnel-core';
 
 import {
   OPEN_TUNNEL_ERROR_CODES,
@@ -246,13 +246,16 @@ export function buildTunnelConfigFromNode(
   node: VpnNode,
   options: TunnelConfigOptions,
 ): VpnTunnelConfig {
-  const remote = extractRemote(node.ovpnConfigRaw);
+  const protocol = detectVpnProtocol(node.ovpnConfigRaw);
+  // The cache may hold a config sanitized by an older release, so the current rules apply at connect.
+  const configText = protocol === 'openvpn' ? sanitizeOpenVpnConfig(node.ovpnConfigRaw) : node.ovpnConfigRaw;
+  const remote = extractRemote(configText);
   return validateTunnelConfig({
     nodeId: node.id,
     serverIp: node.ip,
     serverPort: remote.port ?? node.port,
-    protocol: detectVpnProtocol(node.ovpnConfigRaw),
-    configText: node.ovpnConfigRaw,
+    protocol,
+    configText,
     dnsServers:
       options.dnsServers === undefined ? [...DEFAULT_DNS_SERVERS] : [...options.dnsServers],
     enableKillSwitch: options.enableKillSwitch,
