@@ -134,10 +134,19 @@ All in the plan's "Decisions"; the owner delegated them on 2026-11-05 ("do what 
   `SETUP_TOKEN` must be ≥ 32 characters; smoke-test `json_each`, `RETURNING`, upsert and a 100-upsert
   batch on real D1; the migration is applied by hand (no migrations option in `cloudflare.config.ts`).
   `ifRev` is required on an account update (ruling R7).
+- 2026-11-05: **Task 3 done** (`5d71565..1630c65`): `packages/strongroom-core/src/sync/` (transport, merge,
+  header-adopt, client, signin) + `sync-e2e.test.ts` against the real Worker. Core 136 tests, vault-api 20.
+  Rulings R8 (account update keeps the recovery hash when omitted; turning sync on asks for the recovery
+  key), R9 (oversize entry skipped and reported, never blocks others), R10 (header adopted at the next
+  password unlock/sign-in), R11 (unreadable local record kept, never overwritten or pushed), R12 (sign-in
+  reports unreadable rows), R13 (server reply shapes checked). The opus review found a critical livelock
+  (a locally-won conflict whose push failed never kept its base rev → 409 forever); fixed with
+  `MergePlan.rebase` in the same atomic `applyPull` as the `lastRev` advance, in three fix rounds.
+  The rules Kotlin must copy are listed at the end of `.superpowers/sdd/PHASE-2-PLAN/task-3-report.md`.
 
 ## Current state + exact next step
 
-State: Tasks 1 and 2 complete; Task 3 (TS sync client, merge, header adoption) dispatched (opus). The owner has not pushed `strongroom-extension` or merged
+State: Tasks 1 to 3 complete; Task 4 (account key and tokens in Kotlin) dispatched (opus). The owner has not pushed `strongroom-extension` or merged
 anything.
 
 **Next:** follow the ledger: resume at the first task without a `Task N: complete` line. Tasks 1 to 7 run
