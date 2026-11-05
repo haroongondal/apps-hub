@@ -90,9 +90,12 @@ Not asked: Medium #3 (TunnelWall kill switch does nothing), #5 (signing key in G
   all 98 live rows unchanged); DESIGN.md clipboard window corrected (Doze can delay the job); PDF Editor
   @types/node aligned to ^22.10.0. Final `pnpm test` 501/0, typecheck 0.
 
+- 2026-11-06: owner approved the pending decisions. Three instruction files updated to HTTPS-only wording;
+  copied VPN Gate key line in sanitizer.test.ts replaced with a fake. 8 commits on security-fixes, pushed,
+  PR #21 opened (no attribution lines). strongroom-sync got commit 446ca9f (only my 3 files; session
+  strongroom-sync-c8 told, its local-https.ts untouched).
+
 ## Current state + exact next step
 
-All fixes in and verified, uncommitted in this worktree (plus the strongroom-sync worktree edit). Next: owner
-decides on (a) the three stale instruction-file lines, (b) commit + PR, (c) the on-phone checks before any
-release (real relay connect, firewall "Unknown app" flows and blocked-app DNS incl. whether BlockAll answers get
-cached, Deputy browser list on HyperOS, clipboard clear after swipe, card-fill prompt, CSP with evaluateJavascript).
+PR #21 open: https://github.com/haroongondal/apps-hub/pull/21. Next: the owner runs the phone checks in the PR
+body, then merges (with [skip ci] per the release rule) and releases locally on their go.
