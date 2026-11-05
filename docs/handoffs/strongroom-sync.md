@@ -128,10 +128,16 @@ All in the plan's "Decisions"; the owner delegated them on 2026-11-05 ("do what 
   header flag (last field), vectors from `apps/strongroom/tools/vectors/account_key_vectors.py`
   (argon2-cffi + cryptography in a scratchpad venv). strongroom-core 85 → 95 tests. Opus review approved;
   the reviewer recomputed the vectors with node:crypto.
+- 2026-11-05: **Task 2 done** (`4da6217`): `tools/vault-api` Worker (D1 binding `bindings.d1({ name })`,
+  WebCrypto hashing, imports only `strongroom-core/src/sync/protocol.ts`), `sync-samples.json`, 17 tests on
+  a node:sqlite D1 fake. Not deployed, no `cf` command run. Opus review approved. Deploy notes for Task 8:
+  `SETUP_TOKEN` must be ≥ 32 characters; smoke-test `json_each`, `RETURNING`, upsert and a 100-upsert
+  batch on real D1; the migration is applied by hand (no migrations option in `cloudflare.config.ts`).
+  `ifRev` is required on an account update (ruling R7).
 
 ## Current state + exact next step
 
-State: Task 1 complete; Task 2 (the Worker) dispatched (opus). The owner has not pushed `strongroom-extension` or merged
+State: Tasks 1 and 2 complete; Task 3 (TS sync client, merge, header adoption) dispatched (opus). The owner has not pushed `strongroom-extension` or merged
 anything.
 
 **Next:** follow the ledger: resume at the first task without a `Task N: complete` line. Tasks 1 to 7 run
