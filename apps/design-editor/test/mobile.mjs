@@ -18,12 +18,17 @@ const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasT
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 page.on('dialog', d => { errors.push('dialog: ' + d.message()); d.dismiss(); });
+// the page is offline by design: any request to a web host is recorded and refused
+const outside = [];
+await page.route(/^https?:/, r => { outside.push(r.request().url()); return r.abort(); });
 
 // fake the native bridge before any page script runs, with the SPEC §14.3 wire schema.
 // Boot-time calls (readAutosave/writeAutosave) get answered inline, like the real app does;
 // ask-and-answer calls (saveFile, confirm, openDesign) stay pending so this test can inspect
 // and reply them through reply().
 await page.addInitScript(() => {
+  window.__csp = [];
+  document.addEventListener('securitypolicyviolation', e => window.__csp.push(`${e.effectiveDirective} ${e.blockedURI}`));
   window.__bridge = { inbox: [] };
   window.ReactNativeWebView = {
     postMessage: m => {
@@ -225,6 +230,21 @@ const panned = await page.evaluate(() => {
   return { left: board.scrollLeft, top: board.scrollTop };
 });
 assert.deepEqual(panned, { left: 50, top: 90 }, 'a drag on empty space scrolls the board by the finger move');
+
+// a hostile design can't make the phone fetch anything: the CSP blocks an image src and a
+// pattern source that point at a web host, and nothing a normal session does trips it
+assert.deepEqual(await page.evaluate(() => window.__csp), [], 'the CSP blocked nothing in a normal session');
+const hostile = JSON.stringify({ W: 100, H: 100, pages: [{ objects: [
+  { type: 'Image', src: 'https://evil.example/p.gif' },
+  { type: 'Rect', width: 50, height: 50, fill: { type: 'pattern', source: 'https://evil.example/q.png' } },
+] }] });
+await page.evaluate(() => window.__bridge.fresh());
+await page.evaluate(() => window.__editorCommand('menu', { cmd: 'open' }));
+await reply(await page.evaluate(() => window.__bridge.wait('confirm')), true);
+await reply(await page.evaluate(() => window.__bridge.wait('openDesign')), { text: hostile, filePath: '/d/evil.json' });
+await page.waitForFunction(() => window.editor.size[0] === 100, null, { timeout: 5000 });
+assert.deepEqual(outside, [], 'no request reached a web host');
+assert.deepEqual(await page.evaluate(() => window.__csp.sort()), ['img-src https://evil.example/p.gif', 'img-src https://evil.example/q.png'], 'the CSP blocked both');
 
 await browser.close();
 assert.deepEqual(errors, [], 'no JS dialogs or errors');

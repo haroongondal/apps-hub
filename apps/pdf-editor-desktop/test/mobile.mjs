@@ -33,9 +33,14 @@ const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasT
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 page.on('dialog', d => { errors.push('dialog: ' + d.message()); d.dismiss(); });
+// the page is offline by design: any request to a web host is recorded and refused
+const outside = [];
+await page.route(/^https?:/, r => { outside.push(r.request().url()); return r.abort(); });
 
 // fake the native bridge before any page script runs
 await page.addInitScript(() => {
+  window.__csp = [];
+  document.addEventListener('securitypolicyviolation', e => window.__csp.push(`${e.effectiveDirective} ${e.blockedURI}`));
   window.__bridge = { inbox: [] };
   window.ReactNativeWebView = { postMessage: m => window.__bridge.inbox.push(m) };
   window.__bridge.wait = async (type, match, ms = 5000) => {
@@ -137,6 +142,10 @@ const partial = await page.evaluate(() => window.__bridge.wait('docInfo', m => m
 assert.equal(partial.pages, 2);
 assert.match(partial.text[0], /MobileDoc/);
 assert.ok(partial.thumb.startsWith('/9j/'));
+
+// the CSP (no eval, no web hosts) blocked nothing the editor does, and nothing went online
+assert.deepEqual(await page.evaluate(() => window.__csp), [], 'the CSP blocked nothing');
+assert.deepEqual(outside, [], 'no request reached a web host');
 
 await browser.close();
 assert.deepEqual(errors, [], 'no JS dialogs or errors (WKWebView implements none of them)');
