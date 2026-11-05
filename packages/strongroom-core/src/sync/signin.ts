@@ -47,8 +47,8 @@ export async function signInWithPassword(t: Transport, password: string, account
   if (!pre) throw new SyncHttpError(404, 'No sync account exists yet. Turn on sync on the phone first.');
   const keys = await derivePasswordKeys({ kdf: pre.kdf, salt: fromBase64(pre.salt), accountKey: pre.accountKey }, password, undefined, accountKey);
   const { p, header } = await download(t, keys.loginToken);
-  // The keys came from prelogin, so a header with other settings would not open on this device's next unlock.
-  const vaultKey = matches(header, pre) ? await openPasswordWrap(header, keys.wrapKey) : null;
+  // The keys came from prelogin, so a header with other settings would not open on this device's next unlock. As adoptHeader, a header that dropped the account-key flag is never taken.
+  const vaultKey = matches(header, pre) && (header.accountKey || !accountKey) ? await openPasswordWrap(header, keys.wrapKey) : null;
   if (!vaultKey) throw new SyncAuthError();
   return signedIn(p, header, vaultKey, keys.loginToken, keys.readToken);
 }

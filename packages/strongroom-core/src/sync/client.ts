@@ -11,10 +11,11 @@ export type SyncRecord = StoredRecord & { rev: number; dirty: boolean };
 type Row = { id: string; sealed: Uint8Array; rev: number };
 
 // commit({ records }) marks them dirty. applyPull is one atomic write: records it writes are clean, and `rebase` only sets a rev (bytes and dirty kept), so a local winner's new base survives a push that never lands. markPushed sets each rev but clears dirty only where the stored bytes still equal the pushed ones, so an edit made during the push stays dirty.
+// R16: applyPull writes a record only while the stored row still holds `seen`, the bytes the merge planned against (no row at all when `seen` is undefined). Otherwise it leaves that row as it is (still dirty) and keeps the stored lastRev, so the next pull returns that record again and last writer wins settles it; everything else in the write still applies. Quarantine keeps one row per (id, rev).
 export interface SyncStore extends RecordStore {
   getSyncRecords(): Promise<SyncRecord[]>;
   getSyncMeta(): Promise<{ lastRev: number; headerRev: number }>;
-  applyPull(p: { header?: Header; headerRev: number; records: Row[]; quarantine: Row[]; rebase: { id: string; rev: number }[]; lastRev: number }): Promise<void>;
+  applyPull(p: { header?: Header; headerRev: number; records: (Row & { seen?: Uint8Array })[]; quarantine: Row[]; rebase: { id: string; rev: number }[]; lastRev: number }): Promise<void>;
   markPushed(items: Row[]): Promise<void>;
   getQuarantine(): Promise<{ id: string; rev: number }[]>;
 }
@@ -45,9 +46,10 @@ export async function syncOnce(d: { store: SyncStore; transport: Transport; vaul
     const localHeader = await store.getHeader();
     const sameHeader = header !== null && localHeader !== null && headerToJson(header) === headerToJson(localHeader);
     report.headerChanged ||= !sameHeader;
+    const sealedOf = new Map(local.map((r) => [r.id, r.sealed]));
     await store.applyPull({
       headerRev: sameHeader ? pulled.headerRev : meta.headerRev,
-      records: plan.adopt.map(row),
+      records: plan.adopt.map((r) => ({ ...row(r), seen: sealedOf.get(r.id) })),
       quarantine: plan.quarantine.map(row),
       rebase: plan.rebase,
       lastRev: pulled.latestRev,
@@ -60,7 +62,6 @@ export async function syncOnce(d: { store: SyncStore; transport: Transport; vaul
 
     // Never upload over a server version this device could not read (even one quarantined by an earlier sync), and never send a record over the size limit, whose 413 would fail the whole batch.
     const quarantine = await store.getQuarantine();
-    const sealedOf = new Map(local.map((r) => [r.id, r.sealed]));
     const push = plan.push.filter((p) => {
       const skip = quarantine.some((q) => q.id === p.id && q.rev > p.baseRev) || Math.ceil(sealedOf.get(p.id)!.length / 3) * 4 > LIMITS.maxCiphertextChars;
       if (skip) blocked.add(p.id);

@@ -30,12 +30,13 @@ function server() {
   let latestRev = 0;
   const calls: string[] = [];
   let header = headerToJson(HEADER);
+  let headerRev = 1;
   const put = (rid: string, sealed: Uint8Array) => rows.set(rid, { id: rid, rev: ++latestRev, ciphertext: toBase64(sealed), updatedAt: T });
   const t: Transport = {
     prelogin: async () => null,
     async pull(_token, since): Promise<PullResponse> {
       calls.push(`pull ${since}`);
-      return { header, headerRev: 1, records: [...rows.values()].filter((r) => r.rev > since).sort((a, b) => a.rev - b.rev), latestRev, more: false };
+      return { header, headerRev, records: [...rows.values()].filter((r) => r.rev > since).sort((a, b) => a.rev - b.rev), latestRev, more: false };
     },
     async push(_token, req: PushRequest) {
       calls.push(`push ${req.upserts.map((u) => `${u.id.slice(-2)}@${u.baseRev}`).join(' ')}`);
@@ -48,7 +49,11 @@ function server() {
       throw new Error('not used');
     },
   };
-  return { t, rows, calls, put, setHeader: (h: string) => (header = h) };
+  const setHeader = (h: string, rev = headerRev) => {
+    header = h;
+    headerRev = rev;
+  };
+  return { t, rows, calls, put, setHeader };
 }
 
 const sync = (store: MemorySyncStore, t: Transport, maxRetries?: number) => syncOnce({ store, transport: t, vaultKey, token: new Uint8Array(32), maxRetries });
@@ -219,6 +224,45 @@ test('differentHeaderIsReportedNotWritten', async () => {
   const store = await device();
   assert.equal((await sync(store, s.t)).headerChanged, true);
   assert.equal(store.header, HEADER);
+});
+
+// The stored headerRev is the ifRev of the next account update, so a header this device hasn't adopted must not move it.
+test('aDifferentHeaderDoesNotAdvanceTheStoredHeaderRev', async () => {
+  const s = server();
+  s.setHeader(headerToJson({ ...HEADER, salt: new Uint8Array(16).fill(1) }), 2);
+  const store = await device();
+  assert.equal((await sync(store, s.t)).headerChanged, true);
+  assert.deepEqual([store.meta, store.header], [{ lastRev: 0, headerRev: 1 }, HEADER]);
+  s.setHeader(headerToJson(HEADER));
+  assert.equal((await sync(store, s.t)).headerChanged, false);
+  assert.deepEqual(store.meta, { lastRev: 0, headerRev: 2 });
+});
+
+test('applyPullKeepsAnEditMadeDuringTheSync', async () => {
+  const s = server();
+  const v1 = await seal(1, login('v1', T));
+  s.put(id(1), v1);
+  const store = await device(1);
+  store.records.set(id(1), { sealed: v1, rev: 1, dirty: false });
+  s.put(id(1), await seal(1, login('theirs', T + 1)));
+  const two = await seal(2);
+  s.put(id(2), two);
+  const mine = await seal(1, login('edited during the sync', T + 2));
+  const apply = store.applyPull.bind(store);
+  let edits = 1;
+  store.applyPull = async (p) => {
+    if (edits-- > 0) await store.commit({ records: [{ id: id(1), sealed: mine }] });
+    return apply(p);
+  };
+  await sync(store, s.t);
+  assert.deepEqual(store.records.get(id(1)), { sealed: mine, rev: 1, dirty: true });
+  assert.deepEqual(store.records.get(id(2)), { sealed: two, rev: 3, dirty: false });
+  // lastRev stays put, so the next sync meets the remote again and settles it by last writer wins instead of a 409 for ever.
+  assert.deepEqual(store.meta, { lastRev: 1, headerRev: 1 });
+  const next = await sync(store, s.t);
+  assert.deepEqual([next.pushed, next.conflicts], [1, 1]);
+  assert.deepEqual(s.calls.slice(-1), ['push 01@2']);
+  assert.deepEqual(store.records.get(id(1)), { sealed: mine, rev: 4, dirty: false });
 });
 
 test('oversizeLocalRecordIsSkippedAndReported', async () => {

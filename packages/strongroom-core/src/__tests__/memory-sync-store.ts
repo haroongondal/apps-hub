@@ -23,12 +23,17 @@ export class MemorySyncStore implements SyncStore {
 
   async getSyncRecords(): Promise<SyncRecord[]> { return [...this.records].map(([id, r]) => ({ id, ...r })); }
   async getSyncMeta() { return { ...this.meta }; }
-  async applyPull(p: { header?: Header; headerRev: number; records: Row[]; quarantine: Row[]; rebase: { id: string; rev: number }[]; lastRev: number }) {
+  async applyPull(p: Parameters<SyncStore['applyPull']>[0]) {
     this.writes++;
     if (p.header) this.header = p.header;
-    this.meta = { lastRev: p.lastRev, headerRev: p.headerRev };
-    for (const r of p.records) this.records.set(r.id, { sealed: r.sealed, rev: r.rev, dirty: false });
-    this.quarantine.push(...p.quarantine);
+    let held = false;
+    for (const { id, sealed, rev, seen } of p.records) {
+      const now = this.records.get(id)?.sealed;
+      if (seen ? !now || !equalBytes(now, seen) : now !== undefined) held = true;
+      else this.records.set(id, { sealed, rev, dirty: false });
+    }
+    this.meta = { lastRev: held ? this.meta.lastRev : p.lastRev, headerRev: p.headerRev };
+    for (const q of p.quarantine) if (!this.quarantine.some((k) => k.id === q.id && k.rev === q.rev)) this.quarantine.push(q);
     for (const { id, rev } of p.rebase) {
       const r = this.records.get(id);
       if (r) r.rev = rev;

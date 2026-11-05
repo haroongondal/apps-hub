@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { randomBytes } from '../crypto.ts';
 import type { Entry, Login } from '../entry.ts';
+import { AccountKeyRequired, createVault } from '../format.ts';
 import type { Header } from '../format.ts';
-import { formatRecoveryKey } from '../recovery-key.ts';
+import { formatRecoveryKey, generateRecoveryKey } from '../recovery-key.ts';
 import { readEntries, recover, setupVault, unlock, writeEntries } from '../vault.ts';
 import type { RecordStore, StoredRecord } from '../vault.ts';
 import { LOW_FLOOR, LOW_KDF } from './vectors.ts';
@@ -66,6 +68,36 @@ test('recover with a wrong or malformed recovery key changes nothing', async () 
   assert.equal(store.commits, before);
   assert.deepEqual(await unlock(store, 'old master password', LOW_FLOOR), vaultKey);
   assert.ok(recoveryKey);
+});
+
+async function flaggedVault(password: string) {
+  const store = new MemoryStore();
+  const accountKey = randomBytes(20);
+  const recoveryKey = generateRecoveryKey();
+  const { header, vaultKey } = await createVault(password, recoveryKey, { ...opts, accountKey });
+  await store.commit({ header });
+  return { store, accountKey, recoveryKey, vaultKey };
+}
+
+test('a vault with an account key unlocks only with that key', async () => {
+  const { store, accountKey, vaultKey } = await flaggedVault('a master password');
+  await assert.rejects(unlock(store, 'a master password', LOW_FLOOR), AccountKeyRequired);
+  assert.equal(await unlock(store, 'a master password', LOW_FLOOR, randomBytes(20)), null);
+  assert.equal(await unlock(store, 'wrong password!!', LOW_FLOOR, accountKey), null);
+  assert.deepEqual(await unlock(store, 'a master password', LOW_FLOOR, accountKey), vaultKey);
+});
+
+test('recover on a vault with an account key needs the key and keeps the flag', async () => {
+  const { store, accountKey, recoveryKey, vaultKey } = await flaggedVault('old master password');
+  const text = formatRecoveryKey(recoveryKey);
+  const before = store.commits;
+  await assert.rejects(recover(store, text, 'new master password', { floor: LOW_FLOOR }), AccountKeyRequired);
+  assert.equal(store.commits, before);
+  assert.deepEqual(await recover(store, text, 'new master password', { floor: LOW_FLOOR, accountKey }), vaultKey);
+  assert.equal(store.header?.accountKey, true);
+  assert.deepEqual(await unlock(store, 'new master password', LOW_FLOOR, accountKey), vaultKey);
+  await assert.rejects(unlock(store, 'new master password', LOW_FLOOR), AccountKeyRequired);
+  assert.equal(await unlock(store, 'old master password', LOW_FLOOR, accountKey), null);
 });
 
 test('entries written in one commit read back, deleted ones as tombstones', async () => {

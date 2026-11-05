@@ -97,6 +97,15 @@ test('signInRefusesAHeaderThatDoesNotMatchPrelogin', async () => {
   await assert.rejects(signInWithPassword(a.t, PASSWORD), SyncAuthError);
 });
 
+// As adoptHeader: a server that drops the flag from prelogin and the header, though its wrap still needs the key, is never taken.
+test('signInRefusesAServerHeaderThatDroppedTheAccountKeyFlag', async () => {
+  const key = crypto.randomBytes(20);
+  const a = await account({ accountKey: key });
+  const lying: Transport = { ...a.t, prelogin: async () => ({ ...a.prelogin, accountKey: false }) };
+  a.setPage({ header: headerToJson({ ...a.header, accountKey: undefined }), headerRev: 4, records: [], latestRev: 9, more: false });
+  await assert.rejects(signInWithPassword(lying, PASSWORD, key), SyncAuthError);
+});
+
 test('signInWithRecoveryOpensTheVault', async () => {
   const a = await account({ accountKey: crypto.randomBytes(20) });
   argonCalls = 0;

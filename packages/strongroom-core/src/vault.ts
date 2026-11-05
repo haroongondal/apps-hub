@@ -29,11 +29,17 @@ export async function setupVault(store: RecordStore, password: string, opts?: Op
   return { vaultKey, recoveryKey };
 }
 
-export async function unlock(store: RecordStore, password: string, floor: KdfParams = KDF_FLOOR): Promise<Uint8Array | null> {
-  return unlockWithPassword(await headerOf(store), password, floor);
+// A vault whose header carries the account-key flag needs that key here too; without it unlock and recover throw AccountKeyRequired.
+export async function unlock(store: RecordStore, password: string, floor: KdfParams = KDF_FLOOR, accountKey?: Uint8Array): Promise<Uint8Array | null> {
+  return unlockWithPassword(await headerOf(store), password, floor, accountKey);
 }
 
-export async function recover(store: RecordStore, recoveryKeyText: string, newPassword: string, opts?: Options): Promise<Uint8Array | null> {
+export async function recover(
+  store: RecordStore,
+  recoveryKeyText: string,
+  newPassword: string,
+  opts?: Options & { accountKey?: Uint8Array },
+): Promise<Uint8Array | null> {
   const recoveryKey = parseRecoveryKey(recoveryKeyText);
   if (recoveryKey === null) return null;
   const header = await headerOf(store);
