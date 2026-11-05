@@ -14,9 +14,9 @@ import expo.modules.designmedia.core.forceAudio
 
 // The one place a "Make a video" Composition is made: the preview plays it and the export writes it.
 object ComposeBuilder {
-  fun composition(plan: ComposePlan): Composition {
+  fun composition(plan: ComposePlan, preview: Boolean = false): Composition {
     val items = composeItems(plan).map { spec ->
-      item(spec, MediaItem.Builder().setUri(spec.uri).setClippingConfiguration(clipping(spec)).build(), scaleTo(plan.width, plan.height, plan.fps))
+      item(spec, MediaItem.Builder().setUri(spec.uri).setClippingConfiguration(clipping(spec)).build(), effects(plan, preview))
     }
     val sequence = EditedMediaItemSequence.Builder(items).experimentalSetForceAudioTrack(forceAudio(plan)).build()
     return Composition.Builder(listOf(sequence)).build()
@@ -30,11 +30,18 @@ object ComposeBuilder {
   fun item(spec: ItemSpec, media: MediaItem, effects: Effects): EditedMediaItem =
     EditedMediaItem.Builder(media).setDurationUs(spec.endUs).setEffects(effects).build()
 
+  // On the phone (Media3 1.11.1) CompositionPlayer froze the picture after the first clip with the frame-rate cap on each item;
+  // the preview plays at the clips' own rates, the export still caps it.
+  fun effects(plan: ComposePlan, preview: Boolean): Effects =
+    if (preview) Effects(emptyList(), listOf(fitTo(plan.width, plan.height))) else scaleTo(plan.width, plan.height, plan.fps)
+
   fun scaleTo(width: Int, height: Int, fps: Int) = Effects(
     emptyList(),
     listOf(
-      Presentation.createForWidthAndHeight(width, height, Presentation.LAYOUT_SCALE_TO_FIT),
+      fitTo(width, height),
       FrameDropEffect.createDefaultFrameDropEffect(fps.toFloat()),
     ),
   )
+
+  private fun fitTo(width: Int, height: Int) = Presentation.createForWidthAndHeight(width, height, Presentation.LAYOUT_SCALE_TO_FIT)
 }

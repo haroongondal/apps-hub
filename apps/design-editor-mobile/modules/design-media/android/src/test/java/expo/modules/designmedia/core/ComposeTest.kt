@@ -1,6 +1,7 @@
 package expo.modules.designmedia.core
 
 import androidx.media3.common.MediaItem
+import androidx.media3.effect.FrameDropEffect
 import androidx.media3.transformer.Effects
 import expo.modules.designmedia.android.ComposeBuilder
 import org.junit.Assert.assertEquals
@@ -40,6 +41,13 @@ class ComposeTest {
     val spec = ItemSpec("content://media/a", 2_000_000, 10_000_000, true)
     val media = MediaItem.Builder().setClippingConfiguration(ComposeBuilder.clipping(spec)).build()
     assertEquals(8_000_000L, ComposeBuilder.item(spec, media, Effects.EMPTY).presentationDurationUs)
+  }
+
+  @Test
+  fun thePreviewSkipsTheFrameRateCapThatFreezesThePlayerAfterTheFirstClip() {
+    assertEquals(1, ComposeBuilder.effects(plan, preview = false).videoEffects.count { it is FrameDropEffect })
+    assertEquals(0, ComposeBuilder.effects(plan, preview = true).videoEffects.count { it is FrameDropEffect })
+    assertEquals(1, ComposeBuilder.effects(plan, preview = true).videoEffects.size)
   }
 
   @Test

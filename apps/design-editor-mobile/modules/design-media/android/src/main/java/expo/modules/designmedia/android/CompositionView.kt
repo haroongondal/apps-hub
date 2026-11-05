@@ -68,7 +68,7 @@ class CompositionView(context: Context, appContext: AppContext) : ExpoView(conte
       }
       shape = plan.width to plan.height
       placeSurface()
-      player.setComposition(ComposeBuilder.composition(plan), player.currentPosition.coerceIn(0, durationMs(plan)))
+      player.setComposition(ComposeBuilder.composition(plan, preview = true), player.currentPosition.coerceIn(0, durationMs(plan)))
       player.prepare()
     } catch (e: Exception) {
       Log.w(TAG, "preview plan refused", e)
