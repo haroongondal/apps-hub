@@ -23,12 +23,16 @@ export class MemorySyncStore implements SyncStore {
 
   async getSyncRecords(): Promise<SyncRecord[]> { return [...this.records].map(([id, r]) => ({ id, ...r })); }
   async getSyncMeta() { return { ...this.meta }; }
-  async applyPull(p: { header?: Header; headerRev: number; records: Row[]; quarantine: Row[]; lastRev: number }) {
+  async applyPull(p: { header?: Header; headerRev: number; records: Row[]; quarantine: Row[]; rebase: { id: string; rev: number }[]; lastRev: number }) {
     this.writes++;
     if (p.header) this.header = p.header;
     this.meta = { lastRev: p.lastRev, headerRev: p.headerRev };
     for (const r of p.records) this.records.set(r.id, { sealed: r.sealed, rev: r.rev, dirty: false });
     this.quarantine.push(...p.quarantine);
+    for (const { id, rev } of p.rebase) {
+      const r = this.records.get(id);
+      if (r) r.rev = rev;
+    }
   }
   async markPushed(items: Row[]) {
     this.writes++;

@@ -77,6 +77,8 @@ test('signInWithPasswordDerivesOnceAndOpensTheVault', async () => {
     header: a.header,
     headerRev: 4,
     records: [{ id: ID, sealed: a.sealed, rev: 7 }],
+    quarantine: [],
+    skipped: 0,
     lastRev: 9,
     vaultKey: a.vaultKey,
     loginToken: a.keys.loginToken,
@@ -102,4 +104,26 @@ test('signInWithRecoveryOpensTheVault', async () => {
   assert.equal(argonCalls, 0);
   assert.deepEqual([s.vaultKey, s.loginToken, s.readToken, s.headerRev, s.lastRev], [a.vaultKey, recoveryLoginToken(a.recoveryKey), null, 4, 9]);
   await assert.rejects(signInWithRecovery(a.t, generateRecoveryKey()), SyncAuthError);
+});
+
+test('signInQuarantinesUnreadableRowsAndCountsBadOnes', async () => {
+  const a = await account();
+  const other = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
+  const garbage = crypto.randomBytes(60);
+  const row = (rid: string, rev: number, ciphertext: string) => ({ id: rid, rev, ciphertext, updatedAt: 1 });
+  a.setPage({
+    header: headerToJson(a.header),
+    headerRev: 4,
+    records: [
+      row(ID, 5, toBase64(a.sealed)),
+      row(other(2), 6, toBase64(garbage)),
+      row(other(3), 7, 'A'.repeat(90_004)),
+      row(other(4), 8, 'not*base64'),
+      row('NOT-AN-ID', 9, toBase64(a.sealed)),
+    ],
+    latestRev: 9,
+    more: false,
+  });
+  const s = await signInWithRecovery(a.t, a.recoveryKey);
+  assert.deepEqual([s.records, s.quarantine, s.skipped], [[{ id: ID, sealed: a.sealed, rev: 5 }], [{ id: other(2), sealed: garbage, rev: 6 }], 3]);
 });

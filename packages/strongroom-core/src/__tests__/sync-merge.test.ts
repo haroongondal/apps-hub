@@ -67,10 +67,15 @@ test('readableLocalBeatsUndecryptableRemote', () => {
   const bad = remote('a', { entry: null });
   assert.deepEqual(planMerge([local('a')], [bad]), { ...EMPTY, quarantine: [bad], blocked: ['a'] });
   assert.deepEqual(planMerge([local('a', { dirty: false })], [bad]), { ...EMPTY, quarantine: [bad], blocked: ['a'] });
-  // The other way round: a readable remote replaces a local copy that does not open, and that copy is never pushed.
-  const good = remote('b');
-  assert.deepEqual(planMerge([local('b', { entry: null })], [good]), { ...EMPTY, adopt: [good] });
-  assert.deepEqual(planMerge([local('c', { entry: null })], []), { ...EMPTY, blocked: ['c'] });
+});
+
+test('unreadableLocalIsKeptAndReported', () => {
+  for (const dirty of [true, false]) {
+    assert.deepEqual(planMerge([local('b', { entry: null, dirty })], [remote('b')]), { ...EMPTY, blocked: ['b'] });
+    assert.deepEqual(planMerge([local('c', { entry: null, dirty })], []), { ...EMPTY, blocked: ['c'] });
+    const bad = remote('d', { entry: null });
+    assert.deepEqual(planMerge([local('d', { entry: null, dirty })], [bad]), { ...EMPTY, quarantine: [bad], blocked: ['d'] });
+  }
 });
 
 test('neverDeletesAnything', () => {

@@ -10,11 +10,11 @@ import type { Transport } from './transport.ts';
 export type SyncRecord = StoredRecord & { rev: number; dirty: boolean };
 type Row = { id: string; sealed: Uint8Array; rev: number };
 
-// commit({ records }) marks them dirty. applyPull is one atomic write and leaves what it writes clean. markPushed sets each rev but clears dirty only where the stored bytes still equal the pushed ones, so an edit made during the push stays dirty.
+// commit({ records }) marks them dirty. applyPull is one atomic write: records it writes are clean, and `rebase` only sets a rev (bytes and dirty kept), so a local winner's new base survives a push that never lands. markPushed sets each rev but clears dirty only where the stored bytes still equal the pushed ones, so an edit made during the push stays dirty.
 export interface SyncStore extends RecordStore {
   getSyncRecords(): Promise<SyncRecord[]>;
   getSyncMeta(): Promise<{ lastRev: number; headerRev: number }>;
-  applyPull(p: { header?: Header; headerRev: number; records: Row[]; quarantine: Row[]; lastRev: number }): Promise<void>;
+  applyPull(p: { header?: Header; headerRev: number; records: Row[]; quarantine: Row[]; rebase: { id: string; rev: number }[]; lastRev: number }): Promise<void>;
   markPushed(items: Row[]): Promise<void>;
   getQuarantine(): Promise<{ id: string; rev: number }[]>;
 }
@@ -32,8 +32,7 @@ export async function syncOnce(d: { store: SyncStore; transport: Transport; vaul
     const meta = await store.getSyncMeta();
     const pulled = await pullAll(transport, token, meta.lastRev);
     if (!(pulled.headerRev >= meta.headerRev)) throw new SyncRollbackError();
-    const remoteIds = new Set(pulled.rows.map((r) => r.id));
-    const local = (await store.getSyncRecords()).filter((r) => r.dirty || remoteIds.has(r.id));
+    const local = await store.getSyncRecords();
     const plan = planMerge(
       await Promise.all(local.map(async (r) => ({ ...r, entry: await openEntry(vaultKey, r.id, r.sealed) }))),
       await Promise.all(
@@ -50,6 +49,7 @@ export async function syncOnce(d: { store: SyncStore; transport: Transport; vaul
       headerRev: sameHeader ? pulled.headerRev : meta.headerRev,
       records: plan.adopt.map(row),
       quarantine: plan.quarantine.map(row),
+      rebase: plan.push.map((p) => ({ id: p.id, rev: p.baseRev })),
       lastRev: pulled.latestRev,
     });
     report.pulled += plan.adopt.length;

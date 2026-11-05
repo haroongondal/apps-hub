@@ -33,7 +33,7 @@ async function world() {
   const recoveryHash = tokenHash(recoveryLoginToken(recoveryKey));
   const created = await t.putAccount({ setupToken: SETUP }, { header: headerToJson(header), loginHash: tokenHash(keys.loginToken), recoveryHash, readHash: tokenHash(keys.readToken) });
   const phone: Device = { store: new MemorySyncStore(), vaultKey, token: keys.loginToken };
-  await phone.store.applyPull({ header, headerRev: created.headerRev, records: [], quarantine: [], lastRev: 0 });
+  await phone.store.applyPull({ header, headerRev: created.headerRev, records: [], quarantine: [], rebase: [], lastRev: 0 });
   const loginId = newId();
   await writeEntries(phone.store, vaultKey, [{ id: loginId, entry: login('Mail', 1000) }]);
   assert.equal((await sync(phone, t)).pushed, 1);
@@ -43,7 +43,7 @@ async function world() {
 async function signIn(t: Transport, password: string, accountKey: Uint8Array): Promise<Device> {
   const s = await signInWithPassword(t, password, accountKey);
   const store = new MemorySyncStore();
-  await store.applyPull({ header: s.header, headerRev: s.headerRev, records: s.records, quarantine: [], lastRev: s.lastRev });
+  await store.applyPull({ header: s.header, headerRev: s.headerRev, records: s.records, quarantine: s.quarantine, rebase: [], lastRev: s.lastRev });
   return { store, vaultKey: s.vaultKey, token: s.loginToken };
 }
 
@@ -79,7 +79,7 @@ test('passwordChangeOnOneDeviceMeansSignInAgainOnTheOther', async () => {
   assert.ok(keys);
   const { headerRev, lastRev } = await a.store.getSyncMeta();
   const put = await t.putAccount(a.token, { header: headerToJson(changed), loginHash: tokenHash(keys.loginToken), readHash: tokenHash(keys.readToken), ifRev: headerRev });
-  await a.store.applyPull({ header: changed, headerRev: put.headerRev, records: [], quarantine: [], lastRev });
+  await a.store.applyPull({ header: changed, headerRev: put.headerRev, records: [], quarantine: [], rebase: [], lastRev });
   a.token = keys.loginToken;
   assert.deepEqual((await signInWithRecovery(t, recoveryKey)).vaultKey, a.vaultKey);
 
@@ -94,7 +94,7 @@ test('passwordChangeOnOneDeviceMeansSignInAgainOnTheOther', async () => {
   const adopted = await adoptHeader(b.store.header!, again.header, NEW_PASSWORD, accountKey, b.vaultKey);
   assert.notEqual(adopted, 'refused');
   if (adopted === 'refused') return;
-  await b.store.applyPull({ header: adopted, headerRev: again.headerRev, records: [], quarantine: [], lastRev: (await b.store.getSyncMeta()).lastRev });
+  await b.store.applyPull({ header: adopted, headerRev: again.headerRev, records: [], quarantine: [], rebase: [], lastRev: (await b.store.getSyncMeta()).lastRev });
   b.token = again.loginToken;
 
   assert.equal((await sync(b, t)).pushed, 1);

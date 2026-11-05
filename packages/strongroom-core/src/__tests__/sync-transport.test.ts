@@ -51,6 +51,23 @@ test('fetchTransportMapsFailures', async () => {
   await assert.rejects(down.prelogin(), SyncOfflineError);
 });
 
+test('malformedServerBodiesAreRefused', async () => {
+  const with_ = (status: number, body: unknown) => fetchTransport('https://vault.example', fakeFetch(() => ({ status, body })).fn);
+  const refused = (status: number) => (e: unknown) => e instanceof SyncHttpError && !(e instanceof SyncAuthError) && e.status === status;
+  for (const body of [null, [], {}, { ...PAGE, records: 'none' }, { ...PAGE, records: [null] }, { ...PAGE, more: 1 }, { ...PAGE, header: 3 }]) {
+    await assert.rejects(with_(200, body).pull(TOKEN, 0), refused(200), JSON.stringify(body));
+  }
+  for (const body of [{ latestRev: 1 }, { revs: [null], latestRev: 1 }, { revs: [], latestRev: '1' }]) {
+    await assert.rejects(with_(200, body).push(TOKEN, { upserts: [] }), refused(200), JSON.stringify(body));
+  }
+  for (const body of [{ error: 'stale' }, { conflicts: 'x' }]) {
+    await assert.rejects(with_(409, body).push(TOKEN, { upserts: [] }), refused(409), JSON.stringify(body));
+  }
+  await assert.rejects(with_(200, { kdf: null, salt: 's', accountKey: true }).prelogin(), refused(200));
+  await assert.rejects(with_(200, { version: 1, kdf: {}, salt: 's' }).prelogin(), refused(200));
+  await assert.rejects(with_(200, { headerRev: '2' }).putAccount({ setupToken: 's' }, ACCOUNT), refused(200));
+});
+
 test('fetchTransportGivesUpAfter30Seconds', async () => {
   mock.timers.enable({ apis: ['setTimeout'] });
   try {

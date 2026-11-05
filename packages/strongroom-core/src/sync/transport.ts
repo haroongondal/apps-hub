@@ -59,27 +59,39 @@ export function fetchTransport(baseUrl: string, fetchFn: typeof fetch = fetch): 
     try {
       return { status, data: JSON.parse(text) };
     } catch {
-      throw new SyncHttpError(status);
+      throw new SyncHttpError(status, UNREADABLE);
     }
   }
-  const ok = ({ status, data }: { status: number; data: any }) => {
-    if (status !== 200) throw new SyncHttpError(status);
+  // The shape is checked here, so a wrong body is an error the caller can report, never a TypeError deep inside sync.
+  const ok = ({ status, data }: { status: number; data: any }, shaped: (d: any) => boolean, expected = 200): any => {
+    if (status !== expected) throw new SyncHttpError(status);
+    if (!isObj(data) || !shaped(data)) throw new SyncHttpError(status, UNREADABLE);
     return data;
   };
   return {
     async prelogin() {
       const r = await call('GET', '/v1/prelogin');
-      return r.status === 404 ? null : ok(r);
+      return r.status === 404 ? null : ok(r, (d) => isObj(d.kdf) && typeof d.salt === 'string' && typeof d.accountKey === 'boolean');
     },
-    pull: async (token, since) => ok(await call('GET', `/v1/records?since=${since}`, token)),
+    pull: async (token, since) =>
+      ok(
+        await call('GET', `/v1/records?since=${since}`, token),
+        (d) => typeof d.header === 'string' && int(d.headerRev) && Array.isArray(d.records) && d.records.every(isObj) && int(d.latestRev) && typeof d.more === 'boolean',
+      ),
     async push(token, req) {
       const r = await call('POST', '/v1/records', token, req);
-      return r.status === 409 ? r.data : ok(r);
+      return r.status === 409
+        ? ok(r, (d) => Array.isArray(d.conflicts), 409)
+        : ok(r, (d) => Array.isArray(d.revs) && d.revs.every(isObj) && int(d.latestRev));
     },
     putAccount: async (auth: Uint8Array | { setupToken: string }, body: AccountCreate | AccountUpdate) =>
-      ok(await call('PUT', '/v1/account', auth instanceof Uint8Array ? auth : auth.setupToken, body)),
+      ok(await call('PUT', '/v1/account', auth instanceof Uint8Array ? auth : auth.setupToken, body), (d) => int(d.headerRev)),
   };
 }
+
+const UNREADABLE = 'The vault server sent a reply this device could not read. Try again later.';
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const int = (v: unknown) => Number.isSafeInteger(v);
 
 // sealed is null when the ciphertext is oversize or not base64: the row can't be read, but its id must not be uploaded over.
 export type PulledRow = { id: string; rev: number; sealed: Uint8Array | null };
