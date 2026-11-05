@@ -100,6 +100,16 @@ test('recover on a vault with an account key needs the key and keeps the flag', 
   assert.equal(await unlock(store, 'old master password', LOW_FLOOR, accountKey), null);
 });
 
+test('a stored account key is ignored by unlock and recover while the header carries no flag', async () => {
+  const store = new MemoryStore();
+  const { vaultKey, recoveryKey } = await setupVault(store, 'a master password', opts);
+  const accountKey = randomBytes(20);
+  assert.deepEqual(await unlock(store, 'a master password', LOW_FLOOR, accountKey), vaultKey);
+  assert.deepEqual(await recover(store, formatRecoveryKey(recoveryKey), 'a new master password', { floor: LOW_FLOOR, accountKey }), vaultKey);
+  assert.equal(store.header?.accountKey, undefined);
+  assert.deepEqual(await unlock(store, 'a new master password', LOW_FLOOR), vaultKey);
+});
+
 test('entries written in one commit read back, deleted ones as tombstones', async () => {
   const store = new MemoryStore();
   const { vaultKey } = await setupVault(store, 'a master password', opts);

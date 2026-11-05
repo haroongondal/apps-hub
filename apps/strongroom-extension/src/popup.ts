@@ -1,4 +1,4 @@
-import type { Detail, ImportPreview, PageRef, Pending, Request, Row, Status } from './service.ts';
+import type { Detail, ImportPreview, PageRef, Pending, Request, Row, Status, SyncStatus } from './service.ts';
 
 type Child = Node | string | null | false | undefined;
 
@@ -70,7 +70,93 @@ function setupScreen() {
   }), 'ui-btn--primary');
   screen('Create your vault', null,
     h('p', { class: 'ui-muted' }, 'Your logins are encrypted on this computer with your master password. Nothing leaves it.'),
-    label('Master password (at least 12 characters)', pw), label('Type it again', again), msg, go);
+    label('Master password (at least 12 characters)', pw), label('Type it again', again), msg, go,
+    button('Use my Strongroom account instead', () => signInScreen(setupScreen), 'ui-btn--ghost'));
+}
+
+type Confirm = { needsConfirm: true; entries: number } | null;
+const sameKey = (a: string, b: string) => a.replace(/[-\s]/g, '').toUpperCase() === b.replace(/[-\s]/g, '').toUpperCase();
+
+function confirmReplace(entries: number, back: () => unknown, replace: () => Promise<unknown>) {
+  const msg = msgBox();
+  const yes = button('Replace and sign in', () => guarded(msg, [yes, no], replace), 'ui-btn--danger');
+  const no = button('Cancel', back);
+  const items = `${entries} saved ${entries === 1 ? 'item' : 'items'}`;
+  screen('Replace this vault?', null,
+    h('p', {}, `This computer's vault holds ${items}. Signing in replaces ${entries === 1 ? 'it' : 'them'} with the logins from your Strongroom account.`),
+    h('p', { class: 'ui-muted' }, "What's here now can't be brought back."), msg, yes, no);
+}
+
+function signInScreen(back: () => unknown) {
+  const msg = msgBox();
+  const pw = input({ type: 'password', autocomplete: 'current-password' });
+  const key = input({ placeholder: 'ABCD-EFGH-…' });
+  const send = (replace: boolean) => async () => {
+    const reply = await call<Confirm>({ type: 'signIn', password: pw.value, accountKey: key.value, replace });
+    if (reply) confirmReplace(reply.entries, () => signInScreen(back), send(true));
+    else await route();
+  };
+  const go = button('Sign in', () => guarded(msg, [go], send(false)), 'ui-btn--primary');
+  pw.addEventListener('keydown', (e) => e.key === 'Enter' && go.click());
+  screen('Sign in to sync', back,
+    h('p', { class: 'ui-muted' }, 'Use the master password and account key from your phone. Strongroom was set up there first.'),
+    label('Master password', pw), label('Account key', key), msg, go,
+    button('Forgot master password?', () => recoverySignInScreen(back), 'ui-btn--ghost'));
+}
+
+function recoverySignInScreen(back: () => unknown) {
+  const msg = msgBox();
+  const recovery = input({ placeholder: 'ABCD-EFGH-…' });
+  const pw = input({ type: 'password', autocomplete: 'new-password' });
+  const again = input({ type: 'password', autocomplete: 'new-password' });
+  const key = input({ placeholder: 'ABCD-EFGH-…' });
+  const keyAgain = input({ placeholder: 'ABCD-EFGH-…' });
+  const send = (replace: boolean) => async () => {
+    const reply = await call<Confirm>({ type: 'signInRecovery', recoveryKey: recovery.value, newPassword: pw.value, accountKey: key.value, replace });
+    if (reply) confirmReplace(reply.entries, () => recoverySignInScreen(back), send(true));
+    else await route();
+  };
+  const go = button('Set new master password and sign in', () => guarded(msg, [go], async () => {
+    if (pw.value !== again.value) throw new Error("The two passwords don't match. Type the same one twice.");
+    if (!sameKey(key.value, keyAgain.value)) throw new Error("The two account keys don't match. Type the same one twice.");
+    await send(false)();
+  }), 'ui-btn--primary');
+  screen('Sign in with your recovery key', () => signInScreen(back),
+    h('p', { class: 'ui-muted' }, "Strongroom can't check the account key against the vault server, and a typo would stop your other devices from syncing. Type it twice."),
+    label('Recovery key', recovery), label('New master password (at least 12 characters)', pw), label('Type it again', again),
+    label('Account key', key), label('Type the account key again', keyAgain), msg, go);
+}
+
+function syncCard(sync: SyncStatus, refresh: () => unknown) {
+  const msg = msgBox();
+  const now = button('Sync now', () => guarded(msg, [now], async () => {
+    await call({ type: 'syncNow' });
+    await refresh();
+  }));
+  const signIn = (text: string) => button(text, () => signInScreen(refresh), 'ui-btn--primary');
+  const count = (n: number, what: string) => `${n} item${n === 1 ? '' : 's'} ${what}`;
+  const lines: string[] = [];
+  if (!sync.available) lines.push("Sync isn't available in this build.");
+  else if (sync.state === 'off') lines.push('Sync is off. Sign in with your Strongroom account to share logins with your phone.');
+  else if (sync.state === 'needsSignIn') lines.push("Sign in again to keep syncing. A change made here that hasn't reached the vault server is dropped, and signing in uses the server's settings.");
+  else if (sync.state === 'syncing') lines.push('Syncing…');
+  else if (sync.state === 'error') lines.push(sync.error ?? 'Sync stopped. Try again.');
+  else lines.push(sync.lastSyncAt ? `Synced at ${new Date(sync.lastSyncAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.` : 'Not synced yet.');
+  if (sync.pendingUpdate) lines.push("Your new master password hasn't reached the vault server yet. Strongroom sends it as soon as it can connect, and sync waits until then.");
+  if (sync.blocked > 0) lines.push(`${count(sync.blocked, "couldn't be synced")} and ${sync.blocked === 1 ? 'was' : 'were'} left as ${sync.blocked === 1 ? 'it is' : 'they are'}.`);
+  if (sync.quarantined > 0) lines.push(`${count(sync.quarantined, "on the vault server couldn't be read here")} and ${sync.quarantined === 1 ? 'was' : 'were'} left untouched.`);
+  const action = !sync.available ? null : sync.state === 'off' ? signIn('Sign in to sync') : sync.state === 'needsSignIn' ? signIn('Sign in again') : now;
+  const card = h('div', { class: 'ui-group card', id: 'sync' }, h('p', { class: 'ui-caption' }, 'Sync'), ...lines.map((l) => h('p', {}, l)), action, msg);
+  if (sync.state === 'syncing') void whenSyncDone(card, refresh);
+  return card;
+}
+
+async function whenSyncDone(card: HTMLElement, refresh: () => unknown) {
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    if (!card.isConnected) return;
+    if ((await call<SyncStatus>({ type: 'syncStatus' })).state !== 'syncing') return void refresh();
+  }
 }
 
 function recoveryScreen(key: string) {
@@ -113,10 +199,11 @@ function resetScreen() {
 }
 
 async function vaultScreen() {
-  const [{ rows, unreadable }, pending, here] = await Promise.all([
+  const [{ rows, unreadable }, pending, here, sync] = await Promise.all([
     call<{ rows: Row[]; unreadable: number }>({ type: 'list' }),
     tab ? call<Pending | null>({ type: 'pending', tabId: tab.tabId }) : null,
     tab ? call<{ rows: Row[] }>({ type: 'candidates', page: tab }) : null,
+    call<SyncStatus>({ type: 'syncStatus' }),
   ]);
   const toast = h('p', { class: 'ui-meta', role: 'status' });
   const msg = msgBox();
@@ -152,7 +239,7 @@ async function vaultScreen() {
   screen('Strongroom', null,
     h('div', { class: 'ui-toolbar' }, button('Add', () => editScreen(null), 'ui-btn--primary'), button('Import', importScreen),
       h('span', { class: 'grow' }), button('Lock', () => guarded(msg, [], async () => { await call({ type: 'lock' }); await route(); }), 'ui-btn--ghost')),
-    pendingCard, hereCard, search, list,
+    pendingCard, hereCard, search, list, syncCard(sync, vaultScreen),
     unreadable > 0 && h('p', { class: 'ui-meta' }, `${unreadable} saved item${unreadable === 1 ? '' : 's'} couldn't be read and ${unreadable === 1 ? 'was' : 'were'} left untouched.`),
     toast, msg);
 }

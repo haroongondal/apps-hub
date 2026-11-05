@@ -1,15 +1,19 @@
-import { loadPublicSuffixList } from 'strongroom-core';
+import { fetchTransport, loadPublicSuffixList } from 'strongroom-core';
 import { UserError, createService } from './service.ts';
 import type { Ctx, Pending, Request } from './service.ts';
+import { SYNC_URL } from './sync-url.ts';
 import { localStore, sessionKv } from './storage.ts';
 
 const AUTO_LOCK_MINUTES = 5;
+const SYNC_MINUTES = 5;
 
 const service = createService({
   store: localStore,
   session: sessionKv,
   now: Date.now,
   resetAutoLock: () => void chrome.alarms.create('auto-lock', { delayInMinutes: AUTO_LOCK_MINUTES }),
+  syncAlarm: (on) => void (on ? chrome.alarms.create('sync', { periodInMinutes: SYNC_MINUTES }) : chrome.alarms.clear('sync')),
+  sync: SYNC_URL ? { store: localStore, transport: fetchTransport(SYNC_URL) } : undefined,
 });
 
 // storage.local is readable from content scripts by default; the ciphertext and header should stay with the extension's own pages.
@@ -19,6 +23,7 @@ const ready = fetch(chrome.runtime.getURL('public_suffix_list.dat')).then((r) =>
 
 chrome.alarms.onAlarm.addListener(({ name }) => {
   if (name === 'auto-lock') void ready.then(() => service.handle({ type: 'lock' }));
+  if (name === 'sync') void ready.then(() => service.handle({ type: 'syncNow' })).catch(() => {});
 });
 
 // Chrome clears a tab's badge when the tab navigates, and a sign-in navigates right after the capture, so the badge is set again once the new page has loaded.

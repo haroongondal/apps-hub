@@ -31,7 +31,8 @@ export async function setupVault(store: RecordStore, password: string, opts?: Op
 
 // A vault whose header carries the account-key flag needs that key here too; without it unlock and recover throw AccountKeyRequired.
 export async function unlock(store: RecordStore, password: string, floor: KdfParams = KDF_FLOOR, accountKey?: Uint8Array): Promise<Uint8Array | null> {
-  return unlockWithPassword(await headerOf(store), password, floor, accountKey);
+  const header = await headerOf(store);
+  return unlockWithPassword(header, password, floor, header.accountKey ? accountKey : undefined);
 }
 
 export async function recover(
@@ -45,7 +46,7 @@ export async function recover(
   const header = await headerOf(store);
   const vaultKey = await unlockWithRecovery(header, recoveryKey);
   if (vaultKey === null) return null;
-  await store.commit({ header: await withNewPassword(header, vaultKey, newPassword, opts) });
+  await store.commit({ header: await withNewPassword(header, vaultKey, newPassword, { ...opts, accountKey: header.accountKey ? opts?.accountKey : undefined }) });
   return vaultKey;
 }
 

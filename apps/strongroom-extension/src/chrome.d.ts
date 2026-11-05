@@ -20,7 +20,8 @@ declare namespace chrome {
     };
   }
   namespace alarms {
-    function create(name: string, info: { delayInMinutes: number }): Promise<void>;
+    function create(name: string, info: { delayInMinutes?: number; periodInMinutes?: number }): Promise<void>;
+    function clear(name: string): Promise<boolean>;
     const onAlarm: { addListener(cb: (alarm: { name: string }) => void): void };
   }
   namespace action {

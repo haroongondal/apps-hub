@@ -1,15 +1,19 @@
 // Opens real Chromium with the built extension (run `pnpm build` first). Not part of `pnpm test`.
 // Needs playwright-core and a Chromium: set PLAYWRIGHT_CORE and CHROMIUM_PATH if yours live elsewhere; screenshots go to SHOTS.
 import http from 'node:http';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { recoveryLoginToken } from 'strongroom-core';
+import { newWorld, serveHttp } from '../src/__tests__/sync-world.ts';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE ?? join(homedir(), 'Documents/browser-automation/node_modules/playwright-core/index.mjs'));
 const CHROMIUM = process.env.CHROMIUM_PATH ?? join(homedir(), 'Library/Caches/ms-playwright/chromium-1228/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
 const SCRATCH = process.env.SHOTS ?? tmpdir();
-const EXT = fileURLToPath(new URL('../dist', import.meta.url));
+const PKG = fileURLToPath(new URL('..', import.meta.url));
+const EXT = join(PKG, 'dist');
 const CSV = fileURLToPath(new URL('../../strongroom/modules/strongroom-vault/android/src/test/resources/google-export-redacted.csv', import.meta.url));
 const MASTER = 'correct horse battery staple';
 
@@ -32,18 +36,130 @@ const GOOD = `http://localhost:${PORT}/login.html`;
 const OTHER = `http://127.0.0.1:${PORT}/login.html`;
 
 const profile = mkdtempSync(join(tmpdir(), 'sg-e2e-'));
-const launch = async () => {
-  const ctx = await chromium.launchPersistentContext(profile, {
+const launchWith = async (ext, dir) => {
+  const ctx = await chromium.launchPersistentContext(dir, {
     executablePath: CHROMIUM, headless: true,
-    args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
+    args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
   });
   let [sw] = ctx.serviceWorkers();
   if (!sw) sw = await ctx.waitForEvent('serviceworker');
   return { ctx, sw, id: new URL(sw.url()).host };
 };
+const launch = () => launchWith(EXT, profile);
 
 const menuShown = (page) => page.evaluate(() => document.documentElement.lastElementChild?.style?.zIndex === '2147483647');
 const errors = [];
+
+const until = async (what, fn, tries = 40) => {
+  for (let i = 0; i < tries; i++) {
+    const value = await fn();
+    if (value) return value;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  throw new Error(`timed out waiting for ${what}`);
+};
+const b64 = (bytes) => Buffer.from(bytes).toString('base64');
+
+// A second build points the extension at the real Worker over plain HTTP on 127.0.0.1; the phone is a strongroom-core device on the same database.
+async function syncSuite() {
+  const world = await newWorld();
+  await world.phone.add('Phone mail');
+  await world.phone.sync();
+  const harness = await serveHttp(world);
+  const syncDist = mkdtempSync(join(tmpdir(), 'sg-sync-dist-'));
+  const syncProfile = mkdtempSync(join(tmpdir(), 'sg-sync-e2e-'));
+  try {
+    execFileSync(process.execPath, ['build.mjs'], { cwd: PKG, env: { ...process.env, STRONGROOM_SYNC_URL: harness.url, STRONGROOM_OUT: syncDist }, stdio: 'pipe' });
+    const manifest = JSON.parse(readFileSync(join(syncDist, 'manifest.json'), 'utf8'));
+    check('the sync build asks for the sync origin and no other permission', JSON.stringify(manifest.host_permissions) === JSON.stringify([`${harness.url}/*`]) && manifest.permissions.join() === 'storage,alarms,activeTab', JSON.stringify(manifest));
+    check('the default build asks for no host permission', !('host_permissions' in JSON.parse(readFileSync(join(EXT, 'manifest.json'), 'utf8'))));
+
+    let { ctx, sw, id } = await launchWith(syncDist, syncProfile);
+    const openPopup = async () => {
+      const p = await ctx.newPage();
+      p.on('pageerror', (e) => errors.push(`sync popup: ${e.message}`));
+      await p.goto(`chrome-extension://${id}/popup.html`);
+      return p;
+    };
+    let popup = await openPopup();
+    const send = (msg) => popup.evaluate((m) => chrome.runtime.sendMessage(m), msg);
+    const names = async () => (await send({ type: 'list' })).data.rows.map((r) => r.name).sort();
+    const stored = () => sw.evaluate(async () => JSON.stringify(await chrome.storage.local.get(null)));
+    const THROWAWAY = 'a throwaway master password';
+
+    await popup.getByRole('heading', { name: 'Create your vault' }).waitFor();
+    await send({ type: 'setup', password: THROWAWAY });
+    const recovery = (await send({ type: 'status' })).data.recoveryKey;
+    await send({ type: 'confirmRecovery', group: recovery.slice(0, 4) });
+    await send({ type: 'save', id: null, login: { name: 'Throwaway', username: 'x', password: 'y', websites: 'https://throwaway.example', note: '' } });
+    await popup.reload();
+    await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+    check('the Sync card says sync is off before sign-in', (await popup.locator('#sync').innerText()).includes('Sync is off'));
+
+    await popup.getByRole('button', { name: 'Sign in to sync' }).click();
+    await popup.getByRole('heading', { name: 'Sign in to sync' }).waitFor();
+    await popup.getByLabel('Master password', { exact: true }).fill('not the password');
+    await popup.getByLabel('Account key', { exact: true }).fill(world.accountKeyText);
+    await popup.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await popup.locator('.msg:not(:empty)').waitFor();
+    check('a refused sign-in says password or account key', (await popup.locator('.msg').innerText()).includes('password or account key'));
+    check('a refused sign-in leaves the old vault as it was', (await names()).join() === 'Throwaway');
+
+    await popup.getByLabel('Master password', { exact: true }).fill(world.password);
+    await popup.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await popup.getByRole('heading', { name: 'Replace this vault?' }).waitFor();
+    check('the replace confirmation names the entry count', (await popup.innerText('body')).includes('holds 1 saved item'));
+    check('nothing is replaced before the owner confirms', (await names()).join() === 'Throwaway');
+    await popup.screenshot({ path: `${SCRATCH}/6-replace.png` });
+    await popup.getByRole('button', { name: 'Replace and sign in' }).click();
+    await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+    check('signsInAndSeesThePhonesLogin', (await names()).join() === 'Phone mail' && (await popup.locator('.row').count()) === 1, (await names()).join());
+    check('the Sync card shows the last sync after sign-in', /Synced at \d/.test(await popup.locator('#sync').innerText()), await popup.locator('#sync').innerText());
+    await popup.screenshot({ path: `${SCRATCH}/7-synced.png` });
+
+    await send({ type: 'save', id: null, login: { name: 'From Chrome', username: 'c', password: 'p', websites: '', note: '' } });
+    const reached = await until('the save to reach the phone', async () => ((await world.phone.sync(), (await world.phone.names()).includes('From Chrome'))));
+    await world.phone.add('From phone');
+    await world.phone.sync();
+    const synced = await send({ type: 'syncNow' });
+    check('editOnOneSideAppearsOnTheOther', reached && synced.ok && (await names()).join() === 'From Chrome,From phone,Phone mail', JSON.stringify([synced, await names()]));
+
+    const session = await sw.evaluate(() => chrome.storage.session.get('loginToken'));
+    check('the login token is in session storage while unlocked', session.loginToken === b64(world.tokens.loginToken));
+    const alarm = await sw.evaluate(async () => (await chrome.alarms.getAll()).find((a) => a.name === 'sync'));
+    check('a five-minute sync alarm is set while unlocked', alarm?.periodInMinutes === 5, JSON.stringify(alarm));
+
+    const dump = await stored();
+    const secrets = [world.accountKeyText, world.accountKeyText.replaceAll('-', ''), world.tokens.loginToken, world.tokens.readToken, recoveryLoginToken(world.recoveryKey)]
+      .flatMap((s) => (typeof s === 'string' ? [s, b64(new TextEncoder().encode(s))] : [b64(s), Buffer.from(s).toString('hex'), Buffer.from(s).toString('base64url')]));
+    check('storageLocalHasNoReadableTokenOrAccountKeyText', secrets.every((s) => !dump.includes(s)), secrets.filter((s) => dump.includes(s)).length + ' found');
+    check('the account key is kept beside the header as raw bytes, nothing more', JSON.parse(dump).accountKey === b64(world.accountKey));
+
+    await popup.getByRole('button', { name: 'Lock' }).click();
+    await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
+    check('lock clears the login token', (await sw.evaluate(() => chrome.storage.session.get('loginToken'))).loginToken === undefined);
+    check('lock clears the sync alarm', (await sw.evaluate(async () => (await chrome.alarms.getAll()).some((a) => a.name === 'sync'))) === false);
+
+    await ctx.close();
+    ({ ctx, sw, id } = await launchWith(syncDist, syncProfile));
+    popup = await openPopup();
+    await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
+    const status = (await send({ type: 'syncStatus' })).data;
+    check('restartKeepsSyncStateAndStaysLocked', status.state === 'idle' && status.lastSyncAt > 0 && status.available, JSON.stringify(status));
+    await world.phone.add('After restart');
+    await world.phone.sync();
+    await popup.locator('input[type=password]').fill(world.password);
+    await popup.getByRole('button', { name: 'Unlock', exact: true }).click();
+    await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+    await until('the unlock sync to bring the phone login', async () => (await names()).includes('After restart'));
+    check('unlocking after a restart signs in again by itself and syncs', (await names()).join() === 'After restart,From Chrome,From phone,Phone mail', (await names()).join());
+    await ctx.close();
+  } finally {
+    await harness.close();
+    rmSync(syncDist, { recursive: true, force: true });
+    rmSync(syncProfile, { recursive: true, force: true });
+  }
+}
 
 try {
   let { ctx, sw, id } = await launch();
@@ -217,6 +333,7 @@ try {
   const onDisk = await sw.evaluate(async () => JSON.stringify(await chrome.storage.local.get(null)));
   check('nothing readable is stored on disk', !onDisk.includes('p4ssw0rd-local') && !onDisk.includes('tester') && !onDisk.includes('brand-new-pass-1') && !onDisk.includes('Local test'));
   await ctx.close();
+  await syncSuite();
 } catch (e) {
   check('the run finished without an exception', false, String(e?.stack ?? e).split('\n').slice(0, 4).join(' | '));
 } finally {
