@@ -36,6 +36,10 @@ fun reduce(jobs: List<Job>, e: QueueEvent): List<Job> = when (e) {
   }
 }
 
+// The service marks running jobs interrupted only when it starts again, so after the app is killed the
+// screen would show "Working" forever with nothing running; shown as interrupted, they offer Resume.
+fun shownQueue(jobs: List<Job>, serviceAlive: Boolean): List<Job> = if (serviceAlive) jobs else reduce(jobs, QueueEvent.Interrupt)
+
 fun nextRunnable(jobs: List<Job>): Job? {
   if (jobs.any { it.state == JobState.RUNNING }) return null
   return jobs.firstOrNull { it.state == JobState.QUEUED }

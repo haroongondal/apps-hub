@@ -14,6 +14,7 @@ import expo.modules.designmedia.core.AtomicFile
 import expo.modules.designmedia.core.EncoderStatsStore
 import expo.modules.designmedia.core.QueueStore
 import expo.modules.designmedia.core.decodeJobs
+import expo.modules.designmedia.core.shownQueue
 import expo.modules.designmedia.core.thumbFolder
 import expo.modules.designmedia.core.toStatusMap
 import expo.modules.kotlin.functions.Queues
@@ -102,7 +103,7 @@ class DesignMediaModule : Module() {
     AsyncFunction("open") { uri: String -> Intents.view(context, Uri.parse(uri)) }
 
     AsyncFunction("queue") {
-      QueueStore(AtomicFile(File(context.filesDir, "media-queue.json"))).load().map { it.toStatusMap() }
+      shownQueue(QueueStore(AtomicFile(File(context.filesDir, "media-queue.json"))).load(), MediaJobService.alive).map { it.toStatusMap() }
     }
 
     // saveFile posts from the editor page: designs cross as text, exports as base64 (SPEC §14.3)

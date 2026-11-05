@@ -55,6 +55,7 @@ class MediaJobService : Service() {
 
   override fun onCreate() {
     super.onCreate()
+    alive = true
     Log.i(TAG, "create ${System.identityHashCode(this)}")
     thread = HandlerThread("design-media").apply { start() }
     handler = Handler(thread.looper)
@@ -102,6 +103,7 @@ class MediaJobService : Service() {
   }
 
   override fun onDestroy() {
+    alive = false
     Log.i(TAG, "destroy ${System.identityHashCode(this)}")
     handler.post { current?.let { abort(it) } }
     thread.quitSafely()
@@ -356,6 +358,7 @@ class MediaJobService : Service() {
 
   companion object {
     @Volatile var listener: ((String, Map<String, Any?>) -> Unit)? = null
+    @Volatile var alive = false
     const val EVENT_PROGRESS = "onJobProgress"
     const val EVENT_QUEUE = "onQueue"
 
