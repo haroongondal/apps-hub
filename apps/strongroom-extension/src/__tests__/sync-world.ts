@@ -40,6 +40,7 @@ export async function newWorld() {
     sqlite, env, serve,
     online: true,
     failPut: false,
+    gate: undefined as undefined | Promise<void>,
     rewrite: undefined as undefined | ((path: string, body: any) => any),
     requests: [] as string[],
     accountKey: m.accountKey,
@@ -56,6 +57,7 @@ export async function newWorld() {
     const url = new URL(req.url);
     world.requests.push(`${req.method} ${url.pathname}`);
     if (!world.online || (world.failPut && req.method === 'PUT')) throw new TypeError('offline');
+    if (world.gate && req.method === 'PUT') await world.gate;
     const res = await serve(req);
     if (!world.rewrite) return res;
     return new Response(JSON.stringify(world.rewrite(url.pathname, await res.json())), { status: res.status, headers: res.headers });

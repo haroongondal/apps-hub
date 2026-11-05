@@ -1,4 +1,5 @@
 import type { Detail, ImportPreview, PageRef, Pending, Request, Row, Status, SyncStatus } from './service.ts';
+import { syncLines } from './sync-copy.ts';
 
 type Child = Node | string | null | false | undefined;
 
@@ -59,7 +60,8 @@ async function route() {
   return vaultScreen();
 }
 
-function setupScreen() {
+async function setupScreen() {
+  const { available } = await call<SyncStatus>({ type: 'syncStatus' });
   const msg = msgBox();
   const pw = input({ type: 'password', autocomplete: 'new-password' });
   const again = input({ type: 'password', autocomplete: 'new-password' });
@@ -69,9 +71,11 @@ function setupScreen() {
     await route();
   }), 'ui-btn--primary');
   screen('Create your vault', null,
-    h('p', { class: 'ui-muted' }, 'Your logins are encrypted on this computer with your master password. Nothing leaves it.'),
+    h('p', { class: 'ui-muted' }, available
+      ? 'Your logins are encrypted on this computer with your master password. If you sign in to sync later, only the encrypted data goes to your own vault server.'
+      : 'Your logins are encrypted on this computer with your master password, and they stay here.'),
     label('Master password (at least 12 characters)', pw), label('Type it again', again), msg, go,
-    button('Use my Strongroom account instead', () => signInScreen(setupScreen), 'ui-btn--ghost'));
+    available && button('Use my Strongroom account instead', () => signInScreen(setupScreen), 'ui-btn--ghost'));
 }
 
 type Confirm = { needsConfirm: true; entries: number } | null;
@@ -134,17 +138,7 @@ function syncCard(sync: SyncStatus, refresh: () => unknown) {
     await refresh();
   }));
   const signIn = (text: string) => button(text, () => signInScreen(refresh), 'ui-btn--primary');
-  const count = (n: number, what: string) => `${n} item${n === 1 ? '' : 's'} ${what}`;
-  const lines: string[] = [];
-  if (!sync.available) lines.push("Sync isn't available in this build.");
-  else if (sync.state === 'off') lines.push('Sync is off. Sign in with your Strongroom account to share logins with your phone.');
-  else if (sync.state === 'needsSignIn') lines.push("Sign in again to keep syncing. A change made here that hasn't reached the vault server is dropped, and signing in uses the server's settings.");
-  else if (sync.state === 'syncing') lines.push('Syncing…');
-  else if (sync.state === 'error') lines.push(sync.error ?? 'Sync stopped. Try again.');
-  else lines.push(sync.lastSyncAt ? `Synced at ${new Date(sync.lastSyncAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.` : 'Not synced yet.');
-  if (sync.pendingUpdate) lines.push("Your new master password hasn't reached the vault server yet. Strongroom sends it as soon as it can connect, and sync waits until then.");
-  if (sync.blocked > 0) lines.push(`${count(sync.blocked, "couldn't be synced")} and ${sync.blocked === 1 ? 'was' : 'were'} left as ${sync.blocked === 1 ? 'it is' : 'they are'}.`);
-  if (sync.quarantined > 0) lines.push(`${count(sync.quarantined, "on the vault server couldn't be read here")} and ${sync.quarantined === 1 ? 'was' : 'were'} left untouched.`);
+  const lines = syncLines(sync, (at) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
   const action = !sync.available ? null : sync.state === 'off' ? signIn('Sign in to sync') : sync.state === 'needsSignIn' ? signIn('Sign in again') : now;
   const card = h('div', { class: 'ui-group card', id: 'sync' }, h('p', { class: 'ui-caption' }, 'Sync'), ...lines.map((l) => h('p', {}, l)), action, msg);
   if (sync.state === 'syncing') void whenSyncDone(card, refresh);
@@ -175,6 +169,7 @@ async function unlockScreen() {
   const msg = msgBox();
   const pw = input({ type: 'password', autocomplete: 'current-password', autofocus: true });
   const pending = tab && await call<Pending | null>({ type: 'pending', tabId: tab.tabId });
+  const sync = await call<SyncStatus>({ type: 'syncStatus' });
   const go = button('Unlock', () => guarded(msg, [go], async () => {
     await call({ type: 'unlock', password: pw.value });
     await route();
@@ -182,7 +177,8 @@ async function unlockScreen() {
   pw.addEventListener('keydown', (e) => e.key === 'Enter' && go.click());
   screen('Unlock Strongroom', null,
     pending && h('p', { class: 'ui-muted' }, `After you unlock, you can save the sign-in you just used on ${pending.host}.`),
-    label('Master password', pw), msg, go, button('Forgot master password?', resetScreen, 'ui-btn--ghost'));
+    label('Master password', pw), msg, go, button('Forgot master password?', resetScreen, 'ui-btn--ghost'),
+    sync.available && (sync.state !== 'off' || sync.keyLost) && button('Sign in with your account', () => signInScreen(unlockScreen), 'ui-btn--ghost'));
 }
 
 function resetScreen() {

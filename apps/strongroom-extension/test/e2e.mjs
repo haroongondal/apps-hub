@@ -88,6 +88,8 @@ async function syncSuite() {
     const THROWAWAY = 'a throwaway master password';
 
     await popup.getByRole('heading', { name: 'Create your vault' }).waitFor();
+    const setupText = await popup.innerText('body');
+    check('the sync build offers sign-in on the setup screen and says only encrypted data goes to the vault server', (await popup.getByRole('button', { name: 'Use my Strongroom account instead' }).count()) === 1 && setupText.includes('only the encrypted data goes to your own vault server'), setupText);
     await send({ type: 'setup', password: THROWAWAY });
     const recovery = (await send({ type: 'status' })).data.recoveryKey;
     await send({ type: 'confirmRecovery', group: recovery.slice(0, 4) });
@@ -137,6 +139,11 @@ async function syncSuite() {
 
     await popup.getByRole('button', { name: 'Lock' }).click();
     await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
+    check('a signed-in extension offers sign-in on the unlock screen', (await popup.getByRole('button', { name: 'Sign in with your account' }).count()) === 1);
+    await popup.getByRole('button', { name: 'Sign in with your account' }).click();
+    await popup.getByRole('heading', { name: 'Sign in to sync' }).waitFor();
+    await popup.getByRole('button', { name: 'Back' }).click();
+    await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
     check('lock clears the login token', (await sw.evaluate(() => chrome.storage.session.get('loginToken'))).loginToken === undefined);
     check('lock clears the sync alarm', (await sw.evaluate(async () => (await chrome.alarms.getAll()).some((a) => a.name === 'sync'))) === false);
 
@@ -172,6 +179,8 @@ try {
 
   let popup = await openPopup();
   await popup.getByRole('heading', { name: 'Create your vault' }).waitFor();
+  const defaultSetup = await popup.innerText('body');
+  check('the default build offers no account sign-in on the setup screen and makes no promise about the server', (await popup.getByRole('button', { name: 'Use my Strongroom account instead' }).count()) === 0 && defaultSetup.includes('they stay here') && !defaultSetup.includes('Nothing leaves it'), defaultSetup);
   await popup.locator('input[type=password]').nth(0).fill('short');
   await popup.locator('input[type=password]').nth(1).fill('short');
   await popup.getByRole('button', { name: 'Create vault' }).click();
@@ -291,6 +300,7 @@ try {
   await popup.reload();
   await popup.getByRole('button', { name: 'Lock' }).click();
   await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
+  check('the default build offers no account sign-in on the unlock screen', (await popup.getByRole('button', { name: 'Sign in with your account' }).count()) === 0);
   await page.reload();
   await page.locator('#u').click();
   await page.waitForTimeout(1500);

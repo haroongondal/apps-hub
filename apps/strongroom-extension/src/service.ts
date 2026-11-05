@@ -53,7 +53,7 @@ export type Detail = { id: string; name: string; username: string; password: str
 export type ImportPreview = { added: number; merged: number; flagged: number };
 export type SyncStatus = {
   available: boolean; state: 'off' | 'idle' | 'syncing' | 'needsSignIn' | 'error'; lastSyncAt: number | null; blocked: number; quarantined: number;
-  pendingUpdate: boolean; error: string | null;
+  pendingUpdate: boolean; error: string | null; keyLost: boolean;
 };
 export type Pending = { intent: 'new' | 'update' | null; host: string; username: string; name: string | null; locked: boolean };
 
@@ -74,7 +74,8 @@ const SYNC_OFF = 'Sync is off. Sign in to sync first.';
 const PASSWORD_REFUSED = 'The vault server did not accept that password or account key. Check both and try again.';
 const RECOVERY_REFUSED = 'The vault server did not accept that recovery key. Check it and try again.';
 const BAD_ACCOUNT_KEY = "That account key isn't complete. Check it and try again.";
-const KEY_LOST = 'This computer no longer holds your account key. Sign in to sync with your master password and account key.';
+const KEY_LOST = 'This computer no longer holds your account key. Sign in with your account, using your master password and account key.';
+const KEY_DIFFERENT = "That account key doesn't match the one this computer uses. Check it and try again.";
 const WEAKER = "The vault server's key settings are weaker than the ones on this computer, so nothing was changed.";
 const PENDING_AAD = utf8('strongroom/v1/pending-account-update');
 const noop = () => {};
@@ -194,12 +195,13 @@ export function createService(deps: Deps) {
   }
 
   async function syncStatus(): Promise<SyncStatus> {
-    if (!deps.sync) return { available: false, state: 'off', lastSyncAt: null, blocked: 0, quarantined: 0, pendingUpdate: false, error: null };
+    if (!deps.sync) return { available: false, state: 'off', lastSyncAt: null, blocked: 0, quarantined: 0, pendingUpdate: false, error: null, keyLost: false };
     const { accountKey, info, pending } = await deps.sync.store.getSyncLocal();
     const error = (await session.get('syncError')) ?? null;
     const state = !accountKey ? 'off' : info.needsSignIn ? 'needsSignIn' : syncing > 0 ? 'syncing' : error ? 'error' : 'idle';
     const quarantined = new Set((await deps.sync.store.getQuarantine()).map((q) => q.id)).size;
-    return { available: true, state, lastSyncAt: info.lastSyncAt, blocked: info.blocked, quarantined, pendingUpdate: pending !== null, error };
+    const keyLost = !accountKey && (await store.getHeader())?.accountKey === true;
+    return { available: true, state, lastSyncAt: info.lastSyncAt, blocked: info.blocked, quarantined, pendingUpdate: pending !== null, error, keyLost };
   }
 
   async function doSync(password?: string): Promise<SyncReport | null> {
@@ -360,7 +362,7 @@ export function createService(deps: Deps) {
         case 'recover': {
           strong(req.password);
           const accountKey = await accountKeyOf();
-          if (accountKey) return await recoverSynced(req.recoveryKey, req.password, accountKey);
+          if (accountKey) return await exclusive(() => recoverSynced(req.recoveryKey, req.password, accountKey));
           const key = await recover(store, req.recoveryKey, req.password, { floor: deps.floor });
           if (key === null) throw new UserError("That recovery key doesn't work. Check it and try again.");
           await opened(key);
@@ -395,6 +397,8 @@ export function createService(deps: Deps) {
           const accountKey = parseAccountKey(String(req.accountKey));
           if (!recoveryKey) throw new UserError(RECOVERY_REFUSED);
           if (!accountKey) throw new UserError(BAD_ACCOUNT_KEY);
+          const held = await accountKeyOf();
+          if (held && !equalBytes(held, accountKey)) throw new UserError(KEY_DIFFERENT);
           strong(req.newPassword);
           return await exclusive(async () => {
             const signed = await signInErrors(async () => {

@@ -6,7 +6,7 @@
   "description": "Strongroom for Chrome (Manifest V3): fills and saves logins from a local encrypted vault",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --disable-warning=ExperimentalWarning --test src/__tests__/service.test.ts src/__tests__/common-passwords.test.ts src/__tests__/sync-store.test.ts src/__tests__/build.test.ts",
+    "test": "node --disable-warning=ExperimentalWarning --test src/__tests__/service.test.ts src/__tests__/common-passwords.test.ts src/__tests__/sync-store.test.ts src/__tests__/build.test.ts src/__tests__/sync-copy.test.ts",
     "test:e2e": "node test/e2e.mjs",
     "typecheck": "tsc --noEmit"
   },

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Strongroom",
   "version": "0.1.0",
-  "description": "Fills and saves your logins from an encrypted vault that stays on this computer.",
+  "description": "Fills and saves your logins from a vault encrypted on this computer. With sync on, only encrypted data goes to your own server.",
   "minimum_chrome_version": "127",
   "icons": { "16": "icon.png", "32": "icon.png", "48": "icon.png", "128": "icon.png" },
   "action": { "default_title": "Strongroom", "default_popup": "popup.html" },

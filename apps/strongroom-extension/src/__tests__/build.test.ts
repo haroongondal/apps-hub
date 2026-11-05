@@ -39,6 +39,16 @@ test('a build-time server address becomes the only host permission', () => {
   assert.ok(background.includes('http://127.0.0.1:4321/'));
 });
 
+test('the store description and the setup text make no claim that a sync build breaks', () => {
+  const { description } = JSON.parse(readFileSync(join(pkg, 'src/manifest.json'), 'utf8'));
+  const popup = readFileSync(join(pkg, 'src/popup.ts'), 'utf8');
+  assert.doesNotMatch(description, /stays on this computer|never leaves|nothing leaves/i);
+  assert.match(description, /encrypted/);
+  assert.match(description, /sync/i);
+  assert.ok(description.length <= 132, String(description.length));
+  assert.doesNotMatch(popup, /Nothing leaves it/);
+});
+
 test('a build refuses a server address that is not https, except on this computer', () => {
   assert.throws(() => build('http://vault.example.com'), /https/);
   assert.ok(build('https://vault.example.com/').manifest.host_permissions[0] === 'https://vault.example.com/*');

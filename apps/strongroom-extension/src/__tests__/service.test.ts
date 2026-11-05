@@ -327,6 +327,11 @@ test('setupRejectsCommonPassword', async () => {
 });
 
 const NEW_PASSWORD = 'a second master password';
+const THIRD_PASSWORD = 'a third master password';
+const until = async (done: () => boolean) => {
+  for (let i = 0; i < 500 && !done(); i++) await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.ok(done());
+};
 
 function extension(world: World, local = fakeChrome()) {
   useChrome(local);
@@ -501,7 +506,7 @@ test('pageContextCannotSignInOrSync', async () => {
 
 test('syncIsUnavailableWithoutAServerUrl', async () => {
   const s = setup();
-  assert.deepEqual(await s.call({ type: 'syncStatus' }), { available: false, state: 'off', lastSyncAt: null, blocked: 0, quarantined: 0, pendingUpdate: false, error: null });
+  assert.deepEqual(await s.call({ type: 'syncStatus' }), { available: false, state: 'off', lastSyncAt: null, blocked: 0, quarantined: 0, pendingUpdate: false, error: null, keyLost: false });
   for (const req of [{ type: 'signIn', password: PHONE_PASSWORD, accountKey: 'x' }, { type: 'signInRecovery', recoveryKey: 'x', newPassword: NEW_PASSWORD, accountKey: 'x' }, { type: 'syncNow' }]) {
     await assert.rejects(s.call(req), /isn't available in this build/, req.type);
   }
@@ -510,8 +515,51 @@ test('syncIsUnavailableWithoutAServerUrl', async () => {
 test('aVaultThatNeedsAnAccountKeyThisComputerLostSaysSo', async () => {
   const x = await signedIn();
   await x.call({ type: 'lock' });
+  assert.equal((await status(x)).keyLost, false);
   x.local.data.delete('accountKey');
-  await assert.rejects(x.call({ type: 'unlock', password: PHONE_PASSWORD }), /account key/);
+  await assert.rejects(x.call({ type: 'unlock', password: PHONE_PASSWORD }), /Sign in with your account/);
+  const lost = await status(x);
+  assert.deepEqual([lost.state, lost.keyLost], ['off', true]);
+  assert.equal(await signIn(x), null);
+  assert.deepEqual([(await status(x)).state, (await status(x)).keyLost], ['idle', false]);
+});
+
+test('recoverySignInRefusesAKeyThatIsNotTheOneThisComputerHolds', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  const before = snapshot(x);
+  world.requests.length = 0;
+  await assert.rejects(recoverySignIn(x, { accountKey: formatAccountKey(randomBytes(20)) }), /account key doesn't match the one this computer uses/);
+  assert.deepEqual(world.requests, []);
+  assert.equal(snapshot(x), before);
+  assert.equal(await recoverySignIn(x), null);
+});
+
+test('aRecoveryMadeWhileASyncIsSendingAnOlderUpdateWaitsForIt', async () => {
+  const world = await newWorld();
+  const x = extension(world);
+  world.failPut = true;
+  await recoverySignIn(x);
+  world.failPut = false;
+  let release = () => {};
+  world.gate = new Promise<void>((resolve) => (release = resolve));
+  const syncing = x.call({ type: 'syncNow' });
+  await until(() => world.requests.includes('PUT /v1/account'));
+  const stored = localStore.setAccount;
+  const written = new Promise<void>((resolve) => (localStore.setAccount = async (a) => (await stored(a), resolve())));
+  const recovering = x.call({ type: 'recover', recoveryKey: world.recoveryKeyText, password: THIRD_PASSWORD });
+  await Promise.race([written, new Promise((resolve) => setTimeout(resolve, 2500))]);
+  localStore.setAccount = stored;
+  release();
+  await Promise.all([syncing, recovering]);
+  await x.service.settled();
+
+  const landed = await status(x);
+  assert.deepEqual([landed.state, landed.pendingUpdate], ['idle', false]);
+  assert.ok(await signInWithPassword(world.phone.transport, THIRD_PASSWORD, world.accountKey));
+  await x.call({ type: 'lock' });
+  await x.call({ type: 'unlock', password: THIRD_PASSWORD });
+  await x.call({ type: 'syncNow' });
 });
 
 test('recoverySignInReplacesOnlyAfterConfirmation', async () => {
