@@ -82,7 +82,7 @@ My calls this session, recorded in the plan:
   - ABP anti-circumvention `https://easylist-downloads.adblockplus.org/abp-filters-anti-cv.txt`
   - `easylist-newsletters.txt`, `easylist-notifications.txt` and `easylist-annoyances.txt` on `easylist-downloads` return 404.
 - **Worktree baseline:** `pnpm install --frozen-lockfile` in the worktree succeeded (2.7 s).
-  `pnpm test` has not been run in the worktree yet.
+  `pnpm test` exited 0 with 0 failures (about 485 tests).
 
 ## File map
 
@@ -113,7 +113,6 @@ My calls this session, recorded in the plan:
   yet reviewed the plan or chosen an execution method.
 - **Next step:**
   1. Get the owner's review of the plan and their choice: subagent-driven or native execution.
-  2. Run `pnpm test` in the worktree for a clean baseline.
-  3. Execute phase 0 (Tasks 0.1 to 0.6). Task 0.6 needs the owner to run the signed-in checklist.
+  2. Execute phase 0 (Tasks 0.1 to 0.6). Task 0.6 needs the owner to run the signed-in checklist.
      Phase 1 (Tasks 1.1 to 1.13) does not depend on the spike except Task 1.11's fixture, so
      Tasks 1.1 to 1.10 may start while waiting for the owner.
