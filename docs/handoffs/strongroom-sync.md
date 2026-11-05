@@ -162,14 +162,30 @@ All in the plan's "Decisions"; the owner delegated them on 2026-11-05 ("do what 
   `syncNow`, `onSync`), release manifest keeps INTERNET. Gradle 326 → 350; release APK = Phase 1 permissions +
   INTERNET. Rulings: R19 job has no network constraint and is not persisted (no new permission); **R20
   (provisional, for the owner and Task 8's security review): the loginToken is stored under the
-  unlocked-device Keystore key so a fingerprint unlock can upload**; R21 recoverSync uses only the Keystore
-  account key; R22 a 409 on an account update → "sign in again" (copy must say the change didn't reach other
-  devices); R23 6c may add a debug-only localhost http path + BASE_URL override for the emulator proof.
+  unlocked-device Keystore key so a fingerprint unlock can upload**; R22 a 409 on an account update → "sign
+  in again" (copy must say the change may not have reached other devices).
+- 2026-11-05: **Task 6a done** (`28b7e58..cb9d2b2`): opus review found that a locked download while a
+  password change was unsent would force a sign-in that undoes the change; fixed (download waits while an
+  account update is pending), plus: sign-in refuses a server header without the account-key flag, coded
+  errors, `SyncKey.seal` throws instead of silently replacing a key, password copy wiped at lock, offline
+  job runs are not errors, `recoverSync(recoveryKey, newPassword, accountKey?)` takes an optional typed key
+  (supersedes R21). Gradle 358 tests. R25 supersedes R23: the device proof serves the local Worker over HTTPS
+  with a cert trusted only by a debug-only network security config, plus a debug BASE_URL override.
+- 2026-11-05: **owner changed 6c: test on the PHONE, not the emulator** (the emulator causes problems on
+  the Mac); `adb install` allowed, but only after the session using the phone says "phone free". Ruling R26:
+  install a SIDE-BY-SIDE test build with its own applicationId (Gradle property suffix, default empty);
+  never replace, update or uninstall the Store-installed `com.haroon.strongroom` (the owner's real vault).
+  Phone USB serial `49kjmnuwonkffqzh` (always `adb -s`). No `uiautomator dump` on the phone. Phone queue:
+  apps-hub-63 (Design Editor, testing now; will message **strongroom-sync-dc** "phone free") → this work
+  (6c) → **apps-hub-ad** (Model Host benchmarks, 3–4 h idle on USB; send it "phone free" when 6c is done;
+  leave `/data/local/tmp/mb` and `svc power stayon usb` alone).
 
 ## Current state + exact next step
 
-State: Tasks 1 to 5 complete; Task 6a committed, review running (opus). Then 6b (screens, sonnet),
-6c (emulator proof, opus), Task 7 (extension, sonnet), final review (opus), then stop for the owner (Task 8). The owner has not pushed `strongroom-extension` or merged
+State: Tasks 1 to 5 and 6a complete. 6b (screens, sonnet) running. Next: Task 7 (extension, sonnet) while
+the phone is busy; 6c (phone proof, opus) when "phone free" arrives; then the final review (opus); then stop
+for the owner (Task 8). The SDD ledger `.superpowers/sdd/PHASE-2-PLAN/progress.md` has every ruling,
+deferred minor and carry-forward note. The owner has not pushed `strongroom-extension` or merged
 anything.
 
 **Next:** follow the ledger: resume at the first task without a `Task N: complete` line. Tasks 1 to 7 run
