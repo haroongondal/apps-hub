@@ -14,6 +14,7 @@ class SqliteMigrationTest {
         "UPDATE records SET dirty = 1",
         "CREATE TABLE meta(k TEXT PRIMARY KEY, v INTEGER NOT NULL)",
         "CREATE TABLE quarantine(id TEXT NOT NULL, rev INTEGER NOT NULL, sealed BLOB NOT NULL, PRIMARY KEY (id, rev))",
+        "CREATE TABLE pending(id TEXT PRIMARY KEY, rev INTEGER NOT NULL, sealed BLOB NOT NULL)",
       ),
       Schema.upgrade(1),
     )

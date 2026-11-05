@@ -45,38 +45,63 @@ object SyncClient {
     }
   }
 
+  // Only ids the server accepts take part (it refuses a whole batch over one bad id): the phone's own key-check record never leaves it.
+  private fun localRecords(store: SyncRecordStore) = store.syncRecords().filter { SyncWire.ID.matches(it.id) }
+
+  private fun plan(local: List<SyncRecord>, rows: List<PulledRow>, vaultKey: ByteArray) = SyncMerge.plan(
+    local.map { MergeLocal(it.id, it.rev, it.dirty, it.sealed, VaultFormat.openEntry(vaultKey, it.id, it.sealed)) },
+    rows.map { r -> MergeRemote(r.id, r.rev, r.sealed ?: ByteArray(0), r.sealed?.let { VaultFormat.openEntry(vaultKey, r.id, it) }) },
+  )
+
+  private fun applied(plan: MergePlan, seen: Map<String, ByteArray>, headerRev: Long, lastRev: Long) = PullApplied(
+    headerRev = headerRev,
+    records = plan.adopt.map { Adopt(it.id, it.sealed, it.rev, seen[it.id]) },
+    quarantine = plan.quarantine.map { SyncRow(it.id, it.sealed, it.rev) },
+    rebase = plan.rebase,
+    lastRev = lastRev,
+  )
+
+  /** The locked job (R18): GET with the read token into the stage only. It never touches `records` and never POSTs. */
+  fun download(store: SyncRecordStore, transport: SyncTransport, readToken: ByteArray): Int {
+    val meta = store.syncMeta()
+    val p = pullAll(transport, readToken, maxOf(meta.lastRev, meta.pendingRev))
+    if (p.headerRev < meta.headerRev) throw SyncRollbackError()
+    store.stage(p.rows.map { SyncRow(it.id, it.sealed ?: ByteArray(0), it.rev) }, p.latestRev)
+    return p.rows.size
+  }
+
+  // Staged rows go through the same merge and the same atomic applyPull as a network pull, with no network, so they land even offline.
+  private fun mergeStage(store: SyncRecordStore, vaultKey: ByteArray): MergePlan? {
+    val meta = store.syncMeta()
+    val rows = store.staged().filter { it.rev > meta.lastRev }.map { PulledRow(it.id, it.rev, it.sealed.takeIf(ByteArray::isNotEmpty)) }
+    if (rows.isEmpty()) return null
+    val local = localRecords(store)
+    val plan = plan(local, rows, vaultKey)
+    store.applyPull(applied(plan, local.associate { it.id to it.sealed }, meta.headerRev, maxOf(meta.lastRev, meta.pendingRev)))
+    return plan
+  }
+
   fun syncOnce(store: SyncRecordStore, transport: SyncTransport, vaultKey: ByteArray, token: ByteArray, maxRetries: Int = 3): SyncReport {
-    var pulled = 0
+    val staged = mergeStage(store, vaultKey)
+    var pulled = staged?.adopt?.size ?: 0
     var pushed = 0
-    var conflicts = 0
-    var quarantined = 0
+    var conflicts = staged?.conflicts ?: 0
+    var quarantined = staged?.quarantine?.size ?: 0
     var headerChanged = false
     var skipped = 0
-    val blocked = HashSet<String>()
+    val blocked = HashSet(staged?.blocked.orEmpty())
     var round = 0
     while (true) {
       val meta = store.syncMeta()
       val p = pullAll(transport, token, meta.lastRev)
       if (p.headerRev < meta.headerRev) throw SyncRollbackError()
-      // Only ids the server accepts take part (it refuses a whole batch over one bad id): the phone's own key-check record never leaves it.
-      val local = store.syncRecords().filter { SyncWire.ID.matches(it.id) }
-      val plan = SyncMerge.plan(
-        local.map { MergeLocal(it.id, it.rev, it.dirty, it.sealed, VaultFormat.openEntry(vaultKey, it.id, it.sealed)) },
-        p.rows.map { r -> MergeRemote(r.id, r.rev, r.sealed ?: ByteArray(0), r.sealed?.let { VaultFormat.openEntry(vaultKey, r.id, it) }) },
-      )
+      val local = localRecords(store)
+      val plan = plan(local, p.rows, vaultKey)
 
       val sameHeader = Header.fromJson(p.header)?.let { it == store.header()?.let(Header::fromJson) } == true
       headerChanged = headerChanged || !sameHeader
       val seen = local.associate { it.id to it.sealed }
-      store.applyPull(
-        PullApplied(
-          headerRev = if (sameHeader) p.headerRev else meta.headerRev,
-          records = plan.adopt.map { Adopt(it.id, it.sealed, it.rev, seen[it.id]) },
-          quarantine = plan.quarantine.map { SyncRow(it.id, it.sealed, it.rev) },
-          rebase = plan.rebase,
-          lastRev = p.latestRev,
-        ),
-      )
+      store.applyPull(applied(plan, seen, if (sameHeader) p.headerRev else meta.headerRev, p.latestRev))
       pulled += plan.adopt.size
       conflicts += plan.conflicts
       quarantined += plan.quarantine.size

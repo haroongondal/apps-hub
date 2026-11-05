@@ -18,6 +18,13 @@ import expo.modules.strongroomvault.core.MatchIndex
 import expo.modules.strongroomvault.core.PendingSave
 import expo.modules.strongroomvault.core.Saves
 import expo.modules.strongroomvault.core.Sealer
+import expo.modules.strongroomvault.core.SyncMode
+import expo.modules.strongroomvault.core.SyncReport
+import expo.modules.strongroomvault.core.SyncSecret
+import expo.modules.strongroomvault.core.SyncSession
+import expo.modules.strongroomvault.core.SyncSettings
+import expo.modules.strongroomvault.core.SyncState
+import expo.modules.strongroomvault.core.SyncStatus
 import expo.modules.strongroomvault.core.Vault
 import java.io.File
 import java.io.FileNotFoundException
@@ -38,8 +45,10 @@ object VaultHolder {
   private const val INDEX_FILE = "index.bin"
   private const val PENDING_FILE = "pending.bin"
   private const val BIOMETRIC_FILE = "biometric.bin"
+  private const val CHANGE_SYNC_DELAY_MS = 2_000L
 
   @Volatile private var vault: Vault? = null
+  @Volatile private var session: SyncSession? = null
   @Volatile private var app: Context? = null
   @Volatile private var prompt: BiometricPrompt? = null
 
@@ -48,8 +57,13 @@ object VaultHolder {
   /** Set by the module while JS is listening; runs on the main thread, never inside the vault's monitor. */
   @Volatile internal var lockListener: (() -> Unit)? = null
 
+  @Volatile internal var syncListener: ((SyncStatus) -> Unit)? = null
+
   private val timer = Executors.newSingleThreadScheduledExecutor { Thread(it, "strongroom-autolock").apply { isDaemon = true } }
   private var expiry: ScheduledFuture<*>? = null
+  private val syncer = Executors.newSingleThreadScheduledExecutor { Thread(it, "strongroom-sync").apply { isDaemon = true } }
+  private var nextSync: ScheduledFuture<*>? = null
+  private var unlockPassword: CharArray? = null
   private val pendingFile = Any()
   private val indexFile = Any()
   private val main = Handler(Looper.getMainLooper())
@@ -58,12 +72,66 @@ object VaultHolder {
     context.applicationContext.getSharedPreferences("strongroom", Context.MODE_PRIVATE)
 
   fun get(context: Context): Vault = vault ?: synchronized(this) {
-    vault ?: Vault(SqliteRecordStore(context.applicationContext), System::currentTimeMillis, SystemClock::elapsedRealtime).also {
-      it.autoLockMinutes = prefs(context).getInt(AUTO_LOCK, 5).takeIf(LockPolicy::validTimeout) ?: 5
-      it.onLock = { main.post { lockListener?.invoke() } }
-      app = context.applicationContext
-      vault = it
+    vault ?: run {
+      val ctx = context.applicationContext
+      val store = SqliteRecordStore(ctx)
+      val secrets = KeystoreSyncSecrets(ctx.filesDir)
+      Vault(store, System::currentTimeMillis, SystemClock::elapsedRealtime) { secrets.get(SyncSecret.ACCOUNT_KEY) }.also {
+        it.autoLockMinutes = prefs(context).getInt(AUTO_LOCK, 5).takeIf(LockPolicy::validTimeout) ?: 5
+        it.onLock = { main.post { lockListener?.invoke() } }
+        val s = SyncSession(it, store, secrets, PrefsSyncSettings(prefs(ctx)), SyncConfig.transport(), System::currentTimeMillis)
+        s.onChange = { main.post { syncListener?.invoke(s.status()) } }
+        session = s
+        app = ctx
+        vault = it
+        if (s.isOn) SyncJobService.schedule(ctx)
+      }
     }
+  }
+
+  fun sync(context: Context): SyncSession {
+    get(context)
+    return session!!
+  }
+
+  /** One sync on the sync thread after [delayMs], replacing one not yet started. [password] (an unlock's copy) is zeroed after that run. */
+  internal fun syncSoon(context: Context, delayMs: Long, password: CharArray? = null) {
+    val s = sync(context)
+    synchronized(syncer) {
+      if (!s.isOn) {
+        password?.fill('\u0000')
+        return
+      }
+      if (password != null) {
+        unlockPassword?.fill('\u0000')
+        unlockPassword = password
+      }
+      nextSync?.cancel(false)
+      nextSync = syncer.schedule(Runnable { runSync(context.applicationContext) }, delayMs, TimeUnit.MILLISECONDS)
+    }
+  }
+
+  internal fun syncNow(context: Context, password: CharArray? = null): SyncReport =
+    sync(context).sync(password).also { if (it.pulled > 0) rebuildIndex(context) }
+
+  private fun runSync(context: Context) {
+    val pw = synchronized(syncer) { unlockPassword.also { unlockPassword = null } }
+    try {
+      syncNow(context, pw)
+    } catch (e: Exception) {
+      // The status already tells the screens what went wrong, and the next unlock, change or job tries again.
+    } finally {
+      pw?.fill('\u0000')
+    }
+  }
+
+  fun download(context: Context) {
+    runCatching { sync(context).download() }
+  }
+
+  internal fun headerChanged(context: Context, newPassword: CharArray?, newRecoveryKey: ByteArray?) {
+    sync(context).headerChanged(newPassword, newRecoveryKey)
+    syncSoon(context, 0)
   }
 
   fun touch() {
@@ -83,7 +151,13 @@ object VaultHolder {
     }
   }
 
+  // Every local write refreshes the index, so this is also where a change schedules its sync.
   fun refreshIndex(context: Context) {
+    rebuildIndex(context)
+    syncSoon(context, CHANGE_SYNC_DELAY_MS)
+  }
+
+  private fun rebuildIndex(context: Context) {
     val v = get(context)
     if (!v.isUnlocked) return
     val f = file(context, INDEX_FILE)
@@ -145,7 +219,7 @@ object VaultHolder {
     val started = SystemClock.elapsedRealtime()
     if (!get(context).unlock(password)) return false
     prefs(context).edit().putLong(LAST_UNLOCK_MS, SystemClock.elapsedRealtime() - started).apply()
-    afterUnlock(context, byPassword = true)
+    afterUnlock(context, byPassword = true, password)
     return true
   }
 
@@ -227,14 +301,15 @@ object VaultHolder {
     BiometricKey.delete()
   }
 
-  internal fun afterUnlock(context: Context, byPassword: Boolean) {
+  internal fun afterUnlock(context: Context, byPassword: Boolean, password: CharArray? = null) {
     if (byPassword) {
       val boot = bootCount(context)
       prefs(context).edit().apply { if (boot == null) remove(PASSWORD_BOOT) else putInt(PASSWORD_BOOT, boot) }.commit()
     }
     applyPending(context)
-    refreshIndex(context)
+    rebuildIndex(context)
     scheduleLock()
+    syncSoon(context, 0, password?.copyOf())
   }
 
   // Timer threads don't run in deep sleep, so this only narrows the window; the Vault's own check is the gate.
@@ -268,6 +343,31 @@ object VaultHolder {
       failWrite(out)
       throw e
     }
+  }
+}
+
+// Nothing secret here: the recovery hash is the server's own check value for a token no one can derive from it.
+internal class PrefsSyncSettings(private val p: SharedPreferences) : SyncSettings {
+  override fun load() = SyncState(
+    mode = SyncMode.entries.firstOrNull { it.name == p.getString("syncMode", null) } ?: SyncMode.OFF,
+    lastSyncAt = p.getLong("syncLastAt", -1).takeIf { it >= 0 },
+    blocked = p.getInt("syncBlocked", 0),
+    quarantined = p.getInt("syncQuarantined", 0),
+    failed = p.getBoolean("syncFailed", false),
+    accountPending = p.getBoolean("syncAccountPending", false),
+    recoveryHash = p.getString("syncRecoveryHash", null),
+  )
+
+  override fun save(s: SyncState) {
+    p.edit()
+      .putString("syncMode", s.mode.name)
+      .putLong("syncLastAt", s.lastSyncAt ?: -1)
+      .putInt("syncBlocked", s.blocked)
+      .putInt("syncQuarantined", s.quarantined)
+      .putBoolean("syncFailed", s.failed)
+      .putBoolean("syncAccountPending", s.accountPending)
+      .putString("syncRecoveryHash", s.recoveryHash)
+      .commit()
   }
 }
 

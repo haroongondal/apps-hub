@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
-  <!-- Phase 1 has no network code. Debug keeps INTERNET for Metro; release drops it even when a library merges it in. -->
-  <uses-permission android:name="android.permission.INTERNET" tools:node="remove"/>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Phase 2 syncs, so release keeps the main manifest's INTERNET; the sync client speaks HTTPS only and the app refuses cleartext. Debug turns cleartext back on for Metro. -->
+  <application android:usesCleartextTraffic="false"/>
 </manifest>

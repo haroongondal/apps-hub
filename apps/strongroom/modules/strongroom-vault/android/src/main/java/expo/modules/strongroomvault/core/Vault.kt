@@ -4,12 +4,17 @@ import java.security.MessageDigest
 import java.util.UUID
 
 // Reserved id of the tombstone setUp writes, so unlockWithKey always has a record to verify a key against.
-private const val KEY_CHECK_ID = "key-check"
+internal const val KEY_CHECK_ID = "key-check"
 
 data class Row(val id: String, val type: String, val name: String, val subtitle: String)
 
-/** The unlocked vault. Every member is synchronized so lock() can't zero the key under a seal in flight. */
-class Vault(private val store: RecordStore, private val clock: () -> Long, private val elapsed: () -> Long) {
+/** The unlocked vault. Every member is synchronized so lock() can't zero the key under a seal in flight. [accountKey] reads the Keystore copy (a fresh array). */
+class Vault(
+  private val store: RecordStore,
+  private val clock: () -> Long,
+  private val elapsed: () -> Long,
+  private val accountKey: () -> ByteArray? = { null },
+) {
   private var key: ByteArray? = null
   private var lastUsedAt = 0L
   private var unreadableCount = 0
@@ -55,7 +60,8 @@ class Vault(private val store: RecordStore, private val clock: () -> Long, priva
   }
 
   @Synchronized fun unlock(password: CharArray): Boolean {
-    val k = VaultFormat.unlockWithPassword(header(), password) ?: return false
+    val h = header()
+    val k = keyed(h) { VaultFormat.unlockWithPassword(h, password, it) } ?: return false
     zeroOnThrow(k) { install(k, countUnreadable(k)) }
     return true
   }
@@ -65,7 +71,7 @@ class Vault(private val store: RecordStore, private val clock: () -> Long, priva
     val k = VaultFormat.unlockWithRecovery(h, recoveryKey) ?: return false
     zeroOnThrow(k) {
       val bad = countUnreadable(k) // before the header write, so a failed read changes nothing
-      store.putHeader(VaultFormat.withNewPassword(h, k, newPassword).toJson())
+      store.putHeader(keyed(h) { VaultFormat.withNewPassword(h, k, newPassword, accountKey = it) }.toJson())
       install(k, bad)
     }
     return true
@@ -144,7 +150,7 @@ class Vault(private val store: RecordStore, private val clock: () -> Long, priva
     val k = requireKey()
     val h = header()
     if (!passwordMatches(h, old, k)) return false
-    store.putHeader(VaultFormat.withNewPassword(h, k, new).toJson())
+    store.putHeader(keyed(h) { VaultFormat.withNewPassword(h, k, new, accountKey = it) }.toJson())
     return true
   }
 
@@ -160,6 +166,21 @@ class Vault(private val store: RecordStore, private val clock: () -> Long, priva
   @Synchronized fun vaultKeyCopy(password: CharArray): ByteArray? {
     val k = requireKey()
     return if (passwordMatches(header(), password, k)) k.copyOf() else null
+  }
+
+  /** For sync, which runs without the password: a copy the caller zeroes, null while locked. Not a use, so it doesn't hold the vault open. */
+  @Synchronized fun keyCopy(): ByteArray? = live()?.copyOf()
+
+  @Synchronized fun opensWith(vaultKey: ByteArray): Boolean = store.all().any { (id, s) -> VaultFormat.openEntry(vaultKey, id, s) != null }
+
+  // The account key goes in only for a flagged header (DESIGN §10), and its copy is zeroed after the one use.
+  private inline fun <T> keyed(h: Header, block: (ByteArray?) -> T): T {
+    val ak = if (h.accountKey) accountKey() else null
+    try {
+      return block(ak)
+    } finally {
+      ak?.fill(0)
+    }
   }
 
   private fun header(): Header {
@@ -200,7 +221,7 @@ class Vault(private val store: RecordStore, private val clock: () -> Long, priva
 
   // A password that unwraps a different key than the one in memory means the session key is wrong: lock.
   private fun passwordMatches(h: Header, password: CharArray, sessionKey: ByteArray): Boolean {
-    val derived = VaultFormat.unlockWithPassword(h, password) ?: return false
+    val derived = keyed(h) { VaultFormat.unlockWithPassword(h, password, it) } ?: return false
     try {
       if (MessageDigest.isEqual(derived, sessionKey)) return true
       lock()

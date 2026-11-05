@@ -19,6 +19,7 @@ private class Server {
   var latestRev = 0L
   val calls = ArrayList<String>()
   var headerJson = header.toJson()
+  var headerRev = 1L
 
   fun put(rid: String, sealed: ByteArray) {
     rows[rid] = WireRecord(rid, ++latestRev, b64(sealed))
@@ -29,7 +30,7 @@ private class Server {
 
     override fun pull(token: ByteArray, since: Long): PullResponse {
       calls += "pull $since"
-      return PullResponse(headerJson, 1, rows.values.filter { it.rev!! > since }.sortedBy { it.rev }, latestRev, false)
+      return PullResponse(headerJson, headerRev, rows.values.filter { it.rev!! > since }.sortedBy { it.rev }, latestRev, false)
     }
 
     override fun push(token: ByteArray, req: PushRequest): PushResult {
@@ -381,5 +382,40 @@ class SyncClientTest {
     assertEquals(SyncReport(0, 1, 0, 0, 0, false), sync(store, s.t))
     assertEquals(listOf(id(1)), s.rows.keys.toList())
     assertTrue("key-check" in store.dirty)
+  }
+
+  // The stored headerRev is the ifRev of the next account update, so a header this phone hasn't adopted must not move it.
+  @Test fun aDifferentHeaderDoesNotAdvanceTheStoredHeaderRev() {
+    val s = Server()
+    s.headerJson = header.copy(salt = ByteArray(16) { 1 }).toJson()
+    s.headerRev = 5
+    val store = device()
+    assertTrue(sync(store, s.t).headerChanged)
+    assertEquals(SyncMeta(0, 1), store.meta)
+    assertEquals(header.toJson(), store.headerJson)
+    s.headerJson = header.toJson()
+    assertFalse(sync(store, s.t).headerChanged)
+    assertEquals(SyncMeta(0, 5), store.meta)
+  }
+
+  @Test fun stagedRowsGoThroughTheNormalMergeBeforeTheNetwork() {
+    val s = Server()
+    s.put(id(1), seal(1, login("theirs", T)))
+    s.put(id(2), seal(2))
+    val store = device()
+    val mine = seal(1, login("mine", T + 1))
+    store.putAll(mapOf(id(1) to mine))
+    store.stage(s.rows.values.map { SyncRow(it.id!!, java.util.Base64.getDecoder().decode(it.ciphertext), it.rev!!) }, 2)
+    val offline = object : SyncTransport by s.t {
+      override fun pull(token: ByteArray, since: Long): PullResponse = throw SyncOfflineError()
+    }
+    assertThrows(SyncOfflineError::class.java) { sync(store, offline) }
+    assertEquals(st(mine, 1, true), store.state(id(1))) // the newer local edit won and took the staged rev as its base
+    assertEquals(st(java.util.Base64.getDecoder().decode(s.rows.getValue(id(2)).ciphertext), 2, false), store.state(id(2)))
+    assertTrue(store.staged().isEmpty())
+    assertEquals(SyncMeta(2, 1), store.meta)
+    val next = sync(store, s.t)
+    assertEquals(listOf(1, 0), listOf(next.pushed, next.conflicts))
+    assertEquals("push 01@1", s.calls.last())
   }
 }

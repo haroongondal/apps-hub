@@ -15,21 +15,21 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 private const val KEYSTORE = "AndroidKeyStore"
-private const val GCM = "AES/GCM/NoPadding"
+internal const val GCM = "AES/GCM/NoPadding"
 internal const val IV_BYTES = 12
-private const val TAG_BITS = 128
+internal const val TAG_BITS = 128
 
-private fun keyStore(): KeyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
+internal fun keyStore(): KeyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
 
-private fun stored(alias: String): SecretKey? = keyStore().getKey(alias, null) as SecretKey?
+internal fun stored(alias: String): SecretKey? = keyStore().getKey(alias, null) as SecretKey?
 
-private fun aesGcm(alias: String) =
+internal fun aesGcm(alias: String) =
   KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
     .setKeySize(256)
     .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
     .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
 
-private fun generate(spec: KeyGenParameterSpec): SecretKey =
+internal fun generate(spec: KeyGenParameterSpec): SecretKey =
   KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE).apply { init(spec) }.generateKey()
 
 /** Seals the match index and pending saves (IV then ciphertext); opens only while the phone itself is unlocked. */

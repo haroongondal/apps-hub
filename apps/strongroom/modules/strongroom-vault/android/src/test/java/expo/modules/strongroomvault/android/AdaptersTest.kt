@@ -6,14 +6,25 @@ import expo.modules.strongroomvault.core.AppLink
 import expo.modules.strongroomvault.core.CardFields
 import expo.modules.strongroomvault.core.DetectedForm
 import expo.modules.strongroomvault.core.Entry
+import expo.modules.strongroomvault.core.FakeWorker
+import expo.modules.strongroomvault.core.KdfParams
 import expo.modules.strongroomvault.core.Matching
 import expo.modules.strongroomvault.core.PendingSave
+import expo.modules.strongroomvault.core.RecoveryKey
 import expo.modules.strongroomvault.core.Requester
+import expo.modules.strongroomvault.core.SETUP_TOKEN
 import expo.modules.strongroomvault.core.Saves
 import expo.modules.strongroomvault.core.Sealer
 import expo.modules.strongroomvault.core.Site
+import expo.modules.strongroomvault.core.SyncSecret
+import expo.modules.strongroomvault.core.TestPhone
+import expo.modules.strongroomvault.core.testLogin
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -151,6 +162,50 @@ class AdaptersTest {
     assertEquals(mapOf("number" to "4111111111111111", "cvc" to "123", "expMonth" to "07"), FillValues.of(card.copy(expYear = null)))
     assertEquals(mapOf("password" to "pw"), FillValues.of(Entry.Login("Bank", "", "pw", emptyList(), emptyList(), "", 0)))
     assertEquals(emptyMap<String, String>(), FillValues.of(Entry.Note("n", "secret", 0)))
+  }
+
+  @Test fun accountKeyKeyNeedsUnlockedDevice() {
+    assertTrue(SyncKeys.ACCOUNT.unlockedDeviceRequired)
+    for (s in listOf(SyncSecret.ACCOUNT_KEY, SyncSecret.LOGIN_TOKEN, SyncSecret.PENDING_AUTH)) assertSame(SyncKeys.ACCOUNT, SyncKeys.keyFor(s))
+  }
+
+  // DESIGN §10: the read token must open while the phone is locked, so the background job can download.
+  @Test fun readTokenKeyNeedsNoUnlockedDevice() {
+    assertFalse(SyncKeys.READ.unlockedDeviceRequired)
+    assertSame(SyncKeys.READ, SyncKeys.keyFor(SyncSecret.READ_TOKEN))
+    assertNotEquals(SyncKeys.ACCOUNT.alias, SyncKeys.READ.alias)
+  }
+
+  @Test fun httpTransportRefusesCleartext() {
+    for (url in listOf("http://127.0.0.1:8787", "HTTP://vault.example.com", "ftp://vault.example.com", "//vault.example.com")) {
+      assertThrows(url, IllegalArgumentException::class.java) { HttpSyncTransport(url) }
+    }
+    HttpSyncTransport("https://vault.example.com") // nothing connects until a call
+  }
+
+  @Test fun jobIsDownloadOnlyWhenLocked() {
+    KdfParams.testFloor = KdfParams(1024, 1, 1)
+    try {
+      val w = FakeWorker()
+      val password = "correct horse battery staple".toCharArray()
+      val rk = RecoveryKey.generate()
+      val a = TestPhone(w.t).also { it.vault.setUp(password, rk, KdfParams(1024, 1, 1)) }
+      val ak = a.session.enable(SETUP_TOKEN, password, rk)!!
+      val b = TestPhone(w.t).also { it.session.signIn(password, ak) }
+      val bank = a.vault.put(null, testLogin("Bank"))
+      a.session.sync()
+      b.vault.lock()
+      w.calls.clear()
+      val writes = b.store.writes
+      val records = b.store.all().mapValues { it.value.toList() }
+      assertEquals(1, b.session.download())
+      assertEquals(listOf("pull 0 read"), w.calls) // GET with the read token, no POST
+      assertEquals(writes, b.store.writes) // no applyPull, putAll or header write
+      assertEquals(records, b.store.all().mapValues { it.value.toList() })
+      assertEquals(listOf(bank), b.store.staged().map { it.id })
+    } finally {
+      KdfParams.testFloor = null
+    }
   }
 
   @Test fun fillRolesFollowTheDetectedForm() {

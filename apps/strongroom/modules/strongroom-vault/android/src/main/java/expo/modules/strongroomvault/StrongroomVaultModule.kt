@@ -18,7 +18,10 @@ import expo.modules.strongroomvault.android.BiometricKey
 import expo.modules.strongroomvault.android.EntryInput
 import expo.modules.strongroomvault.android.SecretFieldView
 import expo.modules.strongroomvault.android.SensitiveClipboard
+import expo.modules.strongroomvault.android.SyncJobService
 import expo.modules.strongroomvault.android.VaultHolder
+import expo.modules.strongroomvault.core.AccountKey
+import expo.modules.strongroomvault.core.AccountKeyRequired
 import expo.modules.strongroomvault.core.AppId
 import expo.modules.strongroomvault.core.Browsers
 import expo.modules.strongroomvault.core.Entry
@@ -27,6 +30,11 @@ import expo.modules.strongroomvault.core.ImportError
 import expo.modules.strongroomvault.core.ImportResult
 import expo.modules.strongroomvault.core.KdfOutOfRange
 import expo.modules.strongroomvault.core.RecoveryKey
+import expo.modules.strongroomvault.core.SyncAuthError
+import expo.modules.strongroomvault.core.SyncHttpError
+import expo.modules.strongroomvault.core.SyncOfflineError
+import expo.modules.strongroomvault.core.SyncRollbackError
+import expo.modules.strongroomvault.core.SyncStatus
 import expo.modules.strongroomvault.core.Vault
 import java.io.IOException
 import java.security.MessageDigest
@@ -37,10 +45,13 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
 private const val LOCK_EVENT = "onLock"
+private const val SYNC_EVENT = "onSync"
 private const val PICK_CSV = 7401
 private const val MAX_CSV_BYTES = 5 * 1024 * 1024
 internal const val KDF_REFUSED =
   "Strongroom won't open this vault: its security settings are weaker than it allows. The vault file may have been changed."
+internal const val ACCOUNT_KEY_GONE =
+  "This phone no longer holds your account key, so your master password can't open the vault on its own. Sign in to sync with your master password and account key."
 
 class StrongroomVaultModule : Module() {
   private val context: Context
@@ -57,11 +68,17 @@ class StrongroomVaultModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("StrongroomVault")
 
-    Events(LOCK_EVENT)
+    Events(LOCK_EVENT, SYNC_EVENT)
 
-    OnCreate { VaultHolder.lockListener = { sendEvent(LOCK_EVENT) } }
+    OnCreate {
+      VaultHolder.lockListener = { sendEvent(LOCK_EVENT) }
+      VaultHolder.syncListener = { sendEvent(SYNC_EVENT, it.toMap()) }
+    }
 
-    OnDestroy { VaultHolder.lockListener = null }
+    OnDestroy {
+      VaultHolder.lockListener = null
+      VaultHolder.syncListener = null
+    }
 
     View(SecretFieldView::class) {
       Events("onChangeValue", "onSubmit", "onFocusChange", "onContentHeight")
@@ -145,7 +162,12 @@ class StrongroomVaultModule : Module() {
       val pw = newPassword.toCharArray()
       try {
         rk != null && withContext(Dispatchers.IO) {
-          derive { VaultHolder.get(context).recover(rk, pw) }.also { if (it) VaultHolder.afterUnlock(context, byPassword = true) }
+          derive { VaultHolder.get(context).recover(rk, pw) }.also {
+            if (it) {
+              VaultHolder.headerChanged(context, pw, null)
+              VaultHolder.afterUnlock(context, byPassword = true)
+            }
+          }
         }
       } finally {
         pw.fill('\u0000')
@@ -273,7 +295,7 @@ class StrongroomVaultModule : Module() {
       val old = oldPw.toCharArray()
       val new = newPw.toCharArray()
       try {
-        withContext(Dispatchers.IO) { derive { v.changePassword(old, new) } }
+        withContext(Dispatchers.IO) { derive { v.changePassword(old, new) }.also { if (it) VaultHolder.headerChanged(context, new, null) } }
       } finally {
         old.fill('\u0000')
         new.fill('\u0000')
@@ -284,7 +306,7 @@ class StrongroomVaultModule : Module() {
       val v = vault()
       val pw = password.toCharArray()
       try {
-        withContext(Dispatchers.IO) { derive { v.newRecoveryKey(pw) } }?.let { key ->
+        withContext(Dispatchers.IO) { derive { v.newRecoveryKey(pw) }?.also { VaultHolder.headerChanged(context, null, it) } }?.let { key ->
           try {
             RecoveryKey.format(key)
           } finally {
@@ -328,6 +350,85 @@ class StrongroomVaultModule : Module() {
         },
       )
     }
+
+    // Not vault(): a footer that reads the status must not keep the vault open.
+    Function("syncStatus") { VaultHolder.sync(context).status().toMap() }
+
+    AsyncFunction("enableSync") Coroutine { setupToken: String, password: String, recoveryKey: String ->
+      vault()
+      val rk = RecoveryKey.parse(recoveryKey) ?: throw CodedException("BAD_RECOVERY_KEY", "That recovery key isn't complete. Check it and try again.", null)
+      val pw = password.toCharArray()
+      try {
+        withContext(Dispatchers.IO) { syncCall { VaultHolder.sync(context).enable(setupToken.trim(), pw, rk) } }?.let { ak ->
+          SyncJobService.schedule(context)
+          try {
+            mapOf("accountKey" to AccountKey.format(ak))
+          } finally {
+            ak.fill(0)
+          }
+        }
+      } finally {
+        pw.fill('\u0000')
+        rk.fill(0)
+      }
+    }
+
+    AsyncFunction("showAccountKey") Coroutine { password: String ->
+      vault()
+      val pw = password.toCharArray()
+      try {
+        withContext(Dispatchers.IO) { syncCall { VaultHolder.sync(context).showAccountKey(pw) } }?.let { ak ->
+          try {
+            AccountKey.format(ak)
+          } finally {
+            ak.fill(0)
+          }
+        }
+      } finally {
+        pw.fill('\u0000')
+      }
+    }
+
+    AsyncFunction("signInSync") Coroutine { password: String, accountKey: String ->
+      vault()
+      val ak = AccountKey.parse(accountKey) ?: throw CodedException("BAD_ACCOUNT_KEY", "That account key isn't complete. Check it and try again.", null)
+      val pw = password.toCharArray()
+      try {
+        withContext(Dispatchers.IO) {
+          syncCall { VaultHolder.sync(context).signIn(pw, ak) }
+          SyncJobService.schedule(context)
+          VaultHolder.afterUnlock(context, byPassword = true)
+        }
+      } finally {
+        pw.fill('\u0000')
+        ak.fill(0)
+      }
+    }
+
+    AsyncFunction("recoverSync") Coroutine { recoveryKey: String, newPassword: String ->
+      vault()
+      val rk = RecoveryKey.parse(recoveryKey) ?: throw CodedException("BAD_RECOVERY_KEY", "That recovery key isn't complete. Check it and try again.", null)
+      val pw = newPassword.toCharArray()
+      try {
+        withContext(Dispatchers.IO) {
+          syncCall { VaultHolder.sync(context).recover(rk, pw) }
+          SyncJobService.schedule(context)
+          VaultHolder.afterUnlock(context, byPassword = true)
+        }
+      } finally {
+        pw.fill('\u0000')
+        rk.fill(0)
+      }
+    }
+
+    AsyncFunction("syncNow") Coroutine { ->
+      vault()
+      val r = withContext(Dispatchers.IO) { syncCall { VaultHolder.syncNow(context) } }
+      mapOf(
+        "pulled" to r.pulled, "pushed" to r.pushed, "conflicts" to r.conflicts,
+        "quarantined" to r.quarantined, "blocked" to r.blocked, "headerChanged" to r.headerChanged,
+      )
+    }
   }
 
   private fun readGoogleCsv(uri: Uri): ImportResult {
@@ -351,6 +452,25 @@ internal fun coded(e: IllegalStateException): Exception = when (e.message) {
   "already set up" -> CodedException("ALREADY_SET_UP", "Strongroom is already set up on this phone.", e)
   "header unreadable" ->
     CodedException("HEADER_UNREADABLE", "Strongroom can't read this vault's settings, so it can't open it. The vault file may be damaged.", e)
+  "sync unavailable" -> CodedException("SYNC_UNAVAILABLE", "Sync isn't available in this build.", e)
+  "sync off" -> CodedException("SYNC_OFF", "Sync is off. Turn it on in Settings first.", e)
+  "sync already on" -> CodedException("SYNC_ALREADY_ON", "Sync is already on for this phone.", e)
+  "wrong recovery key" -> CodedException(
+    "WRONG_RECOVERY_KEY",
+    "That recovery key doesn't open this vault. Make a new one in Settings with New recovery key, write it down, then turn on sync.",
+    e,
+  )
+  "wrong setup token" -> CodedException("WRONG_SETUP_TOKEN", "The vault server didn't accept that setup token. Check it and try again.", e)
+  "account exists" -> CodedException(
+    "SYNC_ACCOUNT_EXISTS",
+    "The vault server already has a sync account. Sign in with your master password and account key instead.",
+    e,
+  )
+  "different vault" -> CodedException(
+    "DIFFERENT_VAULT",
+    "This phone holds a different vault from the one on the vault server, so Strongroom changed nothing. Sign in on a phone that has no vault yet.",
+    e,
+  )
   else -> e
 }
 
@@ -367,7 +487,25 @@ internal inline fun <T> derive(block: () -> T): T = try {
   throw CodedException("KDF_OUT_OF_RANGE", KDF_REFUSED, e)
 } catch (e: OutOfMemoryError) {
   throw CodedException("KDF_OUT_OF_RANGE", KDF_REFUSED, e)
+} catch (e: AccountKeyRequired) {
+  throw CodedException("ACCOUNT_KEY_REQUIRED", ACCOUNT_KEY_GONE, e)
 }
+
+// The core's sync errors already carry owner-ready copy (strongroom-core's, word for word).
+internal inline fun <T> syncCall(block: () -> T): T = try {
+  derive(block)
+} catch (e: SyncAuthError) {
+  throw CodedException("SYNC_SIGN_IN", e.message, e)
+} catch (e: SyncHttpError) {
+  throw CodedException("SYNC_SERVER", e.message, e)
+} catch (e: SyncOfflineError) {
+  throw CodedException("SYNC_OFFLINE", e.message, e)
+} catch (e: SyncRollbackError) {
+  throw CodedException("SYNC_ROLLBACK", e.message, e)
+}
+
+private fun SyncStatus.toMap() =
+  mapOf("state" to state, "lastSyncAt" to lastSyncAt, "blocked" to blocked, "quarantined" to quarantined, "available" to available)
 
 // Settles once: the owner's answer, a prompt that couldn't show, or the caller giving up (which closes the prompt).
 private suspend fun awaitPrompt(start: ((Boolean) -> Unit) -> Unit): Boolean = suspendCancellableCoroutine { cont ->

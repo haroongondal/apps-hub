@@ -49,7 +49,29 @@ export interface Diagnostics {
   browsers: { pkg: string; installed: boolean; trusted: boolean }[];
 }
 
-// Rejections carry a code (LOCKED, NOT_SET_UP, KDF_OUT_OF_RANGE, HEADER_UNREADABLE, BAD_SITE, IMPORT_*, NO_FINGERPRINT, ...) and an owner-ready message.
+// 'off' also when this build has no vault server (SyncConfig.BASE_URL empty): every sync call then rejects with SYNC_UNAVAILABLE.
+export type SyncState = 'off' | 'pendingSetup' | 'idle' | 'syncing' | 'needsSignIn' | 'error';
+
+export interface SyncStatus {
+  state: SyncState;
+  lastSyncAt: number | null;
+  blocked: number;
+  quarantined: number;
+  // False in a build without a vault server: the Sync entry then says "Sync isn't available in this build."
+  available: boolean;
+}
+
+export interface SyncReport {
+  pulled: number;
+  pushed: number;
+  conflicts: number;
+  quarantined: number;
+  blocked: number;
+  headerChanged: boolean;
+}
+
+// Rejections carry a code (LOCKED, NOT_SET_UP, KDF_OUT_OF_RANGE, HEADER_UNREADABLE, ACCOUNT_KEY_REQUIRED, BAD_SITE, IMPORT_*, NO_FINGERPRINT,
+// SYNC_UNAVAILABLE, SYNC_OFF, SYNC_SIGN_IN, SYNC_OFFLINE, SYNC_SERVER, SYNC_ROLLBACK, WRONG_RECOVERY_KEY, WRONG_SETUP_TOKEN, BAD_ACCOUNT_KEY, ...) and an owner-ready message.
 export interface StrongroomVaultApi {
   getStatus(): Status;
   generateRecoveryKey(): string;
@@ -76,13 +98,24 @@ export interface StrongroomVaultApi {
   // JSON.stringify({ light: palette('strongroom', 'light'), dark: palette('strongroom', 'dark') }) from @apps-hub/ui; the autofill unlock screen reads its opaque colours.
   setPalette(json: string): void;
   diagnostics(): Diagnostics;
+  syncStatus(): SyncStatus;
+  // A retry while pendingSetup finishes the setup it started and shows the same account key; null when the password is wrong.
+  enableSync(setupToken: string, password: string, recoveryKey: string): Promise<{ accountKey: string } | null>;
+  showAccountKey(password: string): Promise<string | null>;
+  // For a fresh phone or one in needsSignIn; a phone that holds another vault is refused (DIFFERENT_VAULT). Both unlock the vault.
+  signInSync(password: string, accountKey: string): Promise<void>;
+  recoverSync(recoveryKey: string, newPassword: string): Promise<void>;
+  syncNow(): Promise<SyncReport>;
   addListener(event: 'onLock', listener: () => void): { remove(): void };
+  addListener(event: 'onSync', listener: (status: SyncStatus) => void): { remove(): void };
 }
 
 const StrongroomVault = requireNativeModule<StrongroomVaultApi>('StrongroomVault');
 
 // Fires each time an unlocked vault locks (auto-lock, Lock now, a failed key check), so screens can drop what they show.
 export const addLockListener = (listener: () => void) => StrongroomVault.addListener('onLock', listener);
+
+export const addSyncListener = (listener: (status: SyncStatus) => void) => StrongroomVault.addListener('onSync', listener);
 
 // mostRecentEventCount is the eventCount of the last change JS has seen; a value sent with an older count is ignored, so it can't overwrite newer typing.
 export interface SecretInputProps extends ViewProps {

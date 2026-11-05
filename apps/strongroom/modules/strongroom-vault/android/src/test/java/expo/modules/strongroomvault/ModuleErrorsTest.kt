@@ -1,10 +1,18 @@
 package expo.modules.strongroomvault
 
 import expo.modules.kotlin.exception.CodedException
+import expo.modules.strongroomvault.core.AccountKey
+import expo.modules.strongroomvault.core.AccountKeyRequired
+import expo.modules.strongroomvault.core.Header
 import expo.modules.strongroomvault.core.KdfOutOfRange
 import expo.modules.strongroomvault.core.KdfParams
 import expo.modules.strongroomvault.core.MemoryRecordStore
+import expo.modules.strongroomvault.core.SyncAuthError
+import expo.modules.strongroomvault.core.SyncHttpError
+import expo.modules.strongroomvault.core.SyncOfflineError
+import expo.modules.strongroomvault.core.SyncRollbackError
 import expo.modules.strongroomvault.core.Vault
+import expo.modules.strongroomvault.core.VaultFormat
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -62,5 +70,34 @@ class ModuleErrorsTest {
     assertEquals("KDF_OUT_OF_RANGE", derived { throw OutOfMemoryError() }.code)
     assertEquals("KDF_OUT_OF_RANGE", derived { throw KdfOutOfRange(fast) }.code)
     assertEquals("LOCKED", derived { throw IllegalStateException("locked") }.code)
+  }
+
+  @Test fun aVaultWithoutItsAccountKeyIsAClearRefusal() {
+    val store = MemoryRecordStore()
+    val v = vault(store).also { it.setUp(password, recoveryKey, fast) }
+    val k = v.vaultKeyCopy(password)!!
+    store.headerJson = VaultFormat.withAccountKey(Header.fromJson(store.headerJson!!)!!, k, password, AccountKey.generate()).toJson()
+    val e = derived { vault(store).unlock(password) }
+    assertEquals("ACCOUNT_KEY_REQUIRED", e.code)
+    assertEquals(
+      "This phone no longer holds your account key, so your master password can't open the vault on its own. Sign in to sync with your master password and account key.",
+      e.message,
+    )
+  }
+
+  @Test fun syncFailuresReachTheScreensAsCodes() {
+    fun failed(e: Throwable) = assertThrows(CodedException::class.java) { syncCall { throw e } }
+    assertEquals("SYNC_SIGN_IN", failed(SyncAuthError()).code)
+    assertEquals(SyncAuthError().message, failed(SyncAuthError()).message)
+    assertEquals("SYNC_SERVER", failed(SyncHttpError(500)).code)
+    assertEquals("SYNC_OFFLINE", failed(SyncOfflineError()).code)
+    assertEquals("SYNC_ROLLBACK", failed(SyncRollbackError()).code)
+    assertEquals("ACCOUNT_KEY_REQUIRED", failed(AccountKeyRequired()).code)
+    assertEquals("KDF_OUT_OF_RANGE", failed(KdfOutOfRange(fast)).code)
+    val unavailable = failed(IllegalStateException("sync unavailable"))
+    assertEquals("SYNC_UNAVAILABLE", unavailable.code)
+    assertEquals("Sync isn't available in this build.", unavailable.message)
+    val codes = listOf("sync off", "sync already on", "wrong recovery key", "different vault", "account exists").map { failed(IllegalStateException(it)).code }
+    assertEquals(listOf("SYNC_OFF", "SYNC_ALREADY_ON", "WRONG_RECOVERY_KEY", "DIFFERENT_VAULT", "SYNC_ACCOUNT_EXISTS"), codes)
   }
 }

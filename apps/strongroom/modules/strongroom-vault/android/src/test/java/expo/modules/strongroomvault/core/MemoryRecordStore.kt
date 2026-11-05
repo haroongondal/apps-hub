@@ -8,6 +8,7 @@ class MemoryRecordStore : SyncRecordStore {
   val dirty = HashSet<String>()
   var meta = SyncMeta(0, 0)
   val quarantined = ArrayList<SyncRow>()
+  val stagedRows = LinkedHashMap<String, SyncRow>()
   var putAllCalls = 0
   var writes = 0
 
@@ -48,6 +49,7 @@ class MemoryRecordStore : SyncRecordStore {
     meta = SyncMeta(if (held) meta.lastRev else p.lastRev, p.headerRev)
     quarantined += p.quarantine
     for (b in p.rebase) if (b.id in records) revs[b.id] = b.rev
+    stagedRows.clear()
   }
 
   override fun markPushed(items: List<SyncRow>) {
@@ -60,6 +62,13 @@ class MemoryRecordStore : SyncRecordStore {
   }
 
   override fun quarantine() = quarantined.map { it.id to it.rev }
+
+  override fun stage(rows: List<SyncRow>, pendingRev: Long) {
+    for (r in rows) stagedRows[r.id] = r
+    meta = meta.copy(pendingRev = maxOf(meta.pendingRev, pendingRev))
+  }
+
+  override fun staged() = stagedRows.values.toList()
 
   fun state(id: String) = Triple(records[id]?.toList(), revs[id] ?: 0L, id in dirty)
 }

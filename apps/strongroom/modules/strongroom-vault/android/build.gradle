@@ -18,7 +18,7 @@ android {
 }
 
 dependencies {
-  // No network library on purpose: the vault never talks to a server from native code in Phase 1.
+  // No network library on purpose: sync uses the platform HttpURLConnection (HttpSyncTransport).
   implementation("org.bouncycastle:bcprov-jdk18on:1.86")
   implementation("androidx.biometric:biometric:1.1.0")
   implementation("androidx.autofill:autofill:1.3.0")

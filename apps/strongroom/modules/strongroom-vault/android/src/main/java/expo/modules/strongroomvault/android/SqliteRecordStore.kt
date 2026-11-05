@@ -17,6 +17,7 @@ internal object Schema {
     "CREATE TABLE records(id TEXT PRIMARY KEY, sealed BLOB NOT NULL, rev INTEGER NOT NULL DEFAULT 0, dirty INTEGER NOT NULL DEFAULT 0)",
     "CREATE TABLE meta(k TEXT PRIMARY KEY, v INTEGER NOT NULL)",
     "CREATE TABLE quarantine(id TEXT NOT NULL, rev INTEGER NOT NULL, sealed BLOB NOT NULL, PRIMARY KEY (id, rev))",
+    "CREATE TABLE pending(id TEXT PRIMARY KEY, rev INTEGER NOT NULL, sealed BLOB NOT NULL)",
   )
 
   // Every record from before sync is dirty, so the first sync uploads the vault this phone already holds.
@@ -76,7 +77,19 @@ internal class SqliteRecordStore(context: Context) : SQLiteOpenHelper(context, "
     db.execSQL("INSERT OR REPLACE INTO meta(k, v) VALUES ('headerRev', ?), ('lastRev', ?)", arrayOf(p.headerRev, lastRev))
     for (q in p.quarantine) db.execSQL("INSERT OR REPLACE INTO quarantine(id, rev, sealed) VALUES (?, ?, ?)", arrayOf<Any>(q.id, q.rev, q.sealed))
     for (b in p.rebase) db.execSQL("UPDATE records SET rev = ? WHERE id = ?", arrayOf<Any>(b.rev, b.id))
+    db.execSQL("DELETE FROM pending")
+    db.execSQL("DELETE FROM meta WHERE k = 'pendingRev'")
   }
+
+  override fun stage(rows: List<SyncRow>, pendingRev: Long) = transaction { db ->
+    for (r in rows) db.execSQL("INSERT OR REPLACE INTO pending(id, rev, sealed) VALUES (?, ?, ?)", arrayOf<Any>(r.id, r.rev, r.sealed))
+    db.execSQL("INSERT OR REPLACE INTO meta(k, v) VALUES ('pendingRev', ?)", arrayOf<Any>(maxOf(meta(db).pendingRev, pendingRev)))
+  }
+
+  override fun staged(): List<SyncRow> =
+    readableDatabase.rawQuery("SELECT id, rev, sealed FROM pending", null).use { c ->
+      buildList { while (c.moveToNext()) add(SyncRow(c.getString(0), c.getBlob(2), c.getLong(1))) }
+    }
 
   override fun markPushed(items: List<SyncRow>) = transaction { db ->
     for (i in items) {
@@ -95,7 +108,7 @@ internal class SqliteRecordStore(context: Context) : SQLiteOpenHelper(context, "
   private fun meta(db: SQLiteDatabase): SyncMeta =
     db.rawQuery("SELECT k, v FROM meta", null).use { c ->
       val m = buildMap { while (c.moveToNext()) put(c.getString(0), c.getLong(1)) }
-      SyncMeta(m["lastRev"] ?: 0, m["headerRev"] ?: 0)
+      SyncMeta(m["lastRev"] ?: 0, m["headerRev"] ?: 0, m["pendingRev"] ?: 0)
     }
 
   private inline fun transaction(block: (SQLiteDatabase) -> Unit) {

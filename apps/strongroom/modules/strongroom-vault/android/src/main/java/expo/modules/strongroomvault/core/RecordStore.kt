@@ -12,7 +12,8 @@ interface RecordStore {
 
 class SyncRecord(val id: String, val sealed: ByteArray, val rev: Long, val dirty: Boolean)
 
-data class SyncMeta(val lastRev: Long, val headerRev: Long)
+/** [pendingRev]: how far the locked job's staged download reaches (R18), 0 when nothing is staged. */
+data class SyncMeta(val lastRev: Long, val headerRev: Long, val pendingRev: Long = 0)
 
 class SyncRow(val id: String, val sealed: ByteArray, val rev: Long)
 
@@ -31,6 +32,7 @@ class PullApplied(
 )
 
 // strongroom-core's SyncStore contract (putAll marks dirty; applyPull is one atomic write; markPushed clears dirty only on equal bytes), plus R16: an adopt lands only while the row still holds `seen`, else the edit stays dirty and lastRev stays put so the next sync meets that remote record again.
+// R18: stage() keeps a locked download apart from `records`; every applyPull empties the stage (the server still has those rows past lastRev).
 interface SyncRecordStore : RecordStore {
   fun syncRecords(): List<SyncRecord>
 
@@ -41,4 +43,8 @@ interface SyncRecordStore : RecordStore {
   fun markPushed(items: List<SyncRow>)
 
   fun quarantine(): List<Pair<String, Long>>
+
+  fun stage(rows: List<SyncRow>, pendingRev: Long)
+
+  fun staged(): List<SyncRow>
 }
