@@ -25,6 +25,8 @@ data class KdfParams(val memoryKiB: Int, val iterations: Int, val parallelism: I
       iterations <= MAX_ITERATIONS && parallelism <= MAX_PARALLELISM
   }
 
+  fun weakerThan(than: KdfParams) = memoryKiB < than.memoryKiB || iterations < than.iterations || parallelism < than.parallelism
+
   companion object {
     val DEFAULT = KdfParams(65536, 3, 1)
     val FLOOR = KdfParams(32768, 2, 1)

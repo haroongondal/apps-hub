@@ -134,8 +134,7 @@ object VaultFormat {
   fun recoveryLoginToken(recoveryKey: ByteArray): ByteArray = Crypto.hkdf(recoveryKey, LOGIN_LABEL)
 
   fun withNewPassword(h: Header, vaultKey: ByteArray, password: CharArray, kdf: KdfParams = h.kdf, accountKey: ByteArray? = null): Header {
-    val lower = kdf.memoryKiB < h.kdf.memoryKiB || kdf.iterations < h.kdf.iterations || kdf.parallelism < h.kdf.parallelism
-    if (!kdf.inRange() || lower) throw KdfOutOfRange(kdf)
+    if (!kdf.inRange() || kdf.weakerThan(h.kdf)) throw KdfOutOfRange(kdf)
     if (h.accountKey && accountKey == null) throw AccountKeyRequired()
     val salt = Crypto.randomBytes(SALT_BYTES)
     return h.copy(kdf = kdf, salt = salt, passwordWrap = passwordWrap(password, salt, kdf, vaultKey, accountKey), accountKey = accountKey != null)
