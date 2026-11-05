@@ -37,6 +37,7 @@ export interface Transport {
 }
 
 const TIMEOUT_MS = 30_000;
+const PAGE = 100; // as the phone asks: about 9 MB at most per reply
 
 export function fetchTransport(baseUrl: string, fetchFn: typeof fetch = fetch): Transport {
   async function call(method: string, path: string, auth?: Uint8Array | string, body?: unknown): Promise<{ status: number; data: any }> {
@@ -71,11 +72,11 @@ export function fetchTransport(baseUrl: string, fetchFn: typeof fetch = fetch): 
   return {
     async prelogin() {
       const r = await call('GET', '/v1/prelogin');
-      return r.status === 404 ? null : ok(r, (d) => isObj(d.kdf) && typeof d.salt === 'string' && SALT.test(d.salt) && typeof d.accountKey === 'boolean');
+      return r.status === 404 ? null : ok(r, (d) => isObj(d.kdf) && [d.kdf.memoryKiB, d.kdf.iterations, d.kdf.parallelism].every(int) && typeof d.salt === 'string' && SALT.test(d.salt) && typeof d.accountKey === 'boolean');
     },
     pull: async (token, since) =>
       ok(
-        await call('GET', `/v1/records?since=${since}`, token),
+        await call('GET', `/v1/records?since=${since}&limit=${PAGE}`, token),
         (d) => typeof d.header === 'string' && int(d.headerRev) && Array.isArray(d.records) && d.records.every(isObj) && int(d.latestRev) && typeof d.more === 'boolean',
       ),
     async push(token, req) {

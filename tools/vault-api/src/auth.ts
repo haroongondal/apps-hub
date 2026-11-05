@@ -37,6 +37,7 @@ export async function authorize(req: Request, db: Db, setupToken: string, allow:
     .prepare('INSERT INTO auth_state (id, failures) VALUES (1, 1) ON CONFLICT (id) DO UPDATE SET failures = COALESCE(failures, 0) + 1 RETURNING failures')
     .first<{ failures: number }>();
   const n = row?.failures ?? 0;
-  if (n > 5) await sleep(Math.min(2 ** (n - 5), 30) * 1000);
+  // Capped at 20 s, under both clients' 30 s timeouts, so a refused token still reads as "sign in again", not "offline".
+  if (n > 5) await sleep(Math.min(2 ** (n - 5), 20) * 1000);
   return null;
 }

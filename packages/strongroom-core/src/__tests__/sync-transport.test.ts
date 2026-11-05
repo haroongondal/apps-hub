@@ -31,7 +31,7 @@ test('fetchTransportSpeaksTheProtocol', async () => {
   assert.deepEqual(await t.putAccount(TOKEN, { ...ACCOUNT, ifRev: 1 }), { headerRev: 2 });
   assert.deepEqual(f.sent, [
     { url: 'https://vault.example/v1/prelogin', method: 'GET', auth: null, body: undefined },
-    { url: 'https://vault.example/v1/records?since=7', method: 'GET', auth: BEARER, body: undefined },
+    { url: 'https://vault.example/v1/records?since=7&limit=100', method: 'GET', auth: BEARER, body: undefined }, // the phone's page size too
     { url: 'https://vault.example/v1/records', method: 'POST', auth: BEARER, body: { upserts: [{ id: 'a', baseRev: 0, ciphertext: 'AA==' }] } },
     { url: 'https://vault.example/v1/account', method: 'PUT', auth: `Bearer ${'s'.repeat(32)}`, body: ACCOUNT },
     { url: 'https://vault.example/v1/account', method: 'PUT', auth: BEARER, body: { ...ACCOUNT, ifRev: 1 } },
@@ -67,6 +67,10 @@ test('malformedServerBodiesAreRefused', async () => {
   await assert.rejects(with_(200, { version: 1, kdf: {}, salt: 's' }).prelogin(), refused(200));
   const pre = { version: 1, kdf: { memoryKiB: 65536, iterations: 3, parallelism: 1 }, salt: 'AAECAwQFBgcICQoLDA0ODw==', accountKey: true };
   assert.deepEqual(await with_(200, pre).prelogin(), pre);
+  // The KDF numbers go into Argon2, so each must be a whole number, as the phone checks them.
+  for (const kdf of [{ ...pre.kdf, iterations: 2.5 }, { ...pre.kdf, memoryKiB: '65536' }, { memoryKiB: 65536, iterations: 3 }, { ...pre.kdf, parallelism: null }]) {
+    await assert.rejects(with_(200, { ...pre, kdf }).prelogin(), refused(200), JSON.stringify(kdf));
+  }
   for (const salt of ['not*base64*salt*here*!==', 'AAECAwQFBgc=', 'AAECAwQFBgcICQoLDA0ODw', 'AAECAwQFBgcICQoLDA0ODxAR', [pre.salt]]) {
     await assert.rejects(with_(200, { ...pre, salt }).prelogin(), refused(200), JSON.stringify(salt));
   }

@@ -300,7 +300,7 @@ test('failedAuthBacksOffButCorrectTokenIsNeverDelayed', async () => {
   for (let i = 0; i < 5; i++) assert.equal((await w.call('GET', '/v1/records', NEW_LOGIN)).status, 401);
   assert.deepEqual(w.sleeps, []);
   for (let i = 0; i < 6; i++) assert.equal((await w.call('GET', '/v1/records', NEW_LOGIN)).status, 401);
-  assert.deepEqual(w.sleeps, [2000, 4000, 8000, 16000, 30000, 30000]);
+  assert.deepEqual(w.sleeps, [2000, 4000, 8000, 16000, 20000, 20000]); // capped below both clients' 30 s timeouts, so a 401 always arrives
 
   assert.equal((await w.call('GET', '/v1/records', LOGIN)).status, 200);
   assert.equal(w.sleeps.length, 6);

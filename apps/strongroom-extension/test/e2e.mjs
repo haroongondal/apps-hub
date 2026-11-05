@@ -137,6 +137,20 @@ async function syncSuite() {
     check('storageLocalHasNoReadableTokenOrAccountKeyText', secrets.every((s) => !dump.includes(s)), secrets.filter((s) => dump.includes(s)).length + ' found');
     check('the account key is kept beside the header as raw bytes, nothing more', JSON.parse(dump).accountKey === b64(world.accountKey));
 
+    // The content script runs on every web page, so storage.local (the account key) must be closed to it: setAccessLevel(TRUSTED_CONTEXTS).
+    const site = await ctx.newPage();
+    const cdp = await ctx.newCDPSession(site);
+    const contexts = [];
+    cdp.on('Runtime.executionContextCreated', (e) => contexts.push(e.context));
+    await cdp.send('Runtime.enable');
+    await site.goto(GOOD);
+    const contentWorld = await until('the content script to start', async () => contexts.findLast((c) => c.origin === `chrome-extension://${id}`));
+    const inContent = async (expression) => (await cdp.send('Runtime.evaluate', { expression, contextId: contentWorld.id, awaitPromise: true, returnByValue: true })).result.value;
+    const isContentScript = await inContent(`typeof chrome.runtime?.sendMessage === 'function'`);
+    const reach = await inContent(`(async () => { try { return 'read: ' + Object.keys(await chrome.storage.local.get(null)).join(); } catch (e) { return 'refused: ' + e.message; } })()`);
+    check('a content script cannot read storage.local, where the account key is kept', isContentScript && String(reach).startsWith('refused'), `${isContentScript} ${reach}`);
+    await site.close();
+
     await popup.getByRole('button', { name: 'Lock' }).click();
     await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
     check('a signed-in extension offers sign-in on the unlock screen', (await popup.getByRole('button', { name: 'Sign in with your account' }).count()) === 1);
