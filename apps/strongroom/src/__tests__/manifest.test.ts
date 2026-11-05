@@ -38,3 +38,51 @@ test('the vault module adds one private job service and no permission', () => {
 test('backup stays off', () => {
   assert.match(main, /android:allowBackup="false"/);
 });
+
+// Phone proof builds (Task 6c) switch on with -P properties in debug only; a plain build and every release build stay as reviewed.
+const gradle = read('android', 'app', 'build.gradle');
+const moduleGradle = read('modules', 'strongroom-vault', 'android', 'build.gradle');
+const mainActivity = read('android', 'app', 'src', 'main', 'java', 'com', 'haroon', 'strongroom', 'MainActivity.kt');
+const syncConfig = read('modules', 'strongroom-vault', 'android', 'src', 'main', 'java', 'expo', 'modules', 'strongroomvault', 'android', 'SyncConfig.kt');
+const syncTestManifest = read('android', 'app', 'src', 'syncTest', 'AndroidManifest.xml');
+const syncTestNetwork = read('android', 'app', 'src', 'syncTest', 'res', 'xml', 'strongroom_sync_test_network.xml');
+const PROOF_SWITCHES = ['strongroomIdSuffix', 'strongroomScreenshots', 'strongroomSyncUrl', 'strongroomSyncCa'];
+
+function block(src: string, name: string): string {
+  const start = src.search(new RegExp(`\\b${name}\\s*\\{`));
+  assert.ok(start >= 0, `no ${name} block`);
+  let depth = 0;
+  for (let i = src.indexOf('{', start); i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}' && --depth === 0) return src.slice(start, i + 1);
+  }
+  throw new Error(`${name} block never closes`);
+}
+
+test('a plain build keeps FLAG_SECURE and the real app id', () => {
+  assert.match(mainActivity, /if \(!BuildConfig\.ALLOW_SCREENSHOTS\) window\.addFlags\(WindowManager\.LayoutParams\.FLAG_SECURE\)/);
+  const defaults = block(gradle, 'defaultConfig');
+  assert.match(defaults, /applicationId 'com\.haroon\.strongroom'/);
+  assert.match(defaults, /buildConfigField "boolean", "ALLOW_SCREENSHOTS", "false"/);
+  assert.doesNotMatch(defaults, /applicationIdSuffix/);
+  const debug = block(block(gradle, 'buildTypes'), 'debug');
+  assert.match(debug, /if \(findProperty\('strongroomIdSuffix'\)\) \{/);
+  assert.match(debug, /if \(findProperty\('strongroomScreenshots'\) == 'true'\) buildConfigField "boolean", "ALLOW_SCREENSHOTS", "true"/);
+});
+
+test('release builds ignore the phone proof switches', () => {
+  const release = block(block(gradle, 'buildTypes'), 'release');
+  for (const p of PROOF_SWITCHES) assert.doesNotMatch(release, new RegExp(p), `release reads ${p}`);
+  assert.match(syncConfig, /const val BASE_URL = ""/);
+  assert.match(block(moduleGradle, 'defaultConfig'), /buildConfigField "String", "TEST_SYNC_URL", '""'/);
+  const moduleDebug = block(block(moduleGradle, 'buildTypes'), 'debug');
+  assert.match(moduleDebug, /buildConfigField "String", "TEST_SYNC_URL", .*findProperty\('strongroomSyncUrl'\)/);
+  assert.equal(moduleGradle.replace(moduleDebug, '').includes('strongroomSyncUrl'), false, 'only the debug build type reads strongroomSyncUrl');
+  for (const xml of [main, release]) assert.doesNotMatch(xml, /networkSecurityConfig/);
+  assert.match(gradle, /android\.sourceSets\.debug\.manifest\.srcFile 'src\/syncTest\/AndroidManifest\.xml'/);
+  assert.deepEqual([...gradle.matchAll(/sourceSets\.(\w+)[^\n]*syncTest/g)].map((m) => m[1]), ['debug', 'debug']);
+  assert.match(syncTestManifest, /android:networkSecurityConfig="@xml\/strongroom_sync_test_network"/);
+  // The test cert is trusted once, inside <debug-overrides>, which Android applies only to a debuggable app.
+  assert.match(syncTestNetwork, /<debug-overrides>\s*<trust-anchors>[^]*<certificates src="@raw\/strongroom_sync_ca" \/>[^]*<\/trust-anchors>\s*<\/debug-overrides>/);
+  assert.equal(syncTestNetwork.match(/strongroom_sync_ca/g)?.length, 1);
+});

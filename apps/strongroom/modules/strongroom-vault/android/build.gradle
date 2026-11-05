@@ -11,6 +11,16 @@ android {
   defaultConfig {
     versionCode 1
     versionName "0.1.0"
+    buildConfigField "String", "TEST_SYNC_URL", '""'
+  }
+  buildFeatures {
+    buildConfig true
+  }
+  buildTypes {
+    debug {
+      // Phone proof builds (Task 6c): -PstrongroomSyncUrl points a debug build at a local vault server.
+      buildConfigField "String", "TEST_SYNC_URL", "\"${findProperty('strongroomSyncUrl') ?: ''}\""
+    }
   }
   lintOptions {
     abortOnError false
