@@ -100,4 +100,18 @@ class ModuleErrorsTest {
     val codes = listOf("sync off", "sync already on", "wrong recovery key", "different vault", "account exists").map { failed(IllegalStateException(it)).code }
     assertEquals(listOf("SYNC_OFF", "SYNC_ALREADY_ON", "WRONG_RECOVERY_KEY", "DIFFERENT_VAULT", "SYNC_ACCOUNT_EXISTS"), codes)
   }
+
+  // Fix round 1: core faults that used to reach JS as raw text ("Check failed.") now carry a code and owner-ready copy.
+  @Test fun internalSyncFaultsAreCodedToo() {
+    fun failed(message: String) = assertThrows(CodedException::class.java) { syncCall { throw IllegalStateException(message) } }
+    val check = failed("header check failed")
+    assertEquals("HEADER_CHECK_FAILED", check.code)
+    assertEquals("Strongroom couldn't check the vault's new settings, so it changed nothing. Close Strongroom, open it again and retry.", check.message)
+    val lost = failed("sync key lost")
+    assertEquals("SYNC_KEY_LOST", lost.code)
+    assertEquals(
+      "This phone's secure storage lost the key that protects your sync sign-in, so sync stopped. Sign in to sync again with your master password and account key.",
+      lost.message,
+    )
+  }
 }

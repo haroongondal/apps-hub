@@ -71,7 +71,8 @@ export interface SyncReport {
 }
 
 // Rejections carry a code (LOCKED, NOT_SET_UP, KDF_OUT_OF_RANGE, HEADER_UNREADABLE, ACCOUNT_KEY_REQUIRED, BAD_SITE, IMPORT_*, NO_FINGERPRINT,
-// SYNC_UNAVAILABLE, SYNC_OFF, SYNC_SIGN_IN, SYNC_OFFLINE, SYNC_SERVER, SYNC_ROLLBACK, WRONG_RECOVERY_KEY, WRONG_SETUP_TOKEN, BAD_ACCOUNT_KEY, ...) and an owner-ready message.
+// SYNC_UNAVAILABLE, SYNC_OFF, SYNC_SIGN_IN, SYNC_OFFLINE, SYNC_SERVER, SYNC_ROLLBACK, SYNC_KEY_LOST, HEADER_CHECK_FAILED, WRONG_RECOVERY_KEY,
+// WRONG_SETUP_TOKEN, BAD_ACCOUNT_KEY, ...) and an owner-ready message.
 export interface StrongroomVaultApi {
   getStatus(): Status;
   generateRecoveryKey(): string;
@@ -104,7 +105,8 @@ export interface StrongroomVaultApi {
   showAccountKey(password: string): Promise<string | null>;
   // For a fresh phone or one in needsSignIn; a phone that holds another vault is refused (DIFFERENT_VAULT). Both unlock the vault.
   signInSync(password: string, accountKey: string): Promise<void>;
-  recoverSync(recoveryKey: string, newPassword: string): Promise<void>;
+  // accountKey is needed only on a phone that holds none (a new phone, or one whose Keystore lost it); nothing can check it, so ask for it twice.
+  recoverSync(recoveryKey: string, newPassword: string, accountKey?: string): Promise<void>;
   syncNow(): Promise<SyncReport>;
   addListener(event: 'onLock', listener: () => void): { remove(): void };
   addListener(event: 'onSync', listener: (status: SyncStatus) => void): { remove(): void };

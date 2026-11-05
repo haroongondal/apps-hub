@@ -4,6 +4,9 @@ import java.security.MessageDigest
 
 enum class SyncMode { OFF, PENDING_SETUP, ON, NEEDS_SIGN_IN }
 
+internal const val HEADER_CHECK = "header check failed"
+internal const val KEY_LOST = "sync key lost"
+
 data class SyncState(
   val mode: SyncMode = SyncMode.OFF,
   val lastSyncAt: Long? = null,
@@ -28,6 +31,8 @@ interface SyncSecrets {
   fun put(s: SyncSecret, value: ByteArray)
 
   fun delete(s: SyncSecret)
+
+  fun reset()
 }
 
 data class SyncStatus(val state: String, val lastSyncAt: Long?, val blocked: Int, val quarantined: Int, val available: Boolean)
@@ -70,9 +75,9 @@ class SyncSession(
       val ak = secrets.get(SyncSecret.ACCOUNT_KEY) ?: AccountKey.generate().also { secrets.put(SyncSecret.ACCOUNT_KEY, it) }
       try {
         val flagged = if (h.accountKey) h else VaultFormat.withAccountKey(h, k, password, ak)
-        val opened = VaultFormat.openWithPassword(flagged, password, ak)
-        check(opened != null && opened.vaultKey.copyOf().sameKey(k))
+        val opened = VaultFormat.openWithPassword(flagged, password, ak) ?: throw IllegalStateException(HEADER_CHECK)
         try {
+          check(opened.vaultKey.copyOf().sameKey(k)) { HEADER_CHECK }
           secrets.put(SyncSecret.LOGIN_TOKEN, opened.loginToken)
           secrets.put(SyncSecret.READ_TOKEN, opened.readToken)
           update { it.copy(mode = SyncMode.PENDING_SETUP) }
@@ -108,20 +113,23 @@ class SyncSession(
 
   @Synchronized fun showAccountKey(password: CharArray): ByteArray? {
     val ak = secrets.get(SyncSecret.ACCOUNT_KEY) ?: throw IllegalStateException("sync off")
-    val k = vault.vaultKeyCopy(password)
-    if (k == null) ak.fill(0)
-    k?.fill(0)
-    return ak.takeIf { k != null }
+    val opens = try {
+      vault.vaultKeyCopy(password)?.also { it.fill(0) } != null
+    } catch (e: Throwable) {
+      ak.fill(0)
+      throw e
+    }
+    if (!opens) ak.fill(0)
+    return ak.takeIf { opens }
   }
 
   @Synchronized fun signIn(password: CharArray, accountKey: ByteArray) {
     val t = server()
     val s = SyncClient.signInWithPassword(t, password, accountKey)
     try {
+      if (!s.header.accountKey) throw SyncAuthError() // as adoptHeader: a header that dropped the flag is never taken
       val local = localFor(s, s.header)
-      secrets.put(SyncSecret.ACCOUNT_KEY, accountKey)
-      secrets.put(SyncSecret.LOGIN_TOKEN, s.loginToken)
-      s.readToken?.let { secrets.put(SyncSecret.READ_TOKEN, it) }
+      storeAll(listOfNotNull(SyncSecret.ACCOUNT_KEY to accountKey, SyncSecret.LOGIN_TOKEN to s.loginToken, s.readToken?.let { SyncSecret.READ_TOKEN to it }))
       commit(s, s.header, s.headerRev, local)
       signedIn(s.skipped)
     } finally {
@@ -129,19 +137,19 @@ class SyncSession(
     }
   }
 
-  @Synchronized fun recover(recoveryKey: ByteArray, newPassword: CharArray) {
+  /** [accountKey] is the typed one, used only when the Keystore holds none (a new phone, or a lost entry). Nothing can check it before the PUT. */
+  @Synchronized fun recover(recoveryKey: ByteArray, newPassword: CharArray, accountKey: ByteArray? = null) {
     val t = server()
-    val ak = secrets.get(SyncSecret.ACCOUNT_KEY) ?: throw AccountKeyRequired()
+    val ak = secrets.get(SyncSecret.ACCOUNT_KEY) ?: accountKey?.copyOf() ?: throw AccountKeyRequired()
     try {
       val s = SyncClient.signInWithRecovery(t, recoveryKey)
       try {
         val local = localFor(s, s.header)
         val h = VaultFormat.withNewPassword(s.header, s.vaultKey, newPassword, accountKey = ak)
-        val o = VaultFormat.openWithPassword(h, newPassword, ak) ?: error("the new header does not open")
+        val o = VaultFormat.openWithPassword(h, newPassword, ak) ?: throw IllegalStateException(HEADER_CHECK)
         try {
           val rev = t.putAccount(s.loginToken, AccountUpdate(h.toJson(), Crypto.tokenHash(o.loginToken), Crypto.tokenHash(o.readToken), s.headerRev))
-          secrets.put(SyncSecret.LOGIN_TOKEN, o.loginToken)
-          secrets.put(SyncSecret.READ_TOKEN, o.readToken)
+          storeAll(listOf(SyncSecret.ACCOUNT_KEY to ak, SyncSecret.LOGIN_TOKEN to o.loginToken, SyncSecret.READ_TOKEN to o.readToken))
           commit(s, h, rev, local)
           signedIn(s.skipped)
         } finally {
@@ -172,10 +180,11 @@ class SyncSession(
 
   @Synchronized fun download(): Int {
     val t = transport ?: return 0
-    if (settings.load().mode != SyncMode.ON) return 0
+    // A pending update means the stored read token is one the server doesn't know yet.
+    if (settings.load().let { it.mode != SyncMode.ON || it.accountPending }) return 0
     val token = secrets.get(SyncSecret.READ_TOKEN) ?: return 0
     try {
-      return recording { SyncClient.download(store, t, token) }
+      return recording(offlineIsNormal = true) { SyncClient.download(store, t, token) }
     } finally {
       token.fill(0)
     }
@@ -187,7 +196,7 @@ class SyncSession(
       if (newPassword != null) {
         val ak = secrets.get(SyncSecret.ACCOUNT_KEY) ?: throw AccountKeyRequired()
         val o = try {
-          VaultFormat.openWithPassword(header(), newPassword, ak) ?: error("the new header does not open")
+          VaultFormat.openWithPassword(header(), newPassword, ak) ?: throw IllegalStateException(HEADER_CHECK)
         } finally {
           ak.fill(0)
         }
@@ -233,15 +242,17 @@ class SyncSession(
     }
   }
 
-  // A refused token asks for sign-in once and stops, never a retry loop; any other failure reads "error" until a run succeeds.
-  private fun <T> recording(block: () -> T): T {
+  // A refused token asks for sign-in once and stops, never a retry loop, and keeps a pending update (only sign-in drops it); any other failure reads "error" until a run succeeds.
+  private fun <T> recording(offlineIsNormal: Boolean = false, block: () -> T): T {
     running = true
     onChange?.invoke()
     try {
       return block()
     } catch (e: SyncAuthError) {
-      secrets.delete(SyncSecret.PENDING_AUTH)
-      update { it.copy(mode = SyncMode.NEEDS_SIGN_IN, accountPending = false, recoveryHash = null) }
+      update { it.copy(mode = SyncMode.NEEDS_SIGN_IN) }
+      throw e
+    } catch (e: SyncOfflineError) {
+      if (!offlineIsNormal) update { it.copy(failed = true) }
       throw e
     } catch (e: Exception) {
       update { it.copy(failed = true) }
@@ -316,6 +327,17 @@ class SyncSession(
       commitHeader(h, headerRev)
     }
     check(vault.unlockWithKey(s.vaultKey)) { "different vault" }
+  }
+
+  // A Keystore key the system invalidated can't seal; an owner's sign-in starts the secrets over (what that key sealed is unreadable already) and stores the full set again.
+  private fun storeAll(values: List<Pair<SyncSecret, ByteArray>>) {
+    try {
+      for ((s, v) in values) secrets.put(s, v)
+    } catch (e: IllegalStateException) {
+      if (e.message != KEY_LOST) throw e
+      secrets.reset()
+      for ((s, v) in values) secrets.put(s, v)
+    }
   }
 
   private fun signedIn(skipped: Int) {

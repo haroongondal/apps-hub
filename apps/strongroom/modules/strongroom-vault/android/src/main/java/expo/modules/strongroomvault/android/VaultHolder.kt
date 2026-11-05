@@ -78,7 +78,10 @@ object VaultHolder {
       val secrets = KeystoreSyncSecrets(ctx.filesDir)
       Vault(store, System::currentTimeMillis, SystemClock::elapsedRealtime) { secrets.get(SyncSecret.ACCOUNT_KEY) }.also {
         it.autoLockMinutes = prefs(context).getInt(AUTO_LOCK, 5).takeIf(LockPolicy::validTimeout) ?: 5
-        it.onLock = { main.post { lockListener?.invoke() } }
+        it.onLock = {
+          dropUnlockPassword()
+          main.post { lockListener?.invoke() }
+        }
         val s = SyncSession(it, store, secrets, PrefsSyncSettings(prefs(ctx)), SyncConfig.transport(), System::currentTimeMillis)
         s.onChange = { main.post { syncListener?.invoke(s.status()) } }
         session = s
@@ -114,15 +117,21 @@ object VaultHolder {
   internal fun syncNow(context: Context, password: CharArray? = null): SyncReport =
     sync(context).sync(password).also { if (it.pulled > 0) rebuildIndex(context) }
 
+  // The copy stays in the field while its run uses it, so a lock zeroes it there too (a zeroed password only makes R10 adoption refuse).
   private fun runSync(context: Context) {
-    val pw = synchronized(syncer) { unlockPassword.also { unlockPassword = null } }
+    val pw = synchronized(syncer) { unlockPassword }
     try {
       syncNow(context, pw)
     } catch (e: Exception) {
       // The status already tells the screens what went wrong, and the next unlock, change or job tries again.
     } finally {
-      pw?.fill('\u0000')
+      synchronized(syncer) { if (unlockPassword === pw) dropUnlockPassword() }
     }
+  }
+
+  private fun dropUnlockPassword() = synchronized(syncer) {
+    unlockPassword?.fill('\u0000')
+    unlockPassword = null
   }
 
   fun download(context: Context) {

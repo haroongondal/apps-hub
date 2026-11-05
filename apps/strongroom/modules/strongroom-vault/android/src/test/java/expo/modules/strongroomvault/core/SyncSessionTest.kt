@@ -256,8 +256,95 @@ class SyncSessionTest {
     w.headerRev = 1
     w.latestRev = 0
     assertThrows(SyncRollbackError::class.java) { b.session.download() }
+    assertEquals("error", b.session.status().state)
     assertTrue(b.store.staged().isEmpty())
     assertNotEquals(0L, b.store.meta.lastRev)
+  }
+
+  // Fix round 1: the read token changes with the password, so a locked download before the account update must neither run nor lose that update.
+  private fun pendingChangeSurvivesALockedDownload(change: (TestPhone) -> Unit) {
+    val (a, ak) = syncedPhone("Bank")
+    change(a)
+    a.session.headerChanged(newPassword, null)
+    w.offline = true
+    assertThrows(SyncOfflineError::class.java) { a.session.sync() }
+    w.offline = false
+    a.vault.lock()
+    w.calls.clear()
+    assertEquals(0, a.session.download())
+    assertTrue(w.calls.isEmpty())
+    assertEquals(SyncMode.ON, a.settings.state.mode)
+    assertTrue(a.settings.state.accountPending)
+    assertTrue(a.secrets.get(SyncSecret.PENDING_AUTH) != null)
+    assertTrue(a.vault.unlock(newPassword))
+    a.session.sync()
+    assertEquals(a.store.header(), w.header)
+    assertFalse(a.settings.state.accountPending)
+    TestPhone(w.t).session.signIn(newPassword, ak)
+  }
+
+  @Test fun aLockedDownloadKeepsAPasswordChangeThatHasNotGoneUp() = pendingChangeSurvivesALockedDownload {
+    assertTrue(it.vault.changePassword(password, newPassword))
+  }
+
+  @Test fun aLockedDownloadKeepsALocalRecoveryThatHasNotGoneUp() = pendingChangeSurvivesALockedDownload {
+    it.vault.lock()
+    assertTrue(it.vault.recover(recoveryKey, newPassword))
+  }
+
+  @Test fun aRefusedTokenAsksToSignInButKeepsThePendingUpdate() {
+    val (a, _) = syncedPhone("Bank")
+    assertTrue(a.vault.changePassword(password, newPassword))
+    a.session.headerChanged(newPassword, null)
+    w.loginHash = "changed on another device"
+    assertThrows(SyncAuthError::class.java) { a.session.sync() }
+    assertEquals("needsSignIn", a.session.status().state)
+    assertTrue(a.settings.state.accountPending)
+    assertTrue(a.secrets.get(SyncSecret.PENDING_AUTH) != null)
+  }
+
+  @Test fun signInRefusesAServerHeaderThatDroppedTheAccountKeyFlag() {
+    val (a, ak) = syncedPhone("Bank")
+    w.header = a.header().copy(accountKey = false).toJson() // still wrapped with the account key, so it would open
+    val b = TestPhone(w.t)
+    assertThrows(SyncAuthError::class.java) { b.session.signIn(password, ak) }
+    assertNull(b.store.header())
+    assertNull(b.secrets.get(SyncSecret.ACCOUNT_KEY))
+    assertEquals(SyncMode.OFF, b.settings.state.mode)
+  }
+
+  @Test fun anOfflineDownloadIsNotAnError() {
+    val (_, ak) = syncedPhone("Bank")
+    val b = TestPhone(w.t).also { it.session.signIn(password, ak) }
+    b.vault.lock()
+    w.offline = true
+    assertThrows(SyncOfflineError::class.java) { b.session.download() }
+    assertEquals("idle", b.session.status().state)
+  }
+
+  @Test fun recoveryOnANewPhoneTakesATypedAccountKey() {
+    val (_, ak) = syncedPhone("Bank")
+    val c = TestPhone(w.t)
+    assertThrows(AccountKeyRequired::class.java) { c.session.recover(recoveryKey, newPassword) }
+    c.session.recover(recoveryKey, newPassword, ak)
+    assertEquals(listOf("Bank"), c.names())
+    assertArrayEquals(ak, c.secrets.get(SyncSecret.ACCOUNT_KEY))
+    assertEquals(SyncMode.ON, c.settings.state.mode)
+    c.vault.lock()
+    assertTrue(c.vault.unlock(newPassword))
+    TestPhone(w.t).session.signIn(newPassword, ak)
+  }
+
+  @Test fun signInReplacesASyncKeyTheSystemDropped() {
+    val (a, ak) = syncedPhone("Bank")
+    a.secrets.keyLost = true
+    a.vault.lock()
+    assertThrows(AccountKeyRequired::class.java) { a.vault.unlock(password) }
+    a.session.signIn(password, ak)
+    assertEquals(1, a.secrets.resets)
+    assertArrayEquals(ak, a.secrets.get(SyncSecret.ACCOUNT_KEY))
+    a.vault.lock()
+    assertTrue(a.vault.unlock(password))
   }
 
   @Test fun withoutAServerEverySyncEntryPointIsOff() {

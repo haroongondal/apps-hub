@@ -26,6 +26,8 @@ import expo.modules.strongroomvault.core.AppId
 import expo.modules.strongroomvault.core.Browsers
 import expo.modules.strongroomvault.core.Entry
 import expo.modules.strongroomvault.core.GoogleImport
+import expo.modules.strongroomvault.core.HEADER_CHECK
+import expo.modules.strongroomvault.core.KEY_LOST
 import expo.modules.strongroomvault.core.ImportError
 import expo.modules.strongroomvault.core.ImportResult
 import expo.modules.strongroomvault.core.KdfOutOfRange
@@ -405,19 +407,23 @@ class StrongroomVaultModule : Module() {
       }
     }
 
-    AsyncFunction("recoverSync") Coroutine { recoveryKey: String, newPassword: String ->
+    AsyncFunction("recoverSync") Coroutine { recoveryKey: String, newPassword: String, accountKey: String? ->
       vault()
       val rk = RecoveryKey.parse(recoveryKey) ?: throw CodedException("BAD_RECOVERY_KEY", "That recovery key isn't complete. Check it and try again.", null)
+      val ak = accountKey?.let {
+        AccountKey.parse(it) ?: throw CodedException("BAD_ACCOUNT_KEY", "That account key isn't complete. Check it and try again.", null)
+      }
       val pw = newPassword.toCharArray()
       try {
         withContext(Dispatchers.IO) {
-          syncCall { VaultHolder.sync(context).recover(rk, pw) }
+          syncCall { VaultHolder.sync(context).recover(rk, pw, ak) }
           SyncJobService.schedule(context)
           VaultHolder.afterUnlock(context, byPassword = true)
         }
       } finally {
         pw.fill('\u0000')
         rk.fill(0)
+        ak?.fill(0)
       }
     }
 
@@ -464,6 +470,16 @@ internal fun coded(e: IllegalStateException): Exception = when (e.message) {
   "account exists" -> CodedException(
     "SYNC_ACCOUNT_EXISTS",
     "The vault server already has a sync account. Sign in with your master password and account key instead.",
+    e,
+  )
+  HEADER_CHECK -> CodedException(
+    "HEADER_CHECK_FAILED",
+    "Strongroom couldn't check the vault's new settings, so it changed nothing. Close Strongroom, open it again and retry.",
+    e,
+  )
+  KEY_LOST -> CodedException(
+    "SYNC_KEY_LOST",
+    "This phone's secure storage lost the key that protects your sync sign-in, so sync stopped. Sign in to sync again with your master password and account key.",
     e,
   )
   "different vault" -> CodedException(

@@ -90,15 +90,24 @@ internal class FakeWorker {
 
 internal class MemorySecrets : SyncSecrets {
   val values = HashMap<SyncSecret, ByteArray>()
+  var keyLost = false // as a Keystore key the system invalidated: nothing it sealed opens, and it seals nothing new
+  var resets = 0
 
-  override fun get(s: SyncSecret) = values[s]?.copyOf()
+  override fun get(s: SyncSecret) = if (keyLost) null else values[s]?.copyOf()
 
   override fun put(s: SyncSecret, value: ByteArray) {
+    check(!keyLost) { "sync key lost" }
     values[s] = value.copyOf()
   }
 
   override fun delete(s: SyncSecret) {
     values.remove(s)
+  }
+
+  override fun reset() {
+    resets++
+    keyLost = false
+    values.clear()
   }
 }
 

@@ -2,6 +2,7 @@ package expo.modules.strongroomvault.android
 
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.util.AtomicFile
+import expo.modules.strongroomvault.core.KEY_LOST
 import expo.modules.strongroomvault.core.SyncSecret
 import expo.modules.strongroomvault.core.SyncSecrets
 import java.io.File
@@ -13,15 +14,18 @@ import javax.crypto.spec.GCMParameterSpec
 internal class SyncKey(val alias: String, val unlockedDeviceRequired: Boolean) {
   private fun create() = generate(aesGcm(alias).setUnlockedDeviceRequired(unlockedDeviceRequired).build())
 
+  // Never a silent new key under this alias: the other secrets it sealed would stop opening. Only an owner's sign-in starts over (SyncSession.storeAll).
   fun seal(plain: ByteArray): ByteArray {
     val c = Cipher.getInstance(GCM)
     try {
       c.init(Cipher.ENCRYPT_MODE, stored(alias) ?: create())
     } catch (e: KeyPermanentlyInvalidatedException) {
-      c.init(Cipher.ENCRYPT_MODE, create())
+      throw IllegalStateException(KEY_LOST, e)
     }
     return c.iv + c.doFinal(plain)
   }
+
+  fun delete() = keyStore().deleteEntry(alias)
 
   /** Null when the key or the blob is gone for good; any other Keystore failure (the phone locked) throws, so the caller tries again later. */
   fun open(sealed: ByteArray): ByteArray? {
@@ -72,4 +76,10 @@ internal class KeystoreSyncSecrets(private val dir: File) : SyncSecrets {
   }
 
   override fun delete(s: SyncSecret) = file(s).delete()
+
+  override fun reset() {
+    SyncSecret.entries.forEach(::delete)
+    SyncKeys.ACCOUNT.delete()
+    SyncKeys.READ.delete()
+  }
 }
