@@ -165,8 +165,9 @@ neither the server nor a bug can move one record's ciphertext onto another id.
 Deletions are tombstones: the same record id, with a ciphertext that says
 "deleted".
 
-**Header.** Format version, KDF params, salt, `passwordWrap`, `recoveryWrap`. No
-secrets in readable form.
+**Header.** Format version, KDF params, salt, `passwordWrap`, `recoveryWrap`, and,
+once sync is on, an optional `"accountKey": true` as the last field (§10). A header
+without the flag reads and serialises exactly as in Phase 1. No secrets in readable form.
 
 **On the phone**
 - Storage: the platform SQLite (`android.database.sqlite`, no new dependency) in
@@ -434,13 +435,33 @@ re-encrypted, new wraps, then a full upload. Phase 2 adds it.
 
 **New device**: enter the master password → prelogin → derive keys → download header and records → unlock.
 
-**Open question for the owner, before Phase 2 is planned**: today the master
-password alone protects the server copy, so a D1 leak allows offline guessing,
-and a fake unlock screen could phish it. Option: add a 128-bit **account key**,
-generated at setup and mixed into the derivation with the master password (two
-secrets), typed once on each new device. Adding it later only re-wraps
-`passwordWrap`. Phase 1 adds only the common-password check (§6). *(Reviewer's
-point; the owner decides.)*
+**Account key** (decided 2026-11-05, the owner delegated the call): a second
+secret beside the master password, so a D1 leak can't be guessed offline and a
+phished master password alone opens nothing. It is 20 random bytes, shown and typed
+like the recovery key (8 groups of 4 base32 characters, the same encoder), made
+when sync is turned on and typed once on each new device. It is mixed in right
+after Argon2id and **before** the HKDF split, so the wrap key and both tokens need
+both secrets. Mixing it into the wrap alone would leave `SHA-256(loginToken)` on the
+server as a second offline guessing check.
+```
+mixed = HKDF-SHA-256(ikm = Argon2id output, salt = accountKey, info = "strongroom/v1/account", 32)
+mixed ──HKDF "wrap" | "login" | "read"──▶ wrapKey, loginToken, readToken
+```
+- The recovery key path is unchanged: it is 160 random bits already.
+- **Header flag, not a version bump**: a header that needs the key carries
+  `"accountKey": true` (§6). Strongroom 0.1.1 can't read a flagged header and fails
+  closed as "wrong password". Turning sync on re-wraps `passwordWrap` under a new
+  salt with the same KDF params; the vaultKey and the records don't change.
+- A device that holds the key always mixes it in, even into a header without the
+  flag, so a server that strips the flag gets nothing that opens with the password
+  alone.
+- Where it is kept: the phone in the Android Keystore (same key class as the match
+  index, `setUnlockedDeviceRequired(true)`); the extension in `chrome.storage.local`
+  (trusted contexts only) beside the header. It is shown again only after the
+  master password is re-entered.
+- Test vectors: the `accountKey` section of the shared vector file, computed by
+  `apps/strongroom/tools/vectors/account_key_vectors.py` (argon2-cffi and its own
+  HKDF), not by either client.
 
 **Accepted limits** (single owner, own account): the server could withhold or
 roll back records, or delete them. It can't read or forge them. Every device's
@@ -455,6 +476,12 @@ the two vaults are separate until sync exists; joining them later means re-seali
 vault's entries under the other's key. Cut for now: cards and notes in the UI, change
 master password, new recovery key, clipboard auto-clear, adjustable auto-lock (fixed 5
 minutes), and the 10,000-common-passwords check (only repeated and straight-run passwords are refused). Details and next steps: `docs/handoffs/strongroom-extension.md`.
+
+**With sync (Phase 2):** the phone creates the account; the extension signs in with
+the master password and the account key (§10) and replaces its own vault with the
+account's, rather than re-sealing one vault into the other. If its vault has
+entries, it shows the count and asks first, and the old vault is replaced only after
+every step succeeded.
 
 - One WebExtension code base (Manifest V3) for Chrome, then Firefox. TS vault
   logic in a new pure package, `packages/strongroom-core`, Hermes-safe like

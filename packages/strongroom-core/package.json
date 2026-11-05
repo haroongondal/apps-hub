@@ -7,7 +7,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "test": "node --test src/__tests__/crypto.test.ts src/__tests__/format.test.ts src/__tests__/recovery-key.test.ts src/__tests__/matching.test.ts src/__tests__/csv.test.ts src/__tests__/google-import.test.ts src/__tests__/vault.test.ts",
+    "test": "node --test --experimental-test-module-mocks --disable-warning=ExperimentalWarning src/__tests__/crypto.test.ts src/__tests__/format.test.ts src/__tests__/format-kdf-guard.test.ts src/__tests__/recovery-key.test.ts src/__tests__/matching.test.ts src/__tests__/csv.test.ts src/__tests__/google-import.test.ts src/__tests__/vault.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

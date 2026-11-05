@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formatRecoveryKey, generateRecoveryKey, recoveryKeyGroup, parseRecoveryKey } from '../recovery-key.ts';
+import {
+  formatAccountKey,
+  formatRecoveryKey,
+  generateAccountKey,
+  generateRecoveryKey,
+  parseAccountKey,
+  parseRecoveryKey,
+  recoveryKeyGroup,
+} from '../recovery-key.ts';
 
 test('generate gives 20 random bytes', () => {
   const a = generateRecoveryKey();
@@ -40,4 +48,14 @@ test('group returns the indexed group', () => {
   assert.equal(recoveryKeyGroup(f, 0), 'ABCD');
   assert.equal(recoveryKeyGroup(f, 3), 'MNOP');
   assert.equal(recoveryKeyGroup(f, 7), '4567');
+});
+
+test('accountKeyRoundTripsThroughText', () => {
+  const k = generateAccountKey();
+  assert.equal(k.length, 20);
+  const text = formatAccountKey(k);
+  assert.match(text, /^([A-Z2-7]{4}-){7}[A-Z2-7]{4}$/);
+  assert.deepEqual(parseAccountKey(text), k);
+  // There is no checksum: a typo inside the alphabet gives another key, which then fails to unlock.
+  assert.equal(parseAccountKey(`0${text.slice(1)}`), null);
 });

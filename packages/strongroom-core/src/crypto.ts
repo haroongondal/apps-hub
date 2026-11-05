@@ -34,8 +34,8 @@ export async function argon2id(password: string, salt: Uint8Array, kdf: KdfParam
   }
 }
 
-export const hkdf = (ikm: Uint8Array, info: string, length = 32): Uint8Array =>
-  nobleHkdf(sha256, ikm, undefined, utf8(info), length);
+export const hkdf = (ikm: Uint8Array, info: string, length = 32, salt?: Uint8Array): Uint8Array =>
+  nobleHkdf(sha256, ikm, salt, utf8(info), length);
 
 const aesKey = (raw: Uint8Array, use: 'encrypt' | 'decrypt') =>
   crypto.subtle.importKey('raw', new Uint8Array(raw), 'AES-GCM', false, [use]);

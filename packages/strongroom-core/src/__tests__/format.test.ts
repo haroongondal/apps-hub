@@ -1,19 +1,25 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { open, utf8, KDF_DEFAULT } from '../crypto.ts';
+import { argon2id, hkdf, open, utf8, KDF_DEFAULT } from '../crypto.ts';
 import { decodeEntry, encodeEntry } from '../entry.ts';
 import type { Entry } from '../entry.ts';
 import {
+  AccountKeyRequired,
   KdfOutOfRange,
   createVault,
   headerFromJson,
   headerToJson,
   openEntry,
+  openWithPassword,
+  recoveryLoginToken,
   sealEntry,
+  tokenHash,
   unlockWithPassword,
   unlockWithRecovery,
+  withAccountKey,
   withNewPassword,
 } from '../format.ts';
+import { generateAccountKey } from '../recovery-key.ts';
 import { hex, LOW_FLOOR, LOW_KDF, toHex, vectors } from './vectors.ts';
 
 const header = () => {
@@ -125,4 +131,97 @@ test('decodeEntry returns null for anything malformed, never a half-built entry'
   assert.equal(decodeEntry(JSON.stringify({ ...login, apps: [{ pkg: 'a.b', certSha256: 'ABC', domain: null }] })), null);
   assert.equal(decodeEntry(JSON.stringify({ ...login, password: undefined })), null);
   assert.deepEqual(decodeEntry(JSON.stringify(login)), login);
+});
+
+const password = vectors.password.text;
+const accountKey = () => hex(vectors.accountKey.key);
+const flagged = () => {
+  const h = headerFromJson(JSON.stringify(vectors.accountKey.header));
+  assert.ok(h);
+  return h;
+};
+
+test('accountKeyVectorsMatch', async () => {
+  const a = vectors.accountKey;
+  const mixed = hkdf(await argon2id(password, hex(vectors.salt), LOW_KDF), 'strongroom/v1/account', 32, accountKey());
+  assert.equal(toHex(mixed), a.mixedMasterKey);
+  assert.equal(toHex(hkdf(mixed, 'strongroom/v1/wrap')), a.wrapKey);
+  const opened = await openWithPassword(flagged(), password, LOW_FLOOR, accountKey());
+  assert.ok(opened);
+  assert.equal(toHex(opened.vaultKey), vectors.vaultKey);
+  assert.equal(toHex(opened.loginToken), a.loginToken);
+  assert.equal(toHex(opened.readToken), a.readToken);
+  assert.equal(tokenHash(opened.loginToken), a.loginTokenHash);
+});
+
+test('opensVectorHeaderWithAccountKey', async () => {
+  const key = await unlockWithPassword(flagged(), password, LOW_FLOOR, accountKey());
+  assert.ok(key);
+  assert.equal(toHex(key), vectors.vaultKey);
+  await assert.rejects(unlockWithPassword(flagged(), password, LOW_FLOOR), AccountKeyRequired);
+  await assert.rejects(openWithPassword(flagged(), password, LOW_FLOOR), AccountKeyRequired);
+});
+
+test('wrongAccountKeyIsNull', async () => {
+  const wrong = accountKey();
+  wrong[0] ^= 1;
+  assert.equal(await unlockWithPassword(flagged(), password, LOW_FLOOR, wrong), null);
+  assert.equal(await openWithPassword(flagged(), password, LOW_FLOOR, wrong), null);
+  // A header stripped of its flag fails too, instead of falling back to the password alone.
+  assert.equal(await openWithPassword(header(), password, LOW_FLOOR, accountKey()), null);
+});
+
+test('headerWithoutFlagIsByteIdentical', () => {
+  const text = JSON.stringify(vectors.header);
+  assert.equal(headerToJson(header()), text);
+  assert.equal('accountKey' in header(), false);
+  for (const bad of [false, 'true', 1, null]) {
+    assert.equal(headerFromJson(JSON.stringify({ ...vectors.header, accountKey: bad })), null, String(bad));
+  }
+});
+
+test('flaggedHeaderRoundTripsByteIdentical: "accountKey":true is the last field', () => {
+  const text = JSON.stringify(vectors.accountKey.header);
+  assert.ok(text.endsWith(',"accountKey":true}'));
+  assert.equal(flagged().accountKey, true);
+  assert.equal(headerToJson(flagged()), text);
+});
+
+test('withAccountKeyMigratesAndKeepsRecords', async () => {
+  const recovery = hex(vectors.recovery.key);
+  const { header: h, vaultKey } = await createVault('old master password', recovery, { kdf: LOW_KDF, floor: LOW_FLOOR });
+  const note: Entry = { type: 'note', name: 'Kept', text: 'sealed before the migration', updatedAt: 1 };
+  const sealed = await sealEntry(vaultKey, 'id-1', note);
+  const key = generateAccountKey();
+  const next = await withAccountKey(h, vaultKey, 'old master password', key, { floor: LOW_FLOOR });
+  assert.equal(next.accountKey, true);
+  assert.deepEqual(next.kdf, h.kdf);
+  assert.notEqual(toHex(next.salt), toHex(h.salt));
+  assert.deepEqual(next.recoveryWrap, h.recoveryWrap);
+  await assert.rejects(unlockWithPassword(next, 'old master password', LOW_FLOOR), AccountKeyRequired);
+  const same = await unlockWithPassword(next, 'old master password', LOW_FLOOR, key);
+  assert.ok(same);
+  assert.deepEqual(same, vaultKey);
+  assert.deepEqual(await openEntry(same, 'id-1', sealed), note);
+  await assert.rejects(withAccountKey(h, vaultKey, 'old master password', new Uint8Array(0), { floor: LOW_FLOOR }), /20 bytes/);
+});
+
+test('withNewPasswordKeepsAccountKey', async () => {
+  const key = generateAccountKey();
+  const opts = { kdf: LOW_KDF, floor: LOW_FLOOR, accountKey: key };
+  const { header: h, vaultKey } = await createVault('old master password', hex(vectors.recovery.key), opts);
+  assert.equal(h.accountKey, true);
+  const next = await withNewPassword(h, vaultKey, 'new master password', { floor: LOW_FLOOR, accountKey: key });
+  assert.equal(next.accountKey, true);
+  assert.deepEqual(await unlockWithPassword(next, 'new master password', LOW_FLOOR, key), vaultKey);
+  assert.equal(await unlockWithPassword(next, 'old master password', LOW_FLOOR, key), null);
+  // Without the key it would write a wrap that nothing can open, so it refuses.
+  await assert.rejects(withNewPassword(h, vaultKey, 'new master password', { floor: LOW_FLOOR }), AccountKeyRequired);
+});
+
+test('recoveryPathIgnoresAccountKey', async () => {
+  const key = await unlockWithRecovery(flagged(), hex(vectors.recovery.key));
+  assert.ok(key);
+  assert.equal(toHex(key), vectors.vaultKey);
+  assert.equal(toHex(recoveryLoginToken(hex(vectors.recovery.key))), vectors.recovery.loginToken);
 });

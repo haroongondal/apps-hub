@@ -128,5 +128,31 @@
             },
             "sealed": "060606060606060606060606e3264143d82b08b5e7fd2ac41569981f7d8a1df5df379762ebdfcfeeca59a15070c30f7379b06388621daec475c97011af6d1e69b08201fe169c3408"
         }
-    ]
+    ],
+    "accountKey": {
+        "note": "The password, salt, kdf, vaultKey and recovery key above, plus a 20-byte account key. mixedMasterKey = HKDF-SHA-256(ikm = password.masterKey, salt = key, info = UTF-8 'strongroom/v1/account', 32 bytes). wrapKey, loginToken and readToken are HKDF-SHA-256 of mixedMasterKey with no salt and info 'strongroom/v1/wrap', 'strongroom/v1/login' and 'strongroom/v1/read'. loginTokenHash is standard padded Base64 of SHA-256(loginToken). passwordWrap seals vaultKey under wrapKey. header is the exact flagged Header JSON: \"accountKey\": true is its last field and recoveryWrap is unchanged, because the recovery path ignores the account key. Computed by apps/strongroom/tools/vectors/account_key_vectors.py (argon2-cffi, own HKDF), not by Strongroom's code.",
+        "key": "303132333435363738393a3b3c3d3e3f40414243",
+        "mixedMasterKey": "d1ae2427689a9baecd9d18bf452bf9d6d15318fe5f31e59092a6a75610b3f1d6",
+        "wrapKey": "05ef0c0c9708c3af1aa0e4c9defbea45a6c073aadba4453b9fc82fc911fd124f",
+        "loginToken": "46285e287505e667a6adfb57cb26ea002470d71e452197782969baf8ab888630",
+        "readToken": "3a29b9795a6b5b02830d1d3ec2ec0489b8bb0812de9dc4e0e4d31a2ef1a057d6",
+        "loginTokenHash": "vnUMaWRiTmtUBsdn0P44uYRsa2ZsW9wKk+g6aIQxKfo=",
+        "passwordWrap": {
+            "aad": "strongroom/v1/password-wrap",
+            "nonce": "010101010101010101010101",
+            "sealed": "010101010101010101010101a1760e144ca3425ff7f86011c5b6d9317627cfd2163c1ba16c5da6b570199e2abcca1e5e470d3af3ad4a07e0f47ff08a"
+        },
+        "header": {
+            "version": 1,
+            "kdf": {
+                "memoryKiB": 1024,
+                "iterations": 1,
+                "parallelism": 1
+            },
+            "salt": "AAECAwQFBgcICQoLDA0ODw==",
+            "passwordWrap": "AQEBAQEBAQEBAQEBoXYOFEyjQl/3+GARxbbZMXYnz9IWPBuhbF2mtXAZniq8yh5eRw06861KB+D0f/CK",
+            "recoveryWrap": "AgICAgICAgICAgIC34MDF7G4gyrMLLJSEk5oVCRhnyK6kFHMQxtJHPwi1rAwVdxZApS3wylBdk9KxC0M",
+            "accountKey": true
+        }
+    }
 }

@@ -47,3 +47,8 @@ export function parseRecoveryKey(text: string): Uint8Array | null {
 }
 
 export const recoveryKeyGroup = (formatted: string, index: number): string => formatted.split('-')[index];
+
+// The account key is shown and typed exactly like the recovery key (DESIGN §10).
+export const generateAccountKey = generateRecoveryKey;
+export const formatAccountKey = formatRecoveryKey;
+export const parseAccountKey = parseRecoveryKey;
