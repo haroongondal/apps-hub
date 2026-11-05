@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  addClip, clipStarts, deleteClip, emptyProject, locate, MAX_CLIPS, moveClip, parseDraft, projectProblem, sourceFrom,
+  addClip, clipSpans, clipStarts, deleteClip, emptyProject, locate, MAX_CLIPS, moveClip, parseDraft, projectProblem, sourceFrom,
   splitAt, totalS, trimClip, type Project, type Source,
 } from '../project.ts';
 import type { MediaInfo } from '../types.ts';
@@ -123,4 +123,10 @@ test('parseDraft: anything malformed gives nothing', () => {
     bad(d => { d.clips[0].source.hasAudio = 'yes'; }),
     bad(d => { delete d.name; }),
   ]) assert.equal(parseDraft(text), undefined, text);
+});
+
+test('clipSpans: each clip as a block on the strip, never thinner than one pixel', () => {
+  assert.deepEqual(clipSpans(two(), 20), [{ id: 'a', leftPx: 0, widthPx: 200 }, { id: 'b', leftPx: 200, widthPx: 80 }]);
+  assert.deepEqual(clipSpans(emptyProject(), 20), []);
+  assert.deepEqual(clipSpans(addClip(emptyProject(), { ...A, durationS: 0.1 }, 't'), 1), [{ id: 't', leftPx: 0, widthPx: 1 }]);
 });

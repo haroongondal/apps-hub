@@ -9,7 +9,8 @@ import {
 import { timeText } from '../media/tools';
 import { useStripMedia } from './useStripMedia';
 
-const HEAD_H = 26, RULER_H = 18, FILM_H = 56, WAVE_H = 36, HANDLE_W = 32, GRIP_W = 14, EIGHT_SECONDS = 8;
+export const HEAD_H = 26, RULER_H = 18, FILM_H = 56, EIGHT_SECONDS = 8;
+const WAVE_H = 36, HANDLE_W = 32, GRIP_W = 14;
 
 export interface RangeStripProps {
   uri: string;
@@ -33,7 +34,7 @@ const Bars = memo(function Bars({ bars, color }: { bars: number[]; color: string
   );
 });
 
-const Ruler = memo(function Ruler({ durationS, px, pad }: { durationS: number; px: number; pad: number }) {
+export const Ruler = memo(function Ruler({ durationS, px, pad }: { durationS: number; px: number; pad: number }) {
   const step = rulerStepS(px, 56, durationS);
   const count = Math.floor((Number.isFinite(durationS) ? durationS : 0) / step) + 1;
   return (

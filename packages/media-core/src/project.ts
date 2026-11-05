@@ -35,6 +35,11 @@ export function clipStarts(p: Project): number[] {
   return p.clips.map(c => { const start = at; at = snapTenth(at + clipLengthS(c)); return start; });
 }
 
+export function clipSpans(p: Project, pxPerS: number): { id: string; leftPx: number; widthPx: number }[] {
+  const starts = clipStarts(p);
+  return p.clips.map((c, i) => ({ id: c.id, leftPx: starts[i] * pxPerS, widthPx: Math.max(1, clipLengthS(c) * pxPerS) }));
+}
+
 export function locate(p: Project, timelineS: number): { index: number; offsetS: number } | undefined {
   const total = totalS(p);
   if (!p.clips.length || !(timelineS >= 0) || timelineS > total + EPS) return undefined;
