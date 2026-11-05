@@ -19,7 +19,7 @@ import {
   space,
   useTheme,
 } from '@apps-hub/ui';
-import { SIGNING_CERT_SHA256, type StoreApp, type StoreManifest } from '@apps-hub/store-manifest';
+import { SIGNING_CERT_SHA256, androidPackageFor, type StoreApp, type StoreManifest } from '@apps-hub/store-manifest';
 import StoreInstaller, { type InstallProgress, type InstallStatusEvent } from 'store-installer';
 import { fetchManifest, signUrl, type Credentials } from './src/api';
 import { downloadLabel, installFailure, listSummary, statusPill, versionLines } from './src/present';
@@ -209,14 +209,22 @@ function StoreList({ creds, onSignOut }: { creds: Credentials; onSignOut: () => 
       });
       return;
     }
-    report(release.packageName, null);
-    setBusy(release.packageName, { label: 'Downloading', value: null });
+    const pkg = androidPackageFor(app.id);
+    if (!pkg) {
+      report(release.packageName, {
+        title: 'Install blocked',
+        body: 'This version of Store does not know this app. Update Store, then try again.',
+      });
+      return;
+    }
+    report(pkg, null);
+    setBusy(pkg, { label: 'Downloading', value: null });
     try {
       const url = await signUrl(creds, release.apkPath);
-      StoreInstaller.installApk(url, release.packageName, app.name, release.sha256, SIGNING_CERT_SHA256);
+      StoreInstaller.installApk(url, pkg, app.name, release.sha256, SIGNING_CERT_SHA256);
     } catch (e) {
-      setBusy(release.packageName, null);
-      report(release.packageName, { title: 'Install failed', body: String((e as Error).message) });
+      setBusy(pkg, null);
+      report(pkg, { title: 'Install failed', body: String((e as Error).message) });
     }
   };
 
