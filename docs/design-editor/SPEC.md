@@ -280,6 +280,8 @@ export interface DesignMediaModule {
   probe(uri: string): Promise<MediaInfo>;
   keyframeAtOrBefore(uri: string, timeS: number): Promise<number>;
   thumbnails(uri: string, timesS: number[], width: number): Promise<string[]>;   // file:// JPEGs in cache
+  waveform(uri: string, buckets: number): Promise<number[]>;                    // peak 0..1 per slice of the first sound; [] with no sound (Android only; the timeline strip)
+  previewFrame(uri: string, timeS: number, width: number): Promise<string>;      // one file:// JPEG, replaced by the next call (Android only; the timeline strip)
   persistAccess(uri: string): Promise<boolean>;                                  // takePersistableUriPermission
   codecReport(): Promise<CodecInfo[]>;
   encoderStats(): Promise<Record<string, number[]>>;                            // key "<codec name>/<mode>"
@@ -567,7 +569,7 @@ the `<video>` preview needs it (§11 of RESEARCH).
 | Designs (tab) | New design, templates, recent design files; opens Editor |
 | Editor | The canvas WebView full screen; native top bar (back, name, Save, Download) and a bottom toolbar (Templates, Elements, Text, Uploads, Brand, Resize, Undo, Redo) that send `menu` and panel commands to the page |
 | Media (tab) | Six tool rows; "Add files" per tool |
-| Tool setup (`media/[tool]`) | Picked files as `Row`s (name, duration, resolution, size); options (`Segmented` for preset and codec, `Field`s for times and size); the plan as `Readout` ("18.0 MB", "720p 30 fps"); for Clip, a thumbnail strip with tap-to-set start and end and the snapped keyframe; Start |
+| Tool setup (`media/[tool]`) | Picked files as `Row`s (name, duration, resolution, size); options (`Segmented` for preset and codec, `Field`s for times and size); the plan as `Readout` ("18.0 MB", "720p 30 fps"); for Trim, GIF and picture, the timeline strip (`src/timeline/RangeStrip.tsx`: filmstrip from `thumbnails`, waveform from `waveform`, ruler, fixed playhead, start and end handles, zoom; pure maths in `media-core/src/timeline.ts`; a still from `previewFrame` above it; PRD FR-14) with the typed times beneath and, for Trim, the snapped keyframe; Start |
 | Queue (tab) | At most five rows (running with `Progress` and Cancel, then waiting, then the newest results with Share and Open or the failure reason and Try again; `Notice` for paused or interrupted jobs with Resume), no attempt counters (a plain "Trying a smaller size" line at most), a "See all n" row to the full-list screen (`queue/all`) and "Clear queue" (PRD FR-9, AC-15) |
 | Media lab (debug builds only, never in a release build: PRD FR-13) | `codecReport`, encoder stats, a "Run spike" button per spike (§18) with results as text to copy into the handoff |
 

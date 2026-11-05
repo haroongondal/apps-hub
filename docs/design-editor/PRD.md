@@ -157,6 +157,14 @@ hardware encoders; §6.6 works the numbers for a one-minute clip into 20 MB (720
   "Change format"). Failures say what happened and what to do. The debug Media lab stays in debug
   builds only. The same rule covers the editor page's own copy on the phone (it was written for the
   Mac: no "click", "right-click", "double-click" or "this Mac").
+- **FR-14: Timeline strip (owner's request 2026-11-05).** Wherever a person picks a part of a video
+  (Trim, Make a GIF, Save a picture) the media is shown as a horizontal strip: a filmstrip with the
+  sound's waveform under it and a time ruler. The strip scrolls under a fixed playhead (drag to move
+  along the video), the start and end are handles at the ends of the kept part (drag to move them,
+  or "Start here" and "End here" at the playhead), and zoom is a pinch or "Zoom in" and "Zoom out".
+  A still of the picture under the playhead shows above the strip. The typed times stay for exact
+  values. The full multi-track "Make a video" screen (video, sound, music, text) is built on the
+  same strip in later stages: `docs/superpowers/specs/2026-11-05-timeline-editor-design.md`.
 - **FR-12: Setup on Android.** Ask for notification permission before the first batch. If the
   Phase 1 spike shows HyperOS kills swiped batches, show a one-time note with a button to the
   app's battery settings.
