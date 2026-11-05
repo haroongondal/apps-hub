@@ -2,6 +2,10 @@
   <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
   <!-- The autofill service reads each requesting app's signing certificate; without this, package visibility hides every app (checked on API 35). -->
   <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+  <!-- Autofill's keep-alive service needs these to run as a special-use foreground service behind an ongoing notification; without them the system can freeze the process and time out fill requests. -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <application>
     <service
       android:name="expo.modules.strongroomvault.android.StrongroomAutofillService"
@@ -20,5 +24,13 @@
       android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize"
       android:windowSoftInputMode="adjustResize"
       android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
+    <service
+      android:name="expo.modules.strongroomvault.android.KeepAliveService"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="Autofill keep-alive: keeps the process out of the system freezer so Android delivers fill requests instead of timing them out." />
+    </service>
   </application>
 </manifest>

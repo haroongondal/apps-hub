@@ -32,7 +32,8 @@ export function SetupScreen({ status, onFinished }: { status: Status; onFinished
     const problem = validateMasterPassword(password, confirm);
     if (problem) return setError(problem);
     try {
-      setKey(Vault.generateRecoveryKey());
+      const k = Vault.generateRecoveryKey();
+      setKey(k);
     } catch (e) {
       return setFault(messageOf(e));
     }
@@ -59,7 +60,8 @@ export function SetupScreen({ status, onFinished }: { status: Status; onFinished
   };
 
   const verify = async () => {
-    if (!recoveryGroupMatches(key, group, typed)) return setError(`That isn't group ${group + 1}. Check the key you wrote down and try again.`);
+    const matched = recoveryGroupMatches(key, group, typed);
+    if (!matched) return setError(`That isn't group ${group + 1}. Check the key you wrote down and try again.`);
     setBusy(true);
     try {
       await whileDeriving(() => Vault.setUp(password, key));

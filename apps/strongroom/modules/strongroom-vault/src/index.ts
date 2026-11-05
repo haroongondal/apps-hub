@@ -9,6 +9,7 @@ export interface Status {
   autoLockMinutes: 1 | 5 | 15;
   unreadable: number;
   lostSaves: number;
+  keepAliveEnabled: boolean;
 }
 
 export interface Row {
@@ -69,6 +70,8 @@ export interface StrongroomVaultApi {
   // The password is required to turn it on; false when it's wrong or the owner cancels the prompt.
   setBiometric(enabled: boolean, password?: string): Promise<boolean>;
   setAutoLockMinutes(m: 1 | 5 | 15): void;
+  // Keeps the process unfrozen so autofill requests are delivered (see KeepAliveService).
+  setKeepAlive(enable: boolean): void;
   changePassword(oldPw: string, newPw: string): Promise<boolean>;
   newRecoveryKey(password: string): Promise<string | null>;
   clearLostSaves(): void;

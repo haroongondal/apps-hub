@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Switch, View } from 'react-native';
+import { PermissionsAndroid, Platform, Linking, Switch, View } from 'react-native';
 import { Button, Group, Header, Notice, Pill, Row, Screen, Segmented, space, useTheme } from '@apps-hub/ui';
 import Vault, { type Diagnostics, type Status } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
@@ -11,6 +11,14 @@ const MINUTES = [
 ] as const;
 
 const BROWSERS: Record<string, string> = { 'com.android.chrome': 'Chrome', 'org.mozilla.firefox': 'Firefox' };
+
+const MIUI = (() => {
+  try {
+    return String((Platform.constants as unknown as { Manufacturer?: string }).Manufacturer).toLowerCase() === 'xiaomi';
+  } catch {
+    return false;
+  }
+})();
 
 export type SettingsFlow = 'password' | 'fingerprint' | 'newKey' | 'import';
 
@@ -54,6 +62,19 @@ export function SettingsScreen({ status, refresh, notice, onOpen }: Props) {
     }
   };
 
+  const toggleKeepAlive = async (on: boolean) => {
+    try {
+      // A denied request still enables the service; only the status icon is hidden then.
+      if (on && Platform.OS === 'android' && Number(Platform.Version) >= 33) {
+        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+      }
+      Vault.setKeepAlive(on);
+      refresh();
+    } catch (e) {
+      fail(e);
+    }
+  };
+
   const toggleFingerprint = async (on: boolean) => {
     if (on) return onOpen('fingerprint');
     try {
@@ -88,6 +109,36 @@ export function SettingsScreen({ status, refresh, notice, onOpen }: Props) {
           }
         />
       </Group>
+      <Group title="Autofill keep-alive" footer="Keeps Strongroom ready to fill while other apps use password fields. Turning it off removes the ongoing status icon.">
+        <Row
+          title="Keep autofill ready"
+          subtitle="Fills arrive right away, even after the phone has been idle."
+          trailing={
+            <Switch
+              value={status.keepAliveEnabled}
+              onValueChange={toggleKeepAlive}
+              accessibilityLabel="Keep autofill ready"
+              trackColor={{ false: c.line, true: c.accent }}
+              thumbColor={c.surface}
+            />
+          }
+        />
+      </Group>
+      {MIUI && (
+        <Group title="Xiaomi battery" footer="HyperOS can still freeze Strongroom despite the keep-alive service.">
+          <Row
+            title="Open app settings"
+            subtitle="Set Strongroom's battery saver to No restrictions, or password fills can time out."
+            onPress={() => {
+              try {
+                Linking.openSettings();
+              } catch (e) {
+                fail(e);
+              }
+            }}
+          />
+        </Group>
+      )}
       <Group title="Master password and recovery key">
         <Row title="Change master password" onPress={() => onOpen('password')} />
         <Row title="New recovery key" subtitle="Replaces the key you wrote down." onPress={() => onOpen('newKey')} />

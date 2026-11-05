@@ -16,6 +16,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.strongroomvault.android.BiometricKey
 import expo.modules.strongroomvault.android.EntryInput
+import expo.modules.strongroomvault.android.KeepAliveService
 import expo.modules.strongroomvault.android.SecretFieldView
 import expo.modules.strongroomvault.android.SensitiveClipboard
 import expo.modules.strongroomvault.android.VaultHolder
@@ -91,6 +92,7 @@ class StrongroomVaultModule : Module() {
         "autoLockMinutes" to v.autoLockMinutes,
         "unreadable" to v.unreadable,
         "lostSaves" to VaultHolder.lostSaves,
+        "keepAliveEnabled" to VaultHolder.prefs(context).getBoolean(VaultHolder.KEEP_ALIVE, true),
       )
     }
 
@@ -266,6 +268,11 @@ class StrongroomVaultModule : Module() {
         VaultHolder.prefs(context).edit().putInt(VaultHolder.AUTO_LOCK, minutes).apply()
         VaultHolder.touch()
       }
+    }
+
+    Function("setKeepAlive") { enable: Boolean ->
+      VaultHolder.prefs(context).edit().putBoolean(VaultHolder.KEEP_ALIVE, enable).apply()
+      if (enable) KeepAliveService.start(context) else KeepAliveService.stop(context)
     }
 
     AsyncFunction("changePassword") Coroutine { oldPw: String, newPw: String ->
