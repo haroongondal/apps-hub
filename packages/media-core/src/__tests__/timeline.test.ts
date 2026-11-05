@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { barsFor, clampZoom, lastFrameS, moveEdge, rulerStepS, thumbCount, thumbTimes, zoomLimits } from '../timeline.ts';
+import { barsFor, clampZoom, followTarget, lastFrameS, moveEdge, rulerStepS, thumbCount, thumbTimes, zoomLimits } from '../timeline.ts';
 
 test('moveEdge: the start stops a tenth before the end, and snaps to tenths', () => {
   assert.deepEqual(moveEdge({ startS: 0, endS: 10 }, 'start', 12, 10), { startS: 9.9, endS: 10 });
@@ -70,4 +70,11 @@ test('barsFor: the loudest peak of each slice, repeated when there are fewer pea
   assert.deepEqual(barsFor([0.5, 0.2], 4), [0.5, 0.5, 0.2, 0.2]);
   assert.deepEqual(barsFor([], 5), []);
   assert.deepEqual(barsFor([1], 0), []);
+});
+
+test('followTarget: the strip follows the player in tenths, but never while a finger drags it', () => {
+  assert.equal(followTarget(3.46, 0, false), 3.5);
+  assert.equal(followTarget(3.46, 3.5, false), undefined);
+  assert.equal(followTarget(3.46, 0, true), undefined);
+  assert.equal(followTarget(undefined, 0, false), undefined);
 });

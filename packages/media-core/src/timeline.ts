@@ -14,6 +14,12 @@ export function moveEdge(range: Range, edge: 'start' | 'end', toS: number, durat
   return { startS: range.startS, endS: snapTenth(Math.max(Math.min(toS, durationS), range.startS + minS)) };
 }
 
+export function followTarget(seekS: number | undefined, playheadS: number, dragging: boolean): number | undefined {
+  if (seekS === undefined || dragging) return undefined;
+  const t = snapTenth(seekS);
+  return Math.abs(t - playheadS) < 0.05 ? undefined : t;
+}
+
 // The frame rule in validate.ts needs a time strictly before the end.
 export function lastFrameS(durationS: number): number {
   return usable(durationS) ? Math.max(0, Math.floor((durationS - 1e-6) * 10) / 10) : 0;

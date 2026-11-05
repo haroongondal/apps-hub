@@ -14,3 +14,12 @@ fun fitInside(boxW: Int, boxH: Int, width: Int, height: Int): Pair<Int, Int> {
   val scale = minOf(boxW.toDouble() / width, boxH.toDouble() / height)
   return Math.round(width * scale).toInt() to Math.round(height * scale).toInt()
 }
+
+private val FOLDER = Regex("^[A-Za-z0-9-]{1,64}(/[A-Za-z0-9-]{1,64})?$")
+
+// The name comes from JS and becomes a path under the cache, so only one or two plain name parts pass.
+fun thumbFolder(name: String?): String {
+  if (name == null) return "thumbs"
+  require(FOLDER.matches(name)) { "Not a picture folder." }
+  return name
+}

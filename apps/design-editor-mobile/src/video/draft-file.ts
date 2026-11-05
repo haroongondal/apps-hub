@@ -8,7 +8,7 @@ export const draftPath = () => `${FileSystem.documentDirectory}video-project.jso
 
 export const saveDraft = (p: Project) => FileSystem.writeAsStringAsync(draftPath(), JSON.stringify(p));
 
-const canOpen = (uri: string) => DesignMedia.probe(uri).then(() => true, () => false);
+export const canOpen = (uri: string) => DesignMedia.probe(uri).then(() => true, () => false);
 
 export async function loadDraft(readable: (uri: string) => Promise<boolean> = canOpen) {
   const text = await FileSystem.readAsStringAsync(draftPath()).catch(() => undefined);

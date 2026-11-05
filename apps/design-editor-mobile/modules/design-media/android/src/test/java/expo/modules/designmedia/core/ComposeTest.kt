@@ -2,6 +2,7 @@ package expo.modules.designmedia.core
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -45,6 +46,16 @@ class ComposeTest {
     assertEquals(300 to 169, fitInside(300, 600, 1920, 1080))
     assertEquals(0 to 0, fitInside(0, 400, 1920, 1080))
     assertEquals(0 to 0, fitInside(1000, 400, 0, 1080))
+  }
+
+  @Test
+  fun eachClipKeepsItsPicturesInItsOwnFolderInsideTheCache() {
+    assertEquals("thumbs", thumbFolder(null))
+    assertEquals("video/m1x-a9k2", thumbFolder("video/m1x-a9k2"))
+    assertEquals("video", thumbFolder("video"))
+    for (bad in listOf("", "../x", "video/../../x", "/abs", "video/a/b", "a b")) {
+      assertThrows(bad, IllegalArgumentException::class.java) { thumbFolder(bad) }
+    }
   }
 
   @Test

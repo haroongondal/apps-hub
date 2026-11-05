@@ -29,7 +29,8 @@ export interface DesignMediaModule {
   queue(): Promise<NativeJobStatus[]>;
   // Phase 4 (SPEC §7.1). None of these ever deletes an output file (data-safety rule 1).
   keyframeAtOrBefore(uri: string, timeS: number): Promise<number>;
-  thumbnails(uri: string, timesS: number[], width: number): Promise<string[]>; // file:// JPEGs in the app cache
+  thumbnails(uri: string, timesS: number[], width: number, folder?: string): Promise<string[]>; // file:// JPEGs in the app cache; each call replaces the folder's last set
+  clearThumbs(folder: string): Promise<void>; // deletes a picture folder and everything in it
   waveform(uri: string, buckets: number): Promise<number[]>; // peak 0..1 per slice of the first sound; [] when there is none
   previewFrame(uri: string, timeS: number, width: number): Promise<string>; // one file:// JPEG, replaced by the next call
   resume(): Promise<void>; // re-queues paused and interrupted jobs

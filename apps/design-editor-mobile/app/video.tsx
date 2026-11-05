@@ -1,18 +1,19 @@
 import {
-  addClip, deleteClip, emptyProject, locate, moveClip, planCompose, projectProblem, sourceFrom, splitAt, totalS, trimClip,
+  addClip, deleteClip, emptyProject, locate, moveClip, planCompose, projectProblem, sourceFrom, splitAt, totalS, trimAt,
   type MediaInfo, type Project,
 } from '@apps-hub/media-core';
 import { Button, Header, Notice, Screen, Text, radius, space, useTheme } from '@apps-hub/ui';
 import { CompositionView, type CompositionViewHandle } from 'design-media';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
-import { View } from 'react-native';
+import { AppState, View } from 'react-native';
 
 import { plainError } from '../src/media/errors';
 import { pickFiles, startJobs } from '../src/media/jobs';
 import { timeText } from '../src/media/tools';
 import { ClipStrip } from '../src/timeline/ClipStrip';
-import { loadDraft, saveDraft } from '../src/video/draft-file';
+import { droppedNote, dropUnreadable } from '../src/video/draft';
+import { canOpen, loadDraft, saveDraft } from '../src/video/draft-file';
 
 const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const say = (e: unknown) => plainError(e, 'Something went wrong. Try again.');
@@ -40,8 +41,13 @@ export default function MakeAVideo() {
   useEffect(() => {
     loadDraft().then(({ project: p, dropped }) => {
       setProject(p);
-      if (dropped) setNote(dropped === 1 ? '1 clip could not be opened and was removed.' : `${dropped} clips could not be opened and were removed.`);
+      if (dropped) setNote(droppedNote(dropped));
     }, () => undefined).finally(() => setLoaded(true));
+  }, []);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', s => { if (s !== 'active') setPlaying(false); });
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {
@@ -61,6 +67,7 @@ export default function MakeAVideo() {
 
   async function add() {
     setError(null);
+    setPlaying(false);
     try {
       const infos = await pickFiles(['video'], true);
       let next = project;
@@ -80,15 +87,16 @@ export default function MakeAVideo() {
   }
 
   function trimHere(edge: 'start' | 'end') {
-    if (!here || !at) return;
+    if (!here) return;
     setSelectedId(here.id);
-    edit(trimClip(project, here.id, edge, here.inS + at.offsetS));
+    edit(trimAt(project, headS, edge), 'Move the line inside a clip, away from where it starts and ends.');
   }
 
   function remove() {
     if (selectedAt < 0) return;
     const next = deleteClip(project, selectedId!);
     setSelectedId(next.clips[Math.min(selectedAt, next.clips.length - 1)]?.id);
+    if (!next.clips.length) { setHeadS(0); setSeekS(undefined); } // a new strip starts at the beginning
     edit(next);
   }
 
@@ -98,6 +106,12 @@ export default function MakeAVideo() {
     setPlaying(false);
     setBusy(true);
     try {
+      const { project: kept, dropped } = await dropUnreadable(project, canOpen);
+      if (dropped) {
+        setProject(kept);
+        setNote(droppedNote(dropped));
+        return setError('Some clips could not be opened. Check your video, then save again.');
+      }
       await startJobs([{ info: { id: planned.plan.clips[0].uri, name: project.name } as MediaInfo, plan: planned.plan }]);
       router.dismissTo('/queue');
     } catch (e) { setError(say(e)); } finally { setBusy(false); }

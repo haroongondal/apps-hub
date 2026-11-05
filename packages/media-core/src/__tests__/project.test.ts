@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   addClip, clipSpans, clipStarts, deleteClip, emptyProject, locate, MAX_CLIPS, moveClip, parseDraft, projectProblem, sourceFrom,
-  splitAt, totalS, trimClip, type Project, type Source,
+  splitAt, totalS, trimAt, trimClip, type Project, type Source,
 } from '../project.ts';
 import type { MediaInfo } from '../types.ts';
 
@@ -129,4 +129,13 @@ test('clipSpans: each clip as a block on the strip, never thinner than one pixel
   assert.deepEqual(clipSpans(two(), 20), [{ id: 'a', leftPx: 0, widthPx: 200 }, { id: 'b', leftPx: 200, widthPx: 80 }]);
   assert.deepEqual(clipSpans(emptyProject(), 20), []);
   assert.deepEqual(clipSpans(addClip(emptyProject(), { ...A, durationS: 0.1 }, 't'), 1), [{ id: 't', leftPx: 0, widthPx: 1 }]);
+});
+
+test('trimAt: trims the clip under the line; within a tenth of its ends (a join, the very end) it changes nothing', () => {
+  const p = two();
+  assert.deepEqual(edges(trimAt(p, 12, 'start'))[1], ['b', 'content://b', 2, 4]);
+  assert.deepEqual(edges(trimAt(p, 3, 'end'))[0], ['a', 'content://a', 0, 3]);
+  for (const [t, edge] of [[10, 'end'], [10, 'start'], [14, 'start'], [14, 'end'], [0.05, 'end'], [9.95, 'start'], [20, 'end']] as const) {
+    assert.equal(trimAt(p, t, edge), p, `${edge} at ${t}`);
+  }
 });

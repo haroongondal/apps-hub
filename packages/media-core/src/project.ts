@@ -75,6 +75,15 @@ export function trimClip(p: Project, id: string, edge: 'start' | 'end', toSource
   };
 }
 
+// Within a tenth of the clip's ends (a join, the very end) a trim would leave a sliver that can never grow back.
+export function trimAt(p: Project, timelineS: number, edge: 'start' | 'end'): Project {
+  const at = locate(p, timelineS);
+  if (!at) return p;
+  const c = p.clips[at.index];
+  if (at.offsetS < MIN_RANGE_S - EPS || clipLengthS(c) - at.offsetS < MIN_RANGE_S - EPS) return p;
+  return trimClip(p, c.id, edge, c.inS + at.offsetS);
+}
+
 export function moveClip(p: Project, id: string, by: -1 | 1): Project {
   const i = p.clips.findIndex(c => c.id === id);
   const j = i + by;

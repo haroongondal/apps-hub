@@ -1,5 +1,5 @@
 import {
-  clampZoom, clipLengthS, clipSpans, snapTenth, thumbCount, thumbTimes, totalS, zoomLimits, type Clip, type Project,
+  clampZoom, clipLengthS, clipSpans, followTarget, snapTenth, thumbCount, thumbTimes, totalS, zoomLimits, type Clip, type Project,
 } from '@apps-hub/media-core';
 import { Button, Text, radius, space, useTheme } from '@apps-hub/ui';
 import DesignMedia from 'design-media';
@@ -24,6 +24,7 @@ export interface ClipStripProps {
 
 // Twenty clips asking at once would open twenty decoders, so picture reads from every clip queue behind each other.
 let chain: Promise<unknown> = Promise.resolve();
+const FOLDER = 'video'; // each clip's pictures live in their own folder, or one clip's set would delete another's
 function oneAtATime<T>(task: () => Promise<T>): Promise<T> {
   const next = chain.then(task, task);
   chain = next.catch(() => undefined);
@@ -43,15 +44,15 @@ const ClipBlock = memo(function ClipBlock({ clip, index, leftPx, widthPx, px, se
   const haveTiles = useRef(false);
 
   const load = useMemo(() => singleFlight(
-    (a: { key: string; uri: string; times: number[] }) => oneAtATime(() => DesignMedia.thumbnails(a.uri, a.times, 160)),
+    (a: { key: string; uri: string; times: number[]; folder: string }) => oneAtATime(() => DesignMedia.thumbnails(a.uri, a.times, 160, a.folder)),
     (t, a) => { if (a.key === wanted.current) { haveTiles.current = true; setTiles(t); } },
   ), []);
 
   useEffect(() => {
     const times = thumbTimes(lengthS, count).map(t => clip.inS + t);
-    const timer = setTimeout(() => load({ key, uri: clip.source.uri, times }), haveTiles.current ? 300 : 0);
+    const timer = setTimeout(() => load({ key, uri: clip.source.uri, times, folder: `${FOLDER}/${clip.id}` }), haveTiles.current ? 300 : 0);
     return () => clearTimeout(timer);
-  }, [key, clip.source.uri, clip.inS, lengthS, count, load]);
+  }, [key, clip.source.uri, clip.id, clip.inS, lengthS, count, load]);
 
   return (
     <Pressable
@@ -90,6 +91,9 @@ export function ClipStrip({ project, selectedId, onSelect, seekS, onPlayhead, on
   const spans = useMemo(() => clipSpans(project, px), [project, px]);
   const live = useRef(px);
   live.current = px;
+  const dragging = useRef(false);
+
+  useEffect(() => () => { void DesignMedia.clearThumbs(FOLDER).catch(() => undefined); }, []);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => scroller.current?.scrollTo({ x: playhead.current * px, animated: false }));
@@ -98,9 +102,8 @@ export function ClipStrip({ project, selectedId, onSelect, seekS, onPlayhead, on
 
   // Snapped first, so the scroll this causes finds the playhead already there and does not report it back.
   useEffect(() => {
-    if (seekS === undefined) return;
-    const t = snapTenth(seekS);
-    if (Math.abs(t - playhead.current) < 0.05) return;
+    const t = followTarget(seekS, playhead.current, dragging.current);
+    if (t === undefined) return;
     playhead.current = t;
     setHeadS(t);
     scroller.current?.scrollTo({ x: t * live.current, animated: false });
@@ -145,8 +148,8 @@ export function ClipStrip({ project, selectedId, onSelect, seekS, onPlayhead, on
               scrollEnabled={!pinching}
               scrollEventThrottle={16}
               onScroll={onScroll}
-              onScrollBeginDrag={() => onDrag?.(true)}
-              onScrollEndDrag={() => onDrag?.(false)}
+              onScrollBeginDrag={() => { dragging.current = true; onDrag?.(true); }}
+              onScrollEndDrag={() => { dragging.current = false; onDrag?.(false); }}
             >
               <View style={{ width: trackW + viewW, height: top + FILM_H }}>
                 <Ruler durationS={durationS} px={px} pad={pad} />

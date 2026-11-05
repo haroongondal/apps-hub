@@ -14,6 +14,7 @@ import expo.modules.designmedia.core.AtomicFile
 import expo.modules.designmedia.core.EncoderStatsStore
 import expo.modules.designmedia.core.QueueStore
 import expo.modules.designmedia.core.decodeJobs
+import expo.modules.designmedia.core.thumbFolder
 import expo.modules.designmedia.core.toStatusMap
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
@@ -57,8 +58,13 @@ class DesignMediaModule : Module() {
 
     // The default queue is one thread shared by every Expo module, so a sixty-tile filmstrip or a long sound decode
     // would hold up the file picker and Start; these three read media on their own threads.
-    AsyncFunction("thumbnails") { uri: String, timesS: List<Double>, width: Int ->
-      Thumbs.write(context, Uri.parse(uri), timesS, width)
+    AsyncFunction("thumbnails") { uri: String, timesS: List<Double>, width: Int, folder: String? ->
+      Thumbs.write(context, Uri.parse(uri), timesS, width, thumbFolder(folder))
+    }.runOnQueue(readScope)
+
+    AsyncFunction("clearThumbs") { folder: String ->
+      File(context.cacheDir, thumbFolder(folder)).deleteRecursively()
+      Unit
     }.runOnQueue(readScope)
 
     AsyncFunction("waveform") { uri: String, buckets: Int ->
