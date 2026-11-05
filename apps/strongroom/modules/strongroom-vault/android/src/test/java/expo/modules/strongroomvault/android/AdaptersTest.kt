@@ -166,7 +166,7 @@ class AdaptersTest {
 
   @Test fun accountKeyKeyNeedsUnlockedDevice() {
     assertTrue(SyncKeys.ACCOUNT.unlockedDeviceRequired)
-    for (s in listOf(SyncSecret.ACCOUNT_KEY, SyncSecret.LOGIN_TOKEN, SyncSecret.PENDING_AUTH)) assertSame(SyncKeys.ACCOUNT, SyncKeys.keyFor(s))
+    for (s in listOf(SyncSecret.ACCOUNT_KEY, SyncSecret.LOGIN_TOKEN, SyncSecret.NEXT_LOGIN, SyncSecret.NEXT_READ)) assertSame(SyncKeys.ACCOUNT, SyncKeys.keyFor(s))
   }
 
   // DESIGN §10: the read token must open while the phone is locked, so the background job can download.

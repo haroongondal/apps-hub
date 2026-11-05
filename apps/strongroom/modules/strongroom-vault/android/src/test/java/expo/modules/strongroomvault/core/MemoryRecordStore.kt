@@ -11,10 +11,12 @@ class MemoryRecordStore : SyncRecordStore {
   val stagedRows = LinkedHashMap<String, SyncRow>()
   var putAllCalls = 0
   var writes = 0
+  var headerWriteFails = false
 
   override fun header() = headerJson
 
   override fun putHeader(json: String) {
+    check(!headerWriteFails) { "disk full" }
     writes++
     headerJson = json
   }

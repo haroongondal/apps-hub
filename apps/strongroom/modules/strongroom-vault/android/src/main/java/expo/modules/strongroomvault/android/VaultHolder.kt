@@ -138,11 +138,6 @@ object VaultHolder {
     runCatching { sync(context).download() }
   }
 
-  internal fun headerChanged(context: Context, newPassword: CharArray?, newRecoveryKey: ByteArray?) {
-    sync(context).headerChanged(newPassword, newRecoveryKey)
-    syncSoon(context, 0)
-  }
-
   fun touch() {
     val v = vault ?: return
     v.touch()
@@ -355,7 +350,7 @@ object VaultHolder {
   }
 }
 
-// Nothing secret here: the recovery hash is the server's own check value for a token no one can derive from it.
+// Nothing secret here: the recovery hash is the server's own check value for a token no one can derive from it, and the pending header is a fingerprint.
 internal class PrefsSyncSettings(private val p: SharedPreferences) : SyncSettings {
   override fun load() = SyncState(
     mode = SyncMode.entries.firstOrNull { it.name == p.getString("syncMode", null) } ?: SyncMode.OFF,
@@ -363,7 +358,7 @@ internal class PrefsSyncSettings(private val p: SharedPreferences) : SyncSetting
     blocked = p.getInt("syncBlocked", 0),
     quarantined = p.getInt("syncQuarantined", 0),
     failed = p.getBoolean("syncFailed", false),
-    accountPending = p.getBoolean("syncAccountPending", false),
+    pendingHeader = p.getString("syncPendingHeader", null),
     recoveryHash = p.getString("syncRecoveryHash", null),
   )
 
@@ -374,7 +369,7 @@ internal class PrefsSyncSettings(private val p: SharedPreferences) : SyncSetting
       .putInt("syncBlocked", s.blocked)
       .putInt("syncQuarantined", s.quarantined)
       .putBoolean("syncFailed", s.failed)
-      .putBoolean("syncAccountPending", s.accountPending)
+      .putString("syncPendingHeader", s.pendingHeader)
       .putString("syncRecoveryHash", s.recoveryHash)
       .commit()
   }

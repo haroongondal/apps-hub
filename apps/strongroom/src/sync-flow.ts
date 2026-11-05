@@ -204,18 +204,23 @@ export function checkForm(form: FormName, v: Values, askAccountKey = false): Pro
   } else {
     set('recoveryKey', keyProblem(v.recoveryKey, 'recovery key'));
     set('newPassword', validateMasterPassword(v.newPassword, v.confirm));
-    if (askAccountKey) {
-      const missing = keyProblem(v.accountKey, 'account key');
-      set('accountKey', missing);
-      // Nothing can check an account key before the vault server takes it, and a typo would become the key on every device.
-      if (!missing) set('accountKeyAgain', squash(v.accountKey) === squash(v.accountKeyAgain) ? null : KEYS_DIFFER);
-    }
+    if (askAccountKey) Object.assign(problems, accountKeyProblems(v));
   }
   return problems;
 }
 
+// Nothing can check a typed account key before it is used, and a typo would become the key on every device: so it is typed twice.
+export function accountKeyProblems(v: Pick<Values, 'accountKey' | 'accountKeyAgain'>): Problems {
+  const missing = keyProblem(v.accountKey, 'account key');
+  if (missing) return { accountKey: missing };
+  return squash(v.accountKey) === squash(v.accountKeyAgain) ? {} : { accountKeyAgain: KEYS_DIFFER };
+}
+
 export const accountKeyGroupProblem = (key: string, group: number, typed: string): string | null =>
   recoveryGroupMatches(key, group, typed) ? null : `That isn't group ${group + 1}. Check the key you wrote down and try again.`;
+
+// A run can pull entries even when it ends in an error, so the vault list reloads after every run, not only a clean one.
+export const syncSettled = (s: SyncStatus): boolean => s.state !== 'syncing';
 
 export const offerSignIn = (status: SyncStatus | null, failure: unknown): boolean =>
   hasCode(failure, 'ACCOUNT_KEY_REQUIRED') || (status?.available === true && status.state === 'needsSignIn');

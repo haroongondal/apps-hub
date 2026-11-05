@@ -49,6 +49,7 @@ internal class HttpSyncTransport(baseUrl: String) : SyncTransport {
       c.readTimeout = READ_MS
       c.instanceFollowRedirects = false
       c.useCaches = false
+      c.setRequestProperty("User-Agent", "Strongroom") // not the default, which names the phone model
       auth?.let { c.setRequestProperty("Authorization", it) }
       if (body != null) {
         c.doOutput = true

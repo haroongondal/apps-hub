@@ -66,12 +66,15 @@ class Vault(
     return true
   }
 
-  @Synchronized fun recover(recoveryKey: ByteArray, newPassword: CharArray): Boolean {
+  /** [accountKey] is a typed one, used only on a flagged vault whose Keystore copy is gone. [beforeWrite] gets the new header before it is written; a throw there changes nothing (as for changePassword and newRecoveryKey). */
+  @Synchronized fun recover(recoveryKey: ByteArray, newPassword: CharArray, accountKey: ByteArray? = null, beforeWrite: (Header) -> Unit = {}): Boolean {
     val h = header()
     val k = VaultFormat.unlockWithRecovery(h, recoveryKey) ?: return false
     zeroOnThrow(k) {
       val bad = countUnreadable(k) // before the header write, so a failed read changes nothing
-      store.putHeader(keyed(h) { VaultFormat.withNewPassword(h, k, newPassword, accountKey = it) }.toJson())
+      val next = keyed(h, accountKey) { VaultFormat.withNewPassword(h, k, newPassword, accountKey = it) }
+      beforeWrite(next)
+      store.putHeader(next.toJson())
       install(k, bad)
     }
     return true
@@ -146,20 +149,24 @@ class Vault(
     return entries.size
   }
 
-  @Synchronized fun changePassword(old: CharArray, new: CharArray): Boolean {
+  @Synchronized fun changePassword(old: CharArray, new: CharArray, beforeWrite: (Header) -> Unit = {}): Boolean {
     val k = requireKey()
     val h = header()
     if (!passwordMatches(h, old, k)) return false
-    store.putHeader(keyed(h) { VaultFormat.withNewPassword(h, k, new, accountKey = it) }.toJson())
+    val next = keyed(h) { VaultFormat.withNewPassword(h, k, new, accountKey = it) }
+    beforeWrite(next)
+    store.putHeader(next.toJson())
     return true
   }
 
-  @Synchronized fun newRecoveryKey(password: CharArray): ByteArray? {
+  @Synchronized fun newRecoveryKey(password: CharArray, beforeWrite: (Header, ByteArray) -> Unit = { _, _ -> }): ByteArray? {
     val k = requireKey()
     val h = header()
     if (!passwordMatches(h, password, k)) return null
     val recoveryKey = RecoveryKey.generate()
-    store.putHeader(VaultFormat.withNewRecovery(h, k, recoveryKey).toJson())
+    val next = VaultFormat.withNewRecovery(h, k, recoveryKey)
+    beforeWrite(next, recoveryKey)
+    store.putHeader(next.toJson())
     return recoveryKey
   }
 
@@ -173,9 +180,9 @@ class Vault(
 
   @Synchronized fun opensWith(vaultKey: ByteArray): Boolean = store.all().any { (id, s) -> VaultFormat.openEntry(vaultKey, id, s) != null }
 
-  // The account key goes in only for a flagged header (DESIGN §10), and its copy is zeroed after the one use.
-  private inline fun <T> keyed(h: Header, block: (ByteArray?) -> T): T {
-    val ak = if (h.accountKey) accountKey() else null
+  // The account key goes in only for a flagged header (DESIGN §10), and its copy is zeroed after the one use. [typed] stands in only when the Keystore has none.
+  private inline fun <T> keyed(h: Header, typed: ByteArray? = null, block: (ByteArray?) -> T): T {
+    val ak = if (h.accountKey) accountKey() ?: typed?.copyOf() else null
     try {
       return block(ak)
     } finally {

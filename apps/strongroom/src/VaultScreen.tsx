@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Button, Empty, Field, Group, Header, Notice, Pill, Row, Screen, Segmented, Text, radius, useTheme } from '@apps-hub/ui';
-import Vault, { type Row as VaultRow, type Status } from 'strongroom-vault';
+import Vault, { addSyncListener, type Row as VaultRow, type Status } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
 import { filterRows } from './forms.ts';
 import { SyncFooter } from './SyncScreen.tsx';
+import { syncSettled } from './sync-flow.ts';
 
 export interface VaultView {
   kind: VaultRow['type'];
@@ -43,12 +44,22 @@ export function VaultScreen({ status, refresh, view, onView, onOpen, onAdd, onOp
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      setRows(Vault.rows());
-    } catch (e) {
-      if (isLocked(e)) refresh();
-      else setError(messageOf(e));
-    }
+    const load = () => {
+      try {
+        setRows(Vault.rows());
+      } catch (e) {
+        if (isLocked(e)) refresh();
+        else setError(messageOf(e));
+      }
+    };
+    load();
+    // What a sync pulled shows as soon as the run ends; refresh re-reads the unreadable count too.
+    const sub = addSyncListener((s) => {
+      if (!syncSettled(s)) return;
+      load();
+      refresh();
+    });
+    return () => sub.remove();
   }, []);
 
   const dismissLostSaves = () => {

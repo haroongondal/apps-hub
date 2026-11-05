@@ -79,7 +79,8 @@ export interface StrongroomVaultApi {
   setUp(password: string, recoveryKey: string): Promise<void>;
   unlock(password: string): Promise<boolean>;
   unlockWithBiometric(): Promise<boolean>;
-  recover(recoveryKey: string, newPassword: string): Promise<boolean>;
+  // accountKey only after ACCOUNT_KEY_REQUIRED (a flagged vault whose account key this phone lost); nothing can check it, so ask for it twice.
+  recover(recoveryKey: string, newPassword: string, accountKey?: string): Promise<boolean>;
   lock(): void;
   rows(): Row[];
   entry(id: string): EntryView | null;

@@ -24,7 +24,7 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
 import kotlin.concurrent.thread
 
-// A real TLS socket on 127.0.0.1 with a throwaway certificate the client trusts for this test only.
+// A real TLS socket on 127.0.0.1 with a throwaway certificate the client trusts for this test only. Every request names itself "Strongroom", never the default agent with the phone model.
 class HttpSyncTransportTest {
   private val token = ByteArray(32) { it.toByte() }
 
@@ -56,7 +56,7 @@ class HttpSyncTransportTest {
     val headers = lines.drop(1).associate { it.substringBefore(':').lowercase() to it.substringAfter(':').trim() }
     val body = String(input.readNBytes(headers["content-length"]?.toInt() ?: 0), Charsets.UTF_8)
     s.getOutputStream().apply { write(reply.toByteArray(Charsets.UTF_8)) }.flush()
-    listOf(lines[0], headers["authorization"], headers["content-type"], body).joinToString(" | ")
+    listOf(lines[0], headers["user-agent"], headers["authorization"], headers["content-type"], body).joinToString(" | ")
   }
 
   private fun reply(status: String, body: String = "", extra: String = "") =
@@ -88,11 +88,11 @@ class HttpSyncTransportTest {
       val bearer = "Bearer " + SyncWire.toBase64(token)
       assertEquals(
         listOf(
-          "GET /v1/records?since=5&limit=100 HTTP/1.1 | $bearer | null | ",
-          "POST /v1/records HTTP/1.1 | $bearer | application/json | ${SyncWire.toJson(push)}",
-          "PUT /v1/account HTTP/1.1 | Bearer the-setup-token | application/json | ${SyncWire.toJson(AccountCreate("h", "l", "r", "d"))}",
-          "GET /v1/records?since=0&limit=100 HTTP/1.1 | $bearer | null | ",
-          "GET /v1/records?since=0&limit=100 HTTP/1.1 | $bearer | null | ",
+          "GET /v1/records?since=5&limit=100 HTTP/1.1 | Strongroom | $bearer | null | ",
+          "POST /v1/records HTTP/1.1 | Strongroom | $bearer | application/json | ${SyncWire.toJson(push)}",
+          "PUT /v1/account HTTP/1.1 | Strongroom | Bearer the-setup-token | application/json | ${SyncWire.toJson(AccountCreate("h", "l", "r", "d"))}",
+          "GET /v1/records?since=0&limit=100 HTTP/1.1 | Strongroom | $bearer | null | ",
+          "GET /v1/records?since=0&limit=100 HTTP/1.1 | Strongroom | $bearer | null | ",
         ),
         seen,
       )

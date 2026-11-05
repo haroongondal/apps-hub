@@ -13,9 +13,12 @@ data class SyncState(
   val blocked: Int = 0,
   val quarantined: Int = 0,
   val failed: Boolean = false,
-  val accountPending: Boolean = false,
+  // The fingerprint of the local header an account update waits to send; set before that header is written.
+  val pendingHeader: String? = null,
   val recoveryHash: String? = null,
-)
+) {
+  val accountPending: Boolean get() = pendingHeader != null
+}
 
 interface SyncSettings {
   fun load(): SyncState
@@ -23,7 +26,8 @@ interface SyncSettings {
   fun save(s: SyncState)
 }
 
-enum class SyncSecret { ACCOUNT_KEY, LOGIN_TOKEN, READ_TOKEN, PENDING_AUTH }
+// LOGIN_TOKEN and READ_TOKEN are always the ones the server knows; NEXT_* wait for an account update to land.
+enum class SyncSecret { ACCOUNT_KEY, LOGIN_TOKEN, READ_TOKEN, NEXT_LOGIN, NEXT_READ }
 
 interface SyncSecrets {
   fun get(s: SyncSecret): ByteArray?
@@ -64,12 +68,18 @@ class SyncSession(
     return SyncStatus(state, s.lastSyncAt, s.blocked, s.quarantined, transport != null)
   }
 
-  /** Null for a wrong password. Retry-safe: the key reaches the Keystore before the header that needs it, and a retry after the local commit only repeats the PUT. */
+  /**
+   * Null for a wrong password. Retry-safe: the key reaches the Keystore before the header that needs it, and a retry after the local commit only repeats the PUT.
+   * A refusal that created nothing on the server (401, 400, or a 403 for an account that isn't this phone's) puts back this call's header and mode, so the vault
+   * never depends on a key the owner hasn't seen; the Keystore keeps the key, so a retry shows the same one. Only an unclear failure (offline, 5xx, a lost reply) leaves setup pending.
+   */
   @Synchronized fun enable(setupToken: String, password: CharArray, recoveryKey: ByteArray): ByteArray? {
     val t = server()
-    check(settings.load().mode.let { it == SyncMode.OFF || it == SyncMode.PENDING_SETUP }) { "sync already on" }
+    val mode = settings.load().mode
+    check(mode == SyncMode.OFF || mode == SyncMode.PENDING_SETUP) { "sync already on" }
     val k = vault.vaultKeyCopy(password) ?: return null
     try {
+      val original = storedHeader()
       val h = header()
       check(VaultFormat.unlockWithRecovery(h, recoveryKey).sameKey(k)) { "wrong recovery key" }
       val ak = secrets.get(SyncSecret.ACCOUNT_KEY) ?: AccountKey.generate().also { secrets.put(SyncSecret.ACCOUNT_KEY, it) }
@@ -88,13 +98,22 @@ class SyncSession(
             hashOf(VaultFormat.recoveryLoginToken(recoveryKey)),
             Crypto.tokenHash(opened.readToken),
           )
+          val undo = {
+            if (!h.accountKey) store.putHeader(original)
+            update { it.copy(mode = mode) }
+          }
           val rev = try {
             t.putAccount(setupToken, body)
           } catch (e: SyncAuthError) {
+            undo()
             throw IllegalStateException("wrong setup token")
           } catch (e: SyncHttpError) {
+            if (e.status == 400) undo()
             if (e.status != 403) throw e
-            createdEarlier(t, opened.loginToken) ?: throw IllegalStateException("account exists")
+            createdEarlier(t, opened.loginToken) ?: run {
+              undo()
+              throw IllegalStateException("account exists")
+            }
           }
           commitHeader(null, rev)
           update { it.copy(mode = SyncMode.ON, failed = false) }
@@ -144,6 +163,7 @@ class SyncSession(
     try {
       val s = SyncClient.signInWithRecovery(t, recoveryKey)
       try {
+        if (!s.header.accountKey) throw SyncAuthError() // as signIn: a header that dropped the flag is never taken, nor flagged again
         val local = localFor(s, s.header)
         val h = VaultFormat.withNewPassword(s.header, s.vaultKey, newPassword, accountKey = ak)
         val o = VaultFormat.openWithPassword(h, newPassword, ak) ?: throw IllegalStateException(HEADER_CHECK)
@@ -180,7 +200,7 @@ class SyncSession(
 
   @Synchronized fun download(): Int {
     val t = transport ?: return 0
-    // A pending update means the stored read token is one the server doesn't know yet.
+    // A waiting account update goes first, at the next sync with the vault open.
     if (settings.load().let { it.mode != SyncMode.ON || it.accountPending }) return 0
     val token = secrets.get(SyncSecret.READ_TOKEN) ?: return 0
     try {
@@ -190,30 +210,19 @@ class SyncSession(
     }
   }
 
-  @Synchronized fun headerChanged(newPassword: CharArray?, newRecoveryKey: ByteArray?) {
-    if (!isOn) return
-    try {
-      if (newPassword != null) {
-        val ak = secrets.get(SyncSecret.ACCOUNT_KEY) ?: throw AccountKeyRequired()
-        val o = try {
-          VaultFormat.openWithPassword(header(), newPassword, ak) ?: throw IllegalStateException(HEADER_CHECK)
-        } finally {
-          ak.fill(0)
-        }
-        try {
-          val known = secrets.get(SyncSecret.PENDING_AUTH) ?: secrets.get(SyncSecret.LOGIN_TOKEN)
-          known?.let { secrets.put(SyncSecret.PENDING_AUTH, it) }
-          known?.fill(0)
-          secrets.put(SyncSecret.LOGIN_TOKEN, o.loginToken)
-          secrets.put(SyncSecret.READ_TOKEN, o.readToken)
-        } finally {
-          o.wipe()
-        }
-      }
-      val hash = newRecoveryKey?.let { hashOf(VaultFormat.recoveryLoginToken(it)) }
-      update { it.copy(accountPending = true, recoveryHash = hash ?: it.recoveryHash) }
-    } catch (e: Exception) {
-      update { it.copy(failed = true) }
+  // Every local header change goes through the session, so its sync bookkeeping is in place before the vault writes the header (prepare).
+  @Synchronized fun changePassword(old: CharArray, new: CharArray): Boolean = vault.changePassword(old, new) { prepare(it, new, null) }
+
+  @Synchronized fun newRecoveryKey(password: CharArray): ByteArray? =
+    vault.newRecoveryKey(password) { h, rk -> prepare(h, null, hashOf(VaultFormat.recoveryLoginToken(rk))) }
+
+  /** Forgot master password, on this phone. [accountKey] is the typed one, used only on a flagged vault whose Keystore copy is gone, and kept before the header that needs it. Nothing can check it, so ask for it twice. */
+  @Synchronized fun recoverLocally(recoveryKey: ByteArray, newPassword: CharArray, accountKey: ByteArray? = null): Boolean {
+    val held = secrets.get(SyncSecret.ACCOUNT_KEY)?.also { it.fill(0) } != null
+    val typed = accountKey.takeUnless { held }
+    return vault.recover(recoveryKey, newPassword, typed) { h ->
+      if (typed != null && h.accountKey) storeAll(listOf(SyncSecret.ACCOUNT_KEY to typed))
+      prepare(h, newPassword, null)
     }
   }
 
@@ -227,6 +236,34 @@ class SyncSession(
 
   private fun commitHeader(h: Header?, headerRev: Long) =
     store.applyPull(PullApplied(h, headerRev, emptyList(), emptyList(), emptyList(), store.syncMeta().lastRev))
+
+  // Before the header write, and a throw here stops it: the new tokens wait under NEXT_*, then the mark names the header they belong to.
+  // What a mark for another header holds is dropped first (a header write that failed), so tokens or a recovery hash never go up with the wrong header.
+  private fun prepare(h: Header, newPassword: CharArray?, recoveryHash: String?) {
+    if (!isOn) return
+    if (settings.load().pendingHeader != fingerprint(storedHeader())) dropPending()
+    if (newPassword != null) {
+      val ak = secrets.get(SyncSecret.ACCOUNT_KEY) ?: throw AccountKeyRequired()
+      val o = try {
+        VaultFormat.openWithPassword(h, newPassword, ak) ?: throw IllegalStateException(HEADER_CHECK)
+      } finally {
+        ak.fill(0)
+      }
+      try {
+        secrets.put(SyncSecret.NEXT_LOGIN, o.loginToken)
+        secrets.put(SyncSecret.NEXT_READ, o.readToken)
+      } finally {
+        o.wipe()
+      }
+    }
+    update { it.copy(pendingHeader = fingerprint(h.toJson()), recoveryHash = recoveryHash ?: it.recoveryHash) }
+  }
+
+  private fun dropPending() {
+    secrets.delete(SyncSecret.NEXT_LOGIN)
+    secrets.delete(SyncSecret.NEXT_READ)
+    update { it.copy(pendingHeader = null, recoveryHash = null) }
+  }
 
   private fun syncWith(t: SyncTransport, k: ByteArray, password: CharArray?): SyncReport = recording {
     if (settings.load().accountPending) updateAccount(t)
@@ -263,25 +300,30 @@ class SyncSession(
     }
   }
 
-  // Signed with the token the server still knows (PENDING_AUTH after a password change); ifRev is the last header this phone took from it.
+  // Signed with the token the server knows; ifRev is the last header this phone took from it. The waiting tokens replace the known ones only
+  // after the update landed, NEXT_* and the mark go last, so a run cut short anywhere is finished by the next (or, after a lost reply, by a sign-in).
   private fun updateAccount(t: SyncTransport) {
-    val login = secrets.get(SyncSecret.LOGIN_TOKEN) ?: throw SyncAuthError()
-    val read = secrets.get(SyncSecret.READ_TOKEN) ?: throw SyncAuthError()
-    val auth = secrets.get(SyncSecret.PENDING_AUTH) ?: login.copyOf()
+    val local = storedHeader()
+    if (settings.load().pendingHeader != fingerprint(local)) return dropPending() // its header never reached the vault file
+    val auth = secrets.get(SyncSecret.LOGIN_TOKEN) ?: throw SyncAuthError()
+    val login = secrets.get(SyncSecret.NEXT_LOGIN) ?: auth.copyOf()
+    val read = secrets.get(SyncSecret.NEXT_READ) ?: secrets.get(SyncSecret.READ_TOKEN)
     try {
-      val body = AccountUpdate(storedHeader(), Crypto.tokenHash(login), Crypto.tokenHash(read), store.syncMeta().headerRev, settings.load().recoveryHash)
+      if (read == null) throw SyncAuthError()
+      val body = AccountUpdate(local, Crypto.tokenHash(login), Crypto.tokenHash(read), store.syncMeta().headerRev, settings.load().recoveryHash)
       val rev = try {
         t.putAccount(auth, body)
       } catch (e: SyncHttpError) {
         throw if (e.status == 409) SyncAuthError() else e
       }
       commitHeader(null, rev)
-      secrets.delete(SyncSecret.PENDING_AUTH)
-      update { it.copy(accountPending = false, recoveryHash = null) }
+      secrets.put(SyncSecret.LOGIN_TOKEN, login)
+      secrets.put(SyncSecret.READ_TOKEN, read)
+      dropPending()
     } finally {
-      login.fill(0)
-      read.fill(0)
       auth.fill(0)
+      login.fill(0)
+      read?.fill(0)
     }
   }
 
@@ -341,7 +383,8 @@ class SyncSession(
   }
 
   private fun signedIn(skipped: Int) {
-    secrets.delete(SyncSecret.PENDING_AUTH)
+    secrets.delete(SyncSecret.NEXT_LOGIN)
+    secrets.delete(SyncSecret.NEXT_READ)
     update { SyncState(mode = SyncMode.ON, lastSyncAt = it.lastSyncAt, blocked = skipped) }
   }
 }
@@ -363,6 +406,8 @@ private fun ByteArray?.sameKey(k: ByteArray) = this != null && try {
 } finally {
   fill(0)
 }
+
+private fun fingerprint(headerJson: String) = Crypto.tokenHash(Crypto.utf8(headerJson))
 
 private fun hashOf(token: ByteArray) = try {
   Crypto.tokenHash(token)

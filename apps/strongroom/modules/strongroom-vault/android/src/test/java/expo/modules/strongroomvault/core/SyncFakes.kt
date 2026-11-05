@@ -92,11 +92,13 @@ internal class MemorySecrets : SyncSecrets {
   val values = HashMap<SyncSecret, ByteArray>()
   var keyLost = false // as a Keystore key the system invalidated: nothing it sealed opens, and it seals nothing new
   var resets = 0
+  var failOn: SyncSecret? = null // a write that fails, as a full disk would
 
   override fun get(s: SyncSecret) = if (keyLost) null else values[s]?.copyOf()
 
   override fun put(s: SyncSecret, value: ByteArray) {
     check(!keyLost) { "sync key lost" }
+    check(s != failOn) { "disk full" }
     values[s] = value.copyOf()
   }
 
@@ -113,10 +115,12 @@ internal class MemorySecrets : SyncSecrets {
 
 internal class MemorySettings : SyncSettings {
   var state = SyncState()
+  var failSave = false
 
   override fun load() = state
 
   override fun save(s: SyncState) {
+    check(!failSave) { "disk full" }
     state = s
   }
 }

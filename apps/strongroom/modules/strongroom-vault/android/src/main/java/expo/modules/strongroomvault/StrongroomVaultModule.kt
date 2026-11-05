@@ -158,22 +158,23 @@ class StrongroomVaultModule : Module() {
       }
     }
 
-    AsyncFunction("recover") Coroutine { recoveryKey: String, newPassword: String ->
+    AsyncFunction("recover") Coroutine { recoveryKey: String, newPassword: String, accountKey: String? ->
       vault()
       val rk = RecoveryKey.parse(recoveryKey)
+      val ak = accountKey?.let {
+        AccountKey.parse(it) ?: throw CodedException("BAD_ACCOUNT_KEY", "That account key isn't complete. Check it and try again.", null)
+      }
       val pw = newPassword.toCharArray()
       try {
         rk != null && withContext(Dispatchers.IO) {
-          derive { VaultHolder.get(context).recover(rk, pw) }.also {
-            if (it) {
-              VaultHolder.headerChanged(context, pw, null)
-              VaultHolder.afterUnlock(context, byPassword = true)
-            }
+          derive { VaultHolder.sync(context).recoverLocally(rk, pw, ak) }.also {
+            if (it) VaultHolder.afterUnlock(context, byPassword = true)
           }
         }
       } finally {
         pw.fill('\u0000')
         rk?.fill(0)
+        ak?.fill(0)
       }
     }
 
@@ -293,11 +294,11 @@ class StrongroomVaultModule : Module() {
     }
 
     AsyncFunction("changePassword") Coroutine { oldPw: String, newPw: String ->
-      val v = vault()
+      vault()
       val old = oldPw.toCharArray()
       val new = newPw.toCharArray()
       try {
-        withContext(Dispatchers.IO) { derive { v.changePassword(old, new) }.also { if (it) VaultHolder.headerChanged(context, new, null) } }
+        withContext(Dispatchers.IO) { derive { VaultHolder.sync(context).changePassword(old, new) }.also { if (it) VaultHolder.syncSoon(context, 0) } }
       } finally {
         old.fill('\u0000')
         new.fill('\u0000')
@@ -305,10 +306,10 @@ class StrongroomVaultModule : Module() {
     }
 
     AsyncFunction("newRecoveryKey") Coroutine { password: String ->
-      val v = vault()
+      vault()
       val pw = password.toCharArray()
       try {
-        withContext(Dispatchers.IO) { derive { v.newRecoveryKey(pw) }?.also { VaultHolder.headerChanged(context, null, it) } }?.let { key ->
+        withContext(Dispatchers.IO) { derive { VaultHolder.sync(context).newRecoveryKey(pw) }?.also { VaultHolder.syncSoon(context, 0) } }?.let { key ->
           try {
             RecoveryKey.format(key)
           } finally {

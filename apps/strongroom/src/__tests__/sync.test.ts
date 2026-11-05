@@ -11,6 +11,7 @@ import {
   NEEDS_SIGN_IN_BODY,
   WRONG_PASSWORD,
   accountKeyGroupProblem,
+  accountKeyProblems,
   checkForm,
   explain,
   fieldsOf,
@@ -21,6 +22,7 @@ import {
   showKeyProblem,
   signInNote,
   syncFooter,
+  syncSettled,
   syncView,
   verifyCopy,
   type FormName,
@@ -200,6 +202,17 @@ test('recovering through sync applies the master password rules and checks both 
   const typo = checkForm('recover', { ...ok, accountKey: KEY, accountKeyAgain: OTHER_KEY }, true);
   assert.deepEqual(Object.keys(typo), ['accountKeyAgain']);
   assert.match(typo.accountKeyAgain ?? '', /^The two account keys don't match\./);
+});
+
+test('the local reset on the unlock screen checks a typed account key the same way: complete, and typed twice alike', () => {
+  assert.deepEqual(accountKeyProblems(values({ accountKey: KEY, accountKeyAgain: KEY.toLowerCase().replaceAll('-', ' ') })), {});
+  assert.equal(accountKeyProblems(values()).accountKey, 'Enter your account key.');
+  assert.deepEqual(Object.keys(accountKeyProblems(values({ accountKey: 'ABCD', accountKeyAgain: 'ABCD' }))), ['accountKey']);
+  assert.match(accountKeyProblems(values({ accountKey: KEY, accountKeyAgain: OTHER_KEY })).accountKeyAgain ?? '', /^The two account keys don't match\./);
+});
+
+test('the vault list reloads when a sync run ends, however it ended, so what a sync pulled shows', () => {
+  for (const state of STATES) assert.equal(syncSettled(status({ state })), state !== 'syncing', state);
 });
 
 test('a wrong recovery key at turn-on is explained and points to Settings, New recovery key', () => {
