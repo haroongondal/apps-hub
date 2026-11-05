@@ -1,5 +1,8 @@
 package expo.modules.designmedia.core
 
+import androidx.media3.common.MediaItem
+import androidx.media3.transformer.Effects
+import expo.modules.designmedia.android.ComposeBuilder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -30,6 +33,13 @@ class ComposeTest {
       listOf(ItemSpec("content://media/a", 0, 10_000_000, true), ItemSpec("content://media/b", 0, 4_000_000, false)),
       composeItems(plan),
     )
+  }
+
+  @Test
+  fun eachItemKnowsItsLengthSoThePreviewPlayerAcceptsIt() {
+    val spec = ItemSpec("content://media/a", 2_000_000, 10_000_000, true)
+    val media = MediaItem.Builder().setClippingConfiguration(ComposeBuilder.clipping(spec)).build()
+    assertEquals(8_000_000L, ComposeBuilder.item(spec, media, Effects.EMPTY).presentationDurationUs)
   }
 
   @Test

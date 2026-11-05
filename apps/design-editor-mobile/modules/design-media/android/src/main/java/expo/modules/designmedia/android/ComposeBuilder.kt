@@ -8,6 +8,7 @@ import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.Effects
 import expo.modules.designmedia.core.ComposePlan
+import expo.modules.designmedia.core.ItemSpec
 import expo.modules.designmedia.core.composeItems
 import expo.modules.designmedia.core.forceAudio
 
@@ -15,14 +16,19 @@ import expo.modules.designmedia.core.forceAudio
 object ComposeBuilder {
   fun composition(plan: ComposePlan): Composition {
     val items = composeItems(plan).map { spec ->
-      val clip = MediaItem.ClippingConfiguration.Builder().setStartPositionUs(spec.startUs).setEndPositionUs(spec.endUs).build()
-      EditedMediaItem.Builder(MediaItem.Builder().setUri(spec.uri).setClippingConfiguration(clip).build())
-        .setEffects(scaleTo(plan.width, plan.height, plan.fps))
-        .build()
+      item(spec, MediaItem.Builder().setUri(spec.uri).setClippingConfiguration(clipping(spec)).build(), scaleTo(plan.width, plan.height, plan.fps))
     }
     val sequence = EditedMediaItemSequence.Builder(items).experimentalSetForceAudioTrack(forceAudio(plan)).build()
     return Composition.Builder(listOf(sequence)).build()
   }
+
+  fun clipping(spec: ItemSpec): MediaItem.ClippingConfiguration =
+    MediaItem.ClippingConfiguration.Builder().setStartPositionUs(spec.startUs).setEndPositionUs(spec.endUs).build()
+
+  // CompositionPlayer refuses an item with no length. The clip's end is enough: it is never past the file
+  // (the planner floors it to a tenth), and the clipping stops there anyway.
+  fun item(spec: ItemSpec, media: MediaItem, effects: Effects): EditedMediaItem =
+    EditedMediaItem.Builder(media).setDurationUs(spec.endUs).setEffects(effects).build()
 
   fun scaleTo(width: Int, height: Int, fps: Int) = Effects(
     emptyList(),
