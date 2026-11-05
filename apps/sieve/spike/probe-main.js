@@ -1,7 +1,7 @@
 (() => {
-  const post = (msg) => window.postMessage({ source: 'sieve-spike', ...msg }, '*');
+  const post = (msg) => window.postMessage({ source: 'sieve-spike', ...msg }, location.origin);
   const PLACEHOLDER = 'https://example.invalid/stream';
-  const URL_KEYS = new Set(['url', 'signatureCipher', 'serverAbrStreamingUrl']);
+  const SECRET_KEY = /servingdata|trackingparams|baseurl|url$|token$|^signaturecipher$/i;
   const FIXTURE_KEYS = ['videoDetails', 'streamingData', 'adPlacements', 'adSlots', 'playerAds', 'adBreakHeartbeatParams'];
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -20,9 +20,13 @@
   }
 
   const has = (f) => (f.url ? 'url' : f.signatureCipher ? 'cipher' : 'none');
-  const scrub = (v) => Array.isArray(v) ? v.map(scrub)
-    : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, URL_KEYS.has(k) ? PLACEHOLDER : scrub(x)]))
-    : v;
+  const fmt = (f) => ({
+    itag: f.itag, mimeType: f.mimeType, height: f.height ?? null, bitrate: f.bitrate ?? null,
+    contentLength: f.contentLength ? Number(f.contentLength) : null, has: has(f),
+  });
+  const scrub = (v, key = '') => Array.isArray(v) ? v.map((x) => scrub(x))
+    : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, scrub(x, k)]))
+    : typeof v === 'string' && (SECRET_KEY.test(key) || /^https?:\/\//.test(v)) ? PLACEHOLDER : v;
 
   async function S1() {
     const pr = await playerResponse();
@@ -31,14 +35,11 @@
     return {
       videoId: pr.videoDetails.videoId,
       strategy: 'S1',
-      loggedIn: !!window.ytcfg.get('LOGGED_IN'),
       playability: pr.playabilityStatus?.status ?? null,
       reason: pr.playabilityStatus?.reason ?? null,
       sabr: !!sd.serverAbrStreamingUrl,
-      formats: (sd.adaptiveFormats ?? []).map((f) => ({
-        itag: f.itag, mimeType: f.mimeType, height: f.height ?? null, bitrate: f.bitrate ?? null,
-        contentLength: f.contentLength ? Number(f.contentLength) : null, has: has(f),
-      })),
+      formats: (sd.adaptiveFormats ?? []).map(fmt),
+      muxed: (sd.formats ?? []).map(fmt),
     };
   }
 
@@ -46,9 +47,10 @@
 
   window.addEventListener('message', async (e) => {
     if (e.source !== window || e.data?.source !== 'sieve-spike-cmd') return;
+    const loggedIn = window.ytcfg ? !!window.ytcfg.get('LOGGED_IN') : null;
     for (const [strategy, run] of Object.entries(STRATEGIES)) {
-      try { post({ result: await run() }); }
-      catch (err) { post({ result: { strategy, videoId: videoIdNow(), error: String(err?.message ?? err) } }); }
+      try { post({ result: { ...(await run()), loggedIn } }); }
+      catch (err) { post({ result: { strategy, videoId: videoIdNow(), loggedIn, error: String(err?.message ?? err) } }); }
     }
     post({ done: e.data.id });
   });

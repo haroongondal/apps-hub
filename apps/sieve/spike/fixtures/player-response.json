@@ -4,7 +4,7 @@
     {
       "adPlacementRenderer": {
         "adSlotLoggingData": {
-          "serializedSlotAdServingDataEntry": "ChMIvpee-eDxlwMVRgV1AR2DzhSVGhJiEFBrd1E1Qk5NeHVsTzR5T2w="
+          "serializedSlotAdServingDataEntry": "https://example.invalid/stream"
         },
         "config": {
           "adPlacementConfig": {
@@ -756,6 +756,7 @@
         "width": 640
       }
     ],
+    "probeUrl": "https://example.invalid/stream",
     "serverAbrStreamingUrl": "https://example.invalid/stream"
   },
   "videoDetails": {
@@ -830,6 +831,6 @@
     },
     "title": "Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)",
     "videoId": "dQw4w9WgXcQ",
-    "viewCount": "1834080016"
+    "viewCount": "1834083509"
   }
 }

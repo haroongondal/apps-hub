@@ -56,8 +56,16 @@ try {
 
   const fixtureObj = await stored('fixture');
   const fixture = JSON.stringify(fixtureObj, null, 2);
-  const leaks = fixture.match(/googlevideo|visitorData|signatureCipher": "(?!https:\/\/example\.invalid\/stream")/);
-  if (leaks) throw new Error(`fixture still contains "${leaks[0]}"; not writing it`);
+  const SECRET_KEY = /servingdata|trackingparams|baseurl|url$|token$|^signaturecipher$/i;
+  const leaks = [];
+  const walk = (v, path) => {
+    if (Array.isArray(v)) v.forEach((x, i) => walk(x, `${path}/${i}`));
+    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) walk(x, `${path}/${k}`);
+    else if (typeof v === 'string' && (SECRET_KEY.test(path.split('/').pop()) || /^https?:\/\//.test(v)) && v !== 'https://example.invalid/stream') leaks.push(path);
+  };
+  walk(fixtureObj, '');
+  if (/googlevideo|visitorData/i.test(fixture)) leaks.push('googlevideo or visitorData in the text');
+  if (leaks.length) throw new Error(`fixture still holds unscrubbed values (${leaks.slice(0, 5).join(', ')}); not writing it`);
   const ads = ['adPlacements', 'adSlots', 'playerAds'].filter((k) => k in fixtureObj);
   if (ads.length) {
     mkdirSync(join(EXT, 'fixtures'), { recursive: true });

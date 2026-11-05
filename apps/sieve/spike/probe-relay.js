@@ -21,7 +21,7 @@
     const id = crypto.randomUUID();
     failure = null;
     pending.set(id, reply);
-    window.postMessage({ source: 'sieve-spike-cmd', id }, '*');
+    window.postMessage({ source: 'sieve-spike-cmd', id }, location.origin);
     return true;
   });
 })();

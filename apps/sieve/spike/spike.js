@@ -4,15 +4,22 @@ const say = (text) => { $('status').textContent = text; };
 const storedResults = async () =>
   Object.fromEntries(Object.entries(await chrome.storage.local.get(null)).filter(([k]) => k.startsWith('probe:')).sort());
 
-function summarise(r) {
-  if (r.error) return { strategy: r.strategy, videoId: r.videoId, error: r.error };
+function tally(formats) {
   const counts = { url: 0, cipher: 0, none: 0 };
   const maxHeight = { url: null, cipher: null, none: null };
-  for (const f of r.formats) {
+  for (const f of formats) {
     counts[f.has]++;
     if (f.height != null && f.height > (maxHeight[f.has] ?? 0)) maxHeight[f.has] = f.height;
   }
-  return { strategy: r.strategy, videoId: r.videoId, signedIn: r.loggedIn, playability: r.playability, sabr: r.sabr, counts, maxHeight };
+  return { counts, maxHeight };
+}
+
+function summarise(r) {
+  if (r.error) return { strategy: r.strategy, videoId: r.videoId, signedIn: r.loggedIn, error: r.error };
+  return {
+    strategy: r.strategy, videoId: r.videoId, signedIn: r.loggedIn, playability: r.playability, sabr: r.sabr,
+    ...tally(r.formats), muxed: tally(r.muxed ?? []),
+  };
 }
 
 async function render() {
@@ -49,8 +56,12 @@ async function runAll() {
 
 async function save() {
   const results = await storedResults();
-  if (!Object.keys(results).length) throw new Error('There is nothing to save yet. Click Run all first.');
-  const label = Object.values(results).some((r) => r.loggedIn) ? 'signed-in' : 'signed-out';
+  const list = Object.values(results);
+  if (!list.length) throw new Error('There is nothing to save yet. Click Run all first.');
+  if (list.every((r) => r.error)) throw new Error('Every probe failed, so there is nothing worth saving. Reload the video tab and click Run all again.');
+  const signedIn = list.map((r) => r.loggedIn).find((v) => typeof v === 'boolean');
+  if (signedIn === undefined) throw new Error('The video page did not say whether you are signed in. Reload the video tab and click Run all again.');
+  const label = signedIn ? 'signed-in' : 'signed-out';
   const body = { label, savedAt: new Date().toISOString(), userAgent: navigator.userAgent, results };
   const url = URL.createObjectURL(new Blob([JSON.stringify(body, null, 2)], { type: 'application/json' }));
   await chrome.downloads.download({ url, filename: `sieve-spike-${label}.json`, conflictAction: 'overwrite' });
