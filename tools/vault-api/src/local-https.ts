@@ -9,7 +9,10 @@ import { handle } from './index.ts';
 import { d1FromNodeSqlite } from './__tests__/d1-fake.ts';
 
 const USAGE = `usage: node --disable-warning=ExperimentalWarning tools/vault-api/src/local-https.ts <dir> [port, default 8743]
-  <dir> is outside the repo and holds key.pem and cert.pem (self-signed, SAN 127.0.0.1); the server keeps vault.db and setup-token.txt there.
+  <dir> is outside the repo and holds key.pem and cert.pem; the server keeps vault.db and setup-token.txt there. Make the cert with a named curve
+  (Android's TLS refuses explicit EC parameters, LibreSSL's default):
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -pkeyopt ec_param_enc:named_curve -nodes -days 7 \\
+    -subj /CN=strongroom-local -addext subjectAltName=IP:127.0.0.1 -keyout <dir>/key.pem -out <dir>/cert.pem
   A device reaches it through \`adb -s <serial> reverse tcp:<port> tcp:<port>\` and a debug build made with
   -PstrongroomSyncUrl=https://127.0.0.1:<port> -PstrongroomSyncCa=<dir>/cert.pem`;
 const [dir, port = '8743'] = process.argv.slice(2);
@@ -47,4 +50,6 @@ createServer(tls, async (req, res) => {
   response.headers.forEach((v, k) => res.setHeader(k, v));
   res.writeHead(response.status).end(body);
   console.log(`${new Date().toISOString()} ${req.method} ${req.url} ${role} -> ${response.status} (${body.length} bytes)`);
-}).listen(Number(port), '127.0.0.1', () => console.log(`vault-api on https://127.0.0.1:${port}, db ${dbFile}${fresh ? ' (new)' : ''}`));
+})
+  .on('tlsClientError', (e) => console.log(`${new Date().toISOString()} TLS handshake failed: ${e.message}`))
+  .listen(Number(port), '127.0.0.1', () => console.log(`vault-api on https://127.0.0.1:${port}, db ${dbFile}${fresh ? ' (new)' : ''}`));
