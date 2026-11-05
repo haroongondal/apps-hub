@@ -24,8 +24,9 @@ export function clampZoom(pxPerS: number, durationS: number, viewPx: number): nu
   return Math.min(max, Math.max(min, pxPerS));
 }
 
-export function rulerStepS(pxPerS: number, minGapPx = 56): number {
-  return STEPS_S.find(s => s * pxPerS >= minGapPx) ?? STEPS_S[STEPS_S.length - 1];
+export function rulerStepS(pxPerS: number, minGapPx = 56, durationS = 0, maxLabels = 150): number {
+  const fits = (s: number) => s * pxPerS >= minGapPx && (!usable(durationS) || durationS / s <= maxLabels);
+  return STEPS_S.find(fits) ?? STEPS_S[STEPS_S.length - 1];
 }
 
 // Capped at 60 so a two-hour video does not ask the native side for thousands of pictures.

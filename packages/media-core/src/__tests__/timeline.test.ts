@@ -37,6 +37,11 @@ test('rulerStepS: labels stay at least 56 px apart, and a huge media does not ru
   assert.equal(rulerStepS(0.01), 600);
 });
 
+test('rulerStepS: a two-hour video zoomed all the way in still gets at most 150 labels', () => {
+  assert.equal(rulerStepS(240, 56, 7200), 60);
+  assert.equal(rulerStepS(240, 56, 60), 0.5);
+});
+
 test('thumbCount: one tile per 48 px, between 6 and 60, even for a two-hour video or a broken length', () => {
   assert.equal(thumbCount(600, 1.2), 15);
   assert.equal(thumbCount(7200, 240), 60);
