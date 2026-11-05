@@ -140,11 +140,15 @@ Run 2026-11-06 with `node apps/sieve/spike/run.mjs` (headless Chrome for Testing
   - Wrote the plan.
   - Baseline: `pnpm test` is clean.
   - The owner approved the plan; implementation starts in session 3.
+- **2026-11-06 (session 3):** subagent-driven execution. Ledger (gitignored, on disk in the
+  worktree): `.superpowers/sdd/2026-11-06-sieve/progress.md`. It holds the pre-flight rulings
+  R1 to R8, every task's commits, and the deferred minor findings for the final review.
+  - Task 0.1 done (`d1e28e9`, review fixes `ede98e7`): S1 results above.
 
 ## Current state and next step
 
-- **State:** the owner approved the plan on 2026-11-06 and asked to start implementation in a new
-  chat. No code yet. Branch `sieve` is at the handoff-baseline commit, and the worktree is clean.
+- **State:** implementation in progress (session 3). Tasks done: 0.1. Read the ledger before
+  dispatching anything; tasks with a `complete` line there are done.
   The untracked copies of this file and the design in the main checkout
   (`/Users/outsentia/Documents/apps-hub`, branch `model-host`) are stale. The worktree copies are
   the real ones.
