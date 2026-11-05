@@ -71,7 +71,7 @@ export function fetchTransport(baseUrl: string, fetchFn: typeof fetch = fetch): 
   return {
     async prelogin() {
       const r = await call('GET', '/v1/prelogin');
-      return r.status === 404 ? null : ok(r, (d) => isObj(d.kdf) && typeof d.salt === 'string' && typeof d.accountKey === 'boolean');
+      return r.status === 404 ? null : ok(r, (d) => isObj(d.kdf) && SALT.test(String(d.salt)) && typeof d.accountKey === 'boolean');
     },
     pull: async (token, since) =>
       ok(
@@ -92,6 +92,7 @@ export function fetchTransport(baseUrl: string, fetchFn: typeof fetch = fetch): 
 const UNREADABLE = 'The vault server sent a reply this device could not read. Try again later.';
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const int = (v: unknown) => Number.isSafeInteger(v);
+const SALT = /^[A-Za-z0-9+/]{22}==$/; // base64 of the header's 16-byte salt
 
 // sealed is null when the ciphertext is oversize or not base64: the row can't be read, but its id must not be uploaded over.
 export type PulledRow = { id: string; rev: number; sealed: Uint8Array | null };

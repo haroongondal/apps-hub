@@ -11,7 +11,8 @@ const login = (name: string, updatedAt: number): Entry => ({ type: 'login', name
 const tombstone = (updatedAt: number): Entry => ({ type: 'deleted', updatedAt });
 const local = (id: string, o: Partial<MergeLocal> = {}): MergeLocal => ({ id, rev: 3, dirty: true, sealed: bytes(1), entry: login('mine', T), ...o });
 const remote = (id: string, o: Partial<MergeRemote> = {}): MergeRemote => ({ id, rev: 9, sealed: bytes(2), entry: login('theirs', T), ...o });
-const EMPTY = { adopt: [], push: [], quarantine: [], blocked: [], conflicts: 0 };
+const EMPTY = { adopt: [], push: [], quarantine: [], blocked: [], rebase: [], conflicts: 0 };
+const A9 = { push: [{ id: 'a', baseRev: 9 }], rebase: [{ id: 'a', rev: 9 }] };
 
 test('remoteOnlyIsAdopted', () => {
   const r = remote('a');
@@ -31,7 +32,7 @@ test('cleanLocalTakesRemote', () => {
 
 test('laterEditWins', () => {
   const older = remote('a', { entry: login('theirs', T) });
-  assert.deepEqual(planMerge([local('a', { entry: login('mine', T + 5) })], [older]), { ...EMPTY, push: [{ id: 'a', baseRev: 9 }], conflicts: 1 });
+  assert.deepEqual(planMerge([local('a', { entry: login('mine', T + 5) })], [older]), { ...EMPTY, ...A9, conflicts: 1 });
   const newer = remote('a', { entry: login('theirs', T + 5) });
   assert.deepEqual(planMerge([local('a', { entry: login('mine', T) })], [newer]), { ...EMPTY, adopt: [newer], conflicts: 1 });
 });
@@ -39,21 +40,13 @@ test('laterEditWins', () => {
 test('tombstoneWinsOnEqualTime', () => {
   const gone = remote('a', { entry: tombstone(T) });
   assert.deepEqual(planMerge([local('a', { entry: login('mine', T) })], [gone]), { ...EMPTY, adopt: [gone], conflicts: 1 });
-  assert.deepEqual(planMerge([local('a', { entry: tombstone(T) })], [remote('a', { entry: login('theirs', T) })]), {
-    ...EMPTY,
-    push: [{ id: 'a', baseRev: 9 }],
-    conflicts: 1,
-  });
+  assert.deepEqual(planMerge([local('a', { entry: tombstone(T) })], [remote('a', { entry: login('theirs', T) })]), { ...EMPTY, ...A9, conflicts: 1 });
   const same = remote('a', { entry: login('theirs', T) });
   assert.deepEqual(planMerge([local('a', { entry: login('mine', T) })], [same]), { ...EMPTY, adopt: [same], conflicts: 1 });
 });
 
 test('editNewerThanTombstoneWins', () => {
-  assert.deepEqual(planMerge([local('a', { entry: login('mine', T + 1) })], [remote('a', { entry: tombstone(T) })]), {
-    ...EMPTY,
-    push: [{ id: 'a', baseRev: 9 }],
-    conflicts: 1,
-  });
+  assert.deepEqual(planMerge([local('a', { entry: login('mine', T + 1) })], [remote('a', { entry: tombstone(T) })]), { ...EMPTY, ...A9, conflicts: 1 });
   const edit = remote('a', { entry: login('theirs', T + 1) });
   assert.deepEqual(planMerge([local('a', { entry: tombstone(T) })], [edit]), { ...EMPTY, adopt: [edit], conflicts: 1 });
 });
@@ -71,8 +64,10 @@ test('readableLocalBeatsUndecryptableRemote', () => {
 
 test('unreadableLocalIsKeptAndReported', () => {
   for (const dirty of [true, false]) {
-    assert.deepEqual(planMerge([local('b', { entry: null, dirty })], [remote('b')]), { ...EMPTY, blocked: ['b'] });
+    assert.deepEqual(planMerge([local('b', { entry: null, dirty })], [remote('b')]), { ...EMPTY, blocked: ['b'], rebase: [{ id: 'b', rev: 9 }] });
+    assert.deepEqual(planMerge([local('b', { entry: null, dirty, rev: 9 })], [remote('b')]), { ...EMPTY, blocked: ['b'] });
     assert.deepEqual(planMerge([local('c', { entry: null, dirty })], []), { ...EMPTY, blocked: ['c'] });
+    // Not rebased onto a remote it can't read either, so the quarantine still stops a later rewrite from uploading over it.
     const bad = remote('d', { entry: null });
     assert.deepEqual(planMerge([local('d', { entry: null, dirty })], [bad]), { ...EMPTY, quarantine: [bad], blocked: ['d'] });
   }
@@ -82,7 +77,7 @@ test('neverDeletesAnything', () => {
   const locals = [local('a', { dirty: false }), local('b'), local('c', { entry: tombstone(T + 1) }), local('d', { entry: null })];
   const remotes = [remote('b', { entry: tombstone(T + DAY) }), remote('e', { entry: null }), remote('f', { entry: tombstone(T) })];
   const plan = planMerge(locals, remotes);
-  assert.deepEqual(Object.keys(plan).sort(), ['adopt', 'blocked', 'conflicts', 'push', 'quarantine']);
+  assert.deepEqual(Object.keys(plan).sort(), ['adopt', 'blocked', 'conflicts', 'push', 'quarantine', 'rebase']);
   for (const r of plan.adopt) assert.ok(remotes.includes(r));
   const touched = new Set([...plan.adopt.map((r) => r.id), ...plan.push.map((p) => p.id), ...plan.blocked]);
   assert.deepEqual([...touched].sort(), ['b', 'c', 'd', 'e', 'f']);

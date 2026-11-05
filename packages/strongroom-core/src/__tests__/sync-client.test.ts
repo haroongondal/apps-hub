@@ -294,6 +294,22 @@ test('shortenedOversizeWinnerPushesOnTheRemoteBase', async () => {
   assert.deepEqual([second.pushed, second.blocked, store.records.get(id(1))?.dirty], [1, 0, false]);
 });
 
+test('unreadableLocalIsRebasedSoALaterRewritePushes', async () => {
+  const s = server();
+  s.put(id(1), await seal(1, login('v1', T)));
+  const store = await device(1);
+  const garbage = randomBytes(60);
+  store.records.set(id(1), { sealed: garbage, rev: 1, dirty: false });
+  s.put(id(1), await seal(1, login('theirs', T + 1)));
+  const first = await sync(store, s.t);
+  assert.deepEqual([first.blocked, first.pulled, store.meta.lastRev], [1, 0, 2]);
+  assert.deepEqual(store.records.get(id(1)), { sealed: garbage, rev: 2, dirty: false });
+  await store.commit({ records: [{ id: id(1), sealed: await seal(1, login('rewritten', T + 5)) }] });
+  const second = await sync(store, s.t);
+  assert.deepEqual([second.pushed, second.blocked, second.conflicts], [1, 0, 0]);
+  assert.deepEqual(s.calls.slice(-1), ['push 01@2']);
+});
+
 test('unreadableLocalSurvivesAPull', async () => {
   const s = server();
   const store = await device();
@@ -304,5 +320,5 @@ test('unreadableLocalSurvivesAPull', async () => {
   s.put(id(1), await seal(1));
   const report = await sync(store, s.t);
   assert.deepEqual([report.pulled, report.pushed, report.blocked], [1, 0, 2]);
-  assert.deepEqual([store.records.get(id(1)), store.records.get(id(2))], [{ sealed: x, rev: 1, dirty: false }, { sealed: y, rev: 1, dirty: true }]);
+  assert.deepEqual([store.records.get(id(1)), store.records.get(id(2))], [{ sealed: x, rev: 2, dirty: false }, { sealed: y, rev: 1, dirty: true }]);
 });

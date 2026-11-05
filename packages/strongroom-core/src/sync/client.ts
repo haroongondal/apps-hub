@@ -49,7 +49,7 @@ export async function syncOnce(d: { store: SyncStore; transport: Transport; vaul
       headerRev: sameHeader ? pulled.headerRev : meta.headerRev,
       records: plan.adopt.map(row),
       quarantine: plan.quarantine.map(row),
-      rebase: plan.push.map((p) => ({ id: p.id, rev: p.baseRev })),
+      rebase: plan.rebase,
       lastRev: pulled.latestRev,
     });
     report.pulled += plan.adopt.length;
