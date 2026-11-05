@@ -1,4 +1,4 @@
-import { barsFor, clampZoom, formatClock, moveEdge, rulerStepS, snapTenth, zoomLimits, type Range } from '@apps-hub/media-core';
+import { barsFor, clampZoom, formatClock, lastFrameS, moveEdge, rulerStepS, snapTenth, zoomLimits, type Range } from '@apps-hub/media-core';
 import { Button, Text, alpha, radius, space, useTheme } from '@apps-hub/ui';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -20,6 +20,7 @@ export interface RangeStripProps {
   range: Range;
   onRange: (r: Range) => void;
   onPlayhead: (s: number) => void;
+  seekS?: number; // a time typed elsewhere: the strip scrolls to it when it is not already there
 }
 
 const Bars = memo(function Bars({ bars, color }: { bars: number[]; color: string }) {
@@ -57,7 +58,7 @@ const Film = memo(function Film({ tiles, trackW, pad }: { tiles: string[]; track
   );
 });
 
-export function RangeStrip({ uri, durationS, hasVideo, hasSound, mode, range, onRange, onPlayhead }: RangeStripProps) {
+export function RangeStrip({ uri, durationS, hasVideo, hasSound, mode, range, onRange, onPlayhead, seekS }: RangeStripProps) {
   const { c } = useTheme();
   const [viewW, setViewW] = useState(0);
   const [zoom, setZoom] = useState<number>();
@@ -73,7 +74,7 @@ export function RangeStrip({ uri, durationS, hasVideo, hasSound, mode, range, on
   const limits = zoomLimits(durationS, viewW);
   const pad = viewW / 2;
   const trackW = (Number.isFinite(durationS) ? durationS : 0) * px;
-  const { tiles, peaks } = useStripMedia(uri, durationS, hasVideo, hasSound, px);
+  const { tiles, peaks } = useStripMedia(uri, durationS, hasVideo, hasSound, px, viewW > 0);
 
   const live = useRef({ range, durationS, px, onRange });
   live.current = { range, durationS, px, onRange };
@@ -100,8 +101,16 @@ export function RangeStrip({ uri, durationS, hasVideo, hasSound, mode, range, on
     return () => cancelAnimationFrame(id);
   }, [px]);
 
+  useEffect(() => {
+    if (seekS === undefined || Math.abs(seekS - playhead.current) < 0.05) return;
+    playhead.current = seekS;
+    setHeadS(seekS);
+    scroller.current?.scrollTo({ x: seekS * live.current.px, animated: false });
+  }, [seekS]);
+
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const t = snapTenth(Math.min(Math.max(e.nativeEvent.contentOffset.x / px, 0), durationS));
+    const last = mode === 'point' ? lastFrameS(durationS) : durationS;
+    const t = snapTenth(Math.min(Math.max(e.nativeEvent.contentOffset.x / px, 0), last));
     if (t === playhead.current) return;
     playhead.current = t;
     setHeadS(t);
@@ -126,7 +135,7 @@ export function RangeStrip({ uri, durationS, hasVideo, hasSound, mode, range, on
     setPinching(false);
   };
 
-  const barCount = Math.min(Math.floor(trackW / 3), 800);
+  const barCount = [100, 200, 400, 800].find(n => n * 3 >= trackW) ?? 800;
   const bars = useMemo(() => barsFor(peaks, barCount), [peaks, barCount]);
   const top = HEAD_H + RULER_H;
   const body = FILM_H + (bars.length ? WAVE_H + space.xs : 0);

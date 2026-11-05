@@ -14,7 +14,7 @@ import java.nio.ByteOrder
 // Read-only: the file is opened for reading and decoded in memory; nothing is written anywhere.
 object Waveform {
   private const val WAIT_US = 10_000L
-  private const val STALL_POLLS = 500 // 5 s of nothing coming out after the last input
+  private const val STALL_POLLS = 500 // about 10 s in which the decoder neither took input nor gave output
 
   // Peak 0..1 per slice of the first sound track, or an empty list when the file has none.
   fun peaks(context: Context, uri: Uri, buckets: Int): List<Float> {
@@ -42,6 +42,7 @@ object Waveform {
         if (!inputDone) {
           val i = decoder.dequeueInputBuffer(WAIT_US)
           if (i >= 0) {
+            stalled = 0
             val n = extractor.readSampleData(checkNotNull(decoder.getInputBuffer(i)), 0)
             if (n < 0) {
               decoder.queueInputBuffer(i, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
@@ -69,7 +70,7 @@ object Waveform {
           }
           decoder.releaseOutputBuffer(o, false)
           if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
-        } else if (inputDone && ++stalled > STALL_POLLS) {
+        } else if (++stalled > STALL_POLLS) {
           throw IllegalStateException("The sound stopped decoding.")
         }
       }
@@ -93,14 +94,16 @@ object Waveform {
     else -> throw IllegalStateException("This sound format cannot be drawn.")
   }
 
+  // The strip lays the bars over the whole file's length (what probe reports), so slice that, not the sound track's own length.
   private fun durationUs(context: Context, uri: Uri, format: MediaFormat): Long {
-    if (format.containsKey(MediaFormat.KEY_DURATION)) return format.getLong(MediaFormat.KEY_DURATION)
     val retriever = MediaMetadataRetriever()
-    try {
+    val container = try {
       retriever.setDataSource(context, uri)
-      return (retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L) * 1000
+      (retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L) * 1000
     } finally {
       retriever.release()
     }
+    if (container > 0) return container
+    return if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 0L
   }
 }

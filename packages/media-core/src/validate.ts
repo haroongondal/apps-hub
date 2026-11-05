@@ -117,5 +117,5 @@ function n(x: unknown): number {
 function inSpan(s: Record<string, unknown>, info: MediaInfo): boolean {
   const start = n(s.startS);
   const end = n(s.endS);
-  return start >= 0 && end - start >= 0.1 && end <= info.durationS + 0.05;
+  return start >= 0 && Math.round((end - start) * 10) >= 1 && end <= info.durationS + 0.05;
 }

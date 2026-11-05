@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { barsFor, clampZoom, moveEdge, rulerStepS, thumbCount, thumbTimes, zoomLimits } from '../timeline.ts';
+import { barsFor, clampZoom, lastFrameS, moveEdge, rulerStepS, thumbCount, thumbTimes, zoomLimits } from '../timeline.ts';
 
 test('moveEdge: the start stops a tenth before the end, and snaps to tenths', () => {
   assert.deepEqual(moveEdge({ startS: 0, endS: 10 }, 'start', 12, 10), { startS: 9.9, endS: 10 });
@@ -48,6 +48,15 @@ test('thumbCount: one tile per 48 px, between 6 and 60, even for a two-hour vide
   assert.equal(thumbCount(2, 1), 6);
   assert.equal(thumbCount(0, 50), 6);
   assert.equal(thumbCount(NaN, 50), 6);
+});
+
+test('lastFrameS: the last tenth strictly inside the media, so Save a picture never asks for the very end', () => {
+  assert.equal(lastFrameS(13), 12.9);
+  assert.equal(lastFrameS(12.96), 12.9);
+  assert.equal(lastFrameS(12.91), 12.9);
+  assert.equal(lastFrameS(0.05), 0);
+  assert.equal(lastFrameS(0), 0);
+  assert.equal(lastFrameS(NaN), 0);
 });
 
 test('thumbTimes: the middle of each equal slice', () => {

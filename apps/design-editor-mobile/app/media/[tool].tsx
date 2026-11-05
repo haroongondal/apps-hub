@@ -5,7 +5,7 @@ import {
 } from '@apps-hub/media-core';
 import { Button, Field, Group, Header, Notice, Pill, Readout, Row, Screen, Segmented, radius, useTheme } from '@apps-hub/ui';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image } from 'react-native';
 
 import { plainError } from '../../src/media/errors';
@@ -26,6 +26,7 @@ export default function ToolSetup() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [playheadS, setPlayheadS] = useState(0);
+  const [pick, setPick] = useState(0);
   const [keyframe, setKeyframe] = useState<number | undefined>();
   const [correction, setCorrection] = useState(1);
   // options
@@ -73,6 +74,7 @@ export default function ToolSetup() {
       if (!files.length || single) { // a second pick keeps the choices already made
         const first = picked[0];
         setPlayheadS(0);
+        setPick(n => n + 1);
         setStart('0:00.0'); setEnd(timeText(Math.min(first.durationS, def.key === 'gif' ? 10 : first.durationS)));
       }
     } catch (e) { setError(say(e)); }
@@ -92,7 +94,13 @@ export default function ToolSetup() {
   [info, def.key, how, targetBytes, quality, smaller, start, end, cut, skipped, gifWidth, gifFps, gifMb, kind, muted, format, louder, withSound, level, keyframe, correction]);
 
   const endS = parseTime(end);
-  const range = startS !== undefined && endS !== undefined && endS > startS ? { startS, endS } : { startS: 0, endS: info?.durationS ?? 0 };
+  const length = info?.durationS ?? 0;
+  const typed = startS !== undefined && endS !== undefined && endS > startS && startS < length
+    ? { startS: Math.max(0, startS), endS: Math.min(endS, length) }
+    : undefined;
+  const lastRange = useRef({ startS: 0, endS: length });
+  if (typed) lastRange.current = typed;
+  const range = typed ?? lastRange.current; // while a box holds something that is not a time, the strip keeps the last good range
 
   const refusal = planned.find(p => !p.ok);
   const first = planned[0]?.ok ? planned[0].plan : undefined;
@@ -158,15 +166,16 @@ export default function ToolSetup() {
             <Group title={def.key === 'picture' ? 'Moment' : 'Range'}>
               {frame ? <Image source={{ uri: frame }} resizeMode="contain" accessibilityLabel="The picture at the line" style={{ height: 200, borderRadius: radius.control, backgroundColor: c.raised }} /> : null}
               <RangeStrip
-                key={info.id}
+                key={`${info.id}-${pick}`}
                 uri={info.id}
                 durationS={info.durationS}
                 hasVideo={info.tracks.some(t => t.kind === 'video')}
                 hasSound={info.tracks.some(t => t.kind === 'audio')}
                 mode={def.key === 'picture' ? 'point' : 'range'}
                 range={range}
-                onRange={r => { setStart(timeText(r.startS)); setEnd(timeText(r.endS)); }}
+                onRange={r => { if (r.startS !== range.startS) setStart(timeText(r.startS)); if (r.endS !== range.endS) setEnd(timeText(r.endS)); }}
                 onPlayhead={t => { setPlayheadS(t); if (def.key === 'picture') setStart(timeText(t)); }}
+                seekS={def.key === 'picture' ? startS : undefined}
               />
               {def.key !== 'picture' ? <Row title={`Keeps ${timeText(range.endS - range.startS)}`} subtitle={`From ${timeText(range.startS)} to ${timeText(range.endS)}`} /> : null}
               <Field label={def.key === 'picture' ? 'Time (m:ss.s)' : 'Start (m:ss.s)'} value={start} onChangeText={setStart} />

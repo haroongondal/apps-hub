@@ -51,7 +51,8 @@
   export function moveEdge(range: Range, edge: 'start' | 'end', toS: number, durationS: number, minS?: number): Range;
   export function zoomLimits(durationS: number, viewPx: number): { min: number; max: number };
   export function clampZoom(pxPerS: number, durationS: number, viewPx: number): number;
-  export function rulerStepS(pxPerS: number, minGapPx?: number): number;
+  export function rulerStepS(pxPerS: number, minGapPx?: number, durationS?: number, maxLabels?: number): number; // at most 150 labels
+  export function lastFrameS(durationS: number): number; // last tenth strictly inside the media (the frame rule needs t < duration)
   export function thumbCount(durationS: number, pxPerS: number, tilePx?: number): number;
   export function thumbTimes(durationS: number, count: number): number[];
   export function barsFor(peaks: number[], count: number): number[];
@@ -88,7 +89,7 @@
   waveform(uri: string, buckets: number): Promise<number[]>; // peak 0..1 per slice, [] when there is no sound
   previewFrame(uri: string, timeS: number, width: number): Promise<string>; // file:// JPEG, replaced by the next call
   ```
-- Module: `AsyncFunction("waveform") { uri: String, buckets: Int -> Waveform.peaks(context, Uri.parse(uri), buckets.coerceIn(8, 2000)) }` and `AsyncFunction("previewFrame") { uri: String, timeS: Double, width: Int -> Thumbs.write(context, Uri.parse(uri), listOf(timeS), width, "preview").first() }`.
+- Module: `AsyncFunction("waveform") { uri: String, buckets: Int -> Waveform.peaks(context, Uri.parse(uri), buckets.coerceIn(8, 2000)) }` and `AsyncFunction("previewFrame") { uri: String, timeS: Double, width: Int -> Thumbs.write(context, Uri.parse(uri), listOf(timeS), width, "preview").first() }`. All three media reads (`thumbnails` too) end in `.runOnQueue(readScope)` with `readScope = CoroutineScope(Dispatchers.IO + SupervisorJob())`, because Expo's default queue is one thread shared by every module. `Thumbs.write` takes a lock per folder. `waveform` slices over the container duration (what `probe` reports), not the sound track's own.
 
 - [ ] **Step 1: Write `PeaksTest.kt`**: 10 s mono at 8000 Hz, loud (16384) only from 2.0 s to 3.0 s, 10 buckets: bucket 2 is `0.5`, every other bucket `0`; the same signal as interleaved stereo with the loud samples on the right channel only gives the same result; a sample at 12 s lands in the last bucket; `PeakBuckets(0, 4).result()` is four zeros; `PeakBuckets(1_000_000, 0).result().size` is `1`.
 - [ ] **Step 2: Run** `cd apps/design-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew :design-media:testDebugUnitTest --tests '*PeaksTest'`. Expected: FAIL, unresolved `PeakBuckets`.
@@ -106,17 +107,17 @@
 **Interfaces:**
 - Produces:
   ```ts
-  // latest.ts: wraps promises so only the most recently started one resolves with its value; older ones resolve undefined.
-  export function createLatest<T>(): (p: Promise<T>) => Promise<T | undefined>;
+  // latest.ts: one request at a time (the native reads cannot be cancelled); while one runs only the newest later request is kept, and a stale answer is dropped.
+  export function singleFlight<A, T>(run: (arg: A) => Promise<T>, done: (value: T, arg: A) => void, failed?: (error: unknown, arg: A) => void): (arg: A) => void;
   // useStripMedia.ts
-  export function useStripMedia(uri: string, durationS: number, hasVideo: boolean, hasSound: boolean, pxPerS: number): { tiles: string[]; peaks: number[] };
+  export function useStripMedia(uri: string, durationS: number, hasVideo: boolean, hasSound: boolean, pxPerS: number, ready: boolean): { tiles: string[]; peaks: number[] }; // ready is false until the strip knows its width
   // usePreviewFrame.ts: waits 120 ms after the last change, then asks DesignMedia.previewFrame(uri, timeS, 480).
   export function usePreviewFrame(uri: string | undefined, timeS: number): string | undefined;
   ```
 
-- [ ] **Step 1: Write the failing test** `latest.test.ts`: start A (resolves after 20 ms) then B (resolves at once); `await` both; A is `undefined`, B is its value. A rejected older promise also resolves `undefined`; a rejected newest promise rejects.
+- [ ] **Step 1: Write the failing test** `latest.test.ts`: call a, b, c while a runs: only a then c run, a's answer is dropped, c's is delivered; a lone answer is delivered with its argument; a failure is reported only when nothing newer waits.
 - [ ] **Step 2: Run** `node --test apps/design-editor-mobile/src/__tests__/latest.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** `latest.ts`; then `useStripMedia`: tiles from `DesignMedia.thumbnails(uri, thumbTimes(durationS, thumbCount(durationS, pxPerS)), 160)` re-requested 300 ms after the zoom bucket changes, keeping the old tiles until the new ones arrive and showing none on failure; peaks from `DesignMedia.waveform(uri, 400)` once, `[]` on failure or `hasSound` false. `usePreviewFrame` uses `createLatest` and keeps the last frame while the next loads.
+- [ ] **Step 3: Implement** `latest.ts`; then `useStripMedia`: tiles from `DesignMedia.thumbnails(uri, thumbTimes(durationS, thumbCount(durationS, pxPerS)), 160)` re-requested 300 ms after the zoom bucket changes, keeping the old tiles until the new ones arrive and showing none on failure; peaks from `DesignMedia.waveform(uri, 400)` once, `[]` on failure or `hasSound` false. `usePreviewFrame` uses `singleFlight` and keeps the last frame while the next loads.
 - [ ] **Step 4: Run** the test and `pnpm --filter design-editor-mobile typecheck`. Expected: PASS.
 - [ ] **Step 5: Commit** `git add apps/design-editor-mobile/src apps/design-editor-mobile/package.json && git commit -m "Design Editor timeline: latest-only helper and strip media hooks"`.
 
@@ -134,12 +135,13 @@
     mode: 'range' | 'point';
     range: Range;
     onRange: (r: Range) => void;
-    onPlayhead: (s: number) => void; // tenths, after every scroll
+    onPlayhead: (s: number) => void; // tenths, after every scroll; in 'point' mode never past lastFrameS
+    seekS?: number; // a time typed elsewhere: the strip scrolls to it when it is not already there
   }
   export function RangeStrip(props: RangeStripProps): JSX.Element;
   ```
 
-- [ ] **Step 1: Implement** the layout: a ruler row (labels every `rulerStepS(pxPerS)`), a horizontal `ScrollView` whose content is `[half-view padding][durationS * pxPerS wide track][half-view padding]` so `scrollX / pxPerS` is the time under the fixed playhead (a full-height line in `c.text` with a time label above it), a filmstrip of equal-width tiles with `Image`, and under it the waveform as bars from `barsFor(peaks, min(floor(trackWidth / 3), 800))` coloured `c.accent` inside the range and `c.muted` outside. No waveform row when `peaks` is empty. A loading placeholder in `c.raised` while tiles are absent.
+- [ ] **Step 1: Implement** the layout: a ruler row (labels every `rulerStepS(pxPerS)`), a horizontal `ScrollView` whose content is `[half-view padding][durationS * pxPerS wide track][half-view padding]` so `scrollX / pxPerS` is the time under the fixed playhead (a full-height line in `c.text` with a time label above it), a filmstrip of equal-width tiles with `Image`, and under it the waveform as bars from `barsFor(peaks, n)` with `n` the first of 100, 200, 400, 800 whose bars are at least 3 px apart over the track coloured `c.accent` inside the range and `c.muted` outside. No waveform row when `peaks` is empty. A loading placeholder in `c.raised` while tiles are absent.
 - [ ] **Step 2: Handles** (range mode only): two `PanResponder` handles 14 dp wide, with a 48 dp touch area, positioned inside the scrolling content at `range.startS * pxPerS` and `range.endS * pxPerS`; dragging calls `onRange(moveEdge(range, edge, startTimeAtGrant + dx / pxPerS, durationS))`; the `ScrollView` has `scrollEnabled` off while a handle is held; dimming overlays in `c.bg` at 65 percent outside the range and a 2 dp `c.accent` border around it. Accessibility labels in plain words: "Start of the part to keep" and "End of the part to keep".
 - [ ] **Step 3: Zoom**: `pxPerS` state starts at `clampZoom(durationS > 8 ? viewPx / 8 : viewPx / durationS, ...)`; two buttons "Zoom out" and "Zoom in" (each multiplies by 1.5 and clamps); a two-finger pinch handled with `onTouchMove` on the wrapper View using the distance between `nativeEvent.touches`; after a zoom change the scroll offset is set so the playhead time stays put.
 - [ ] **Step 4: Buttons** below the strip in range mode: "Start here" and "End here" set the edge to the playhead through `moveEdge`.

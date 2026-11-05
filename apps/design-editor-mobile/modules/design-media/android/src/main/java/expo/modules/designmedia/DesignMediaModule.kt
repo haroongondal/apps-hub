@@ -17,8 +17,13 @@ import expo.modules.designmedia.core.toStatusMap
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 class DesignMediaModule : Module() {
+  private val readScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
   private val context
     get() = requireNotNull(appContext.reactContext) { "React context unavailable" }
 
@@ -39,13 +44,19 @@ class DesignMediaModule : Module() {
 
     AsyncFunction("keyframeAtOrBefore") { uri: String, timeS: Double -> Probe.keyframeAtOrBefore(context, Uri.parse(uri), timeS) }
 
-    AsyncFunction("thumbnails") { uri: String, timesS: List<Double>, width: Int -> Thumbs.write(context, Uri.parse(uri), timesS, width) }
+    // The default queue is one thread shared by every Expo module, so a sixty-tile filmstrip or a long sound decode
+    // would hold up the file picker and Start; these three read media on their own threads.
+    AsyncFunction("thumbnails") { uri: String, timesS: List<Double>, width: Int ->
+      Thumbs.write(context, Uri.parse(uri), timesS, width)
+    }.runOnQueue(readScope)
 
-    AsyncFunction("waveform") { uri: String, buckets: Int -> Waveform.peaks(context, Uri.parse(uri), buckets.coerceIn(8, 2000)) }
+    AsyncFunction("waveform") { uri: String, buckets: Int ->
+      Waveform.peaks(context, Uri.parse(uri), buckets.coerceIn(8, 2000))
+    }.runOnQueue(readScope)
 
     AsyncFunction("previewFrame") { uri: String, timeS: Double, width: Int ->
       Thumbs.write(context, Uri.parse(uri), listOf(timeS), width, "preview").first()
-    }
+    }.runOnQueue(readScope)
 
     AsyncFunction("codecReport") { CodecReport.list() }
 

@@ -1,21 +1,25 @@
 import DesignMedia from 'design-media';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { createLatest } from './latest';
+import { singleFlight } from './latest';
 
 export function usePreviewFrame(uri: string | undefined, timeS: number): string | undefined {
   const [frame, setFrame] = useState<string>();
-  const latest = useRef(createLatest<string>()).current;
+  const current = useRef(uri);
+  current.current = uri;
+
+  const ask = useMemo(() => singleFlight(
+    (a: { uri: string; timeS: number }) => DesignMedia.previewFrame(a.uri, a.timeS, 480),
+    (f, a) => { if (a.uri === current.current) setFrame(f); },
+  ), []);
 
   useEffect(() => { setFrame(undefined); }, [uri]);
 
   useEffect(() => {
     if (!uri) return;
-    const timer = setTimeout(() => {
-      latest(DesignMedia.previewFrame(uri, timeS, 480)).then(f => { if (f) setFrame(f); }, () => undefined);
-    }, 120);
+    const timer = setTimeout(() => ask({ uri, timeS }), 120);
     return () => clearTimeout(timer);
-  }, [uri, timeS, latest]);
+  }, [uri, timeS, ask]);
 
   return frame;
 }

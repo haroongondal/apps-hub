@@ -14,6 +14,11 @@ export function moveEdge(range: Range, edge: 'start' | 'end', toS: number, durat
   return { startS: range.startS, endS: snapTenth(Math.max(Math.min(toS, durationS), range.startS + minS)) };
 }
 
+// The frame rule in validate.ts needs a time strictly before the end.
+export function lastFrameS(durationS: number): number {
+  return usable(durationS) ? Math.max(0, Math.floor((durationS - 1e-6) * 10) / 10) : 0;
+}
+
 export function zoomLimits(durationS: number, viewPx: number): { min: number; max: number } {
   if (!usable(durationS) || !(viewPx > 0)) return { min: 1, max: MAX_PX_PER_S };
   return { min: Math.min(viewPx / durationS, MAX_PX_PER_S), max: MAX_PX_PER_S };
