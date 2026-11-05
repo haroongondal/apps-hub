@@ -2,17 +2,18 @@
 
 ## Resume prompt
 
-Dated 2026-11-03 (sixth session). Work only in the worktree
+Dated 2026-11-06 (seventh session). Work only in the worktree
 `/Users/outsentia/Documents/apps-hub/.claude/worktrees/strongroom-phase-1`.
 Its branch `strongroom-phase-1` was recreated from `origin/main` (146db86) on
 2026-11-03 because the old branch was deleted after PR #7 merged; it has no
 upstream on purpose, so never `git push` from it without naming the remote
 branch. Read `docs/handoffs/strongroom.md` completely first, then
 `docs/strongroom/DESIGN.md`. The Phase 1 work and its releases are done (0.1.1,
-versionCode 7, is in the Store and on the phone). The open problem is the one
-under "Current state + exact next step", item 1: a fill request is queued but
-never reaches Strongroom's service within Android's 5 s, after a login form is
-submitted. Trust the verified facts and decisions in the handoff and don't redo
+versionCode 7, is in the Store and on the phone). The open problem is the one under "Current state + exact next step", item 1a.
+Its root cause is now proven (autofill rebinds into an idle process and HyperOS
+never completes that bind; see item 1a) and the Phase 2 fix — a foreground
+keep-alive service — is on this branch (commit 6ebbe3d) with all gates green.
+Still open: a Store release (owner's word) and the phone save test. Trust the verified facts and decisions in the handoff and don't redo
 that work. Use superpowers:systematic-debugging first (evidence before a fix),
 then superpowers:subagent-driven-development for code changes (implementer and
 task-reviewer, a review after every change, explicit models), ledgering every
@@ -120,6 +121,23 @@ no password generator / CSV export / card saving in v1.
 - **Sandbox:** compound shell commands that mix adb with variables, pipes into
   other interpreters, or globbed URLs get refused as unverifiable; split them
   into plain commands and quote URLs.
+- **1a root cause (AOSP sources, 2026-11-06):** autofill's `RemoteFillService`
+  unbinds 5 s after an idle answer (`TIMEOUT_IDLE_BIND_MILLIS = 5s`) and every
+  fill request carries its own 5 s timer (`TIMEOUT_REMOTE_REQUEST_MILLIS = 5s`),
+  so a fill after a quiet stretch is a fresh bind; source copies live in the
+  session scratchpad (`strongroom-p1/aosp/` under the opencode temp dir).
+- **Phone read-only post-mortem (2026-11-06, USB, `adb -s 49kjmnuwonkffqzh`):**
+  standby bucket 10 (ACTIVE), `RUN_ANY_IN_BACKGROUND: allow`, no battery
+  whitelist, no appops block, no Strongroom process running at the time;
+  empirically nothing in Android's own battery machinery was blocking the app,
+  which narrowed 1a to HyperOS's Greeze/SmartPower wedge of the rebind.
+- **Emulator launch this session:** unaided launches SIGSEGV'd (crashpad
+  `child_port_handshake` check-in error, "Downloaded protobuf file is corrupt");
+  booting worked only via the harness background shell with stale AVD locks
+  (`hardware-qemu.ini.lock`, `multiinstance.lock`) and `SDK emulator crashreport/`
+  cleared plus `-no-window -no-audio -no-snapshot -gpu swiftshader_indirect`
+  (53 s boot). No emulator testing was allowed this session (owner: "dont test
+  it in emulator").
 
 ## File map
 
@@ -248,6 +266,31 @@ no password generator / CSV export / card saving in v1.
     254 JVM tests / 0 failures + `:app:assembleDebug`. Release APK: no
     `android.permission.INTERNET`; `dataExtractionRules=@xml/data_extraction_rules`,
     and the rules XML is in the APK.
+- 2026-11-06 (seventh session): 1a root-caused, then the Phase 2 fix
+  implemented via SDD (implementer task → reviewer task → fixes). Evidence
+  chain: phone logcat window 16:06.56–16:16.15 (requests 1372/1374 queued,
+  no `onFillRequest`, zero `calling onFillRequest()` anywhere,
+  `AndroidFuture.triggerTimeout` at 5.001 s, `mResponseStatus=4`, the connector
+  queue wedged with `mService == null` while still binding), AOSP
+  `RemoteFillService` sources (the 5 s idle unbind makes the 16:07 fill a fresh
+  bind into the idle process; nothing app-side ever ran — the "2 ms zero
+  items" on 1372 is the superseded-cancel artifact, and `AuthRequest.answerOnce`
+  audited clean), and the earlier AOSP control runs on the emulator (a fresh
+  bind into a frozen process dispatches in ~125 ms and shows the Save dialog,
+  so the wedge is MIUI's). Fix: `KeepAliveService` (FGS `specialUse`,
+  `START_STICKY`, silent IMPORTANCE_LOW notification) started from
+  `VaultHolder.afterUnlock` (covers app password, fingerprint, autofill
+  `UnlockActivity`, setup and recovery) while the `keepAliveEnabled` pref
+  (default on) allows it; module gains `setKeepAlive` and
+  `getStatus.keepAliveEnabled`; Settings gains the toggle (with a
+  POST_NOTIFICATIONS request) and a Xiaomi "battery saver → No restrictions"
+  row; SRDBG logs reverted. Reviewer findings fixed: an out-of-scope
+  `tsconfig.json` edit reverted; channel importance MIN → LOW. Gates:
+  `:strongroom-vault:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL,
+  `pnpm typecheck` exit 0, `pnpm test` exit 0 (12 suites). Code commit
+  `6ebbe3d`. The owner blocked all emulator testing ("dont test it in
+  emulator"), so verification is the phone save test after a Store release
+  (which needs the owner's word).
 
 **The owner's phone is attached over wifi adb.** Every adb/expo command must
 target the emulator explicitly (`-s emulator-5554`). After Task 12, emulator-5554's
@@ -496,10 +539,20 @@ order (ledger "Post-plan work" has the rulings and P-briefs):
    Save and Update checks are still untested. Phone state: 0.1.1 versionCode 7;
    Strongroom is the autofill service; the vault is unlocked; no test entry was
    saved; Chrome is on the practice login page; verbose autofill logging is on.
-   Next: read `RemoteFillService` / `onFillRequest` in the logs for both ids,
-   find where the request stops (binding, `strongroom-fill` thread, a callback
-   that never runs), reproduce on `emulator-5556` with a warm process and a
-   form submit, fix the root cause, then repeat the phone save test.
+   **Root cause + fix (2026-11-06, seventh session).** Android unbinds an
+   idle autofill service 5 s after it answers (`RemoteFillService`,
+   `TIMEOUT_IDLE_BIND_MILLIS = 5s`; each request also carries its own
+   `TIMEOUT_REMOTE_REQUEST_MILLIS = 5s`), so the 16:07 fill was a fresh bind
+   into the idle Strongroom process. On the phone that rebind queued and
+   `onServiceConnected` never arrived within the 5 s window (HyperOS Greeze
+   wedging the frozen process); the app was never invoked, and the evidence
+   and control runs are listed in the 2026-11-06 session-log entry. Fix:
+   `KeepAliveService`, a foreground service (`specialUse`, `START_STICKY`,
+   silent IMPORTANCE_LOW notification) started on every vault unlock when the
+   `keepAliveEnabled` pref (default on) allows it, plus the Settings toggle,
+   a POST_NOTIFICATIONS request and a Xiaomi battery-unrestricted row
+   (commit `6ebbe3d`). Gates green; no emulator testing (owner's word). Next:
+   owner's word to release via the Store, then repeat the phone save test.
 2a. **Phone check 2026-11-03 15:44 (controller, adb, 0.1.1 versionCode 7 from the
    Store, Strongroom still the autofill service):** PASS cold fill. Strongroom
    had no process; Chrome on https://the-internet.herokuapp.com/login, tap
