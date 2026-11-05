@@ -30,6 +30,8 @@ export interface DesignMediaModule {
   // Phase 4 (SPEC §7.1). None of these ever deletes an output file (data-safety rule 1).
   keyframeAtOrBefore(uri: string, timeS: number): Promise<number>;
   thumbnails(uri: string, timesS: number[], width: number): Promise<string[]>; // file:// JPEGs in the app cache
+  waveform(uri: string, buckets: number): Promise<number[]>; // peak 0..1 per slice of the first sound; [] when there is none
+  previewFrame(uri: string, timeS: number, width: number): Promise<string>; // one file:// JPEG, replaced by the next call
   resume(): Promise<void>; // re-queues paused and interrupted jobs
   clearQueue(): Promise<void>; // stops the running job, drops waiting ones, empties the list; outputs stay
   share(outputUri: string): Promise<void>; // ACTION_SEND with a read grant
