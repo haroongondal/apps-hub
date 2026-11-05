@@ -3,11 +3,29 @@
 ## Resume prompt
 
 ```
-Date: 2026-11-06. Work in the worktree /Users/outsentia/Documents/apps-hub/.claude/worktrees/sieve
-(branch `sieve`). Read docs/handoffs/sieve.md there completely first, then the design and the plan
-it points to. Trust its verified facts and decisions; do not redo that work. Follow the same
-handoff contract (update the session log and current state as milestones land; at ~85% context,
-finalize and print a new resume prompt). Continue from "Next step".
+Date: 2026-11-06. Start implementing Sieve, my private Chrome extension (ad blocking, YouTube
+tools, downloads). Work only in the worktree /Users/outsentia/Documents/apps-hub/.claude/worktrees/sieve
+on branch `sieve` (enter it with EnterWorktree path=<that folder>). Do not use the main checkout:
+its branch `model-host` belongs to other work, and its copies of the Sieve docs are stale.
+
+1. Read docs/handoffs/sieve.md in the worktree completely first. Then read the plan
+   docs/superpowers/plans/2026-11-06-sieve.md and the design
+   docs/superpowers/specs/2026-11-06-sieve-design.md.
+2. Trust the handoff's decisions and verified facts; do not redo that work. Examples: the
+   converter is @adguard/dnr-converter, the filter-list URLs are checked, and the baseline tests
+   pass.
+3. I approved the plan on 2026-11-06. Execute it with superpowers:subagent-driven-development,
+   task by task, starting at phase 0 Task 0.1 (the YouTube download spike). Give each implementer
+   subagent the plan's Global Constraints, Review Focus, and its task's Interfaces block.
+4. Task 0.6 needs me to run a signed-in checklist in my own Chrome. Ask me when you get there,
+   and never use my Chrome profile in automated tests. While waiting, continue with Tasks 1.1 to
+   1.10, which do not depend on the spike.
+5. Commit after each task on `sieve`. Never add Co-Authored-By or "Generated with" lines. Do not
+   push, open a PR or merge unless I ask.
+6. Follow the handoff contract. Update the session log and "Current state and next step" in
+   docs/handoffs/sieve.md as each task lands. At ~85% context, stop starting new work, finalize
+   the handoff, rewrite this resume prompt with the date, print it in a fenced block for me, and
+   end the turn.
 ```
 
 ## Goal and fixed constraints
@@ -106,13 +124,20 @@ My calls this session, recorded in the plan:
   - Committed the design and this file (`bedb6d2`).
   - Chose the converter and checked the list addresses.
   - Wrote the plan.
+  - Baseline: `pnpm test` is clean.
+  - The owner approved the plan; implementation starts in session 3.
 
 ## Current state and next step
 
-- **State:** the plan is written and committed on branch `sieve`. No code yet. The owner has not
-  yet reviewed the plan or chosen an execution method.
+- **State:** the owner approved the plan on 2026-11-06 and asked to start implementation in a new
+  chat. No code yet. Branch `sieve` is at the handoff-baseline commit, and the worktree is clean.
+  The untracked copies of this file and the design in the main checkout
+  (`/Users/outsentia/Documents/apps-hub`, branch `model-host`) are stale. The worktree copies are
+  the real ones.
+- **Execution method:** subagent-driven (superpowers:subagent-driven-development), as recommended
+  in session 2. The owner approved without naming a method. Switch to native
+  (superpowers:executing-plans) only if the owner says so.
 - **Next step:**
-  1. Get the owner's review of the plan and their choice: subagent-driven or native execution.
-  2. Execute phase 0 (Tasks 0.1 to 0.6). Task 0.6 needs the owner to run the signed-in checklist.
+  1. Execute phase 0 (Tasks 0.1 to 0.6). Task 0.6 needs the owner to run the signed-in checklist.
      Phase 1 (Tasks 1.1 to 1.13) does not depend on the spike except Task 1.11's fixture, so
      Tasks 1.1 to 1.10 may start while waiting for the owner.
