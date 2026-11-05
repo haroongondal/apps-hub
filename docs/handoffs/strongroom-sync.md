@@ -211,12 +211,15 @@ the owner's word the phone went to **apps-hub-ad** (Model Host, ~3–4 h), which
 6b is complete (`3b10bd5..ad95198`, two fix rounds; strongroom 59 tests). **7b is complete**
 (`1b99210..46b4254`, one fix round: honest sign-in copy, recovery serialized with sync, sign-in from the
 unlock screen, account-key typo guard, true "stays on this computer" copy; extension 69 tests, Chromium e2e
-55/55). **All code tasks are done.** Ruling R32: the final whole-branch review (opus) is running now over
-`c3da09c..46b4254` (area diffs `final-*.diff` in the SDD folder), before the phone checks. Remaining:
-act on the final review (ONE fix wave + one scoped re-review, then adjudicate residuals); 6c phone checks
-a–h when apps-hub-ad sends "phone free" (resume per `task-6c-report.md`; then "phone free" to apps-hub-ad or
-whoever the queue says); then stop for the owner (Task 8, each step on their word) with the "Rulings I
-made" list from the ledger. The SDD ledger `.superpowers/sdd/PHASE-2-PLAN/progress.md` has every ruling,
+55/55). **All code tasks are done.** The final whole-branch review (opus) found 2 Important + 6 Minor;
+the one fix wave (`a0bc58e`, `1e19046`, `3082b04`) addressed all nine items (Gradle 369, strongroom 61,
+extension 69 + e2e 56, core 142, vault-api 20; release = Phase 1 + INTERNET). Its re-review found ONE
+residual Important (overlapping password/recovery-key changes + a crash in the new bookkeeping can upload a
+header no device can sign in to; fix = save the new mark before overwriting NEXT_*; details in the ledger),
+**surfaced to the owner for a decision**. Remaining: the owner's call on that residual; 6c phone checks a–h
+when apps-hub-ad sends "phone free" (resume per `task-6c-report.md`; then "phone free" to apps-hub-ad or
+whoever the queue says); then stop for the owner (Task 8, each step on their word; deploy notes are in
+this file) with the "Rulings I made" list from the ledger. The SDD ledger `.superpowers/sdd/PHASE-2-PLAN/progress.md` has every ruling,
 deferred minor and carry-forward note. The owner has not pushed `strongroom-extension` or merged
 anything.
 
