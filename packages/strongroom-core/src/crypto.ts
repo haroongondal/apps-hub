@@ -20,6 +20,12 @@ export function kdfInRange(k: KdfParams, floor: KdfParams = KDF_FLOOR): boolean 
   );
 }
 
+// A header may get stronger, never weaker, on any axis.
+export const kdfWeaker = (k: KdfParams, than: KdfParams): boolean =>
+  k.memoryKiB < than.memoryKiB || k.iterations < than.iterations || k.parallelism < than.parallelism;
+
+export const equalBytes = (a: Uint8Array, b: Uint8Array): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
+
 // TextEncoder turns an unpaired surrogate into U+FFFD, exactly as the Android app does, so both derive the same bytes.
 export const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s);
 

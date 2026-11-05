@@ -1,5 +1,5 @@
 import { sha256 } from '@noble/hashes/sha2.js';
-import { KDF_DEFAULT, KDF_FLOOR, argon2id, hkdf, kdfInRange, open, randomBytes, seal, utf8 } from './crypto.ts';
+import { KDF_DEFAULT, KDF_FLOOR, argon2id, hkdf, kdfInRange, kdfWeaker, open, randomBytes, seal, utf8 } from './crypto.ts';
 import type { KdfParams } from './crypto.ts';
 import { decodeEntry, encodeEntry } from './entry.ts';
 import type { Entry } from './entry.ts';
@@ -110,17 +110,29 @@ export async function createVault(
   return { header, vaultKey };
 }
 
+// Takes a header or, on a new device's sign-in, prelogin's kdf, salt and flag: both refuse before the one Argon2 run.
+export async function derivePasswordKeys(
+  p: { kdf: KdfParams; salt: Uint8Array; accountKey?: boolean },
+  password: string,
+  floor: KdfParams = KDF_FLOOR,
+  accountKey?: Uint8Array,
+): Promise<{ wrapKey: Uint8Array; loginToken: Uint8Array; readToken: Uint8Array }> {
+  if (!kdfInRange(p.kdf, floor)) throw new KdfOutOfRange(p.kdf);
+  if (p.accountKey && !accountKey) throw new AccountKeyRequired();
+  return passwordKeys(password, p.salt, p.kdf, accountKey);
+}
+
+export const openPasswordWrap = (h: Header, wrapKey: Uint8Array): Promise<Uint8Array | null> => open(wrapKey, h.passwordWrap, PASSWORD_WRAP_AAD);
+
 export async function openWithPassword(
   h: Header,
   password: string,
   floor: KdfParams = KDF_FLOOR,
   accountKey?: Uint8Array,
 ): Promise<{ vaultKey: Uint8Array; loginToken: Uint8Array; readToken: Uint8Array } | null> {
-  if (!kdfInRange(h.kdf, floor)) throw new KdfOutOfRange(h.kdf);
-  if (h.accountKey && !accountKey) throw new AccountKeyRequired();
   // A given key is mixed in even without the flag, so a header stripped of it opens nothing rather than falling back to the password alone.
-  const { wrapKey, loginToken, readToken } = await passwordKeys(password, h.salt, h.kdf, accountKey);
-  const vaultKey = await open(wrapKey, h.passwordWrap, PASSWORD_WRAP_AAD);
+  const { wrapKey, loginToken, readToken } = await derivePasswordKeys(h, password, floor, accountKey);
+  const vaultKey = await openPasswordWrap(h, wrapKey);
   return vaultKey && { vaultKey, loginToken, readToken };
 }
 
@@ -141,8 +153,7 @@ export async function withNewPassword(
   password: string,
   { kdf = h.kdf, floor = KDF_FLOOR, accountKey }: Options & AccountKeyOption = {},
 ): Promise<Header> {
-  const weaker = kdf.memoryKiB < h.kdf.memoryKiB || kdf.iterations < h.kdf.iterations || kdf.parallelism < h.kdf.parallelism;
-  if (!kdfInRange(kdf, floor) || weaker) throw new KdfOutOfRange(kdf);
+  if (!kdfInRange(kdf, floor) || kdfWeaker(kdf, h.kdf)) throw new KdfOutOfRange(kdf);
   if (h.accountKey && !accountKey) throw new AccountKeyRequired();
   const salt = randomBytes(SALT_BYTES);
   const next: Header = { ...h, kdf, salt, passwordWrap: await sealPasswordWrap(password, salt, kdf, vaultKey, accountKey) };

@@ -1,5 +1,5 @@
 import { LIMITS } from 'strongroom-core/src/sync/protocol.ts';
-import type { AccountPut, Prelogin, Upsert } from 'strongroom-core/src/sync/protocol.ts';
+import type { AccountCreate, Prelogin, Upsert } from 'strongroom-core/src/sync/protocol.ts';
 import { authorize, BASE64_32_BYTES } from './auth.ts';
 import { createAccount, getAccount, pull, push, updateAccount, type Db } from './db.ts';
 
@@ -25,7 +25,7 @@ export function preloginOf(header: string): Prelogin | null {
   }
 }
 
-function accountPutOf(o: any): AccountPut | null {
+function accountPutOf(o: any): (AccountCreate & { ifRev?: number }) | null {
   const { header, loginHash, recoveryHash, readHash, ifRev } = o ?? {};
   if (typeof header !== 'string' || header.length > LIMITS.maxHeaderChars || !preloginOf(header)) return null;
   if (![loginHash, recoveryHash, readHash].every((h) => typeof h === 'string' && BASE64_32_BYTES.test(h))) return null;

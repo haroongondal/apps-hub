@@ -1,4 +1,4 @@
-import type { AccountPut, PullResponse, PushConflict, PushResponse, Upsert, WireRecord } from 'strongroom-core/src/sync/protocol.ts';
+import type { AccountCreate, PullResponse, PushConflict, PushResponse, Upsert, WireRecord } from 'strongroom-core/src/sync/protocol.ts';
 
 export type Row = Record<string, unknown>;
 export interface Result { results: Row[] }
@@ -17,7 +17,7 @@ export const getAccount = (db: Db) =>
     .first<Account>();
 
 // The primary key on setup_done is the once-ever guard: a second create fails here even after the account row is deleted.
-export async function createAccount(db: Db, a: AccountPut): Promise<boolean> {
+export async function createAccount(db: Db, a: AccountCreate): Promise<boolean> {
   try {
     await db.batch([
       db.prepare("INSERT INTO meta (k, v) VALUES ('setup_done', '1')"),
@@ -32,7 +32,7 @@ export async function createAccount(db: Db, a: AccountPut): Promise<boolean> {
   }
 }
 
-export const updateAccount = async (db: Db, a: AccountPut, ifRev: number): Promise<number | null> =>
+export const updateAccount = async (db: Db, a: AccountCreate, ifRev: number): Promise<number | null> =>
   (
     await db
       .prepare(

@@ -12,7 +12,9 @@ export const LIMITS = {
 
 export type Prelogin = { version: number; kdf: KdfParams; salt: string; accountKey: boolean };
 
-export type AccountPut = { header: string; loginHash: string; recoveryHash: string; readHash: string; ifRev?: number };
+export type AccountCreate = { header: string; loginHash: string; recoveryHash: string; readHash: string };
+// An update names the header revision it replaces (the Worker answers 400 without it), so it never overwrites blindly.
+export type AccountUpdate = AccountCreate & { ifRev: number };
 export type AccountPutResponse = { headerRev: number };
 
 export type WireRecord = { id: string; rev: number; ciphertext: string; updatedAt: number };
