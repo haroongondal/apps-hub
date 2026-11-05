@@ -9,6 +9,9 @@ export default function MediaTab() {
       <Header title="Media" subtitle="Tools for your videos and sounds." />
       <Notice tone="accent" title="Your originals are never changed">Every tool saves a new file and leaves the one you picked as it was.</Notice>
       <Group>
+        <Row title="Make a video" subtitle="Join clips into one video, cut them and put them in order." onPress={() => router.push('/video')} accessibilityHint="Opens Make a video" />
+      </Group>
+      <Group>
         {TOOLS.map(t => (
           <Row
             key={t.key}

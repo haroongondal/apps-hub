@@ -165,6 +165,15 @@ hardware encoders; §6.6 works the numbers for a one-minute clip into 20 MB (720
   A still of the picture under the playhead shows above the strip. The typed times stay for exact
   values. The full multi-track "Make a video" screen (video, sound, music, text) is built on the
   same strip in later stages: `docs/superpowers/specs/2026-11-05-timeline-editor-design.md`.
+- **FR-15: Make a video, stage 2 (video track only; owner reviewed the plan 2026-11-06).** A "Make a
+  video" row on the Media tab opens one screen: a preview that plays the result, Play or Pause, a strip
+  with one block per clip (tap to choose a clip), and buttons: Add clips, Cut here, Start here and End
+  here (the clip under the line), Earlier and Later (the chosen clip), Delete clip and Save video. Save
+  queues one MP4 ("My video.mp4" in Movies) at the medium quality; the first clip sets the picture shape
+  and others fit inside it with black bars. Up to 20 clips and 10 minutes. The project is kept on the
+  phone and comes back when the screen opens; a clip whose file cannot be opened any more is removed
+  with a note. Not in this stage: sound tracks and music (stage 3), text (stage 4), drag handles on
+  clips, drag to reorder, undo, transitions, speed. Plan: `docs/superpowers/plans/2026-11-06-make-a-video-stage-2.md`.
 - **FR-12: Setup on Android.** Ask for notification permission before the first batch. If the
   Phase 1 spike shows HyperOS kills swiped batches, show a one-time note with a button to the
   app's battery settings.
