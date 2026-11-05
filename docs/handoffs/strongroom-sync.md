@@ -2,44 +2,41 @@
 
 ## Resume prompt
 
-Dated 2026-11-05. Strongroom is the owner's own-code password manager (Android app 0.1.1 merged; the
-Chrome extension is built and committed locally as `c3da09c` on branch `strongroom-extension`, **not
-pushed**). Phase 2, Cloudflare sync, is planned and **the owner approved the plan on 2026-11-05**: build it.
+Dated 2026-11-05 (rewritten at the end of build session 1). Strongroom is the owner's own-code password
+manager. Phase 2, Cloudflare sync, was approved on 2026-11-05 and is being built on branch `strongroom-sync`
+in the worktree `/Users/outsentia/Documents/apps-hub/.claude/worktrees/strongroom-sync` (from the unpushed
+extension commit `c3da09c`). Enter that worktree with EnterWorktree (path) and work only there.
 
-Read completely first, in this order: this file, `docs/strongroom/PHASE-2-PLAN.md` (the approved plan; its
-Decisions, Protocol, Review Focus and Global Constraints bind the work), `docs/strongroom/DESIGN.md`
-(§6 format, §10 sync, §11, §12 review gates), then skim `docs/handoffs/strongroom-extension.md` and
-`docs/handoffs/strongroom.md` for the extension and Android facts. Trust the decisions and verified facts
-and don't redo that work. Follow the handoff contract in `~/.claude/CLAUDE.md`: update the session log and
-"Current state" as each task lands, and at about 85% context finalize this file, print a fresh resume
-prompt in a fenced block and end the turn (no compaction).
+Read completely first, in this order: this file; the SDD ledger
+`.superpowers/sdd/PHASE-2-PLAN/progress.md` in the worktree (git-ignored: every ruling R1–R27, every
+deferred minor, every carry-forward note, the phone queue, and which tasks are complete — trust it and
+`git log` over memory); `docs/strongroom/PHASE-2-PLAN.md` (Decisions, Protocol, Review Focus, Global
+Constraints bind the work); `docs/strongroom/DESIGN.md` §6, §10–§12. The per-task briefs and reports are in
+`.superpowers/sdd/PHASE-2-PLAN/` (task-N-brief.md, task-N-report.md, task-6a/6b/7a-brief.md). Trust the
+decisions and verified facts; don't redo finished tasks. Follow the handoff contract in `~/.claude/CLAUDE.md`
+(update the session log and "Current state" as work lands; at about 85% context finalize this file, print a
+fresh resume prompt in a fenced block and end the turn, no compaction).
 
-Step 0, before any task: work in **your own worktree**, not the extension worktree. Another chat is
-working in `/Users/outsentia/Documents/apps-hub/.claude/worktrees/strongroom-extension` on Chrome Web
-Store publishing CI with uncommitted files there (`.github/workflows/strongroom-extension-store.yml`,
-`apps/strongroom-extension/{scripts/,README.md,package.json,tsconfig.json}`, `AGENTS.md`): never edit,
-stash, commit or revert them. Create the worktree with
-`git worktree add /Users/outsentia/Documents/apps-hub/.claude/worktrees/strongroom-sync -b strongroom-sync c3da09c`
-(enter it with EnterWorktree), copy `docs/strongroom/PHASE-2-PLAN.md` and `docs/handoffs/strongroom-sync.md`
-from the extension worktree into it, and commit exactly those two with explicit pathspecs (never
-`git add -A`; no `Co-Authored-By` or "Generated with" lines). Never edit `.claude/worktrees/strongroom-phase-1`
-(another session's, the Android app) if it still exists.
+Execution: `superpowers:subagent-driven-development` (its scripts are refused by the worktree sandbox: write
+briefs with `sed -n 'a,bp' plan > brief`, review packages with `git diff -U10 BASE HEAD > file`, keep git
+commands plain and separate). Models: opus for crypto/merge/Worker/Keystore/platform and their reviewers,
+sonnet for screens and extension wiring (and their reviewers when the diff is UI-only). Test-first; real
+command output only. Briefs and reports go through files; implementers never spawn subagents.
 
-Execution method: `superpowers:subagent-driven-development`, as the plan recommends (the owner approved the
-plan without choosing; switch to `superpowers:executing-plans` only if they say "native"). Models used in
-Phase 1: opus for crypto, merge, Worker auth, Keystore and platform tasks (here Tasks 1 to 6), sonnet for
-screens and extension wiring, opus reviewers for crypto/merge/Worker. Test-first in every task; report
-real command output only.
+Rules that do not bend: commit on `strongroom-sync` with explicit pathspecs, no `Co-Authored-By` or
+"Generated with" lines; **push, merge, release or deploy only on the owner's explicit word in the chat**;
+confirm the Cloudflare account before any deploy and use the `cf` CLI; no new third-party dependency without
+asking. **Phone (owner, 2026-11-05):** test 6c on the owner's phone (USB serial `49kjmnuwonkffqzh`, always
+`adb -s`), not the emulator; `adb install` of a SIDE-BY-SIDE test build with its own applicationId only
+(ruling R26) — never replace, update or uninstall the Store-installed `com.haroon.strongroom` (the real
+vault); no `uiautomator dump` on the phone; no phone settings changes. **Phone queue:** apps-hub-63 is on the
+phone and will message `strongroom-sync-dc` (the old session's name) "phone free" — a new session must first
+tell apps-hub-63 its own name (ListAgents shows it) and ask to be messaged instead; after 6c send "phone free"
+to **apps-hub-ad** (Model Host; leave `/data/local/tmp/mb` and `svc power stayon usb` alone). Never
+`adb logcat -c` or touch `com.haroon.designeditor` while another session holds the phone.
 
-Rules that do not bend: commit on `strongroom-sync` as the plan's steps say, but **push, merge, release or
-deploy only on the owner's explicit word in the chat** (a `git push` was denied by the auto-mode
-classifier on 2026-11-05: the owner pushes, or says how); confirm the Cloudflare account with them before
-any deploy and use the `cf` CLI; install on the phone only through the Store; adb on the phone only for
-logcat, screenshots and uiautomator dumps with `-s <serial>`, debug builds only on an emulator
-(`strongroom-task12`, emulator-5556, never the phone); no new third-party dependency without asking.
-
-Your first message to the owner is short: the execution method you will use, that you are starting
-Task 1, and nothing else unless you are blocked. Then continue from "Current state + exact next step".
+Your first message to the owner is short: where you are resuming (task and state from the ledger) and what
+you start now. Then continue from "Current state + exact next step".
 
 ## Goal and fixed constraints
 
@@ -182,9 +179,13 @@ All in the plan's "Decisions"; the owner delegated them on 2026-11-05 ("do what 
 
 ## Current state + exact next step
 
-State: Tasks 1 to 5 and 6a complete. 6b (screens, sonnet) running. Next: Task 7 (extension, sonnet) while
-the phone is busy; 6c (phone proof, opus) when "phone free" arrives; then the final review (opus); then stop
-for the owner (Task 8). The SDD ledger `.superpowers/sdd/PHASE-2-PLAN/progress.md` has every ruling,
+State: Tasks 1 to 5 and 6a complete. 6b (screens) committed `3b10bd5` (strongroom 52 tests), its sonnet
+review running. 7a (TS core: R16 guard + lastRev hold-back, headerRev test, vault.ts account key) running
+(opus) from `3b10bd5`. Next: finish 6b review (fixes only after 7a reports), review 7a, then 7b (extension
+wiring, common passwords, e2e; sonnet; brief to write from `task-7-brief.md` minus 7a's scope, carrying the
+ledger's Task 7 notes); 6c (phone proof, opus, R25 HTTPS harness + R26 side-by-side build) when apps-hub-63
+says "phone free"; then the final whole-branch review (opus) with the ledger's deferred minors; then stop
+for the owner (Task 8: reviews, Cloudflare account, deploy, release, live checks — each on their word). The SDD ledger `.superpowers/sdd/PHASE-2-PLAN/progress.md` has every ruling,
 deferred minor and carry-forward note. The owner has not pushed `strongroom-extension` or merged
 anything.
 
