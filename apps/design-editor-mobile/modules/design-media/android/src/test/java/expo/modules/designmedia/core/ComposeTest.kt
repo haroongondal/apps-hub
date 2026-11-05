@@ -38,6 +38,16 @@ class ComposeTest {
   }
 
   @Test
+  fun thePreviewKnowsTheLengthAndFitsThePictureInsideItsBox() {
+    assertEquals(14_000L, durationMs(plan))
+    assertEquals(711 to 400, fitInside(1000, 400, 1920, 1080))
+    assertEquals(225 to 400, fitInside(1000, 400, 720, 1280))
+    assertEquals(300 to 169, fitInside(300, 600, 1920, 1080))
+    assertEquals(0 to 0, fitInside(0, 400, 1920, 1080))
+    assertEquals(0 to 0, fitInside(1000, 400, 0, 1080))
+  }
+
+  @Test
   fun savesOneMp4InMoviesNamedAfterTheProject() {
     assertEquals(2 * plan.plannedBytes, neededBytes(plan, 0, 0.0))
     assertEquals("mp4", outputExt(plan))

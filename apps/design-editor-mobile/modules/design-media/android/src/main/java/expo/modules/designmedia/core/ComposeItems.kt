@@ -7,3 +7,5 @@ fun composeItems(plan: ComposePlan): List<ItemSpec> =
 
 // A silent clip among clips with sound needs a silent track, or the sequence has a gap in its sound.
 fun forceAudio(plan: ComposePlan): Boolean = plan.clips.any { it.hasAudio }
+
+fun durationMs(plan: ComposePlan): Long = composeItems(plan).sumOf { it.endUs - it.startUs } / 1000

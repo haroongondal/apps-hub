@@ -43,3 +43,4 @@ export interface DesignMediaModule {
 }
 
 export default requireNativeModule<DesignMediaModule>('DesignMedia');
+export { CompositionView, type CompositionViewHandle, type CompositionViewProps } from './CompositionView';

@@ -3,6 +3,7 @@ package expo.modules.designmedia
 import android.net.Uri
 import expo.modules.designmedia.android.Access
 import expo.modules.designmedia.android.CodecReport
+import expo.modules.designmedia.android.CompositionView
 import expo.modules.designmedia.android.DesignSaves
 import expo.modules.designmedia.android.Intents
 import expo.modules.designmedia.android.MediaJobService
@@ -14,6 +15,7 @@ import expo.modules.designmedia.core.EncoderStatsStore
 import expo.modules.designmedia.core.QueueStore
 import expo.modules.designmedia.core.decodeJobs
 import expo.modules.designmedia.core.toStatusMap
+import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
@@ -31,6 +33,15 @@ class DesignMediaModule : Module() {
     Name("DesignMedia")
 
     Events(MediaJobService.EVENT_PROGRESS, MediaJobService.EVENT_QUEUE)
+
+    View(CompositionView::class) {
+      Events("onPosition", "onEnded", "onError")
+      Prop("plan") { view: CompositionView, plan: String? -> view.setPlan(plan) }
+      Prop("playing") { view: CompositionView, playing: Boolean -> view.setPlaying(playing) }
+      AsyncFunction("seekTo") { view: CompositionView, timeS: Double -> view.seekTo(timeS) }.runOnQueue(Queues.MAIN)
+      AsyncFunction("setScrubbing") { view: CompositionView, on: Boolean -> view.setScrubbing(on) }.runOnQueue(Queues.MAIN)
+      OnViewDestroys { view: CompositionView -> view.release() }
+    }
 
     OnCreate {
       MediaJobService.listener = { name, body -> sendEvent(name, body) }
