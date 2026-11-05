@@ -3,16 +3,18 @@ import {
   DESTINATIONS, GIF_WARN_S, formatClock, formatMb, planAudio, planFor, refusalText,
   type MediaInfo, type Plan, type QualityName,
 } from '@apps-hub/media-core';
-import { Button, Field, Group, Header, Notice, Pill, Readout, Row, Screen, Segmented } from '@apps-hub/ui';
+import { Button, Field, Group, Header, Notice, Pill, Readout, Row, Screen, Segmented, radius, useTheme } from '@apps-hub/ui';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Image, ScrollView, Pressable } from 'react-native';
+import { Image } from 'react-native';
 
 import { plainError } from '../../src/media/errors';
 import { pickFiles, startJobs } from '../../src/media/jobs';
 import { loadPrefs, savePrefs } from '../../src/media/prefs';
 import { specsFor, soundTracksOf, type Options } from '../../src/media/specs';
 import { correctionFrom, parseTime, TOOLS, timeText, type ToolKey } from '../../src/media/tools';
+import { RangeStrip } from '../../src/timeline/RangeStrip';
+import { usePreviewFrame } from '../../src/timeline/usePreviewFrame';
 
 const say = (e: unknown) => plainError(e, 'Something went wrong. Try again.');
 
@@ -23,7 +25,7 @@ export default function ToolSetup() {
   const [files, setFiles] = useState<MediaInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [thumbs, setThumbs] = useState<string[]>([]);
+  const [playheadS, setPlayheadS] = useState(0);
   const [keyframe, setKeyframe] = useState<number | undefined>();
   const [correction, setCorrection] = useState(1);
   // options
@@ -34,7 +36,6 @@ export default function ToolSetup() {
   const [smaller, setSmaller] = useState(false);
   const [start, setStart] = useState('0:00.0');
   const [end, setEnd] = useState('0:10.0');
-  const [setting, setSetting] = useState<'start' | 'end'>('start');
   const [cut, setCut] = useState<'copy' | 'exact'>('copy');
   const [skipped, setSkipped] = useState<Record<string, number[]>>({});
   const [gifWidth, setGifWidth] = useState('480');
@@ -59,12 +60,9 @@ export default function ToolSetup() {
     DesignMedia.keyframeAtOrBefore(info.id, startS).then(setKeyframe, () => setKeyframe(undefined));
   }, [def.key, info, startS]);
 
-  useEffect(() => {
-    setThumbs([]);
-    if (!info || !(def.key === 'trim' || def.key === 'gif' || def.key === 'picture') || !info.tracks.some(t => t.kind === 'video')) return;
-    const times = Array.from({ length: 10 }, (_, i) => (info.durationS * (i + 0.5)) / 10);
-    DesignMedia.thumbnails(info.id, times, 160).then(setThumbs, () => setThumbs([]));
-  }, [def.key, info]);
+  const timeline = def.key === 'trim' || def.key === 'gif' || def.key === 'picture';
+  const frame = usePreviewFrame(timeline && info?.tracks.some(t => t.kind === 'video') ? info.id : undefined, playheadS);
+  const { c } = useTheme();
 
   async function add() {
     setError(null);
@@ -74,6 +72,7 @@ export default function ToolSetup() {
       setFiles(single ? picked.slice(0, 1) : [...files, ...picked]);
       if (!files.length || single) { // a second pick keeps the choices already made
         const first = picked[0];
+        setPlayheadS(0);
         setStart('0:00.0'); setEnd(timeText(Math.min(first.durationS, def.key === 'gif' ? 10 : first.durationS)));
       }
     } catch (e) { setError(say(e)); }
@@ -91,6 +90,9 @@ export default function ToolSetup() {
     ? specs(info).map(s => planFor(s, info, { platform: 'android', keyframeS: keyframe, correction }))
     : [], // eslint-disable-next-line react-hooks/exhaustive-deps
   [info, def.key, how, targetBytes, quality, smaller, start, end, cut, skipped, gifWidth, gifFps, gifMb, kind, muted, format, louder, withSound, level, keyframe, correction]);
+
+  const endS = parseTime(end);
+  const range = startS !== undefined && endS !== undefined && endS > startS ? { startS, endS } : { startS: 0, endS: info?.durationS ?? 0 };
 
   const refusal = planned.find(p => !p.ok);
   const first = planned[0]?.ok ? planned[0].plan : undefined;
@@ -154,22 +156,19 @@ export default function ToolSetup() {
 
           {def.key === 'trim' || def.key === 'gif' || def.key === 'picture' ? (
             <Group title={def.key === 'picture' ? 'Moment' : 'Range'}>
-              {thumbs.length ? (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {thumbs.map((uri, i) => (
-                    <Pressable
-                      key={`${i}-${uri}`}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Use ${formatClock((info.durationS * (i + 0.5)) / 10)}`}
-                      onPress={() => { const t = timeText((info.durationS * (i + 0.5)) / 10); if (def.key === 'picture' || setting === 'start') setStart(t); else setEnd(t); }}
-                      style={{ marginRight: 6, minHeight: 48 }}
-                    >
-                      <Image source={{ uri }} style={{ width: 80, height: 80, borderRadius: 6 }} />
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              ) : null}
-              {def.key !== 'picture' ? choose([{ key: 'start', label: 'Set the start' }, { key: 'end', label: 'Set the end' }], setting, setSetting, 'Which end to set') : null}
+              {frame ? <Image source={{ uri: frame }} resizeMode="contain" accessibilityLabel="The picture at the line" style={{ height: 200, borderRadius: radius.control, backgroundColor: c.raised }} /> : null}
+              <RangeStrip
+                key={info.id}
+                uri={info.id}
+                durationS={info.durationS}
+                hasVideo={info.tracks.some(t => t.kind === 'video')}
+                hasSound={info.tracks.some(t => t.kind === 'audio')}
+                mode={def.key === 'picture' ? 'point' : 'range'}
+                range={range}
+                onRange={r => { setStart(timeText(r.startS)); setEnd(timeText(r.endS)); }}
+                onPlayhead={t => { setPlayheadS(t); if (def.key === 'picture') setStart(timeText(t)); }}
+              />
+              {def.key !== 'picture' ? <Row title={`Keeps ${timeText(range.endS - range.startS)}`} subtitle={`From ${timeText(range.startS)} to ${timeText(range.endS)}`} /> : null}
               <Field label={def.key === 'picture' ? 'Time (m:ss.s)' : 'Start (m:ss.s)'} value={start} onChangeText={setStart} />
               {def.key !== 'picture' ? <Field label="End (m:ss.s)" value={end} onChangeText={setEnd} /> : null}
               {def.key === 'trim' ? (
