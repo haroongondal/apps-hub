@@ -102,6 +102,19 @@ My calls this session, recorded in the plan:
 - **Worktree baseline:** `pnpm install --frozen-lockfile` in the worktree succeeded (2.7 s).
   `pnpm test` exited 0 with 0 failures (about 485 tests).
 
+## Spike results
+
+### S1 (page data, signed out)
+
+Run 2026-11-06 with `node apps/sieve/spike/run.mjs` (headless Chrome for Testing 149, fresh profile, no consent page or bot check) on `aqz-KE-bpKQ`:
+
+```json
+{"strategy":"S1","videoId":"aqz-KE-bpKQ","signedIn":false,"playability":"OK","sabr":true,"counts":{"url":0,"cipher":0,"none":40},"maxHeight":{"url":null,"cipher":null,"none":2160}}
+```
+
+- Reading: S1 gives 0 plain URLs and 0 cipher formats. SABR is on, and all 40 adaptive formats (up to 2160p) carry neither `url` nor `signatureCipher`, so the page data alone offers no downloadable stream.
+- Fixture: `apps/sieve/spike/fixtures/player-response.json` comes from `dQw4w9WgXcQ` (26 adaptive formats, one `adPlacements`). The test video has no ad placements, so `run.mjs` only writes the fixture when the response has some (`VIDEO=<id>` picks the video).
+
 ## File map
 
 - `docs/superpowers/specs/2026-11-06-sieve-design.md`: the design

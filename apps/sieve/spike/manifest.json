@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Sieve spike",
+  "version": "0.0.1",
+  "minimum_chrome_version": "127",
+  "description": "Throwaway YouTube download feasibility spike.",
+  "permissions": ["storage", "downloads"],
+  "host_permissions": ["*://*.youtube.com/*", "*://*.googlevideo.com/*", "<all_urls>"],
+  "background": { "service_worker": "sw.js" },
+  "action": { "default_title": "Sieve spike" },
+  "content_scripts": [
+    { "matches": ["*://www.youtube.com/*"], "js": ["probe-main.js"], "world": "MAIN", "run_at": "document_idle" },
+    { "matches": ["*://www.youtube.com/*"], "js": ["probe-relay.js"], "run_at": "document_idle" }
+  ]
+}
