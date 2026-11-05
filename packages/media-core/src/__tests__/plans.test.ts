@@ -128,12 +128,17 @@ test('reverse: a clip up to 10 s at 1080p or below is planned; longer or bigger 
 });
 
 test('stabilize: each level maps to its search range, and an audio-only file is refused', () => {
-  assert.deepEqual(planStabilize(film(), 'recommended'), { ok: true, plan: { tool: 'stabilize', level: 'recommended', search: 16, quality: 65, ext: 'mp4' } });
+  assert.deepEqual(planStabilize(film(), 'recommended'), { ok: true, plan: { tool: 'stabilize', level: 'recommended', search: 32, quality: 65, ext: 'mp4' } });
   const most = planStabilize(film(), 'most');
   const minimum = planStabilize(film(), 'minimum');
   assert.ok(most.ok && minimum.ok);
-  assert.equal(most.plan.search, 40);
-  assert.equal(minimum.plan.search, 8);
+  assert.equal(most.plan.search, 64);
+  assert.equal(minimum.plan.search, 16);
+  // The phone's deshake rejects any other range, which made two of the three levels fail on the phone.
+  for (const level of ['minimum', 'recommended', 'most'] as const) {
+    const p = planStabilize(film(), level);
+    assert.ok(p.ok && p.plan.search % 16 === 0 && p.plan.search >= 16 && p.plan.search <= 64, level);
+  }
   assert.equal(planStabilize({ ...film(), tracks: film().tracks.filter(t => t.kind === 'audio') }, 'most').ok, false);
 });
 

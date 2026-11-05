@@ -2,6 +2,7 @@ package expo.modules.designmedia.core
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 // Golden argument lists: any change to a phone command line shows up here first.
@@ -92,12 +93,18 @@ class FfmpegArgsTest {
   fun stabilizeUsesDeshakeWithMirroredEdgesAndKeepsTheSound() {
     assertEquals(
       listOf(
-        "-hide_banner", "-y", "-i", "saf:1.mp4", "-map", "0:v:0", "-vf", "deshake=rx=40:ry=40:edge=mirror",
+        "-hide_banner", "-y", "-i", "saf:1.mp4", "-map", "0:v:0", "-vf", "deshake=rx=64:ry=64:edge=mirror",
         "-c:v", "h264_mediacodec", "-b:v", "6000000", "-pix_fmt", "yuv420p",
         "-map", "0:a:0?", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-map_metadata", "-1", "out.mp4",
       ),
-      FfmpegArgs.stabilize(StabilizePlan("most", 40, 65.0, "mp4"), "saf:1.mp4", "out.mp4", 6_000_000),
+      FfmpegArgs.stabilize(StabilizePlan("most", 64, 65.0, "mp4"), "saf:1.mp4", "out.mp4", 6_000_000),
     )
+  }
+
+  @Test
+  fun stabilizeRangeIsAlwaysOneThePhonesDeshakeAccepts() {
+    assertEquals(listOf(16, 16, 32, 48, 64, 64), listOf(8, 16, 32, 40, 64, 200).map { FfmpegArgs.deshakeRange(it) })
+    assertTrue(FfmpegArgs.stabilize(StabilizePlan("minimum", 8, 65.0, "mp4"), "i", "o.mp4", 1).contains("deshake=rx=16:ry=16:edge=mirror"))
   }
 
   @Test

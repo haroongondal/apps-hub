@@ -31,9 +31,14 @@ object FfmpegArgs {
     return GLOBAL + listOf("-i", input, "-map", "0:v:0", "-vf", "reverse") + h264(videoBps) + sound + FASTSTART + STRIP + output
   }
 
-  fun stabilize(plan: StabilizePlan, input: String, output: String, videoBps: Int): List<String> =
-    GLOBAL + listOf("-i", input, "-map", "0:v:0", "-vf", "deshake=rx=${plan.search}:ry=${plan.search}:edge=mirror") +
+  // FFmpeg 8.1's deshake refuses any range that is not a multiple of 16 and caps it at 64. A job queued by an older build can still carry 8 or 40.
+  fun deshakeRange(search: Int): Int = (search.coerceIn(16, 64) + 15) / 16 * 16
+
+  fun stabilize(plan: StabilizePlan, input: String, output: String, videoBps: Int): List<String> {
+    val range = deshakeRange(plan.search)
+    return GLOBAL + listOf("-i", input, "-map", "0:v:0", "-vf", "deshake=rx=$range:ry=$range:edge=mirror") +
       h264(videoBps) + listOf("-map", "0:a:0?") + AAC + FASTSTART + STRIP + output
+  }
 
   // loudnorm's first pass prints one flat JSON object near the end of the log. Missing or non-numeric fields mean the measure failed.
   fun parseLoudnorm(log: String): Loudness? {

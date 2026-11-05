@@ -106,8 +106,8 @@ test('ffmpeg: reverse runs the video and, when asked, the sound backwards; witho
 });
 
 test('ffmpeg: stabilize uses deshake with the level search range and mirrored edges, so the frame keeps its size', () => {
-  const args = ffmpegArgs({ tool: 'stabilize', level: 'most', search: 40, quality: 65, ext: 'mp4' }, 'in.mp4', 'out.mp4');
-  assert.equal(args[args.indexOf('-vf') + 1], 'deshake=rx=40:ry=40:edge=mirror');
+  const args = ffmpegArgs({ tool: 'stabilize', level: 'most', search: 64, quality: 65, ext: 'mp4' }, 'in.mp4', 'out.mp4');
+  assert.equal(args[args.indexOf('-vf') + 1], 'deshake=rx=64:ry=64:edge=mirror');
   assert.equal(args[args.indexOf('-c:v') + 1], 'h264_videotoolbox');
 });
 

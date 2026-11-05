@@ -1,6 +1,6 @@
 import DesignMedia from 'design-media';
 import {
-  DESTINATIONS, GIF_WARN_S, formatClock, formatMb, planAudio, planFor, refusalText,
+  DESTINATIONS, GIF_WARN_S, formatClock, formatMb, lastFrameS, planAudio, planFor, refusalText,
   type MediaInfo, type Plan, type QualityName,
 } from '@apps-hub/media-core';
 import { Button, Field, Group, Header, Notice, Pill, Readout, Row, Screen, Segmented, radius, useTheme } from '@apps-hub/ui';
@@ -62,7 +62,9 @@ export default function ToolSetup() {
   }, [def.key, info, startS]);
 
   const timeline = def.key === 'trim' || def.key === 'gif' || def.key === 'picture';
-  const frame = usePreviewFrame(timeline && info?.tracks.some(t => t.kind === 'video') ? info.id : undefined, playheadS);
+  // A typed time scrolls the strip without moving its playhead, so the picture tool shows the frame at the typed time.
+  const previewS = def.key === 'picture' && startS !== undefined && info ? Math.min(startS, lastFrameS(info.durationS)) : playheadS;
+  const frame = usePreviewFrame(timeline && info?.tracks.some(t => t.kind === 'video') ? info.id : undefined, previewS);
   const { c } = useTheme();
 
   async function add() {
