@@ -430,8 +430,8 @@ requirement. So a background sync can **download** while the vault, or the phone
 is locked. Merging and uploading wait for the next unlock.
 
 **Re-key** (after a suspected compromise): a new vaultKey, every record
-re-encrypted, new wraps, then a full upload. Phase 2 adds it.
-*(Reviewer's point, adopted.)*
+re-encrypted, new wraps, then a full upload. *(Reviewer's point, adopted.)* **Not
+built in Phase 2**: it is deferred to a later task (Task 9).
 
 **New device**: enter the master password → prelogin → derive keys → download header and records → unlock.
 
@@ -452,9 +452,13 @@ mixed ──HKDF "wrap" | "login" | "read"──▶ wrapKey, loginToken, readTok
   `"accountKey": true` (§6). Strongroom 0.1.1 can't read a flagged header and fails
   closed as "wrong password". Turning sync on re-wraps `passwordWrap` under a new
   salt with the same KDF params; the vaultKey and the records don't change.
-- A device that holds the key always mixes it in, even into a header without the
-  flag, so a server that strips the flag gets nothing that opens with the password
-  alone.
+- A device mixes the key in only for a local header that carries the flag. What
+  stops a server that strips the flag is that sign-in, recovery through the server
+  and header adoption all refuse a server header without it, on both clients.
+- Forgetting the master password on a device with a flagged vault: the local reset
+  takes the recovery key **and** the account key. The phone uses its Keystore copy;
+  if that is gone, the owner types the written-down key (twice, since nothing can
+  check it), and the phone keeps it again.
 - Where it is kept: the phone in the Android Keystore (same key class as the match
   index, `setUnlockedDeviceRequired(true)`); the extension in `chrome.storage.local`
   (trusted contexts only) beside the header. It is shown again only after the
@@ -462,6 +466,47 @@ mixed ──HKDF "wrap" | "login" | "read"──▶ wrapKey, loginToken, readTok
 - Test vectors: the `accountKey` section of the shared vector file, computed by
   `apps/strongroom/tools/vectors/account_key_vectors.py` (argon2-cffi and its own
   HKDF), not by either client.
+
+**As built in Phase 2** (decisions the plan left open; rulings in the Phase 2 ledger):
+- Account update: `ifRev` (the last header revision this device took) is required,
+  so a stale update gets 409 instead of overwriting. `recoveryHash` is optional and
+  the Worker keeps the stored one when it is left out. On the phone a 409 means
+  "sign in again", and a password or recovery-key change made there doesn't reach
+  the other devices.
+- Turning sync on asks for the setup code, the master password and the recovery
+  key, and checks that the recovery key opens this vault. The account key is in the
+  Keystore before the flagged header is written. If the server refuses the setup
+  outright (wrong setup code, a bad request, an account that isn't this phone's),
+  the old header and mode come back; only an unclear failure (offline, a server
+  error, a lost reply) leaves setup pending, and a retry shows the same key.
+- A local header change (new master password, new recovery key, local reset) is
+  written only after its sync bookkeeping: the new tokens are kept apart from the
+  ones the server knows, and a pending mark names the new header. The tokens swap
+  only after the server took the update. A mark whose header never got written is
+  dropped.
+- A remote header (password changed elsewhere) is adopted at the next password
+  unlock or sign-in, where the password is at hand; background sync only notes it.
+- Merge details: an entry over the size limit (90,000 base64 characters) is left
+  out of every push, stays local and is reported, and never blocks the others. A
+  local entry that doesn't decrypt is kept, never overwritten or pushed, and
+  reported. A pull adopts a remote entry only if the local one is unchanged since
+  the merge looked at it; otherwise the local edit stays for the next sync and the
+  last-seen revision is held back so that entry comes again.
+- Pages: both clients ask for 100 records per pull (the Worker allows up to 500).
+- Failed sign-ins: one counter in D1. After 5 failures each refused request waits
+  2, 4, 8 and 16 s, then 20 s at most, which stays under both clients' 30 s
+  timeouts. A good token resets it and is never delayed.
+- The phone's background job runs every 15 minutes, without a network constraint
+  and not kept across reboots (either would need a new permission); app start
+  schedules it again. It downloads with the read token into a staging table
+  and never touches the vault; the next unlock merges the staged rows through the
+  normal merge, even offline.
+- The phone keeps the login token under the Keystore key that opens only while the
+  phone is unlocked, so a fingerprint unlock can still upload edits. *(Provisional,
+  for Task 8's security review.)*
+- The extension's recovery sign-in also sends an account update, held as pending
+  (sync waits while it is pending, and a refused token never drops it) until the
+  server takes it.
 
 **Accepted limits** (single owner, own account): the server could withhold or
 roll back records, or delete them. It can't read or forge them. Every device's
@@ -474,14 +519,16 @@ its own local vault (same format as §6, `packages/strongroom-core` passes the s
 vectors). The Android vault has no export and the release app has no network access, so
 the two vaults are separate until sync exists; joining them later means re-sealing one
 vault's entries under the other's key. Cut for now: cards and notes in the UI, change
-master password, new recovery key, clipboard auto-clear, adjustable auto-lock (fixed 5
-minutes), and the 10,000-common-passwords check (only repeated and straight-run passwords are refused). Details and next steps: `docs/handoffs/strongroom-extension.md`.
+master password, new recovery key, clipboard auto-clear and adjustable auto-lock (fixed 5
+minutes). The common-password check came with sync: the same ten entries as the phone,
+with a test that keeps the two lists equal. Details and next steps: `docs/handoffs/strongroom-extension.md`.
 
 **With sync (Phase 2):** the phone creates the account; the extension signs in with
-the master password and the account key (§10) and replaces its own vault with the
-account's, rather than re-sealing one vault into the other. If its vault has
-entries, it shows the count and asks first, and the old vault is replaced only after
-every step succeeded.
+the master password and the account key (§10). If the extension already holds the
+account's vault (an earlier sign-in), the sign-in merges and keeps its local edits.
+An empty vault is replaced by the account's. A different vault with entries is
+replaced only after the extension shows the count and the owner confirms, and only
+after every step succeeded; one vault is never re-sealed into the other.
 
 - One WebExtension code base (Manifest V3) for Chrome, then Firefox. TS vault
   logic in a new pure package, `packages/strongroom-core`, Hermes-safe like
@@ -489,8 +536,9 @@ every step succeeded.
   test vectors.
 - Content script detects login forms and shows a fill suggestion. On submit it
   offers save/update. Matching follows the same rules as §7.
-- The vault key is held only in `chrome.storage.session` (memory) while unlocked.
-  The encrypted vault is cached in `chrome.storage.local`. Same auto-lock times.
+- The vault key, and with sync the login token, are held only in
+  `chrome.storage.session` (memory) while unlocked; locking clears both. The
+  encrypted vault is cached in `chrome.storage.local`. Same auto-lock times.
 - Chrome on the Mac and on Windows: the same extension, loaded unpacked in
   developer mode. *(Fine for one owner; no Web Store listing.)* Check on the
   Windows machine whether Chrome warns about or disables developer-mode

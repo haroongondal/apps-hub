@@ -1,6 +1,6 @@
 # Strongroom for Chrome
 
-Fills and saves logins from an encrypted vault that stays in this browser profile. Manifest V3, Chrome 127 or later, Mac and Windows. No sync yet: this vault is separate from the phone's until the Cloudflare sync exists (see `docs/handoffs/strongroom-extension.md`).
+Fills and saves logins from a vault encrypted in this browser profile. Manifest V3, Chrome 127 or later, Mac and Windows. With sync, it signs in with your master password and account key and syncs with the phone through your own vault server; only encrypted data leaves the browser. A build without the vault server's address (the default until it is deployed) has no sync and keeps the vault separate from the phone's (see `docs/handoffs/strongroom-sync.md`).
 
 ## Install (unpacked)
 
@@ -18,7 +18,7 @@ Chrome → `chrome://extensions` → turn on Developer mode → Load unpacked �
 - **Import:** Google Password Manager export (CSV), once. Delete the file afterwards; it is plain text.
 - **Locks** after 5 minutes without use, on browser restart, and with the Lock button.
 
-Not in this version: cards and notes in the UI, change master password, new recovery key, clipboard auto-clear, the common-passwords check, Firefox.
+Not in this version: cards and notes in the UI, change master password, new recovery key, clipboard auto-clear, Firefox.
 
 ## Develop
 

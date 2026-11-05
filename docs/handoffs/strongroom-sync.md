@@ -177,6 +177,20 @@ All in the plan's "Decisions"; the owner delegated them on 2026-11-05 ("do what 
   (6c) → **apps-hub-ad** (Model Host benchmarks, 3–4 h idle on USB; send it "phone free" when 6c is done;
   leave `/data/local/tmp/mb` and `svc power stayon usb` alone).
 
+## Task 8 deploy notes
+
+- **Setup code.** The Worker's `SETUP_TOKEN` secret must be at least 32 characters; the Worker refuses a
+  shorter one as if none were set. Make it with `openssl rand -base64 32` (44 characters). Call it the
+  **setup code** when talking to the owner: that is the name on the phone's Turn on sync screen. It is
+  typed once on the phone and works once, ever.
+- **Real D1 smoke test before the phone uses it.** The tests run on a node:sqlite D1 fake, so check on the
+  deployed database what the fake can't prove: `json_each` (the push's conflict check), `RETURNING` (the
+  revision counter, the account update and the auth counter), the upsert (`ON CONFLICT … DO UPDATE`) and
+  one push of 100 upserts (the batch limit).
+- **The migration is applied by hand.** `cloudflare.config.ts` has no migrations option, so run
+  `tools/vault-api/migrations/0001_init.sql` against the new D1 database once, before the first request
+  (find the `cf` subcommand with `cf cli search`; the account is the personal one pinned in that file).
+
 ## Current state + exact next step
 
 State (2026-11-05, late): Tasks 1–5, 6a and 7a complete (7a `f4f9790`: R16 guard + lastRev hold-back in
