@@ -166,7 +166,7 @@ export default function ToolSetup() {
 
           {def.key === 'trim' || def.key === 'gif' || def.key === 'picture' ? (
             <Group title={def.key === 'picture' ? 'Moment' : 'Range'}>
-              {frame ? <Image source={{ uri: frame }} resizeMode="contain" accessibilityLabel="The picture at the line" style={{ height: 200, borderRadius: radius.control, backgroundColor: c.raised }} /> : null}
+              {frame ? <Image source={{ uri: frame }} resizeMode="contain" accessibilityLabel="The picture at the line" style={{ height: 150, borderRadius: radius.control, backgroundColor: c.raised }} /> : null}
               <RangeStrip
                 key={`${info.id}-${pick}`}
                 uri={info.id}

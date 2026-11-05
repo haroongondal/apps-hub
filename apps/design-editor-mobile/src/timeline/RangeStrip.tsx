@@ -206,16 +206,17 @@ export function RangeStrip({ uri, durationS, hasVideo, hasSound, mode, range, on
             <View pointerEvents="none" style={{ position: 'absolute', top: 20, bottom: 0, left: pad - 1, width: 2, backgroundColor: c.text }} />
           </View>
 
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, alignItems: 'center' }}>
+          {/* Two fixed rows: four small buttons never fit one row on a phone, and wrapping left "End here" alone. */}
+          <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
             <Button label="Zoom out" variant="secondary" size="sm" disabled={px <= limits.min * 1.001} onPress={() => zoomBy(1 / 1.5)} />
             <Button label="Zoom in" variant="secondary" size="sm" disabled={px >= limits.max * 0.999} onPress={() => zoomBy(1.5)} />
-            {ranged ? (
-              <>
-                <Button label="Start here" variant="secondary" size="sm" onPress={() => onRange(moveEdge(range, 'start', headS, durationS))} />
-                <Button label="End here" variant="secondary" size="sm" onPress={() => onRange(moveEdge(range, 'end', headS, durationS))} />
-              </>
-            ) : null}
           </View>
+          {ranged ? (
+            <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
+              <Button label="Start here" variant="secondary" size="sm" onPress={() => onRange(moveEdge(range, 'start', headS, durationS))} />
+              <Button label="End here" variant="secondary" size="sm" onPress={() => onRange(moveEdge(range, 'end', headS, durationS))} />
+            </View>
+          ) : null}
         </>
       ) : null}
     </View>
