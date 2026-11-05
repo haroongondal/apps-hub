@@ -41,20 +41,23 @@ try {
   await spike.getByRole('button', { name: 'Run all' }).click();
 
   const stored = (key) => spike.evaluate((k) => chrome.storage.local.get(k).then((o) => o[k]), key);
-  let s1;
-  for (let i = 0; i < 40 && !s1; i++) {
-    s1 = await stored('probe:S1');
-    if (!s1) await spike.waitForTimeout(500);
+  // The page says "Done" only after the relay has stored every result, so the status text is the signal.
+  await spike.waitForFunction(() => { const t = document.getElementById('status').textContent; return t && t !== 'Running the probes...'; }, null, { timeout: 90_000 });
+  const status = await spike.locator('#status').innerText();
+  if (status !== 'Done. Results below.') throw new Error(`Run all did not finish: ${status}`);
+
+  const probes = await spike.evaluate(() => chrome.storage.local.get(null).then((o) => Object.fromEntries(Object.entries(o).filter(([k]) => k.startsWith('probe:')).sort())));
+  const keys = Object.keys(probes);
+  if (!keys.length) throw new Error('no probe results were stored');
+  for (const r of Object.values(probes)) {
+    console.log(JSON.stringify(await spike.evaluate((x) => summarise(x), r)));
+    if (!r.error && r.playability !== 'OK') console.log(`  ${r.strategy}: playability is ${r.playability} (${r.reason})${r.playability === 'LOGIN_REQUIRED' ? '; on a bot check, rerun with HEADLESS=0' : ''}`);
   }
-  if (!s1) throw new Error(`no probe:S1 within 20 s; the page says: ${await spike.locator('#status').innerText()}`);
-  if (s1.error) throw new Error(`probe:S1 recorded an error: ${s1.error}`);
+  const label = Object.values(probes).some((r) => r.loggedIn) ? 'signed-in' : 'signed-out';
+  writeFileSync(join(SCRATCH, `spike-${label}.json`), JSON.stringify(probes, null, 2));
+  if (Object.values(probes).every((r) => r.error)) throw new Error('every probe recorded an error');
 
-  const summary = await spike.evaluate((r) => summarise(r), s1);
-  console.log(JSON.stringify(summary, null, 2));
-  if (s1.playability !== 'OK') console.log(`playability is ${s1.playability} (${s1.reason}); on a bot check, rerun with HEADLESS=0`);
-  writeFileSync(join(SCRATCH, `spike-${s1.loggedIn ? 'signed-in' : 'signed-out'}.json`), JSON.stringify(s1, null, 2));
-
-  const fixtureObj = await stored('fixture');
+  const fixtureObj = (await stored('fixture')) ?? {};
   const fixture = JSON.stringify(fixtureObj, null, 2);
   const SECRET_KEY = /servingdata|trackingparams|baseurl|url$|token$|^signaturecipher$/i;
   const leaks = [];
@@ -84,7 +87,7 @@ try {
   }
   const file = saved && JSON.parse(readFileSync(saved.filename, 'utf8'));
   console.log(`saved: label ${file?.label}, results ${Object.keys(file?.results ?? {}).join(', ')}`);
-  failed = file?.label !== (s1.loggedIn ? 'signed-in' : 'signed-out') || !file.results['probe:S1'];
+  failed = file?.label !== label || keys.some((k) => !file.results[k]);
 } catch (e) {
   failed = true;
   console.error(String(e?.stack ?? e).split('\n').slice(0, 4).join('\n'));

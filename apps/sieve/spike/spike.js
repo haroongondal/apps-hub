@@ -19,6 +19,7 @@ function summarise(r) {
   return {
     strategy: r.strategy, videoId: r.videoId, signedIn: r.loggedIn, playability: r.playability, sabr: r.sabr,
     ...tally(r.formats), muxed: tally(r.muxed ?? []),
+    audioUrl: r.formats.some((f) => f.has === 'url' && f.mimeType?.startsWith('audio/')),
   };
 }
 
