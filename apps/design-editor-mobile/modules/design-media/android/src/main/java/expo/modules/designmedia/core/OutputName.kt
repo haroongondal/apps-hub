@@ -26,7 +26,7 @@ fun outputLabel(plan: Plan): String = when (plan) {
   is VolumePlan -> "volume"
   is ReversePlan -> "reversed"
   is StabilizePlan -> "stabilized"
-  is GifPlan, is AudioPlan -> ""
+  is GifPlan, is AudioPlan, is ComposePlan -> ""
 }
 
 fun audioLabel(position: Int, language: String?): String {
@@ -35,7 +35,7 @@ fun audioLabel(position: Int, language: String?): String {
 }
 
 fun outputExt(plan: Plan): String = when (plan) {
-  is SizePlan, is QualityPlan, is ReversePlan, is StabilizePlan -> "mp4"
+  is SizePlan, is QualityPlan, is ReversePlan, is StabilizePlan, is ComposePlan -> "mp4"
   is GifPlan -> "gif"
   is ClipPlan -> plan.ext
   is AudioPlan -> plan.ext

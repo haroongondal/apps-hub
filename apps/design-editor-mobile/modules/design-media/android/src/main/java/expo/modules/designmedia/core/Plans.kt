@@ -81,6 +81,14 @@ data class StabilizePlan(val level: String, val search: Int, val quality: Double
   override val tool get() = "stabilize"
 }
 
+data class ComposeClip(val uri: String, val name: String, val inS: Double, val outS: Double, val hasAudio: Boolean)
+
+data class ComposePlan(
+  val clips: List<ComposeClip>, val width: Int, val height: Int, val fps: Int, val videoBps: Int, val plannedBytes: Long, val ext: String,
+) : Plan {
+  override val tool get() = "compose"
+}
+
 data class Output(val name: String, val ref: String, val bytes: Long, val note: String? = null)
 data class AttemptLog(val attempt: Int, val plannedBytes: Long, val actualBytes: Long, val seconds: Double, val mode: String)
 
@@ -145,6 +153,7 @@ fun decodePlan(o: JsonObject): Plan = when (val tool = textOf(o, "tool")) {
   "volume" -> decodeVolumePlan(o)
   "reverse" -> ReversePlan(o.getValue("sound").jsonPrimitive.boolean, doubleOf(o, "quality"), textOf(o, "ext"))
   "stabilize" -> StabilizePlan(textOf(o, "level"), intOf(o, "search"), doubleOf(o, "quality"), textOf(o, "ext"))
+  "compose" -> decodeComposePlan(o)
   else -> throw IllegalArgumentException("Unknown tool: $tool")
 }
 
@@ -227,6 +236,18 @@ fun encodePlan(p: Plan): JsonObject = when (p) {
     put("quality", p.quality)
     put("ext", p.ext)
   }
+  is ComposePlan -> buildJsonObject {
+    put("tool", "compose")
+    put("clips", JsonArray(p.clips.map { c ->
+      buildJsonObject { put("uri", c.uri); put("name", c.name); put("inS", c.inS); put("outS", c.outS); put("hasAudio", c.hasAudio) }
+    }))
+    put("width", p.width)
+    put("height", p.height)
+    put("fps", p.fps)
+    put("videoBps", p.videoBps)
+    put("plannedBytes", p.plannedBytes)
+    put("ext", p.ext)
+  }
 }
 
 fun decodeSizePlan(o: JsonObject): SizePlan {
@@ -284,6 +305,15 @@ private fun decodeConvertPlan(o: JsonObject): ConvertPlan {
   val audio = optObject(o, "audio")?.let { ConvertAudio(textOf(it, "codec"), optInt(it, "bps"), it.getValue("copy").jsonPrimitive.boolean) }
   return ConvertPlan(textOf(o, "mode"), textOf(o, "container"), textOf(o, "ext"), video, audio)
 }
+
+private fun decodeComposePlan(o: JsonObject) = ComposePlan(
+  clips = o.getValue("clips").jsonArray.map {
+    val c = it.jsonObject
+    ComposeClip(textOf(c, "uri"), textOf(c, "name"), doubleOf(c, "inS"), doubleOf(c, "outS"), c.getValue("hasAudio").jsonPrimitive.boolean)
+  },
+  width = intOf(o, "width"), height = intOf(o, "height"), fps = intOf(o, "fps"), videoBps = intOf(o, "videoBps"),
+  plannedBytes = longOf(o, "plannedBytes"), ext = textOf(o, "ext"),
+)
 
 private fun decodeVolumePlan(o: JsonObject): VolumePlan {
   val measured = optObject(o, "measured")?.let {

@@ -2,6 +2,7 @@ package expo.modules.designmedia.android
 
 import expo.modules.designmedia.core.AudioPlan
 import expo.modules.designmedia.core.ClipPlan
+import expo.modules.designmedia.core.ComposePlan
 import expo.modules.designmedia.core.ConvertPlan
 import expo.modules.designmedia.core.FramePlan
 import expo.modules.designmedia.core.GifPlan
@@ -24,6 +25,7 @@ object Runners {
       is GifPlan -> GifRunner.start(req, source, done)
       is FramePlan -> StillRunner.start(req, source, done)
       is VolumePlan, is ReversePlan, is StabilizePlan -> FfmpegRunner.start(req, source, done)
+      is ComposePlan -> TransformerRunner.compose(req, plan, done)
     }
   }
 }

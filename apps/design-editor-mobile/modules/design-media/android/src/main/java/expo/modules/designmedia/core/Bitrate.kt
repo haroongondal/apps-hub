@@ -23,6 +23,7 @@ fun convertBps(encoder: String, sourceBps: Int?): Int? =
 // SPEC §11.1: free space needed before a job starts. Size jobs write a temp file and a published copy.
 fun neededBytes(plan: Plan, inputBytes: Long, durationS: Double): Long = when (plan) {
   is SizePlan -> 2 * plan.plannedBytes
+  is ComposePlan -> 2 * plan.plannedBytes
   is GifPlan -> 2 * (plan.targetBytes ?: 20_000_000L)
   is FramePlan -> 25_000_000L
   is ClipPlan ->

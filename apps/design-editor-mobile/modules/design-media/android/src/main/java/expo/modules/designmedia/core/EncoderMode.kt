@@ -6,7 +6,7 @@ const val FIXED = "fixed"
 
 // Only a re-encode with a bit-rate target has a CBR/VBR choice; every other tool runs once in its one mode.
 fun hasBitrateMode(plan: Plan): Boolean = when (plan) {
-  is SizePlan, is QualityPlan -> true
+  is SizePlan, is QualityPlan, is ComposePlan -> true
   is ClipPlan -> plan.mode == "exact"
   is ConvertPlan -> plan.video != null && plan.video.encoder != "copy"
   else -> false

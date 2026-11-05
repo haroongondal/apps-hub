@@ -4,13 +4,10 @@ import android.media.MediaCodecInfo.EncoderCapabilities
 import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
-import androidx.media3.effect.FrameDropEffect
-import androidx.media3.effect.Presentation
 import androidx.media3.transformer.AudioEncoderSettings
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.EditedMediaItem
-import androidx.media3.transformer.Effects
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
@@ -18,6 +15,7 @@ import androidx.media3.transformer.Transformer
 import androidx.media3.transformer.VideoEncoderSettings
 import expo.modules.designmedia.core.AudioPlan
 import expo.modules.designmedia.core.ClipPlan
+import expo.modules.designmedia.core.ComposePlan
 import expo.modules.designmedia.core.ConvertPlan
 import expo.modules.designmedia.core.QualityPlan
 import expo.modules.designmedia.core.SizePlan
@@ -38,7 +36,7 @@ object TransformerRunner {
         val audioBps = if (plan.audio.mode == "aac") plan.audio.bps else null
         val item = EditedMediaItem.Builder(plain)
           .setRemoveAudio(plan.audio.mode == "none")
-          .setEffects(scaleTo(plan.width, plan.height, plan.rung.fps))
+          .setEffects(ComposeBuilder.scaleTo(plan.width, plan.height, plan.rung.fps))
           .build()
         launch(req, done, item) {
           setVideoMimeType(if (plan.encoder == "hw-hevc") MimeTypes.VIDEO_H265 else MimeTypes.VIDEO_H264)
@@ -48,7 +46,7 @@ object TransformerRunner {
       }
       is QualityPlan -> {
         val bps = qualityBps(plan.quality, plan.width, plan.height, plan.rung.fps, source?.videoBps)
-        val item = EditedMediaItem.Builder(plain).setEffects(scaleTo(plan.width, plan.height, plan.rung.fps)).build()
+        val item = EditedMediaItem.Builder(plain).setEffects(ComposeBuilder.scaleTo(plan.width, plan.height, plan.rung.fps)).build()
         launch(req, done, item) {
           setVideoMimeType(MimeTypes.VIDEO_H264)
           setAudioMimeType(MimeTypes.AUDIO_AAC)
@@ -91,7 +89,16 @@ object TransformerRunner {
     }
   }
 
-  private fun launch(req: Request, done: (Outcome) -> Unit, item: EditedMediaItem, configure: Transformer.Builder.() -> Unit): Runner {
+  fun compose(req: Request, plan: ComposePlan, done: (Outcome) -> Unit): Runner = run(req, done, {
+    setVideoMimeType(MimeTypes.VIDEO_H264)
+    setAudioMimeType(MimeTypes.AUDIO_AAC)
+    setEncoderFactory(encoders(req, plan.videoBps, AAC_BPS))
+  }) { start(ComposeBuilder.composition(plan), req.out.absolutePath) }
+
+  private fun launch(req: Request, done: (Outcome) -> Unit, item: EditedMediaItem, configure: Transformer.Builder.() -> Unit): Runner =
+    run(req, done, configure) { start(item, req.out.absolutePath) }
+
+  private fun run(req: Request, done: (Outcome) -> Unit, configure: Transformer.Builder.() -> Unit, begin: Transformer.() -> Unit): Runner {
     val transformer = Transformer.Builder(req.context).apply {
       configure()
       setLooper(req.looper)
@@ -107,7 +114,7 @@ object TransformerRunner {
         },
       )
     }.build()
-    transformer.start(item, req.out.absolutePath)
+    transformer.begin()
     return object : Runner {
       override fun progress(): Double? {
         val holder = ProgressHolder()
@@ -127,12 +134,4 @@ object TransformerRunner {
       if (audioBps != null) setRequestedAudioEncoderSettings(AudioEncoderSettings.Builder().setBitrate(audioBps).build())
     }.build()
   }
-
-  private fun scaleTo(width: Int, height: Int, fps: Int) = Effects(
-    emptyList(),
-    listOf(
-      Presentation.createForWidthAndHeight(width, height, Presentation.LAYOUT_SCALE_TO_FIT),
-      FrameDropEffect.createDefaultFrameDropEffect(fps.toFloat()),
-    ),
-  )
 }
