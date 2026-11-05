@@ -215,8 +215,10 @@ unlock screen, account-key typo guard, true "stays on this computer" copy; exten
 the one fix wave (`a0bc58e`, `1e19046`, `3082b04`) addressed all nine items (Gradle 369, strongroom 61,
 extension 69 + e2e 56, core 142, vault-api 20; release = Phase 1 + INTERNET). Its re-review found ONE
 residual Important (overlapping password/recovery-key changes + a crash in the new bookkeeping can upload a
-header no device can sign in to; fix = save the new mark before overwriting NEXT_*; details in the ledger),
-**surfaced to the owner for a decision**. Remaining: the owner's call on that residual; 6c phone checks a–h
+header no device can sign in to), **fixed on the owner's "go ahead" (2026-11-06) in two rounds**
+(`9239d47`, `ef89ccd`: mark saved before the new tokens; NEXT_* via the KEY_LOST-safe store; a new recovery
+key sends tokens matching its header; Gradle 376). Re-review clean; three minors deferred in the ledger.
+Remaining: 6c phone checks a–h
 when apps-hub-ad sends "phone free" (resume per `task-6c-report.md`; then "phone free" to apps-hub-ad or
 whoever the queue says); then stop for the owner (Task 8, each step on their word; deploy notes are in
 this file) with the "Rulings I made" list from the ledger. The SDD ledger `.superpowers/sdd/PHASE-2-PLAN/progress.md` has every ruling,
