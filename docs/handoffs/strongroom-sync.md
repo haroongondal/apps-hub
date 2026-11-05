@@ -194,14 +194,15 @@ Both test APKs and the throwaway c3da09c worktree are in the old session's scrat
 if a new session can't see them, rebuild per `task-6c-report.md`. Phone checks a–h wait for the phone: on
 the owner's word the phone went to **apps-hub-ad** (Model Host, ~3–4 h), which will send "phone free" back
 (owner's rule: hand the phone on while only waiting off-device; memory `phone-queue-handoff`). 6b fix round
-6b is complete (`3b10bd5..ad95198`, two fix rounds: one honest "not synced" count, copy fixes, a warning
-before a sign-in from an unfinished setup replaces a local password/recovery-key change; strongroom 59 tests).
-7b (Chrome extension wiring, sonnet) is running from `ad95198`: if this session ended before it reported,
-check `git log` for its commit ("Strongroom for Chrome: sign in to sync, merge, and the common-password
-rule") and `.superpowers/sdd/PHASE-2-PLAN/task-7b-report.md`; if both exist, review it (spec + quality,
-sonnet for UI-only parts, opus if it touched merge/storage logic); if not, re-dispatch from the brief.
-Next, one implementer at a time: 7b review → 6c phone checks when apps-hub-ad sends "phone free" → final
-whole-branch review (opus) with the ledger's deferred minors → stop for the owner (Task 8, each on their word). The SDD ledger `.superpowers/sdd/PHASE-2-PLAN/progress.md` has every ruling,
+6b is complete (`3b10bd5..ad95198`, two fix rounds; strongroom 59 tests). **7b is complete**
+(`1b99210..46b4254`, one fix round: honest sign-in copy, recovery serialized with sync, sign-in from the
+unlock screen, account-key typo guard, true "stays on this computer" copy; extension 69 tests, Chromium e2e
+55/55). **All code tasks are done.** Ruling R32: the final whole-branch review (opus) is running now over
+`c3da09c..46b4254` (area diffs `final-*.diff` in the SDD folder), before the phone checks. Remaining:
+act on the final review (ONE fix wave + one scoped re-review, then adjudicate residuals); 6c phone checks
+a–h when apps-hub-ad sends "phone free" (resume per `task-6c-report.md`; then "phone free" to apps-hub-ad or
+whoever the queue says); then stop for the owner (Task 8, each step on their word) with the "Rulings I
+made" list from the ledger. The SDD ledger `.superpowers/sdd/PHASE-2-PLAN/progress.md` has every ruling,
 deferred minor and carry-forward note. The owner has not pushed `strongroom-extension` or merged
 anything.
 
