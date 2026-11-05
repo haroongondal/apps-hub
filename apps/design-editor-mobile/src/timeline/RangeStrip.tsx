@@ -32,6 +32,31 @@ const Bars = memo(function Bars({ bars, color }: { bars: number[]; color: string
   );
 });
 
+const Ruler = memo(function Ruler({ durationS, px, pad }: { durationS: number; px: number; pad: number }) {
+  const step = rulerStepS(px, 56, durationS);
+  const count = Math.floor((Number.isFinite(durationS) ? durationS : 0) / step) + 1;
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => i * step).map(s => (
+        <Text key={s} variant="caption" tone="muted" style={{ position: 'absolute', top: HEAD_H, left: pad + s * px + 3 }}>
+          {step < 1 ? timeText(s) : formatClock(s)}
+        </Text>
+      ))}
+    </>
+  );
+});
+
+const Film = memo(function Film({ tiles, trackW, pad }: { tiles: string[]; trackW: number; pad: number }) {
+  const { c } = useTheme();
+  return (
+    <View style={{ position: 'absolute', top: HEAD_H + RULER_H, left: pad, width: trackW, height: FILM_H, flexDirection: 'row', backgroundColor: c.raised, borderRadius: 6, overflow: 'hidden' }}>
+      {tiles.map((t, i) => (
+        <Image key={`${i}-${t}`} source={{ uri: t }} resizeMode="cover" style={{ width: trackW / tiles.length, height: FILM_H }} />
+      ))}
+    </View>
+  );
+});
+
 export function RangeStrip({ uri, durationS, hasVideo, hasSound, mode, range, onRange, onPlayhead }: RangeStripProps) {
   const { c } = useTheme();
   const [viewW, setViewW] = useState(0);
@@ -103,9 +128,6 @@ export function RangeStrip({ uri, durationS, hasVideo, hasSound, mode, range, on
 
   const barCount = Math.min(Math.floor(trackW / 3), 800);
   const bars = useMemo(() => barsFor(peaks, barCount), [peaks, barCount]);
-  const step = rulerStepS(px, 56, durationS);
-  const marks = Array.from({ length: Math.floor((Number.isFinite(durationS) ? durationS : 0) / step) + 1 }, (_, i) => i * step);
-
   const top = HEAD_H + RULER_H;
   const body = FILM_H + (bars.length ? WAVE_H + space.xs : 0);
   const startX = range.startS * px, endX = range.endS * px;
@@ -125,17 +147,8 @@ export function RangeStrip({ uri, durationS, hasVideo, hasSound, mode, range, on
               onScroll={onScroll}
             >
               <View style={{ width: trackW + viewW, height: top + body }}>
-                {marks.map(s => (
-                  <Text key={s} variant="caption" tone="muted" style={{ position: 'absolute', top: HEAD_H, left: pad + s * px + 3 }}>
-                    {step < 1 ? timeText(s) : formatClock(s)}
-                  </Text>
-                ))}
-
-                <View style={{ position: 'absolute', top, left: pad, width: trackW, height: FILM_H, flexDirection: 'row', backgroundColor: c.raised, borderRadius: 6, overflow: 'hidden' }}>
-                  {tiles.map((t, i) => (
-                    <Image key={`${i}-${t}`} source={{ uri: t }} resizeMode="cover" style={{ width: trackW / tiles.length, height: FILM_H }} />
-                  ))}
-                </View>
+                <Ruler durationS={durationS} px={px} pad={pad} />
+                <Film tiles={tiles} trackW={trackW} pad={pad} />
 
                 {bars.length ? (
                   <>

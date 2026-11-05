@@ -87,7 +87,9 @@ class Phase4RulesTest {
   fun thumbnailsAndGifFramesNeverLeaveTheCacheOrTheBridge() {
     val module = source("DesignMediaModule.kt")
     assertTrue(module.contains("Thumbs.write("))
-    assertTrue(source("Thumbs.kt").contains("File(context.cacheDir, \"thumbs\")"))
+    // every folder is under the cache, and the cleanup only looks inside the folder it wrote to
+    assertTrue(source("Thumbs.kt").contains("folder: String = \"thumbs\""))
+    assertTrue(source("Thumbs.kt").contains("File(context.cacheDir, folder)"))
     assertTrue(source("Thumbs.kt").contains("it !in made"))
   }
 }

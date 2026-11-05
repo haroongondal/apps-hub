@@ -8,6 +8,7 @@ import expo.modules.designmedia.android.Intents
 import expo.modules.designmedia.android.MediaJobService
 import expo.modules.designmedia.android.Probe
 import expo.modules.designmedia.android.Thumbs
+import expo.modules.designmedia.android.Waveform
 import expo.modules.designmedia.core.AtomicFile
 import expo.modules.designmedia.core.EncoderStatsStore
 import expo.modules.designmedia.core.QueueStore
@@ -39,6 +40,12 @@ class DesignMediaModule : Module() {
     AsyncFunction("keyframeAtOrBefore") { uri: String, timeS: Double -> Probe.keyframeAtOrBefore(context, Uri.parse(uri), timeS) }
 
     AsyncFunction("thumbnails") { uri: String, timesS: List<Double>, width: Int -> Thumbs.write(context, Uri.parse(uri), timesS, width) }
+
+    AsyncFunction("waveform") { uri: String, buckets: Int -> Waveform.peaks(context, Uri.parse(uri), buckets.coerceIn(8, 2000)) }
+
+    AsyncFunction("previewFrame") { uri: String, timeS: Double, width: Int ->
+      Thumbs.write(context, Uri.parse(uri), listOf(timeS), width, "preview").first()
+    }
 
     AsyncFunction("codecReport") { CodecReport.list() }
 

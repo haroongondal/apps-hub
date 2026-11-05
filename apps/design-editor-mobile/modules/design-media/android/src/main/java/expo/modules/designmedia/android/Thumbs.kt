@@ -9,16 +9,23 @@ import expo.modules.designmedia.core.microseconds
 import expo.modules.designmedia.core.scaledHeight
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.ConcurrentHashMap
 
 object Thumbs {
   private const val QUALITY = 80
   private const val STEP_BACK_US = 100_000L
 
   // Each call writes a fresh set (new names, so image caches never show an old picture) and deletes every
-  // file the previous calls left, so the folder never holds more than the latest strip.
-  @Synchronized
-  fun write(context: Context, uri: Uri, timesS: List<Double>, width: Int): List<String> {
-    val dir = File(context.cacheDir, "thumbs").apply { mkdirs() }
+  // file the previous calls left in the same folder, so a folder never holds more than its latest set and
+  // the one-frame "preview" folder never touches the filmstrip tiles.
+  private val locks = ConcurrentHashMap<String, Any>()
+
+  // One lock per folder: a one-frame preview must not wait behind a sixty-tile filmstrip.
+  fun write(context: Context, uri: Uri, timesS: List<Double>, width: Int, folder: String = "thumbs"): List<String> =
+    synchronized(locks.getOrPut(folder) { Any() }) { writeFolder(context, uri, timesS, width, folder) }
+
+  private fun writeFolder(context: Context, uri: Uri, timesS: List<Double>, width: Int, folder: String): List<String> {
+    val dir = File(context.cacheDir, folder).apply { mkdirs() }
     val stamp = System.nanoTime()
     val retriever = MediaMetadataRetriever()
     val made = ArrayList<File>()
