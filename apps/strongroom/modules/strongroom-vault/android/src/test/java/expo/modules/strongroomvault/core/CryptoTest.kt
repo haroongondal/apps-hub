@@ -86,6 +86,10 @@ class CryptoTest {
     )
   }
 
+  @Test fun tokenHashIsBase64OfSha256() {
+    assertEquals("FIPS 180-2 SHA-256(\"abc\")", "ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=", Crypto.tokenHash("abc".toByteArray()))
+  }
+
   @Test fun hkdfLabelsGiveDistinctKeys() {
     val wrap = Crypto.hkdf(key, "strongroom/v1/wrap")
     val login = Crypto.hkdf(key, "strongroom/v1/login")

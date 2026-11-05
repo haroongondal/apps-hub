@@ -8,8 +8,10 @@ import org.bouncycastle.crypto.params.HKDFParameters
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
 import java.nio.charset.CodingErrorAction
+import java.security.MessageDigest
 import java.security.SecureRandom
 import java.text.Normalizer
+import java.util.Base64
 import javax.crypto.BadPaddingException
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
@@ -90,6 +92,9 @@ object Crypto {
       .generateBytes(out, 0, length)
     return out
   }
+
+  /** What the server stores for a token: standard Base64 of SHA-256 of the raw token bytes. */
+  fun tokenHash(token: ByteArray): String = Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(token))
 
   fun seal(key: ByteArray, plaintext: ByteArray, aad: ByteArray): ByteArray {
     val nonce = randomBytes(NONCE_BYTES)
