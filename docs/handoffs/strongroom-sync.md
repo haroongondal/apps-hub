@@ -117,14 +117,22 @@ All in the plan's "Decisions"; the owner delegated them on 2026-11-05 ("do what 
 - 2026-11-05 (planning session): read the three docs, verified the facts above, committed the extension
   as `c3da09c` locally (push denied), wrote the plan, corrected the common-password claim, owner approved
   the plan and asked for this handoff and a new-chat prompt. No Phase 2 code exists yet.
+- 2026-11-05 (build session 1): Step 0 done: worktree `.claude/worktrees/strongroom-sync` on branch
+  `strongroom-sync` from `c3da09c`, docs committed as `94b6239`; `strongroom-core` deps installed.
+  Execution: subagent-driven-development. Its ledger (pre-flight scan, rulings R1 to R5, per-task
+  progress) is `.superpowers/sdd/PHASE-2-PLAN/progress.md` in the worktree (git-ignored): read it on
+  resume, it says which tasks are done. argon2-cffi is not installed on the Mac; vectors use a scratchpad
+  venv (R1). The worktree sandbox refuses compound shell commands that might run git: keep git commands
+  plain and separate.
+- 2026-11-05: **Task 1 done** (`8ea3c25`): account key, `openWithPassword`, `tokenHash`, `withAccountKey`,
+  header flag (last field), vectors from `apps/strongroom/tools/vectors/account_key_vectors.py`
+  (argon2-cffi + cryptography in a scratchpad venv). strongroom-core 85 → 95 tests. Opus review approved;
+  the reviewer recomputed the vectors with node:crypto.
 
 ## Current state + exact next step
 
-State: plan approved, no code written, no branch `strongroom-sync` yet. The plan and this file are
-uncommitted in the extension worktree. The owner has not yet pushed `strongroom-extension` or merged
+State: Task 1 complete; Task 2 (the Worker) dispatched (opus). The owner has not pushed `strongroom-extension` or merged
 anything.
 
-**Next:** do Step 0 of the resume prompt (own worktree, copy and commit the two docs), run
-`pnpm install --frozen-lockfile --filter strongroom-core...` there, then start **Task 1** of the plan:
-write the account-key vectors with the independent Python script, then the failing tests, then the code.
-The owner-gated Task 8 (deploy, release, live checks) waits for their word at each step.
+**Next:** follow the ledger: resume at the first task without a `Task N: complete` line. Tasks 1 to 7 run
+unattended; the owner-gated Task 8 (reviews, deploy, release, live checks) waits for their word at each step.
