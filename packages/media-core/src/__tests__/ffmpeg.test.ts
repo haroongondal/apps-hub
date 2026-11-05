@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ffmpegArgs, loudnormMeasureArgs, parseKeyframe, parseProgress } from '../ffmpeg.ts';
-import type { ClipPlan, ConvertPlan, GifPlan, QualityPlan, SizePlan } from '../types.ts';
+import type { ClipPlan, ComposePlan, ConvertPlan, GifPlan, QualityPlan, SizePlan } from '../types.ts';
 
 const size: SizePlan = {
   tool: 'size', targetBytes: 20_000_000, encoder: 'x264', rung: { shortSide: 720, fps: 30 }, width: 1280, height: 720,
@@ -119,4 +119,9 @@ test('ffmpeg: a measured normalize runs the second pass linearly with the measur
   const measure = loudnormMeasureArgs('in.mp4');
   assert.equal(measure[measure.indexOf('-af') + 1], 'loudnorm=I=-23:LRA=11:TP=-1.5:print_format=json');
   assert.deepEqual(measure.slice(-3), ['-f', 'null', '-']);
+});
+
+test('ffmpegArgs: a compose plan is the phone only, so the Mac refuses it', () => {
+  const plan: ComposePlan = { tool: 'compose', clips: [], width: 2, height: 2, fps: 30, videoBps: 1, plannedBytes: 1, ext: 'mp4' };
+  assert.throws(() => ffmpegArgs(plan, 'in.mp4', 'out.mp4'), /phone/);
 });

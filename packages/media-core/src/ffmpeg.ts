@@ -52,6 +52,7 @@ export function ffmpegArgs(plan: Plan, input: string, output: string, pass?: { n
     case 'volume': return volumeArgs(plan, input, output);
     case 'reverse': return reverseArgs(plan, input, output);
     case 'stabilize': return stabilizeArgs(plan, input, output);
+    case 'compose': throw new Error('Make a video runs on the phone only.');
   }
 }
 

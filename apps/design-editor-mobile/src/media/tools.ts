@@ -1,4 +1,4 @@
-import type { JobSpec } from '@apps-hub/media-core';
+import type { Plan } from '@apps-hub/media-core';
 
 export type ToolKey = 'smaller' | 'trim' | 'sound' | 'gif' | 'format' | 'picture' | 'volume' | 'backwards' | 'steady';
 
@@ -18,11 +18,12 @@ export const TOOLS: { key: ToolKey; title: string; about: string; accept: ('vide
 export const toolTitle = (key: string | undefined) => TOOLS.find(t => t.key === key)?.title;
 
 // The title a finished or running job shows, from the plan's tool.
-const BY_PLAN: Record<JobSpec['tool'], string> = {
+const BY_PLAN: Record<Plan['tool'], string> = {
   size: 'Make smaller', quality: 'Make smaller', clip: 'Trim', audio: 'Get the sound', gif: 'Make a GIF',
   convert: 'Change format', frame: 'Save a picture', volume: 'Change the volume', reverse: 'Play backwards', stabilize: 'Steady a shaky video',
+  compose: 'Make a video',
 };
-export const planTitle = (tool: string) => BY_PLAN[tool as JobSpec['tool']] ?? 'Video job';
+export const planTitle = (tool: string) => BY_PLAN[tool as Plan['tool']] ?? 'Video job';
 
 // "1:05.4" or "65.4" or "1:05" -> seconds; undefined when it is not a time.
 export function parseTime(text: string): number | undefined {

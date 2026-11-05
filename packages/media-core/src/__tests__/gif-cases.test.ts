@@ -20,5 +20,5 @@ for (const c of cases) {
 test('plan examples: every tool the phone runs has one example the Kotlin decoder reads', () => {
   const { plans } = read('plan-examples.json') as { plans: Record<string, { tool: string }> };
   assert.deepEqual([...new Set(Object.values(plans).map(p => p.tool))].sort(),
-    ['audio', 'clip', 'convert', 'frame', 'gif', 'quality', 'reverse', 'size', 'stabilize', 'volume']);
+    ['audio', 'clip', 'compose', 'convert', 'frame', 'gif', 'quality', 'reverse', 'size', 'stabilize', 'volume']);
 });

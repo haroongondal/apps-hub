@@ -195,6 +195,31 @@
     "inputThresh": -38.1,
     "offset": 0.4
    }
+  },
+  "compose": {
+   "tool": "compose",
+   "clips": [
+    {
+     "uri": "content://media/a",
+     "name": "a.mp4",
+     "inS": 0,
+     "outS": 10,
+     "hasAudio": true
+    },
+    {
+     "uri": "content://media/b",
+     "name": "b.mp4",
+     "inS": 0,
+     "outS": 4,
+     "hasAudio": false
+    }
+   ],
+   "width": 1920,
+   "height": 1080,
+   "fps": 30,
+   "videoBps": 6220800,
+   "plannedBytes": 11222400,
+   "ext": "mp4"
   }
  }
 }
