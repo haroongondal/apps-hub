@@ -20,3 +20,4 @@ export * from './format.ts';
 export * from './remux.ts';
 export * from './plan-for.ts';
 export * from './timeline.ts';
+export * from './project.ts';
