@@ -197,37 +197,31 @@ All in the plan's "Decisions"; the owner delegated them on 2026-11-05 ("do what 
 
 ## Current state + exact next step
 
-State (2026-11-05, late): Tasks 1–5, 6a and 7a complete (7a `f4f9790`: R16 guard + lastRev hold-back in
-TS, vault.ts account key, sign-in refuses a dropped flag; opus approved). 6b (screens, `3b10bd5`) reviewed:
-**fix round 1 queued** (double-counted "not synced" footer + copy fixes, ruling R28; resume/redo from
-`task-6b-report.md` and the ledger's 6b lines). 6c (phone proof, opus) is doing the OFF-PHONE prep only
-(side-by-side build property, debug-only FLAG_SECURE switch, HTTPS harness, debug network config + BASE_URL
-override, both test APKs, disk-check update) and will report BLOCKED "waiting for the phone": the owner gave
-the phone back to apps-hub-63, which will send "phone free" to strongroom-sync-dc. 7b brief is ready
-(`task-7b-brief.md`, rulings R29 and the vault.ts `keyed` gate).
-Update: 6c off-phone prep is DONE (`561f1a8`: side-by-side test app `com.haroon.strongroom.synctest`,
-debug-only screenshot switch, HTTPS harness `tools/vault-api/src/local-https.ts` + second-device script
-`local-device.ts`, debug network config + BASE_URL override, disk-check update; release APK byte-identical).
-Both test APKs and the throwaway c3da09c worktree are in the old session's scratchpad (`…/scratchpad/6c/`);
-if a new session can't see them, rebuild per `task-6c-report.md`. Phone checks a–h wait for the phone: on
-the owner's word the phone went to **apps-hub-ad** (Model Host, ~3–4 h), which will send "phone free" back
-(owner's rule: hand the phone on while only waiting off-device; memory `phone-queue-handoff`). 6b fix round
-6b is complete (`3b10bd5..ad95198`, two fix rounds; strongroom 59 tests). **7b is complete**
-(`1b99210..46b4254`, one fix round: honest sign-in copy, recovery serialized with sync, sign-in from the
-unlock screen, account-key typo guard, true "stays on this computer" copy; extension 69 tests, Chromium e2e
-55/55). **All code tasks are done.** The final whole-branch review (opus) found 2 Important + 6 Minor;
-the one fix wave (`a0bc58e`, `1e19046`, `3082b04`) addressed all nine items (Gradle 369, strongroom 61,
-extension 69 + e2e 56, core 142, vault-api 20; release = Phase 1 + INTERNET). Its re-review found ONE
-residual Important (overlapping password/recovery-key changes + a crash in the new bookkeeping can upload a
-header no device can sign in to), **fixed on the owner's "go ahead" (2026-11-06) in two rounds**
-(`9239d47`, `ef89ccd`: mark saved before the new tokens; NEXT_* via the KEY_LOST-safe store; a new recovery
-key sends tokens matching its header; Gradle 376). Re-review clean; three minors deferred in the ledger.
-Remaining: 6c phone checks a–h
-when apps-hub-ad sends "phone free" (resume per `task-6c-report.md`; then "phone free" to apps-hub-ad or
-whoever the queue says); then stop for the owner (Task 8, each step on their word; deploy notes are in
-this file) with the "Rulings I made" list from the ledger. The SDD ledger `.superpowers/sdd/PHASE-2-PLAN/progress.md` has every ruling,
-deferred minor and carry-forward note. The owner has not pushed `strongroom-extension` or merged
-anything.
+State (2026-11-06): **the build is done; Task 8 waits for the owner.** Branch `strongroom-sync`, HEAD
+`c63735f`, from `c3da09c` (the unpushed extension commit). Nothing pushed, merged, deployed or released.
 
-**Next:** follow the ledger: resume at the first task without a `Task N: complete` line. Tasks 1 to 7 run
-unattended; the owner-gated Task 8 (reviews, deploy, release, live checks) waits for their word at each step.
+- Tasks 1–7 complete, each reviewed (opus for crypto/merge/Worker/Keystore, sonnet for screens/extension),
+  with fix rounds; the final whole-branch review, its one fix wave and the owner-approved residual fix are
+  done and re-reviewed clean. Gates at the end: Gradle 376 (0 failures), strongroom 61, strongroom-core 142,
+  vault-api 20, extension 69 + Chromium e2e 56/56, all typechecks; release APK = Phase 1 permissions only
+  (`446ca9f`, from an owner-approved security review in another session, removes INTERNET again until Task 8
+  sets `SyncConfig.BASE_URL`).
+- **Phone proof (6c) passed on the owner's phone** (side-by-side test app, local HTTPS Worker): 0.1.1 upgrade,
+  wrong setup code leaves the vault as it was, turn on sync (key shown once, type-back), add/sync, fresh-device
+  sign-in, locked download staged then merged, wrong password/key copy, list refresh, on-disk check 0 hits for
+  17 secrets. Test app uninstalled, phone released in coord.
+- Deferred minors (none blocking; triaged CAN WAIT / SHOULD FIX in the ledger): e.g. hardware Back from Show
+  account key leaves Sync; a cert failure reads "could not be reached"; a refused setup code leaves encrypted
+  sync files; NEEDS_SIGN_IN copy after a local reset; `updateAccount` fallbacks after a double failure.
+- Merge note: branch `security-fixes` adds a second private job service (ClipboardClearJob) to the vault
+  module; our manifest.test.ts must allow it when the branches meet. Rebase onto `origin/main` once the owner
+  has merged the extension PR (`git rebase --onto origin/main c3da09c strongroom-sync` if squashed).
+
+**Next (each step only on the owner's word):** Task 8 per the plan and the "Task 8 deploy notes" above:
+1. reviews (security-engineer on vault-api + sync code; invariant-reviewer; supply-chain; docs-keeper);
+2. confirm the Cloudflare account (personal `29ada9205500ff7931f09084daf89597`), find the `cf` commands with
+   `cf cli search`, show them; 3. create D1, apply the migration by hand, set SETUP_TOKEN (≥ 32 chars, the
+   "setup code"), deploy, smoke-test (incl. json_each/RETURNING/upsert/100-upsert batch on real D1);
+4. set `SyncConfig.BASE_URL` + `sync-url.ts` (test they are equal) and delete the release INTERNET removal;
+5. push/merge with `[skip ci]`, then `pnpm release strongroom` (0.2.0), owner installs from the Store;
+6. live checks with the owner; 7. update `docs/handoffs/strongroom.md` and `strongroom-extension.md`.
