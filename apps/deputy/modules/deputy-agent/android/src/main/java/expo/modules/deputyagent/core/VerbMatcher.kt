@@ -10,6 +10,7 @@ object VerbMatcher {
     "send", "post", "publish", "reply", "share", "pay", "buy", "purchase", "order", "checkout", "confirm",
     "transfer", "withdraw", "deposit", "invest", "sell", "trade", "submit", "book", "reserve", "subscribe",
     "delete", "remove", "erase", "reset", "uninstall", "install", "call", "allow", "grant", "approve",
+    "pair", "forward", "dial",
   ).map { it.split(' ') }
 
   private val CAMEL = Regex("([a-z])([A-Z])")

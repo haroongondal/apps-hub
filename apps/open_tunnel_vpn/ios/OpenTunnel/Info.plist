@@ -42,23 +42,6 @@
     <dict>
       <key>NSAllowsArbitraryLoads</key>
       <false/>
-      <key>NSExceptionDomains</key>
-      <dict>
-        <key>www.vpngate.net</key>
-        <dict>
-          <key>NSExceptionAllowsInsecureHTTPLoads</key>
-          <true/>
-          <key>NSIncludesSubdomains</key>
-          <true/>
-        </dict>
-        <key>vpngate.net</key>
-        <dict>
-          <key>NSExceptionAllowsInsecureHTTPLoads</key>
-          <true/>
-          <key>NSIncludesSubdomains</key>
-          <true/>
-        </dict>
-      </dict>
     </dict>
     <key>RCTNewArchEnabled</key>
     <true/>

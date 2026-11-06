@@ -149,7 +149,7 @@ object VaultHolder {
     return true
   }
 
-  fun biometricUnlock(activity: FragmentActivity, onResult: (Boolean) -> Unit) {
+  fun biometricUnlock(activity: FragmentActivity, description: CharSequence? = null, onResult: (Boolean) -> Unit) {
     val context = activity.applicationContext
     if (!biometricAllowed(context)) return onResult(false)
     val sealed = file(context, BIOMETRIC_FILE).readOrNull()?.takeIf { it.size > IV_BYTES }
@@ -164,7 +164,7 @@ object VaultHolder {
       disableBiometric(context)
       return onResult(false)
     }
-    prompt = BiometricKey.prompt(activity, cipher, "Unlock Strongroom", "Use master password") { done ->
+    prompt = BiometricKey.prompt(activity, cipher, "Unlock Strongroom", "Use master password", description) { done ->
       prompt = null
       if (done == null) return@prompt onResult(false)
       thread(name = "strongroom-unlock") {

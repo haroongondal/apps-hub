@@ -90,13 +90,14 @@ internal object BiometricKey {
 
   fun delete() = keyStore().deleteEntry(ALIAS)
 
-  fun prompt(activity: FragmentActivity, cipher: Cipher, title: String, negative: String, onDone: (Cipher?) -> Unit): BiometricPrompt? {
+  fun prompt(activity: FragmentActivity, cipher: Cipher, title: String, negative: String, description: CharSequence? = null, onDone: (Cipher?) -> Unit): BiometricPrompt? {
     if (activity.isFinishing || activity.isDestroyed || activity.supportFragmentManager.isStateSaved) {
       onDone(null) // authenticate() silently shows nothing then, and the caller would wait forever
       return null
     }
     val info = BiometricPrompt.PromptInfo.Builder()
       .setTitle(title)
+      .setDescription(description)
       .setNegativeButtonText(negative)
       .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
       .build()

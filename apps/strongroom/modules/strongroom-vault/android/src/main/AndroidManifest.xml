@@ -13,6 +13,10 @@
       </intent-filter>
       <meta-data android:name="android.autofill" android:resource="@xml/strongroom_autofill_service" />
     </service>
+    <service
+      android:name="expo.modules.strongroomvault.android.ClipboardClearJob"
+      android:exported="false"
+      android:permission="android.permission.BIND_JOB_SERVICE" />
     <activity
       android:name="expo.modules.strongroomvault.android.UnlockActivity"
       android:exported="false"

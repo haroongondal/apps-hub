@@ -220,6 +220,24 @@ test('configFromNode routes by payload — VPN Gate rows are OpenVPN, genuine .c
   assert.equal(wireguardConfig.serverPort, 51820);
 });
 
+test('a relay config cached before the current sanitizer is sanitized again at connect', () => {
+  const cached = createVpnNode({
+    ...vpnGateNode(),
+    ovpnConfigRaw: 'client\nremote 198.51.100.77 1199\nproto tcp\nwritepid firewall.db\n<ca>\nMIIabc\n</ca>\n',
+  });
+  const config = buildTunnelConfigFromNode(cached, { enableKillSwitch: true });
+  assert.doesNotMatch(config.configText, /writepid/);
+  assert.match(config.configText, /^remote-cert-tls server$/m);
+  assert.match(config.configText, /^verify-x509-name opengw\.net name$/m);
+  assert.equal(config.serverPort, 1199);
+});
+
+test('a WireGuard payload is handed over untouched', () => {
+  const payload = wireguardPayload();
+  const node = createVpnNode({ ...vpnGateNode(), ovpnConfigRaw: payload });
+  assert.equal(buildTunnelConfigFromNode(node, { enableKillSwitch: true }).configText, payload);
+});
+
 test('no remote line falls back to the upstream default port 1194', () => {
   const node = createVpnNode({
     hostName: 'noremote',

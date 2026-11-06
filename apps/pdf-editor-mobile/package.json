@@ -10,6 +10,7 @@
     "ios": "expo run:ios",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
+    "test": "node --test src/__tests__/decode-uri-component.test.ts",
     "doctor": "expo-doctor",
     "prebuild": "expo prebuild --no-install"
   },
@@ -51,6 +52,7 @@
   },
   "devDependencies": {
     "@apps-hub/pdf-editor-engine": "workspace:*",
+    "@types/node": "^22.10.0",
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",

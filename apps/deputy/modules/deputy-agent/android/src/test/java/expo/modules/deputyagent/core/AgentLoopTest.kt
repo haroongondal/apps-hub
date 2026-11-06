@@ -250,10 +250,10 @@ class AgentLoopTest {
     assertTrue(script.seen[1].contains("the screen changed"))
   }
 
-  @Test fun memoryOfEarlierRunsRidesWithTheTask() = runTest {
+  @Test fun memoryOfEarlierRunsIsItsOwnMessageApartFromTheOwnersTask() = runTest {
     val script = Script(call("finish", """{"status":"done","summary":"x"}"""))
     run(FakeDevice(clock), script).loop.run("t", "<memory>\nOpen com.clock\n</memory>")
-    assertTrue(script.seen[0].contains("The owner's task: t\\n\\n<memory>"))
+    assertTrue(script.seen[0], script.seen[0].contains("\"content\":\"The owner's task: t\"}\n{\"role\":\"user\",\"content\":\"<memory>"))
   }
 
   @Test fun ac2SendPausesForTheOwnerAndDenyEndsTheRunDeclined() = runTest {
