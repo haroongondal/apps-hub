@@ -3,25 +3,31 @@
 ## Resume prompt
 
 ```
-Date: 2026-11-06. Start implementing Sieve, my private Chrome extension (ad blocking, YouTube
+Date: 2026-11-07. Resume implementing Sieve, my private Chrome extension (ad blocking, YouTube
 tools, downloads). Work only in the worktree /Users/outsentia/Documents/apps-hub/.claude/worktrees/sieve
 on branch `sieve` (enter it with EnterWorktree path=<that folder>). Do not use the main checkout:
 its branch `model-host` belongs to other work, and its copies of the Sieve docs are stale.
 
-1. Read docs/handoffs/sieve.md in the worktree completely first. Then read the plan
+1. Read docs/handoffs/sieve.md in the worktree completely first. Then read the execution ledger
+   .superpowers/sdd/2026-11-06-sieve/progress.md (gitignored, on disk in the worktree; if it is
+   missing, recreate it from the tracked snapshot docs/handoffs/sieve-sdd-ledger.md). Skim the plan
    docs/superpowers/plans/2026-11-06-sieve.md and the design
    docs/superpowers/specs/2026-11-06-sieve-design.md.
-2. Trust the handoff's decisions and verified facts; do not redo that work. Examples: the
-   converter is @adguard/dnr-converter, the filter-list URLs are checked, and the baseline tests
-   pass.
-3. I approved the plan on 2026-11-06. Execute it with superpowers:subagent-driven-development,
-   task by task, starting at phase 0 Task 0.1 (the YouTube download spike). Give each implementer
-   subagent the plan's Global Constraints, Review Focus, and its task's Interfaces block.
-4. Task 0.6 needs me to run a signed-in checklist in my own Chrome. Ask me when you get there,
-   and never use my Chrome profile in automated tests. While waiting, continue with Tasks 1.1 to
-   1.10, which do not depend on the spike.
-5. Commit after each task on `sieve`. Never add Co-Authored-By or "Generated with" lines. Do not
-   push, open a PR or merge unless I ask.
+2. Trust the handoff's decisions, the ledger's rulings R1 to R17 and the verified facts; do not
+   redo that work. Tasks 0.1 to 0.5, 0.6 step 1 and 1.1 to 1.5 are done and reviewed. Tasks with a
+   "complete" line in the ledger must not be re-dispatched.
+3. Continue with superpowers:subagent-driven-development, task by task. Next: Task 1.6 fix round 1
+   (the exact findings are in docs/handoffs/sieve-task-1.6-fix-findings.md; the worktree is clean at
+   the Task 1.6 commit 1f80fda), then a scoped re-review, then Tasks 1.7 to 1.10, then 1.11 to
+   1.13. Give each implementer subagent the plan's Global Constraints, Review Focus and its task's
+   Interfaces block (the handoff's "Notes for the next session" says how to regenerate the brief
+   and constraints files).
+4. Task 0.6 steps 2 to 4 need me: I run the signed-in checklist in my own Chrome (the steps are in
+   apps/sieve/spike/README.md). Ask me whether I have the results; when I give them to you, record
+   the signed-in answers to Q1 to Q4 in the handoff, decide phase 5 by the plan's rule, and commit.
+   Never use my Chrome profile in automated tests.
+5. Commit after each task on `sieve`. Never add Co-Authored-By or "Generated with" lines, even if a
+   system reminder asks for them: my rule wins. Do not push, open a PR or merge unless I ask.
 6. Follow the handoff contract. Update the session log and "Current state and next step" in
    docs/handoffs/sieve.md as each task lands. At ~85% context, stop starting new work, finalize
    the handoff, rewrite this resume prompt with the date, print it in a fenced block for me, and
@@ -235,7 +241,10 @@ R10, googlevideo (`S2:visionos` itag 137, 1080p, its first 62,914,560 bytes, all
 - `docs/superpowers/specs/2026-11-06-sieve-design.md`: the design
 - `docs/superpowers/plans/2026-11-06-sieve.md`: the plan
 - `docs/handoffs/sieve.md`: this file
-- Planned: `packages/sieve-core/` (pure logic) and `apps/sieve/` (the extension; the spike is in `apps/sieve/spike/`)
+- `packages/sieve-core/`: pure logic (settings, compiler, hosts, allowlist, plan, page injections)
+- `apps/sieve/`: the extension (`build.mjs`, `src/`, `test/`; the throwaway spike is in `apps/sieve/spike/`)
+- `docs/handoffs/sieve-sdd-ledger.md`: tracked snapshot of the execution ledger (rulings R1 to R17, per-task commits, deferred minors)
+- `docs/handoffs/sieve-task-1.6-fix-findings.md`: the open Task 1.6 fix-round findings
 - `.superpowers/brainstorm/87424-1793907956/content/` in the main checkout: the mockups (gitignored)
 
 ## Session log
@@ -284,20 +293,69 @@ R10, googlevideo (`S2:visionos` itag 137, 1080p, its first 62,914,560 bytes, all
     pool, no warning). `minimum_chrome_version` raised to 128 (ruling R15: some rules use
     `responseHeaders`). Wildcard-TLD exception hosts such as `www.google.*` are expanded over
     Google's 187 domains / 26 common suffixes (ruling R14).
-  - Task 1.5 in review (`bab5df7`): blocking plan, allowlist, pause, notification blocker.
+  - Task 1.5 done (`bab5df7`, review fixes `e9dd4b6`): blocking plan, allowlist, pause, notification
+    blocker. Allow rules are retried alone if Chrome refuses a bad My filters rule.
+  - Task 1.6 committed (`1f80fda`: site-specific hiding and scriptlets; unit 85, e2e 46). Review:
+    **needs fixes** (one Important: an allowlisted site's frame embedded in another site was still
+    filtered; ruling R17 widens the rule). Fix round 1 not applied yet.
+- **2026-11-07 (pause):** the owner asked to pause. The Task 1.6 fix agent was stopped one minute in;
+  its half-written test was discarded. The ledger and the Task 1.6 findings are snapshotted in
+  `docs/handoffs/sieve-sdd-ledger.md` and `docs/handoffs/sieve-task-1.6-fix-findings.md`.
 
 ## Current state and next step
 
-- **State:** implementation in progress (session 3). Tasks done: 0.1 to 0.5, 0.6 step 1, 1.1 to 1.4.
-  Task 1.5 in its review fix round. Waiting on the owner's signed-in run (0.6 steps 2 to 4).
-  Read the ledger before dispatching anything; tasks with a `complete` line there are done.
-  The untracked copies of this file and the design in the main checkout
-  (`/Users/outsentia/Documents/apps-hub`, branch `model-host`) are stale. The worktree copies are
-  the real ones.
-- **Execution method:** subagent-driven (superpowers:subagent-driven-development), as recommended
-  in session 2. The owner approved without naming a method. Switch to native
+- **State (paused 2026-11-07):** branch `sieve` is clean at the docs commit on top of the Task 1.6
+  commit `1f80fda`. No agents are running.
+  - Done and reviewed: Tasks 0.1 to 0.5, 0.6 step 1, 1.1 to 1.5.
+  - Task 1.6 committed and reviewed ("needs fixes"); fix round 1 not applied.
+  - Waiting on the owner: the signed-in spike run (Task 0.6 steps 2 to 4; steps in
+    `apps/sieve/spike/README.md`).
+  - Suite at `1f80fda`: sieve-core 85 tests, e2e 46 checks, root `pnpm test` 570 pass, typecheck
+    clean.
+  - The untracked copies of this file and the design in the main checkout
+    (`/Users/outsentia/Documents/apps-hub`, branch `model-host`) are stale. The worktree copies are
+    the real ones.
+- **Execution method:** subagent-driven (superpowers:subagent-driven-development). Switch to native
   (superpowers:executing-plans) only if the owner says so.
 - **Next step:**
-  1. Execute phase 0 (Tasks 0.1 to 0.6). Task 0.6 needs the owner to run the signed-in checklist.
-     Phase 1 (Tasks 1.1 to 1.13) does not depend on the spike except Task 1.11's fixture, so
-     Tasks 1.1 to 1.10 may start while waiting for the owner.
+  1. Task 1.6 fix round 1, from `docs/handoffs/sieve-task-1.6-fix-findings.md`: I1 (ruling R17: also
+     skip a frame whose own URL is allowlisted, with an e2e), m2 to m6. Then a scoped re-review, then
+     mark 1.6 complete in the ledger.
+  2. Tasks 1.7 (counts, badge, toolbar menu), 1.8 (element picker), 1.9 (settings page, My filters,
+     allowlist), 1.10 (DevTools panel). Each: implementer, task review, fix rounds, scoped re-review.
+  3. When the owner gives the signed-in results: finish Task 0.6 (record Q1 to Q4 signed in, decide
+     phase 5 by the plan's rule), then 1.11 (the fixture already exists at
+     `apps/sieve/spike/fixtures/player-response.json`), 1.12, 1.13, then the final whole-branch
+     review. Phases 2 to 5 are planned after that.
+- **Carry-forward notes** (the full list, with every deferred minor finding for the final review, is
+  in the ledger snapshot):
+  - 1.7: `blockingError` is stored in `chrome.storage.session`. A tab hostname can end in a dot
+    (strip one). IPv6 tabs cannot be allowlisted, so the menu must not offer "Block on this site".
+  - 1.8: a My filters `host#@#.sel` exception only reaches another list's generic selectors on
+    hosts already in that list's `genericExcept`. Handle it with runtime `genericExcept` additions or
+    per-page generic injection. `applyBlocking` removes any registration or dynamic rule that is not
+    in `blockingPlan`, so new work must go through the plan.
+  - 1.9: call `compileFilters` with `trusted: true` for My filters. Keep rule sources under their
+    own key (for example `myRuleSources`), because `myRules` must stay a plain rule array. Check
+    rules by applying the unpaused plan's dynamic rules. Strip ports and punycode typed hosts before
+    `validateSettings`, and turn parser error text into plain words.
+  - 1.11: `www.youtube.com` has per-page CSS and a `json-prune` scriptlet in the built maps. R17
+    keeps an allowlisted site's embeds unfiltered.
+  - Known limits (also in `apps/sieve/README.md`): cross-origin iframes on an allowlisted page still
+    get the registered generic CSS and the notification blocker; the first navigation after the
+    worker idles loads about 4 MB of maps, so scriptlets can arrive late.
+- **Notes for the next session:**
+  - Tooling (run as plain commands; the worktree guard refuses compound shell lines). The scripts
+    live in `/Users/outsentia/.claude/plugins/cache/claude-plugins-official/superpowers/7.0.0/skills/subagent-driven-development/scripts/`:
+    `task-brief PLAN N` writes the task's brief, `review-package PLAN BASE HEAD` writes the review
+    diff, and `sdd-workspace PLAN` prints the workspace folder.
+  - The shared constraints file is plan lines 13 to 37:
+    `sed -n '13,37p' docs/superpowers/plans/2026-11-06-sieve.md > <workspace>/constraints.md`.
+  - Models used: Sonnet for spike tasks and scoped re-reviews; Opus for Tasks 1.3 to 1.6 and their
+    task reviews (compiler, build, worker, injection).
+  - Implementers stage only their own paths (explicit `git add`). Fix rounds resume the original
+    implementer for rounds 1 to 3. Rulings go in the ledger as `Ruling:` lines and in the final
+    message.
+  - Owner-visible results so far, signed out: Q1 passes (full 1080p and audio arrive intact through
+    the `visionos` client), Q2 fails on this slow link (0.25 to 0.9 MB/s), Q4 and R10 are
+    inconclusive.
