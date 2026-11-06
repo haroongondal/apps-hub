@@ -2,41 +2,56 @@
 
 ## Resume prompt
 
-Dated 2026-11-05 (rewritten at the end of build session 1). Strongroom is the owner's own-code password
-manager. Phase 2, Cloudflare sync, was approved on 2026-11-05 and is being built on branch `strongroom-sync`
-in the worktree `/Users/outsentia/Documents/apps-hub/.claude/worktrees/strongroom-sync` (from the unpushed
-extension commit `c3da09c`). Enter that worktree with EnterWorktree (path) and work only there.
+Dated 2026-11-06. Strongroom is the owner's own-code password manager. **Phase 2 (Cloudflare sync) is built
+and proven on the owner's phone; what is left is Task 8 of the plan: reviews, Cloudflare deploy, release
+0.2.0 and live checks — every step only on the owner's explicit word in the chat.** The work is on branch
+`strongroom-sync` in the worktree `/Users/outsentia/Documents/apps-hub/.claude/worktrees/strongroom-sync`
+(HEAD `f2f73ce`, stacked on the UNPUSHED extension commit `c3da09c` on branch `strongroom-extension`).
+Nothing is pushed, merged, deployed or released. Enter that worktree with EnterWorktree (path) and work only
+there.
 
-Read completely first, in this order: this file; the SDD ledger
-`.superpowers/sdd/PHASE-2-PLAN/progress.md` in the worktree (git-ignored: every ruling R1–R27, every
-deferred minor, every carry-forward note, the phone queue, and which tasks are complete — trust it and
-`git log` over memory); `docs/strongroom/PHASE-2-PLAN.md` (Decisions, Protocol, Review Focus, Global
-Constraints bind the work); `docs/strongroom/DESIGN.md` §6, §10–§12. The per-task briefs and reports are in
-`.superpowers/sdd/PHASE-2-PLAN/` (task-N-brief.md, task-N-report.md, task-6a/6b/7a-brief.md). Trust the
-decisions and verified facts; don't redo finished tasks. Follow the handoff contract in `~/.claude/CLAUDE.md`
-(update the session log and "Current state" as work lands; at about 85% context finalize this file, print a
-fresh resume prompt in a fenced block and end the turn, no compaction).
+Read completely first, in this order: this file (above all "Task 8 deploy notes" and "Current state + exact
+next step"); `docs/strongroom/PHASE-2-PLAN.md` Task 8 and its Global Constraints; `docs/strongroom/DESIGN.md`
+§10–§12; the SDD ledger `.superpowers/sdd/PHASE-2-PLAN/progress.md` in the worktree (git-ignored: rulings
+R1–R33 with what each costs if wrong, every deferred minor and its triage, the phone-queue history). Trust the
+verified results in them (all gates green, the 6c phone proof passed, the final review and its fixes are
+done) and don't redo that work. Follow the handoff contract in `~/.claude/CLAUDE.md`: update the session log
+and "Current state" as each step lands; at about 85% context finalize this file, print a fresh resume prompt
+in a fenced block and end the turn (no compaction).
 
-Execution: `superpowers:subagent-driven-development` (its scripts are refused by the worktree sandbox: write
-briefs with `sed -n 'a,bp' plan > brief`, review packages with `git diff -U10 BASE HEAD > file`, keep git
-commands plain and separate). Models: opus for crypto/merge/Worker/Keystore/platform and their reviewers,
-sonnet for screens and extension wiring (and their reviewers when the diff is UI-only). Test-first; real
-command output only. Briefs and reports go through files; implementers never spawn subagents.
+Task 8 steps, each waiting for the owner's word: (1) read-only reviews (DESIGN §12.2): `security-engineer`
+on `tools/vault-api` and the sync code in core and Kotlin (auth, backoff, header adoption, quarantine, the
+account-key mix, and ruling R20: the loginToken at rest under the unlocked-device Keystore key),
+`invariant-reviewer` on the branch diff against AGENTS.md, `supply-chain-risk-auditor` (no new dependency),
+`docs-keeper`; fix confirmed findings test-first and re-run every gate. (2) Confirm the Cloudflare account
+with the owner (personal `29ada9205500ff7931f09084daf89597`, pinned in `tools/vault-api/cloudflare.config.ts`);
+use the `cf` CLI only, find D1 create/migrate/secret/deploy commands with `cf cli search`, and show the owner
+the exact commands before running any. (3) Create the D1 database, apply `migrations/0001_init.sql` by hand,
+set `SETUP_TOKEN` (`openssl rand -base64 32`, ≥ 32 chars; kept only in the git-ignored `.dev.vars`; call it
+the "setup code" to the owner), deploy, smoke-test (`GET /v1/prelogin` → 404, `POST /v1/records` without a
+token → 401, and json_each / RETURNING / upsert / a 100-upsert batch on real D1). (4) Put the Worker URL in
+`SyncConfig.BASE_URL` and `apps/strongroom-extension/src/sync-url.ts` with a test that they are equal, and
+delete the release manifest's INTERNET removal (`manifest.test.ts` requires the pair). (5) Release only on the
+owner's word: they push (a `git push` was denied by the auto-mode classifier before; ask how), the extension
+PR merges first, then `git rebase --onto origin/main c3da09c strongroom-sync` if it was squashed; mind the
+`security-fixes` branch's second vault-module job service (ClipboardClearJob) in `manifest.test.ts`; merge
+with `[skip ci]`, then `pnpm release strongroom` (0.2.0) locally; the owner installs from the Store. (6) Live
+checks with the owner (DESIGN/plan Task 8 Step 6). (7) Update `docs/handoffs/strongroom.md` and
+`docs/handoffs/strongroom-extension.md`.
 
-Rules that do not bend: commit on `strongroom-sync` with explicit pathspecs, no `Co-Authored-By` or
-"Generated with" lines; **push, merge, release or deploy only on the owner's explicit word in the chat**;
-confirm the Cloudflare account before any deploy and use the `cf` CLI; no new third-party dependency without
-asking. **Phone (owner, 2026-11-05):** test 6c on the owner's phone (USB serial `49kjmnuwonkffqzh`, always
-`adb -s`), not the emulator; `adb install` of a SIDE-BY-SIDE test build with its own applicationId only
-(ruling R26) — never replace, update or uninstall the Store-installed `com.haroon.strongroom` (the real
-vault); no `uiautomator dump` on the phone; no phone settings changes. **Phone queue:** apps-hub-63 is on the
-phone and will message `strongroom-sync-dc` (the old session's name) "phone free" — a new session must first
-tell apps-hub-63 its own name (ListAgents shows it) and ask to be messaged instead; after 6c send "phone free"
-to **apps-hub-ad** (Model Host; leave `/data/local/tmp/mb` and `svc power stayon usb` alone). Never
-`adb logcat -c` or touch `com.haroon.designeditor` while another session holds the phone.
+Rules that do not bend: commit with explicit pathspecs, never `git add -A`, no `Co-Authored-By` or
+"Generated with" lines; the worktree sandbox refuses compound shell commands around git, so keep git commands
+plain; no new third-party dependency without asking. **Phone:** the owner's real vault is the Store-installed
+`com.haroon.strongroom` — never replace, clear or uninstall it; releases reach it only through the Store.
+Before any adb on the phone (USB serial `49kjmnuwonkffqzh`, always `adb -s`), claim it with coord
+(`~/.claude/plugins/cache/claude-coord/coord/1.0.0/bin/coord claim device:49kjmnuwonkffqzh "<what for>"`),
+release it when done and message the next session; while only waiting off-device, or while fixing bugs
+found in testing, lend it to the next session (`coord lend`/`coord back`) and ask for it back; no
+`uiautomator dump` on the phone; don't change phone settings without asking (the owner allowed
+`svc power stayon usb` during a test, reset to off afterwards).
 
-Your first message to the owner is short: where you are resuming (task and state from the ledger) and what
-you start now. Then continue from "Current state + exact next step".
+Your first message to the owner is short: that Phase 2 is built and proven, and ask which Task 8 step to
+start (suggest step 1, the read-only reviews). Then continue from "Current state + exact next step".
 
 ## Goal and fixed constraints
 
