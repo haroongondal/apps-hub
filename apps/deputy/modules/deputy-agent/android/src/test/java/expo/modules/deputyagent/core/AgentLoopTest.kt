@@ -43,7 +43,10 @@ class AgentLoopTest {
     val shot: String? = "IMG",
     val onAction: (Action) -> Screen? = { null },
     val performMs: Long = 0,
+    val reply: (Action) -> String = { "ok" },
   ) : Device {
+    var photos = listOf<String>()
+    override fun newPhotos(sinceMs: Long) = photos
     val performed = mutableListOf<Action>()
     val targets = mutableListOf<NodeRef?>()
     var resolves = 0
@@ -51,6 +54,7 @@ class AgentLoopTest {
     override fun info() = "Android 16, battery 80%"
     override fun contacts(name: String) = "$name Khan: +923001234567"
     override fun resolveClock() = "com.clock"
+    override fun resolveGallery() = "com.gallery"
     var contactsApp: String? = "com.contacts"
     override fun resolveContacts() = contactsApp
     override suspend fun foregroundPkg() = current.pkg.also { onForeground() }
@@ -63,7 +67,7 @@ class AgentLoopTest {
       targets += target
       kotlinx.coroutines.delay(performMs)
       onAction(action)?.let { current = it }
-      return "ok"
+      return reply(action)
     }
     override suspend fun settle() = Unit
   }
@@ -756,6 +760,48 @@ class AgentLoopTest {
     assertTrue(script.seen[2].contains("Sara Khan: +923001234567"))
     assertEquals(listOf<Action>(Action.SetAlarm(7, 30, null, "com.clock")), device.performed)
     assertEquals(listOf("Phone info", "Find contact Sara", "Set an alarm for 07:30"), r.events.filterIsInstance<RunEvent.Step>().map { it.action })
+  }
+
+  @Test fun makeVideoIsJudgedByTheGalleryAppItReadsFrom() = runTest {
+    val device = FakeDevice(clock)
+    val r = run(device, Script(call("make_video", """{"photos":["a.jpg","b.jpg"]}"""), call("finish", """{"status":"done","summary":"x"}""")))
+    r.loop.run("t")
+    assertEquals(listOf<Action>(Action.MakeVideo(listOf("a.jpg", "b.jpg"), 3, "com.gallery")), device.performed)
+    assertEquals("Make a video from 2 photos", r.events.filterIsInstance<RunEvent.Step>().single().action)
+  }
+
+  @Test fun aRunThatFailsAfterMakingAVideoStillSaysTheVideoWasSaved() = runTest {
+    val device = FakeDevice(clock, reply = { if (it is Action.MakeVideo) "Saved Movies/Deputy/v.mp4, 6 s, from a.jpg, b.jpg." else "ok" })
+    val turns = ArrayDeque(listOf(call("make_video", """{"photos":["a.jpg","b.jpg"]}""")))
+    val limited = object : LlmProvider {
+      override suspend fun step(history: List<Msg>, tools: List<ToolSpec>) = turns.removeFirstOrNull()
+        ?.let { ModelTurn(Msg("assistant", buildJsonObject { put("role", "assistant") }), it, Usage(0, 0, 0), null) }
+        ?: throw ProviderError(ProviderError.Kind.SERVER, "The model's rate limit was reached (HTTP 429).")
+    }
+    val r = run(device, limited)
+    val expected = RunResult(RunStatus.FAILED, "The model's rate limit was reached (HTTP 429). Before it stopped, Deputy saved Movies/Deputy/v.mp4.")
+    assertEquals(expected, r.loop.run("t"))
+    assertEquals(expected.summary, r.finished().summary)
+  }
+
+  @Test fun aFinishedRunAndAFailedVideoAddNothingToTheSummary() = runTest {
+    val done = run(FakeDevice(clock, reply = { "Saved Movies/Deputy/v.mp4, 3 s, from a.jpg." }), Script(call("make_video", """{"photos":["a.jpg"]}"""), call("finish", """{"status":"done","summary":"Made it."}""")))
+    assertEquals("Made it.", done.loop.run("t").summary)
+    val failed = run(FakeDevice(clock, reply = { "None of these photos are on the phone: a.jpg. Download them first." }), Script(call("make_video", """{"photos":["a.jpg"]}"""), call("finish", """{"status":"failed","summary":"No photos."}""")))
+    assertEquals("No photos.", failed.loop.run("t").summary)
+  }
+
+  @Test fun photosThatReachThePhoneAreListedOnceWithRepeatsNamed() = runTest {
+    val downloads = ArrayDeque(listOf("a.jpg", "b (1).jpg", "a (1).jpg"))
+    val onPhone = mutableListOf<String>()
+    val device = FakeDevice(clock, onAction = { downloads.removeFirstOrNull()?.let(onPhone::add); null }).apply { photos = onPhone }
+    val waits = (1..4).map { call("wait", """{"seconds":$it}""") }.toTypedArray()
+    val script = Script(*waits, call("finish", """{"status":"done","summary":"x"}"""))
+    run(device, script).loop.run("t")
+    assertFalse("nothing arrived yet", script.seen[0].contains("Photos added"))
+    assertTrue(script.seen[1].contains("Photos added to the phone during this task, 1 different: a.jpg."))
+    assertTrue(script.seen[3].contains("2 different: a.jpg, b (1).jpg. Downloaded again, so not needed: a (1).jpg. Don't download a photo twice."))
+    assertEquals("an unchanged list isn't repeated", 3, Regex("Photos added").findAll(script.seen[4]).count())
   }
 
   @Test fun everyStepIsLoggedWithItsVerdictAndCost() = runTest {

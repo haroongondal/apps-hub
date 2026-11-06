@@ -165,7 +165,9 @@ class OpenAiCompatProvider(
           "The model rejected the request (HTTP ${reply.code}): " + keys.fold(reply.body) { b, k -> b.replace(k, "[key]") }.take(2_000),
         )
       }
-      delay(reply?.retryAfterMs?.coerceIn(0, MAX_WAIT_MS) ?: RETRY_DELAYS[attempt])
+      val hint = reply?.retryAfterMs ?: reply?.takeIf { it.code == 429 }?.let { serverDelay(it.body) }
+      val wait = if (reply?.code == 429) maxOf(hint ?: 0, RATE_DELAYS[attempt]) else hint ?: RETRY_DELAYS[attempt]
+      delay(wait.coerceIn(0, MAX_WAIT_MS))
       attempt++
       limited = 0
     }
@@ -173,6 +175,11 @@ class OpenAiCompatProvider(
 
   private companion object {
     val RETRY_DELAYS = listOf(1_000L, 2_000L, 4_000L)
+    // A per-minute quota outlasts 1+2+4 s, and Gemini's own hint ended a run in 7 s too (phone, 2026-11-05): a hint only lengthens.
+    val RATE_DELAYS = listOf(10_000L, 20_000L, 30_000L)
+    val RETRY_DELAY = Regex(""""retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"""")
     const val MAX_WAIT_MS = 60_000L
+
+    fun serverDelay(body: String) = RETRY_DELAY.find(body)?.groupValues?.get(1)?.toDouble()?.let { (it * 1_000).toLong() }
   }
 }

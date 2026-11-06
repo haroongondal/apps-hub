@@ -34,6 +34,14 @@ class ToolsTest {
     assertTrue(parse("set_alarm", """{"hour":25,"minute":0}""") is Call.Invalid)
   }
 
+  @Test fun makeVideoTakesPhotoNamesAndSecondsEach() {
+    assertEquals(Call.Act(Action.MakeVideo(listOf("a.jpg", "b.jpg"), 4), false), parse("make_video", """{"photos":["a.jpg","b.jpg"],"seconds_each":4}"""))
+    assertEquals(Call.Act(Action.MakeVideo(listOf("a.jpg"), 3), false), parse("make_video", """{"photos":[" a.jpg ",""]}"""))
+    assertEquals(Call.Act(Action.MakeVideo(listOf("a.jpg"), 10), false), parse("make_video", """{"photos":["a.jpg"],"seconds_each":60}"""))
+    assertTrue(parse("make_video", """{"photos":[]}""") is Call.Invalid)
+    assertTrue(parse("make_video", """{"photos":${(1..31).map { "\"p$it\"" }}}""") is Call.Invalid)
+  }
+
   @Test fun openChatTypesTheMessageIntoALinkThatNeverSends() {
     assertEquals(
       Call.Act(Action.OpenLink("whatsapp://send?phone=923001234567&text=Running%2010%20min%20late%20%26%20sorry"), false),

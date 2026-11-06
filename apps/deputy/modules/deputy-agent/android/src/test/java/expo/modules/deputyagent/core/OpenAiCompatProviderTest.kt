@@ -48,11 +48,24 @@ class OpenAiCompatProviderTest {
     assertEquals("Bearer sk-secret", headers["Authorization"])
   }
 
-  @Test fun rateLimitsAndServerErrorsBackOffOneTwoFourSeconds() = runTest {
-    val http = FakeHttp(HttpReply(429, ""), HttpReply(500, ""), HttpReply(503, ""), ok)
+  @Test fun serverErrorsBackOffOneTwoFourSeconds() = runTest {
+    val http = FakeHttp(HttpReply(500, ""), HttpReply(502, ""), HttpReply(503, ""), ok)
     provider(http).step(history, emptyList())
     assertEquals(4, http.calls.size)
     assertEquals(7_000L, testScheduler.currentTime)
+  }
+
+  @Test fun aRateLimitWithNoHintWaitsOutAWholeMinute() = runTest {
+    val http = FakeHttp(HttpReply(429, ""), HttpReply(429, ""), HttpReply(429, ""), ok)
+    assertEquals("done", provider(http).step(history, emptyList()).text)
+    assertEquals(60_000L, testScheduler.currentTime)
+  }
+
+  @Test fun aServerHintOnlyEverLengthensARateLimitWait() = runTest {
+    val gemini = """[{"error":{"code":429,"status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"37.5s"}]}}]"""
+    val http = FakeHttp(HttpReply(429, gemini), HttpReply(429, gemini.replace("37.5s", "1s")), HttpReply(429, "", retryAfterMs = 2_000), ok)
+    provider(http).step(history, emptyList())
+    assertEquals("37.5 s from the body, then the 20 s and 30 s floors", 87_500L, testScheduler.currentTime)
   }
 
   @Test fun aRateLimitWaitsAsLongAsTheServerSaysUpToAMinute() = runTest {
@@ -125,7 +138,7 @@ class OpenAiCompatProviderTest {
     val http = FakeHttp(HttpReply(429, "", retryAfterMs = 5_000), HttpReply(429, "", retryAfterMs = 5_000), HttpReply(429, ""), ok)
     provider(http, listOf("key-a", "key-b")).step(history, emptyList())
     assertEquals(listOf("key-a", "key-b", "key-b", "key-a"), http.keysUsed)
-    assertEquals(5_000L, testScheduler.currentTime)
+    assertEquals("a 5 s hint is raised to the 10 s floor", 10_000L, testScheduler.currentTime)
   }
 
   @Test fun everyKeyLimitedOnEveryTryEndsAsARateLimit() = runTest {

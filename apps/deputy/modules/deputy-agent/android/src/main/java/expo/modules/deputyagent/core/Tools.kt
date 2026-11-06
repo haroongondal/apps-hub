@@ -67,6 +67,11 @@ object Tools {
       """"hour":{"type":"integer","minimum":0,"maximum":23},"minute":{"type":"integer","minimum":0,"maximum":59},"label":{"type":"string"}""", """"hour","minute"""",
     ),
     spec("set_timer", "Start a timer in the clock app.", """"seconds":{"type":"integer","minimum":1,"maximum":86400},"label":{"type":"string"}""", """"seconds""""),
+    spec(
+      "make_video", "Make one video from photos already on the phone, downloads included, and save it to the gallery. Deputy renders it itself; no editing app is needed.",
+      """"photos":{"type":"array","items":{"type":"string"},"maxItems":${Slideshow.MAX_PHOTOS},"description":"File names in the order to show them, such as 20230604_082213.jpg"},"seconds_each":{"type":"integer","minimum":1,"maximum":10}""",
+      """"photos"""",
+    ),
     spec("find_contact", "Look up a contact's phone numbers by name.", """"name":{"type":"string"}""", """"name"""", memo = false),
     spec(
       "open_chat", "Open a chat with the message already typed in, or with empty text to read the chat first. It never sends: tap Send afterwards.",
@@ -103,6 +108,7 @@ object Tools {
       "open_settings" -> Call.Act(Action.OpenSettings(a.choice("page", PAGES)), flag)
       "set_alarm" -> Call.Act(Action.SetAlarm(a.int("hour").checkIn("hour", 0..23), a.int("minute").checkIn("minute", 0..59), a.opt("label")), flag)
       "set_timer" -> Call.Act(Action.SetTimer(a.int("seconds").coerceIn(1, 86_400), a.opt("label")), flag)
+      "make_video" -> Call.Act(Action.MakeVideo(a.names("photos"), a["seconds_each"]?.takeUnless { it is JsonNull }?.let { a.int("seconds_each").coerceIn(1, 10) } ?: 3), flag)
       "open_chat" -> Call.Act(Action.OpenLink(chatLink(a.choice("app", listOf("whatsapp", "sms")), a.str("phone"), a.str("text"))), flag)
       "ask_user" -> Call.Ask(a.str("question"), (a["options"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content }.take(3))
       "finish" -> Call.Finish(a.choice("status", listOf("done", "failed")) == "done", a.str("summary"))
@@ -125,6 +131,10 @@ object Tools {
   }
 
   private fun Int.checkIn(k: String, range: IntRange) = also { require(it in range) { "$k must be from ${range.first} to ${range.last}" } }
+
+  private fun JsonObject.names(k: String) = (this[k] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.trim()?.ifEmpty { null } }
+    .also { require(it.isNotEmpty()) { "$k must list at least one file name" } }
+    .also { require(it.size <= Slideshow.MAX_PHOTOS) { "$k may list at most ${Slideshow.MAX_PHOTOS} file names" } }
 
   private fun JsonObject.opt(k: String) = (this[k] as? JsonPrimitive)?.takeIf { it.isString }?.content?.ifBlank { null }
 

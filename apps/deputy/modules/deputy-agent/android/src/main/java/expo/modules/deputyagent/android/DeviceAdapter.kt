@@ -62,6 +62,7 @@ class DeviceAdapter(private val context: Context) : Device {
   private var infos: List<AccessibilityNodeInfo> = emptyList()
   private val appWindow = Rect()
   private var display = Bounds(0, 0, 0, 0)
+  private val video = VideoMaker(context)
   private var unread: List<Area> = emptyList()
 
   override suspend fun foregroundPkg(): String = awaitService().rootInActiveWindow?.packageName?.toString().orEmpty()
@@ -115,6 +116,11 @@ class DeviceAdapter(private val context: Context) : Device {
   override fun resolveClock(): String? = handler(Intent(AlarmClock.ACTION_SET_ALARM))
 
   override fun resolveContacts(): String? = handler(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CONTACTS))
+
+  // VIEW image/* opens the chooser on the owner's phone (two galleries); APP_GALLERY resolves to Google Photos (2026-11-05).
+  override fun resolveGallery(): String? = handler(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_GALLERY))
+
+  override fun newPhotos(sinceMs: Long) = video.added(sinceMs)
 
   private fun handler(intent: Intent) = context.packageManager
     .resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName?.takeIf { it != "android" }
@@ -188,6 +194,7 @@ class DeviceAdapter(private val context: Context) : Device {
           .putExtra(AlarmClock.EXTRA_SKIP_UI, true).putExtra(AlarmClock.EXTRA_MESSAGE, action.label),
         "Asked the clock app to start the timer.",
       )
+      is Action.MakeVideo -> video.make(action)
     }
   }
 

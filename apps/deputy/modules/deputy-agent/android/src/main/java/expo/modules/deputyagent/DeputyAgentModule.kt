@@ -62,6 +62,7 @@ class DeputyAgentModule : Module() {
         "batteryUnrestricted" to context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName),
         "keySet" to KeyVault.has(context, OwnerStore.settings(context)),
         "contactsAllowed" to (context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) == android.content.pm.PackageManager.PERMISSION_GRANTED),
+        "photosAllowed" to (context.checkSelfPermission(android.Manifest.permission.READ_MEDIA_IMAGES) == android.content.pm.PackageManager.PERMISSION_GRANTED),
         "runActive" to AgentRuntime.active,
       )
     }

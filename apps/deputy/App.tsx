@@ -28,7 +28,7 @@ export default function App() {
 function Home() {
   const { c } = useTheme();
   const [state, setState] = useState(() => DeputyAgent.getServiceState());
-  const [tab, setTab] = useState<Tab>(() => (setupComplete(setupRows(state)) ? 'tasks' : 'settings'));
+  const [tab, setTab] = useState<Tab>('tasks');
 
   const refresh = useCallback(() => setState(DeputyAgent.getServiceState()), []);
 
