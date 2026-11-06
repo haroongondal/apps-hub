@@ -41,8 +41,18 @@ try {
   await spike.getByRole('button', { name: 'Run all' }).click();
 
   const stored = (key) => spike.evaluate((k) => chrome.storage.local.get(k).then((o) => o[k]), key);
-  // The page says "Done" only after the relay has stored every result, so the status text is the signal.
-  await spike.waitForFunction(() => { const t = document.getElementById('status').textContent; return t && t !== 'Running the probes...'; }, null, { timeout: 180_000 });
+  // The status stays aria-busy until Run all ends, and its text changes as it goes. The downloads announce their size first.
+  const idle = () => !document.getElementById('status').hasAttribute('aria-busy');
+  await spike.waitForFunction(() => document.getElementById('status').dataset.expectBytes || !document.getElementById('status').hasAttribute('aria-busy'), null, { timeout: 240_000 });
+  const expect = Number(await spike.locator('#status').getAttribute('data-expect-bytes')) || 0;
+  // A 1 MB/s floor plus half again and 2 min: a link at that floor still finishes (the first try, with only 2 min, cut a 1 MB/s run short).
+  const downloadMs = Math.min(30 * 60_000, (expect / 1e6) * 1500 + 120_000);
+  try { await spike.waitForFunction(idle, null, { timeout: downloadMs }); }
+  catch {
+    const dl = await stored('probe:DL');
+    if (dl) console.log(`downloads so far: ${JSON.stringify(dl.streams?.map(({ itag, bytes, ms, mbps, reason }) => ({ itag, bytes, ms, mbps, reason })))} baseline ${JSON.stringify(dl.baseline)}`);
+    throw new Error(`Run all did not finish within ${Math.round(downloadMs / 60_000)} min for ${Math.round(expect / 1e6)} MB; status: ${await spike.locator('#status').innerText()}`);
+  }
   const status = await spike.locator('#status').innerText();
   if (status !== 'Done. Results below.') throw new Error(`Run all did not finish: ${status}`);
 
@@ -54,6 +64,12 @@ try {
   for (const r of Object.values(probes)) {
     console.log(JSON.stringify(await spike.evaluate((x) => summarise(x), r)));
     if (!r.error && 'playability' in r && r.playability !== 'OK') console.log(`  ${r.strategy}: playability is ${r.playability} (${r.reason})${r.playability === 'LOGIN_REQUIRED' ? '; on a bot check, rerun with HEADLESS=0' : ''}`);
+  }
+  const dl = probes['probe:DL'];
+  if (dl?.baseline) console.log(`baseline: ${dl.baseline.error ?? `${dl.baseline.mbps} MB/s (${dl.baseline.host}, ${dl.baseline.bytes} bytes in ${(dl.baseline.ms / 1000).toFixed(1)} s)`}`);
+  if (dl?.streams?.length) {
+    console.log('| itag | height | codec | mode | bytes | seconds | MB/s | x bitrate | Q1 | Q2 | pass |');
+    for (const x of dl.streams) console.log(`| ${x.itag} | ${x.height ?? ''} | ${/codecs="([^"]+)"/.exec(x.mimeType ?? '')?.[1] ?? ''} | ${x.mode} | ${x.bytes} of ${x.contentLength} | ${(x.ms / 1000).toFixed(1)} | ${x.mbps} | ${x.xBitrate} | ${x.q1} | ${x.q2} | ${x.pass}${x.reason ? ` (${x.reason})` : ''} |`);
   }
   const label = Object.values(probes).some((r) => r.loggedIn) ? 'signed-in' : 'signed-out';
   writeFileSync(join(SCRATCH, `spike-${label}.json`), JSON.stringify(probes, null, 2));

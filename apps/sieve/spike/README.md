@@ -49,3 +49,17 @@ Raw stream URLs and ciphers live in `chrome.storage.session` under `streams:<str
 summaries and `run.mjs` read the `probe:` keys in `chrome.storage.local` only, and `run.mjs` fails if a stream URL or
 cipher shows up in them. **Run all** clears both first. S3 Range-checks every solved URL (4 at a time), each next to a
 control that uses the raw challenges, and a class passes only when every one of its formats answers 206.
+
+## Downloads (Q1 and Q2, the last step of Run all, stored as `probe:DL`)
+
+`spike.js` picks streams from the `streams:` records, joined by itag to the probe's `bitrate` and `contentLength`. Raw URLs
+that still carry an `n` are skipped (S3 holds the solved copy). Per height, the highest-bitrate stream that answers a Range
+request wins. Downloads are sequential 10 MiB `Range` requests (60 s each, one retry on a network error; a non-206 answer
+or a short chunk fails the stream):
+
+- A link baseline first: 25 MB from `speed.cloudflare.com` (else 10 MB from `proof.ovh.net`), so a slow link is not read as throttling.
+- The audio (itag 251, else 140) and the 1080p video, in full. Q1: every byte arrived and the first bytes are `ftyp` at offset 4 or `1A 45 DF A3`. Q2: speed is at least 5x the format's `bitrate` (its peak rate, so the ratio errs low).
+- The top height above 1080p, if there is one: only its first 100 MiB plus the last 1 MiB (a 206 with the right byte count proves the end is reachable). It is marked `partial` and never claims Q1.
+
+`probe:DL` holds itag, height, mimeType, byte counts, timings, the first 16 bytes as hex and the verdict, never a URL or a body.
+`run.mjs` sizes its wait from the byte count the page announces (at a 1 MB/s floor, capped at 30 minutes).

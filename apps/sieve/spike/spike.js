@@ -29,6 +29,12 @@ function summarise(r) {
       })),
     };
   }
+  if (r.strategy === 'DL') {
+    return {
+      strategy: 'DL', videoId: r.videoId, signedIn: r.loggedIn, baseline: r.baseline,
+      streams: r.streams.map(({ role, mode, itag, height, bytes, contentLength, mbps, xBitrate, q1, q2, pass, reason }) => ({ role, mode, itag, height, bytes, contentLength, mbps, xBitrate, q1, q2, pass, reason })),
+    };
+  }
   return {
     strategy: r.strategy, videoId: r.videoId, signedIn: r.loggedIn, playability: r.playability, sabr: r.sabr,
     ...tally(r.formats), muxed: tally(r.muxed ?? []),
@@ -134,10 +140,14 @@ async function S3(videoId, loggedIn) {
     result.players.push(info);
     try {
       if (!playerJsUrl) throw new Error('the probe recorded no player script URL');
-      const getPlayer = () => fetch(new URL(playerJsUrl, 'https://www.youtube.com'), { signal: AbortSignal.timeout(20_000) });
+      // The body read is inside the retried call, so a read that fails halfway retries the whole fetch too.
+      const getPlayer = async () => {
+        const res = await fetch(new URL(playerJsUrl, 'https://www.youtube.com'), { signal: AbortSignal.timeout(20_000) });
+        return { status: res.status, text: res.ok ? await res.text() : null };
+      };
       const res = await getPlayer().catch(() => pause(3_000).then(getPlayer));
-      if (!res.ok) throw new Error(`player script: HTTP ${res.status}`);
-      const sol = await solve(await res.text(), {
+      if (res.text === null) throw new Error(`player script: HTTP ${res.status}`);
+      const sol = await solve(res.text, {
         sig: [...new Set(group.map((t) => t.s).filter(Boolean))],
         n: [...new Set(group.map((t) => t.n).filter(Boolean))],
       });
@@ -169,11 +179,155 @@ async function S3(videoId, loggedIn) {
   await chrome.storage.local.set({ 'probe:S3': result });
 }
 
+const MIB = 1024 * 1024;
+const mb = (n) => Math.round(n / 1e6);
+const round2 = (x) => Math.round(x * 100) / 100;
+const BASELINES = ['https://speed.cloudflare.com/__down?bytes=25000000', 'http://proof.ovh.net/files/10Mb.dat'];
+
+async function fetchRange(url, start, length) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const res = await fetch(url, { headers: { Range: `bytes=${start}-${start + length - 1}` }, credentials: 'omit', signal: AbortSignal.timeout(60_000) });
+      if (res.status !== 206) {
+        res.body?.cancel().catch(() => {});
+        return { status: res.status, attempt };
+      }
+      const total = Number(/\/(\d+)\s*$/.exec(res.headers.get('content-range') ?? '')?.[1]) || null;
+      return { status: 206, body: await res.arrayBuffer(), total, attempt };
+    } catch (err) {
+      if (attempt === 2) return { status: 'network', error: err?.name === 'TimeoutError' ? 'timed out' : String(err?.message ?? err), attempt };
+      await pause(3_000);
+    }
+  }
+}
+
+// yt-dlp's chunk size: googlevideo throttles single long requests. Only the count, Content-Range total and first 16 bytes are kept; mbps is MB (1e6 bytes) per second.
+async function downloadStream(url, contentLength, { maxBytes = contentLength, onProgress } = {}) {
+  const goal = Math.min(contentLength, maxBytes);
+  const out = { bytes: 0, ms: 0, mbps: 0, magic: null, contentRangeTotal: null, retries: 0, chunkMs: [] };
+  const t0 = performance.now();
+  onProgress?.(0);
+  while (out.bytes < goal) {
+    const length = Math.min(10 * MIB, goal - out.bytes);
+    const tChunk = performance.now();
+    const r = await fetchRange(url, out.bytes, length);
+    out.chunkMs.push(Math.round(performance.now() - tChunk));
+    out.retries += r.attempt - 1;
+    if (r.status !== 206) { out.error = r.status === 'network' ? `network error at offset ${out.bytes}: ${r.error}` : `HTTP ${r.status} at offset ${out.bytes}`; break; }
+    out.magic ??= [...new Uint8Array(r.body.slice(0, 16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    out.contentRangeTotal ??= r.total;
+    out.bytes += r.body.byteLength;
+    if (r.body.byteLength !== length) { out.error = `short chunk at offset ${out.bytes - r.body.byteLength}: got ${r.body.byteLength} of ${length} bytes`; break; }
+    onProgress?.(out.bytes);
+  }
+  out.ms = Math.round(performance.now() - t0);
+  out.mbps = out.ms ? round2(out.bytes / 1e6 / (out.ms / 1000)) : 0;
+  return out;
+}
+
+// A neutral host, so a slow link is not read as YouTube throttling. One plain request: a measurement, not an extension feature.
+async function baseline() {
+  const failed = [];
+  for (const url of BASELINES) {
+    const host = new URL(url).host;
+    const t0 = performance.now();
+    try {
+      const res = await fetch(url, { credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(120_000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      let bytes = 0;
+      for await (const part of res.body) bytes += part.byteLength;
+      const ms = Math.round(performance.now() - t0);
+      return { host, bytes, ms, mbps: round2(bytes / 1e6 / (ms / 1000)), failed };
+    } catch (err) {
+      failed.push(`${host}: ${err?.name === 'TimeoutError' ? 'timed out' : String(err?.message ?? err)}`);
+    }
+  }
+  return { error: 'neither neutral host answered', failed };
+}
+
+// A raw URL that still carries an `n` is refused or throttled, so only S3's solved copy of it counts.
+async function candidates() {
+  const probes = await storedResults();
+  return (await storedStreams()).flatMap((rec) => rec.formats.flatMap((f) => {
+    const source = f.strategy ?? rec.strategy;
+    const meta = probes[`probe:${source}`]?.formats?.find((m) => m.itag === f.itag);
+    if (f.muxed || !f.url || !meta?.contentLength || !meta.bitrate) return [];
+    if (rec.strategy !== 'S3' && new URL(f.url).searchParams.has('n')) return [];
+    return [{ source, itag: f.itag, height: f.height, mimeType: f.mimeType, bitrate: meta.bitrate, contentLength: meta.contentLength, url: f.url }];
+  }));
+}
+
+async function working(list) {
+  for (const c of list) if ((await rangeCheck(c.url)).status === 206) return c;
+  return null;
+}
+
+// Q1: every byte arrived and the container magic is right (not claimed for a partial). Q2: at least 5x the stream's bitrate.
+async function measure(role, label, c, partial) {
+  const goal = partial ? 100 * MIB : c.contentLength;
+  const d = await downloadStream(c.url, c.contentLength, { maxBytes: goal, onProgress: (n) => say(`Downloading ${label}: ${mb(n)} of ${mb(Math.min(goal, c.contentLength))} MB`) });
+  const rec = { role, mode: partial ? 'partial' : 'full', source: c.source, itag: c.itag, height: c.height, mimeType: c.mimeType, bitrate: c.bitrate, contentLength: c.contentLength, ...d };
+  rec.xBitrate = round2((d.mbps * 8e6) / c.bitrate);
+  rec.magicOk = !!(d.magic && (d.magic.slice(8, 16) === '66747970' || d.magic.startsWith('1a45dfa3')));
+  const problems = [];
+  if (d.error) problems.push(d.error);
+  else if (!rec.magicOk) problems.push(`unexpected first bytes ${d.magic}`);
+  if (d.contentRangeTotal != null && d.contentRangeTotal !== c.contentLength) problems.push(`Content-Range total ${d.contentRangeTotal} differs from the declared contentLength ${c.contentLength}`);
+  if (partial && !d.error) {
+    const len = Math.min(MIB, c.contentLength);
+    const t = await fetchRange(c.url, c.contentLength - len, len);
+    rec.tail = { status: t.status, bytes: t.body?.byteLength ?? 0, total: t.total ?? null };
+    if (t.status !== 206 || rec.tail.bytes !== len) problems.push(`the last ${len} bytes: ${t.status === 206 ? `got ${rec.tail.bytes}` : (t.error ?? `HTTP ${t.status}`)}`);
+  }
+  rec.q1 = partial ? null : problems.length === 0;
+  rec.q2 = rec.xBitrate >= 5;
+  if (!rec.q2) problems.push(`${rec.xBitrate}x the bitrate is under 5x`);
+  rec.pass = problems.length === 0;
+  rec.reason = problems.join('; ') || null;
+  return rec;
+}
+
+async function DL(videoId, loggedIn) {
+  const result = { strategy: 'DL', videoId, loggedIn, baseline: null, streams: [] };
+  const save = () => chrome.storage.local.set({ 'probe:DL': result });
+  const all = await candidates();
+  const video = all.filter((c) => c.height && c.mimeType?.startsWith('video/')).sort((a, b) => b.bitrate - a.bitrate);
+  const heights = [...new Set(video.map((c) => c.height))].sort((a, b) => a - b);
+  const firstWorking = async (hs) => {
+    for (const h of hs) { const c = await working(video.filter((v) => v.height === h)); if (c) return c; }
+    return null;
+  };
+  const full = await firstWorking(heights.filter((h) => h >= 1080));
+  if (!full) {
+    result.error = 'No video stream of 1080p or more has a plain URL that answers. See the S1, S2 and S3 results for why.';
+    await save();
+    return;
+  }
+  const top = await firstWorking(heights.filter((h) => h > full.height).reverse());
+  const audio = (await working(all.filter((c) => c.itag === 251))) ?? (await working(all.filter((c) => c.itag === 140)));
+  $('status').dataset.expectBytes = String(25e6 + full.contentLength + (audio?.contentLength ?? 0) + (top ? Math.min(top.contentLength, 100 * MIB) + MIB : 0));
+
+  say('Measuring this link...');
+  result.baseline = await baseline();
+  await save();
+  const topPartial = top?.contentLength > 100 * MIB;
+  const steps = [
+    ['audio', 'audio', audio, false],
+    ['video', `${full.height}p video`, full, false],
+    ...(top ? [['video', `${top.height}p video${topPartial ? ' (first 100 MiB)' : ''}`, top, topPartial]] : []),
+  ];
+  for (const [role, label, c, partial] of steps) {
+    result.streams.push(c ? await measure(role, label, c, partial) : { role, mode: 'full', pass: false, reason: 'no URL for itag 251 or 140 answers' });
+    await save();
+  }
+}
+
 async function runAll() {
   const tabs = (await chrome.tabs.query({ url: '*://www.youtube.com/watch*' })).sort((a, b) => b.lastAccessed - a.lastAccessed);
   if (!tabs.length) throw new Error('No YouTube video tab is open. Open a video, then click Run all again.');
   await chrome.storage.local.remove(Object.keys(await storedResults()));
   await chrome.storage.session.clear();
+  delete $('status').dataset.expectBytes;
   const reply = await chrome.tabs.sendMessage(tabs[0].id, { type: 'sieve-run' }).catch(() => {
     throw new Error('The video tab cannot talk to the spike yet. Wait for the video page to finish loading, or reload it, then click Run all again.');
   });
@@ -181,8 +335,11 @@ async function runAll() {
   const probes = Object.values(await storedResults());
   const videoId = probes.find((r) => r.videoId)?.videoId ?? null;
   const loggedIn = probes.map((r) => r.loggedIn).find((v) => typeof v === 'boolean') ?? null;
+  say('Solving signatures...');
   try { await S3(videoId, loggedIn); }
   catch (err) { await chrome.storage.local.set({ 'probe:S3': { strategy: 'S3', videoId, loggedIn, ejs: EJS, error: String(err?.message ?? err) } }); }
+  try { await DL(videoId, loggedIn); }
+  catch (err) { await chrome.storage.local.set({ 'probe:DL': { strategy: 'DL', videoId, loggedIn, error: String(err?.message ?? err) } }); }
 }
 
 async function save() {
@@ -200,8 +357,10 @@ async function save() {
 }
 
 const guard = (busy, fn) => async () => {
+  $('status').setAttribute('aria-busy', 'true');
   say(busy);
   try { say(await fn()); } catch (err) { say(err.message); }
+  $('status').removeAttribute('aria-busy');
   await render();
 };
 $('run').addEventListener('click', guard('Running the probes...', async () => { await runAll(); return 'Done. Results below.'; }));

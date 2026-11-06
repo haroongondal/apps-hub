@@ -188,6 +188,23 @@ Summary lines (`run.mjs`, after the review fixes). The fields:
 - Reading: ejs 0.8.0 works in the extension (solved web URL 206, raw 403), but signed out it only unlocks the 360p muxed format; the tv family stays unproven, and signed in (0.6), full download and speed (0.4, 0.5) are untested.
 - The solved URLs are kept in session storage under `streams:S3` for Task 0.4.
 
+### Downloads (Q1, Q2, signed out)
+
+Run 2026-11-06 with `node apps/sieve/spike/run.mjs` on `aqz-KE-bpKQ` (same setup as above), the last step of **Run all** (`probe:DL`). Every stream is 10 MiB `Range` requests, one after another (60 s each, one retry on a network error). The streams are `S2:visionos` URLs (no `n`, no cipher; S3 had nothing to solve on this video). Per ruling R9 the audio and the 1080p video are downloaded in full; 2160p, the top height, only gets its first 100 MiB plus a 1 MiB range at the end. A stream passes Q1 when every byte arrived and the first bytes are `ftyp` at offset 4 or `1A 45 DF A3`, and Q2 when it ran at 5x its `bitrate` (the format's peak rate, so the ratio errs low) or more.
+
+Link baseline, taken just before the downloads: 25 MB from `speed.cloudflare.com` in 5.0 s, **5.0 MB/s**. This Mac's link moves a lot: the first run (below) measured 1.17 MB/s, and `curl` after the second run gave 4.95, 6.20 and 5.55 MB/s for the same 25 MB.
+
+| itag | height | codec | bytes | seconds | MB/s | x bitrate | result |
+|---|---|---|---|---|---|---|---|
+| 251 audio | | opus, WebM | 10,202,210 of 10,202,210 | 39.3 | 0.26 | 14.5 | Q1 pass, Q2 pass |
+| 299 video | 1080p | avc1.64002A, MP4 | 257,619,653 of 257,619,653 | 421.0 | 0.61 | 0.7 | Q1 pass, **Q2 fail** |
+| 315 video | 2160p | vp9, WebM | **partial:** 104,857,600 of 1,362,269,481 | 112.5 | 0.93 | 0.28 | partial pass (first 100 MiB, magic `1A 45 DF A3`, last 1 MiB gave 206 with 1,048,576 bytes), **Q2 fail**, Q1 not claimed |
+
+- Checks on all three: every `Content-Range` total equals the declared `contentLength`; the 1080p stream is `00 00 00 1C ftyp dash`; no HTTP error. The 1080p stream needed 1 retry (a network error on one chunk, then 206).
+- Per chunk (MB/s): 1080p's first 12 chunks ran 0.16 to 1.22 and its last 13 ran 0.91 to 1.86 (mostly 1.0 to 1.2); 2160p's 10 ran 0.78 to 1.10. The audio is one chunk, so its Q2 pass says little: 5x of 143 kbps is only 90 KB/s.
+- First run (same download code; its wait ended early, at 9 min, because the 1 MB/s floor was too tight for this link, so the wait now has half again plus 2 min): baseline 1.17 MB/s; audio 0.36 MB/s (about 20x); 1080p 257,619,653 bytes in 276.5 s, 0.93 MB/s, 1.07x; 2160p cut at 73 of 105 MB.
+- Reading: Q1 passes for the 1080p video and the audio (every byte, right container, 206 throughout; 2160p's end is reachable, its middle untested), but Q2 fails as measured: 1080p ran at 0.7 to 1.07x its bitrate, which is about real time, and 2160p at 0.28x. The link does not explain all of it: in the second run YouTube gave 0.6 to 0.9 MB/s while the neutral host gave 5 MB/s, but in the first run the baseline was 1.17 MB/s, so a slow link fits that run. A one-off cross-check from node and `curl` failed (the player call answered `LOGIN_REQUIRED` without page cookies), so a googlevideo cap near 1 MB/s per connection, a poor route to it, and a limit of 10 MiB sequential requests are not told apart here; Task 0.5 (split vs plain) and the owner's run (0.6) are the next evidence.
+
 ## File map
 
 - `docs/superpowers/specs/2026-11-06-sieve-design.md`: the design

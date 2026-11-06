@@ -8,10 +8,14 @@
   window.addEventListener('message', (e) => {
     const m = e.data;
     if (e.source !== window || m?.source !== 'sieve-spike') return;
+    const send = async (msg) => {
+      const r = await chrome.runtime.sendMessage(msg);
+      if (r?.error) throw new Error(`the service worker could not store ${msg.type}: ${r.error}`);
+    };
     chain = chain.then(async () => {
-      if (m.result) await chrome.runtime.sendMessage({ type: 'probe-result', result: m.result });
-      if (m.fixture) await chrome.runtime.sendMessage({ type: 'fixture', fixture: m.fixture });
-      if (m.streams) await chrome.runtime.sendMessage({ type: 'streams', streams: m.streams });
+      if (m.result) await send({ type: 'probe-result', result: m.result });
+      if (m.fixture) await send({ type: 'fixture', fixture: m.fixture });
+      if (m.streams) await send({ type: 'streams', streams: m.streams });
     }).catch((err) => { failure = String(err); }).then(() => {
       if (m.done) pending.get(m.done)?.({ ok: !failure, error: failure });
     });
