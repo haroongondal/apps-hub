@@ -80,10 +80,11 @@ and the usual Android build paths for `apps/design-editor-mobile` (copy the NetL
 | Name | Version | Licence | Size impact | Why | Alternatives considered |
 | --- | --- | --- | --- | --- | --- |
 | `androidx.media3:media3-transformer` (+ `-effect`, `-common`) | 1.11.1 | Apache-2.0 (verified) | 4.49 MB of AARs with its transitive Media3 modules (verified); APK +3–5 MB assumed | Hardware transcode, trim, resize, audio-only export | FFmpegKitNext (+15–30 MB/ABI, Nix build, same hardware encoders); raw MediaCodec (far more code) |
-| `androidx.media3:media3-inspector` | 1.11.1 | Apache-2.0 | 40 KB AAR | `FrameExtractor` for GIF frames | `MediaMetadataRetriever.getScaledFrameAtTime` (platform; slower, the fallback) |
+| `androidx.media3:media3-inspector` | 1.11.1 | Apache-2.0 | 40 KB AAR | Metadata reading. **As built (Phase 4): `FrameExtractor` is not in 1.11.1** (the jar has `MediaExtractorCompat` and `MetadataRetriever` only), so GIF frames and thumbnails use `MediaMetadataRetriever.getScaledFrameAtTime(OPTION_CLOSEST)` | `MediaMetadataRetriever` (platform; exact, slower than `CLOSEST_SYNC`) |
 | `org.jetbrains.kotlinx:kotlinx-serialization-json` | 1.8.1 | Apache-2.0 | already in the repo (Deputy) | Parse plan JSON from TS; persist the queue | `org.json` (non-OSI licence, stubs throw in JVM tests; Deputy rejected it) |
-| GIF encoder, ported from `gifenc` 1.0.3 to Kotlin | n/a (code port, ~300 lines) | MIT (verified); keep the notice | none | Palette, LZW, GIF writer without native code | gifski (AGPL), `com.squareup:gifencoder` (unmaintained), FFmpeg |
+| GIF encoder, ported from `gifenc` 1.0.3 to Kotlin | n/a (code port) | The header and LZW port is MIT (notice kept in `core/THIRD_PARTY_NOTICES.txt`). **Correction (Phase 4):** gifenc's quantizer is derived from PnnQuant.js, which the implementer read as MPL-2.0 (not checked by the parent), so `Quantizer.kt` is an original median-cut quantizer instead | none | Palette, LZW, GIF writer without native code | gifski (AGPL), `com.squareup:gifencoder` (unmaintained), FFmpeg |
 | FFmpeg + FFprobe static, macOS arm64 | 9.0.2 (Martin Riedl build) | GPL (includes x264, x265) | Mac app only; size measured in Phase 2 (full static builds run 37–80 MB each, assumed) | Every Mac media job; x264 two-pass | Own LGPL build (no x264, no two-pass); `ffmpeg-static` 5.3.0 (FFmpeg 6.1.1, install script); Mediabunny (no lossless cut, no GIF) |
+| `dev.ffmpegkit-maintained:ffmpeg-kit-min` (approved by the owner 2026-11-04, Phase 4) | 8.1.7 (FFmpeg n8.1.2), pinned; AAR sha256 `591ddcf3698028e838b854dc775e60aedaf43fffd59689cb59b8af632aba3d76` (equal to Maven Central's published `.sha256`) | LGPL-3.0 (no x264, no GPL libraries; MediaCodec encoders only) | arm64-v8a `.so` files 15.8 MB uncompressed (the AAR also carries x86_64, which `abiFilters` drops) | Volume (loudness measuring), reverse and stabilize on the phone, which Media3 cannot do | Build our own (the owner chose the pinned AAR). The module's `build.gradle` fails the build if the resolved AAR's sha256 differs (`verifyFfmpegAar`). The fork's POM does not declare `com.arthenica:smart-exception-java`, which the AAR calls, so `Exceptions.kt` in our module stands in for it; `ffmpeg-kit` 6.x by arthenica (retired, binaries pulled) |
 | `expo-document-picker` | ~14.0.8 | MIT | already in the workspace (PDF Editor) | Pick video and audio without copying | Photo picker via the module (no audio) |
 | `react-native-webview` | 13.15.0 | MIT | already in the workspace | Canvas WebView; supports `<input type=file>` (verified, `RNCWebChromeClient.onShowFileChooser`) | none |
 | `expo-router`, `expo-asset`, `expo-file-system`, `expo-sharing`, `expo-haptics` etc. | as PDF Editor | MIT | already in the workspace | Same shell pattern as PDF Editor | n/a |
@@ -279,6 +280,8 @@ export interface DesignMediaModule {
   probe(uri: string): Promise<MediaInfo>;
   keyframeAtOrBefore(uri: string, timeS: number): Promise<number>;
   thumbnails(uri: string, timesS: number[], width: number): Promise<string[]>;   // file:// JPEGs in cache
+  waveform(uri: string, buckets: number): Promise<number[]>;                    // peak 0..1 per slice of the first sound; [] with no sound (Android only; the timeline strip)
+  previewFrame(uri: string, timeS: number, width: number): Promise<string>;      // one file:// JPEG, replaced by the next call (Android only; the timeline strip)
   persistAccess(uri: string): Promise<boolean>;                                  // takePersistableUriPermission
   codecReport(): Promise<CodecInfo[]>;
   encoderStats(): Promise<Record<string, number[]>>;                            // key "<codec name>/<mode>"
@@ -287,7 +290,7 @@ export interface DesignMediaModule {
   cancel(id: string): Promise<void>;                 // job id or "all"
   resume(): Promise<void>;                           // re-queues paused and interrupted jobs
   queue(): Promise<NativeJobStatus[]>;
-  clearFinished(): Promise<void>;
+  clearQueue(): Promise<void>;                       // stops the running job, drops waiting ones, empties the list; never deletes an output (Phase 4; replaces clearFinished)
   share(outputUri: string): Promise<void>;           // ACTION_SEND with FLAG_GRANT_READ_URI_PERMISSION
   open(outputUri: string): Promise<void>;            // ACTION_VIEW
 }
@@ -318,7 +321,7 @@ class DesignMediaModule : Module() {
     AsyncFunction("cancel") { id: String -> MediaJobService.cancel(ctx, id) }
     AsyncFunction("resume") { MediaJobService.resume(ctx) }
     AsyncFunction("queue") { QueueStore(ctx.filesDir).load().map { it.toStatusMap() } }
-    AsyncFunction("clearFinished") { QueueStore(ctx.filesDir).clearFinished() }
+    AsyncFunction("clearQueue") { MediaJobService.clear(ctx) }   // cancels the running job and every waiting one, then empties the list; outputs stay
     AsyncFunction("share") { uri: String -> Intents.share(currentActivity, Uri.parse(uri)) }
     AsyncFunction("open") { uri: String -> Intents.view(currentActivity, Uri.parse(uri)) }
   }
@@ -409,7 +412,7 @@ including location (PRD Q10).
 | Clip, copy | `CopyRunner` | All video and audio tracks into `MediaMuxer` (MP4, or WebM for VP8/VP9 sources); `setOrientationHint(rotation)`; `seekTo(keyframeUs, SEEK_TO_PREVIOUS_SYNC)`; write samples with `pts − keyframeUs` until each track passes `endUs`. |
 | Clip, exact | `TransformerRunner` | `ClippingConfiguration(start, end)`, `experimentalSetTrimOptimizationEnabled(true)`, bitrate = source video bitrate; result reports whether the optimisation applied. |
 | Audio | `CopyRunner` / `RawAudioWriter` / `TransformerRunner` | AAC → MP4 `.m4a`; Opus → OGG; Vorbis → WebM; MP3, AC-3, E-AC-3 → raw frames; PCM → WAV; else Transformer with `setRemoveVideo(true)` to AAC 192 kbit/s. |
-| GIF | `GifRunner` | `FrameExtractor` frames at `start + i / fps`, scaled to `width`; global palette (256 colours) from 8 evenly spaced frames; Bayer 4×4 dither; LZW per frame; streamed to the temp file. One frame in memory at a time. Fallback: `MediaMetadataRetriever.getScaledFrameAtTime(OPTION_CLOSEST)`. |
+| GIF | `GifRunner` | Frames at `start + i / fps` (as built: `MediaMetadataRetriever.getScaledFrameAtTime`, since `FrameExtractor` is not in Media3 1.11.1), scaled to `width`; global palette (256 colours) from 8 evenly spaced frames; Bayer 4×4 dither; LZW per frame; streamed to the temp file. One frame in memory at a time. Fallback: `MediaMetadataRetriever.getScaledFrameAtTime(OPTION_CLOSEST)`. |
 | Convert | `CopyRunner` (remux when `canRemux`) or `TransformerRunner` | MP4 H.264/HEVC + AAC; audio-only `.m4a`. |
 
 Outputs carry no location metadata (PRD FR-10, Q10). `CopyRunner` never calls
@@ -566,9 +569,10 @@ the `<video>` preview needs it (§11 of RESEARCH).
 | Designs (tab) | New design, templates, recent design files; opens Editor |
 | Editor | The canvas WebView full screen; native top bar (back, name, Save, Download) and a bottom toolbar (Templates, Elements, Text, Uploads, Brand, Resize, Undo, Redo) that send `menu` and panel commands to the page |
 | Media (tab) | Six tool rows; "Add files" per tool |
-| Tool setup (`media/[tool]`) | Picked files as `Row`s (name, duration, resolution, size); options (`Segmented` for preset and codec, `Field`s for times and size); the plan as `Readout` ("18.0 MB", "720p 30 fps"); for Clip, a thumbnail strip with tap-to-set start and end and the snapped keyframe; Start |
-| Queue (tab) | Running job with `Progress`, attempt "Try 2 of 3", Cancel; queued jobs; results with Share and Open; failed with reason and Try again; `Notice` for paused or interrupted jobs with Resume |
-| Media lab (debug, Phase 1) | `codecReport`, encoder stats, a "Run spike" button per spike (§18) with results as text to copy into the handoff |
+| Tool setup (`media/[tool]`) | Picked files as `Row`s (name, duration, resolution, size); options (`Segmented` for preset and codec, `Field`s for times and size); the plan as `Readout` ("18.0 MB", "720p 30 fps"); for Trim, GIF and picture, the timeline strip (`src/timeline/RangeStrip.tsx`: filmstrip from `thumbnails`, waveform from `waveform`, ruler, fixed playhead, start and end handles, zoom; pure maths in `media-core/src/timeline.ts`; a still from `previewFrame` above it; PRD FR-14) with the typed times beneath and, for Trim, the snapped keyframe; Start |
+| Make a video (`app/video.tsx`, PRD FR-15) | `CompositionView` (module `design-media`: Media3 `CompositionPlayer` on the main looper, plays the Composition that `ComposeBuilder.composition(plan)` builds, the same function the export runs), Play or Pause, `src/timeline/ClipStrip.tsx` (one block per clip, shared ruler and playhead), button rows of two; the project model is `media-core/src/project.ts`, the plan `compose.ts` (`ComposePlan`, tool `compose`, H.264 and AAC through `TransformerRunner.compose`); the project autosaves to `documentDirectory/video-project.json` (`src/video/draft-file.ts`). Stage 3 (FR-16): each clip has a `volume` and the project a `music` list; the plan carries both (music cut to the video's end); `ComposeBuilder` adds a `GainProcessor` per clip or piece whose volume is not 1 and a second, sound-only sequence (`addGap` before each piece) for the music; the strip shows a music row under the clips |
+| Queue (tab) | At most five rows (running with `Progress` and Cancel, then waiting, then the newest results with Share and Open or the failure reason and Try again; `Notice` for paused or interrupted jobs with Resume), no attempt counters (a plain "Trying a smaller size" line at most), a "See all n" row to the full-list screen (`queue/all`) and "Clear queue" (PRD FR-9, AC-15) |
+| Media lab (debug builds only, never in a release build: PRD FR-13) | `codecReport`, encoder stats, a "Run spike" button per spike (§18) with results as text to copy into the handoff |
 
 **As built (2026-11-04, Phase 3 step 3):** the Designs screen is not a tab bar tab yet —
 `app/index.tsx` is the home (Continue row fed by the autosave record, New design, Open a design
@@ -577,8 +581,17 @@ and `app/editor.tsx` is the editor. TabBar and the media tool screens arrive wit
 phase rewrite of the app shell.
 
 Copy examples: "Couldn't fit under 20 MB. This video can hold about 21 minutes at the lowest
-quality." "Starts at 0:12.4, the nearest keyframe before 0:13.0." "Converted to AAC: this audio
+quality." "Starts at 0:12.4, the closest point before 0:13.0 that keeps full quality." "Converted to AAC: this audio
 format can't be copied on Android."
+
+**As built (2026-11-04, Phase 4, screens):** the app shell is a Tabs layout (`app/(tabs)`: Designs, Media, Queue) drawn with the shared `TabBar`; the Queue label carries a count while jobs run. `app/media/[tool].tsx` is one setup screen for nine tools, named Make smaller (fit a size or pick a quality), Trim, Get the sound, Make a GIF, Change format, Save a picture, Change the volume, Play backwards and Steady a shaky video; every tool plans through `planFor` in media-core with the phone tables. `app/queue/all.tsx` is the full list; the Queue tab shows `visibleQueue(jobs, 5)` and a "See all n" row; "Clear queue" confirms while something runs or waits and calls `clearQueue()`, which never touches an output file. "Try again" re-enqueues from `documentDirectory/media-jobs.json` (the newest 200 jobs this app started). The Media lab is `src/lab/MediaLab.tsx`, reachable only through `app/lab.tsx` and `__DEV__`. The editor page's phone wording lives in `packages/design-editor-engine/copy.js` (a phone and a Mac column), and `plain-words.test.ts` reads the phone column, the screens and the phone page against the banned list.
+
+**Owner's requirements (2026-11-04):** plain words in every release screen (PRD FR-13, AC-16), the
+five-row Queue with a full-list screen and Clear queue (FR-9, AC-15), and a calmer Design Editor
+overall: tab bar (Designs, Media, Queue), page sizes when starting a design, touch wording in the
+editor page, the page kept visible above the property sheet, the zoom kept while the keyboard is up.
+`pnpm test` covers the pure rule (`visibleQueue`) and the banned-words list; the screens are walked on
+the phone.
 
 ### 13.3 Brand
 

@@ -156,7 +156,7 @@ export default function EditorScreen() {
             <Ionicons name="save-outline" size={20} color={c.accent} />
             <Text variant="meta" tone="accent" style={{ fontFamily: fonts.semibold }}>Save</Text>
           </Pressable>
-          <Pressable onPress={() => menu('export')} accessibilityRole="button" accessibilityLabel="Download" accessibilityHint="Opens the export sheet with format and size" style={({ pressed }) => [host.pillBtn, pressed && { backgroundColor: c.raised }]}>
+          <Pressable onPress={() => menu('export')} accessibilityRole="button" accessibilityLabel="Save image" accessibilityHint="Choose a format and size, then save the image" style={({ pressed }) => [host.pillBtn, pressed && { backgroundColor: c.raised }]}>
             <Ionicons name="download-outline" size={20} color={c.accent} />
           </Pressable>
         </View>
@@ -166,7 +166,7 @@ export default function EditorScreen() {
         <View style={[host.center, { backgroundColor: c.bg }]}>
           <Empty
             title="The editor didn't load"
-            body={`${assetError} Go back and open the design again.`}
+            body="Go back and open the design again."
             action={<Button label="Go back" variant="secondary" onPress={() => router.back()} />}
           />
         </View>
@@ -198,6 +198,7 @@ export default function EditorScreen() {
               ['undo', 'arrow-undo-outline', 'Undo'],
               ['redo', 'arrow-redo-outline', 'Redo'],
               ['duplicate', 'copy-outline', 'Duplicate the selected item'],
+              ['selectMany', 'layers-outline', 'Select several items'],
               ['zoomOut', 'remove-outline', 'Zoom out'],
               ['zoomIn', 'add-outline', 'Zoom in'],
               ['zoomFit', 'resize-outline', 'Fit the design on the screen'],

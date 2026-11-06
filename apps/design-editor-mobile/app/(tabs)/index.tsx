@@ -1,25 +1,27 @@
-import { Button, Group, Header, Notice, Row, Screen } from '@apps-hub/ui';
+import { Button, Group, Header, Notice, Row, Screen, Sheet } from '@apps-hub/ui';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 
 import {
-  clearAutosave,
   designTitle,
   readAutosave,
   readDesignText,
   readSavedList,
   writeAutosave,
   type SavedDesign,
-} from '../src/editor/files';
+} from "../../src/editor/files";
+import { PAGE_SIZES, blankDesign } from '../../src/editor/pageSizes';
+import { plainError } from '../../src/media/errors';
 
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+const message = (e: unknown) => plainError(e, 'That didn\'t work. Try again.');
 
 export default function DesignsHome() {
   const [resumable, setResumable] = useState<Awaited<ReturnType<typeof readAutosave>>>(null);
   const [designs, setDesigns] = useState<SavedDesign[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [choosing, setChoosing] = useState(false);
 
   // Re-read whenever the tab gains focus: a save made in the editor shows up on return.
   useFocusEffect(
@@ -39,12 +41,14 @@ export default function DesignsHome() {
     router.push({ pathname: '/editor', params: { name: designTitle(resumable?.filePath) } });
   }
 
-  function newDesign() {
+  // A new design starts at a size the person picks (the same sizes as the editor's Resize panel).
+  function newDesign(w: number, h: number) {
     void (async () => {
       setError(null);
+      setChoosing(false);
       try {
-        // A blank start must not inherit the previous session's autosave slot.
-        await clearAutosave();
+        // a blank start must not inherit the previous session's autosave slot
+        await writeAutosave({ filePath: null, dirty: false, doc: blankDesign(w, h) });
         router.push({ pathname: '/editor', params: { name: 'Untitled' } });
       } catch (e) {
         setError(message(e));
@@ -98,7 +102,7 @@ export default function DesignsHome() {
         <Group title="Continue" footer="Your last edits are always here, even without a save.">
           <Row
             title={designTitle(resumable.filePath) + (resumable.dirty ? ' — not saved' : '')}
-            subtitle={resumable.dirty ? 'Pick up where you left off.' : 'Saved copy intact.'}
+            subtitle={resumable.dirty ? 'Pick up where you left off.' : 'All changes saved.'}
             onPress={resume}
             accessibilityHint="Opens the editor with this design"
           />
@@ -106,13 +110,13 @@ export default function DesignsHome() {
       ) : null}
 
       <Group>
-        <Button label="New design" block onPress={newDesign} />
+        <Button label="New design" block onPress={() => setChoosing(true)} />
         <Button label="Open a design file" variant="secondary" block onPress={openFile} />
       </Group>
 
-      <Group title="Saved designs" footer="Designs land in Documents/Design Editor on the phone.">
+      <Group title="Saved designs" footer="Saved designs are in the Design Editor folder on this phone.">
         {designs === null ? (
-          <Row title="Checking the phone…" />
+          <Row title="Loading your designs…" />
         ) : designs.length === 0 ? (
           <Row title="No designs yet" subtitle="A design appears here after you save one in the editor." />
         ) : (
@@ -128,9 +132,13 @@ export default function DesignsHome() {
         )}
       </Group>
 
-      <Group title="Media tools" footer="Video tools from the first phase; the six design-oriented tools arrive with the media phase rewrite.">
-        <Row title="Media lab" subtitle="Phase 1 checks on this phone." onPress={() => router.push('/media')} accessibilityHint="Opens the phase 1 media lab" />
-      </Group>
+      {/* eslint-disable-next-line @typescript-eslint/no-require-imports -- dev-only: a release bundle drops the lab */}
+      {__DEV__ ? require('../../src/lab/LabRow').LabRow() : null}
+      <Sheet visible={choosing} onClose={() => setChoosing(false)} title="Choose a page size" doneLabel="Cancel" onDone={() => setChoosing(false)}>
+        {PAGE_SIZES.map(([name, w, h]) => (
+          <Row key={name} title={name} subtitle={`${w} × ${h}`} onPress={() => newDesign(w, h)} accessibilityHint="Starts a new design at this size" />
+        ))}
+      </Sheet>
     </Screen>
   );
 }

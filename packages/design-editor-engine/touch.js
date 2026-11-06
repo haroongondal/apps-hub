@@ -22,6 +22,25 @@
   const syncSelected = () => document.body.classList.toggle('obj', !!canvas.getActiveObject());
   for (const ev of ['selection:created', 'selection:updated', 'selection:cleared', 'object:removed']) canvas.on(ev, syncSelected);
 
+  // keep the selected item above the property sheet: once the finger is up (a layout shift during a
+  // drag would move the item under it), the board gets room below the page and scrolls if needed
+  const inspector = document.querySelector('#inspector');
+  function keepVisible() {
+    const o = canvas.getActiveObject();
+    document.body.classList.toggle('room', !!o);
+    if (!o) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const sheetTop = inspector.getBoundingClientRect().top - 12;
+      const r = o.getBoundingRect(), w = canvas.wrapperEl.getBoundingClientRect(), z = canvas.getZoom(); // scene units, so scale by the zoom
+      const top = w.top + r.top * z, bottom = top + r.height * z;
+      const limit = Math.max(0, top - (board.getBoundingClientRect().top + 8)); // never scroll the item's top off the screen
+      if (bottom > sheetTop) board.scrollTop += Math.min(bottom - sheetTop, limit);
+    }));
+  }
+  canvas.on('mouse:up', keepVisible);
+  for (const ev of ['selection:created', 'selection:updated']) canvas.on(ev, () => setTimeout(() => { if (!pts.size) keepVisible(); }, 0));
+  canvas.on('selection:cleared', () => document.body.classList.remove('room'));
+
   // the Done closer for each drawer sheet; app.js's rail handler re-syncs on the next tap, and
   // the active tab's highlight is kept in step with the now-closed sheet
   for (const sec of document.querySelectorAll('.drawer section')) {
@@ -135,7 +154,8 @@
     if (pts.size === 2) startGesture();
     else if (pts.size === 1) {
       armPress(e);
-      pan = hit(e) ? null : { x: e.clientX, y: e.clientY, sl: board.scrollLeft, st: board.scrollTop };
+      // in select-several mode a drag on empty space draws a selection box instead of panning
+      pan = hit(e) || editor.selectMany ? null : { x: e.clientX, y: e.clientY, sl: board.scrollLeft, st: board.scrollTop };
     }
   }, true);
   board.addEventListener('pointermove', e => {

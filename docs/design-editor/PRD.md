@@ -131,6 +131,10 @@ hardware encoders; §6.6 works the numbers for a one-minute clip into 20 MB (720
     with a progress notification ("Compressing 2 of 5, 43%") carrying a Cancel action, and a
     summary notification at the end.
   - Mac: the batch continues with the Media tools window closed; quitting asks first.
+  - Android, owner's requirement 2026-11-04: the Queue screen shows at most five jobs (the running
+    one first, then the waiting ones, then the newest finished or failed). When there are more, a
+    "See all" row opens a separate screen with every job. "Clear queue" empties the list: it asks
+    first when a job is running or waiting, and then stops them; it never deletes an output file.
 - **FR-10: Results.**
   - The original is never changed. Outputs go to `Movies`, `Music` or `Pictures` under
     "Design Editor" on Android, and to a folder the user picks on the Mac.
@@ -145,6 +149,42 @@ hardware encoders; §6.6 works the numbers for a one-minute clip into 20 MB (720
   - Usable by touch: tap to select, drag to move, handles at least 44 px, pinch to zoom,
     two fingers to pan, a bottom toolbar instead of the Mac menus.
   - Design files (`.json`) open on either device.
+- **FR-13: Plain words (owner's requirement 2026-11-04).** A person who has never heard of a codec
+  can use every screen. A release build shows no engineering information: no phase, spike or lab
+  names, no job ids, no codec, bitrate, encoder or keyframe words, no byte counts of a plan against
+  its result, no attempt counters, no storage paths or API names. Sizes are in MB, times are
+  m:ss, tool names say what they do ("Make smaller", "Trim", "Get the sound", "Make a GIF",
+  "Change format"). Failures say what happened and what to do. The debug Media lab stays in debug
+  builds only. The same rule covers the editor page's own copy on the phone (it was written for the
+  Mac: no "click", "right-click", "double-click" or "this Mac").
+- **FR-14: Timeline strip (owner's request 2026-11-05).** Wherever a person picks a part of a video
+  (Trim, Make a GIF, Save a picture) the media is shown as a horizontal strip: a filmstrip with the
+  sound's waveform under it and a time ruler. The strip scrolls under a fixed playhead (drag to move
+  along the video), the start and end are handles at the ends of the kept part (drag to move them,
+  or "Start here" and "End here" at the playhead), and zoom is a pinch or "Zoom in" and "Zoom out".
+  A still of the picture under the playhead shows above the strip. The typed times stay for exact
+  values. The full multi-track "Make a video" screen (video, sound, music, text) is built on the
+  same strip in later stages: `docs/superpowers/specs/2026-11-05-timeline-editor-design.md`.
+- **FR-15: Make a video, stage 2 (video track only; owner reviewed the plan 2026-11-06).** A "Make a
+  video" row on the Media tab opens one screen: a preview that plays the result, Play or Pause, a strip
+  with one block per clip (tap to choose a clip), and buttons: Add clips, Cut here, Start here and End
+  here (the clip under the line), Earlier and Later (the chosen clip), Delete clip and Save video. Save
+  queues one MP4 ("My video.mp4" in Movies) at the medium quality; the first clip sets the picture shape
+  and others fit inside it with black bars. Up to 20 clips and 10 minutes. The project is kept on the
+  phone and comes back when the screen opens; a clip whose file cannot be opened any more is removed
+  with a note. Not in this stage: sound tracks and music (stage 3), text (stage 4), drag handles on
+  clips, drag to reorder, undo, transitions, speed. Plan: `docs/superpowers/plans/2026-11-06-make-a-video-stage-2.md`.
+- **FR-16: Make a video, stage 3 (sound; built 2026-11-06, not yet checked on a phone).** Each clip's own
+  sound has a volume: Mute, Quiet (half), Normal or Loud (one and a half times), set in a "Sound" group
+  for the chosen clip; a clip with no sound says so. Music comes from sound files on the phone (never
+  from the network): Add music starts a piece at the line, cut to the room left before the next piece or
+  the video's end; pieces sit in one row under the clips, never overlap, at most 5. With a piece chosen,
+  Start here and End here trim it, Move here moves its start to the line (it may then run past the end),
+  Delete music removes it, and the Sound group sets its volume. The saved video stops at the video's end,
+  so music never makes it longer; music left after the end by a shorter video is named in a note with a
+  button to remove it. Loud stops at full scale rather than distorting. A music file that cannot be opened any more is removed with the clips' note. Not in this
+  stage: fades, lowering the music under speech, voice-over, a built-in sound library, dragging music.
+  Plan: `docs/superpowers/plans/2026-11-06-make-a-video-stage-3-sound.md`.
 - **FR-12: Setup on Android.** Ask for notification permission before the first batch. If the
   Phase 1 spike shows HyperOS kills swiped batches, show a one-time note with a button to the
   app's battery settings.
@@ -236,6 +276,14 @@ samples).
 - **AC-14 (design files):** Given a design saved on the Mac, when opened on the phone (and the
   reverse), then it has the same objects, text and page size.
 
+- **AC-15 (queue of five):** Given twelve jobs in the list, when the owner opens the Queue screen,
+  then exactly five rows show with the running job first, a "See all 12" row opens the full list on
+  its own screen, and "Clear queue" empties the list (after a confirm while a job runs or waits)
+  with every output file still in `Movies/Design Editor`.
+- **AC-16 (plain words):** Given a release build, when the owner walks every screen and the editor
+  page, then none shows a word from the banned list in FR-13, and the Media lab row is absent. A
+  test over the screens' string literals enforces the list.
+
 ## 7. Success metrics
 
 No telemetry: the owner reads these from the result list, the debug "Media lab" screen and the
@@ -254,11 +302,20 @@ test log in the handoff.
 
 - **A video timeline inside the design canvas** and **exporting designs as MP4 or animated
   images.** Later ideas, below.
-- **FFmpeg on Android**, MP3, WebM and animated WebP output on the phone, AV1 output anywhere.
+- **FFmpeg on Android**, MP3, WebM and animated WebP output on the phone, AV1 output anywhere. (Exception, the owner's yes on 2026-11-04: the LGPL `ffmpeg-kit-min` 8.1.7 AAR, used only for volume, reverse and stabilize on the phone, with hardware encoders and no x264; SPEC §3.)
 - Multi-segment cuts, merging, subtitles, filters, crop, speed changes. (Exception: volume, reverse and stabilize, the owner's yes on 2026-11-03; see FR-8.)
 - Uploading, cloud sync, accounts.
 - Play Store release; Windows or Linux builds of Design Editor.
 - **iOS** until the owner has a paid Apple developer account (SPEC Phase 6, optional).
+
+### Requested by the owner on 2026-11-04, not scheduled yet (needs a plan before any build)
+
+These lift parts of the list above; the owner's message is the yes. They are the next session (B4.2), after Phase 4.
+
+- **Add music and mix several sounds on one video** (a background track, more than one sound, a level per sound). Music comes from files on the phone.
+- **Join clips** (PRD later idea 4), **cut a clip into pieces**, **change a video's orientation** (rotate, flip, fit to a vertical or horizontal frame).
+- **Video templates in the CapCut style.** A template needs a timeline (clip slots, text, music), so it is its own designed phase. CapCut's own templates are not copied; ours are original.
+- **Spotify: not possible.** Spotify's developer policy bars syncing its content with video and mixing it with other audio, its SDKs only control playback inside Spotify, and it needs a network, an account and a closed SDK (PRD NFR-4, NFR-8, AGENTS.md).
 
 ### Later ideas
 

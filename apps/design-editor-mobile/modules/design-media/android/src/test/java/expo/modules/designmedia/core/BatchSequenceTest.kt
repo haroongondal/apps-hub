@@ -30,9 +30,9 @@ class BatchSequenceTest {
     while (next != null) {
       val id = next.id
       record(QueueEvent.Start(id, 1L))
-      record(QueueEvent.Attempt(id, AttemptLog(1, next.plan.plannedBytes, 26_100_000, 34.0, "vbr")))
+      record(QueueEvent.Attempt(id, AttemptLog(1, (next.plan as SizePlan).plannedBytes, 26_100_000, 34.0, "vbr")))
       record(QueueEvent.Retry(id, next.plan))
-      record(QueueEvent.Attempt(id, AttemptLog(2, next.plan.plannedBytes, 14_200_000, 30.0, "vbr")))
+      record(QueueEvent.Attempt(id, AttemptLog(2, (next.plan as SizePlan).plannedBytes, 14_200_000, 30.0, "vbr")))
       record(QueueEvent.Done(id, listOf(Output("$id.mp4", "content://media/$id", 14_200_000)), 2L))
       ran++
       next = nextRunnable(store.load())

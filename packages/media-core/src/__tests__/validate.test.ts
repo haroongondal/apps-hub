@@ -26,6 +26,13 @@ test('validate: the target must be at least 1 MB and below the file size', () =>
   assert.deepEqual(validateSpec({ ...spec, targetBytes: Number.NaN }, clip, 'android'), ['Pick a size of at least 1 MB.']);
 });
 
+test('validate: a clip a tenth of a second long passes even when the subtraction comes out as 0.0999', () => {
+  const part = (startS: number, endS: number) => ({ tool: 'clip', inputId: clip.id, startS, endS, mode: 'exact' });
+  assert.deepEqual(validateSpec(part(2.2, 2.3), clip, 'android'), []);
+  assert.deepEqual(validateSpec(part(5.6, 5.7), clip, 'android'), []);
+  assert.equal(validateSpec(part(2.2, 2.2), clip, 'android').length, 1);
+});
+
 test('validate: the phone has no x264 encoder', () => {
   assert.deepEqual(validateSpec({ ...spec, encoder: 'x264' }, clip, 'android'),
     ["This encoder isn't available on this phone."]);

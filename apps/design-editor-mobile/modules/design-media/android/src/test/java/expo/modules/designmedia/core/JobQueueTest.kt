@@ -63,6 +63,13 @@ class JobQueueTest {
   }
 
   @Test
+  fun aJobLeftRunningWhenTheAppWasKilledShowsAsInterruptedSoItCanBeResumed() {
+    val running = reduce(listOf(queued), QueueEvent.Start(queued.id, 10))
+    assertEquals(JobState.INTERRUPTED, shownQueue(running, serviceAlive = false)[0].state)
+    assertEquals(JobState.RUNNING, shownQueue(running, serviceAlive = true)[0].state)
+  }
+
+  @Test
   fun reduceDoesNotChangeTheInput() {
     val before = listOf(queued)
     reduce(before, QueueEvent.Cancel("all"))

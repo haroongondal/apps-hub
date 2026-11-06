@@ -6,7 +6,7 @@ import { planClip } from '../clip.ts';
 import { planConvert } from '../convert.ts';
 import { planFrame } from '../frame.ts';
 import { planReverse, reverseProblem } from '../reverse.ts';
-import { planStabilize } from '../stabilize.ts';
+import { planStabilize, STABILIZE_PASSES } from '../stabilize.ts';
 import { parseLoudnorm, planVolume } from '../volume.ts';
 import { planGif, nextGifAttempt } from '../gif.ts';
 import { fromFfprobe } from '../probe.ts';
@@ -122,18 +122,25 @@ test('reverse: a clip up to 10 s at 1080p or below is planned; longer or bigger 
   assert.equal(reverseProblem({ ...film(), durationS: 10.02 }), undefined);
   assert.match(reverseProblem({ ...film(), durationS: 12 }) ?? '', /up to 10 seconds/);
   const uhd = { ...film(), tracks: film().tracks.map(t => t.kind === 'video' ? { ...t, width: 3840, height: 2160 } : t) };
-  assert.match(reverseProblem(uhd) ?? '', /up to 1920×1080/);
+  assert.match(reverseProblem(uhd) ?? '', /up to 1080p/);
   assert.deepEqual(planReverse({ ...film(), tracks: film().tracks.filter(t => t.kind === 'audio') }, true),
     { ok: false, reason: 'invalid', detail: 'Reverse needs a video track.' });
 });
 
 test('stabilize: each level maps to its search range, and an audio-only file is refused', () => {
-  assert.deepEqual(planStabilize(film(), 'recommended'), { ok: true, plan: { tool: 'stabilize', level: 'recommended', search: 16, quality: 65, ext: 'mp4' } });
+  assert.deepEqual(planStabilize(film(), 'recommended'), { ok: true, plan: { tool: 'stabilize', level: 'recommended', search: 32, quality: 65, ext: 'mp4' } });
   const most = planStabilize(film(), 'most');
   const minimum = planStabilize(film(), 'minimum');
   assert.ok(most.ok && minimum.ok);
-  assert.equal(most.plan.search, 40);
-  assert.equal(minimum.plan.search, 8);
+  assert.equal(most.plan.search, 64);
+  assert.equal(minimum.plan.search, 16);
+  // Only the pass count changes the picture (measured 2026-11-06), so the levels must differ in passes: Balanced and Steadiest are never one pass.
+  assert.deepEqual(STABILIZE_PASSES, { minimum: 1, recommended: 2, most: 2 });
+  // The phone's deshake rejects any other range, which made two of the three levels fail on the phone.
+  for (const level of ['minimum', 'recommended', 'most'] as const) {
+    const p = planStabilize(film(), level);
+    assert.ok(p.ok && p.plan.search % 16 === 0 && p.plan.search >= 16 && p.plan.search <= 64, level);
+  }
   assert.equal(planStabilize({ ...film(), tracks: film().tracks.filter(t => t.kind === 'audio') }, 'most').ok, false);
 });
 

@@ -10,24 +10,34 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.util.Log
-import androidx.media3.transformer.Composition
-import androidx.media3.transformer.ExportException
-import androidx.media3.transformer.ExportResult
-import androidx.media3.transformer.Transformer
 import expo.modules.designmedia.core.AtomicFile
 import expo.modules.designmedia.core.AttemptLog
+import expo.modules.designmedia.core.CBR
+import expo.modules.designmedia.core.ClipPlan
 import expo.modules.designmedia.core.EncoderStatsStore
+import expo.modules.designmedia.core.GifNext
+import expo.modules.designmedia.core.GifPlan
 import expo.modules.designmedia.core.Job
 import expo.modules.designmedia.core.JobState
+import expo.modules.designmedia.core.Messages
 import expo.modules.designmedia.core.Next
+import expo.modules.designmedia.core.Plan
+import expo.modules.designmedia.core.QualityPlan
 import expo.modules.designmedia.core.QueueEvent
 import expo.modules.designmedia.core.QueueStore
 import expo.modules.designmedia.core.SizePlan
+import expo.modules.designmedia.core.VBR
 import expo.modules.designmedia.core.decodeJobs
+import expo.modules.designmedia.core.firstMode
+import expo.modules.designmedia.core.neededBytes
+import expo.modules.designmedia.core.nextGifAttempt
 import expo.modules.designmedia.core.nextRunnable
 import expo.modules.designmedia.core.nextSizeAttempt
+import expo.modules.designmedia.core.outputExt
+import expo.modules.designmedia.core.outputLabel
 import expo.modules.designmedia.core.outputName
 import expo.modules.designmedia.core.reduce
+import expo.modules.designmedia.core.targetFor
 import expo.modules.designmedia.core.toStatusMap
 import java.io.File
 
@@ -45,6 +55,7 @@ class MediaJobService : Service() {
 
   override fun onCreate() {
     super.onCreate()
+    alive = true
     Log.i(TAG, "create ${System.identityHashCode(this)}")
     thread = HandlerThread("design-media").apply { start() }
     handler = Handler(thread.looper)
@@ -61,7 +72,7 @@ class MediaJobService : Service() {
     lastStartId = startId
     startForeground(
       NOTIFICATION_ID,
-      notifier.build(TITLE, "Starting", 0, cancelIntent()),
+      notifier.build(Messages.CHANNEL, Messages.STARTING, 0, cancelIntent()),
       ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING,
     )
     val action = intent?.action
@@ -73,6 +84,8 @@ class MediaJobService : Service() {
         ACTION_ENQUEUE -> enqueue(jobs, cbr)
         ACTION_CANCEL -> cancel(id)
         ACTION_CANCEL_ALL -> cancel(ALL)
+        ACTION_RESUME -> record(QueueEvent.Resume)
+        ACTION_CLEAR -> clear()
       }
       pump()
     }
@@ -90,6 +103,7 @@ class MediaJobService : Service() {
   }
 
   override fun onDestroy() {
+    alive = false
     Log.i(TAG, "destroy ${System.identityHashCode(this)}")
     handler.post { current?.let { abort(it) } }
     thread.quitSafely()
@@ -101,7 +115,8 @@ class MediaJobService : Service() {
       try {
         block()
       } catch (e: Exception) {
-        current?.let { fail(it.job.id, e.message ?: "Unexpected error.") }
+        Log.w(TAG, "unexpected error", e)
+        current?.let { fail(it.job.id, Messages.WENT_WRONG) }
         pump()
       }
     }
@@ -120,6 +135,13 @@ class MediaJobService : Service() {
     record(QueueEvent.Cancel(id))
   }
 
+  // Stops what runs, drops what waits, then empties the list. Only the list and temp files go; no output file or row is touched.
+  private fun clear() {
+    cancel(ALL)
+    store.save(emptyList())
+    emit()
+  }
+
   private fun pump() {
     if (current != null) return
     val next = nextRunnable(store.load())
@@ -129,13 +151,21 @@ class MediaJobService : Service() {
       stopSelf(lastStartId)
       return
     }
-    val needed = 2 * next.plan.plannedBytes
-    if (cacheDir.usableSpace < needed) {
-      fail(next.id, "Not enough free space: needs ${(needed + 999_999) / 1_000_000} MB.")
+    val needed = try {
+      val input = Uri.parse(next.inputId)
+      neededBytes(next.plan, Probe.bytesOf(this, input), if (next.plan is ClipPlan) Probe.source(this, input).durationS else 0.0)
+    } catch (e: Exception) {
+      Log.w(TAG, "input not readable", e)
+      fail(next.id, Messages.COULDNT_OPEN)
       pump()
       return
     }
-    val run = Run(next, next.plan, CBR)
+    if (cacheDir.usableSpace < needed) {
+      fail(next.id, Messages.noRoom((needed + 999_999) / 1_000_000))
+      pump()
+      return
+    }
+    val run = Run(next, next.plan, firstMode(next.plan))
     current = run
     record(QueueEvent.Start(next.id, now()))
     attempt(run)
@@ -143,56 +173,78 @@ class MediaJobService : Service() {
 
   private fun attempt(r: Run) {
     val dir = File(cacheDir, "jobs/${r.job.id}").apply { mkdirs() }
-    val out = File(dir, "attempt-${r.plan.attempt}.mp4").apply { delete() }
+    r.tries++
+    val out = File(dir, "attempt-${r.tries}.${outputExt(r.plan)}").apply { delete() }
     r.startedMs = now()
     r.finished = false
-    r.transformer = TransformerRunner.start(
-      this, thread.looper, r.plan, Uri.parse(r.job.inputId), out, r.mode == CBR, listener(r, out),
-    )
-    r.startPolling()
+    val request = Request(this, thread.looper, handler, r.plan, Uri.parse(r.job.inputId), out, r.mode == CBR)
+    try {
+      r.runner = Runners.start(request) { outcome -> finishedWith(r, out, outcome) }
+    } catch (e: Exception) {
+      Log.w(TAG, "${r.plan.tool} did not start", e)
+      fail(r.job.id, Messages.COULDNT_PROCESS)
+      pump()
+      return
+    }
+    // a runner that fails while starting has already finished and aborted this run; polling it would never stop
+    if (!r.aborted && !r.finished) r.startPolling()
   }
 
-  private fun listener(r: Run, out: File) = object : Transformer.Listener {
-    override fun onCompleted(composition: Composition, result: ExportResult) = completed(r, out)
-
-    override fun onError(composition: Composition, result: ExportResult, exception: ExportException) =
-      errored(r, exception)
+  private fun finishedWith(r: Run, out: File, outcome: Outcome) {
+    if (r.aborted) return
+    r.finished = true
+    r.stopPolling()
+    when (outcome) {
+      is Outcome.Failed -> {
+        Log.w(TAG, "${r.plan.tool} failed: ${outcome.detail}")
+        encoderFailed(r, Messages.COULDNT_PROCESS)
+      }
+      is Outcome.Written -> {
+        r.label = outcome.label
+        completed(r, out)
+      }
+    }
   }
 
   private fun completed(r: Run, out: File) {
-    if (r.aborted) return
-    r.finished = true
-    r.stopPolling()
     val actual = out.length()
+    val plan = r.plan
     if (actual == 0L) {
-      encoderFailed(r, "The encoder produced no output.")
+      encoderFailed(r, if (plan is SizePlan || plan is QualityPlan) Messages.NOTHING_MADE else Messages.COULDNT_PROCESS)
       return
     }
-    val plan = r.plan
-    record(QueueEvent.Attempt(r.job.id, AttemptLog(plan.attempt, plan.plannedBytes, actual, (now() - r.startedMs) / 1000.0, r.mode)))
-    if (plan.attempt == 1) recordRatio(plan, r.mode, actual)
-    when (val next = nextSizeAttempt(plan, actual)) {
-      is Next.Publish -> publish(r, out)
-      is Next.Retry -> {
-        r.plan = next.plan
-        record(QueueEvent.Retry(r.job.id, next.plan))
-        attempt(r)
+    when (plan) {
+      is SizePlan -> {
+        record(QueueEvent.Attempt(r.job.id, AttemptLog(plan.attempt, plan.plannedBytes, actual, (now() - r.startedMs) / 1000.0, r.mode)))
+        if (plan.attempt == 1) recordRatio(plan, r.mode, actual)
+        when (val next = nextSizeAttempt(plan, actual)) {
+          is Next.Publish -> publish(r, out)
+          is Next.Retry -> retry(r, out, next.plan)
+          is Next.GaveUp -> giveUp(r, next.detail ?: Messages.overTarget(plan.targetBytes / 1_000_000))
+        }
       }
-      is Next.GaveUp -> {
-        fail(r.job.id, next.detail ?: "Couldn't fit under ${plan.targetBytes / 1_000_000} MB.")
-        pump()
+      is GifPlan -> when (val next = nextGifAttempt(plan, actual)) {
+        is GifNext.Publish -> publish(r, out)
+        is GifNext.Retry -> retry(r, out, next.plan)
+        GifNext.GaveUp -> giveUp(r, Messages.overTarget((plan.targetBytes ?: 0) / 1_000_000))
       }
+      else -> publish(r, out)
     }
   }
 
-  private fun errored(r: Run, e: ExportException) {
-    if (r.aborted) return
-    r.finished = true
-    r.stopPolling()
-    encoderFailed(r, "The encoder failed: ${ExportException.getErrorCodeName(e.errorCode)}")
+  private fun retry(r: Run, out: File, plan: Plan) {
+    out.delete()
+    r.plan = plan
+    record(QueueEvent.Retry(r.job.id, plan))
+    attempt(r)
   }
 
-  // CBR first: on the phone VBR overshot by 45% and CBR landed within 1% (2026-11-02). VBR runs once if CBR fails to start or yields nothing, unless cbrOnly (spike S4).
+  private fun giveUp(r: Run, message: String) {
+    fail(r.job.id, message)
+    pump()
+  }
+
+  // CBR first, then VBR once if the phone's encoder fails to start or yields nothing, unless cbrOnly (spike S4).
   private fun encoderFailed(r: Run, message: String) {
     if (r.mode == CBR && !cbrOnly) {
       r.mode = VBR
@@ -204,10 +256,13 @@ class MediaJobService : Service() {
   }
 
   private fun publish(r: Run, out: File) {
+    val target = targetFor(r.plan)
     val output = try {
-      Outputs.publish(this, out, outputName(r.job.inputName) { Outputs.exists(this, it) })
+      val name = outputName(r.job.inputName, r.label ?: outputLabel(r.plan), outputExt(r.plan)) { Outputs.exists(this, target, it) }
+      Outputs.publish(this, out, name, target)
     } catch (e: Exception) {
-      fail(r.job.id, "Couldn't save the output: ${e.message ?: "unknown error"}")
+      Log.w(TAG, "publish failed", e)
+      fail(r.job.id, Messages.COULDNT_SAVE)
       pump()
       return
     }
@@ -224,7 +279,7 @@ class MediaJobService : Service() {
 
   private fun abort(r: Run) {
     r.aborted = true
-    if (!r.finished) r.transformer?.cancel()
+    if (!r.finished) r.runner?.cancel()
     release(r)
   }
 
@@ -242,15 +297,14 @@ class MediaJobService : Service() {
   }
 
   private fun report(r: Run) {
-    val fraction = r.transformer?.let { TransformerRunner.progress(it) } ?: return
-    listener?.invoke(EVENT_PROGRESS, mapOf("id" to r.job.id, "fraction" to fraction, "attempt" to r.plan.attempt))
+    val fraction = r.runner?.progress() ?: return
+    listener?.invoke(EVENT_PROGRESS, mapOf("id" to r.job.id, "fraction" to fraction, "attempt" to r.attemptNo))
     val jobs = store.load()
     val done = jobs.count { it.state == JobState.DONE || it.state == JobState.FAILED }
     val total = jobs.count {
       it.state == JobState.QUEUED || it.state == JobState.RUNNING || it.state == JobState.DONE || it.state == JobState.FAILED
     }
-    val title = "Compressing ${done + 1} of $total"
-    notifier.show(NOTIFICATION_ID, notifier.build(title, r.job.inputName, (fraction * 100).toInt(), cancelIntent()))
+    notifier.show(NOTIFICATION_ID, notifier.build(Messages.working(done + 1, total), r.job.inputName, (fraction * 100).toInt(), cancelIntent()))
   }
 
   private fun record(event: QueueEvent) {
@@ -279,11 +333,14 @@ class MediaJobService : Service() {
 
   private fun now() = System.currentTimeMillis()
 
-  private inner class Run(val job: Job, var plan: SizePlan, var mode: String) : Runnable {
-    var transformer: Transformer? = null
+  private inner class Run(val job: Job, var plan: Plan, var mode: String) : Runnable {
+    var runner: Runner? = null
+    var label: String? = null
     var aborted = false
     var finished = false
     var startedMs = 0L
+    var tries = 0
+    val attemptNo get() = plan.let { if (it is SizePlan) it.attempt else if (it is GifPlan) it.attempt else 1 }
 
     override fun run() {
       report(this)
@@ -301,21 +358,21 @@ class MediaJobService : Service() {
 
   companion object {
     @Volatile var listener: ((String, Map<String, Any?>) -> Unit)? = null
+    @Volatile var alive = false
     const val EVENT_PROGRESS = "onJobProgress"
     const val EVENT_QUEUE = "onQueue"
 
     private const val TAG = "DesignMediaQueue"
-    private const val TITLE = "Media jobs"
     private const val QUEUE_FILE = "media-queue.json"
     private const val STATS_FILE = "encoder-stats.json"
     private const val ALL = "all"
-    private const val VBR = "vbr"
-    private const val CBR = "cbr"
     private const val NOTIFICATION_ID = 7201
     private const val POLL_MS = 500L
     private const val ACTION_ENQUEUE = "expo.modules.designmedia.ENQUEUE"
     private const val ACTION_CANCEL = "expo.modules.designmedia.CANCEL"
     private const val ACTION_CANCEL_ALL = "expo.modules.designmedia.CANCEL_ALL"
+    private const val ACTION_RESUME = "expo.modules.designmedia.RESUME"
+    private const val ACTION_CLEAR = "expo.modules.designmedia.CLEAR"
     private const val EXTRA_JOBS = "jobs"
     private const val EXTRA_CBR_ONLY = "cbrOnly"
     private const val EXTRA_ID = "id"
@@ -329,10 +386,14 @@ class MediaJobService : Service() {
       )
     }
 
-    fun cancel(context: Context, id: String) {
-      context.startForegroundService(
-        Intent(context, MediaJobService::class.java).setAction(ACTION_CANCEL).putExtra(EXTRA_ID, id),
-      )
+    fun cancel(context: Context, id: String) = send(context, ACTION_CANCEL) { putExtra(EXTRA_ID, id) }
+
+    fun resume(context: Context) = send(context, ACTION_RESUME)
+
+    fun clearQueue(context: Context) = send(context, ACTION_CLEAR)
+
+    private fun send(context: Context, action: String, extras: Intent.() -> Unit = {}) {
+      context.startForegroundService(Intent(context, MediaJobService::class.java).setAction(action).apply(extras))
     }
   }
 }

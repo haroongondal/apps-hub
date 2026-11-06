@@ -29,7 +29,7 @@ if (/<\/script/i.test(table)) throw new Error('the font table strings contain an
 // app.js must run before touch.js (window.editor) and after shell-mobile.js (native.onMenu);
 // SPEC §14.1 lists app.js before shell-mobile, which the four native.* calls make impossible —
 // the as-built order lives in this array and in the handoff.
-const scripts = ['vendor/fabric.min.js', 'vendor/pdf-lib.min.js', 'vendor/fontkit.min.js', 'shell-mobile.js', 'app.js', 'touch.js'];
+const scripts = ['vendor/fabric.min.js', 'vendor/pdf-lib.min.js', 'vendor/fontkit.min.js', 'shell-mobile.js', 'copy.js', 'app.js', 'touch.js'];
 let html = fs.readFileSync(page, 'utf8');
 for (const src of scripts) {
   const tag = `<script src="${src}"></script>`;

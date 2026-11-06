@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ffmpegArgs, loudnormMeasureArgs, parseKeyframe, parseProgress } from '../ffmpeg.ts';
-import type { ClipPlan, ConvertPlan, GifPlan, QualityPlan, SizePlan } from '../types.ts';
+import type { ClipPlan, ComposePlan, ConvertPlan, GifPlan, QualityPlan, SizePlan } from '../types.ts';
 
 const size: SizePlan = {
   tool: 'size', targetBytes: 20_000_000, encoder: 'x264', rung: { shortSide: 720, fps: 30 }, width: 1280, height: 720,
@@ -105,10 +105,16 @@ test('ffmpeg: reverse runs the video and, when asked, the sound backwards; witho
   assert.ok(silent.includes('-an') && !silent.includes('areverse'));
 });
 
-test('ffmpeg: stabilize uses deshake with the level search range and mirrored edges, so the frame keeps its size', () => {
-  const args = ffmpegArgs({ tool: 'stabilize', level: 'most', search: 40, quality: 65, ext: 'mp4' }, 'in.mp4', 'out.mp4');
-  assert.equal(args[args.indexOf('-vf') + 1], 'deshake=rx=40:ry=40:edge=mirror');
-  assert.equal(args[args.indexOf('-c:v') + 1], 'h264_videotoolbox');
+test('ffmpeg: stabilize chains one deshake per pass with the level range, less exhaustive search and mirrored edges', () => {
+  const vf = (level: 'minimum' | 'recommended' | 'most', search: number) =>
+    ffmpegArgs({ tool: 'stabilize', level, search, quality: 65, ext: 'mp4' }, 'in.mp4', 'out.mp4');
+  const most = vf('most', 64);
+  assert.equal(most[most.indexOf('-vf') + 1], 'deshake=rx=64:ry=64:edge=mirror:search=less,deshake=rx=64:ry=64:edge=mirror:search=less');
+  assert.equal(most[most.indexOf('-c:v') + 1], 'h264_videotoolbox');
+  const minimum = vf('minimum', 16);
+  assert.equal(minimum[minimum.indexOf('-vf') + 1], 'deshake=rx=16:ry=16:edge=mirror:search=less');
+  const recommended = vf('recommended', 32);
+  assert.equal(recommended[recommended.indexOf('-vf') + 1].split(',').length, 2);
 });
 
 test('ffmpeg: a measured normalize runs the second pass linearly with the measured values', () => {
@@ -119,4 +125,9 @@ test('ffmpeg: a measured normalize runs the second pass linearly with the measur
   const measure = loudnormMeasureArgs('in.mp4');
   assert.equal(measure[measure.indexOf('-af') + 1], 'loudnorm=I=-23:LRA=11:TP=-1.5:print_format=json');
   assert.deepEqual(measure.slice(-3), ['-f', 'null', '-']);
+});
+
+test('ffmpegArgs: a compose plan is the phone only, so the Mac refuses it', () => {
+  const plan: ComposePlan = { tool: 'compose', clips: [], music: [], width: 2, height: 2, fps: 30, videoBps: 1, plannedBytes: 1, ext: 'mp4' };
+  assert.throws(() => ffmpegArgs(plan, 'in.mp4', 'out.mp4'), /phone/);
 });
