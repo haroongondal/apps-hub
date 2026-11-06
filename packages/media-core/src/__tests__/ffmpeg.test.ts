@@ -128,6 +128,6 @@ test('ffmpeg: a measured normalize runs the second pass linearly with the measur
 });
 
 test('ffmpegArgs: a compose plan is the phone only, so the Mac refuses it', () => {
-  const plan: ComposePlan = { tool: 'compose', clips: [], width: 2, height: 2, fps: 30, videoBps: 1, plannedBytes: 1, ext: 'mp4' };
+  const plan: ComposePlan = { tool: 'compose', clips: [], music: [], width: 2, height: 2, fps: 30, videoBps: 1, plannedBytes: 1, ext: 'mp4' };
   assert.throws(() => ffmpegArgs(plan, 'in.mp4', 'out.mp4'), /phone/);
 });

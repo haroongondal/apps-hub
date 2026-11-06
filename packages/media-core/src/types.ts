@@ -47,8 +47,10 @@ export interface VolumePlan { tool: 'volume'; mode: 'normalize' | 'gain'; gainDb
 export interface ReversePlan { tool: 'reverse'; sound: boolean; quality: number; ext: 'mp4' }
 export interface StabilizePlan { tool: 'stabilize'; level: 'minimum' | 'recommended' | 'most'; search: number; quality: number; ext: 'mp4' }
 // "Make a video": every clip travels inside the plan, so the queue, retry and resume need nothing new.
-export interface ComposeClip { uri: string; name: string; inS: number; outS: number; hasAudio: boolean }
-export interface ComposePlan { tool: 'compose'; clips: ComposeClip[]; width: number; height: number; fps: number; videoBps: number; plannedBytes: number; ext: 'mp4' }
+export interface ComposeClip { uri: string; name: string; inS: number; outS: number; hasAudio: boolean; volume: number }
+// startS is the place on the video's timeline; inS and outS are times in the audio file, already cut to the video's end.
+export interface ComposeMusic { uri: string; name: string; inS: number; outS: number; startS: number; volume: number }
+export interface ComposePlan { tool: 'compose'; clips: ComposeClip[]; music: ComposeMusic[]; width: number; height: number; fps: number; videoBps: number; plannedBytes: number; ext: 'mp4' }
 export type Plan = SizePlan | QualityPlan | ClipPlan | AudioPlan | GifPlan | ConvertPlan | FramePlan | VolumePlan | ReversePlan | StabilizePlan | ComposePlan;
 
 export type JobState = 'queued' | 'running' | 'done' | 'failed' | 'cancelled' | 'interrupted' | 'paused';

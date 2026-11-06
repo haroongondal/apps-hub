@@ -204,14 +204,26 @@
      "name": "a.mp4",
      "inS": 0,
      "outS": 10,
-     "hasAudio": true
+     "hasAudio": true,
+     "volume": 1.5
     },
     {
      "uri": "content://media/b",
      "name": "b.mp4",
      "inS": 0,
      "outS": 4,
-     "hasAudio": false
+     "hasAudio": false,
+     "volume": 1
+    }
+   ],
+   "music": [
+    {
+     "uri": "content://media/s",
+     "name": "s.m4a",
+     "inS": 0,
+     "outS": 11,
+     "startS": 3,
+     "volume": 0.5
     }
    ],
    "width": 1920,
