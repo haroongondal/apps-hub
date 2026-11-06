@@ -12,7 +12,7 @@ import {
 
 import { timeText } from '../media/tools';
 import { singleFlight } from './latest';
-import { Bars, EIGHT_SECONDS, FILM_H, HEAD_H, RULER_H, Ruler, WAVE_H } from './RangeStrip';
+import { Bars, EIGHT_SECONDS, FILM_H, HEAD_H, RULER_H, Ruler } from './RangeStrip';
 
 export interface ClipStripProps {
   project: Project;
@@ -76,6 +76,7 @@ const ClipBlock = memo(function ClipBlock({ clip, index, leftPx, widthPx, px, se
 });
 
 const PEAKS = 400;
+const MUSIC_H = 48; // a touch target, taller than the waveform it holds
 
 // The sound of the whole file is read once; the block shows the part between inS and outS.
 const MusicBlock = memo(function MusicBlock({ music, index, top, leftPx, widthPx, selected, onSelect }: {
@@ -103,7 +104,7 @@ const MusicBlock = memo(function MusicBlock({ music, index, top, leftPx, widthPx
       accessibilityLabel={`Music ${index + 1}, ${timeText(musicLengthS(music))}`}
       accessibilityState={{ selected }}
       style={{
-        position: 'absolute', top, left: leftPx, width: widthPx, height: WAVE_H, paddingHorizontal: 2,
+        position: 'absolute', top, left: leftPx, width: widthPx, height: MUSIC_H, paddingHorizontal: 2,
         backgroundColor: c.raised, borderRadius: 6, overflow: 'hidden', borderWidth: 2, borderColor: selected ? c.accent : c.bg,
       }}
     >
@@ -177,7 +178,7 @@ export function ClipStrip({ project, selectedId, onSelect, seekS, onPlayhead, on
 
   const top = HEAD_H + RULER_H;
   const musicTop = top + FILM_H + space.xs;
-  const height = project.music.length ? musicTop + WAVE_H : top + FILM_H;
+  const height = project.music.length ? musicTop + MUSIC_H : top + FILM_H;
 
   return (
     <View onLayout={(e: LayoutChangeEvent) => setViewW(e.nativeEvent.layout.width)} onTouchMove={onTouchMove} onTouchEnd={endPinch} onTouchCancel={endPinch} style={{ gap: space.sm }}>

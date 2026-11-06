@@ -1,12 +1,12 @@
 import {
   addClip, addMusic, audioSourceFrom, deleteClip, deleteMusic, emptyProject, locate, MAX_MUSIC, moveClip, moveMusic, planCompose,
-  projectProblem, setClipVolume, setMusicVolume, sourceFrom, splitAt, totalS, trimAt, trimMusicAt, VOLUME_STEPS,
+  projectProblem, setClipVolume, setMusicVolume, sourceFrom, splitAt, totalS, trimAt, trimMusicAt, unheardMusic, VOLUME_STEPS,
   type MediaInfo, type Project,
 } from '@apps-hub/media-core';
 import { Button, Group, Header, Notice, Screen, Segmented, Text, radius, space, useTheme } from '@apps-hub/ui';
 import { CompositionView, type CompositionViewHandle } from 'design-media';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { AppState, View } from 'react-native';
 
 import { plainError } from '../src/media/errors';
@@ -74,9 +74,11 @@ export default function MakeAVideo() {
   const selectedAt = project.clips.findIndex(cl => cl.id === selectedId);
   const chosenClip = project.clips[selectedAt];
   const chosenMusic = project.music.find(m => m.id === musicId);
+  const unheard = unheardMusic(project);
 
-  const chooseClip = (id: string | undefined) => { setSelectedId(id); setMusicId(undefined); };
-  const chooseMusic = (id: string) => { setMusicId(id); setSelectedId(undefined); };
+  // Stable, so the strip's memoised blocks do not re-render on every playback tick.
+  const chooseClip = useCallback((id: string | undefined) => { setSelectedId(id); setMusicId(undefined); }, []);
+  const chooseMusic = useCallback((id: string) => { setMusicId(id); setSelectedId(undefined); }, []);
 
   const edit = (next: Project, fail?: string) => {
     setError(next === project && fail ? fail : null);
@@ -238,13 +240,26 @@ export default function MakeAVideo() {
           <Text tone="muted">Choose a clip or a piece of music to set how loud it is.</Text>
         )}
       </Group>
+      {unheard.length ? (
+        <Notice
+          tone="warn"
+          action={<Button label={unheard.length === 1 ? 'Remove it' : 'Remove them'} variant="secondary" size="sm" onPress={() => {
+            if (musicId && unheard.includes(musicId)) setMusicId(undefined);
+            edit({ ...project, music: project.music.filter(m => !unheard.includes(m.id)) });
+          }} />}
+        >
+          {unheard.length === 1
+            ? '1 piece of music starts after the video ends, so it is not heard.'
+            : `${unheard.length} pieces of music start after the video ends, so they are not heard.`}
+        </Notice>
+      ) : null}
       <View style={{ gap: space.sm }}>
         <Pair>
           <Half label="Add music" disabled={!loaded || !project.clips.length} onPress={addTune} accessibilityHint="Picks a sound file and starts it at the line" />
           <Half label="Delete music" disabled={!chosenMusic} onPress={() => { setMusicId(undefined); edit(deleteMusic(project, chosenMusic!.id)); }} accessibilityHint="Takes the chosen music out of the video; the file stays on your phone" />
         </Pair>
         <Pair>
-          <Half label="Move here" disabled={!chosenMusic} onPress={() => edit(moveMusic(project, chosenMusic!.id, headS), 'The music would overlap other music or run past the end of the video here.')} accessibilityHint="The chosen music starts at the line" />
+          <Half label="Move here" disabled={!chosenMusic} onPress={() => edit(moveMusic(project, chosenMusic!.id, headS), 'Here the music would overlap other music or start at the very end. Move the line, then try again.')} accessibilityHint="The chosen music starts at the line" />
           <View style={{ flex: 1 }} />
         </Pair>
       </View>

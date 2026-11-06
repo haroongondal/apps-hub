@@ -3,8 +3,7 @@ package expo.modules.designmedia.android
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.audio.AudioProcessor
-import androidx.media3.common.audio.DefaultGainProvider
-import androidx.media3.common.audio.GainProcessor
+import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.effect.FrameDropEffect
 import androidx.media3.effect.Presentation
 import androidx.media3.transformer.Composition
@@ -17,6 +16,7 @@ import expo.modules.designmedia.core.MusicSpec
 import expo.modules.designmedia.core.composeItems
 import expo.modules.designmedia.core.forceAudio
 import expo.modules.designmedia.core.musicItems
+import java.nio.ByteBuffer
 
 // The one place a "Make a video" Composition is made: the preview plays it and the export writes it.
 object ComposeBuilder {
@@ -37,9 +37,8 @@ object ComposeBuilder {
   fun clipping(startUs: Long, endUs: Long): MediaItem.ClippingConfiguration =
     MediaItem.ClippingConfiguration.Builder().setStartPositionUs(startUs).setEndPositionUs(endUs).build()
 
-  // shortcut: a plain gain with no limiter, so Loud (1.5) can clip a clip that is already near full scale; add a limiter if the phone check hears it.
-  fun gain(volume: Float): List<AudioProcessor> =
-    if (volume == 1f) emptyList() else listOf(GainProcessor(DefaultGainProvider.Builder(volume).build()))
+  // shortcut: Loud stops at full scale (a hard clip, no limiter), so a loud song can sound harsh at 1.5; add a limiter if the phone check hears it.
+  fun gain(volume: Float): List<AudioProcessor> = if (volume == 1f) emptyList() else listOf(ClampedGain(volume))
 
   // A clip with no sound gets its silence from the sequence; there is nothing to make louder or quieter.
   fun clipGain(spec: ItemSpec): List<AudioProcessor> = if (spec.keepAudio) gain(spec.volume) else emptyList()
@@ -73,4 +72,25 @@ object ComposeBuilder {
   )
 
   private fun fitTo(width: Int, height: Int) = Presentation.createForWidthAndHeight(width, height, Presentation.LAYOUT_SCALE_TO_FIT)
+}
+
+// Media3 1.11.1's GainProcessor casts 16-bit samples back with no clamp, so a gain above 1 wraps a loud sample
+// to the opposite sign (a crackle). This one stops at full scale. It takes the same formats GainProcessor takes.
+class ClampedGain(private val volume: Float) : BaseAudioProcessor() {
+  override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
+    if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT && inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT) {
+      throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
+    }
+    return inputAudioFormat
+  }
+
+  override fun queueInput(inputBuffer: ByteBuffer) {
+    val out = replaceOutputBuffer(inputBuffer.remaining())
+    if (inputAudioFormat.encoding == C.ENCODING_PCM_16BIT) {
+      while (inputBuffer.remaining() >= 2) out.putShort(Math.round(inputBuffer.short * volume).coerceIn(-32_768, 32_767).toShort())
+    } else {
+      while (inputBuffer.remaining() >= 4) out.putFloat((inputBuffer.float * volume).coerceIn(-1f, 1f))
+    }
+    out.flip()
+  }
 }

@@ -179,9 +179,10 @@ hardware encoders; §6.6 works the numbers for a one-minute clip into 20 MB (720
   for the chosen clip; a clip with no sound says so. Music comes from sound files on the phone (never
   from the network): Add music starts a piece at the line, cut to the room left before the next piece or
   the video's end; pieces sit in one row under the clips, never overlap, at most 5. With a piece chosen,
-  Start here and End here trim it, Move here moves its start to the line, Delete music removes it, and
-  the Sound group sets its volume. The saved video stops at the video's end, so music never makes it
-  longer. A music file that cannot be opened any more is removed with the clips' note. Not in this
+  Start here and End here trim it, Move here moves its start to the line (it may then run past the end),
+  Delete music removes it, and the Sound group sets its volume. The saved video stops at the video's end,
+  so music never makes it longer; music left after the end by a shorter video is named in a note with a
+  button to remove it. Loud stops at full scale rather than distorting. A music file that cannot be opened any more is removed with the clips' note. Not in this
   stage: fades, lowering the music under speech, voice-over, a built-in sound library, dragging music.
   Plan: `docs/superpowers/plans/2026-11-06-make-a-video-stage-3-sound.md`.
 - **FR-12: Setup on Android.** Ask for notification permission before the first batch. If the

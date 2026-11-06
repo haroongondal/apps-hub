@@ -10,8 +10,7 @@ import { timeText } from '../media/tools';
 import { useStripMedia } from './useStripMedia';
 
 export const HEAD_H = 26, RULER_H = 18, FILM_H = 56, EIGHT_SECONDS = 8;
-export const WAVE_H = 36;
-const HANDLE_W = 32, GRIP_W = 14;
+const WAVE_H = 36, HANDLE_W = 32, GRIP_W = 14;
 
 export interface RangeStripProps {
   uri: string;

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import {
   addClip, addMusic, audioSourceFrom, clipSpans, clipStarts, deleteClip, deleteMusic, emptyProject, locate, MAX_CLIPS, MAX_MUSIC,
   moveClip, moveMusic, musicEndS, musicLengthS, musicSpans, parseDraft, projectProblem, setClipVolume, setMusicVolume, sourceFrom, splitAt,
-  totalS, trimAt, trimClip, trimMusic, trimMusicAt, VOLUME_STEPS, type AudioSource, type Music, type Project, type Source,
+  totalS, trimAt, trimClip, trimMusic, trimMusicAt, unheardMusic, VOLUME_STEPS, type AudioSource, type Music, type Project, type Source,
 } from '../project.ts';
 import type { MediaInfo } from '../types.ts';
 
@@ -214,11 +214,12 @@ test('trimMusic: never reaches into a neighbour or before the video start', () =
   assert.deepEqual(spans(trimMusic(withMusic(piece('m1', 2, 6, 9)), 'm1', 'start', 0)), [['m1', 0, 4, 9]]);
 });
 
-test('moveMusic: moves the start; an overlap or a piece past the video end changes nothing', () => {
+test('moveMusic: moves the start, also so it runs past the end (cut when saved); an overlap or a start at the very end changes nothing', () => {
   const short = addMusic(two(), S5, 'm1', 3);
   assert.deepEqual(spans(moveMusic(short, 'm1', 0)), [['m1', 0, 0, 5]]);
   const full = addMusic(two(), S, 'm1', 3);
-  assert.equal(moveMusic(full, 'm1', 4), full);
+  assert.deepEqual(spans(moveMusic(full, 'm1', 6)), [['m1', 6, 0, 11]]);
+  for (const at of [14, 13.95, 20]) assert.equal(moveMusic(full, 'm1', at), full, `at ${at}`);
   const p = withMusic(piece('m1', 0, 0, 5), piece('m2', 7, 0, 4));
   assert.equal(moveMusic(p, 'm2', 4), p);
   assert.deepEqual(spans(moveMusic(p, 'm1', 2))[0], ['m1', 2, 0, 5]);
@@ -289,4 +290,11 @@ test('trimMusicAt: Start here and End here move the chosen piece to the line, al
     assert.equal(trimMusicAt(p, 'm1', t, edge), p, `${edge} at ${t}`);
   }
   assert.equal(trimMusicAt(p, 'nope', 5, 'start'), p);
+});
+
+test('unheardMusic: pieces that start at or within a tenth of the video end, or with no clips at all, are not heard', () => {
+  const p = withMusic(piece('m1', 0, 0, 5), piece('m2', 13.95, 0, 2), piece('m3', 16, 0, 2), piece('m4', 13.8, 0, 2));
+  assert.deepEqual(unheardMusic(p), ['m2', 'm3']);
+  assert.deepEqual(unheardMusic(withMusic(piece('m1', 0, 0, 5))), []);
+  assert.deepEqual(unheardMusic({ ...emptyProject(), music: [piece('m1', 0, 0, 5)] }), ['m1']);
 });

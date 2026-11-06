@@ -1,12 +1,15 @@
 package expo.modules.designmedia.core
 
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.common.audio.GainProcessor
+import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.effect.FrameDropEffect
 import androidx.media3.transformer.Effects
 import expo.modules.designmedia.android.ComposeBuilder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -89,8 +92,8 @@ class ComposeTest {
   @Test
   fun aVolumeOtherThanNormalAddsAGainAndASilentClipGetsNone() {
     assertEquals(0, ComposeBuilder.gain(1f).size)
-    assertTrue(ComposeBuilder.gain(0.5f).single() is GainProcessor)
-    assertTrue(ComposeBuilder.gain(0f).single() is GainProcessor)
+    assertEquals(1, ComposeBuilder.gain(0.5f).size)
+    assertEquals(1, ComposeBuilder.gain(0f).size)
     assertEquals(1, ComposeBuilder.clipGain(ItemSpec("a", 0, 1, true, 1.5f)).size)
     assertEquals(0, ComposeBuilder.clipGain(ItemSpec("a", 0, 1, false, 1.5f)).size)
   }
@@ -108,7 +111,7 @@ class ComposeTest {
     assertTrue(items[1].removeVideo)
     assertEquals(5_000_000L, items[1].presentationDurationUs)
     assertEquals(0, items[1].effects.audioProcessors.size)
-    assertTrue(items[2].effects.audioProcessors.single() is GainProcessor)
+    assertEquals(1, items[2].effects.audioProcessors.size)
     assertEquals(2_000_000L, items[2].presentationDurationUs)
   }
 
@@ -140,5 +143,27 @@ class ComposeTest {
     assertEquals("My video.mp4", outputName("My video", outputLabel(plan), outputExt(plan)) { false })
     assertTrue(hasBitrateMode(plan))
     assertEquals(Target(Kind.VIDEO, "Movies/Design Editor/", "video/mp4"), targetFor(plan))
+  }
+
+  private fun run(volume: Float, encoding: Int, write: (ByteBuffer) -> Unit, n: Int, read: (ByteBuffer) -> Number): List<Number> {
+    val p = ComposeBuilder.gain(volume).single()
+    p.configure(AudioProcessor.AudioFormat(44_100, 1, encoding))
+    p.flush()
+    val input = ByteBuffer.allocateDirect(n * 4).order(ByteOrder.nativeOrder())
+    write(input)
+    input.flip()
+    p.queueInput(input)
+    val out = p.output
+    return List(n) { read(out) }
+  }
+
+  @Test
+  fun loudStopsAtFullScaleInsteadOfWrappingAround() {
+    val got = run(1.5f, C.ENCODING_PCM_16BIT, { b -> listOf(25_000, -25_000, 1_000, 0).forEach { b.putShort(it.toShort()) } }, 4) { it.short }
+    assertEquals(listOf<Number>(32_767.toShort(), (-32_768).toShort(), 1_500.toShort(), 0.toShort()), got)
+    val quiet = run(0.5f, C.ENCODING_PCM_16BIT, { b -> listOf(-32_768, 3).forEach { b.putShort(it.toShort()) } }, 2) { it.short }
+    assertEquals(listOf<Number>((-16_384).toShort(), 2.toShort()), quiet)
+    val float = run(1.5f, C.ENCODING_PCM_FLOAT, { b -> listOf(0.9f, -0.9f, 0.2f).forEach { b.putFloat(it) } }, 3) { it.float }
+    assertEquals(listOf<Number>(1f, -1f, 0.3f), float.map { Math.round(it.toFloat() * 1000) / 1000f })
   }
 }

@@ -169,11 +169,18 @@ export function trimMusicAt(p: Project, id: string, timelineS: number, edge: 'st
   return trimMusic(p, id, edge, m.inS + timelineS - m.startS);
 }
 
+// After clips are cut shorter or deleted, a piece can start where nothing of it is heard (planCompose leaves it out).
+export function unheardMusic(p: Project): string[] {
+  const end = totalS(p);
+  return p.music.filter(m => end - m.startS < MIN_RANGE_S - EPS).map(m => m.id);
+}
+
 export function moveMusic(p: Project, id: string, toTimelineS: number): Project {
   const m = p.music.find(x => x.id === id);
   if (!m || !(toTimelineS >= 0)) return p;
+  // A piece may run past the end (the saved video cuts it there), but it must start where some of it is heard.
   const moved = { ...m, startS: snapTenth(toTimelineS) };
-  if (musicEndS(moved) > totalS(p) + EPS || overlaps([...others(p, id), moved])) return p;
+  if (totalS(p) - moved.startS < MIN_RANGE_S - EPS || overlaps([...others(p, id), moved])) return p;
   return withPiece(p, id, () => moved);
 }
 
