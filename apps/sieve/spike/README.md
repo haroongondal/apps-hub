@@ -37,12 +37,15 @@ The ejs README documents installation and runtimes only. The contract below come
 
 `jsc` evals the player script, which extension pages forbid, so `solver.html` is a sandbox page (manifest `sandbox`).
 `spike.js` keeps it in a hidden iframe and calls `solve(playerJsText, { sig, n })` through `postMessage`; both ends
-check `event.source`. The page solves in a fresh blob worker per request, not in the page itself: ejs's setup line
+check `event.source`. `spike.js` has to target the iframe with `'*'` (a sandbox page's origin is opaque), and the reply
+targets the extension's origin. The page solves in a fresh blob worker per request, not in the page itself: ejs's setup line
 `globalThis.location = new URL("https://www.youtube.com/watch?v=yt-dlp-wins")` (meant for node and deno) navigated a
 sandbox page away when tried, but does nothing in a worker. The default sandbox CSP blocks blob workers
 (`child-src 'self'`), so the manifest sets `sandbox allow-scripts; script-src 'self' 'unsafe-eval'; worker-src blob:; default-src 'none'`,
 which also leaves the player code no network access.
 
-Raw stream URLs and ciphers travel under `streams:<strategy>` storage keys (solved ones under `streams:S3`, for Task
-0.4). **Save results**, the summaries and `run.mjs` read `probe:` keys only, and `run.mjs` fails if a stream URL or
-cipher shows up in them. **Run all** clears both prefixes first.
+Raw stream URLs and ciphers live in `chrome.storage.session` under `streams:<strategy>` (solved ones under
+`streams:S3`, for Task 0.4), so they never reach disk and are gone when the browser closes. **Save results**, the
+summaries and `run.mjs` read the `probe:` keys in `chrome.storage.local` only, and `run.mjs` fails if a stream URL or
+cipher shows up in them. **Run all** clears both first. S3 Range-checks every solved URL (4 at a time), each next to a
+control that uses the raw challenges, and a class passes only when every one of its formats answers 206.

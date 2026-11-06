@@ -33,8 +33,7 @@ window.addEventListener('message', (e) => {
   const finish = (out) => {
     clearTimeout(timer);
     worker.terminate();
-    // '*': this sandboxed page has an opaque origin and cannot name its parent's; spike.js checks event.source.
-    parent.postMessage({ id, ...out }, '*');
+    parent.postMessage({ id, ...out }, new URL(location.href).origin);
   };
   const timer = setTimeout(() => finish({ error: 'the solver took longer than 60 s' }), 60_000);
   worker.onmessage = (m) => finish(m.data);

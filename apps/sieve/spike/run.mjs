@@ -25,15 +25,15 @@ try {
   const id = new URL(sw.url()).host;
 
   const video = await ctx.newPage();
-  await video.goto(`https://www.youtube.com/watch?v=${VIDEO}`, { waitUntil: 'domcontentloaded' });
+  await video.goto(`https://www.youtube.com/watch?v=${VIDEO}`, { waitUntil: 'domcontentloaded', timeout: 90_000 });
   const reject = video.getByRole('button', { name: 'Reject all' }).first();
   await Promise.race([reject.waitFor({ timeout: 15_000 }), video.locator('#movie_player').waitFor({ timeout: 15_000 })]).catch(() => {});
   if (await reject.isVisible()) {
     await reject.click();
     await video.waitForURL(/youtube\.com\/watch/);
   }
-  await video.locator('#movie_player').waitFor({ timeout: 20_000 });
-  await video.waitForLoadState('load', { timeout: 30_000 });
+  await video.locator('#movie_player').waitFor({ timeout: 60_000 });
+  await video.waitForLoadState('load', { timeout: 60_000 });
   await video.waitForTimeout(1_000);
 
   const spike = await ctx.newPage();

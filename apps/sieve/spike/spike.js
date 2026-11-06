@@ -1,10 +1,10 @@
 const $ = (id) => document.getElementById(id);
 const say = (text) => { $('status').textContent = text; };
 
-const stored = async (prefix) =>
-  Object.fromEntries(Object.entries(await chrome.storage.local.get(null)).filter(([k]) => k.startsWith(prefix)).sort());
-// Only probe: keys are shown and saved; streams: keys hold raw stream URLs and ciphers and stay on this machine.
-const storedResults = () => stored('probe:');
+const storedResults = async () =>
+  Object.fromEntries(Object.entries(await chrome.storage.local.get(null)).filter(([k]) => k.startsWith('probe:')).sort());
+// Raw and solved stream URLs live only in session storage (streams:<strategy>), never in what is shown or saved.
+const storedStreams = async () => Object.values(await chrome.storage.session.get(null));
 
 function tally(formats) {
   const counts = { url: 0, cipher: 0, none: 0 };
@@ -20,9 +20,13 @@ function summarise(r) {
   if (r.error) return { strategy: r.strategy, videoId: r.videoId, signedIn: r.loggedIn, error: r.error };
   if (r.strategy === 'S3') {
     return {
-      strategy: 'S3', videoId: r.videoId, signedIn: r.loggedIn, ejs: r.ejs, nothingToSolve: r.nothingToSolve,
-      players: r.players.map((p) => ({ solveMs: p.solveMs, sigSolved: p.sigSolved, nSolved: p.nSolved, errors: p.errors, error: p.error })),
-      classes: Object.fromEntries(Object.entries(r.classes).map(([k, c]) => [k, { formats: c.formats, solved: c.solved, checked: c.checks.map((x) => `${x.strategy} ${x.itag}: ${x.status} (unsolved ${x.unsolved})`), pass: c.pass }])),
+      strategy: 'S3', videoId: r.videoId, signedIn: r.loggedIn, ejs: r.ejs, scanned: r.scanned, nothingToSolve: r.nothingToSolve,
+      players: r.players.map((p) => ({ jscMs: p.jscMs, sigSolved: p.sigSolved, nSolved: p.nSolved, errors: p.errors, error: p.error })),
+      classes: Object.fromEntries(Object.entries(r.classes).map(([k, c]) => {
+        const outcomes = {};
+        for (const x of c.checks) { const o = `${x.status} (unsolved ${x.unsolved})`; outcomes[o] = (outcomes[o] ?? 0) + 1; }
+        return [k, { formats: c.formats, solved: c.solved, checked: c.checked, passed: c.passed, outcomes, pass: c.pass }];
+      })),
     };
   }
   return {
@@ -95,15 +99,9 @@ function finalUrl(t, sol) {
   return url;
 }
 
-// shortcut: one Range check per muxed format plus the tallest video and one audio per strategy, because a single solved
-// signature already proves the function; check every format if 0.4 sees a format fail that its sample passed.
-function sample(ts) {
-  return [...new Set(ts.map((t) => t.strategy))].flatMap((strategy) => {
-    const mine = ts.filter((t) => t.strategy === strategy);
-    const video = mine.filter((t) => !t.muxed && t.height).sort((a, b) => b.height - a.height)[0];
-    const audio = mine.find((t) => !t.muxed && t.mimeType?.startsWith('audio/'));
-    return [...mine.filter((t) => t.muxed), video, audio].filter(Boolean);
-  });
+async function eachLimited(items, limit, fn) {
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => { while (next < items.length) await fn(items[next++]); }));
 }
 
 async function rangeCheck(url) {
@@ -123,9 +121,11 @@ async function rangeCheck(url) {
 }
 
 async function S3(videoId, loggedIn) {
-  const all = Object.values(await stored('streams:')).flatMap(targets);
-  const blank = () => ({ formats: 0, solved: 0, checks: [], pass: null });
-  const result = { strategy: 'S3', videoId, loggedIn, ejs: EJS, nothingToSolve: !all.length, players: [], classes: { 'S1 muxed cipher': blank(), 'tv-family cipher': blank(), 'any n': blank() } };
+  const recs = await storedStreams();
+  const all = recs.flatMap(targets);
+  const blank = () => ({ formats: 0, solved: 0, checked: 0, passed: 0, checks: [], pass: null });
+  const scanned = Object.fromEntries(recs.map((r) => [r.strategy, r.formats.length]));
+  const result = { strategy: 'S3', videoId, loggedIn, ejs: EJS, scanned, nothingToSolve: !all.length, players: [], classes: { 'S1 muxed cipher': blank(), 'tv-family cipher': blank(), 'any n': blank() } };
   for (const t of all) for (const c of t.classes) (result.classes[c] ??= blank()).formats++;
 
   for (const playerJsUrl of new Set(all.map((t) => t.playerJsUrl))) {
@@ -134,13 +134,14 @@ async function S3(videoId, loggedIn) {
     result.players.push(info);
     try {
       if (!playerJsUrl) throw new Error('the probe recorded no player script URL');
-      const res = await fetch(new URL(playerJsUrl, 'https://www.youtube.com'), { signal: AbortSignal.timeout(20_000) });
+      const getPlayer = () => fetch(new URL(playerJsUrl, 'https://www.youtube.com'), { signal: AbortSignal.timeout(20_000) });
+      const res = await getPlayer().catch(() => pause(3_000).then(getPlayer));
       if (!res.ok) throw new Error(`player script: HTTP ${res.status}`);
       const sol = await solve(await res.text(), {
         sig: [...new Set(group.map((t) => t.s).filter(Boolean))],
         n: [...new Set(group.map((t) => t.n).filter(Boolean))],
       });
-      Object.assign(info, { solveMs: sol.ms, sigSolved: Object.keys(sol.sig).length, nSolved: Object.keys(sol.n).length, errors: sol.errors });
+      Object.assign(info, { jscMs: sol.ms, sigSolved: Object.keys(sol.sig).length, nSolved: Object.keys(sol.n).length, errors: sol.errors });
       for (const t of group) {
         t.final = finalUrl(t, sol);
         if (t.final) for (const c of t.classes) result.classes[c].solved++;
@@ -150,22 +151,29 @@ async function S3(videoId, loggedIn) {
     }
   }
 
-  await Promise.all(sample(all.filter((t) => t.final)).map(async (t) => {
+  await eachLimited(all.filter((t) => t.final), 4, async (t) => {
     // Control: the same URL with the raw challenges, to show that the solving is what makes it answer.
     const [solvedCheck, control] = await Promise.all([rangeCheck(t.final), rangeCheck(t.s ? `${t.url}&${t.sp}=${encodeURIComponent(t.s)}` : t.url)]);
     const check = { strategy: t.strategy, itag: t.itag, height: t.height, mimeType: t.mimeType, ...solvedCheck, unsolved: control.status };
     t.check = check.status;
-    for (const c of t.classes) result.classes[c].checks.push(check);
-  }));
-  for (const c of Object.values(result.classes)) c.pass = c.formats ? c.checks.some((x) => x.status === 206) : null;
+    for (const c of t.classes) {
+      const cls = result.classes[c];
+      cls.checks.push(check);
+      cls.checked++;
+      if (check.status === 206) cls.passed++;
+    }
+  });
+  for (const c of Object.values(result.classes)) c.pass = c.formats ? c.passed === c.formats : null;
   const solved = all.filter((t) => t.final).map(({ strategy, itag, mimeType, height, muxed, final, check }) => ({ strategy, itag, mimeType, height, muxed, url: final, check }));
-  await chrome.storage.local.set({ 'probe:S3': result, 'streams:S3': { strategy: 'S3', videoId, formats: solved } });
+  await chrome.storage.session.set({ 'streams:S3': { strategy: 'S3', videoId, formats: solved } });
+  await chrome.storage.local.set({ 'probe:S3': result });
 }
 
 async function runAll() {
   const tabs = (await chrome.tabs.query({ url: '*://www.youtube.com/watch*' })).sort((a, b) => b.lastAccessed - a.lastAccessed);
   if (!tabs.length) throw new Error('No YouTube video tab is open. Open a video, then click Run all again.');
-  await chrome.storage.local.remove([...Object.keys(await storedResults()), ...Object.keys(await stored('streams:'))]);
+  await chrome.storage.local.remove(Object.keys(await storedResults()));
+  await chrome.storage.session.clear();
   const reply = await chrome.tabs.sendMessage(tabs[0].id, { type: 'sieve-run' }).catch(() => {
     throw new Error('The video tab cannot talk to the spike yet. Wait for the video page to finish loading, or reload it, then click Run all again.');
   });

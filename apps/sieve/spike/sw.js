@@ -7,6 +7,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg?.type === 'fixture') items = { fixture: msg.fixture };
   if (msg?.type === 'streams') items = { [`streams:${msg.streams.strategy}`]: msg.streams };
   if (!items) return;
-  chrome.storage.local.set(items).then(() => reply(true));
+  (msg.type === 'streams' ? chrome.storage.session : chrome.storage.local).set(items).then(() => reply(true));
   return true;
 });
