@@ -42,6 +42,7 @@ object VaultHolder {
   internal const val PALETTE = "palette"
   internal const val LAST_UNLOCK_MS = "lastUnlockMs"
   internal const val LOST_SAVES = "lostSaves"
+  internal const val KEEP_ALIVE = "keepAliveEnabled"
   internal const val IMPORTS = "imports"
   private const val INDEX_FILE = "index.bin"
   private const val PENDING_FILE = "pending.bin"
@@ -308,6 +309,7 @@ object VaultHolder {
   }
 
   internal fun afterUnlock(context: Context, byPassword: Boolean, password: CharArray? = null) {
+    KeepAliveService.start(context)
     if (byPassword) {
       val boot = bootCount(context)
       prefs(context).edit().apply { if (boot == null) remove(PASSWORD_BOOT) else putInt(PASSWORD_BOOT, boot) }.commit()

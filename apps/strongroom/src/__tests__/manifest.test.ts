@@ -29,15 +29,33 @@ test('the release build refuses cleartext traffic', () => {
   assert.doesNotMatch(main, /usesCleartextTraffic="true"/);
 });
 
-test('the vault module adds only private job services and no permission', () => {
-  assert.deepEqual(permissions(vaultModule), ['android.permission.HIDE_OVERLAY_WINDOWS', 'android.permission.QUERY_ALL_PACKAGES']);
-  const [autofill, ...jobs] = services(vaultModule);
+test('the vault module keeps services private plus the keep-alive foreground service', () => {
+  assert.deepEqual(permissions(vaultModule), [
+    'android.permission.HIDE_OVERLAY_WINDOWS',
+    'android.permission.QUERY_ALL_PACKAGES',
+    'android.permission.FOREGROUND_SERVICE',
+    'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
+    'android.permission.POST_NOTIFICATIONS',
+  ]);
+  const [autofill, syncJob, clipboardJob, keepAlive] = services(vaultModule);
   assert.equal(attr(autofill, 'android:name'), 'expo.modules.strongroomvault.android.StrongroomAutofillService');
-  assert.deepEqual(jobs.map((j) => attr(j, 'android:name')), ['expo.modules.strongroomvault.android.SyncJobService', 'expo.modules.strongroomvault.android.ClipboardClearJob']);
-  for (const job of jobs) {
+  assert.deepEqual(
+    [syncJob, clipboardJob].map((j) => attr(j, 'android:name')),
+    ['expo.modules.strongroomvault.android.SyncJobService', 'expo.modules.strongroomvault.android.ClipboardClearJob'],
+  );
+  for (const job of [syncJob, clipboardJob]) {
     assert.equal(attr(job, 'android:exported'), 'false');
     assert.equal(attr(job, 'android:permission'), 'android.permission.BIND_JOB_SERVICE');
   }
+  // Keep-alive: a private special-use foreground service, not a job service.
+  assert.equal(attr(keepAlive, 'android:name'), 'expo.modules.strongroomvault.android.KeepAliveService');
+  assert.equal(attr(keepAlive, 'android:exported'), 'false');
+  assert.equal(attr(keepAlive, 'android:foregroundServiceType'), 'specialUse');
+  const keepAliveBlock = vaultModule.match(
+    /<service\b[^>]*android:name="expo\.modules\.strongroomvault\.android\.KeepAliveService"[\s\S]*?<\/service>/,
+  )?.[0];
+  assert.ok(keepAliveBlock, 'the keep-alive service block exists');
+  assert.match(keepAliveBlock, /android\.app\.PROPERTY_SPECIAL_USE_FGS_SUBTYPE/);
 });
 
 test('backup stays off', () => {
