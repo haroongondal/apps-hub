@@ -76,7 +76,7 @@ test('a plain build keeps FLAG_SECURE and the real app id', () => {
 test('release builds ignore the phone proof switches', () => {
   const release = block(block(gradle, 'buildTypes'), 'release');
   for (const p of PROOF_SWITCHES) assert.doesNotMatch(release, new RegExp(p), `release reads ${p}`);
-  assert.match(syncConfig, /const val BASE_URL = ""/);
+  assert.match(syncConfig, /const val BASE_URL = "https:\/\/strongroom-vault\.[a-z0-9-]+\.workers\.dev"/);
   assert.match(block(moduleGradle, 'defaultConfig'), /buildConfigField "String", "TEST_SYNC_URL", '""'/);
   const moduleDebug = block(block(moduleGradle, 'buildTypes'), 'debug');
   assert.match(moduleDebug, /buildConfigField "String", "TEST_SYNC_URL", .*findProperty\('strongroomSyncUrl'\)/);

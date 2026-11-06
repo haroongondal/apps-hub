@@ -1,4 +1,4 @@
-// Opens real Chromium with the built extension (run `pnpm build` first). Not part of `pnpm test`.
+// Opens real Chromium with the extension, built here without a sync server (the sync suite makes its own build). Not part of `pnpm test`.
 // Needs playwright-core and a Chromium: set PLAYWRIGHT_CORE and CHROMIUM_PATH if yours live elsewhere; screenshots go to SHOTS.
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';
@@ -13,7 +13,8 @@ const { chromium } = await import(process.env.PLAYWRIGHT_CORE ?? join(homedir(),
 const CHROMIUM = process.env.CHROMIUM_PATH ?? join(homedir(), 'Library/Caches/ms-playwright/chromium-1228/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
 const SCRATCH = process.env.SHOTS ?? tmpdir();
 const PKG = fileURLToPath(new URL('..', import.meta.url));
-const EXT = join(PKG, 'dist');
+const EXT = mkdtempSync(join(tmpdir(), 'sg-dist-'));
+execFileSync(process.execPath, ['build.mjs'], { cwd: PKG, env: { ...process.env, STRONGROOM_SYNC_URL: '', STRONGROOM_OUT: EXT }, stdio: 'pipe' });
 const CSV = fileURLToPath(new URL('../../strongroom/modules/strongroom-vault/android/src/test/resources/google-export-redacted.csv', import.meta.url));
 const MASTER = 'correct horse battery staple';
 
@@ -72,7 +73,7 @@ async function syncSuite() {
     execFileSync(process.execPath, ['build.mjs'], { cwd: PKG, env: { ...process.env, STRONGROOM_SYNC_URL: harness.url, STRONGROOM_OUT: syncDist }, stdio: 'pipe' });
     const manifest = JSON.parse(readFileSync(join(syncDist, 'manifest.json'), 'utf8'));
     check('the sync build asks for the sync origin and no other permission', JSON.stringify(manifest.host_permissions) === JSON.stringify([`${harness.url}/*`]) && manifest.permissions.join() === 'storage,alarms,activeTab', JSON.stringify(manifest));
-    check('the default build asks for no host permission', !('host_permissions' in JSON.parse(readFileSync(join(EXT, 'manifest.json'), 'utf8'))));
+    check('a build without a server asks for no host permission', !('host_permissions' in JSON.parse(readFileSync(join(EXT, 'manifest.json'), 'utf8'))));
 
     let { ctx, sw, id } = await launchWith(syncDist, syncProfile);
     const openPopup = async () => {
@@ -194,7 +195,7 @@ try {
   let popup = await openPopup();
   await popup.getByRole('heading', { name: 'Create your vault' }).waitFor();
   const defaultSetup = await popup.innerText('body');
-  check('the default build offers no account sign-in on the setup screen and makes no promise about the server', (await popup.getByRole('button', { name: 'Use my Strongroom account instead' }).count()) === 0 && defaultSetup.includes('they stay here') && !defaultSetup.includes('Nothing leaves it'), defaultSetup);
+  check('a build without a server offers no account sign-in on the setup screen and makes no promise about the server', (await popup.getByRole('button', { name: 'Use my Strongroom account instead' }).count()) === 0 && defaultSetup.includes('they stay here') && !defaultSetup.includes('Nothing leaves it'), defaultSetup);
   await popup.locator('input[type=password]').nth(0).fill('short');
   await popup.locator('input[type=password]').nth(1).fill('short');
   await popup.getByRole('button', { name: 'Create vault' }).click();
@@ -314,7 +315,7 @@ try {
   await popup.reload();
   await popup.getByRole('button', { name: 'Lock' }).click();
   await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
-  check('the default build offers no account sign-in on the unlock screen', (await popup.getByRole('button', { name: 'Sign in with your account' }).count()) === 0);
+  check('a build without a server offers no account sign-in on the unlock screen', (await popup.getByRole('button', { name: 'Sign in with your account' }).count()) === 0);
   await page.reload();
   await page.locator('#u').click();
   await page.waitForTimeout(1500);
@@ -363,6 +364,7 @@ try {
 } finally {
   server.close();
   rmSync(profile, { recursive: true, force: true });
+  rmSync(EXT, { recursive: true, force: true });
 }
 
 if (errors.length) console.log('page errors:', errors);

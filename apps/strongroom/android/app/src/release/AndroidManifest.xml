@@ -1,5 +1,4 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
-  <!-- Sync has no server until Task 8 sets SyncConfig.BASE_URL, so release drops INTERNET until then and a bad dependency can't send anything out; Task 8 deletes the uses-permission line (manifest.test.ts checks the pair). The sync client speaks HTTPS only and the app refuses cleartext. Debug turns cleartext back on for Metro. -->
-  <uses-permission android:name="android.permission.INTERNET" tools:node="remove"/>
+  <!-- Release keeps INTERNET for sync now that SyncConfig.BASE_URL is set (manifest.test.ts checks the pair). The sync client speaks HTTPS only and the app refuses cleartext. Debug turns cleartext back on for Metro. -->
   <application android:usesCleartextTraffic="false"/>
 </manifest>

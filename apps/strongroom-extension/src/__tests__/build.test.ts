@@ -21,15 +21,24 @@ function build(syncUrl?: string): { manifest: any; background: string } {
   }
 }
 
-test('the server address is empty in the source until the Worker is deployed', () => {
-  assert.equal(SYNC_URL, '');
+test('the extension and the phone talk to the same vault server', () => {
+  const kotlin = readFileSync(join(pkg, '../strongroom/modules/strongroom-vault/android/src/main/java/expo/modules/strongroomvault/android/SyncConfig.kt'), 'utf8');
+  const phone = kotlin.match(/const val BASE_URL = "([^"]*)"/)?.[1];
+  assert.match(SYNC_URL, /^https:\/\/[a-z0-9.-]+\.workers\.dev$/);
+  assert.equal(SYNC_URL, phone);
 });
 
-test('defaultBuildHasNoSyncOrigin', () => {
+test('the default build asks only for the vault server origin', () => {
   const { manifest, background } = build();
-  assert.equal('host_permissions' in manifest, false);
+  assert.deepEqual(manifest.host_permissions, [`${SYNC_URL}/*`]);
   assert.deepEqual(manifest.permissions, ['storage', 'alarms', 'activeTab']);
+  assert.ok(background.includes(SYNC_URL));
   assert.ok(!background.includes('127.0.0.1'));
+});
+
+test('an empty build-time address builds without sync', () => {
+  const { manifest } = build('');
+  assert.equal('host_permissions' in manifest, false);
 });
 
 test('a build-time server address becomes the only host permission', () => {
