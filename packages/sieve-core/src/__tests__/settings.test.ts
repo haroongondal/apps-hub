@@ -200,6 +200,25 @@ test('allowlist: page urls lose any username and password', () => {
   assert.deepEqual(out.blocking.allowlist, [{ kind: 'page', url: 'https://a.com/p' }]);
 });
 
+test('allowlist: a page whose host Chrome refuses in a match pattern is dropped; IPv4 hosts and ports stay', () => {
+  const out = validateSettings({
+    version: 1,
+    blocking: {
+      allowlist: [
+        { kind: 'page', url: 'http://a*b.com/p' },
+        { kind: 'page', url: 'http://a_b.com/p' },
+        { kind: 'page', url: 'http://[::1]/p' },
+        { kind: 'page', url: 'https://127.0.0.1:8443/x' },
+        { kind: 'page', url: 'http://localhost:8080/y' },
+      ],
+    },
+  });
+  assert.deepEqual(out.blocking.allowlist, [
+    { kind: 'page', url: 'https://127.0.0.1:8443/x' },
+    { kind: 'page', url: 'http://localhost:8080/y' },
+  ]);
+});
+
 test('allowlist that is not an array becomes empty', () => {
   assert.deepEqual(validateSettings({ version: 1, blocking: { allowlist: 'a.com' } }).blocking.allowlist, []);
 });

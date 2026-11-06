@@ -81,7 +81,8 @@ function allowlist(raw: unknown): AllowEntry[] {
       if (isHost(host)) entry = { kind: 'site', host };
     } else if (item.kind === 'page' && typeof item.url === 'string') {
       const url = pageUrl(item.url);
-      if (url !== null) entry = { kind: 'page', url };
+      // The page becomes a match pattern, and one host Chrome refuses there (`a*b.com`) voids every registration.
+      if (url !== null && isHost(new URL(url).hostname)) entry = { kind: 'page', url };
     }
     if (entry === null) continue;
     const key = entry.kind === 'site' ? `s:${entry.host}` : `p:${entry.url}`;

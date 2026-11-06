@@ -166,24 +166,45 @@ try {
   });
   check('a settings change that alters nothing makes no change in Chrome', calls.getDynamicRules === 1 && calls.remove === 1 && Object.keys(calls).length === 2, json(calls));
 
-  await sw.evaluate(() => chrome.storage.local.set({ myRules: [{ id: 1, action: { type: 'block' }, condition: { regexFilter: '(' } }] }));
+  // null is junk Sieve must skip; the regex is one Chrome refuses.
+  await sw.evaluate(() => chrome.storage.local.set({ myRules: [null, { id: 1, action: { type: 'block' }, condition: { regexFilter: '(' } }] }));
   s = await settle(sw, (s) => s.error);
   check(
     'when Chrome refuses a rule, blockingError says why and the allow rule stays on',
     typeof s.error?.message === 'string' && s.error.message.length > 0 && typeof s.error.at === 'number' && s.dynamic.map((r) => r.id).join() === String(ALLOW_ID),
     json({ error: s.error, rules: s.dynamic.map((r) => r.id) }),
   );
+  await setBlocking(sw, { paused: true });
+  s = await settle(sw, (s) => s.enabled.length === 0 && s.dynamic.length === 0);
+  await setBlocking(sw, { paused: false });
+  s = await settle(sw, (s) => allOn(s) && s.dynamic.some((r) => r.id === ALLOW_ID) && s.error);
+  hits = await visit(ctx, ADS);
+  check(
+    'with a refused My filters rule stored, Pause then Resume still lets allowlisted localhost through, and blockingError stays set',
+    allOn(s) && s.dynamic.map((r) => r.id).join() === String(ALLOW_ID) && typeof s.error?.message === 'string' && hits.includes('/pagead/x.js'),
+    json({ rules: s.dynamic.map((r) => r.id), error: s.error, hits }),
+  );
+  await setBlocking(sw, { allowlist: [{ kind: 'site', host: 'localhost' }, { kind: 'site', host: '127.0.0.1' }] });
+  s = await settle(sw, (s) => s.dynamic.some((r) => r.id === ALLOW_ID + 1) && s.error);
+  hits = await visit(ctx, ADS_IP);
+  check(
+    'with a refused My filters rule stored, a newly allowlisted site gets its ad request through, and blockingError stays set',
+    s.dynamic.some((r) => r.id === ALLOW_ID + 1) && typeof s.error?.message === 'string' && hits.includes('/pagead/x.js'),
+    json({ rules: s.dynamic.map((r) => r.id), error: s.error, hits }),
+  );
+  await setBlocking(sw, { allowlist: [{ kind: 'site', host: 'localhost' }] });
   await sw.evaluate(() => chrome.storage.local.set({ myRules: [] }));
-  s = await settle(sw, (s) => !s.error);
-  check('the next update that Chrome accepts clears blockingError', !s.error, json(s.error));
+  const denyExcludes = (s, pattern) => s.scripts.find((r) => r.id === 'deny-notifications')?.excludeMatches?.includes(pattern);
+  s = await settle(sw, (s) => !s.error && s.dynamic.length === 1 && !denyExcludes(s, '*://127.0.0.1/*'));
+  check('the next update that Chrome accepts clears blockingError', !s.error && s.dynamic.map((r) => r.id).join() === String(ALLOW_ID), json({ error: s.error, rules: s.dynamic.map((r) => r.id) }));
 
   await sw.evaluate(() => (globalThis.beforeStop = true));
   const status = await stopWorker(ctx);
   check('stopWorker stops the service worker', status === 'stopped', status);
   hits = await visit(ctx, ADS);
-  check('with the worker stopped, allowlisted localhost still gets its ad request', hits.includes('/pagead/x.js'), json(hits));
+  check('after stopping the worker, allowlisted localhost still gets its ad request', hits.includes('/pagead/x.js'), json(hits));
   hits = await visit(ctx, ADS_IP);
-  check('with the worker stopped, the ad request on 127.0.0.1 is still blocked', hits.includes('/ads.html') && !hits.includes('/pagead/x.js'), json(hits));
+  check('after stopping the worker, the ad request on 127.0.0.1 is still blocked', hits.includes('/ads.html') && !hits.includes('/pagead/x.js'), json(hits));
 
   const sw2 = await startWorker(ctx, id);
   const fresh = await sw2.evaluate(() => globalThis.beforeStop === undefined);
@@ -204,9 +225,16 @@ try {
   check('with Site notification requests off, the page gets its real permission', !ids(s).includes('deny-notifications') && answers.join() === 'granted,granted,TypeError', json(answers));
 
   await setBlocking(sw2, { allowlist: [] });
-  s = await settle(sw2, (s) => s.dynamic.length === 0);
+  // Some lists exempt localhost from their generic CSS themselves (genericExcept), so only the others must drop it.
+  const keepsLocalhost = (s) =>
+    s.scripts.some((r) => r.excludeMatches?.includes('*://*.localhost/*') && !meta.features[r.id.replace('generic-', '')]?.genericExcept.includes('localhost'));
+  s = await settle(sw2, (s) => s.dynamic.length === 0 && !keepsLocalhost(s));
   hits = await visit(ctx, ADS);
-  check('after the restart, the worker still applies changes: removing localhost blocks its ad request again', s.dynamic.length === 0 && hits.includes('/ads.html') && !hits.includes('/pagead/x.js'), json(hits));
+  check(
+    'after the restart, the worker still applies changes: removing localhost blocks its ad request again and clears its exclusions',
+    s.dynamic.length === 0 && !keepsLocalhost(s) && !s.error && hits.includes('/ads.html') && !hits.includes('/pagead/x.js'),
+    json({ rules: s.dynamic.length, excludes: s.scripts.map((r) => [r.id, r.excludeMatches?.length ?? 0]), error: s.error, hits }),
+  );
   await ctx.close();
 } catch (e) {
   check('the run finished without an exception', false, String(e?.stack ?? e).split('\n').slice(0, 4).join(' | '));

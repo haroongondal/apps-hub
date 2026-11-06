@@ -1,6 +1,7 @@
 // Deep imports keep the filter compiler (and its converter dependencies) out of the worker bundle.
 import { blockingPlan, type BlockingPlan, type BuildMeta, type Registration } from '@apps-hub/sieve-core/src/plan.ts';
 import { validateSettings } from '@apps-hub/sieve-core/src/settings.ts';
+import { ALLOW_FIRST_ID } from '@apps-hub/sieve-core/src/allowlist.ts';
 import type { DnrRule } from '@apps-hub/sieve-core/src/compile.ts';
 
 type Script = chrome.scripting.RegisteredContentScript;
@@ -18,13 +19,22 @@ async function applyRulesets(plan: BlockingPlan) {
   if (enableRulesetIds.length || disableRulesetIds.length) await chrome.declarativeNetRequest.updateEnabledRulesets({ enableRulesetIds, disableRulesetIds });
 }
 
-// One updateDynamicRules call, so Chrome keeps every earlier rule when it refuses any new one.
+// One updateDynamicRules call, so Chrome keeps every earlier rule when it refuses any new one. A refused My filters
+// rule must not hold off the allowlist, so the allow rules then go in on their own (and the refusal is still reported).
 async function applyRules(rules: DnrRule[]) {
   const have = new Map((await chrome.declarativeNetRequest.getDynamicRules()).map((r) => [r.id, canon(r)]));
   const want = new Map(rules.map((r) => [r.id, canon(r)]));
-  const removeRuleIds = [...have.keys()].filter((id) => have.get(id) !== want.get(id));
-  const addRules = rules.filter((r) => have.get(r.id) !== want.get(r.id)) as unknown as chrome.declarativeNetRequest.Rule[];
-  if (removeRuleIds.length || addRules.length) await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules });
+  const update = async (only: (id: number) => boolean) => {
+    const removeRuleIds = [...have.keys()].filter((id) => only(id) && have.get(id) !== want.get(id));
+    const addRules = rules.filter((r) => only(r.id) && have.get(r.id) !== want.get(r.id)) as unknown as chrome.declarativeNetRequest.Rule[];
+    if (removeRuleIds.length || addRules.length) await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules });
+  };
+  try {
+    await update(() => true);
+  } catch (e) {
+    await update((id) => id >= ALLOW_FIRST_ID);
+    throw e;
+  }
 }
 
 async function applyScripts(registrations: Registration[]) {
@@ -53,8 +63,11 @@ export async function applyBlocking(): Promise<void> {
       chrome.storage.local.get(['settings', 'myRules']),
       fetch(chrome.runtime.getURL('meta.json')).then((r) => r.json() as Promise<BuildMeta>),
     ]);
-    const plan = blockingPlan(validateSettings(settings), meta, Array.isArray(myRules) ? myRules : []);
-    await Promise.all([attempt(() => applyRulesets(plan)), attempt(() => applyRules(plan.dynamicRules)), attempt(() => applyScripts(plan.registrations))]);
+    const rules = Array.isArray(myRules) ? myRules.filter((r) => typeof r?.id === 'number') : [];
+    const plan = blockingPlan(validateSettings(settings), meta, rules);
+    // Allow rules land before the lists come back on, so a Resume never blocks an allowlisted page.
+    await attempt(() => applyRules(plan.dynamicRules));
+    await Promise.all([attempt(() => applyRulesets(plan)), attempt(() => applyScripts(plan.registrations))]);
   });
   if (errors.length) await chrome.storage.session.set({ blockingError: { message: errors.join(' '), at: Date.now() } });
   else await chrome.storage.session.remove('blockingError');
@@ -69,13 +82,11 @@ export function applyBlockingSoon(): void {
     return;
   }
   running = (async () => {
-    try {
-      do {
-        again = false;
-        await applyBlocking();
-      } while (again);
-    } finally {
-      running = null;
-    }
+    do {
+      again = false;
+      // A failure here (saving blockingError) must not drop the run that is queued.
+      await applyBlocking().catch((e) => console.error('Sieve could not finish applying the blocking settings', e));
+    } while (again);
+    running = null;
   })();
 }
