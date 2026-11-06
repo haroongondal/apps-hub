@@ -21,9 +21,46 @@ test('defaults: every list is on except ai, nothing paused or allowlisted', () =
 });
 
 test('unusable input gives the defaults', () => {
-  for (const input of [undefined, null, 'x', 42, true, [], [1, 2], { version: 9 }, { version: '1' }]) {
+  for (const input of [undefined, null, 'x', 42, true, [], [1, 2], { version: 9 }, { version: '1' }, { version: null }]) {
     assert.deepEqual(validateSettings(input), DEFAULT_SETTINGS, JSON.stringify(input));
   }
+});
+
+test('a missing version is read as version 1, so partial input keeps what it set', () => {
+  const out = validateSettings({ blocking: { lists: { ads: false } } });
+  assert.equal(out.blocking.lists.ads, false);
+  assert.deepEqual(out.blocking.lists, { ...DEFAULT_SETTINGS.blocking.lists, ads: false });
+  assert.equal(validateSettings({ enabled: false }).enabled, false);
+  assert.equal(validateSettings({ version: undefined, enabled: false }).enabled, false);
+  assert.deepEqual(validateSettings({}), DEFAULT_SETTINGS);
+});
+
+test('the {version: 1} path never aliases DEFAULT_SETTINGS', () => {
+  const out = validateSettings({ version: 1 });
+  assert.notEqual(out, DEFAULT_SETTINGS);
+  assert.notEqual(out.blocking, DEFAULT_SETTINGS.blocking);
+  assert.notEqual(out.blocking.lists, DEFAULT_SETTINGS.blocking.lists);
+  assert.notEqual(out.blocking.allowlist, DEFAULT_SETTINGS.blocking.allowlist);
+  assert.notEqual(out.blocking.youtubeAllowedChannels, DEFAULT_SETTINGS.blocking.youtubeAllowedChannels);
+  const snapshot = structuredClone(DEFAULT_SETTINGS);
+  out.blocking.lists.ads = false;
+  out.blocking.allowlist.push({ kind: 'site', host: 'x.com' });
+  assert.deepEqual(DEFAULT_SETTINGS, snapshot);
+});
+
+test('hostile JSON with __proto__ keys at every level neither throws nor pollutes', () => {
+  const evil = '{"__proto__":{"polluted":1},"version":1,"enabled":false,"blocking":{"__proto__":{"polluted":2},'
+    + '"lists":{"__proto__":{"ads":false},"constructor":{"prototype":{"polluted":3}}},'
+    + '"allowlist":[{"kind":"site","host":"a.com","__proto__":{"polluted":4}}],'
+    + '"youtubeAllowedChannels":[{"id":"UC1","name":"One","__proto__":{"polluted":5}}]}}';
+  const out = validateSettings(JSON.parse(evil));
+  assert.equal((Object.prototype as Record<string, unknown>).polluted, undefined);
+  assert.equal(({} as Record<string, unknown>).polluted, undefined);
+  assert.equal(out.enabled, false);
+  assert.deepEqual(out.blocking.lists, DEFAULT_SETTINGS.blocking.lists);
+  assert.deepEqual(out.blocking.allowlist, [{ kind: 'site', host: 'a.com' }]);
+  assert.deepEqual(out.blocking.youtubeAllowedChannels, [{ id: 'UC1', name: 'One' }]);
+  assert.equal(Object.getPrototypeOf(out.blocking.lists), Object.prototype);
 });
 
 test('a partial lists object keeps what was set and fills the rest', () => {
@@ -102,13 +139,39 @@ test('allowlist: IPv4 and localhost hosts are accepted, bad IPv4 and junk entrie
   ]);
 });
 
+function sites(...hosts: unknown[]) {
+  return validateSettings({ version: 1, blocking: { allowlist: hosts.map((host) => ({ kind: 'site', host })) } }).blocking.allowlist;
+}
+
 test('allowlist: empty labels, a numeric last label that is not IPv4, and padded hosts', () => {
-  const hosts = ['.a.com', 'a..com', 'a.com.', '.', 'example.123', '01.2.3.4', '1.2.3', ' Sub.A.com '];
-  const out = validateSettings({
-    version: 1,
-    blocking: { allowlist: hosts.map((host) => ({ kind: 'site', host })) },
-  });
-  assert.deepEqual(out.blocking.allowlist, [{ kind: 'site', host: 'sub.a.com' }]);
+  const hosts = ['.a.com', 'a..com', '.', 'example.123', '01.2.3.4', '1.2.3', ' Sub.A.com '];
+  assert.deepEqual(sites(...hosts), [{ kind: 'site', host: 'sub.a.com' }]);
+});
+
+test('allowlist: one trailing dot is stripped, so a tab host like example.com. still works', () => {
+  assert.deepEqual(sites('example.com.'), [{ kind: 'site', host: 'example.com' }]);
+  assert.deepEqual(sites('example.com.', 'Example.com', 'a.com..', '.'), [{ kind: 'site', host: 'example.com' }]);
+});
+
+test('allowlist: labels follow DNS rules (hyphens inside, at most 63 characters, host at most 253)', () => {
+  const label63 = 'a'.repeat(63);
+  const long = Array.from({ length: 5 }, () => label63).join('.');
+  assert.deepEqual(sites('-a.com', 'a-.com', 'a_b.com', `${'a'.repeat(64)}.com`, long, 'a-b.com', `${label63}.com`), [
+    { kind: 'site', host: 'a-b.com' },
+    { kind: 'site', host: `${label63}.com` },
+  ]);
+});
+
+test('allowlist: hex and other numeric-looking last labels that are not a plain IPv4 are dropped', () => {
+  assert.deepEqual(sites('example.0x10', '0x7f.0.0.1', '127.1', '1.2.3.4'), [{ kind: 'site', host: '1.2.3.4' }]);
+});
+
+test('allowlist: www. is a host of its own, not folded into the bare domain', () => {
+  assert.deepEqual(sites('www.example.com'), [{ kind: 'site', host: 'www.example.com' }]);
+  assert.deepEqual(sites('www.example.com', 'example.com'), [
+    { kind: 'site', host: 'www.example.com' },
+    { kind: 'site', host: 'example.com' },
+  ]);
 });
 
 test('allowlist: pages keep http(s) only, drop the hash, and dedupe; junk urls are dropped', () => {
@@ -127,6 +190,14 @@ test('allowlist: pages keep http(s) only, drop the hash, and dedupe; junk urls a
     },
   });
   assert.deepEqual(out.blocking.allowlist, [{ kind: 'page', url: 'http://a.com/p?q=1' }]);
+});
+
+test('allowlist: page urls lose any username and password', () => {
+  const out = validateSettings({
+    version: 1,
+    blocking: { allowlist: [{ kind: 'page', url: 'https://user:secret@a.com/p#x' }, { kind: 'page', url: 'https://a.com/p' }] },
+  });
+  assert.deepEqual(out.blocking.allowlist, [{ kind: 'page', url: 'https://a.com/p' }]);
 });
 
 test('allowlist that is not an array becomes empty', () => {
@@ -155,6 +226,19 @@ test('channels: kept when id and name are non-empty strings, deduped by id', () 
     { id: 'UC1', name: 'One' },
     { id: 'UC4', name: 'Four' },
   ]);
+});
+
+test('channels: id and name are stored trimmed, and dedupe uses the trimmed id', () => {
+  const out = validateSettings({
+    version: 1,
+    blocking: {
+      youtubeAllowedChannels: [
+        { id: ' UC1 ', name: '  One ' },
+        { id: 'UC1', name: 'One again' },
+      ],
+    },
+  });
+  assert.deepEqual(out.blocking.youtubeAllowedChannels, [{ id: 'UC1', name: 'One' }]);
 });
 
 test('unknown keys are dropped at every level', () => {

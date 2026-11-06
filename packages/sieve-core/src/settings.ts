@@ -43,16 +43,17 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 const bool = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean' ? v : fallback);
 const text = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
 
-const OCTET = /^(0|[1-9][0-9]{0,2})$/;
+const LABEL = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 
-// A host whose last label is a number must be a full IPv4 address: the URL parser reads it as one, so anything else never matches a page.
+// A host the URL parser rewrites or refuses (1.2.3, 0x7f.0.0.1, example.123) never matches a tab, so it is not a host.
 // shortcut: IPv6 literals are not accepted, add them if a local IPv6 site ever needs the allowlist.
 function isHost(host: string): boolean {
-  if (!/^[a-z0-9.-]+$/.test(host)) return false;
-  const labels = host.split('.');
-  if (labels.includes('')) return false;
-  if (!/^[0-9]+$/.test(labels[labels.length - 1])) return true;
-  return labels.length === 4 && labels.every((l) => OCTET.test(l) && Number(l) <= 255);
+  if (host.length > 253 || !host.split('.').every((l) => l.length <= 63 && LABEL.test(l))) return false;
+  try {
+    return new URL(`http://${host}`).hostname === host;
+  } catch {
+    return false;
+  }
 }
 
 function pageUrl(raw: string): string | null {
@@ -60,6 +61,8 @@ function pageUrl(raw: string): string | null {
     const u = new URL(raw);
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
     u.hash = '';
+    u.username = '';
+    u.password = '';
     return u.href;
   } catch {
     return null;
@@ -73,7 +76,7 @@ function allowlist(raw: unknown): AllowEntry[] {
     if (!isRecord(item)) continue;
     let entry: AllowEntry | null = null;
     if (item.kind === 'site' && typeof item.host === 'string') {
-      const host = item.host.trim().toLowerCase();
+      const host = item.host.trim().toLowerCase().replace(/\.$/, '');
       if (isHost(host)) entry = { kind: 'site', host };
     } else if (item.kind === 'page' && typeof item.url === 'string') {
       const url = pageUrl(item.url);
@@ -92,16 +95,18 @@ function channels(raw: unknown): Channel[] {
   const out: Channel[] = [];
   const seen = new Set<string>();
   for (const item of Array.isArray(raw) ? raw : []) {
-    if (!isRecord(item) || !text(item.id) || !text(item.name) || seen.has(item.id)) continue;
-    seen.add(item.id);
-    out.push({ id: item.id, name: item.name });
+    if (!isRecord(item) || !text(item.id) || !text(item.name)) continue;
+    const id = item.id.trim();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, name: item.name.trim() });
   }
   return out;
 }
 
 export function validateSettings(input: unknown): Settings {
-  const d = DEFAULT_SETTINGS;
-  if (!isRecord(input) || input.version !== 1) return defaults();
+  const d = defaults();
+  if (!isRecord(input) || (input.version !== undefined && input.version !== 1)) return d;
   const b = isRecord(input.blocking) ? input.blocking : {};
   const rawLists = isRecord(b.lists) ? b.lists : {};
   const lists = {} as Record<FeatureKey, boolean>;
