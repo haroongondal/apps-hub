@@ -41,16 +41,13 @@ export function RunPanel({ state, refresh }: { state: ServiceState; refresh: () 
     refresh();
   };
 
-  // The speech dialog closes when the owner stops talking, so the run starts straight from what it heard.
+  // Any installed app can answer the speech request, so what it heard waits in the field for the owner's Run tap.
   const speak = async () => {
     setListening(true);
     setSpeechError(null);
     try {
       const heard = await DeputyAgent.listen('What should Deputy do?');
-      if (heard?.trim()) {
-        setTask(heard);
-        start(heard);
-      }
+      if (heard?.trim()) setTask(heard);
     } catch (e) {
       setSpeechError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -110,7 +107,7 @@ function MicButton({ onPress, listening, disabled, error }: { onPress: () => voi
         disabled={off}
         accessibilityRole="button"
         accessibilityLabel="Speak a task"
-        accessibilityHint="Deputy starts the task as soon as you stop talking"
+        accessibilityHint="Deputy puts what you say in the task box for you to check and run"
         accessibilityState={{ disabled: off, busy: listening }}
         style={({ pressed }) => ({
           width: MIC,
@@ -132,7 +129,7 @@ function MicButton({ onPress, listening, disabled, error }: { onPress: () => voi
         </View>
       </Pressable>
       <Text tone={error ? 'danger' : 'muted'} align="center">
-        {error ?? (listening ? 'Listening…' : 'Tap and say the task. It starts when you stop talking.')}
+        {error ?? (listening ? 'Listening…' : 'Tap and say the task, then check it and tap Run.')}
       </Text>
     </View>
   );

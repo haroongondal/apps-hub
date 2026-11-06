@@ -13,7 +13,7 @@ pnpm release <app>                 apps-hub-store Worker (Cloudflare)           
 
 | Piece | Path |
 |---|---|
-| Manifest schema + pinned cert (`SIGNING_CERT_SHA256`) | `packages/store-manifest` |
+| Manifest schema, pinned cert (`SIGNING_CERT_SHA256`), app id → package table (`ANDROID_PACKAGES`) | `packages/store-manifest` |
 | Release CLI | `tools/release` (`pnpm release`) |
 | CI/CD (auto-release on push to `main`) | `.github/workflows/ci.yml`, `tools/release/src/changed.ts` |
 | Worker: auth, signed URLs, uploads | `tools/store-api` |
@@ -150,15 +150,21 @@ Background checks run through WorkManager on **unmetered networks** every 6 h by
 Store header). When an installed app is behind the manifest, you get a notification. Updates are not installed
 in the background; tap the notification and then **Update**.
 
-What the Store checks before every install: SHA-256 of the downloaded file = manifest, package name = manifest,
-signer = the **pinned** cert compiled into the Store (it ignores whatever cert the manifest claims).
+What the Store checks before every install: SHA-256 of the downloaded file = manifest, package name = the one
+compiled into the Store for the app id you tapped (`ANDROID_PACKAGES`), signer = the **pinned** cert compiled into
+the Store. It ignores whatever package and cert the manifest claims, and refuses an app id it doesn't know
+("Update Store, then try again"). It does not stop an older build of an app that isn't installed yet: Android
+refuses downgrades only for installed apps.
 
 Store permissions: `INTERNET`, `REQUEST_INSTALL_PACKAGES`, `UPDATE_PACKAGES_WITHOUT_USER_ACTION`,
 `POST_NOTIFICATIONS`, `QUERY_ALL_PACKAGES`, plus `WAKE_LOCK`, `ACCESS_NETWORK_STATE` and `RECEIVE_BOOT_COMPLETED`, which WorkManager merges in
 so its scheduling keeps working. `QUERY_ALL_PACKAGES` lets the Store read the installed version of every app it
 lists ([package visibility](https://developer.android.com/training/package-visibility)). It replaced a per-app
 `<queries>` list on 2026-11-01: a new app went unseen until someone added it, and a Store release from an older branch
-dropped entries. Play restricts this permission; the Store is sideloaded only.
+dropped entries. Play restricts this permission; the Store is sideloaded only. `ANDROID_PACKAGES` (security fix,
+2026-11-06) brings a narrower form of that trade-off back on purpose: a Store built from a branch that lacks a newer
+app's id still lists the app but refuses to install it until a newer Store is released. That is the price of a
+compromised Worker or `RELEASE_TOKEN` no longer choosing which of your apps a tap installs.
 
 ---
 
@@ -176,14 +182,17 @@ dropped entries. Play restricts this permission; the Store is sideloaded only.
 ## 5. Adding a new app
 
 1. The app must be an Expo/RN app with a version in `app.json` and an `android.package`.
-2. Add it to `tools/release/src/apps.ts`:
+2. Add its release id → `android.package` to `ANDROID_PACKAGES` in `packages/store-manifest/src/index.ts`, then
+   add it to `tools/release/src/apps.ts` with `packageName: ANDROID_PACKAGES[<id>]`:
    - `dir` is workspace-relative (or absolute for an app outside this repo).
    - `prebuild: true` if `android/` is not committed. The release then runs `expo prebuild --clean` each time.
    - `prepare` lists commands to run in `dir` before building (pdf-editor builds its editor bundle this way).
    You don't edit Gradle by hand. Each release patches `android/app/build.gradle` with the shared signing key and
    the `appsHubVersion*` overrides (`applyAppsHubGradle`, which does nothing if they're already there), and fails
    loudly if the file has drifted from the Expo template.
-3. `pnpm release <app>`. The Store sees it with no change of its own (`QUERY_ALL_PACKAGES`, §3).
+3. `pnpm release store` first: the Store installs only ids compiled into it. A push to `main` that changes
+   `packages/store-manifest` releases the Store automatically. Then `pnpm release <app>`. The Store reads its
+   installed version with no further change (`QUERY_ALL_PACKAGES`, §3).
 
 ---
 

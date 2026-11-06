@@ -617,7 +617,9 @@ iconset → `iconutil`) and passes `--icon=build/icon.icns` to electron-packager
   `shell-mobile.js` must precede `app.js` because `app.js` calls `native.onMenu()` while its own
   body runs, and `app.js` must precede `touch.js` because `window.editor` exists only when
   `app.js` ends. `build.mjs` inlines those scripts plus `tokens.css` (fonts as data: URLs, read
-  through `window.__fontsData` by the shell's shims). The page carries no CSP meta and its
+  through `window.__fontsData` by the shell's shims). Since 2026-11-06 the page carries an
+  offline CSP (`default-src 'none'`; images, fetches and fonts from data:/blob: only, no eval), so a
+  design whose image or pattern points at a web URL loads nothing (`test/mobile.mjs`). Its
   viewport is `user-scalable=no` (pinch is the editor's own zoom). Embedded layout lives on
   `body.embedded` — the class sits on **body** (set by `shell-mobile.js`; on 2026-11-04 it moved
   off documentElement, which never matched the CSS), the rail becomes a bottom strip, the header

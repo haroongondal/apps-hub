@@ -29,14 +29,15 @@ test('the release build refuses cleartext traffic', () => {
   assert.doesNotMatch(main, /usesCleartextTraffic="true"/);
 });
 
-test('the vault module adds one private job service and no permission', () => {
+test('the vault module adds only private job services and no permission', () => {
   assert.deepEqual(permissions(vaultModule), ['android.permission.HIDE_OVERLAY_WINDOWS', 'android.permission.QUERY_ALL_PACKAGES']);
-  const [autofill, job, ...rest] = services(vaultModule);
-  assert.equal(rest.length, 0);
+  const [autofill, ...jobs] = services(vaultModule);
   assert.equal(attr(autofill, 'android:name'), 'expo.modules.strongroomvault.android.StrongroomAutofillService');
-  assert.equal(attr(job, 'android:name'), 'expo.modules.strongroomvault.android.SyncJobService');
-  assert.equal(attr(job, 'android:exported'), 'false');
-  assert.equal(attr(job, 'android:permission'), 'android.permission.BIND_JOB_SERVICE');
+  assert.deepEqual(jobs.map((j) => attr(j, 'android:name')), ['expo.modules.strongroomvault.android.SyncJobService', 'expo.modules.strongroomvault.android.ClipboardClearJob']);
+  for (const job of jobs) {
+    assert.equal(attr(job, 'android:exported'), 'false');
+    assert.equal(attr(job, 'android:permission'), 'android.permission.BIND_JOB_SERVICE');
+  }
 });
 
 test('backup stays off', () => {

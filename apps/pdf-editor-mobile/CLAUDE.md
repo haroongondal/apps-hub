@@ -20,7 +20,7 @@ pnpm --filter pdf-editor-mobile typecheck
 pnpm --filter pdf-editor-desktop test:e2e   # includes mobile.mjs, see below
 ```
 
-There is no `test` script in this app. `mobile.mjs` smoke-tests `mobile.html` in system Chrome with a fake `ReactNativeWebView` bridge and skips when Chrome isn't installed, so it covers the page but not this shell.
+This app's `test` script only checks the patched `decode-uri-component` it ships (`patches/`, a DoS fix the ESM-only upstream release can't give query-string 7). `mobile.mjs` smoke-tests `mobile.html` in system Chrome with a fake `ReactNativeWebView` bridge and skips when Chrome isn't installed, so it covers the page but not this shell.
 
 ## This app is a shell
 

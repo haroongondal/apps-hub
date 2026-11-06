@@ -58,10 +58,12 @@ class AgentLoop(
   private var actMs = 0L
   private var verdict = "" // of the latest logged step, so a batch only goes on after a step that simply ran
 
-  /** `memory` is `RunStore.recall`'s record of earlier runs, sent with the task as data. */
+  /** `memory` is `RunStore.recall`'s record of earlier runs: data, sent after the task in its own message. */
   suspend fun run(task: String, memory: String? = null): RunResult {
     history += Msgs.system(systemPrompt)
-    history += Msgs.user("The owner's task: $task" + memory?.let { "\n\n$it" }.orEmpty())
+    history += Msgs.user("The owner's task: $task")
+    // Its steps hold labels from other apps' screens, so they never share the message that carries the owner's words.
+    memory?.let { history += Msgs.user(it) }
     var backs = 0
     var note = ""
     var prevScreen: String? = null

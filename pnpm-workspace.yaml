@@ -10,3 +10,6 @@ allowBuilds:
   canvas: false
   unrs-resolver: false
   esbuild: false
+
+patchedDependencies:
+  decode-uri-component@0.2.2: patches/decode-uri-component@0.2.2.patch

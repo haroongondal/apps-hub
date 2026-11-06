@@ -14,6 +14,7 @@ import {
   VpnGateFetchException,
   VpnGateService,
 } from '../vpngate-service.ts';
+import { VPN_GATE_SOURCES } from '../vpngate.ts';
 import { csvRow, HEADER_LINE, ovpnConfig } from './fixtures.ts';
 
 function fixtureBody(rows: readonly string[]): string {
@@ -43,7 +44,7 @@ function bodyFromText(text: string): AsyncIterable<Uint8Array> {
 }
 
 const sourceA = 'https://www.vpngate.net/api/iphone/';
-const sourceB = 'http://www.vpngate.net/api/iphone/';
+const sourceB = 'https://mirror.example/api/iphone/';
 
 /** Delay raced against the abort signal: resolves, or rejects 'Aborted'. */
 function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
@@ -117,6 +118,20 @@ test('falls back to the next source on failure or empty bodies', async () => {
   });
   const nodes = await service.fetchNodes();
   assert.equal(nodes.length, 2);
+});
+
+test('the default sources are HTTPS only, so a blocked 443 never falls back to cleartext', async () => {
+  const asked: string[] = [];
+  const service = new VpnGateService({
+    fetcher: async (url) => {
+      asked.push(url);
+      throw new Error('port 443 blocked');
+    },
+  });
+  await assert.rejects(service.fetchNodes(), VpnGateFetchException);
+  assert.deepEqual(asked, [...VPN_GATE_SOURCES]);
+  assert.ok(asked.length > 0);
+  for (const url of asked) assert.equal(new URL(url).protocol, 'https:', url);
 });
 
 test('a body with zero usable rows is a failed source', async () => {

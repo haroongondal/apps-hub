@@ -58,8 +58,9 @@ root `AGENTS.md` ("Hard Architectural & OS Constraints — NetLens"), `apps/open
 - Streaming: the CSV is split per line at byte level and decoded per row; nothing buffers the whole
   multi-megabyte body. Probes are bounded (default 8) with short timeouts. Rows are parsed from the
   final comma, not `split(',')`.
-- `allowBackup="false"` stays in `plugin/opentunnel-android-config.js`; the HTTP cleartext exception
-  stays scoped to the VPN Gate hosts.
+- `allowBackup="false"` stays in `plugin/opentunnel-android-config.js`, and TunnelWall refuses cleartext
+  everywhere: no HTTP source and no cleartext or ATS exception for vpngate.net. OpenVPN configs keep
+  only allowlisted directives plus `remote-cert-tls server` and `verify-x509-name opengw.net name`.
 - Runtime code in `open-tunnel-core` stays Hermes-safe (no `node:crypto`, `Buffer`, `TextDecoder`).
 
 ## Store pipeline (`packages/store-manifest`, `tools/release`, `tools/store-api`, `apps/store`)

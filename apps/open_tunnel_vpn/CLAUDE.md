@@ -21,5 +21,5 @@ cd apps/open_tunnel_vpn/android && ./gradlew :open-tunnel-native:testDebugUnitTe
 - Phase prompts are `.opencode/commands/phase1.md` to `phase4.md`; plans and session logs for phases 2 to 4 are in `docs/`. Read the relevant log before changing that area.
 - The OpenVPN engine is `android/app/libs/ics-openvpn.aar`, built by `vendor/ics-openvpn/build-aar.sh`. Don't edit the AAR; rebuild it. ics-openvpn is GPLv2, which is why this app is GPL-2.0-only while the rest of the repo has no licence file.
 - The Android tunnel is split across `modules/open-tunnel-native` (Expo module: `TunnelStateRegistry`, `TunnelEventBus`, `TrafficTicker`) and `android/app/.../OpenTunnelVpnService.kt` with the engines in `engines/`. iOS mirrors it with `ios/OpenTunnelPacketTunnel/` (Network Extension) and the module's Swift files.
-- Native config comes from `plugin/opentunnel-android-config.js` (manifest posture, scoped cleartext) as well as the committed `android/`; check both when a manifest setting seems to vanish.
+- Native config comes from `plugin/opentunnel-android-config.js` (manifest posture; a network security config that refuses cleartext, vpngate.net included) as well as the committed `android/`; check both when a manifest setting seems to vanish.
 - Unit tests use a real `node:sqlite` rather than mocks for the cache, so they exercise the actual SQL.

@@ -21,7 +21,7 @@ Install builds on the phone through the Store itself (`pnpm release store`), not
 
 ## Rules that are easy to break
 
-- Verify before every install: SHA-256 of the file against the manifest, package name against the manifest, and the signer against the cert pinned in the app (`SIGNING_CERT_SHA256`). The manifest's own cert field is ignored.
+- Verify before every install: SHA-256 of the file against the manifest, package name against the one compiled in for the tapped app id (`androidPackageFor`, `ANDROID_PACKAGES` in `packages/store-manifest`), and the signer against the cert pinned in the app (`SIGNING_CERT_SHA256`). The manifest's own package and cert fields are ignored for installs.
 - A download that finishes while the app is in the background must not start the install. Play Protect's prompt would go unseen and the OS times out after about 17 s. Post a "ready to install" notification instead.
-- Package visibility is `QUERY_ALL_PACKAGES` in the module's `AndroidManifest.xml` (owner decision, 2026-11-01), so a new app needs no Store change. Don't bring back a `<queries>` package list.
+- Package visibility is `QUERY_ALL_PACKAGES` in the module's `AndroidManifest.xml` (owner decision, 2026-11-01), so reading a new app's installed version needs no Store change; installing it needs its `ANDROID_PACKAGES` entry and a Store release. Don't bring back a `<queries>` package list.
 - Permissions are set in `app.json` (`blockedPermissions` strips the storage, vibrate and overlay ones). Keep the list minimal.

@@ -146,7 +146,7 @@ build changes the 0.2.2 "Question gate" row: a question now gets a card too.
 
 | Check | How to run it | Pass when | Result | Note |
 | ----- | ------------- | --------- | ------ | ---- |
-| Mic starts the task | On Tasks, tap the big mic and say "Open the clock app and tell me my next alarm", then stop talking | The speech dialog closes, the text box shows what you said and the task starts with no Run tap | | |
+| Mic fills the task | On Tasks, tap the big mic and say "Open the clock app and tell me my next alarm", then stop talking | The speech dialog closes and the text box shows what you said. Nothing runs until you tap Run | | |
 | Mic cancelled | Tap the mic, then dismiss the speech dialog without speaking | No task starts and nothing is shown as an error | | |
 | Inline answer in the notification | "Send a message on WhatsApp"; when the question comes, pull down the shade and tap Answer | A reply box opens inside the notification (Deputy doesn't open); typing an answer and sending it carries the run on | | |
 | Question card | The same task; when the question comes, leave the shade closed | A card "Deputy has a question" sits under the Stop chip with the question, any option buttons, a "Your answer" box and Send | | |

@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SIGNING_CERT_SHA256,
+  StoreAppSchema,
+  androidPackageFor,
   StoreManifestSchema,
   emptyManifest,
   nextVersionCode,
@@ -47,4 +49,11 @@ test('schema rejects bad hashes and wrong schemaVersion', () => {
   assert.equal(StoreManifestSchema.safeParse({ ...ok, schemaVersion: 2 }).success, false);
   const bad = { ...ok, apps: [{ ...ok.apps[0], android: { ...release(2), sha256: 'XYZ' } }] };
   assert.equal(StoreManifestSchema.safeParse(bad).success, false);
+});
+
+test('androidPackageFor returns the compiled-in package for a release id, never the manifest claim', () => {
+  const lying = StoreAppSchema.parse({ id: 'netlens', name: 'HomeNet', changelog: '', android: { ...release(2), packageName: 'com.haroon.deputy' } });
+  assert.equal(androidPackageFor(lying.id), 'app.netlens');
+  assert.equal(androidPackageFor('store'), 'com.haroon.store');
+  for (const id of ['evil', 'constructor', '__proto__', 'hasownproperty']) assert.equal(androidPackageFor(id), undefined);
 });
