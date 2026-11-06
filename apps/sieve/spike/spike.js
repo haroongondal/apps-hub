@@ -181,12 +181,13 @@ async function S3(videoId, loggedIn) {
 }
 
 const MIB = 1024 * 1024;
+let received = 0;
 const mb = (n) => Math.round(n / 1e6);
 const round2 = (x) => Math.round(x * 100) / 100;
 const BASELINES = ['https://speed.cloudflare.com/__down?bytes=25000000', 'http://proof.ovh.net/files/10Mb.dat'];
 
 // discard: count the bytes and drop them (no body in the result). timeoutMs covers the whole request, body included.
-async function fetchRange(url, start, length, { discard = false, timeoutMs = 60_000 } = {}) {
+async function fetchRange(url, start, length, { discard = false, timeoutMs = 60_000, retryTimeouts = true } = {}) {
   const tStart = performance.now();
   const errors = [];
   for (let attempt = 1; ; attempt++) {
@@ -201,13 +202,14 @@ async function fetchRange(url, start, length, { discard = false, timeoutMs = 60_
       const total = Number(/\/(\d+)\s*$/.exec(res.headers.get('content-range') ?? '')?.[1]) || null;
       let body;
       let bytes = 0;
-      if (discard) for await (const part of res.body) bytes += part.byteLength;
+      if (discard) for await (const part of res.body) { bytes += part.byteLength; received += part.byteLength; }
       else bytes = (body = await res.arrayBuffer()).byteLength;
       return { status: 206, body, bytes, total, attempt, ms: Math.round(performance.now() - t0), waitedMs, errors };
     } catch (err) {
-      const error = err?.name === 'TimeoutError' || err?.name === 'AbortError' ? `timed out after ${timeoutMs / 1000} s` : String(err?.message ?? err);
+      const timedOut = err?.name === 'TimeoutError' || err?.name === 'AbortError';
+      const error = timedOut ? `timed out after ${timeoutMs / 1000} s` : String(err?.message ?? err);
       errors.push(error);
-      if (attempt === 2) return { status: 'network', error, attempt, ms: 0, waitedMs: Math.round(performance.now() - tStart), errors };
+      if (attempt === 2 || (timedOut && !retryTimeouts)) return { status: 'network', error, attempt, ms: 0, waitedMs: Math.round(performance.now() - tStart), errors };
       await pause(3_000);
     }
   }
@@ -309,10 +311,13 @@ const protocols = async (url) => {
   return [...new Set(performance.getEntriesByName(new URL(url).href).map((e) => e.nextHopProtocol).filter(Boolean))].join(',') || 'unknown';
 };
 
+const RUN_LIMIT_MS = 600_000;
+
 async function timed(label, fn) {
-  const t = Date.now();
-  const tick = setInterval(() => say(`${label}... ${Math.round((Date.now() - t) / 1000)} s`), 5_000);
-  say(`${label}...`);
+  received = 0;
+  const text = () => `${label}: ${round2(received / 1e6)} MB`;
+  const tick = setInterval(() => say(text()), 5_000);
+  say(text());
   try { return await fn(); } finally { clearInterval(tick); }
 }
 
@@ -320,7 +325,7 @@ async function timed(label, fn) {
 async function splitDownload(url, size, parts = 6) {
   const step = Math.ceil(size / parts);
   const t0 = performance.now();
-  const rs = await Promise.all(Array.from({ length: parts }, (_, i) => fetchRange(url, i * step, Math.min(step, size - i * step), { discard: true, timeoutMs: 300_000 })));
+  const rs = await Promise.all(Array.from({ length: parts }, (_, i) => fetchRange(url, i * step, Math.min(step, size - i * step), { discard: true, timeoutMs: RUN_LIMIT_MS, retryTimeouts: false })));
   const ms = Math.round(performance.now() - t0);
   const bytes = rs.reduce((n, r) => n + (r.bytes ?? 0), 0);
   const bad = rs.find((r) => r.status !== 206);
@@ -343,22 +348,23 @@ async function plainDownload(url, size) {
     if (d.id === mine) finish(at); else ended[d.id] = at;
   };
   chrome.downloads.onChanged.addListener(on);
+  const poll = setInterval(async () => { const [d] = mine === undefined ? [] : await chrome.downloads.search({ id: mine }); if (d) received = d.bytesReceived; }, 2_000);
   try {
     mine = await chrome.downloads.download({ url });
     const at = ended[mine] ?? await new Promise((resolve) => {
       finish = resolve;
-      setTimeout(() => resolve({ state: 'timeout', ms: Math.round(performance.now() - t0) }), 600_000);
+      setTimeout(() => resolve({ state: 'timeout', ms: Math.round(performance.now() - t0) }), RUN_LIMIT_MS);
     });
     const [item] = await chrome.downloads.search({ id: mine });
     const out = { bytes: item?.fileSize ?? 0, ms: at.ms, mbps: 0 };
-    if (at.state !== 'complete') out.error = at.state === 'timeout' ? 'still running after 10 min' : `interrupted: ${item?.error}`;
+    if (at.state !== 'complete') out.error = at.state === 'timeout' ? `still running after ${RUN_LIMIT_MS / 60_000} min` : `interrupted: ${item?.error}`;
     else if (out.bytes !== size) out.error = `got ${out.bytes} of ${size} bytes`;
     else out.mbps = round2(out.bytes / 1e6 / (out.ms / 1000));
     if (at.state === 'timeout') await chrome.downloads.cancel(mine);
     if (at.state === 'complete') try { await chrome.downloads.removeFile(mine); } catch (err) { out.cleanup = `removeFile failed: ${String(err?.message ?? err)}`; }
     await chrome.downloads.erase({ id: mine });
     return out;
-  } finally { chrome.downloads.onChanged.removeListener(on); }
+  } finally { clearInterval(poll); chrome.downloads.onChanged.removeListener(on); }
 }
 
 const SPEED_SERVERS = [
@@ -410,12 +416,12 @@ async function splitProbe(c) {
   for (let run = 1; run <= 2; run++) {
     for (const mode of ['sequential', 'parallel']) {
       performance.clearResourceTimings();
-      const r = await timed(`googlevideo ${mode}, run ${run} of 2`, () => (mode === 'sequential' ? downloadStream(c.url, c.contentLength, { maxBytes: size }) : splitDownload(c.url, size)));
+      const r = await timed(`googlevideo ${mode}, run ${run} of 2`, () => (mode === 'sequential' ? downloadStream(c.url, c.contentLength, { maxBytes: size, onProgress: (n) => { received = n; } }) : splitDownload(c.url, size)));
       out.runs.push({ run, mode, bytes: r.bytes, ms: r.ms, mbps: r.mbps, retries: r.retries, retryErrors: r.retryErrors, protocol: await protocols(c.url), error: r.error ?? null });
     }
   }
   out.protocol = [...new Set(out.runs.map((r) => r.protocol))].join(',');
-  for (const m of ['sequential', 'parallel']) out[`${m}Mbps`] = median(out.runs.filter((r) => r.mode === m && !r.error && r.bytes === size && (m === 'sequential' || !r.retries)).map((r) => r.mbps));
+  for (const m of ['sequential', 'parallel']) out[`${m}Mbps`] = median(out.runs.filter((r) => r.mode === m && !r.error && r.bytes === size && !r.retries).map((r) => r.mbps));
   out.ratio = out.sequentialMbps && out.parallelMbps ? round2(out.parallelMbps / out.sequentialMbps) : null;
   out.pass = out.runs.every((r) => !r.error && r.bytes === size);
   return out;

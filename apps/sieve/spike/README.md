@@ -72,7 +72,7 @@ its progress text has not changed for 4.5 minutes or 30 minutes have passed.
 `--disable-quic`, so an HTTPS server that also offers HTTP/3 is measured on HTTP/2). Per server it checks the protocol with
 `nextHopProtocol` and a `Range: bytes=0-0` request (206), then runs plain (`chrome.downloads`, timed to `complete`, then `removeFile` and
 `erase`) and a 6-part split (parallel `Range` fetches, bodies counted and dropped) 3 times each, alternating. A run that did not get every
-byte is a failed run. The median skips failed runs and split runs with a retry. Candidates, first pass wins: HTTP/1.1 `http://proof.ovh.net`
+byte is a failed run, and so is one still going after 10 min (the same limit for both methods; a split part is not retried after a timeout). The median skips failed runs and split runs with a retry. Candidates, first pass wins: HTTP/1.1 `http://proof.ovh.net`
 (301 to HTTPS, so it is HTTP/2 and fails the check), `ash-speed.hetzner.com` (Chrome gets an empty response), then
 `http://ping.online.net/100Mo.dat`; HTTP/2 `https://proof.ovh.net/files/100Mb.dat` and `https://cdn.kernel.org/.../linux-5.10.tar.xz`.
 
