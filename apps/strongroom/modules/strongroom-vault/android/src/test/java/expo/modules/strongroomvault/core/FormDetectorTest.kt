@@ -184,6 +184,17 @@ class FormDetectorTest {
     assertEquals(form(card = card(number = 1, holder = 0, expMonth = 3, expYear = 4, expDate = 2, cvc = 5)), FormDetector.detect(nodes))
   }
 
+  // Chrome and WebView send no "autocomplete" HtmlInfo attribute: they pass the page's autocomplete tokens as the autofill hints (FormData.fillViewStructure).
+  @Test fun cardFieldsFromChromeAutocompleteHints() {
+    val nodes = listOf(
+      node(0, hints = listOf("cc-name"), htmlType = "text"),
+      node(1, hints = listOf("billing", "cc-number"), htmlType = "text"),
+      node(2, hints = listOf("cc-exp"), htmlType = "text"),
+      node(3, hints = listOf("cc-csc"), htmlType = "text"),
+    )
+    assertEquals(form(card = card(number = 1, holder = 0, expDate = 2, cvc = 3)), FormDetector.detect(nodes))
+  }
+
   @Test fun aLoneHolderNameIsNotACardForm() {
     assertEquals(form(), FormDetector.detect(listOf(node(0, hints = listOf("personName")))))
     assertEquals(form(), FormDetector.detect(listOf(node(0, htmlAutocomplete = "cc-name"))))
