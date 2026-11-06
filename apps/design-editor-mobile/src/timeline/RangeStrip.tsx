@@ -10,7 +10,8 @@ import { timeText } from '../media/tools';
 import { useStripMedia } from './useStripMedia';
 
 export const HEAD_H = 26, RULER_H = 18, FILM_H = 56, EIGHT_SECONDS = 8;
-const WAVE_H = 36, HANDLE_W = 32, GRIP_W = 14;
+export const WAVE_H = 36;
+const HANDLE_W = 32, GRIP_W = 14;
 
 export interface RangeStripProps {
   uri: string;
@@ -24,7 +25,7 @@ export interface RangeStripProps {
   seekS?: number; // a time typed elsewhere: the strip scrolls to it when it is not already there
 }
 
-const Bars = memo(function Bars({ bars, color }: { bars: number[]; color: string }) {
+export const Bars = memo(function Bars({ bars, color }: { bars: number[]; color: string }) {
   return (
     <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
       {bars.map((v, i) => (

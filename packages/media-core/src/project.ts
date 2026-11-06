@@ -117,6 +117,12 @@ export function setClipVolume(p: Project, id: string, volume: number): Project {
 export const musicLengthS = (m: Music): number => snapTenth(m.outS - m.inS);
 export const musicEndS = (m: Music): number => snapTenth(m.startS + musicLengthS(m));
 
+// Drawn only up to the video's end, because the saved video cuts the music there.
+export function musicSpans(p: Project, pxPerS: number): { id: string; leftPx: number; widthPx: number }[] {
+  const end = totalS(p);
+  return p.music.map(m => ({ id: m.id, leftPx: m.startS * pxPerS, widthPx: Math.max(1, (Math.min(musicEndS(m), end) - m.startS) * pxPerS) }));
+}
+
 const others = (p: Project, id: string) => p.music.filter(m => m.id !== id);
 // The free stretch of the timeline around a piece: from the end of the piece before it to the start of the one after.
 const prevEnd = (music: Music[], atS: number) => Math.max(0, ...music.filter(m => musicEndS(m) <= atS + EPS).map(musicEndS));

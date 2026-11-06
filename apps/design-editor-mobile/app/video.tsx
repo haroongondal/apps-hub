@@ -30,6 +30,7 @@ export default function MakeAVideo() {
   const [project, setProject] = useState<Project>(emptyProject());
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
+  const [musicId, setMusicId] = useState<string>(); // one choice at a time: a clip or a piece of music
   const [headS, setHeadS] = useState(0);
   const [seekS, setSeekS] = useState<number>();
   const [playing, setPlaying] = useState(false);
@@ -59,6 +60,9 @@ export default function MakeAVideo() {
   const at = locate(project, headS);
   const here = at ? project.clips[at.index] : undefined;
   const selectedAt = project.clips.findIndex(cl => cl.id === selectedId);
+
+  const chooseClip = (id: string | undefined) => { setSelectedId(id); setMusicId(undefined); };
+  const chooseMusic = (id: string) => { setMusicId(id); setSelectedId(undefined); };
 
   const edit = (next: Project, fail?: string) => {
     setError(next === project && fail ? fail : null);
@@ -153,7 +157,10 @@ export default function MakeAVideo() {
       {project.clips.length ? (
         <>
           <Button label={playing ? 'Pause' : 'Play'} variant="secondary" block disabled={!planJson} onPress={() => setPlaying(!playing)} />
-          <ClipStrip project={project} selectedId={selectedId} onSelect={setSelectedId} seekS={seekS} onPlayhead={onPlayhead} onDrag={onDrag} />
+          <ClipStrip
+            project={project} selectedId={selectedId} onSelect={chooseClip} selectedMusicId={musicId} onSelectMusic={chooseMusic}
+            seekS={seekS} onPlayhead={onPlayhead} onDrag={onDrag}
+          />
         </>
       ) : null}
 

@@ -1,5 +1,6 @@
 import {
-  clampZoom, clipLengthS, clipSpans, followTarget, snapTenth, thumbCount, thumbTimes, totalS, zoomLimits, type Clip, type Project,
+  barsFor, clampZoom, clipLengthS, clipSpans, followTarget, musicLengthS, musicSpans, snapTenth, thumbCount, thumbTimes, totalS, zoomLimits,
+  type Clip, type Music, type Project,
 } from '@apps-hub/media-core';
 import { Button, Text, radius, space, useTheme } from '@apps-hub/ui';
 import DesignMedia from 'design-media';
@@ -11,7 +12,7 @@ import {
 
 import { timeText } from '../media/tools';
 import { singleFlight } from './latest';
-import { EIGHT_SECONDS, FILM_H, HEAD_H, RULER_H, Ruler } from './RangeStrip';
+import { Bars, EIGHT_SECONDS, FILM_H, HEAD_H, RULER_H, Ruler, WAVE_H } from './RangeStrip';
 
 export interface ClipStripProps {
   project: Project;
@@ -20,6 +21,8 @@ export interface ClipStripProps {
   seekS?: number; // the player's time while it plays: the strip follows it without calling onPlayhead
   onPlayhead: (timelineS: number) => void;
   onDrag?: (dragging: boolean) => void;
+  selectedMusicId?: string;
+  onSelectMusic: (id: string) => void;
 }
 
 // Twenty clips asking at once would open twenty decoders, so picture reads from every clip queue behind each other.
@@ -72,7 +75,44 @@ const ClipBlock = memo(function ClipBlock({ clip, index, leftPx, widthPx, px, se
   );
 });
 
-export function ClipStrip({ project, selectedId, onSelect, seekS, onPlayhead, onDrag }: ClipStripProps) {
+const PEAKS = 400;
+
+// The sound of the whole file is read once; the block shows the part between inS and outS.
+const MusicBlock = memo(function MusicBlock({ music, index, top, leftPx, widthPx, selected, onSelect }: {
+  music: Music; index: number; top: number; leftPx: number; widthPx: number; selected: boolean; onSelect: (id: string) => void;
+}) {
+  const { c } = useTheme();
+  const [peaks, setPeaks] = useState<{ uri: string; peaks: number[] }>();
+  const load = useMemo(() => singleFlight(
+    (uri: string) => oneAtATime(() => DesignMedia.waveform(uri, PEAKS)),
+    (p, uri) => setPeaks({ uri, peaks: p }),
+  ), []);
+  useEffect(() => { load(music.source.uri); }, [music.source.uri, load]);
+
+  const bars = useMemo(() => {
+    if (peaks?.uri !== music.source.uri || !peaks.peaks.length) return [];
+    const n = peaks.peaks.length, d = music.source.durationS;
+    const lo = Math.floor((music.inS / d) * n), hi = Math.max(lo + 1, Math.ceil((music.outS / d) * n));
+    return barsFor(peaks.peaks.slice(lo, hi), Math.max(1, Math.min(200, Math.floor(widthPx / 3))));
+  }, [peaks, music.source.uri, music.source.durationS, music.inS, music.outS, widthPx]);
+
+  return (
+    <Pressable
+      onPress={() => onSelect(music.id)}
+      accessibilityRole="button"
+      accessibilityLabel={`Music ${index + 1}, ${timeText(musicLengthS(music))}`}
+      accessibilityState={{ selected }}
+      style={{
+        position: 'absolute', top, left: leftPx, width: widthPx, height: WAVE_H, paddingHorizontal: 2,
+        backgroundColor: c.raised, borderRadius: 6, overflow: 'hidden', borderWidth: 2, borderColor: selected ? c.accent : c.bg,
+      }}
+    >
+      <Bars bars={bars} color={selected ? c.accent : c.muted} />
+    </Pressable>
+  );
+});
+
+export function ClipStrip({ project, selectedId, onSelect, seekS, onPlayhead, onDrag, selectedMusicId, onSelectMusic }: ClipStripProps) {
   const { c } = useTheme();
   const durationS = totalS(project);
   const [viewW, setViewW] = useState(0);
@@ -89,6 +129,7 @@ export function ClipStrip({ project, selectedId, onSelect, seekS, onPlayhead, on
   const pad = viewW / 2;
   const trackW = durationS * px;
   const spans = useMemo(() => clipSpans(project, px), [project, px]);
+  const tunes = useMemo(() => musicSpans(project, px), [project, px]);
   const live = useRef(px);
   live.current = px;
   const dragging = useRef(false);
@@ -135,12 +176,14 @@ export function ClipStrip({ project, selectedId, onSelect, seekS, onPlayhead, on
   };
 
   const top = HEAD_H + RULER_H;
+  const musicTop = top + FILM_H + space.xs;
+  const height = project.music.length ? musicTop + WAVE_H : top + FILM_H;
 
   return (
     <View onLayout={(e: LayoutChangeEvent) => setViewW(e.nativeEvent.layout.width)} onTouchMove={onTouchMove} onTouchEnd={endPinch} onTouchCancel={endPinch} style={{ gap: space.sm }}>
       {viewW > 0 ? (
         <>
-          <View style={{ height: top + FILM_H }}>
+          <View style={{ height }}>
             <ScrollView
               ref={scroller}
               horizontal
@@ -151,7 +194,7 @@ export function ClipStrip({ project, selectedId, onSelect, seekS, onPlayhead, on
               onScrollBeginDrag={() => { dragging.current = true; onDrag?.(true); }}
               onScrollEndDrag={() => { dragging.current = false; onDrag?.(false); }}
             >
-              <View style={{ width: trackW + viewW, height: top + FILM_H }}>
+              <View style={{ width: trackW + viewW, height }}>
                 <Ruler durationS={durationS} px={px} pad={pad} />
                 {project.clips.map((clip, i) => (
                   <ClipBlock
@@ -163,6 +206,18 @@ export function ClipStrip({ project, selectedId, onSelect, seekS, onPlayhead, on
                     px={px}
                     selected={clip.id === selectedId}
                     onSelect={onSelect}
+                  />
+                ))}
+                {project.music.map((m, i) => (
+                  <MusicBlock
+                    key={m.id}
+                    music={m}
+                    index={i}
+                    top={musicTop}
+                    leftPx={pad + tunes[i].leftPx}
+                    widthPx={tunes[i].widthPx}
+                    selected={m.id === selectedMusicId}
+                    onSelect={onSelectMusic}
                   />
                 ))}
               </View>

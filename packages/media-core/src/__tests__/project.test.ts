@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   addClip, addMusic, audioSourceFrom, clipSpans, clipStarts, deleteClip, deleteMusic, emptyProject, locate, MAX_CLIPS, MAX_MUSIC,
-  moveClip, moveMusic, musicEndS, musicLengthS, parseDraft, projectProblem, setClipVolume, setMusicVolume, sourceFrom, splitAt,
+  moveClip, moveMusic, musicEndS, musicLengthS, musicSpans, parseDraft, projectProblem, setClipVolume, setMusicVolume, sourceFrom, splitAt,
   totalS, trimAt, trimClip, trimMusic, VOLUME_STEPS, type AudioSource, type Music, type Project, type Source,
 } from '../project.ts';
 import type { MediaInfo } from '../types.ts';
@@ -269,4 +269,12 @@ test('parseDraft: a bad volume, music past its source, overlapping or malformed 
     bad(d => { d.music[0].source.durationS = 0; }),
     bad(d => { d.music = {}; }),
   ]) assert.equal(parseDraft(text), undefined, text);
+});
+
+test('musicSpans: each piece as a block under the clips, cut at the video end, never thinner than one pixel', () => {
+  assert.deepEqual(musicSpans(withMusic(piece('m1', 3, 0, 8)), 20), [{ id: 'm1', leftPx: 60, widthPx: 160 }]);
+  assert.deepEqual(musicSpans(two(), 20), []);
+  assert.deepEqual(musicSpans(withMusic(piece('m1', 0, 0, 0.1)), 1), [{ id: 'm1', leftPx: 0, widthPx: 1 }]);
+  assert.deepEqual(musicSpans(withMusic(piece('m1', 10, 0, 10)), 10), [{ id: 'm1', leftPx: 100, widthPx: 40 }]);
+  assert.deepEqual(musicSpans(withMusic(piece('m1', 16, 0, 2)), 10), [{ id: 'm1', leftPx: 160, widthPx: 1 }]);
 });
