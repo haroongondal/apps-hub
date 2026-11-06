@@ -39,9 +39,18 @@
     };
   };
 
+  // Raw URLs and ciphers for S3, stored under streams:<strategy>, which "Save results" and the summaries never read.
+  const streams = (strategy, videoId, playerJsUrl, pr) => {
+    const raw = (muxed) => (f) => ({ itag: f.itag, mimeType: f.mimeType, height: f.height ?? null, muxed, url: f.url, signatureCipher: f.signatureCipher });
+    const sd = pr.streamingData ?? {};
+    const formats = [...(sd.formats ?? []).map(raw(true)), ...(sd.adaptiveFormats ?? []).map(raw(false))].filter((f) => f.url || f.signatureCipher);
+    post({ streams: { strategy, videoId, playerJsUrl, formats } });
+  };
+
   async function S1() {
     const pr = await playerResponse();
     post({ fixture: scrub(Object.fromEntries(FIXTURE_KEYS.filter((k) => k in pr).map((k) => [k, pr[k]]))) });
+    streams('S1', pr.videoDetails.videoId, window.ytcfg?.get('PLAYER_JS_URL') ?? null, pr);
     return { videoId: pr.videoDetails.videoId, strategy: 'S1', ...classify(pr) };
   }
 
@@ -82,18 +91,24 @@
     const fromCfg = Number(window.ytcfg.get('STS'));
     if (fromCfg) return { sts: fromCfg, stsSource: 'ytcfg', playerJsUrl };
     if (!playerJsUrl) return { sts: null, stsSource: null, playerJsUrl };
-    const js = await (await fetch(playerJsUrl)).text();
-    const sts = Number(/(?:signatureTimestamp|sts)\s*:\s*(\d{5})/.exec(js)?.[1]) || null;
-    return { sts, stsSource: sts ? 'player-js' : null, playerJsUrl };
+    try {
+      const res = await fetch(playerJsUrl, { signal: AbortSignal.timeout(20_000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const sts = Number(/(?:signatureTimestamp|sts)\s*:\s*(\d{5})/.exec(await res.text())?.[1]) || null;
+      return { sts, stsSource: sts ? 'player-js' : null, playerJsUrl };
+    } catch (err) {
+      return { sts: null, stsSource: null, stsError: `player script: ${err?.name === 'TimeoutError' ? 'timed out' : err?.message ?? err}`, playerJsUrl };
+    }
   }
 
   async function S2(id) {
     const { n, client, thirdParty } = CLIENTS[id];
     const videoId = videoIdNow();
     const visitorData = window.ytcfg.get('VISITOR_DATA');
-    const { sts, stsSource, playerJsUrl } = await signatureTimestamp();
+    const { sts, stsSource, stsError, playerJsUrl } = await signatureTimestamp();
     const res = await fetch('/youtubei/v1/player?prettyPrint=false', {
       method: 'POST',
+      signal: AbortSignal.timeout(20_000),
       headers: {
         'Content-Type': 'application/json',
         'X-YouTube-Client-Name': String(n),
@@ -110,11 +125,12 @@
       }),
     });
     const pr = await res.json().catch(() => { throw new Error(`HTTP ${res.status} with a body that is not JSON`); });
-    if (!pr.playabilityStatus) throw new Error(`HTTP ${res.status}: ${JSON.stringify(pr.error ?? pr).slice(0, 200)}`);
+    if (!pr.playabilityStatus) throw new Error(`HTTP ${res.status}: ${pr.error ? JSON.stringify(pr.error).slice(0, 200) : `no playabilityStatus; keys ${Object.keys(pr).join()}`}`);
+    streams(`S2:${id}`, videoId, playerJsUrl, pr);
     return {
       videoId, strategy: `S2:${id}`, httpStatus: res.status,
       client: { id, clientName: client.clientName, clientVersion: client.clientVersion, nameNumber: n, userAgent: client.userAgent },
-      sts, stsSource, playerJsUrl, ...classify(pr),
+      sts, stsSource, ...(stsError && { stsError }), playerJsUrl, ...classify(pr),
     };
   }
 

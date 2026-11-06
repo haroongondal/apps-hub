@@ -11,6 +11,7 @@
     chain = chain.then(async () => {
       if (m.result) await chrome.runtime.sendMessage({ type: 'probe-result', result: m.result });
       if (m.fixture) await chrome.runtime.sendMessage({ type: 'fixture', fixture: m.fixture });
+      if (m.streams) await chrome.runtime.sendMessage({ type: 'streams', streams: m.streams });
     }).catch((err) => { failure = String(err); }).then(() => {
       if (m.done) pending.get(m.done)?.({ ok: !failure, error: failure });
     });

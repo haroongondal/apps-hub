@@ -5,6 +5,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   let items = null;
   if (msg?.type === 'probe-result') items = { [`probe:${msg.result.strategy}`]: msg.result };
   if (msg?.type === 'fixture') items = { fixture: msg.fixture };
+  if (msg?.type === 'streams') items = { [`streams:${msg.streams.strategy}`]: msg.streams };
   if (!items) return;
   chrome.storage.local.set(items).then(() => reply(true));
   return true;

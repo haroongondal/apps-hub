@@ -42,16 +42,18 @@ try {
 
   const stored = (key) => spike.evaluate((k) => chrome.storage.local.get(k).then((o) => o[k]), key);
   // The page says "Done" only after the relay has stored every result, so the status text is the signal.
-  await spike.waitForFunction(() => { const t = document.getElementById('status').textContent; return t && t !== 'Running the probes...'; }, null, { timeout: 90_000 });
+  await spike.waitForFunction(() => { const t = document.getElementById('status').textContent; return t && t !== 'Running the probes...'; }, null, { timeout: 180_000 });
   const status = await spike.locator('#status').innerText();
   if (status !== 'Done. Results below.') throw new Error(`Run all did not finish: ${status}`);
 
   const probes = await spike.evaluate(() => chrome.storage.local.get(null).then((o) => Object.fromEntries(Object.entries(o).filter(([k]) => k.startsWith('probe:')).sort())));
   const keys = Object.keys(probes);
   if (!keys.length) throw new Error('no probe results were stored');
+  const STREAM_LEAK = /googlevideo|signaturecipher|[?&](?:n|s|sig|lsig|signature)=/i;
+  if (STREAM_LEAK.test(JSON.stringify(probes))) throw new Error('a probe result holds a stream URL or cipher; not printing or saving');
   for (const r of Object.values(probes)) {
     console.log(JSON.stringify(await spike.evaluate((x) => summarise(x), r)));
-    if (!r.error && r.playability !== 'OK') console.log(`  ${r.strategy}: playability is ${r.playability} (${r.reason})${r.playability === 'LOGIN_REQUIRED' ? '; on a bot check, rerun with HEADLESS=0' : ''}`);
+    if (!r.error && 'playability' in r && r.playability !== 'OK') console.log(`  ${r.strategy}: playability is ${r.playability} (${r.reason})${r.playability === 'LOGIN_REQUIRED' ? '; on a bot check, rerun with HEADLESS=0' : ''}`);
   }
   const label = Object.values(probes).some((r) => r.loggedIn) ? 'signed-in' : 'signed-out';
   writeFileSync(join(SCRATCH, `spike-${label}.json`), JSON.stringify(probes, null, 2));
@@ -85,9 +87,11 @@ try {
     [saved] = await spike.evaluate(() => chrome.downloads.search({ state: 'complete' }));
     if (!saved) await spike.waitForTimeout(500);
   }
-  const file = saved && JSON.parse(readFileSync(saved.filename, 'utf8'));
+  const text = saved ? readFileSync(saved.filename, 'utf8') : 'null';
+  const file = JSON.parse(text);
   console.log(`saved: label ${file?.label}, results ${Object.keys(file?.results ?? {}).join(', ')}`);
-  failed = file?.label !== label || keys.some((k) => !file.results[k]);
+  if (STREAM_LEAK.test(text)) console.error('the saved file holds a stream URL or cipher');
+  failed = file?.label !== label || keys.some((k) => !file.results[k]) || STREAM_LEAK.test(text);
 } catch (e) {
   failed = true;
   console.error(String(e?.stack ?? e).split('\n').slice(0, 4).join('\n'));
