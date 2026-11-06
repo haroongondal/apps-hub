@@ -87,8 +87,9 @@ const EXTENDED_CSS =
   /:(?:-abp-contains|-abp-properties|has-text|contains|xpath|matches-[\w-]+|upward|remove|remove-attr|remove-class|spath|style|min-text-length|watch-attr|others|if-not|nth-ancestor)\(/;
 // shortcut: misses nesting behind a closing paren (`:has(:is(a) :has(b))`); Chrome then ignores just that one CSS rule.
 const NESTED_HAS = /:has\([^)]*:has\(/;
-const QUOTED = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g;
-const BREAKS_CSS = /\/\*|\*\/|[{};"']/;
+// An escape (`\:`) and complete quoted strings are harmless; what is left must not hold a quote, brace, comment or lone backslash.
+const ESCAPED_OR_QUOTED = /\\[^]|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g;
+const BREAKS_CSS = /\/\*|\*\/|[{};"'\\]/;
 const HIDE_KINDS = new Map<string, 'generichide' | 'elemhide'>([
   ['generichide', 'generichide'],
   ['ghide', 'generichide'],
@@ -192,9 +193,11 @@ function blocksEverySite(rule: Rule): boolean {
 // $document also allows every request, so it still goes on to become an allowAllRequests rule.
 function addCosmeticException(node: NetworkRule, cosmetic: CosmeticSet, drop: (reason: string) => void): boolean {
   const names = (node.modifiers?.children ?? []).filter((m) => !m.exception).map((m) => m.name.value);
-  const document = node.exception && names.some((n) => n === 'document' || n === 'doc');
+  const namesDocument = names.some((n) => n === 'document' || n === 'doc');
+  const document = node.exception && namesDocument;
   const kinds = new Set(names.flatMap((n) => HIDE_KINDS.get(n) ?? []));
-  const cosmeticOnly = kinds.size > 0 && names.every((n) => HIDE_KINDS.has(n) || n === 'domain' || n === 'from' || n === 'badfilter');
+  // Extra modifiers (`$generichide,third-party`) must not turn a hide exception into a network allow rule.
+  const cosmeticOnly = kinds.size > 0 && !namesDocument;
   if ((!kinds.size && !document) || names.includes('badfilter')) return cosmeticOnly;
   const hosts = exceptionHosts(node);
   if (!node.exception || !hosts.length) {
@@ -227,7 +230,7 @@ function addCosmetic(rule: AnyCosmeticRule, cosmetic: CosmeticSet, drop: (reason
     const selector = rule.body.selectorList.value.replace(/:-abp-has\(/g, ':has(').replace(/:if\(/g, ':has(');
     if (EXTENDED_CSS.test(selector) || NESTED_HAS.test(selector)) return drop('extended-css');
     // Each selector becomes its own CSS rule in a shared stylesheet; a stray comment or brace would void the rules after it.
-    if (BREAKS_CSS.test(selector.replace(QUOTED, ''))) throw new Error("A selector can't contain /*, */, {, } or ; outside quotes, or an unclosed quote");
+    if (BREAKS_CSS.test(selector.replace(ESCAPED_OR_QUOTED, ''))) throw new Error("A selector can't contain /*, */, {, } or ; outside quotes, an unclosed quote or a trailing backslash");
     if (rule.exception) for (const host of targets) push(cosmetic.unhide, host, selector);
     else if (hosts.length) for (const host of hosts) push(cosmetic.hide, host, selector);
     else cosmetic.generic.push(selector);

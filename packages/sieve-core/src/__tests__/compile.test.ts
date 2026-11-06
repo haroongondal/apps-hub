@@ -173,6 +173,28 @@ test('a selector that could break the generated stylesheet is an error, quoted t
   assert.deepEqual(out.cosmetic.generic, []);
 });
 
+test('a backslash outside quotes cannot smuggle a quote or end the stylesheet rule', async () => {
+  const out = await compileFilters(
+    ['##div\\"a"', '##a\\"b"c', '##div\\', 'example.com#@#div\\', '##.a\\:b', '##a\\3A b', '##[x="q\\"r"]'].join('\n'),
+    { firstId: 1 },
+  );
+  assert.deepEqual(out.errors.map((e) => e.line), [1, 2, 3, 4]);
+  assert.deepEqual(out.cosmetic.generic, ['.a\\:b', 'a\\3A b', '[x="q\\"r"]']);
+  assert.deepEqual(out.cosmetic.unhide, {});
+});
+
+test('a hide exception with other modifiers stays cosmetic, unless it also names $document', async () => {
+  const out = await compileFilters(
+    ['@@||a.com^$generichide,third-party', '@@||b.com^$elemhide,important', '@@||c.com^$generichide,document'].join('\n'),
+    { firstId: 1 },
+  );
+  assert.deepEqual(out.cosmetic.generichide, ['a.com', 'c.com']);
+  assert.deepEqual(out.cosmetic.elemhide, ['b.com', 'c.com']);
+  assert.equal(out.rules.length, 1);
+  assert.equal(out.rules[0].action.type, 'allowAllRequests');
+  assert.deepEqual(out.errors, []);
+});
+
 test('a block filter with no address and no domain is too general', async () => {
   const out = await compileFilters('$third-party\n*$script\n$third-party,domain=a.com\n$removeparam=utm_source', { firstId: 1 });
   assert.deepEqual(out.errors.map((e) => e.line), [1, 2]);
