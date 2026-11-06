@@ -2,7 +2,7 @@
   "expo": {
     "name": "Strongroom",
     "slug": "strongroom",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
