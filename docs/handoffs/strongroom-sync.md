@@ -286,6 +286,17 @@ State (2026-11-06): **the build is done; Task 8 waits for the owner.** Branch `s
 - This worktree is now on branch `strongroom-sync-followup` (from `2d446dd`) for the step-7 docs.
 - Not done: step 1 reviews (owner skipped them); the on-disk check on the Store build (not debuggable, backup
   off, so adb can't read its data without root; 6c did it on the test build).
+- Owner reported (2026-11-06): cards don't fill on the phone, in apps or Chrome. Root cause for Chrome,
+  from Chromium `FormData.fillViewStructure`: Chrome/WebView pass the page's autocomplete tokens as the
+  autofill hints (`setAutofillHints(autocomplete.split(" +"))`) and never an `autocomplete` HtmlInfo
+  attribute (they send name, type, label, id, ua-autofill-hints, crowdsourcing-autofill-hints,
+  computed-autofill-hints); `FormDetector` matched hints only to Android's names, so no Chrome card field
+  was ever found. Fixed on `strongroom-sync-followup` (`44d4748`, test `cardFieldsFromChromeAutocompleteHints`,
+  Gradle 386/0); not released, not checked on the phone (phone not on adb at the time). Apps: card fields
+  are found only from Android card hints, by design (DESIGN §2 "labelled as card fields"); most apps don't
+  set them. Possible next: Chrome's own `computed-autofill-hints` (format unverified) for pages without
+  autocomplete tags, and a keyword fallback for apps (owner's call). Card fill was never checked on the
+  phone in Phase 1 either.
 - Next: step 6 with the owner (install 0.2.0 from the Store; Turn on sync with the setup code from
   `tools/vault-api/.dev.vars` in this worktree, master password and recovery key; write down the account
   key; Reload the extension, sign in with master password + account key; edit and delete each way; change
