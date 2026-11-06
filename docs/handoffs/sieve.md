@@ -216,10 +216,14 @@ Summary lines (`run.mjs`, after the review fixes). The fields:
   worktree): `.superpowers/sdd/2026-11-06-sieve/progress.md`. It holds the pre-flight rulings
   R1 to R8, every task's commits, and the deferred minor findings for the final review.
   - Task 0.1 done (`d1e28e9`, review fixes `ede98e7`): S1 results above.
+  - Task 0.2 done (`e1f8651`): S2 results above; only `visionos` gives plain URLs (to 2160p, with audio).
+  - Task 0.3 done (`09bb187`, review fixes `11e6e54`): S3 results above; ejs 0.8.0 solves the web
+    player's signature and `n`; the tv-family cipher path is unproven. This Mac's network was very
+    slow during the runs (many launch timeouts).
 
 ## Current state and next step
 
-- **State:** implementation in progress (session 3). Tasks done: 0.1. Read the ledger before
+- **State:** implementation in progress (session 3). Tasks done: 0.1, 0.2, 0.3. Read the ledger before
   dispatching anything; tasks with a `complete` line there are done.
   The untracked copies of this file and the design in the main checkout
   (`/Users/outsentia/Documents/apps-hub`, branch `model-host`) are stale. The worktree copies are
