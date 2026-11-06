@@ -174,6 +174,16 @@ hardware encoders; §6.6 works the numbers for a one-minute clip into 20 MB (720
   phone and comes back when the screen opens; a clip whose file cannot be opened any more is removed
   with a note. Not in this stage: sound tracks and music (stage 3), text (stage 4), drag handles on
   clips, drag to reorder, undo, transitions, speed. Plan: `docs/superpowers/plans/2026-11-06-make-a-video-stage-2.md`.
+- **FR-16: Make a video, stage 3 (sound; built 2026-11-06, not yet checked on a phone).** Each clip's own
+  sound has a volume: Mute, Quiet (half), Normal or Loud (one and a half times), set in a "Sound" group
+  for the chosen clip; a clip with no sound says so. Music comes from sound files on the phone (never
+  from the network): Add music starts a piece at the line, cut to the room left before the next piece or
+  the video's end; pieces sit in one row under the clips, never overlap, at most 5. With a piece chosen,
+  Start here and End here trim it, Move here moves its start to the line, Delete music removes it, and
+  the Sound group sets its volume. The saved video stops at the video's end, so music never makes it
+  longer. A music file that cannot be opened any more is removed with the clips' note. Not in this
+  stage: fades, lowering the music under speech, voice-over, a built-in sound library, dragging music.
+  Plan: `docs/superpowers/plans/2026-11-06-make-a-video-stage-3-sound.md`.
 - **FR-12: Setup on Android.** Ask for notification permission before the first batch. If the
   Phase 1 spike shows HyperOS kills swiped batches, show a one-time note with a button to the
   app's battery settings.

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import {
   addClip, addMusic, audioSourceFrom, clipSpans, clipStarts, deleteClip, deleteMusic, emptyProject, locate, MAX_CLIPS, MAX_MUSIC,
   moveClip, moveMusic, musicEndS, musicLengthS, musicSpans, parseDraft, projectProblem, setClipVolume, setMusicVolume, sourceFrom, splitAt,
-  totalS, trimAt, trimClip, trimMusic, VOLUME_STEPS, type AudioSource, type Music, type Project, type Source,
+  totalS, trimAt, trimClip, trimMusic, trimMusicAt, VOLUME_STEPS, type AudioSource, type Music, type Project, type Source,
 } from '../project.ts';
 import type { MediaInfo } from '../types.ts';
 
@@ -277,4 +277,16 @@ test('musicSpans: each piece as a block under the clips, cut at the video end, n
   assert.deepEqual(musicSpans(withMusic(piece('m1', 0, 0, 0.1)), 1), [{ id: 'm1', leftPx: 0, widthPx: 1 }]);
   assert.deepEqual(musicSpans(withMusic(piece('m1', 10, 0, 10)), 10), [{ id: 'm1', leftPx: 100, widthPx: 40 }]);
   assert.deepEqual(musicSpans(withMusic(piece('m1', 16, 0, 2)), 10), [{ id: 'm1', leftPx: 160, widthPx: 1 }]);
+});
+
+test('trimMusicAt: Start here and End here move the chosen piece to the line, also outward; at or past its far end nothing changes', () => {
+  const p = withMusic(piece('m1', 3, 2, 8)); // on the video from 3 to 9
+  assert.deepEqual(spans(trimMusicAt(p, 'm1', 5, 'start')), [['m1', 5, 4, 8]]);
+  assert.deepEqual(spans(trimMusicAt(p, 'm1', 1, 'start')), [['m1', 1, 0, 8]]);
+  assert.deepEqual(spans(trimMusicAt(p, 'm1', 7, 'end')), [['m1', 3, 2, 6]]);
+  assert.deepEqual(spans(trimMusicAt(p, 'm1', 12, 'end')), [['m1', 3, 2, 11]]);
+  for (const [t, edge] of [[9, 'start'], [8.95, 'start'], [13, 'start'], [3, 'end'], [3.05, 'end'], [1, 'end']] as const) {
+    assert.equal(trimMusicAt(p, 'm1', t, edge), p, `${edge} at ${t}`);
+  }
+  assert.equal(trimMusicAt(p, 'nope', 5, 'start'), p);
 });

@@ -160,6 +160,15 @@ export function trimMusic(p: Project, id: string, edge: 'start' | 'end', toSourc
   });
 }
 
+// Start here / End here for a piece of music: the edge goes to the line, also outward; at or past the piece's far end
+// (within a tenth) it would leave a sliver, so nothing changes.
+export function trimMusicAt(p: Project, id: string, timelineS: number, edge: 'start' | 'end'): Project {
+  const m = p.music.find(x => x.id === id);
+  if (!m || !Number.isFinite(timelineS)) return p;
+  if (edge === 'start' ? timelineS > musicEndS(m) - MIN_RANGE_S + EPS : timelineS < m.startS + MIN_RANGE_S - EPS) return p;
+  return trimMusic(p, id, edge, m.inS + timelineS - m.startS);
+}
+
 export function moveMusic(p: Project, id: string, toTimelineS: number): Project {
   const m = p.music.find(x => x.id === id);
   if (!m || !(toTimelineS >= 0)) return p;

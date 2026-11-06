@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { addClip, emptyProject, type Source } from '@apps-hub/media-core';
+import { addClip, addMusic, emptyProject, splitAt, type AudioSource, type Source } from '@apps-hub/media-core';
 import { droppedNote, dropUnreadable, queued, restoreDraft } from '../video/draft.ts';
 
 const src = (n: string): Source => ({ uri: `content://${n}`, name: `${n}.mp4`, durationS: 5, width: 1280, height: 720, fps: 30, hasAudio: true });
@@ -30,8 +30,8 @@ test('dropUnreadable: Save checks every clip first, so a deleted file never star
   const p = JSON.parse(draft('a', 'gone'));
   const got = await dropUnreadable(p, async uri => uri !== 'content://gone');
   assert.deepEqual([got.project.clips.map(c => c.id), got.dropped], [['c0'], 1]);
-  assert.equal(droppedNote(1), '1 clip could not be opened and was removed.');
-  assert.equal(droppedNote(3), '3 clips could not be opened and were removed.');
+  assert.equal(droppedNote(1), '1 file could not be opened and was taken out of the video.');
+  assert.equal(droppedNote(3), '3 files could not be opened and were taken out of the video.');
 });
 
 test('queued: saves run one at a time in the order asked, and a failed one does not stop the next', async () => {
@@ -51,4 +51,32 @@ test('queued: saves run one at a time in the order asked, and a failed one does 
   open.b(); await assert.rejects(b); await tick();
   open.c(); await c;
   assert.deepEqual(log, ['start a', 'end a', 'start b', 'start c', 'end c']);
+});
+
+const song = (n: string): AudioSource => ({ uri: `content://${n}`, name: `${n}.m4a`, durationS: 3 });
+const withMusic = (clips: string[], music: string[]) => {
+  let p = JSON.parse(draft(...clips));
+  music.forEach((n, i) => { p = addMusic(p, song(n), `m${i}`, i * 3); });
+  return p;
+};
+
+test('dropUnreadable: music whose file cannot be opened is removed too, counted with the clips', async () => {
+  const got = await dropUnreadable(withMusic(['a', 'gone'], ['s', 'lost']), async uri => !['content://gone', 'content://lost'].includes(uri));
+  assert.deepEqual(got.project.clips.map(c => c.id), ['c0']);
+  assert.deepEqual(got.project.music.map(m => m.id), ['m0']);
+  assert.equal(got.dropped, 2);
+});
+
+test('restoreDraft: music whose file is gone is removed and the clips stay', async () => {
+  const got = await restoreDraft(JSON.stringify(withMusic(['a', 'b'], ['lost'])), async uri => uri !== 'content://lost');
+  assert.deepEqual(got.project.clips.map(c => c.id), ['c0', 'c1']);
+  assert.deepEqual(got.project.music, []);
+  assert.equal(got.dropped, 1);
+});
+
+test('dropUnreadable: the count is of files, so a cut clip whose file is gone counts once', async () => {
+  const p = splitAt(splitAt(JSON.parse(draft('gone', 'a')), 1, 'x'), 3, 'y');
+  const got = await dropUnreadable(p, async uri => uri !== 'content://gone');
+  assert.deepEqual(got.project.clips.map(c => c.id), ['c1']);
+  assert.equal(got.dropped, 1);
 });
