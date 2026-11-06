@@ -4,6 +4,20 @@ Throwaway Phase 0 spike: can a Chrome extension download YouTube streams? Load t
 click the action, then **Run all** and **Save results**. `node apps/sieve/spike/run.mjs` drives the same buttons in a
 fresh profile. Results go in `docs/handoffs/sieve.md` under "Spike results".
 
+## Owner checklist (signed in, Task 0.6)
+
+Run this once in your own Chrome while you are signed in to YouTube.
+
+1. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and select the folder `/Users/outsentia/Documents/apps-hub/.claude/worktrees/sieve/apps/sieve/spike`.
+2. While signed in to YouTube, open `https://www.youtube.com/watch?v=aqz-KE-bpKQ` and pause the video. Keep this tab open. A playing video skews the speed numbers.
+3. Click the **Sieve spike** toolbar button. It may be under the puzzle-piece menu. A spike page opens in a new tab. Click **Run all**. The test downloads roughly 500 MB to measure speed. Nothing is saved to disk except the results file. It can take 10 minutes or more on a slow connection. Wait until the status line says "Done. Results below."
+4. Click **Save results**. The file `sieve-spike-signed-in.json` appears in your Downloads folder. It holds counts, sizes, timings and whether you were signed in. It has no stream addresses, cookies or account details.
+5. Optional: if you have a members-only or age-restricted video, rename `sieve-spike-signed-in.json` in Downloads first, because the next save replaces it. Open that video, pause it, and repeat steps 3 and 4.
+6. Remove the extension on `chrome://extensions`. This also deletes everything it stored. The results file stays in Downloads.
+7. Tell Claude the run is done, and give the file names if you renamed any.
+
+If YouTube shows "Sign in to confirm you're not a bot", or the spike page shows an error, still click **Save results** and tell Claude that it happened.
+
 ## Vendored: yt-dlp ejs (signature and `n` solver, strategy S3)
 
 - Source: <https://github.com/yt-dlp/ejs>, release `0.8.0` (published 2026-03-17, the latest release on 2026-11-06).
