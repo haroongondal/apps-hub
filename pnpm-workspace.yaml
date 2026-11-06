@@ -9,3 +9,4 @@ allowBuilds:
   electron: true
   canvas: false
   unrs-resolver: false
+  esbuild: false

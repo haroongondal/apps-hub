@@ -1,0 +1,22 @@
+{
+  "name": "sieve",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sieve for Chrome (Manifest V3): blocks ads, trackers and annoyances with compiled filter lists",
+  "scripts": {
+    "build": "node build.mjs",
+    "test:e2e": "node test/e2e.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@apps-hub/sieve-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@adguard/scriptlets": "2.5.1",
+    "@types/chrome": "0.3.7",
+    "@types/node": "^22.10.0",
+    "esbuild": "0.28.2",
+    "typescript": "~5.9.2"
+  }
+}
