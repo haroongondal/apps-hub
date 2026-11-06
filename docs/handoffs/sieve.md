@@ -274,11 +274,22 @@ R10, googlevideo (`S2:visionos` itag 137, 1080p, its first 62,914,560 bytes, all
     asked to run it.
   - Tasks 1.1 and 1.2 ran in parallel with 0.5 (owner said to keep working while 0.5 measured);
     each agent staged only its own paths.
+  - Task 1.3 done (`597fc4f`, review fixes `90e624d`): `compileFilters` + `hostCandidates`. EasyList
+    78k lines → 50,215 rules in 0.34 s. Node builds must `await checkRegexesWithRe2()` first
+    (`node-regex.ts`, adds `@adguard/re2-wasm`, build-time only). `trusted-*` scriptlets are dropped
+    unless `trusted: true` (My filters in Task 1.9 must pass it). `$document` exceptions also turn
+    off cosmetics and scriptlets for the host.
+  - Task 1.4 done (`bed15d6`, `10b4f5b`, review fixes `55d7712`): `apps/sieve` builds; all five
+    default rulesets enable in a fresh profile (115,468 rules; Chrome took them from the shared
+    pool, no warning). `minimum_chrome_version` raised to 128 (ruling R15: some rules use
+    `responseHeaders`). Wildcard-TLD exception hosts such as `www.google.*` are expanded over
+    Google's 187 domains / 26 common suffixes (ruling R14).
+  - Task 1.5 in review (`bab5df7`): blocking plan, allowlist, pause, notification blocker.
 
 ## Current state and next step
 
-- **State:** implementation in progress (session 3). Tasks done: 0.1 to 0.5, 0.6 step 1, 1.1, 1.2.
-  Task 1.3 (filter compiler) in progress. Waiting on the owner's signed-in run (0.6 steps 2 to 4).
+- **State:** implementation in progress (session 3). Tasks done: 0.1 to 0.5, 0.6 step 1, 1.1 to 1.4.
+  Task 1.5 in its review fix round. Waiting on the owner's signed-in run (0.6 steps 2 to 4).
   Read the ledger before dispatching anything; tasks with a `complete` line there are done.
   The untracked copies of this file and the design in the main checkout
   (`/Users/outsentia/Documents/apps-hub`, branch `model-host`) are stale. The worktree copies are
