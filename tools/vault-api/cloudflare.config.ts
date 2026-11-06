@@ -8,7 +8,7 @@ export default defineConfig({
     entrypoint: './src/index.ts',
     compatibilityDate: '2026-10-01',
     env: {
-      DB: bindings.d1({ name: 'strongroom-vault' }),
+      DB: bindings.d1({ id: '0dae26b4-869e-4784-a039-022b0326b949', name: 'strongroom-vault' }),
       SETUP_TOKEN: bindings.secret(),
     },
   },
