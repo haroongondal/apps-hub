@@ -163,10 +163,49 @@ class VaultTest {
   @Test fun putManyIsOneTransaction() {
     val v = setUpVault()
     store.putAllCalls = 0
-    assertEquals(3, v.putMany(listOf(login, card, note)))
+    assertEquals(wall, v.putMany(listOf(login, card, note)))
     assertEquals(1, store.putAllCalls)
     assertEquals(3, v.all().size)
     assertEquals(setOf(wall), v.all().values.map { it.updatedAt }.toSet())
+  }
+
+  @Test fun importsAreTheEntriesStillCarryingTheirStamp() {
+    val v = setUpVault()
+    val first = v.putMany(listOf(login, card, note))
+    wall += minute
+    val manual = v.put(null, login)
+    wall += minute
+    val single = v.putMany(listOf(note))
+    assertEquals(listOf(first to 3), v.imports(emptySet()))
+    assertEquals(listOf(single to 1, first to 3), v.imports(setOf(single)))
+
+    wall += minute
+    val edited = v.all().entries.first { it.value.updatedAt == first && it.value is Entry.Card }.key
+    v.put(edited, card)
+    assertEquals(listOf(first to 2), v.imports(emptySet()))
+    assertEquals(2, v.deleteImport(first))
+    val tombstones = store.all().filterKeys { it != KEY_CHECK_ID }.mapNotNull { (id, s) -> VaultFormat.openEntry(internalKey(v)!!, id, s) as? Entry.Deleted }
+    assertEquals(listOf(first, first), tombstones.map { it.updatedAt })
+    assertEquals(3, v.all().size)
+    assertTrue(v.all().keys.containsAll(listOf(manual, edited)))
+    assertEquals(emptyList<Pair<Long, Int>>(), v.imports(emptySet()))
+  }
+
+  @Test fun deleteAllLeavesTombstonesAndKeepsTheVaultUsable() {
+    val v = setUpVault()
+    v.putMany(listOf(login, card))
+    v.put(null, note)
+    val garbage = ByteArray(40) { it.toByte() }
+    store.records["garbage"] = garbage.copyOf()
+    val keyCheck = store.all().getValue(KEY_CHECK_ID).copyOf()
+    assertEquals(3, v.deleteAll())
+    assertEquals(emptyMap<String, Entry>(), v.all())
+    assertArrayEquals(garbage, store.all().getValue("garbage"))
+    assertArrayEquals(keyCheck, store.all().getValue(KEY_CHECK_ID))
+    v.lock()
+    assertTrue(v.unlock(password))
+    assertEquals(0, v.deleteAll())
+    assertLocked { v.lock(); v.deleteAll() }
   }
 
   @Test fun lockZeroesTheKey() {

@@ -43,6 +43,7 @@ object VaultHolder {
   internal const val LAST_UNLOCK_MS = "lastUnlockMs"
   internal const val LOST_SAVES = "lostSaves"
   internal const val KEEP_ALIVE = "keepAliveEnabled"
+  internal const val IMPORTS = "imports"
   private const val INDEX_FILE = "index.bin"
   private const val PENDING_FILE = "pending.bin"
   private const val BIOMETRIC_FILE = "biometric.bin"
@@ -54,6 +55,7 @@ object VaultHolder {
   @Volatile private var prompt: BiometricPrompt? = null
 
   @Volatile internal var pendingImport: ImportResult? = null
+  @Volatile internal var pendingImportName: String? = null
 
   /** Set by the module while JS is listening; runs on the main thread, never inside the vault's monitor. */
   @Volatile internal var lockListener: (() -> Unit)? = null
