@@ -63,6 +63,12 @@ export function scriptletKey(call: ScriptletCall): string {
   return JSON.stringify([call.name, ...call.args]);
 }
 
+// The build serialises these with toString(); asking sieve-core keeps one installed copy of @adguard/scriptlets.
+export function scriptletFunction(name: string): ((source: object, args: string[]) => void) | undefined {
+  const fn = scriptlets.getScriptletFunction(name);
+  return typeof fn === 'function' ? fn : undefined;
+}
+
 export function emptyCosmetic(): CosmeticSet {
   return { generic: [], hide: {}, unhide: {}, generichide: [], elemhide: [], scriptlets: {}, scriptletExcept: {} };
 }
@@ -245,7 +251,7 @@ function addCosmetic(rule: AnyCosmeticRule, cosmetic: CosmeticSet, drop: (reason
         continue;
       }
       const adgName = name ? scriptletsCompatibilityTable.getFirst(name, GenericPlatform.AdgAny)?.name : undefined;
-      if (!adgName || typeof scriptlets.getScriptletFunction(adgName) !== 'function') {
+      if (!adgName || !scriptletFunction(adgName)) {
         drop('unknown-scriptlet');
         continue;
       }

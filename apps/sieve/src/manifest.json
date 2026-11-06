@@ -3,7 +3,7 @@
   "name": "Sieve",
   "version": "0.1.0",
   "description": "Blocks ads, trackers, cookie banners and annoyances with filter lists built on this computer.",
-  "minimum_chrome_version": "127",
+  "minimum_chrome_version": "128",
   "icons": { "16": "icon-16.png", "32": "icon-32.png", "48": "icon-48.png", "128": "icon-128.png" },
   "action": {
     "default_title": "Sieve",

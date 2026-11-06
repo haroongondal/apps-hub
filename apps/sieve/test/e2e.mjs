@@ -20,8 +20,9 @@ try {
   check('the service worker starts', sw && /^[a-p]{32}$/.test(id), id);
 
   const enabled = await sw.evaluate(() => chrome.declarativeNetRequest.getEnabledRulesets());
-  check('every default list is enabled', RULESETS.every((r) => enabled.includes(r)), JSON.stringify(enabled));
-  check('AI search summaries is off', !enabled.includes('ai'), JSON.stringify(enabled));
+  check('every default list is enabled, and nothing else', [...enabled].sort().join() === [...RULESETS].sort().join(), JSON.stringify(enabled));
+  const meta = await sw.evaluate(() => fetch(chrome.runtime.getURL('meta.json')).then((r) => r.json()));
+  check('AI search summaries ships with no ruleset and no generic CSS', meta.features.ai.ruleset === null && !meta.features.ai.hasGenericCss, JSON.stringify(meta.features.ai));
   const card = await ctx.newPage();
   await card.goto('chrome://extensions');
   const info = await card.evaluate((extId) => new Promise((r) => chrome.developerPrivate.getExtensionInfo(extId, r)), id);

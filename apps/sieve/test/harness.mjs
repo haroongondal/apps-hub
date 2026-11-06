@@ -36,9 +36,13 @@ export async function startServers() {
     res.end('');
   };
   const certDir = mkdtempSync(join(tmpdir(), 'sieve-cert-'));
-  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=localhost', '-days', '1', '-keyout', join(certDir, 'key.pem'), '-out', join(certDir, 'cert.pem')], { stdio: 'ignore' });
-  const tls = { key: readFileSync(join(certDir, 'key.pem')), cert: readFileSync(join(certDir, 'cert.pem')) };
-  rmSync(certDir, { recursive: true, force: true });
+  let tls;
+  try {
+    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=localhost', '-days', '1', '-keyout', join(certDir, 'key.pem'), '-out', join(certDir, 'cert.pem')], { stdio: 'ignore' });
+    tls = { key: readFileSync(join(certDir, 'key.pem')), cert: readFileSync(join(certDir, 'cert.pem')) };
+  } finally {
+    rmSync(certDir, { recursive: true, force: true });
+  }
   const plain = http.createServer(handler);
   const secure = https.createServer(tls, handler);
   await Promise.all([plain, secure].map((s) => new Promise((r) => s.listen(0, '127.0.0.1', r))));
@@ -60,12 +64,13 @@ export async function launch({ extraArgs = [] } = {}) {
       ...extraArgs,
     ],
   });
-  // Chrome still writes to the profile just after `close`, so it goes at exit; a leftover temp folder is harmless.
+  // Chrome still writes to the profile just after `close`, so it goes at exit, after Playwright's handlers (added at launch) stop it.
   process.on('exit', () => {
     try {
       rmSync(profile, { recursive: true, force: true });
     } catch {}
   });
+  process.once('SIGINT', () => process.exit(130));
   let [sw] = ctx.serviceWorkers();
   if (!sw) sw = await ctx.waitForEvent('serviceworker');
   return { ctx, sw, id: new URL(sw.url()).host };

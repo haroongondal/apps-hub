@@ -2,10 +2,11 @@ import { build } from 'esbuild';
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { scriptlets } from '@adguard/scriptlets';
-import { DEFAULT_SETTINGS, FEATURES, compileFilters, stripSections } from '@apps-hub/sieve-core';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { DEFAULT_SETTINGS, FEATURES, compileFilters, scriptletFunction, stripSections } from '@apps-hub/sieve-core';
 import { checkRegexesWithRe2 } from '@apps-hub/sieve-core/src/node-regex.ts';
 import { LISTS } from './src/lists.ts';
+import { COMMON_SUFFIXES, GOOGLE_SUFFIXES } from './src/tlds.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = (...p) => join(here, ...p);
@@ -13,10 +14,20 @@ const out = root('dist');
 const cache = root('filters/cache');
 const cached = (url) => join(cache, basename(new URL(url).pathname));
 const onByDefault = (feature) => DEFAULT_SETTINGS.blocking.lists[feature];
+const HOSTNAME = /^[a-z0-9-]+(\.[a-z0-9-]+)*$/;
+
+// `google.*` can't be a Chrome match pattern, so it becomes one host per suffix; IP prefixes (`192.168.*`) can't be expanded.
+// shortcut: Google's own domains, else a fixed list of common suffixes; a site on a rarer suffix keeps the generic CSS there.
+function expandWildcard(host) {
+  const base = host.slice(0, -2);
+  if (!host.endsWith('.*') || base.includes('*') || /^[\d.]+$/.test(base)) return [];
+  return (base.split('.').pop() === 'google' ? GOOGLE_SUFFIXES : COMMON_SUFFIXES).map((suffix) => `${base}.${suffix}`);
+}
 
 async function download(url) {
   let last;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (const [attempt, wait] of [0, 2_000, 5_000].entries()) {
+    await sleep(wait);
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(120_000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -27,7 +38,7 @@ async function download(url) {
       return;
     } catch (e) {
       last = e;
-      console.warn(`Download ${attempt} of 3 failed for ${url}: ${e.message}`);
+      console.warn(`Download ${attempt + 1} of 3 failed for ${url}: ${e.message}`);
     }
   }
   throw last;
@@ -68,13 +79,26 @@ for (const feature of FEATURES) {
   const unhiddenEverywhere = new Set(cosmetic.unhide['*'] ?? []);
   const genericCss = [...new Set(generic)].filter((s) => !unhiddenEverywhere.has(s));
   const dropped = { ...compiled.dropped };
-  const genericExcept = [...new Set([...Object.keys(cosmetic.unhide), ...cosmetic.generichide, ...cosmetic.elemhide])].filter((host) => {
-    if (host === '*') return false;
-    // `google.*` can't be a Chrome match pattern, so those sites keep the generic CSS.
-    if (!host.includes('*')) return true;
-    dropped['wildcard-exception'] = (dropped['wildcard-exception'] ?? 0) + 1;
-    return false;
-  });
+  const drop = (reason) => (dropped[reason] = (dropped[reason] ?? 0) + 1);
+  // Only hosts that actually change the generic CSS leave the registered stylesheet for the slower per-page path.
+  const inGeneric = new Set(genericCss);
+  const exempt = new Set([...cosmetic.generichide, ...cosmetic.elemhide]);
+  for (const [host, selectors] of Object.entries(cosmetic.unhide)) if (selectors.some((s) => inGeneric.has(s))) exempt.add(host);
+  exempt.delete('*');
+  const genericExcept = new Set();
+  let expanded = 0;
+  for (const host of exempt) {
+    let hosts = [host];
+    if (host.includes('*')) {
+      hosts = expandWildcard(host);
+      expanded += hosts.length;
+      if (!hosts.length) drop('wildcard-exception');
+    }
+    for (const h of hosts) {
+      if (HOSTNAME.test(h)) genericExcept.add(h);
+      else drop('invalid-exception-host');
+    }
+  }
 
   const ruleset = compiled.rules.length ? feature : null;
   if (ruleset) writeFileSync(join(out, 'rules', `${feature}.json`), JSON.stringify(compiled.rules));
@@ -85,16 +109,16 @@ for (const feature of FEATURES) {
 
   for (const calls of Object.values(cosmetic.scriptlets)) for (const call of calls) usedScriptlets.add(call.name);
   meta.maxPriority = Math.max(meta.maxPriority, compiled.maxPriority);
-  meta.features[feature] = { ruleset, ruleCount: compiled.rules.length, hasGenericCss: genericCss.length > 0, genericExcept, allowIds: compiled.allowIds };
+  meta.features[feature] = { ruleset, ruleCount: compiled.rules.length, hasGenericCss: genericCss.length > 0, genericExcept: [...genericExcept], allowIds: compiled.allowIds };
   const hosts = new Set([cosmetic.hide, cosmetic.unhide, cosmetic.scriptlets, cosmetic.scriptletExcept].flatMap(Object.keys).concat(cosmetic.generichide, cosmetic.elemhide));
   hosts.delete('*');
   const regex = compiled.rules.filter((r) => r.condition.regexFilter).length;
   const reasons = Object.entries(dropped).map(([reason, n]) => `${reason} ${n}`).join(', ') || '-';
-  rows.push([feature, compiled.rules.length, regex, genericCss.length, hosts.size, compiled.errors.length, reasons]);
+  rows.push([feature, compiled.rules.length, regex, genericCss.length, hosts.size, genericExcept.size, expanded, compiled.errors.length, reasons]);
 }
 
 meta.scriptlets = [...usedScriptlets].sort();
-const entries = meta.scriptlets.map((name) => `  ${JSON.stringify(name)}: ${scriptlets.getScriptletFunction(name).toString()},\n`);
+const entries = meta.scriptlets.map((name) => `  ${JSON.stringify(name)}: ${scriptletFunction(name).toString()},\n`);
 writeFileSync(join(out, 'scriptlets.js'), `// Generated from @adguard/scriptlets (GPL-3.0) by build.mjs.\nexport const SCRIPTLETS = {\n${entries.join('')}};\n`);
 const { SCRIPTLETS } = await import(pathToFileURL(join(out, 'scriptlets.js')).href);
 const broken = meta.scriptlets.filter((name) => typeof SCRIPTLETS[name] !== 'function');
@@ -107,7 +131,7 @@ manifest.declarative_net_request = {
 writeFileSync(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2));
 writeFileSync(join(out, 'meta.json'), JSON.stringify(meta));
 
-const table = [['feature', 'rules', 'regex rules', 'generic selectors', 'hosts', 'errors', 'dropped by reason'], ...rows].map((r) => r.map(String));
+const table = [['feature', 'rules', 'regex rules', 'generic selectors', 'hosts', 'generic except', 'from wildcards', 'errors', 'dropped by reason'], ...rows].map((r) => r.map(String));
 const widths = table[0].map((_, i) => Math.max(...table.map((r) => r[i].length)));
 for (const r of table) console.log(r.map((cell, i) => (i === 0 || i === r.length - 1 ? cell.padEnd(widths[i]) : cell.padStart(widths[i]))).join('  ').trimEnd());
 const total = FEATURES.reduce((n, f) => n + meta.features[f].ruleCount, 0);
@@ -123,7 +147,7 @@ await build({
   entryPoints: { background: root('src/background.ts') },
   bundle: true,
   format: 'esm',
-  target: 'chrome127',
+  target: 'chrome128',
   outdir: out,
   external: ['./scriptlets.js'],
   logLevel: 'warning',

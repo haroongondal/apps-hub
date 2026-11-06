@@ -561,9 +561,6 @@ importers:
         specifier: workspace:*
         version: link:../../packages/sieve-core
     devDependencies:
-      '@adguard/scriptlets':
-        specifier: 2.5.1
-        version: 2.5.1
       '@types/chrome':
         specifier: 0.3.7
         version: 0.3.7

@@ -1,6 +1,6 @@
 # Sieve for Chrome
 
-The owner's private ad blocker (Manifest V3, Chrome 127 or later). It is never published: you build it on this Mac and load it unpacked. The filter lists are downloaded and compiled at build time; the extension itself makes no requests of its own.
+The owner's private ad blocker (Manifest V3, Chrome 128 or later: the anti-adblock list has a rule that matches on response headers, which Chrome supports from 128). It is never published: you build it on this Mac and load it unpacked. The filter lists are downloaded and compiled at build time; the extension itself makes no requests of its own.
 
 ## Install (unpacked)
 
@@ -19,7 +19,7 @@ After a rebuild, press the reload arrow on the Sieve card.
 
 `build.mjs` downloads each list into `filters/cache/` the first time, and reuses that copy afterwards. Run `pnpm --filter sieve build -- --refresh` to download fresh lists. If a download fails and there is no cached copy, the build stops and names the list.
 
-The build prints one row per feature: rules, regex rules, generic selectors, hosts with site-specific filters, errors, and filters dropped by reason (features Chrome or Sieve can't run). It warns when the lists that are on by default have more than 30,000 rules, the number Chrome guarantees; the rest come from a pool shared with other extensions.
+The build prints one row per feature: rules, regex rules, generic selectors, hosts with site-specific filters, hosts kept out of the generic CSS ("generic except"), how many of those came from expanding `google.*`-style exceptions into real domains ("from wildcards"), errors, and filters dropped by reason (features Chrome or Sieve can't run). It warns when the lists that are on by default have more than 30,000 rules, the number Chrome guarantees; the rest come from a pool shared with other extensions.
 
 | Feature | List | Default |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ Sieve's dependencies, read from each package's `package.json`:
 | --- | --- | --- | --- |
 | `@adguard/dnr-converter` | 2.0.0 | GPL-3.0-only | turns network filters into Chrome rules (through `@apps-hub/sieve-core`) |
 | `@adguard/agtree` | 4.3.0 | MIT | parses filter lines (through `@apps-hub/sieve-core`) |
-| `@adguard/scriptlets` | 2.5.1 | GPL-3.0 | the scriptlet functions copied into `dist/scriptlets.js` |
+| `@adguard/scriptlets` | 2.5.1 | GPL-3.0 | the scriptlet functions copied into `dist/scriptlets.js` (through `@apps-hub/sieve-core`) |
 | `@adguard/re2-wasm` | 1.2.0 | Apache-2.0 | checks regex filters at build time only; not shipped in the extension |
 | `esbuild` | 0.28.2 | MIT | bundles the extension scripts (build only) |
 | `@types/chrome` | 0.3.7 | MIT | type definitions (build only) |
