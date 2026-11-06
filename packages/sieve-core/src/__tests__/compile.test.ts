@@ -1,0 +1,119 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { scriptlets } from '@adguard/scriptlets';
+import { compileFilters, scriptletKey, stripSections } from '../index.ts';
+import { checkRegexesWithRe2 } from '../node-regex.ts';
+
+await checkRegexesWithRe2();
+
+test('network filters become DNR rules numbered from firstId', async () => {
+  const out = await compileFilters('||ads.example^$third-party\n@@||ads.example/ok^', { firstId: 1 });
+  assert.deepEqual(out.rules.map((r) => r.id), [1, 2]);
+  assert.deepEqual(out.allowIds, [2]);
+  assert.equal(out.sources[1], '||ads.example^$third-party');
+  assert.equal(out.sources[2], '@@||ads.example/ok^');
+  assert.ok(out.maxPriority >= Math.max(...out.rules.map((r) => r.priority ?? 1)));
+  assert.deepEqual(out.errors, []);
+});
+
+test('element hiding fills generic, hide and unhide, with no DNR rules', async () => {
+  const out = await compileFilters('##.banner\nexample.com##.promo\nexample.com#@#.banner', { firstId: 1 });
+  assert.deepEqual(out.cosmetic.generic, ['.banner']);
+  assert.deepEqual(out.cosmetic.hide, { 'example.com': ['.promo'] });
+  assert.deepEqual(out.cosmetic.unhide, { 'example.com': ['.banner'] });
+  assert.deepEqual(out.rules, []);
+});
+
+test('a negated domain exempts that site from the selector', async () => {
+  const out = await compileFilters('~foo.com##.ad\n~sub.bar.com,bar.com##.zzz', { firstId: 1 });
+  assert.deepEqual(out.cosmetic.generic, ['.ad']);
+  assert.deepEqual(out.cosmetic.hide, { 'bar.com': ['.zzz'] });
+  assert.deepEqual(out.cosmetic.unhide, { 'foo.com': ['.ad'], 'sub.bar.com': ['.zzz'] });
+});
+
+test('filter domains are keyed the way Chrome gives hostnames, and * means every site', async () => {
+  const out = await compileFilters('Пример.рф##.ad\nExample.COM##.x\n*##.all\n||пример.рф^', { firstId: 1 });
+  assert.deepEqual(out.cosmetic.hide, { 'xn--e1afmkfd.xn--p1ai': ['.ad'], 'example.com': ['.x'] });
+  assert.deepEqual(out.cosmetic.generic, ['.all']);
+  assert.deepEqual(out.rules, [], 'the converter would turn a non-ASCII address into a rule that matches nothing');
+  assert.deepEqual(out.errors.map((e) => e.line), [4]);
+});
+
+test(':-abp-has and :if become native :has', async () => {
+  const out = await compileFilters('example.com#?#div:-abp-has(> .ad)\nexample.org##div:if(.ad)', { firstId: 1 });
+  assert.deepEqual(out.cosmetic.hide, { 'example.com': ['div:has(> .ad)'], 'example.org': ['div:has(.ad)'] });
+});
+
+test('extended CSS that Chrome cannot run is dropped', async () => {
+  const out = await compileFilters('example.com#?#div:-abp-contains(Sponsored)', { firstId: 1 });
+  assert.equal(out.dropped['extended-css'], 1);
+  assert.deepEqual(out.cosmetic.hide, {});
+  assert.deepEqual(out.errors, []);
+});
+
+test('ABP snippets and uBO +js become AdGuard scriptlet calls', async () => {
+  const out = await compileFilters('example.com#$#abort-on-property-read adsbygoogle\nexample.com##+js(set-constant, foo, 1)', { firstId: 1 });
+  const calls = out.cosmetic.scriptlets['example.com'];
+  assert.deepEqual(calls, [
+    { name: 'abort-on-property-read', args: ['adsbygoogle'] },
+    { name: 'set-constant', args: ['foo', '1'] },
+  ]);
+  for (const call of calls) assert.equal(typeof scriptlets.getScriptletFunction(call.name), 'function', call.name);
+});
+
+test('scriptlet exceptions fill scriptletExcept, an empty one exempts every scriptlet', async () => {
+  const out = await compileFilters('example.com#@#+js(set-constant, foo, 1)\nexample.org#@#+js()', { firstId: 1 });
+  assert.deepEqual(out.cosmetic.scriptletExcept, {
+    'example.com': [scriptletKey({ name: 'set-constant', args: ['foo', '1'] })],
+    'example.org': ['*'],
+  });
+  assert.equal(scriptletKey({ name: 'a', args: ['b'] }), '["a","b"]');
+});
+
+test('unknown scriptlets and raw JS are dropped', async () => {
+  const out = await compileFilters('example.com##+js(no-such-scriptlet, foo)\nexample.com#%#window.x=1', { firstId: 1 });
+  assert.equal(out.dropped['unknown-scriptlet'], 1);
+  assert.equal(out.dropped['raw-js'], 1);
+  assert.deepEqual(out.cosmetic.scriptlets, {});
+});
+
+test('$generichide and $elemhide exceptions list their hosts', async () => {
+  const out = await compileFilters('@@||example.com^$generichide\n@@||example.org^$elemhide', { firstId: 1 });
+  assert.deepEqual(out.cosmetic.generichide, ['example.com']);
+  assert.deepEqual(out.cosmetic.elemhide, ['example.org']);
+  assert.deepEqual(out.rules, []);
+});
+
+test('bad lines are listed by line number and the good ones still compile', async () => {
+  const out = await compileFilters('||[\nnot a filter at all ##\n||ok.example^', { firstId: 1 });
+  assert.equal(out.rules.length, 1);
+  assert.equal(out.sources[1], '||ok.example^');
+  assert.deepEqual(out.errors.map((e) => [e.line, e.text]), [[1, '||['], [2, 'not a filter at all ##']]);
+  for (const e of out.errors) assert.ok(e.reason.length > 0);
+});
+
+test('comments, headers, blank lines and CRLF are skipped silently', async () => {
+  const out = await compileFilters('[Adblock Plus 2.0]\r\n! Title: x\r\n\r\n||ok.example^\r\n', { firstId: 5 });
+  assert.deepEqual(out.rules.map((r) => r.id), [5]);
+  assert.deepEqual(out.errors, []);
+  assert.deepEqual(out.dropped, {});
+});
+
+test('regexes past regexLimit are dropped', async () => {
+  const out = await compileFilters('/ban+er[0-9]/\n/foo(bar|baz)/', { firstId: 1, regexLimit: 1 });
+  assert.equal(out.rules.filter((r) => r.condition.regexFilter).length, 1);
+  assert.equal(out.dropped['regex-limit'], 1);
+});
+
+test('a regex Chrome cannot run is an error on its line', async () => {
+  const out = await compileFilters('||ok.example^\n/a(?!b)/', { firstId: 1 });
+  assert.equal(out.rules.length, 1);
+  assert.deepEqual(out.errors.map((e) => e.line), [2]);
+});
+
+test('stripSections drops the named sections up to the next one', () => {
+  assert.equal(
+    stripSections('a\n! easylist_cookie_general_block.txt\nb\n! fanboy_social_general_block.txt\nc', ['easylist_cookie_']),
+    'a\n! fanboy_social_general_block.txt\nc',
+  );
+});
