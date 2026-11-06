@@ -5,6 +5,21 @@ export const SIGNING_CERT_SHA256 = 'e3af4a92b1e858ede650bf53521c9be86702036100b2
 
 export const MANIFEST_PATH = 'manifest.json';
 
+// Compiled into the Store so a tampered manifest cannot point an app's Install button at another package.
+export const ANDROID_PACKAGES = {
+  netlens: 'app.netlens',
+  'open-tunnel': 'com.opentunnel.open_tunnel_vpn',
+  'pdf-editor': 'com.haroon.pdfeditor',
+  'design-editor': 'com.haroon.designeditor',
+  store: 'com.haroon.store',
+  deputy: 'com.haroon.deputy',
+  strongroom: 'com.haroon.strongroom',
+} as const;
+
+export function androidPackageFor(id: string): string | undefined {
+  return Object.prototype.hasOwnProperty.call(ANDROID_PACKAGES, id) ? ANDROID_PACKAGES[id as keyof typeof ANDROID_PACKAGES] : undefined;
+}
+
 const hex64 = z.string().regex(/^[0-9a-f]{64}$/, 'lowercase hex SHA-256');
 
 export const AndroidReleaseSchema = z.object({

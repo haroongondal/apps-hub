@@ -6,15 +6,18 @@
   "type": "module",
   "scripts": {
     "start": "env -u ELECTRON_RUN_AS_NODE electron .",
-    "dist": "electron-packager . --out=dist --overwrite --ignore='^/(test|graft|dist|node_modules|\\.claude-trash|\\.ignore|\\.gitignore)($|/)'",
-    "test:e2e": "node test/e2e.mjs"
+    "ffmpeg": "node scripts/fetch-ffmpeg.mjs",
+    "dist": "electron-packager . --out=dist --overwrite --ignore='^/(test|graft|dist|node_modules|\\.claude-trash|\\.ignore|\\.gitignore)($|/)' --icon=build/icon --asar.unpackDir=vendor/ffmpeg",
+    "test:e2e": "node test/e2e.mjs && node test/media.mjs && node test/mobile.mjs"
   },
   "main": "main.js",
   "devDependencies": {
     "@electron/packager": "20.3.0",
+    "@pdf-lib/fontkit": "1.1.1",
     "electron": "44.8.0",
     "fabric": "7.4.0",
     "pdf-lib": "1.17.1",
+    "pdfjs-dist": "4.10.38",
     "playwright-core": "1.49.1"
   }
 }

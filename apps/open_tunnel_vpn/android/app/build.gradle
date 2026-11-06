@@ -170,6 +170,12 @@ dependencies {
     implementation("com.wireguard.android:tunnel:1.0.20260102")
     // OpenVPN 2 engine (ics-openvpn v0.7.69, GPLv2), built by vendor/ics-openvpn/build-aar.sh.
     implementation(files("libs/ics-openvpn.aar"))
+    // Firewall packet engine (firestack, MPL-2.0, Maven Central), run only in the :firewall process.
+    // Pinned, and "@aar" because the POM says jar but Maven Central holds an AAR. Its API changes between versions.
+    implementation("com.celzero:firestack:d3d530ea3e@aar")
+
+    // JVM tests for the firewall's pure constants.
+    testImplementation("junit:junit:4.13.2")
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";

@@ -1,0 +1,4 @@
+{"version":2,"W":200,"H":200,"pages":[{"background":"","objects":[
+{"type":"Textbox","text":"A","fontFamily":"Jost","fontSize":"1 Tf ET 1 0 0 rg 0 0 300 300 re f BT /F 1","left":60,"top":60,"width":100,"fill":"#000000"},
+{"type":"Textbox","text":"Hello","fontFamily":"constructor","fontSize":20,"left":100,"top":150,"width":160,"fill":"#000000"}
+]}]}

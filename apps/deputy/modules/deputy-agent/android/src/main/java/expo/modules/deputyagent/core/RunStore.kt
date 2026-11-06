@@ -120,9 +120,10 @@ class RunStore(root: File, private val now: () -> Long, zone: ZoneId = ZoneId.sy
         val lines = f.readLines().map { Json.parseToJsonElement(it).jsonObject }
         val past = lines.first().str("task")!!
         val shared = (words(past) intersect want).size
-        // Labels came from other apps' screens: `<` is escaped as on a screen, and apps blocked since then are left out.
+        // Labels came from other apps' screens: cut to one short line, `<` escaped as on a screen, and apps blocked since then left out.
         val steps = lines.filter { it.str("type") == "step" && it.str("verdict") in RAN && it.str("app") !in blocked && !failed(it.str("result").orEmpty()) }
-          .map { it.str("action")!!.replace(MESSAGE, "$1…").replace("<", "&lt;") }.distinct().take(15)
+          .map { it.str("action")!!.replace(MESSAGE, "$1…").replace(SPACE, " ").replace(LONG_LABEL) { m -> "\"${m.groupValues[1].take(LABEL_MAX)}…\"" }.replace("<", "&lt;") }
+          .distinct().take(15)
         if (lines.last().str("status") != "done" || shared < 2 || shared * 2 < minOf(want.size, words(past).size) || steps.isEmpty()) null
         else Triple(shared.toDouble() / minOf(want.size, words(past).size), past.replace("<", "&lt;"), steps)
       }.getOrNull()
@@ -177,6 +178,9 @@ class RunStore(root: File, private val now: () -> Long, zone: ZoneId = ZoneId.sy
     const val MAX_RUNS = 200
     val RAN = setOf("allow", "confirm")
     val MESSAGE = Regex("([?&](?:text|body)=)[^&\\s]*")
+    const val LABEL_MAX = 40
+    val SPACE = Regex("\\s+")
+    val LONG_LABEL = Regex("\"(.{${LABEL_MAX + 1},})\"")
     val STOP = setOf("the", "and", "for", "that", "this", "with", "from", "please", "tell", "what", "you", "your", "about", "then", "can")
     const val DAY_MS = 86_400_000L
   }

@@ -1,13 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <!-- Package visibility for getInstalledVersion: keep in sync with tools/release/src/apps.ts. -->
-    <queries>
-        <package android:name="app.netlens" />
-        <package android:name="com.opentunnel.open_tunnel_vpn" />
-        <package android:name="com.haroon.pdfeditor" />
-        <package android:name="com.haroon.deputy" />
-    </queries>
+    <!-- getInstalledVersion sees every app the Store lists, with no per-app <queries> list for a branch release to drop. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <application>
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"

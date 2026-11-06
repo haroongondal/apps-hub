@@ -185,6 +185,15 @@ video out of those pictures using CapCut".
   photos were downloaded this run. Can't tell from the phone alone whether the
   "Photos added" line or route memory caused that. Photos are whatever Drive
   search returned (taste is out of scope).
+- 2026-11-06: committed (`60b03f1`) and merged `origin/main` into the branch
+  for the PR. Conflicts only in `RunPanel.tsx` and `docs/deputy/EVAL.md`, both
+  between the unmerged 0.2.4 commits and #21: #21 made a speech result wait in
+  the task box for a Run tap (any installed app can answer the speech request),
+  0.2.4 made holding the mic run it. Resolved to #21's behaviour, so
+  hold-to-run is gone from the source; the Store's 0.2.4/0.2.5 builds on the
+  phone still have it until the next release. Owner to confirm that's wanted.
+  The Kotlin merged textually clean (#21's Policy changes touch link taps and
+  browser typing, not `make_video`).
 - Phone now: Download holds extra copies from three Drive runs; Movies/Deputy
   has 3 test videos (~37 MB); Deputy limits 30 steps / 10 min; build 0.2.6
   (versionCode 13) installed by adb. Nothing committed.

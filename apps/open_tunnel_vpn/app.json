@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "OpenTunnel",
+    "name": "TunnelWall",
     "slug": "open_tunnel_vpn",
     "version": "1.2.1",
     "orientation": "portrait",
@@ -13,17 +13,7 @@
       "supportsTablet": false,
       "infoPlist": {
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": false,
-          "NSExceptionDomains": {
-            "www.vpngate.net": {
-              "NSExceptionAllowsInsecureHTTPLoads": true,
-              "NSIncludesSubdomains": true
-            },
-            "vpngate.net": {
-              "NSExceptionAllowsInsecureHTTPLoads": true,
-              "NSIncludesSubdomains": true
-            }
-          }
+          "NSAllowsArbitraryLoads": false
         }
       }
     },

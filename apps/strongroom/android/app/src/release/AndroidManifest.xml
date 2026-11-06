@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+  <!-- Release keeps INTERNET for sync now that SyncConfig.BASE_URL is set (manifest.test.ts checks the pair). The sync client speaks HTTPS only and the app refuses cleartext. Debug turns cleartext back on for Metro. -->
+  <application android:usesCleartextTraffic="false"/>
+</manifest>

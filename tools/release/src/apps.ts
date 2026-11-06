@@ -1,3 +1,5 @@
+import { ANDROID_PACKAGES } from '@apps-hub/store-manifest';
+
 export interface ReleasableApp {
   name: string;
   /** Dir holding app.json and android/: workspace-relative, or absolute for apps outside this repo. */
@@ -9,20 +11,28 @@ export interface ReleasableApp {
 }
 
 export const APPS: Record<string, ReleasableApp> = {
-  netlens: { name: 'NetLens', dir: 'apps/netlens', android: { packageName: 'app.netlens' } },
+  netlens: { name: 'HomeNet', dir: 'apps/netlens', android: { packageName: ANDROID_PACKAGES.netlens } },
   'open-tunnel': {
-    name: 'OpenTunnel',
+    name: 'TunnelWall',
     dir: 'apps/open_tunnel_vpn',
-    android: { packageName: 'com.opentunnel.open_tunnel_vpn' },
+    android: { packageName: ANDROID_PACKAGES['open-tunnel'] },
   },
   'pdf-editor': {
     name: 'PDF Editor',
     dir: 'apps/pdf-editor-mobile',
-    android: { packageName: 'com.haroon.pdfeditor' },
+    android: { packageName: ANDROID_PACKAGES['pdf-editor'] },
     prepare: [['node', '../../packages/pdf-editor-engine/build.mjs']],
   },
-  store: { name: 'Store', dir: 'apps/store', android: { packageName: 'com.haroon.store' } },
-  deputy: { name: 'Deputy', dir: 'apps/deputy', android: { packageName: 'com.haroon.deputy' } },
+  'design-editor': {
+    name: 'Design Editor',
+    dir: 'apps/design-editor-mobile',
+    android: { packageName: ANDROID_PACKAGES['design-editor'] },
+    // the canvas page inlines itself into assets/editor/editor.html before a build (SPEC §14.1)
+    prepare: [['node', '../../packages/design-editor-engine/build.mjs']],
+  },
+  store: { name: 'Store', dir: 'apps/store', android: { packageName: ANDROID_PACKAGES.store } },
+  deputy: { name: 'Deputy', dir: 'apps/deputy', android: { packageName: ANDROID_PACKAGES.deputy } },
+  strongroom: { name: 'Strongroom', dir: 'apps/strongroom', android: { packageName: ANDROID_PACKAGES.strongroom } },
 };
 
 /** Release ids of the apps whose workspace-relative dir is in `dirs` (the packages pnpm says changed). */

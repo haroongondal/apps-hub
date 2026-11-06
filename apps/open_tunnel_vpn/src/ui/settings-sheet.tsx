@@ -151,7 +151,7 @@ export function SettingsSheet({
       </Group>
 
       <Notice tone="neutral" title="Open source">
-        OpenTunnel is free software under the GPLv2. Source:
+        TunnelWall is free software under the GPLv2. Source:
         github.com/haroongondal/apps-hub
       </Notice>
       <Text variant="caption" tone="faint">

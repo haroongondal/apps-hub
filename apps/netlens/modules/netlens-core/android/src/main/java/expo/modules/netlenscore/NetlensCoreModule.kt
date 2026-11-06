@@ -1,9 +1,12 @@
 package expo.modules.netlenscore
 
 import android.content.Context
+import android.net.ConnectivityManager
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.net.DatagramSocket
+import java.net.InetAddress
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -137,15 +140,29 @@ class NetlensCoreModule : Module() {
           serviceJob = moduleScope.launch {
             try {
               val mdnsDeferred = async(Dispatchers.IO) {
-                MdnsProbe(context) { type ->
-                  postEvent(
-                    EVENT_SERVICE_DISCOVERED,
-                    mapOf<String, Any?>(
-                      "kind" to "mdns",
-                      "serviceName" to type.serviceName,
-                    ),
-                  )
-                }.collectServiceTypes(timeoutMs.toLong())
+                MdnsProbe(
+                  context,
+                  onDiscovered = { type ->
+                    postEvent(
+                      EVENT_SERVICE_DISCOVERED,
+                      mapOf<String, Any?>(
+                        "kind" to "mdns",
+                        "serviceName" to type.serviceName,
+                      ),
+                    )
+                  },
+                  onInstance = { instance ->
+                    postEvent(
+                      EVENT_SERVICE_DISCOVERED,
+                      mapOf<String, Any?>(
+                        "kind" to "mdns-instance",
+                        "instanceName" to instance.instanceName,
+                        "serviceType" to instance.serviceType,
+                        "host" to instance.host,
+                      ),
+                    )
+                  },
+                ).collectServiceTypes(timeoutMs.toLong())
               }
               val ssdpDeferred = async(Dispatchers.IO) {
                 SsdpProbe.discover(context, windowMs = timeoutMs.toLong()) { service ->
@@ -252,6 +269,50 @@ class NetlensCoreModule : Module() {
       }
     }
 
+    /** Name lookups: one datagram out, the first reply from the same address back (bytes as 0..255). */
+    AsyncFunction("udpRequest") { ip: String, port: Int, payload: List<Int>, timeoutMs: Int, promise: Promise ->
+      if (port !in 1..65535) {
+        promise.reject(ERR_INVALID_PARAMS, "port must be in 1..65535", null)
+      } else if (payload.any { it !in 0..255 }) {
+        promise.reject(ERR_INVALID_PARAMS, "payload bytes must be in 0..255", null)
+      } else if (timeoutMs !in 1..10_000) {
+        promise.reject(ERR_INVALID_PARAMS, "timeoutMs must be in 1..10000", null)
+      } else {
+        moduleScope.launch {
+          try {
+            val target = ip.trim()
+            val reply = NameProbes.udpRequest(
+              target, port, ByteArray(payload.size) { payload[it].toByte() }, timeoutMs, lanBinder(target),
+            )
+            promise.resolve(reply?.map { it.toInt() and 0xFF })
+          } catch (error: Exception) {
+            promise.reject("UDP_REQUEST_FAILED", error.message, error)
+          }
+        }
+      }
+    }
+
+    /** Name lookups: a bounded HTTP-style exchange, decoded as UTF-8. Null when nothing was read. */
+    AsyncFunction("tcpFetch") { ip: String, port: Int, request: String, timeoutMs: Int, maxBytes: Int, promise: Promise ->
+      if (port !in 1..65535) {
+        promise.reject(ERR_INVALID_PARAMS, "port must be in 1..65535", null)
+      } else if (maxBytes <= 0) {
+        promise.reject(ERR_INVALID_PARAMS, "maxBytes must be positive", null)
+      } else if (timeoutMs !in 1..10_000) {
+        promise.reject(ERR_INVALID_PARAMS, "timeoutMs must be in 1..10000", null)
+      } else {
+        moduleScope.launch {
+          try {
+            val target = ip.trim()
+            val factory = withContext(Dispatchers.IO) { PlatformNetwork.socketFactoryFor(resolvedContext(), target) }
+            promise.resolve(NameProbes.tcpFetch(target, port, request, timeoutMs, maxBytes, factory))
+          } catch (error: Exception) {
+            promise.reject("TCP_FETCH_FAILED", error.message, error)
+          }
+        }
+      }
+    }
+
     OnDestroy {
       moduleScope.cancel()
       tcpScanJob = null
@@ -264,6 +325,15 @@ class NetlensCoreModule : Module() {
     withContext(Dispatchers.Main) {
       sendEvent(name, payload)
     }
+
+  /** Datagram twin of PlatformNetwork.socketFactoryFor: private targets leave over Wi-Fi even behind a VPN. */
+  private fun lanBinder(ip: String): (DatagramSocket) -> Unit = { socket ->
+    val cm = resolvedContext()?.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+    val addr = InetAddress.getByName(ip)
+    if (cm != null && (addr.isSiteLocalAddress || addr.isLinkLocalAddress)) {
+      PlatformNetwork.lanNetwork(cm)?.bindSocket(socket)
+    }
+  }
 
   private fun resolvedContext(): Context? = appContext.reactContext
 }

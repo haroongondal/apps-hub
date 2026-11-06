@@ -6,9 +6,9 @@ React Native (+ Expo) and Electron. Apps live in `apps/`, shared logic lives
 in `packages/`.
 
 Current apps:
-- **netlens** (`apps/netlens`) — FOSS, zero-telemetry LAN scanner & connectivity
+- **HomeNet** (`apps/netlens`, formerly NetLens) — FOSS, zero-telemetry LAN scanner & connectivity
   diagnostic toolkit. Android-first, iOS second. Feature docs: `docs/netlens/`.
-- **open_tunnel_vpn** (`apps/open_tunnel_vpn`) — zero-registration VPN client
+- **TunnelWall** (`apps/open_tunnel_vpn`, formerly OpenTunnel) — zero-registration VPN client
   aggregating VPN Gate relays + user WireGuard nodes. Migrated from Flutter to
   React Native (Expo SDK 54) on 2026-10-26 (Dart snapshot: commit `a8cf6e9`).
   Domain logic in `packages/open-tunnel-core`; phases in
@@ -17,14 +17,33 @@ Current apps:
 - **pdf-editor** — offline PDF editor, moved in from `~/Documents/pdf-editor`
   on 2026-10-26: `apps/pdf-editor-desktop` (Electron), `apps/pdf-editor-mobile`
   (Expo + WebView), both booting the shared engine in
-  `packages/pdf-editor-engine` (`build.mjs` inlines it for mobile).
+  `packages/pdf-editor-engine` (`build.mjs` inlines it for mobile). The mobile
+  app's home screen is a searchable **Library** (folders, tags, full-text search,
+  Arabic and Urdu normalised) over one `library.db`: logic in
+  `packages/library-core`, app glue in `apps/pdf-editor-mobile/src/library`. Scan
+  and Reader build on it; specs `docs/pdf-editor/`, progress `docs/handoffs/pdf-editor-scan.md`.
 - **design-editor** (`apps/design-editor`) — offline Canva-style editor for the
   Mac (Electron), moved in from `~/Documents/design-editor` on 2026-10-26.
+  Its Android sibling `apps/design-editor-mobile` (`com.haroon.designeditor`, Store
+  release id `design-editor`) runs the same canvas in a WebView plus the media tools
+  as a Kotlin foreground queue (`modules/design-media`). Pure logic in
+  `packages/media-core`. Specs: `docs/design-editor/`; progress:
+  `docs/handoffs/design-editor-media.md`.
 - **deputy** (`apps/deputy`) — personal Android agent that carries out tasks by
   operating other apps through an AccessibilityService. Android only, private
   Store only (`com.haroon.deputy`). Kotlin owns the agent loop and the
   confirmation gate; RN only renders. Specs: `docs/deputy/` (PRD, SPEC);
   phases and spike results: `docs/handoffs/deputy.md`.
+- **strongroom** (`apps/strongroom`) — personal password manager, all own code
+  (Kotlin owns the vault; RN only renders). Android only, private Store only
+  (`com.haroon.strongroom`). Design: `docs/strongroom/DESIGN.md`; phases:
+  `docs/strongroom/PHASE-1-PLAN.md` and `docs/handoffs/strongroom.md`.
+- **strongroom-extension** (`apps/strongroom-extension`) — Strongroom for Chrome
+  (Manifest V3, Mac and Windows, loaded unpacked). Its own local vault in the
+  Android vault format (`packages/strongroom-core`, checked against the shared
+  `vault-vectors.json`); fills and saves logins; signs in to sync with the phone
+  through the vault server (`tools/vault-api`, Phase 2, not deployed yet). Handoffs:
+  `docs/handoffs/strongroom-extension.md`, `docs/handoffs/strongroom-sync.md`.
 
 Not here on purpose: `~/Documents/browser-automation` (stays standalone) and
 `~/Documents/agent-harness` (deferred until its phase branches are merged).
@@ -41,7 +60,7 @@ Planned (do not scaffold yet):
 - Tokens live in `src/tokens.ts` only. After changing them run
   `pnpm --filter @apps-hub/ui build:css`; the test fails if `web/tokens.css` is
   stale, and it enforces WCAG AA contrast for every brand in light and dark.
-- Brands: netlens, opentunnel, store, pdf, design, deputy (hue + accent from each
+- Brands: netlens, opentunnel, store, pdf, design, deputy, strongroom (hue + accent from each
   launcher icon). Light and dark follow the system.
 - Copy is sentence case, active voice; errors say what happened and how to fix
   it. No emoji icons, no ALL-CAPS labels.
@@ -117,9 +136,17 @@ cd apps/open_tunnel_vpn/android && JAVA_HOME=$JAVA_HOME ./gradlew :app:assembleD
 # Native compile gate (Deputy):
 cd apps/deputy/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :deputy-agent:testDebugUnitTest :app:assembleDebug
+# Native compile gate (Strongroom):
+cd apps/strongroom/android && JAVA_HOME=$JAVA_HOME ./gradlew \
+  :strongroom-vault:testDebugUnitTest :app:assembleDebug
+# Native compile gate (Design Editor mobile):
+cd apps/design-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
+  :design-media:testDebugUnitTest :app:assembleDebug
 # Electron apps (open real windows, so not part of `pnpm test`):
 pnpm --filter pdf-editor-desktop test:e2e   # desktop + Electron + mobile-bridge suites
 pnpm --filter design-editor test:e2e
+# Chrome extension in real Chromium (build first; needs playwright-core, see its README):
+pnpm --filter strongroom-extension build && pnpm --filter strongroom-extension test:e2e
 # Environment sanity:
 pnpm doctor                     # expo-doctor in every app that ships it
 ```

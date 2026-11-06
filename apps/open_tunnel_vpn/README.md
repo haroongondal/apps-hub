@@ -1,4 +1,4 @@
-# OpenTunnel VPN & Privacy Guard
+# TunnelWall (formerly OpenTunnel) VPN & Privacy Guard
 
 Zero-registration, zero-telemetry VPN client that aggregates academic and
 community relays (VPN Gate) alongside user-supplied WireGuard nodes.
@@ -15,8 +15,8 @@ and are invoked as `/phase1` … `/phase4`.
 | React Native 0.81 + Expo 54 project (`apps/open_tunnel_vpn`) | Scaffolded, natives prebuilt & committed |
 | Pure-TS domain layer (`packages/open-tunnel-core`) | Created — Hermes-safe sha256/base64/UTF-8, streaming parser |
 | expo-sqlite cache (Drift parity, `node:sqlite` tests) | Implemented |
-| Android VPN/FGS permissions + scoped cleartext policy | Configured (Expo config plugin) |
-| iOS ATS exception (vpngate.net) — bundle id retained | Configured |
+| Android VPN/FGS permissions + no-cleartext policy | Configured (Expo config plugin) |
+| iOS ATS with no exceptions — bundle id retained | Configured |
 | Phase 1 — ingestion, parser, sanitizer, scorer, cache | Done |
 | Phase 2 — Android VpnService + OpenVPN engine (ics-openvpn) | Done; connects to VPN Gate relays on a real phone (2026-10-27) |
 | Phase 3 — iOS Network Extension | Module + provider built; both iOS engines still gated (OpenVPN core licence, WireGuard Go build) |
@@ -70,7 +70,7 @@ the app.
 
 ## Licensing and release blockers
 
-- OpenTunnel is GPL-2.0-only (`LICENSE`, decided 2026-10-27) because the
+- TunnelWall is GPL-2.0-only (`LICENSE`, decided 2026-10-27) because the
   Android OpenVPN engine is `ics-openvpn` v0.7.69 (GPLv2 with additional
   terms, `vendor/ics-openvpn/LICENSE-ics-openvpn.txt`). Anyone who gets the
   APK must be able to get this source; the repo is public.
@@ -93,9 +93,9 @@ the app.
   connections without VPN" is deep-linked, not programmable.
 - Native package path is `com.opentunnel.open_tunnel_vpn` (React Native
   `applicationId` and future Kotlin sources keep this).
-- VPN Gate needs a scoped cleartext exception for its HTTP fallback
-  (`plugin/opentunnel-android-config.js`) plus the iOS ATS exception
-  (already in `app.json`). HTTPS remains primary.
+- The VPN Gate list is fetched over HTTPS only, with no cleartext exception
+  on Android or iOS: a cleartext list lets anyone on the Wi-Fi rank their own
+  relay first. When HTTPS fails the app shows the cached list.
 - Licensing was decided on 2026-10-27: GPL-2.0-only (see above).
 
 ## Migration provenance (Flutter → React Native, 2026-10-26)

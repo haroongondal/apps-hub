@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <mask id="wheel" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <g fill="#000">
+        <circle cx="512" cy="519" r="44"/>
+        <circle cx="512" cy="519" r="88" fill="none" stroke="#000" stroke-width="32"/>
+        <rect x="494" y="389" width="36" height="130" rx="18"/>
+        <rect x="494" y="389" width="36" height="130" rx="18" transform="rotate(120 512 519)"/>
+        <rect x="494" y="389" width="36" height="130" rx="18" transform="rotate(240 512 519)"/>
+      </g>
+    </mask>
+  </defs>
+  <rect id="plate" width="1024" height="1024" rx="228" fill="#1F0A24"/>
+  <g id="mark">
+    <path fill="#E879F9" fill-rule="evenodd" d="M342 229H682a120 120 0 0 1 120 120V689a120 120 0 0 1-120 120H342a120 120 0 0 1-120-120V349a120 120 0 0 1 120-120ZM342 301a48 48 0 0 0-48 48V689a48 48 0 0 0 48 48H682a48 48 0 0 0 48-48V349a48 48 0 0 0-48-48Z"/>
+    <g fill="#F5D0FE">
+      <circle cx="512" cy="519" r="170" mask="url(#wheel)"/>
+      <rect x="470" y="271" width="84" height="110" rx="18"/>
+      <rect x="470" y="657" width="84" height="110" rx="18"/>
+      <rect x="264" y="477" width="110" height="84" rx="18"/>
+      <rect x="650" y="477" width="110" height="84" rx="18"/>
+    </g>
+  </g>
+</svg>

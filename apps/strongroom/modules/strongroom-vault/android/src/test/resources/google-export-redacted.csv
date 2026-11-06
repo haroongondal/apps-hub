@@ -1,0 +1,11 @@
+﻿name,url,username,password,note
+example.org,https://example.org,user1@example.com,pw1,
+accounts.example.com,https://accounts.example.com/login,,pw2,
+Team wiki,https://wiki.example.net/home,user2@example.com,"pw3","Shared with ""ops"", rotate monthly.
+Second line of the note"
+Example app,android://AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=@com.example.app/,user3@example.com,pw4,
+Broken hash,android://not-base64!@com.example.broken/,user4@example.com,pw5,
+Mail,https://mail.example.org/,user5@example.com,pw6,
+Mail,https://mail.example.org/,user5@example.com,pw6,
+Forum,https://forum.example.org/,user6@example.com,pw7,old account
+Forum,https://forum.example.org/,user6@example.com,pw8,new account

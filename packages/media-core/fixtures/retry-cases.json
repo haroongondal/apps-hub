@@ -1,0 +1,32 @@
+{
+  "_source": "RESEARCH §6.6 A: 60 s 1080p30 to 20 MB, hw-h264. Attempt 1 overshoots video by 15%. Attempt 2 = 2,236,595 x (16,774,463 / 19,290,632) x 0.97 = about 1,886,000 bit/s, still 720p30.",
+  "cases": [
+    {
+      "name": "attempt 1 overshoots by 15%: attempt 2 at about 1.886 Mbit/s, 720p30",
+      "plan": { "tool": "size", "targetBytes": 20000000, "encoder": "hw-h264", "rung": { "shortSide": 720, "fps": 30 },
+        "width": 1280, "height": 720, "videoBps": 2236595, "audio": { "mode": "aac", "bps": 128000 },
+        "overheadBytes": 265536, "plannedVideoBytes": 16774463, "plannedBytes": 17999999,
+        "attempt": 1, "margin": 0.9, "fpsCap": 30 },
+      "actualBytes": 20516168,
+      "expect": { "ok": true, "attempt": 2, "rung": { "shortSide": 720, "fps": 30 }, "videoBpsApprox": 1886000 }
+    },
+    {
+      "name": "attempt 3 still over the target: gave up, nothing delivered",
+      "plan": { "tool": "size", "targetBytes": 20000000, "encoder": "hw-h264", "rung": { "shortSide": 720, "fps": 30 },
+        "width": 1280, "height": 720, "videoBps": 1886519, "audio": { "mode": "aac", "bps": 128000 },
+        "overheadBytes": 265536, "plannedVideoBytes": 14148893, "plannedBytes": 15374429,
+        "attempt": 3, "margin": 0.9, "fpsCap": 30 },
+      "actualBytes": 20516168,
+      "expect": { "ok": false, "reason": "gave-up" }
+    },
+    {
+      "name": "attempt 1 within the target: publish the same plan",
+      "plan": { "tool": "size", "targetBytes": 20000000, "encoder": "hw-h264", "rung": { "shortSide": 720, "fps": 30 },
+        "width": 1280, "height": 720, "videoBps": 2236595, "audio": { "mode": "aac", "bps": 128000 },
+        "overheadBytes": 265536, "plannedVideoBytes": 16774463, "plannedBytes": 17999999,
+        "attempt": 1, "margin": 0.9, "fpsCap": 30 },
+      "actualBytes": 19999000,
+      "expect": { "ok": true, "attempt": 1, "rung": { "shortSide": 720, "fps": 30 }, "videoBps": 2236595 }
+    }
+  ]
+}

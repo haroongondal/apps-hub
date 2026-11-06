@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { openMediaWindow, registerMedia } from './media.js';
 
 if (process.env.DESIGN_EDITOR_DATA) app.setPath('userData', process.env.DESIGN_EDITOR_DATA);
 const autosavePath = () => path.join(app.getPath('userData'), 'autosave.json');
@@ -18,6 +19,8 @@ const menu = Menu.buildFromTemplate([
     { id: 'save', label: 'Save', accelerator: 'CmdOrCtrl+S', click: send('save') },
     { id: 'saveAs', label: 'Save As…', accelerator: 'Shift+CmdOrCtrl+S', click: send('saveAs') },
     { id: 'export', label: 'Download…', accelerator: 'Shift+CmdOrCtrl+E', click: send('export') },
+    { type: 'separator' },
+    { id: 'media', label: 'Media Tools…', accelerator: 'Shift+CmdOrCtrl+M', click: openMediaWindow },
     ...(isMac ? [] : [{ type: 'separator' }, { role: 'quit' }]),
   ] },
   // undo and redo go to the editor's own history, not Chromium's, unless a text field has focus
@@ -51,14 +54,27 @@ const FILTERS = {
 ipcMain.handle('save-file', async (_, { name, ext, data, filePath }) => {
   if (!FILTERS[ext]) throw new Error('unknown file type ' + ext);
   if (filePath && !granted.has(filePath)) throw new Error('path was not chosen in a dialog');
+  if (Array.isArray(data) && (filePath || ext === 'json')) throw new Error('several files need a dialog');
   if (!filePath) {
     const r = await dialog.showSaveDialog(win, { defaultPath: name, filters: [FILTERS[ext]] });
     if (r.canceled || !r.filePath) return null;
     filePath = r.filePath;
     if (ext === 'json') granted.add(filePath);
   }
-  await fs.writeFile(filePath, typeof data === 'string' ? data : Buffer.from(data));
-  return filePath;
+  // one file per page: name-1.png, name-2.png, … next to the path picked in the dialog
+  const files = Array.isArray(data) ? data.map((_, i) => filePath.replace(/(\.\w+)?$/, `-${i + 1}$1`)) : [filePath];
+  // the dialog only confirmed filePath, so ask before replacing any of the per-page files
+  const taken = Array.isArray(data) ? (await Promise.all(files.map(f => fs.access(f).then(() => f, () => null)))).filter(Boolean) : [];
+  if (taken.length) {
+    const r = await dialog.showMessageBox(win, {
+      type: 'warning', message: `Replace ${taken.length} ${taken.length > 1 ? 'files that already exist' : 'file that already exists'}?`,
+      detail: taken.map(f => path.basename(f)).join('\n'), buttons: ['Replace', 'Cancel'], defaultId: 1, cancelId: 1,
+    });
+    if (r.response !== 0) return null;
+  }
+  const list = Array.isArray(data) ? data : [data];
+  await Promise.all(files.map((f, i) => fs.writeFile(f, typeof list[i] === 'string' ? list[i] : Buffer.from(list[i]))));
+  return files[0];
 });
 ipcMain.handle('open-design', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [FILTERS.json] });
@@ -73,6 +89,13 @@ ipcMain.handle('autosave-read', async () => {
     return saved;
   } catch { return null; }
 });
+// a session this build can't restore is saved aside as a design file before the new design's autosave replaces it
+ipcMain.handle('autosave-keep', async () => {
+  const { doc } = JSON.parse(await fs.readFile(autosavePath(), 'utf8'));
+  const kept = path.join(app.getPath('userData'), `autosave-unreadable-${Date.now()}.json`);
+  await fs.writeFile(kept, typeof doc === 'string' ? doc : JSON.stringify(doc));
+  return kept;
+});
 let autosaving = Promise.resolve();
 ipcMain.handle('autosave-write', (_, saved) => {
   if (saved.filePath && !granted.has(saved.filePath)) saved.filePath = null;
@@ -82,6 +105,7 @@ ipcMain.handle('autosave-write', (_, saved) => {
   });
   return autosaving;
 });
+registerMedia();
 ipcMain.on('doc-state', (_, { title, dirty, filePath }) => {
   if (!win) return;
   win.setTitle(title);
@@ -99,6 +123,6 @@ app.whenReady().then(() => {
   win.webContents.on('will-navigate', e => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.on('closed', () => { win = null; });
-  win.loadFile('index.html');
+  win.loadFile('vendor/engine/desktop.html');
 });
 app.on('window-all-closed', () => app.quit());

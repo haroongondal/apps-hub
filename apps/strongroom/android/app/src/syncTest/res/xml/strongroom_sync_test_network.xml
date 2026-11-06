@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- A network config overrides usesCleartextTraffic, so keep debug's http to Metro. -->
+    <base-config cleartextTrafficPermitted="true" />
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="@raw/strongroom_sync_ca" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

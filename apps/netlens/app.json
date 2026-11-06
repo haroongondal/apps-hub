@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "NetLens",
+    "name": "HomeNet",
     "slug": "netlens",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -12,15 +12,27 @@
       "bundleIdentifier": "app.netlens",
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "NetLens scans your local Wi-Fi network to discover connected devices and services.",
+        "NSLocalNetworkUsageDescription": "HomeNet scans your local Wi-Fi network to discover connected devices and services.",
         "NSBonjourServices": [
           "_services._dns-sd._udp",
-          "_http._tcp"
+          "_http._tcp",
+          "_googlecast._tcp",
+          "_airplay._tcp",
+          "_ipp._tcp",
+          "_smb._tcp",
+          "_hap._tcp",
+          "_companion-link._tcp"
         ]
       }
     },
     "android": {
       "package": "app.netlens",
+      "allowBackup": false,
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [

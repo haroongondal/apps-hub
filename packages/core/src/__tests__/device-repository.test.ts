@@ -87,6 +87,10 @@ function seedDevice(overrides: Partial<StoredDevice> = {}): StoredDevice {
     isTrusted: false,
     firstSeenAt: 1_000,
     lastSeenAt: 1_000,
+    mdnsName: null,
+    friendlyName: null,
+    model: null,
+    netbiosName: null,
     ...overrides,
   };
 }
@@ -243,6 +247,35 @@ test('an IP-fallback identity legitimately reads as new after relocation', async
   assert.equal(stale.isNew, false);
   assert.equal(stale.seenThisScan, false);
   assert.equal(stale.customName, 'Named box');
+});
+
+test('a named device is matched, not new, on the next scan', async () => {
+  const store = new FakeStore();
+  const id = await store.insertDevice(
+    seedDevice({
+      identityKey: 'ip:192.168.7.3',
+      lastIp: '192.168.7.3',
+      hostname: 'galaxy.lan',
+      mdnsName: 'Galaxy',
+    }),
+  );
+  const result = await reconcileScan(
+    {
+      networkId: NETWORK.networkId,
+      gatewayIp: NETWORK.gatewayIp,
+      subnetCidr: NETWORK.subnetCidr,
+      hosts: [host('192.168.7.3')],
+      enrichmentByIp: { '192.168.7.3': { usn: null, vendorOrModel: null } },
+    },
+    store,
+    3_000,
+  );
+  const row = result.devices.find((d) => d.identityKey === 'ip:192.168.7.3');
+  assert.ok(row);
+  assert.equal(row.isNew, false);
+  assert.equal(row.id, id);
+  assert.equal(row.mdnsName, 'Galaxy');
+  assert.equal(result.newCount, 0);
 });
 
 test('duplicate alive probes collapse to one identity row', async () => {

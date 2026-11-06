@@ -4,6 +4,14 @@ node_modules/
 .npm/
 
 # expo / react-native builds (root-anchored: DO NOT match apps/*/modules/*/android|ios)
+/apps/design-editor-mobile/android/.gradle/
+/apps/design-editor-mobile/android/app/build/
+/apps/design-editor-mobile/android/build/
+/apps/design-editor-mobile/android/local.properties
+/apps/design-editor-mobile/android/**/.cxx/
+/apps/design-editor-mobile/modules/*/android/build/
+/apps/design-editor-mobile/.expo/
+/apps/design-editor-mobile/assets/editor/
 /apps/netlens/android/.gradle/
 /apps/netlens/android/app/build/
 /apps/netlens/android/build/
@@ -58,6 +66,13 @@ coverage/
 /apps/deputy/android/**/.cxx/
 /apps/deputy/modules/*/android/build/
 /apps/deputy/.expo/
+/apps/strongroom/android/.gradle/
+/apps/strongroom/android/app/build/
+/apps/strongroom/android/build/
+/apps/strongroom/android/local.properties
+/apps/strongroom/android/**/.cxx/
+/apps/strongroom/modules/*/android/build/
+/apps/strongroom/.expo/
 /tools/store-api/.cloudflare/
 /tools/store-api/.wrangler/
 /tools/store-api/dist/
@@ -78,3 +93,4 @@ coverage/
 
 # release APKs are build outputs; the store pipeline uploads its own builds
 /apps/*/releases/*.apk
+/.superpowers/

@@ -58,8 +58,9 @@ root `AGENTS.md` ("Hard Architectural & OS Constraints — NetLens"), `apps/open
 - Streaming: the CSV is split per line at byte level and decoded per row; nothing buffers the whole
   multi-megabyte body. Probes are bounded (default 8) with short timeouts. Rows are parsed from the
   final comma, not `split(',')`.
-- `allowBackup="false"` stays in `plugin/opentunnel-android-config.js`; the HTTP cleartext exception
-  stays scoped to the VPN Gate hosts.
+- `allowBackup="false"` stays in `plugin/opentunnel-android-config.js`, and TunnelWall refuses cleartext
+  everywhere: no HTTP source and no cleartext or ATS exception for vpngate.net. OpenVPN configs keep
+  only allowlisted directives plus `remote-cert-tls server` and `verify-x509-name opengw.net name`.
 - Runtime code in `open-tunnel-core` stays Hermes-safe (no `node:crypto`, `Buffer`, `TextDecoder`).
 
 ## Store pipeline (`packages/store-manifest`, `tools/release`, `tools/store-api`, `apps/store`)
@@ -78,8 +79,8 @@ root `AGENTS.md` ("Hard Architectural & OS Constraints — NetLens"), `apps/open
   validated (`isKey`) before any R2 read or write. Any route that lets `STORE_TOKEN` write is a blocker.
 - Secrets never enter git: `release.jks`, `~/.gradle/gradle.properties`, `.dev.vars`,
   `~/.config/apps-hub/release.env`. The Store keeps its token Keystore-encrypted.
-- Store permissions stay as documented in `docs/app-store.md`: no `QUERY_ALL_PACKAGES`; package
-  visibility is the `<queries>` list.
+- Store permissions stay as documented in `docs/app-store.md`. Package visibility is
+  `QUERY_ALL_PACKAGES` (owner decision, 2026-11-01); a per-app `<queries>` list coming back is a finding.
 
 ## Every app
 

@@ -8,7 +8,7 @@ class DefaultTrustTest {
 
   @Test fun blocksDeputyTheStoreInstallersAndPasswordApps() = listOf(
     "com.haroon.deputy", "com.haroon.store", "com.android.packageinstaller", "com.google.android.packageinstaller",
-    "com.miui.packageinstaller", "com.x8bit.bitwarden", "com.google.android.apps.authenticator2", "com.beemdevelopment.aegis",
+    "com.miui.packageinstaller", "com.x8bit.bitwarden", "com.haroon.strongroom", "com.google.android.apps.authenticator2", "com.beemdevelopment.aegis",
   ).forEach { assertEquals(it, TrustLevel.BLOCKED, level(it)) }
 
   @Test fun startsMoneyAppsReadOnly() = listOf(

@@ -1,4 +1,4 @@
-# OpenTunnel VPN & Privacy Guard — Agent Rules & Architecture
+# TunnelWall (formerly OpenTunnel) VPN & Privacy Guard — Agent Rules & Architecture
 
 ## Workspace
 
@@ -87,9 +87,13 @@ android/.../OpenTunnelVpnService.kt           Android VpnService host (Phase 2)
    `includeAllNetworks` where the deployment target supports it.
 4. **Sanitize every OpenVPN payload.** Inject
    `data-ciphers AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305:AES-128-CBC` and
-   `data-ciphers-fallback AES-128-CBC` exactly once. Strip unsupported
-   directives that modern OpenVPN 2.6+ rejects. Never log inline keys,
-   certificates, or full configs.
+   `data-ciphers-fallback AES-128-CBC` exactly once, plus
+   `remote-cert-tls server` and `verify-x509-name opengw.net name` (every VPN
+   Gate relay presents a Let's Encrypt cert for opengw.net; without the name
+   check any Let's Encrypt cert passes). Keep only allowlisted directives and
+   the ca/cert/key/tls-auth/tls-crypt blocks: ics-openvpn passes unknown lines
+   through, and `writepid`/`log` would overwrite app files. Never log inline
+   keys, certificates, or full configs.
 5. **Privacy by construction.** No accounts, analytics SDKs, crash
    reporters with PII, or remote logging. Node cache lives only in local
    expo-sqlite storage and dies with the app; Android backups are disabled
@@ -120,10 +124,9 @@ android/.../OpenTunnelVpnService.kt           Android VpnService host (Phase 2)
   `split(',')` shifts columns when the message contains commas.
 - Extract `remote <host> <port>` and `proto <tcp|udp>` from the decoded
   text. Default to port 1194/udp if absent.
-- Prefer HTTPS, then HTTP, then documented mirrors when the primary host is
-  blocked. The HTTP fallback needs a scoped cleartext exception on Android
-  (`plugin/opentunnel-android-config.js`) plus the ATS exception on iOS
-  (already configured in `app.json`).
+- HTTPS only. Never add an HTTP source or a cleartext/ATS exception for
+  vpngate.net: anyone on the Wi-Fi could block HTTPS and serve their own relay
+  list. When HTTPS fails, the app keeps the cached list.
 
 ## Scoring
 
@@ -149,7 +152,7 @@ expo-sqlite semantics were ported with two deliberate deviations:
 
 - React Native scaffold: Expo 54 + expo-sqlite 16, prebuilt `android/` and
   `ios/` committed; Android manifest carries the VPN/FGS permissions and
-  the scoped cleartext policy (the service declaration is added in Phase 2
+  a network security config that refuses cleartext (the service declaration is added in Phase 2
   together with the Kotlin class).
 - Phase 1 data layer (ingestion, parser, sanitizer, scorer, cache) is
   implemented in TS and green: `pnpm test` / `pnpm typecheck`.

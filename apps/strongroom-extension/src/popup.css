@@ -1,0 +1,18 @@
+body { width: 360px; min-height: 240px; max-height: 560px; overflow-y: auto; }
+#app { padding: var(--space-md); display: grid; gap: var(--space-md); }
+.bar { display: flex; align-items: center; gap: var(--space-sm); }
+.stack { display: grid; gap: var(--space-md); }
+.ui-input { width: 100%; }
+textarea.ui-input { padding: var(--space-sm) var(--space-md); resize: vertical; font-family: inherit; }
+.ui-toolbar { gap: var(--space-sm); flex-wrap: wrap; }
+.grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pre { white-space: pre-wrap; }
+.card { padding: var(--space-md); display: grid; gap: var(--space-sm); }
+.card p { margin: 0; }
+.list { display: grid; gap: var(--space-xs); }
+.row { display: grid; gap: 2px; text-align: left; padding: var(--space-sm) var(--space-md); border: 1px solid var(--c-line); border-radius: var(--radius-control); background: var(--c-surface); color: var(--c-text); font: inherit; cursor: pointer; }
+.row:hover { background: var(--c-raised); }
+.row .name { font-weight: 600; display: flex; gap: var(--space-sm); align-items: center; }
+.key { font-size: 18px; letter-spacing: 1px; margin: 0; padding: var(--space-md); border: 1px dashed var(--c-line); border-radius: var(--radius-control); text-align: center; user-select: all; }
+.msg { color: var(--c-danger); margin: 0; }
+.msg:empty { display: none; }

@@ -27,6 +27,7 @@ import type { TunnelSnapshot } from '../tunnel/tunnel-client.ts';
 import { countryLabel, formatBytes, formatDuration, type CountryOption } from './format.ts';
 import { SMOOTHED_SAMPLE_COUNT, sparklineBars, type TrafficSample } from './traffic-samples.ts';
 import { forgetPublicIp, fetchPublicIp } from './public-ip.ts';
+import { shieldTap } from './shield-tap.ts';
 import { useTrafficRing } from './use-traffic-ring.ts';
 
 export interface HomeScreenProps {
@@ -196,7 +197,7 @@ export function HomeScreen({
         accessibilityHint="Deep-links to the system VPN settings"
       />
       <Text variant="caption" tone="faint" align="center">
-        OpenTunnel is free software under the GPLv2. Source: github.com/haroongondal/apps-hub
+        TunnelWall is free software under the GPLv2. Source: github.com/haroongondal/apps-hub
       </Text>
     </View>
   );
@@ -229,23 +230,21 @@ function ShieldRow({
   const { title, subtitle, action } = shieldCopy(tunnel, activeNode, scanning);
 
   const press = () => {
-    switch (tunnel.state) {
-      case 'disconnected':
+    switch (shieldTap(tunnel.state)) {
+      case 'connect':
         // The explicit start out of a terminal state — same path as the
         // sheet rows; the client owns the transition into `connecting`.
         if (activeNode) onConnect(activeNode);
         else onAutoSelect();
         return;
-      case 'error':
+      case 'retry':
         // Retrying a relay that just failed usually fails again: VPN Gate relays drop out often.
         onAutoSelect();
         return;
-      case 'connected':
+      case 'stop':
         onDisconnect();
         return;
-      default:
-        // connecting / disconnecting / reasserting: the native side owns
-        // the outcome; an extra tap cannot cancel or rush it.
+      case 'none':
         return;
     }
   };
@@ -309,13 +308,13 @@ function shieldCopy(
       return {
         title: `Connecting${where}`,
         subtitle: 'Opening the tunnel',
-        action: 'The native side owns the outcome',
+        action: 'Tap to cancel',
       };
     case 'reasserting':
       return {
         title: 'Reconnecting',
         subtitle: 'The tunnel is re-establishing',
-        action: 'The native side owns the outcome',
+        action: 'Tap to cancel',
       };
     case 'disconnecting':
       return {

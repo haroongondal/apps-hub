@@ -8,7 +8,7 @@ device you're editing on — nothing leaves your machine.
 ```
 apps-hub/
 ├── apps/pdf-editor-desktop/   Electron shell: main.js + Playwright tests
-├── apps/pdf-editor-mobile/    Expo (SDK 54) app: pick → edit → share
+├── apps/pdf-editor-mobile/    Expo (SDK 54) app: Library → edit → share
 └── packages/pdf-editor-engine/  the shared editor engine (this folder)
     ├── vendor/            unmodified PDF.js 3.11.174 + pdf-lib 1.17.1
     ├── textedit.js        content-stream lexer/rewriter for in-place text edits
@@ -20,7 +20,7 @@ apps-hub/
 
 Both shells boot the same `core.js`; they differ only in the adapter they hand
 it (`savePdf`, `pickPdf`, `pickImage`, `alert`, `confirm`, `emitDocumentLoaded`,
-`supports`). `core.js` classic-scripts PDF.js and pdf-lib — no ES modules — so
+`supports`, and on mobile only `emitDocInfo`). `core.js` classic-scripts PDF.js and pdf-lib — no ES modules — so
 the desktop app still works from `file://` with no server and no build step.
 
 ## Features
@@ -56,7 +56,8 @@ mobile `start` script's `prestart` hook runs `packages/pdf-editor-engine/build.m
 which regenerates `apps/pdf-editor-mobile/assets/editor/editor.html` (~2 MB, gitignored
 like the test fixtures, never committed).
 
-Pick a PDF on the home screen; the editor runs in a WebView with a native top
+The home screen is the Library: add a PDF with **+ → Open a PDF**, or tap one already
+there; the editor runs in a WebView with a native top
 bar (back / file name / share). **Save** builds the PDF in the page and hands
 it to the system share sheet.
 
@@ -73,6 +74,25 @@ drive of `mobile.html` over a fake `ReactNativeWebView` bridge. Device
 behaviour (Expo Go, iOS + Android) is a manual checklist: open → replace /
 merge, each tool incl. in-place text edit, rotate/move/delete pages,
 save→share sheet, dark/light, keyboard readability of the tool bars.
+
+## The `docInfo` event (mobile)
+
+After a document finishes loading, `core.js` calls the adapter's optional `emitDocInfo`
+with the page count, the text of each page and a 320 px wide cover of page 1. `mobile.html`
+posts it as `{ type: 'docInfo', pages, text: string[], thumb? }`, with `thumb` as bare
+base64 JPEG (no `data:` prefix). The shell uses it to make a PDF searchable in the Library
+and to give it a cover; it is the only addition to the bridge since the schema was frozen.
+
+- It runs after `documentLoaded` and never blocks it. A page whose text can't be read adds an
+  empty string (a console warning only), so only that page lacks text search; the event still
+  carries the page count and the cover. If anything else fails, the event is skipped.
+- Text stops accumulating once it reaches 1,000,000 characters; `pages` still counts them all.
+- Merging a PDF in sends another `docInfo` for the merged document. The shell ignores it for
+  indexing, because the library item is still the original file.
+- The desktop adapter has no `emitDocInfo`, so the Electron app is unchanged.
+  `apps/pdf-editor-desktop/test/mobile.mjs` asserts one event with the fixture's page count,
+  its text and a JPEG cover, and that a page whose text can't be read still sends the count
+  and the cover.
 
 ## How text editing works
 

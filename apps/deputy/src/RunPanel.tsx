@@ -41,16 +41,13 @@ export function RunPanel({ state, refresh }: { state: ServiceState; refresh: () 
     refresh();
   };
 
-  // The speech dialog closes when the owner stops talking. Holding the mic runs what it heard; a tap only fills the field.
-  const speak = async (runNow: boolean) => {
+  // Any installed app can answer the speech request, so what it heard waits in the field for the owner's Run tap.
+  const speak = async () => {
     setListening(true);
     setSpeechError(null);
     try {
       const heard = await DeputyAgent.listen('What should Deputy do?');
-      if (heard?.trim()) {
-        setTask(heard);
-        if (runNow) start(heard);
-      }
+      if (heard?.trim()) setTask(heard);
     } catch (e) {
       setSpeechError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -69,7 +66,7 @@ export function RunPanel({ state, refresh }: { state: ServiceState; refresh: () 
         footer={state.runActive ? 'Deputy is doing a task. Stop it to start another.' : canRun(state) ? undefined : 'Finish the setup rows marked To do first.'}
       >
         <View style={{ padding: space.lg, gap: space.md }}>
-          <MicButton onPress={() => speak(false)} onHold={() => speak(true)} listening={listening} disabled={!canRun(state)} error={speechError} />
+          <MicButton onPress={speak} listening={listening} disabled={!canRun(state)} error={speechError} />
           <Field label="Or type it" value={task} onChangeText={setTask} placeholder="Open the clock app and tell me my next alarm" multiline />
           <Button label="Run" onPress={() => start(task)} disabled={!canRun(state) || task.trim() === ''} block />
           {error && (
@@ -100,18 +97,17 @@ export function RunPanel({ state, refresh }: { state: ServiceState; refresh: () 
 
 const MIC = 112;
 
-function MicButton({ onPress, onHold, listening, disabled, error }: { onPress: () => void; onHold: () => void; listening: boolean; disabled: boolean; error: string | null }) {
+function MicButton({ onPress, listening, disabled, error }: { onPress: () => void; listening: boolean; disabled: boolean; error: string | null }) {
   const { c } = useTheme();
   const off = disabled || listening;
   return (
     <View style={{ alignItems: 'center', gap: space.sm, paddingVertical: space.md }}>
       <Pressable
         onPress={onPress}
-        onLongPress={onHold}
         disabled={off}
         accessibilityRole="button"
         accessibilityLabel="Speak a task"
-        accessibilityHint="Touch and hold to run the task as soon as you stop talking. Tap to dictate it into the task field first."
+        accessibilityHint="Deputy puts what you say in the task box for you to check and run"
         accessibilityState={{ disabled: off, busy: listening }}
         style={({ pressed }) => ({
           width: MIC,
@@ -133,7 +129,7 @@ function MicButton({ onPress, onHold, listening, disabled, error }: { onPress: (
         </View>
       </Pressable>
       <Text tone={error ? 'danger' : 'muted'} align="center">
-        {error ?? (listening ? 'Listening…' : 'Hold and say the task to run it when you stop talking. Tap to dictate it first, or type below.')}
+        {error ?? (listening ? 'Listening…' : 'Tap and say the task, then check it and tap Run.')}
       </Text>
     </View>
   );

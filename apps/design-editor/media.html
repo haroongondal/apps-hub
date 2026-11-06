@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en" data-brand="design" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' mediain:; connect-src 'self' data: blob:">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Media tools</title>
+<link rel="stylesheet" href="vendor/ui/web/tokens.css">
+<link rel="stylesheet" href="vendor/ui/web/base.css">
+<link rel="stylesheet" href="media.css">
+</head>
+<body>
+<header class="top">
+  <h1 class="ui-title">Media tools</h1>
+  <p id="ffmpegNotice" class="notice" hidden>FFmpeg isn't set up. Run <code>pnpm --filter design-editor ffmpeg</code>, then reopen this window.</p>
+</header>
+<main class="layout">
+  <nav class="tools" aria-label="Tools">
+    <button data-tool="size" class="on">Compress to size</button>
+    <button data-tool="quality">Compress by quality</button>
+    <button data-tool="clip">Clip</button>
+    <button data-tool="audio">Extract audio</button>
+    <button data-tool="gif">Make a GIF</button>
+    <button data-tool="convert">Convert</button>
+    <button data-tool="frame">Still frame</button>
+    <button data-tool="volume">Volume</button>
+    <button data-tool="reverse">Reverse</button>
+    <button data-tool="stabilize">Stabilize</button>
+  </nav>
+  <section class="setup">
+    <div class="row">
+      <button id="addFiles" class="ui-btn">Add files…</button>
+      <span id="fileCount" class="ui-meta"></span>
+    </div>
+    <ul id="files" class="files"></ul>
+    <div class="options">
+      <section data-tool="size">
+        <label class="ui-field">Target size
+          <select id="sizePreset"></select>
+        </label>
+        <label class="ui-field" id="sizeCustomField" hidden>Size in MB
+          <input id="sizeCustom" class="ui-input" type="number" min="1" step="1" value="20">
+        </label>
+        <label class="ui-field">Codec
+          <select id="sizeCodec">
+            <option value="h264">H.264, plays everywhere</option>
+            <option value="hevc">HEVC, smaller but may not play everywhere</option>
+          </select>
+        </label>
+      </section>
+      <section data-tool="quality" hidden>
+        <label class="ui-field">Quality
+          <select id="qualityPreset">
+            <option value="high">High: source size</option>
+            <option value="medium">Medium: up to 1080p, 30 fps</option>
+            <option value="small">Small: up to 720p, 30 fps</option>
+          </select>
+        </label>
+      </section>
+      <section data-tool="clip" hidden>
+        <label class="ui-field">Start (m:ss.s)<input id="clipStart" class="ui-input" value="0"></label>
+        <label class="ui-field">End (m:ss.s)<input id="clipEnd" class="ui-input" value="0"></label>
+        <label class="ui-field">Mode
+          <select id="clipMode">
+            <option value="copy">Lossless: no re-encode, starts on a keyframe</option>
+            <option value="exact">Exact: re-encodes, cuts on the frame</option>
+          </select>
+        </label>
+        <div id="thumbs" class="thumbs"></div>
+        <button id="clipPreview" class="ui-btn ui-btn--ghost" type="button">Preview in player</button>
+        <video id="clipVideo" class="clip-video" controls preload="metadata" hidden></video>
+      </section>
+      <section data-tool="audio" hidden>
+        <fieldset id="tracks" class="tracks"><legend class="ui-meta">Tracks, one file each</legend></fieldset>
+      </section>
+      <section data-tool="gif" hidden>
+        <label class="ui-field">Start (m:ss.s)<input id="gifStart" class="ui-input" value="0"></label>
+        <label class="ui-field">End (m:ss.s)<input id="gifEnd" class="ui-input" value="0"></label>
+        <label class="ui-field">Width in px<input id="gifWidth" class="ui-input" type="number" min="16" max="1920" step="1" value="480"></label>
+        <label class="ui-field">Frames per second<input id="gifFps" class="ui-input" type="number" min="1" max="30" step="1" value="12"></label>
+        <label class="ui-field"><input id="gifFit" type="checkbox"> Fit under a size</label>
+        <label class="ui-field" id="gifFitField" hidden>Size in MB<input id="gifFitMb" class="ui-input" type="number" min="1" step="1" value="10"></label>
+        <p id="gifWarn" class="ui-meta" hidden>Over 15 seconds, the GIF will be large. The limit is 60 seconds.</p>
+      </section>
+      <section data-tool="convert" hidden>
+        <label class="ui-field">Format
+          <select id="convertTarget">
+            <option value="mp4">MP4 (video)</option>
+            <option value="mov">MOV (video)</option>
+            <option value="mkv">MKV (video)</option>
+            <option value="webm">WebM (video, VP9)</option>
+            <option value="m4a">M4A (audio)</option>
+            <option value="mp3">MP3 (audio)</option>
+            <option value="opus">Opus (audio)</option>
+            <option value="flac">FLAC (audio)</option>
+            <option value="wav">WAV (audio)</option>
+          </select>
+        </label>
+        <label class="ui-field">Video codec
+          <select id="convertCodec">
+            <option value="h264">H.264</option>
+            <option value="hevc">HEVC</option>
+          </select>
+        </label>
+        <label class="ui-field"><input id="convertMute" type="checkbox"> Without sound</label>
+      </section>
+      <section data-tool="frame" hidden>
+        <label class="ui-field">Time (m:ss.s)<input id="frameTime" class="ui-input" value="0"></label>
+        <label class="ui-field">Format
+          <select id="frameFormat">
+            <option value="png">PNG (lossless)</option>
+            <option value="jpg">JPEG</option>
+          </select>
+        </label>
+      </section>
+      <section data-tool="volume" hidden>
+        <label class="ui-field">Change
+          <select id="volumeMode">
+            <option value="normalize">Normalize loudness to -23 LUFS</option>
+            <option value="gain">Change the volume by dB</option>
+          </select>
+        </label>
+        <label class="ui-field" id="volumeGainField" hidden>Change in dB (-20 to +20)<input id="volumeGain" class="ui-input" type="number" min="-20" max="20" step="0.5" value="0"></label>
+      </section>
+      <section data-tool="reverse" hidden>
+        <label class="ui-field"><input id="reverseSound" type="checkbox" checked> Reverse the sound too</label>
+        <p class="ui-meta">Clips up to 10 seconds, at 1920×1080 or below. Clip a longer file first.</p>
+      </section>
+      <section data-tool="stabilize" hidden>
+        <label class="ui-field">Level
+          <select id="stabilizeLevel">
+            <option value="recommended">Recommended</option>
+            <option value="minimum">Minimum cut</option>
+            <option value="most">Most stable</option>
+          </select>
+        </label>
+      </section>
+    </div>
+    <p id="plan" class="plan" role="status"></p>
+    <div class="row">
+      <button id="pickFolder" class="ui-btn ui-btn--ghost">Output folder…</button>
+      <span id="folderName" class="ui-meta">No folder chosen</span>
+    </div>
+    <button id="start" class="ui-btn ui-btn--primary" disabled>Start</button>
+  </section>
+  <aside class="queue">
+    <div class="row">
+      <h2 class="ui-heading">Queue</h2>
+      <button id="cancelAll" class="ui-btn ui-btn--ghost">Cancel all</button>
+    </div>
+    <ul id="jobs" class="jobs"></ul>
+  </aside>
+</main>
+<script src="media-ui.js"></script>
+</body>
+</html>
