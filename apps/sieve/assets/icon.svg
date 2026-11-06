@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <pattern id="mesh" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45 64 64)">
+      <path d="M0 0H12M0 0V12" stroke="#22D3EE" stroke-opacity=".6" stroke-width="2"/>
+    </pattern>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="#06303A"/>
+  <circle cx="64" cy="64" r="42" fill="#0E7490"/>
+  <circle cx="64" cy="64" r="42" fill="url(#mesh)"/>
+  <g fill="#06303A">
+    <circle cx="64" cy="38" r="9"/><circle cx="86.5" cy="51" r="9"/><circle cx="86.5" cy="77" r="9"/>
+    <circle cx="64" cy="90" r="9"/><circle cx="41.5" cy="77" r="9"/><circle cx="41.5" cy="51" r="9"/>
+  </g>
+  <circle cx="64" cy="64" r="47" fill="none" stroke="#22D3EE" stroke-width="10"/>
+</svg>
