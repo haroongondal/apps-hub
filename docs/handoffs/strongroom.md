@@ -293,6 +293,28 @@ no password generator / CSV export / card saving in v1.
   `6ebbe3d`. The owner blocked all emulator testing ("dont test it in
   emulator"), so verification is the phone save test after a Store release
   (which needs the owner's word).
+- 2026-11-06 (cont.): released and corrected the Store, then the merge. The
+  owner's word in chat: "Release + keep-alive phone test". First release
+  shipped 0.1.2 as versionCode 11 from this branch — an accidental regression:
+  another session's work had meanwhile landed Strongroom 0.2.0 (Chrome
+  extension + sync, PR #22) and 0.2.1 (card fill on Chrome checkout, PR #25)
+  on `origin/main`, and the Store entry had been 0.2.1/vc10. Restored with the
+  owner's word "Merge origin/main + release 0.2.2": merged `origin/main` into
+  the branch locally (conflicts resolved in `app.json` → 0.2.2, `VaultHolder`
+  → their `afterUnlock(context, byPassword, password)` signature with
+  `KeepAliveService.start` kept first, `SettingsScreen` → their 'sync' flow +
+  our MIUI const), the merge reviewer found one integration break — origin
+  main's `manifest.test.ts` still encoded the pre-keep-alive manifest — fixed
+  (`cd49692`) so `pnpm test` is exit 0 again; gates green (gradle unit +
+  assembleDebug, typecheck, tests). Published 0.2.2 as versionCode 12 and
+  verified the live manifest read-back (versionCode 12, versionName 0.2.2,
+  right signing cert, sha256 recorded). The release ran while the Mac's system
+  DNS is broken (`scutil --dns`: "No DNS configuration available"; a Wi-Fi
+  toggle and a plain re-launch did not heal it; the Store worker itself and
+  phones are unaffected) — the release script was run with an uncommitted
+  temporary patch (connect by DoH-confirmed IP, SNI preserved), reverted
+  immediately after each of both releases. Next: Store update on the phone →
+  keep-alive service check → save + matching-fill test on the practice page.
 
 **The owner's phone is attached over wifi adb.** Every adb/expo command must
 target the emulator explicitly (`-s emulator-5554`). After Task 12, emulator-5554's
