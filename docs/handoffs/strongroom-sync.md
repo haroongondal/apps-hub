@@ -192,7 +192,26 @@ All in the plan's "Decisions"; the owner delegated them on 2026-11-05 ("do what 
   (6c) → **apps-hub-ad** (Model Host benchmarks, 3–4 h idle on USB; send it "phone free" when 6c is done;
   leave `/data/local/tmp/mb` and `svc power stayon usb` alone).
 
+- 2026-11-06 (Task 8 session): owner said "start from step 2 and then do everything in order" (step 1,
+  the reviews, skipped on the owner's word). Step 2 done: `cf` 1.0.0-beta.21 is signed in to the personal
+  profile and sees only account `29ada9205500ff7931f09084daf89597`; no D1 databases; only Worker
+  `apps-hub-store`. Commands found with `cf cli search` (below). `.dev.vars` written (SETUP_TOKEN, 44 chars,
+  mode 600, git-ignored); `cf deploy --dry-run --secrets-file .dev.vars` builds (bindings DB + SETUP_TOKEN).
+  **`cf d1 create` was DENIED by the auto-mode classifier** ("Modify Shared Resources") even with the
+  owner's go: the owner must approve the Cloudflare commands explicitly or run them. Step 4 done ahead of the
+  deploy (`35f56a5`): URL `https://strongroom-vault.haroonmukhtar4.workers.dev` (subdomain from
+  `STORE_API_URL` in `~/.config/apps-hub/release.env`) in `SyncConfig.BASE_URL` and `sync-url.ts`,
+  build.test.ts checks they are equal, release manifest keeps INTERNET, e2e builds its own no-server
+  extension. Gates: extension 70, strongroom 61, typechecks, Gradle 376/0 + assembleDebug +
+  assembleRelease, aapt2 release = Phase 1 + INTERNET, URL in the dex, e2e 56/56.
+
 ## Task 8 deploy notes
+
+- **Commands (found 2026-11-06 with `cf cli search`; run in `tools/vault-api`):**
+  `cf d1 create --name strongroom-vault` → `cf d1 migrations apply <id> --dir migrations` (adds a
+  `d1_migrations` bookkeeping table, harmless) → `cf deploy --secrets-file .dev.vars` (= `pnpm run deploy`;
+  the D1 binding is by name, deploy's `--provision` defaults on). If deploy makes a second database, put
+  `id:` in `bindings.d1(...)`.
 
 - **Give release builds INTERNET back.** Security review, 2026-11-06: until `SyncConfig.BASE_URL` is set,
   `apps/strongroom/android/app/src/release/AndroidManifest.xml` removes `INTERNET` again, so a bad
@@ -231,6 +250,10 @@ State (2026-11-06): **the build is done; Task 8 waits for the owner.** Branch `s
 - Merge note: branch `security-fixes` adds a second private job service (ClipboardClearJob) to the vault
   module; our manifest.test.ts must allow it when the branches meet. Rebase onto `origin/main` once the owner
   has merged the extension PR (`git rebase --onto origin/main c3da09c strongroom-sync` if squashed).
+
+**Update 2026-11-06 (Task 8 session):** step 1 skipped on the owner's word; step 2 done; step 4 done
+(`35f56a5`); step 3 blocked: `cf d1 create` denied by the auto-mode classifier, waiting for the owner to
+approve the Cloudflare commands or run them. Next: step 3 (create D1, migrate, deploy, smoke test), then 5–7.
 
 **Next (each step only on the owner's word):** Task 8 per the plan and the "Task 8 deploy notes" above:
 1. reviews (security-engineer on vault-api + sync code; invariant-reviewer; supply-chain; docs-keeper);
