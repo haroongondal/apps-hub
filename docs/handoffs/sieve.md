@@ -262,13 +262,24 @@ R10, googlevideo (`S2:visionos` itag 137, 1080p, its first 62,914,560 bytes, all
   - Task 0.3 done (`09bb187`, review fixes `11e6e54`): S3 results above; ejs 0.8.0 solves the web
     player's signature and `n`; the tv-family cipher path is unproven. This Mac's network was very
     slow during the runs (many launch timeouts).
-  - Task 0.5 done (commit `Sieve spike: split vs plain speed`): Q4 and R10 results above; Speed test
-    button and `run.mjs --speed` added; the link was the bottleneck (0.2 to 1.2 MB/s), so no split gain.
+  - Task 0.4 done (`e46d867`, review fixes `94ebba9`): Q1 passes (full 1080p + audio), Q2 fails
+    (googlevideo about 0.25 to 0.9 MB/s regardless of bitrate). YouTube now bot-checks
+    `aqz-KE-bpKQ` from this IP when signed out; automated runs use `dQw4w9WgXcQ`.
+  - Task 0.5 done (`ad3a2f6`, review fixes `4a4a89c`): Q4 and R10 results above; both readings are
+    inconclusive on this slow link (0.2 to 1.2 MB/s). Speed test button and `run.mjs --speed` added.
+  - Task 1.1 done (`93b9b99`): `sieve` brand (WCAG passes, no accent change) and icon.
+  - Task 1.2 done (`3b1c566`, review fixes `9ef2419`): `@apps-hub/sieve-core` settings and
+    `validateSettings` (a missing `version` is read as 1; trailing dots stripped; userinfo dropped).
+  - Task 0.6 step 1 done (`6ace2b3`): owner checklist in `apps/sieve/spike/README.md`; the owner was
+    asked to run it.
+  - Tasks 1.1 and 1.2 ran in parallel with 0.5 (owner said to keep working while 0.5 measured);
+    each agent staged only its own paths.
 
 ## Current state and next step
 
-- **State:** implementation in progress (session 3). Tasks done: 0.1, 0.2, 0.3. Read the ledger before
-  dispatching anything; tasks with a `complete` line there are done.
+- **State:** implementation in progress (session 3). Tasks done: 0.1 to 0.5, 0.6 step 1, 1.1, 1.2.
+  Task 1.3 (filter compiler) in progress. Waiting on the owner's signed-in run (0.6 steps 2 to 4).
+  Read the ledger before dispatching anything; tasks with a `complete` line there are done.
   The untracked copies of this file and the design in the main checkout
   (`/Users/outsentia/Documents/apps-hub`, branch `model-host`) are stale. The worktree copies are
   the real ones.
