@@ -1,0 +1,15 @@
+{
+  "name": "@apps-hub/model-bench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Model Host Phase 0: Picker and Deputy-step requests to llama-server on the phone, with summaries",
+  "scripts": {
+    "test": "node --test src/__tests__/bench.test.ts src/__tests__/phone.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.9.2"
+  }
+}
