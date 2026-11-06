@@ -65,3 +65,16 @@ or a short chunk fails the stream):
 `ms`, `mbps` and `xBitrate` count only the attempts that succeeded; a failed attempt and its 3 s pause go to `waitedMs`, with
 the error in `retryErrors`. `run.mjs` pauses the video first, then waits for Run all to finish, failing with a message when
 its progress text has not changed for 4.5 minutes or 30 minutes have passed.
+
+## Split vs plain (Q4, the Speed test button, stored as `probe:Q4`; and R10, the last step of Run all, in `probe:DL.split`)
+
+**Speed test** needs no video: `node apps/sieve/spike/run.mjs --speed` opens `spike.html` and clicks it (Chrome launched with
+`--disable-quic`, so an HTTPS server that also offers HTTP/3 is measured on HTTP/2). Per server it checks the protocol with
+`nextHopProtocol` and a `Range: bytes=0-0` request (206), then runs plain (`chrome.downloads`, timed to `complete`, then `removeFile` and
+`erase`) and a 6-part split (parallel `Range` fetches, bodies counted and dropped) 3 times each, alternating. A run that did not get every
+byte is a failed run. The median skips failed runs and split runs with a retry. Candidates, first pass wins: HTTP/1.1 `http://proof.ovh.net`
+(301 to HTTPS, so it is HTTP/2 and fails the check), `ash-speed.hetzner.com` (Chrome gets an empty response), then
+`http://ping.online.net/100Mo.dat`; HTTP/2 `https://proof.ovh.net/files/100Mb.dat` and `https://cdn.kernel.org/.../linux-5.10.tar.xz`.
+
+**R10** (in Run all, after the downloads): the first 60 MiB of the 1080p stream as 6 sequential 10 MiB requests against 6 parallel ones,
+alternating, 2 runs each, with the protocol from Resource Timing. Numbers only; the URL stays in session storage. Every Range fetch is `cache: 'no-store'`.

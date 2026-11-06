@@ -19,10 +19,11 @@ function tally(formats) {
 function summarise(r) {
   if (r.strategy === 'DL') {
     return {
-      strategy: 'DL', videoId: r.videoId, signedIn: r.loggedIn, error: r.error, baseline: r.baseline,
+      strategy: 'DL', videoId: r.videoId, signedIn: r.loggedIn, error: r.error, baseline: r.baseline, split: r.split,
       streams: (r.streams ?? []).map(({ role, mode, itag, height, bytes, contentLength, ms, waitedMs, mbps, xBitrate, q1, q2, pass, reason }) => ({ role, mode, itag, height, bytes, contentLength, ms, waitedMs, mbps, xBitrate, q1, q2, pass, reason })),
     };
   }
+  if (r.strategy === 'Q4') return r; // numbers and the public test URLs only
   if (r.error) return { strategy: r.strategy, videoId: r.videoId, signedIn: r.loggedIn, error: r.error };
   if (r.strategy === 'S3') {
     return {
@@ -50,7 +51,7 @@ async function render() {
   for (const r of results) {
     const section = document.createElement('section');
     const h = document.createElement('h2');
-    h.textContent = `${r.strategy} for ${r.videoId}`;
+    h.textContent = r.videoId ? `${r.strategy} for ${r.videoId}` : r.strategy;
     const p = document.createElement('p');
     p.textContent = JSON.stringify(summarise(r));
     const d = document.createElement('details');
@@ -184,23 +185,27 @@ const mb = (n) => Math.round(n / 1e6);
 const round2 = (x) => Math.round(x * 100) / 100;
 const BASELINES = ['https://speed.cloudflare.com/__down?bytes=25000000', 'http://proof.ovh.net/files/10Mb.dat'];
 
-async function fetchRange(url, start, length) {
+// discard: count the bytes and drop them (no body in the result). timeoutMs covers the whole request, body included.
+async function fetchRange(url, start, length, { discard = false, timeoutMs = 60_000 } = {}) {
   const tStart = performance.now();
   const errors = [];
   for (let attempt = 1; ; attempt++) {
     const t0 = performance.now();
     const waitedMs = Math.round(t0 - tStart);
     try {
-      const res = await fetch(url, { headers: { Range: `bytes=${start}-${start + length - 1}` }, credentials: 'omit', signal: AbortSignal.timeout(60_000) });
+      const res = await fetch(url, { headers: { Range: `bytes=${start}-${start + length - 1}` }, credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) });
       if (res.status !== 206) {
         res.body?.cancel().catch(() => {});
         return { status: res.status, attempt, ms: Math.round(performance.now() - t0), waitedMs, errors };
       }
       const total = Number(/\/(\d+)\s*$/.exec(res.headers.get('content-range') ?? '')?.[1]) || null;
-      const body = await res.arrayBuffer();
-      return { status: 206, body, total, attempt, ms: Math.round(performance.now() - t0), waitedMs, errors };
+      let body;
+      let bytes = 0;
+      if (discard) for await (const part of res.body) bytes += part.byteLength;
+      else bytes = (body = await res.arrayBuffer()).byteLength;
+      return { status: 206, body, bytes, total, attempt, ms: Math.round(performance.now() - t0), waitedMs, errors };
     } catch (err) {
-      const error = err?.name === 'TimeoutError' || err?.name === 'AbortError' ? 'timed out after 60 s' : String(err?.message ?? err);
+      const error = err?.name === 'TimeoutError' || err?.name === 'AbortError' ? `timed out after ${timeoutMs / 1000} s` : String(err?.message ?? err);
       errors.push(error);
       if (attempt === 2) return { status: 'network', error, attempt, ms: 0, waitedMs: Math.round(performance.now() - tStart), errors };
       await pause(3_000);
@@ -295,6 +300,127 @@ async function measure(role, label, c, partial) {
   return rec;
 }
 
+const median = (xs) => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length ? round2(s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : null;
+};
+const protocols = async (url) => {
+  await pause(300);
+  return [...new Set(performance.getEntriesByName(new URL(url).href).map((e) => e.nextHopProtocol).filter(Boolean))].join(',') || 'unknown';
+};
+
+async function timed(label, fn) {
+  const t = Date.now();
+  const tick = setInterval(() => say(`${label}... ${Math.round((Date.now() - t) / 1000)} s`), 5_000);
+  say(`${label}...`);
+  try { return await fn(); } finally { clearInterval(tick); }
+}
+
+// A retried part cannot be timed fairly (its stall and the rest running alone both skew the wall time), so the medians skip runs with retries.
+async function splitDownload(url, size, parts = 6) {
+  const step = Math.ceil(size / parts);
+  const t0 = performance.now();
+  const rs = await Promise.all(Array.from({ length: parts }, (_, i) => fetchRange(url, i * step, Math.min(step, size - i * step), { discard: true, timeoutMs: 300_000 })));
+  const ms = Math.round(performance.now() - t0);
+  const bytes = rs.reduce((n, r) => n + (r.bytes ?? 0), 0);
+  const bad = rs.find((r) => r.status !== 206);
+  const out = { bytes, ms, mbps: round2(bytes / 1e6 / (ms / 1000)), retries: rs.reduce((n, r) => n + r.attempt - 1, 0), retryErrors: rs.flatMap((r) => r.errors) };
+  if (bad) out.error = bad.status === 'network' ? `a part failed: ${bad.error}` : `a part got HTTP ${bad.status} instead of 206`;
+  else if (bytes !== size) out.error = `got ${bytes} of ${size} bytes`;
+  if (out.error) out.mbps = 0;
+  return out;
+}
+
+async function plainDownload(url, size) {
+  const t0 = performance.now();
+  const ended = {};
+  let mine;
+  let finish;
+  const on = (d) => {
+    const state = d.state?.current;
+    if (state !== 'complete' && state !== 'interrupted') return;
+    const at = { state, ms: Math.round(performance.now() - t0) };
+    if (d.id === mine) finish(at); else ended[d.id] = at;
+  };
+  chrome.downloads.onChanged.addListener(on);
+  try {
+    mine = await chrome.downloads.download({ url });
+    const at = ended[mine] ?? await new Promise((resolve) => {
+      finish = resolve;
+      setTimeout(() => resolve({ state: 'timeout', ms: Math.round(performance.now() - t0) }), 600_000);
+    });
+    const [item] = await chrome.downloads.search({ id: mine });
+    const out = { bytes: item?.fileSize ?? 0, ms: at.ms, mbps: 0 };
+    if (at.state !== 'complete') out.error = at.state === 'timeout' ? 'still running after 10 min' : `interrupted: ${item?.error}`;
+    else if (out.bytes !== size) out.error = `got ${out.bytes} of ${size} bytes`;
+    else out.mbps = round2(out.bytes / 1e6 / (out.ms / 1000));
+    if (at.state === 'timeout') await chrome.downloads.cancel(mine);
+    if (at.state === 'complete') try { await chrome.downloads.removeFile(mine); } catch (err) { out.cleanup = `removeFile failed: ${String(err?.message ?? err)}`; }
+    await chrome.downloads.erase({ id: mine });
+    return out;
+  } finally { chrome.downloads.onChanged.removeListener(on); }
+}
+
+const SPEED_SERVERS = [
+  { protocol: 'http/1.1', urls: ['http://proof.ovh.net/files/100Mb.dat', 'https://ash-speed.hetzner.com/100MB.bin', 'http://ping.online.net/100Mo.dat'] },
+  { protocol: 'h2', urls: ['https://proof.ovh.net/files/100Mb.dat', 'https://ash-speed.hetzner.com/100MB.bin'] },
+  { protocol: 'h2', urls: ['https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.10.tar.xz'] },
+];
+
+async function pickServer({ protocol, urls }) {
+  const checks = [];
+  for (const url of urls) {
+    performance.clearResourceTimings();
+    const r = await fetchRange(url, 0, 1, { discard: true, timeoutMs: 20_000 });
+    const seen = await protocols(url);
+    checks.push({ url, status: r.status, protocol: seen, error: r.error });
+    if (r.status === 206 && seen === protocol && r.total) return { url, size: r.total, checks };
+  }
+  return { checks };
+}
+
+async function speedTest() {
+  const result = { strategy: 'Q4', servers: [] };
+  const save = () => chrome.storage.local.set({ 'probe:Q4': result });
+  try {
+    for (const wanted of SPEED_SERVERS) {
+      const s = { wanted: wanted.protocol, ...(await pickServer(wanted)), runs: [] };
+      result.servers.push(s);
+      await save();
+      if (!s.url) { s.error = `no candidate answered 206 on ${wanted.protocol}`; continue; }
+      for (let run = 1; run <= 3; run++) {
+        for (const method of ['plain', 'split']) {
+          performance.clearResourceTimings();
+          const r = await timed(`${wanted.protocol} ${method}, run ${run} of 3`, () => (method === 'plain' ? plainDownload(s.url, s.size) : splitDownload(s.url, s.size)));
+          s.runs.push({ run, method, ...r, ...(method === 'split' ? { protocol: await protocols(s.url) } : {}) });
+          await save();
+        }
+      }
+      for (const m of ['plain', 'split']) s[`${m}Mbps`] = median(s.runs.filter((r) => r.method === m && !r.error && !r.retries).map((r) => r.mbps));
+      s.ratio = s.plainMbps && s.splitMbps ? round2(s.splitMbps / s.plainMbps) : null;
+      await save();
+    }
+  } catch (err) { result.error = String(err?.message ?? err); await save(); }
+}
+
+// R10: a per-request cap lets parallel win, a per-client or per-IP cap does not. Numbers only; the URL stays in session storage.
+async function splitProbe(c) {
+  const size = Math.min(60 * MIB, c.contentLength);
+  const out = { itag: c.itag, height: c.height, bytes: size, runs: [] };
+  for (let run = 1; run <= 2; run++) {
+    for (const mode of ['sequential', 'parallel']) {
+      performance.clearResourceTimings();
+      const r = await timed(`googlevideo ${mode}, run ${run} of 2`, () => (mode === 'sequential' ? downloadStream(c.url, c.contentLength, { maxBytes: size }) : splitDownload(c.url, size)));
+      out.runs.push({ run, mode, bytes: r.bytes, ms: r.ms, mbps: r.mbps, retries: r.retries, retryErrors: r.retryErrors, protocol: await protocols(c.url), error: r.error ?? null });
+    }
+  }
+  out.protocol = [...new Set(out.runs.map((r) => r.protocol))].join(',');
+  for (const m of ['sequential', 'parallel']) out[`${m}Mbps`] = median(out.runs.filter((r) => r.mode === m && !r.error && r.bytes === size && (m === 'sequential' || !r.retries)).map((r) => r.mbps));
+  out.ratio = out.sequentialMbps && out.parallelMbps ? round2(out.parallelMbps / out.sequentialMbps) : null;
+  out.pass = out.runs.every((r) => !r.error && r.bytes === size);
+  return out;
+}
+
 async function DL(videoId, loggedIn) {
   const result = { strategy: 'DL', videoId, loggedIn, baseline: null, streams: [] };
   const save = () => chrome.storage.local.set({ 'probe:DL': result });
@@ -318,7 +444,7 @@ async function downloads(result, save) {
   }
   const top = await firstWorking(heights.filter((h) => h > full.height).reverse());
   const audio = (await working(all.filter((c) => c.itag === 251))) ?? (await working(all.filter((c) => c.itag === 140)));
-  $('status').dataset.expectBytes = String(25e6 + full.contentLength + (audio?.contentLength ?? 0) + (top ? Math.min(top.contentLength, 100 * MIB) + MIB : 0));
+  $('status').dataset.expectBytes = String(25e6 + full.contentLength + (audio?.contentLength ?? 0) + (top ? Math.min(top.contentLength, 100 * MIB) + MIB : 0) + 4 * Math.min(60 * MIB, full.contentLength));
 
   say('Measuring this link...');
   result.baseline = await baseline();
@@ -333,6 +459,8 @@ async function downloads(result, save) {
     result.streams.push(c ? await measure(role, label, c, partial) : { role, mode: 'full', pass: false, reason: 'no URL for itag 251 or 140 answers' });
     await save();
   }
+  try { result.split = await splitProbe(full); } catch (err) { result.split = { error: String(err?.message ?? err) }; }
+  await save();
 }
 
 async function runAll() {
@@ -377,6 +505,7 @@ const guard = (busy, fn) => async () => {
   await render();
 };
 $('run').addEventListener('click', guard('Running the probes...', async () => { await runAll(); return 'Done. Results below.'; }));
+$('speed').addEventListener('click', guard('Running the speed test...', async () => { await speedTest(); return 'Speed test done. Results below.'; }));
 $('save').addEventListener('click', guard('Saving...', async () => `Saved Downloads/${await save()}`));
 chrome.storage.onChanged.addListener(render);
 render();

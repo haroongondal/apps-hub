@@ -208,6 +208,28 @@ Link baseline, taken just before the downloads: 25 MB from `speed.cloudflare.com
 - Earlier runs on `aqz-KE-bpKQ`, before the timing fix (their figures include any stalled retry, so they are understated; the second run's 1080p had one, about 60 s of 421 s): baseline 5.0 MB/s, audio 0.26 MB/s, 1080p 257,619,653 bytes at 0.61 MB/s (0.7x, all bytes, `ftyp`), 2160p first 100 MiB at 0.93 MB/s (0.28x) with the last 1 MiB reachable (206). A run before that: baseline 1.17 MB/s, 1080p 0.93 MB/s (1.07x). A run on this video cut short by the old wait: baseline 3.97 MB/s, 1080p 0.59 MB/s.
 - Reading: Q1 passes for the 1080p video and the audio, and the end of 2160p is reachable (its middle untested), but Q2 fails: YouTube gave about 0.25 to 0.9 MB/s regardless of bitrate (1080p at 4 to 7 Mbps and 2160p at 18 to 27 Mbps got the same), below the 1.2 to 5 MB/s the neutral host gave on the same runs; a cap, a poor route and the sequential-request design are not told apart yet, so Task 0.5 (split vs plain) and the owner's run (0.6) are the next evidence. A node and `curl` cross-check failed (`LOGIN_REQUIRED` without page cookies).
 
+### Split vs plain (Q4)
+
+Run 2026-11-06 on the same Mac and link as the downloads, in headless Chrome for Testing 149 with a fresh profile. **Speed test** is its own button (`node apps/sieve/spike/run.mjs --speed`, launched with `--disable-quic`); the googlevideo test (R10) is the last step of **Run all** (`VIDEO=dQw4w9WgXcQ`; `aqz-KE-bpKQ` is bot-checked). Each server: 3 runs of plain (`chrome.downloads`, timed from the call to `complete`, then file deleted) alternating with 3 runs of a 6-part split (parallel `Range` fetches, bodies counted and dropped). A run that did not get every byte is a failed run; the median skips failed runs and split runs with a retry.
+
+| server | protocol | plain MB/s | split MB/s | ratio |
+|---|---|---|---|---|
+| `http://ping.online.net/100Mo.dat` (100,000,000 bytes) | http/1.1 | 0.41 (0.41, 0.62, 0.18) | 0.43 (0.43, 0.83, 0.43) | 1.05 |
+| `https://proof.ovh.net/files/100Mb.dat` (104,857,600 bytes) | h2 | 0.50 (0.59, 0.50, 0.44) | **failed in 3 of 3 runs:** 2 of 6 parts got HTTP 429, 69,905,068 of 104,857,600 bytes arrived | none |
+| `https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.10.tar.xz` (116,606,704 bytes) | h2 | 0.72 (0.29, 1.15, run 3 still running after 10 min: failed) | 0.60 (0.66, 0.54, run 3 had 3 retries after 300 s timeouts, 0.25, skipped) | 0.83 |
+
+R10, googlevideo (`S2:visionos` itag 137, 1080p, its first 62,914,560 bytes, all bytes arrived in all 4 runs, no retries):
+
+| protocol | sequential MB/s (6 requests of 10 MiB, one after another) | parallel MB/s (the same 6 at once) | ratio |
+|---|---|---|---|
+| http/1.1 (so 6 connections) | 1.01 (0.79, 1.23) | 1.24 (0.91, 1.56) | 1.23 |
+
+- Servers: the brief's `http://proof.ovh.net/files/100Mb.dat` answers `301` to HTTPS, so Chrome reports `h2` for it (not HTTP/1.1). `https://ash-speed.hetzner.com/100MB.bin` answers 206 over HTTP/1.1 to curl, but Chrome got `net::ERR_EMPTY_RESPONSE` (headless for both its `https://` and `http://` forms, headed for `https://`); cause not found. So the HTTP/1.1 row uses `http://ping.online.net/100Mo.dat` (not in the brief: 206, `nextHopProtocol` `http/1.1`, plain HTTP). `https://proof.ovh.net` is the brief's HTTP/2 file and passes both checks (206, `h2`), but it rejects 2 of 6 parallel ranges, so `cdn.kernel.org` (206, `h2`, Fastly) is a second HTTP/2 row. `proof.ovh.net` offers HTTP/3: once Chrome had seen it, a later check reported `h3`, which is why Speed test turns QUIC off.
+- `chrome.downloads` worked in the Playwright-launched Chrome for Testing: `onChanged` gave `complete`, `fileSize` matched, `removeFile` then `erase` removed the file (and a download of the wrong expected size is reported as failed, checked on a 1 Mb file). The 1 Mb check is the only test of that path. Chrome's own download manager may already split a download in parts; not checked.
+- The link moves a lot: plain downloads of the same file ranged 0.18 to 0.62 MB/s (online.net) and 0.29 to 1.15 MB/s (kernel.org), more than any split effect seen, and the Cloudflare baseline in the R10 run was 0.55 MB/s. The Q4 figures were taken before `cache: 'no-store'` was added to the `Range` fetches; no split run was fast enough (shortest 120 s) to have come from Chrome's cache.
+- A first R10 run is discarded: its first sequential pass took 0.6 s (110 MB/s) because Chrome's HTTP cache served the 10 MiB ranges the 1080p download had just fetched. Every `Range` fetch is now `no-store` and the R10 above is the rerun. In that run the 1080p download itself was 0.43 MB/s (0.79x bitrate, Q2 still fails) and the 2160p partial passed its 100 MiB at 0.99 MB/s.
+- Reading: Q4 supports 1 part per host as the default for both HTTP/1.1 (split 1.05x) and HTTP/2 (0.83x on kernel.org, and OVH answers 429 to 6 parallel ranges), but the link is the bottleneck here (about 0.2 to 1.2 MB/s), so this shows no gain rather than a proven one: keep parts configurable and treat a 429 as "use fewer parts". R10 says Q2's slowness is not a per-request cap: 6 parallel ranges got only 1.23x one sequential stream (about 1.0 to 1.2 MB/s), far from the up to 6x a cap on each request would allow, so the cause is the link or a per-client limit, still not told apart.
+
 ## File map
 
 - `docs/superpowers/specs/2026-11-06-sieve-design.md`: the design
@@ -240,6 +262,8 @@ Link baseline, taken just before the downloads: 25 MB from `speed.cloudflare.com
   - Task 0.3 done (`09bb187`, review fixes `11e6e54`): S3 results above; ejs 0.8.0 solves the web
     player's signature and `n`; the tv-family cipher path is unproven. This Mac's network was very
     slow during the runs (many launch timeouts).
+  - Task 0.5 done (commit `Sieve spike: split vs plain speed`): Q4 and R10 results above; Speed test
+    button and `run.mjs --speed` added; the link was the bottleneck (0.2 to 1.2 MB/s), so no split gain.
 
 ## Current state and next step
 
