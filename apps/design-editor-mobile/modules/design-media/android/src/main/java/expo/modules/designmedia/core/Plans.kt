@@ -81,10 +81,15 @@ data class StabilizePlan(val level: String, val search: Int, val quality: Double
   override val tool get() = "stabilize"
 }
 
-data class ComposeClip(val uri: String, val name: String, val inS: Double, val outS: Double, val hasAudio: Boolean)
+// volume and music default so a plan queued before stage 3 still decodes.
+data class ComposeClip(val uri: String, val name: String, val inS: Double, val outS: Double, val hasAudio: Boolean, val volume: Double = 1.0)
+
+// startS is the place on the video's timeline; inS and outS are times in the audio file, already cut to the video's end.
+data class ComposeMusic(val uri: String, val name: String, val inS: Double, val outS: Double, val startS: Double, val volume: Double)
 
 data class ComposePlan(
   val clips: List<ComposeClip>, val width: Int, val height: Int, val fps: Int, val videoBps: Int, val plannedBytes: Long, val ext: String,
+  val music: List<ComposeMusic> = emptyList(),
 ) : Plan {
   override val tool get() = "compose"
 }
@@ -239,7 +244,10 @@ fun encodePlan(p: Plan): JsonObject = when (p) {
   is ComposePlan -> buildJsonObject {
     put("tool", "compose")
     put("clips", JsonArray(p.clips.map { c ->
-      buildJsonObject { put("uri", c.uri); put("name", c.name); put("inS", c.inS); put("outS", c.outS); put("hasAudio", c.hasAudio) }
+      buildJsonObject { put("uri", c.uri); put("name", c.name); put("inS", c.inS); put("outS", c.outS); put("hasAudio", c.hasAudio); put("volume", c.volume) }
+    }))
+    put("music", JsonArray(p.music.map { m ->
+      buildJsonObject { put("uri", m.uri); put("name", m.name); put("inS", m.inS); put("outS", m.outS); put("startS", m.startS); put("volume", m.volume) }
     }))
     put("width", p.width)
     put("height", p.height)
@@ -309,10 +317,17 @@ private fun decodeConvertPlan(o: JsonObject): ConvertPlan {
 private fun decodeComposePlan(o: JsonObject) = ComposePlan(
   clips = o.getValue("clips").jsonArray.map {
     val c = it.jsonObject
-    ComposeClip(textOf(c, "uri"), textOf(c, "name"), doubleOf(c, "inS"), doubleOf(c, "outS"), c.getValue("hasAudio").jsonPrimitive.boolean)
+    ComposeClip(
+      textOf(c, "uri"), textOf(c, "name"), doubleOf(c, "inS"), doubleOf(c, "outS"), c.getValue("hasAudio").jsonPrimitive.boolean,
+      optDouble(c, "volume") ?: 1.0,
+    )
   },
   width = intOf(o, "width"), height = intOf(o, "height"), fps = intOf(o, "fps"), videoBps = intOf(o, "videoBps"),
   plannedBytes = longOf(o, "plannedBytes"), ext = textOf(o, "ext"),
+  music = present(o, "music")?.jsonArray?.map {
+    val m = it.jsonObject
+    ComposeMusic(textOf(m, "uri"), textOf(m, "name"), doubleOf(m, "inS"), doubleOf(m, "outS"), doubleOf(m, "startS"), doubleOf(m, "volume"))
+  } ?: emptyList(),
 )
 
 private fun decodeVolumePlan(o: JsonObject): VolumePlan {
@@ -372,6 +387,7 @@ private fun present(o: JsonObject, key: String): JsonElement? = o[key]?.takeUnle
 private fun optText(o: JsonObject, key: String) = present(o, key)?.jsonPrimitive?.content
 private fun optInt(o: JsonObject, key: String) = present(o, key)?.jsonPrimitive?.int
 private fun optLong(o: JsonObject, key: String) = present(o, key)?.jsonPrimitive?.long
+private fun optDouble(o: JsonObject, key: String) = present(o, key)?.jsonPrimitive?.double
 private fun optObject(o: JsonObject, key: String) = present(o, key)?.jsonObject
 private fun textOf(o: JsonObject, key: String) = o.getValue(key).jsonPrimitive.content
 private fun intOf(o: JsonObject, key: String) = o.getValue(key).jsonPrimitive.int
