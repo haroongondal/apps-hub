@@ -1,3 +1,4 @@
+import { STABILIZE_PASSES } from './stabilize.ts';
 import { LOUDNESS_TARGET_LUFS } from './volume.ts';
 import type { Codec, ConvertPlan, Encoder, GifPlan, Plan, ReversePlan, SizePlan, StabilizePlan, VolumePlan } from './types.ts';
 
@@ -137,7 +138,9 @@ function reverseArgs(plan: ReversePlan, input: string, output: string): string[]
 }
 
 function stabilizeArgs(plan: StabilizePlan, input: string, output: string): string[] {
-  return [...GLOBAL, '-i', input, '-map', '0:v:0', '-vf', `deshake=rx=${plan.search}:ry=${plan.search}:edge=mirror`,
+  const pass = `deshake=rx=${plan.search}:ry=${plan.search}:edge=mirror:search=less`;
+  const chain = Array.from({ length: STABILIZE_PASSES[plan.level] }, () => pass).join(',');
+  return [...GLOBAL, '-i', input, '-map', '0:v:0', '-vf', chain,
     '-c:v', 'h264_videotoolbox', '-q:v', String(plan.quality), '-pix_fmt', 'yuv420p', '-map', '0:a:0?', '-c:a', 'aac', '-b:a', '192k',
     '-movflags', '+faststart', ...STRIP, output];
 }

@@ -34,9 +34,14 @@ object FfmpegArgs {
   // FFmpeg 8.1's deshake refuses any range that is not a multiple of 16 and caps it at 64. A job queued by an older build can still carry 8 or 40.
   fun deshakeRange(search: Int): Int = (search.coerceIn(16, 64) + 15) / 16 * 16
 
+  // Passes, not range, make the picture steadier (measured 2026-11-06); mirrors STABILIZE_PASSES in media-core/stabilize.ts.
+  fun deshakePasses(level: String): Int = if (level == "minimum") 1 else 2
+
   fun stabilize(plan: StabilizePlan, input: String, output: String, videoBps: Int): List<String> {
     val range = deshakeRange(plan.search)
-    return GLOBAL + listOf("-i", input, "-map", "0:v:0", "-vf", "deshake=rx=$range:ry=$range:edge=mirror") +
+    val pass = "deshake=rx=$range:ry=$range:edge=mirror:search=less"
+    val chain = List(deshakePasses(plan.level)) { pass }.joinToString(",")
+    return GLOBAL + listOf("-i", input, "-map", "0:v:0", "-vf", chain) +
       h264(videoBps) + listOf("-map", "0:a:0?") + AAC + FASTSTART + STRIP + output
   }
 

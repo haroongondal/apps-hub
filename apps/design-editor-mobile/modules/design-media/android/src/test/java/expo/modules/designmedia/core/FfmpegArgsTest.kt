@@ -93,7 +93,8 @@ class FfmpegArgsTest {
   fun stabilizeUsesDeshakeWithMirroredEdgesAndKeepsTheSound() {
     assertEquals(
       listOf(
-        "-hide_banner", "-y", "-i", "saf:1.mp4", "-map", "0:v:0", "-vf", "deshake=rx=64:ry=64:edge=mirror",
+        "-hide_banner", "-y", "-i", "saf:1.mp4", "-map", "0:v:0", "-vf",
+        "deshake=rx=64:ry=64:edge=mirror:search=less,deshake=rx=64:ry=64:edge=mirror:search=less",
         "-c:v", "h264_mediacodec", "-b:v", "6000000", "-pix_fmt", "yuv420p",
         "-map", "0:a:0?", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-map_metadata", "-1", "out.mp4",
       ),
@@ -104,7 +105,16 @@ class FfmpegArgsTest {
   @Test
   fun stabilizeRangeIsAlwaysOneThePhonesDeshakeAccepts() {
     assertEquals(listOf(16, 16, 32, 48, 64, 64), listOf(8, 16, 32, 40, 64, 200).map { FfmpegArgs.deshakeRange(it) })
-    assertTrue(FfmpegArgs.stabilize(StabilizePlan("minimum", 8, 65.0, "mp4"), "i", "o.mp4", 1).contains("deshake=rx=16:ry=16:edge=mirror"))
+    assertTrue(FfmpegArgs.stabilize(StabilizePlan("minimum", 8, 65.0, "mp4"), "i", "o.mp4", 1).contains("deshake=rx=16:ry=16:edge=mirror:search=less"))
+  }
+
+  @Test
+  fun stabilizePassesFollowTheLevelSoBalancedIsNeverOnePass() {
+    assertEquals(listOf(1, 2, 2), listOf("minimum", "recommended", "most").map { FfmpegArgs.deshakePasses(it) })
+    // an unknown level from an older queue still gets the stronger setting rather than failing
+    assertEquals(2, FfmpegArgs.deshakePasses("anything"))
+    val balanced = FfmpegArgs.stabilize(StabilizePlan("recommended", 32, 65.0, "mp4"), "i", "o.mp4", 1)
+    assertEquals(2, balanced[balanced.indexOf("-vf") + 1].split(",").size)
   }
 
   @Test

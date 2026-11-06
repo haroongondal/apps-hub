@@ -105,10 +105,16 @@ test('ffmpeg: reverse runs the video and, when asked, the sound backwards; witho
   assert.ok(silent.includes('-an') && !silent.includes('areverse'));
 });
 
-test('ffmpeg: stabilize uses deshake with the level search range and mirrored edges, so the frame keeps its size', () => {
-  const args = ffmpegArgs({ tool: 'stabilize', level: 'most', search: 64, quality: 65, ext: 'mp4' }, 'in.mp4', 'out.mp4');
-  assert.equal(args[args.indexOf('-vf') + 1], 'deshake=rx=64:ry=64:edge=mirror');
-  assert.equal(args[args.indexOf('-c:v') + 1], 'h264_videotoolbox');
+test('ffmpeg: stabilize chains one deshake per pass with the level range, less exhaustive search and mirrored edges', () => {
+  const vf = (level: 'minimum' | 'recommended' | 'most', search: number) =>
+    ffmpegArgs({ tool: 'stabilize', level, search, quality: 65, ext: 'mp4' }, 'in.mp4', 'out.mp4');
+  const most = vf('most', 64);
+  assert.equal(most[most.indexOf('-vf') + 1], 'deshake=rx=64:ry=64:edge=mirror:search=less,deshake=rx=64:ry=64:edge=mirror:search=less');
+  assert.equal(most[most.indexOf('-c:v') + 1], 'h264_videotoolbox');
+  const minimum = vf('minimum', 16);
+  assert.equal(minimum[minimum.indexOf('-vf') + 1], 'deshake=rx=16:ry=16:edge=mirror:search=less');
+  const recommended = vf('recommended', 32);
+  assert.equal(recommended[recommended.indexOf('-vf') + 1].split(',').length, 2);
 });
 
 test('ffmpeg: a measured normalize runs the second pass linearly with the measured values', () => {

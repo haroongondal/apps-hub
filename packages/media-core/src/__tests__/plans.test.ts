@@ -6,7 +6,7 @@ import { planClip } from '../clip.ts';
 import { planConvert } from '../convert.ts';
 import { planFrame } from '../frame.ts';
 import { planReverse, reverseProblem } from '../reverse.ts';
-import { planStabilize } from '../stabilize.ts';
+import { planStabilize, STABILIZE_PASSES } from '../stabilize.ts';
 import { parseLoudnorm, planVolume } from '../volume.ts';
 import { planGif, nextGifAttempt } from '../gif.ts';
 import { fromFfprobe } from '../probe.ts';
@@ -134,6 +134,8 @@ test('stabilize: each level maps to its search range, and an audio-only file is 
   assert.ok(most.ok && minimum.ok);
   assert.equal(most.plan.search, 64);
   assert.equal(minimum.plan.search, 16);
+  // Only the pass count changes the picture (measured 2026-11-06), so the levels must differ in passes: Balanced and Steadiest are never one pass.
+  assert.deepEqual(STABILIZE_PASSES, { minimum: 1, recommended: 2, most: 2 });
   // The phone's deshake rejects any other range, which made two of the three levels fail on the phone.
   for (const level of ['minimum', 'recommended', 'most'] as const) {
     const p = planStabilize(film(), level);
