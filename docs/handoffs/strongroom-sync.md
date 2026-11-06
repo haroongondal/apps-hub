@@ -268,12 +268,29 @@ State (2026-11-06): **the build is done; Task 8 waits for the owner.** Branch `s
   so the phone's "Turn on sync" with the same setup code creates the real account.
 - Real-D1 difference, harmless: `next_rev` is stored as text `103.0` (D1 binds JS numbers as REAL); every
   read uses `CAST(v AS INTEGER)`, so revisions stay integers.
-- Next: step 5. `origin/main` is now `1f91a6f` (security-fixes merged as #21, touching the vault module:
-  ClipboardClearJob etc.); the extension branch (`c3da09c`) was never pushed. Needs the owner's word to push
-  and their choice: two PRs (extension first, then `git rebase --onto origin/main c3da09c strongroom-sync`)
-  or one PR (merge `origin/main` into `strongroom-sync`). Either way resolve conflicts with #21 (allow the
-  second job service in `manifest.test.ts`), re-run every gate, merge with `[skip ci]`, then
-  `pnpm release strongroom` (0.2.0) from a clean checkout of `main`.
+- Step 5 DONE (owner: "one PR … merge it with [skip ci] and release Strongroom 0.2.0"): merged
+  `origin/main` (#21) into `strongroom-sync` (`88aa3b7`; conflicts: vault-module manifest keeps both job
+  services, `pnpm-workspace.yaml` keeps esbuild + main's patchedDependencies; manifest.test.ts allows
+  SyncJobService + ClipboardClearJob), `app.json` 0.2.0 (`c51f8ee`). Gates after the merge: core 142,
+  vault-api 20, extension 70, strongroom 61, typechecks, Gradle 385/0 + assembleDebug/Release, aapt2 release
+  = Phase 1 + INTERNET, both job services private. Pushed; PR #22; CI `test` passed (full `pnpm test` +
+  `typecheck`). **GitGuardian failed with 17 "secrets": all test fixtures** (vault-vectors.json from the test
+  password and fixed salts/keys, sync-samples.json repeated-byte tokens, test passwords, and a
+  `LoginInput` type in service.ts); the real setup code, release token and any private key are absent from
+  the branch history (checked). `main` is unprotected, so it did not block. Squash-merged as `2d446dd`
+  (`[skip ci]`, no CI run on main). `pnpm release strongroom` from a clean detached `origin/main`:
+  **Strongroom 0.2.0, versionCode 9, published**; APK permissions = Phase 1 + INTERNET.
+- Extension snapshot the owner loads unpacked (`/Users/outsentia/Documents/apps-hub/strongroom-extension-dist`,
+  untracked, hidden by `.git/info/exclude`) rebuilt from merged main with the server address
+  (host_permissions = the Worker only); the old snapshot is in this session's scratchpad.
+- This worktree is now on branch `strongroom-sync-followup` (from `2d446dd`) for the step-7 docs.
+- Not done: step 1 reviews (owner skipped them); the on-disk check on the Store build (not debuggable, backup
+  off, so adb can't read its data without root; 6c did it on the test build).
+- Next: step 6 with the owner (install 0.2.0 from the Store; Turn on sync with the setup code from
+  `tools/vault-api/.dev.vars` in this worktree, master password and recovery key; write down the account
+  key; Reload the extension, sign in with master password + account key; edit and delete each way; change
+  the master password on the phone and sign in again in Chrome), then step 7 (handoffs `strongroom.md`,
+  `strongroom-extension.md`, this file) as a docs-only PR.
 
 **Next (each step only on the owner's word):** Task 8 per the plan and the "Task 8 deploy notes" above:
 1. reviews (security-engineer on vault-api + sync code; invariant-reviewer; supply-chain; docs-keeper);
