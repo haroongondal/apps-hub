@@ -13,7 +13,7 @@ const MINUTES = [
 
 const BROWSERS: Record<string, string> = { 'com.android.chrome': 'Chrome', 'org.mozilla.firefox': 'Firefox' };
 
-export type SettingsFlow = 'password' | 'fingerprint' | 'newKey' | 'import' | 'sync';
+export type SettingsFlow = 'password' | 'fingerprint' | 'newKey' | 'import' | 'sync' | 'export' | 'imports' | 'deleteAll';
 
 interface Props {
   status: Status;
@@ -98,6 +98,9 @@ export function SettingsScreen({ status, refresh, notice, onOpen }: Props) {
       </Group>
       <Group title="Your passwords">
         <Row title="Import from Google" subtitle="Move your saved passwords out of Google Password Manager." onPress={() => onOpen('import')} />
+        <Row title="Imported files" subtitle="Delete what one import brought in." onPress={() => onOpen('imports')} />
+        <Row title="Export all" subtitle="Save every login, card and note to a file." onPress={() => onOpen('export')} />
+        <Row title="Delete all passwords" subtitle="Empty the vault." onPress={() => onOpen('deleteAll')} />
       </Group>
       <Button label="Lock now" variant="secondary" onPress={lockNow} block />
       <Group title="Checks" footer="Autofill fills a browser only when Strongroom recognises it.">

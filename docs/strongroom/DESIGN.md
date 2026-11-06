@@ -70,9 +70,9 @@ Phase 1 is described in the most detail.
 - Passkeys, and the Android 14+ Credential Manager provider API
   (`CredentialProviderService`). Phase 1 uses the autofill framework only.
   Credential Manager is the likely next addition after Phase 4.
-- Password generator, password history, sharing with other people, CSV export,
+- Password generator, password history, sharing with other people,
   breach checking. *(My calls. The generator is small and the obvious first
-  extra.)*
+  extra.)* CSV export came later, on the owner's request (§8).
 - Saving cards from forms. Cards are added by hand and only filled. *(My call.)*
 - Filling apps that block autofill by abusing the accessibility service (the
   Deputy technique). It's too easy to get wrong for passwords.
@@ -370,6 +370,25 @@ keyboard keeps the clip in its own clipboard history despite the flag.
 - After import, tell the owner to delete the exported file, because it's
   plaintext. The app can't delete a file it didn't create, so it says this
   plainly instead.
+
+**Added 2026-11-06, on the owner's request (Android app only, not the extension):**
+
+- **Export all** (master password first) writes a plaintext CSV through the system
+  save dialog. Google's five columns come first, one row per site or app link, then
+  `type,holder,number,exp_month,exp_year,cvc,app_domain` for cards, notes and an app
+  link's web domain. The phone's import reads them all back; a login with several
+  links comes back as one login per link, as with Google's own export. The
+  extension's import skips card and note rows. Cells aren't escaped for
+  spreadsheets, because escaping would change passwords that start with `=`.
+- **Imported files** lists each import, newest first. An import is the set of entries
+  sharing the one stamp `putMany` gave them. An edit restamps an entry, so deleting an
+  import removes only the entries still exactly as imported. Its tombstones carry the
+  import's stamp, so an edit on another device that isn't pulled yet still wins the
+  sync. File names live only in
+  this phone's prefs (stamp → name, count). Imports made before this log existed are
+  found by their shared stamp and labelled by date.
+- **Delete all passwords** (master password first) syncs first when sync is on (best
+  effort), then tombstones every entry, so the deletes reach the other devices too.
 
 ## 9. App screens (Phase 1)
 

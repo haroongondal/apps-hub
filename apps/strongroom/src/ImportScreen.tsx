@@ -2,11 +2,10 @@ import React, { useState } from 'react';
 import { Button, Group, Header, Notice, Row, Screen } from '@apps-hub/ui';
 import Vault, { type ImportPreview } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
+import { entries, plural } from './forms.ts';
 import { BackButton } from './parts.tsx';
 
 const STEPS = ['In Google Password Manager, choose Settings, then Export passwords.', 'Pick the file it saved.'];
-
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 interface Props {
   onBack: () => void;
@@ -47,7 +46,7 @@ export function ImportScreen({ onBack, onDone, onLocked }: Props) {
       <BackButton onPress={imported === null ? onBack : onDone} />
       <Header title="Import from Google" subtitle="A one-time move out of Google. Afterwards you delete the logins from Google yourself." />
       {imported === null && (
-        <Group title="How">
+        <Group title="How" footer="A file from Strongroom's Export all works too.">
           {STEPS.map((s, i) => (
             <Row key={s} title={`${i + 1}. ${s}`} />
           ))}
@@ -59,6 +58,7 @@ export function ImportScreen({ onBack, onDone, onLocked }: Props) {
         <>
           <Group title="In the file">
             <Row title={plural(preview.found, 'login found', 'logins found')} />
+            {preview.others > 0 && <Row title={plural(preview.others, 'card or note found', 'cards and notes found')} />}
             <Row title={plural(preview.merged, 'duplicate merged', 'duplicates merged')} />
             {preview.flagged > 0 && (
               <Row
@@ -67,12 +67,12 @@ export function ImportScreen({ onBack, onDone, onLocked }: Props) {
               />
             )}
           </Group>
-          <Button label={`Import ${plural(preview.found, 'login', 'logins')}`} onPress={commit} block />
+          <Button label={`Import ${preview.others > 0 ? entries(preview.found + preview.others) : plural(preview.found, 'login', 'logins')}`} onPress={commit} block />
         </>
       )}
       {imported !== null && (
         <>
-          <Notice tone="ok">{`${plural(imported, 'login', 'logins')} imported.`}</Notice>
+          <Notice tone="ok">{`${preview?.others ? entries(imported) : plural(imported, 'login', 'logins')} imported.`}</Notice>
           <Notice tone="warn">
             Delete the exported file now. It isn't encrypted, so anyone who gets it can read every password in it.
           </Notice>
