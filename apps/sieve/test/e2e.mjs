@@ -1,6 +1,6 @@
 // Real Chromium with the built extension (run `pnpm --filter sieve build` first). Not part of `pnpm test`.
 import { setTimeout as sleep } from 'node:timers/promises';
-import { check, launch, results, startServers, startWorker, stopWorker } from './harness.mjs';
+import { SITE_HOST, UNHIDE_HOST, check, launch, results, startServers, startWorker, stopWorker } from './harness.mjs';
 
 const RULESETS = ['ads', 'trackers', 'distraction', 'cookies', 'antiadblock'];
 const ALLOW_ID = 1_000_000;
@@ -235,6 +235,98 @@ try {
     s.dynamic.length === 0 && !keepsLocalhost(s) && !s.error && hits.includes('/ads.html') && !hits.includes('/pagead/x.js'),
     json({ rules: s.dynamic.length, excludes: s.scripts.map((r) => [r.id, r.excludeMatches?.length ?? 0]), error: s.error, hits }),
   );
+
+  await sw2.evaluate(() => {
+    globalThis.injectErrors = [];
+    const error = console.error;
+    console.error = (...a) => (globalThis.injectErrors.push(a.map(String).join(' ')), error(...a));
+  });
+  const SITE = `https://${SITE_HOST}:${servers.httpsPort}/site.html`;
+  const EMBED = `https://${UNHIDE_HOST}:${servers.httpsPort}/embed.html`;
+  // [.adsbygoogle display, site-specific element display, #adbar display, reading window.g00gletag throws]
+  const look = (frame) =>
+    frame.evaluate(() => {
+      const display = (s) => {
+        const el = document.querySelector(s);
+        return el && getComputedStyle(el).display;
+      };
+      let throws = false;
+      try {
+        window.g00gletag;
+      } catch {
+        throws = true;
+      }
+      return [display('ins.adsbygoogle'), display('.widget_media_image'), display('#adbar'), throws];
+    });
+  // Injection lands after `load` on a cold worker, so wait for `ready`; with none, Sieve must do nothing, so give it 1 s to (wrongly) act.
+  const visitSite = async (url, ready) => {
+    servers.hits.length = 0;
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(url, { waitUntil: 'load' });
+    const frames = [page.mainFrame(), page.frames().find((f) => f.url().endsWith('/frame.html'))];
+    const end = Date.now() + (ready ? 5_000 : 1_000);
+    let seen = await Promise.all(frames.map(look));
+    while (!ready?.(seen) && Date.now() < end) {
+      await sleep(100);
+      seen = await Promise.all(frames.map(look));
+    }
+    await page.close();
+    return { hits: [...servers.hits], main: seen[0], frame: seen[1] };
+  };
+  const hidden = (v) => v[0] === 'none' && v[1] === 'none' && v[3] === true;
+  const shown = (v) => v[0] !== 'none' && v[1] !== 'none' && v[3] === false;
+
+  let r = await visitSite(SITE, ([m, f]) => hidden(m) && hidden(f));
+  check('the generic <ins class="adsbygoogle"> is display: none', r.main[0] === 'none' && !r.hits.includes('/pagead/x.js'), json(r));
+  check(`the EasyList rule ${SITE_HOST}##.widget_media_image hides the element there`, r.main[1] === 'none', json(r));
+  check(`the scriptlet abort-on-property-read g00gletag runs on ${SITE_HOST}: reading window.g00gletag throws`, r.main[3] === true, json(r));
+  check(
+    'in a same-origin iframe, the ad request is blocked, .adsbygoogle and the site-specific element are hidden, and the scriptlet runs',
+    r.hits.includes('/frame.html') && !r.hits.includes('/pagead/frame.js') && hidden(r.frame),
+    json(r),
+  );
+  r = await visitSite(`https://${UNHIDE_HOST}:${servers.httpsPort}/site.html`, ([m]) => m[0] === 'none');
+  check(
+    `on ${UNHIDE_HOST}, kept out of the registered ads stylesheet, the page gets the generic CSS minus its #adbar exception, and no other site's rules`,
+    r.main[0] === 'none' && r.main[2] === 'block' && r.main[1] === 'block' && r.main[3] === false,
+    json(r),
+  );
+  r = await visitSite(EMBED, ([, f]) => f[1] === 'none' && f[3] === true);
+  check(`a ${SITE_HOST} iframe inside a srcdoc frame on another site gets its own site's hiding and scriptlet`, r.frame[1] === 'none' && r.frame[3] === true, json(r));
+
+  await setBlocking(sw2, { allowlist: [{ kind: 'site', host: SITE_HOST }] });
+  s = await settle(sw2, excludes(`*://*.${SITE_HOST}/*`));
+  r = await visitSite(SITE);
+  check(
+    'on an allowlisted site, the ad request loads, .adsbygoogle and the site-specific element stay visible, and no scriptlet runs',
+    r.hits.includes('/pagead/x.js') && shown(r.main),
+    json(r),
+  );
+  check('on an allowlisted site, the iframe ad request loads, and nothing in the iframe is hidden or run', r.hits.includes('/pagead/frame.js') && shown(r.frame), json(r));
+  await setBlocking(sw2, { allowlist: [{ kind: 'site', host: UNHIDE_HOST }] });
+  s = await settle(sw2, (s) => !s.scripts.some((r) => r.excludeMatches?.includes(`*://*.${SITE_HOST}/*`)));
+  r = await visitSite(EMBED);
+  // The registered generic CSS still hides .adsbygoogle in that cross-site frame (README, Known limits), so it is not checked here.
+  check(
+    `on an allowlisted site, a ${SITE_HOST} iframe nested in a srcdoc frame loads its ad request and gets no site-specific hiding or scriptlet`,
+    r.hits.includes('/pagead/frame.js') && r.frame[1] === 'block' && r.frame[3] === false,
+    json(r),
+  );
+  await setBlocking(sw2, { allowlist: [], paused: true });
+  s = await settle(sw2, (s) => s.enabled.length === 0 && s.scripts.length === 0);
+  r = await visitSite(SITE);
+  check(
+    'while paused, the page and iframe ad requests load, nothing is hidden and no scriptlet runs',
+    r.hits.includes('/pagead/x.js') && r.hits.includes('/pagead/frame.js') && shown(r.main) && shown(r.frame),
+    json(r),
+  );
+  await setBlocking(sw2, { paused: false });
+  s = await settle(sw2, (s) => s.enabled.length > 0);
+  r = await visitSite(SITE, ([m, f]) => hidden(m) && hidden(f));
+  check('Resume brings the site-specific hiding and the scriptlet back', hidden(r.main) && hidden(r.frame) && !r.hits.includes('/pagead/x.js'), json(r));
+  const injectErrors = await sw2.evaluate(() => globalThis.injectErrors);
+  check('the service worker logged no error while injecting', injectErrors?.length === 0, json(injectErrors));
   await ctx.close();
 } catch (e) {
   check('the run finished without an exception', false, String(e?.stack ?? e).split('\n').slice(0, 4).join(' | '));

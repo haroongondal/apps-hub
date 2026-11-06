@@ -20,6 +20,7 @@ import {
   isConversionError,
 } from '@adguard/dnr-converter';
 import { scriptlets } from '@adguard/scriptlets';
+import { scriptletKey } from './page.ts';
 
 export interface DnrRule {
   id: number;
@@ -57,10 +58,6 @@ export interface CompiledList {
   maxPriority: number;
   dropped: Record<string, number>;
   errors: { line: number; text: string; reason: string }[];
-}
-
-export function scriptletKey(call: ScriptletCall): string {
-  return JSON.stringify([call.name, ...call.args]);
 }
 
 // The build serialises these with toString(); asking sieve-core keeps one installed copy of @adguard/scriptlets.

@@ -15,6 +15,10 @@ const PAGES = fileURLToPath(new URL('pages', import.meta.url));
 // `||host^` rules with no options, picked from EasyList and EasyPrivacy on 2026-11-06.
 export const AD_HOST = 'pagead2.googlesyndication.com';
 export const TRACKER_HOST = 'googletagmanager.com';
+// EasyList `foreverconscious.com,…##.widget_media_image` and ABP anti-cv `…,foreverconscious.com,…#$#abort-on-property-read g00gletag`.
+export const SITE_HOST = 'foreverconscious.com';
+// EasyList `linuxtracker.org#@##adbar` keeps it out of the registered ads stylesheet, so its generic CSS comes per page.
+export const UNHIDE_HOST = 'linuxtracker.org';
 
 export const results = [];
 export function check(name, cond, extra = '') {
@@ -30,7 +34,7 @@ export async function startServers() {
     const file = join(PAGES, new URL(req.url, 'http://x').pathname);
     if (req.url.endsWith('.html') && file.startsWith(PAGES) && existsSync(file)) {
       res.setHeader('content-type', 'text/html');
-      return res.end(readFileSync(file, 'utf8').replaceAll('%PORT%', ports.httpsPort).replaceAll('%AD_HOST%', AD_HOST).replaceAll('%TRACKER_HOST%', TRACKER_HOST));
+      return res.end(readFileSync(file, 'utf8').replaceAll('%PORT%', ports.httpsPort).replaceAll('%AD_HOST%', AD_HOST).replaceAll('%TRACKER_HOST%', TRACKER_HOST).replaceAll('%SITE_HOST%', SITE_HOST));
     }
     res.setHeader('content-type', 'text/javascript');
     res.end('');
@@ -60,7 +64,7 @@ export async function launch({ extraArgs = [] } = {}) {
       `--disable-extensions-except=${EXT}`,
       `--load-extension=${EXT}`,
       '--ignore-certificate-errors',
-      `--host-resolver-rules=MAP ${AD_HOST} 127.0.0.1,MAP ${TRACKER_HOST} 127.0.0.1,MAP www.youtube.com 127.0.0.1`,
+      `--host-resolver-rules=${[AD_HOST, TRACKER_HOST, SITE_HOST, UNHIDE_HOST, 'www.youtube.com'].map((h) => `MAP ${h} 127.0.0.1`).join(',')}`,
       ...extraArgs,
     ],
   });

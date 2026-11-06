@@ -39,6 +39,11 @@ pnpm --filter sieve test:e2e     # headless Chromium in a fresh temporary profil
 
 The filter compiler and the settings logic live in `packages/sieve-core` and are unit-tested there. `test:e2e` needs playwright-core and Chrome for Testing: set `PLAYWRIGHT_CORE` (path to playwright-core's `index.mjs`) and `CHROMIUM_PATH` if yours are not in this Mac's default places. It never uses your own Chrome profile.
 
+## Known limits
+
+- On an allowlisted site, the generic hiding CSS and the notification blocker still run inside iframes from other sites, because Chrome matches a registered script's excluded sites against the iframe's own address, not the tab's. Everything those iframes load still gets through, since the allow rule covers every frame in the page. Site-specific hiding and scriptlets check the tab's page, so they stay out of those iframes.
+- Site-specific hiding and scriptlets are added by the service worker as each page or iframe starts loading. On the first page after Chrome starts the worker, it reads the filter maps first (about 4 MB, a few tens of milliseconds), so a scriptlet can arrive after that page's first scripts have run. Later pages usually get it in time, but an inline script at the very top of a page can still run first.
+
 ## Licences
 
 Sieve's dependencies, read from each package's `package.json`:

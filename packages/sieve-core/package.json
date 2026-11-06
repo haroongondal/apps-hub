@@ -6,7 +6,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "test": "node --test src/__tests__/settings.test.ts src/__tests__/hosts.test.ts src/__tests__/compile.test.ts src/__tests__/allowlist.test.ts src/__tests__/plan.test.ts",
+    "test": "node --test src/__tests__/settings.test.ts src/__tests__/hosts.test.ts src/__tests__/compile.test.ts src/__tests__/allowlist.test.ts src/__tests__/plan.test.ts src/__tests__/page.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
