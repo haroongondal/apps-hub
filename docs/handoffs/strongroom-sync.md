@@ -251,9 +251,29 @@ State (2026-11-06): **the build is done; Task 8 waits for the owner.** Branch `s
   module; our manifest.test.ts must allow it when the branches meet. Rebase onto `origin/main` once the owner
   has merged the extension PR (`git rebase --onto origin/main c3da09c strongroom-sync` if squashed).
 
-**Update 2026-11-06 (Task 8 session):** step 1 skipped on the owner's word; step 2 done; step 4 done
-(`35f56a5`); step 3 blocked: `cf d1 create` denied by the auto-mode classifier, waiting for the owner to
-approve the Cloudflare commands or run them. Next: step 3 (create D1, migrate, deploy, smoke test), then 5–7.
+**Update 2026-11-06 (Task 8 session):** step 1 skipped on the owner's word; steps 2, 3 and 4 done.
+- Cost: the account has no Workers Paid plan (only `r2_paid`, pay-as-you-go for the Store), so Workers and
+  D1 run on the free plan: over its limits requests fail, nothing is billed. The owner asked for $0 or they
+  would use another free database.
+- Step 3 (owner's explicit word): D1 `strongroom-vault` id `0dae26b4-869e-4784-a039-022b0326b949` (APAC),
+  `0001_init.sql` applied with `cf d1 migrations apply`, id pinned in `cloudflare.config.ts` (`b99512f`;
+  `cf deploy --no-provision` needs it), deployed with `cf deploy --no-provision --secrets-file .dev.vars`
+  → `https://strongroom-vault.haroonmukhtar4.workers.dev`, version `b6d148ba-…`; SETUP_TOKEN is
+  `secret_text`. Smoke: prelogin 404, POST records without a token 401, no CORS, `no-store`. Live run of
+  the e2e flows with a throwaway vault (scratchpad `live-smoke.ts`): create with the setup code, second
+  setup refused, one 100-upsert push, sign-in pulls 100, edit (upsert), stale base → 409 + merge
+  (json_each), convergence, account update stale ifRev refused / current accepted (RETURNING), recovery
+  sign-in, old token 401, new-password sign-in + adopt: all PASS. Then the database was reset by hand to
+  the fresh-migration state (0 records, 0 accounts, meta only `next_rev=1`, failures 0; prelogin 404 again),
+  so the phone's "Turn on sync" with the same setup code creates the real account.
+- Real-D1 difference, harmless: `next_rev` is stored as text `103.0` (D1 binds JS numbers as REAL); every
+  read uses `CAST(v AS INTEGER)`, so revisions stay integers.
+- Next: step 5. `origin/main` is now `1f91a6f` (security-fixes merged as #21, touching the vault module:
+  ClipboardClearJob etc.); the extension branch (`c3da09c`) was never pushed. Needs the owner's word to push
+  and their choice: two PRs (extension first, then `git rebase --onto origin/main c3da09c strongroom-sync`)
+  or one PR (merge `origin/main` into `strongroom-sync`). Either way resolve conflicts with #21 (allow the
+  second job service in `manifest.test.ts`), re-run every gate, merge with `[skip ci]`, then
+  `pnpm release strongroom` (0.2.0) from a clean checkout of `main`.
 
 **Next (each step only on the owner's word):** Task 8 per the plan and the "Task 8 deploy notes" above:
 1. reviews (security-engineer on vault-api + sync code; invariant-reviewer; supply-chain; docs-keeper);
