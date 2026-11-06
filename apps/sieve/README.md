@@ -1,6 +1,6 @@
 # Sieve for Chrome
 
-The owner's private ad blocker (Manifest V3, Chrome 128 or later: the anti-adblock list has a rule that matches on response headers, which Chrome supports from 128). It is never published: you build it on this Mac and load it unpacked. The filter lists are downloaded and compiled at build time; the extension itself makes no requests of its own.
+The owner's private ad blocker (Manifest V3, Chrome 128 or later: some rules in the ads, trackers and anti-adblock lists match on response headers, which Chrome supports from 128). It is never published: you build it on this Mac and load it unpacked. The filter lists are downloaded and compiled at build time; the extension itself makes no requests of its own.
 
 ## Install (unpacked)
 

@@ -1,4 +1,5 @@
 import { build } from 'esbuild';
+import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -23,6 +24,11 @@ function expandWildcard(host) {
   if (!host.endsWith('.*') || base.includes('*') || /^[\d.]+$/.test(base)) return [];
   return (base.split('.').pop() === 'google' ? GOOGLE_SUFFIXES : COMMON_SUFFIXES).map((suffix) => `${base}.${suffix}`);
 }
+assert.ok(expandWildcard('www.google.*').includes('www.google.co.uk'));
+assert.ok(expandWildcard('example.*').includes('example.com') && !expandWildcard('example.*').includes('example.co.ao'));
+assert.deepEqual(expandWildcard('192.168.*'), []);
+assert.deepEqual(expandWildcard('*.x.*'), []);
+assert.deepEqual(expandWildcard('*.example.com'), []);
 
 async function download(url) {
   let last;
@@ -152,6 +158,8 @@ await build({
   external: ['./scriptlets.js'],
   logLevel: 'warning',
 });
+// Registered content scripts are classic scripts, not modules.
+await build({ entryPoints: { 'notify-deny': root('src/notify-deny.ts') }, bundle: true, format: 'iife', target: 'chrome128', outdir: out, logLevel: 'warning' });
 const ui = root('../../packages/ui');
 for (const f of ['tokens.css', 'base.css']) cpSync(join(ui, 'web', f), join(out, 'web', f));
 cpSync(join(ui, 'fonts'), join(out, 'fonts'), { recursive: true });

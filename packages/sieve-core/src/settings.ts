@@ -56,7 +56,8 @@ function isHost(host: string): boolean {
   }
 }
 
-function pageUrl(raw: string): string | null {
+// Page entries and the tab URLs compared with them: http(s) only, no hash, no userinfo.
+export function pageUrl(raw: string): string | null {
   try {
     const u = new URL(raw);
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;

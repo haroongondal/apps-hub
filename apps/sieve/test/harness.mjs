@@ -76,8 +76,8 @@ export async function launch({ extraArgs = [] } = {}) {
   return { ctx, sw, id: new URL(sw.url()).host };
 }
 
-// Resolves with the worker's running status ('stopped' on success). Playwright's own `close` event for the worker can
-// arrive much later, so this watches Chrome's status instead; take a new handle with ctx.waitForEvent('serviceworker').
+// Resolves with the worker's running status ('stopped' on success), as seen when it stopped: something may start it again
+// at once. Playwright's own `close` event for the worker can arrive much later, so this watches Chrome's status instead.
 export async function stopWorker(ctx) {
   const page = ctx.pages()[0] ?? (await ctx.newPage());
   const cdp = await ctx.newCDPSession(page);
@@ -86,14 +86,25 @@ export async function stopWorker(ctx) {
   const stopped = new Promise((resolve) => {
     cdp.on('ServiceWorker.workerVersionUpdated', ({ versions }) => {
       for (const v of versions) if (v.scriptURL.startsWith('chrome-extension://')) status = v.runningStatus;
-      if (status === 'stopped') resolve();
+      if (status === 'stopped') resolve(status);
     });
-    timer = setTimeout(resolve, 10_000);
+    timer = setTimeout(() => resolve(status), 10_000);
   });
   await cdp.send('ServiceWorker.enable');
   await cdp.send('ServiceWorker.stopAllWorkers');
-  await stopped;
+  const result = await stopped;
   clearTimeout(timer);
   await cdp.detach();
-  return status;
+  return result;
+}
+
+// Starts the worker after stopWorker. Playwright fires no new `serviceworker` event: its existing handle reaches the
+// new worker instance (globals set before the stop are gone), so this resolves with that handle.
+export async function startWorker(ctx, id) {
+  const page = ctx.pages()[0] ?? (await ctx.newPage());
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send('ServiceWorker.enable');
+  await cdp.send('ServiceWorker.startWorker', { scopeURL: `chrome-extension://${id}/` });
+  await cdp.detach();
+  return ctx.serviceWorkers()[0] ?? ctx.waitForEvent('serviceworker', { timeout: 10_000 });
 }
