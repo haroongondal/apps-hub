@@ -5,6 +5,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
@@ -80,7 +81,27 @@ test('the tools namespace is declared on the root, so the tools:ignore on PACKAG
   assert.equal(usage.$['tools:ignore'], 'ProtectedPermissions');
 });
 
-test('backups stay off and the cleartext policy stays scoped', () => {
+test('release builds permit no cleartext, and the plugin writes the committed policy', () => {
+  const committed = readFileSync(join(import.meta.dirname, '../../android/app/src/main/res/xml/network_security_config.xml'), 'utf8');
+  assert.equal(plugin.NETWORK_SECURITY_CONFIG_XML, committed);
+  assert.doesNotMatch(committed, /cleartextTrafficPermitted="true"|vpngate/);
+  assert.match(committed, /<base-config cleartextTrafficPermitted="false"/);
+});
+
+test('debug builds allow cleartext only for the Metro base config, with no VPN Gate exception', () => {
+  const debug = readFileSync(join(import.meta.dirname, '../../android/app/src/debug/res/xml/network_security_config.xml'), 'utf8');
+  assert.doesNotMatch(debug, /vpngate|<domain-config/);
+  assert.match(debug, /<base-config cleartextTrafficPermitted="true">/);
+});
+
+test('iOS has no App Transport Security exception for VPN Gate', () => {
+  const appJson = readFileSync(join(import.meta.dirname, '../../app.json'), 'utf8');
+  const infoPlist = readFileSync(join(import.meta.dirname, '../../ios/OpenTunnel/Info.plist'), 'utf8');
+  assert.doesNotMatch(appJson, /vpngate|NSExceptionAllowsInsecureHTTPLoads/);
+  assert.doesNotMatch(infoPlist, /vpngate|NSExceptionAllowsInsecureHTTPLoads/);
+});
+
+test('backups stay off and the network security config stays wired', () => {
   const app = configure(bareManifest()).manifest.application[0];
   assert.equal(app.$['android:allowBackup'], 'false');
   assert.equal(app.$['android:networkSecurityConfig'], '@xml/network_security_config');

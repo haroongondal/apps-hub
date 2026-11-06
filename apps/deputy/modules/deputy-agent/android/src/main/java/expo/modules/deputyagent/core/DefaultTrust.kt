@@ -3,7 +3,7 @@ package expo.modules.deputyagent.core
 /** PRD FR-4 defaults, before the owner changes any app on the Apps screen. */
 object DefaultTrust {
   private val BLOCKED = setOf(
-    "com.haroon.store",
+    "com.haroon.store", "com.haroon.strongroom",
     "com.android.packageinstaller", "com.google.android.packageinstaller", "com.miui.packageinstaller",
     "com.x8bit.bitwarden", "com.bitwarden.authenticator", "com.agilebits.onepassword", "com.lastpass.lpandroid",
     "com.dashlane", "proton.android.pass", "keepass2android.keepass2android", "com.kunzisoft.keepass.free",

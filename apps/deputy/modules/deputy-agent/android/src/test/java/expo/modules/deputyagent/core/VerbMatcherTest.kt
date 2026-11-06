@@ -53,4 +53,10 @@ class VerbMatcherTest {
     "delete",
     VerbMatcher.match(NodeRef("p", null, null, null, null, Bounds(0, 0, 10, 10), clickable = true, childText = "Delete account")),
   )
+
+  @Test fun pairForwardAndDialAreIrreversible() {
+    assertEquals("pair", VerbMatcher.match("Pair device"))
+    assertEquals("forward", VerbMatcher.match("Forward"))
+    assertEquals("dial", VerbMatcher.match("Dial 0300 1234567"))
+  }
 }

@@ -260,8 +260,12 @@ class FirewallEngine(
 
   private fun firstDomain(csv: String?): String? = csv?.substringBefore(',')?.trim()?.takeIf { it.isNotEmpty() }
 
-  private fun verdictFor(uid: Int): Verdict =
-    if (uid < 0) Verdict.ALLOW else FirewallDecision.verdict(ruleOf(rules, uid), onCellular)
+  private fun verdictFor(uid: Int): Verdict = FirewallDecision.flowVerdict(uid, ruleOf(rules, uid), onCellular)
+
+  private fun dnsBlocked(uid: String?): Boolean {
+    val owner = FirewallDecision.dnsUid(uid)
+    return FirewallDecision.dnsVerdict(owner, ruleOf(rules, owner), onCellular) == Verdict.BLOCK
+  }
 
   private inner class FlowBridge : Bridge {
     override fun bind4(who: String?, addrPort: String?, fd: Long) = keepOutOfTun(fd)
@@ -362,14 +366,17 @@ class FirewallEngine(
       record(entry.copy(bytesOut = ended.getTx(), bytesIn = ended.getRx()))
     }
 
-    override fun onQuery(origin: String?, uid: String?, fqdn: String?, qtype: Long): DNSOpts =
-      DNSOpts().also {
+    override fun onQuery(origin: String?, uid: String?, fqdn: String?, qtype: Long): DNSOpts {
+      // A query that left the phone for a blocked app could carry its data out in the name.
+      val blocked = dnsBlocked(uid)
+      return DNSOpts().also {
         it.setUID(uid ?: "")
         it.setIPCSV("")
-        it.setTIDCSV("${Backend.System}:${Backend.Base}")
+        it.setTIDCSV(if (blocked) Backend.BlockAll else "${Backend.System}:${Backend.Base}")
         it.setTIDSECCSV("")
-        it.setNOBLOCK(true)
+        it.setNOBLOCK(!blocked)
       }
+    }
 
     override fun onPrequery(a: String?, b: String?, c: String?, d: Long): DomainOpts? = null
 

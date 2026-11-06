@@ -13,6 +13,15 @@
       </intent-filter>
       <meta-data android:name="android.autofill" android:resource="@xml/strongroom_autofill_service" />
     </service>
+    <!-- The background download (DESIGN §10): only the system's job scheduler may bind it. -->
+    <service
+      android:name="expo.modules.strongroomvault.android.SyncJobService"
+      android:exported="false"
+      android:permission="android.permission.BIND_JOB_SERVICE" />
+    <service
+      android:name="expo.modules.strongroomvault.android.ClipboardClearJob"
+      android:exported="false"
+      android:permission="android.permission.BIND_JOB_SERVICE" />
     <activity
       android:name="expo.modules.strongroomvault.android.UnlockActivity"
       android:exported="false"

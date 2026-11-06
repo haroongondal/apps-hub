@@ -2,7 +2,10 @@
 <!--
   The mobile page: the desktop page's markup with a mobile stylesheet. app.js is shared and
   queries only by id/class, so none of the ids move. Differences from desktop.html:
-  - no CSP meta (Electron-only concern; build.mjs inlines the scripts)
+  - an offline CSP: build.mjs inlines every script, stylesheet and font, so images, fetches and
+    fonts take only data:/blob: and nothing can reach a web host (a design's image src or
+    pattern source included); 'self' stays for scripts, styles and fonts so this file still
+    opens straight from file:// (apps/design-editor/test/mobile.mjs). No eval: none is needed
   - viewport locks browser pinch (touch.js does the canvas pinch), touch-action none on the board
   - the rail is a bottom strip, the drawer and inspector are bottom sheets, and the export
     popover is a sheet — all in embedded mode (body.embedded, set by shell-mobile.js when a
@@ -14,6 +17,7 @@
 <html lang="en" data-brand="design" data-theme="light">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data: blob:; font-src 'self' data:; connect-src data: blob:">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>Design Editor</title>
 <link rel="stylesheet" href="../ui/web/tokens.css">

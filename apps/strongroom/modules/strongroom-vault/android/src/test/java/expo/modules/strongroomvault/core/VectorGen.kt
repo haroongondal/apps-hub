@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import org.junit.Assume.assumeTrue
@@ -152,8 +153,12 @@ class VectorGen {
           }
         },
       )
+      // tools/vectors/account_key_vectors.py writes this section from an outside oracle; never recompute it here.
+      Json.parseToJsonElement(file.readText()).jsonObject["accountKey"]?.let { put("accountKey", it) }
     }
   }
+
+  private val file = File("src/test/resources/vault-vectors.json")
 
   @Test fun writeVectors() {
     assumeTrue(
@@ -163,6 +168,6 @@ class VectorGen {
     )
     val pretty = Json { prettyPrint = true }.encodeToString(JsonObject.serializer(), build())
     val ascii = pretty.map { if (it.code > 0x7e) "\\u%04x".format(it.code) else it.toString() }.joinToString("")
-    File("src/test/resources/vault-vectors.json").apply { parentFile?.mkdirs() }.writeText(ascii + "\n")
+    file.writeText(ascii + "\n")
   }
 }

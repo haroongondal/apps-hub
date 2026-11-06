@@ -292,8 +292,9 @@ closed.
 - "Mobile data" means the default network has `TRANSPORT_CELLULAR`.
 - When the network changes or a rule changes, rules are re-evaluated and
   open connections of newly blocked apps are closed, not just new ones.
-- If the UID lookup fails, the connection is allowed and logged as
-  "Unknown app", so the phone keeps working.
+- If the UID lookup fails, the connection is blocked and logged as
+  "Unknown app" (security fix, 2026-11-06: a blocked app could otherwise slip
+  out unattributed). DNS to the tunnel's own address is not affected.
 - Shared system UIDs (Android system, media and similar) appear as one
   entry each and can carry a rule like any app.
 

@@ -7,13 +7,9 @@ import { createVpnNode, type VpnNode, type VpnTransport } from './vpn-node.ts';
 
 export type { VpnNode, VpnTransport } from './vpn-node.ts';
 
-/** Ordered fetch sources. HTTPS is preferred; the HTTP fallback is slow and
- * relies on the scoped cleartext policy configured for `vpngate.net`. */
-export const VPN_GATE_SOURCES: readonly string[] = [
-  'https://www.vpngate.net/api/iphone/',
-  'http://www.vpngate.net/api/iphone/',
-  'http://www.vpngate.net/api/iphone/?mirror=1',
-];
+/** Fetch sources, HTTPS only: a cleartext list lets anyone on the Wi-Fi rank their own relay first.
+ * When HTTPS is blocked the app keeps showing the cached list. */
+export const VPN_GATE_SOURCES: readonly string[] = ['https://www.vpngate.net/api/iphone/'];
 
 /** Default when a row has no usable `remote <host> <port>` line downstream. */
 export const DEFAULT_VPN_GATE_PORT = 1194;
@@ -26,13 +22,28 @@ export const VPN_GATE_RECEIVE_TIMEOUT_MS = 120_000;
 
 const REMOTE_LINE = /^\s*remote\s+\S+\s+(\d+)\s*$/im;
 const PROTO_LINE = /^\s*proto\s+(tcp4?|tcp6|tcp|udp4?|udp6|udp)\b/im;
-const STRIPPED_DIRECTIVE =
-  /^\s*(data-ciphers|data-ciphers-fallback|cipher|comp-lzo|compress)\b.*$/i;
+
+/** The only directives a relay's row may carry; ics-openvpn passes any other option to OpenVPN
+ * as is, so `writepid`, `log` or `status` with a path could overwrite the app's own files.
+ * Every kept one maps to a typed ics-openvpn profile field; cipher lines are replaced below. */
+const ALLOWED_DIRECTIVES = new Set(['client', 'dev', 'proto', 'remote', 'nobind', 'persist-key', 'persist-tun', 'auth', 'key-direction']);
+const ALLOWED_INLINE_BLOCKS = new Set(['ca', 'cert', 'key', 'tls-auth', 'tls-crypt']);
+/** Plain words only, and short: ics-openvpn re-quotes nothing here and OpenVPN splits lines over 256 bytes. */
+const DIRECTIVE_LINE = /^[ \t]*([a-z][a-z-]*)(?:[ \t]+[A-Za-z0-9._:-]+)*[ \t]*$/;
+const MAX_DIRECTIVE_LINE = 128;
+const INLINE_OPEN = /^\s*<([a-z-]+)>(?:\s|$)/;
 
 /** Directives injected after the `client` preamble (exactly once). */
 export const INJECTED_CIPHER_DIRECTIVES: readonly string[] = [
   'data-ciphers AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305:AES-128-CBC',
   'data-ciphers-fallback AES-128-CBC',
+];
+
+/** Every VPN Gate relay presents a Let's Encrypt server certificate for `opengw.net`; without these
+ * ics-openvpn checks only the chain, so any Let's Encrypt certificate could pose as a relay. */
+export const VPN_GATE_IDENTITY_DIRECTIVES: readonly string[] = [
+  'remote-cert-tls server',
+  'verify-x509-name opengw.net name',
 ];
 
 /**
@@ -110,31 +121,33 @@ export async function* parseVpnGateCsv(
   }
 }
 
-/** Rewrites a decoded `.ovpn` payload so modern OpenVPN 2.6+ engines can
- * handshake with legacy academic servers.
+/** Rewrites a decoded VPN Gate `.ovpn` payload so modern OpenVPN 2.6+ engines can
+ * handshake with legacy academic servers, and only with a genuine relay.
  *
- * Idempotent by construction: existing cipher selection is removed, then the
- * compatibility block is injected exactly once, immediately after the
- * `client` preamble when one exists. Never log the input or output. */
+ * Idempotent by construction: only allowlisted directives and inline blocks are
+ * kept, then the cipher and relay identity directives are injected exactly once,
+ * immediately after the `client` preamble when one exists. Never log the input or output. */
 export function sanitizeOpenVpnConfig(raw: string): string {
   if (raw.trim().length === 0) {
     return raw;
   }
   const hadTrailingNewline = raw.endsWith('\n');
 
-  const withoutLegacy = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const lines = withoutLegacy.split('\n').filter((line) => {
-    return !STRIPPED_DIRECTIVE.test(line);
-  });
+  const lines = allowedLines(raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n'));
 
+  // allowedLines leaves block tags as bare `<name>` / `</name>` and drops any content line with `<`,
+  // so a `client` inside a block is skipped: injecting there would bury the identity check in a cert.
   let insertAt = 0;
+  let inBlock = false;
   for (let i = 0; i < lines.length; i++) {
-    if (/^\s*client\b/i.test(lines[i]!)) {
+    const line = lines[i]!;
+    if (line.startsWith('<')) inBlock = !line.startsWith('</');
+    else if (!inBlock && /^\s*client\b/i.test(line)) {
       insertAt = i + 1;
       break;
     }
   }
-  lines.splice(insertAt, 0, ...INJECTED_CIPHER_DIRECTIVES);
+  lines.splice(insertAt, 0, ...INJECTED_CIPHER_DIRECTIVES, ...VPN_GATE_IDENTITY_DIRECTIVES);
 
   const sanitized = lines.join('\n');
   // `split` keeps the trailing empty element for newline-terminated input, so
@@ -143,6 +156,43 @@ export function sanitizeOpenVpnConfig(raw: string): string {
     return `${sanitized}\n`;
   }
   return sanitized;
+}
+
+function allowedLines(lines: readonly string[]): string[] {
+  const kept: string[] = [];
+  let block: string | null = null;
+  for (const line of lines) {
+    if (block !== null) {
+      if (javaTrim(line) === `</${block}>`) {
+        kept.push(`</${block}>`);
+        block = null;
+      } else if (!line.includes('<')) {
+        // ics-openvpn copies block content verbatim into OpenVPN's config, where a line
+        // starting with `</` would close the block early and turn the rest into options.
+        kept.push(line);
+      }
+      continue;
+    }
+    const open = INLINE_OPEN.exec(line);
+    if (open !== null && ALLOWED_INLINE_BLOCKS.has(open[1]!)) {
+      block = open[1]!;
+      kept.push(`<${block}>`);
+      continue;
+    }
+    if (/^[ \t]*$/.test(line) || isAllowedDirective(line)) kept.push(line);
+  }
+  return kept;
+}
+
+function isAllowedDirective(line: string): boolean {
+  if (line.length > MAX_DIRECTIVE_LINE) return false;
+  const match = DIRECTIVE_LINE.exec(line);
+  return match !== null && ALLOWED_DIRECTIVES.has(match[1]!);
+}
+
+/** ics-openvpn ends an inline block where Java's `String.trim()` (strips U+0000..U+0020) gives the end tag. */
+function javaTrim(line: string): string {
+  return line.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, '');
 }
 
 /** Detects the payload protocol by content, never by naming convention. */

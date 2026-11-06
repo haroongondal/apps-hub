@@ -365,6 +365,11 @@ internal fun flatten(n: AccessibilityNodeInfo, refs: MutableList<NodeRef>, infos
   for (i in 0 until n.childCount) n.getChild(i)?.let { flatten(it, refs, infos, depth + 1) }
 }
 
+/** Apps that open a link to any site: the policy asks before typing in them. The app manifest's https `<queries>` makes them visible. */
+internal fun browsers(context: Context): Set<String> = context.packageManager
+  .queryIntentActivities(Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")).addCategory(Intent.CATEGORY_BROWSABLE), PackageManager.MATCH_ALL)
+  .map { it.activityInfo.packageName }.toSet()
+
 /** Package and label of every app with a launcher icon (the manifest's `<queries>` makes them visible). */
 internal fun launcherApps(context: Context): List<Pair<String, String>> {
   val pm = context.packageManager
