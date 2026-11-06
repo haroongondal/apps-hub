@@ -8,12 +8,17 @@ Its branch `strongroom-phase-1` was recreated from `origin/main` (146db86) on
 2026-11-03 because the old branch was deleted after PR #7 merged; it has no
 upstream on purpose, so never `git push` from it without naming the remote
 branch. Read `docs/handoffs/strongroom.md` completely first, then
-`docs/strongroom/DESIGN.md`. The Phase 1 work and its releases are done (0.1.1,
-versionCode 7, is in the Store and on the phone). The open problem is the one under "Current state + exact next step", item 1a.
-Its root cause is now proven (autofill rebinds into an idle process and HyperOS
-never completes that bind; see item 1a) and the Phase 2 fix — a foreground
-keep-alive service — is on this branch (commit 6ebbe3d) with all gates green.
-Still open: a Store release (owner's word) and the phone save test. Trust the verified facts and decisions in the handoff and don't redo
+`docs/strongroom/DESIGN.md`. The Phase 1 work and its releases are done. The
+phone-fill bug (item 1a) is closed end to end: root cause proven, the Phase 2
+keep-alive fix merged with the 0.2.x line and released as 0.2.2 (versionCode
+12, in the Store and on the phone, 2026-11-06), and both phone halves of the
+fix verified (Save dialog + stored entry; fill after a 98.7 s SmartPower idle
+dispatched in 24/6/120 ms, mResponseStatus=2). Still open: the owner may
+eye-confirm the fill chip (optional) and delete the throwaway entry
+`the-internet.herokuapp.com/strongroomtester`; this local branch (`ca93727`
+merge + the fix) is **not yet on origin/main** — pushing/merging needs the
+owner's word. Trust the verified facts and
+decisions in the handoff and don't redo
 that work. Use superpowers:systematic-debugging first (evidence before a fix),
 then superpowers:subagent-driven-development for code changes (implementer and
 task-reviewer, a review after every change, explicit models), ledgering every
@@ -315,8 +320,48 @@ no password generator / CSV export / card saving in v1.
   temporary patch (connect by DoH-confirmed IP, SNI preserved), reverted
   immediately after each of both releases. Next: Store update on the phone →
   keep-alive service check → save + matching-fill test on the practice page.
+- 2026-11-06 (cont.): **phone verification of the keep-alive fix — both halves
+  PASS on 0.2.2 (versionCode 12).** Install: the Store row offered the update
+  over the phone's 0.2.0 (9); the controller only tapped Strongroom's own row
+  → system "Update" → Play Protect "Scan app" → "This app looks safe" →
+  Install; `dumpsys package` then read versionCode=12, versionName=0.2.2, and
+  `autofill_service` stayed Strongroom. The owner unlocked the vault with the
+  fingerprint (controller never typed the master password, never attempted
+  fingerprint writes). **Keep-alive check:** right after unlock
+  `dumpsys activity services` showed `KeepAliveService` with `isForeground=true
+  foregroundId=1 types=0x40000000` (FOREGROUND_SERVICE_TYPE_SPECIAL_USE), the
+  notification on channel `keepAlive` (`mImportance=2`, LOW, silent), and the
+  same pid as the app process (11748). It held through a 75 s idle soak with no
+  interaction. **Save test (previously the bug was "no Save prompt
+  appeared"):** Chrome on `https://the-internet.herokuapp.com/login`, typed
+  throwaway creds (`strongroomtester` / an 11-char test password), submitted;
+  the system Save dialog ("Save username and password to Strongroom?")
+  appeared and Save completed: `RemoteFillService: calling onSaveRequest()`
+  fired 32 ms after the tap, and an in-app search finds the entry
+  (`the-internet.herokuapp.com` / `strongroomtester`) in the vault. The fill
+  request on that run (id 2738, before any matching entry existed) answered in
+  350 ms, `mResponseStatus=2`, 1 auth-fallback dataset — the correct no-match
+  shape. **Matching-fill test after idle:** after a 98.7 s SmartPower idle
+  (`idle->background(98729ms)` — the wedge that killed the 16:07 fill),
+  tapping the Username field logged request id 2742 with
+  `mLatencyFillRequestSentMillis=24`, `calling onFillRequest()` 6 ms after the
+  request was queued, `mLatencyFillResponseReceivedMillis=120`,
+  `mLatencyResponseProcessingMillis=32`, `mResponseStatus=2` (SUCCESS — the
+  16:07 wedge had `mResponseStatus=4`/timeout with `onFillRequest` never
+  called), `mTotalDatasetsProvided=2` (dataset 1 = the saved creds
+  16_chars/11_chars exactly matching the new entry; dataset 2
+  `hasAuthentication`), and the ViewState shows `FILLABLE|INLINE_SHOWN`.
+  Evidence limits: this HyperOS build returns all-black screencaps and keeps
+  the IME/autofill surfaces out of uiautomator dumps, so the chip's pixels
+  aren't captured — the system's own telemetry above is the record; the owner
+  can see the chip live if they repeat the field tap. Left for the owner: the
+  throwaway entry `the-internet.herokuapp.com/strongroomtester` is still in
+  the vault (and synced) — delete or keep it as they like; the field-level
+  tap-to-fill with the chip needs their eyes (fingerprint or master password
+  stays theirs).
 
-**The owner's phone is attached over wifi adb.** Every adb/expo command must
+**The owner's phone is attached over USB** (serial `49kjmnuwonkffqzh`; it
+dropped off adb twice this day and was re-plugged). Every adb/expo command must
 target the emulator explicitly (`-s emulator-5554`). After Task 12, emulator-5554's
 Strongroom has no vault (`pm clear`), its autofill service is Google and verbose
 autofill logging is on; the dev-server override to port 8082 is restored (another
@@ -348,7 +393,11 @@ Fill, save and platform:
   - Does `webDomain` carry a port? (Firefox's doesn't, so an IP-address login
     fills on any port of that IP.)
   - A checkout-page card fill asks for the fingerprint even when unlocked.
-- First fill with a cold Strongroom process lands within Android's 5 s limit (release build).
+- First fill with a cold Strongroom process lands within Android's 5 s limit
+  (release build). **PASS on the phone 2026-11-03 (`mLatencyFillResponseReceivedMillis=378`)**
+  and, 2026-11-06 (0.2.2), PASS after a 98.7 s SmartPower idle with the
+  keep-alive fix: 24 ms request-sent / 6 ms dispatch / 120 ms response,
+  no timeout.
 - `autofillSelected` right after the Store install (on the emulator it reads
   false until an autofill session runs).
 - What `getInstallSourceInfo` reports for an APK sideloaded on HyperOS
@@ -575,8 +624,15 @@ order (ledger "Post-plan work" has the rulings and P-briefs):
    silent IMPORTANCE_LOW notification) started on every vault unlock when the
    `keepAliveEnabled` pref (default on) allows it, plus the Settings toggle,
    a POST_NOTIFICATIONS request and a Xiaomi battery-unrestricted row
-   (commit `6ebbe3d`). Gates green; no emulator testing (owner's word). Next:
-   owner's word to release via the Store, then repeat the phone save test.
+   (commit `6ebbe3d`). Gates green; no emulator testing (owner's word).
+   **VERIFIED 2026-11-06 (0.2.2, versionCode 12) — both halves PASS:**
+   Save dialog appeared and the entry was stored (`onSaveRequest` delivered
+   +32 ms); a fill after 98.7 s of SmartPower idle dispatched in 24/6/120 ms
+   with `mResponseStatus=2` and the new entry's credentials as dataset 1
+   (`mTotalDatasetsProvided=2`), and the keep-alive FGS held the process
+   (same pid) through the idle keep — full chain in the 2026-11-06
+   session-log entries. The item is closed; remaining checks are the owner's
+   optional eye-confirm of the chip and deleting the throwaway entry.
 2a. **Phone check 2026-11-03 15:44 (controller, adb, 0.1.1 versionCode 7 from the
    Store, Strongroom still the autofill service):** PASS cold fill. Strongroom
    had no process; Chrome on https://the-internet.herokuapp.com/login, tap
