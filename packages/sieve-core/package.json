@@ -1,0 +1,16 @@
+{
+  "name": "@apps-hub/sieve-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure TypeScript settings model and validation for Sieve, the private Chrome extension (runnable from the extension and Node)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "node --test src/__tests__/settings.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.9.2"
+  }
+}

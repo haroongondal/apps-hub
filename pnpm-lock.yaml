@@ -683,6 +683,15 @@ importers:
 
   packages/pdf-editor-engine: {}
 
+  packages/sieve-core:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.10.10
+      typescript:
+        specifier: ~5.9.2
+        version: 5.9.3
+
   packages/store-manifest:
     dependencies:
       zod:
