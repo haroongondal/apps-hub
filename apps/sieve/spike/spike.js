@@ -17,6 +17,12 @@ function tally(formats) {
 }
 
 function summarise(r) {
+  if (r.strategy === 'DL') {
+    return {
+      strategy: 'DL', videoId: r.videoId, signedIn: r.loggedIn, error: r.error, baseline: r.baseline,
+      streams: (r.streams ?? []).map(({ role, mode, itag, height, bytes, contentLength, ms, waitedMs, mbps, xBitrate, q1, q2, pass, reason }) => ({ role, mode, itag, height, bytes, contentLength, ms, waitedMs, mbps, xBitrate, q1, q2, pass, reason })),
+    };
+  }
   if (r.error) return { strategy: r.strategy, videoId: r.videoId, signedIn: r.loggedIn, error: r.error };
   if (r.strategy === 'S3') {
     return {
@@ -27,12 +33,6 @@ function summarise(r) {
         for (const x of c.checks) { const o = `${x.status} (unsolved ${x.unsolved})`; outcomes[o] = (outcomes[o] ?? 0) + 1; }
         return [k, { formats: c.formats, solved: c.solved, checked: c.checked, passed: c.passed, outcomes, pass: c.pass }];
       })),
-    };
-  }
-  if (r.strategy === 'DL') {
-    return {
-      strategy: 'DL', videoId: r.videoId, signedIn: r.loggedIn, baseline: r.baseline,
-      streams: r.streams.map(({ role, mode, itag, height, bytes, contentLength, mbps, xBitrate, q1, q2, pass, reason }) => ({ role, mode, itag, height, bytes, contentLength, mbps, xBitrate, q1, q2, pass, reason })),
     };
   }
   return {
@@ -185,42 +185,50 @@ const round2 = (x) => Math.round(x * 100) / 100;
 const BASELINES = ['https://speed.cloudflare.com/__down?bytes=25000000', 'http://proof.ovh.net/files/10Mb.dat'];
 
 async function fetchRange(url, start, length) {
+  const tStart = performance.now();
+  const errors = [];
   for (let attempt = 1; ; attempt++) {
+    const t0 = performance.now();
+    const waitedMs = Math.round(t0 - tStart);
     try {
       const res = await fetch(url, { headers: { Range: `bytes=${start}-${start + length - 1}` }, credentials: 'omit', signal: AbortSignal.timeout(60_000) });
       if (res.status !== 206) {
         res.body?.cancel().catch(() => {});
-        return { status: res.status, attempt };
+        return { status: res.status, attempt, ms: Math.round(performance.now() - t0), waitedMs, errors };
       }
       const total = Number(/\/(\d+)\s*$/.exec(res.headers.get('content-range') ?? '')?.[1]) || null;
-      return { status: 206, body: await res.arrayBuffer(), total, attempt };
+      const body = await res.arrayBuffer();
+      return { status: 206, body, total, attempt, ms: Math.round(performance.now() - t0), waitedMs, errors };
     } catch (err) {
-      if (attempt === 2) return { status: 'network', error: err?.name === 'TimeoutError' ? 'timed out' : String(err?.message ?? err), attempt };
+      const error = err?.name === 'TimeoutError' || err?.name === 'AbortError' ? 'timed out after 60 s' : String(err?.message ?? err);
+      errors.push(error);
+      if (attempt === 2) return { status: 'network', error, attempt, ms: 0, waitedMs: Math.round(performance.now() - tStart), errors };
       await pause(3_000);
     }
   }
 }
 
-// yt-dlp's chunk size: googlevideo throttles single long requests. Only the count, Content-Range total and first 16 bytes are kept; mbps is MB (1e6 bytes) per second.
+// yt-dlp's chunk size: googlevideo throttles single long requests. Only the count, Content-Range total and first 16 bytes are kept.
+// ms and mbps (MB of 1e6 bytes per second) count the successful attempts only; a failed attempt and its pause go to waitedMs.
 async function downloadStream(url, contentLength, { maxBytes = contentLength, onProgress } = {}) {
   const goal = Math.min(contentLength, maxBytes);
-  const out = { bytes: 0, ms: 0, mbps: 0, magic: null, contentRangeTotal: null, retries: 0, chunkMs: [] };
-  const t0 = performance.now();
+  const out = { bytes: 0, ms: 0, mbps: 0, magic: null, contentRangeTotal: null, retries: 0, waitedMs: 0, retryErrors: [], chunkMs: [] };
   onProgress?.(0);
   while (out.bytes < goal) {
     const length = Math.min(10 * MIB, goal - out.bytes);
-    const tChunk = performance.now();
     const r = await fetchRange(url, out.bytes, length);
-    out.chunkMs.push(Math.round(performance.now() - tChunk));
     out.retries += r.attempt - 1;
+    out.waitedMs += r.waitedMs;
+    out.retryErrors.push(...r.errors.map((e) => `offset ${out.bytes}: ${e}`));
     if (r.status !== 206) { out.error = r.status === 'network' ? `network error at offset ${out.bytes}: ${r.error}` : `HTTP ${r.status} at offset ${out.bytes}`; break; }
     out.magic ??= [...new Uint8Array(r.body.slice(0, 16))].map((b) => b.toString(16).padStart(2, '0')).join('');
     out.contentRangeTotal ??= r.total;
+    out.ms += r.ms;
+    out.chunkMs.push(r.ms);
     out.bytes += r.body.byteLength;
     if (r.body.byteLength !== length) { out.error = `short chunk at offset ${out.bytes - r.body.byteLength}: got ${r.body.byteLength} of ${length} bytes`; break; }
     onProgress?.(out.bytes);
   }
-  out.ms = Math.round(performance.now() - t0);
   out.mbps = out.ms ? round2(out.bytes / 1e6 / (out.ms / 1000)) : 0;
   return out;
 }
@@ -267,7 +275,7 @@ async function measure(role, label, c, partial) {
   const goal = partial ? 100 * MIB : c.contentLength;
   const d = await downloadStream(c.url, c.contentLength, { maxBytes: goal, onProgress: (n) => say(`Downloading ${label}: ${mb(n)} of ${mb(Math.min(goal, c.contentLength))} MB`) });
   const rec = { role, mode: partial ? 'partial' : 'full', source: c.source, itag: c.itag, height: c.height, mimeType: c.mimeType, bitrate: c.bitrate, contentLength: c.contentLength, ...d };
-  rec.xBitrate = round2((d.mbps * 8e6) / c.bitrate);
+  rec.xBitrate = d.ms ? round2((d.bytes * 8) / (d.ms / 1000) / c.bitrate) : 0;
   rec.magicOk = !!(d.magic && (d.magic.slice(8, 16) === '66747970' || d.magic.startsWith('1a45dfa3')));
   const problems = [];
   if (d.error) problems.push(d.error);
@@ -280,8 +288,8 @@ async function measure(role, label, c, partial) {
     if (t.status !== 206 || rec.tail.bytes !== len) problems.push(`the last ${len} bytes: ${t.status === 206 ? `got ${rec.tail.bytes}` : (t.error ?? `HTTP ${t.status}`)}`);
   }
   rec.q1 = partial ? null : problems.length === 0;
-  rec.q2 = rec.xBitrate >= 5;
-  if (!rec.q2) problems.push(`${rec.xBitrate}x the bitrate is under 5x`);
+  rec.q2 = d.error ? null : rec.xBitrate >= 5;
+  if (rec.q2 === false) problems.push(`${rec.xBitrate}x the bitrate is under 5x`);
   rec.pass = problems.length === 0;
   rec.reason = problems.join('; ') || null;
   return rec;
@@ -290,6 +298,11 @@ async function measure(role, label, c, partial) {
 async function DL(videoId, loggedIn) {
   const result = { strategy: 'DL', videoId, loggedIn, baseline: null, streams: [] };
   const save = () => chrome.storage.local.set({ 'probe:DL': result });
+  try { await downloads(result, save); }
+  catch (err) { result.error = String(err?.message ?? err); await save(); }
+}
+
+async function downloads(result, save) {
   const all = await candidates();
   const video = all.filter((c) => c.height && c.mimeType?.startsWith('video/')).sort((a, b) => b.bitrate - a.bitrate);
   const heights = [...new Set(video.map((c) => c.height))].sort((a, b) => a - b);

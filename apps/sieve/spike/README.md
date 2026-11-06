@@ -62,4 +62,6 @@ or a short chunk fails the stream):
 - The top height above 1080p, if there is one: only its first 100 MiB plus the last 1 MiB (a 206 with the right byte count proves the end is reachable). It is marked `partial` and never claims Q1.
 
 `probe:DL` holds itag, height, mimeType, byte counts, timings, the first 16 bytes as hex and the verdict, never a URL or a body.
-`run.mjs` sizes its wait from the byte count the page announces (at a 1 MB/s floor, capped at 30 minutes).
+`ms`, `mbps` and `xBitrate` count only the attempts that succeeded; a failed attempt and its 3 s pause go to `waitedMs`, with
+the error in `retryErrors`. `run.mjs` pauses the video first, then waits for Run all to finish, failing with a message when
+its progress text has not changed for 4.5 minutes or 30 minutes have passed.

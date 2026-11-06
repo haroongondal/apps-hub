@@ -190,20 +190,23 @@ Summary lines (`run.mjs`, after the review fixes). The fields:
 
 ### Downloads (Q1, Q2, signed out)
 
-Run 2026-11-06 with `node apps/sieve/spike/run.mjs` on `aqz-KE-bpKQ` (same setup as above), the last step of **Run all** (`probe:DL`). Every stream is 10 MiB `Range` requests, one after another (60 s each, one retry on a network error). The streams are `S2:visionos` URLs (no `n`, no cipher; S3 had nothing to solve on this video). Per ruling R9 the audio and the 1080p video are downloaded in full; 2160p, the top height, only gets its first 100 MiB plus a 1 MiB range at the end. A stream passes Q1 when every byte arrived and the first bytes are `ftyp` at offset 4 or `1A 45 DF A3`, and Q2 when it ran at 5x its `bitrate` (the format's peak rate, so the ratio errs low) or more.
+Run 2026-11-06 with `VIDEO=dQw4w9WgXcQ node apps/sieve/spike/run.mjs` (same setup as above), the last step of **Run all** (`probe:DL`). The default video `aqz-KE-bpKQ` could not be used for the final run: YouTube started answering "Sign in to confirm you're not a bot" for it (every client, `visionos` included, `LOGIN_REQUIRED`; headless and headed; still after a 10 minute wait), after many runs today from this IP. `run.mjs` pauses the video before **Run all**, because a playing video shares the link; the owner should pause theirs too in task 0.6.
 
-Link baseline, taken just before the downloads: 25 MB from `speed.cloudflare.com` in 5.0 s, **5.0 MB/s**. This Mac's link moves a lot: the first run (below) measured 1.17 MB/s, and `curl` after the second run gave 4.95, 6.20 and 5.55 MB/s for the same 25 MB.
+Every stream is 10 MiB `Range` requests, one after another (60 s each, one retry on a network error). The streams are `S2:visionos` URLs (no `n`, no cipher). Per ruling R9 the audio and the 1080p video are downloaded in full; 2160p, the top height, only gets its first 100 MiB plus a 1 MiB range at the end. A stream passes Q1 when every byte arrived and the first bytes are `ftyp` at offset 4 or `1A 45 DF A3`, and Q2 when it ran at 5x its `bitrate` (the format's peak rate, so the ratio errs low) or more. Seconds, MB/s and x bitrate count only the attempts that succeeded; a failed attempt and its 3 s pause are in "waited".
 
-| itag | height | codec | bytes | seconds | MB/s | x bitrate | result |
-|---|---|---|---|---|---|---|---|
-| 251 audio | | opus, WebM | 10,202,210 of 10,202,210 | 39.3 | 0.26 | 14.5 | Q1 pass, Q2 pass |
-| 299 video | 1080p | avc1.64002A, MP4 | 257,619,653 of 257,619,653 | 421.0 | 0.61 | 0.7 | Q1 pass, **Q2 fail** |
-| 315 video | 2160p | vp9, WebM | **partial:** 104,857,600 of 1,362,269,481 | 112.5 | 0.93 | 0.28 | partial pass (first 100 MiB, magic `1A 45 DF A3`, last 1 MiB gave 206 with 1,048,576 bytes), **Q2 fail**, Q1 not claimed |
+Link baseline, taken just before the downloads: 25 MB from `speed.cloudflare.com` in 10.9 s, **2.3 MB/s**. This Mac's link moves a lot (1.17, 2.3, 3.97 and 5.0 MB/s in four runs today).
 
-- Checks on all three: every `Content-Range` total equals the declared `contentLength`; the 1080p stream is `00 00 00 1C ftyp dash`; no HTTP error. The 1080p stream needed 1 retry (a network error on one chunk, then 206).
-- Per chunk (MB/s): 1080p's first 12 chunks ran 0.16 to 1.22 and its last 13 ran 0.91 to 1.86 (mostly 1.0 to 1.2); 2160p's 10 ran 0.78 to 1.10. The audio is one chunk, so its Q2 pass says little: 5x of 143 kbps is only 90 KB/s.
-- First run (same download code; its wait ended early, at 9 min, because the 1 MB/s floor was too tight for this link, so the wait now has half again plus 2 min): baseline 1.17 MB/s; audio 0.36 MB/s (about 20x); 1080p 257,619,653 bytes in 276.5 s, 0.93 MB/s, 1.07x; 2160p cut at 73 of 105 MB.
-- Reading: Q1 passes for the 1080p video and the audio (every byte, right container, 206 throughout; 2160p's end is reachable, its middle untested), but Q2 fails as measured: 1080p ran at 0.7 to 1.07x its bitrate, which is about real time, and 2160p at 0.28x. The link does not explain all of it: in the second run YouTube gave 0.6 to 0.9 MB/s while the neutral host gave 5 MB/s, but in the first run the baseline was 1.17 MB/s, so a slow link fits that run. A one-off cross-check from node and `curl` failed (the player call answered `LOGIN_REQUIRED` without page cookies), so a googlevideo cap near 1 MB/s per connection, a poor route to it, and a limit of 10 MiB sequential requests are not told apart here; Task 0.5 (split vs plain) and the owner's run (0.6) are the next evidence.
+| itag | height | codec | bytes | seconds | waited s | MB/s | x bitrate | result |
+|---|---|---|---|---|---|---|---|---|
+| 251 audio | | opus, WebM | 3,433,755 of 3,433,755 | 13.8 | 0 | 0.25 | 14.61 | Q1 pass, Q2 pass |
+| 137 video | 1080p | avc1.640028, MP4 | 80,911,999 of 80,911,999 | 163.9 | 63.0 | 0.49 | 0.91 | Q1 pass, **Q2 fail** |
+| 313 video | 2160p | vp9, WebM | **partial:** 104,857,600 of 358,608,461 | 179.7 | 0 | 0.58 | 0.26 | partial pass (first 100 MiB, magic `1A 45 DF A3`, last 1 MiB gave 206 with 1,048,576 bytes), **Q2 fail**, Q1 not claimed |
+
+- Checks: on all three streams the first chunk's `Content-Range` total equals the declared `contentLength` (only the first chunk's total is compared); the 1080p stream starts `00 00 00 1C ftyp dash`; no HTTP error.
+- The 1080p stream had one retry: the chunk at offset 62,914,560 stalled until the 60 s timeout (recorded as "The user aborted a request.", now worded "timed out after 60 s"), then succeeded after the 3 s pause, which is the 63.0 s waited. That chunk ran at 2.91 MB/s on the new attempt.
+- Per chunk (MB/s): 1080p 0.51, 0.48, 0.40, 0.40, 0.26, 0.66, 2.91 (the retried chunk), 0.86; 2160p 0.34 to 0.86 over its 10 chunks. The audio is one chunk, so its Q2 pass says little: 5x of 137 kbps is only 85 KB/s.
+- Earlier runs on `aqz-KE-bpKQ`, before the timing fix (their figures include any stalled retry, so they are understated; the second run's 1080p had one, about 60 s of 421 s): baseline 5.0 MB/s, audio 0.26 MB/s, 1080p 257,619,653 bytes at 0.61 MB/s (0.7x, all bytes, `ftyp`), 2160p first 100 MiB at 0.93 MB/s (0.28x) with the last 1 MiB reachable (206). A run before that: baseline 1.17 MB/s, 1080p 0.93 MB/s (1.07x). A run on this video cut short by the old wait: baseline 3.97 MB/s, 1080p 0.59 MB/s.
+- Reading: Q1 passes for the 1080p video and the audio, and the end of 2160p is reachable (its middle untested), but Q2 fails: YouTube gave about 0.25 to 0.9 MB/s regardless of bitrate (1080p at 4 to 7 Mbps and 2160p at 18 to 27 Mbps got the same), below the 1.2 to 5 MB/s the neutral host gave on the same runs; a cap, a poor route and the sequential-request design are not told apart yet, so Task 0.5 (split vs plain) and the owner's run (0.6) are the next evidence. A node and `curl` cross-check failed (`LOGIN_REQUIRED` without page cookies).
 
 ## File map
 

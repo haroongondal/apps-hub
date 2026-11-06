@@ -35,23 +35,32 @@ try {
   await video.locator('#movie_player').waitFor({ timeout: 60_000 });
   await video.waitForLoadState('load', { timeout: 60_000 });
   await video.waitForTimeout(1_000);
+  // A playing video competes with the downloads for the link, so pause it first.
+  if (!(await video.evaluate(() => { const v = document.querySelector('video'); v?.pause(); return v?.paused; }))) throw new Error('the video did not pause');
 
   const spike = await ctx.newPage();
   await spike.goto(`chrome-extension://${id}/spike.html`);
   await spike.getByRole('button', { name: 'Run all' }).click();
 
   const stored = (key) => spike.evaluate((k) => chrome.storage.local.get(k).then((o) => o[k]), key);
-  // The status stays aria-busy until Run all ends, and its text changes as it goes. The downloads announce their size first.
-  const idle = () => !document.getElementById('status').hasAttribute('aria-busy');
+  // The status stays aria-busy until Run all ends, and its text changes with every 10 MiB chunk. The downloads announce their size first.
   await spike.waitForFunction(() => document.getElementById('status').dataset.expectBytes || !document.getElementById('status').hasAttribute('aria-busy'), null, { timeout: 240_000 });
   const expect = Number(await spike.locator('#status').getAttribute('data-expect-bytes')) || 0;
-  // A 1 MB/s floor plus half again and 2 min: a link at that floor still finishes (the first try, with only 2 min, cut a 1 MB/s run short).
-  const downloadMs = Math.min(30 * 60_000, (expect / 1e6) * 1500 + 120_000);
-  try { await spike.waitForFunction(idle, null, { timeout: downloadMs }); }
-  catch {
-    const dl = await stored('probe:DL');
-    if (dl) console.log(`downloads so far: ${JSON.stringify(dl.streams?.map(({ itag, bytes, ms, mbps, reason }) => ({ itag, bytes, ms, mbps, reason })))} baseline ${JSON.stringify(dl.baseline)}`);
-    throw new Error(`Run all did not finish within ${Math.round(downloadMs / 60_000)} min for ${Math.round(expect / 1e6)} MB; status: ${await spike.locator('#status').innerText()}`);
+  // A fixed 1 MB/s floor failed three times on a link that gave YouTube 0.2 to 0.6 MB/s, so a hang is a status text that stops changing; 30 min caps the whole wait.
+  const started = Date.now();
+  let seen = '';
+  let changed = started;
+  for (;;) {
+    const now = await spike.evaluate(() => ({ busy: document.getElementById('status').hasAttribute('aria-busy'), text: document.getElementById('status').textContent }));
+    if (!now.busy) break;
+    if (now.text !== seen) { seen = now.text; changed = Date.now(); }
+    const why = Date.now() - changed > 270_000 ? 'its progress text has not changed for 4.5 min' : Date.now() - started > 30 * 60_000 ? 'it took more than 30 min' : null;
+    if (why) {
+      const dl = await stored('probe:DL');
+      if (dl) console.log(`downloads so far: ${JSON.stringify(dl.streams?.map(({ itag, bytes, ms, waitedMs, mbps, reason }) => ({ itag, bytes, ms, waitedMs, mbps, reason })))} baseline ${JSON.stringify(dl.baseline)}`);
+      throw new Error(`Run all did not finish (${why}; ${Math.round(expect / 1e6)} MB planned); status: ${now.text}`);
+    }
+    await spike.waitForTimeout(2_000);
   }
   const status = await spike.locator('#status').innerText();
   if (status !== 'Done. Results below.') throw new Error(`Run all did not finish: ${status}`);
@@ -66,10 +75,11 @@ try {
     if (!r.error && 'playability' in r && r.playability !== 'OK') console.log(`  ${r.strategy}: playability is ${r.playability} (${r.reason})${r.playability === 'LOGIN_REQUIRED' ? '; on a bot check, rerun with HEADLESS=0' : ''}`);
   }
   const dl = probes['probe:DL'];
+  if (dl?.error) console.log(`DL error: ${dl.error}`);
   if (dl?.baseline) console.log(`baseline: ${dl.baseline.error ?? `${dl.baseline.mbps} MB/s (${dl.baseline.host}, ${dl.baseline.bytes} bytes in ${(dl.baseline.ms / 1000).toFixed(1)} s)`}`);
   if (dl?.streams?.length) {
-    console.log('| itag | height | codec | mode | bytes | seconds | MB/s | x bitrate | Q1 | Q2 | pass |');
-    for (const x of dl.streams) console.log(`| ${x.itag} | ${x.height ?? ''} | ${/codecs="([^"]+)"/.exec(x.mimeType ?? '')?.[1] ?? ''} | ${x.mode} | ${x.bytes} of ${x.contentLength} | ${(x.ms / 1000).toFixed(1)} | ${x.mbps} | ${x.xBitrate} | ${x.q1} | ${x.q2} | ${x.pass}${x.reason ? ` (${x.reason})` : ''} |`);
+    console.log('| itag | height | codec | mode | bytes | seconds | waited s | retries | MB/s | x bitrate | Q1 | Q2 | pass |');
+    for (const x of dl.streams) console.log(`| ${x.itag} | ${x.height ?? ''} | ${/codecs="([^"]+)"/.exec(x.mimeType ?? '')?.[1] ?? ''} | ${x.mode} | ${x.bytes} of ${x.contentLength} | ${(x.ms / 1000).toFixed(1)} | ${((x.waitedMs ?? 0) / 1000).toFixed(1)} | ${x.retries ?? 0} | ${x.mbps} | ${x.xBitrate} | ${x.q1} | ${x.q2} | ${x.pass}${x.reason ? ` (${x.reason})` : ''}${x.retryErrors?.length ? ` [retry: ${x.retryErrors.join('; ')}]` : ''} |`);
   }
   const label = Object.values(probes).some((r) => r.loggedIn) ? 'signed-in' : 'signed-out';
   writeFileSync(join(SCRATCH, `spike-${label}.json`), JSON.stringify(probes, null, 2));
