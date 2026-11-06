@@ -61,6 +61,9 @@ react {
 
     /* Autolinking */
     autolinkLibrariesWithApp()
+
+    // A side-by-side test build carries its own JS, so it never loads whatever a Metro on 8081 serves.
+    if (findProperty('strongroomIdSuffix')) debuggableVariants = []
 }
 
 /**
@@ -97,6 +100,7 @@ android {
         versionName findProperty('appsHubVersionName') ?: "0.1.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+        buildConfigField "boolean", "ALLOW_SCREENSHOTS", "false"
     }
     signingConfigs {
         debug {
@@ -118,6 +122,12 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            // Phone proof builds (Task 6c): -PstrongroomIdSuffix=.synctest installs beside the Store app, which holds the owner's vault.
+            if (findProperty('strongroomIdSuffix')) {
+                applicationIdSuffix findProperty('strongroomIdSuffix')
+                resValue "string", "app_name", "Strongroom test"
+            }
+            if (findProperty('strongroomScreenshots') == 'true') buildConfigField "boolean", "ALLOW_SCREENSHOTS", "true"
         }
         release {
             signingConfig signingConfigs.findByName('release') ?: signingConfigs.debug
@@ -138,6 +148,15 @@ android {
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
     }
+}
+
+// Phone proof builds: -PstrongroomSyncCa=<pem> makes a debug build trust that one self-signed local vault server (src/syncTest).
+def syncCa = findProperty('strongroomSyncCa')
+if (syncCa) {
+    def caRes = layout.buildDirectory.dir('generated/strongroomSyncCa').get().asFile
+    copy { from syncCa; into "$caRes/raw"; rename { 'strongroom_sync_ca.pem' } }
+    android.sourceSets.debug.manifest.srcFile 'src/syncTest/AndroidManifest.xml'
+    android.sourceSets.debug.res.srcDirs += ['src/syncTest/res', caRes]
 }
 
 // Apply static values from `gradle.properties` to the `android.packagingOptions`

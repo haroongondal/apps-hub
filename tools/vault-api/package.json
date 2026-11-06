@@ -1,0 +1,22 @@
+{
+  "name": "@apps-hub/vault-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker: Strongroom sync server (D1); holds only ciphertext, record ids, sizes and timestamps",
+  "scripts": {
+    "test": "node --disable-warning=ExperimentalWarning --test src/__tests__/worker.test.ts src/__tests__/schema.test.ts src/__tests__/sync-e2e.test.ts",
+    "typecheck": "tsc --noEmit",
+    "deploy": "cf deploy --secrets-file .dev.vars"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "2.0.0-beta.v.4",
+    "@types/node": "^22.10.0",
+    "cf": "1.0.0-beta.21",
+    "typescript": "~5.9.2",
+    "vite": "^8.3.5"
+  },
+  "dependencies": {
+    "strongroom-core": "workspace:*"
+  }
+}

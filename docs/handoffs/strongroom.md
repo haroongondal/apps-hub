@@ -120,8 +120,10 @@ no password generator / CSV export / card saving in v1.
 - `docs/strongroom/DESIGN.md`: the design.
 - `docs/strongroom/PHASE-1-PLAN.md`: Phase 1 plan, 12 tasks (Task 1 = threat-model gate).
 - `.superpowers/brainstorm/6147-1793289451/content/android-flows.html`: mockups (git-ignored).
-- `apps/strongroom/tools/disk-check.sh <username> <password> [serial]`: debug-build
-  on-disk scan (plain, UTF-16, Base64); serial defaults to `emulator-5554`.
+- `apps/strongroom/tools/disk-check.sh <serial> <package> <secret>...`: debug-build
+  on-disk scan (plain, UTF-16, Base64; `hex:<hex>` secrets as raw bytes). Since
+  Phase 2 Task 6c it takes the package id (the side-by-side test build is
+  `com.haroon.strongroom.synctest`) and any number of secrets.
 - `.superpowers/sdd/PHASE-1-PLAN/`: SDD ledger (`progress.md`), Task 1 rulings,
   report and review (git-ignored scratch; the git log is the durable record).
 

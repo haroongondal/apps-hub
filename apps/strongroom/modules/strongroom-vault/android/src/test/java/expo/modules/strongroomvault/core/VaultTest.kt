@@ -538,4 +538,25 @@ class VaultTest {
     assertThrows(KdfOutOfRange::class.java) { v.recover(recoveryKey, password) }
     assertFalse(v.isUnlocked)
   }
+
+  @Test fun aFlaggedHeaderOpensWithTheStoredAccountKeyAndKeepsItsFlag() {
+    val ak = AccountKey.generate()
+    var stored: ByteArray? = ak.copyOf()
+    val v = Vault(store, { wall }, { elapsed }) { stored?.copyOf() }.also { it.setUp(password, recoveryKey, fast) }
+    val k = v.vaultKeyCopy(password)!!
+    store.putHeader(VaultFormat.withAccountKey(storedHeader(), k, password, ak).toJson())
+    v.lock()
+    assertTrue(v.unlock(password))
+    val other = "another master password".toCharArray()
+    assertTrue(v.changePassword(password, other))
+    val rk = v.newRecoveryKey(other)!!
+    v.lock()
+    assertTrue(v.recover(rk, password))
+    assertTrue(storedHeader().accountKey)
+    assertArrayEquals(k, VaultFormat.unlockWithPassword(storedHeader(), password, ak))
+    stored = null
+    v.lock()
+    assertThrows(AccountKeyRequired::class.java) { v.unlock(password) }
+    assertFalse(v.isUnlocked)
+  }
 }

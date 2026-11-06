@@ -1,0 +1,709 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
+import {
+  createVault, formatAccountKey, headerToJson, KDF_FLOOR, loadPublicSuffixList, randomBytes, recoveryLoginToken, signInWithPassword,
+  signInWithRecovery, SyncAuthError, toBase64, tokenHash,
+} from 'strongroom-core';
+import type { Header, RecordStore, StoredRecord, SyncReport } from 'strongroom-core';
+import { COMMON_PASSWORDS } from '../common-passwords.ts';
+import { createService } from '../service.ts';
+import type { Ctx, Detail, ImportPreview, KV, Pending, Row, Status, SyncStatus } from '../service.ts';
+import { localStore } from '../storage.ts';
+import { fakeChrome, loginEntry, newWorld, PHONE_PASSWORD, useChrome } from './sync-world.ts';
+import type { World } from './sync-world.ts';
+
+const android = '../../../strongroom/modules/strongroom-vault/android/src';
+loadPublicSuffixList(readFileSync(new URL(`${android}/main/resources/public_suffix_list.dat`, import.meta.url), 'utf8'));
+const redacted = readFileSync(new URL(`${android}/test/resources/google-export-redacted.csv`, import.meta.url), 'utf8');
+
+class MemoryStore implements RecordStore {
+  header: Header | null = null;
+  records = new Map<string, Uint8Array>();
+  async getHeader() { return this.header; }
+  async getRecords(): Promise<StoredRecord[]> { return [...this.records].map(([id, sealed]) => ({ id, sealed })); }
+  async commit(change: { header?: Header; records?: StoredRecord[] }) {
+    if (change.header) this.header = change.header;
+    for (const r of change.records ?? []) this.records.set(r.id, r.sealed);
+  }
+}
+
+const memoryKv = (): KV & { data: Map<string, string> } => {
+  const data = new Map<string, string>();
+  return { data, get: async (k) => data.get(k), set: async (k, v) => void data.set(k, v), remove: async (k) => void data.delete(k) };
+};
+
+const PASSWORD = 'a long master password';
+const LOW = { kdf: { memoryKiB: 1024, iterations: 1, parallelism: 1 }, floor: { memoryKiB: 8, iterations: 1, parallelism: 1 } };
+
+function setup() {
+  const store = new MemoryStore();
+  const session = memoryKv();
+  const clock = { t: 1_000_000 };
+  const timer = { resets: 0 };
+  const service = createService({ store, session, now: () => clock.t, resetAutoLock: () => timer.resets++, ...LOW });
+  const call = <T>(req: object, ctx?: Ctx) => service.handle(req as never, ctx) as Promise<T>;
+  return { store, session, clock, timer, service, call };
+}
+
+async function unlocked() {
+  const s = setup();
+  await s.call({ type: 'setup', password: PASSWORD });
+  return s;
+}
+
+const page = (url: string, tabId = 1): Ctx => ({ url, tabId });
+const login = (over: object = {}) => ({ name: 'Bank', username: 'me', password: 'pw-1', websites: 'https://login.bank.com/signin', note: '', ...over });
+const add = <T = { id: string }>(s: { call<R>(req: object, ctx?: Ctx): Promise<R> }, over: object = {}) => s.call<T>({ type: 'save', id: null, login: login(over) });
+
+test('a new profile has no vault; setup creates one, unlocks it and holds the recovery key until it is confirmed', async () => {
+  const { call } = setup();
+  assert.equal((await call<Status>({ type: 'status' })).state, 'no-vault');
+  await call({ type: 'setup', password: PASSWORD });
+  const status = await call<Status>({ type: 'status' });
+  assert.equal(status.state, 'unlocked');
+  assert.match(status.recoveryKey ?? '', /^([A-Z2-7]{4}-){7}[A-Z2-7]{4}$/);
+});
+
+test('setup refuses a master password shorter than 12 characters', async () => {
+  const { call } = setup();
+  await assert.rejects(call({ type: 'setup', password: 'too short' }), /12 characters/);
+  assert.equal((await call<Status>({ type: 'status' })).state, 'no-vault');
+});
+
+test('the recovery key is held until the owner types back its first group', async () => {
+  const { call } = await unlocked();
+  const key = (await call<Status>({ type: 'status' })).recoveryKey!;
+  await assert.rejects(call({ type: 'confirmRecovery', group: 'ZZZZ' }), /doesn't match/);
+  assert.equal((await call<Status>({ type: 'status' })).recoveryKey, key);
+  await call({ type: 'confirmRecovery', group: key.slice(0, 4).toLowerCase() });
+  assert.equal((await call<Status>({ type: 'status' })).recoveryKey, null);
+});
+
+test('lock then unlock; a wrong master password says so and stays locked', async () => {
+  const { call } = await unlocked();
+  await call({ type: 'lock' });
+  assert.equal((await call<Status>({ type: 'status' })).state, 'locked');
+  await assert.rejects(call({ type: 'unlock', password: 'the wrong password' }), /isn't right/);
+  assert.equal((await call<Status>({ type: 'status' })).state, 'locked');
+  await call({ type: 'unlock', password: PASSWORD });
+  assert.equal((await call<Status>({ type: 'status' })).state, 'unlocked');
+});
+
+test('the recovery key sets a new master password and unlocks', async () => {
+  const s = await unlocked();
+  const key = (await s.call<Status>({ type: 'status' })).recoveryKey!;
+  await s.call({ type: 'lock' });
+  await assert.rejects(s.call({ type: 'recover', recoveryKey: 'AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA', password: 'a brand new password' }), /recovery key/);
+  await s.call({ type: 'recover', recoveryKey: key, password: 'a brand new password' });
+  await s.call({ type: 'lock' });
+  await assert.rejects(s.call({ type: 'unlock', password: PASSWORD }), /isn't right/);
+  await s.call({ type: 'unlock', password: 'a brand new password' });
+});
+
+test('save, list and get: the list never carries a password, get does', async () => {
+  const s = await unlocked();
+  const { id } = await add(s);
+  const { rows } = await s.call<{ rows: Row[] }>({ type: 'list' });
+  assert.deepEqual(rows, [{ id, name: 'Bank', username: 'me', sites: ['login.bank.com'], apps: 0, flagged: false }]);
+  assert.ok(!JSON.stringify(rows).includes('pw-1'));
+  const detail = await s.call<Detail>({ type: 'get', id });
+  assert.equal(detail.password, 'pw-1');
+  assert.equal(detail.websites, 'https://login.bank.com');
+});
+
+test('editing keeps the id and the app links; removing leaves a tombstone, not a hole', async () => {
+  const s = await unlocked();
+  const preview = await s.call<ImportPreview>({ type: 'import', csv: redacted, commit: true });
+  assert.ok(preview.added > 0);
+  const { rows } = await s.call<{ rows: Row[] }>({ type: 'list' });
+  const app = rows.find((r) => r.apps > 0)!;
+  await s.call({ type: 'save', id: app.id, login: login({ name: 'Renamed', websites: '' }) });
+  const after = (await s.call<{ rows: Row[] }>({ type: 'list' })).rows.find((r) => r.id === app.id)!;
+  assert.deepEqual([after.name, after.apps], ['Renamed', app.apps]);
+  await s.call({ type: 'remove', id: app.id });
+  assert.ok(!(await s.call<{ rows: Row[] }>({ type: 'list' })).rows.some((r) => r.id === app.id));
+  assert.ok(s.store.records.has(app.id));
+});
+
+test('save asks for a name and a valid website instead of storing junk', async () => {
+  const s = await unlocked();
+  await assert.rejects(add(s, { name: ' ', websites: '' }), /name/i);
+  await assert.rejects(add(s, { websites: 'not a url' }), /website address/);
+});
+
+test('a blank name falls back to the site', async () => {
+  const s = await unlocked();
+  await add(s, { name: '', websites: 'https://www.example.co.uk/login' });
+  assert.equal((await s.call<{ rows: Row[] }>({ type: 'list' })).rows[0].name, 'example.co.uk');
+});
+
+test('import previews without writing, then commits every login in one go', async () => {
+  const s = await unlocked();
+  const preview = await s.call<ImportPreview>({ type: 'import', csv: redacted, commit: false });
+  assert.deepEqual([preview.added, preview.merged, preview.flagged], [8, 1, 2]);
+  assert.equal(s.store.records.size, 0);
+  await s.call({ type: 'import', csv: redacted, commit: true });
+  assert.equal(s.store.records.size, 8);
+  assert.equal((await s.call<{ rows: Row[] }>({ type: 'list' })).rows.filter((r) => r.flagged).length, 2);
+});
+
+test('a file that is not a Google export is refused with the importer message', async () => {
+  const s = await unlocked();
+  await assert.rejects(s.call({ type: 'import', csv: 'a,b\n1,2', commit: true }), /isn't a Google Passwords export/);
+  assert.equal(s.store.records.size, 0);
+});
+
+test('a web page may only ask for matching logins, fills and captures; everything else is refused', async () => {
+  const s = await unlocked();
+  const { id } = await add(s);
+  const ctx = page('https://login.bank.com/');
+  for (const req of [{ type: 'list' }, { type: 'get', id }, { type: 'unlock', password: PASSWORD }, { type: 'lock' }, { type: 'status' },
+    { type: 'save', id: null, login: login() }, { type: 'remove', id }, { type: 'import', csv: redacted, commit: true },
+    { type: 'pending', tabId: 1 }, { type: 'resolvePending', tabId: 1, action: 'save' }, { type: 'confirmRecovery', group: 'AAAA' }]) {
+    await assert.rejects(s.call(req, ctx), /isn't allowed/, req.type);
+  }
+  assert.ok(await s.call({ type: 'candidates' }, ctx));
+});
+
+test('candidates are the logins saved for this site, never a lookalike or an http copy of an https login', async () => {
+  const s = await unlocked();
+  const { id } = await add(s);
+  await add(s, { name: 'Other', websites: 'https://other.org' });
+  const names = async (url: string) => (await s.call<{ rows: Row[] }>({ type: 'candidates' }, page(url))).rows.map((r) => r.name);
+  assert.deepEqual(await names('https://www.bank.com/'), ['Bank']);
+  assert.deepEqual(await names('https://bank.com.evil.io/'), []);
+  assert.deepEqual(await names('https://bank-com.example/'), []);
+  assert.deepEqual(await names('http://login.bank.com/'), []);
+  assert.deepEqual(await names('chrome://settings'), []);
+  assert.ok(id);
+});
+
+test('while locked a page learns only that the vault is locked', async () => {
+  const s = await unlocked();
+  await add(s);
+  await s.call({ type: 'lock' });
+  assert.deepEqual(await s.call({ type: 'candidates' }, page('https://login.bank.com/')), { locked: true, rows: [] });
+});
+
+test('fill returns the credentials only for a login saved for the page the request came from', async () => {
+  const s = await unlocked();
+  const { id } = await add(s);
+  assert.deepEqual(await s.call({ type: 'fill', id }, page('https://login.bank.com/')), { username: 'me', password: 'pw-1' });
+  await assert.rejects(s.call({ type: 'fill', id }, page('https://bank.com.evil.io/')), /isn't saved for this website/);
+  await assert.rejects(s.call({ type: 'fill', id }, page('http://login.bank.com/')), /isn't saved for this website/);
+  await assert.rejects(s.call({ type: 'fill', id: 'no-such-id' }, page('https://login.bank.com/')), /isn't saved for this website/);
+  await assert.rejects(s.call({ type: 'fill', id }), /isn't allowed/);
+});
+
+test('fill never answers while locked', async () => {
+  const s = await unlocked();
+  const { id } = await add(s);
+  await s.call({ type: 'lock' });
+  await assert.rejects(s.call({ type: 'fill', id }, page('https://login.bank.com/')), /locked/i);
+});
+
+test('fill is refused unless it comes from the page itself, so the popup cannot fill a page that changed since it looked', async () => {
+  const s = await unlocked();
+  const { id } = await add(s);
+  await assert.rejects(s.call({ type: 'fill', id, page: page('https://login.bank.com/') }), /isn't allowed/);
+});
+
+test('the recovery key is shown only while the vault is unlocked', async () => {
+  const s = await unlocked();
+  await s.call({ type: 'lock' });
+  assert.equal((await s.call<Status>({ type: 'status' })).recoveryKey, null);
+  await assert.rejects(s.call({ type: 'confirmRecovery', group: 'AAAA' }), /locked/i);
+  await s.call({ type: 'unlock', password: PASSWORD });
+  assert.ok((await s.call<Status>({ type: 'status' })).recoveryKey);
+});
+
+test('a master password that is one repeated character or a straight run is refused', async () => {
+  for (const password of ['aaaaaaaaaaaa', '000000000000', 'abcdefghijkl', 'mnopqrstuvwx', 'zyxwvutsrqpo']) {
+    await assert.rejects(setup().call({ type: 'setup', password }), /too common/, password);
+  }
+  await setup().call({ type: 'setup', password: 'abcdefghijkm' });
+});
+
+test('a captured sign-in for a new site is offered as a new login and saved on request', async () => {
+  const s = await unlocked();
+  await s.call({ type: 'capture', username: 'ann', password: 'secret-1' }, page('https://shop.example.com/login', 7));
+  const pending = await s.call<Pending>({ type: 'pending', tabId: 7 });
+  assert.deepEqual(pending, { intent: 'new', host: 'shop.example.com', username: 'ann', name: null, locked: false });
+  assert.ok(!JSON.stringify(pending).includes('secret-1'));
+  await s.call({ type: 'resolvePending', tabId: 7, action: 'save' });
+  assert.equal(await s.call({ type: 'pending', tabId: 7 }), null);
+  const { rows } = await s.call<{ rows: Row[] }>({ type: 'list' });
+  assert.deepEqual(rows.map((r) => [r.name, r.username, r.sites]), [['example.com', 'ann', ['shop.example.com']]]);
+  const detail = await s.call<Detail>({ type: 'get', id: rows[0].id });
+  assert.equal(detail.password, 'secret-1');
+});
+
+test('a changed password for a saved username is offered as an update; the same password is not offered at all', async () => {
+  const s = await unlocked();
+  const { id } = await add(s);
+  const at = page('https://login.bank.com/', 3);
+  await s.call({ type: 'capture', username: 'me', password: 'pw-1' }, at);
+  assert.equal(await s.call({ type: 'pending', tabId: 3 }), null);
+  await s.call({ type: 'capture', username: 'ME', password: 'pw-2' }, at);
+  assert.deepEqual(await s.call<Pending>({ type: 'pending', tabId: 3 }), { intent: 'update', host: 'login.bank.com', username: 'ME', name: 'Bank', locked: false });
+  await s.call({ type: 'resolvePending', tabId: 3, action: 'save' });
+  assert.equal((await s.call<Detail>({ type: 'get', id })).password, 'pw-2');
+  assert.equal((await s.call<{ rows: Row[] }>({ type: 'list' })).rows.length, 1);
+});
+
+test('dismissing a pending save forgets it; captures with no password or on non-web pages are ignored', async () => {
+  const s = await unlocked();
+  await s.call({ type: 'capture', username: 'ann', password: 'x' }, page('https://shop.example.com/', 4));
+  await s.call({ type: 'resolvePending', tabId: 4, action: 'dismiss' });
+  assert.equal(await s.call({ type: 'pending', tabId: 4 }), null);
+  await s.call({ type: 'capture', username: 'ann', password: '' }, page('https://shop.example.com/', 5));
+  await s.call({ type: 'capture', username: 'ann', password: 'x' }, page('file:///tmp/login.html', 6));
+  assert.equal(await s.call({ type: 'pending', tabId: 5 }), null);
+  assert.equal(await s.call({ type: 'pending', tabId: 6 }), null);
+});
+
+test('an oversized capture is ignored, so a page cannot fill the session store', async () => {
+  const s = await unlocked();
+  await s.call({ type: 'capture', username: 'a'.repeat(2000), password: 'x' }, page('https://shop.example.com/', 11));
+  await s.call({ type: 'capture', username: 'ann', password: 'x'.repeat(5000) }, page('https://shop.example.com/', 12));
+  assert.equal(await s.call({ type: 'pending', tabId: 11 }), null);
+  assert.equal(await s.call({ type: 'pending', tabId: 12 }), null);
+});
+
+test('a capture made while locked waits for the unlock, but expires after five minutes', async () => {
+  const s = await unlocked();
+  await s.call({ type: 'lock' });
+  await s.call({ type: 'capture', username: 'ann', password: 'secret-1' }, page('https://shop.example.com/', 8));
+  assert.deepEqual(await s.call<Pending>({ type: 'pending', tabId: 8 }), { intent: null, host: 'shop.example.com', username: 'ann', name: null, locked: true });
+  await assert.rejects(s.call({ type: 'resolvePending', tabId: 8, action: 'save' }), /locked/i);
+  await s.call({ type: 'unlock', password: PASSWORD });
+  assert.equal((await s.call<Pending>({ type: 'pending', tabId: 8 })).intent, 'new');
+  s.clock.t += 5 * 60_000 + 1;
+  assert.equal(await s.call({ type: 'pending', tabId: 8 }), null);
+});
+
+test('locking wipes the vault key and every captured password; an unconfirmed recovery key waits in memory, unseen', async () => {
+  const s = await unlocked();
+  await s.call({ type: 'capture', username: 'ann', password: 'secret-1' }, page('https://shop.example.com/', 9));
+  await s.call({ type: 'lock' });
+  assert.ok(![...s.session.data.values()].some((v) => v.includes('secret-1')));
+  assert.ok(![...s.session.data.keys()].includes('vaultKey'));
+  assert.ok(s.session.data.has('recovery'));
+  assert.equal((await s.call<Status>({ type: 'status' })).recoveryKey, null);
+});
+
+test('the auto-lock timer restarts on the owner\'s actions but not on a page asking for matches', async () => {
+  const s = await unlocked();
+  const base = s.timer.resets;
+  assert.ok(base >= 1);
+  await s.call({ type: 'candidates' }, page('https://login.bank.com/'));
+  await s.call({ type: 'status' });
+  assert.equal(s.timer.resets, base);
+  await s.call({ type: 'list' });
+  assert.equal(s.timer.resets, base + 1);
+});
+
+test('records that cannot be read are reported and left in place', async () => {
+  const s = await unlocked();
+  await add(s);
+  s.store.records.set('broken', new Uint8Array(40).fill(1));
+  const list = await s.call<{ rows: Row[]; unreadable: number }>({ type: 'list' });
+  assert.equal(list.rows.length, 1);
+  assert.equal(list.unreadable, 1);
+  assert.ok(s.store.records.has('broken'));
+});
+
+test('setupRejectsCommonPassword', async () => {
+  assert.equal(COMMON_PASSWORDS.size, 10);
+  for (const common of COMMON_PASSWORDS) {
+    for (const password of [common, common.toUpperCase(), common[0].toUpperCase() + common.slice(1)]) {
+      const { call } = setup();
+      await assert.rejects(call({ type: 'setup', password }), /too common/, password);
+      assert.equal((await call<Status>({ type: 'status' })).state, 'no-vault');
+    }
+  }
+  await assert.rejects(setup().call({ type: 'recover', recoveryKey: 'AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA', password: 'Masterbating' }), /too common/);
+});
+
+const NEW_PASSWORD = 'a second master password';
+const THIRD_PASSWORD = 'a third master password';
+const until = async (done: () => boolean) => {
+  for (let i = 0; i < 500 && !done(); i++) await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.ok(done());
+};
+
+function extension(world: World, local = fakeChrome()) {
+  useChrome(local);
+  const session = memoryKv();
+  const alarms: boolean[] = [];
+  const clock = { t: 1_000_000 };
+  const service = createService({
+    store: localStore, session, now: () => clock.t, resetAutoLock() {}, syncAlarm: (on) => void alarms.push(on),
+    sync: { store: localStore, transport: world.transport }, ...LOW,
+  });
+  const call = <T = unknown>(req: object, ctx?: Ctx) => service.handle(req as never, ctx) as Promise<T>;
+  return { world, local, session, alarms, clock, service, call, restart: () => extension(world, local) };
+}
+type Ext = ReturnType<typeof extension>;
+
+const signIn = (x: Ext, over: object = {}) => x.call({ type: 'signIn', password: PHONE_PASSWORD, accountKey: x.world.accountKeyText, ...over });
+const recoverySignIn = (x: Ext, over: object = {}) =>
+  x.call({ type: 'signInRecovery', recoveryKey: x.world.recoveryKeyText, newPassword: NEW_PASSWORD, accountKey: x.world.accountKeyText, ...over });
+const names = async (x: Ext) => (await x.call<{ rows: Row[] }>({ type: 'list' })).rows.map((r) => r.name).sort();
+const status = (x: Ext) => x.call<SyncStatus>({ type: 'syncStatus' });
+const snapshot = (x: Ext) => JSON.stringify([...x.local.data]);
+const headerNow = async () => headerToJson((await localStore.getHeader())!);
+
+async function signedIn(world?: World) {
+  const x = extension(world ?? (await newWorld()));
+  assert.equal(await signIn(x), null);
+  return x;
+}
+
+test('signInReplacesTheLocalVaultOnlyAfterConfirmation', async () => {
+  const world = await newWorld();
+  await world.phone.add('Mail');
+  await world.phone.sync();
+  const x = extension(world);
+  await x.call({ type: 'setup', password: PASSWORD });
+  await add(x);
+  await add(x, { name: 'Second', websites: 'https://two.example' });
+  const before = snapshot(x);
+  assert.deepEqual(await signIn(x), { needsConfirm: true, entries: 2 });
+  assert.equal(snapshot(x), before);
+  assert.equal((await status(x)).state, 'off');
+
+  x.local.setCalls.length = 0;
+  assert.equal(await signIn(x, { replace: true }), null);
+  const writes = x.local.setCalls.filter((keys) => keys.includes('header'));
+  assert.equal(writes.length, 1);
+  for (const key of ['records', 'quarantine', 'syncMeta', 'accountKey']) assert.ok(writes[0].includes(key), key);
+  assert.deepEqual(await names(x), ['Mail']);
+  assert.equal(await headerNow(), headerToJson(world.phone.store.header!));
+  assert.deepEqual(await localStore.getSyncMeta(), { lastRev: 1, headerRev: 1 });
+  assert.deepEqual((await localStore.getSyncLocal()).accountKey, world.accountKey);
+
+  await x.call({ type: 'lock' });
+  await assert.rejects(x.call({ type: 'unlock', password: PASSWORD }), /isn't right/);
+  await x.call({ type: 'unlock', password: PHONE_PASSWORD });
+  assert.equal((await status(x)).state, 'idle');
+});
+
+test('theConfirmationCountsWhatIsThereNotWhatWasDeleted', async () => {
+  const x = extension(await newWorld());
+  await x.call({ type: 'setup', password: PASSWORD });
+  const { id } = await add(x);
+  await add(x, { name: 'Second' });
+  await add(x, { name: 'Third' });
+  await x.call({ type: 'remove', id });
+  assert.deepEqual(await signIn(x), { needsConfirm: true, entries: 2 });
+  await x.call({ type: 'lock' });
+  assert.deepEqual(await signIn(x), { needsConfirm: true, entries: 3 });
+});
+
+test('aServerHeaderThatDroppedTheAccountKeyFlagIsNeverTaken', async () => {
+  const world = await newWorld();
+  const x = extension(world);
+  await x.call({ type: 'setup', password: PASSWORD });
+  const before = snapshot(x);
+  world.rewrite = (path, body) => (path === '/v1/records' ? { ...body, header: JSON.stringify({ ...JSON.parse(body.header), accountKey: undefined }) } : body);
+  await assert.rejects(recoverySignIn(x, { replace: true }), /did not accept that recovery key/);
+  await assert.rejects(signIn(x, { replace: true }), /password or account key/);
+  assert.equal(snapshot(x), before);
+});
+
+test('signInAsksNothingWhenThereIsNothingToLose', async () => {
+  const empty = extension(await newWorld());
+  assert.equal(await signIn(empty), null);
+  const withVault = extension(await newWorld());
+  await withVault.call({ type: 'setup', password: PASSWORD });
+  assert.equal(await signIn(withVault), null);
+});
+
+test('failedSignInKeepsTheOldVault', async () => {
+  const world = await newWorld();
+  const x = extension(world);
+  await x.call({ type: 'setup', password: PASSWORD });
+  await add(x, { name: 'Mine' });
+  const before = snapshot(x);
+  const refused = async (over: object, message: RegExp) => {
+    await assert.rejects(signIn(x, { replace: true, ...over }), message);
+    assert.equal(snapshot(x), before);
+    assert.equal((await status(x)).state, 'off');
+    await x.call({ type: 'lock' });
+    await x.call({ type: 'unlock', password: PASSWORD });
+    assert.deepEqual(await names(x), ['Mine']);
+  };
+  await refused({ password: 'not the password' }, /password or account key/);
+  await refused({ accountKey: formatAccountKey(randomBytes(20)) }, /password or account key/);
+  await refused({ accountKey: 'ABCD-EFGH' }, /account key isn't complete/);
+  world.rewrite = (path, body) => (path === '/v1/prelogin' ? { ...body, kdf: { ...body.kdf, memoryKiB: 4_194_304 } } : body);
+  await refused({}, /outside what Strongroom accepts/);
+  world.rewrite = undefined;
+  world.online = false;
+  await refused({}, /could not be reached/);
+  world.online = true;
+  assert.equal(await signIn(x, { replace: true }), null);
+  assert.deepEqual(await names(x), []);
+});
+
+test('syncMergesAndShowsRemoteEdits', async () => {
+  const world = await newWorld();
+  const mailId = await world.phone.add('Mail', 1000);
+  await world.phone.sync();
+  const x = await signedIn(world);
+  assert.deepEqual(await names(x), ['Mail']);
+
+  await world.phone.edit(mailId, loginEntry('Mail (work)', 5000));
+  await world.phone.add('Bank');
+  await world.phone.sync();
+  assert.equal((await x.call<SyncReport>({ type: 'syncNow' })).pulled, 2);
+  assert.deepEqual(await names(x), ['Bank', 'Mail (work)']);
+  const shown = await status(x);
+  assert.deepEqual([shown.state, shown.lastSyncAt, shown.pendingUpdate], ['idle', x.clock.t, false]);
+
+  await add(x, { name: 'From the extension' });
+  await x.service.settled();
+  await world.phone.sync();
+  assert.deepEqual(await world.phone.names(), ['Bank', 'From the extension', 'Mail (work)']);
+
+  await world.phone.edit(mailId, { type: 'deleted', updatedAt: Date.now() });
+  await world.phone.sync();
+  await x.call({ type: 'syncNow' });
+  assert.deepEqual(await names(x), ['Bank', 'From the extension']);
+});
+
+test('lockClearsTheLoginTokenAndStopsSyncing', async () => {
+  const x = await signedIn();
+  assert.ok(x.session.data.has('loginToken'));
+  assert.equal(x.alarms.at(-1), true);
+  await x.call({ type: 'lock' });
+  assert.ok(!x.session.data.has('loginToken'));
+  assert.ok(!x.session.data.has('vaultKey'));
+  assert.equal(x.alarms.at(-1), false);
+
+  const seen = x.world.requests.length;
+  await assert.rejects(x.call({ type: 'syncNow' }), /locked/i);
+  await x.service.settled();
+  assert.equal(x.world.requests.length, seen);
+
+  await x.call({ type: 'unlock', password: PHONE_PASSWORD });
+  assert.ok(x.session.data.has('loginToken'));
+  await x.call({ type: 'syncNow' });
+  assert.ok(x.world.requests.length > seen);
+});
+
+test('pageContextCannotSignInOrSync', async () => {
+  const x = extension(await newWorld());
+  const ctx = page('https://login.bank.com/');
+  for (const req of [{ type: 'syncStatus' }, { type: 'signIn', password: PHONE_PASSWORD, accountKey: x.world.accountKeyText, replace: true },
+    { type: 'signInRecovery', recoveryKey: x.world.recoveryKeyText, newPassword: NEW_PASSWORD, accountKey: x.world.accountKeyText }, { type: 'syncNow' }]) {
+    await assert.rejects(x.call(req, ctx), /isn't allowed/, req.type);
+  }
+  assert.deepEqual(x.world.requests, []);
+});
+
+test('syncIsUnavailableWithoutAServerUrl', async () => {
+  const s = setup();
+  assert.deepEqual(await s.call({ type: 'syncStatus' }), { available: false, state: 'off', lastSyncAt: null, blocked: 0, quarantined: 0, pendingUpdate: false, error: null, keyLost: false });
+  for (const req of [{ type: 'signIn', password: PHONE_PASSWORD, accountKey: 'x' }, { type: 'signInRecovery', recoveryKey: 'x', newPassword: NEW_PASSWORD, accountKey: 'x' }, { type: 'syncNow' }]) {
+    await assert.rejects(s.call(req), /isn't available in this build/, req.type);
+  }
+});
+
+test('aVaultThatNeedsAnAccountKeyThisComputerLostSaysSo', async () => {
+  const x = await signedIn();
+  await x.call({ type: 'lock' });
+  assert.equal((await status(x)).keyLost, false);
+  x.local.data.delete('accountKey');
+  await assert.rejects(x.call({ type: 'unlock', password: PHONE_PASSWORD }), /Sign in with your account/);
+  const lost = await status(x);
+  assert.deepEqual([lost.state, lost.keyLost], ['off', true]);
+  assert.equal(await signIn(x), null);
+  assert.deepEqual([(await status(x)).state, (await status(x)).keyLost], ['idle', false]);
+});
+
+test('recoverySignInRefusesAKeyThatIsNotTheOneThisComputerHolds', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  const before = snapshot(x);
+  world.requests.length = 0;
+  await assert.rejects(recoverySignIn(x, { accountKey: formatAccountKey(randomBytes(20)) }), /account key doesn't match the one this computer uses/);
+  assert.deepEqual(world.requests, []);
+  assert.equal(snapshot(x), before);
+  assert.equal(await recoverySignIn(x), null);
+});
+
+test('aRecoveryMadeWhileASyncIsSendingAnOlderUpdateWaitsForIt', async () => {
+  const world = await newWorld();
+  const x = extension(world);
+  world.failPut = true;
+  await recoverySignIn(x);
+  world.failPut = false;
+  let release = () => {};
+  world.gate = new Promise<void>((resolve) => (release = resolve));
+  const syncing = x.call({ type: 'syncNow' });
+  await until(() => world.requests.includes('PUT /v1/account'));
+  const stored = localStore.setAccount;
+  const written = new Promise<void>((resolve) => (localStore.setAccount = async (a) => (await stored(a), resolve())));
+  const recovering = x.call({ type: 'recover', recoveryKey: world.recoveryKeyText, password: THIRD_PASSWORD });
+  await Promise.race([written, new Promise((resolve) => setTimeout(resolve, 2500))]);
+  localStore.setAccount = stored;
+  release();
+  await Promise.all([syncing, recovering]);
+  await x.service.settled();
+
+  const landed = await status(x);
+  assert.deepEqual([landed.state, landed.pendingUpdate], ['idle', false]);
+  assert.ok(await signInWithPassword(world.phone.transport, THIRD_PASSWORD, world.accountKey));
+  await x.call({ type: 'lock' });
+  await x.call({ type: 'unlock', password: THIRD_PASSWORD });
+  await x.call({ type: 'syncNow' });
+});
+
+test('recoverySignInReplacesOnlyAfterConfirmation', async () => {
+  const x = extension(await newWorld());
+  await x.call({ type: 'setup', password: PASSWORD });
+  await add(x);
+  const before = snapshot(x);
+  assert.deepEqual(await recoverySignIn(x), { needsConfirm: true, entries: 1 });
+  assert.equal(snapshot(x), before);
+  assert.equal(await recoverySignIn(x, { replace: true }), null);
+  assert.deepEqual(await names(x), []);
+});
+
+test('recoverySignInUpdatesTheServerWithTheNewPassword', async () => {
+  const world = await newWorld();
+  await world.phone.add('Mail');
+  await world.phone.sync();
+  const x = extension(world);
+  assert.equal(await recoverySignIn(x), null);
+  assert.deepEqual(await names(x), ['Mail']);
+  const shown = await status(x);
+  assert.deepEqual([shown.state, shown.pendingUpdate], ['idle', false]);
+
+  const again = await signInWithPassword(world.phone.transport, NEW_PASSWORD, world.accountKey);
+  assert.deepEqual(again.vaultKey, world.phone.vaultKey);
+  assert.deepEqual(await localStore.getSyncMeta(), { lastRev: 1, headerRev: again.headerRev });
+  await assert.rejects(signInWithPassword(world.phone.transport, PHONE_PASSWORD, world.accountKey), SyncAuthError);
+  assert.ok(await signInWithRecovery(world.phone.transport, world.recoveryKey));
+  const row = world.sqlite.prepare('SELECT recovery_hash FROM account').get() as { recovery_hash: string };
+  assert.equal(row.recovery_hash, tokenHash(recoveryLoginToken(world.recoveryKey)));
+
+  await x.call({ type: 'lock' });
+  await x.call({ type: 'unlock', password: NEW_PASSWORD });
+  await x.call({ type: 'syncNow' });
+});
+
+test('recoverySignInKeepsAPendingUpdateUntilItLands', async () => {
+  const world = await newWorld();
+  const x = extension(world);
+  world.failPut = true;
+  assert.equal(await recoverySignIn(x), null);
+  assert.equal((await status(x)).pendingUpdate, true);
+
+  world.requests.length = 0;
+  await assert.rejects(x.call({ type: 'syncNow' }), /could not be reached/);
+  assert.deepEqual(world.requests, ['PUT /v1/account']);
+  assert.ok(!snapshot(x).includes(toBase64(recoveryLoginToken(world.recoveryKey))));
+
+  const y = x.restart();
+  world.requests.length = 0;
+  await y.call({ type: 'unlock', password: NEW_PASSWORD });
+  await y.service.settled();
+  assert.deepEqual(world.requests, ['PUT /v1/account']);
+  assert.equal((await status(y)).pendingUpdate, true);
+
+  world.failPut = false;
+  await y.call({ type: 'syncNow' });
+  const landed = await status(y);
+  assert.deepEqual([landed.state, landed.pendingUpdate], ['idle', false]);
+  assert.ok(await signInWithPassword(world.phone.transport, NEW_PASSWORD, world.accountKey));
+});
+
+test('aRefusedTokenAsksToSignInButKeepsThePendingUpdate', async () => {
+  const world = await newWorld();
+  const x = extension(world);
+  world.failPut = true;
+  await recoverySignIn(x);
+  world.failPut = false;
+  world.sqlite.exec("UPDATE account SET recovery_hash = 'a recovery key replaced elsewhere'");
+
+  await assert.rejects(x.call({ type: 'syncNow' }), /Sign in again/);
+  const refused = await status(x);
+  assert.deepEqual([refused.state, refused.pendingUpdate], ['needsSignIn', true]);
+  const seen = world.requests.length;
+  await assert.rejects(x.call({ type: 'syncNow' }), /Sign in again/);
+  assert.equal(world.requests.length, seen);
+
+  assert.equal(await signIn(x, { replace: true }), null);
+  const after = await status(x);
+  assert.deepEqual([after.state, after.pendingUpdate], ['idle', false]);
+});
+
+test('aLocalRecoveryOnASignedInExtensionQueuesTheServerUpdate', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  await x.call({ type: 'lock' });
+  await x.call({ type: 'recover', recoveryKey: world.recoveryKeyText, password: NEW_PASSWORD });
+  await x.service.settled();
+  assert.equal((await status(x)).pendingUpdate, false);
+  assert.ok(await signInWithPassword(world.phone.transport, NEW_PASSWORD, world.accountKey));
+  await x.call({ type: 'lock' });
+  await x.call({ type: 'unlock', password: NEW_PASSWORD });
+  await x.call({ type: 'syncNow' });
+});
+
+test('aHeaderChangedElsewhereIsAdoptedOnlyAtAPasswordUnlock', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  const changed = { ...world.phone.store.header!, recoveryWrap: randomBytes(60) };
+  await world.phone.putHeader(changed, tokenHash(world.tokens.loginToken));
+
+  assert.equal((await x.call<SyncReport>({ type: 'syncNow' })).headerChanged, true);
+  assert.notEqual(await headerNow(), headerToJson(changed));
+  await x.call({ type: 'lock' });
+  await x.call({ type: 'unlock', password: PHONE_PASSWORD });
+  await x.service.settled();
+  assert.equal(await headerNow(), headerToJson(changed));
+  assert.equal((await localStore.getSyncMeta()).headerRev, 2);
+  assert.equal((await status(x)).state, 'idle');
+});
+
+test('aHeaderThatDoesNotOpenToThisVaultKeyIsNeverAdopted', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  const before = await headerNow();
+  const other = await createVault(PHONE_PASSWORD, randomBytes(20), { kdf: KDF_FLOOR, accountKey: world.accountKey });
+  await world.phone.putHeader(other.header, tokenHash(world.tokens.loginToken));
+  await x.call({ type: 'lock' });
+  await x.call({ type: 'unlock', password: PHONE_PASSWORD });
+  await x.service.settled();
+  assert.equal(await headerNow(), before);
+  assert.equal((await localStore.getSyncMeta()).headerRev, 1);
+});
+
+test('aRefusedTokenAsksToSignInAndStopsRetrying', async () => {
+  const world = await newWorld();
+  await world.phone.add('Mail');
+  await world.phone.sync();
+  const x = await signedIn(world);
+  await world.phone.changePassword(NEW_PASSWORD);
+
+  await add(x, { name: 'Written before the 401' });
+  await x.service.settled();
+  assert.equal((await status(x)).state, 'needsSignIn');
+  const seen = world.requests.length;
+  await assert.rejects(x.call({ type: 'syncNow' }), /Sign in again/);
+  await x.call({ type: 'lock' });
+  await x.call({ type: 'unlock', password: PHONE_PASSWORD });
+  await x.service.settled();
+  assert.equal(world.requests.length, seen);
+
+  assert.equal(await signIn(x, { password: NEW_PASSWORD }), null);
+  assert.equal((await status(x)).state, 'idle');
+  assert.deepEqual(await names(x), ['Mail', 'Written before the 401']);
+  await world.phone.sync();
+  assert.deepEqual(await world.phone.names(), ['Mail', 'Written before the 401']);
+});

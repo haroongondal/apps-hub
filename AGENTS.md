@@ -38,6 +38,12 @@ Current apps:
   (Kotlin owns the vault; RN only renders). Android only, private Store only
   (`com.haroon.strongroom`). Design: `docs/strongroom/DESIGN.md`; phases:
   `docs/strongroom/PHASE-1-PLAN.md` and `docs/handoffs/strongroom.md`.
+- **strongroom-extension** (`apps/strongroom-extension`) — Strongroom for Chrome
+  (Manifest V3, Mac and Windows, loaded unpacked). Its own local vault in the
+  Android vault format (`packages/strongroom-core`, checked against the shared
+  `vault-vectors.json`); fills and saves logins; signs in to sync with the phone
+  through the vault server (`tools/vault-api`, Phase 2, not deployed yet). Handoffs:
+  `docs/handoffs/strongroom-extension.md`, `docs/handoffs/strongroom-sync.md`.
 
 Not here on purpose: `~/Documents/browser-automation` (stays standalone) and
 `~/Documents/agent-harness` (deferred until its phase branches are merged).
@@ -139,6 +145,8 @@ cd apps/design-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
 # Electron apps (open real windows, so not part of `pnpm test`):
 pnpm --filter pdf-editor-desktop test:e2e   # desktop + Electron + mobile-bridge suites
 pnpm --filter design-editor test:e2e
+# Chrome extension in real Chromium (build first; needs playwright-core, see its README):
+pnpm --filter strongroom-extension build && pnpm --filter strongroom-extension test:e2e
 # Environment sanity:
 pnpm doctor                     # expo-doctor in every app that ships it
 ```

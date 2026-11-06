@@ -76,7 +76,7 @@ export function SecretField({ label, hint, error, value, onChangeText, onSubmitE
   );
 }
 
-export function NewPasswordFields(p: { password: string; confirm: string; onPassword: (v: string) => void; onConfirm: (v: string) => void; error: string | null; label?: string }) {
+export function NewPasswordFields(p: { password: string; confirm: string; onPassword: (v: string) => void; onConfirm: (v: string) => void; error: string | null; label?: string; onSubmit?: () => void }) {
   const notice = keyboardNotice(p.password);
   return (
     <>
@@ -87,7 +87,7 @@ export function NewPasswordFields(p: { password: string; confirm: string; onPass
         onChangeText={p.onPassword}
         error={p.error === MISMATCH ? null : p.error}
       />
-      <SecretField label="Type it again" value={p.confirm} onChangeText={p.onConfirm} error={p.error === MISMATCH ? p.error : null} />
+      <SecretField label="Type it again" value={p.confirm} onChangeText={p.onConfirm} onSubmitEditing={p.onSubmit} error={p.error === MISMATCH ? p.error : null} />
       {notice && <Notice tone="warn">{notice}</Notice>}
     </>
   );

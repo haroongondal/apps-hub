@@ -58,4 +58,14 @@ class RecoveryKeyTest {
     assertEquals("MNOP", RecoveryKey.group(formatted, 3))
     assertEquals("4567", RecoveryKey.group(formatted, 7))
   }
+
+  @Test fun accountKeyRoundTripsThroughText() {
+    val k = AccountKey.generate()
+    assertEquals(20, k.size)
+    val text = AccountKey.format(k)
+    assertTrue(text, Regex("^([A-Z2-7]{4}-){7}[A-Z2-7]{4}$").matches(text))
+    assertArrayEquals(k, AccountKey.parse(text))
+    // There is no checksum: a typo inside the alphabet gives another key, which then fails to unlock.
+    assertNull(AccountKey.parse("0" + text.drop(1)))
+  }
 }

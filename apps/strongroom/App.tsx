@@ -9,6 +9,7 @@ import { ImportScreen } from './src/ImportScreen.tsx';
 import { SettingsScreen, type SettingsFlow } from './src/SettingsScreen.tsx';
 import { ChangePasswordScreen, FingerprintScreen, NewRecoveryKeyScreen } from './src/SettingsFlows.tsx';
 import { SetupScreen } from './src/SetupScreen.tsx';
+import { SyncScreen } from './src/SyncScreen.tsx';
 import { UnlockScreen } from './src/UnlockScreen.tsx';
 import { VaultScreen, type VaultView } from './src/VaultScreen.tsx';
 
@@ -20,6 +21,7 @@ type Route =
   | { name: 'import' }
   | { name: 'password' }
   | { name: 'fingerprint' }
+  | { name: 'sync' }
   | { name: 'newKey'; key: string | null };
 
 const TABS: ReadonlyArray<{ key: Tab; label: string }> = [
@@ -33,6 +35,7 @@ const FLOW_ROUTES: Record<SettingsFlow, Route> = {
   fingerprint: { name: 'fingerprint' },
   newKey: { name: 'newKey', key: null },
   import: { name: 'import' },
+  sync: { name: 'sync' },
 };
 const NO_VIEW: VaultView = { kind: 'login', query: '' };
 const DISCARDED = 'Strongroom locked, so your unsaved changes were discarded.';
@@ -62,6 +65,7 @@ function Home() {
   const [view, setView] = useState<VaultView>(NO_VIEW);
   const [notice, setNotice] = useState<string | null>(null);
   const [discarded, setDiscarded] = useState(false);
+  const [holdingKey, setHoldingKey] = useState(false);
 
   const unlocked = status?.unlocked ?? false;
   const settingUp = inSetup || (status !== null && !status.setUp);
@@ -109,11 +113,12 @@ function Home() {
       if (deriving() || settingUp) return true;
       if (!unlocked || route.name === 'tabs') return false;
       if (route.name === 'newKey' && route.key !== null) return true;
+      if (route.name === 'sync' && holdingKey) return true;
       setRoute(route.name === 'edit' && route.id !== null ? { name: 'entry', id: route.id } : TABS_ROUTE);
       return true;
     });
     return () => sub.remove();
-  }, [route, settingUp, unlocked]);
+  }, [route, settingUp, unlocked, holdingKey]);
 
   const home = () => {
     if (!deriving()) setRoute(TABS_ROUTE);
@@ -162,6 +167,7 @@ function Home() {
   if (route.name === 'import') return <ImportScreen onBack={home} onDone={home} onLocked={refresh} />;
   if (route.name === 'password') return <ChangePasswordScreen onBack={home} onDone={finishFlow} onLocked={refresh} />;
   if (route.name === 'fingerprint') return <FingerprintScreen onBack={home} onDone={finishFlow} onLocked={refresh} />;
+  if (route.name === 'sync') return <SyncScreen start="home" onBack={home} onDone={finishFlow} onLocked={refresh} onHold={setHoldingKey} />;
   if (route.name === 'newKey') {
     return <NewRecoveryKeyScreen shown={route.key} onKey={(key) => setRoute({ name: 'newKey', key })} onBack={home} onDone={finishFlow} onLocked={refresh} />;
   }
@@ -177,6 +183,7 @@ function Home() {
             onView={setView}
             onOpen={(id) => setRoute({ name: 'entry', id })}
             onAdd={() => setRoute({ name: 'edit', id: null })}
+            onOpenSync={() => openFlow('sync')}
           />
         ) : (
           <SettingsScreen status={status} refresh={refresh} notice={notice} onOpen={openFlow} />
