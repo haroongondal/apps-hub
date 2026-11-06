@@ -36,11 +36,17 @@ export interface ScriptletCall {
 export interface CosmeticSet {
   generic: string[];
   hide: Record<string, string[]>;
-  unhide: Record<string, string[]>;
+  unhide: Record<string, string[]>; // host ('*' = every site) -> selectors it exempts
   generichide: string[];
   elemhide: string[];
-  scriptlets: Record<string, ScriptletCall[]>;
-  scriptletExcept: Record<string, string[]>;
+  scriptlets: Record<string, ScriptletCall[]>; // host ('*' = every site) -> calls
+  scriptletExcept: Record<string, string[]>; // host ('*' = every site) -> scriptletKey(call), or '*' for all of them
+}
+
+export interface CompileOptions {
+  firstId: number;
+  regexLimit?: number;
+  trusted?: boolean; // allow trusted-* scriptlets: only for the owner's own filters
 }
 
 export interface CompiledList {
@@ -78,8 +84,20 @@ export function stripSections(text: string, dropPrefixes: string[]): string {
 
 const PARSE = { ...defaultParserOptions, tolerant: true, isLocIncluded: false, includeRaws: false };
 const EXTENDED_CSS =
-  /:(?:-abp-contains|-abp-properties|has-text|contains|xpath|matches-[\w-]+|upward|remove|style|min-text-length|watch-attr|others|if-not|nth-ancestor)\(/;
-const HIDE_EXCEPTIONS: Record<string, 'generichide' | 'elemhide'> = { generichide: 'generichide', ghide: 'generichide', elemhide: 'elemhide', ehide: 'elemhide' };
+  /:(?:-abp-contains|-abp-properties|has-text|contains|xpath|matches-[\w-]+|upward|remove|remove-attr|remove-class|spath|style|min-text-length|watch-attr|others|if-not|nth-ancestor)\(/;
+// shortcut: misses nesting behind a closing paren (`:has(:is(a) :has(b))`); Chrome then ignores just that one CSS rule.
+const NESTED_HAS = /:has\([^)]*:has\(/;
+const QUOTED = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g;
+const BREAKS_CSS = /\/\*|\*\/|[{};"']/;
+const HIDE_KINDS = new Map<string, 'generichide' | 'elemhide'>([
+  ['generichide', 'generichide'],
+  ['ghide', 'generichide'],
+  ['elemhide', 'elemhide'],
+  ['ehide', 'elemhide'],
+  ['specifichide', 'elemhide'],
+  ['shide', 'elemhide'],
+]);
+const HOST_IN_PATTERN = /^(?:\|\||\|?(?:[a-z][\w+.-]*)?:\/\/)([a-z0-9.*-]+)/i;
 
 const NON_ASCII = /[^\x00-\x7f]/;
 
@@ -88,7 +106,7 @@ const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 // Tab hostnames come lowercased and in xn-- form, so filter domains are stored the same way.
 const siteKey = (domain: string) => (NON_ASCII.test(domain) ? new URL(`http://${domain}`).hostname : domain.toLowerCase());
 
-export async function compileFilters(text: string, opts: { firstId: number; regexLimit?: number }): Promise<CompiledList> {
+export async function compileFilters(text: string, opts: CompileOptions): Promise<CompiledList> {
   const out: CompiledList = { rules: [], sources: {}, allowIds: [], cosmetic: emptyCosmetic(), maxPriority: 0, dropped: {}, errors: [] };
   const drop = (reason: string, count = 1) => (out.dropped[reason] = (out.dropped[reason] ?? 0) + count);
   const network: { line: number; text: string }[] = [];
@@ -101,13 +119,16 @@ export async function compileFilters(text: string, opts: { firstId: number; rege
       if (node.category === 'Invalid') return fail(node.error.message);
       if (node.category === 'Cosmetic') {
         if (node.modifiers?.children.length) return drop('cosmetic-modifier');
-        for (const rule of RuleConverter.convertToAdg(node).result) addCosmetic(rule as AnyCosmeticRule, out.cosmetic, drop);
+        // agtree strips some procedural parts while parsing (`:matches-media(…)` vanishes), so check the line as written.
+        if (node.type === 'ElementHidingRule' && EXTENDED_CSS.test(raw)) return drop('extended-css');
+        for (const rule of RuleConverter.convertToAdg(node).result) addCosmetic(rule as AnyCosmeticRule, out.cosmetic, drop, opts.trusted === true);
         return;
       }
       if (node.category !== 'Network' || node.type !== 'NetworkRule') return;
       if (NON_ASCII.test(node.pattern.value)) return fail('Write the address in plain ASCII, with xn-- names for non-Latin sites');
-      if (addHideException(node, out.cosmetic, drop)) return;
-      Rule.parseFromNode(1, 0, node); // throws what the batch converter would only report without a line
+      if (addCosmeticException(node, out.cosmetic, drop)) return;
+      const rules = Rule.parseFromNode(1, 0, node); // throws what the batch converter would only report without a line
+      if (rules.some(blocksEverySite)) return fail('Rule is too general: add an address or a domain= so it does not block every site');
       network.push({ line: i + 1, text: raw });
     } catch (e) {
       fail(messageOf(e).replace(/^"(.*)" in the rule: .*$/s, '$1'));
@@ -121,7 +142,7 @@ export async function compileFilters(text: string, opts: { firstId: number; rege
 
 async function convertNetwork(
   network: { line: number; text: string }[],
-  opts: { firstId: number; regexLimit?: number },
+  opts: CompileOptions,
   out: CompiledList,
   drop: (reason: string, count?: number) => void,
 ): Promise<void> {
@@ -163,20 +184,40 @@ async function convertNetwork(
   }
 }
 
-// shortcut: a path-limited exception (`@@||bing.com/search?$generichide`) covers the whole host; fewer hidden ads there, never a broken page.
-function addHideException(node: NetworkRule, cosmetic: CosmeticSet, drop: (reason: string) => void): boolean {
-  const modifiers = node.modifiers?.children ?? [];
-  const kind = modifiers.map((m) => HIDE_EXCEPTIONS[m.name.value]).find(Boolean);
-  if (!kind) return false;
-  const domains = modifiers.find((m) => m.name.value === 'domain')?.value?.value.split('|').filter((d) => !d.startsWith('~')) ?? [];
-  const host = /^\|\|([a-z0-9.*-]+)/i.exec(node.pattern.value)?.[1].replace(/\.$/, '.*');
-  const hosts = node.pattern.value === '' ? domains : host ? [host] : [];
-  if (!node.exception || !hosts.length) drop('hide-exception-pattern');
-  else cosmetic[kind].push(...hosts.map(siteKey));
-  return true;
+function blocksEverySite(rule: Rule): boolean {
+  return !rule.allowlist && /^[|*]*$/.test(rule.pattern) && !rule.permittedDomains && !rule.permittedToDomains && !rule.advancedModifierName;
 }
 
-function addCosmetic(rule: AnyCosmeticRule, cosmetic: CosmeticSet, drop: (reason: string) => void): void {
+// $generichide/$elemhide/$specifichide only touch cosmetics (true: keep the line from the converter);
+// $document also allows every request, so it still goes on to become an allowAllRequests rule.
+function addCosmeticException(node: NetworkRule, cosmetic: CosmeticSet, drop: (reason: string) => void): boolean {
+  const names = (node.modifiers?.children ?? []).filter((m) => !m.exception).map((m) => m.name.value);
+  const document = node.exception && names.some((n) => n === 'document' || n === 'doc');
+  const kinds = new Set(names.flatMap((n) => HIDE_KINDS.get(n) ?? []));
+  const cosmeticOnly = kinds.size > 0 && names.every((n) => HIDE_KINDS.has(n) || n === 'domain' || n === 'from' || n === 'badfilter');
+  if ((!kinds.size && !document) || names.includes('badfilter')) return cosmeticOnly;
+  const hosts = exceptionHosts(node);
+  if (!node.exception || !hosts.length) {
+    if (cosmeticOnly) drop('hide-exception-pattern');
+    return cosmeticOnly;
+  }
+  if (document) kinds.add('elemhide');
+  for (const kind of kinds) cosmetic[kind].push(...hosts);
+  if (document) for (const host of hosts) push(cosmetic.scriptletExcept, host, '*');
+  return cosmeticOnly;
+}
+
+// shortcut: a path-limited exception (`@@||bing.com/search?$generichide`) covers the whole host; fewer hidden ads there, never a broken page.
+function exceptionHosts(node: NetworkRule): string[] {
+  if (/^\**$/.test(node.pattern.value)) {
+    const list = node.modifiers?.children.find((m) => m.name.value === 'domain' || m.name.value === 'from')?.value?.value ?? '';
+    return list.split('|').filter((d) => d && !d.startsWith('~')).map(siteKey);
+  }
+  const host = HOST_IN_PATTERN.exec(node.pattern.value)?.[1];
+  return host ? [siteKey(host.replace(/\.$/, '.*'))] : [];
+}
+
+function addCosmetic(rule: AnyCosmeticRule, cosmetic: CosmeticSet, drop: (reason: string) => void, trusted: boolean): void {
   const hosts = rule.domains.children.filter((d) => !d.exception && d.value !== '*').map((d) => siteKey(d.value));
   const notHosts = rule.domains.children.filter((d) => d.exception).map((d) => siteKey(d.value));
   const targets = hosts.length ? hosts : ['*'];
@@ -184,7 +225,9 @@ function addCosmetic(rule: AnyCosmeticRule, cosmetic: CosmeticSet, drop: (reason
 
   if (rule.type === 'ElementHidingRule') {
     const selector = rule.body.selectorList.value.replace(/:-abp-has\(/g, ':has(').replace(/:if\(/g, ':has(');
-    if (EXTENDED_CSS.test(selector)) return drop('extended-css');
+    if (EXTENDED_CSS.test(selector) || NESTED_HAS.test(selector)) return drop('extended-css');
+    // Each selector becomes its own CSS rule in a shared stylesheet; a stray comment or brace would void the rules after it.
+    if (BREAKS_CSS.test(selector.replace(QUOTED, ''))) throw new Error("A selector can't contain /*, */, {, } or ; outside quotes, or an unclosed quote");
     if (rule.exception) for (const host of targets) push(cosmetic.unhide, host, selector);
     else if (hosts.length) for (const host of hosts) push(cosmetic.hide, host, selector);
     else cosmetic.generic.push(selector);
@@ -201,6 +244,10 @@ function addCosmetic(rule: AnyCosmeticRule, cosmetic: CosmeticSet, drop: (reason
       const adgName = name ? scriptletsCompatibilityTable.getFirst(name, GenericPlatform.AdgAny)?.name : undefined;
       if (!adgName || typeof scriptlets.getScriptletFunction(adgName) !== 'function') {
         drop('unknown-scriptlet');
+        continue;
+      }
+      if (!rule.exception && !trusted && adgName.startsWith('trusted-')) {
+        drop('trusted-scriptlet');
         continue;
       }
       const call = { name: adgName, args };

@@ -111,6 +111,75 @@ test('a regex Chrome cannot run is an error on its line', async () => {
   assert.deepEqual(out.errors.map((e) => e.line), [2]);
 });
 
+test('a $document exception also turns off cosmetic filtering and scriptlets on that site', async () => {
+  const out = await compileFilters('@@||example.com^$document\n@@||example.org^$doc', { firstId: 1 });
+  assert.equal(out.rules.length, 2);
+  assert.deepEqual(out.allowIds, [1, 2]);
+  assert.ok(out.rules.every((r) => r.action.type === 'allowAllRequests'));
+  assert.deepEqual(out.cosmetic.elemhide, ['example.com', 'example.org']);
+  assert.deepEqual(out.cosmetic.scriptletExcept, { 'example.com': ['*'], 'example.org': ['*'] });
+});
+
+test('trusted-* scriptlets are dropped unless the list is trusted', async () => {
+  const text = "example.com#%#//scriptlet('trusted-set-cookie', 'a', 'b')";
+  const untrusted = await compileFilters(text, { firstId: 1 });
+  assert.equal(untrusted.dropped['trusted-scriptlet'], 1);
+  assert.deepEqual(untrusted.cosmetic.scriptlets, {});
+  const trusted = await compileFilters(text, { firstId: 1, trusted: true });
+  assert.deepEqual(trusted.cosmetic.scriptlets, { 'example.com': [{ name: 'trusted-set-cookie', args: ['a', 'b'] }] });
+  assert.deepEqual(trusted.dropped, {});
+});
+
+test('hide exceptions: $specifichide, both kinds at once, URL-style patterns, from=, and $badfilter', async () => {
+  const out = await compileFilters(
+    [
+      '@@||a.com^$specifichide',
+      '@@||b.com^$generichide,elemhide',
+      '@@||c.com^$generichide,badfilter',
+      '@@|https://d.com/$generichide',
+      '@@://localhost/$generichide',
+      '@@$generichide,from=f.com|~g.f.com',
+      '@@||h.com^$constructor',
+    ].join('\n'),
+    { firstId: 1 },
+  );
+  assert.deepEqual(out.cosmetic.elemhide, ['a.com', 'b.com']);
+  assert.deepEqual(out.cosmetic.generichide, ['b.com', 'd.com', 'localhost', 'f.com']);
+  assert.deepEqual(out.errors.map((e) => [e.line, e.reason]), [[7, 'Unknown modifier: constructor']]);
+  assert.deepEqual(out.dropped, {});
+});
+
+test('procedural selectors are caught before conversion, and :has is never nested', async () => {
+  const out = await compileFilters(
+    [
+      'example.com##.ad:matches-media((min-width: 800px))',
+      '##div:remove-attr(x)',
+      '##.a:remove-class(b)',
+      '##:spath(> .x)',
+      '##div:if(:has(.ad))',
+      'example.com#?#div:-abp-has(:-abp-has(.x))',
+    ].join('\n'),
+    { firstId: 1 },
+  );
+  assert.equal(out.dropped['extended-css'], 6);
+  assert.deepEqual(out.cosmetic.generic, []);
+  assert.deepEqual(out.cosmetic.hide, {});
+});
+
+test('a selector that could break the generated stylesheet is an error, quoted text is fine', async () => {
+  const out = await compileFilters('##div /* x\n##.a */\n##.a;b\nexample.com##div[style="width: 1px;"]', { firstId: 1 });
+  assert.deepEqual(out.errors.map((e) => e.line), [1, 2, 3]);
+  assert.deepEqual(out.cosmetic.hide, { 'example.com': ['div[style="width: 1px;"]'] });
+  assert.deepEqual(out.cosmetic.generic, []);
+});
+
+test('a block filter with no address and no domain is too general', async () => {
+  const out = await compileFilters('$third-party\n*$script\n$third-party,domain=a.com\n$removeparam=utm_source', { firstId: 1 });
+  assert.deepEqual(out.errors.map((e) => e.line), [1, 2]);
+  assert.match(out.errors[0].reason, /too general/);
+  assert.equal(out.rules.length, 2);
+});
+
 test('stripSections drops the named sections up to the next one', () => {
   assert.equal(
     stripSections('a\n! easylist_cookie_general_block.txt\nb\n! fanboy_social_general_block.txt\nc', ['easylist_cookie_']),
