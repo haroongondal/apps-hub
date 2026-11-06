@@ -32,6 +32,14 @@ class PolicyTest {
     assertTrue("expected the blocked reason, got $v", v is Verdict.Deny && v.reason.contains("blocked"))
   }
 
+  @Test fun makingAVideoIsJudgedByTheGalleryAppLikeALookup() {
+    fun video(gallery: String?) = Action.MakeVideo(listOf("a.jpg"), 3, gallery)
+    assertEquals("a new file needs no approval", Verdict.Allow, check(video("com.gallery"), on = screen("com.bank")))
+    assertDeny(check(video("com.gallery"), allowed = setOf("com.chat")))
+    assertDeny(check(video("com.vault")))
+    assertDeny(check(video(null)))
+  }
+
   @Test fun theSettingsSearchCountsAsSettings() =
     assertDeny(check(Action.Tap(1), node("com.android.settings.intelligence", "Accessibility"), screen("com.android.settings.intelligence")))
 

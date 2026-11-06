@@ -14,6 +14,8 @@ interface Device {
   fun resolveLink(url: String): String?
   /** The clock app that would take an alarm or timer. */
   fun resolveClock(): String?
+  /** The gallery app, whose trust and the task's apps make_video is judged by. */
+  fun resolveGallery(): String?
   /** Android version, battery, storage, next alarm, network and time; reads no app's screen. */
   fun info(): String
   /** Matching contacts with their numbers, or why there are none. */
@@ -22,6 +24,8 @@ interface Device {
   fun resolveContacts(): String?
   suspend fun perform(action: Action, target: NodeRef?): String
   suspend fun settle()
+  /** File names of photos added to the phone since `sinceMs`, oldest first; empty without photo access. */
+  fun newPhotos(sinceMs: Long): List<String>
 }
 
 enum class RunStatus { DONE, FAILED, STOPPED, DECLINED, CAPPED, INTERRUPTED }
@@ -57,6 +61,7 @@ class AgentLoop(
   private var modelMs = 0L
   private var actMs = 0L
   private var verdict = "" // of the latest logged step, so a batch only goes on after a step that simply ran
+  private val made = mutableListOf<String>() // videos make_video saved, named again if the run ends without finishing
 
   /** `memory` is `RunStore.recall`'s record of earlier runs: data, sent after the task in its own message. */
   suspend fun run(task: String, memory: String? = null): RunResult {
@@ -75,6 +80,8 @@ class AgentLoop(
     var repeats = 0
     var shown = -1 // where the full screen sits in history, and its shortened form
     var stub = ""
+    val started = now()
+    var photos = emptySet<String>()
     try {
       while (true) {
         guard.tripped()?.let { return end(RunStatus.CAPPED, guard.describe(it)) }
@@ -112,6 +119,11 @@ class AgentLoop(
           wanted && !safe -> "\n(No screenshot: another app's private content may be on screen.)"
           wanted && shot == null -> "\n(No screenshot: the app hides its screen from capture, or the capture failed.)"
           else -> ""
+        }
+        val arrived = device.newPhotos(started)
+        if (arrived.toSet() != photos) {
+          photos = arrived.toSet()
+          if (arrived.isNotEmpty()) note += Slideshow.arrivals(arrived)
         }
         if (shown >= 0) history[shown] = Msgs.user(stub)
         shown = history.size
@@ -234,6 +246,7 @@ class AgentLoop(
       is Action.OpenLink -> requested.copy(handler = device.resolveLink(requested.url))
       is Action.SetAlarm -> requested.copy(handler = device.resolveClock())
       is Action.SetTimer -> requested.copy(handler = device.resolveClock())
+      is Action.MakeVideo -> requested.copy(handler = device.resolveGallery())
       else -> requested
     }
     val target = targetOf(obs, action)
@@ -324,6 +337,7 @@ class AgentLoop(
     currentCoroutineContext().ensureActive()
     val start = now()
     return device.perform(action, target).also {
+      if (action is Action.MakeVideo && it.startsWith(Slideshow.SAVED)) made += it.removePrefix(Slideshow.SAVED).substringBefore(',')
       device.settle()
       actMs = now() - start
     }
@@ -345,6 +359,7 @@ class AgentLoop(
     is Action.OpenSettings -> "Open ${a.page} settings"
     is Action.SetAlarm -> "Set an alarm for %02d:%02d".format(a.hour, a.minute)
     is Action.SetTimer -> "Start a timer for " + if (a.seconds % 60 == 0) "${a.seconds / 60} min" else "${a.seconds} s"
+    is Action.MakeVideo -> "Make a video from ${a.photos.size} photo" + if (a.photos.size == 1) "" else "s"
     else -> a::class.simpleName.orEmpty() + t?.label?.let { " \"$it\"" }.orEmpty()
   }
 
@@ -357,8 +372,9 @@ class AgentLoop(
   private fun declined() = end(RunStatus.DECLINED, "The owner said no, so Deputy stopped before that step.")
 
   private fun end(status: RunStatus, summary: String?): RunResult {
-    emit(RunEvent.Finished(runId, status, summary, guard.costUsd))
-    return RunResult(status, summary)
+    val told = if (status == RunStatus.DONE || made.isEmpty()) summary else listOfNotNull(summary, "Before it stopped, Deputy saved ${made.joinToString()}.").joinToString(" ")
+    emit(RunEvent.Finished(runId, status, told, guard.costUsd))
+    return RunResult(status, told)
   }
 
   companion object {

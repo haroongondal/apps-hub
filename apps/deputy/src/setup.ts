@@ -1,9 +1,9 @@
 import type { ServiceState } from 'deputy-agent';
 
-export type SetupAction = 'accessibility' | 'appInfo' | 'notifications' | 'battery' | 'key' | 'contacts';
+export type SetupAction = 'accessibility' | 'appInfo' | 'notifications' | 'battery' | 'key' | 'contacts' | 'photos';
 
 export interface SetupRow {
-  id: 'accessibility' | 'restricted' | 'notifications' | 'battery' | 'autostart' | 'key' | 'contacts';
+  id: 'accessibility' | 'restricted' | 'notifications' | 'battery' | 'autostart' | 'key' | 'contacts' | 'photos';
   title: string;
   detail: string;
   status: 'ok' | 'todo' | 'manual' | 'optional';
@@ -61,6 +61,14 @@ export function setupRows(s: ServiceState): SetupRow[] {
       detail: "Lets Deputy find a person's number and open their chat directly, which is much faster than searching in the app.",
       status: s.contactsAllowed ? 'ok' : 'optional',
       action: 'contacts',
+    },
+    {
+      id: 'photos',
+      title: 'Allow photos (optional)',
+      detail:
+        "Lets Deputy make a video from photos on the phone, such as ones it downloaded from Drive. Choose Allow all: with selected photos only, Deputy can't see new downloads. Photos stay on the phone.",
+      status: s.photosAllowed ? 'ok' : 'optional',
+      action: 'photos',
     },
   ];
 }

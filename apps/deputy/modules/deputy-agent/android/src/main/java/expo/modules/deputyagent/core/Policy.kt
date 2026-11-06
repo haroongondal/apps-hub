@@ -22,6 +22,9 @@ class Policy(
     if (action is Action.TapAt && screen.unread.any { action.x in it.left..it.right && action.y in it.top..it.bottom }) {
       return Verdict.Deny("That point is on the keyboard or a system window, which Deputy doesn't read. Type with type_text, or press back to close it.")
     }
+    if (action is Action.MakeVideo && action.handler == null) {
+      return Verdict.Deny("Deputy couldn't tell which app keeps the photos, so it didn't read them.")
+    }
     val pkg = when (action) {
       is Action.OpenApp -> action.pkg
       is Action.OpenLink -> action.handler
@@ -29,6 +32,7 @@ class Policy(
       is Action.OpenSettings -> SETTINGS.first()
       is Action.SetAlarm -> action.handler
       is Action.SetTimer -> action.handler
+      is Action.MakeVideo -> action.handler
       is Action.Press, is Action.Wait, Action.Look -> null
       else -> target?.pkg ?: screen.pkg
     }
@@ -87,6 +91,7 @@ class Policy(
     is Action.TypeText -> if (action.pressEnter) "Type and press Enter" else "Type"
     is Action.LongPress -> "Long-press"
     is Action.Tap, is Action.TapAt -> "Tap"
+    is Action.MakeVideo -> "Make a video"
     else -> action::class.simpleName.orEmpty()
   }
 
