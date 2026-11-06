@@ -13,17 +13,7 @@
       "supportsTablet": false,
       "infoPlist": {
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": false,
-          "NSExceptionDomains": {
-            "www.vpngate.net": {
-              "NSExceptionAllowsInsecureHTTPLoads": true,
-              "NSIncludesSubdomains": true
-            },
-            "vpngate.net": {
-              "NSExceptionAllowsInsecureHTTPLoads": true,
-              "NSIncludesSubdomains": true
-            }
-          }
+          "NSAllowsArbitraryLoads": false
         }
       }
     },

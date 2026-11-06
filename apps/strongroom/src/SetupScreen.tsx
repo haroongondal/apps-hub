@@ -5,8 +5,10 @@ import { messageOf, whileDeriving } from './call.ts';
 import { pickGroupIndex, recoveryGroupMatches, validateMasterPassword } from './forms.ts';
 import { ImportScreen } from './ImportScreen.tsx';
 import { NewPasswordFields, RecoveryKeyCard, SecretField } from './parts.tsx';
+import { SyncScreen, useSyncStatus } from './SyncScreen.tsx';
+import { ALREADY_USE } from './sync-flow.ts';
 
-type Step = 'password' | 'key' | 'verify' | 'fingerprint' | 'autofill' | 'chrome' | 'import' | 'importing';
+type Step = 'password' | 'key' | 'verify' | 'fingerprint' | 'autofill' | 'chrome' | 'import' | 'importing' | 'signIn';
 
 const CHROME_STEPS = ['Open Chrome, then Settings.', 'Tap Autofill services.', 'Choose Autofill using another service.'];
 
@@ -21,6 +23,7 @@ export function SetupScreen({ status, onFinished }: { status: Status; onFinished
   const [error, setError] = useState<string | null>(null);
   const [fault, setFault] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { status: sync } = useSyncStatus();
 
   const go = (next: Step) => {
     setError(null);
@@ -93,6 +96,7 @@ export function SetupScreen({ status, onFinished }: { status: Status; onFinished
   };
 
   if (step === 'importing') return <ImportScreen onBack={() => go('import')} onDone={onFinished} onLocked={onFinished} />;
+  if (step === 'signIn') return <SyncScreen start="signIn" onBack={() => go('password')} onDone={() => go('autofill')} onLocked={() => go('password')} />;
 
   return (
     <Screen scroll>
@@ -102,6 +106,7 @@ export function SetupScreen({ status, onFinished }: { status: Status; onFinished
           <NewPasswordFields password={password} confirm={confirm} onPassword={setPassword} onConfirm={setConfirm} error={error} />
           {fault && <Notice tone="danger">{fault}</Notice>}
           <Button label="Continue" onPress={choosePassword} block />
+          {sync?.available && <Button label={ALREADY_USE} variant="ghost" onPress={() => go('signIn')} />}
         </>
       )}
       {step === 'key' && (

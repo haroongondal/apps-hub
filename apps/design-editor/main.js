@@ -123,6 +123,6 @@ app.whenReady().then(() => {
   win.webContents.on('will-navigate', e => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.on('closed', () => { win = null; });
-  win.loadFile('index.html');
+  win.loadFile('vendor/engine/desktop.html');
 });
 app.on('window-all-closed', () => app.quit());

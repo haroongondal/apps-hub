@@ -260,4 +260,126 @@ class VaultFormatTest {
     assertEquals(listOf(true, false), login.apps.map { it.domain != null })
     assertTrue(login.apps.all { it.app.certSha256.length == 64 })
   }
+
+  private val v by lazy { vectors() }
+  private val a by lazy { v["accountKey"]!!.jsonObject }
+  private val vectorPassword by lazy { v["password"]!!.jsonObject.text("text").toCharArray() }
+  private val vectorKdf = KdfParams(1024, 1, 1)
+  private fun accountKey() = a.hex("key")
+  private fun flagged() = Header.fromJson(a["header"]!!.toString())!!
+  private fun unflagged() = Header.fromJson(v["header"]!!.toString())!!
+
+  @Test fun accountKeyVectorsMatch() {
+    val mixed = Crypto.hkdf(v["password"]!!.jsonObject.hex("masterKey"), accountKey(), Crypto.utf8("strongroom/v1/account"), 32)
+    assertEquals("mixedMasterKey", a.text("mixedMasterKey"), mixed.toHex())
+    val keys = VaultFormat.derivePasswordKeys(vectorPassword, v.hex("salt"), vectorKdf, true, accountKey())
+    assertEquals("wrapKey", a.text("wrapKey"), keys.wrapKey.toHex())
+    assertEquals("loginToken", a.text("loginToken"), keys.loginToken.toHex())
+    assertEquals("readToken", a.text("readToken"), keys.readToken.toHex())
+    assertEquals(a["passwordWrap"]!!.jsonObject.text("sealed"), flagged().passwordWrap.toHex())
+    assertArrayEquals(v.hex("vaultKey"), VaultFormat.openPasswordWrap(flagged(), keys.wrapKey))
+    val opened = VaultFormat.openWithPassword(flagged(), vectorPassword, accountKey())
+    assertNotNull(opened)
+    assertArrayEquals(v.hex("vaultKey"), opened!!.vaultKey)
+    assertEquals(a.text("loginToken"), opened.loginToken.toHex())
+    assertEquals(a.text("readToken"), opened.readToken.toHex())
+    assertEquals("loginTokenHash", a.text("loginTokenHash"), Crypto.tokenHash(opened.loginToken))
+  }
+
+  @Test fun opensVectorHeaderWithAccountKey() {
+    assertTrue(flagged().accountKey)
+    assertArrayEquals(v.hex("vaultKey"), VaultFormat.unlockWithPassword(flagged(), vectorPassword, accountKey()))
+  }
+
+  @Test fun withoutKeyThrowsAccountKeyRequired() {
+    assertThrows(AccountKeyRequired::class.java) { VaultFormat.unlockWithPassword(flagged(), vectorPassword) }
+    assertThrows(AccountKeyRequired::class.java) { VaultFormat.openWithPassword(flagged(), vectorPassword, null) }
+    assertThrows(AccountKeyRequired::class.java) { VaultFormat.derivePasswordKeys(vectorPassword, v.hex("salt"), vectorKdf, true, null) }
+    assertThrows(
+      "a new wrap without the key would open nothing",
+      AccountKeyRequired::class.java,
+    ) { VaultFormat.withNewPassword(flagged(), v.hex("vaultKey"), vectorPassword) }
+  }
+
+  @Test fun wrongAccountKeyIsNull() {
+    val wrong = accountKey().also { it[0] = (it[0].toInt() xor 1).toByte() }
+    assertNull(VaultFormat.unlockWithPassword(flagged(), vectorPassword, wrong))
+    assertNull(VaultFormat.openWithPassword(flagged(), vectorPassword, wrong))
+    // A given key is mixed in even without the flag, so it never falls back to the password alone.
+    assertNull(VaultFormat.openWithPassword(unflagged(), vectorPassword, accountKey()))
+    assertNull("flag stripped, password alone", VaultFormat.unlockWithPassword(flagged().copy(accountKey = false), vectorPassword))
+  }
+
+  @Test fun headerWithoutFlagIsByteIdentical() {
+    val text = v["header"]!!.toString()
+    assertFalse(unflagged().accountKey)
+    assertEquals(text, unflagged().toJson())
+    assertFalse("accountKey" in Json.parseToJsonElement(newVault().first.toJson()).jsonObject)
+    for (bad in listOf("false", "\"true\"", "1", "null")) {
+      assertNull(bad, Header.fromJson(JsonObject(v["header"]!!.jsonObject + ("accountKey" to Json.parseToJsonElement(bad))).toString()))
+    }
+  }
+
+  @Test fun flaggedHeaderRoundTripsByteIdentical() {
+    val text = a["header"]!!.toString()
+    assertTrue(text, text.endsWith(",\"accountKey\":true}"))
+    assertEquals(text, flagged().toJson())
+    assertEquals(flagged(), Header.fromJson(flagged().toJson()))
+    assertNotEquals(flagged(), flagged().copy(accountKey = false))
+  }
+
+  @Test fun withAccountKeyMigratesAndKeepsRecords() {
+    val (h, vaultKey) = newVault()
+    val note = Entry.Note("Kept", "sealed before the migration", 1)
+    val sealed = VaultFormat.sealEntry(vaultKey, "id-1", note)
+    val key = AccountKey.generate()
+    val next = VaultFormat.withAccountKey(h, vaultKey, password, key)
+    assertTrue(next.accountKey)
+    assertEquals(h.kdf, next.kdf)
+    assertFalse("a new salt is drawn", h.salt.contentEquals(next.salt))
+    assertArrayEquals("recoveryWrap is kept", h.recoveryWrap, next.recoveryWrap)
+    assertThrows(AccountKeyRequired::class.java) { VaultFormat.unlockWithPassword(next, password) }
+    val same = VaultFormat.unlockWithPassword(next, password, key)
+    assertArrayEquals(vaultKey, same)
+    assertEquals(note, VaultFormat.openEntry(same!!, "id-1", sealed))
+    assertThrows(IllegalArgumentException::class.java) { VaultFormat.withAccountKey(h, vaultKey, password, ByteArray(0)) }
+  }
+
+  @Test fun withNewPasswordKeepsAccountKey() {
+    val key = AccountKey.generate()
+    val (h, vaultKey) = VaultFormat.create(password, recoveryKey, fast, key)
+    assertTrue(h.accountKey)
+    val newPassword = "new master password".toCharArray()
+    val next = VaultFormat.withNewPassword(h, vaultKey, newPassword, accountKey = key)
+    assertTrue(next.accountKey)
+    assertArrayEquals(vaultKey, VaultFormat.unlockWithPassword(next, newPassword, key))
+    assertNull(VaultFormat.unlockWithPassword(next, password, key))
+    assertThrows(AccountKeyRequired::class.java) { VaultFormat.withNewPassword(h, vaultKey, newPassword) }
+  }
+
+  @Test fun recoveryPathIgnoresAccountKey() {
+    val recovery = v["recovery"]!!.jsonObject
+    assertArrayEquals(v.hex("vaultKey"), VaultFormat.unlockWithRecovery(flagged(), recovery.hex("key")))
+    assertEquals(recovery.text("loginToken"), VaultFormat.recoveryLoginToken(recovery.hex("key")).toHex())
+  }
+
+  // Deriving at the ceiling (1 GiB, t = 16, p = 4) would blow the timeout, so passing proves nothing was derived.
+  @Test(timeout = 5000)
+  fun kdfRangeCheckedBeforeDerivingWithFlag() {
+    val salt = v.hex("salt")
+    for (kdf in listOf(KdfParams(Int.MAX_VALUE, 1, 1), KdfParams(512, 1, 1), KdfParams(1024, 17, 1))) {
+      val h = flagged().copy(kdf = kdf)
+      assertThrows(KdfOutOfRange::class.java) { VaultFormat.unlockWithPassword(h, vectorPassword, accountKey()) }
+      assertThrows(KdfOutOfRange::class.java) { VaultFormat.openWithPassword(h, vectorPassword) }
+      assertThrows(KdfOutOfRange::class.java) { VaultFormat.derivePasswordKeys(vectorPassword, salt, kdf, true, ByteArray(3)) }
+    }
+    val ceiling = KdfParams(KdfParams.MAX_MEMORY_KIB, KdfParams.MAX_ITERATIONS, KdfParams.MAX_PARALLELISM)
+    val h = flagged().copy(kdf = ceiling)
+    assertThrows(AccountKeyRequired::class.java) { VaultFormat.openWithPassword(h, vectorPassword) }
+    assertThrows(AccountKeyRequired::class.java) { VaultFormat.derivePasswordKeys(vectorPassword, salt, ceiling, true, null) }
+    assertThrows(AccountKeyRequired::class.java) { VaultFormat.withNewPassword(h, v.hex("vaultKey"), vectorPassword) }
+    assertThrows(IllegalArgumentException::class.java) { VaultFormat.openWithPassword(h, vectorPassword, ByteArray(19)) }
+    assertThrows(IllegalArgumentException::class.java) { VaultFormat.openWithPassword(unflagged().copy(kdf = ceiling), vectorPassword, ByteArray(21)) }
+    assertThrows(IllegalArgumentException::class.java) { VaultFormat.create(password, recoveryKey, ceiling, ByteArray(19)) }
+  }
 }

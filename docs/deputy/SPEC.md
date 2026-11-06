@@ -102,6 +102,7 @@ export interface ServiceState {
   batteryUnrestricted: boolean;
   keySet: boolean;                   // a key is saved for the current address (§12)
   contactsAllowed: boolean;          // optional: lets find_contact read numbers
+  photosAllowed: boolean;            // optional: lets make_video read photos
   runActive: boolean;
 }
 
@@ -255,7 +256,7 @@ don't.
 | `open_app(name)`                                  | Resolves to a launchable package by label or package name (a name of 4+ letters also matches inside a package name: "Alfalah" finds `com.base.bankalfalah`, labelled "Alfa"). The loop then waits up to 4.5 s for the app, or any app but the one it was opened from, to come to the front, since a cold start can outlast the settle. Ambiguity returns the candidates as `Label (package)`, and a name given back in that form opens the package in the brackets. Blocked apps are refused. |
 | `open_link(url)`                                  | Schemes: `https`, `http`, `tel` (dialer only, `ACTION_DIAL`), `sms`/`smsto` (`ACTION_SENDTO`, body in the `sms_body` extra), `mailto`, `geo`, and `whatsapp://send?` only (other `whatsapp:` links are denied). `intent:`, `content:` and `file:` are denied. |
 | `tap(index, irreversible?)`                       | `ACTION_CLICK` on the node or its nearest clickable ancestor; falls back to a gesture at the bounds centre. |
-| `tap_at(x, y, irreversible?)`                     | Screenshot coordinates. For custom-drawn UIs only. Checked against the node under the point if there is one. |
+| `tap_at(x, y, irreversible?)`                     | Screenshot coordinates. For custom-drawn UIs only. Checked against the node under the point; with no labelled node there it asks the owner first (§8.2). |
 | `long_press(index)`                               | Gesture.                                                                                                |
 | `type_text(index, text, press_enter?, irreversible?)` | `ACTION_SET_TEXT` with the text given, which replaces what the field holds: WhatsApp reports its empty box as the text "Message", and adding to that would send "Message…". The tool's description tells the model to include any text that should stay, and a replacement that drops more than 20 characters is confirmed (§8.2). When the text doesn't change (S4: Flutter fields) and the field didn't already hold it, the tool says typing isn't possible here. IME fallback is Phase 5 (§17). |
 | `scroll(direction, index?)`                       | `ACTION_SCROLL_*` on the node, else a swipe gesture.                                                    |
@@ -267,6 +268,7 @@ don't.
 | `open_settings(page)`                             | Opens one Settings page by intent. Pages are `Tools.PAGES`: wifi, bluetooth, internet, airplane, display, sound, volume, battery, storage, apps, location, date, about, nfc. Security and accessibility pages aren't offered. |
 | `set_alarm(hour, minute, label?)`                 | `ACTION_SET_ALARM` with `EXTRA_SKIP_UI`, handled by the phone's clock app.                              |
 | `set_timer(seconds, label?)`                      | `ACTION_SET_TIMER` with `EXTRA_SKIP_UI`; 1 to 86,400 s.                                                 |
+| `make_video(photos, seconds_each?)`               | 1 to 30 photo file names already on the phone (downloads included), 1 to 10 s each (default 3). Finds them in MediaStore by name (an exact name beats its "name (1)" copies; the newest copy wins), renders one MP4 with Media3 (portrait unless most photos are landscape, letterboxed, a 0.4 s fade through black at each photo's ends) and saves it to `Movies/Deputy`. Pixels never reach the model; the result names the file and the photos used. Needs the optional photos permission (§14). Judged against the gallery app (§8.2). |
 | `find_contact(name)`                              | Matching contacts with numbers in international form where the phone can format them (at most 8; a local number gets the SIM's country code). Needs the optional contacts permission (§14); without it the tool says so. Judged by `Policy.lookup` (§8.2). |
 | `open_chat(app, phone, text)`                     | `app` is `whatsapp` or `sms`. Builds a `whatsapp://send?phone=…&text=…` or `smsto:…?body=…` link, so the message is typed in and never sent: Send stays a tap the policy judges. It runs as an `open_link`. |
 | `ask_user(question, options?)`                    | A `question` gate. Returns the owner's text. Never counts as approval (FR-7).                           |
@@ -280,7 +282,7 @@ lower one (§8.2).
 ```text
 run(task, opts):
   guard   = Guard(maxSteps, maxCostUsd, maxMillis, dailyBudget)   # caps from settings
-  history = [system, user(task + memory)]                 # memory: route memory, below
+  history = [system, user(task), user(memory)?]           # memory: route memory, below; never in the task's message
   repeat:
     guard.check()                       -> end(capped) if tripped
     if !policy.preObserve(foregroundPkg):                  # blocked app in front
@@ -363,13 +365,27 @@ run(task, opts):
   screenshot, so a 30-step run stays well inside the model's window. The model
   keeps what it needs from a left screen in the `memo` of its action tools, which
   is replayed with the call. Nothing else is summarised or dropped.
+- **Photos that arrive during a run** (`Device.newPhotos`, only with the optional
+  photos permission): when the set of images added to MediaStore since the run
+  started changes, the next screen opens with one line listing them, counting
+  a file and its " (n)" copies once and naming the copies as repeats ("Don't
+  download a photo twice"). The line stays in that screen's shortened header.
+  Only file names reach the model. Why: in the 0.2.6 phone test the model lost
+  count and downloaded two Drive files three times each.
+- **A video saved before an unfinished end:** when a run ends any way but
+  `finish(done)` (failed, capped, stopped, declined) after `make_video` saved a
+  video, the summary ends "Before it stopped, Deputy saved Movies/Deputy/…". Why:
+  a 429 right after `make_video` ended the 0.2.6 phone test as "Task failed"
+  with no word of the saved video.
 - **Route memory** (`RunStore.recall`, no storage of its own): at run start, the
   steps that ran (verdict allow or confirm; steps denied, stale, not run,
   declined or left waiting are skipped) in up to two earlier `done` runs go in
-  the first user message, inside a `<memory>` block labelled as data to check
-  against the screen. A run qualifies when its task shares at least two words
+  their own user message after the owner's task (never in the task's message,
+  since the steps hold labels from other apps' screens), inside a `<memory>`
+  block labelled as data to check against the screen. A run qualifies when its task shares at least two words
   with this one, and at least half of the shorter task's words. The best matches
-  come first, at most 15 steps each. `<` is escaped as on a screen, steps in apps
+  come first, at most 15 steps each. A step is kept on one line and a label in it
+  is cut to 40 characters, `<` is escaped as on a screen, steps in apps
   blocked since then are left out, and the text of a message in a link (`text=`,
   `body=`) is replaced by `…`, so a new message can't inherit an old one. "Clear
   history" clears it.
@@ -395,7 +411,7 @@ class Policy(
   private val trust: (pkg: String) -> TrustLevel,
   private val allowedApps: Set<String>?,                   // from the rule or saved task; null = any
   private val self: String,                                // com.haroon.deputy
-  private val verbs: VerbMatcher,
+  private val browsers: Set<String>,                       // apps that open any https link, listed by DeviceAdapter
 ) {
   fun preObserve(pkg: String): Boolean                     // false when blocked
   fun check(action: Action, target: NodeRef?, screen: ScreenContext, modelFlag: Boolean): Verdict
@@ -421,6 +437,19 @@ class Policy(
    - The target's label (text, description, hint, view id) matches the verb list.
    - The target sits in a flow on the sensitive list (security settings in
      Settings, permission dialogs, the package installer, "clear data").
+   - `type_text` in a web browser (an app that opens a link to any site; the
+     Android side lists them from the app manifest's https `<queries>`), whatever
+     the field, the text or the model's flag: a page can ask for what Deputy read
+     in another app, such as a code (prompt injection).
+   - `tap`, `tap_at` or `long_press` on a node, other than a text field, whose text
+     or description looks like a link (`scheme://`, `www.` or a bare
+     `host.tld/path`): it opens a page, as an `open_link` does. Child text counts
+     only for `tap_at`: it skips clickable children, so a URL there is a row's
+     preview, which a click opens as the row and only a gesture can hit. A browser's
+     address bar only takes focus, so it doesn't ask.
+   - `tap_at` with no labelled node under the point: none at all, or an
+     unlabelled root, which is what a canvas or a WebView without nodes gives.
+     The gate says "Tap a spot with no label".
    - `type_text` with `press_enter`, unless the field is a search field and the
      text is plain. A search field has a word starting with `search` in its hint,
      view id or description. Text is plain when it has none of `. / : @` and no run
@@ -440,7 +469,10 @@ class Policy(
 Which package a step is judged against: `open_app` the app it opens; `open_link`
 and `open_chat` the app the phone resolves for the link; `open_settings` the
 Settings app (`com.android.settings`); `set_alarm` and `set_timer` the clock app
-the phone resolves for the alarm intent; `press`, `wait` and `look` none; every
+the phone resolves for the alarm intent; `make_video` the gallery app the phone
+resolves for `CATEGORY_APP_GALLERY`, Denied when none resolves (it reads that app's
+data, as a lookup does, and only adds a new file, so it is otherwise Allowed without
+asking); `press`, `wait` and `look` none; every
 other step the app of its target element, else the app in front. A step that opens
 a link is also Denied under an `allowedApps` list, and a `whatsapp:` link that
 isn't `whatsapp://send?` is Denied (§6).
@@ -449,24 +481,27 @@ The model's flag is ignored for `press`, `wait`, `look`, `open_app` and
 `open_settings` in rules 5 and 6: they change nothing, so a flag on them (Back
 flagged as irreversible gated the eval) only costs the owner a prompt. It is also
 ignored for `type_text` without `press_enter`, unless the text has a run of 4
-digits or more: typing alone sends nothing, and on 0.2.1 the flag on plain typing
+digits or more: typing alone sends nothing outside a browser, and on 0.2.1 the flag on plain typing
 in a WhatsApp chat made one message cost two approvals (owner, 2026-10-30). A
 verification box often submits on its last digit, so a code keeps the flag. Rule 6
 still confirms such typing for `press_enter` (except a plain search), a verb in the
-field's label, a sensitive flow, and replacing more than 20 characters already in
-the field. On every other step the flag counts, swipes and scrolls included.
+field's label, a sensitive flow, a browser, and replacing more than 20 characters
+already in the field. On every other step the flag counts, swipes and scrolls included.
 
 **Lookups** (`find_contact`) read an app's data without its screen, so
 `Policy.lookup` gives them the same trust and task limits as opening the app. The
 app is the one the phone resolves for contacts. Deny when none resolves, when it is
 Deputy or a blocked app, or when `allowedApps` is set and doesn't list it; otherwise
 Allow. A read-only app can be looked up. `phone_info` reads no app and has no check.
+`make_video` reads the gallery's photos the same way but goes through `check` with
+the gallery as its package, so a read-only gallery Denies it (it adds a video).
 
 **Verb list** (whole word, case-insensitive; lives in one file, `VerbMatcher.kt`,
 extended when the eval finds a miss): send, post, publish, reply, share, pay,
 buy, purchase, order, "place order", checkout, confirm, transfer, withdraw,
 deposit, invest, sell, trade, submit, book, reserve, subscribe, delete, remove,
-erase, reset, uninstall, install, "sign out", "log out", call, allow, grant, and
+erase, reset, uninstall, install, "sign out", "log out", call, allow, grant,
+approve, pair, forward, dial, and
 `clear` only with a word after it in the label ("Clear chat" matches; a lone
 "Clear", such as a calculator's C key, doesn't).
 
@@ -560,6 +595,11 @@ erase, reset, uninstall, install, "sign out", "log out", call, allow, grant, and
   when the model flags it: an autosaving note holding 20 characters or fewer
   (replacing more is still confirmed), or a code box that takes 3 digits or
   fewer. Upgrade when a run does it by mistake.
+- **shortcut:** "a browser" is the app, not the view: typing into a web page shown
+  inside another app (an in-app browser, a `WebView` in a chat or mail app) is
+  not asked about, because the observation doesn't mark `WebView` nodes. Taps on
+  links there are still asked. Upgrade by passing each node's class name and
+  confirming typing under an `android.webkit.WebView`.
 
 ## 9. Provider layer
 
@@ -632,9 +672,14 @@ any other 400 ends the run.
 **Several keys.** `OpenAiCompatProvider` gets the owner's keys for the address
 (§12). A run starts on the first and stays on one key until it answers 429; it
 then switches to the next key at once, without waiting. Only when every key has
-answered 429 in a row does it wait the server's `retry-after` (capped at 60 s; 1 s,
-2 s, 4 s when it sends none) and go round again, up to three waits, then fail with
-"rate limit reached". With one key that is the plain 429 backoff.
+answered 429 in a row does it wait: 10 s, 20 s, 30 s, or longer when the
+server's hint asks for more (`retry-after`, else the `retryDelay` Gemini puts
+in the error body), capped at 60 s each; then it goes round again, up to three
+waits, and fails with "rate limit reached". With one key that is the plain 429
+backoff. Why a floor: a per-minute quota outlasted 1 s, 2 s, 4 s, and with
+Gemini's own hint obeyed a run still failed within 7 s (0.2.6 phone tests).
+Each 429 logs a `Deputy` warning with its `retry-after`, `retryDelay` and
+`quotaId` values only (not the body, the request or the key).
 
 401 and 403: end the run with "check your API key in Settings", naming "API key n
 of m" when there are several. 400: end the run, write the response body (every
@@ -682,6 +727,9 @@ facts (Android version, locale, date and time). It states:
 - Prefer the direct tools to tapping through apps: `phone_info` for questions
   about the phone, `open_settings`, `set_alarm`, `set_timer`, `open_link` and
   `open_app`.
+- To make a video from photos, get them onto the phone first (download them and
+  note each file name in the memo), then call `make_video` with those names. Don't
+  use a video editing app.
 - You can read whatever an app shows, messages and statements included. When the
   task depends on what an app holds, open it and read it before acting: scroll for
   more and keep what you read in the `memo`.
@@ -820,6 +868,10 @@ In the module's `AndroidManifest.xml` (merged into the app, so no config plugin)
   `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_SPECIAL_USE` (S3 passed),
   `READ_CONTACTS` (for `find_contact`; a runtime permission the owner grants from
   an optional Setup row, "Allow contacts", which never blocks setup),
+  `READ_MEDIA_IMAGES` (for `make_video`; the same kind of optional Setup row,
+  "Allow photos", which asks for Allow all; `READ_MEDIA_VISUAL_USER_SELECTED` is
+  declared so that "Select photos" leaves `READ_MEDIA_IMAGES` denied and the row
+  optional, because a partial grant can't see new downloads),
   `com.android.alarm.permission.SET_ALARM` (for `set_alarm` and `set_timer`) and
   `ACCESS_NETWORK_STATE` (for `phone_info`'s network line) and
   `USE_FULL_SCREEN_INTENT` (asks the system to keep an approval's heads-up on
@@ -870,13 +922,14 @@ In the module's `AndroidManifest.xml` (merged into the app, so no config plugin)
     Deputy in front, no app in front yet), stale index (a moved element found
     again on the same app and screen title, the policy asked again, a changed
     element still stale), no-progress, caps, stop
-    mid-call, only the latest screen sent in full, memory sent with the task, an
+    mid-call, only the latest screen sent in full, memory sent as its own message after the task, an
     injected "ignore your task" screen still hits the gate (AC-6).
   - `GuardTest`: step, cost, time and daily caps.
   - `GateNonceTest`: single use, expiry, wrong run, replay.
   - `ProviderJsonTest`: request shape and the replay of tool calls, with unknown
     fields dropped (§9.3).
-  - `OpenAiCompatProviderTest`: retries (5xx, 429 and `retry-after`, Groq's two
+  - `OpenAiCompatProviderTest`: retries (5xx, 429 with `retry-after`, Gemini's
+    `retryDelay` or the 10/20/30 s backoff, Groq's two
     400s), a key handed over at its limit, the wait once every key is limited,
     "API key n of m" on a 401, every key redacted from a 400 (§9.4).
   - `GateCopyTest`: the collapsed row's text and the 32-character limit for

@@ -62,6 +62,7 @@ class DeviceAdapter(private val context: Context) : Device {
   private var infos: List<AccessibilityNodeInfo> = emptyList()
   private val appWindow = Rect()
   private var display = Bounds(0, 0, 0, 0)
+  private val video = VideoMaker(context)
   private var unread: List<Area> = emptyList()
 
   override suspend fun foregroundPkg(): String = awaitService().rootInActiveWindow?.packageName?.toString().orEmpty()
@@ -115,6 +116,11 @@ class DeviceAdapter(private val context: Context) : Device {
   override fun resolveClock(): String? = handler(Intent(AlarmClock.ACTION_SET_ALARM))
 
   override fun resolveContacts(): String? = handler(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CONTACTS))
+
+  // VIEW image/* opens the chooser on the owner's phone (two galleries); APP_GALLERY resolves to Google Photos (2026-11-05).
+  override fun resolveGallery(): String? = handler(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_GALLERY))
+
+  override fun newPhotos(sinceMs: Long) = video.added(sinceMs)
 
   private fun handler(intent: Intent) = context.packageManager
     .resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName?.takeIf { it != "android" }
@@ -188,6 +194,7 @@ class DeviceAdapter(private val context: Context) : Device {
           .putExtra(AlarmClock.EXTRA_SKIP_UI, true).putExtra(AlarmClock.EXTRA_MESSAGE, action.label),
         "Asked the clock app to start the timer.",
       )
+      is Action.MakeVideo -> video.make(action)
     }
   }
 
@@ -364,6 +371,11 @@ internal fun flatten(n: AccessibilityNodeInfo, refs: MutableList<NodeRef>, infos
   infos?.add(n)
   for (i in 0 until n.childCount) n.getChild(i)?.let { flatten(it, refs, infos, depth + 1) }
 }
+
+/** Apps that open a link to any site: the policy asks before typing in them. The app manifest's https `<queries>` makes them visible. */
+internal fun browsers(context: Context): Set<String> = context.packageManager
+  .queryIntentActivities(Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")).addCategory(Intent.CATEGORY_BROWSABLE), PackageManager.MATCH_ALL)
+  .map { it.activityInfo.packageName }.toSet()
 
 /** Package and label of every app with a launcher icon (the manifest's `<queries>` makes them visible). */
 internal fun launcherApps(context: Context): List<Pair<String, String>> {

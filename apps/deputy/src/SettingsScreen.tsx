@@ -39,8 +39,10 @@ export function SettingsScreen({ state, refresh }: { state: ServiceState; refres
     else if (action === 'battery') DeputyAgent.openBatterySettings();
     else if (action === 'appInfo') DeputyAgent.openAppInfo();
     else if (action === 'key') setKeyOpen(true);
-    else if (action === 'contacts') {
-      const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CONTACTS);
+    else if (action === 'contacts' || action === 'photos') {
+      const result = await PermissionsAndroid.request(
+        action === 'contacts' ? PermissionsAndroid.PERMISSIONS.READ_CONTACTS : PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+      );
       if (result === 'never_ask_again') DeputyAgent.openAppInfo();
       refresh();
     } else {

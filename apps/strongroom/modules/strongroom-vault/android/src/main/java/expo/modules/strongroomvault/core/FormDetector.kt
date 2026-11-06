@@ -141,7 +141,9 @@ object FormDetector {
     return keywordRole(n)?.let { it to RANK_KEYWORD }
   }
 
-  private fun hintRole(hint: String): Role? = HINT_ROLES[hint] ?: Role.OTHER.takeIf { hint.startsWith("smsotpcode") }
+  // Chrome and WebView pass a page's autocomplete tokens (cc-number, cc-exp…) as the hints, never as an "autocomplete" HtmlInfo attribute.
+  private fun hintRole(hint: String): Role? =
+    HINT_ROLES[hint] ?: (if (hint.startsWith("cc-")) autocompleteRole(hint) else null) ?: Role.OTHER.takeIf { hint.startsWith("smsotpcode") }
 
   private fun autocompleteRole(token: String): Role? = AUTOCOMPLETE_ROLES[token] ?: Role.OTHER.takeIf { token.startsWith("cc-") }
 

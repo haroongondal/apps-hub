@@ -13,12 +13,17 @@ class Policy(
   private val trust: (pkg: String) -> TrustLevel,
   private val allowedApps: Set<String>?,
   val self: String,
+  /** Apps that open any https link (the phone's browsers), listed by the Android side. */
+  private val browsers: Set<String> = emptySet(),
 ) {
   fun preObserve(pkg: String): Boolean = pkg != self && trust(pkg) != TrustLevel.BLOCKED
 
   fun check(action: Action, target: NodeRef?, screen: ScreenContext, modelFlag: Boolean): Verdict {
     if (action is Action.TapAt && screen.unread.any { action.x in it.left..it.right && action.y in it.top..it.bottom }) {
       return Verdict.Deny("That point is on the keyboard or a system window, which Deputy doesn't read. Type with type_text, or press back to close it.")
+    }
+    if (action is Action.MakeVideo && action.handler == null) {
+      return Verdict.Deny("Deputy couldn't tell which app keeps the photos, so it didn't read them.")
     }
     val pkg = when (action) {
       is Action.OpenApp -> action.pkg
@@ -27,6 +32,7 @@ class Policy(
       is Action.OpenSettings -> SETTINGS.first()
       is Action.SetAlarm -> action.handler
       is Action.SetTimer -> action.handler
+      is Action.MakeVideo -> action.handler
       is Action.Press, is Action.Wait, Action.Look -> null
       else -> target?.pkg ?: screen.pkg
     }
@@ -68,11 +74,16 @@ class Policy(
 
   private fun standard(action: Action, target: NodeRef?, screen: ScreenContext, modelFlag: Boolean): Verdict {
     if (action is Action.OpenLink && action.url.substringBefore(':').lowercase() in WEB) return Verdict.Confirm("Open link", action.url)
+    // A point with no labelled element (none at all, or an unlabelled root on a canvas or WebView) can be anything, a link included.
+    if (action is Action.TapAt && target?.label == null) return Verdict.Confirm("Tap a spot with no label", null)
     val changes = action is Action.Tap || action is Action.TapAt || action is Action.LongPress || action is Action.TypeText
     val enter = action is Action.TypeText && action.pressEnter && !(isSearch(target) && plain(action.text))
     // Typing replaces the field, so dropping text already there asks first; a short placeholder like WhatsApp's "Message" doesn't.
     val erases = action is Action.TypeText && target?.text.orEmpty().let { it.length > PLACEHOLDER_MAX && !action.text.startsWith(it) }
-    val risky = changes && (enter || erases || (target != null && VerbMatcher.match(target) != null) || isSensitive(screen))
+    // Prompt injection: a page, or a link a message holds, can ask for what Deputy read elsewhere, such as a code.
+    val web = (action is Action.TypeText && (target?.pkg ?: screen.pkg) in browsers) ||
+      ((action is Action.Tap || action is Action.TapAt || action is Action.LongPress) && target != null && isLink(target, action is Action.TapAt))
+    val risky = changes && (enter || erases || web || (target != null && VerbMatcher.match(target) != null) || isSensitive(screen))
     return if (modelFlag || risky) Verdict.Confirm(if (erases) "Replace the text" else name(action), target?.label) else Verdict.Allow
   }
 
@@ -80,6 +91,7 @@ class Policy(
     is Action.TypeText -> if (action.pressEnter) "Type and press Enter" else "Type"
     is Action.LongPress -> "Long-press"
     is Action.Tap, is Action.TapAt -> "Tap"
+    is Action.MakeVideo -> "Make a video"
     else -> action::class.simpleName.orEmpty()
   }
 
@@ -97,6 +109,11 @@ class Policy(
 
   private fun plain(text: String) = text.none { it in "./:@" } && !DIGITS.containsMatchIn(text)
 
+  // A field showing an address, such as a browser's address bar, only takes focus when tapped.
+  // childText skips clickable children, so its URL is preview text a click won't open; only a gesture can land on it.
+  private fun isLink(n: NodeRef, gesture: Boolean) =
+    !n.editable && listOf(n.text, n.desc, n.childText.takeIf { gesture }).any { it != null && URL.containsMatchIn(it) }
+
   private fun changesDeputysAccess(s: ScreenContext, target: NodeRef?) =
     ((s.pkg in SETTINGS || s.pkg in PERMISSION_DIALOGS) && s.showsSelf) ||
       (s.pkg in SETTINGS && listOf(s.title, target?.label).any { t -> SELF_PAGES.any { t.orEmpty().contains(it, ignoreCase = true) } })
@@ -110,6 +127,8 @@ class Policy(
     val SEARCH = Regex("(?i)(?<![a-z])search")
     val DIGITS = Regex("\\d{5}")
     private val CODE = Regex("\\d{4}") // verification boxes often submit on the last digit
+    // A scheme, www. or a bare host.tld/path: what a chat app turns into a tappable link.
+    private val URL = Regex("(?i)\\b[a-z][a-z0-9+.-]*://|\\bwww\\.|\\b[a-z0-9-]+\\.[a-z]{2,}/")
     val SCHEMES = setOf("https", "http", "tel", "sms", "smsto", "mailto", "geo", "whatsapp")
     val WEB = setOf("https", "http")
     // shortcut: packages and titles cover AOSP and HyperOS as far as known; extend them from the S4 dumps.

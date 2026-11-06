@@ -1,5 +1,5 @@
 export type Platform = 'mac' | 'android';
-export type Tool = 'size' | 'quality' | 'clip' | 'audio' | 'gif' | 'convert';
+export type Tool = 'size' | 'quality' | 'clip' | 'audio' | 'gif' | 'convert' | 'frame' | 'volume' | 'reverse' | 'stabilize' | 'compose';
 export type Codec = 'h264' | 'hevc' | 'vp8' | 'vp9' | 'av1' | 'mpeg4' | 'prores'
   | 'aac' | 'alac' | 'mp3' | 'opus' | 'vorbis' | 'ac3' | 'eac3' | 'flac' | 'pcm' | 'dts' | 'truehd' | 'other';
 
@@ -38,7 +38,20 @@ export interface GifPlan { tool: 'gif'; startS: number; endS: number; width: num
 export interface ConvertPlan { tool: 'convert'; mode: 'remux' | 'transcode'; container: string; ext: string; video?: { encoder: Encoder | 'vp9' | 'copy'; quality: number }; audio?: { codec: Codec; bps?: number; copy: boolean } }
 export type ConvertTarget = 'mp4' | 'mov' | 'mkv' | 'webm' | 'm4a' | 'mp3' | 'opus' | 'flac' | 'wav';
 export interface QualityPlan { tool: 'quality'; encoder: Encoder; rung: Rung; width: number; height: number; quality: number /* VT -q:v, or bpp on Android */ }
-export type Plan = SizePlan | QualityPlan | ClipPlan | AudioPlan | GifPlan | ConvertPlan;
+// One frame at timeS as a PNG or JPEG still. Video only; the sound is never read.
+export interface FramePlan { tool: 'frame'; timeS: number; format: 'png' | 'jpg'; ext: 'png' | 'jpg' }
+// volume: video 'copy' when the codec fits MP4, else 'hw-h264'; absent for audio only.
+export interface LoudnessMeasure { inputI: number; inputTp: number; inputLra: number; inputThresh: number; offset: number }
+export interface VolumePlan { tool: 'volume'; mode: 'normalize' | 'gain'; gainDb: number; video?: 'copy' | 'hw-h264'; ext: 'mp4' | 'm4a'; measured?: LoudnessMeasure }
+// reverse holds the whole clip in memory, so the planner caps its length and size (see reverse.ts).
+export interface ReversePlan { tool: 'reverse'; sound: boolean; quality: number; ext: 'mp4' }
+export interface StabilizePlan { tool: 'stabilize'; level: 'minimum' | 'recommended' | 'most'; search: number; quality: number; ext: 'mp4' }
+// "Make a video": every clip travels inside the plan, so the queue, retry and resume need nothing new.
+export interface ComposeClip { uri: string; name: string; inS: number; outS: number; hasAudio: boolean; volume: number }
+// startS is the place on the video's timeline; inS and outS are times in the audio file, already cut to the video's end.
+export interface ComposeMusic { uri: string; name: string; inS: number; outS: number; startS: number; volume: number }
+export interface ComposePlan { tool: 'compose'; clips: ComposeClip[]; music: ComposeMusic[]; width: number; height: number; fps: number; videoBps: number; plannedBytes: number; ext: 'mp4' }
+export type Plan = SizePlan | QualityPlan | ClipPlan | AudioPlan | GifPlan | ConvertPlan | FramePlan | VolumePlan | ReversePlan | StabilizePlan | ComposePlan;
 
 export type JobState = 'queued' | 'running' | 'done' | 'failed' | 'cancelled' | 'interrupted' | 'paused';
 export interface Output { name: string; ref: string /* Mac path or Android content URI */; bytes: number; note?: string /* "converted to AAC" */ }

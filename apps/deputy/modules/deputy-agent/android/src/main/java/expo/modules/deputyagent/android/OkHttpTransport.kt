@@ -1,5 +1,6 @@
 package expo.modules.deputyagent.android
 
+import android.util.Log
 import expo.modules.deputyagent.core.HttpReply
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -18,6 +19,8 @@ import okhttp3.Response
 object OkHttpTransport {
   private val client = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).callTimeout(90, TimeUnit.SECONDS).build()
   private val json = "application/json".toMediaType()
+  // Only a 429's wait and quota names are logged, never its whole body, the request or the key.
+  private val HINTS = Regex(""""(?:retryDelay|quotaId)"\s*:\s*"[^"]{1,80}"|retry in [\d.]+s""")
 
   suspend fun post(url: String, headers: Map<String, String>, body: String): HttpReply = suspendCancellableCoroutine { c ->
     val request = Request.Builder().url(url).apply { headers.forEach { (k, v) -> header(k, v) } }.post(body.toRequestBody(json)).build()
@@ -30,7 +33,9 @@ object OkHttpTransport {
         // OkHttp only logs an IOException thrown here and never calls onFailure, so it must be passed on by hand.
         override fun onResponse(call: Call, response: Response) = response.use {
           try {
-            c.resume(HttpReply(it.code, it.body?.string().orEmpty(), it.header("retry-after")?.toDoubleOrNull()?.let { s -> (s * 1_000).toLong() }))
+            val reply = HttpReply(it.code, it.body?.string().orEmpty(), it.header("retry-after")?.toDoubleOrNull()?.let { s -> (s * 1_000).toLong() })
+            if (reply.code == 429) Log.w("Deputy", "HTTP 429, retry-after ${it.header("retry-after")}, " + HINTS.findAll(reply.body).joinToString { m -> m.value })
+            c.resume(reply)
           } catch (e: IOException) {
             c.resumeWithException(e)
           }

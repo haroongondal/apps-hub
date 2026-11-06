@@ -9,7 +9,7 @@ import java.net.InetSocketAddress
 
 /**
  * Attributes a flow to the app that owns it. A UID it cannot resolve stays -1 and is labelled
- * UNKNOWN_APP_LABEL; the engine allows such flows (ruling R9).
+ * UNKNOWN_APP_LABEL; the engine blocks such flows (FirewallDecision.flowVerdict).
  */
 object UidResolver {
 

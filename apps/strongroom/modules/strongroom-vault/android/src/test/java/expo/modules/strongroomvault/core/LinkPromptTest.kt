@@ -45,6 +45,11 @@ class LinkPromptTest {
     assertFalse(web.installedFromFile)
   }
 
+  @Test fun cardFillShowsWhoAsksWithoutAMatch() {
+    assertEquals(LinkPrompt("com.shop", "shop.com", true, null), LinkPrompt.of(Requester.App(AppId("com.shop", certB), "shop.com"), true))
+    assertEquals(LinkPrompt(null, "example.com", false, null), LinkPrompt.of(Requester.Web(Site(true, "pay.example.com")), true))
+  }
+
   @Test fun httpPageOfAnHttpsLoginIsRefused() {
     val insecure = "This page isn't secure (http). Strongroom won't fill a login saved for the secure site."
     for (host in listOf("bank.com", "www.bank.com", "bank.com:8080")) {

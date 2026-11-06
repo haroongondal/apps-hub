@@ -1,0 +1,7 @@
+{
+  "name": "@apps-hub/design-editor-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Design Editor page (Fabric.js canvas, multi-page designs, bundled fonts) shared by the Mac app and the Android WebView",
+  "files": ["desktop.html", "app.js", "copy.js", "vendor"]
+}

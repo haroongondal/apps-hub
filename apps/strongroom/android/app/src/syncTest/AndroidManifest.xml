@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Replaces src/debug/AndroidManifest.xml in a phone proof build (-PstrongroomSyncCa); keep the two in step. -->
+
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+
+    <application android:usesCleartextTraffic="true" android:networkSecurityConfig="@xml/strongroom_sync_test_network" tools:targetApi="28" tools:ignore="GoogleAppIndexingWarning" tools:replace="android:usesCleartextTraffic" />
+</manifest>

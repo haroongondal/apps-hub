@@ -1,0 +1,116 @@
+{
+  "accountCreate": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/account",
+      "authorization": "Bearer setup-token-for-tests-0123456789abcdef",
+      "body": {
+        "header": "{\"version\":1,\"kdf\":{\"memoryKiB\":65536,\"iterations\":3,\"parallelism\":1},\"salt\":\"AAECAwQFBgcICQoLDA0ODw==\",\"passwordWrap\":\"cGFzc3dvcmQgd3JhcA==\",\"recoveryWrap\":\"cmVjb3Zlcnkgd3JhcA==\",\"accountKey\":true}",
+        "loginHash": "cs1uhCLEB/ttCYaQ8RMLfe1+wvf14dML2dUh8BU2N5M=",
+        "recoveryHash": "dYd7tB05O1+4RVzmDs2N2gAdBjFklrFN+n+JVlbuyko=",
+        "readHash": "ZIqlxXn7MPOK90TZfW7IQMepEnekmaDXgPPnMU7KCQs="
+      }
+    },
+    "response": { "status": 200, "body": { "headerRev": 1 } }
+  },
+  "prelogin": {
+    "request": { "method": "GET", "path": "/v1/prelogin" },
+    "response": {
+      "status": 200,
+      "body": {
+        "version": 1,
+        "kdf": { "memoryKiB": 65536, "iterations": 3, "parallelism": 1 },
+        "salt": "AAECAwQFBgcICQoLDA0ODw==",
+        "accountKey": true
+      }
+    }
+  },
+  "push": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/records",
+      "authorization": "Bearer AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+      "body": {
+        "upserts": [
+          { "id": "00000000-0000-4000-8000-000000000001", "baseRev": 0, "ciphertext": "c2VhbGVkIHJlY29yZCBvbmU=" },
+          { "id": "00000000-0000-4000-8000-000000000002", "baseRev": 0, "ciphertext": "c2VhbGVkIHJlY29yZCB0d28=" }
+        ]
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "revs": [
+          { "id": "00000000-0000-4000-8000-000000000001", "rev": 1 },
+          { "id": "00000000-0000-4000-8000-000000000002", "rev": 2 }
+        ],
+        "latestRev": 2
+      }
+    }
+  },
+  "pull": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/records?since=0&limit=500",
+      "authorization": "Bearer AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "header": "{\"version\":1,\"kdf\":{\"memoryKiB\":65536,\"iterations\":3,\"parallelism\":1},\"salt\":\"AAECAwQFBgcICQoLDA0ODw==\",\"passwordWrap\":\"cGFzc3dvcmQgd3JhcA==\",\"recoveryWrap\":\"cmVjb3Zlcnkgd3JhcA==\",\"accountKey\":true}",
+        "headerRev": 1,
+        "records": [
+          { "id": "00000000-0000-4000-8000-000000000001", "rev": 1, "ciphertext": "c2VhbGVkIHJlY29yZCBvbmU=", "updatedAt": 1800000000000 },
+          { "id": "00000000-0000-4000-8000-000000000002", "rev": 2, "ciphertext": "c2VhbGVkIHJlY29yZCB0d28=", "updatedAt": 1800000000000 }
+        ],
+        "latestRev": 2,
+        "more": false
+      }
+    }
+  },
+  "pushConflict": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/records",
+      "authorization": "Bearer AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+      "body": {
+        "upserts": [
+          { "id": "00000000-0000-4000-8000-000000000001", "baseRev": 0, "ciphertext": "YSByZXBsYXllZCBwdXNo" }
+        ]
+      }
+    },
+    "response": {
+      "status": 409,
+      "body": { "conflicts": [{ "id": "00000000-0000-4000-8000-000000000001", "rev": 1 }] }
+    }
+  },
+  "accountUpdate": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/account",
+      "authorization": "Bearer AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+      "body": {
+        "header": "{\"version\":1,\"kdf\":{\"memoryKiB\":65536,\"iterations\":3,\"parallelism\":1},\"salt\":\"EBESExQVFhcYGRobHB0eHw==\",\"passwordWrap\":\"bmV3IHBhc3N3b3JkIHdyYXA=\",\"recoveryWrap\":\"cmVjb3Zlcnkgd3JhcA==\",\"accountKey\":true}",
+        "loginHash": "n0+2jz4drIIgL5qlgc4Lvx92XfDprDyMV+IPaFq6uO0=",
+        "recoveryHash": "dYd7tB05O1+4RVzmDs2N2gAdBjFklrFN+n+JVlbuyko=",
+        "readHash": "ZIqlxXn7MPOK90TZfW7IQMepEnekmaDXgPPnMU7KCQs=",
+        "ifRev": 1
+      }
+    },
+    "response": { "status": 200, "body": { "headerRev": 2 } }
+  },
+  "accountUpdateKeepRecovery": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/account",
+      "authorization": "Bearer BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ=",
+      "body": {
+        "header": "{\"version\":1,\"kdf\":{\"memoryKiB\":65536,\"iterations\":3,\"parallelism\":1},\"salt\":\"ICEiIyQlJicoKSorLC0uLw==\",\"passwordWrap\":\"bmV3ZXIgcGFzc3dvcmQgd3JhcA==\",\"recoveryWrap\":\"cmVjb3Zlcnkgd3JhcA==\",\"accountKey\":true}",
+        "loginHash": "+EnWcyX6zwQXe8ZjstxUQFGDHFie9YHUEvLrpEg053w=",
+        "readHash": "ZIqlxXn7MPOK90TZfW7IQMepEnekmaDXgPPnMU7KCQs=",
+        "ifRev": 2
+      }
+    },
+    "response": { "status": 200, "body": { "headerRev": 3 } }
+  }
+}

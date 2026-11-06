@@ -21,6 +21,8 @@ dependencies {
   implementation("androidx.media3:media3-transformer:1.11.1")
   implementation("androidx.media3:media3-effect:1.11.1")
   implementation("androidx.media3:media3-inspector:1.11.1")
+  // Reverse, stabilize and volume only. Pinned: LGPL-3.0, AAR sha256 591ddcf3698028e838b854dc775e60aedaf43fffd59689cb59b8af632aba3d76 (SPEC §3).
+  implementation("dev.ffmpegkit-maintained:ffmpeg-kit-min:8.1.7")
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
   testImplementation("junit:junit:4.13.2")
 }
@@ -30,3 +32,14 @@ tasks.withType(Test).configureEach {
   systemProperty 'fixtures.dir', file('../../../../../packages/media-core/fixtures').absolutePath
   systemProperty 'module.src', file('src/main/java').absolutePath
 }
+
+// The owner approved this AAR by hash (SPEC §3). Fail the build if Gradle resolves different bytes (a comment alone checks nothing).
+def ffmpegAarSha256 = '591ddcf3698028e838b854dc775e60aedaf43fffd59689cb59b8af632aba3d76'
+tasks.register('verifyFfmpegAar') {
+  doLast {
+    def aar = configurations.detachedConfiguration(dependencies.create('dev.ffmpegkit-maintained:ffmpeg-kit-min:8.1.7@aar')).singleFile
+    def sha = java.security.MessageDigest.getInstance('SHA-256').digest(aar.bytes).encodeHex().toString()
+    if (sha != ffmpegAarSha256) throw new GradleException("ffmpeg-kit-min AAR sha256 is ${sha}, not the approved ${ffmpegAarSha256}")
+  }
+}
+tasks.matching { it.name == 'preBuild' }.configureEach { dependsOn 'verifyFfmpegAar' }

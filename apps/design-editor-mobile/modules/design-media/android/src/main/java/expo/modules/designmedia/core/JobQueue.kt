@@ -5,7 +5,7 @@ sealed interface QueueEvent {
   data class Enqueue(val jobs: List<Job>) : QueueEvent
   data class Start(val id: String, val at: Long) : QueueEvent
   data class Progress(val id: String, val fraction: Double) : QueueEvent
-  data class Retry(val id: String, val plan: SizePlan) : QueueEvent
+  data class Retry(val id: String, val plan: Plan) : QueueEvent
   data class Attempt(val id: String, val log: AttemptLog) : QueueEvent
   data class Done(val id: String, val outputs: List<Output>, val at: Long) : QueueEvent
   data class Fail(val id: String, val error: String, val at: Long) : QueueEvent
@@ -35,6 +35,10 @@ fun reduce(jobs: List<Job>, e: QueueEvent): List<Job> = when (e) {
     if (it.state == JobState.PAUSED || it.state == JobState.INTERRUPTED) it.copy(state = JobState.QUEUED, error = null) else it
   }
 }
+
+// The service marks running jobs interrupted only when it starts again, so after the app is killed the
+// screen would show "Working" forever with nothing running; shown as interrupted, they offer Resume.
+fun shownQueue(jobs: List<Job>, serviceAlive: Boolean): List<Job> = if (serviceAlive) jobs else reduce(jobs, QueueEvent.Interrupt)
 
 fun nextRunnable(jobs: List<Job>): Job? {
   if (jobs.any { it.state == JobState.RUNNING }) return null

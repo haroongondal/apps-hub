@@ -8,7 +8,7 @@
     "start": "env -u ELECTRON_RUN_AS_NODE electron .",
     "ffmpeg": "node scripts/fetch-ffmpeg.mjs",
     "dist": "electron-packager . --out=dist --overwrite --ignore='^/(test|graft|dist|node_modules|\\.claude-trash|\\.ignore|\\.gitignore)($|/)' --icon=build/icon --asar.unpackDir=vendor/ffmpeg",
-    "test:e2e": "node test/e2e.mjs && node test/media.mjs"
+    "test:e2e": "node test/e2e.mjs && node test/media.mjs && node test/mobile.mjs"
   },
   "main": "main.js",
   "devDependencies": {

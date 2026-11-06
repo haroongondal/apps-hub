@@ -11,19 +11,17 @@ data class LinkPrompt(val pkg: String?, val domain: String?, val installedFromFi
     // An allowlist, so an installer we don't know (an OEM package installer, a file manager) still shows the warning.
     fun installedFromFile(installer: String?): Boolean = installer == null || installer !in STORES
 
-    fun build(login: Entry.Login, r: Requester, installedFromFile: Boolean): LinkPrompt = when (r) {
-      is Requester.App -> LinkPrompt(
-        r.id.pkg,
-        r.reportedDomain,
-        installedFromFile,
-        SAME_PACKAGE_OTHER_CERT.takeIf { login.holdsPackageWithOtherCert(r.id) },
-      )
-      is Requester.Web -> LinkPrompt(
-        null,
-        Matching.registrableDomain(r.site.host) ?: Matching.normalizeHost(r.site.host),
-        false,
-        INSECURE_PAGE.takeIf { login.holdsHttpsSiteFor(r.site) },
-      )
+    /** Who asks, with no refusal: what a card fill shows, since cards aren't tied to an app or site. */
+    fun of(r: Requester, installedFromFile: Boolean): LinkPrompt = when (r) {
+      is Requester.App -> LinkPrompt(r.id.pkg, r.reportedDomain, installedFromFile, null)
+      is Requester.Web -> LinkPrompt(null, Matching.registrableDomain(r.site.host) ?: Matching.normalizeHost(r.site.host), false, null)
     }
+
+    fun build(login: Entry.Login, r: Requester, installedFromFile: Boolean): LinkPrompt = of(r, installedFromFile).copy(
+      refusal = when (r) {
+        is Requester.App -> SAME_PACKAGE_OTHER_CERT.takeIf { login.holdsPackageWithOtherCert(r.id) }
+        is Requester.Web -> INSECURE_PAGE.takeIf { login.holdsHttpsSiteFor(r.site) }
+      },
+    )
   }
 }

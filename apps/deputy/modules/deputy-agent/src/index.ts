@@ -8,6 +8,8 @@ export interface ServiceState {
   keySet: boolean;
   /** Optional: lets find_contact read numbers. */
   contactsAllowed: boolean;
+  /** Optional: lets make_video read photos. */
+  photosAllowed: boolean;
   runActive: boolean;
 }
 

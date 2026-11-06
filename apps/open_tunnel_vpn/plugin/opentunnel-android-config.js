@@ -5,9 +5,9 @@
  * 1. `android:allowBackup="false"` — the SQLite node cache must never leave
  *    the device through OS backup; "no accounts, remote sync, upload" is a
  *    hard privacy rule of this app.
- * 2. `android:networkSecurityConfig` — VPN Gate's documented HTTP (non-TLS)
- *    fallback sources need a scoped cleartext exception for
- *    `vpngate.net`. HTTPS remains the primary transport.
+ * 2. `android:networkSecurityConfig` — no cleartext anywhere; the VPN Gate
+ *    list is fetched over HTTPS only (a cleartext list could be swapped on
+ *    the Wi-Fi). The debug source set overrides it to reach Metro.
  *
  * 3. The firewall: `FirewallService` in its own `:firewall` process (firestack's
  *    and WireGuard's Go runtimes crash each other in one), plus the two
@@ -29,12 +29,8 @@ const path = require('path');
 
 const NETWORK_SECURITY_CONFIG_XML = `<?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Backend API: cleartext permitted only for the documented VPN Gate
-         HTTP fallback and mirrors. Do not widen this to the whole app. -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">www.vpngate.net</domain>
-        <domain includeSubdomains="true">vpngate.net</domain>
-    </domain-config>
+    <!-- No cleartext anywhere: the relay list is fetched over HTTPS only. -->
+    <base-config cleartextTrafficPermitted="false" />
 </network-security-config>
 `;
 
@@ -125,3 +121,4 @@ function withOpentunnelAndroidConfig(config) {
 
 module.exports = withOpentunnelAndroidConfig;
 module.exports.configureManifest = configureManifest;
+module.exports.NETWORK_SECURITY_CONFIG_XML = NETWORK_SECURITY_CONFIG_XML;

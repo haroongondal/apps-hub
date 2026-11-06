@@ -3,8 +3,8 @@ package expo.modules.designmedia.core
 import kotlin.math.max
 import kotlin.math.min
 
-// Mirrors packages/media-core/src/budget.ts (walkLadder) and retry.ts (nextSizeAttempt).
-// Kept in step by RetryRuleTest, which reads the same retry-cases.json fixture.
+// Mirrors packages/media-core/src/budget.ts (walkLadder), retry.ts (nextSizeAttempt) and gif.ts (nextGifAttempt).
+// Kept in step by RetryRuleTest, which reads the same retry-cases.json and gif-cases.json fixtures.
 
 val LADDER = listOf(
   Rung(1080, 30), Rung(720, 30), Rung(540, 30), Rung(480, 30), Rung(360, 30), Rung(360, 24), Rung(240, 24),
@@ -34,12 +34,12 @@ fun walkLadder(width: Int, height: Int, fps: Int, videoBps: Int, encoder: String
 }
 
 fun nextSizeAttempt(plan: SizePlan, actualBytes: Long): Next {
-  if (actualBytes < 0) return Next.GaveUp("The output size is unknown.")
+  if (actualBytes < 0) return Next.GaveUp(Messages.WENT_WRONG)
   if (actualBytes <= plan.targetBytes) return Next.Publish(plan)
   if (plan.attempt == 3) return Next.GaveUp(null)
   val audioBytes = plan.plannedBytes - plan.plannedVideoBytes - plan.overheadBytes
   val actualVideoBytes = actualBytes - audioBytes - plan.overheadBytes
-  if (actualVideoBytes <= 0) return Next.GaveUp("The output has no room left for video.")
+  if (actualVideoBytes <= 0) return Next.GaveUp(Messages.TOO_SMALL)
   val videoBps = Math.round(plan.videoBps * plan.plannedVideoBytes.toDouble() / actualVideoBytes * RETRY_FACTOR).toInt()
   val walk = walkLadder(plan.width, plan.height, plan.fpsCap, videoBps, plan.encoder)
   val plannedVideoBytes = Math.round(plan.plannedVideoBytes.toDouble() * videoBps / plan.videoBps)
@@ -55,4 +55,24 @@ fun nextSizeAttempt(plan: SizePlan, actualBytes: Long): Next {
 private fun dimsFor(w: Int, h: Int, shortSide: Int): Pair<Int, Int> {
   val long = 2 * Math.round(shortSide * max(w, h).toDouble() / min(w, h) / 2).toInt()
   return if (w >= h) long to shortSide else shortSide to long
+}
+
+class GifRung(val width: Int, val fps: Int)
+
+val GIF_LADDER = listOf(GifRung(480, 12), GifRung(360, 12), GifRung(320, 10), GifRung(240, 10))
+private const val GIF_MAX_ATTEMPTS = 4
+
+sealed interface GifNext {
+  data class Publish(val plan: GifPlan) : GifNext
+  data class Retry(val plan: GifPlan) : GifNext
+  data object GaveUp : GifNext
+}
+
+fun nextGifAttempt(plan: GifPlan, actualBytes: Long): GifNext {
+  val target = plan.targetBytes
+  if (target == null || actualBytes <= target) return GifNext.Publish(plan)
+  if (plan.attempt >= GIF_MAX_ATTEMPTS) return GifNext.GaveUp
+  val next = GIF_LADDER.firstOrNull { it.width <= plan.width && it.fps <= plan.fps && (it.width < plan.width || it.fps < plan.fps) }
+    ?: return GifNext.GaveUp
+  return GifNext.Retry(plan.copy(width = next.width, fps = next.fps, attempt = plan.attempt + 1))
 }

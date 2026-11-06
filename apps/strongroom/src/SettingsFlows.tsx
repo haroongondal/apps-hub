@@ -17,12 +17,13 @@ interface AskProps {
   action: string;
   wrong: string;
   run: (password: string) => Promise<boolean>;
+  explain?: (e: unknown) => string;
   onSuccess?: () => void;
   onBack: () => void;
   onLocked: () => void;
 }
 
-function AskPassword({ title, intro, action, wrong, run, onSuccess, onBack, onLocked }: AskProps) {
+export function AskPassword({ title, intro, action, wrong, run, explain = messageOf, onSuccess, onBack, onLocked }: AskProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,7 +36,7 @@ function AskPassword({ title, intro, action, wrong, run, onSuccess, onBack, onLo
       setError(wrong);
     } catch (e) {
       if (isLocked(e)) return onLocked();
-      setError(messageOf(e));
+      setError(explain(e));
     }
     setBusy(false);
   };

@@ -48,4 +48,6 @@ sealed interface Action {
   /** `handler` is the clock app the phone would ask, filled in before the policy judges the step. */
   data class SetAlarm(val hour: Int, val minute: Int, val label: String?, val handler: String? = null) : Action
   data class SetTimer(val seconds: Int, val label: String?, val handler: String? = null) : Action
+  /** Photo file names on the phone, made into one video; `handler` is the gallery app, judged like a lookup of its data. */
+  data class MakeVideo(val photos: List<String>, val secondsEach: Int, val handler: String? = null) : Action
 }

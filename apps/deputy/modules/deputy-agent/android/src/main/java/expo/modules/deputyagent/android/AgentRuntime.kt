@@ -67,7 +67,7 @@ object AgentRuntime {
     val settings = OwnerStore.settings(app)
     val keys = KeyVault.load(app, settings)
     check(keys.isNotEmpty()) { "Add your API key first." }
-    val policy = Policy({ OwnerStore.trust(app).level(it) }, allowedApps, app.packageName)
+    val policy = Policy({ OwnerStore.trust(app).level(it) }, allowedApps, app.packageName, browsers(app))
     val loop = AgentLoop(
       id,
       DeviceAdapter(app),

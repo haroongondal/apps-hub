@@ -1,9 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Backend API: cleartext permitted only for the documented VPN Gate
-         HTTP fallback and mirrors. Do not widen this to the whole app. -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">www.vpngate.net</domain>
-        <domain includeSubdomains="true">vpngate.net</domain>
-    </domain-config>
+    <!-- No cleartext anywhere: the relay list is fetched over HTTPS only. -->
+    <base-config cleartextTrafficPermitted="false" />
 </network-security-config>
