@@ -1,7 +1,23 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { COMMON_PASSWORDS } from '../common-passwords.ts';
-import { filterRows, keyboardNotice, pickGroupIndex, recoveryGroupMatches, validateMasterPassword } from '../forms.ts';
+import { exportedNotice, filterRows, importConfirm, importRow, keyboardNotice, pickGroupIndex, recoveryGroupMatches, validateMasterPassword } from '../forms.ts';
+
+test('an import shows its file name, or its date when the phone has no log of it', () => {
+  const at = new Date(2026, 10, 6, 14, 2).getTime();
+  assert.deepEqual(importRow({ at, name: 'Passwords.csv', count: 212, imported: 215 }), { title: 'Passwords.csv', subtitle: '6 Nov 2026, 14:02 · 212 entries' });
+  assert.deepEqual(importRow({ at, name: null, count: 1, imported: null }), { title: 'Imported 6 Nov 2026, 14:02', subtitle: '1 entry' });
+});
+
+test('deleting an import says how many edited entries it leaves alone', () => {
+  assert.equal(importConfirm({ at: 0, name: 'a.csv', count: 212, imported: 215 }), "This deletes the 212 entries still exactly as imported. 3 entries you've edited or deleted since aren't touched. This can't be undone.");
+  assert.equal(importConfirm({ at: 0, name: 'a.csv', count: 4, imported: 5 }), "This deletes the 4 entries still exactly as imported. 1 entry you've edited or deleted since isn't touched. This can't be undone.");
+  assert.equal(importConfirm({ at: 0, name: null, count: 1, imported: null }), "This deletes the 1 entry still exactly as imported. This can't be undone.");
+});
+
+test('the export notice counts each kind', () => {
+  assert.match(exportedNotice({ logins: 1, cards: 0, notes: 2 }), /^Exported 1 login, 0 cards and 2 notes\. /);
+});
 
 const TOO_SHORT = 'Use at least 12 characters.';
 const TOO_COMMON = 'That password is too common. Pick something only you would think of.';

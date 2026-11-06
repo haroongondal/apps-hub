@@ -24,6 +24,18 @@ const messageOf = (csv: string): string => {
   throw new Error('expected an ImportError');
 };
 
+test("a Strongroom export's card and note rows are skipped, and its app_domain column is read", () => {
+  const csv =
+    'name,url,username,password,note,type,holder,number,exp_month,exp_year,cvc,app_domain\n' +
+    `Bank,android://${hashB64}@com.bank/,me,pw,,login,,,,,,bank.example\n` +
+    'Visa,,,,,card,A. Holder,4111,3,2031,321,\n' +
+    'Wi-Fi,,,,secret,note,,,,,,\n';
+  const r = parseGoogleExport(csv, 1);
+  assert.equal(r.logins.length, 1);
+  assert.deepEqual(r.logins[0].apps, [{ pkg: 'com.bank', certSha256: hash, domain: 'bank.example' }]);
+  assert.equal(r.merged, 0);
+});
+
 test('an android:// URL becomes an app link', () => {
   const r = imp(`Example app,android://${hashB64}@com.example/,me,pw,\r\n`);
   assert.deepEqual(r.logins[0].apps, [{ pkg: 'com.example', certSha256: hash, domain: null }]);

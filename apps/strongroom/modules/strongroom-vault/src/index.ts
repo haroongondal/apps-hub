@@ -42,6 +42,22 @@ export interface ImportPreview {
   found: number;
   merged: number;
   flagged: number;
+  // Cards and notes, which only a Strongroom export carries.
+  others: number;
+}
+
+// One import: the entries still exactly as imported. name and imported are null for an import made before this phone kept a log of them.
+export interface ImportBatch {
+  at: number;
+  name: string | null;
+  count: number;
+  imported: number | null;
+}
+
+export interface ExportCounts {
+  logins: number;
+  cards: number;
+  notes: number;
 }
 
 export interface Diagnostics {
@@ -90,6 +106,12 @@ export interface StrongroomVaultApi {
   remove(id: string): void;
   pickGoogleCsv(): Promise<ImportPreview | null>;
   commitImport(): number;
+  imports(): ImportBatch[];
+  deleteImport(at: number): number;
+  // Null when the password is wrong; rejects with EXPORT_CANCELLED when no file was picked.
+  exportAll(password: string): Promise<ExportCounts | null>;
+  // Null when the password is wrong; otherwise how many entries were deleted.
+  deleteAll(password: string): Promise<number | null>;
   // The password is required to turn it on; false when it's wrong or the owner cancels the prompt.
   setBiometric(enabled: boolean, password?: string): Promise<boolean>;
   setAutoLockMinutes(m: 1 | 5 | 15): void;

@@ -1,4 +1,4 @@
-import type { Row } from 'strongroom-vault';
+import type { ExportCounts, ImportBatch, Row } from 'strongroom-vault';
 import { COMMON_PASSWORDS } from './common-passwords.ts';
 
 const TOO_SHORT = 'Use at least 12 characters.';
@@ -34,3 +34,25 @@ export function filterRows(rows: Row[], query: string): Row[] {
 }
 
 export const pickGroupIndex = (random: () => number): number => Math.floor(random() * 8);
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const pad = (n: number) => String(n).padStart(2, '0');
+export const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+export const entries = (n: number) => plural(n, 'entry', 'entries');
+
+export function importRow(b: ImportBatch): { title: string; subtitle: string } {
+  const d = new Date(b.at);
+  const when = `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return b.name ? { title: b.name, subtitle: `${when} · ${entries(b.count)}` } : { title: `Imported ${when}`, subtitle: entries(b.count) };
+}
+
+export function importConfirm(b: ImportBatch): string {
+  const changed = b.imported === null ? 0 : b.imported - b.count;
+  const kept = changed > 0 ? ` ${plural(changed, 'entry', 'entries')} you've edited or deleted since ${changed === 1 ? "isn't" : "aren't"} touched.` : '';
+  return `This deletes the ${entries(b.count)} still exactly as imported.${kept} This can't be undone.`;
+}
+
+export function exportedNotice(c: ExportCounts): string {
+  const parts = [plural(c.logins, 'login', 'logins'), plural(c.cards, 'card', 'cards'), plural(c.notes, 'note', 'notes')];
+  return `Exported ${parts[0]}, ${parts[1]} and ${parts[2]}. Delete the file once you're done with it: it isn't encrypted.`;
+}

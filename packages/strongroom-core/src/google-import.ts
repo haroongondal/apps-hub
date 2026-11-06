@@ -48,18 +48,21 @@ export function parseGoogleExport(csv: string, now: number): ImportResult {
   const [nameAt, urlAt, userAt, passAt] = ['name', 'url', 'username', 'password'].map((h) => header.indexOf(h));
   if (Math.min(nameAt, urlAt, userAt, passAt) < 0) throw new ImportError(NOT_GOOGLE);
   const noteAt = header.indexOf('note');
+  const [typeAt, appDomainAt] = ['type', 'app_domain'].map((h) => header.indexOf(h));
 
-  const rows: Row[] = records.slice(1).map((row, n) => {
+  const parsed = records.slice(1).map((row, n): Row | null => {
     if (row.length > header.length) {
       throw new ImportError(`Row ${n + 1} of this file has more columns than its header, so a value may be split. Export again from Google Password Manager.`);
     }
     const cell = (at: number) => row[at] ?? '';
+    // A Strongroom export's card and note rows: the phone imports them, this importer takes logins only.
+    if (cell(typeAt) === 'card' || cell(typeAt) === 'note') return null;
     const url = cell(urlAt).trim();
     const name = cell(nameAt);
     const site = siteFromUrl(url);
     const android = androidUrl(url);
     const cert = android && certHex(android[0]);
-    const app: AppLink | null = android && cert ? { pkg: android[1], certSha256: cert, domain: null } : null;
+    const app: AppLink | null = android && cert ? { pkg: android[1], certSha256: cert, domain: cell(appDomainAt).trim() || null } : null;
     const unlinked = site === null && app === null;
     return {
       place: JSON.stringify(!unlinked ? [site ? [site] : [], app ? [app] : []] : url !== '' ? ['url', url] : ['name', name.trim()]),
@@ -76,6 +79,7 @@ export function parseGoogleExport(csv: string, now: number): ImportResult {
       },
     };
   });
+  const rows = parsed.filter((r) => r !== null);
 
   const groups = new Map<string, Row[]>();
   for (const row of rows) {

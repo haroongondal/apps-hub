@@ -3,7 +3,8 @@ package expo.modules.strongroomvault.core
 import java.util.Base64
 import java.util.Locale
 
-data class ImportResult(val logins: List<Entry.Login>, val merged: Int, val flagged: Int)
+/** [cardsAndNotes]: the card and note rows of a Strongroom export (CsvExport); a Google file has none. */
+data class ImportResult(val logins: List<Entry.Login>, val merged: Int, val flagged: Int, val cardsAndNotes: List<Entry> = emptyList())
 
 class ImportError(message: String) : Exception(message)
 
@@ -27,17 +28,31 @@ object GoogleImport {
     val (nameAt, urlAt, userAt, passAt) = listOf("name", "url", "username", "password").map { header.indexOf(it) }
     if (minOf(nameAt, urlAt, userAt, passAt) < 0) throw ImportError(NOT_GOOGLE)
     val noteAt = header.indexOf("note")
+    val cardsAndNotes = ArrayList<Entry>()
 
-    val rows = records.drop(1).mapIndexed { n, row ->
+    val rows = records.drop(1).mapIndexedNotNull { n, row ->
       if (row.size > header.size) {
         throw ImportError("Row ${n + 1} of this file has more columns than its header, so a value may be split. Export again from Google Password Manager.")
       }
-      fun cell(at: Int) = row.getOrElse(at) { "" }
+      fun cell(at: Int) = row.getOrElse(at) { "" } // a missing column (index -1) reads as empty
+      fun col(name: String) = cell(header.indexOf(name))
+      when (col("type")) {
+        "card" -> {
+          cardsAndNotes += Entry.Card(
+            cell(nameAt), col("holder"), col("number"), col("exp_month").trim().toIntOrNull(), col("exp_year").trim().toIntOrNull(), col("cvc"), cell(noteAt), now,
+          )
+          return@mapIndexedNotNull null
+        }
+        "note" -> {
+          cardsAndNotes += Entry.Note(cell(nameAt), cell(noteAt), now)
+          return@mapIndexedNotNull null
+        }
+      }
       val url = cell(urlAt).trim()
       val name = cell(nameAt)
       val site = Matching.siteFromUrl(url)
       val android = androidUrl(url)
-      val app = android?.let { (b64, pkg) -> sha256(b64)?.let { AppLink(AppId(pkg, hex(it)), null) } }
+      val app = android?.let { (b64, pkg) -> sha256(b64)?.let { AppLink(AppId(pkg, hex(it)), col("app_domain").trim().ifEmpty { null }) } }
       val unlinked = site == null && app == null
       Row(
         place = when {
@@ -68,7 +83,7 @@ object GoogleImport {
       val lines = group.map { it.login.note }.filter { it.isNotBlank() }.distinct() + listOfNotNull(first.importedFrom?.let { "Imported from $it" })
       first.login.copy(note = (if (isFlagged) FLAG_PREFIX else "") + lines.joinToString("\n"))
     }
-    return ImportResult(logins, merged = rows.size - groups.size, flagged = flagged)
+    return ImportResult(logins, merged = rows.size - groups.size, flagged = flagged, cardsAndNotes = cardsAndNotes)
   }
 
   /** (base64 hash, package) of an `android://<hash>@<package>/` URL, or null; the hash may contain '/' but never '@', so split on the first '@'. */

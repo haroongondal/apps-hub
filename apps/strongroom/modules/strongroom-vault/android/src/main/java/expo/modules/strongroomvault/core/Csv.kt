@@ -39,4 +39,10 @@ object Csv {
     }
     return rows
   }
+
+  /** The inverse of [parse]: a cell holding a comma, quote or line break is quoted. */
+  fun format(rows: List<List<String>>): String =
+    rows.joinToString("") { row ->
+      row.joinToString(",") { c -> if (c.any { it == ',' || it == '"' || it == '\r' || it == '\n' }) "\"" + c.replace("\"", "\"\"") + "\"" else c } + "\n"
+    }
 }

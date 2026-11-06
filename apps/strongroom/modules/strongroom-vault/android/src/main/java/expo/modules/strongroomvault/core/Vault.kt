@@ -139,14 +139,30 @@ class Vault(
     store.putAll(mapOf(id to VaultFormat.sealEntry(k, id, Entry.Deleted(clock()))))
   }
 
-  @Synchronized fun putMany(entries: List<Entry>): Int {
+  @Synchronized fun putMany(entries: List<Entry>): Long {
     val k = requireKey()
     val now = clock()
     store.putAll(entries.associate {
       val id = UUID.randomUUID().toString()
       id to VaultFormat.sealEntry(k, id, it.stamped(now))
     })
-    return entries.size
+    return now
+  }
+
+  // An import is the set of entries sharing putMany's stamp; an edit restamps an entry and takes it out. Only putMany shares stamps (bar two autofill saves in one ms), so a shared one counts even if [known] lacks it.
+  @Synchronized fun imports(known: Set<Long>): List<Pair<Long, Int>> =
+    all().values.groupingBy { it.updatedAt }.eachCount().filter { (at, n) -> n > 1 || at in known }.toList().sortedByDescending { it.first }
+
+  // Tombstones keep the import's stamp: sync's tie goes to the delete, so untouched copies elsewhere go too, while an edit not yet pulled is newer and wins.
+  @Synchronized fun deleteImport(at: Long): Int = deleteWhere(at) { it.updatedAt == at }
+
+  @Synchronized fun deleteAll(): Int = deleteWhere(clock()) { true }
+
+  private fun deleteWhere(stamp: Long, which: (Entry) -> Boolean): Int {
+    val k = requireKey()
+    val ids = all().filterValues(which).keys
+    store.putAll(ids.associateWith { VaultFormat.sealEntry(k, it, Entry.Deleted(stamp)) })
+    return ids.size
   }
 
   @Synchronized fun changePassword(old: CharArray, new: CharArray, beforeWrite: (Header) -> Unit = {}): Boolean {

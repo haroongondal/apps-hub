@@ -7,6 +7,8 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
+import android.provider.DocumentsContract
+import android.provider.OpenableColumns
 import android.provider.Settings
 import android.view.autofill.AutofillManager
 import androidx.fragment.app.FragmentActivity
@@ -24,6 +26,7 @@ import expo.modules.strongroomvault.core.AccountKey
 import expo.modules.strongroomvault.core.AccountKeyRequired
 import expo.modules.strongroomvault.core.AppId
 import expo.modules.strongroomvault.core.Browsers
+import expo.modules.strongroomvault.core.CsvExport
 import expo.modules.strongroomvault.core.Entry
 import expo.modules.strongroomvault.core.GoogleImport
 import expo.modules.strongroomvault.core.HEADER_CHECK
@@ -40,15 +43,19 @@ import expo.modules.strongroomvault.core.SyncStatus
 import expo.modules.strongroomvault.core.Vault
 import java.io.IOException
 import java.security.MessageDigest
+import java.time.LocalDate
 import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import org.json.JSONException
+import org.json.JSONObject
 
 private const val LOCK_EVENT = "onLock"
 private const val SYNC_EVENT = "onSync"
 private const val PICK_CSV = 7401
+private const val SAVE_CSV = 7402
 private const val MAX_CSV_BYTES = 5 * 1024 * 1024
 internal const val KDF_REFUSED =
   "Strongroom won't open this vault: its security settings are weaker than it allows. The vault file may have been changed."
@@ -218,13 +225,7 @@ class StrongroomVaultModule : Module() {
         .addCategory(Intent.CATEGORY_OPENABLE)
         .setType("text/*")
         .putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("text/csv", "text/comma-separated-values"))
-      val uri = withContext(Dispatchers.Main) {
-        suspendCancellableCoroutine { cont ->
-          appContext.throwingActivity.startActivityForResult(intent, PICK_CSV)
-          pendingPick?.let { if (it.isActive) it.resume(null) }
-          pendingPick = cont
-        }
-      }
+      val uri = awaitDocument(intent, PICK_CSV)
       if (uri == null) {
         null
       } else {
@@ -238,13 +239,14 @@ class StrongroomVaultModule : Module() {
           }
           guard { check(VaultHolder.get(context).isUnlocked) { "locked" } }
           VaultHolder.pendingImport = parsed
-          mapOf("found" to parsed.logins.size, "merged" to parsed.merged, "flagged" to parsed.flagged)
+          VaultHolder.pendingImportName = displayName(uri)
+          mapOf("found" to parsed.logins.size, "merged" to parsed.merged, "flagged" to parsed.flagged, "others" to parsed.cardsAndNotes.size)
         }
       }
     }
 
     OnActivityResult { _, result ->
-      if (result.requestCode != PICK_CSV) return@OnActivityResult
+      if (result.requestCode != PICK_CSV && result.requestCode != SAVE_CSV) return@OnActivityResult
       val cont = pendingPick ?: return@OnActivityResult
       pendingPick = null
       if (cont.isActive) cont.resume(result.data?.data?.takeIf { result.resultCode == Activity.RESULT_OK })
@@ -256,9 +258,79 @@ class StrongroomVaultModule : Module() {
         check(v.isUnlocked) { "locked" }
         val parsed = VaultHolder.pendingImport ?: throw CodedException("NO_IMPORT", "Pick the Google Passwords file first.", null)
         VaultHolder.pendingImport = null
-        val count = v.putMany(parsed.logins)
+        val entries = parsed.logins + parsed.cardsAndNotes
+        val at = v.putMany(entries)
+        saveImportLog(importLog().put(at.toString(), JSONObject().put("name", VaultHolder.pendingImportName ?: "").put("count", entries.size)))
         VaultHolder.refreshIndex(context)
-        count
+        entries.size
+      }
+    }
+
+    Function("imports") {
+      guard {
+        val log = importLog()
+        vault().imports(log.keys().asSequence().mapNotNull { it.toLongOrNull() }.toSet()).map { (at, count) ->
+          val made = log.optJSONObject(at.toString())
+          mapOf("at" to at, "name" to made?.optString("name")?.ifEmpty { null }, "count" to count, "imported" to made?.optInt("count"))
+        }
+      }
+    }
+
+    Function("deleteImport") { at: Double ->
+      guard {
+        val n = vault().deleteImport(at.toLong())
+        saveImportLog(importLog().apply { remove(at.toLong().toString()) })
+        VaultHolder.refreshIndex(context)
+        n
+      }
+    }
+
+    AsyncFunction("deleteAll") Coroutine { password: String ->
+      val v = vault()
+      if (!passwordOk(v, password)) {
+        null
+      } else {
+        val n = withContext(Dispatchers.IO) {
+          // Pull first so entries added on other devices since the last sync go too; offline, delete what this phone has.
+          if (VaultHolder.sync(context).isOn) runCatching { VaultHolder.syncNow(context) }
+          guard { v.deleteAll() }
+        }
+        VaultHolder.prefs(context).edit().remove(VaultHolder.IMPORTS).apply()
+        VaultHolder.refreshIndex(context)
+        n
+      }
+    }
+
+    AsyncFunction("exportAll") Coroutine { password: String ->
+      if (!passwordOk(vault(), password)) {
+        null
+      } else {
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT)
+          .addCategory(Intent.CATEGORY_OPENABLE)
+          .setType("text/csv")
+          .putExtra(Intent.EXTRA_TITLE, "Strongroom passwords ${LocalDate.now()}.csv")
+        val uri = awaitDocument(intent, SAVE_CSV)
+          ?: throw CodedException("EXPORT_CANCELLED", "Nothing was exported because no place to save it was picked. Tap Export and choose where to save the file.", null)
+        withContext(Dispatchers.IO) {
+          try {
+            val entries = guard { vault().all().values }
+            val bytes = CsvExport.csv(entries).toByteArray(Charsets.UTF_8)
+            try {
+              context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes) } ?: throw IOException("no stream")
+            } finally {
+              bytes.fill(0)
+            }
+            mapOf("logins" to entries.count { it is Entry.Login }, "cards" to entries.count { it is Entry.Card }, "notes" to entries.count { it is Entry.Note })
+          } catch (e: Exception) {
+            // The picker already made the file: don't leave an empty or half-written one behind.
+            runCatching { DocumentsContract.deleteDocument(context.contentResolver, uri) }
+            throw if (e is IOException || e is SecurityException) {
+              CodedException("EXPORT_FAILED", "Strongroom couldn't write the file. Try again and pick another place to save it.", e)
+            } else {
+              e
+            }
+          }
+        }
       }
     }
 
@@ -454,6 +526,35 @@ class StrongroomVaultModule : Module() {
       bytes.fill(0)
     }
   }
+
+  private suspend fun awaitDocument(intent: Intent, code: Int): Uri? = withContext(Dispatchers.Main) {
+    suspendCancellableCoroutine { cont ->
+      appContext.throwingActivity.startActivityForResult(intent, code)
+      pendingPick?.let { if (it.isActive) it.resume(null) }
+      pendingPick = cont
+    }
+  }
+
+  private suspend fun passwordOk(v: Vault, password: String): Boolean {
+    val pw = password.toCharArray()
+    return try {
+      withContext(Dispatchers.IO) { derive { v.vaultKeyCopy(pw) } }?.also { it.fill(0) } != null
+    } finally {
+      pw.fill('\u0000')
+    }
+  }
+
+  // stamp -> {name, count} for each import made on this phone. The vault knows imports only by stamp (Vault.imports); this adds the file name.
+  private fun importLog(): JSONObject = try {
+    JSONObject(VaultHolder.prefs(context).getString(VaultHolder.IMPORTS, null) ?: "{}")
+  } catch (e: JSONException) {
+    JSONObject()
+  }
+
+  private fun saveImportLog(log: JSONObject) = VaultHolder.prefs(context).edit().putString(VaultHolder.IMPORTS, log.toString()).apply()
+
+  private fun displayName(uri: Uri): String? =
+    runCatching { context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null } }.getOrNull()
 }
 
 internal fun coded(e: IllegalStateException): Exception = when (e.message) {

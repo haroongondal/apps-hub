@@ -3,6 +3,7 @@ import { AppState, BackHandler, View } from 'react-native';
 import { Button, Header, Notice, Screen, TabBar, ThemeProvider, palette } from '@apps-hub/ui';
 import Vault, { addLockListener, type Status } from 'strongroom-vault';
 import { deriving, messageOf } from './src/call.ts';
+import { DeleteAllScreen, ExportScreen, ImportsScreen } from './src/DataScreens.tsx';
 import { EditScreen } from './src/EditScreen.tsx';
 import { EntryScreen } from './src/EntryScreen.tsx';
 import { ImportScreen } from './src/ImportScreen.tsx';
@@ -22,6 +23,9 @@ type Route =
   | { name: 'password' }
   | { name: 'fingerprint' }
   | { name: 'sync' }
+  | { name: 'export' }
+  | { name: 'imports' }
+  | { name: 'deleteAll' }
   | { name: 'newKey'; key: string | null };
 
 const TABS: ReadonlyArray<{ key: Tab; label: string }> = [
@@ -36,6 +40,9 @@ const FLOW_ROUTES: Record<SettingsFlow, Route> = {
   newKey: { name: 'newKey', key: null },
   import: { name: 'import' },
   sync: { name: 'sync' },
+  export: { name: 'export' },
+  imports: { name: 'imports' },
+  deleteAll: { name: 'deleteAll' },
 };
 const NO_VIEW: VaultView = { kind: 'login', query: '' };
 const DISCARDED = 'Strongroom locked, so your unsaved changes were discarded.';
@@ -165,6 +172,9 @@ function Home() {
     return <EditScreen id={id} onBack={() => setRoute(id === null ? TABS_ROUTE : { name: 'entry', id })} onSaved={(saved) => setRoute({ name: 'entry', id: saved })} onLocked={refresh} />;
   }
   if (route.name === 'import') return <ImportScreen onBack={home} onDone={home} onLocked={refresh} />;
+  if (route.name === 'imports') return <ImportsScreen onBack={home} onLocked={refresh} />;
+  if (route.name === 'export') return <ExportScreen onBack={home} onDone={finishFlow} onLocked={refresh} />;
+  if (route.name === 'deleteAll') return <DeleteAllScreen onBack={home} onDone={finishFlow} onLocked={refresh} />;
   if (route.name === 'password') return <ChangePasswordScreen onBack={home} onDone={finishFlow} onLocked={refresh} />;
   if (route.name === 'fingerprint') return <FingerprintScreen onBack={home} onDone={finishFlow} onLocked={refresh} />;
   if (route.name === 'sync') return <SyncScreen start="home" onBack={home} onDone={finishFlow} onLocked={refresh} onHold={setHoldingKey} />;
