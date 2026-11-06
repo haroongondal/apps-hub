@@ -15,6 +15,8 @@ import expo.modules.designmedia.core.fitInside
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
+import java.util.Collections
+import java.util.WeakHashMap
 import kotlin.math.roundToLong
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -37,6 +39,7 @@ class CompositionView(context: Context, appContext: AppContext) : ExpoView(conte
   }
 
   init {
+    live.add(this)
     player.setVideoSurfaceView(surface)
     player.addListener(
       object : Player.Listener {
@@ -87,6 +90,7 @@ class CompositionView(context: Context, appContext: AppContext) : ExpoView(conte
   fun setScrubbing(on: Boolean) = player.setScrubbingModeEnabled(on)
 
   fun release() {
+    live.remove(this)
     main.removeCallbacks(ticker)
     player.release()
   }
@@ -102,8 +106,12 @@ class CompositionView(context: Context, appContext: AppContext) : ExpoView(conte
     surface.layout(left, top, left + w, top + h)
   }
 
-  private companion object {
-    const val TAG = "DesignMediaPreview"
-    const val TICK_MS = 100L
+  companion object {
+    private const val TAG = "DesignMediaPreview"
+    private const val TICK_MS = 100L
+    private val live = Collections.newSetFromMap(WeakHashMap<CompositionView, Boolean>())
+
+    // React's "playing" prop only reaches the view once the app is back in front, so the sound kept going in the background.
+    fun pauseAll() = live.forEach { it.player.pause() }
   }
 }

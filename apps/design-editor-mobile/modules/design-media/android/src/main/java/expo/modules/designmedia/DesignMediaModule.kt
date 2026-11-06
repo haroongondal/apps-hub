@@ -53,6 +53,8 @@ class DesignMediaModule : Module() {
       MediaJobService.listener = null
     }
 
+    OnActivityEntersBackground { CompositionView.pauseAll() }
+
     AsyncFunction("probe") { uri: String -> Probe.read(context, Uri.parse(uri)) }
 
     AsyncFunction("keyframeAtOrBefore") { uri: String, timeS: Double -> Probe.keyframeAtOrBefore(context, Uri.parse(uri), timeS) }
