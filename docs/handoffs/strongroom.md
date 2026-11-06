@@ -558,6 +558,24 @@ Phone results (fill in as they come):
   -no-snapshot-save &`, then unlock it with PIN 1234. Nothing needs it until a
   code change is made after the phone checks.
 
+- 2026-11-06 (cont.): the owner's word "create the PR". GitHub access from
+  this Mac blocked in layers: system DNS still dead; this session's sandbox
+  cannot resolve its own uid (`whoami` prints `501`), so `ssh` dies with
+  "No user exists for uid 501"; osascript's scripting additions refuse
+  `do shell script`; `gh auth status` mislabels network failures and, even
+  after two device-flow logins through a temporary pinned CONNECT proxy
+  (DoH-over-IP, node script in the session scratchpad, now stopped), the
+  stored token returns 401 from `api.github.com` (checked via `curl` with the
+  gh token, never printed). The owner chose to reboot the Mac and re-run
+  `gh auth login` on the healthy session. State at reboot: everything
+  committed (HEAD `645e441`, tree clean), Store at 0.2.2/vc12, phone on
+  0.2.2 with keep-alive verified. Next after the reboot: `gh auth login
+  -h github.com -p https -w` in the owner's Terminal, then (from this
+  worktree) `git push origin strongroom-phase-1` (or via
+  `https://github.com/haroongondal/apps-hub.git` + `gh auth setup-git`) and
+  `gh pr create --base main --head strongroom-phase-1` — body summary in the
+  session log below. No pushes have happened yet.
+
 ## Owner items to raise at the end of Phase 1 (from Task 1)
 
 - Before Phase 2: decide whether to add an account key (a second secret typed
