@@ -82,7 +82,7 @@ const rows = [];
 const usedScriptlets = new Set();
 for (const feature of FEATURES) {
   const list = LISTS[feature];
-  const text = list.file ? readFileSync(root(list.file), 'utf8') : list.urls.map((url) => readFileSync(cached(url), 'utf8')).join('\n');
+  const text = list.file ? readFileSync(root(list.file), 'utf8') : [...list.urls.map((url) => readFileSync(cached(url), 'utf8')), ...(list.extra ?? [])].join('\n');
   const compiled = await compileFilters(stripSections(text, list.dropSections ?? []), { firstId: 1, regexLimit: 1000 });
   const { generic, ...cosmetic } = compiled.cosmetic;
   const unhiddenEverywhere = new Set(cosmetic.unhide['*'] ?? []);
