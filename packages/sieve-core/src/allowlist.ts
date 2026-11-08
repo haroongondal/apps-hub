@@ -12,6 +12,14 @@ export function isAllowed(url: string, entries: AllowEntry[]): boolean {
   return entries.some((e) => (e.kind === 'site' ? host === e.host || host.endsWith(`.${e.host}`) : e.url === page));
 }
 
+// What the toolbar menu allowlists for a tab: the host without a trailing dot or a leading `www.` (an entry covers subdomains), and the
+// page entry's URL. Null where Sieve doesn't run (chrome://, file://, no address). An IPv6 host comes back as is; settings refuse it.
+export function tabSite(url: string | undefined): { host: string; page: string } | null {
+  const page = url === undefined ? null : pageUrl(url);
+  if (page === null) return null;
+  return { host: new URL(page).hostname.replace(/\.$/, '').replace(/^www\./, ''), page };
+}
+
 // allowAllRequests on the frame request also lets through everything the frame and its child frames load.
 export function allowRules(entries: AllowEntry[], firstId: number, priority: number): DnrRule[] {
   return entries.map((e, i) => ({

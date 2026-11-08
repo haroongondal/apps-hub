@@ -1,4 +1,8 @@
 // Real Chromium with the built extension (run `pnpm --filter sieve build` first). Not part of `pnpm test`.
+import http from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { isDeepStrictEqual as same } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { SITE_HOST, UNHIDE_HOST, check, launch, results, startServers, startWorker, stopWorker } from './harness.mjs';
 
@@ -8,6 +12,7 @@ const servers = await startServers();
 const ADS = `https://localhost:${servers.httpsPort}/ads.html`;
 const ADS_IP = `https://127.0.0.1:${servers.httpsPort}/ads.html`;
 const errors = [];
+const SHOTS = process.env.SHOTS ?? tmpdir();
 const json = (v) => String(JSON.stringify(v)).slice(0, 500);
 
 const visit = async (ctx, url) => {
@@ -84,12 +89,15 @@ try {
     json({ excluded, error: s.error }),
   );
   check('AI search summaries ships with no ruleset and no generic CSS', meta.features.ai.ruleset === null && !meta.features.ai.hasGenericCss, json(meta.features.ai));
-  const card = await ctx.newPage();
-  await card.goto('chrome://extensions');
-  const info = await card.evaluate((extId) => new Promise((r) => chrome.developerPrivate.getExtensionInfo(extId, r)), id);
-  const warnings = [...info.installWarnings, ...info.manifestErrors.map((e) => e.message), ...info.runtimeErrors.map((e) => e.message)];
+  const cardProblems = async () => {
+    const card = await ctx.newPage();
+    await card.goto('chrome://extensions');
+    const info = await card.evaluate((extId) => new Promise((r) => chrome.developerPrivate.getExtensionInfo(extId, r)), id);
+    await card.close();
+    return [...info.installWarnings, ...info.manifestErrors.map((e) => e.message), ...info.runtimeErrors.map((e) => e.message)];
+  };
+  const warnings = await cardProblems();
   check('Chrome shows no warning or error on the extension card', warnings.length === 0, json(warnings));
-  await card.close();
 
   let hits = await visit(ctx, ADS);
   check('the fixture page and its own script load', hits.includes('/ads.html') && hits.includes('/control.js'), json(hits));
@@ -333,6 +341,180 @@ try {
   check('Resume brings the site-specific hiding and the scriptlet back', hidden(r.main) && hidden(r.frame) && !r.hits.includes('/pagead/x.js'), json(r));
   const injectErrors = await sw2.evaluate(() => globalThis.injectErrors);
   check('the service worker logged no error while injecting', injectErrors?.length === 0, json(injectErrors));
+  // Playwright can't click the toolbar button, so popup.html?tab=<id> stands in for it.
+  const COUNTS = `https://localhost:${servers.httpsPort}/counts.html`;
+  const COUNTS_WWW = `https://www.localhost:${servers.httpsPort}/counts.html`;
+  const until = async (read, ok, ms = 10_000) => {
+    const end = Date.now() + ms;
+    for (;;) {
+      const v = await read();
+      if (ok(v) || Date.now() > end) return v;
+      await sleep(100);
+    }
+  };
+  const tabs = (w) => w.evaluate(() => chrome.tabs.query({}).then((ts) => ts.map((t) => [t.id, t.url])));
+  const tabFor = async (w, url) => (await tabs(w)).find(([, u]) => u === url)?.[0];
+  const badgeOf = (w, tabId) => w.evaluate((t) => chrome.action.getBadgeText({ tabId: t }), tabId);
+  const blockingOf = async (w) => (await w.evaluate(() => chrome.storage.local.get('settings'))).settings.blocking;
+  const countsOf = (w, tabId) => w.evaluate((k) => chrome.storage.session.get(k).then((r) => r[k]), `counts:${tabId}`);
+  const menu = async (tabId, colorScheme = 'light') => {
+    const pop = await ctx.newPage();
+    const problems = [];
+    pop.on('pageerror', (e) => problems.push(e.message));
+    pop.on('console', (msg) => msg.type() === 'error' && problems.push(msg.text()));
+    await pop.emulateMedia({ colorScheme });
+    await pop.setViewportSize({ width: 340, height: 700 });
+    await pop.goto(`chrome-extension://${id}/popup.html?tab=${tabId}`);
+    await pop.locator('footer').waitFor();
+    return { pop, problems, countsText: () => pop.locator('.counts').innerText() };
+  };
+  const SENTENCE = '3 ads and 2 trackers blocked on this page';
+
+  const counted = await ctx.newPage();
+  await counted.goto(COUNTS, { waitUntil: 'load' });
+  const countedId = await tabFor(sw2, COUNTS);
+  const badge = await until(() => badgeOf(sw2, countedId), (t) => t === '5');
+  check('a page with 3 ad and 2 tracker requests shows 5 on the toolbar badge', badge === '5', json({ badge, counts: await countsOf(sw2, countedId) }));
+  let m = await menu(countedId);
+  check(`the menu says "${SENTENCE}"`, (await m.countsText()) === SENTENCE, await m.countsText());
+  const switchCount = await m.pop.getByRole('switch').count();
+  check('the menu has the header switch, the site switch and four feature switches, and no tab bar (one tab)', switchCount === 6 && (await m.pop.locator('[role=tablist]').count()) === 0, String(switchCount));
+  await m.pop.screenshot({ path: join(SHOTS, 'menu.png'), fullPage: true });
+  await m.pop.emulateMedia({ colorScheme: 'dark' });
+  await sleep(400); // the buttons and switches fade between themes
+  await m.pop.screenshot({ path: join(SHOTS, 'menu-dark.png'), fullPage: true });
+  await m.pop.close();
+
+  const stopped = await stopWorker(ctx);
+  m = await menu(countedId);
+  check('after the worker is stopped, the menu still says 3 ads and 2 trackers', stopped === 'stopped' && (await m.countsText()) === SENTENCE, json({ stopped, text: await m.countsText() }));
+  await m.pop.close();
+  const sw4 = await startWorker(ctx, id);
+  check('after the worker is stopped, the badge still shows 5', (await badgeOf(sw4, countedId)) === '5', await badgeOf(sw4, countedId));
+  await sw4.evaluate(() => {
+    globalThis.countErrors = [];
+    const error = console.error;
+    console.error = (...a) => (globalThis.countErrors.push(a.map(String).join(' ')), error(...a));
+  });
+  await counted.reload({ waitUntil: 'load' });
+  const again = await until(() => badgeOf(sw4, countedId), (t) => t === '5');
+  m = await menu(countedId);
+  check('a reload starts the count from zero again, and the restarted worker counts: 3 ads and 2 trackers, not 6 and 4', again === '5' && (await m.countsText()) === SENTENCE, json({ again, text: await m.countsText(), counts: await countsOf(sw4, countedId) }));
+
+  const toggled = (label) => m.pop.getByRole('switch', { name: label });
+  const buttonOf = (name) => m.pop.getByRole('button', { name, exact: true });
+  const allowlistIs = (want) => until(async () => (await blockingOf(sw4)).allowlist, (a) => same(a, want));
+  const listsOn = (st) => st.enabled.join() === [...RULESETS].sort().join();
+  const hasAllowRule = (on) => settle(sw4, (st) => st.dynamic.some((r) => r.id === ALLOW_ID) === on);
+
+  await toggled('Block on this site').uncheck();
+  let list = await allowlistIs([{ kind: 'site', host: 'localhost' }]);
+  check('turning off "Block on this site" allowlists the tab host', same(list, [{ kind: 'site', host: 'localhost' }]), json(list));
+  check('the menu tells the owner to reload to see the change', await m.pop.getByText('Reload this page to see the change.').isVisible());
+  await hasAllowRule(true);
+  servers.hits.length = 0;
+  await counted.reload({ waitUntil: 'load' });
+  check('after turning it off and reloading, the ad request reaches the server', servers.hits.includes('/pagead/c1.js'), json(servers.hits));
+  await toggled('Block on this site').check();
+  list = await allowlistIs([]);
+  check('turning "Block on this site" back on removes the entry', json(list) === '[]' && (await toggled('Block on this site').isChecked()), json(list));
+  await hasAllowRule(false);
+
+  await buttonOf('Pause on this page').click();
+  list = await allowlistIs([{ kind: 'page', url: COUNTS }]);
+  check('"Pause on this page" adds a page entry, and the button becomes "Resume on this page"', same(list, [{ kind: 'page', url: COUNTS }]) && (await buttonOf('Resume on this page').isVisible()), json(list));
+  await hasAllowRule(true);
+  servers.hits.length = 0;
+  await counted.reload({ waitUntil: 'load' });
+  check('on a paused page, the ad request reaches the server', servers.hits.includes('/pagead/c1.js'), json(servers.hits));
+  await buttonOf('Resume on this page').click();
+  list = await allowlistIs([]);
+  check('"Resume on this page" removes the page entry', json(list) === '[]' && (await buttonOf('Pause on this page').isVisible()), json(list));
+  await hasAllowRule(false);
+
+  const wwwPage = await ctx.newPage();
+  await wwwPage.goto(COUNTS_WWW, { waitUntil: 'load' });
+  const www = await menu(await tabFor(sw4, COUNTS_WWW));
+  const wwwHost = await www.pop.locator('.host').innerText();
+  await www.pop.getByRole('switch', { name: 'Block on this site' }).uncheck();
+  list = await allowlistIs([{ kind: 'site', host: 'localhost' }]);
+  check('on www.localhost the menu shows localhost, and turning the site off allowlists localhost without the www.', wwwHost === 'localhost' && same(list, [{ kind: 'site', host: 'localhost' }]), json({ wwwHost, list }));
+  await www.pop.getByRole('switch', { name: 'Block on this site' }).check();
+  await allowlistIs([]);
+  await www.pop.close();
+  await wwwPage.close();
+
+  const flips = [
+    ['Distraction control', (b) => b.lists.distraction, true],
+    ['Cookie banners', (b) => b.lists.cookies, true],
+    ['AI search summaries', (b) => b.lists.ai, false],
+    ['Site notification requests', (b) => b.denyNotifications, false],
+  ];
+  for (const [label, read, was] of flips) {
+    await toggled(label).setChecked(!was);
+    const flipped = await until(async () => read(await blockingOf(sw4)), (v) => v === !was);
+    await toggled(label).setChecked(was);
+    const restored = await until(async () => read(await blockingOf(sw4)), (v) => v === was);
+    check(`the "${label}" switch changes its setting and changes it back`, flipped === !was && restored === was, json({ flipped, restored }));
+  }
+  await buttonOf('Pause everywhere').click();
+  await m.pop.getByText('Blocking is paused everywhere').waitFor();
+  s = await settle(sw4, (st) => st.enabled.length === 0);
+  check('"Pause everywhere" pauses blocking, and the menu says so with a Resume button in place of it', (await blockingOf(sw4)).paused === true && s.enabled.length === 0 && (await buttonOf('Pause everywhere').count()) === 0, json({ enabled: s.enabled }));
+  await buttonOf('Resume').click();
+  s = await settle(sw4, listsOn);
+  check('"Resume" brings blocking back', (await blockingOf(sw4)).paused === false && listsOn(s), json({ enabled: s.enabled }));
+  await m.pop.getByRole('switch', { name: 'Sieve on' }).uncheck();
+  s = await settle(sw4, (st) => st.enabled.length === 0);
+  check('the "Sieve on" switch turns Sieve off, and the rest of the menu goes inert', s.enabled.length === 0 && (await m.pop.locator('.stack[inert]').count()) === 1, json({ enabled: s.enabled }));
+  await m.pop.getByRole('switch', { name: 'Sieve on' }).check();
+  s = await settle(sw4, listsOn);
+
+  await sw4.evaluate(() => chrome.storage.session.set({ blockingError: { message: 'Chrome refused a rule', at: Date.now() } }));
+  await m.pop.getByRole('alert').waitFor();
+  const banner = await m.pop.getByRole('alert').innerText();
+  check('the error banner shows the stored message, then how to fix it', banner === 'Chrome refused a rule. Turn a list off in Settings to make room.', banner);
+  await sw4.evaluate(() => chrome.storage.session.remove('blockingError'));
+  await m.pop.getByRole('alert').waitFor({ state: 'detached' });
+  await m.pop.close();
+
+  const before = new Set((await tabs(sw4)).map(([i]) => i));
+  const extensions = await ctx.newPage();
+  await extensions.goto('chrome://extensions');
+  m = await menu((await tabs(sw4)).map(([i]) => i).find((i) => !before.has(i)));
+  check(
+    `on a chrome:// tab the menu says "Sieve doesn't run on this page.", has no counts or site switch, and logs no page errors`,
+    (await m.pop.getByText("Sieve doesn't run on this page.").isVisible()) && (await m.pop.locator('.counts').count()) === 0 && (await m.pop.getByRole('switch', { name: 'Block on this site' }).count()) === 0 && m.problems.length === 0,
+    json(m.problems),
+  );
+  await m.pop.close();
+  await extensions.close();
+
+  const v6 = http.createServer((_, res) => res.end('<!doctype html><title>v6</title>'));
+  await new Promise((r) => v6.listen(0, '::1', r));
+  const V6 = `http://[::1]:${v6.address().port}/`;
+  const v6Page = await ctx.newPage();
+  await v6Page.goto(V6, { waitUntil: 'load' });
+  m = await menu(await tabFor(sw4, V6));
+  check(
+    'on an IPv6 tab the menu offers no "Block on this site" switch, says why, and cannot pause the page',
+    (await m.pop.getByRole('switch', { name: 'Block on this site' }).count()) === 0 &&
+      (await m.pop.getByText("Sieve can't turn blocking off for this address.").isVisible()) &&
+      (await buttonOf('Pause on this page').isDisabled()) &&
+      m.problems.length === 0,
+    json(m.problems),
+  );
+  await m.pop.close();
+  await v6Page.close();
+  v6.close();
+
+  await counted.close();
+  const gone = await until(() => countsOf(sw4, countedId), (c) => c === undefined);
+  check('closing the tab deletes its counts', gone === undefined, json(gone));
+  const countErrors = await sw4.evaluate(() => globalThis.countErrors);
+  check('the service worker logged no error while counting', countErrors?.length === 0, json(countErrors));
+  const lateWarnings = await cardProblems();
+  check('after the worker and the menu ran all of this, the extension card still shows no warning or error', lateWarnings.length === 0, json(lateWarnings));
   await ctx.close();
 } catch (e) {
   check('the run finished without an exception', false, String(e?.stack ?? e).split('\n').slice(0, 4).join(' | '));

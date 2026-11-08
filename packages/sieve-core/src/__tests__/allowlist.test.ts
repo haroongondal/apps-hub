@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ALLOW_FIRST_ID, allowRules, excludePatterns, isAllowed } from '../index.ts';
+import { ALLOW_FIRST_ID, allowRules, excludePatterns, isAllowed, tabSite } from '../index.ts';
 
 const site = (host: string) => ({ kind: 'site' as const, host });
 const page = (url: string) => ({ kind: 'page' as const, url });
@@ -77,4 +77,19 @@ test('excludePatterns: hosts with their subdomains, IPs exactly, pages as a pref
 test('excludePatterns drops a page port, which Chrome refuses after `*://`; a pattern with no port matches every port', () => {
   assert.deepEqual(excludePatterns(['localhost'], ['http://localhost:8080/x?y=1']), ['*://*.localhost/*', '*://localhost/x?y=1*']);
   assert.deepEqual(excludePatterns([], ['https://[2001:db8::1]:8443/x']), ['*://[2001:db8::1]/x*']);
+});
+
+test('tabSite: the host loses one trailing dot and a leading www., and the page entry loses the hash and userinfo', () => {
+  assert.deepEqual(tabSite('https://www.example.com/a?b=1#h'), { host: 'example.com', page: 'https://www.example.com/a?b=1' });
+  assert.deepEqual(tabSite('https://example.com./x'), { host: 'example.com', page: 'https://example.com./x' });
+  assert.deepEqual(tabSite('https://www.example.com./'), { host: 'example.com', page: 'https://www.example.com./' });
+  assert.equal(tabSite('https://www.www.example.com/')?.host, 'www.example.com');
+  assert.equal(tabSite('https://www/')?.host, 'www');
+  assert.deepEqual(tabSite('http://user:pw@localhost:8443/ads.html'), { host: 'localhost', page: 'http://localhost:8443/ads.html' });
+  assert.equal(tabSite('http://10.0.0.1:8080/')?.host, '10.0.0.1');
+});
+
+test('tabSite gives an IPv6 host as it is (settings refuse it, so the menu offers no switch) and null where Sieve does not run', () => {
+  assert.equal(tabSite('http://[::1]:8080/')?.host, '[::1]');
+  for (const url of [undefined, '', 'not a url', 'chrome://extensions', 'chrome-extension://abc/popup.html', 'file:///Users/x/a.html', 'about:blank']) assert.equal(tabSite(url), null, String(url));
 });

@@ -4,3 +4,4 @@ export * from './compile.ts';
 export * from './allowlist.ts';
 export * from './plan.ts';
 export * from './page.ts';
+export * from './counts.ts';

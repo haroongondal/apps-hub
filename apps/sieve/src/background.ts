@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS } from '@apps-hub/sieve-core/src/settings.ts';
 import { applyBlockingSoon } from './blocking.ts';
+import { initBadge, onMatched, onNavigated, onTabRemoved } from './counts.ts';
 import { forgetSettings, onCommitted } from './inject.ts';
 
 // Listeners are added synchronously at the top level, so Chrome can deliver the event that woke a stopped worker.
@@ -14,3 +15,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && ('settings' in changes || 'myRules' in changes)) applyBlockingSoon();
 });
 chrome.webNavigation.onCommitted.addListener(onCommitted, { url: [{ schemes: ['http', 'https'] }] });
+initBadge();
+// Only unpacked extensions have the debug event; without it the menu shows no counts, and the worker still starts.
+chrome.declarativeNetRequest.onRuleMatchedDebug?.addListener(onMatched);
+chrome.webNavigation.onCommitted.addListener(onNavigated);
+chrome.tabs.onRemoved.addListener(onTabRemoved);

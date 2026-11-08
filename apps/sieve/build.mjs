@@ -150,7 +150,7 @@ if (defaultOn > 30_000) {
 }
 
 await build({
-  entryPoints: { background: root('src/background.ts') },
+  entryPoints: { background: root('src/background.ts'), popup: root('src/popup.ts') },
   bundle: true,
   format: 'esm',
   target: 'chrome128',
@@ -161,6 +161,7 @@ await build({
 // Registered content scripts are classic scripts, not modules.
 await build({ entryPoints: { 'notify-deny': root('src/notify-deny.ts') }, bundle: true, format: 'iife', target: 'chrome128', outdir: out, logLevel: 'warning' });
 const ui = root('../../packages/ui');
+for (const f of ['popup.html', 'popup.css']) cpSync(root('src', f), join(out, f));
 for (const f of ['tokens.css', 'base.css']) cpSync(join(ui, 'web', f), join(out, 'web', f));
 cpSync(join(ui, 'fonts'), join(out, 'fonts'), { recursive: true });
 for (const size of [16, 32, 48, 128]) cpSync(root(`assets/icon-${size}.png`), join(out, `icon-${size}.png`));
