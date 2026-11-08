@@ -355,6 +355,23 @@ try {
   check('flagged duplicates are marked for review', (await popup.getByText('Review', { exact: true }).count()) === 2);
   await popup.screenshot({ path: `${SCRATCH}/5-list.png` });
 
+  await popup.getByRole('button', { name: 'Export', exact: true }).click();
+  await popup.getByRole('heading', { name: 'Export for Chrome' }).waitFor();
+  await popup.locator('input[type=password]').fill('the wrong password');
+  await popup.getByRole('button', { name: 'Export for Chrome' }).click();
+  await popup.locator('.msg:not(:empty)').waitFor();
+  check('Export refuses a wrong master password', (await popup.locator('.msg').innerText()).includes("isn't right"));
+  await popup.locator('input[type=password]').fill(MASTER);
+  const [download] = await Promise.all([popup.waitForEvent('download'), popup.getByRole('button', { name: 'Export for Chrome' }).click()]);
+  const exportPath = join(profile, 'export.csv');
+  await download.saveAs(exportPath);
+  const exported = readFileSync(exportPath, 'utf8');
+  check('Export downloads strongroom-passwords.csv with the five Chrome columns and the logins', download.suggestedFilename() === 'strongroom-passwords.csv' && exported.startsWith('name,url,username,password,note\r\n') && exported.includes('p4ssw0rd-local') && exported.includes('newuser@example.com'), exported.slice(0, 200));
+  await popup.getByText('to strongroom-passwords.csv').waitFor();
+  check('Export tells the owner to delete the file and counts logins left out', (await popup.getByText('Delete the file as soon as Chrome has imported it').isVisible()) && (await popup.innerText('body')).includes('no website'));
+  await popup.getByRole('button', { name: 'Done' }).click();
+  await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+
   await ctx.close();
   ({ ctx, sw, id } = await launch());
   popup = await openPopup();

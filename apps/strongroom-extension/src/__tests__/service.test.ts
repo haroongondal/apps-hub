@@ -166,6 +166,38 @@ test('a web page may only ask for matching logins, fills and captures; everythin
   assert.ok(await s.call({ type: 'candidates' }, ctx));
 });
 
+test('export refuses a wrong master password', async () => {
+  const s = await unlocked();
+  await add(s);
+  await assert.rejects(s.call({ type: 'export', password: 'not the master password' }), /isn't right/);
+});
+
+test('export refuses while locked', async () => {
+  const s = await unlocked();
+  await add(s);
+  await s.call({ type: 'lock' });
+  await assert.rejects(s.call({ type: 'export', password: PASSWORD }), /locked/);
+});
+
+test('export returns one row per site and counts logins without a website', async () => {
+  const s = await unlocked();
+  await add(s);
+  await add(s, { name: 'Wifi', websites: '', password: 'pw-2', note: 'router' });
+  const out = await s.call<{ csv: string; rows: number; leftOut: number }>({ type: 'export', password: PASSWORD });
+  assert.deepEqual([out.rows, out.leftOut], [1, 1]);
+  const lines = out.csv.trim().split(/\r?\n/);
+  assert.equal(lines[0], 'name,url,username,password,note');
+  assert.equal(lines.length, 2);
+  assert.match(lines[1], /login\.bank\.com/);
+  assert.ok(!out.csv.includes('pw-2'));
+});
+
+test('export from a page context is refused, even for the right password', async () => {
+  const s = await unlocked();
+  await add(s);
+  await assert.rejects(s.call({ type: 'export', password: PASSWORD }, page('https://login.bank.com/')), /isn't allowed/);
+});
+
 test('candidates are the logins saved for this site, never a lookalike or an http copy of an https login', async () => {
   const s = await unlocked();
   const { id } = await add(s);

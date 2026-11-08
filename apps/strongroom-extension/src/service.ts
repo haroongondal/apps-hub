@@ -1,6 +1,6 @@
 import {
   AccountKeyRequired, FLAG_PREFIX, ImportError, KdfOutOfRange, SyncAuthError, SyncHttpError, SyncOfflineError, SyncRollbackError, adoptHeader,
-  equalBytes, fromBase64, formatRecoveryKey, headerFromJson, headerToJson, kdfWeaker, matches, newId, open, openEntry, openWithPassword,
+  equalBytes, exportForChrome, fromBase64, formatRecoveryKey, headerFromJson, headerToJson, kdfWeaker, matches, newId, open, openEntry, openWithPassword,
   parseAccountKey, parseGoogleExport, parseRecoveryKey, readEntries, recoveryKeyGroup, recoveryLoginToken, recover, registrableDomain, seal,
   setupVault, signInWithPassword, signInWithRecovery, siteFromUrl, syncOnce, toBase64, tokenHash, unlockWithRecovery, utf8, withNewPassword,
   writeEntries,
@@ -37,6 +37,7 @@ export type Request =
   | { type: 'save'; id: string | null; login: LoginInput }
   | { type: 'remove'; id: string }
   | { type: 'import'; csv: string; commit: boolean }
+  | { type: 'export'; password: string }
   | { type: 'candidates'; page?: PageRef }
   | { type: 'fill'; id: string }
   | { type: 'capture'; username: string; password: string }
@@ -443,6 +444,15 @@ export function createService(deps: Deps) {
           deps.resetAutoLock();
           if (req.commit) syncSoon();
           return { added: result.logins.length, merged: result.merged, flagged: result.flagged } satisfies ImportPreview;
+        }
+        case 'export': {
+          const key = await requireKey();
+          // Re-checking the password stops someone at an unlocked, unattended browser from taking every password in plain text.
+          const header = await store.getHeader();
+          const keys = header && (await openWithPassword(header, String(req.password), deps.floor, keyedFor(header, await accountKeyOf())));
+          if (!keys || !equalBytes(keys.vaultKey, key)) throw new UserError("That master password isn't right.");
+          deps.resetAutoLock();
+          return exportForChrome((await logins(key)).found.map((f) => f.login));
         }
         case 'candidates': {
           const site = where && siteFromUrl(where.url);

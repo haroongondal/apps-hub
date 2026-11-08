@@ -240,7 +240,7 @@ async function vaultScreen() {
       button('Copy password', () => guarded(msg, [], async () => copy((await call<Detail>({ type: 'get', id: r.id })).password, 'Password', toast))))));
 
   screen('Strongroom', null,
-    h('div', { class: 'ui-toolbar' }, button('Add', () => editScreen(null), 'ui-btn--primary'), button('Import', openImport),
+    h('div', { class: 'ui-toolbar' }, button('Add', () => editScreen(null), 'ui-btn--primary'), button('Import', openImport), button('Export', exportScreen),
       h('span', { class: 'grow' }), button('Lock', () => guarded(msg, [], async () => { await call({ type: 'lock' }); await route(); }), 'ui-btn--ghost')),
     pendingCard, hereCard, search, list, syncCard(sync, vaultScreen),
     unreadable > 0 && h('p', { class: 'ui-meta' }, `${unreadable} saved item${unreadable === 1 ? '' : 's'} couldn't be read and ${unreadable === 1 ? 'was' : 'were'} left untouched.`),
@@ -320,6 +320,28 @@ function importScreen() {
   screen('Import from Google', vaultScreen,
     h('p', { class: 'ui-muted' }, 'In Google Password Manager choose Settings, then Export passwords, and pick the file here. Import it once: importing twice adds every login again.'),
     file, msg, out);
+}
+
+function exportScreen() {
+  const msg = msgBox();
+  const pw = input({ type: 'password', autocomplete: 'current-password' });
+  const out = h('div', { class: 'stack' });
+  const go = button('Export for Chrome', () => guarded(msg, [go], async () => {
+    const { csv, rows, leftOut } = await call<{ csv: string; rows: number; leftOut: number }>({ type: 'export', password: pw.value });
+    pw.value = '';
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    h('a', { href: url, download: 'strongroom-passwords.csv' }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    out.replaceChildren(h('div', { class: 'stack' },
+      h('p', {}, `Saved ${rows} ${rows === 1 ? 'login' : 'logins'} to strongroom-passwords.csv.`),
+      leftOut > 0 && h('p', { class: 'ui-muted' }, `${leftOut} ${leftOut === 1 ? 'login has' : 'logins have'} no website, so ${leftOut === 1 ? 'it was' : 'they were'} left out. Add a website to ${leftOut === 1 ? 'it' : 'them'} to export ${leftOut === 1 ? 'it' : 'them'}.`),
+      h('p', { class: 'ui-muted' }, 'Delete the file as soon as Chrome has imported it. It holds your passwords in plain text.'),
+      button('Done', vaultScreen, 'ui-btn--primary')));
+  }), 'ui-btn--primary');
+  pw.addEventListener('keydown', (e) => e.key === 'Enter' && go.click());
+  screen('Export for Chrome', vaultScreen,
+    h('p', { class: 'ui-muted' }, "This makes a file you can import into Chrome's password manager. The file holds your passwords in plain text, so anyone who gets it can read them. It leaves out cards, notes and logins without a website."),
+    label('Master password', pw), msg, go, out);
 }
 
 async function main() {
