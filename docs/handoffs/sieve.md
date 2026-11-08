@@ -236,6 +236,22 @@ R10, googlevideo (`S2:visionos` itag 137, 1080p, its first 62,914,560 bytes, all
 - A first R10 run is discarded: its first sequential pass took 0.6 s (110 MB/s) because Chrome's HTTP cache served the 10 MiB ranges the 1080p download had just fetched. Every `Range` fetch is now `no-store` and the R10 above is the rerun. In that run the 1080p download itself was 0.43 MB/s (0.79x bitrate, Q2 still fails) and the 2160p partial passed its 100 MiB at 0.99 MB/s.
 - Reading: Q4 is inconclusive on speed: the ratios (1.05; 0.83 excluding each side's slowest run, about 1.9 counting them) straddle 1 on a link whose own speed moved by up to 6x between runs, so keep 1 part per host (Chrome's own download) as the default for both HTTP/1.1 and HTTP/2, because the one firm datum is OVH rejecting 2 of 6 parallel ranges with 429; keep parts configurable and treat a 429 as "use fewer parts". R10 is inconclusive on this link too: single sequential ranges ran at about 1 MB/s here (0.79 and 1.23), so the earlier 0.25 to 0.6 MB/s was not a stable per-request ceiling, and the sequential and parallel runs overlap (n=2 each; the link, about 0.55 to 1.5 MB/s, was below what Q2 needs, so parallel requests could not show a cap); the cause is deferred to the owner's run (0.6) or a rerun with a baseline of 3 MB/s or more.
 
+## Phase 1 live checks
+
+### YouTube ad removal (Task 1.11, signed out)
+
+Run 2026-11-08 with `pnpm --filter sieve test:e2e -- --live` (`apps/sieve/test/yt-live.mjs`), headless Chrome for Testing, fresh signed-out profile, 30 s per video:
+
+| Video | Seconds played | `.ad-showing` | Bot check | Consent page |
+|---|---|---|---|---|
+| `dQw4w9WgXcQ` | 31 | no | no | no |
+| `kJQP7kiw5Fk` | 29 | no | no | no |
+| `9bZkp7q19f0` | 25 | no | no | no |
+| control, Sieve off, `dQw4w9WgXcQ` | 30 | no | no | no |
+
+- **Reading: inconclusive about ad removal.** YouTube still plays with Sieve on, but the Sieve-off control also showed no ad, so this profile was served no pre-roll at all and the run cannot show that ads are removed. The local fixture e2e (an inline `ytInitialPlayerResponse`, `JSON.parse` and `Response.json`, all stripped; videoDetails and streamingData unchanged) is the evidence for the stripping, not the live run. The task review asked for an honest "inconclusive" label and an extension-free control in `yt-live.mjs` (fix round 1).
+- Still unchecked: removal while an ad is actually served; m.youtube.com and music.youtube.com live; signed-in (Task 0.6).
+
 ## File map
 
 - `docs/superpowers/specs/2026-11-06-sieve-design.md`: the design
