@@ -1,20 +1,21 @@
 [Adblock Plus 2.0]
 ! Title: Sieve AI search summaries
-! Hand-written hide rules for the AI answer blocks on four search engines, scoped to each engine's own host. No generic rule.
-! Checked on 2026-11-08 from a signed-out profile with the query "how do magnets work". A group marked "not verified" matched nothing on a live page that day.
+! Hide rules for the AI answer blocks on four search engines, scoped to each engine's own host. No generic rule.
+! Source: seven of these eight rules are taken from Stevo's AI Blocklist (MIT, copyright (c) 2026 Stevoisiak, https://github.com/Stevoisiak/Stevos-AI-Blocklist), with the host written as each engine's own (that list says www.bing.com where this one says bing.com). Only bing.com###b_genserp_container is Sieve's own: Bing's page script on 2026-11-08 looks that id up.
+! Checked on 2026-11-08 from a signed-out profile with the query "how do magnets work". A group marked "not verified" matched nothing on a live page that day. "Checked" means the selector hid the block when its CSS was added to the live page, not that the extension ran against the engine.
 !
 ! Google, 2026-11-08: hides the AI Overview and the generated topic summary. Not verified: Google showed a robot check instead of results.
 www.google.*##[data-attnms]
 www.google.*##[data-attrid="VisualDigestGeneratedDescription"]
 !
-! Bing, 2026-11-08: hides the Copilot Search answer block. Not verified: Bing showed results with no AI block for four queries. The first id is named in Bing's own page script.
+! Bing, 2026-11-08: hides the Copilot Search answer block. Not verified: Bing showed results with no AI block for four queries. The first rule is Sieve's own, the other two are from Stevo's list.
 bing.com###b_genserp_container
 bing.com##.b_ans:has(> #copans_container)
 bing.com##.b_ans.b_top:has(> .cht_container)
 !
-! DuckDuckGo, 2026-11-08: hides the Search Assist answer above the results (verified on a live page). The second rule is its sidebar form, which did not appear that day.
+! DuckDuckGo, 2026-11-08: hides the Search Assist answer above the results (checked on a live page). The second rule is its sidebar form, which did not appear that day.
 duckduckgo.com##[data-react-module-id="wikinlp"]
 duckduckgo.com##[data-layout="wikinlp"]
 !
-! Brave Search, 2026-11-08: hides the AI answer above the results (verified on a live page).
+! Brave Search, 2026-11-08: hides the AI answer above the results (checked on a live page).
 search.brave.com###llm-snippet

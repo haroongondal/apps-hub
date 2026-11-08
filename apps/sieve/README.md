@@ -28,7 +28,7 @@ The build prints one row per feature: rules, regex rules, generic selectors, hos
 | `distraction` | Fanboy's Annoyance List, without its cookie sections | on |
 | `cookies` | EasyList Cookie List (Fanboy's Cookiemonster) | on |
 | `antiadblock` | Adblock Warning Removal List and ABP filters (anti-circumvention) | on |
-| `ai` | `filters/ai-summaries.txt`, written for Sieve | off |
+| `ai` | `filters/ai-summaries.txt`: seven rules from Stevo's AI Blocklist and one of Sieve's own | off |
 
 ## Develop
 
@@ -84,7 +84,7 @@ The panel connects to the worker with `runtime.connect({ name: 'panel:<tab id>' 
 
 ## AI search summaries
 
-`filters/ai-summaries.txt` is written by hand, not downloaded: a few `##` hide rules per engine for the AI answer on Google, Bing, DuckDuckGo and Brave Search, each scoped to that engine's own host, with no generic rule. The `ai` feature is off by default; the menu and the settings page switch it. The selectors prefer stable attributes and ids over generated class names. The Google and Bing selector names come from the notes of Stevo's AI Blocklist (MIT) and a Bing id in Bing's own page script; the lines are written here.
+`filters/ai-summaries.txt` is a short list kept in the repo, not downloaded: one to three `##` hide rules per engine for the AI answer on Google, Bing, DuckDuckGo and Brave Search, each scoped to that engine's own host, with no generic rule. The `ai` feature is off by default; the menu and the settings page switch it. Seven of its eight rules are taken from [Stevo's AI Blocklist](https://github.com/Stevoisiak/Stevos-AI-Blocklist) (MIT; see Licences), with the host written as each engine's own (that list says `www.bing.com` where this one says `bing.com`). Only `bing.com###b_genserp_container` is Sieve's own: Bing's page script, in the results page saved on 2026-11-08, looks up that id, so the rule hides the element it names. The selectors prefer stable attributes and ids over generated class names.
 
 The rules were checked on 2026-11-08 from a signed-out Chrome for Testing profile with the query "how do magnets work":
 
@@ -92,14 +92,16 @@ The rules were checked on 2026-11-08 from a signed-out Chrome for Testing profil
 | --- | --- | --- |
 | Google | A robot check on every try, so no results | Not verified on a live page |
 | Bing | Results with no AI block, for four different questions | Not verified on a live page |
-| DuckDuckGo | A Search Assist answer above the results (a robot check on a headless run) | Verified on a live page, except the sidebar rule, which did not appear |
-| Brave Search | An AI answer above the results (a robot check when the address is opened directly; typing the question worked) | Verified on a live page |
+| DuckDuckGo | A Search Assist answer above the results (a robot check on a headless run) | Selector checked on a live page, except the sidebar rule, which did not appear |
+| Brave Search | An AI answer above the results (a robot check when the address is opened directly; typing the question worked) | Selector checked on a live page |
 
-A verified rule hid the block with no gap left behind. The Google rules may leave a blank space where the block was. A search engine can rename any of these, and a rule that stops matching fails silently, so repeat the checklist below after a Chrome or site change.
+"Checked" means this: with the live results page open, the selector's rule was added to it as CSS (`display: none`), and the AI block went away with no gap left behind. The extension's own path, where the service worker inserts the hiding CSS once the switch is on, has never run against a real engine. The owner checklist below is the real end-to-end test. The Google rules may leave a blank space where the block was. A search engine can rename any of these, and a rule that stops matching fails silently, so repeat the checklist after a Chrome or site change.
 
 ### Owner checklist: AI search summaries
 
 - [ ] With "AI search summaries" on (menu or settings page), search "how do magnets work" on Google, Bing, DuckDuckGo and Brave Search, and check that no AI summary shows on any of them.
+- [ ] Search a second question on all four, for example "why is the sky blue": Bing showed no AI block for four questions on the day the rules were written, so one question is not enough.
+- [ ] With the switch still on, check that ordinary results, links and the search box still show on all four. The Google and Bing rules were never seen on a real page, so your eyes are the only check that they hide nothing else.
 - [ ] Turn it off, reload each page, and check that the summary shows again.
 
 An engine shows a summary only for some questions, signed in or out, and in some regions. If a summary does not show with the switch off, the engine did not make one for you: try another question before you blame a rule. On Google and Bing, say which engine showed nothing, so the rule can be fixed against a real page.
@@ -166,3 +168,5 @@ Filter lists, compiled into `dist/rules`, `dist/cosmetic` and `dist/sources`:
 | Fanboy's Annoyance List | https://secure.fanboy.co.nz/fanboy-annoyance.txt | CC BY 3.0 (list header) |
 | EasyList Cookie List | https://secure.fanboy.co.nz/fanboy-cookiemonster.txt | CC BY 3.0 (list header) |
 | ABP filters (anti-circumvention) | https://easylist-downloads.adblockplus.org/abp-filters-anti-cv.txt | GPL-3.0 (no licence in the list header; the project's README at https://gitlab.com/eyeo/anti-cv/abp-filters-anti-cv says GPLv3) |
+| Stevo's AI Blocklist | https://raw.githubusercontent.com/Stevoisiak/Stevos-AI-Blocklist/main/GenAI-Blocklist.txt (not downloaded by the build; seven of its rules are copied into `filters/ai-summaries.txt`) | MIT, "Copyright (c) 2026 Stevoisiak" (the repository's `LICENSE.txt`, fetched 2026-11-08; the repository is https://github.com/Stevoisiak/Stevos-AI-Blocklist) |
+| `filters/ai-summaries.txt` | this repository, the `ai` feature | Seven rules from Stevo's AI Blocklist under its MIT licence (row above); one rule, `bing.com###b_genserp_container`, is Sieve's own |
