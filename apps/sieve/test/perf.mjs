@@ -1,11 +1,11 @@
 // Anti-goal 1, browsing does not slow down: with dist/ against no extension in fresh profiles, local DCL at most +20 ms and cold load within 1.10x on 4 of 5 real sites.
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const PLAYWRIGHT = process.env.PLAYWRIGHT_CORE ?? join(homedir(), 'Documents/browser-automation/node_modules/playwright-core/index.mjs');
 const CHROMIUM = process.env.CHROMIUM_PATH ?? join(homedir(), 'Library/Caches/ms-playwright/chromium-1228/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
@@ -15,17 +15,23 @@ const BUILD_HINT = `run \`pnpm --filter sieve build\` and check that ${EXT} has 
 const num = (key, fallback) => {
   const v = process.env[key];
   const n = v === undefined || v === '' ? fallback : Number(v);
-  if (!Number.isFinite(n) || n < 0) throw new Error(`${key} must be a number of 0 or more, got "${v}"`);
+  if (!Number.isFinite(n) || n < 0) throw setupError(`${key} must be a number of 0 or more, got "${v}"`);
   return n;
 };
-const LOCAL_RUNS = num('LOCAL_RUNS', 20);
-const SITE_RUNS = num('SITE_RUNS', 5);
-const LOAD_MS = num('LOAD_TIMEOUT_MS', 60_000);
-const TOTAL_MS = num('TOTAL_TIMEOUT_MS', 30 * 60_000);
-const SETTLE_MS = num('SETTLE_MS', 1000);
-const SITES = process.env.SITES !== undefined
-  ? process.env.SITES.split(',').map((s) => s.trim()).filter(Boolean)
-  : ['https://www.theguardian.com/', 'https://www.dawn.com/', 'https://edition.cnn.com/', 'https://www.weather.com/', 'https://www.bbc.com/news'];
+let LOCAL_RUNS = 20;
+let SITE_RUNS = 5;
+let LOAD_MS = 60_000;
+let TOTAL_MS = 30 * 60_000;
+let SETTLE_MS = 1000;
+let SITES = ['https://www.theguardian.com/', 'https://www.dawn.com/', 'https://edition.cnn.com/', 'https://www.weather.com/', 'https://www.bbc.com/news'];
+function readEnv() {
+  LOCAL_RUNS = num('LOCAL_RUNS', LOCAL_RUNS);
+  SITE_RUNS = num('SITE_RUNS', SITE_RUNS);
+  LOAD_MS = num('LOAD_TIMEOUT_MS', LOAD_MS);
+  TOTAL_MS = num('TOTAL_TIMEOUT_MS', TOTAL_MS);
+  SETTLE_MS = num('SETTLE_MS', SETTLE_MS);
+  if (process.env.SITES !== undefined) SITES = process.env.SITES.split(',').map((s) => s.trim()).filter(Boolean);
+}
 const DCL_LIMIT_MS = 20;
 const LOAD_RATIO = 1.1;
 // shortcut: the last two host labels, so a redirect to another registrable domain is caught; wrong for co.uk-style hosts, fine for the default sites.
@@ -157,11 +163,11 @@ function localPart(a, b) {
   return { pass, line: `Local page: median DCL ${diff >= 0 ? '+' : ''}${diff.toFixed(1)} ms with the extension (limit +${DCL_LIMIT_MS} ms): ${pass ? 'PASS' : 'FAIL'}` };
 }
 
-// rows: [{ label, w, wo }], the runs with and without the extension. A side needs at least half its loads to count; the extension side may not lose loads the other side kept.
+// rows: [{ label, w, wo }], the runs with and without the extension. A side needs at least half the loads attempted (a site dropped after 2 rounds counts 2, not SITE_RUNS) to count; the extension side may not lose loads the other side kept.
 export function judge(rows, runs = SITE_RUNS) {
-  const min = Math.max(1, Math.ceil(runs / 2));
   const need = Math.ceil((rows.length * 4) / 5);
   const sites = rows.map(({ label, w, wo }) => {
+    const min = Math.max(1, Math.ceil(Math.min(runs, w.length, wo.length) / 2));
     const gw = ok(w).length;
     const gwo = ok(wo).length;
     if (gwo >= min && gw < gwo) return { label, status: 'lost', result: `fail: extension side lost loads (${gw} of ${w.length}; ${gwo} of ${wo.length} without)`, withWhy: reasons(w) };
@@ -174,10 +180,11 @@ export function judge(rows, runs = SITE_RUNS) {
   const passed = count('pass');
   const pass = passed >= need && !count('lost');
   const hints = [];
-  if (!pass && count('lost')) hints.push(`the extension side lost loads on ${sites.filter((s) => s.status === 'lost').map((s) => s.label).join(', ')}: reproduce with HEADLESS=0 SITES=<url> and open the page by hand`);
+  if (!pass && count('lost')) hints.push(`the extension side lost loads on ${sites.filter((s) => s.status === 'lost').map((s) => s.label).join(', ')}: a lost-load FAIL is re-run once, and the same site failing again with the extension means a real break (reproduce with HEADLESS=0 SITES=<url> and open the page by hand)`);
   if (!pass && count('excluded')) hints.push('the result column says why; re-run, try HEADLESS=0, or replace a site with SITES=...');
-  const extra = `${count('excluded') ? `; ${count('excluded')} excluded, which cannot count as a pass` : ''}${count('lost') ? `; ${count('lost')} lost loads with the extension` : ''}`;
-  return { sites, passed, need, pass, hint: hints.join('; '), line: `Real sites: ${passed} of ${rows.length} within ${LOAD_RATIO.toFixed(2)}x load time (need ${need}${extra}): ${pass ? 'PASS' : 'FAIL'}` };
+  const sitesWord = (n) => `${n} ${n === 1 ? 'site' : 'sites'}`;
+  const extra = `${count('excluded') ? `; ${sitesWord(count('excluded'))} excluded (an excluded site cannot count as a pass)` : ''}${count('lost') ? `, but ${sitesWord(count('lost'))} lost loads with the extension, and a run with a lost-load site always fails` : ''}`;
+  return { sites, passed, need, pass, hint: hints.join('; '), line: `Real sites: ${passed} of ${rows.length} within ${LOAD_RATIO.toFixed(2)}x load time (need ${need})${extra}: ${pass ? 'PASS' : 'FAIL'}` };
 }
 
 function sitesPart(rows) {
@@ -217,6 +224,18 @@ function selfCheck() {
   assert.equal(status(five(site('a', runs(5, 0, 100), runs(5, 3, 100)))).sites[0].status, 'excluded', 'only the without side failed: excluded');
   assert.equal(status(five(site('a', runs(5, 0, 100), runs(5, 3, 100)))).hint, '', 'passing run needs no hint');
   assert.match(status(five(site('a', runs(2, 2, 100), runs(2, 2, 100)), site('b', runs(2, 2, 100), runs(2, 2, 100)))).hint, /replace a site with SITES/, 'excluded sites in a failing run say what to do');
+  const dropped = status(five(site('a', runs(2, 2, 100), runs(2, 0, 100))));
+  assert.equal(dropped.sites[0].status, 'lost', 'a site dropped after 2 rounds where the extension side lost both loads and the other kept both is lost, not excluded');
+  assert.equal(dropped.pass, false, 'that run fails even though 4 sites pass');
+  assert.match(dropped.hint, /re-run once/, 'a lost site says to re-run once');
+  assert.match(dropped.line, /1 site lost loads with the extension, and a run with a lost-load site always fails: FAIL$/, 'the lost-site line reads as one sentence');
+  assert.equal(status(five(site('a', runs(2, 1, 100), runs(2, 0, 100)))).sites[0].status, 'lost', 'dropped site: 1 of 2 with against 2 of 2 without is lost');
+  assert.equal(status(five(site('a', runs(2, 0, 150), runs(2, 0, 100)))).sites[0].status, 'slower', 'dropped site with both loads good is judged on its ratio, not excluded');
+  const both = status(five(site('a', runs(2, 2, 100), runs(2, 2, 100))));
+  assert.equal(both.sites[0].status, 'excluded', 'a site dropped after 2 rounds with no good load on either side is excluded');
+  assert.equal(both.pass, true, 'one excluded site next to 4 passes is not a loss');
+  const withOk = status(five(site('a', runs(2, 0, 100), runs(2, 2, 100))));
+  assert.match(withOk.sites[0].result, /^excluded \(without: 0 of 2 loads worked/, 'only the unusable side is named');
   assert.equal(judge([site('a', runs(1, 0, 100), runs(1, 0, 100))], 1).pass, true, 'SITE_RUNS=1 smoke: one good load is enough, 1 site needs 1');
   assert.equal(judge([site('a', runs(1, 1, 100), runs(1, 0, 100))], 1).sites[0].status, 'lost', 'SITE_RUNS=1: losing the only load is a loss');
   assert.equal(judge([site('a', [{ ok: true, load: 100, dcl: 1, heapMb: NaN }, ...runs(4, 0, 100)], runs(5, 0, 100))], 5).sites[0].status, 'pass', 'a missing heap reading does not drop a timing');
@@ -225,6 +244,12 @@ function selfCheck() {
 
 async function main() {
   if (process.argv.includes('--self-check')) return selfCheck();
+  try {
+    readEnv();
+  } catch (e) {
+    console.log(`\nFAIL: ${e.message}`);
+    process.exit(1);
+  }
   const hard = setTimeout(async () => {
     stopped = true;
     console.error(`FAIL: the run took more than ${TOTAL_MS / 1000} s and was stopped`);
@@ -288,4 +313,11 @@ async function main() {
   process.exit(exitCode);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+const invokedDirectly = (() => {
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+})();
+if (invokedDirectly) await main();
