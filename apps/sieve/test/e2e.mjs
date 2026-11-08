@@ -1,4 +1,5 @@
 // Real Chromium with the built extension (run `pnpm --filter sieve build` first). Not part of `pnpm test`.
+import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +10,16 @@ import { SITE_HOST, UNHIDE_HOST, check, launch, results, startServers, startWork
 const RULESETS = ['ads', 'trackers', 'distraction', 'cookies', 'antiadblock'];
 const ALLOW_ID = 1_000_000;
 const servers = await startServers();
+// A built rule that only changes headers on one whole host: its matches must not be counted as blocked ads.
+const headerRule = ['antiadblock', 'ads', 'trackers'].flatMap((ruleset) => {
+  try {
+    return JSON.parse(readFileSync(new URL(`../dist/rules/${ruleset}.json`, import.meta.url), 'utf8'))
+      .filter((r) => r.action.type === 'modifyHeaders' && /^\|\|[a-z0-9.-]+\^$/.test(r.condition.urlFilter ?? '') && Object.keys(r.condition).length === 2 && r.condition.resourceTypes.includes('script') && r.condition.resourceTypes.includes('main_frame'))
+      .map((r) => ({ ruleset, id: r.id, host: r.condition.urlFilter.slice(2, -1) }));
+  } catch {
+    return [];
+  }
+})[0];
 const ADS = `https://localhost:${servers.httpsPort}/ads.html`;
 const ADS_IP = `https://127.0.0.1:${servers.httpsPort}/ads.html`;
 const errors = [];
@@ -65,7 +76,7 @@ const setBlocking = (sw, blocking) =>
 const ids = (s) => s.scripts.map((r) => r.id).sort();
 
 try {
-  const { ctx, sw, id } = await launch();
+  const { ctx, sw, id } = await launch({ extraHosts: headerRule ? [headerRule.host] : [] });
   check('the service worker starts', sw && /^[a-p]{32}$/.test(id), id);
 
   const meta = await sw.evaluate(() => fetch(chrome.runtime.getURL('meta.json')).then((r) => r.json()));
@@ -407,6 +418,31 @@ try {
   const listsOn = (st) => st.enabled.join() === [...RULESETS].sort().join();
   const hasAllowRule = (on) => settle(sw4, (st) => st.dynamic.some((r) => r.id === ALLOW_ID) === on);
 
+  const held = await toggled('Distraction control').elementHandle();
+  await sw4.evaluate((k) => chrome.storage.session.set({ [k]: { ads: 9, trackers: 4 } }), `counts:${countedId}`);
+  await m.pop.getByText('9 ads and 4 trackers blocked on this page').waitFor();
+  const stillThere = await held.evaluate((el) => el.isConnected);
+  await held.click({ timeout: 3000 }).catch(() => {});
+  const dropped = await until(async () => (await blockingOf(sw4)).lists.distraction, (v) => v === false);
+  check('a count change updates the number in place: the switch the owner is about to click stays in the page and still works', stillThere && dropped === false, json({ stillThere, dropped }));
+  await toggled('Distraction control').setChecked(true);
+  await until(async () => (await blockingOf(sw4)).lists.distraction, (v) => v === true);
+  await sw4.evaluate((k) => chrome.storage.session.set({ [k]: { ads: 3, trackers: 2 } }), `counts:${countedId}`);
+
+  const clickBoth = () =>
+    m.pop.evaluate(() => {
+      for (const key of ['distraction', 'cookies']) document.querySelector(`[data-id="${key}"]`).click();
+    });
+  const pair = async () => {
+    const { lists } = await blockingOf(sw4);
+    return `${lists.distraction},${lists.cookies}`;
+  };
+  await clickBoth();
+  const both = await until(pair, (v) => v === 'false,false');
+  await clickBoth();
+  const back = await until(pair, (v) => v === 'true,true');
+  check('two switches changed at the same moment are both saved', both === 'false,false' && back === 'true,true', json({ both, back }));
+
   await toggled('Block on this site').uncheck();
   let list = await allowlistIs([{ kind: 'site', host: 'localhost' }]);
   check('turning off "Block on this site" allowlists the tab host', same(list, [{ kind: 'site', host: 'localhost' }]), json(list));
@@ -444,6 +480,38 @@ try {
   await www.pop.close();
   await wwwPage.close();
 
+  const built = await sw4.evaluate(async () => {
+    const meta = await fetch(chrome.runtime.getURL('meta.json')).then((r) => r.json());
+    const out = {};
+    for (const [f, v] of Object.entries(meta.features)) {
+      if (!v.ruleset) continue;
+      const rules = await fetch(chrome.runtime.getURL(`rules/${v.ruleset}.json`)).then((r) => r.json());
+      out[f] = [rules.filter((r) => r.action.type === 'modifyHeaders').map((r) => r.id).join(), (v.modifyIds ?? []).join()];
+    }
+    return out;
+  });
+  const headerRules = Object.values(built).reduce((n, [ids]) => n + (ids ? ids.split(',').length : 0), 0);
+  check(`meta.json lists, for each list, the ids of its rules that only change headers (${headerRules} in all)`, headerRules > 0 && Object.values(built).every(([want, got]) => want === got), json(built));
+  check('the built lists have a header-only rule on one whole host to test with', headerRule !== undefined);
+  if (headerRule) {
+    const headerUrl = `https://${headerRule.host}:${servers.httpsPort}/counts.html`;
+    const headerPage = await ctx.newPage();
+    await headerPage.goto(headerUrl, { waitUntil: 'load' });
+    const headerId = await tabFor(sw4, headerUrl);
+    const headerBadge = await until(() => badgeOf(sw4, headerId), (t) => t === '5');
+    await sleep(500);
+    const matched = await sw4.evaluate((t) => chrome.declarativeNetRequest.getMatchedRules({ tabId: t }).then((r) => r.rulesMatchedInfo.map((i) => `${i.rule.rulesetId}:${i.rule.ruleId}`)), headerId);
+    const header = await menu(headerId);
+    const headerText = await header.countsText();
+    check(
+      `on ${headerRule.host}, where a rule only changes headers on every request, those matches are not counted: still ${SENTENCE}`,
+      matched.includes(`${headerRule.ruleset}:${headerRule.id}`) && headerText === SENTENCE && (await badgeOf(sw4, headerId)) === '5',
+      json({ headerBadge, headerText, matched: matched.length }),
+    );
+    await header.pop.close();
+    await headerPage.close();
+  }
+
   const flips = [
     ['Distraction control', (b) => b.lists.distraction, true],
     ['Cookie banners', (b) => b.lists.cookies, true],
@@ -470,6 +538,7 @@ try {
   await m.pop.getByRole('switch', { name: 'Sieve on' }).check();
   s = await settle(sw4, listsOn);
 
+  await sleep(300); // an apply still finishing would clear the error just set
   await sw4.evaluate(() => chrome.storage.session.set({ blockingError: { message: 'Chrome refused a rule', at: Date.now() } }));
   await m.pop.getByRole('alert').waitFor();
   const banner = await m.pop.getByRole('alert').innerText();

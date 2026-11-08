@@ -6,6 +6,7 @@
   "description": "Sieve for Chrome (Manifest V3): blocks ads, trackers and annoyances with compiled filter lists",
   "scripts": {
     "build": "node build.mjs",
+    "test": "node --test src/__tests__/counts.test.ts",
     "test:e2e": "node test/e2e.mjs",
     "typecheck": "tsc --noEmit"
   },

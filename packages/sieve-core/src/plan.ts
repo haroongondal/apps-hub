@@ -6,7 +6,7 @@ import { FEATURES, type FeatureKey, type Settings } from './settings.ts';
 export interface BuildMeta {
   builtAt: string;
   maxPriority: number;
-  features: Record<FeatureKey, { ruleset: string | null; ruleCount: number; hasGenericCss: boolean; genericExcept: string[]; allowIds: number[] }>;
+  features: Record<FeatureKey, { ruleset: string | null; ruleCount: number; hasGenericCss: boolean; genericExcept: string[]; allowIds: number[]; modifyIds: number[] }>;
   scriptlets: string[];
 }
 

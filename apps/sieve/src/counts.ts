@@ -3,7 +3,13 @@ import { DYNAMIC_RULESET, classifyMatch, countsKey, type Counts } from '@apps-hu
 import type { BuildMeta } from '@apps-hub/sieve-core/src/plan.ts';
 
 let meta: Promise<BuildMeta> | undefined;
-const loadMeta = () => (meta ??= fetch(chrome.runtime.getURL('meta.json')).then((r) => r.json() as Promise<BuildMeta>));
+const loadMeta = () =>
+  (meta ??= fetch(chrome.runtime.getURL('meta.json'))
+    .then((r) => r.json() as Promise<BuildMeta>)
+    .catch((e) => {
+      meta = undefined;
+      throw e;
+    }));
 
 // One queue for every write: events arrive in bursts, and two read-modify-writes at once would lose a count.
 let queue: Promise<unknown> = Promise.resolve();
@@ -36,8 +42,9 @@ export function onMatched({ request, rule }: chrome.declarativeNetRequest.Matche
     const counts: Counts = { ads: 0, trackers: 0, ...((await chrome.storage.session.get(key))[key] as Partial<Counts> | undefined) };
     if (kind === 'ad') counts.ads++;
     else counts.trackers++;
-    await chrome.storage.session.set({ [key]: counts });
+    // Badge first: a tab that closed meanwhile fails here, so it leaves no counts entry behind.
     await chrome.action.setBadgeText({ tabId, text: badgeText(counts.ads + counts.trackers) });
+    await chrome.storage.session.set({ [key]: counts });
   });
 }
 

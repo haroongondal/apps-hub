@@ -115,7 +115,7 @@ for (const feature of FEATURES) {
 
   for (const calls of Object.values(cosmetic.scriptlets)) for (const call of calls) usedScriptlets.add(call.name);
   meta.maxPriority = Math.max(meta.maxPriority, compiled.maxPriority);
-  meta.features[feature] = { ruleset, ruleCount: compiled.rules.length, hasGenericCss: genericCss.length > 0, genericExcept: [...genericExcept], allowIds: compiled.allowIds };
+  meta.features[feature] = { ruleset, ruleCount: compiled.rules.length, hasGenericCss: genericCss.length > 0, genericExcept: [...genericExcept], allowIds: compiled.allowIds, modifyIds: compiled.modifyIds };
   const hosts = new Set([cosmetic.hide, cosmetic.unhide, cosmetic.scriptlets, cosmetic.scriptletExcept].flatMap(Object.keys).concat(cosmetic.generichide, cosmetic.elemhide));
   hosts.delete('*');
   const regex = compiled.rules.filter((r) => r.condition.regexFilter).length;

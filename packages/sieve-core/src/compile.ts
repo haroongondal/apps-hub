@@ -54,6 +54,7 @@ export interface CompiledList {
   rules: DnrRule[];
   sources: Record<number, string>;
   allowIds: number[];
+  modifyIds: number[];
   cosmetic: CosmeticSet;
   maxPriority: number;
   dropped: Record<string, number>;
@@ -111,7 +112,7 @@ const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const siteKey = (domain: string) => (NON_ASCII.test(domain) ? new URL(`http://${domain}`).hostname : domain.toLowerCase());
 
 export async function compileFilters(text: string, opts: CompileOptions): Promise<CompiledList> {
-  const out: CompiledList = { rules: [], sources: {}, allowIds: [], cosmetic: emptyCosmetic(), maxPriority: 0, dropped: {}, errors: [] };
+  const out: CompiledList = { rules: [], sources: {}, allowIds: [], modifyIds: [], cosmetic: emptyCosmetic(), maxPriority: 0, dropped: {}, errors: [] };
   const drop = (reason: string, count = 1) => (out.dropped[reason] = (out.dropped[reason] ?? 0) + count);
   const network: { line: number; text: string }[] = [];
 
@@ -166,6 +167,7 @@ async function convertNetwork(
       out.rules.push({ ...rule, id } as DnrRule);
       out.sources[id] = (await result.ruleset.getRulesById(rule.id)).map((s) => s.sourceRule).join('\n');
       if (rule.action.type === 'allow' || rule.action.type === 'allowAllRequests') out.allowIds.push(id);
+      if (rule.action.type === 'modifyHeaders') out.modifyIds.push(id);
       out.maxPriority = Math.max(out.maxPriority, rule.priority ?? 1);
     }
     for (const e of result.errors) {

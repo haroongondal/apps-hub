@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { ALLOW_FIRST_ID, DEFAULT_SETTINGS, blockingPlan, validateSettings, type BuildMeta, type DnrRule, type Settings } from '../index.ts';
 
 const WEB = ['http://*/*', 'https://*/*'];
-const feature = (ruleset: string | null, hasGenericCss: boolean, genericExcept: string[] = []) => ({ ruleset, ruleCount: ruleset ? 10 : 0, hasGenericCss, genericExcept, allowIds: [] });
+const feature = (ruleset: string | null, hasGenericCss: boolean, genericExcept: string[] = []) => ({ ruleset, ruleCount: ruleset ? 10 : 0, hasGenericCss, genericExcept, allowIds: [], modifyIds: [] });
 const meta: BuildMeta = {
   builtAt: '2026-11-06T00:00:00.000Z',
   maxPriority: 1000301,

@@ -2,17 +2,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { classifyMatch, countsKey, type BuildMeta } from '../index.ts';
 
-const feature = (ruleset: string | null, allowIds: number[] = []) => ({ ruleset, ruleCount: 10, hasGenericCss: false, genericExcept: [], allowIds });
-// Rule ids restart at 1 in every list, so id 7 is an allow rule in `ads` and a block rule in `trackers`.
+const feature = (ruleset: string | null, allowIds: number[] = [], modifyIds: number[] = []) => ({ ruleset, ruleCount: 10, hasGenericCss: false, genericExcept: [], allowIds, modifyIds });
+// Rule ids restart at 1 in every list, so id 7 is an allow rule in `ads` and a block rule in `trackers`, and id 5 changes headers only in `antiadblock`.
 const meta: BuildMeta = {
   builtAt: '2026-11-06T00:00:00.000Z',
   maxPriority: 10,
   features: {
     ads: feature('ads', [7, 8]),
-    trackers: feature('trackers'),
+    trackers: feature('trackers', [], [9]),
     distraction: feature('distraction'),
     cookies: feature('cookies'),
-    antiadblock: feature('antiadblock'),
+    antiadblock: feature('antiadblock', [], [5]),
     ai: feature(null),
   },
   scriptlets: [],
@@ -28,6 +28,15 @@ test('a list rule is an ad, except in the trackers list', () => {
 test('an allow rule of a list is not counted, but the same id in another list is', () => {
   assert.equal(classifyMatch('ads', 7, meta, none), null);
   assert.equal(classifyMatch('trackers', 7, meta, none), 'tracker');
+});
+
+test('a rule that only changes response headers is not counted, but the same id in another list is', () => {
+  assert.equal(classifyMatch('antiadblock', 5, meta, none), null);
+  assert.equal(classifyMatch('ads', 5, meta, none), 'ad');
+  assert.equal(classifyMatch('trackers', 9, meta, none), null);
+  assert.equal(classifyMatch('ads', 9, meta, none), 'ad');
+  assert.equal(classifyMatch('trackers', 5, meta, none), 'tracker');
+  assert.equal(classifyMatch('_dynamic', 5, meta, none), 'ad');
 });
 
 test('a dynamic rule is not counted when it is an allow rule, and is an ad otherwise (a My filters block rule)', () => {

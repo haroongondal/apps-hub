@@ -16,6 +16,15 @@ test('network filters become DNR rules numbered from firstId', async () => {
   assert.deepEqual(out.errors, []);
 });
 
+test('a rule that only changes response headers is listed in modifyIds, and a block or allow rule is not', async () => {
+  const out = await compileFilters("||ads.example^\n||csp.example^$csp=script-src-attr 'none'\n@@||ads.example/ok^", { firstId: 1 });
+  const idsOf = (type: string) => out.rules.filter((r) => r.action.type === type).map((r) => r.id);
+  assert.equal(idsOf('modifyHeaders').length, 1);
+  assert.deepEqual(out.modifyIds, idsOf('modifyHeaders'));
+  assert.deepEqual(out.allowIds, idsOf('allow'));
+  assert.equal(out.rules.length, 3);
+});
+
 test('element hiding fills generic, hide and unhide, with no DNR rules', async () => {
   const out = await compileFilters('##.banner\nexample.com##.promo\nexample.com#@#.banner', { firstId: 1 });
   assert.deepEqual(out.cosmetic.generic, ['.banner']);
