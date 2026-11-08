@@ -1432,6 +1432,13 @@ try {
     await yt.goto(WATCH, { waitUntil: 'load' });
     return probeIn(yt.mainFrame());
   };
+  // The anti-adblock list's own json-prune scriptlet for www.youtube.com wraps JSON.parse and Response.json again, injected by the worker
+  // after the commit, so it lands after yt-main.js at a time that races the probe. This waits for it (5 s at most: a list may drop the rule).
+  const watchLayered = async () => {
+    await yt.goto(WATCH, { waitUntil: 'load' });
+    const layered = await yt.waitForFunction(() => JSON.parse.name === 'jsonParseWrapper', null, { timeout: 5000 }).then(() => true, () => false);
+    return { layered, ...(await probeIn(yt.mainFrame())) };
+  };
   const writeSettings = (top, blocking) =>
     pw.evaluate(
       ([t, b]) =>
@@ -1442,14 +1449,30 @@ try {
       [top, blocking],
     );
   const ytBefore = await blockingOf(pw);
-  let yr = await watchYt();
+  let yr = await watchLayered();
   check(
     'on a YouTube watch page, ytInitialPlayerResponse, JSON.parse, Response.json and a [{page}, {playerResponse}] array give the player response without its ad fields, video and stream data unchanged',
     ytBefore.youtubeAllowedChannels.length === 0 && same(adsIn(yr), [0, 0, 0, 0]) && yr.nativeKeys.includes('adPlacements') && yr.sameData && yr.wrapped,
     json({ ads: adsIn(yr), sameData: yr.sameData, wrapped: yr.wrapped, settings: (await pw.evaluate(() => chrome.storage.local.get('settings'))).settings }),
   );
   check(
-    "JSON.parse and Response.json act as the browser's own: same name, length, toString text (and toString's own), no own keys, no prototype, `new` throws TypeError, the same SyntaxError for bad JSON and TypeError for a wrong this, a reviver runs, a short array loses its ad fields and other values pass through",
+    `with the anti-adblock list's json-prune scriptlet wrapping them too (it landed: ${yr.layered}), JSON.parse and Response.json still drop the ad fields, throw the browser's SyntaxError for bad JSON and TypeError for a wrong this, and run a reviver`,
+    same(adsIn(yr), [0, 0, 0, 0]) &&
+      yr.badParse?.[0] === 'SyntaxError' &&
+      same(yr.badParse, yr.nativeBadParse) &&
+      same(yr.badJson, yr.nativeBadJson) &&
+      yr.wrongThis?.[0] === 'TypeError' &&
+      same(yr.wrongThis, yr.nativeWrongThis) &&
+      same(yr.reviver, { a: 10, b: [20] }),
+    JSON.stringify({ layered: yr.layered, shape: yr.shape, ads: adsIn(yr), bad: [yr.badParse, yr.nativeBadParse, yr.badJson, yr.nativeBadJson], wrongThis: [yr.wrongThis, yr.nativeWrongThis], reviver: yr.reviver }),
+  );
+
+  // Sieve's own wrappers alone: with the anti-adblock list off its scriptlet is not injected (the Ads list keeps yt-main.js stripping).
+  await writeSettings({}, { lists: { ...ytBefore.lists, antiadblock: false } });
+  await settle(pw, (st) => !st.enabled.includes('antiadblock'));
+  yr = await watchYt();
+  check(
+    "with the anti-adblock list off, JSON.parse and Response.json act as the browser's own: same name, length, toString text (and toString's own), no own keys, no prototype, `new` throws TypeError, the same SyntaxError for bad JSON and TypeError for a wrong this, a reviver runs, a short array loses its ad fields and other values pass through",
     same(yr.shape, yr.nativeShape) &&
       same(yr.shape, [['parse', 2, false], ['json', 0, false]]) &&
       same(yr.text, yr.nativeText) &&
@@ -1465,6 +1488,8 @@ try {
       same(yr.plain, [5, 'x', null, [1, {}], [1, 2, 3, 4, 5, { adSlots: 1 }]]),
     JSON.stringify({ shape: [yr.shape, yr.nativeShape], text: [yr.text, yr.nativeText], construct: [yr.construct, yr.nativeConstruct], bad: [yr.badParse, yr.nativeBadParse, yr.badJson, yr.nativeBadJson], wrongThis: [yr.wrongThis, yr.nativeWrongThis], reviver: yr.reviver, plain: yr.plain }),
   );
+  await writeSettings({}, { lists: ytBefore.lists });
+  await settle(pw, (st) => st.enabled.includes('antiadblock'));
 
   await yt.evaluate((real) => {
     const v = 'dQw4w9WgXcQ';
