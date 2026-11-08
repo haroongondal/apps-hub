@@ -80,8 +80,8 @@ My calls this session, recorded in the plan:
   - The converter stays out of the worker bundle. Only the settings page compiles My filters.
 - **Distraction list:** Fanboy's Annoyance list with its `easylist_cookie_*` sections stripped
   (the list is a concatenation with `! <file>.txt` section headers).
-- **Brand:** `sieve`, hue 186, accent dark `#22D3EE` and light `#0E7490`. Not yet run through
-  the WCAG test.
+- **Brand:** `sieve`, hue 186, accent dark `#22D3EE` and light `#0E7490`. Passes the
+  WCAG test in light and dark (checked 2026-11-08).
 - **Chrome types:** `@types/chrome` (MIT, types only) instead of hand-typing the large API surface.
 
 ## Verified facts
@@ -251,6 +251,18 @@ Run 2026-11-08 with `pnpm --filter sieve test:e2e -- --live` (`apps/sieve/test/y
 
 - **Reading: inconclusive about ad removal.** YouTube still plays with Sieve on, but the Sieve-off control also showed no ad, so this profile was served no pre-roll at all and the run cannot show that ads are removed. The local fixture e2e (an inline `ytInitialPlayerResponse`, `JSON.parse` and `Response.json`, all stripped; videoDetails and streamingData unchanged) is the evidence for the stripping, not the live run. The task review asked for an honest "inconclusive" label and an extension-free control in `yt-live.mjs` (fix round 1).
 - Still unchecked: removal while an ad is actually served; m.youtube.com and music.youtube.com live; signed-in (Task 0.6).
+
+Task 1.11 fix round 1 (`5f2cabd`), same setup with an extension-free control first (`yt-live.mjs`):
+
+| Video | Without Sieve | With Sieve | Result |
+|---|---|---|---|
+| `dQw4w9WgXcQ` | no ad, played to 29 s | no ad, played to 30 s | inconclusive (no ad was served) |
+| `kJQP7kiw5Fk` | an ad showed, played to 15 s | no ad, played to 6 s | removal check passed, but see the stall below |
+| `9bZkp7q19f0` | no ad, played to 29 s | no ad, played to 26 s | inconclusive |
+
+- With Sieve off afterwards, `kJQP7kiw5Fk` showed no ad and played to 30 s. The 6 s figure is the anti-goal-4 concern ("YouTube must not feel janky").
+- **Measured afterwards** (`docs/handoffs/sieve-yt-measurement.md`: 48 fresh-profile runs on that video, with no extension, Sieve on, stripping only and network rules only; plus 25 follow-up runs): Sieve does not hold back playback. Medians of `currentTime` at 30 s were 26.5, 26.0, 26.0 and 26.05 s, every difference under 1 s and inside the noise; neither component alone shows a cost. The earlier 6 s has two candidate explanations the data cannot separate: a network drop (one run window was a network outage) or a self-pause of the player (one unexplained self-pause at 5.5 s in a network-rules-only run, which `yt-live.mjs` would report as exactly "6 s").
+- **YouTube served no ad in any of the 15 no-extension measurement runs** (although every response contained `adPlacements`), so the measurement says nothing about the cost or the success of removing an ad. Removal was seen working once (the `kJQP7kiw5Fk` row above).
 
 ## File map
 
