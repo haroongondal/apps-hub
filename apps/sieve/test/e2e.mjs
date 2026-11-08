@@ -1361,10 +1361,10 @@ try {
   await opt.close();
 
   // YouTube ad removal. www.youtube.com is mapped to the local server, whose /watch page holds the spike's player response inline.
-  const WATCH = `https://www.youtube.com:${servers.httpsPort}/watch?v=test`;
+  const WATCH = `https://www.youtube.com:${servers.httpsPort}/watch?v=dQw4w9WgXcQ`;
   const RICK = { id: 'UCuAXFkgsw1L7xaCfnd5JJOw', name: 'Rick Astley' };
   const AD_FIELDS = ['adPlacements', 'adSlots', 'playerAds', 'adBreakHeartbeatParams'];
-  const adsIn = (r) => [r.keys, r.parsed, r.fetched].map((keys) => keys.filter((k) => AD_FIELDS.includes(k)).length);
+  const adsIn = (r) => [r.keys, r.parsed, r.fetched, r.arrayed].map((keys) => keys.filter((k) => AD_FIELDS.includes(k)).length);
   const adsKept = (r) => adsIn(r).every((n) => n === r.nativeKeys.filter((k) => AD_FIELDS.includes(k)).length && n > 0);
   const ytProblems = [];
   const probeIn = async (frame) => {
@@ -1389,34 +1389,42 @@ try {
   const ytBefore = await blockingOf(pw);
   let yr = await watchYt();
   check(
-    'on a YouTube watch page, ytInitialPlayerResponse, JSON.parse and Response.json give the player response without its ad fields, video and stream data unchanged',
-    ytBefore.youtubeAllowedChannels.length === 0 && same(adsIn(yr), [0, 0, 0]) && yr.nativeKeys.includes('adPlacements') && yr.sameData && yr.wrapped,
-    json({ keys: yr.keys, parsed: yr.parsed, fetched: yr.fetched, sameData: yr.sameData, wrapped: yr.wrapped }),
+    'on a YouTube watch page, ytInitialPlayerResponse, JSON.parse, Response.json and a [{page}, {playerResponse}] array give the player response without its ad fields, video and stream data unchanged',
+    ytBefore.youtubeAllowedChannels.length === 0 && same(adsIn(yr), [0, 0, 0, 0]) && yr.nativeKeys.includes('adPlacements') && yr.sameData && yr.wrapped,
+    json({ ads: adsIn(yr), sameData: yr.sameData, wrapped: yr.wrapped, settings: (await pw.evaluate(() => chrome.storage.local.get('settings'))).settings }),
   );
   check(
-    "for other JSON, JSON.parse and Response.json act as the browser's own: the same SyntaxError for bad JSON, the same TypeError for a wrong this, a reviver runs, other values pass through",
-    yr.badParse?.[0] === 'SyntaxError' &&
+    "JSON.parse and Response.json act as the browser's own: same name, length, no prototype, `new` throws TypeError, the same SyntaxError for bad JSON and TypeError for a wrong this, a reviver runs, a short array loses its ad fields and other values pass through",
+    same(yr.shape, yr.nativeShape) &&
+      same(yr.shape, [['parse', 2, false], ['json', 0, false]]) &&
+      same(yr.construct, yr.nativeConstruct) &&
+      same(yr.construct, ['TypeError', 'TypeError']) &&
+      yr.badParse?.[0] === 'SyntaxError' &&
       same(yr.badParse, yr.nativeBadParse) &&
       same(yr.badJson, yr.nativeBadJson) &&
       yr.wrongThis?.[0] === 'TypeError' &&
       same(yr.wrongThis, yr.nativeWrongThis) &&
       same(yr.reviver, { a: 10, b: [20] }) &&
-      same(yr.plain, [5, 'x', null, [1, { adSlots: 1 }]]),
-    json(yr),
+      same(yr.plain, [5, 'x', null, [1, {}], [1, 2, 3, 4, 5, { adSlots: 1 }]]),
+    JSON.stringify({ shape: [yr.shape, yr.nativeShape], construct: [yr.construct, yr.nativeConstruct], bad: [yr.badParse, yr.nativeBadParse, yr.badJson, yr.nativeBadJson], wrongThis: [yr.wrongThis, yr.nativeWrongThis], reviver: yr.reviver, plain: yr.plain }),
   );
 
   await yt.evaluate((real) => {
-    for (const detail of [null, real, { id: real, name: 7 }, { id: real }, { id: real, name: '  ' }, { id: 'UC1', name: 'Forged' }, { id: `${real}x`, name: 'Forged' }]) {
+    const v = 'dQw4w9WgXcQ';
+    for (const detail of [null, real, { id: real, name: 7, videoId: v }, { id: real, videoId: v }, { id: real, name: '  ', videoId: v }, { id: 'UC1', name: 'Forged', videoId: v }, { id: `${real}x`, name: 'Forged', videoId: v }, { id: real, name: 'Forged', videoId: `${v}x` }, { id: real, name: 'Forged' }]) {
       document.dispatchEvent(new CustomEvent('sieve-yt-channel', { detail }));
     }
+    // A hover preview: another video's player response, read after the page's own one.
+    JSON.parse(JSON.stringify({ videoDetails: { videoId: 'aaaaaaaaaaa', channelId: 'UCaaaaaaaaaaaaaaaaaaaaaa', author: 'Preview channel' }, adSlots: [1] }));
   }, RICK.id);
   const ytTab = await tabFor(pw, WATCH);
   let ytMenu = await menu(ytTab);
   let allowSwitch = ytMenu.pop.getByRole('switch', { name: `Allow ads on ${RICK.name}` });
+  const cardText = await ytMenu.pop.locator('.card').innerText();
   check(
-    'on the watch page the menu has "Allow ads on Rick Astley", off, and page events with a bad channel id or name changed nothing',
-    (await allowSwitch.count()) === 1 && !(await allowSwitch.isChecked()) && (await ytMenu.pop.getByText('Forged').count()) === 0,
-    await ytMenu.pop.locator('.card').innerText(),
+    'on the watch page the menu has "Allow ads on Rick Astley", off: a later preview of another video and page events with a bad channel id, name or video id changed nothing',
+    (await allowSwitch.count()) === 1 && !(await allowSwitch.isChecked()) && !/Forged|Preview/.test(cardText),
+    cardText,
   );
   await ytMenu.pop.screenshot({ path: join(SHOTS, 'menu-youtube.png'), fullPage: true });
   await ytMenu.pop.emulateMedia({ colorScheme: 'dark' });
@@ -1440,7 +1448,7 @@ try {
   await allowSwitch.uncheck();
   channels = await until(async () => (await blockingOf(pw)).youtubeAllowedChannels, (c) => c.length === 0);
   yr = await watchYt();
-  check('turning it off removes the channel, and the next load strips its ads again', same(channels, []) && same(adsIn(yr), [0, 0, 0]), json({ channels, ads: adsIn(yr) }));
+  check('turning it off removes the channel, and the next load strips its ads again', same(channels, []) && same(adsIn(yr), [0, 0, 0, 0]), json({ channels, ads: adsIn(yr) }));
   check('the YouTube menu logged no errors', ytMenu.problems.length === 0, json(ytMenu.problems));
   await ytMenu.pop.close();
 
@@ -1470,11 +1478,13 @@ try {
   const embedOn = await embedIn();
   await writeSettings({}, { allowlist: [{ kind: 'site', host: 'localhost' }] });
   const embedAllowed = await embedIn();
+  await writeSettings({}, { allowlist: [{ kind: 'page', url: `https://localhost:${servers.httpsPort}/` }] });
+  const embedRootPaused = await embedIn();
   await writeSettings({}, { allowlist: ytBefore.allowlist });
   check(
-    'a YouTube embed is stripped on another site, and keeps its ads on an allowlisted one (location.ancestorOrigins)',
-    same(adsIn(embedOn), [0, 0, 0]) && adsKept(embedAllowed),
-    json({ on: adsIn(embedOn), allowed: adsIn(embedAllowed) }),
+    "a YouTube embed is stripped on another site and keeps its ads on an allowlisted one; a paused page entry for that site's root, which is not the embedding page, does not reach it",
+    same(adsIn(embedOn), [0, 0, 0, 0]) && adsKept(embedAllowed) && same(adsIn(embedRootPaused), [0, 0, 0, 0]),
+    json({ on: adsIn(embedOn), allowed: adsIn(embedAllowed), rootPaused: adsIn(embedRootPaused) }),
   );
   check('the YouTube pages logged no errors', ytProblems.length === 0, json(ytProblems));
   await yt.close();

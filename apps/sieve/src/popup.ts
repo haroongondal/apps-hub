@@ -25,8 +25,11 @@ async function targetTab(): Promise<chrome.tabs.Tab | undefined> {
 const tab = await targetTab();
 const site = tabSite(tab?.url);
 const tabCounts = tab?.id === undefined ? undefined : countsKey(tab.id);
-// Only yt-relay.ts answers, and only on a YouTube watch page; elsewhere nothing receives the message.
-const channel = tab?.id === undefined || site === null ? null : ytChannel(await chrome.tabs.sendMessage(tab.id, { type: 'yt-channel' }, { frameId: 0 }).catch(() => null));
+const tabUrl = site === null ? null : new URL(site.page);
+// Only www.youtube.com: on m. and music. the anti-adblock list strips the same ads whatever the channel, so the switch would do nothing.
+const ytReply = tab?.id !== undefined && tabUrl?.hostname === 'www.youtube.com' && tabUrl.pathname === '/watch' ? await chrome.tabs.sendMessage(tab.id, { type: 'yt-channel' }, { frameId: 0 }).catch(() => null) : null;
+const ytFound = ytChannel(ytReply);
+const channel = ytFound && { id: ytFound.id, name: ytFound.name };
 let reloadHint = false;
 let pickFailed = false;
 let liveCounts: Counts | undefined;
@@ -98,7 +101,7 @@ function blockingView({ settings: s, error, counts }: State): Child[] {
         ? toggle('site', 'Block on this site', !isAllowed(page, entries.filter((e) => e.kind === 'site')), allowSite)
         : h('p', { class: 'ui-meta' }, "Sieve can't turn blocking off for this address."),
       channel !== null &&
-        youtubeAdsOn(s, [page]) &&
+        youtubeAdsOn(s, page) &&
         toggle('yt-channel', `Allow ads on ${channel.name}`, s.blocking.youtubeAllowedChannels.some((c) => c.id === channel.id), allowChannel),
       h('p', { class: 'counts' }, countsText(counts)),
       h(

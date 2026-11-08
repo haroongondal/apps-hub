@@ -35,6 +35,7 @@
           keys: Object.keys(ytInitialPlayerResponse),
           parsed: Object.keys(JSON.parse(text)),
           fetched: Object.keys(await new Response(text).json()),
+          arrayed: Object.keys(JSON.parse(`[{"page":"watch"},{"playerResponse":${text}}]`)[1].playerResponse),
           nativeKeys: Object.keys(original),
           sameData:
             JSON.stringify([ytInitialPlayerResponse.videoDetails, ytInitialPlayerResponse.streamingData]) ===
@@ -46,8 +47,12 @@
           nativeBadJson: await failure(() => viaNative(native.Response.prototype.json)(new Response('{bad'))),
           wrongThis: await failure(() => Response.prototype.json.call({})),
           nativeWrongThis: await failure(() => viaNative(native.Response.prototype.json)({})),
+          shape: [JSON.parse, Response.prototype.json].map((f) => [f.name, f.length, 'prototype' in f]),
+          nativeShape: [native.JSON.parse, native.Response.prototype.json].map((f) => [f.name, f.length, 'prototype' in f]),
+          construct: [await failure(() => new JSON.parse('1')), await failure(() => new Response.prototype.json())].map((e) => e?.[0]),
+          nativeConstruct: [await failure(() => new native.JSON.parse('1')), await failure(() => new native.Response.prototype.json())].map((e) => e?.[0]),
           reviver: JSON.parse('{"a":1,"b":[2]}', (k, v) => (typeof v === 'number' ? v * 10 : v)),
-          plain: [JSON.parse('5'), JSON.parse('"x"'), JSON.parse('null'), JSON.parse('[1,{"adSlots":1}]')],
+          plain: [JSON.parse('5'), JSON.parse('"x"'), JSON.parse('null'), JSON.parse('[1,{"adSlots":1}]'), JSON.parse('[1,2,3,4,5,{"adSlots":1}]')],
         };
       };
     </script>

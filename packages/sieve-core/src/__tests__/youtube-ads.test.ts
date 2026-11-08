@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { AD_KEYS, stripAds, validateSettings, youtubeAdsOn, ytChannel } from '../index.ts';
+import { AD_KEYS, stripAds, validateSettings, watchChannel, youtubeAdsOn, ytChannel } from '../index.ts';
 
 const TEXT = readFileSync(new URL('./fixtures/yt/player-response.json', import.meta.url), 'utf8');
 const fixture = () => JSON.parse(TEXT);
@@ -72,42 +72,94 @@ test('stripAds never throws: frozen objects, throwing getters, a response that h
   assert.equal(stripAds(deep, new Set()), false); // only the top level and its playerResponse are read
 });
 
-test('ytChannel accepts a channel id and a name, trimmed and capped at 100 characters', () => {
-  assert.deepEqual(ytChannel({ id: CHANNEL, name: '  Rick Astley ' }), { id: CHANNEL, name: 'Rick Astley' });
-  assert.deepEqual(ytChannel({ id: CHANNEL, name: 'x'.repeat(500) }), { id: CHANNEL, name: 'x'.repeat(100) });
-  assert.deepEqual(ytChannel({ id: 'UC_-abcdefghijklmnopqrst', name: 'A', extra: 1 }), { id: 'UC_-abcdefghijklmnopqrst', name: 'A' });
+test('a wrapper with no videoDetails of its own is judged by its playerResponse: an allowed channel keeps the wrapper ad fields too', () => {
+  const wrapped = { adSlots: [1], playerResponse: fixture() };
+  assert.equal(stripAds(wrapped, new Set([CHANNEL])), false);
+  assert.deepEqual(wrapped.adSlots, [1]);
+  assert.ok('adPlacements' in wrapped.playerResponse);
+  assert.equal(stripAds(wrapped, new Set()), true);
+  assert.equal('adSlots' in wrapped, false);
 });
 
-test('ytChannel refuses anything that is not a channel id with a name', () => {
+test('a short array is read element by element, with the same rules; a longer one and nested arrays are left alone', () => {
+  const page = [{ page: 'watch' }, { playerResponse: fixture() }];
+  assert.equal(stripAds(page, new Set()), true);
+  assert.equal('adPlacements' in page[1].playerResponse, false);
+  assert.deepEqual(page[0], { page: 'watch' });
+  const allowed = [{ page: 'watch' }, { playerResponse: fixture() }];
+  assert.equal(stripAds(allowed, new Set([CHANNEL])), false);
+  assert.ok('adPlacements' in allowed[1].playerResponse);
+  const five = [1, 'x', null, [{ adSlots: [1] }], { adSlots: [1] }];
+  assert.equal(stripAds(five, new Set()), true);
+  assert.deepEqual(five, [1, 'x', null, [{ adSlots: [1] }], {}]);
+  const six = [{}, {}, {}, {}, {}, { adSlots: [1] }];
+  assert.equal(stripAds(six, new Set()), false);
+  assert.deepEqual(six[5], { adSlots: [1] });
+});
+
+const RICK = { id: CHANNEL, name: 'Rick Astley', videoId: 'dQw4w9WgXcQ' };
+
+test('ytChannel accepts a channel id, a name (trimmed, at most 100 characters) and a video id', () => {
+  assert.deepEqual(ytChannel({ ...RICK, name: '  Rick Astley ' }), RICK);
+  assert.deepEqual(ytChannel({ ...RICK, name: 'x'.repeat(500) }), { ...RICK, name: 'x'.repeat(100) });
+  assert.deepEqual(ytChannel({ id: 'UC_-abcdefghijklmnopqrst', name: 'A', videoId: '_-a1B2c3D4e', extra: 1 }), { id: 'UC_-abcdefghijklmnopqrst', name: 'A', videoId: '_-a1B2c3D4e' });
+});
+
+test('ytChannel refuses anything that is not a channel id with a name and a video id', () => {
   for (const input of [
     null,
     'UCuAXFkgsw1L7xaCfnd5JJOw',
     [CHANNEL, 'x'],
-    { id: CHANNEL },
-    { id: CHANNEL, name: '   ' },
-    { id: CHANNEL, name: 7 },
-    { id: 'UC1', name: 'Short' },
-    { id: `${CHANNEL}x`, name: 'Long' },
-    { id: 'XXuAXFkgsw1L7xaCfnd5JJOw', name: 'Not UC' },
-    { id: 'UCuAXFkgsw1L7xaCfnd5JJ.w', name: 'Bad character' },
-    { id: ` ${CHANNEL}`, name: 'Space' },
+    { id: CHANNEL, videoId: RICK.videoId },
+    { ...RICK, name: '   ' },
+    { ...RICK, name: 7 },
+    { ...RICK, id: 'UC1' },
+    { ...RICK, id: `${CHANNEL}x` },
+    { ...RICK, id: 'XXuAXFkgsw1L7xaCfnd5JJOw' },
+    { ...RICK, id: 'UCuAXFkgsw1L7xaCfnd5JJ.w' },
+    { ...RICK, id: ` ${CHANNEL}` },
+    { id: CHANNEL, name: 'No video' },
+    { ...RICK, videoId: 'dQw4w9WgXc' },
+    { ...RICK, videoId: 'dQw4w9WgXcQQ' },
+    { ...RICK, videoId: 'dQw4w9WgXc.' },
+    { ...RICK, videoId: 11 },
   ]) {
     assert.equal(ytChannel(input), null, JSON.stringify(input));
   }
 });
 
-test('youtubeAdsOn: on by default, off when Sieve is off, paused, the Ads list is off, or any given address is allowlisted', () => {
+test("watchChannel names the channel of the watch page's own video, never another response seen on the page", () => {
+  const preview = { id: 'UCaaaaaaaaaaaaaaaaaaaaaa', name: 'Preview' };
+  const seen = new Map([
+    ['dQw4w9WgXcQ', { id: CHANNEL, name: 'Rick Astley' }],
+    ['aaaaaaaaaaa', preview],
+  ]);
+  assert.deepEqual(watchChannel('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10', seen), { id: CHANNEL, name: 'Rick Astley' });
+  assert.deepEqual(watchChannel('https://www.youtube.com/watch?list=x&v=aaaaaaaaaaa', seen), preview);
+  assert.equal(watchChannel('https://www.youtube.com/watch?v=bbbbbbbbbbb', seen), null);
+  assert.equal(watchChannel('https://www.youtube.com/watch', seen), null);
+  assert.equal(watchChannel('https://www.youtube.com/shorts/dQw4w9WgXcQ', seen), null);
+  assert.equal(watchChannel('https://www.youtube.com/?v=dQw4w9WgXcQ', seen), null);
+});
+
+test('youtubeAdsOn: on by default, off when Sieve is off, paused, the Ads list is off, or the page is allowlisted', () => {
   const s = (blocking: object, enabled = true) => validateSettings({ enabled, blocking });
   const watch = 'https://www.youtube.com/watch?v=x';
-  assert.equal(youtubeAdsOn(s({}), [watch]), true);
-  assert.equal(youtubeAdsOn(s({}, false), [watch]), false);
-  assert.equal(youtubeAdsOn(s({ paused: true }), [watch]), false);
-  assert.equal(youtubeAdsOn(s({ lists: { ads: false } }), [watch]), false);
-  assert.equal(youtubeAdsOn(s({ allowlist: [{ kind: 'site', host: 'youtube.com' }] }), [watch]), false);
-  assert.equal(youtubeAdsOn(s({ allowlist: [{ kind: 'page', url: watch }] }), [watch]), false);
-  assert.equal(youtubeAdsOn(s({ allowlist: [{ kind: 'page', url: watch }] }), ['https://www.youtube.com/watch?v=y']), true);
-  // An embed on an allowlisted site: the embedding page's origin comes from location.ancestorOrigins.
-  const embed = ['https://www.youtube-nocookie.com/embed/x', 'https://example.com'];
-  assert.equal(youtubeAdsOn(s({ allowlist: [{ kind: 'site', host: 'example.com' }] }), embed), false);
-  assert.equal(youtubeAdsOn(s({ allowlist: [{ kind: 'site', host: 'other.com' }] }), embed), true);
+  assert.equal(youtubeAdsOn(s({}), watch), true);
+  assert.equal(youtubeAdsOn(s({}, false), watch), false);
+  assert.equal(youtubeAdsOn(s({ paused: true }), watch), false);
+  assert.equal(youtubeAdsOn(s({ lists: { ads: false } }), watch), false);
+  assert.equal(youtubeAdsOn(s({ allowlist: [{ kind: 'site', host: 'youtube.com' }] }), watch), false);
+  assert.equal(youtubeAdsOn(s({ allowlist: [{ kind: 'page', url: watch }] }), watch), false);
+  assert.equal(youtubeAdsOn(s({ allowlist: [{ kind: 'page', url: watch }] }), 'https://www.youtube.com/watch?v=y'), true);
+});
+
+test('youtubeAdsOn for an embed: a site entry for a page around it turns it off; a page entry never does, as ancestors are only origins', () => {
+  const s = (allowlist: object[]) => validateSettings({ blocking: { allowlist } });
+  const embed = 'https://www.youtube-nocookie.com/embed/x';
+  assert.equal(youtubeAdsOn(s([{ kind: 'site', host: 'example.com' }]), embed, ['https://example.com']), false);
+  assert.equal(youtubeAdsOn(s([{ kind: 'site', host: 'example.com' }]), embed, ['https://other.com', 'https://www.example.com']), false);
+  assert.equal(youtubeAdsOn(s([{ kind: 'site', host: 'other.com' }]), embed, ['https://example.com']), true);
+  assert.equal(youtubeAdsOn(s([{ kind: 'page', url: 'https://example.com/' }]), embed, ['https://example.com']), true);
+  assert.equal(youtubeAdsOn(s([{ kind: 'page', url: embed }]), embed, ['https://example.com']), false);
 });

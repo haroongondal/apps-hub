@@ -60,16 +60,14 @@ export async function startServers() {
   return { http: plain, https: secure, ...ports, hits };
 }
 
-export async function launch({ extraArgs = [], extraHosts = [], mapHosts = true } = {}) {
+export async function launch({ extraArgs = [], extraHosts = [], mapHosts = true, extension = true } = {}) {
   const profile = mkdtempSync(join(tmpdir(), 'sieve-e2e-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     executablePath: CHROMIUM,
     headless: true,
     args: [
-      `--disable-extensions-except=${EXT}`,
-      `--load-extension=${EXT}`,
-      '--ignore-certificate-errors',
-      ...(mapHosts ? [`--host-resolver-rules=${[AD_HOST, TRACKER_HOST, SITE_HOST, UNHIDE_HOST, 'www.youtube.com', ...extraHosts].map((h) => `MAP ${h} 127.0.0.1`).join(',')}`] : []),
+      ...(extension ? [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`] : []),
+      ...(mapHosts ? ['--ignore-certificate-errors', `--host-resolver-rules=${[AD_HOST, TRACKER_HOST, SITE_HOST, UNHIDE_HOST, 'www.youtube.com', ...extraHosts].map((h) => `MAP ${h} 127.0.0.1`).join(',')}`] : []),
       ...extraArgs,
     ],
   });
@@ -80,6 +78,7 @@ export async function launch({ extraArgs = [], extraHosts = [], mapHosts = true 
     } catch {}
   });
   process.once('SIGINT', () => process.exit(130));
+  if (!extension) return { ctx };
   let [sw] = ctx.serviceWorkers();
   if (!sw) sw = await ctx.waitForEvent('serviceworker');
   return { ctx, sw, id: new URL(sw.url()).host };
