@@ -1,7 +1,7 @@
 import { SCRIPTLETS } from './scriptlets.js';
 import { isAllowed } from '@apps-hub/sieve-core/src/allowlist.ts';
 import { hostCandidates } from '@apps-hub/sieve-core/src/hosts.ts';
-import { pageInjections, scriptletArgs } from '@apps-hub/sieve-core/src/page.ts';
+import { pageInjections, scriptletArgs, storedCosmetic } from '@apps-hub/sieve-core/src/page.ts';
 import { FEATURES, validateSettings, type Settings } from '@apps-hub/sieve-core/src/settings.ts';
 import type { BuildMeta } from '@apps-hub/sieve-core/src/plan.ts';
 import type { CosmeticSet } from '@apps-hub/sieve-core/src/compile.ts';
@@ -20,9 +20,10 @@ function load<T>(path: string, read: (r: Response) => Promise<T>): Promise<T> {
 const cosmetic = (f: string) => load(`cosmetic/${f}.json`, async (r) => ({ generic: [] as string[], ...((await r.json()) as Omit<CosmeticSet, 'generic'>) }));
 const genericSelectors = (f: string) => load(`cosmetic/${f}.generic.css`, async (r) => (await r.text()).split('\n').filter(Boolean).map((l) => l.slice(0, -RULE_END.length)));
 
-let settings: Promise<Settings> | undefined;
-export function forgetSettings(): void {
-  settings = undefined;
+// The settings and My filters' hide data (`myCosmetic`, written when an item is picked), read once until either changes.
+let stored: Promise<{ settings: Settings; mine: CosmeticSet }> | undefined;
+export function forgetStored(): void {
+  stored = undefined;
 }
 
 // shortcut: documentId -> top frame URL, oldest dropped past 1,000; a miss walks up with getFrame, raise it if that shows up in profiles.
@@ -55,8 +56,8 @@ export async function onCommitted(d: Committed): Promise<void> {
   // A document seen before (a back/forward cache restore) already has its CSS and scriptlets.
   if (tops.has(d.documentId)) return;
   try {
-    const [s, meta, top] = await Promise.all([
-      (settings ??= chrome.storage.local.get('settings').then((r) => validateSettings(r.settings))),
+    const [{ settings: s, mine }, meta, top] = await Promise.all([
+      (stored ??= chrome.storage.local.get(['settings', 'myCosmetic']).then((r) => ({ settings: validateSettings(r.settings), mine: storedCosmetic(r.myCosmetic) }))),
       load('meta.json', (r) => r.json() as Promise<BuildMeta>),
       topUrl(d),
     ]);
@@ -68,7 +69,8 @@ export async function onCommitted(d: Committed): Promise<void> {
     const features = FEATURES.filter((f) => s.blocking.lists[f]);
     const excluded = features.map((f) => meta.features[f].hasGenericCss && meta.features[f].genericExcept.some((h) => candidates.has(h)));
     const sets = await Promise.all(features.map(async (f, i) => (excluded[i] ? { ...(await cosmetic(f)), generic: await genericSelectors(f) } : cosmetic(f))));
-    const { css, scriptlets } = pageInjections(host, sets, (i) => excluded[i]);
+    // My filters come last, after the lists, and only the lists have generic CSS to exclude.
+    const { css, scriptlets } = pageInjections(host, [...sets, mine], (i) => excluded[i] === true);
 
     const target = { tabId: d.tabId, documentIds: [d.documentId] };
     await Promise.all([

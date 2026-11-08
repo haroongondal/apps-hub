@@ -556,6 +556,7 @@ try {
     (await m.pop.getByText("Sieve doesn't run on this page.").isVisible()) && (await m.pop.locator('.counts').count()) === 0 && (await m.pop.getByRole('switch', { name: 'Block on this site' }).count()) === 0 && m.problems.length === 0,
     json(m.problems),
   );
+  check('on a chrome:// tab the menu has no "Block an item on this page" button', (await buttonOf('Block an item on this page').count()) === 0);
   await m.pop.close();
   await extensions.close();
 
@@ -573,6 +574,7 @@ try {
       m.problems.length === 0,
     json(m.problems),
   );
+  check('on an IPv6 tab "Block an item on this page" is disabled, so the picker cannot start', await buttonOf('Block an item on this page').isDisabled());
   await m.pop.close();
   await v6Page.close();
   v6.close();
@@ -582,6 +584,205 @@ try {
   check('closing the tab deletes its counts', gone === undefined, json(gone));
   const countErrors = await sw4.evaluate(() => globalThis.countErrors);
   check('the service worker logged no error while counting', countErrors?.length === 0, json(countErrors));
+  // The element picker: the menu button starts it, as it does from the toolbar. pick.html is the page, and the worker is stopped part-way.
+  const PICK = `https://localhost:${servers.httpsPort}/pick.html`;
+  const PICK_CSP = `https://localhost:${servers.httpsPort}/pick-csp.html`;
+  const PICKER = 'sieve-picker';
+  const pickPage = await ctx.newPage();
+  pickPage.on('pageerror', (e) => errors.push(e.message));
+  await pickPage.setViewportSize({ width: 760, height: 460 });
+  await pickPage.goto(PICK, { waitUntil: 'load' });
+  let pw = sw4;
+  const pickButton = (mm) => mm.pop.getByRole('button', { name: 'Block an item on this page', exact: true });
+  const startPicker = async (page, url) => {
+    const mm = await menu(await tabFor(pw, url));
+    await pickButton(mm).click();
+    await page.locator(PICKER).waitFor({ state: 'attached' });
+    await mm.pop.close().catch(() => {});
+    await page.bringToFront();
+  };
+  const pickerCount = (page) => page.locator(PICKER).count();
+  const inPicker = (page, sel) => page.locator(`${PICKER} ${sel}`);
+  const choose = async (page, item) => {
+    await page.hover(item);
+    await page.click(item);
+    await inPicker(page, '.selector').waitFor({ state: 'visible' });
+  };
+  const selectorOf = (page) => inPicker(page, '.selector').innerText();
+  const hidesOf = (page) => inPicker(page, 'p[aria-live]').innerText();
+  const pbtn = (name) => pickPage.getByRole('button', { name, exact: true });
+  const displayOf = (page, sel) => page.evaluate((q) => getComputedStyle(document.querySelector(q)).display, sel);
+  const myFiltersOf = async (w) => (await blockingOf(w)).myFilters;
+  const hideDataOf = (w) => w.evaluate(() => chrome.storage.local.get('myCosmetic').then((r) => r.myCosmetic?.hide));
+  const rects = (page) =>
+    page.evaluate(() => {
+      const r = (el) => [el.left, el.top, el.width, el.height].map(Math.round);
+      const root = document.querySelector('sieve-picker').shadowRoot;
+      return { box: r(root.querySelector('.box').getBoundingClientRect()), item: r(document.querySelector('a.promo').getBoundingClientRect()) };
+    });
+  const paint = (page) =>
+    page.evaluate(() => {
+      const root = document.querySelector('sieve-picker').shadowRoot;
+      const css = (el) => getComputedStyle(el);
+      return { panel: css(root.querySelector('.panel')).backgroundColor, position: css(root.querySelector('.panel')).position, primary: css(root.querySelector('.ui-btn--primary')).backgroundColor };
+    });
+
+  m = await menu(await tabFor(pw, PICK));
+  check('on a web page the menu enables "Block an item on this page"', await pickButton(m).isEnabled());
+  const rulesBefore = await state(pw);
+  await pickButton(m).click();
+  await pickPage.locator(PICKER).waitFor({ state: 'attached' });
+  await m.pop.close().catch(() => {});
+  await pickPage.bringToFront();
+  const opened = await pickPage.evaluate(() => ({ open: document.querySelector('sieve-picker').shadowRoot !== null, host: document.documentElement.contains(document.querySelector('sieve-picker')) }));
+  check(
+    'the picker opens in an open shadow root on the page, asks the owner to click an item, and shows no "Block it" yet, even though the page styles its tag display: none',
+    opened.open && opened.host && (await inPicker(pickPage, '.panel').isVisible()) && (await inPicker(pickPage, 'p.ui-meta').innerText()) === 'Click the item you want to block.' && !(await pbtn('Block it').isVisible()) && (await pbtn('Cancel').isVisible()),
+    json(opened),
+  );
+  await pickPage.hover('a.promo');
+  const hovered = await rects(pickPage);
+  check('hovering an item outlines exactly that item', same(hovered.box, hovered.item), json(hovered));
+
+  await pickPage.click('a.promo');
+  await inPicker(pickPage, '.selector').waitFor({ state: 'visible' });
+  const clicks = await pickPage.evaluate(() => window.clicks);
+  check('clicking an item picks it without the page seeing the click: selector a.promo, "Hides 1 item on this page"', (await selectorOf(pickPage)) === 'a.promo' && (await hidesOf(pickPage)) === 'Hides 1 item on this page' && clicks === 0, json({ clicks }));
+  const atOne = await pbtn('Less').isDisabled();
+  await pbtn('More').click();
+  const wider = [await selectorOf(pickPage), await hidesOf(pickPage)];
+  await pbtn('More').click();
+  const top = [await selectorOf(pickPage), await pbtn('More').isDisabled()];
+  await pbtn('Less').click();
+  await pbtn('Less').click();
+  const narrower = [await selectorOf(pickPage), await pbtn('Less').isDisabled()];
+  check(
+    '"More" widens the selector one level at a time, "Less" narrows it again, and each stops at its end',
+    atOne && same(wider, ['div.wrap > a.promo', 'Hides 1 item on this page']) && same(top, ['body:nth-of-type(1) > div.wrap > a.promo', true]) && same(narrower, ['a.promo', true]),
+    json({ atOne, wider, top, narrower }),
+  );
+
+  await pbtn('More').click();
+  const light = await paint(pickPage);
+  await pickPage.screenshot({ path: join(SHOTS, 'picker.png') });
+  await pickPage.emulateMedia({ colorScheme: 'dark' });
+  await sleep(400); // the buttons fade between themes
+  const dark = await paint(pickPage);
+  await pickPage.screenshot({ path: join(SHOTS, 'picker-dark.png') });
+  await pickPage.emulateMedia({ colorScheme: 'light' });
+  check(
+    'the panel takes the shared tokens: a white sheet and a teal "Block it" in light, a dark sheet and a bright one in dark',
+    light.panel === 'rgb(255, 255, 255)' && light.primary === 'rgb(14, 116, 144)' && dark.panel === 'rgb(20, 35, 36)' && dark.primary === 'rgb(34, 211, 238)' && light.position === 'fixed',
+    json({ light, dark }),
+  );
+
+  await pickPage.keyboard.press('Escape');
+  await pickPage.locator(PICKER).waitFor({ state: 'detached' });
+  await pickPage.mouse.move(300, 300);
+  await pickPage.click('a.promo');
+  check('Esc closes the picker, and the page gets its clicks again', (await pickerCount(pickPage)) === 0 && (await pickPage.evaluate(() => window.clicks)) === 1, String(await pickPage.evaluate(() => window.clicks)));
+
+  await startPicker(pickPage, PICK);
+  await choose(pickPage, '.note');
+  const plural = [await selectorOf(pickPage), await hidesOf(pickPage)];
+  await pbtn('Cancel').click();
+  check('a selector that finds two items says "Hides 2 items on this page", and Cancel closes the picker', same(plural, ['p.note', 'Hides 2 items on this page']) && (await pickerCount(pickPage)) === 0, json(plural));
+
+  await startPicker(pickPage, PICK);
+  await choose(pickPage, '#main-ad');
+  check('an item with an id gets #main-ad, and "More" has nowhere to go', (await selectorOf(pickPage)) === '#main-ad' && (await pbtn('More').isDisabled()));
+  await pickPage.keyboard.press('Escape');
+  await pickPage.locator(PICKER).waitFor({ state: 'detached' });
+
+  await startPicker(pickPage, PICK);
+  await choose(pickPage, 'a.promo');
+  await pbtn('More').click();
+  await pickPage.evaluate(() => {
+    const root = document.querySelector('sieve-picker').shadowRoot;
+    root.querySelector('.ui-btn--primary').click();
+    root.querySelector('.ui-btn--primary').dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+    [...root.querySelectorAll('button')].find((b) => b.textContent === 'Cancel').click();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    document.querySelector('.note').click();
+  });
+  await sleep(700);
+  check(
+    'a page that clicks "Block it" or "Cancel" itself, sends Escape or clicks another item changes nothing: the picker stays, nothing is hidden or saved',
+    (await pickerCount(pickPage)) === 1 && (await selectorOf(pickPage)) === 'div.wrap > a.promo' && (await displayOf(pickPage, 'a.promo')) !== 'none' && !(await myFiltersOf(pw)).includes('localhost##') && (await hideDataOf(pw)) === undefined,
+    json({ filters: await myFiltersOf(pw), selector: await selectorOf(pickPage) }),
+  );
+
+  await pbtn('Block it').click();
+  const hiddenNow = await until(() => displayOf(pickPage, 'a.promo'), (d) => d === 'none');
+  const stored1 = await until(() => myFiltersOf(pw), (f) => f.includes('localhost##'));
+  check(
+    'a real click on "Block it" hides the item at once, closes the picker, and adds localhost##div.wrap > a.promo to My filters (below the comment already there) and to the hide data',
+    hiddenNow === 'none' && (await pickerCount(pickPage)) === 0 && stored1 === '! only a comment\nlocalhost##div.wrap > a.promo' && same(await hideDataOf(pw), { localhost: ['div.wrap > a.promo'] }),
+    json({ hiddenNow, stored1, hide: await hideDataOf(pw) }),
+  );
+  await sleep(800); // the save also reaches the worker's settings listener, which must find nothing to change
+  const rulesAfter = await state(pw);
+  check(
+    'picking an item leaves the lists, the registered scripts and the dynamic rules as they were',
+    same(rulesAfter.enabled, rulesBefore.enabled) && same(rulesAfter.scripts, rulesBefore.scripts) && same(rulesAfter.dynamic, rulesBefore.dynamic) && same(rulesAfter.error, rulesBefore.error),
+    json({ enabled: rulesAfter.enabled, scripts: ids(rulesAfter), dynamic: rulesAfter.dynamic.length }),
+  );
+
+  await pickPage.reload({ waitUntil: 'load' });
+  const reloaded = await until(() => displayOf(pickPage, 'a.promo'), (d) => d === 'none', 5_000);
+  check('after a reload the item is still hidden, and the others are not', reloaded === 'none' && (await displayOf(pickPage, '.note')) !== 'none', reloaded);
+
+  const pickStatus = await stopWorker(ctx);
+  await pickPage.reload({ waitUntil: 'load' });
+  const restarted = await until(() => displayOf(pickPage, 'a.promo'), (d) => d === 'none', 5_000);
+  check('after the worker is stopped, a reload still hides the item', pickStatus === 'stopped' && restarted === 'none', json({ pickStatus, restarted }));
+  pw = await startWorker(ctx, id);
+  await pw.evaluate(() => {
+    globalThis.pickErrors = [];
+    const error = console.error;
+    console.error = (...a) => (globalThis.pickErrors.push(a.map(String).join(' ')), error(...a));
+  });
+
+  await startPicker(pickPage, PICK);
+  await choose(pickPage, '#main-ad');
+  await pbtn('Block it').click();
+  const second = await until(async () => (await hideDataOf(pw))?.localhost?.length, (n) => n === 2);
+  check(
+    'a second pick, handled by the restarted worker, is added to the first in My filters and the hide data',
+    second === 2 && (await myFiltersOf(pw)) === '! only a comment\nlocalhost##div.wrap > a.promo\nlocalhost###main-ad' && same(await hideDataOf(pw), { localhost: ['div.wrap > a.promo', '#main-ad'] }) && (await until(() => displayOf(pickPage, '#main-ad'), (d) => d === 'none')) === 'none',
+    json({ filters: await myFiltersOf(pw), hide: await hideDataOf(pw) }),
+  );
+
+  m = await menu(await tabFor(pw, PICK));
+  const refused = await m.pop.evaluate(() => chrome.runtime.sendMessage({ type: 'pick', host: 'localhost', selector: '.zzz' }));
+  check('a pick sent from the menu page, which is not a web page, is refused and saves nothing', refused?.ok === false && !(await myFiltersOf(pw)).includes('.zzz'), json(refused));
+  await m.pop.close();
+  const pickBlocking = await blockingOf(pw);
+  await setBlocking(pw, { allowlist: [{ kind: 'site', host: 'localhost' }] });
+  m = await menu(await tabFor(pw, PICK));
+  const offHere = await pickButton(m).isDisabled();
+  await m.pop.close();
+  await setBlocking(pw, { paused: true });
+  m = await menu(await tabFor(pw, PICK));
+  const pausedAll = await pickButton(m).isDisabled();
+  await m.pop.close();
+  await setBlocking(pw, { allowlist: pickBlocking.allowlist, paused: false });
+  check('where blocking is off for the page, or paused everywhere, "Block an item on this page" is disabled', offHere && pausedAll, json({ offHere, pausedAll }));
+  await settle(pw, (st) => st.enabled.length > 0);
+
+  const cspPage = await ctx.newPage();
+  await cspPage.setViewportSize({ width: 760, height: 460 });
+  await cspPage.goto(PICK_CSP, { waitUntil: 'load' });
+  await startPicker(cspPage, PICK_CSP);
+  await choose(cspPage, 'span.csp-item');
+  const strict = await paint(cspPage);
+  check('on a page whose policy allows no styles, the picker is still drawn from the shared tokens', strict.position === 'fixed' && strict.panel === 'rgb(255, 255, 255)' && strict.primary === 'rgb(14, 116, 144)', json(strict));
+  await cspPage.keyboard.press('Escape');
+  await cspPage.close();
+  await pickPage.close();
+  const pickErrors = await pw.evaluate(() => globalThis.pickErrors);
+  check('the service worker logged no error while handling picks', pickErrors?.length === 0, json(pickErrors));
+
   const lateWarnings = await cardProblems();
   check('after the worker and the menu ran all of this, the extension card still shows no warning or error', lateWarnings.length === 0, json(lateWarnings));
   await ctx.close();

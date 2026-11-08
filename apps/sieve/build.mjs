@@ -158,8 +158,16 @@ await build({
   external: ['./scriptlets.js'],
   logLevel: 'warning',
 });
-// Registered content scripts are classic scripts, not modules.
-await build({ entryPoints: { 'notify-deny': root('src/notify-deny.ts') }, bundle: true, format: 'iife', target: 'chrome128', outdir: out, logLevel: 'warning' });
+// Content scripts are classic scripts, not modules. The picker takes the shared UI styles as text and adopts them into its shadow root.
+await build({
+  entryPoints: { 'notify-deny': root('src/notify-deny.ts'), picker: root('src/picker.ts') },
+  bundle: true,
+  format: 'iife',
+  target: 'chrome128',
+  outdir: out,
+  loader: { '.css': 'text' },
+  logLevel: 'warning',
+});
 const ui = root('../../packages/ui');
 for (const f of ['popup.html', 'popup.css']) cpSync(root('src', f), join(out, f));
 for (const f of ['tokens.css', 'base.css']) cpSync(join(ui, 'web', f), join(out, 'web', f));

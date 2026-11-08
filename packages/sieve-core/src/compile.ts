@@ -20,7 +20,7 @@ import {
   isConversionError,
 } from '@adguard/dnr-converter';
 import { scriptlets } from '@adguard/scriptlets';
-import { scriptletKey } from './page.ts';
+import { emptyCosmetic, scriptletKey } from './page.ts';
 
 export interface DnrRule {
   id: number;
@@ -65,10 +65,6 @@ export interface CompiledList {
 export function scriptletFunction(name: string): ((source: object, args: string[]) => void) | undefined {
   const fn = scriptlets.getScriptletFunction(name);
   return typeof fn === 'function' ? fn : undefined;
-}
-
-export function emptyCosmetic(): CosmeticSet {
-  return { generic: [], hide: {}, unhide: {}, generichide: [], elemhide: [], scriptlets: {}, scriptletExcept: {} };
 }
 
 // `! name.txt` or EasyList's `! *** easylist:dir/name.txt ***`

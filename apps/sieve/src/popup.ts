@@ -24,6 +24,7 @@ const tab = await targetTab();
 const site = tabSite(tab?.url);
 const tabCounts = tab?.id === undefined ? undefined : countsKey(tab.id);
 let reloadHint = false;
+let pickFailed = false;
 let liveCounts: Counts | undefined;
 
 const canAllowlist = (entry: AllowEntry) => validateSettings({ blocking: { allowlist: [entry] } }).blocking.allowlist.length > 0;
@@ -44,6 +45,19 @@ const setList = (feature: FeatureKey, on: boolean) => save((s) => ({ ...s, block
 const toggle = (id: string, text: string, on: boolean, change: (on: boolean) => unknown) =>
   h('label', { class: 'switch' }, h('span', {}, text), h('input', { type: 'checkbox', role: 'switch', checked: on, 'data-id': id, onchange: (e: Event) => change((e.target as HTMLInputElement).checked) }));
 const button = (id: string, text: string, onclick: () => unknown, props: Record<string, unknown> = {}) => h('button', { class: 'ui-btn', type: 'button', 'data-id': id, onclick, ...props }, text);
+
+// The picker lives in the page, so the menu only starts it and gets out of the way.
+async function pickItem(): Promise<void> {
+  if (tab?.id === undefined) return;
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['picker.js'] });
+    window.close();
+  } catch (e) {
+    console.error('Sieve could not open the item picker', e);
+    pickFailed = true;
+    await render();
+  }
+}
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const countsText = (c: Counts) => `${count(c.ads, 'ad', 'ads')} and ${count(c.trackers, 'tracker', 'trackers')} blocked on this page`;
@@ -81,8 +95,9 @@ function blockingView({ settings: s, error, counts }: State): Child[] {
       h(
         'div',
         { class: 'actions' },
-        // The element picker arrives with Task 1.8.
-        button('pick', 'Block an item on this page', () => {}, { disabled: true }),
+        // Where blocking is off a saved pick would not show after a reload, and an address Sieve can't write a filter for has no host to save it under.
+        button('pick', 'Block an item on this page', pickItem, { disabled: !canAllowlist({ kind: 'site', host }) || s.blocking.paused || isAllowed(page, entries) }),
+        pickFailed && h('p', { class: 'ui-meta', role: 'alert' }, "Sieve couldn't open the item picker here. Reload this page, then try again."),
         button('page', pageEntry ? 'Resume on this page' : 'Pause on this page', pausePage, { disabled: !canAllowlist({ kind: 'page', url: page }) }),
         reloadHint && h('p', { class: 'ui-meta' }, 'Reload this page to see the change.'),
       ),

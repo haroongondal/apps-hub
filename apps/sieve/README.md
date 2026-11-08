@@ -34,7 +34,7 @@ The build prints one row per feature: rules, regex rules, generic selectors, hos
 
 ```bash
 pnpm --filter sieve typecheck
-pnpm --filter sieve test         # the counting code against an in-memory `chrome`
+pnpm --filter sieve test         # the counting code and the pick handler against an in-memory `chrome`
 pnpm --filter sieve test:e2e     # headless Chromium in a fresh temporary profile; build first
 ```
 
@@ -46,7 +46,25 @@ The toolbar button opens a menu with a switch for Sieve, a switch for the curren
 
 The counts and the badge come from `declarativeNetRequest.onRuleMatchedDebug` (permission `declarativeNetRequestFeedback`), an event Chrome only gives unpacked extensions, which is how Sieve is installed. Each tab's count lives in `chrome.storage.session`, so it survives the service worker stopping. It starts again at zero on each page load and is gone when Chrome quits. A match of a rule that only allows a request or only changes a response header is not counted: the build writes those rule ids per list (`allowIds`, `modifyIds`) into `dist/meta.json`. `test:e2e` opens the menu as `popup.html?tab=<id>`, since a script can't click the toolbar button.
 
+## Block an item on this page
+
+"Block an item on this page" in the menu injects `picker.js` into the tab (`scripting.executeScript`, covered by the existing host access, so it adds no permission) and closes the menu. The picker outlines the item under the pointer; a click picks it. The panel shows the selector and "Hides N items on this page", with Less and More to make the selector shorter or longer, Block it, and Cancel. Esc also closes it. The selector starts as short as it can be while still finding only that item, and ends at an id, which is already unique.
+
+Block it sends `{ type: 'pick', host, selector }` to the service worker, which adds `host##selector` to My filters (`settings.blocking.myFilters`), adds the selector to `myCosmetic.hide[host]` (plain data in `chrome.storage.local`), and hides the item in that page at once. The worker does not compile the line, which keeps the filter compiler out of the worker bundle. On later page loads it injects `myCosmetic` with the lists' site-specific hiding, so a pick lasts across reloads and worker restarts. The host is the tab's address without `www.`, so it also covers that site's subdomains.
+
+The picker is code running in a page the owner does not control, so it treats the page as untrusted:
+
+- Its panel and outline sit in an open shadow root, styled from the shared UI tokens through a constructed stylesheet, which a page's Content Security Policy does not block. The fonts cannot load from a page, so the system font stands in.
+- Only real input counts: a page that calls `click()` or sends events at the panel changes nothing.
+- The worker takes the host from the sender's address, never from the message, and accepts only a selector of the shape the picker builds (`parsePick` in `sieve-core`: names, `#`, `.`, `:nth-of-type()`, spaces and `>`, at most 1,000 characters, no line break). One that could hide more than it showed, or add a line to My filters, is refused.
+- Saves go through one queue, so two picks sent at once are both kept.
+
+The button is off where blocking is off for the page (allowlisted site, paused page, paused everywhere) because a saved pick would not show after a reload there, and on an address Sieve cannot write a filter for (an IPv6 host).
+
 ## Known limits
+
+- The picker works in the top frame only. The pointer events over an iframe go to the frame, not to the page, so the picker can neither outline an iframe (many ads are one) nor pick anything inside it. An element inside a page's own shadow DOM is picked as its host.
+- A pick hides the item on every page of that site that matches the selector, not only on the current page.
 
 - On an allowlisted site, the generic hiding CSS and the notification blocker still run inside iframes from other sites, because Chrome matches a registered script's excluded sites against the iframe's own address, not the tab's. Everything those iframes load still gets through, since the allow rule covers every frame in the page. Site-specific hiding and scriptlets check both the tab's page and the iframe's own address, so they stay out of those iframes, and out of an allowlisted site's iframes on other sites.
 - Site-specific hiding and scriptlets are added by the service worker as each page or iframe starts loading. Chrome stops the worker after about 30 seconds without events, so the first page after any pause in browsing, not only the first after Chrome starts, starts a new worker. That worker reads the filter maps again (about 4 MB, a few tens of milliseconds), so a scriptlet can arrive after that page's first scripts have run. Pages loaded while the worker is running usually get it in time, but an inline script at the very top of a page can still run first.

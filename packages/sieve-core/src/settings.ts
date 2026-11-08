@@ -47,7 +47,7 @@ const LABEL = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 
 // A host the URL parser rewrites or refuses (1.2.3, 0x7f.0.0.1, example.123) never matches a tab, so it is not a host.
 // shortcut: IPv6 literals are not accepted, add them if a local IPv6 site ever needs the allowlist.
-function isHost(host: string): boolean {
+export function isHost(host: string): boolean {
   if (host.length > 253 || !host.split('.').every((l) => l.length <= 63 && LABEL.test(l))) return false;
   try {
     return new URL(`http://${host}`).hostname === host;

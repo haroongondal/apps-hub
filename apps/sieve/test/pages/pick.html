@@ -1,0 +1,17 @@
+<!doctype html>
+<title>Pick</title>
+<style>
+  body { margin: 20px; font: 16px sans-serif; }
+  .wrap { margin-bottom: 20px; }
+  a.promo { display: inline-block; padding: 20px; background: #fc0; }
+  .note { margin: 10px 0; }
+  sieve-picker { display: none !important; }
+</style>
+<div class="wrap"><a class="promo" id="">Buy</a></div>
+<p class="note">First note</p>
+<p class="note">Second note</p>
+<div id="main-ad">An item with an id</div>
+<script>
+  window.clicks = 0;
+  document.addEventListener('click', () => window.clicks++);
+</script>

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import { emptyCosmetic, pageInjections, scriptletArgs, scriptletFunction, scriptletKey, type CosmeticSet } from '../index.ts';
+import { emptyCosmetic, pageInjections, scriptletArgs, scriptletFunction, scriptletKey, storedCosmetic, type CosmeticSet } from '../index.ts';
 
 const set = (parts: Partial<CosmeticSet>): CosmeticSet => ({ ...emptyCosmetic(), ...parts });
 const never = () => false;
@@ -83,4 +83,13 @@ test('scriptletArgs gives the scriptlet function what it takes: set-constant foo
 test('hosts named like Object members do not pick up prototype properties', () => {
   const sets = [set({ hide: { 'x.com': ['.a'] } })];
   for (const host of ['constructor', '__proto__']) assert.deepEqual(pageInjections(host, sets, never), { css: '', scriptlets: [] }, host);
+});
+
+test('storedCosmetic reads what storage holds: an empty set when absent, damaged fields replaced by empty ones', () => {
+  assert.deepEqual(storedCosmetic(undefined), emptyCosmetic());
+  assert.deepEqual(storedCosmetic([]), emptyCosmetic());
+  assert.deepEqual(storedCosmetic({ hide: { 'a.com': ['.x'] } }), set({ hide: { 'a.com': ['.x'] } }));
+  const damaged = storedCosmetic({ hide: null, unhide: 'x', generic: {}, elemhide: ['a.com'] });
+  assert.deepEqual(damaged, set({ elemhide: ['a.com'] }));
+  assert.equal(pageInjections('a.com', [storedCosmetic({ hide: null })], never).css, '');
 });

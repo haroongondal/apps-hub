@@ -7,6 +7,17 @@ export interface PageInjection {
 }
 
 // Here, not in compile.ts, so the service worker can import this file without the filter compiler.
+export function emptyCosmetic(): CosmeticSet {
+  return { generic: [], hide: {}, unhide: {}, generichide: [], elemhide: [], scriptlets: {}, scriptletExcept: {} };
+}
+
+// My filters' set as storage holds it (`myCosmetic`): a missing or damaged field becomes an empty one, so one bad write cannot stop every page's injection.
+export function storedCosmetic(raw: unknown): CosmeticSet {
+  const stored = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+  const kind = (v: unknown, fallback: unknown) => (typeof v === 'object' && v !== null && Array.isArray(v) === Array.isArray(fallback) ? v : fallback);
+  return Object.fromEntries(Object.entries(emptyCosmetic()).map(([key, fallback]) => [key, kind(stored[key], fallback)])) as unknown as CosmeticSet;
+}
+
 export function scriptletKey(call: ScriptletCall): string {
   return JSON.stringify([call.name, ...call.args]);
 }
