@@ -8,6 +8,7 @@ const LOCAL_CSS = `
 .root { color: var(--c-text); font: var(--type-body) var(--font-sans); }
 .box { position: fixed; box-sizing: border-box; border: 2px solid var(--c-accent); border-radius: 2px; background: var(--c-accent-soft); pointer-events: none; }
 .panel { position: fixed; right: var(--space-lg); bottom: var(--space-lg); display: grid; gap: var(--space-sm); width: min(360px, calc(100vw - 2 * var(--space-lg))); padding: var(--space-md); pointer-events: auto; }
+.panel.top { top: var(--space-lg); left: var(--space-lg); right: auto; bottom: auto; }
 .panel p { margin: 0; }
 .selector { padding: var(--space-sm); border-radius: var(--radius-control); background: var(--c-raised); overflow-wrap: anywhere; font: var(--type-data) var(--font-mono); }
 .error { color: var(--c-danger); font: 600 var(--type-meta) var(--font-sans); }
@@ -52,7 +53,10 @@ const more = button('More', () => ((levels += 1), show()));
 const cancel = button('Cancel', close);
 const block = button('Block it', () => void send(), ' ui-btn--primary');
 const choice = [less, more, block];
-const panel = h('section', { class: 'panel ui-group', role: 'dialog', 'aria-label': 'Block an item on this page' }, hint, code, count, error, h('div', { class: 'row' }, less, more, h('span', { class: 'gap' }), cancel, block));
+// The panel moves only when the owner clicks this, never when the pointer reaches it. It covers a fixed item (a chat bubble, a toast) in the bottom-right corner, which scrolling cannot clear.
+const panel = h('section', { class: 'panel ui-group', role: 'dialog', 'aria-label': 'Block an item on this page' }, hint, code, count, error);
+const move = button('Move panel', () => void panel.classList.toggle('top'), ' ui-btn--ghost');
+panel.append(h('div', { class: 'row' }, less, more, h('span', { class: 'gap' }), move), h('div', { class: 'row' }, h('span', { class: 'gap' }), cancel, block));
 shadow.append(h('div', { class: 'root', 'data-brand': 'sieve' }, box, panel));
 // A page handler that closes its menu on any outside click must not hear the owner using the panel.
 for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'] as const) shadow.addEventListener(type, (e) => e.stopPropagation());

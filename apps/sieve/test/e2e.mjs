@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { isDeepStrictEqual as same } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { AD_HOST, SITE_HOST, TRACKER_HOST, UNHIDE_HOST, check, launch, results, startServers, startWorker, stopWorker } from './harness.mjs';
+import { checkMovePanel } from './picker-move.mjs';
 
 const RULESETS = ['ads', 'trackers', 'distraction', 'cookies', 'antiadblock'];
 const ALLOW_ID = 1_000_000;
@@ -846,6 +847,7 @@ try {
   check('on a page whose policy allows no styles, the picker is still drawn from the shared tokens', strict.position === 'fixed' && strict.panel === 'rgb(255, 255, 255)' && strict.primary === 'rgb(14, 116, 144)', json(strict));
   await cspPage.keyboard.press('Escape');
   await cspPage.close();
+  await checkMovePanel({ ctx, servers, errors, startPicker, until, displayOf, myFiltersOf, hideDataOf, pw, shots: SHOTS });
   await pickPage.close();
   const pickErrors = await pw.evaluate(() => globalThis.pickErrors);
   check('the service worker logged no error while handling picks', pickErrors?.length === 0, json(pickErrors));

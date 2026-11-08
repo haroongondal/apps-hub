@@ -1,0 +1,13 @@
+<!doctype html>
+<title>Pick a fixed item</title>
+<style>
+  body { margin: 20px; font: 16px sans-serif; }
+  /* A chat bubble in the bottom-right corner, where the picker's panel starts: scrolling cannot move it out from under the panel. */
+  .toast { position: fixed; right: 24px; bottom: 24px; width: 120px; height: 60px; background: #fc0; }
+</style>
+<p class="note">Some text</p>
+<div class="toast">Chat with us</div>
+<script>
+  window.clicks = 0;
+  document.addEventListener('click', () => window.clicks++);
+</script>

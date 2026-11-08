@@ -137,20 +137,36 @@ test('parsePick refuses a selector that is not what the picker builds', () => {
     'body:nth-of-type(1)',
     'div.a > body:nth-of-type(1)',
     'HTML.x',
+    // CSS reads each of these as html or body, so they would hide the whole page.
+    '\\68 tml:nth-of-type(1)',
+    '\\html:nth-of-type(1)',
+    '\\62 ody:nth-of-type(1)',
+    'div.a > \\62 ody.x',
+    'div.a > \\48 TML.x',
+    'div.a > \\000062 \\6f dy:nth-of-type(2)',
+    'ht\\6d l.x',
   ];
   for (const selector of bad) assert.equal(parsePick(pick(selector), PAGE), null, JSON.stringify(selector));
 });
 
 test('parsePick accepts every selector shape the picker builds', () => {
-  const ok = ['#main-ad', 'div.promo', 'a:nth-of-type(3)', 'div.a\\:b', 'div.\\31 a.w-1\\/2.x\\ y', 'div.a\\a b', '#box > a.promo', 'body:nth-of-type(1) > section.x > p:nth-of-type(2)', 'div.café', 'my-element:nth-of-type(12)'];
+  // `\body` is a hex escape (U+000B) then "ody", not body, and `html\:x` is one tag named "html:x": neither matches the page's html or body.
+  const ok = ['#main-ad', 'div.promo', 'a:nth-of-type(3)', 'div.a\\:b', 'div.\\31 a.w-1\\/2.x\\ y', 'div.a\\a b', '#box > a.promo', 'body:nth-of-type(1) > section.x > p:nth-of-type(2)', 'div.café', 'my-element:nth-of-type(12)', 'div.a > \\body.x', 'html\\:x:nth-of-type(1)', 'div.html > p.body', 'div.a\\62 ody > p:nth-of-type(1)'];
   for (const selector of ok) assert.deepEqual(parsePick(pick(selector), PAGE), { host: 'www.example.com', selector }, selector);
   assert.equal(selectorFor([el('div', { classes: ['a\nb'] })], 1), 'div.a\\a b');
 });
 
 test('parsePick accepts every selector selectorFor makes, whatever the page calls its tags, ids and classes', () => {
   const nasty = ['a', 'x', 'Z', '1', '-', '_', ':', '.', '#', ' ', '\\', '/', '*', '(', ')', '{', '}', ';', '"', "'", '@', '<', '>', ',', '+', '~', '[', ']', '=', '!', '%', '&', '\n', '\t', '\u0001', '\u007f', '\u0000', 'é', '\u{1f600}', '￿', '-1', '--', '/*', '*/'];
+  // mulberry32: deterministic, and every bit is mixed (an LCG's low bits cycle, so `% 2` would strictly alternate).
   let seed = 12345;
-  const next = (n: number) => ((seed = (seed * 1103515245 + 12345) % 2 ** 31), seed % n);
+  const rand = () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32;
+  };
+  const next = (n: number) => Math.floor(rand() * n);
   const word = () => Array.from({ length: 1 + next(6) }, () => nasty[next(nasty.length)]).join('');
   const names = ['promo', 'wrap', 'id-1', 'css-1q2w3e'];
   const chain = (): ElementInfo[] =>
@@ -161,13 +177,16 @@ test('parsePick accepts every selector selectorFor makes, whatever the page call
       nth: 1 + next(9),
     }));
   let made = 0;
+  let escaped = 0;
   for (let i = 0; i < 400; i++) {
     const c = chain();
     for (let levels = 1; levels <= c.length; levels++) {
       const selector = selectorFor(c, levels);
       assert.deepEqual(parsePick(pick(selector), PAGE), { host: 'www.example.com', selector }, JSON.stringify(selector));
       made++;
+      if (selector.includes('\\')) escaped++;
     }
   }
   assert.ok(made > 300, 'the generator made selectors');
+  assert.ok(escaped > made / 4, `the generator reached the escaping paths: ${escaped} of ${made}`);
 });

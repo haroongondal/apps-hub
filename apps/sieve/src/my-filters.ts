@@ -39,7 +39,8 @@ export async function saveMyFilters(text: string, base?: string): Promise<SaveRe
         myCosmetic: compiled.cosmetic,
       });
     } catch {
-      await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: dynamicRules.map((r) => r.id), addRules: previous });
+      // If putting the earlier rules back fails too, the answer is still "not saved": the worker's next apply sets Chrome's rules from storage, which still holds the earlier ones.
+      await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: dynamicRules.map((r) => r.id), addRules: previous }).catch(() => {});
       return notSaved(TOO_MANY_TO_STORE, errors);
     }
     if (!s.enabled || s.blocking.paused) await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: dynamicRules.map((r) => r.id) });

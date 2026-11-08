@@ -56,11 +56,18 @@ const IDENT = '[A-Za-z_\\u0080-\\uFFFF-][\\w\\u0080-\\uFFFF-]*';
 const COMPOUND = `(?:#[A-Za-z][\\w-]*|${IDENT}(?:(?:\\.${IDENT})+|:nth-of-type\\(\\d+\\)))`;
 const ESCAPE = /\\[0-9a-fA-F]{1,6} ?|\\[^\n]/g;
 // Exactly what selectorFor builds: `#id`, `tag.class...` or `tag:nth-of-type(n)`, joined by ` > `, with escapes allowed. Nothing else gets in, not even a bare tag.
+// A last compound on html or body is refused as well, however it is spelled: `\68 tml` and `\html` are html to CSS, so escapes are decoded for that test.
 const BUILT = new RegExp(`^${COMPOUND}(?: > ${COMPOUND})*$`);
+
+// What an escape stands for in a name, if it is a letter (hex `\62 ` and `\c` both give the letter); anything else cannot help spell html or body, so it stays `x`.
+function escapedLetter(escape: string): string {
+  const code = /^\\[0-9a-fA-F]/.test(escape) ? parseInt(escape.slice(1), 16) : (escape.codePointAt(1) as number);
+  return code < 0x80 && /[A-Za-z]/.test(String.fromCharCode(code)) ? String.fromCharCode(code) : 'x';
+}
 
 function isBuiltSelector(selector: string): boolean {
   if (selector.length > MAX_SELECTOR || /[\u0000-\u001f\u007f]/.test(selector)) return false;
-  const plain = selector.replace(ESCAPE, 'x');
+  const plain = selector.replace(ESCAPE, escapedLetter);
   return BUILT.test(plain) && !/^(?:html|body)[.:]/i.test(plain.split(' > ').pop() as string);
 }
 

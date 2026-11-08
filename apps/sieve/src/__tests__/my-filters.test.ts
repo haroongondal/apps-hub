@@ -18,8 +18,9 @@ type Update = { removeRuleIds?: number[]; addRules?: Rule[] };
 const OLD_RULE: Rule = { id: 1, action: { type: 'block' } };
 
 // An in-memory `chrome` with one earlier My filters rule applied. `refuse`: Chrome refuses any update; `setFails`: storage
-// refuses writes; `onApply`: runs as Chrome starts taking the rules, which is slow.
-function setup(settings: Settings, options: { refuse?: string; setFails?: boolean; onApply?: () => void } = {}) {
+// refuses writes; `restoreFails`: Chrome refuses the second update, the one that puts the earlier rules back; `onApply`: runs as
+// Chrome starts taking the rules, which is slow.
+function setup(settings: Settings, options: { refuse?: string; setFails?: boolean; restoreFails?: boolean; onApply?: () => void } = {}) {
   const store = new Map<string, unknown>([['settings', structuredClone(settings)], ['myRules', [OLD_RULE]]]);
   let dynamic: Rule[] = [OLD_RULE];
   const updates: Update[] = [];
@@ -44,6 +45,7 @@ function setup(settings: Settings, options: { refuse?: string; setFails?: boolea
       updateDynamicRules: async (u: Update) => {
         updates.push(u);
         if (options.refuse) throw new Error(options.refuse);
+        if (options.restoreFails && updates.length === 2) throw new Error('Chrome is not answering');
         if (updates.length === 1) options.onApply?.();
         await sleep(20);
         dynamic = [...dynamic.filter((r) => !u.removeRuleIds?.includes(r.id)), ...(u.addRules ?? [])];
@@ -101,6 +103,16 @@ test('when storage refuses the write, the rules Chrome took are swapped back for
   assert.equal(t.updates.length, 2);
   assert.deepEqual(t.updates[1], { removeRuleIds: [1, 2, 1_000_000], addRules: [OLD_RULE] });
   assert.deepEqual(t.dynamic(), [OLD_RULE]);
+  assert.equal(t.settings().blocking.myFilters, 'old');
+  assert.deepEqual(t.store.get('myRules'), [OLD_RULE]);
+});
+
+test('when storage refuses the write and Chrome then fails to take the earlier rules back, the save still says nothing was stored', async () => {
+  const t = setup(withAllowlist, { setFails: true, restoreFails: true });
+  const out = await saveMyFilters('||a.example^\n||b.example^', 'old');
+  assert.deepEqual(out, { saved: 0, errors: [{ line: 0, text: '', reason: TOO_MANY_TO_STORE }], notSaved: TOO_MANY_TO_STORE });
+  assert.equal(t.updates.length, 2, 'the restore was tried once');
+  // Chrome keeps the new rules until the worker's next apply rebuilds them from storage, which still holds the earlier ones.
   assert.equal(t.settings().blocking.myFilters, 'old');
   assert.deepEqual(t.store.get('myRules'), [OLD_RULE]);
 });
