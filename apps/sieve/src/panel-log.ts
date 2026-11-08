@@ -22,6 +22,16 @@ export function addRow(rows: Row[], row: Row): boolean {
   return true;
 }
 
+export const HEALTHY_MS = 5000;
+export const MAX_QUICK_DROPS = 5;
+
+// A port that lived HEALTHY_MS or delivered a message was a good one (Chrome just stopped the idle worker), so the panel connects again at once.
+// Ports that drop right away mean the worker can't start: wait longer each time, and give up (null) after MAX_QUICK_DROPS in a row.
+export function afterDrop(quickDrops: number, livedMs: number, received: boolean): { quickDrops: number; retryMs: number | null } {
+  const quick = received || livedMs >= HEALTHY_MS ? 0 : quickDrops + 1;
+  return { quickDrops: quick, retryMs: quick >= MAX_QUICK_DROPS ? null : quick === 0 ? 0 : Math.min(250 * 2 ** (quick - 1), 2000) };
+}
+
 export function filterSources(load: (rulesetId: string) => Promise<Record<string, string>>) {
   const loaded = new Map<string, Promise<Record<string, string>>>();
   return {

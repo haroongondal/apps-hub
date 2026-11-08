@@ -21,16 +21,21 @@ export function onPanelConnect(port: chrome.runtime.Port): void {
   port.onDisconnect.addListener(() => drop(tabId, port));
 }
 
+// Nothing in here may throw: the caller counts the match right after.
 function send(tabId: number, message: () => object): void {
-  const open = ports.get(tabId);
-  if (!open) return;
-  const body = message();
-  for (const port of open) {
-    try {
-      port.postMessage(body);
-    } catch {
-      drop(tabId, port);
+  try {
+    const open = ports.get(tabId);
+    if (!open) return;
+    const body = message();
+    for (const port of open) {
+      try {
+        port.postMessage(body);
+      } catch {
+        drop(tabId, port);
+      }
     }
+  } catch (e) {
+    console.error('Sieve could not pass a blocked request to DevTools', e);
   }
 }
 

@@ -178,9 +178,19 @@ test('a panel that cannot be written to does not cost a count or the badge', asy
   panel(63, { fails: true });
   t.match(63, 'ads', 1);
   t.match(63, 'trackers', 2);
-  await t.until(() => t.badges.get(63) === '2' && t.store.has('counts:63'));
+  await t.until(() => t.badges.get(63) === '2' && (t.store.get('counts:63') as { trackers: number } | undefined)?.trackers === 1);
   assert.deepEqual(t.store.get('counts:63'), { ads: 1, trackers: 1 });
   assert.deepEqual(t.logged, []);
+});
+
+test('a match whose forwarding throws while the message is built is still counted', async () => {
+  const t = await setup();
+  panel(66);
+  const request = { tabId: 66, type: 'script', get url(): string { throw new Error('unreadable'); } };
+  t.counts.onMatched({ request, rule: { rulesetId: 'ads', ruleId: 1 } } as unknown as chrome.declarativeNetRequest.MatchedRuleInfoDebug);
+  await t.until(() => t.badges.get(66) === '1' && t.store.has('counts:66'));
+  assert.deepEqual(t.store.get('counts:66'), { ads: 1, trackers: 0 });
+  assert.equal(t.logged.length, 1);
 });
 
 test('a main-frame navigation tells the panel to clear, in order with the matches around it; a frame navigation does not', async () => {

@@ -80,6 +80,24 @@ test('only a port named panel:<tab id> from the extension is kept', () => {
   assert.deepEqual([stranger, fromPage, noSender, badName].map((p) => p.isOpen()), [true, false, false, true]);
 });
 
+test('a request whose address cannot be read throws nothing and is logged, and the next match still goes through', () => {
+  const a = port('panel:60');
+  connect(a);
+  const logged: unknown[][] = [];
+  const error = console.error;
+  console.error = (...args: unknown[]) => void logged.push(args);
+  try {
+    const request = { tabId: 60, type: 'script', get url(): string { throw new Error('unreadable'); } };
+    assert.doesNotThrow(() => forwardMatch({ request, rule: { rulesetId: 'ads', ruleId: 1 } } as unknown as chrome.declarativeNetRequest.MatchedRuleInfoDebug, 1));
+    forwardMatch(match(60), 2);
+  } finally {
+    console.error = error;
+  }
+  assert.equal(logged.length, 1);
+  assert.equal(a.sent.length, 1);
+  a.closeFromPanel();
+});
+
 test('an enormous address is cut', () => {
   const a = port('panel:50');
   connect(a);

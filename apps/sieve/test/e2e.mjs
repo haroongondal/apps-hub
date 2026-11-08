@@ -1112,7 +1112,7 @@ try {
   };
   const AD_SOURCE = builtSource('ads', AD_HOST);
   const TRACKER_SOURCE = builtSource('trackers', TRACKER_HOST);
-  const openPanel = async (tabId, { colorScheme = 'light', stub } = {}) => {
+  const openPanel = async (tabId, { colorScheme = 'light', stub, init } = {}) => {
     const page = await ctx.newPage();
     const problems = [];
     page.on('pageerror', (e) => problems.push(e.message));
@@ -1120,6 +1120,7 @@ try {
     await page.emulateMedia({ colorScheme });
     await page.setViewportSize({ width: 1100, height: 420 });
     if (stub) await page.addInitScript((s) => void (chrome.devtools = s), stub);
+    if (init) await page.addInitScript(init);
     await page.goto(`chrome-extension://${id}/panel.html${stub ? '' : `?tab=${tabId}`}`);
     return {
       page,
@@ -1226,8 +1227,12 @@ try {
     json(panelRows),
   );
   await panel.page.screenshot({ path: join(SHOTS, 'panel.png'), fullPage: true });
+  await panel.page.setViewportSize({ width: 700, height: 420 });
+  await panel.page.screenshot({ path: join(SHOTS, 'panel-700.png'), fullPage: true });
   await panel.page.emulateMedia({ colorScheme: 'dark' });
   await sleep(400);
+  await panel.page.screenshot({ path: join(SHOTS, 'panel-700-dark.png'), fullPage: true });
+  await panel.page.setViewportSize({ width: 1100, height: 420 });
   await panel.page.screenshot({ path: join(SHOTS, 'panel-dark.png'), fullPage: true });
   await panel.page.emulateMedia({ colorScheme: 'light' });
   await typeFilters('/control.js$script,important');
@@ -1255,28 +1260,75 @@ try {
   panelRows = await inPanel(panel, (r) => r.length === 2);
   check('navigating away drops the old rows and the notice', panelRows.length === 2 && (await panel.status()) === '', json({ n: panelRows.length, status: await panel.status() }));
 
+  await panel.page.evaluate(() => getSelection().selectAllChildren(document.querySelector('tbody tr td:nth-child(3)')));
+  const picked = await panel.page.evaluate(() => getSelection().toString());
+  await inspected.evaluate((src) => document.head.append(Object.assign(document.createElement('script'), { src })), `https://${AD_HOST}:${servers.httpsPort}/pagead/more.js`);
+  panelRows = await inPanel(panel, (r) => r.length === 3);
+  const keptSelection = await panel.page.evaluate(() => getSelection().toString());
+  check('a row added while the owner has text in the table selected leaves the selection alone, so a URL can be copied while rows stream in', picked.includes('/pagead/') && keptSelection === picked && rowFor(panelRows, '/pagead/more.js') !== undefined, json({ picked, keptSelection, rows: panelRows.length }));
+
   const panelErrorsBefore = await pw.evaluate(() => globalThis.panelErrors);
   await panel.page.evaluate(() => {
     const el = document.querySelector('[role=status]');
+    const tbody = document.querySelector('tbody');
     window.heard = [];
+    window.counts = [];
     new MutationObserver(() => window.heard.push(el.textContent)).observe(el, { childList: true, characterData: true, subtree: true });
+    new MutationObserver(() => window.counts.push(tbody.rows.length)).observe(tbody, { childList: true });
   });
   const panelStop = await stopWorker(ctx);
-  await until(() => panel.page.evaluate(() => window.heard.some((t) => /reconnecting/i.test(t))), Boolean);
-  const heard = await panel.page.evaluate(() => window.heard);
-  await until(() => panel.status(), (t) => t === '');
-  panelRows = await panel.rows();
-  check(
-    'when the worker stops, the panel says it is reconnecting, then connects again and keeps its rows',
-    panelStop === 'stopped' && heard.some((t) => /^Sieve is reconnecting/.test(t)) && (await panel.status()) === '' && panelRows.length === 2,
-    json({ panelStop, heard, status: await panel.status(), rows: panelRows.length }),
-  );
   pw = await startWorker(ctx, id);
   await watchErrors(pw);
+  await sleep(1800);
+  const quiet = await panel.page.evaluate(() => [window.heard, document.querySelector('[role=status]').textContent, document.querySelectorAll('tbody tr').length]);
+  check(
+    'when Chrome stops the idle worker, the panel connects again without saying anything, and keeps its rows',
+    panelStop === 'stopped' && same(quiet, [[], '', 3]),
+    json({ panelStop, quiet }),
+  );
+  const countsBefore = await panel.page.evaluate(() => window.counts.length);
   await inspected.reload({ waitUntil: 'load' });
-  await sleep(800);
-  panelRows = await inPanel(panel, (r) => r.length === 2);
-  check('after the restart, a reload reaches the reconnected panel: its rows are replaced by the new 2', panelRows.length === 2 && rowFor(panelRows, '/pagead/x.js') !== undefined && rowFor(panelRows, '/sieve-tracker.js') !== undefined, json(panelRows));
+  await until(() => panel.page.evaluate((n) => window.counts.slice(n).at(-1), countsBefore), (c) => c === 2);
+  const afterReload = await panel.page.evaluate((n) => window.counts.slice(n), countsBefore);
+  panelRows = await panel.rows();
+  check(
+    'after the restart, a reload reaches the reconnected port: the table is cleared (0 rows) and filled again (2), not left as it was',
+    afterReload.includes(0) && afterReload.at(-1) === 2 && panelRows.length === 2 && rowFor(panelRows, '/pagead/x.js') !== undefined && rowFor(panelRows, '/sieve-tracker.js') !== undefined,
+    json({ afterReload, panelRows }),
+  );
+
+  const lastPanel = await openPanel(inspectedId, {
+    init: () => {
+      window.connects = 0;
+      chrome.runtime.connect = () => {
+        window.connects++;
+        return { onMessage: { addListener() {} }, onDisconnect: { addListener: (f) => setTimeout(f, 10) } };
+      };
+    },
+  });
+  const dropStart = Date.now();
+  const lostText = await until(() => lastPanel.status(), (t) => /reconnecting/.test(t), 6_000);
+  const lostAfter = Date.now() - dropStart;
+  const goneText = await until(() => lastPanel.status(), (t) => /^Sieve stopped/.test(t), 8_000);
+  const triedThen = await lastPanel.page.evaluate(() => window.connects);
+  await sleep(2500);
+  const triedLater = await lastPanel.page.evaluate(() => window.connects);
+  check(
+    'when the worker cannot start and every port drops at once, the panel says it is reconnecting after about a second, then "Sieve stopped. Close and reopen DevTools, or reload the extension." after 5 tries, and stops trying',
+    /^Sieve is reconnecting/.test(lostText) && lostAfter >= 900 && goneText === 'Sieve stopped. Close and reopen DevTools, or reload the extension.' && triedThen === 5 && triedLater === 5 && lastPanel.problems.length === 0,
+    json({ lostText, lostAfter, goneText, triedThen, triedLater, problems: lastPanel.problems }),
+  );
+  await lastPanel.page.close();
+  const brokenPanel = await openPanel(inspectedId, {
+    init: () => {
+      chrome.runtime.connect = () => {
+        throw new Error('Extension context invalidated.');
+      };
+    },
+  });
+  const brokenText = await until(() => brokenPanel.status(), (t) => /^Sieve stopped/.test(t), 3_000);
+  check('when Chrome refuses the connection outright, the panel says "Sieve stopped…" at once and logs no error', brokenText === 'Sieve stopped. Close and reopen DevTools, or reload the extension.' && brokenPanel.problems.length === 0, json({ brokenText, problems: brokenPanel.problems }));
+  await brokenPanel.page.close();
 
   const inDevTools = await openPanel(undefined, { stub: { inspectedWindow: { tabId: inspectedId }, panels: { themeName: 'dark' } } });
   await inspected.reload({ waitUntil: 'load' });

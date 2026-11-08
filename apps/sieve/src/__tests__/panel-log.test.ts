@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_ROWS, addRow, filterSources, listName, type Row } from '../panel-log.ts';
+import { HEALTHY_MS, MAX_QUICK_DROPS, MAX_ROWS, addRow, afterDrop, filterSources, listName, type Row } from '../panel-log.ts';
 
 const row = (n: number): Row => ({ at: n, type: 'script', url: `https://ads.example/${n}.js`, list: 'Ads', filter: '||ads.example^' });
 
@@ -55,4 +55,27 @@ test('a list that fails to load gives no text, is logged, and is tried again by 
   } finally {
     console.error = error;
   }
+});
+
+test('a port that lived long or delivered a message is replaced at once, and an idle tab never makes the panel give up', () => {
+  let quick = 0;
+  for (let cycle = 0; cycle < 20; cycle++) {
+    const next = afterDrop(quick, HEALTHY_MS, false);
+    assert.deepEqual(next, { quickDrops: 0, retryMs: 0 });
+    quick = next.quickDrops;
+  }
+  assert.deepEqual(afterDrop(3, 10, true), { quickDrops: 0, retryMs: 0 });
+});
+
+test('ports that drop right away are retried after longer waits, then the panel gives up; a good port in between starts the count over', () => {
+  const waits: (number | null)[] = [];
+  let quick = 0;
+  for (let n = 1; n <= MAX_QUICK_DROPS; n++) {
+    const next = afterDrop(quick, 20, false);
+    waits.push(next.retryMs);
+    quick = next.quickDrops;
+  }
+  assert.deepEqual(waits, [250, 500, 1000, 2000, null]);
+  assert.deepEqual(afterDrop(MAX_QUICK_DROPS - 1, HEALTHY_MS - 1, false).retryMs, null);
+  assert.deepEqual(afterDrop(MAX_QUICK_DROPS - 1, 20, true), { quickDrops: 0, retryMs: 0 });
 });
