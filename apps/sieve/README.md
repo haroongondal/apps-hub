@@ -81,6 +81,28 @@ The panel connects to the worker with `runtime.connect({ name: 'panel:<tab id>' 
 
 `test:e2e` opens `panel.html?tab=<id>`, and stubs `chrome.devtools` to run the paths only DevTools takes (the tab id, the theme and the `panels.create` call). It doesn't open a real DevTools window.
 
+## AI search summaries
+
+`filters/ai-summaries.txt` is written by hand, not downloaded: a few `##` hide rules per engine for the AI answer on Google, Bing, DuckDuckGo and Brave Search, each scoped to that engine's own host, with no generic rule. The `ai` feature is off by default; the menu and the settings page switch it. The selectors prefer stable attributes and ids over generated class names. The Google and Bing selector names come from the notes of Stevo's AI Blocklist (MIT) and a Bing id in Bing's own page script; the lines are written here.
+
+The rules were checked on 2026-11-08 from a signed-out Chrome for Testing profile with the query "how do magnets work":
+
+| Engine | What the page showed | Rules |
+| --- | --- | --- |
+| Google | A robot check on every try, so no results | Not verified on a live page |
+| Bing | Results with no AI block, for four different questions | Not verified on a live page |
+| DuckDuckGo | A Search Assist answer above the results (a robot check on a headless run) | Verified on a live page, except the sidebar rule, which did not appear |
+| Brave Search | An AI answer above the results (a robot check when the address is opened directly; typing the question worked) | Verified on a live page |
+
+A verified rule hid the block with no gap left behind. The Google rules may leave a blank space where the block was. A search engine can rename any of these, and a rule that stops matching fails silently, so repeat the checklist below after a Chrome or site change.
+
+### Owner checklist: AI search summaries
+
+- [ ] With "AI search summaries" on (menu or settings page), search "how do magnets work" on Google, Bing, DuckDuckGo and Brave Search, and check that no AI summary shows on any of them.
+- [ ] Turn it off, reload each page, and check that the summary shows again.
+
+An engine shows a summary only for some questions, signed in or out, and in some regions. If a summary does not show with the switch off, the engine did not make one for you: try another question before you blame a rule. On Google and Bing, say which engine showed nothing, so the rule can be fixed against a real page.
+
 ## Known limits
 
 - The DevTools panel keeps the newest 500 requests of a page ("Showing the latest 500 requests." says when it dropped older ones) and cuts an address at 2,048 characters. A request blocked while the panel was reconnecting, a fraction of a second after a worker stop, is not listed, and a page that reloaded in that moment can leave its old rows until the next load. Like the counts, it only works where Chrome gives the debug event, in an unpacked install.
