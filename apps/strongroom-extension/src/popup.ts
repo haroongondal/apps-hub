@@ -23,6 +23,9 @@ async function call<T = unknown>(req: Request | { type: string }): Promise<T> {
 
 const root = document.getElementById('app')!;
 let tab: PageRef | null = null;
+// Chrome closes the toolbar popup when the file picker opens, so Import runs in a full tab (popup.html#import).
+const inImportTab = () => location.hash === '#import';
+let importNext = false;
 
 const msgBox = () => h('p', { class: 'ui-meta msg', role: 'alert' });
 const label = (text: string, input: HTMLElement) => h('label', { class: 'ui-field' }, h('span', { class: 'ui-caption' }, text), input);
@@ -57,6 +60,10 @@ async function route() {
   if (status.recoveryKey) return recoveryScreen(status.recoveryKey);
   if (status.state === 'no-vault') return setupScreen();
   if (status.state === 'locked') return unlockScreen();
+  if (importNext) {
+    importNext = false;
+    return importScreen();
+  }
   return vaultScreen();
 }
 
@@ -233,7 +240,7 @@ async function vaultScreen() {
       button('Copy password', () => guarded(msg, [], async () => copy((await call<Detail>({ type: 'get', id: r.id })).password, 'Password', toast))))));
 
   screen('Strongroom', null,
-    h('div', { class: 'ui-toolbar' }, button('Add', () => editScreen(null), 'ui-btn--primary'), button('Import', importScreen),
+    h('div', { class: 'ui-toolbar' }, button('Add', () => editScreen(null), 'ui-btn--primary'), button('Import', openImport),
       h('span', { class: 'grow' }), button('Lock', () => guarded(msg, [], async () => { await call({ type: 'lock' }); await route(); }), 'ui-btn--ghost')),
     pendingCard, hereCard, search, list, syncCard(sync, vaultScreen),
     unreadable > 0 && h('p', { class: 'ui-meta' }, `${unreadable} saved item${unreadable === 1 ? '' : 's'} couldn't be read and ${unreadable === 1 ? 'was' : 'were'} left untouched.`),
@@ -291,6 +298,12 @@ function editScreen(d: Detail | null) {
     label('Websites (one per line)', sites), label('Note', note), msg, save);
 }
 
+async function openImport() {
+  if (inImportTab()) return importScreen();
+  await chrome.tabs.create({ url: chrome.runtime.getURL('popup.html#import') });
+  window.close();
+}
+
 function importScreen() {
   const msg = msgBox();
   const file = h('input', { type: 'file', accept: '.csv,text/csv', class: 'ui-input' });
@@ -311,7 +324,8 @@ function importScreen() {
 
 async function main() {
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-  tab = active?.id !== undefined && active.url ? { tabId: active.id, url: active.url } : null;
+  tab = inImportTab() ? null : active?.id !== undefined && active.url ? { tabId: active.id, url: active.url } : null;
+  importNext = inImportTab();
   await route();
 }
 

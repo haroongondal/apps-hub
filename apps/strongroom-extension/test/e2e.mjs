@@ -330,7 +330,17 @@ try {
   await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
   check('the right master password unlocks', true);
 
+  // Chrome closes the toolbar popup when the file picker opens, so Import must run in its own tab.
+  const opened = ctx.waitForEvent('page', { timeout: 5000 }).catch(() => null);
   await popup.getByRole('button', { name: 'Import' }).click();
+  const tabPage = await opened;
+  const inTab = !!tabPage && tabPage.url().endsWith('#import');
+  check('Import opens in its own tab and imports', inTab, tabPage ? tabPage.url() : 'no new page');
+  if (!inTab) throw new Error('Import did not open a tab');
+  tabPage.on('pageerror', (e) => errors.push(`import tab: ${e.message}`));
+  await tabPage.locator('input[type=file]').waitFor();
+  await popup.close();
+  popup = tabPage;
   await popup.locator('input[type=file]').setInputFiles(CSV);
   await popup.getByText('logins found').waitFor();
   const summary = await popup.getByText('logins found').innerText();
