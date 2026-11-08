@@ -60,7 +60,7 @@ The filter compiler and the settings logic live in `packages/sieve-core` and are
 `node apps/sieve/test/perf.mjs` (build first) compares Sieve with no extension at all, in two fresh profiles that load each page in turn (a real-site load clears the cache and cookies first). It passes when:
 
 - on a local page with no ads, loaded 20 times per profile, the median `domContentLoadedEventEnd` with Sieve is at most 20 ms more than without;
-- on real sites (theguardian.com, dawn.com, edition.cnn.com, weather.com, bbc.com/news), 5 loads per profile, the median load time with Sieve is at most 1.10 times the one without on at least 4 of the 5 sites.
+- on real sites (theguardian.com, bbc.com/news, npr.org, nbcnews.com, wired.com), 5 loads per profile, the median load time with Sieve is at most 1.10 times the one without on at least 4 of the 5 sites. The plan first named dawn.com, edition.cnn.com and weather.com; on 2026-11-08 they did not load reliably without an ad blocker in headless Chrome (dawn.com answered HTTP 403 on both sides, CNN and weather.com loaded in 10 to 12 s and about 3 s with Sieve but timed out at 60 s or took up to 9 s without it), so they were replaced by sites that loaded 3 of 3 times without Sieve.
 
 It also prints each site's median DCL, load time and `JSHeapUsedSize`. It judges load times only: the renderer memory and style cost of the generic hiding CSS (about 41,000 selectors registered into every frame) is not measured. A full run should take about 4 to 8 minutes (an estimate, not measured) and needs the machine to itself: other work distorts the times. `node apps/sieve/test/perf.mjs --self-check` runs the verdict logic on made-up numbers and starts no browser.
 

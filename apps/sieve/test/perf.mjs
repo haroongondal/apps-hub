@@ -23,7 +23,7 @@ let SITE_RUNS = 5;
 let LOAD_MS = 60_000;
 let TOTAL_MS = 30 * 60_000;
 let SETTLE_MS = 1000;
-let SITES = ['https://www.theguardian.com/', 'https://www.dawn.com/', 'https://edition.cnn.com/', 'https://www.weather.com/', 'https://www.bbc.com/news'];
+let SITES = ['https://www.theguardian.com/', 'https://www.bbc.com/news', 'https://www.npr.org/', 'https://www.nbcnews.com/', 'https://www.wired.com/'];
 function readEnv() {
   LOCAL_RUNS = num('LOCAL_RUNS', LOCAL_RUNS);
   SITE_RUNS = num('SITE_RUNS', SITE_RUNS);
