@@ -301,32 +301,77 @@ R10, googlevideo (`S2:visionos` itag 137, 1080p, its first 62,914,560 bytes, all
 - **2026-11-07 (pause):** the owner asked to pause. The Task 1.6 fix agent was stopped one minute in;
   its half-written test was discarded. The ledger and the Task 1.6 findings are snapshotted in
   `docs/handoffs/sieve-sdd-ledger.md` and `docs/handoffs/sieve-task-1.6-fix-findings.md`.
+- **2026-11-08 (session 4):**
+  - The owner has not run the signed-in checklist (Task 0.6 steps 2 to 4 still pending).
+  - Task 1.6 fix round 1 done (`375fee3`, fresh Opus implementer, since the session-3 agent was gone):
+    I1 (ruling R17, an allowlisted frame embedded in another site is skipped, with an e2e that failed
+    first) and m2 to m6 (including `scriptletArgs` in sieve-core with a `node:vm` test). Sieve-core 86,
+    e2e 47, root `pnpm test` 571 pass, typecheck clean. Scoped re-review: all addressed. Deferred
+    minor: the duplicate-commit guard reads the worker's in-memory map, so a BFCache restore after
+    an idle pause can inject twice (harmless).
+  - Task 1.7 done (`19f083a`, review fixes `fd463b9`): counts and badge in `chrome.storage.session`,
+    toolbar menu (Blocking tab). Ruling R18: the build writes per-list `modifyIds` to `meta.json`
+    (83 header-only rules) and `classifyMatch` skips them, so the menu does not call them "blocked".
+    Count changes update the number in place (a full rebuild could swallow a click).
+  - Task 1.8 done (`ac01b1c`, review fixes `8b8cfea`): element picker. The worker validates the pick
+    (host from `sender.url`, never the message; strict selector grammar), only trusted clicks work,
+    writes are serialised. Ruling R19: a pick is saved under the full hostname (`www.` kept).
+    Six deferred minors in the ledger; the main one: an item under the bottom-right panel (a chat
+    bubble, a toast) cannot be picked, and the README's "scroll it away" advice is wrong for fixed
+    items. Picking inside iframes is a follow-up (many ads are iframes).
+  - Task 1.9 committed (`3fedd1e`, review fixes `e89814d`): settings page, My filters (compiled in
+    `options.js` only, `trusted: true`, atomic check against Chrome's dynamic rules, sources under
+    the top-level key `myRuleSources`), allowlist input, `#@#` exceptions, plain-word errors.
+    Review found data-loss paths; rulings R20 (one shared `navigator.locks` lock, `lock.ts`, around
+    every writer of settings/myFilters/myCosmetic/myRules/myRuleSources) and R21 (`unlimitedStorage`
+    plus rollback of the dynamic rules if the storage write fails). Scoped re-review of the fix
+    round was running when the session ended its last update. Subagents cannot write report files
+    (the harness refuses), so tasks 1.8 fix round and 1.9 have their reports only in the ledger.
+  - Task 1.10 (DevTools panel) dispatched in parallel with the 1.9 re-review (read-only).
+  - The owner asked about running agents in parallel: tasks share one worktree and one e2e harness,
+    so only read-only reviews overlap with the next implementer; `coord claim apps/sieve` is used
+    around build + e2e.
 
 ## Current state and next step
 
-- **State (paused 2026-11-07):** branch `sieve` is clean at the docs commit on top of the Task 1.6
-  commit `1f80fda`. No agents are running.
-  - Done and reviewed: Tasks 0.1 to 0.5, 0.6 step 1, 1.1 to 1.5.
-  - Task 1.6 committed and reviewed ("needs fixes"); fix round 1 not applied.
+- **State (2026-11-08, mid-session 4, parallel agents running):** branch `sieve`, HEAD `4aca08e`
+  or later. Per-task state is in the ledger snapshot `docs/handoffs/sieve-sdd-ledger.md` (the
+  authority) and the experiment log `docs/handoffs/sieve-parallel-metrics.md`.
+  - Done and reviewed (complete lines in the ledger): Tasks 0.1 to 0.5, 0.6 step 1, 1.1 to 1.9,
+    1.13 step 1 (`perf.mjs`, after two fix rounds).
+  - Committed, review or fix round open: 1.10 DevTools panel (`9ef8ffc`; review found one vacuous
+    reconnect e2e plus six minors; fix round 1 running), 1.11 YouTube ads (`27a1146`; review
+    running), 1.12 AI summaries list (`e401ee2`; review found false "hand-written" provenance, fix
+    running), polish batch for 1.8/1.9 minors (`4aca08e`; review running).
+  - Draft only: Phase 2 plan (`docs/superpowers/plans/2026-11-08-sieve-phase-2.md`, needs the
+    owner's approval).
+  - Not started: 1.13 steps 2 to 5 (clean-checkout gate, exclusive perf run, branch review, owner
+    hand-off README incl. the perf rerun policy and a real-DevTools line, handoff).
   - Waiting on the owner: the signed-in spike run (Task 0.6 steps 2 to 4; steps in
     `apps/sieve/spike/README.md`).
-  - Suite at `1f80fda`: sieve-core 85 tests, e2e 46 checks, root `pnpm test` 570 pass, typecheck
-    clean.
+  - Gate numbers are the implementers' reports, not re-run by the controller; the e2e in the shared
+    tree was contaminated twice by another agent's uncommitted work. Run the full gate once from a
+    clean checkout of HEAD before trusting it (Task 1.13 step 2).
   - The untracked copies of this file and the design in the main checkout
     (`/Users/outsentia/Documents/apps-hub`, branch `model-host`) are stale. The worktree copies are
     the real ones.
 - **Execution method:** subagent-driven (superpowers:subagent-driven-development). Switch to native
   (superpowers:executing-plans) only if the owner says so.
 - **Next step:**
-  1. Task 1.6 fix round 1, from `docs/handoffs/sieve-task-1.6-fix-findings.md`: I1 (ruling R17: also
-     skip a frame whose own URL is allowlisted, with an e2e), m2 to m6. Then a scoped re-review, then
-     mark 1.6 complete in the ledger.
-  2. Tasks 1.7 (counts, badge, toolbar menu), 1.8 (element picker), 1.9 (settings page, My filters,
-     allowlist), 1.10 (DevTools panel). Each: implementer, task review, fix rounds, scoped re-review.
-  3. When the owner gives the signed-in results: finish Task 0.6 (record Q1 to Q4 signed in, decide
-     phase 5 by the plan's rule), then 1.11 (the fixture already exists at
-     `apps/sieve/spike/fixtures/player-response.json`), 1.12, 1.13, then the final whole-branch
-     review. Phases 2 to 5 are planned after that.
+  1. Finish the open review and fix rounds listed above (each: fix, scoped per-commit re-review,
+     ledger `complete` line). Per-commit review packages: `review-package PLAN <sha>^ <sha>`.
+  2. Task 1.13 steps 2 to 5 once the above are committed; the full perf run needs the machine to
+     itself; README: perf rerun policy (a lost-load FAIL is re-run once; the same site failing again
+     means a real break; a different site on the second run is another flake; a site that
+     blocks only the extension profile fails every time: `HEADLESS=0` or replace it with `SITES=`),
+     owner checklist lines (real DevTools once; signed-in YouTube; the AI-summaries four engines).
+  3. Final whole-branch review (most capable model), `finishing-a-development-branch`, and the
+     controller's "Rulings I made" list (ledger lines containing `Ruling:`, R1 to R25).
+  4. When the owner gives the signed-in results: finish Task 0.6 (record Q1 to Q4 signed in, decide
+     phase 5 by the plan's rule). Phase 2 needs the owner's approval of the drafted plan.
+  5. Write the skill from the parallel-agent experiment (the owner asked): lessons are in
+     `docs/handoffs/sieve-parallel-metrics.md` (coord is session-scoped, so subagents of one session
+     need a real lock or, better, one worktree per agent merged in order).
 - **Carry-forward notes** (the full list, with every deferred minor finding for the final review, is
   in the ledger snapshot):
   - 1.7: `blockingError` is stored in `chrome.storage.session`. A tab hostname can end in a dot
