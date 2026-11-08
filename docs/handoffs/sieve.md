@@ -385,7 +385,7 @@ Task 1.11 fix round 1 (`5f2cabd`), same setup with an extension-free control fir
   1. Owner: install both folders (README "Install and first run"), run the signed-in YouTube and AI-summaries checklists, answer the decisions above.
   2. When the owner gives the signed-in results: finish Task 0.6 (record Q1 to Q4, decide Phase 5 by the plan's rule).
   3. On the owner's approval: schedule Phase 2 from its plan (independent pairs and shared files are tabled in the plan; start no more than two agents on the shared files at once).
-  4. Before merging: `finishing-a-development-branch` (nothing is pushed; branch `sieve` has about 70 commits on `ec23cbd`); the final "Rulings I made" list is the ledger lines containing `Ruling:` (R1 to R30).
+  4. Before merging: `finishing-a-development-branch` (nothing is pushed; branch `sieve` has 62 commits on `ec23cbd`); the final "Rulings I made" list is the ledger lines containing `Ruling:` (R1 to R30).
 - **Carry-forward notes** (the full list, with every deferred minor finding for the final review, is
   in the ledger snapshot):
   - 1.7: `blockingError` is stored in `chrome.storage.session`. A tab hostname can end in a dot
