@@ -31,13 +31,13 @@ const ytReply = tab?.id !== undefined && tabUrl?.hostname === 'www.youtube.com' 
 const ytFound = ytChannel(ytReply);
 const channel = ytFound && { id: ytFound.id, name: ytFound.name };
 let reloadHint = false;
-let pickFailed: string | undefined;
 let liveCounts: Counts | undefined;
 
 const canAllowlist = (entry: AllowEntry) => validateSettings({ blocking: { allowlist: [entry] } }).blocking.allowlist.length > 0;
 
 const button = (id: string, text: string, onclick: () => unknown, props: Record<string, unknown> = {}) => h('button', { class: 'ui-btn', type: 'button', 'data-id': id, onclick, ...props }, text);
 const errorBanner = h('p', { class: 'banner banner--danger', role: 'alert' });
+const pickError = h('p', { class: 'banner banner--danger', role: 'alert' });
 const SWAPS: Record<string, string> = { pause: 'resume', resume: 'pause' };
 
 // The picker lives in the page, so the menu only starts it and gets out of the way.
@@ -49,7 +49,7 @@ async function pickItem(): Promise<void> {
   } catch (e) {
     console.error('Sieve could not open the item picker', e);
     // Chrome never lets extensions script some pages (the Chrome Web Store); a reload can't help there.
-    pickFailed = /cannot be scripted/i.test(e instanceof Error ? e.message : String(e))
+    pickError.textContent = /cannot be scripted/i.test(e instanceof Error ? e.message : String(e))
       ? "Sieve can't open the item picker on this page."
       : "Sieve couldn't open the item picker here. Reload this page, then try again.";
     await render();
@@ -103,7 +103,6 @@ function blockingView({ settings: s, error, counts }: State): Child[] {
         { class: 'actions' },
         // Where blocking is off a saved pick would not show after a reload, and an address Sieve can't write a filter for has no host to save it under.
         button('pick', 'Block an item on this page', pickItem, { disabled: !canAllowlist({ kind: 'site', host }) || s.blocking.paused || isAllowed(page, entries) }),
-        pickFailed !== undefined && h('p', { class: 'ui-meta', role: 'alert' }, pickFailed),
         button('page', pageEntry ? 'Resume on this page' : 'Pause on this page', pausePage, { disabled: !canAllowlist({ kind: 'page', url: page }) }),
         reloadHint && h('p', { class: 'ui-meta' }, 'Reload this page to see the change.'),
       ),
@@ -118,6 +117,7 @@ function blockingView({ settings: s, error, counts }: State): Child[] {
   if (error !== undefined && errorBanner.textContent !== errorText(error)) errorBanner.textContent = errorText(error);
   return [
     error !== undefined && errorBanner,
+    pickError.textContent !== '' && pickError,
     s.blocking.paused && h('div', { class: 'banner banner--warn', role: 'status' }, h('span', {}, 'Blocking is paused everywhere'), button('resume', 'Resume', () => setBlocking({ paused: false }))),
     h('div', { class: 'stack', inert: !s.enabled }, here, switches, !s.blocking.paused && button('pause', 'Pause everywhere', () => setBlocking({ paused: true }))),
   ];
@@ -156,13 +156,14 @@ async function render(): Promise<void> {
   };
   const focused = document.activeElement?.getAttribute('data-id');
   const nodes = view(state).filter((c): c is Node => !!c);
-  // The error banner stays in the page while it shows, so a screen reader announces it once, not on every change.
-  const at = nodes.indexOf(errorBanner);
-  if (at >= 0 && errorBanner.parentNode === root) {
-    for (const node of [...root.childNodes]) if (node !== errorBanner) node.remove();
-    errorBanner.before(...nodes.slice(0, at));
-    errorBanner.after(...nodes.slice(at + 1));
-  } else root.replaceChildren(...nodes);
+  // A shown alert never leaves the page, so a screen reader announces it once, not on every redraw: the rest is replaced around it.
+  const kept = new Set(nodes.filter((n) => (n === errorBanner || n === pickError) && n.parentNode === root));
+  for (const node of [...root.childNodes]) if (!kept.has(node)) node.remove();
+  let last: Node | null = null;
+  for (const node of nodes) {
+    if (!kept.has(node)) root.insertBefore(node, last ? last.nextSibling : root.firstChild);
+    last = node;
+  }
   // "Pause everywhere" and "Resume" replace each other, so focus moves to the one that took the place of the button pressed.
   if (focused) (root.querySelector<HTMLElement>(`[data-id="${focused}"]`) ?? root.querySelector<HTMLElement>(`[data-id="${SWAPS[focused]}"]`))?.focus();
 }

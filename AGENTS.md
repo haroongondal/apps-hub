@@ -143,7 +143,7 @@ cd apps/design-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :design-media:testDebugUnitTest :app:assembleDebug
 # Sieve (Chrome extension; the e2e opens headless Chrome for Testing in a temporary profile):
 pnpm --filter sieve build && pnpm --filter sieve test:e2e
-node apps/sieve/test/perf.mjs   # 4 to 8 minutes, real sites, needs the machine otherwise idle
+node apps/sieve/test/perf.mjs   # about 4 to 8 minutes (estimate, not measured), real sites, needs the machine otherwise idle
 # Electron apps (open real windows, so not part of `pnpm test`):
 pnpm --filter pdf-editor-desktop test:e2e   # desktop + Electron + mobile-bridge suites
 pnpm --filter design-editor test:e2e

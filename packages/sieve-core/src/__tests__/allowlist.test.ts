@@ -79,6 +79,14 @@ test('excludePatterns: a home page entry covers that page only, not every page o
   assert.deepEqual(excludePatterns([], ['https://a.com/watch?v=1']), ['*://a.com/watch?v=1']);
 });
 
+test('excludePatterns keeps the path and query as the entry has them: an empty query `?` is not the page without one', () => {
+  assert.deepEqual(excludePatterns([], ['https://a.com/p?']), ['*://a.com/p?']);
+  assert.deepEqual(excludePatterns([], ['https://a.com/p?q=1&r=2']), ['*://a.com/p?q=1&r=2']);
+  assert.deepEqual(excludePatterns([], ['https://a.com/']), ['*://a.com/']);
+  assert.deepEqual(excludePatterns([], ['https://a.com/p']), ['*://a.com/p']);
+  assert.deepEqual(excludePatterns([], ['http://localhost:8080/?']), ['*://localhost/?']);
+});
+
 test('excludePatterns drops a page port, which Chrome refuses after `*://`; a pattern with no port matches every port', () => {
   assert.deepEqual(excludePatterns(['localhost'], ['http://localhost:8080/x?y=1']), ['*://*.localhost/*', '*://localhost/x?y=1']);
   assert.deepEqual(excludePatterns([], ['https://[2001:db8::1]:8443/x']), ['*://[2001:db8::1]/x']);

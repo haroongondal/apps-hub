@@ -52,13 +52,14 @@ export function allowRules(entries: AllowEntry[], firstId: number, priority: num
 }
 
 // `*.host` covers the host and its subdomains (an IP takes no `*.`). A page is that exact page, as in isAllowed and the allow rule:
-// Chrome matches a pattern's path against the URL's path and query (never the hash), with `?` literal. Any port: Chrome refuses `*://host:port`.
+// Chrome matches a pattern's path against the URL's path and query (never the hash), with `?` literal, so the entry's own text after the
+// origin is kept as it is (`u.search` drops an empty `?`). Entries carry no hash or userinfo. Any port: Chrome refuses `*://host:port`.
 export function excludePatterns(hosts: string[], pages: string[]): string[] {
   return [
     ...hosts.map((h) => (IP.test(h) ? `*://${h}/*` : `*://*.${h}/*`)),
     ...pages.map((p) => {
       const u = new URL(p);
-      return `*://${u.hostname}${u.pathname}${u.search}`;
+      return `*://${u.hostname}${p.slice(u.origin.length)}`;
     }),
   ];
 }

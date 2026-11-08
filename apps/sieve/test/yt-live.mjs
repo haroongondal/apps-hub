@@ -30,6 +30,9 @@ if (process.argv.includes('--self-check')) {
   assert.equal(judgePlayback({ playedTo: 28 }, { endedAt: 6 }).verdict, 'fail', 'a stall past 5 s no longer passes');
   assert.equal(judgePlayback({ playedTo: 4 }, { endedAt: 28 }).verdict, 'inconclusive', 'a control that did not play cannot be compared');
   assert.equal(judgePlayback({ playedTo: 0 }, { endedAt: 0 }).verdict, 'inconclusive');
+  assert.equal(judgePlayback({ playedTo: 10 }, { endedAt: 6 }).verdict, 'pass', 'a ratio of exactly 0.6 passes');
+  assert.equal(judgePlayback({ playedTo: 5 }, { endedAt: 5 }).verdict, 'inconclusive', 'a control of exactly 5 s cannot be compared');
+  assert.equal(judgePlayback({ playedTo: 28 }, { endedAt: null }).verdict, 'fail', 'no end time with Sieve is a failure');
   assert.equal(exitCode({ failed: 0, videos: 3, skipped: 3, inconclusive: 0 }), 2, 'all skipped is no evidence');
   assert.equal(exitCode({ failed: 0, videos: 3, skipped: 1, inconclusive: 2 }), 2, 'skipped plus inconclusive is no evidence');
   assert.equal(exitCode({ failed: 0, videos: 3, skipped: 1, inconclusive: 1 }), 0);
@@ -123,5 +126,7 @@ try {
 
 console.log(`\n${results.filter((r) => r.ok).length}/${results.length} live checks passed, ${inconclusive} inconclusive, ${skipped} skipped`);
 const code = exitCode({ failed: results.filter((r) => !r.ok).length, videos: VIDEOS.length, skipped, inconclusive });
-if (code === 2) console.log('NO EVIDENCE: every video was skipped or showed no ad, so this run shows nothing about Sieve. Run it again from another network, or watch the videos by hand.');
+// Exit 2 means no ad was served (or every video was skipped); playback checks that ran (all passed, or the exit would be 1) still count.
+if (code === 2 && results.length > 0) console.log('NO EVIDENCE about ad removal (no ad was served); the playback checks above still stand.');
+else if (code === 2) console.log('NO EVIDENCE: every video was skipped or showed no ad, so this run shows nothing about Sieve. Run it again from another network, or watch the videos by hand.');
 process.exit(code);

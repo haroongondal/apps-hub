@@ -39,17 +39,22 @@ const visit = async (ctx, url) => {
   return [...servers.hits];
 };
 
-// [promise answer, callback answer, PushManager.subscribe outcome, requestPermission is the browser's own (no blocker)]
-const askNotifications = async (ctx, url) => {
+// [promise answer, callback answer, PushManager.subscribe outcome, requestPermission is the browser's own (no blocker)].
+// `spoof`: the page first redefines Notification.permission as 'granted'. A prompt that never answers gives 'no answer' after 3 s.
+const askNotifications = async (ctx, url, spoof = false) => {
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(url, { waitUntil: 'load' });
-  const out = await page.evaluate(async () => [
-    await Notification.requestPermission(),
-    await new Promise((r) => Notification.requestPermission(r)),
-    await PushManager.prototype.subscribe.call({}).then(() => 'subscribed', (e) => e.name),
-    Function.prototype.toString.call(Notification.requestPermission).includes('[native code]'),
-  ]);
+  const out = await page.evaluate(async (spoofed) => {
+    if (spoofed) Object.defineProperty(Notification, 'permission', { get: () => 'granted', configurable: true });
+    const late = (p) => Promise.race([p, new Promise((r) => setTimeout(() => r('no answer'), 3000))]);
+    return [
+      await late(Notification.requestPermission()),
+      await late(new Promise((r) => Notification.requestPermission(r))),
+      await late(PushManager.prototype.subscribe.call({}).then(() => 'subscribed', (e) => e.name)),
+      Function.prototype.toString.call(Notification.requestPermission).includes('[native code]'),
+    ];
+  }, spoof);
   await page.close();
   return out;
 };
@@ -242,6 +247,8 @@ try {
   await ctx.clearPermissions();
   let answers = await askNotifications(ctx, ADS_IP);
   check('with Site notification requests on, a site that has not been answered yet is told "denied" and cannot subscribe to push', answers.join() === 'denied,denied,NotAllowedError,false', json(answers));
+  answers = await askNotifications(ctx, ADS_IP, true);
+  check('a page that redefines Notification.permission as "granted" is still told "denied" and cannot subscribe: Sieve reads the real permission', answers.join() === 'denied,denied,NotAllowedError,false', json(answers));
   await ctx.grantPermissions(['notifications']);
   answers = await askNotifications(ctx, ADS_IP);
   check(
@@ -588,6 +595,29 @@ try {
   check('on a chrome:// tab the menu has no "Block an item on this page" button', (await buttonOf('Block an item on this page').count()) === 0);
   await m.pop.close();
   await extensions.close();
+
+  // Chrome refuses port 1 (ERR_UNSAFE_PORT), so the tab shows its error page, which extensions can't script.
+  const REFUSED = 'http://localhost:1/';
+  const errorTab = await ctx.newPage();
+  await errorTab.goto(REFUSED).catch(() => {});
+  m = await menu(await until(() => tabFor(sw4, REFUSED), (t) => t !== undefined));
+  await buttonOf('Block an item on this page').click();
+  const pickAlert = m.pop.getByText("Sieve couldn't open the item picker here. Reload this page, then try again.");
+  await pickAlert.waitFor();
+  await pickAlert.evaluate((el) => (el.dataset.seen = 'yes'));
+  await toggled('Cookie banners').uncheck();
+  await until(async () => (await blockingOf(sw4)).lists.cookies, (v) => v === false);
+  await toggled('Cookie banners').check();
+  await until(async () => (await blockingOf(sw4)).lists.cookies, (v) => v === true);
+  await sleep(300); // the menu redraws after each storage change
+  const pickKept = await m.pop.evaluate(() => [...document.querySelectorAll('[role=alert]')].map((el) => [el.textContent, el.dataset.seen]));
+  check(
+    'when the picker cannot open on a page, the menu says so once: the alert stays the same node while settings change around it',
+    same(pickKept, [["Sieve couldn't open the item picker here. Reload this page, then try again.", 'yes']]),
+    json(pickKept),
+  );
+  await m.pop.close();
+  await errorTab.close();
 
   const v6 = http.createServer((_, res) => res.end('<!doctype html><title>v6</title>'));
   await new Promise((r) => v6.listen(0, '::1', r));
