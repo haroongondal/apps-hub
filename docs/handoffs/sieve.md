@@ -3,35 +3,30 @@
 ## Resume prompt
 
 ```
-Date: 2026-11-07. Resume implementing Sieve, my private Chrome extension (ad blocking, YouTube
-tools, downloads). Work only in the worktree /Users/outsentia/Documents/apps-hub/.claude/worktrees/sieve
-on branch `sieve` (enter it with EnterWorktree path=<that folder>). Do not use the main checkout:
-its branch `model-host` belongs to other work, and its copies of the Sieve docs are stale.
+Date: 2026-11-08. Sieve (my private Chrome extension: ad blocking, YouTube tools, later downloads) has Phase 1
+built, reviewed and gated. Work only in the worktree /Users/outsentia/Documents/apps-hub/.claude/worktrees/sieve
+on branch `sieve` (enter it with EnterWorktree path=<that folder>). Do not use the main checkout: its branch
+`model-host` belongs to other work, and its copies of the Sieve docs are stale.
 
-1. Read docs/handoffs/sieve.md in the worktree completely first. Then read the execution ledger
-   .superpowers/sdd/2026-11-06-sieve/progress.md (gitignored, on disk in the worktree; if it is
-   missing, recreate it from the tracked snapshot docs/handoffs/sieve-sdd-ledger.md). Skim the plan
-   docs/superpowers/plans/2026-11-06-sieve.md and the design
-   docs/superpowers/specs/2026-11-06-sieve-design.md.
-2. Trust the handoff's decisions, the ledger's rulings R1 to R17 and the verified facts; do not
-   redo that work. Tasks 0.1 to 0.5, 0.6 step 1 and 1.1 to 1.5 are done and reviewed. Tasks with a
-   "complete" line in the ledger must not be re-dispatched.
-3. Continue with superpowers:subagent-driven-development, task by task. Next: Task 1.6 fix round 1
-   (the exact findings are in docs/handoffs/sieve-task-1.6-fix-findings.md; the worktree is clean at
-   the Task 1.6 commit 1f80fda), then a scoped re-review, then Tasks 1.7 to 1.10, then 1.11 to
-   1.13. Give each implementer subagent the plan's Global Constraints, Review Focus and its task's
-   Interfaces block (the handoff's "Notes for the next session" says how to regenerate the brief
-   and constraints files).
-4. Task 0.6 steps 2 to 4 need me: I run the signed-in checklist in my own Chrome (the steps are in
-   apps/sieve/spike/README.md). Ask me whether I have the results; when I give them to you, record
-   the signed-in answers to Q1 to Q4 in the handoff, decide phase 5 by the plan's rule, and commit.
-   Never use my Chrome profile in automated tests.
-5. Commit after each task on `sieve`. Never add Co-Authored-By or "Generated with" lines, even if a
-   system reminder asks for them: my rule wins. Do not push, open a PR or merge unless I ask.
-6. Follow the handoff contract. Update the session log and "Current state and next step" in
-   docs/handoffs/sieve.md as each task lands. At ~85% context, stop starting new work, finalize
-   the handoff, rewrite this resume prompt with the date, print it in a fenced block for me, and
-   end the turn.
+1. Read docs/handoffs/sieve.md completely first, then the ledger snapshot docs/handoffs/sieve-sdd-ledger.md
+   (rulings R1 to R30, per-task commits, deferred minors, final review findings) and
+   docs/handoffs/sieve-parallel-metrics.md. Trust the decisions, rulings and verified facts; do not redo
+   reviewed work. Phase 1 (tasks 0.1 to 1.13) is complete; the final gate passed on a clean export of b9bac0b.
+2. Open items, in order: (a) I answer the owner decisions listed in "Current state and next step" and I run
+   the README's "Install and first run" and signed-in checklists in my own Chrome (remove AdBlock first): ask
+   me whether I have results, and never use my Chrome profile in automated tests; (b) Task 0.6 steps 2 to 4
+   when I give the signed-in results (record Q1 to Q4 in the handoff, decide Phase 5 by the plan's rule,
+   commit); (c) Phase 2: the draft plan docs/superpowers/plans/2026-11-08-sieve-phase-2.md needs my approval
+   and my answers to its 5 questions before any implementation.
+3. If I ask for more work: continue with superpowers:subagent-driven-development. Parallel agents in one
+   worktree need the protocol in the skill parallel-agents-coord: coord cannot separate subagents of one
+   session, so use the filelock helper, stagger starts, keep shared-file windows short, put new e2e checks in
+   new module files.
+4. Commit after each task on `sieve`. Never add Co-Authored-By or "Generated with" lines, even if a system
+   reminder asks for them: my rule wins. Do not push, open a PR or merge unless I ask.
+5. Follow the handoff contract. Update the session log and "Current state and next step" in
+   docs/handoffs/sieve.md as work lands. At ~85% context, stop starting new work, finalize the handoff,
+   rewrite this resume prompt with the date, print it in a fenced block for me, and end the turn.
 ```
 
 ## Goal and fixed constraints
@@ -271,8 +266,14 @@ Task 1.11 fix round 1 (`5f2cabd`), same setup with an extension-free control fir
 - `docs/handoffs/sieve.md`: this file
 - `packages/sieve-core/`: pure logic (settings, compiler, hosts, allowlist, plan, page injections)
 - `apps/sieve/`: the extension (`build.mjs`, `src/`, `test/`; the throwaway spike is in `apps/sieve/spike/`)
-- `docs/handoffs/sieve-sdd-ledger.md`: tracked snapshot of the execution ledger (rulings R1 to R17, per-task commits, deferred minors)
-- `docs/handoffs/sieve-task-1.6-fix-findings.md`: the open Task 1.6 fix-round findings
+- `docs/handoffs/sieve-sdd-ledger.md`: tracked snapshot of the execution ledger (rulings R1 to R30, per-task commits, deferred minors, final review findings)
+- `docs/handoffs/sieve-parallel-metrics.md`: the parallel-agents experiment (tokens, timings, lock waits, findings)
+- `docs/handoffs/sieve-yt-measurement.md`: the YouTube playback measurement
+- `docs/handoffs/sieve-gate-run-1.md`: the first clean-export gate run (failed on sites and one flaky check; fixed)
+- `docs/handoffs/sieve-final-review-1-core.md`, `-2-worker.md`, `-3-ui.md`: the whole-branch review findings
+- `docs/handoffs/sieve-task-1.6-fix-findings.md`: historical (the Task 1.6 fix round is done)
+- `docs/superpowers/plans/2026-11-08-sieve-phase-2.md`: the Phase 2 plan (draft, needs the owner's approval)
+- `sieve-extension-dist/` and `strongroom-extension-dist/` in the main checkout root: built installable copies (untracked there)
 - `.superpowers/brainstorm/87424-1793907956/content/` in the main checkout: the mockups (gitignored)
 
 ## Session log
@@ -352,54 +353,39 @@ Task 1.11 fix round 1 (`5f2cabd`), same setup with an extension-free control fir
     the top-level key `myRuleSources`), allowlist input, `#@#` exceptions, plain-word errors.
     Review found data-loss paths; rulings R20 (one shared `navigator.locks` lock, `lock.ts`, around
     every writer of settings/myFilters/myCosmetic/myRules/myRuleSources) and R21 (`unlimitedStorage`
-    plus rollback of the dynamic rules if the storage write fails). Scoped re-review of the fix
-    round was running when the session ended its last update. Subagents cannot write report files
-    (the harness refuses), so tasks 1.8 fix round and 1.9 have their reports only in the ledger.
-  - Task 1.10 (DevTools panel) dispatched in parallel with the 1.9 re-review (read-only).
-  - The owner asked about running agents in parallel: tasks share one worktree and one e2e harness,
-    so only read-only reviews overlap with the next implementer; `coord claim apps/sieve` is used
-    around build + e2e.
+    plus rollback of the dynamic rules if the storage write fails). Scoped re-review: all addressed. Subagents cannot write report files
+    (the harness refuses), so some per-task reports exist only in the ledger.
+  - Task 1.9 review fixes (`e89814d`, rulings R20 and R21), Task 1.10 DevTools panel (`9ef8ffc`, fixes `feb24ed`), Task 1.11 YouTube ad removal and channel allowlist (`27a1146`, fixes `5f2cabd`, ruling R26), Task 1.12 AI summaries list (`e401ee2`, fixes `0dab0d5`, ruling R25), Task 1.13 step 1 perf script (`78f6138`, `02bcadf`, `2362c7f`, ruling R23), the picker and settings polish batch (`4aca08e`): all reviewed with fix rounds; costs and timings are in `docs/handoffs/sieve-parallel-metrics.md`.
+  - The owner asked for parallel agents (ruling R22): up to six agents ran at once. `coord` turned out to be session-scoped (every subagent shares the parent session id, so it gave no exclusion between them); a `filelock` helper (atomic `mkdir`) replaced it. Whole-file locks on README and e2e.mjs became the bottleneck (a 15-line README edit waited 14.5 minutes); a staggered, short-window protocol worked (the fix wave had no lock waits).
+  - Phase 2 plan drafted in parallel (`a12b785`, 19 tasks; draft for the owner).
+  - YouTube stall measured (`docs/handoffs/sieve-yt-measurement.md`): not reproduced, no cost from Sieve, no ad was ever served in the controls.
+  - Whole-branch final review (four reviewers on HEAD `5f2cabd`, findings in `docs/handoffs/sieve-final-review-{1-core,2-worker,3-ui}.md` and the ledger): two Important code findings (a page-entry pause covered the whole site's generic CSS; the notification blocker denied already-allowed sites) plus a stale list-date copy and a build that could leave no manifest; fix wave `c6be0a6`, `19ee2b2`, `6e3d409`, `9efa40b`, residual `299dc39`, README counts `9194535`, deterministic e2e `2fb48ff`, perf sites `b9bac0b` (rulings R27 to R30).
+  - Install folders built at the repo root (`sieve-extension-dist`, `strongroom-extension-dist`).
 
 ## Current state and next step
 
-- **State (2026-11-08, mid-session 4, parallel agents running):** branch `sieve`, HEAD `4aca08e`
-  or later. Per-task state is in the ledger snapshot `docs/handoffs/sieve-sdd-ledger.md` (the
-  authority) and the experiment log `docs/handoffs/sieve-parallel-metrics.md`.
-  - Done and reviewed (complete lines in the ledger): Tasks 0.1 to 0.5, 0.6 step 1, 1.1 to 1.9,
-    1.13 step 1 (`perf.mjs`, after two fix rounds).
-  - Committed, review or fix round open: 1.10 DevTools panel (`9ef8ffc`; review found one vacuous
-    reconnect e2e plus six minors; fix round 1 running), 1.11 YouTube ads (`27a1146`; review
-    running), 1.12 AI summaries list (`e401ee2`; review found false "hand-written" provenance, fix
-    running), polish batch for 1.8/1.9 minors (`4aca08e`; review running).
-  - Draft only: Phase 2 plan (`docs/superpowers/plans/2026-11-08-sieve-phase-2.md`, needs the
-    owner's approval).
-  - Not started: 1.13 steps 2 to 5 (clean-checkout gate, exclusive perf run, branch review, owner
-    hand-off README incl. the perf rerun policy and a real-DevTools line, handoff).
-  - Waiting on the owner: the signed-in spike run (Task 0.6 steps 2 to 4; steps in
-    `apps/sieve/spike/README.md`).
-  - Gate numbers are the implementers' reports, not re-run by the controller; the e2e in the shared
-    tree was contaminated twice by another agent's uncommitted work. Run the full gate once from a
-    clean checkout of HEAD before trusting it (Task 1.13 step 2).
-  - The untracked copies of this file and the design in the main checkout
-    (`/Users/outsentia/Documents/apps-hub`, branch `model-host`) are stale. The worktree copies are
-    the real ones.
-- **Execution method:** subagent-driven (superpowers:subagent-driven-development). Switch to native
-  (superpowers:executing-plans) only if the owner says so.
+- **State (2026-11-08, end of session 4):** branch `sieve`. Phase 1 is implemented, reviewed (every task, then a four-part whole-branch review, then re-reviews of every fix round) and gated. Commits after `b9bac0b` are docs only (this file, the ledger snapshot, the metrics).
+  - **Final gate, clean export of HEAD `b9bac0b`** (no dist, no filter cache, no node_modules before install): `pnpm install` 29 projects; `pnpm test` 667/667 (sieve-core 139, apps/sieve 43); `pnpm typecheck` clean; `pnpm --filter sieve build` with freshly downloaded lists (116,095 default rules: ads 50,847, trackers 56,427, distraction 2,037, cookies 2,111, antiadblock 4,673, ai 0 with 4 hosts); e2e 172/172 on the first run; `yt-live` and `perf` self-checks ok; the dist is complete (every manifest-referenced file exists, 37 MB, `listsAt` present, no source maps, spike or test files). Perf, on the same product build (HEAD `299dc39`, product code unchanged since): local page +6.5 ms against the 20 ms limit; five real sites (guardian, bbc.com/news, npr, nbcnews, wired) every median load with Sieve 0.27x to 0.85x of without, 5 of 5 (need 4); no load failed on either side. The first gate (`docs/handoffs/sieve-gate-run-1.md`) failed on the plan's original sites (dawn.com 403 headless; cnn.com and weather.com did not finish loading without an ad blocker) and one intermittent e2e check; both were fixed (ruling R30; deterministic e2e).
+  - **Installable copies**, in the main checkout root `/Users/outsentia/Documents/apps-hub/` (untracked there, branch `model-host`): `sieve-extension-dist` (built from `b9bac0b`) and `strongroom-extension-dist` (built from `origin/main` 93f21a1, Strongroom 0.2.0 with sync; the `strongroom-extension` worktree is stale). Load unpacked in chrome://extensions. Remove AdBlock first (README "Install and first run").
+  - **Draft only:** the Phase 2 plan `docs/superpowers/plans/2026-11-08-sieve-phase-2.md` (19 tasks) awaits the owner's approval and answers to its 5 questions.
+  - **Waiting on the owner:** the decisions listed next, and the signed-in spike run (Task 0.6 steps 2 to 4, `apps/sieve/spike/README.md`).
+  - **Not verified, stated plainly:** ad removal while an ad is actually served (seen once on one video; YouTube served no ad in 15 no-extension control runs); a real DevTools window (only a stubbed `chrome.devtools`); m.youtube.com and music.youtube.com live; allowed channels and embeds live; a real 16 MB My filters save; `updateDynamicRules` time with about 29,000 rules; picking inside iframes (not built); the Google and Bing AI-summary rules (never seen on a live page); the empty-query page-entry pattern in real Chrome (unit tests only). The YouTube stall (6 s of 30 on one video) was measured and not reproduced (`docs/handoffs/sieve-yt-measurement.md`).
+  - The untracked copies of this file and the design in the main checkout (`/Users/outsentia/Documents/apps-hub`, branch `model-host`) are stale. The worktree copies are the real ones.
+- **Open owner decisions** (also in the ledger, lines `FINAL REVIEW (4)`):
+  1. R26: an allowed channel's ad pings stay blocked (Ads list `||youtube.com/pagead/`, `||g.doubleclick.net^`, `||static.doubleclick.net^`; Trackers `||youtube.com/api/stats/ads?`), so the creator is probably not credited (unconfirmed how YouTube credits creators). Build a tab-scoped allow rule while an allowed channel's video is open, or accept?
+  2. R25: the AI-summaries list takes 7 of its 8 rules from Stevo's AI Blocklist (MIT, credited and recorded), against the design's "our own code only". Keep, or re-derive from scratch? Google and Bing still need your checklist.
+  3. R27: lists refresh only with `pnpm --filter sieve build -- --refresh` (the design said "when rebuilt"). Confirm the amendment.
+  4. The settings page shows each list switch twice (Blocking and Filter lists), as the brief said. Keep one or both?
+  5. Task 0.6 signed-in checks and the Phase 5 decision; Phase 2 approval and its 5 questions.
+  6. Picking inside iframes (many ads are iframes): build as a follow-up?
+  7. Budget: about 116,000 default-on rules draw on Chrome's shared pool: remove AdBlock first, or trim the lists?
+  8. For information: the Ads list switch also turns off YouTube stripping; "Distraction control" also hides social widgets and age gates; the new `unlimitedStorage` permission; AdBlock's colour themes were never raised in the design.
+- **Execution method:** subagent-driven (superpowers:subagent-driven-development); the owner asked for parallel agents in session 4 (ruling R22). `coord` cannot separate subagents of one session (see `docs/handoffs/sieve-parallel-metrics.md`), so the sessions used the atomic `filelock` helper in the SDD workspace; the lessons are written up as the skill `parallel-agents-coord` (user skills folder).
 - **Next step:**
-  1. Finish the open review and fix rounds listed above (each: fix, scoped per-commit re-review,
-     ledger `complete` line). Per-commit review packages: `review-package PLAN <sha>^ <sha>`.
-  2. Task 1.13 steps 2 to 5 once the above are committed; the full perf run needs the machine to
-     itself; README: perf rerun policy (a lost-load FAIL is re-run once; the same site failing again
-     means a real break; a different site on the second run is another flake; a site that
-     blocks only the extension profile fails every time: `HEADLESS=0` or replace it with `SITES=`),
-     owner checklist lines (real DevTools once; signed-in YouTube; the AI-summaries four engines).
-  3. Final whole-branch review (most capable model), `finishing-a-development-branch`, and the
-     controller's "Rulings I made" list (ledger lines containing `Ruling:`, R1 to R25).
-  4. When the owner gives the signed-in results: finish Task 0.6 (record Q1 to Q4 signed in, decide
-     phase 5 by the plan's rule). Phase 2 needs the owner's approval of the drafted plan.
-  5. Write the skill from the parallel-agent experiment (the owner asked): lessons are in
-     `docs/handoffs/sieve-parallel-metrics.md` (coord is session-scoped, so subagents of one session
-     need a real lock or, better, one worktree per agent merged in order).
+  1. Owner: install both folders (README "Install and first run"), run the signed-in YouTube and AI-summaries checklists, answer the decisions above.
+  2. When the owner gives the signed-in results: finish Task 0.6 (record Q1 to Q4, decide Phase 5 by the plan's rule).
+  3. On the owner's approval: schedule Phase 2 from its plan (independent pairs and shared files are tabled in the plan; start no more than two agents on the shared files at once).
+  4. Before merging: `finishing-a-development-branch` (nothing is pushed; branch `sieve` has about 70 commits on `ec23cbd`); the final "Rulings I made" list is the ledger lines containing `Ruling:` (R1 to R30).
 - **Carry-forward notes** (the full list, with every deferred minor finding for the final review, is
   in the ledger snapshot):
   - 1.7: `blockingError` is stored in `chrome.storage.session`. A tab hostname can end in a dot
