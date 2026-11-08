@@ -1,0 +1,174 @@
+import { allowEntry } from '@apps-hub/sieve-core/src/allowlist.ts';
+import { withNewLines } from '@apps-hub/sieve-core/src/my-filters.ts';
+import type { BuildMeta } from '@apps-hub/sieve-core/src/plan.ts';
+import { FEATURES, validateSettings, type AllowEntry, type FeatureKey, type Settings } from '@apps-hub/sieve-core/src/settings.ts';
+import { h, type Child } from './dom.ts';
+import { FILTERS_CHANGED, saveMyFilters, type SaveResult } from './my-filters.ts';
+
+const NAMES: Record<FeatureKey, string> = {
+  ads: 'Ads',
+  trackers: 'Trackers',
+  distraction: 'Distraction control',
+  cookies: 'Cookie banners',
+  antiadblock: 'Ad blocker warnings',
+  ai: 'AI search summaries',
+};
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const SHOWN_ERRORS = 50;
+const CHANGED_HERE = 'Your filters changed while this page was open.';
+
+const read = async () => validateSettings((await chrome.storage.local.get('settings')).settings);
+const [meta, initial] = await Promise.all([fetch('meta.json').then((r) => r.json() as Promise<BuildMeta>), read()]);
+let settings = initial;
+
+// Every write re-reads storage inside one queue: the menu and the worker (a pick) change the same settings while this page is open.
+let queue: Promise<unknown> = Promise.resolve();
+function later<T>(work: () => Promise<T>): Promise<T> {
+  const run = queue.then(work);
+  queue = run.catch(() => {});
+  return run;
+}
+const save = (edit: (s: Settings) => Settings) =>
+  later(async () => chrome.storage.local.set({ settings: edit(await read()) })).catch((e) => console.error('Sieve could not save the settings', e));
+const setList = (f: FeatureKey, on: boolean) => save((s) => ({ ...s, blocking: { ...s.blocking, lists: { ...s.blocking.lists, [f]: on } } }));
+
+const switches: { input: HTMLInputElement; read: (s: Settings) => boolean }[] = [];
+function toggle(label: string, read: (s: Settings) => boolean, change: (on: boolean) => unknown): HTMLElement {
+  const input = h('input', { type: 'checkbox', role: 'switch', checked: read(settings), onchange: () => change(input.checked) });
+  switches.push({ input, read });
+  return h('label', { class: 'switch' }, h('span', {}, label), input);
+}
+const listToggle = (f: FeatureKey, label = NAMES[f]) => toggle(label, (s) => s.blocking.lists[f], (on) => setList(f, on));
+const section = (title: string, ...kids: Child[]) => h('section', {}, h('h2', { class: 'ui-heading' }, title), ...kids);
+const count = (n: number, one: string, many: string) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
+
+const built = new Date(meta.builtAt);
+const blocking = section(
+  'Blocking',
+  h(
+    'div',
+    { class: 'ui-group rows' },
+    listToggle('distraction'),
+    listToggle('cookies'),
+    listToggle('ai'),
+    toggle('Site notification requests', (s) => s.blocking.denyNotifications, (on) => save((s) => ({ ...s, blocking: { ...s.blocking, denyNotifications: on } }))),
+    listToggle('antiadblock'),
+    listToggle('trackers'),
+  ),
+);
+const lists = section(
+  'Filter lists',
+  h('div', { class: 'ui-group rows' }, ...FEATURES.map((f) => listToggle(f, meta.features[f].ruleCount ? `${NAMES[f]} · ${count(meta.features[f].ruleCount, 'rule', 'rules')}` : NAMES[f]))),
+  h('p', { class: 'ui-meta' }, `Lists built on ${built.getDate()} ${MONTHS[built.getMonth()]} ${built.getFullYear()}. Rebuild Sieve to update them.`),
+);
+
+let edited = false;
+const area = h('textarea', { class: 'filters', spellcheck: false, rows: 12, 'aria-label': 'My filters', oninput: () => (edited = true) });
+area.value = settings.blocking.myFilters;
+let loaded = area.value;
+const notice = h('p', { class: 'ui-meta notice', role: 'status' });
+const result = h('div', { class: 'result', 'aria-live': 'polite' });
+const saveButton = h('button', { class: 'ui-btn ui-btn--primary', type: 'button', onclick: () => void saveFilters() }, 'Save');
+
+function showResult({ saved, errors }: SaveResult): void {
+  const refused = errors.find((e) => e.line === 0);
+  const lines = errors.filter((e) => e.line > 0);
+  const parts: Child[] = [
+    refused
+      ? h(
+          'p',
+          { class: 'error' },
+          refused.reason === FILTERS_CHANGED
+            ? FILTERS_CHANGED
+            : `Chrome refused these filters, so the ones saved before stay on. Remove some filters or fix the one Chrome names, then save again. Chrome says: ${refused.reason}`,
+        )
+      : h('p', {}, `Saved ${count(saved, 'filter', 'filters')}.`),
+    lines.length > 0 && h('ul', { class: 'errors' }, ...lines.slice(0, SHOWN_ERRORS).map((e) => h('li', {}, `Line ${e.line}: ${e.reason}`))),
+    lines.length > SHOWN_ERRORS && h('p', { class: 'ui-meta' }, `and ${(lines.length - SHOWN_ERRORS).toLocaleString('en-US')} more`),
+  ];
+  result.replaceChildren(...parts.filter((p): p is Node => !!p));
+}
+
+async function saveFilters(): Promise<void> {
+  saveButton.disabled = true;
+  result.replaceChildren(h('p', { class: 'ui-meta' }, 'Saving…'));
+  try {
+    const { added, ...outcome } = await later(async () => {
+      const stored = (await read()).blocking.myFilters;
+      const merged = withNewLines(area.value, loaded, stored);
+      area.value = merged.text;
+      loaded = stored;
+      return { ...(await saveMyFilters(merged.text, stored)), added: merged.added };
+    });
+    if (!outcome.errors.some((e) => e.line === 0)) {
+      loaded = area.value;
+      edited = false;
+    }
+    notice.textContent = added ? `${CHANGED_HERE} Sieve added the new lines at the end of yours.` : '';
+    showResult(outcome);
+  } catch (e) {
+    console.error('Sieve could not save My filters', e);
+    result.replaceChildren(h('p', { class: 'error' }, "Sieve couldn't save your filters. Reload this page, then try again."));
+  } finally {
+    saveButton.disabled = false;
+  }
+}
+
+const mine = section(
+  'My filters',
+  h('p', { class: 'ui-meta' }, 'One filter per line, in Adblock Plus or AdGuard syntax.'),
+  area,
+  notice,
+  h('div', { class: 'row' }, saveButton),
+  result,
+);
+
+const same = (a: AllowEntry, b: AllowEntry) => JSON.stringify(a) === JSON.stringify(b);
+const entries = h('ul', { class: 'entries ui-group' });
+function renderAllowlist(): void {
+  const list = settings.blocking.allowlist;
+  entries.hidden = list.length === 0;
+  entries.replaceChildren(
+    ...list.map((e) => {
+      const label = e.kind === 'site' ? e.host : e.url;
+      const remove = () => save((s) => ({ ...s, blocking: { ...s.blocking, allowlist: s.blocking.allowlist.filter((x) => !same(x, e)) } }));
+      return h('li', {}, h('span', { class: 'entry' }, label), h('button', { class: 'ui-btn', type: 'button', 'aria-label': `Remove ${label}`, onclick: remove }, 'Remove'));
+    }),
+  );
+}
+const address = h('input', { class: 'ui-input', type: 'text', 'aria-label': 'Site or page address', placeholder: 'example.com or a page address', onkeydown: (e: KeyboardEvent) => e.key === 'Enter' && add() });
+const addError = h('p', { class: 'error', role: 'alert' });
+function add(): void {
+  const entry = allowEntry(address.value);
+  addError.textContent = entry ? '' : 'Enter a site like example.com or a full page address.';
+  if (!entry) return;
+  address.value = '';
+  void save((s) => ({ ...s, blocking: { ...s.blocking, allowlist: s.blocking.allowlist.some((x) => same(x, entry)) ? s.blocking.allowlist : [...s.blocking.allowlist, entry] } }));
+}
+const allow = section(
+  'Allowlist',
+  h('p', { class: 'ui-meta' }, "Sieve doesn't block anything on these sites and pages."),
+  entries,
+  h('div', { class: 'row' }, address, h('button', { class: 'ui-btn', type: 'button', onclick: add }, 'Add')),
+  addError,
+);
+
+// The text area follows the stored filters until the owner edits it; after that a change from elsewhere (a pick) is only announced.
+chrome.storage.onChanged.addListener((changes, where) => {
+  if (where !== 'local' || !('settings' in changes)) return;
+  settings = validateSettings(changes.settings.newValue);
+  for (const s of switches) s.input.checked = s.read(settings);
+  renderAllowlist();
+  const text = settings.blocking.myFilters;
+  if (text === loaded) return;
+  if (!edited || text === area.value) {
+    area.value = loaded = text;
+    edited = false;
+    notice.textContent = '';
+  } else {
+    notice.textContent = `${CHANGED_HERE} Saving keeps your text and adds the new lines after it.`;
+  }
+});
+
+renderAllowlist();
+document.getElementById('app')!.replaceChildren(h('header', {}, h('h1', { class: 'ui-title' }, 'Sieve settings')), blocking, lists, mine, allow);

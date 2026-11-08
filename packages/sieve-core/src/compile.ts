@@ -48,6 +48,7 @@ export interface CompileOptions {
   firstId: number;
   regexLimit?: number;
   trusted?: boolean; // allow trusted-* scriptlets: only for the owner's own filters
+  scriptlets?: readonly string[]; // the scriptlets the extension ships (My filters): any other is an error on its line
 }
 
 export interface CompiledList {
@@ -59,6 +60,8 @@ export interface CompiledList {
   maxPriority: number;
   dropped: Record<string, number>;
   errors: { line: number; text: string; reason: string }[];
+  skipped: { line: number; text: string; reason: string }[]; // the dropped filters whose line is known, with their `dropped` reason
+  filterLines: number; // lines that are not blank or a comment
 }
 
 // The build serialises these with toString(); asking sieve-core keeps one installed copy of @adguard/scriptlets.
@@ -108,26 +111,32 @@ const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const siteKey = (domain: string) => (NON_ASCII.test(domain) ? new URL(`http://${domain}`).hostname : domain.toLowerCase());
 
 export async function compileFilters(text: string, opts: CompileOptions): Promise<CompiledList> {
-  const out: CompiledList = { rules: [], sources: {}, allowIds: [], modifyIds: [], cosmetic: emptyCosmetic(), maxPriority: 0, dropped: {}, errors: [] };
+  const out: CompiledList = { rules: [], sources: {}, allowIds: [], modifyIds: [], cosmetic: emptyCosmetic(), maxPriority: 0, dropped: {}, errors: [], skipped: [], filterLines: 0 };
   const drop = (reason: string, count = 1) => (out.dropped[reason] = (out.dropped[reason] ?? 0) + count);
   const network: { line: number; text: string }[] = [];
 
   text.split(/\r\n?|\n/).forEach((rawLine, i) => {
     const raw = rawLine.trim();
     const fail = (reason: string) => out.errors.push({ line: i + 1, text: raw, reason });
+    const skip = (reason: string) => {
+      drop(reason);
+      out.skipped.push({ line: i + 1, text: raw, reason });
+    };
     try {
       const node = RuleParser.parse(raw, PARSE);
+      if (node.category === 'Empty' || node.category === 'Comment') return;
+      out.filterLines++;
       if (node.category === 'Invalid') return fail(node.error.message);
       if (node.category === 'Cosmetic') {
-        if (node.modifiers?.children.length) return drop('cosmetic-modifier');
+        if (node.modifiers?.children.length) return skip('cosmetic-modifier');
         // agtree strips some procedural parts while parsing (`:matches-media(…)` vanishes), so check the line as written.
-        if (node.type === 'ElementHidingRule' && EXTENDED_CSS.test(raw)) return drop('extended-css');
-        for (const rule of RuleConverter.convertToAdg(node).result) addCosmetic(rule as AnyCosmeticRule, out.cosmetic, drop, opts.trusted === true);
+        if (node.type === 'ElementHidingRule' && EXTENDED_CSS.test(raw)) return skip('extended-css');
+        for (const rule of RuleConverter.convertToAdg(node).result) addCosmetic(rule as AnyCosmeticRule, out.cosmetic, skip, opts);
         return;
       }
       if (node.category !== 'Network' || node.type !== 'NetworkRule') return;
       if (NON_ASCII.test(node.pattern.value)) return fail('Write the address in plain ASCII, with xn-- names for non-Latin sites');
-      if (addCosmeticException(node, out.cosmetic, drop)) return;
+      if (addCosmeticException(node, out.cosmetic, skip)) return;
       const rules = Rule.parseFromNode(1, 0, node); // throws what the batch converter would only report without a line
       if (rules.some(blocksEverySite)) return fail('Rule is too general: add an address or a domain= so it does not block every site');
       network.push({ line: i + 1, text: raw });
@@ -138,6 +147,7 @@ export async function compileFilters(text: string, opts: CompileOptions): Promis
 
   if (network.length) await convertNetwork(network, opts, out, drop);
   out.errors.sort((a, b) => a.line - b.line);
+  out.skipped.sort((a, b) => a.line - b.line);
   return out;
 }
 
@@ -167,15 +177,19 @@ async function convertNetwork(
       out.maxPriority = Math.max(out.maxPriority, rule.priority ?? 1);
     }
     for (const e of result.errors) {
-      if (e instanceof UnsupportedModifierError || e instanceof EmptyResourcesError || e instanceof EmptyDomainsError) {
-        drop('unsupported-modifier');
-      } else if (/web accessible resources/.test(messageOf(e.cause))) {
-        drop('redirect');
+      const at = isConversionError(e) ? e.rule.index : Number(/index - (\d+)/.exec(e.message)?.[1]);
+      const entry = byOffset.get(at) ?? { line: 0, text: '' };
+      const skipped =
+        e instanceof UnsupportedModifierError || e instanceof EmptyResourcesError || e instanceof EmptyDomainsError
+          ? 'unsupported-modifier'
+          : /web accessible resources/.test(messageOf(e.cause))
+            ? 'redirect'
+            : null;
+      if (skipped) {
+        drop(skipped);
+        if (entry.line) out.skipped.push({ ...entry, reason: skipped });
       } else {
-        const at = isConversionError(e) ? e.rule.index : Number(/index - (\d+)/.exec(e.message)?.[1]);
-        const entry = byOffset.get(at);
-        const reason = e instanceof UnsupportedRegexpError ? "Chrome can't run this regular expression" : e.message;
-        out.errors.push({ line: entry?.line ?? 0, text: entry?.text ?? '', reason });
+        out.errors.push({ ...entry, reason: e instanceof UnsupportedRegexpError ? "Chrome can't run this regular expression" : e.message });
       }
     }
     for (const l of result.limitations) {
@@ -221,7 +235,7 @@ function exceptionHosts(node: NetworkRule): string[] {
   return host ? [siteKey(host.replace(/\.$/, '.*'))] : [];
 }
 
-function addCosmetic(rule: AnyCosmeticRule, cosmetic: CosmeticSet, drop: (reason: string) => void, trusted: boolean): void {
+function addCosmetic(rule: AnyCosmeticRule, cosmetic: CosmeticSet, drop: (reason: string) => void, opts: CompileOptions): void {
   const hosts = rule.domains.children.filter((d) => !d.exception && d.value !== '*').map((d) => siteKey(d.value));
   const notHosts = rule.domains.children.filter((d) => d.exception).map((d) => siteKey(d.value));
   const targets = hosts.length ? hosts : ['*'];
@@ -246,11 +260,15 @@ function addCosmetic(rule: AnyCosmeticRule, cosmetic: CosmeticSet, drop: (reason
         continue;
       }
       const adgName = name ? scriptletsCompatibilityTable.getFirst(name, GenericPlatform.AdgAny)?.name : undefined;
+      // The worker only has the scriptlets the lists use, so in My filters any other one would do nothing.
+      if (!rule.exception && name && opts.scriptlets && !opts.scriptlets.includes(adgName ?? '')) {
+        throw new Error(`${name.replace(/^(?:ubo|abp)-/, '')} isn't available in this build`); // the name as written, without agtree's prefix
+      }
       if (!adgName || !scriptletFunction(adgName)) {
         drop('unknown-scriptlet');
         continue;
       }
-      if (!rule.exception && !trusted && adgName.startsWith('trusted-')) {
+      if (!rule.exception && !opts.trusted && adgName.startsWith('trusted-')) {
         drop('trusted-scriptlet');
         continue;
       }

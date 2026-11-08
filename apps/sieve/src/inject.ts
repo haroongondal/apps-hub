@@ -2,7 +2,7 @@ import { SCRIPTLETS } from './scriptlets.js';
 import { isAllowed } from '@apps-hub/sieve-core/src/allowlist.ts';
 import { hostCandidates } from '@apps-hub/sieve-core/src/hosts.ts';
 import { pageInjections, scriptletArgs, storedCosmetic } from '@apps-hub/sieve-core/src/page.ts';
-import { FEATURES, validateSettings, type Settings } from '@apps-hub/sieve-core/src/settings.ts';
+import { FEATURES, isHost, validateSettings, type Settings } from '@apps-hub/sieve-core/src/settings.ts';
 import type { BuildMeta } from '@apps-hub/sieve-core/src/plan.ts';
 import type { CosmeticSet } from '@apps-hub/sieve-core/src/compile.ts';
 
@@ -67,10 +67,12 @@ export async function onCommitted(d: Committed): Promise<void> {
     const host = new URL(d.url).hostname;
     const candidates = new Set(hostCandidates(host));
     const features = FEATURES.filter((f) => s.blocking.lists[f]);
-    const excluded = features.map((f) => meta.features[f].hasGenericCss && meta.features[f].genericExcept.some((h) => candidates.has(h)));
+    // A My filters `#@#` host left the registered generic CSS too (blockingPlan), so it gets each list's generic CSS here.
+    const myExcept = Object.keys(mine.unhide).some((h) => candidates.has(h) && isHost(h));
+    const excluded = features.map((f) => meta.features[f].hasGenericCss && (myExcept || meta.features[f].genericExcept.some((h) => candidates.has(h))));
     const sets = await Promise.all(features.map(async (f, i) => (excluded[i] ? { ...(await cosmetic(f)), generic: await genericSelectors(f) } : cosmetic(f))));
-    // My filters come last, after the lists, and only the lists have generic CSS to exclude.
-    const { css, scriptlets } = pageInjections(host, [...sets, mine], (i) => excluded[i] === true);
+    // My filters come last, after the lists. Their generic selectors have no registered CSS, so they always come per page.
+    const { css, scriptlets } = pageInjections(host, [...sets, mine], (i) => i === sets.length || excluded[i]);
 
     const target = { tabId: d.tabId, documentIds: [d.documentId] };
     await Promise.all([

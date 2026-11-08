@@ -13,7 +13,7 @@ const meta: BuildMeta = {
 
 // A fresh copy of counts.ts per test (it caches meta.json at module level), run against an in-memory `chrome`.
 let n = 0;
-async function setup(options: { badgeFails?: boolean; fetchFailures?: number } = {}) {
+async function setup(options: { badgeFails?: boolean; fetchFailures?: number; dynamic?: { id: number; action: { type: string } }[] } = {}) {
   const store = new Map<string, unknown>();
   const badges = new Map<number, string>();
   const logged: unknown[][] = [];
@@ -22,7 +22,7 @@ async function setup(options: { badgeFails?: boolean; fetchFailures?: number } =
   const g = globalThis as unknown as Record<string, unknown>;
   g.chrome = {
     runtime: { getURL: (path: string) => `chrome-extension://sieve/${path}` },
-    declarativeNetRequest: { getDynamicRules: async () => [] },
+    declarativeNetRequest: { getDynamicRules: async ({ ruleIds }: { ruleIds: number[] }) => (options.dynamic ?? []).filter((r) => ruleIds.includes(r.id)) },
     action: {
       setBadgeBackgroundColor: async () => {},
       setBadgeText: async ({ tabId, text }: { tabId: number; text: string }) => {
@@ -71,6 +71,22 @@ test('an ad and a tracker are counted per tab and the badge shows the total; all
   await t.until(() => t.badges.get(1) === '2' && t.badges.get(2) === '1' && t.store.size === 2);
   assert.deepEqual(t.store.get('counts:1'), { ads: 1, trackers: 1 });
   assert.deepEqual(t.store.get('counts:2'), { ads: 1, trackers: 0 });
+});
+
+test('a My filters rule is counted only when it blocks: its allow and header-only rules are not', async () => {
+  const dynamic = [
+    { id: 1, action: { type: 'block' } },
+    { id: 2, action: { type: 'modifyHeaders' } },
+    { id: 3, action: { type: 'allow' } },
+    { id: 4, action: { type: 'allowAllRequests' } },
+    { id: 5, action: { type: 'upgradeScheme' } },
+  ];
+  const t = await setup({ dynamic });
+  for (const r of dynamic) t.match(1, '_dynamic', r.id);
+  t.match(1, 'trackers', 9);
+  await t.until(() => t.badges.get(1) === '2');
+  await sleep(30);
+  assert.deepEqual(t.store.get('counts:1'), { ads: 1, trackers: 1 });
 });
 
 test('events that arrive together are all counted', async () => {

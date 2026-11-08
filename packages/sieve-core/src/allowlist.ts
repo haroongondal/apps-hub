@@ -1,5 +1,5 @@
 import type { DnrRule } from './compile.ts';
-import { pageUrl, type AllowEntry } from './settings.ts';
+import { pageUrl, validateSettings, type AllowEntry } from './settings.ts';
 
 export const ALLOW_FIRST_ID = 1_000_000; // my-filter rules use ids from 1
 
@@ -18,6 +18,18 @@ export function tabSite(url: string | undefined): { host: string; page: string }
   const page = url === undefined ? null : pageUrl(url);
   if (page === null) return null;
   return { host: new URL(page).hostname.replace(/\.$/, '').replace(/^www\./, ''), page };
+}
+
+// The settings page's allowlist box: a full URL is a page entry, anything else a site entry, the host as the URL parser gives it.
+export function allowEntry(input: string): AllowEntry | null {
+  const text = input.trim();
+  let entry: AllowEntry;
+  try {
+    entry = /^[a-z][a-z\d+.-]*:\/\//i.test(text) ? { kind: 'page', url: text } : { kind: 'site', host: new URL(`http://${text}`).hostname };
+  } catch {
+    return null;
+  }
+  return validateSettings({ blocking: { allowlist: [entry] } }).blocking.allowlist[0] ?? null;
 }
 
 // allowAllRequests on the frame request also lets through everything the frame and its child frames load.

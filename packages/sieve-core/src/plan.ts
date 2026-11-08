@@ -1,6 +1,6 @@
 import type { DnrRule } from './compile.ts';
 import { ALLOW_FIRST_ID, allowRules, excludePatterns } from './allowlist.ts';
-import { FEATURES, type FeatureKey, type Settings } from './settings.ts';
+import { FEATURES, isHost, type FeatureKey, type Settings } from './settings.ts';
 
 // What apps/sieve/build.mjs writes to dist/meta.json.
 export interface BuildMeta {
@@ -28,7 +28,9 @@ export interface BlockingPlan {
   dynamicRules: DnrRule[];
 }
 
-export function blockingPlan(settings: Settings, meta: BuildMeta, myRules: DnrRule[]): BlockingPlan {
+// myExceptHosts: the hosts of My filters' `#@#` exceptions. They leave the registered generic CSS, as a list's own
+// genericExcept hosts do, so inject.ts gives them the generic CSS per page without the excepted selectors.
+export function blockingPlan(settings: Settings, meta: BuildMeta, myRules: DnrRule[], myExceptHosts: string[] = []): BlockingPlan {
   const b = settings.blocking;
   const shipped = FEATURES.filter((f) => meta.features[f].ruleset !== null);
   const rulesetOf = (f: FeatureKey) => meta.features[f].ruleset as string;
@@ -42,10 +44,12 @@ export function blockingPlan(settings: Settings, meta: BuildMeta, myRules: DnrRu
     allFrames: true as const,
     runAt: 'document_start' as const,
   });
+  // `*` (every site) and `google.*` can't be match patterns, and one bad pattern voids the registration.
+  const mine = myExceptHosts.filter(isHost);
   const registrations: Registration[] = FEATURES.filter((f) => b.lists[f] && meta.features[f].hasGenericCss).map((f) => ({
     id: `generic-${f}`,
     css: [`cosmetic/${f}.generic.css`],
-    ...where(meta.features[f].genericExcept),
+    ...where([...meta.features[f].genericExcept, ...mine]),
   }));
   if (b.denyNotifications) registrations.push({ id: 'deny-notifications', js: ['notify-deny.js'], world: 'MAIN', ...where() });
 

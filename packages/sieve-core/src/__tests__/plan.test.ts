@@ -100,6 +100,13 @@ test('My filters pass through unchanged before the allow rules, which outrank th
   assert.equal(plan.dynamicRules[2].priority, 2000001);
 });
 
+test('hosts with a My filters #@# exception leave every generic CSS registration, not the notification blocker; hosts that are not one are ignored', () => {
+  const plan = blockingPlan(DEFAULT_SETTINGS, meta, [], ['example.org', '*', 'google.*', 'jetzt.de', '10.0.0.1']);
+  assert.deepEqual(plan.registrations.find((r) => r.id === 'generic-ads')?.excludeMatches, ['*://*.jetzt.de/*', '*://127.0.0.1/*', '*://*.example.org/*', '*://10.0.0.1/*']);
+  assert.deepEqual(plan.registrations.find((r) => r.id === 'generic-trackers')?.excludeMatches, ['*://*.example.org/*', '*://*.jetzt.de/*', '*://10.0.0.1/*']);
+  assert.deepEqual(plan.registrations.find((r) => r.id === 'deny-notifications')?.excludeMatches, []);
+});
+
 test('My filters apply with no allowlist, and the plan never mutates its inputs', () => {
   const myRules: DnrRule[] = [{ id: 1, action: { type: 'block' }, condition: { urlFilter: '||x.com^' } }];
   const before = JSON.stringify([DEFAULT_SETTINGS, meta, myRules]);

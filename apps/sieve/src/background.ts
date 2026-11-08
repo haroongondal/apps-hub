@@ -13,7 +13,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.runtime.onStartup.addListener(applyBlockingSoon);
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && ('settings' in changes || 'myCosmetic' in changes)) forgetStored();
-  if (area === 'local' && ('settings' in changes || 'myRules' in changes)) applyBlockingSoon();
+  if (area === 'local' && ('settings' in changes || 'myRules' in changes || 'myCosmetic' in changes)) applyBlockingSoon();
 });
 chrome.runtime.onMessage.addListener(onMessage);
 chrome.webNavigation.onCommitted.addListener(onCommitted, { url: [{ schemes: ['http', 'https'] }] });

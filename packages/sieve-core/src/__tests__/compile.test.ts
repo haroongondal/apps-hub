@@ -211,6 +211,35 @@ test('a block filter with no address and no domain is too general', async () => 
   assert.equal(out.rules.length, 2);
 });
 
+test('a dropped filter keeps its line in skipped, and filterLines counts every line that is not blank or a comment', async () => {
+  const out = await compileFilters(
+    ['! a comment', '', '||a.com^', 'example.com##div:has-text(x)', '#also a comment', '||x.com^$redirect=noopjs', 'example.com#%#window.x=1', '||y.com^$foo'].join('\n'),
+    { firstId: 1 },
+  );
+  assert.deepEqual(out.skipped, [
+    { line: 4, text: 'example.com##div:has-text(x)', reason: 'extended-css' },
+    { line: 6, text: '||x.com^$redirect=noopjs', reason: 'redirect' },
+    { line: 7, text: 'example.com#%#window.x=1', reason: 'raw-js' },
+  ]);
+  assert.deepEqual(out.dropped, { 'extended-css': 1, redirect: 1, 'raw-js': 1 });
+  assert.deepEqual(out.errors.map((e) => e.line), [8]);
+  assert.equal(out.filterLines, 5);
+  assert.equal(out.rules.length, 1);
+});
+
+test('with scriptlets given, a scriptlet outside them is an error on its line; exceptions and listed ones pass', async () => {
+  const out = await compileFilters(
+    ['example.com##+js(aopr, x)', "example.com#%#//scriptlet('trusted-set-cookie', 'a', 'b')", 'example.com##+js(nosuch, y)', 'example.com#@#+js(set-constant, z, 1)'].join('\n'),
+    { firstId: 1, trusted: true, scriptlets: ['abort-on-property-read'] },
+  );
+  assert.deepEqual(out.errors.map((e) => [e.line, e.reason]), [
+    [2, "trusted-set-cookie isn't available in this build"],
+    [3, "nosuch isn't available in this build"],
+  ]);
+  assert.deepEqual(out.cosmetic.scriptlets, { 'example.com': [{ name: 'abort-on-property-read', args: ['x'] }] });
+  assert.deepEqual(out.cosmetic.scriptletExcept, { 'example.com': [scriptletKey({ name: 'set-constant', args: ['z', '1'] })] });
+});
+
 test('stripSections drops the named sections up to the next one', () => {
   assert.equal(
     stripSections('a\n! easylist_cookie_general_block.txt\nb\n! fanboy_social_general_block.txt\nc', ['easylist_cookie_']),

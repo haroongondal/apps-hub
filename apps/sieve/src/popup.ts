@@ -133,7 +133,6 @@ function view(state: State): Child[] {
         ),
       ),
     ...tabs.find((t) => t.id === current)!.view(state),
-    // There is no settings page until Task 1.9, so until then this logs an error.
     h('footer', {}, button('settings', 'Settings', () => chrome.runtime.openOptionsPage().catch((e) => console.error('Sieve could not open the settings page', e)), { class: 'ui-btn ui-btn--ghost' })),
   ];
 }

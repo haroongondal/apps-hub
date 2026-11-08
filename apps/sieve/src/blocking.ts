@@ -2,6 +2,7 @@
 import { blockingPlan, type BlockingPlan, type BuildMeta, type Registration } from '@apps-hub/sieve-core/src/plan.ts';
 import { validateSettings } from '@apps-hub/sieve-core/src/settings.ts';
 import { ALLOW_FIRST_ID } from '@apps-hub/sieve-core/src/allowlist.ts';
+import { storedCosmetic } from '@apps-hub/sieve-core/src/page.ts';
 import type { DnrRule } from '@apps-hub/sieve-core/src/compile.ts';
 
 type Script = chrome.scripting.RegisteredContentScript;
@@ -59,12 +60,12 @@ export async function applyBlocking(): Promise<void> {
     }
   };
   await attempt(async () => {
-    const [{ settings, myRules }, meta] = await Promise.all([
-      chrome.storage.local.get(['settings', 'myRules']),
+    const [{ settings, myRules, myCosmetic }, meta] = await Promise.all([
+      chrome.storage.local.get(['settings', 'myRules', 'myCosmetic']),
       fetch(chrome.runtime.getURL('meta.json')).then((r) => r.json() as Promise<BuildMeta>),
     ]);
     const rules = Array.isArray(myRules) ? myRules.filter((r) => typeof r?.id === 'number') : [];
-    const plan = blockingPlan(validateSettings(settings), meta, rules);
+    const plan = blockingPlan(validateSettings(settings), meta, rules, Object.keys(storedCosmetic(myCosmetic).unhide));
     // Allow rules land before the lists come back on, so a Resume never blocks an allowlisted page.
     await attempt(() => applyRules(plan.dynamicRules));
     await Promise.all([attempt(() => applyRulesets(plan)), attempt(() => applyScripts(plan.registrations))]);

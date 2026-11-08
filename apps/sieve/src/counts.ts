@@ -26,17 +26,18 @@ export function initBadge(): void {
 
 const badgeText = (total: number) => (total === 0 ? '' : total > 999 ? '999+' : String(total));
 
-async function dynamicAllowIds(rulesetId: string, ruleId: number): Promise<Set<number>> {
+// My filters rules that allow a request or only change its headers (`$csp`, `$removeheader`) block nothing.
+async function dynamicNotBlocking(rulesetId: string, ruleId: number): Promise<Set<number>> {
   if (rulesetId !== DYNAMIC_RULESET) return new Set();
   const rules = await chrome.declarativeNetRequest.getDynamicRules({ ruleIds: [ruleId] });
-  return new Set(rules.filter((r) => r.action.type === 'allow' || r.action.type === 'allowAllRequests').map((r) => r.id));
+  return new Set(rules.filter((r) => r.action.type !== 'block' && r.action.type !== 'redirect').map((r) => r.id));
 }
 
 export function onMatched({ request, rule }: chrome.declarativeNetRequest.MatchedRuleInfoDebug): void {
   const { tabId } = request;
   if (tabId < 0) return;
   later(async () => {
-    const kind = classifyMatch(rule.rulesetId, rule.ruleId, await loadMeta(), await dynamicAllowIds(rule.rulesetId, rule.ruleId));
+    const kind = classifyMatch(rule.rulesetId, rule.ruleId, await loadMeta(), await dynamicNotBlocking(rule.rulesetId, rule.ruleId));
     if (kind === null) return;
     const key = countsKey(tabId);
     const counts: Counts = { ads: 0, trackers: 0, ...((await chrome.storage.session.get(key))[key] as Partial<Counts> | undefined) };

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isDeepStrictEqual as same } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { SITE_HOST, UNHIDE_HOST, check, launch, results, startServers, startWorker, stopWorker } from './harness.mjs';
+import { SITE_HOST, TRACKER_HOST, UNHIDE_HOST, check, launch, results, startServers, startWorker, stopWorker } from './harness.mjs';
 
 const RULESETS = ['ads', 'trackers', 'distraction', 'cookies', 'antiadblock'];
 const ALLOW_ID = 1_000_000;
@@ -846,6 +846,204 @@ try {
   await pickPage.close();
   const pickErrors = await pw.evaluate(() => globalThis.pickErrors);
   check('the service worker logged no error while handling picks', pickErrors?.length === 0, json(pickErrors));
+
+  const OPTIONS = `chrome-extension://${id}/options.html`;
+  const helper = await ctx.newPage();
+  await helper.goto(ADS, { waitUntil: 'load' });
+  m = await menu(await tabFor(pw, ADS));
+  await m.pop.getByRole('button', { name: 'Settings', exact: true }).click();
+  const fromMenu = await until(async () => ctx.pages().find((p) => p.url().startsWith(OPTIONS)), (p) => p !== undefined);
+  check("the menu's Settings button opens the settings page in a tab", fromMenu !== undefined && m.problems.length === 0, json({ pages: ctx.pages().map((p) => p.url()), problems: m.problems }));
+  await m.pop.close();
+  await fromMenu?.close();
+  await helper.close();
+
+  const opt = await ctx.newPage();
+  const optProblems = [];
+  opt.on('pageerror', (e) => optProblems.push(e.message));
+  opt.on('console', (msg) => msg.type() === 'error' && optProblems.push(msg.text()));
+  await opt.setViewportSize({ width: 800, height: 900 });
+  await opt.goto(OPTIONS);
+  await opt.getByRole('heading', { name: 'Allowlist' }).waitFor();
+  const optSwitch = (name) => opt.getByRole('switch', { name, exact: true });
+  const labelsIn = (n) => opt.locator('section').nth(n).locator('label.switch').allInnerTexts();
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const builtAt = new Date(meta.builtAt);
+  const footer = `Lists built on ${builtAt.getDate()} ${MONTHS[builtAt.getMonth()]} ${builtAt.getFullYear()}. Rebuild Sieve to update them.`;
+  const NAMES = { ads: 'Ads', trackers: 'Trackers', distraction: 'Distraction control', cookies: 'Cookie banners', antiadblock: 'Ad blocker warnings', ai: 'AI search summaries' };
+  const rows = Object.entries(NAMES).map(([f, name]) => (meta.features[f].ruleCount ? `${name} · ${meta.features[f].ruleCount.toLocaleString('en-US')} rules` : name));
+  const headings = await opt.getByRole('heading', { level: 2 }).allInnerTexts();
+  const blockingLabels = (await labelsIn(0)).map((t) => t.trim());
+  const rowLabels = (await labelsIn(1)).map((t) => t.trim());
+  check(
+    `the settings page has Blocking (the menu's four switches, Ad blocker warnings and Trackers), Filter lists ("${rows[0]}", AI search summaries by name only), My filters and Allowlist, and says when the lists were built`,
+    same(headings, ['Blocking', 'Filter lists', 'My filters', 'Allowlist']) &&
+      same(blockingLabels, ['Distraction control', 'Cookie banners', 'AI search summaries', 'Site notification requests', 'Ad blocker warnings', 'Trackers']) &&
+      same(rowLabels, rows) &&
+      (await opt.getByText(footer, { exact: true }).isVisible()),
+    json({ headings, blockingLabels, rowLabels, footer }),
+  );
+  await opt.screenshot({ path: join(SHOTS, 'settings.png'), fullPage: true });
+  await opt.emulateMedia({ colorScheme: 'dark' });
+  await sleep(400); // the switches fade between themes
+  await opt.screenshot({ path: join(SHOTS, 'settings-dark.png'), fullPage: true });
+  await opt.emulateMedia({ colorScheme: 'light' });
+
+  await optSwitch('Trackers').uncheck();
+  s = await settle(pw, (st) => !st.enabled.includes('trackers'));
+  const rowFollows = await opt.getByRole('switch', { name: rows[1], exact: true }).isChecked();
+  hits = await visit(ctx, ADS);
+  const trackerThrough = hits.includes('/sieve-tracker.js');
+  await optSwitch('Trackers').check();
+  s = await settle(pw, listsOn);
+  hits = await visit(ctx, ADS);
+  check(
+    'turning off "Trackers" lets the tracker request through (and the Trackers list row follows), and turning it on blocks it again',
+    trackerThrough && rowFollows === false && listsOn(s) && hits.includes('/ads.html') && !hits.includes('/sieve-tracker.js'),
+    json({ trackerThrough, rowFollows, hits }),
+  );
+
+  const filtersBox = opt.getByRole('textbox', { name: 'My filters' });
+  const typeFilters = (text) =>
+    filtersBox.evaluate((el, t) => {
+      el.value = t;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }, text);
+  const pressSave = async () => {
+    await opt.getByRole('button', { name: 'Save', exact: true }).click();
+    await opt.waitForFunction(() => !document.querySelector('.result').textContent.includes('Saving'), null, { timeout: 60_000 });
+    return opt.locator('.result').innerText();
+  };
+  const TRACKER_FILTER = `||${TRACKER_HOST}^$third-party`;
+  const firstText = `${TRACKER_FILTER}\nnot a filter ##\n`;
+  await typeFilters(firstText);
+  let said = await pressSave();
+  await opt.locator('section').nth(2).screenshot({ path: join(SHOTS, 'settings-saved.png') });
+  await optSwitch('Trackers').uncheck();
+  s = await settle(pw, (st) => !st.enabled.includes('trackers') && st.dynamic.some((r) => r.id === 1));
+  hits = await visit(ctx, ADS);
+  let mineStored = await pw.evaluate(() => chrome.storage.local.get(['myRules', 'myRuleSources']));
+  check(
+    'saving a good filter and a bad line says "Saved 1 filter." and "Line 2: ..." in plain words, and with the Trackers list off the saved filter still blocks the tracker',
+    said.startsWith('Saved 1 filter.\n') &&
+      said.includes("Line 2: Sieve can't read this line as a filter. Check it for typos and stray spaces.") &&
+      hits.includes('/ads.html') &&
+      !hits.includes('/sieve-tracker.js') &&
+      mineStored.myRules?.length === 1 &&
+      same(mineStored.myRuleSources, { 1: TRACKER_FILTER }),
+    json({ said, hits, mineStored }),
+  );
+
+  const before40k = await state(pw);
+  const started40k = Date.now();
+  await typeFilters(Array.from({ length: 40_000 }, (_, i) => `||host${i}.example^`).join('\n'));
+  said = await pressSave();
+  const took40k = Date.now() - started40k;
+  const after40k = await state(pw);
+  hits = await visit(ctx, ADS);
+  mineStored = await pw.evaluate(() => chrome.storage.local.get(['myRules']));
+  check(
+    `saving 40,000 rules, past Chrome's dynamic limit, shows Chrome's refusal, and the earlier filter stays on and stored (${took40k} ms)`,
+    said.startsWith('Chrome refused these filters, so the ones saved before stay on.') &&
+      said.length > 'Chrome refused these filters, so the ones saved before stay on. Remove some filters or fix the one Chrome names, then save again. Chrome says: '.length &&
+      same(after40k.dynamic, before40k.dynamic) &&
+      !after40k.error &&
+      (await blockingOf(pw)).myFilters === firstText &&
+      mineStored.myRules?.length === 1 &&
+      !hits.includes('/sieve-tracker.js'),
+    json({ said: said.slice(0, 400), dynamic: after40k.dynamic.length, error: after40k.error, hits }),
+  );
+
+  await typeFilters(Array.from({ length: 5_000 }, (_, i) => `garbage line ${i} ##`).join('\n'));
+  said = await pressSave();
+  const listed = await opt.locator('.errors li').allInnerTexts();
+  check(
+    'saving 5,000 garbage lines says "Saved 0 filters.", lists the first 50 by line, then "and 4,950 more"',
+    said.startsWith('Saved 0 filters.\n') && listed.length === 50 && listed[0].startsWith('Line 1: ') && listed[49].startsWith('Line 50: ') && said.trimEnd().endsWith('and 4,950 more'),
+    json({ said: said.slice(0, 200), listed: listed.length, end: said.slice(-40) }),
+  );
+  await optSwitch('Trackers').check();
+  s = await settle(pw, (st) => listsOn(st) && st.dynamic.length === 0);
+
+  // ins.adsbygoogle[data-ad-client] is in the ads list's generic CSS, which a My filters exception can only lift per page.
+  const genericOut = (st, host) => st.scripts.filter((x) => x.id.startsWith('generic-')).every((x) => x.excludeMatches?.includes(`*://*.${host}/*`));
+  await typeFilters(`${SITE_HOST}#@#ins.adsbygoogle[data-ad-client]\n##p.note`);
+  said = await pressSave();
+  s = await settle(pw, (st) => genericOut(st, SITE_HOST));
+  r = await visitSite(SITE, ([main]) => main[0] !== 'none' && main[2] === 'none' && main[3] === true);
+  check(
+    `a My filters ${SITE_HOST}#@# exception lifts a list's generic rule there: the ad shows, while the rest of the generic CSS, the site's own hiding and its scriptlet still apply`,
+    said.startsWith('Saved 2 filters.') && genericOut(s, SITE_HOST) && r.main[0] !== 'none' && r.main[1] === 'none' && r.main[2] === 'none' && r.main[3] === true,
+    json({ said, main: r.main, excludes: s.scripts.map((x) => [x.id, x.excludeMatches?.includes(`*://*.${SITE_HOST}/*`)]) }),
+  );
+  const notePage = await ctx.newPage();
+  await notePage.goto(PICK, { waitUntil: 'load' });
+  const noteHidden = await until(() => displayOf(notePage, '.note'), (d) => d === 'none', 5_000);
+  await notePage.close();
+  check('a My filters line with no site (##p.note) hides on every site', noteHidden === 'none', noteHidden);
+
+  await typeFilters('! settings page test');
+  said = await pressSave();
+  s = await settle(pw, (st) => !st.scripts.some((x) => x.excludeMatches?.includes(`*://*.${SITE_HOST}/*`)));
+  check(`saving My filters without the exception puts ${SITE_HOST} back under the registered generic CSS`, said.startsWith('Saved 0 filters.') && !s.scripts.some((x) => x.excludeMatches?.includes(`*://*.${SITE_HOST}/*`)), json(said));
+
+  const addressBox = opt.getByRole('textbox', { name: 'Site or page address' });
+  const allowIs = (want) => until(async () => (await blockingOf(pw)).allowlist, (a) => same(a, want));
+  await addressBox.fill('example.com');
+  await opt.getByRole('button', { name: 'Add', exact: true }).click();
+  list = await allowIs([{ kind: 'site', host: 'example.com' }]);
+  await opt.locator('.entries li').first().waitFor();
+  const entryText = await opt.locator('.entries li').allInnerTexts();
+  check('adding "example.com" to the allowlist lists it with a Remove button', same(list, [{ kind: 'site', host: 'example.com' }]) && entryText.length === 1 && entryText[0].startsWith('example.com'), json({ list, entryText }));
+  await opt.getByRole('button', { name: 'Remove example.com', exact: true }).click();
+  list = await allowIs([]);
+  await opt.locator('.entries li').first().waitFor({ state: 'detached' });
+  check('"Remove" takes it off the allowlist and off the page', json(list) === '[]', json(list));
+  await addressBox.fill('[::1]');
+  await opt.getByRole('button', { name: 'Add', exact: true }).click();
+  const refusedText = await opt.getByRole('alert').innerText();
+  check(
+    'an address Sieve cannot allowlist (IPv6) says "Enter a site like example.com or a full page address." and adds nothing',
+    refusedText === 'Enter a site like example.com or a full page address.' && json((await blockingOf(pw)).allowlist) === '[]',
+    refusedText,
+  );
+
+  // The page is a second writer of the settings: a pick saved by the worker while it is open must survive what the page saves next.
+  const pickWrite = (line) =>
+    pw.evaluate(async (l) => {
+      const { settings } = await chrome.storage.local.get('settings');
+      await chrome.storage.local.set({ settings: { ...settings, blocking: { ...settings.blocking, myFilters: `${settings.blocking.myFilters}\n${l}` } } });
+    }, line);
+  await pickWrite('localhost##.picked-one');
+  const followed = await until(() => filtersBox.inputValue(), (v) => v.endsWith('\nlocalhost##.picked-one'));
+  await optSwitch('Cookie banners').uncheck();
+  const afterSwitch = await until(() => blockingOf(pw), (b) => b.lists.cookies === false);
+  check(
+    'a pick saved while the settings page is open shows in the untouched text area and survives a switch change made after it',
+    followed.endsWith('\nlocalhost##.picked-one') && afterSwitch.lists.cookies === false && afterSwitch.myFilters.endsWith('\nlocalhost##.picked-one'),
+    json({ followed, afterSwitch }),
+  );
+  await optSwitch('Cookie banners').check();
+  await until(() => blockingOf(pw), (b) => b.lists.cookies === true);
+
+  await filtersBox.evaluate((el) => {
+    el.value += '\nexample.com##.mine-x';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await pickWrite('localhost##.picked-two');
+  await opt.getByText('Your filters changed while this page was open.', { exact: false }).waitFor();
+  const kept = await filtersBox.inputValue();
+  said = await pressSave();
+  const merged = (await blockingOf(pw)).myFilters.split('\n');
+  check(
+    "with the text edited, a pick saved meanwhile is announced, the owner's text stays, and Save keeps both",
+    kept.endsWith('\nexample.com##.mine-x') && !kept.includes('picked-two') && ['example.com##.mine-x', 'localhost##.picked-one', 'localhost##.picked-two'].every((l) => merged.includes(l)) && said.startsWith('Saved 3 filters.'),
+    json({ kept, merged, said }),
+  );
+  await typeFilters('');
+  await pressSave();
+  check('the settings page logged no errors', optProblems.length === 0, json(optProblems));
+  await opt.close();
 
   const lateWarnings = await cardProblems();
   check('after the worker and the menu ran all of this, the extension card still shows no warning or error', lateWarnings.length === 0, json(lateWarnings));

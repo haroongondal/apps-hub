@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ALLOW_FIRST_ID, allowRules, excludePatterns, isAllowed, tabSite } from '../index.ts';
+import { ALLOW_FIRST_ID, allowEntry, allowRules, excludePatterns, isAllowed, tabSite } from '../index.ts';
 
 const site = (host: string) => ({ kind: 'site' as const, host });
 const page = (url: string) => ({ kind: 'page' as const, url });
@@ -92,4 +92,20 @@ test('tabSite: the host loses one trailing dot and a leading www., and the page 
 test('tabSite gives an IPv6 host as it is (settings refuse it, so the menu offers no switch) and null where Sieve does not run', () => {
   assert.equal(tabSite('http://[::1]:8080/')?.host, '[::1]');
   for (const url of [undefined, '', 'not a url', 'chrome://extensions', 'chrome-extension://abc/popup.html', 'file:///Users/x/a.html', 'about:blank']) assert.equal(tabSite(url), null, String(url));
+});
+
+test('allowEntry: a full URL becomes a page entry, anything else a site entry, normalised as the settings store them', () => {
+  assert.deepEqual(allowEntry('localhost:3000'), site('localhost'));
+  assert.deepEqual(allowEntry('münchen.de'), site('xn--mnchen-3ya.de'));
+  assert.deepEqual(allowEntry('  Example.COM. '), site('example.com'));
+  assert.deepEqual(allowEntry('192.168.1.10:8080'), site('192.168.1.10'));
+  assert.deepEqual(allowEntry('https://example.com/a?b=1#c'), page('https://example.com/a?b=1'));
+  assert.deepEqual(allowEntry('http://localhost:3000/x'), page('http://localhost:3000/x'));
+  assert.deepEqual(allowEntry('https://münchen.de/'), page('https://xn--mnchen-3ya.de/'));
+});
+
+test('allowEntry gives null for what cannot be allowlisted, IPv6 included, and never throws', () => {
+  for (const input of ['', '   ', 'not a site', '*.example.com', '[::1]', '::1', 'http://[::1]:8080/', 'ftp://example.com/', 'https://', 'a b.com', 'http://a*b.com/']) {
+    assert.equal(allowEntry(input), null, input);
+  }
 });

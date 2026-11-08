@@ -34,7 +34,7 @@ The build prints one row per feature: rules, regex rules, generic selectors, hos
 
 ```bash
 pnpm --filter sieve typecheck
-pnpm --filter sieve test         # the counting code and the pick handler against an in-memory `chrome`
+pnpm --filter sieve test         # the counting code, the pick handler and the My filters save against an in-memory `chrome`
 pnpm --filter sieve test:e2e     # headless Chromium in a fresh temporary profile; build first
 ```
 
@@ -42,7 +42,7 @@ The filter compiler and the settings logic live in `packages/sieve-core` and are
 
 ## Toolbar menu
 
-The toolbar button opens a menu with a switch for Sieve, a switch for the current site, the ads and trackers blocked on the page, "Pause on this page" and "Pause everywhere", and the Distraction control, Cookie banners, AI search summaries and Site notification requests switches. It writes the same `settings` the service worker applies, so every switch goes through the blocking plan.
+The toolbar button opens a menu with a switch for Sieve, a switch for the current site, the ads and trackers blocked on the page, "Pause on this page" and "Pause everywhere", the Distraction control, Cookie banners, AI search summaries and Site notification requests switches, and a Settings button that opens the settings page. It writes the same `settings` the service worker applies, so every switch goes through the blocking plan.
 
 The counts and the badge come from `declarativeNetRequest.onRuleMatchedDebug` (permission `declarativeNetRequestFeedback`), an event Chrome only gives unpacked extensions, which is how Sieve is installed. Each tab's count lives in `chrome.storage.session`, so it survives the service worker stopping. It starts again at zero on each page load and is gone when Chrome quits. A match of a rule that only allows a request or only changes a response header is not counted: the build writes those rule ids per list (`allowIds`, `modifyIds`) into `dist/meta.json`. `test:e2e` opens the menu as `popup.html?tab=<id>`, since a script can't click the toolbar button.
 
@@ -62,7 +62,21 @@ The picker is code running in a page the owner does not control, so it treats th
 
 The button is off where blocking is off for the page (allowlisted site, paused page, paused everywhere) because a saved pick would not show after a reload there, and on an address Sieve cannot write a filter for (an IPv6 host).
 
+## Settings page
+
+`options.html` (the manifest's `options_page`, so it opens in a tab; no new permission) has four sections:
+
+- **Blocking:** the menu's four switches, plus Ad blocker warnings and Trackers.
+- **Filter lists:** each list with its rule count from `dist/meta.json` and a switch (the same setting as the Blocking switch of that name), and the date the lists were built. Rebuilding Sieve is the only way to update them.
+- **My filters:** the owner's own filters, one per line, saved with Save. The page compiles them with the same compiler as the build (`trusted: true`, so `trusted-*` scriptlets are allowed). That compiler is bundled into `options.js` only (about 2.3 MB); the worker never loads it. Before anything is stored, the page hands Chrome the rules the unpaused blocking plan would run, allowlist rules included, in one atomic `updateDynamicRules` call. If Chrome refuses them (more than 30,000 dynamic rules, more than 1,000 regex rules counting the allowlist's page entries, a rule it can't run), the earlier rules stay on, nothing is stored, and the page shows Chrome's message. On success it stores the text in `settings.blocking.myFilters`, the rules in `myRules` (a plain rule array, which the worker applies), their filter lines in `myRuleSources` (rule id to line, for the DevTools panel) and the hiding and scriptlet data in `myCosmetic`. Bad lines are listed as "Line N: what is wrong and how to fix it", the first 50, then "and N more". A line Sieve can't run (an extended selector, `$redirect`, a scriptlet the lists don't use and so the build doesn't ship) counts as a bad line, not a saved filter.
+- **Allowlist:** each entry with Remove, and a box that takes a host or a full page address. A full URL (with `http://` or `https://`) becomes a page entry; anything else becomes a site entry for its host, with the port dropped and a Unicode name turned into its `xn--` form. IPv6 addresses can't be allowlisted.
+
+The menu, the worker (a pick) and this page all write `settings`. The page re-reads storage before every write, one write at a time, and follows changes made elsewhere: switches and the allowlist update in place, and the My filters box takes a pick's new line unless the owner has typed in it. Then the page says that the filters changed, and Save adds the lines saved elsewhere since the page loaded to the end of the owner's text.
+
 ## Known limits
+
+- A My filters `site#@#selector` exception lifts another list's generic hiding only on that site: the site leaves the registered generic stylesheets and gets them per page, without the excepted selectors. A `#@#selector` with no site, or one on a `google.*`-style site, does not lift a list's generic hiding; it still works against site-specific rules and My filters' own. My filters' `$generichide` and `$elemhide` exceptions only turn off My filters' own hiding.
+- A pick that lands in the fraction of a second while Save is handing the rules to Chrome loses its line (the page still saves). Both are the owner's own clicks.
 
 - The picker works in the top frame only. The pointer events over an iframe go to the frame, not to the page, so the picker can neither outline an iframe (many ads are one) nor pick anything inside it. An element inside a page's own shadow DOM is picked as its host.
 - A pick hides the item on every page of that host that matches the selector, not only on the current page.
