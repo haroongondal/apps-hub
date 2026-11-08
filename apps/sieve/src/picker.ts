@@ -8,7 +8,6 @@ const LOCAL_CSS = `
 .root { color: var(--c-text); font: var(--type-body) var(--font-sans); }
 .box { position: fixed; box-sizing: border-box; border: 2px solid var(--c-accent); border-radius: 2px; background: var(--c-accent-soft); pointer-events: none; }
 .panel { position: fixed; right: var(--space-lg); bottom: var(--space-lg); display: grid; gap: var(--space-sm); width: min(360px, calc(100vw - 2 * var(--space-lg))); padding: var(--space-md); pointer-events: auto; }
-.panel.top { top: var(--space-lg); bottom: auto; }
 .panel p { margin: 0; }
 .selector { padding: var(--space-sm); border-radius: var(--radius-control); background: var(--c-raised); overflow-wrap: anywhere; font: var(--type-data) var(--font-mono); }
 .error { color: var(--c-danger); font: 600 var(--type-meta) var(--font-sans); }
@@ -44,7 +43,7 @@ const real = (fn: () => void) => (e: Event) => {
 const button = (text: string, onclick: () => void, extra = '') => h('button', { class: `ui-btn${extra}`, type: 'button', onclick: real(onclick) }, text);
 
 const box = h('div', { class: 'box', hidden: true });
-const hint = h('p', { class: 'ui-meta' }, 'Click the item you want to block.');
+const hint = h('p', { class: 'ui-meta' }, 'Click the item you want to block. Esc cancels.');
 const code = h('code', { class: 'selector', hidden: true });
 const count = h('p', { class: 'ui-heading', hidden: true, 'aria-live': 'polite' });
 const error = h('p', { class: 'error', role: 'alert', hidden: true });
@@ -67,9 +66,8 @@ function matches(sel: string): Element[] {
 }
 
 function info(el: Element): ElementInfo {
-  const classes = el.getAttribute('class');
   const nth = [...(el.parentElement?.children ?? [el])].filter((c) => c.localName === el.localName).indexOf(el) + 1;
-  return { tag: el.localName, id: el.getAttribute('id') ?? '', classes: classes ? classes.split(/\s+/).filter(Boolean) : [], nth };
+  return { tag: el.localName, id: el.getAttribute('id') ?? '', classes: [...el.classList], nth };
 }
 
 function outline(el: Element | null): void {
@@ -97,18 +95,28 @@ function choose(el: Element): void {
   target = el;
   chain = [];
   for (let e: Element | null = el; e !== null && e !== document.documentElement; e = e.parentElement) chain.push(info(e));
+  // The shortest selector that finds only this item or starts at an id; failing that, the shortest one that finds the fewest.
   levels = 1;
+  let fewest = Infinity;
   for (let n = 1; n <= chain.length; n++) {
     const sel = selectorFor(chain, n);
-    const found = matches(sel);
-    if (sel.startsWith('#') || (found.length === 1 && found[0] === el)) {
+    const found = matches(sel).length;
+    if (sel.startsWith('#') || found === 1) {
       levels = n;
       break;
     }
+    if (found > 0 && found < fewest) [fewest, levels] = [found, n];
   }
   error.hidden = true;
   show();
   block.focus();
+}
+
+function fail(text: string): void {
+  busy = false;
+  error.textContent = text;
+  error.hidden = false;
+  show();
 }
 
 async function send(): Promise<void> {
@@ -116,13 +124,17 @@ async function send(): Promise<void> {
   busy = true;
   error.hidden = true;
   show();
-  const reply = await chrome.runtime.sendMessage({ type: 'pick', host: location.hostname, selector }).catch(() => undefined);
+  let reply: { ok?: boolean } | undefined;
+  try {
+    reply = await chrome.runtime.sendMessage({ type: 'pick', host: location.hostname, selector });
+  } catch {
+    // After the extension reloads, this page's copy of the picker is cut off and sendMessage throws at once.
+    if (!closed) fail('Sieve was reloaded or turned off. Reload this page, then try again.');
+    return;
+  }
   if (closed) return;
-  busy = false;
   if (reply?.ok === true) return close();
-  error.textContent = "Sieve couldn't block this item. Reload the page, then try again.";
-  error.hidden = false;
-  show();
+  fail("Sieve couldn't block this item. Reload this page, then try again.");
 }
 
 function close(): void {
@@ -133,15 +145,13 @@ function close(): void {
 }
 
 const pickable = (el: EventTarget | null): el is Element => el instanceof Element && el !== document.documentElement && el !== document.body;
-const on = <K extends keyof WindowEventMap>(type: K, fn: (e: WindowEventMap[K]) => void) => window.addEventListener(type, fn, { capture: true, signal: ac.signal });
+// A page that removes the picker must not leave listeners behind that swallow its clicks.
+const on = <K extends keyof WindowEventMap>(type: K, fn: (e: WindowEventMap[K]) => void) =>
+  window.addEventListener(type, (e) => (host.isConnected ? fn(e) : close()), { capture: true, signal: ac.signal });
 const inside = (e: Event) => e.composedPath().includes(host);
 
 on('mousemove', (e) => {
-  if (inside(e)) {
-    if (target === null) panel.classList.toggle('top');
-    return;
-  }
-  if (target !== null) return;
+  if (inside(e) || target !== null) return;
   hovered = pickable(e.target) ? e.target : null;
   outline(hovered);
 });

@@ -55,8 +55,8 @@ test('a pick adds a hide filter, one entry in My filters cosmetic data, and CSS 
   const t = await setup();
   const { reply } = await t.send(pick('div.wrap > a.promo'));
   assert.deepEqual(reply, { ok: true });
-  assert.equal(t.blocking().myFilters, 'example.com##div.wrap > a.promo');
-  assert.deepEqual(t.hide(), { 'example.com': ['div.wrap > a.promo'] });
+  assert.equal(t.blocking().myFilters, 'www.example.com##div.wrap > a.promo');
+  assert.deepEqual(t.hide(), { 'www.example.com': ['div.wrap > a.promo'] });
   assert.deepEqual(t.inserted, [{ target: { tabId: 7, documentIds: ['doc-1'] }, css: 'div.wrap > a.promo{display:none!important}', origin: 'USER' }]);
   assert.equal(t.blocking().lists.ads, true, 'the other settings are kept');
 });
@@ -65,42 +65,48 @@ test('picks add to what is there: other filters, other hosts, and no repeat of t
   const t = await setup();
   t.store.set('settings', { ...DEFAULT_SETTINGS, blocking: { ...DEFAULT_SETTINGS.blocking, myFilters: '||ads.example^\n', allowlist: [{ kind: 'site', host: 'kept.com' }] } });
   t.store.set('myCosmetic', { hide: { 'other.com': ['.x'] }, unhide: { 'other.com': ['.y'] } });
-  await t.send(pick('.a'));
-  await t.send(pick('.b'));
-  await t.send(pick('.a'));
-  assert.equal(t.blocking().myFilters, '||ads.example^\nexample.com##.a\nexample.com##.b');
+  await t.send(pick('div.a'));
+  await t.send(pick('div.b'));
+  await t.send(pick('div.a'));
+  assert.equal(t.blocking().myFilters, '||ads.example^\nwww.example.com##div.a\nwww.example.com##div.b');
   assert.deepEqual(t.blocking().allowlist, [{ kind: 'site', host: 'kept.com' }]);
   const mine = t.store.get('myCosmetic') as { hide: unknown; unhide: unknown };
-  assert.deepEqual(mine.hide, { 'other.com': ['.x'], 'example.com': ['.a', '.b'] });
+  assert.deepEqual(mine.hide, { 'other.com': ['.x'], 'www.example.com': ['div.a', 'div.b'] });
   assert.deepEqual(mine.unhide, { 'other.com': ['.y'] });
 });
 
 test('two picks sent at the same moment are both saved', async () => {
   const t = await setup();
-  const replies = await Promise.all([t.send(pick('.a')), t.send(pick('.b'), { documentId: 'doc-2' }), t.send(pick('.c'))]);
+  const replies = await Promise.all([t.send(pick('div.a')), t.send(pick('div.b'), { documentId: 'doc-2' }), t.send(pick('div.c'))]);
   assert.deepEqual(replies.map((r) => r.reply), [{ ok: true }, { ok: true }, { ok: true }]);
-  assert.equal(t.blocking().myFilters, 'example.com##.a\nexample.com##.b\nexample.com##.c');
-  assert.deepEqual(t.hide(), { 'example.com': ['.a', '.b', '.c'] });
+  assert.equal(t.blocking().myFilters, 'www.example.com##div.a\nwww.example.com##div.b\nwww.example.com##div.c');
+  assert.deepEqual(t.hide(), { 'www.example.com': ['div.a', 'div.b', 'div.c'] });
   assert.deepEqual(t.inserted.map((i) => i.target.documentIds[0]), ['doc-1', 'doc-2', 'doc-1']);
 });
 
-test('the host is the sender page, whatever the message says', async () => {
+test('the host is the sender page, whatever the message says, and a www. host stays apart from its siblings', async () => {
   const t = await setup();
-  await t.send(pick('.a', 'evil.com'), { url: 'http://shop.example.org:8080/x' });
-  assert.equal(t.blocking().myFilters, 'shop.example.org##.a');
-  assert.deepEqual(t.hide(), { 'shop.example.org': ['.a'] });
+  await t.send(pick('div.a', 'evil.com'), { url: 'http://shop.example.org:8080/x' });
+  assert.equal(t.blocking().myFilters, 'shop.example.org##div.a');
+  assert.deepEqual(t.hide(), { 'shop.example.org': ['div.a'] });
+  await t.send(pick('div.b'), { url: 'https://www.google.com/' });
+  await t.send(pick('div.c'), { url: 'https://mail.google.com/' });
+  assert.deepEqual(t.hide(), { 'shop.example.org': ['div.a'], 'www.google.com': ['div.b'], 'mail.google.com': ['div.c'] });
 });
 
 test('a pick that does not come from a web page, or is not what the picker builds, changes nothing and gets "not ok"', async () => {
   const t = await setup();
   const bad: [unknown, Partial<chrome.runtime.MessageSender>][] = [
-    [pick('.a'), { url: 'chrome-extension://abc/popup.html' }],
-    [pick('.a'), { url: 'http://[::1]/' }],
-    [pick('.a'), { tab: undefined }],
-    [pick('.a'), { documentId: undefined }],
-    [pick('.a\nexample.com#%#//scriptlet("x")'), {}],
-    [pick('.a, body'), {}],
-    [pick('.a{}'), {}],
+    [pick('div.a'), { url: 'chrome-extension://abc/popup.html' }],
+    [pick('div.a'), { url: 'http://[::1]/' }],
+    [pick('div.a'), { tab: undefined }],
+    [pick('div.a'), { documentId: undefined }],
+    [pick('div.a\nexample.com#%#//scriptlet("x")'), {}],
+    [pick('div.a, body'), {}],
+    [pick('div.a{}'), {}],
+    [pick('div'), {}],
+    [pick('html'), {}],
+    [pick('div.a:not('), {}],
     [{ type: 'pick', host: 'x' }, {}],
   ];
   for (const [message, sender] of bad) assert.deepEqual((await t.send(message, sender)).reply, { ok: false }, JSON.stringify([message, sender]));
@@ -116,19 +122,19 @@ test('a message that is not a pick is left for other listeners', async () => {
 
 test('when the CSS cannot be inserted, the pick says "not ok", is already stored, and a second try adds nothing twice', async () => {
   const t = await setup({ cssFails: true });
-  assert.deepEqual((await t.send(pick('.a'))).reply, { ok: false });
+  assert.deepEqual((await t.send(pick('div.a'))).reply, { ok: false });
   assert.equal(t.logged.length, 1);
-  assert.equal(t.blocking().myFilters, 'example.com##.a');
-  await t.send(pick('.a'));
-  assert.equal(t.blocking().myFilters, 'example.com##.a');
-  assert.deepEqual(t.hide(), { 'example.com': ['.a'] });
+  assert.equal(t.blocking().myFilters, 'www.example.com##div.a');
+  await t.send(pick('div.a'));
+  assert.equal(t.blocking().myFilters, 'www.example.com##div.a');
+  assert.deepEqual(t.hide(), { 'www.example.com': ['div.a'] });
 });
 
 test('one failed pick does not hold up the next', async () => {
   const t = await setup();
-  const first = t.send(pick('.a'), { documentId: undefined });
-  const second = t.send(pick('.b'));
+  const first = t.send(pick('div.a'), { documentId: undefined });
+  const second = t.send(pick('div.b'));
   assert.deepEqual((await first).reply, { ok: false });
   assert.deepEqual((await second).reply, { ok: true });
-  assert.equal(t.blocking().myFilters, 'example.com##.b');
+  assert.equal(t.blocking().myFilters, 'www.example.com##div.b');
 });

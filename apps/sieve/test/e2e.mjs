@@ -637,7 +637,7 @@ try {
   const opened = await pickPage.evaluate(() => ({ open: document.querySelector('sieve-picker').shadowRoot !== null, host: document.documentElement.contains(document.querySelector('sieve-picker')) }));
   check(
     'the picker opens in an open shadow root on the page, asks the owner to click an item, and shows no "Block it" yet, even though the page styles its tag display: none',
-    opened.open && opened.host && (await inPicker(pickPage, '.panel').isVisible()) && (await inPicker(pickPage, 'p.ui-meta').innerText()) === 'Click the item you want to block.' && !(await pbtn('Block it').isVisible()) && (await pbtn('Cancel').isVisible()),
+    opened.open && opened.host && (await inPicker(pickPage, '.panel').isVisible()) && (await inPicker(pickPage, 'p.ui-meta').innerText()) === 'Click the item you want to block. Esc cancels.' && !(await pbtn('Block it').isVisible()) && (await pbtn('Cancel').isVisible()),
     json(opened),
   );
   await pickPage.hover('a.promo');
@@ -693,6 +693,51 @@ try {
   check('an item with an id gets #main-ad, and "More" has nowhere to go', (await selectorOf(pickPage)) === '#main-ad' && (await pbtn('More').isDisabled()));
   await pickPage.keyboard.press('Escape');
   await pickPage.locator(PICKER).waitFor({ state: 'detached' });
+
+  await startPicker(pickPage, PICK);
+  await choose(pickPage, '.grp .dup >> nth=0');
+  const fewest = [await selectorOf(pickPage), await hidesOf(pickPage)];
+  await pickPage.keyboard.press('Escape');
+  await pickPage.locator(PICKER).waitFor({ state: 'detached' });
+  check('when no selector finds only the item, the picker starts at the one that finds the fewest: section.grp > p.dup with 2 items, not p.dup with 3', same(fewest, ['section.grp > p.dup', 'Hides 2 items on this page']), json(fewest));
+
+  const filtersBeforeCancel = await myFiltersOf(pw);
+  const clicksBeforeCancel = await pickPage.evaluate(() => window.clicks);
+  await startPicker(pickPage, PICK);
+  const cancelBox = await pbtn('Cancel').boundingBox();
+  await pickPage.mouse.move(20, 20);
+  await pickPage.mouse.move(cancelBox.x + cancelBox.width / 2, cancelBox.y + cancelBox.height / 2, { steps: 25 });
+  await pickPage.mouse.down();
+  await pickPage.mouse.up();
+  await sleep(300);
+  check(
+    'before an item is picked, a pointer that crosses the panel still clicks Cancel: the picker closes, and the item under the panel is not picked, hidden or saved',
+    (await pickerCount(pickPage)) === 0 && (await myFiltersOf(pw)) === filtersBeforeCancel && (await pickPage.evaluate(() => window.clicks)) === clicksBeforeCancel && (await displayOf(pickPage, '.corner')) !== 'none',
+    json({ open: await pickerCount(pickPage), filters: await myFiltersOf(pw) }),
+  );
+
+  await startPicker(pickPage, PICK);
+  await pickPage.evaluate(() => (document.querySelector('sieve-picker').dataset.first = 'yes'));
+  await startPicker(pickPage, PICK);
+  await pickPage.locator('sieve-picker[data-first]').waitFor({ state: 'detached' });
+  await choose(pickPage, '#main-ad');
+  const twice = [await pickerCount(pickPage), await selectorOf(pickPage)];
+  await pickPage.keyboard.press('Escape');
+  await pickPage.locator(PICKER).waitFor({ state: 'detached' });
+  const clicksTwice = await pickPage.evaluate(() => window.clicks);
+  await pickPage.click('.note >> nth=0');
+  check(
+    'running the picker again while it is open leaves one picker that works, and after Esc nothing of the first is left to swallow the page\'s clicks',
+    same(twice, [1, '#main-ad']) && (await pickPage.evaluate(() => window.clicks)) === clicksTwice + 1,
+    json({ twice, clicks: await pickPage.evaluate(() => window.clicks), clicksTwice }),
+  );
+
+  await startPicker(pickPage, PICK);
+  await pickPage.evaluate(() => document.querySelector('sieve-picker').remove());
+  const clicksBeforeRemoval = await pickPage.evaluate(() => window.clicks);
+  await pickPage.click('.note >> nth=0');
+  await pickPage.click('.note >> nth=0');
+  check('when the page removes the picker, the next pointer event ends it for good, so the page gets its clicks', (await pickPage.evaluate(() => window.clicks)) === clicksBeforeRemoval + 2, String(await pickPage.evaluate(() => window.clicks)));
 
   await startPicker(pickPage, PICK);
   await choose(pickPage, 'a.promo');
@@ -753,6 +798,25 @@ try {
     json({ filters: await myFiltersOf(pw), hide: await hideDataOf(pw) }),
   );
 
+  const WWW = `https://www.localhost:${servers.httpsPort}/pick.html`;
+  const wwwPick = await ctx.newPage();
+  await wwwPick.setViewportSize({ width: 760, height: 460 });
+  await wwwPick.goto(WWW, { waitUntil: 'load' });
+  await startPicker(wwwPick, WWW);
+  await choose(wwwPick, '.note >> nth=0');
+  await wwwPick.getByRole('button', { name: 'Block it', exact: true }).click();
+  const wwwSaved = await until(async () => (await hideDataOf(pw))?.['www.localhost'], (v) => v !== undefined);
+  await wwwPick.reload({ waitUntil: 'load' });
+  const wwwHidden = await until(() => displayOf(wwwPick, '.note'), (d) => d === 'none', 5_000);
+  await pickPage.reload({ waitUntil: 'load' });
+  await until(() => displayOf(pickPage, 'a.promo'), (d) => d === 'none', 5_000);
+  check(
+    'a pick on a www. page is saved under www.localhost, hides there after a reload, and leaves localhost itself alone',
+    same(wwwSaved, ['p.note']) && (await myFiltersOf(pw)).endsWith('\nwww.localhost##p.note') && wwwHidden === 'none' && (await displayOf(pickPage, '.note')) !== 'none',
+    json({ wwwSaved, wwwHidden, filters: await myFiltersOf(pw) }),
+  );
+  await wwwPick.close();
+
   m = await menu(await tabFor(pw, PICK));
   const refused = await m.pop.evaluate(() => chrome.runtime.sendMessage({ type: 'pick', host: 'localhost', selector: '.zzz' }));
   check('a pick sent from the menu page, which is not a web page, is refused and saves nothing', refused?.ok === false && !(await myFiltersOf(pw)).includes('.zzz'), json(refused));
@@ -785,6 +849,21 @@ try {
 
   const lateWarnings = await cardProblems();
   check('after the worker and the menu ran all of this, the extension card still shows no warning or error', lateWarnings.length === 0, json(lateWarnings));
+  // Last of all, because reloading the extension from Chrome for Testing leaves it off: the picker still open on a page is then cut off from it.
+  const reloadPage = await ctx.newPage();
+  await reloadPage.setViewportSize({ width: 760, height: 460 });
+  await reloadPage.goto(PICK, { waitUntil: 'load' });
+  await startPicker(reloadPage, PICK);
+  await choose(reloadPage, '.note >> nth=0');
+  await pw.evaluate(() => chrome.runtime.reload()).catch(() => {});
+  await sleep(2000);
+  await reloadPage.getByRole('button', { name: 'Block it', exact: true }).click();
+  await inPicker(reloadPage, '.error').waitFor({ state: 'visible' });
+  const cutOff = await inPicker(reloadPage, '.error').innerText();
+  const unstuck = await reloadPage.getByRole('button', { name: 'Block it', exact: true }).isEnabled();
+  await reloadPage.keyboard.press('Escape');
+  await reloadPage.locator(PICKER).waitFor({ state: 'detached' });
+  check('after the extension reloads, "Block it" says why it cannot save and is ready for another try instead of sticking', cutOff === 'Sieve was reloaded or turned off. Reload this page, then try again.' && unstuck, json({ cutOff, unstuck }));
   await ctx.close();
 } catch (e) {
   check('the run finished without an exception', false, String(e?.stack ?? e).split('\n').slice(0, 4).join(' | '));

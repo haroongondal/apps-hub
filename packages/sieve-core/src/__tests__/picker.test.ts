@@ -48,56 +48,126 @@ test('addHideFilter puts the filter on its own line', () => {
 });
 
 const PAGE = 'https://www.example.com/shop?x=1#top';
+const pick = (selector: string, host = 'x') => ({ type: 'pick', host, selector });
 
-test('parsePick takes the host from the sender, not from the message', () => {
-  assert.deepEqual(parsePick({ type: 'pick', host: 'www.example.com', selector: 'div.wrap > a.promo' }, PAGE), { host: 'example.com', selector: 'div.wrap > a.promo' });
-  assert.deepEqual(parsePick({ type: 'pick', host: 'evil.com', selector: '.a' }, PAGE), { host: 'example.com', selector: '.a' });
-  assert.deepEqual(parsePick({ type: 'pick', host: 'x', selector: '.a' }, 'http://localhost:3000/'), { host: 'localhost', selector: '.a' });
-  assert.deepEqual(parsePick({ type: 'pick', host: 'x', selector: '.a' }, 'http://192.168.1.2/'), { host: '192.168.1.2', selector: '.a' });
+test('parsePick takes the host from the sender page, with its www. and without a trailing dot, never from the message', () => {
+  assert.deepEqual(parsePick(pick('div.wrap > a.promo', 'www.example.com'), PAGE), { host: 'www.example.com', selector: 'div.wrap > a.promo' });
+  assert.deepEqual(parsePick(pick('div.a', 'evil.com'), PAGE), { host: 'www.example.com', selector: 'div.a' });
+  assert.deepEqual(parsePick(pick('div.a'), 'https://www.google.com/'), { host: 'www.google.com', selector: 'div.a' });
+  assert.deepEqual(parsePick(pick('div.a'), 'https://mail.google.com/'), { host: 'mail.google.com', selector: 'div.a' });
+  assert.deepEqual(parsePick(pick('div.a'), 'https://example.com./x'), { host: 'example.com', selector: 'div.a' });
+  assert.deepEqual(parsePick(pick('div.a'), 'HTTPS://WWW.Example.COM/'), { host: 'www.example.com', selector: 'div.a' });
+  assert.deepEqual(parsePick(pick('div.a'), 'http://www.localhost:8080/'), { host: 'www.localhost', selector: 'div.a' });
+  assert.deepEqual(parsePick(pick('div.a'), 'http://localhost:3000/'), { host: 'localhost', selector: 'div.a' });
+  assert.deepEqual(parsePick(pick('div.a'), 'http://192.168.1.2/'), { host: '192.168.1.2', selector: 'div.a' });
 });
 
 test('parsePick refuses a sender that is not a web page with a host Sieve can use', () => {
-  const msg = { type: 'pick', host: 'x', selector: '.a' };
   for (const url of [undefined, '', 'chrome://extensions', 'file:///tmp/x.html', 'chrome-extension://abc/popup.html', 'http://[::1]:8080/', 'http://my_host.test/', 'about:blank']) {
-    assert.equal(parsePick(msg, url), null, String(url));
+    assert.equal(parsePick(pick('div.a'), url), null, String(url));
   }
 });
 
 test('parsePick refuses a message that is not a well-formed pick', () => {
-  for (const msg of [null, undefined, 'pick', [], {}, { type: 'pick' }, { type: 'pick', host: 'x' }, { type: 'pick', selector: '.a' }, { type: 'other', host: 'x', selector: '.a' }, { type: 'pick', host: 1, selector: '.a' }, { type: 'pick', host: 'x', selector: 1 }]) {
+  for (const msg of [null, undefined, 'pick', [], {}, { type: 'pick' }, { type: 'pick', host: 'x' }, { type: 'pick', selector: 'div.a' }, { type: 'other', host: 'x', selector: 'div.a' }, { type: 'pick', host: 1, selector: 'div.a' }, { type: 'pick', host: 'x', selector: 1 }]) {
     assert.equal(parsePick(msg, PAGE), null, JSON.stringify(msg));
   }
-  assert.equal(parsePick({ type: 'pick', host: 'x'.repeat(300), selector: '.a' }, PAGE), null);
-  assert.equal(parsePick({ type: 'pick', host: 'x', selector: `.${'a'.repeat(1000)}` }, PAGE), null);
+  assert.equal(parsePick(pick('div.a', 'x'.repeat(300)), PAGE), null);
+  assert.equal(parsePick(pick(`div.${'a'.repeat(1000)}`), PAGE), null);
 });
 
 test('parsePick refuses a selector that is not what the picker builds', () => {
   const bad = [
     '',
-    '.a\n.b',
-    '.a\r\nexample.com#%#//scriptlet("x")',
-    '.a\\\n.b',
-    '.a\u0000',
-    '.a, body',
-    '.a{}',
-    '.a}body{display:none',
-    '.a;',
+    'div.a\n.b',
+    'div.a\r\nexample.com#%#//scriptlet("x")',
+    'div.a\\\ndiv.b',
+    'div.a\\\u0001',
+    'div.a\u0000',
+    'div.a, body',
+    'div.a{}',
+    'div.a}body{display:none',
+    'div.a;',
+    '}',
+    ';',
     '/*',
-    '.a/*x*/',
-    '.a"b',
+    'div.a/*x*/',
+    'div.a"b',
+    "div.a'b",
     "a[href='x']",
     '*',
-    '.a ~ .b',
-    '.a + .b',
-    '.a\\',
-    ' .a',
+    'div.a ~ div.b',
+    'div.a + div.b',
+    'div.a\\',
+    ' div.a',
+    'div.a ',
     '>',
+    'div.a >',
+    'div.a >  div.b',
+    'div.a > > div.b',
+    '.a(',
+    '.a:not(',
+    'div.a(',
+    'div.a:not(.b)',
+    'div:has(.x)',
+    'body:has(.x)',
+    'div.a:nth-of-type(1)',
+    'div:nth-of-type(x)',
+    'div:nth-of-type(1',
+    'div:nth-of-type(1)(',
+    'div:nth-of-type(2n+1)',
+    'html',
+    'body',
+    'div',
+    'div p',
+    'div > p',
+    '.promo',
+    '.a.b',
+    'a#b',
+    '#a#b',
+    '#a.b',
+    '#1a',
+    'div.1a',
+    '1div.a',
+    '@import "x"',
+    'url(x)',
+    'div.a { x',
+    'html:nth-of-type(1)',
+    'body.x',
+    'body:nth-of-type(1)',
+    'div.a > body:nth-of-type(1)',
+    'HTML.x',
   ];
-  for (const selector of bad) assert.equal(parsePick({ type: 'pick', host: 'x', selector }, PAGE), null, JSON.stringify(selector));
+  for (const selector of bad) assert.equal(parsePick(pick(selector), PAGE), null, JSON.stringify(selector));
 });
 
 test('parsePick accepts every selector shape the picker builds', () => {
-  const ok = ['#main-ad', 'div.promo', 'a:nth-of-type(3)', 'div.a\\:b', 'div.\\31 a.w-1\\/2.x\\ y', 'div.a\\a b', '#box > a.promo', 'body > section.x > p:nth-of-type(2)', '.café'];
-  for (const selector of ok) assert.deepEqual(parsePick({ type: 'pick', host: 'x', selector }, PAGE), { host: 'example.com', selector }, selector);
+  const ok = ['#main-ad', 'div.promo', 'a:nth-of-type(3)', 'div.a\\:b', 'div.\\31 a.w-1\\/2.x\\ y', 'div.a\\a b', '#box > a.promo', 'body:nth-of-type(1) > section.x > p:nth-of-type(2)', 'div.café', 'my-element:nth-of-type(12)'];
+  for (const selector of ok) assert.deepEqual(parsePick(pick(selector), PAGE), { host: 'www.example.com', selector }, selector);
   assert.equal(selectorFor([el('div', { classes: ['a\nb'] })], 1), 'div.a\\a b');
+});
+
+test('parsePick accepts every selector selectorFor makes, whatever the page calls its tags, ids and classes', () => {
+  const nasty = ['a', 'x', 'Z', '1', '-', '_', ':', '.', '#', ' ', '\\', '/', '*', '(', ')', '{', '}', ';', '"', "'", '@', '<', '>', ',', '+', '~', '[', ']', '=', '!', '%', '&', '\n', '\t', '\u0001', '\u007f', '\u0000', 'é', '\u{1f600}', '￿', '-1', '--', '/*', '*/'];
+  let seed = 12345;
+  const next = (n: number) => ((seed = (seed * 1103515245 + 12345) % 2 ** 31), seed % n);
+  const word = () => Array.from({ length: 1 + next(6) }, () => nasty[next(nasty.length)]).join('');
+  const names = ['promo', 'wrap', 'id-1', 'css-1q2w3e'];
+  const chain = (): ElementInfo[] =>
+    Array.from({ length: 1 + next(4) }, () => ({
+      tag: next(3) === 0 ? word() : 'div',
+      id: next(3) === 0 ? names[next(2) + 2] : next(4) === 0 ? word() : '',
+      classes: Array.from({ length: next(4) }, () => (next(2) ? word() : names[next(names.length)])),
+      nth: 1 + next(9),
+    }));
+  let made = 0;
+  for (let i = 0; i < 400; i++) {
+    const c = chain();
+    for (let levels = 1; levels <= c.length; levels++) {
+      const selector = selectorFor(c, levels);
+      assert.deepEqual(parsePick(pick(selector), PAGE), { host: 'www.example.com', selector }, JSON.stringify(selector));
+      made++;
+    }
+  }
+  assert.ok(made > 300, 'the generator made selectors');
 });

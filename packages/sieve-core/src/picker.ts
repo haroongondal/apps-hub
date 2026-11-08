@@ -1,5 +1,4 @@
-import { tabSite } from './allowlist.ts';
-import { isHost } from './settings.ts';
+import { isHost, pageUrl } from './settings.ts';
 
 export interface ElementInfo {
   tag: string;
@@ -53,18 +52,24 @@ export interface Pick {
 }
 
 const MAX_SELECTOR = 1000;
-// Only what selectorFor builds (escapes removed first): no comma, brace, quote, `*` or line break, so a selector cannot hide more than the picker showed or add a line to My filters.
-const BUILT = /^[A-Za-z#.][\w\-#.:() >\u0080-￿]*$/;
+const IDENT = '[A-Za-z_\\u0080-\\uFFFF-][\\w\\u0080-\\uFFFF-]*';
+const COMPOUND = `(?:#[A-Za-z][\\w-]*|${IDENT}(?:(?:\\.${IDENT})+|:nth-of-type\\(\\d+\\)))`;
+const ESCAPE = /\\[0-9a-fA-F]{1,6} ?|\\[^\n]/g;
+// Exactly what selectorFor builds: `#id`, `tag.class...` or `tag:nth-of-type(n)`, joined by ` > `, with escapes allowed. Nothing else gets in, not even a bare tag.
+const BUILT = new RegExp(`^${COMPOUND}(?: > ${COMPOUND})*$`);
 
 function isBuiltSelector(selector: string): boolean {
-  return selector.length <= MAX_SELECTOR && !/[\u0000-\u001f\u007f]/.test(selector) && BUILT.test(selector.replace(/\\[^]/g, ''));
+  if (selector.length > MAX_SELECTOR || /[\u0000-\u001f\u007f]/.test(selector)) return false;
+  const plain = selector.replace(ESCAPE, 'x');
+  return BUILT.test(plain) && !/^(?:html|body)[.:]/i.test(plain.split(' > ').pop() as string);
 }
 
-// The message comes from a page we do not control, so the host is the sender's, never the message's.
+// The message comes from a page we do not control, so the host is the sender's full hostname (www. kept, so www.google.com never hides on mail.google.com), never the message's.
 export function parsePick(message: unknown, senderUrl: string | undefined): Pick | null {
   if (typeof message !== 'object' || message === null || Array.isArray(message)) return null;
   const { type, host, selector } = message as Record<string, unknown>;
   if (type !== 'pick' || typeof host !== 'string' || host.length > 253 || typeof selector !== 'string' || !isBuiltSelector(selector)) return null;
-  const site = tabSite(senderUrl);
-  return site !== null && isHost(site.host) ? { host: site.host, selector } : null;
+  const page = senderUrl === undefined ? null : pageUrl(senderUrl);
+  const hostname = page === null ? '' : new URL(page).hostname.replace(/\.$/, '');
+  return isHost(hostname) ? { host: hostname, selector } : null;
 }
