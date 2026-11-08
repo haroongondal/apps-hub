@@ -132,3 +132,60 @@ test('account key round-trips and survives clearKeys', async () => {
   await vault.clearKeys();
   assert.deepEqual(await vault.loadAccountKey(), ak);
 });
+
+const short = [new Uint8Array(0), new Uint8Array(31)];
+
+test('a prf shorter than 32 bytes is refused by protect and changes nothing', async () => {
+  for (const bad of short) {
+    const { vault, m } = await setup();
+    await vault.saveKeys({ vaultKey });
+    const stored = m.get('deviceKeys');
+    await assert.rejects(vault.protect(bad));
+    assert.equal(m.get('deviceKeys'), stored);
+    assert.equal(await vault.mode(), 'device');
+    assert.deepEqual((await vault.loadKeys())?.vaultKey, vaultKey);
+  }
+});
+
+test('a short prf is refused by unprotect and saveKeys, and loadKeys returns null for it', async () => {
+  for (const bad of short) {
+    const { vault, m } = await setup();
+    await vault.saveKeys({ vaultKey });
+    await vault.protect(prf);
+    const stored = m.get('deviceKeys');
+    await assert.rejects(vault.unprotect(bad));
+    await assert.rejects(vault.saveKeys({ vaultKey: new Uint8Array(32).fill(1) }, bad));
+    assert.equal(m.get('deviceKeys'), stored);
+    assert.equal(await vault.loadKeys(bad), null);
+    assert.deepEqual((await vault.loadKeys(prf))?.vaultKey, vaultKey);
+  }
+});
+
+// A KeyStore whose get() takes the given delays in order, then none: what idbKeyStore's varying latency looks like.
+const slowKeys = async (delays: number[]): Promise<KeyStore> => {
+  const ks = await newKeys();
+  return { put: ks.put, get: async () => (await new Promise((r) => setTimeout(r, delays.shift() ?? 0)), ks.get()) };
+};
+
+test('protect racing saveKeys keeps fingerprint mode and no device-sealed copy', async () => {
+  const { kv } = memKV();
+  const delays: number[] = [];
+  const vault = createDeviceVault(kv, await slowKeys(delays));
+  await vault.saveKeys({ vaultKey });
+  delays.push(40, 0);
+  const done = Promise.all([vault.protect(prf), vault.saveKeys({ vaultKey: new Uint8Array(32).fill(1) })]);
+  await done;
+  assert.equal(await vault.mode(), 'fingerprint');
+  assert.equal(await vault.loadKeys(), null);
+  assert.deepEqual((await vault.loadKeys(prf))?.vaultKey, vaultKey);
+});
+
+test('clearKeys issued after a saveKeys leaves nothing behind', async () => {
+  const { kv } = memKV();
+  const vault = createDeviceVault(kv, await slowKeys([40]));
+  const save = vault.saveKeys({ vaultKey });
+  const clear = vault.clearKeys();
+  await Promise.all([save, clear]);
+  assert.equal(await vault.mode(), 'none');
+  assert.equal(await vault.loadKeys(), null);
+});

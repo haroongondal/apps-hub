@@ -66,7 +66,18 @@ export function createDeviceVault(area: KV, keys: KeyStore): DeviceVault {
     }
   };
   const write = (mode: Mode, sealed: Uint8Array) => area.set(KEYS, JSON.stringify({ mode, sealed: toBase64(sealed) }));
-  const fp = (prf: Uint8Array) => hkdf(prf, 'strongroom/ext/fingerprint');
+  // A prf under 32 bytes (an empty one, say, from a message that lost its bytes) would seal under a key anyone can derive: protect, unprotect and saveKeys throw, loadKeys returns null.
+  const fp = (prf: Uint8Array) => {
+    if (!(prf instanceof Uint8Array) || prf.length < 32) throw new Error('Fingerprint secret is too short');
+    return hkdf(prf, 'strongroom/ext/fingerprint');
+  };
+  // Every change reads then writes the entry, so changes run one at a time, in call order.
+  let tail: Promise<unknown> = Promise.resolve();
+  const queued = <T>(f: () => Promise<T>): Promise<T> => {
+    const r = tail.then(f);
+    tail = r.catch(() => {});
+    return r;
+  };
   const sealKeys = async (mode: Mode, k: DeviceKeys, prf?: Uint8Array) =>
     write(mode, mode === 'device' ? await wrapSeal(await wrapper(), encode(k), KEYS_AAD) : await seal(fp(prf!), encode(k), KEYS_AAD));
 
@@ -89,27 +100,29 @@ export function createDeviceVault(area: KV, keys: KeyStore): DeviceVault {
         return null;
       }
     },
-    async saveKeys(k, prf) {
+    saveKeys: (k, prf) => queued(async () => {
       const e = await entry();
       if (e?.mode === 'fingerprint') {
         if (prf) await sealKeys('fingerprint', k, prf);
         return;
       }
       await sealKeys('device', k);
-    },
-    clearKeys: () => area.remove(KEYS),
+    }),
+    clearKeys: () => queued(() => area.remove(KEYS)),
     // One entry holds the sealed copy, so replacing it is the write-new-then-drop-old step: no moment with both or neither.
-    async protect(prf) {
+    protect: (prf) => queued(async () => {
+      fp(prf);
       const k = (await entry())?.mode === 'device' ? await self.loadKeys() : null;
       if (k) await sealKeys('fingerprint', k, prf);
-    },
-    async unprotect(prf) {
+    }),
+    unprotect: (prf) => queued(async () => {
+      fp(prf);
       const k = (await entry())?.mode === 'fingerprint' ? await self.loadKeys(prf) : null;
       if (k) await sealKeys('device', k);
-    },
-    async saveAccountKey(k) {
+    }),
+    saveAccountKey: (k) => queued(async () => {
       await area.set(ACCOUNT, toBase64(await wrapSeal(await wrapper(), k, ACCOUNT_AAD)));
-    },
+    }),
     async loadAccountKey() {
       const s = await area.get(ACCOUNT);
       if (!s) return null;
@@ -131,6 +144,12 @@ const openDb = () =>
     r.onsuccess = () => resolve(r.result);
     r.onerror = () => reject(r.error);
   });
+// Resolves when the transaction has committed, rejects if it aborts.
+const committed = (tx: IDBTransaction) =>
+  new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onabort = tx.onerror = () => reject(tx.error);
+  });
 const done = <T>(r: IDBRequest<T>) =>
   new Promise<T>((resolve, reject) => {
     r.onsuccess = () => resolve(r.result);
@@ -144,10 +163,12 @@ export const idbKeyStore: KeyStore = {
     const fresh = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
     const db = await openDb();
     try {
-      const store = db.transaction('keys', 'readwrite').objectStore('keys');
+      const tx = db.transaction('keys', 'readwrite');
+      const store = tx.objectStore('keys');
       const existing = await done<CryptoKey | undefined>(store.get('wrapper'));
       if (existing) return existing;
-      await done(store.put(fresh, 'wrapper'));
+      store.put(fresh, 'wrapper');
+      await committed(tx); // sealing under a key that was never stored would lose the data
       return fresh;
     } finally {
       db.close();
@@ -156,7 +177,9 @@ export const idbKeyStore: KeyStore = {
   async put(k) {
     const db = await openDb();
     try {
-      await done(db.transaction('keys', 'readwrite').objectStore('keys').put(k, 'wrapper'));
+      const tx = db.transaction('keys', 'readwrite');
+      tx.objectStore('keys').put(k, 'wrapper');
+      await committed(tx);
     } finally {
       db.close();
     }
