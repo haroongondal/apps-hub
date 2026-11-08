@@ -11,6 +11,7 @@ const { chromium } = await import(process.env.PLAYWRIGHT_CORE ?? join(homedir(),
 const CHROMIUM = process.env.CHROMIUM_PATH ?? join(homedir(), 'Library/Caches/ms-playwright/chromium-1228/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
 const EXT = fileURLToPath(new URL('../dist', import.meta.url));
 const PAGES = fileURLToPath(new URL('pages', import.meta.url));
+const YT_FIXTURE = readFileSync(new URL('../spike/fixtures/player-response.json', import.meta.url), 'utf8');
 
 // `||host^` rules with no options, picked from EasyList and EasyPrivacy on 2026-11-06.
 export const AD_HOST = 'pagead2.googlesyndication.com';
@@ -31,6 +32,10 @@ export async function startServers() {
   const ports = {};
   const handler = (req, res) => {
     hits.push(req.url);
+    if (req.url.startsWith('/watch?')) {
+      res.setHeader('content-type', 'text/html');
+      return res.end(readFileSync(join(PAGES, 'yt-watch.html'), 'utf8').replaceAll('%YT_FIXTURE%', YT_FIXTURE));
+    }
     const file = join(PAGES, new URL(req.url, 'http://x').pathname);
     if (req.url.endsWith('.html') && file.startsWith(PAGES) && existsSync(file)) {
       res.setHeader('content-type', 'text/html');
@@ -55,7 +60,7 @@ export async function startServers() {
   return { http: plain, https: secure, ...ports, hits };
 }
 
-export async function launch({ extraArgs = [], extraHosts = [] } = {}) {
+export async function launch({ extraArgs = [], extraHosts = [], mapHosts = true } = {}) {
   const profile = mkdtempSync(join(tmpdir(), 'sieve-e2e-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     executablePath: CHROMIUM,
@@ -64,7 +69,7 @@ export async function launch({ extraArgs = [], extraHosts = [] } = {}) {
       `--disable-extensions-except=${EXT}`,
       `--load-extension=${EXT}`,
       '--ignore-certificate-errors',
-      `--host-resolver-rules=${[AD_HOST, TRACKER_HOST, SITE_HOST, UNHIDE_HOST, 'www.youtube.com', ...extraHosts].map((h) => `MAP ${h} 127.0.0.1`).join(',')}`,
+      ...(mapHosts ? [`--host-resolver-rules=${[AD_HOST, TRACKER_HOST, SITE_HOST, UNHIDE_HOST, 'www.youtube.com', ...extraHosts].map((h) => `MAP ${h} 127.0.0.1`).join(',')}`] : []),
       ...extraArgs,
     ],
   });

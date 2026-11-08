@@ -1,6 +1,7 @@
 import { isAllowed, tabSite } from '@apps-hub/sieve-core/src/allowlist.ts';
 import { countsKey, type Counts } from '@apps-hub/sieve-core/src/counts.ts';
 import { validateSettings, type AllowEntry, type FeatureKey, type Settings } from '@apps-hub/sieve-core/src/settings.ts';
+import { youtubeAdsOn, ytChannel } from '@apps-hub/sieve-core/src/youtube-ads.ts';
 import { h, type Child } from './dom.ts';
 import { withSettingsLock } from './lock.ts';
 
@@ -24,6 +25,8 @@ async function targetTab(): Promise<chrome.tabs.Tab | undefined> {
 const tab = await targetTab();
 const site = tabSite(tab?.url);
 const tabCounts = tab?.id === undefined ? undefined : countsKey(tab.id);
+// Only yt-relay.ts answers, and only on a YouTube watch page; elsewhere nothing receives the message.
+const channel = tab?.id === undefined || site === null ? null : ytChannel(await chrome.tabs.sendMessage(tab.id, { type: 'yt-channel' }, { frameId: 0 }).catch(() => null));
 let reloadHint = false;
 let pickFailed = false;
 let liveCounts: Counts | undefined;
@@ -80,6 +83,13 @@ function blockingView({ settings: s, error, counts }: State): Child[] {
         return { ...x, blocking: { ...x.blocking, allowlist: pageEntry ? rest : [...rest, { kind: 'page', url: page }] } };
       });
     };
+    const allowChannel = (on: boolean) => {
+      reloadHint = true;
+      return save((x) => {
+        const rest = x.blocking.youtubeAllowedChannels.filter((c) => c.id !== channel?.id);
+        return { ...x, blocking: { ...x.blocking, youtubeAllowedChannels: on && channel ? [...rest, channel] : rest } };
+      });
+    };
     here = h(
       'section',
       { class: 'ui-group card' },
@@ -87,6 +97,9 @@ function blockingView({ settings: s, error, counts }: State): Child[] {
       canAllowlist({ kind: 'site', host })
         ? toggle('site', 'Block on this site', !isAllowed(page, entries.filter((e) => e.kind === 'site')), allowSite)
         : h('p', { class: 'ui-meta' }, "Sieve can't turn blocking off for this address."),
+      channel !== null &&
+        youtubeAdsOn(s, [page]) &&
+        toggle('yt-channel', `Allow ads on ${channel.name}`, s.blocking.youtubeAllowedChannels.some((c) => c.id === channel.id), allowChannel),
       h('p', { class: 'counts' }, countsText(counts)),
       h(
         'div',

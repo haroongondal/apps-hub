@@ -13,6 +13,21 @@
   "background": { "service_worker": "background.js", "type": "module" },
   "options_page": "options.html",
   "devtools_page": "devtools.html",
+  "content_scripts": [
+    {
+      "matches": ["*://www.youtube.com/*", "*://m.youtube.com/*", "*://music.youtube.com/*", "*://www.youtube-nocookie.com/*"],
+      "js": ["yt-main.js"],
+      "world": "MAIN",
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["*://www.youtube.com/*", "*://m.youtube.com/*", "*://music.youtube.com/*", "*://www.youtube-nocookie.com/*"],
+      "js": ["yt-relay.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
   "permissions": ["declarativeNetRequest", "declarativeNetRequestFeedback", "storage", "unlimitedStorage", "scripting", "webNavigation"],
   "host_permissions": ["<all_urls>"]
 }

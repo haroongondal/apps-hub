@@ -160,7 +160,7 @@ await build({
 });
 // Content scripts are classic scripts, not modules. The picker takes the shared UI styles as text and adopts them into its shadow root.
 await build({
-  entryPoints: { 'notify-deny': root('src/notify-deny.ts'), picker: root('src/picker.ts') },
+  entryPoints: { 'notify-deny': root('src/notify-deny.ts'), picker: root('src/picker.ts'), 'yt-main': root('src/yt-main.ts'), 'yt-relay': root('src/yt-relay.ts') },
   bundle: true,
   format: 'iife',
   target: 'chrome128',

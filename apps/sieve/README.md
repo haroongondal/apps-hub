@@ -36,13 +36,14 @@ The build prints one row per feature: rules, regex rules, generic selectors, hos
 pnpm --filter sieve typecheck
 pnpm --filter sieve test         # the counting code, the pick handler, the My filters save and the DevTools panel's ports and rows against an in-memory `chrome`
 pnpm --filter sieve test:e2e     # headless Chromium in a fresh temporary profile; build first
+pnpm --filter sieve test:e2e -- --live   # only the YouTube smoke test, against real youtube.com
 ```
 
 The filter compiler and the settings logic live in `packages/sieve-core` and are unit-tested there. `test:e2e` needs playwright-core and Chrome for Testing: set `PLAYWRIGHT_CORE` (path to playwright-core's `index.mjs`) and `CHROMIUM_PATH` if yours are not in this Mac's default places. It never uses your own Chrome profile.
 
 ## Toolbar menu
 
-The toolbar button opens a menu with a switch for Sieve, a switch for the current site, the ads and trackers blocked on the page, "Pause on this page" and "Pause everywhere", the Distraction control, Cookie banners, AI search summaries and Site notification requests switches, and a Settings button that opens the settings page. It writes the same `settings` the service worker applies, so every switch goes through the blocking plan.
+The toolbar button opens a menu with a switch for Sieve, a switch for the current site, the ads and trackers blocked on the page, "Pause on this page" and "Pause everywhere", the Distraction control, Cookie banners, AI search summaries and Site notification requests switches, and a Settings button that opens the settings page. On a YouTube watch page it also has "Allow ads on <channel>" (see YouTube ads). It writes the same `settings` the service worker applies, so every switch goes through the blocking plan.
 
 The counts and the badge come from `declarativeNetRequest.onRuleMatchedDebug` (permission `declarativeNetRequestFeedback`), an event Chrome only gives unpacked extensions, which is how Sieve is installed. Each tab's count lives in `chrome.storage.session`, so it survives the service worker stopping. It starts again at zero on each page load and is gone when Chrome quits. A match of a rule that only allows a request, only changes a response header or only strips query parameters (`$removeparam`) is not counted: the build writes those rule ids per list (`allowIds`, `modifyIds`) into `dist/meta.json`, and My filters rules are judged the same way (`blocksRequest` in `sieve-core`). `test:e2e` opens the menu as `popup.html?tab=<id>`, since a script can't click the toolbar button.
 
@@ -103,6 +104,24 @@ A verified rule hid the block with no gap left behind. The Google rules may leav
 
 An engine shows a summary only for some questions, signed in or out, and in some regions. If a summary does not show with the switch off, the engine did not make one for you: try another question before you blame a rule. On Google and Bing, say which engine showed nothing, so the rule can be fixed against a real page.
 
+## YouTube ads
+
+Two content scripts from the manifest run on `www.youtube.com`, `m.youtube.com`, `music.youtube.com` and `www.youtube-nocookie.com` at `document_start`, in every frame, so a YouTube player embedded in another site is covered too:
+
+- `yt-main.js` runs in the page's own world (`"world": "MAIN"`), before YouTube's scripts. It wraps `JSON.parse` and `Response.prototype.json`, and puts a getter and setter on `window.ytInitialPlayerResponse`. An object with an ad field (`adPlacements`, `adSlots`, `playerAds`, `adBreakHeartbeatParams`), `playerResponse` or `videoDetails` at its top level goes through `stripAds` (`sieve-core`). That deletes the ad fields from it and from its `playerResponse`, unless the video's channel is allowed, and leaves `videoDetails` and `streamingData` alone. Everything else comes back exactly as the browser gave it, bad JSON throws the browser's own `SyntaxError`, and a failure inside the wrapper still returns the value, never an error.
+- `yt-relay.js` runs in the isolated world. It reads `settings` and sends the main world a `sieve-yt-allow` event with `{ on, ids }`, again on every settings change. `on` is false where Sieve is off, paused everywhere, the Ads list is off, or the page is allowlisted (for an embed, also the pages around it, from `location.ancestorOrigins`, as `inject.ts` leaves an allowlisted site's frames alone). `ids` are the allowed channel ids, nothing else from the settings.
+- The main world sends `sieve-yt-channel` with `{ id, name }` from the response's `videoDetails.channelId` and `author`. The page can send that event too, so the relay keeps only a channel id (`UC` and 22 letters, digits, `-` or `_`) with a name, cut to 100 characters (`ytChannel`), and ignores anything else.
+
+Everything the main-world script holds can be read and called by the page, so it holds only the allowed channel ids, and the two events are its only link to Sieve.
+
+On a watch page the menu asks the tab's top frame for the channel (`{ type: 'yt-channel' }`) and shows "Allow ads on <channel>". The switch saves `{ id, name }` in `settings.blocking.youtubeAllowedChannels` under the settings lock, and that channel's next video keeps its ads. The switch is hidden where Sieve doesn't remove YouTube ads anyway.
+
+The settings reach the main world asynchronously, so until they arrive it strips everything. `ytInitialPlayerResponse`, which the page's inline script sets before they arrive, is checked when it is first read instead, by which time they normally have. A response YouTube parses before that is stripped even on an allowed channel.
+
+The ads list's own YouTube rules still run through `inject.ts`: hiding rules on youtube.com, a `json-prune` for Shorts ads on www.youtube.com, and `json-prune` scriptlets for the same player fields on m.youtube.com and music.youtube.com. Each wraps `JSON.parse` around whichever came first, so a response can be stripped twice. That is harmless: the second pass finds nothing to delete.
+
+`test:e2e` checks this on a stand-in watch page (`www.youtube.com` mapped to the local server, serving the spike's saved player response, `spike/fixtures/player-response.json`): the three ways in stay free of ad fields, other JSON behaves as the browser's own, the channel switch saves and survives a worker stop, an allowed channel keeps its ads, Sieve off, paused, allowlisted or the Ads list off leave the response untouched, an embed on an allowlisted site keeps its ads, and malformed page events are ignored. `test:e2e -- --live` runs only a smoke test against real youtube.com in a fresh, signed-out profile: three public videos for 30 seconds each, where `#movie_player.ad-showing` must never appear and the video must play, then one video with Sieve off as a control. YouTube may answer a headless browser with "Sign in to confirm you're not a bot"; that video is then reported as skipped, not failed.
+
 ## Known limits
 
 - The DevTools panel keeps the newest 500 requests of a page ("Showing the latest 500 requests." says when it dropped older ones) and cuts an address at 2,048 characters. A request blocked while the panel was reconnecting, a fraction of a second after a worker stop, is not listed, and a page that reloaded in that moment can leave its old rows until the next load. Like the counts, it only works where Chrome gives the debug event, in an unpacked install.
@@ -115,6 +134,10 @@ An engine shows a summary only for some questions, signed in or out, and in some
 - A page script that registered a capture listener on `window` before the picker started sees the owner's clicks first. It can tell that an item is being picked, or stop the picker from getting a click, so that item cannot be picked on that page. It still cannot press Block it for the owner. The picker cannot do better, because listeners registered earlier always run first.
 - On an allowlisted site, the generic hiding CSS and the notification blocker still run inside iframes from other sites, because Chrome matches a registered script's excluded sites against the iframe's own address, not the tab's. Everything those iframes load still gets through, since the allow rule covers every frame in the page. Site-specific hiding and scriptlets check both the tab's page and the iframe's own address, so they stay out of those iframes, and out of an allowlisted site's iframes on other sites.
 - Site-specific hiding and scriptlets are added by the service worker as each page or iframe starts loading. Chrome stops the worker after about 30 seconds without events, so the first page after any pause in browsing, not only the first after Chrome starts, starts a new worker. That worker reads the filter maps again (about 4 MB, a few tens of milliseconds), so a scriptlet can arrive after that page's first scripts have run. Pages loaded while the worker is running usually get it in time, but an inline script at the very top of a page can still run first.
+- "Allow ads on <channel>" brings ads back on www.youtube.com and in embeds only. On m.youtube.com and music.youtube.com the ads list's `json-prune` scriptlets strip the same fields whatever the channel. On youtube.com the anti-adblock list hides `.video-ads .ytp-ad-player-overlay`, so an allowed channel's ad may play without YouTube's ad overlay.
+- The channel the menu names is the last player response the page read. Near the end of a video YouTube may load the next one for autoplay, and the switch then names that video's channel.
+- A page allowlist entry on YouTube is checked against the address the tab loaded (and again on a settings change), not after YouTube's in-app navigation, as with `inject.ts`.
+- Player data that YouTube reads with `XMLHttpRequest` as `responseType: 'json'` is not stripped; today it comes through `fetch` and `JSON.parse`.
 
 ## Licences
 
