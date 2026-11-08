@@ -3,17 +3,10 @@ import { withNewLines } from '@apps-hub/sieve-core/src/my-filters.ts';
 import type { BuildMeta } from '@apps-hub/sieve-core/src/plan.ts';
 import { FEATURES, validateSettings, type AllowEntry, type FeatureKey, type Settings } from '@apps-hub/sieve-core/src/settings.ts';
 import { h, type Child } from './dom.ts';
+import { NAMES } from './lists.ts';
 import { withSettingsLock } from './lock.ts';
 import { FILTERS_CHANGED, TOO_MANY_TO_STORE, saveMyFilters, type SaveResult } from './my-filters.ts';
 
-const NAMES: Record<FeatureKey, string> = {
-  ads: 'Ads',
-  trackers: 'Trackers',
-  distraction: 'Distraction control',
-  cookies: 'Cookie banners',
-  antiadblock: 'Ad blocker warnings',
-  ai: 'AI search summaries',
-};
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const SHOWN_ERRORS = 50;
 const CHANGED_HERE = 'Your filters changed while this page was open.';

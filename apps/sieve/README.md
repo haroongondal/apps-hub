@@ -34,7 +34,7 @@ The build prints one row per feature: rules, regex rules, generic selectors, hos
 
 ```bash
 pnpm --filter sieve typecheck
-pnpm --filter sieve test         # the counting code, the pick handler and the My filters save against an in-memory `chrome`
+pnpm --filter sieve test         # the counting code, the pick handler, the My filters save and the DevTools panel's ports and rows against an in-memory `chrome`
 pnpm --filter sieve test:e2e     # headless Chromium in a fresh temporary profile; build first
 ```
 
@@ -73,7 +73,17 @@ The button is off where blocking is off for the page (allowlisted site, paused p
 
 The menu, the worker (a pick) and this page all write `settings`, and My filters' `myRules`, `myRuleSources` and `myCosmetic`. Each of them reads, changes and writes these under one Web Lock (`sieve-settings`, in `lock.ts`), so no writer can undo another's change. A My filters save holds the lock only to check the stored text, hand Chrome the rules and write, not while compiling. If a pick lands during the compile, the save stops and says so, and the next Save keeps both. The page follows changes made elsewhere: switches and the allowlist update in place, and the My filters box takes a pick's new line unless the owner has typed in it. Then the page says that the filters changed, and Save adds the lines saved elsewhere since the page loaded to the end of the owner's text. Text typed while a save runs stays in the box as an unsaved edit.
 
+## DevTools panel
+
+DevTools has a Sieve tab (`devtools_page` in the manifest, which adds no permission). `devtools.html` runs `chrome.devtools.panels.create('Sieve', 'icon-32.png', 'panel.html')`. Open DevTools, pick the Sieve tab and reload the page: the table lists each request Sieve blocked there, with Time, Type, Address, List (the list's name as the menu shows it, or "My filters") and Filter (the filter line that blocked it). With nothing listed it says "Reload the page to see what Sieve blocks."
+
+The panel connects to the worker with `runtime.connect({ name: 'panel:<tab id>' })`, and the tab id comes from `chrome.devtools.inspectedWindow.tabId`, or from `?tab=<id>` outside DevTools. The worker keeps the open ports in memory, by tab (`panels.ts`). `counts.ts` passes each match it counts on to the tab's ports, judged by the same `classifyMatch` as the counts, so a match of an allow rule, a header-only rule or a `$removeparam` rule gets no row. It does nothing when no panel is open for the tab: one `Map` lookup, and a port that can't be written to is dropped without touching the count. A main-frame navigation sends a reset, the same signal that zeroes the counts, and the panel clears its table. Chrome drops the ports when it stops the worker: the panel says "Sieve is reconnecting", connects again (which wakes the worker) and keeps its rows. The Filter text is read when a row needs it: static lists from `sources/<list>.json` in the build, My filters from `myRuleSources` in `chrome.storage.local`, once per list (My filters again after it changes). Addresses and filter text are set as text, never as HTML. The panel follows DevTools' light or dark theme.
+
+`test:e2e` opens `panel.html?tab=<id>`, and stubs `chrome.devtools` to run the paths only DevTools takes (the tab id, the theme and the `panels.create` call). It doesn't open a real DevTools window.
+
 ## Known limits
+
+- The DevTools panel keeps the newest 500 requests of a page ("Showing the latest 500 requests." says when it dropped older ones) and cuts an address at 2,048 characters. A request blocked while the panel was reconnecting, a fraction of a second after a worker stop, is not listed, and a page that reloaded in that moment can leave its old rows until the next load. Like the counts, it only works where Chrome gives the debug event, in an unpacked install.
 
 - A My filters `site#@#selector` exception lifts another list's generic hiding only on that site: the site leaves the registered generic stylesheets and gets them per page, without the excepted selectors. A `#@#selector` with no site, or one on a `google.*`-style site, does not lift a list's generic hiding; it still works against site-specific rules and My filters' own. My filters' `$generichide` and `$elemhide` exceptions only turn off My filters' own hiding.
 

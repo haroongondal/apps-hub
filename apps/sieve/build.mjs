@@ -150,7 +150,7 @@ if (defaultOn > 30_000) {
 }
 
 await build({
-  entryPoints: { background: root('src/background.ts'), popup: root('src/popup.ts'), options: root('src/options.ts') },
+  entryPoints: { background: root('src/background.ts'), popup: root('src/popup.ts'), options: root('src/options.ts'), devtools: root('src/devtools.ts'), panel: root('src/panel.ts') },
   bundle: true,
   format: 'esm',
   target: 'chrome128',
@@ -169,7 +169,7 @@ await build({
   logLevel: 'warning',
 });
 const ui = root('../../packages/ui');
-for (const f of ['popup.html', 'popup.css', 'options.html', 'options.css', 'switch.css']) cpSync(root('src', f), join(out, f));
+for (const f of ['popup.html', 'popup.css', 'options.html', 'options.css', 'switch.css', 'devtools.html', 'panel.html', 'panel.css']) cpSync(root('src', f), join(out, f));
 for (const f of ['tokens.css', 'base.css']) cpSync(join(ui, 'web', f), join(out, 'web', f));
 cpSync(join(ui, 'fonts'), join(out, 'fonts'), { recursive: true });
 for (const size of [16, 32, 48, 128]) cpSync(root(`assets/icon-${size}.png`), join(out, `icon-${size}.png`));

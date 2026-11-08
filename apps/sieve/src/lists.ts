@@ -1,5 +1,14 @@
 import type { FeatureKey } from '@apps-hub/sieve-core';
 
+export const NAMES: Record<FeatureKey, string> = {
+  ads: 'Ads',
+  trackers: 'Trackers',
+  distraction: 'Distraction control',
+  cookies: 'Cookie banners',
+  antiadblock: 'Ad blocker warnings',
+  ai: 'AI search summaries',
+};
+
 export const LISTS: Record<Exclude<FeatureKey, 'ai'>, { urls: string[]; dropSections?: string[] }> & { ai: { file: string } } = {
   ads: { urls: ['https://easylist.to/easylist/easylist.txt'] },
   trackers: { urls: ['https://easylist.to/easylist/easyprivacy.txt'] },

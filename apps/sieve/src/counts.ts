@@ -1,6 +1,7 @@
 import { brands } from '../../../packages/ui/src/tokens.ts';
 import { DYNAMIC_RULESET, blocksRequest, classifyMatch, countsKey, type Counts } from '@apps-hub/sieve-core/src/counts.ts';
 import type { BuildMeta } from '@apps-hub/sieve-core/src/plan.ts';
+import { forwardMatch, forwardReset } from './panels.ts';
 
 let meta: Promise<BuildMeta> | undefined;
 const loadMeta = () =>
@@ -33,12 +34,15 @@ async function dynamicNotBlocking(rulesetId: string, ruleId: number): Promise<Se
   return new Set(rules.filter((r) => !blocksRequest(r.action)).map((r) => r.id));
 }
 
-export function onMatched({ request, rule }: chrome.declarativeNetRequest.MatchedRuleInfoDebug): void {
+export function onMatched(info: chrome.declarativeNetRequest.MatchedRuleInfoDebug): void {
+  const { request, rule } = info;
   const { tabId } = request;
   if (tabId < 0) return;
+  const at = Date.now();
   later(async () => {
     const kind = classifyMatch(rule.rulesetId, rule.ruleId, await loadMeta(), await dynamicNotBlocking(rule.rulesetId, rule.ruleId));
     if (kind === null) return;
+    forwardMatch(info, at);
     const key = countsKey(tabId);
     const counts: Counts = { ads: 0, trackers: 0, ...((await chrome.storage.session.get(key))[key] as Partial<Counts> | undefined) };
     if (kind === 'ad') counts.ads++;
@@ -51,7 +55,10 @@ export function onMatched({ request, rule }: chrome.declarativeNetRequest.Matche
 
 export function onNavigated({ tabId, frameId }: chrome.webNavigation.WebNavigationTransitionCallbackDetails): void {
   if (frameId !== 0 || tabId < 0) return;
-  later(() => Promise.all([chrome.storage.session.remove(countsKey(tabId)), chrome.action.setBadgeText({ tabId, text: '' })]));
+  later(() => {
+    forwardReset(tabId);
+    return Promise.all([chrome.storage.session.remove(countsKey(tabId)), chrome.action.setBadgeText({ tabId, text: '' })]);
+  });
 }
 
 export function onTabRemoved(tabId: number): void {

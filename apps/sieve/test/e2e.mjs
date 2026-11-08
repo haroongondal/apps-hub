@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isDeepStrictEqual as same } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { SITE_HOST, TRACKER_HOST, UNHIDE_HOST, check, launch, results, startServers, startWorker, stopWorker } from './harness.mjs';
+import { AD_HOST, SITE_HOST, TRACKER_HOST, UNHIDE_HOST, check, launch, results, startServers, startWorker, stopWorker } from './harness.mjs';
 
 const RULESETS = ['ads', 'trackers', 'distraction', 'cookies', 'antiadblock'];
 const ALLOW_ID = 1_000_000;
@@ -1097,6 +1097,210 @@ try {
   );
   await typeFilters('');
   await pressSave();
+
+  // The DevTools panel. A script can't open DevTools, so panel.html?tab=<id> stands in for it, and a stub of chrome.devtools covers the paths only DevTools takes.
+  const MANY = `https://localhost:${servers.httpsPort}/many.html`;
+  const COLUMNS = ['Time', 'Type', 'Address', 'List', 'Filter'];
+  const builtSource = (ruleset, host) => {
+    const read = (dir) => JSON.parse(readFileSync(new URL(`../dist/${dir}/${ruleset}.json`, import.meta.url), 'utf8'));
+    const rule = read('rules').find((r) => r.action.type === 'block' && r.condition.urlFilter === `||${host}^` && Object.keys(r.condition).length === 1);
+    return read('sources')[rule?.id];
+  };
+  const AD_SOURCE = builtSource('ads', AD_HOST);
+  const TRACKER_SOURCE = builtSource('trackers', TRACKER_HOST);
+  const openPanel = async (tabId, { colorScheme = 'light', stub } = {}) => {
+    const page = await ctx.newPage();
+    const problems = [];
+    page.on('pageerror', (e) => problems.push(e.message));
+    page.on('console', (msg) => msg.type() === 'error' && problems.push(msg.text()));
+    await page.emulateMedia({ colorScheme });
+    await page.setViewportSize({ width: 1100, height: 420 });
+    if (stub) await page.addInitScript((s) => void (chrome.devtools = s), stub);
+    await page.goto(`chrome-extension://${id}/panel.html${stub ? '' : `?tab=${tabId}`}`);
+    return {
+      page,
+      problems,
+      rows: () => page.locator('tbody tr').evaluateAll((trs) => trs.map((tr) => [...tr.cells].map((c) => c.textContent))),
+      status: () => page.locator('[role=status]').innerText(),
+    };
+  };
+  const inPanel = (p, ok, ms) => until(() => p.rows(), ok, ms);
+  const rowFor = (rows, part) => rows.find((r) => r[2].includes(part));
+  const watchErrors = (w) =>
+    w.evaluate(() => {
+      globalThis.panelErrors = [];
+      const error = console.error;
+      console.error = (...a) => (globalThis.panelErrors.push(a.map(String).join(' ')), error(...a));
+    });
+  const matchedIn = (w, tabId) => w.evaluate((t) => chrome.declarativeNetRequest.getMatchedRules({ tabId: t }).then((r) => r.rulesMatchedInfo.map((i) => `${i.rule.rulesetId}:${i.rule.ruleId}`)), tabId);
+
+  const inspected = await ctx.newPage();
+  inspected.on('pageerror', (e) => errors.push(e.message));
+  await inspected.goto(ADS, { waitUntil: 'load' });
+  const inspectedId = await tabFor(pw, ADS);
+  await watchErrors(pw);
+  const panel = await openPanel(inspectedId);
+  await panel.page.getByText('Reload the page to see what Sieve blocks.', { exact: true }).waitFor();
+  check(
+    'a panel opened on a page that has not loaded since says "Reload the page to see what Sieve blocks." and lists no rows',
+    (await panel.status()) === 'Reload the page to see what Sieve blocks.' && (await panel.rows()).length === 0,
+    json({ status: await panel.status(), rows: await panel.rows() }),
+  );
+  await panel.page.screenshot({ path: join(SHOTS, 'panel-empty.png') });
+  await inspected.reload({ waitUntil: 'load' });
+  let panelRows = await inPanel(panel, (r) => r.length === 2);
+  const adRow = rowFor(panelRows, '/pagead/x.js');
+  const trackerRow = rowFor(panelRows, '/sieve-tracker.js');
+  const heads = await panel.page.locator('th').allTextContents();
+  check(
+    `reloading the page lists the blocked ad request: Type script, List Ads, and the list's own filter ${AD_SOURCE}`,
+    adRow !== undefined &&
+      /^\d\d:\d\d:\d\d$/.test(adRow[0]) &&
+      adRow[1] === 'script' &&
+      adRow[2] === `https://${AD_HOST}:${servers.httpsPort}/pagead/x.js` &&
+      adRow[3] === 'Ads' &&
+      adRow[4] === AD_SOURCE &&
+      AD_SOURCE === `||${AD_HOST}^`,
+    json({ adRow, AD_SOURCE }),
+  );
+  check(
+    `and the blocked tracker request: List Trackers and filter ${TRACKER_SOURCE}; the columns are ${COLUMNS.join(', ')}`,
+    trackerRow?.[3] === 'Trackers' && trackerRow[4] === TRACKER_SOURCE && TRACKER_SOURCE === `||${TRACKER_HOST}^` && same(heads, COLUMNS) && (await panel.status()) === '',
+    json({ trackerRow, heads, status: await panel.status() }),
+  );
+  await inspected.reload({ waitUntil: 'load' });
+  await sleep(800);
+  panelRows = await panel.rows();
+  check('a second reload clears the table first: 2 rows again, not 4', panelRows.length === 2, json(panelRows));
+
+  await setBlocking(pw, { allowlist: [{ kind: 'site', host: 'localhost' }] });
+  await settle(pw, (st) => st.dynamic.some((r) => r.id === ALLOW_ID));
+  await inspected.reload({ waitUntil: 'load' });
+  await sleep(800);
+  const allowMatched = await matchedIn(pw, inspectedId);
+  panelRows = await panel.rows();
+  check(
+    'on an allowlisted site Chrome matches the allow rule, and the panel adds no row for it: the table is empty and says to reload',
+    allowMatched.includes(`_dynamic:${ALLOW_ID}`) && panelRows.length === 0 && (await panel.status()) === 'Reload the page to see what Sieve blocks.',
+    json({ allowMatched: allowMatched.slice(-3), panelRows }),
+  );
+  await setBlocking(pw, { allowlist: [] });
+  await settle(pw, (st) => !st.dynamic.some((r) => r.id === ALLOW_ID));
+
+  check('the built lists have a header-only rule on one whole host to test the panel with', headerRule !== undefined);
+  if (headerRule) {
+    const headerUrl = `https://${headerRule.host}:${servers.httpsPort}/counts.html`;
+    const headerPage = await ctx.newPage();
+    await headerPage.goto(headerUrl, { waitUntil: 'load' });
+    const headerTab = await tabFor(pw, headerUrl);
+    const headerPanel = await openPanel(headerTab);
+    await headerPage.reload({ waitUntil: 'load' });
+    await inPanel(headerPanel, (r) => r.length >= 5);
+    await sleep(800);
+    panelRows = await headerPanel.rows();
+    const headerMatched = await matchedIn(pw, headerTab);
+    check(
+      `on ${headerRule.host}, where a rule only changes headers on every request, the panel lists only the 5 blocked requests, not the header matches`,
+      headerMatched.includes(`${headerRule.ruleset}:${headerRule.id}`) && panelRows.length === 5 && panelRows.every((r) => !r[2].endsWith('/counts.html')),
+      json({ headerMatched: headerMatched.length, panelRows }),
+    );
+    await headerPanel.page.close();
+    await headerPage.close();
+  }
+
+  const mineLoaded = (st) => st.dynamic.some((r) => r.condition.urlFilter?.includes('control.js'));
+  await inspected.goto(ADS, { waitUntil: 'load' });
+  await typeFilters('/control.js$script');
+  await pressSave();
+  await settle(pw, mineLoaded);
+  await inspected.reload({ waitUntil: 'load' });
+  panelRows = await inPanel(panel, (r) => r.length === 3);
+  let mineRow = rowFor(panelRows, '/control.js');
+  check(
+    'a My filters rule that blocks a request is listed with List "My filters" and its own filter line',
+    mineRow?.[1] === 'script' && mineRow[2] === `https://localhost:${servers.httpsPort}/control.js` && mineRow[3] === 'My filters' && mineRow[4] === '/control.js$script',
+    json(panelRows),
+  );
+  await panel.page.screenshot({ path: join(SHOTS, 'panel.png'), fullPage: true });
+  await panel.page.emulateMedia({ colorScheme: 'dark' });
+  await sleep(400);
+  await panel.page.screenshot({ path: join(SHOTS, 'panel-dark.png'), fullPage: true });
+  await panel.page.emulateMedia({ colorScheme: 'light' });
+  await typeFilters('/control.js$script,important');
+  await pressSave();
+  await sleep(500);
+  await settle(pw, mineLoaded);
+  await inspected.reload({ waitUntil: 'load' });
+  panelRows = await inPanel(panel, (r) => r.length === 3);
+  mineRow = rowFor(panelRows, '/control.js');
+  check('after My filters is saved with another line for that request, the panel shows the new line, not the one it read before', mineRow?.[3] === 'My filters' && mineRow[4] === '/control.js$script,important', json(panelRows));
+  await typeFilters('');
+  await pressSave();
+  await settle(pw, (st) => st.dynamic.length === 0);
+
+  await inspected.goto(MANY, { waitUntil: 'load' });
+  await panel.page.getByText('Showing the latest 500 requests.', { exact: true }).waitFor();
+  await sleep(1000);
+  panelRows = await panel.rows();
+  check(
+    'a load with 600 blocked requests keeps the newest 500 and says "Showing the latest 500 requests."',
+    panelRows.length === 500 && (await panel.status()) === 'Showing the latest 500 requests.' && panelRows[0][2].endsWith('i=100') && panelRows[499][2].endsWith('i=599'),
+    json({ n: panelRows.length, first: panelRows[0]?.[2], last: panelRows[panelRows.length - 1]?.[2], status: await panel.status() }),
+  );
+  await inspected.goto(ADS, { waitUntil: 'load' });
+  panelRows = await inPanel(panel, (r) => r.length === 2);
+  check('navigating away drops the old rows and the notice', panelRows.length === 2 && (await panel.status()) === '', json({ n: panelRows.length, status: await panel.status() }));
+
+  const panelErrorsBefore = await pw.evaluate(() => globalThis.panelErrors);
+  await panel.page.evaluate(() => {
+    const el = document.querySelector('[role=status]');
+    window.heard = [];
+    new MutationObserver(() => window.heard.push(el.textContent)).observe(el, { childList: true, characterData: true, subtree: true });
+  });
+  const panelStop = await stopWorker(ctx);
+  await until(() => panel.page.evaluate(() => window.heard.some((t) => /reconnecting/i.test(t))), Boolean);
+  const heard = await panel.page.evaluate(() => window.heard);
+  await until(() => panel.status(), (t) => t === '');
+  panelRows = await panel.rows();
+  check(
+    'when the worker stops, the panel says it is reconnecting, then connects again and keeps its rows',
+    panelStop === 'stopped' && heard.some((t) => /^Sieve is reconnecting/.test(t)) && (await panel.status()) === '' && panelRows.length === 2,
+    json({ panelStop, heard, status: await panel.status(), rows: panelRows.length }),
+  );
+  pw = await startWorker(ctx, id);
+  await watchErrors(pw);
+  await inspected.reload({ waitUntil: 'load' });
+  await sleep(800);
+  panelRows = await inPanel(panel, (r) => r.length === 2);
+  check('after the restart, a reload reaches the reconnected panel: its rows are replaced by the new 2', panelRows.length === 2 && rowFor(panelRows, '/pagead/x.js') !== undefined && rowFor(panelRows, '/sieve-tracker.js') !== undefined, json(panelRows));
+
+  const inDevTools = await openPanel(undefined, { stub: { inspectedWindow: { tabId: inspectedId }, panels: { themeName: 'dark' } } });
+  await inspected.reload({ waitUntil: 'load' });
+  panelRows = await inPanel(inDevTools, (r) => r.length === 2);
+  const devToolsLook = await inDevTools.page.evaluate(() => [document.documentElement.dataset.theme, getComputedStyle(document.body).backgroundColor]);
+  check(
+    'inside DevTools the panel takes its tab from inspectedWindow.tabId and its theme from DevTools: dark, though the page asks for light',
+    panelRows.length === 2 && devToolsLook[0] === 'dark' && devToolsLook[1] !== 'rgb(242, 247, 247)',
+    json({ panelRows, devToolsLook }),
+  );
+  const devtoolsPage = await ctx.newPage();
+  await devtoolsPage.addInitScript(() => {
+    window.created = [];
+    chrome.devtools = { panels: { create: (...a) => window.created.push(a) } };
+  });
+  await devtoolsPage.goto(`chrome-extension://${id}/devtools.html`);
+  const created = await until(() => devtoolsPage.evaluate(() => window.created), (c) => c.length > 0);
+  const present = await devtoolsPage.evaluate(() => Promise.all(['icon-32.png', 'panel.html'].map((f) => fetch(f).then((r) => r.ok))));
+  const declared = await pw.evaluate(() => chrome.runtime.getManifest().devtools_page);
+  check('the manifest names devtools.html, which adds a panel "Sieve" with icon-32.png and panel.html, and both files are in the extension', declared === 'devtools.html' && same(created, [['Sieve', 'icon-32.png', 'panel.html']]) && present.every(Boolean), json({ declared, created, present }));
+  const panelErrorsAfter = await pw.evaluate(() => globalThis.panelErrors);
+  check(
+    'the panel pages and the service worker logged no errors while listing requests',
+    [panel, inDevTools].every((p) => p.problems.length === 0) && panelErrorsBefore?.length === 0 && panelErrorsAfter?.length === 0,
+    json({ panel: panel.problems, inDevTools: inDevTools.problems, panelErrorsBefore, panelErrorsAfter }),
+  );
+  for (const p of [panel.page, inDevTools.page, devtoolsPage, inspected]) await p.close();
+
   check('the settings page logged no errors', optProblems.length === 0, json(optProblems));
   await opt.close();
 
