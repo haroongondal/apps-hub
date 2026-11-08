@@ -13,7 +13,7 @@ const meta: BuildMeta = {
 
 // A fresh copy of counts.ts per test (it caches meta.json at module level), run against an in-memory `chrome`.
 let n = 0;
-async function setup(options: { badgeFails?: boolean; fetchFailures?: number; dynamic?: { id: number; action: { type: string } }[] } = {}) {
+async function setup(options: { badgeFails?: boolean; fetchFailures?: number; dynamic?: { id: number; action: { type: string; redirect?: object } }[] } = {}) {
   const store = new Map<string, unknown>();
   const badges = new Map<number, string>();
   const logged: unknown[][] = [];
@@ -73,20 +73,22 @@ test('an ad and a tracker are counted per tab and the badge shows the total; all
   assert.deepEqual(t.store.get('counts:2'), { ads: 1, trackers: 0 });
 });
 
-test('a My filters rule is counted only when it blocks: its allow and header-only rules are not', async () => {
+test('a My filters rule is counted only when it blocks: its allow, header-only and $removeparam rules are not', async () => {
   const dynamic = [
     { id: 1, action: { type: 'block' } },
     { id: 2, action: { type: 'modifyHeaders' } },
     { id: 3, action: { type: 'allow' } },
     { id: 4, action: { type: 'allowAllRequests' } },
     { id: 5, action: { type: 'upgradeScheme' } },
+    { id: 6, action: { type: 'redirect', redirect: { transform: { queryTransform: { removeParams: ['utm_source'] } } } } },
+    { id: 7, action: { type: 'redirect', redirect: { extensionPath: '/blank.js' } } },
   ];
   const t = await setup({ dynamic });
   for (const r of dynamic) t.match(1, '_dynamic', r.id);
   t.match(1, 'trackers', 9);
-  await t.until(() => t.badges.get(1) === '2');
+  await t.until(() => t.badges.get(1) === '3');
   await sleep(30);
-  assert.deepEqual(t.store.get('counts:1'), { ads: 1, trackers: 1 });
+  assert.deepEqual(t.store.get('counts:1'), { ads: 2, trackers: 1 });
 });
 
 test('events that arrive together are all counted', async () => {

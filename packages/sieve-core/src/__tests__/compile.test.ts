@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { scriptlets } from '@adguard/scriptlets';
-import { compileFilters, scriptletKey, stripSections } from '../index.ts';
+import { blocksRequest, compileFilters, scriptletKey, stripSections } from '../index.ts';
 import { checkRegexesWithRe2 } from '../node-regex.ts';
 
 await checkRegexesWithRe2();
@@ -16,13 +16,21 @@ test('network filters become DNR rules numbered from firstId', async () => {
   assert.deepEqual(out.errors, []);
 });
 
-test('a rule that only changes response headers is listed in modifyIds, and a block or allow rule is not', async () => {
-  const out = await compileFilters("||ads.example^\n||csp.example^$csp=script-src-attr 'none'\n@@||ads.example/ok^", { firstId: 1 });
+test('a rule that only changes response headers or strips query parameters is listed in modifyIds, and a block or allow rule is not', async () => {
+  const out = await compileFilters("||ads.example^\n||csp.example^$csp=script-src-attr 'none'\n@@||ads.example/ok^\n||rp.example^$removeparam=utm_source", { firstId: 1 });
   const idsOf = (type: string) => out.rules.filter((r) => r.action.type === type).map((r) => r.id);
   assert.equal(idsOf('modifyHeaders').length, 1);
-  assert.deepEqual(out.modifyIds, idsOf('modifyHeaders'));
+  assert.equal(idsOf('redirect').length, 1);
+  assert.deepEqual(out.modifyIds, [...idsOf('modifyHeaders'), ...idsOf('redirect')].sort((a, b) => a - b));
   assert.deepEqual(out.allowIds, idsOf('allow'));
-  assert.equal(out.rules.length, 3);
+  assert.equal(out.rules.length, 4);
+});
+
+test('blocksRequest: a block and a plain redirect block the request; a redirect that only rewrites the address does not', () => {
+  assert.equal(blocksRequest({ type: 'block' }), true);
+  assert.equal(blocksRequest({ type: 'redirect', redirect: { extensionPath: '/x.js' } }), true);
+  assert.equal(blocksRequest({ type: 'redirect', redirect: { transform: { queryTransform: { removeParams: ['a'] } } } }), false);
+  for (const type of ['allow', 'allowAllRequests', 'modifyHeaders', 'upgradeScheme']) assert.equal(blocksRequest({ type }), false, type);
 });
 
 test('element hiding fills generic, hide and unhide, with no DNR rules', async () => {

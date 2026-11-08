@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS } from '@apps-hub/sieve-core/src/settings.ts';
 type Reply = { ok: boolean };
 type Css = { target: { tabId: number; documentIds: string[] }; css: string; origin: string };
 
-// A fresh copy of pick-handler.ts per test (it keeps its write queue at module level), run against an in-memory `chrome`.
+// A fresh copy of pick-handler.ts per test, run against an in-memory `chrome`; the settings lock (lock.ts) is shared by every copy.
 let n = 0;
 async function setup(options: { cssFails?: boolean } = {}) {
   const store = new Map<string, unknown>([['settings', structuredClone(DEFAULT_SETTINGS)]]);

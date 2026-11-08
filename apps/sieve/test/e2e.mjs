@@ -486,12 +486,13 @@ try {
     for (const [f, v] of Object.entries(meta.features)) {
       if (!v.ruleset) continue;
       const rules = await fetch(chrome.runtime.getURL(`rules/${v.ruleset}.json`)).then((r) => r.json());
-      out[f] = [rules.filter((r) => r.action.type === 'modifyHeaders').map((r) => r.id).join(), (v.modifyIds ?? []).join()];
+      const passes = (a) => !['block', 'allow', 'allowAllRequests'].includes(a.type) && !(a.type === 'redirect' && !a.redirect?.transform);
+      out[f] = [rules.filter((r) => passes(r.action)).map((r) => r.id).join(), (v.modifyIds ?? []).join()];
     }
     return out;
   });
   const headerRules = Object.values(built).reduce((n, [ids]) => n + (ids ? ids.split(',').length : 0), 0);
-  check(`meta.json lists, for each list, the ids of its rules that only change headers (${headerRules} in all)`, headerRules > 0 && Object.values(built).every(([want, got]) => want === got), json(built));
+  check(`meta.json lists, for each list, the ids of its rules that block and allow nothing: header changes, $removeparam (${headerRules} in all)`, headerRules > 0 && Object.values(built).every(([want, got]) => want === got), json(built));
   check('the built lists have a header-only rule on one whole host to test with', headerRule !== undefined);
   if (headerRule) {
     const headerUrl = `https://${headerRule.host}:${servers.httpsPort}/counts.html`;
@@ -1009,11 +1010,16 @@ try {
   );
 
   // The page is a second writer of the settings: a pick saved by the worker while it is open must survive what the page saves next.
-  const pickWrite = (line) =>
-    pw.evaluate(async (l) => {
-      const { settings } = await chrome.storage.local.get('settings');
-      await chrome.storage.local.set({ settings: { ...settings, blocking: { ...settings.blocking, myFilters: `${settings.blocking.myFilters}\n${l}` } } });
-    }, line);
+  const pickWrite = (line, hold = 0) =>
+    pw.evaluate(
+      ([l, ms]) =>
+        navigator.locks.request('sieve-settings', async () => {
+          const { settings } = await chrome.storage.local.get('settings');
+          await new Promise((r) => setTimeout(r, ms));
+          await chrome.storage.local.set({ settings: { ...settings, blocking: { ...settings.blocking, myFilters: `${settings.blocking.myFilters}\n${l}` } } });
+        }),
+      [line, hold],
+    );
   await pickWrite('localhost##.picked-one');
   const followed = await until(() => filtersBox.inputValue(), (v) => v.endsWith('\nlocalhost##.picked-one'));
   await optSwitch('Cookie banners').uncheck();
@@ -1039,6 +1045,55 @@ try {
     "with the text edited, a pick saved meanwhile is announced, the owner's text stays, and Save keeps both",
     kept.endsWith('\nexample.com##.mine-x') && !kept.includes('picked-two') && ['example.com##.mine-x', 'localhost##.picked-one', 'localhost##.picked-two'].every((l) => merged.includes(l)) && said.startsWith('Saved 3 filters.'),
     json({ kept, merged, said }),
+  );
+
+  const big = Array.from({ length: 20_000 }, (_, i) => `||big${i}.example^`).join('\n');
+  await typeFilters(big);
+  await opt.getByRole('button', { name: 'Save', exact: true }).click();
+  const typedDuring = await filtersBox.evaluate((el) => {
+    el.value += '\nexample.com##.typed-during-save';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return document.querySelector('.result').textContent;
+  });
+  await opt.waitForFunction(() => !document.querySelector('.result').textContent.includes('Saving'), null, { timeout: 60_000 });
+  said = await opt.locator('.result').innerText();
+  await optSwitch('Cookie banners').uncheck();
+  await until(() => blockingOf(pw), (b) => b.lists.cookies === false);
+  await sleep(300); // the page's own storage event for that switch
+  const afterToggle = await filtersBox.inputValue();
+  await optSwitch('Cookie banners').check();
+  await until(() => blockingOf(pw), (b) => b.lists.cookies === true);
+  await pickWrite('localhost##.picked-three');
+  await opt.getByText('Saving keeps your text and adds the new lines after it.', { exact: false }).waitFor();
+  const storedNow = (await blockingOf(pw)).myFilters;
+  check(
+    'text typed while a save runs stays in the box as an edit: a switch change does not wipe it, and a later pick is announced instead of replacing it',
+    typedDuring === 'Saving…' &&
+      said.startsWith('Saved 20,000 filters.') &&
+      afterToggle.endsWith('\nexample.com##.typed-during-save') &&
+      (await filtersBox.inputValue()).endsWith('\nexample.com##.typed-during-save') &&
+      !storedNow.includes('typed-during-save') &&
+      storedNow.endsWith('\nlocalhost##.picked-three'),
+    json({ typedDuring, said: said.slice(0, 80), afterToggle: afterToggle.slice(-60), storedNow: storedNow.slice(-80) }),
+  );
+
+  // The worker holds the shared lock through a slow pick while the page saves 20,000 filters: the save must wait, see the pick and stop.
+  const slowPick = pickWrite('localhost##.picked-slow', 1_500);
+  await sleep(100);
+  said = await pressSave();
+  await slowPick;
+  const afterSlowPick = (await blockingOf(pw)).myFilters.split('\n');
+  const savedAgain = await pressSave();
+  const bothKept = (await blockingOf(pw)).myFilters.split('\n');
+  const keptRules = (await pw.evaluate(() => chrome.storage.local.get('myRules'))).myRules.length;
+  check(
+    'a pick that holds the settings lock during a large save is kept: the save waits, says the filters changed, and the next Save keeps the pick and the typed line',
+    said.startsWith('Your filters changed while Sieve was saving them.') &&
+      afterSlowPick.includes('localhost##.picked-slow') &&
+      savedAgain.startsWith('Saved 20,003 filters.') &&
+      ['example.com##.typed-during-save', 'localhost##.picked-three', 'localhost##.picked-slow'].every((l) => bothKept.includes(l)) &&
+      keptRules === 20_000,
+    json({ said: said.slice(0, 120), savedAgain: savedAgain.slice(0, 80), tail: bothKept.slice(-4), keptRules }),
   );
   await typeFilters('');
   await pressSave();

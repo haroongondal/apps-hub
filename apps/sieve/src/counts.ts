@@ -1,5 +1,5 @@
 import { brands } from '../../../packages/ui/src/tokens.ts';
-import { DYNAMIC_RULESET, classifyMatch, countsKey, type Counts } from '@apps-hub/sieve-core/src/counts.ts';
+import { DYNAMIC_RULESET, blocksRequest, classifyMatch, countsKey, type Counts } from '@apps-hub/sieve-core/src/counts.ts';
 import type { BuildMeta } from '@apps-hub/sieve-core/src/plan.ts';
 
 let meta: Promise<BuildMeta> | undefined;
@@ -26,11 +26,11 @@ export function initBadge(): void {
 
 const badgeText = (total: number) => (total === 0 ? '' : total > 999 ? '999+' : String(total));
 
-// My filters rules that allow a request or only change its headers (`$csp`, `$removeheader`) block nothing.
+// My filters rules that allow a request, only change its headers (`$csp`, `$removeheader`) or its query (`$removeparam`) block nothing.
 async function dynamicNotBlocking(rulesetId: string, ruleId: number): Promise<Set<number>> {
   if (rulesetId !== DYNAMIC_RULESET) return new Set();
   const rules = await chrome.declarativeNetRequest.getDynamicRules({ ruleIds: [ruleId] });
-  return new Set(rules.filter((r) => r.action.type !== 'block' && r.action.type !== 'redirect').map((r) => r.id));
+  return new Set(rules.filter((r) => !blocksRequest(r.action)).map((r) => r.id));
 }
 
 export function onMatched({ request, rule }: chrome.declarativeNetRequest.MatchedRuleInfoDebug): void {

@@ -12,6 +12,6 @@
   },
   "background": { "service_worker": "background.js", "type": "module" },
   "options_page": "options.html",
-  "permissions": ["declarativeNetRequest", "declarativeNetRequestFeedback", "storage", "scripting", "webNavigation"],
+  "permissions": ["declarativeNetRequest", "declarativeNetRequestFeedback", "storage", "unlimitedStorage", "scripting", "webNavigation"],
   "host_permissions": ["<all_urls>"]
 }

@@ -20,12 +20,18 @@ export function tabSite(url: string | undefined): { host: string; page: string }
   return { host: new URL(page).hostname.replace(/\.$/, '').replace(/^www\./, ''), page };
 }
 
-// The settings page's allowlist box: a full URL is a page entry, anything else a site entry, the host as the URL parser gives it.
+const SCHEME = /^[a-z][a-z\d+.-]*:/i;
+
+// The settings page's allowlist box: a full URL, or an address with a path, is a page entry; a bare host (a port is dropped)
+// is a site entry without `www.`, like the menu's. A scheme with no host after it (`mailto:`) is refused.
 export function allowEntry(input: string): AllowEntry | null {
   const text = input.trim();
+  const full = /^[a-z][a-z\d+.-]*:\/\//i.test(text);
+  if (!full && SCHEME.test(text) && !/^[^:]*:\d+(?:[/?#]|$)/.test(text)) return null;
   let entry: AllowEntry;
   try {
-    entry = /^[a-z][a-z\d+.-]*:\/\//i.test(text) ? { kind: 'page', url: text } : { kind: 'site', host: new URL(`http://${text}`).hostname };
+    const url = new URL(full ? text : `https://${text}`);
+    entry = full || url.pathname !== '/' || url.search ? { kind: 'page', url: url.href } : { kind: 'site', host: url.hostname.replace(/^www\./, '') };
   } catch {
     return null;
   }

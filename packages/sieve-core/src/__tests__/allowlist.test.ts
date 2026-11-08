@@ -104,8 +104,20 @@ test('allowEntry: a full URL becomes a page entry, anything else a site entry, n
   assert.deepEqual(allowEntry('https://münchen.de/'), page('https://xn--mnchen-3ya.de/'));
 });
 
-test('allowEntry gives null for what cannot be allowlisted, IPv6 included, and never throws', () => {
-  for (const input of ['', '   ', 'not a site', '*.example.com', '[::1]', '::1', 'http://[::1]:8080/', 'ftp://example.com/', 'https://', 'a b.com', 'http://a*b.com/']) {
+test('allowEntry drops a leading www. from a site, as the menu does, and keeps it in a full page address', () => {
+  assert.deepEqual(allowEntry('www.example.com'), site('example.com'));
+  assert.deepEqual(allowEntry('WWW.Example.com:8080'), site('example.com'));
+  assert.deepEqual(allowEntry('https://www.example.com/a'), page('https://www.example.com/a'));
+});
+
+test('allowEntry makes an address with a path but no scheme a page entry on https, and a bare slash still a site', () => {
+  assert.deepEqual(allowEntry('example.com/some/page'), page('https://example.com/some/page'));
+  assert.deepEqual(allowEntry('localhost:3000/x?y=1'), page('https://localhost:3000/x?y=1'));
+  assert.deepEqual(allowEntry('example.com/'), site('example.com'));
+});
+
+test('allowEntry gives null for what cannot be allowlisted, IPv6 and hostless schemes included, and never throws', () => {
+  for (const input of ['', '   ', 'not a site', '*.example.com', '[::1]', '::1', 'http://[::1]:8080/', 'ftp://example.com/', 'https://', 'a b.com', 'http://a*b.com/', 'mailto:x@y.com', 'javascript:alert(1)', 'about:blank', 'www.']) {
     assert.equal(allowEntry(input), null, input);
   }
 });

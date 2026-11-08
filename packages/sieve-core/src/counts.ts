@@ -10,6 +10,9 @@ export const countsKey = (tabId: number) => `counts:${tabId}`;
 
 export const DYNAMIC_RULESET = '_dynamic';
 
+// A redirect with a transform ($removeparam) only rewrites the address, and the request still goes through.
+export const blocksRequest = (action: { type: string; redirect?: object }) => action.type === 'block' || (action.type === 'redirect' && !(action.redirect && 'transform' in action.redirect));
+
 // Rule ids restart at 1 in each list, so a static id is only an allow or header-only rule in its own list.
 export function classifyMatch(rulesetId: string, ruleId: number, meta: BuildMeta, dynamicNotBlocking: ReadonlySet<number>): 'ad' | 'tracker' | null {
   const notABlock =

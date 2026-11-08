@@ -20,6 +20,7 @@ import {
   isConversionError,
 } from '@adguard/dnr-converter';
 import { scriptlets } from '@adguard/scriptlets';
+import { blocksRequest } from './counts.ts';
 import { emptyCosmetic, scriptletKey } from './page.ts';
 
 export interface DnrRule {
@@ -55,7 +56,7 @@ export interface CompiledList {
   rules: DnrRule[];
   sources: Record<number, string>;
   allowIds: number[];
-  modifyIds: number[];
+  modifyIds: number[]; // rules that neither block nor allow: header changes, $removeparam
   cosmetic: CosmeticSet;
   maxPriority: number;
   dropped: Record<string, number>;
@@ -173,7 +174,7 @@ async function convertNetwork(
       out.rules.push({ ...rule, id } as DnrRule);
       out.sources[id] = (await result.ruleset.getRulesById(rule.id)).map((s) => s.sourceRule).join('\n');
       if (rule.action.type === 'allow' || rule.action.type === 'allowAllRequests') out.allowIds.push(id);
-      if (rule.action.type === 'modifyHeaders') out.modifyIds.push(id);
+      else if (!blocksRequest(rule.action)) out.modifyIds.push(id);
       out.maxPriority = Math.max(out.maxPriority, rule.priority ?? 1);
     }
     for (const e of result.errors) {

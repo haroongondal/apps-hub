@@ -2,6 +2,7 @@ import { isAllowed, tabSite } from '@apps-hub/sieve-core/src/allowlist.ts';
 import { countsKey, type Counts } from '@apps-hub/sieve-core/src/counts.ts';
 import { validateSettings, type AllowEntry, type FeatureKey, type Settings } from '@apps-hub/sieve-core/src/settings.ts';
 import { h, type Child } from './dom.ts';
+import { withSettingsLock } from './lock.ts';
 
 interface State {
   settings: Settings;
@@ -29,16 +30,11 @@ let liveCounts: Counts | undefined;
 
 const canAllowlist = (entry: AllowEntry) => validateSettings({ blocking: { allowlist: [entry] } }).blocking.allowlist.length > 0;
 
-// One at a time: two quick changes would otherwise both read the old settings, and the second write would undo the first.
-let saving: Promise<unknown> = Promise.resolve();
-function save(edit: (s: Settings) => Settings): Promise<void> {
-  const run = saving.then(async () => {
+const save = (edit: (s: Settings) => Settings): Promise<void> =>
+  withSettingsLock(async () => {
     const { settings } = await chrome.storage.local.get('settings');
     await chrome.storage.local.set({ settings: edit(validateSettings(settings)) });
   });
-  saving = run.catch(() => {});
-  return run;
-}
 const setBlocking = (patch: Partial<Settings['blocking']>) => save((s) => ({ ...s, blocking: { ...s.blocking, ...patch } }));
 const setList = (feature: FeatureKey, on: boolean) => save((s) => ({ ...s, blocking: { ...s.blocking, lists: { ...s.blocking.lists, [feature]: on } } }));
 

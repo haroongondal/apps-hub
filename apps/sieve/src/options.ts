@@ -3,7 +3,8 @@ import { withNewLines } from '@apps-hub/sieve-core/src/my-filters.ts';
 import type { BuildMeta } from '@apps-hub/sieve-core/src/plan.ts';
 import { FEATURES, validateSettings, type AllowEntry, type FeatureKey, type Settings } from '@apps-hub/sieve-core/src/settings.ts';
 import { h, type Child } from './dom.ts';
-import { FILTERS_CHANGED, saveMyFilters, type SaveResult } from './my-filters.ts';
+import { withSettingsLock } from './lock.ts';
+import { FILTERS_CHANGED, TOO_MANY_TO_STORE, saveMyFilters, type SaveResult } from './my-filters.ts';
 
 const NAMES: Record<FeatureKey, string> = {
   ads: 'Ads',
@@ -21,15 +22,8 @@ const read = async () => validateSettings((await chrome.storage.local.get('setti
 const [meta, initial] = await Promise.all([fetch('meta.json').then((r) => r.json() as Promise<BuildMeta>), read()]);
 let settings = initial;
 
-// Every write re-reads storage inside one queue: the menu and the worker (a pick) change the same settings while this page is open.
-let queue: Promise<unknown> = Promise.resolve();
-function later<T>(work: () => Promise<T>): Promise<T> {
-  const run = queue.then(work);
-  queue = run.catch(() => {});
-  return run;
-}
 const save = (edit: (s: Settings) => Settings) =>
-  later(async () => chrome.storage.local.set({ settings: edit(await read()) })).catch((e) => console.error('Sieve could not save the settings', e));
+  withSettingsLock(async () => chrome.storage.local.set({ settings: edit(await read()) })).catch((e) => console.error('Sieve could not save the settings', e));
 const setList = (f: FeatureKey, on: boolean) => save((s) => ({ ...s, blocking: { ...s.blocking, lists: { ...s.blocking.lists, [f]: on } } }));
 
 const switches: { input: HTMLInputElement; read: (s: Settings) => boolean }[] = [];
@@ -70,48 +64,63 @@ const notice = h('p', { class: 'ui-meta notice', role: 'status' });
 const result = h('div', { class: 'result', 'aria-live': 'polite' });
 const saveButton = h('button', { class: 'ui-btn ui-btn--primary', type: 'button', onclick: () => void saveFilters() }, 'Save');
 
-function showResult({ saved, errors }: SaveResult): void {
-  const refused = errors.find((e) => e.line === 0);
-  const lines = errors.filter((e) => e.line > 0);
+function showResult({ saved, errors, notSaved }: SaveResult): void {
+  const listed = errors.filter((e) => !(e.line === 0 && e.reason === notSaved));
   const parts: Child[] = [
-    refused
-      ? h(
+    notSaved === undefined
+      ? h('p', {}, `Saved ${count(saved, 'filter', 'filters')}.`)
+      : h(
           'p',
           { class: 'error' },
-          refused.reason === FILTERS_CHANGED
-            ? FILTERS_CHANGED
-            : `Chrome refused these filters, so the ones saved before stay on. Remove some filters or fix the one Chrome names, then save again. Chrome says: ${refused.reason}`,
-        )
-      : h('p', {}, `Saved ${count(saved, 'filter', 'filters')}.`),
-    lines.length > 0 && h('ul', { class: 'errors' }, ...lines.slice(0, SHOWN_ERRORS).map((e) => h('li', {}, `Line ${e.line}: ${e.reason}`))),
-    lines.length > SHOWN_ERRORS && h('p', { class: 'ui-meta' }, `and ${(lines.length - SHOWN_ERRORS).toLocaleString('en-US')} more`),
+          notSaved === FILTERS_CHANGED || notSaved === TOO_MANY_TO_STORE
+            ? notSaved
+            : `Chrome refused these filters, so the ones saved before stay on. Remove some filters or fix the one Chrome names, then save again. Chrome says: ${notSaved}`,
+        ),
+    listed.length > 0 && h('ul', { class: 'errors' }, ...listed.slice(0, SHOWN_ERRORS).map((e) => h('li', {}, e.line ? `Line ${e.line}: ${e.reason}` : e.reason))),
+    listed.length > SHOWN_ERRORS && h('p', { class: 'ui-meta' }, `and ${(listed.length - SHOWN_ERRORS).toLocaleString('en-US')} more`),
   ];
   result.replaceChildren(...parts.filter((p): p is Node => !!p));
 }
 
+// The text area follows the stored filters until the owner edits it; after that a change from elsewhere (a pick) is only announced.
+// While a save runs it waits, and catches up once the save is done.
+let pending = false;
+function follow(text: string): void {
+  if (pending || text === loaded) return;
+  if (!edited || text === area.value) {
+    area.value = loaded = text;
+    edited = false;
+    notice.textContent = '';
+  } else {
+    notice.textContent = `${CHANGED_HERE} Saving keeps your text and adds the new lines after it.`;
+  }
+}
+
 async function saveFilters(): Promise<void> {
+  const text = area.value; // what Save saves; anything typed while it runs stays in the box as an edit
+  pending = true;
   saveButton.disabled = true;
   result.replaceChildren(h('p', { class: 'ui-meta' }, 'Saving…'));
   try {
-    const { added, ...outcome } = await later(async () => {
-      const stored = (await read()).blocking.myFilters;
-      const merged = withNewLines(area.value, loaded, stored);
-      area.value = merged.text;
-      loaded = stored;
-      return { ...(await saveMyFilters(merged.text, stored)), added: merged.added };
-    });
-    if (!outcome.errors.some((e) => e.line === 0)) {
-      loaded = area.value;
-      edited = false;
+    const stored = (await read()).blocking.myFilters;
+    const merged = withNewLines(text, loaded, stored);
+    if (merged.added) area.value = withNewLines(area.value, loaded, stored).text;
+    loaded = stored;
+    const outcome = await saveMyFilters(merged.text, stored);
+    if (outcome.notSaved === undefined) {
+      loaded = merged.text;
+      edited = area.value !== merged.text;
     }
-    notice.textContent = added ? `${CHANGED_HERE} Sieve added the new lines at the end of yours.` : '';
+    notice.textContent = merged.added ? `${CHANGED_HERE} Sieve added the new lines at the end of yours.` : '';
     showResult(outcome);
   } catch (e) {
     console.error('Sieve could not save My filters', e);
     result.replaceChildren(h('p', { class: 'error' }, "Sieve couldn't save your filters. Reload this page, then try again."));
   } finally {
+    pending = false;
     saveButton.disabled = false;
   }
+  follow((await read()).blocking.myFilters);
 }
 
 const mine = section(
@@ -153,21 +162,12 @@ const allow = section(
   addError,
 );
 
-// The text area follows the stored filters until the owner edits it; after that a change from elsewhere (a pick) is only announced.
 chrome.storage.onChanged.addListener((changes, where) => {
   if (where !== 'local' || !('settings' in changes)) return;
   settings = validateSettings(changes.settings.newValue);
   for (const s of switches) s.input.checked = s.read(settings);
   renderAllowlist();
-  const text = settings.blocking.myFilters;
-  if (text === loaded) return;
-  if (!edited || text === area.value) {
-    area.value = loaded = text;
-    edited = false;
-    notice.textContent = '';
-  } else {
-    notice.textContent = `${CHANGED_HERE} Saving keeps your text and adds the new lines after it.`;
-  }
+  follow(settings.blocking.myFilters);
 });
 
 renderAllowlist();
