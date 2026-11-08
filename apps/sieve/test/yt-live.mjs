@@ -5,10 +5,42 @@ import { check, launch, results } from './harness.mjs';
 const VIDEOS = ['dQw4w9WgXcQ', 'kJQP7kiw5Fk', '9bZkp7q19f0'];
 const SECONDS = 30;
 const ARGS = ['--autoplay-policy=no-user-gesture-required'];
+// A video that stalled with Sieve (kJQP7kiw5Fk) still got past 5 s: it has to keep up with the extension-free control instead.
+const MIN_RATIO = 0.6;
+const MIN_CONTROL_S = 5;
+
+// control.playedTo is the furthest the control got (an ad's own clock can reset it); sieve.endedAt is where the video was when the window closed.
+export function judgePlayback(control, sieve) {
+  if (!(control.playedTo > MIN_CONTROL_S)) return { verdict: 'inconclusive', ratio: null, text: `the control only reached ${control.playedTo} s, so playback cannot be compared` };
+  const ratio = sieve.endedAt / control.playedTo;
+  return { verdict: ratio >= MIN_RATIO ? 'pass' : 'fail', ratio, text: `with Sieve ${sieve.endedAt} s at the end of the window, the control ${control.playedTo} s, ratio ${ratio.toFixed(2)} (needs ${MIN_RATIO})` };
+}
+
+// Exit status: 1 when a check failed, 2 when no video gave evidence (every one skipped or inconclusive), else 0.
+export function exitCode({ failed, videos, skipped, inconclusive }) {
+  if (failed) return 1;
+  return videos - skipped - inconclusive > 0 ? 0 : 2;
+}
+
+if (process.argv.includes('--self-check')) {
+  const assert = (await import('node:assert/strict')).default;
+  assert.equal(judgePlayback({ playedTo: 28 }, { endedAt: 27 }).verdict, 'pass');
+  assert.equal(judgePlayback({ playedTo: 28 }, { endedAt: 17 }).verdict, 'pass', '17/28 = 0.61');
+  assert.equal(judgePlayback({ playedTo: 28 }, { endedAt: 16 }).verdict, 'fail', '16/28 = 0.57');
+  assert.equal(judgePlayback({ playedTo: 28 }, { endedAt: 6 }).verdict, 'fail', 'a stall past 5 s no longer passes');
+  assert.equal(judgePlayback({ playedTo: 4 }, { endedAt: 28 }).verdict, 'inconclusive', 'a control that did not play cannot be compared');
+  assert.equal(judgePlayback({ playedTo: 0 }, { endedAt: 0 }).verdict, 'inconclusive');
+  assert.equal(exitCode({ failed: 0, videos: 3, skipped: 3, inconclusive: 0 }), 2, 'all skipped is no evidence');
+  assert.equal(exitCode({ failed: 0, videos: 3, skipped: 1, inconclusive: 2 }), 2, 'skipped plus inconclusive is no evidence');
+  assert.equal(exitCode({ failed: 0, videos: 3, skipped: 1, inconclusive: 1 }), 0);
+  assert.equal(exitCode({ failed: 1, videos: 3, skipped: 3, inconclusive: 0 }), 1, 'a failure wins');
+  console.log('self-check ok');
+  process.exit(0);
+}
 
 async function watch(ctx, id) {
   const page = await ctx.newPage();
-  const row = { id, seconds: 0, adShowing: false, botCheck: false, consent: false, playedTo: 0 };
+  const row = { id, seconds: 0, adShowing: false, botCheck: false, consent: false, playedTo: 0, endedAt: 0 };
   try {
     await page.goto(`https://www.youtube.com/watch?v=${id}`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     const start = Date.now();
@@ -19,10 +51,13 @@ async function watch(ctx, id) {
           bot: /confirm you.re not a bot/i.test(document.body?.innerText ?? ''),
           time: document.querySelector('#movie_player video')?.currentTime ?? 0,
         }))
-        .catch(() => ({ ad: false, bot: false, time: 0 }));
-      row.adShowing ||= s.ad;
-      row.botCheck ||= s.bot;
-      row.playedTo = Math.max(row.playedTo, Math.round(s.time));
+        .catch(() => null);
+      if (s) {
+        row.adShowing ||= s.ad;
+        row.botCheck ||= s.bot;
+        row.playedTo = Math.max(row.playedTo, Math.round(s.time));
+        row.endedAt = Math.round(s.time);
+      }
       await sleep(500);
     }
     row.seconds = Math.round((Date.now() - start) / 1000);
@@ -60,7 +95,9 @@ try {
       console.log(`SKIP  ${id}: ${why(r) ?? why(c)}`);
       continue;
     }
-    check(`live ${id}: the video plays with Sieve (to ${r.playedTo} s in ${r.seconds} s)`, r.playedTo > 5, JSON.stringify(r));
+    const play = judgePlayback(c, r);
+    if (play.verdict === 'inconclusive') console.log(`INCONCLUSIVE  ${id}: ${play.text}`);
+    else check(`live ${id}: the video keeps playing with Sieve, ${play.text}`, play.verdict === 'pass', JSON.stringify({ control: c, sieve: r }));
     if (c.adShowing || r.adShowing) {
       check(`live ${id}: ${c.adShowing ? 'an ad showed without Sieve' : 'no ad showed without Sieve'}, and none showed with Sieve`, !r.adShowing, JSON.stringify({ control: c, sieve: r }));
     } else {
@@ -85,4 +122,6 @@ try {
 }
 
 console.log(`\n${results.filter((r) => r.ok).length}/${results.length} live checks passed, ${inconclusive} inconclusive, ${skipped} skipped`);
-process.exit(results.every((r) => r.ok) ? 0 : 1);
+const code = exitCode({ failed: results.filter((r) => !r.ok).length, videos: VIDEOS.length, skipped, inconclusive });
+if (code === 2) console.log('NO EVIDENCE: every video was skipped or showed no ad, so this run shows nothing about Sieve. Run it again from another network, or watch the videos by hand.');
+process.exit(code);

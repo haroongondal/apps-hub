@@ -38,6 +38,11 @@ Current apps:
   (Kotlin owns the vault; RN only renders). Android only, private Store only
   (`com.haroon.strongroom`). Design: `docs/strongroom/DESIGN.md`; phases:
   `docs/strongroom/PHASE-1-PLAN.md` and `docs/handoffs/strongroom.md`.
+- **sieve** (`apps/sieve`) — the owner's private ad blocker for Chrome (Manifest V3),
+  built on this Mac and loaded unpacked, never published. Chrome only. Filter
+  compiler and settings logic in `packages/sieve-core`; how to install and what is
+  verified in `apps/sieve/README.md`. Design: `docs/superpowers/specs/2026-11-06-sieve-design.md`;
+  plan: `docs/superpowers/plans/2026-11-06-sieve.md`; progress: `docs/handoffs/sieve.md`.
 
 Not here on purpose: `~/Documents/browser-automation` (stays standalone) and
 `~/Documents/agent-harness` (deferred until its phase branches are merged).
@@ -136,6 +141,9 @@ cd apps/strongroom/android && JAVA_HOME=$JAVA_HOME ./gradlew \
 # Native compile gate (Design Editor mobile):
 cd apps/design-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :design-media:testDebugUnitTest :app:assembleDebug
+# Sieve (Chrome extension; the e2e opens headless Chrome for Testing in a temporary profile):
+pnpm --filter sieve build && pnpm --filter sieve test:e2e
+node apps/sieve/test/perf.mjs   # 4 to 8 minutes, real sites, needs the machine otherwise idle
 # Electron apps (open real windows, so not part of `pnpm test`):
 pnpm --filter pdf-editor-desktop test:e2e   # desktop + Electron + mobile-bridge suites
 pnpm --filter design-editor test:e2e
