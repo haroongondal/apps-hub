@@ -1,7 +1,7 @@
 import { SCRIPTLETS } from './scriptlets.js';
 import { isAllowed } from '@apps-hub/sieve-core/src/allowlist.ts';
 import { hostCandidates } from '@apps-hub/sieve-core/src/hosts.ts';
-import { pageInjections } from '@apps-hub/sieve-core/src/page.ts';
+import { pageInjections, scriptletArgs } from '@apps-hub/sieve-core/src/page.ts';
 import { FEATURES, validateSettings, type Settings } from '@apps-hub/sieve-core/src/settings.ts';
 import type { BuildMeta } from '@apps-hub/sieve-core/src/plan.ts';
 import type { CosmeticSet } from '@apps-hub/sieve-core/src/compile.ts';
@@ -9,7 +9,8 @@ import type { CosmeticSet } from '@apps-hub/sieve-core/src/compile.ts';
 type Committed = chrome.webNavigation.WebNavigationTransitionCallbackDetails;
 
 const RULE_END = '{display:none!important}';
-const GONE = /No (?:tab|frame|document) with id|Invalid document id|was removed|showing error page|tab was closed/i;
+// Frames that went away, and pages Chrome never lets extensions script (the Chrome Web Store).
+const GONE = /No (?:tab|frame|document) with id|Invalid document id|was removed|showing error page|tab was closed|cannot be scripted/i;
 
 const files = new Map<string, Promise<unknown>>();
 function load<T>(path: string, read: (r: Response) => Promise<T>): Promise<T> {
@@ -29,6 +30,7 @@ const tops = new Map<string, string>();
 async function topUrl(d: Committed): Promise<string | null> {
   let url = d.url;
   let parent = d.parentDocumentId;
+  const walked = [d.documentId];
   while (parent) {
     const known = tops.get(parent);
     if (known !== undefined) {
@@ -37,10 +39,11 @@ async function topUrl(d: Committed): Promise<string | null> {
     }
     const frame = await chrome.webNavigation.getFrame({ documentId: parent });
     if (!frame) return null;
+    walked.push(parent);
     ({ url, parentDocumentId: parent } = frame);
   }
-  tops.set(d.documentId, url);
-  if (tops.size > 1000) tops.delete(tops.keys().next().value as string);
+  for (const id of walked) tops.set(id, url);
+  while (tops.size > 1000) tops.delete(tops.keys().next().value as string);
   return url;
 }
 
@@ -49,13 +52,16 @@ function report(e: unknown): void {
 }
 
 export async function onCommitted(d: Committed): Promise<void> {
+  // A document seen before (a back/forward cache restore) already has its CSS and scriptlets.
+  if (tops.has(d.documentId)) return;
   try {
     const [s, meta, top] = await Promise.all([
       (settings ??= chrome.storage.local.get('settings').then((r) => validateSettings(r.settings))),
       load('meta.json', (r) => r.json() as Promise<BuildMeta>),
       topUrl(d),
     ]);
-    if (!s.enabled || s.blocking.paused || top === null || isAllowed(top, s.blocking.allowlist)) return;
+    // The frame's own address too: the allow rule and the registered scripts treat an allowlisted site's iframe as allowlisted.
+    if (!s.enabled || s.blocking.paused || top === null || isAllowed(top, s.blocking.allowlist) || isAllowed(d.url, s.blocking.allowlist)) return;
 
     const host = new URL(d.url).hostname;
     const candidates = new Set(hostCandidates(host));
@@ -68,8 +74,7 @@ export async function onCommitted(d: Committed): Promise<void> {
     await Promise.all([
       ...scriptlets
         .filter((c) => SCRIPTLETS[c.name])
-        // The two arguments scriptlets.invoke passes: the source object, then the args array.
-        .map((c) => chrome.scripting.executeScript({ target, world: 'MAIN', injectImmediately: true, func: SCRIPTLETS[c.name], args: [{ name: c.name, args: c.args, engine: 'extension', verbose: false }, c.args] }).catch(report)),
+        .map((c) => chrome.scripting.executeScript({ target, world: 'MAIN', injectImmediately: true, func: SCRIPTLETS[c.name], args: scriptletArgs(c) }).catch(report)),
       css && chrome.scripting.insertCSS({ target, css, origin: 'USER' }).catch(report),
     ]);
   } catch (e) {

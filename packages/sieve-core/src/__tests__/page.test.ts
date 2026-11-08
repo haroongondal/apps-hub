@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyCosmetic, pageInjections, scriptletKey, type CosmeticSet } from '../index.ts';
+import vm from 'node:vm';
+import { emptyCosmetic, pageInjections, scriptletArgs, scriptletFunction, scriptletKey, type CosmeticSet } from '../index.ts';
 
 const set = (parts: Partial<CosmeticSet>): CosmeticSet => ({ ...emptyCosmetic(), ...parts });
 const never = () => false;
@@ -68,6 +69,15 @@ test("'*' keys reach every site: hide, unhide and scriptletExcept", () => {
 test('google.* hide rules apply to www.google.de', () => {
   const sets = [set({ hide: { 'google.*': ['#tads'] } })];
   assert.equal(pageInjections('www.google.de', sets, never).css, '#tads{display:none!important}');
+});
+
+test('scriptletArgs gives the scriptlet function what it takes: set-constant foo 1 sets window.foo to 1', () => {
+  const ctx = vm.createContext({ console });
+  vm.runInContext('var window = globalThis; globalThis.Window = function Window() {};', ctx);
+  // Like executeScript: the function travels as source text and the args are structured-cloned.
+  const fn = vm.runInContext(`(${scriptletFunction(setConstant.name)?.toString()})`, ctx);
+  fn(...structuredClone(scriptletArgs(setConstant)));
+  assert.equal(vm.runInContext('window.foo', ctx), 1);
 });
 
 test('hosts named like Object members do not pick up prototype properties', () => {

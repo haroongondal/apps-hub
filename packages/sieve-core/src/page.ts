@@ -11,6 +11,11 @@ export function scriptletKey(call: ScriptletCall): string {
   return JSON.stringify([call.name, ...call.args]);
 }
 
+// What scriptlets.invoke passes to the function getScriptletFunction returns: the source object, then the args array, not spread.
+export function scriptletArgs(call: ScriptletCall): [source: object, args: string[]] {
+  return [{ name: call.name, args: call.args, engine: 'extension', verbose: false }, call.args];
+}
+
 // Exceptions (unhide, scriptletExcept) reach every set, so My filters can lift a list's rule; generichide and elemhide stay per set, like the registered stylesheets.
 export function pageInjections(hostname: string, sets: CosmeticSet[], excluded: (set: number) => boolean): PageInjection {
   const keys = [...hostCandidates(hostname), '*'];

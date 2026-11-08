@@ -304,6 +304,12 @@ try {
     json(r),
   );
   check('on an allowlisted site, the iframe ad request loads, and nothing in the iframe is hidden or run', r.hits.includes('/pagead/frame.js') && shown(r.frame), json(r));
+  r = await visitSite(EMBED);
+  check(
+    `an iframe from allowlisted ${SITE_HOST} on a site that is not allowlisted loads its ad request, and nothing in it is hidden or run`,
+    r.hits.includes('/pagead/frame.js') && shown(r.frame),
+    json(r),
+  );
   await setBlocking(sw2, { allowlist: [{ kind: 'site', host: UNHIDE_HOST }] });
   s = await settle(sw2, (s) => !s.scripts.some((r) => r.excludeMatches?.includes(`*://*.${SITE_HOST}/*`)));
   r = await visitSite(EMBED);
