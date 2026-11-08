@@ -1,11 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { compileFilters } from '../compile.ts';
 import { addHideFilter, parsePick, selectorFor, simpleSelector, type ElementInfo } from '../picker.ts';
 
 const el = (tag: string, parts: Partial<ElementInfo> = {}): ElementInfo => ({ tag, id: '', classes: [], nth: 1, ...parts });
 
 test('an id is the selector when it is a plain identifier', () => {
   assert.equal(simpleSelector({ tag: 'div', id: 'main-ad', classes: [], nth: 1 }), '#main-ad');
+});
+
+test('an id with 3 or more digits is generated and skipped: the selector falls back to a class or nth-of-type', () => {
+  assert.equal(simpleSelector(el('div', { id: 'yui_3_18_1_1_1700000000000_1234', classes: ['promo'] })), 'div.promo');
+  assert.equal(simpleSelector(el('div', { id: 'ember1234', nth: 2 })), 'div:nth-of-type(2)');
+  assert.equal(simpleSelector(el('div', { id: 'mui-12345', classes: ['card'] })), 'div.card');
+  assert.equal(selectorFor([el('a', { classes: ['promo'] }), el('div', { id: 'ember1234' }), el('section', { id: 'main-ad' })], 3), '#main-ad > div:nth-of-type(1) > a.promo');
 });
 
 test('classes with 3 or more digits are treated as generated and skipped', () => {
@@ -20,9 +28,27 @@ test('with no usable id or class, the selector counts the tag among its siblings
 
 test('an id that is not a plain identifier is skipped, and classes are CSS-escaped', () => {
   assert.equal(simpleSelector({ tag: 'div', id: '1bad', classes: ['a:b'], nth: 1 }), 'div.a\\:b');
-  assert.equal(simpleSelector(el('div', { classes: ['1a', 'w-1/2', 'x y'] })), 'div.\\31 a.w-1\\/2.x\\ y');
+  assert.equal(simpleSelector(el('div', { classes: ['1a', 'w-1/2', 'x y'] })), 'div.\\31 a.w-1\\/2.x\\20 y');
   assert.equal(simpleSelector(el('div', { classes: ['a\nb'] })), 'div.a\\a b');
   assert.equal(simpleSelector(el('a:b')), 'a\\:b:nth-of-type(1)');
+});
+
+test('whitespace a class can hold (no-break, ideographic, BOM, line separator) is hex-escaped, so trimming the filter line cannot change it', () => {
+  assert.equal(simpleSelector(el('div', { classes: ['ad '] })), 'div.ad\\a0 ');
+  assert.equal(simpleSelector(el('div', { classes: ['　'] })), 'div.\\3000 ');
+  assert.equal(simpleSelector(el('div', { classes: ['a﻿b', 'c '] })), 'div.a\\feff b.c\\2028 ');
+});
+
+// What CSS reads an escaped name as: `\a0 ` and `\:` become the characters they stand for.
+const unescape = (s: string) => s.replace(/\\([0-9a-fA-F]{1,6}) ?|\\(.)/g, (_, hex, c) => (hex ? String.fromCodePoint(parseInt(hex, 16)) : c));
+
+test('a picked selector with escaped whitespace means the same after My filters compile it again', async () => {
+  for (const classes of [['ad '], ['　'], ['a﻿b', 'c '], ['x y']]) {
+    const selector = selectorFor([el('div', { classes })], 1);
+    const out = await compileFilters(addHideFilter('', 'www.x.com', selector), { firstId: 1 });
+    assert.deepEqual(out.errors, []);
+    assert.deepEqual(out.cosmetic.hide['www.x.com']?.map(unescape), [unescape(selector)], JSON.stringify(classes));
+  }
 });
 
 test('selectorFor joins the target and its ancestors with child combinators', () => {

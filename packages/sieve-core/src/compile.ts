@@ -48,7 +48,6 @@ export interface CosmeticSet {
 export interface CompileOptions {
   firstId: number;
   regexLimit?: number;
-  trusted?: boolean; // allow trusted-* scriptlets: only for the owner's own filters
   scriptlets?: readonly string[]; // the scriptlets the extension ships (My filters): any other is an error on its line
 }
 
@@ -217,7 +216,7 @@ function addCosmeticException(node: NetworkRule, cosmetic: CosmeticSet, drop: (r
   if ((!kinds.size && !document) || names.includes('badfilter')) return cosmeticOnly;
   const hosts = exceptionHosts(node);
   if (!node.exception || !hosts.length) {
-    if (cosmeticOnly) drop('hide-exception-pattern');
+    if (cosmeticOnly) drop(node.exception ? 'hide-exception-pattern' : 'hide-not-exception');
     return cosmeticOnly;
   }
   if (document) kinds.add('elemhide');
@@ -263,13 +262,13 @@ function addCosmetic(rule: AnyCosmeticRule, cosmetic: CosmeticSet, drop: (reason
       const adgName = name ? scriptletsCompatibilityTable.getFirst(name, GenericPlatform.AdgAny)?.name : undefined;
       // The worker only has the scriptlets the lists use, so in My filters any other one would do nothing.
       if (!rule.exception && name && opts.scriptlets && !opts.scriptlets.includes(adgName ?? '')) {
-        throw new Error(`${name.replace(/^(?:ubo|abp)-/, '')} isn't available in this build`); // the name as written, without agtree's prefix
+        throw new Error(`${name.replace(/^(?:ubo|abp)-/, '')} isn't available in this build. Remove the line.`); // the name as written, without agtree's prefix
       }
       if (!adgName || !scriptletFunction(adgName)) {
         drop('unknown-scriptlet');
         continue;
       }
-      if (!rule.exception && !opts.trusted && adgName.startsWith('trusted-')) {
+      if (!rule.exception && adgName.startsWith('trusted-')) {
         drop('trusted-scriptlet');
         continue;
       }

@@ -5,7 +5,7 @@ import { ALLOW_FIRST_ID, DEFAULT_SETTINGS, blockingPlan, validateSettings, type 
 const WEB = ['http://*/*', 'https://*/*'];
 const feature = (ruleset: string | null, hasGenericCss: boolean, genericExcept: string[] = []) => ({ ruleset, ruleCount: ruleset ? 10 : 0, hasGenericCss, genericExcept, allowIds: [], modifyIds: [] });
 const meta: BuildMeta = {
-  builtAt: '2026-11-06T00:00:00.000Z',
+  listsAt: '2026-11-06T00:00:00.000Z',
   maxPriority: 1000301,
   features: {
     ads: feature('ads', true, ['jetzt.de', '127.0.0.1']),
@@ -72,9 +72,9 @@ test('paused or switched off: every ruleset off, nothing registered, no dynamic 
 test('an allowlisted site leaves every registration and gets an allow rule above every list rule', () => {
   const plan = blockingPlan(withBlocking({ allowlist: [{ kind: 'site', host: 'example.com' }, { kind: 'page', url: 'https://a.com/p' }] }), meta, []);
   const ads = plan.registrations.find((r) => r.id === 'generic-ads');
-  assert.deepEqual(ads?.excludeMatches, ['*://*.example.com/*', '*://*.jetzt.de/*', '*://127.0.0.1/*', '*://a.com/p*']);
+  assert.deepEqual(ads?.excludeMatches, ['*://*.example.com/*', '*://*.jetzt.de/*', '*://127.0.0.1/*', '*://a.com/p']);
   for (const r of plan.registrations) {
-    assert.ok(r.excludeMatches.includes('*://*.example.com/*') && r.excludeMatches.includes('*://a.com/p*'), r.id);
+    assert.ok(r.excludeMatches.includes('*://*.example.com/*') && r.excludeMatches.includes('*://a.com/p'), r.id);
   }
   assert.deepEqual(plan.dynamicRules.map((r) => [r.id, r.priority]), [
     [ALLOW_FIRST_ID, 1000302],

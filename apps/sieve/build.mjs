@@ -1,21 +1,22 @@
 import { build } from 'esbuild';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { DEFAULT_SETTINGS, FEATURES, compileFilters, scriptletFunction, stripSections } from '@apps-hub/sieve-core';
+import { DEFAULT_SETTINGS, FEATURES, compileFilters, isHost, scriptletFunction, stripSections } from '@apps-hub/sieve-core';
 import { checkRegexesWithRe2 } from '@apps-hub/sieve-core/src/node-regex.ts';
 import { LISTS } from './src/lists.ts';
 import { COMMON_SUFFIXES, GOOGLE_SUFFIXES } from './src/tlds.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = (...p) => join(here, ...p);
-const out = root('dist');
+const dist = root('dist');
+// Built here and swapped in at the end, so a failed build leaves the installed dist (and its manifest) as it was.
+const out = root('dist.next');
 const cache = root('filters/cache');
 const cached = (url) => join(cache, basename(new URL(url).pathname));
 const onByDefault = (feature) => DEFAULT_SETTINGS.blocking.lists[feature];
-const HOSTNAME = /^[a-z0-9-]+(\.[a-z0-9-]+)*$/;
 
 // `google.*` can't be a Chrome match pattern, so it becomes one host per suffix; IP prefixes (`192.168.*`) can't be expanded.
 // shortcut: Google's own domains, else a fixed list of common suffixes; a site on a rarer suffix keeps the generic CSS there.
@@ -74,7 +75,9 @@ await checkRegexesWithRe2();
 rmSync(out, { recursive: true, force: true });
 for (const dir of ['rules', 'sources', 'cosmetic']) mkdirSync(join(out, dir), { recursive: true });
 
-const meta = { builtAt: new Date().toISOString(), maxPriority: 0, features: {}, scriptlets: [] };
+// The cached file's mtime is when the build downloaded it (the lists' own `! Last modified` lines differ in format).
+const listsAt = Math.min(...FEATURES.flatMap((f) => LISTS[f].urls ?? []).map((url) => statSync(cached(url)).mtimeMs));
+const meta = { listsAt: new Date(listsAt).toISOString(), maxPriority: 0, features: {}, scriptlets: [] };
 const rows = [];
 const usedScriptlets = new Set();
 for (const feature of FEATURES) {
@@ -101,10 +104,12 @@ for (const feature of FEATURES) {
       if (!hosts.length) drop('wildcard-exception');
     }
     for (const h of hosts) {
-      if (HOSTNAME.test(h)) genericExcept.add(h);
+      if (isHost(h)) genericExcept.add(h);
       else drop('invalid-exception-host');
     }
   }
+  // One pattern Chrome refuses voids the whole registration (plan.ts), so every excluded host must be one isHost accepts.
+  assert.ok([...genericExcept].every(isHost), `${feature}: a genericExcept host isHost refuses`);
 
   const ruleset = compiled.rules.length ? feature : null;
   if (ruleset) writeFileSync(join(out, 'rules', `${feature}.json`), JSON.stringify(compiled.rules));
@@ -173,4 +178,10 @@ for (const f of ['popup.html', 'popup.css', 'options.html', 'options.css', 'swit
 for (const f of ['tokens.css', 'base.css']) cpSync(join(ui, 'web', f), join(out, 'web', f));
 cpSync(join(ui, 'fonts'), join(out, 'fonts'), { recursive: true });
 for (const size of [16, 32, 48, 128]) cpSync(root(`assets/icon-${size}.png`), join(out, `icon-${size}.png`));
-console.log('Built', out);
+// A directory can't be renamed over a full one, so the old dist steps aside first; Chrome sees no dist only between two renames.
+const old = root('dist.old');
+rmSync(old, { recursive: true, force: true });
+if (existsSync(dist)) renameSync(dist, old);
+renameSync(out, dist);
+rmSync(old, { recursive: true, force: true });
+console.log('Built', dist);

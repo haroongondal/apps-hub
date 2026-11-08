@@ -2,9 +2,8 @@ import { allowEntry } from '@apps-hub/sieve-core/src/allowlist.ts';
 import { withNewLines } from '@apps-hub/sieve-core/src/my-filters.ts';
 import type { BuildMeta } from '@apps-hub/sieve-core/src/plan.ts';
 import { FEATURES, validateSettings, type AllowEntry, type FeatureKey, type Settings } from '@apps-hub/sieve-core/src/settings.ts';
+import { NAMES, count, save, setBlocking, setList, toggle } from './controls.ts';
 import { h, type Child } from './dom.ts';
-import { NAMES } from './lists.ts';
-import { withSettingsLock } from './lock.ts';
 import { FILTERS_CHANGED, TOO_MANY_TO_STORE, saveMyFilters, type SaveResult } from './my-filters.ts';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -15,21 +14,17 @@ const read = async () => validateSettings((await chrome.storage.local.get('setti
 const [meta, initial] = await Promise.all([fetch('meta.json').then((r) => r.json() as Promise<BuildMeta>), read()]);
 let settings = initial;
 
-const save = (edit: (s: Settings) => Settings) =>
-  withSettingsLock(async () => chrome.storage.local.set({ settings: edit(await read()) })).catch((e) => console.error('Sieve could not save the settings', e));
-const setList = (f: FeatureKey, on: boolean) => save((s) => ({ ...s, blocking: { ...s.blocking, lists: { ...s.blocking.lists, [f]: on } } }));
-
+// Switches follow changes made elsewhere (the menu), so each keeps how to read its value.
 const switches: { input: HTMLInputElement; read: (s: Settings) => boolean }[] = [];
-function toggle(label: string, read: (s: Settings) => boolean, change: (on: boolean) => unknown): HTMLElement {
-  const input = h('input', { type: 'checkbox', role: 'switch', checked: read(settings), onchange: () => change(input.checked) });
-  switches.push({ input, read });
-  return h('label', { class: 'switch' }, h('span', {}, label), input);
+function liveToggle(label: string, read: (s: Settings) => boolean, change: (on: boolean) => Promise<boolean>): HTMLElement {
+  const row = toggle(label, read(settings), change);
+  switches.push({ input: row.querySelector('input')!, read });
+  return row;
 }
-const listToggle = (f: FeatureKey, label = NAMES[f]) => toggle(label, (s) => s.blocking.lists[f], (on) => setList(f, on));
+const listToggle = (f: FeatureKey, label = NAMES[f]) => liveToggle(label, (s) => s.blocking.lists[f], (on) => setList(f, on));
 const section = (title: string, ...kids: Child[]) => h('section', {}, h('h2', { class: 'ui-heading' }, title), ...kids);
-const count = (n: number, one: string, many: string) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
 
-const built = new Date(meta.builtAt);
+const listsAt = new Date(meta.listsAt);
 const blocking = section(
   'Blocking',
   h(
@@ -38,7 +33,7 @@ const blocking = section(
     listToggle('distraction'),
     listToggle('cookies'),
     listToggle('ai'),
-    toggle('Site notification requests', (s) => s.blocking.denyNotifications, (on) => save((s) => ({ ...s, blocking: { ...s.blocking, denyNotifications: on } }))),
+    liveToggle('Site notification requests', (s) => s.blocking.denyNotifications, (on) => setBlocking({ denyNotifications: on })),
     listToggle('antiadblock'),
     listToggle('trackers'),
   ),
@@ -46,7 +41,11 @@ const blocking = section(
 const lists = section(
   'Filter lists',
   h('div', { class: 'ui-group rows' }, ...FEATURES.map((f) => listToggle(f, meta.features[f].ruleCount ? `${NAMES[f]} · ${count(meta.features[f].ruleCount, 'rule', 'rules')}` : NAMES[f]))),
-  h('p', { class: 'ui-meta' }, `Lists built on ${built.getDate()} ${MONTHS[built.getMonth()]} ${built.getFullYear()}. Rebuild Sieve to update them.`),
+  h(
+    'p',
+    { class: 'ui-meta' },
+    `Lists from ${listsAt.getDate()} ${MONTHS[listsAt.getMonth()]} ${listsAt.getFullYear()}. To update them, run pnpm --filter sieve build -- --refresh, then reload Sieve.`,
+  ),
 );
 
 let edited = false;

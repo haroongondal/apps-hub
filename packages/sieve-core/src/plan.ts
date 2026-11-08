@@ -4,7 +4,7 @@ import { FEATURES, isHost, type FeatureKey, type Settings } from './settings.ts'
 
 // What apps/sieve/build.mjs writes to dist/meta.json.
 export interface BuildMeta {
-  builtAt: string;
+  listsAt: string; // when the oldest downloaded list was fetched (ISO date): a plain rebuild reuses the cached lists
   maxPriority: number;
   features: Record<FeatureKey, { ruleset: string | null; ruleCount: number; hasGenericCss: boolean; genericExcept: string[]; allowIds: number[]; modifyIds: number[] }>;
   scriptlets: string[];

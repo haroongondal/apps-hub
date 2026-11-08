@@ -8,10 +8,10 @@ import { onMessage } from '../pick-handler.ts';
 
 const feature = (ruleset: string | null) => ({ ruleset, ruleCount: 10, hasGenericCss: false, genericExcept: [], allowIds: [], modifyIds: [] });
 const meta: BuildMeta = {
-  builtAt: '2026-11-06T00:00:00.000Z',
+  listsAt: '2026-11-06T00:00:00.000Z',
   maxPriority: 10,
   features: { ads: feature('ads'), trackers: feature('trackers'), distraction: feature('distraction'), cookies: feature('cookies'), antiadblock: feature('antiadblock'), ai: feature(null) },
-  scriptlets: ['set-constant', 'trusted-set-cookie'],
+  scriptlets: ['set-constant'],
 };
 type Rule = { id: number; action: { type: string } };
 type Update = { removeRuleIds?: number[]; addRules?: Rule[] };
@@ -42,13 +42,16 @@ function setup(settings: Settings, options: { refuse?: string; setFails?: boolea
     },
     declarativeNetRequest: {
       getDynamicRules: async () => structuredClone(dynamic),
-      updateDynamicRules: async (u: Update) => {
+      // Not async: the failed restore throws before returning a promise, the harder case for the caller.
+      updateDynamicRules: (u: Update) => {
         updates.push(u);
-        if (options.refuse) throw new Error(options.refuse);
         if (options.restoreFails && updates.length === 2) throw new Error('Chrome is not answering');
-        if (updates.length === 1) options.onApply?.();
-        await sleep(20);
-        dynamic = [...dynamic.filter((r) => !u.removeRuleIds?.includes(r.id)), ...(u.addRules ?? [])];
+        return (async () => {
+          if (options.refuse) throw new Error(options.refuse);
+          if (updates.length === 1) options.onApply?.();
+          await sleep(20);
+          dynamic = [...dynamic.filter((r) => !u.removeRuleIds?.includes(r.id)), ...(u.addRules ?? [])];
+        })();
       },
     },
     scripting: { insertCSS: async () => {} },
@@ -66,11 +69,14 @@ const withAllowlist: Settings = { ...DEFAULT_SETTINGS, blocking: { ...DEFAULT_SE
 
 test('valid lines are saved and applied with the allow rules in one call that replaces every earlier rule; bad lines come back by line number', async () => {
   const t = setup(withAllowlist);
-  const text = "||ads.example^\nnot a filter ##\nexample.com#%#//scriptlet('trusted-set-cookie', 'a', 'b')\n! a comment\n";
+  const text = "||ads.example^\nnot a filter ##\nexample.com#%#//scriptlet('set-constant', 'a', '1')\nexample.com#%#//scriptlet('trusted-set-cookie', 'a', 'b')\n! a comment\n";
   const out = await saveMyFilters(text);
   assert.equal(out.saved, 2);
   assert.equal(out.notSaved, undefined);
-  assert.deepEqual(out.errors, [{ line: 2, text: 'not a filter ##', reason: "Sieve can't read this line as a filter. Check it for typos and stray spaces." }]);
+  assert.deepEqual(out.errors, [
+    { line: 2, text: 'not a filter ##', reason: "Sieve can't read this line as a filter. Check it for typos and stray spaces." },
+    { line: 4, text: "example.com#%#//scriptlet('trusted-set-cookie', 'a', 'b')", reason: "trusted-set-cookie isn't available in this build. Remove the line." },
+  ]);
   assert.equal(t.updates.length, 1);
   assert.deepEqual(t.updates[0].removeRuleIds, [1]);
   assert.deepEqual(t.updates[0].addRules?.map((r) => [r.id, r.action.type]), [
@@ -81,8 +87,8 @@ test('valid lines are saved and applied with the allow rules in one call that re
   assert.deepEqual(t.settings().blocking.allowlist, withAllowlist.blocking.allowlist);
   assert.equal((t.store.get('myRules') as Rule[]).length, 1);
   assert.deepEqual(t.store.get('myRuleSources'), { 1: '||ads.example^' });
-  // My filters are the owner's own, so a trusted-* scriptlet the build ships is kept.
-  assert.deepEqual((t.store.get('myCosmetic') as { scriptlets: unknown }).scriptlets, { 'example.com': [{ name: 'trusted-set-cookie', args: ['a', 'b'] }] });
+  // The build ships only the scriptlets the lists use, never a trusted-* one, so that line is refused and the other kept.
+  assert.deepEqual((t.store.get('myCosmetic') as { scriptlets: unknown }).scriptlets, { 'example.com': [{ name: 'set-constant', args: ['a', '1'] }] });
 });
 
 test('when Chrome refuses the rules, nothing is stored, the earlier rules stay, and Chrome says why on line 0', async () => {
@@ -107,11 +113,16 @@ test('when storage refuses the write, the rules Chrome took are swapped back for
   assert.deepEqual(t.store.get('myRules'), [OLD_RULE]);
 });
 
-test('when storage refuses the write and Chrome then fails to take the earlier rules back, the save still says nothing was stored', async () => {
+test('when storage refuses the write and Chrome then fails to take the earlier rules back, the save still says nothing was stored, and logs the failure', async () => {
   const t = setup(withAllowlist, { setFails: true, restoreFails: true });
-  const out = await saveMyFilters('||a.example^\n||b.example^', 'old');
+  const logged: unknown[][] = [];
+  const error = console.error;
+  console.error = (...args: unknown[]) => void logged.push(args);
+  const out = await saveMyFilters('||a.example^\n||b.example^', 'old').finally(() => (console.error = error));
   assert.deepEqual(out, { saved: 0, errors: [{ line: 0, text: '', reason: TOO_MANY_TO_STORE }], notSaved: TOO_MANY_TO_STORE });
   assert.equal(t.updates.length, 2, 'the restore was tried once');
+  assert.equal(logged.length, 1);
+  assert.match(String(logged[0][1]), /Chrome is not answering/);
   // Chrome keeps the new rules until the worker's next apply rebuilds them from storage, which still holds the earlier ones.
   assert.equal(t.settings().blocking.myFilters, 'old');
   assert.deepEqual(t.store.get('myRules'), [OLD_RULE]);

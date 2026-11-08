@@ -69,14 +69,19 @@ test('rule ids count up from firstId in entry order', () => {
   assert.equal(ALLOW_FIRST_ID, 1_000_000);
 });
 
-test('excludePatterns: hosts with their subdomains, IPs exactly, pages as a prefix', () => {
-  assert.deepEqual(excludePatterns(['example.com', '10.0.0.1'], ['https://a.com/p']), ['*://*.example.com/*', '*://10.0.0.1/*', '*://a.com/p*']);
+test('excludePatterns: hosts with their subdomains, IPs exactly, pages exactly (Chrome matches the path and query, not the hash)', () => {
+  assert.deepEqual(excludePatterns(['example.com', '10.0.0.1'], ['https://a.com/p']), ['*://*.example.com/*', '*://10.0.0.1/*', '*://a.com/p']);
   assert.deepEqual(excludePatterns([], []), []);
 });
 
+test('excludePatterns: a home page entry covers that page only, not every page of the site, and a query is not a prefix', () => {
+  assert.deepEqual(excludePatterns([], ['https://www.bbc.com/']), ['*://www.bbc.com/']);
+  assert.deepEqual(excludePatterns([], ['https://a.com/watch?v=1']), ['*://a.com/watch?v=1']);
+});
+
 test('excludePatterns drops a page port, which Chrome refuses after `*://`; a pattern with no port matches every port', () => {
-  assert.deepEqual(excludePatterns(['localhost'], ['http://localhost:8080/x?y=1']), ['*://*.localhost/*', '*://localhost/x?y=1*']);
-  assert.deepEqual(excludePatterns([], ['https://[2001:db8::1]:8443/x']), ['*://[2001:db8::1]/x*']);
+  assert.deepEqual(excludePatterns(['localhost'], ['http://localhost:8080/x?y=1']), ['*://*.localhost/*', '*://localhost/x?y=1']);
+  assert.deepEqual(excludePatterns([], ['https://[2001:db8::1]:8443/x']), ['*://[2001:db8::1]/x']);
 });
 
 test('tabSite: the host loses one trailing dot and a leading www., and the page entry loses the hash and userinfo', () => {

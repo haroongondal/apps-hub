@@ -1,9 +1,9 @@
 import { isAllowed, tabSite } from '@apps-hub/sieve-core/src/allowlist.ts';
 import { countsKey, type Counts } from '@apps-hub/sieve-core/src/counts.ts';
-import { validateSettings, type AllowEntry, type FeatureKey, type Settings } from '@apps-hub/sieve-core/src/settings.ts';
+import { validateSettings, type AllowEntry, type Settings } from '@apps-hub/sieve-core/src/settings.ts';
 import { youtubeAdsOn, ytChannel } from '@apps-hub/sieve-core/src/youtube-ads.ts';
+import { NAMES, count, errorText, save, setBlocking, setList, toggle } from './controls.ts';
 import { h, type Child } from './dom.ts';
-import { withSettingsLock } from './lock.ts';
 
 interface State {
   settings: Settings;
@@ -31,22 +31,14 @@ const ytReply = tab?.id !== undefined && tabUrl?.hostname === 'www.youtube.com' 
 const ytFound = ytChannel(ytReply);
 const channel = ytFound && { id: ytFound.id, name: ytFound.name };
 let reloadHint = false;
-let pickFailed = false;
+let pickFailed: string | undefined;
 let liveCounts: Counts | undefined;
 
 const canAllowlist = (entry: AllowEntry) => validateSettings({ blocking: { allowlist: [entry] } }).blocking.allowlist.length > 0;
 
-const save = (edit: (s: Settings) => Settings): Promise<void> =>
-  withSettingsLock(async () => {
-    const { settings } = await chrome.storage.local.get('settings');
-    await chrome.storage.local.set({ settings: edit(validateSettings(settings)) });
-  });
-const setBlocking = (patch: Partial<Settings['blocking']>) => save((s) => ({ ...s, blocking: { ...s.blocking, ...patch } }));
-const setList = (feature: FeatureKey, on: boolean) => save((s) => ({ ...s, blocking: { ...s.blocking, lists: { ...s.blocking.lists, [feature]: on } } }));
-
-const toggle = (id: string, text: string, on: boolean, change: (on: boolean) => unknown) =>
-  h('label', { class: 'switch' }, h('span', {}, text), h('input', { type: 'checkbox', role: 'switch', checked: on, 'data-id': id, onchange: (e: Event) => change((e.target as HTMLInputElement).checked) }));
 const button = (id: string, text: string, onclick: () => unknown, props: Record<string, unknown> = {}) => h('button', { class: 'ui-btn', type: 'button', 'data-id': id, onclick, ...props }, text);
+const errorBanner = h('p', { class: 'banner banner--danger', role: 'alert' });
+const SWAPS: Record<string, string> = { pause: 'resume', resume: 'pause' };
 
 // The picker lives in the page, so the menu only starts it and gets out of the way.
 async function pickItem(): Promise<void> {
@@ -56,12 +48,14 @@ async function pickItem(): Promise<void> {
     window.close();
   } catch (e) {
     console.error('Sieve could not open the item picker', e);
-    pickFailed = true;
+    // Chrome never lets extensions script some pages (the Chrome Web Store); a reload can't help there.
+    pickFailed = /cannot be scripted/i.test(e instanceof Error ? e.message : String(e))
+      ? "Sieve can't open the item picker on this page."
+      : "Sieve couldn't open the item picker here. Reload this page, then try again.";
     await render();
   }
 }
 
-const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const countsText = (c: Counts) => `${count(c.ads, 'ad', 'ads')} and ${count(c.trackers, 'tracker', 'trackers')} blocked on this page`;
 
 function blockingView({ settings: s, error, counts }: State): Child[] {
@@ -98,18 +92,18 @@ function blockingView({ settings: s, error, counts }: State): Child[] {
       { class: 'ui-group card' },
       h('p', { class: 'ui-heading host' }, host),
       canAllowlist({ kind: 'site', host })
-        ? toggle('site', 'Block on this site', !isAllowed(page, entries.filter((e) => e.kind === 'site')), allowSite)
+        ? toggle('Block on this site', !isAllowed(page, entries.filter((e) => e.kind === 'site')), allowSite, { 'data-id': 'site' })
         : h('p', { class: 'ui-meta' }, "Sieve can't turn blocking off for this address."),
       channel !== null &&
         youtubeAdsOn(s, page) &&
-        toggle('yt-channel', `Allow ads on ${channel.name}`, s.blocking.youtubeAllowedChannels.some((c) => c.id === channel.id), allowChannel),
+        toggle(`Allow ads on ${channel.name}`, s.blocking.youtubeAllowedChannels.some((c) => c.id === channel.id), allowChannel, { 'data-id': 'yt-channel' }),
       h('p', { class: 'counts' }, countsText(counts)),
       h(
         'div',
         { class: 'actions' },
         // Where blocking is off a saved pick would not show after a reload, and an address Sieve can't write a filter for has no host to save it under.
         button('pick', 'Block an item on this page', pickItem, { disabled: !canAllowlist({ kind: 'site', host }) || s.blocking.paused || isAllowed(page, entries) }),
-        pickFailed && h('p', { class: 'ui-meta', role: 'alert' }, "Sieve couldn't open the item picker here. Reload this page, then try again."),
+        pickFailed !== undefined && h('p', { class: 'ui-meta', role: 'alert' }, pickFailed),
         button('page', pageEntry ? 'Resume on this page' : 'Pause on this page', pausePage, { disabled: !canAllowlist({ kind: 'page', url: page }) }),
         reloadHint && h('p', { class: 'ui-meta' }, 'Reload this page to see the change.'),
       ),
@@ -118,13 +112,12 @@ function blockingView({ settings: s, error, counts }: State): Child[] {
   const switches = h(
     'section',
     { class: 'ui-group switches' },
-    toggle('distraction', 'Distraction control', s.blocking.lists.distraction, (on) => setList('distraction', on)),
-    toggle('cookies', 'Cookie banners', s.blocking.lists.cookies, (on) => setList('cookies', on)),
-    toggle('ai', 'AI search summaries', s.blocking.lists.ai, (on) => setList('ai', on)),
-    toggle('notifications', 'Site notification requests', s.blocking.denyNotifications, (on) => setBlocking({ denyNotifications: on })),
+    ...(['distraction', 'cookies', 'ai'] as const).map((f) => toggle(NAMES[f], s.blocking.lists[f], (on) => setList(f, on), { 'data-id': f })),
+    toggle('Site notification requests', s.blocking.denyNotifications, (on) => setBlocking({ denyNotifications: on }), { 'data-id': 'notifications' }),
   );
+  if (error !== undefined && errorBanner.textContent !== errorText(error)) errorBanner.textContent = errorText(error);
   return [
-    error !== undefined && h('p', { class: 'banner banner--danger', role: 'alert' }, `${/[.!?]$/.test(error) ? error : `${error}.`} Turn a list off in Settings to make room.`),
+    error !== undefined && errorBanner,
     s.blocking.paused && h('div', { class: 'banner banner--warn', role: 'status' }, h('span', {}, 'Blocking is paused everywhere'), button('resume', 'Resume', () => setBlocking({ paused: false }))),
     h('div', { class: 'stack', inert: !s.enabled }, here, switches, !s.blocking.paused && button('pause', 'Pause everywhere', () => setBlocking({ paused: true }))),
   ];
@@ -135,7 +128,7 @@ let current = tabs[0].id;
 
 function view(state: State): Child[] {
   return [
-    h('header', { class: 'bar' }, h('h1', { class: 'ui-heading' }, 'Sieve'), toggle('enabled', 'Sieve on', state.settings.enabled, (on) => save((s) => ({ ...s, enabled: on })))),
+    h('header', { class: 'bar' }, h('h1', { class: 'ui-heading' }, 'Sieve'), toggle('Sieve on', state.settings.enabled, (on) => save((s) => ({ ...s, enabled: on })), { 'data-id': 'enabled' })),
     tabs.length > 1 &&
       h(
         'nav',
@@ -162,8 +155,16 @@ async function render(): Promise<void> {
     counts: liveCounts,
   };
   const focused = document.activeElement?.getAttribute('data-id');
-  root.replaceChildren(...view(state).filter((c): c is Node => !!c));
-  if (focused) root.querySelector<HTMLElement>(`[data-id="${focused}"]`)?.focus();
+  const nodes = view(state).filter((c): c is Node => !!c);
+  // The error banner stays in the page while it shows, so a screen reader announces it once, not on every change.
+  const at = nodes.indexOf(errorBanner);
+  if (at >= 0 && errorBanner.parentNode === root) {
+    for (const node of [...root.childNodes]) if (node !== errorBanner) node.remove();
+    errorBanner.before(...nodes.slice(0, at));
+    errorBanner.after(...nodes.slice(at + 1));
+  } else root.replaceChildren(...nodes);
+  // "Pause everywhere" and "Resume" replace each other, so focus moves to the one that took the place of the button pressed.
+  if (focused) (root.querySelector<HTMLElement>(`[data-id="${focused}"]`) ?? root.querySelector<HTMLElement>(`[data-id="${SWAPS[focused]}"]`))?.focus();
 }
 
 // A count change only edits the number: rebuilding the menu under the pointer would lose a click that began on the old switch.

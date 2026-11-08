@@ -36,17 +36,33 @@ function clean<T>(value: T): T {
   return value;
 }
 
+// The wrapper's toString gives the native's text, as the lists' own json-prune does, and that toString's own toString does too;
+// non-enumerable, so the wrapper's keys stay the native's (none).
+const nativeToString = Function.prototype.toString;
+function asNative<T extends object>(wrapper: T, native: object): T {
+  const toString = nativeToString.bind(native);
+  Object.defineProperty(toString, 'toString', { value: nativeToString.bind(nativeToString), writable: true, configurable: true });
+  Object.defineProperty(wrapper, 'toString', { value: toString, writable: true, configurable: true });
+  return wrapper;
+}
+
 // Method shorthand, like the natives: no prototype, and `new` throws.
-JSON.parse = {
-  parse(_text: string, _reviver?: unknown) {
-    return clean(apply(nativeParse, this, arguments));
-  },
-}.parse;
-Response.prototype.json = {
-  json() {
-    return apply(nativeJson, this, arguments).then(clean);
-  },
-}.json;
+JSON.parse = asNative(
+  {
+    parse(_text: string, _reviver?: unknown) {
+      return clean(apply(nativeParse, this, arguments));
+    },
+  }.parse,
+  nativeParse,
+);
+Response.prototype.json = asNative(
+  {
+    json() {
+      return apply(nativeJson, this, arguments).then(clean);
+    },
+  }.json,
+  nativeJson,
+);
 
 // The inline `var ytInitialPlayerResponse = …` runs before the settings arrive, so a value set then is checked when first read.
 let initial: unknown;

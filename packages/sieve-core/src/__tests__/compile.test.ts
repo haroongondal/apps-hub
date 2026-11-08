@@ -137,14 +137,10 @@ test('a $document exception also turns off cosmetic filtering and scriptlets on 
   assert.deepEqual(out.cosmetic.scriptletExcept, { 'example.com': ['*'], 'example.org': ['*'] });
 });
 
-test('trusted-* scriptlets are dropped unless the list is trusted', async () => {
-  const text = "example.com#%#//scriptlet('trusted-set-cookie', 'a', 'b')";
-  const untrusted = await compileFilters(text, { firstId: 1 });
-  assert.equal(untrusted.dropped['trusted-scriptlet'], 1);
-  assert.deepEqual(untrusted.cosmetic.scriptlets, {});
-  const trusted = await compileFilters(text, { firstId: 1, trusted: true });
-  assert.deepEqual(trusted.cosmetic.scriptlets, { 'example.com': [{ name: 'trusted-set-cookie', args: ['a', 'b'] }] });
-  assert.deepEqual(trusted.dropped, {});
+test('trusted-* scriptlets in a list are dropped', async () => {
+  const out = await compileFilters("example.com#%#//scriptlet('trusted-set-cookie', 'a', 'b')", { firstId: 1 });
+  assert.deepEqual(out.dropped, { 'trusted-scriptlet': 1 });
+  assert.deepEqual(out.cosmetic.scriptlets, {});
 });
 
 test('hide exceptions: $specifichide, both kinds at once, URL-style patterns, from=, and $badfilter', async () => {
@@ -238,11 +234,11 @@ test('a dropped filter keeps its line in skipped, and filterLines counts every l
 test('with scriptlets given, a scriptlet outside them is an error on its line; exceptions and listed ones pass', async () => {
   const out = await compileFilters(
     ['example.com##+js(aopr, x)', "example.com#%#//scriptlet('trusted-set-cookie', 'a', 'b')", 'example.com##+js(nosuch, y)', 'example.com#@#+js(set-constant, z, 1)'].join('\n'),
-    { firstId: 1, trusted: true, scriptlets: ['abort-on-property-read'] },
+    { firstId: 1, scriptlets: ['abort-on-property-read'] },
   );
   assert.deepEqual(out.errors.map((e) => [e.line, e.reason]), [
-    [2, "trusted-set-cookie isn't available in this build"],
-    [3, "nosuch isn't available in this build"],
+    [2, "trusted-set-cookie isn't available in this build. Remove the line."],
+    [3, "nosuch isn't available in this build. Remove the line."],
   ]);
   assert.deepEqual(out.cosmetic.scriptlets, { 'example.com': [{ name: 'abort-on-property-read', args: ['x'] }] });
   assert.deepEqual(out.cosmetic.scriptletExcept, { 'example.com': [scriptletKey({ name: 'set-constant', args: ['z', '1'] })] });

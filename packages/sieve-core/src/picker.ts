@@ -8,14 +8,16 @@ export interface ElementInfo {
 }
 
 const PLAIN_ID = /^[A-Za-z][\w-]*$/;
-const generated = (cls: string) => cls.replace(/\D/g, '').length >= 3;
+// An id or class with 3 or more digits is generated (`css-1q2w3e`, `ember1234`) and changes on reload.
+const generated = (name: string) => name.replace(/\D/g, '').length >= 3;
 
+// Whitespace a class can hold (U+00A0, U+3000, U+FEFF…) is hex-escaped like a control character: the filter line is trimmed when compiled.
 function escapeIdent(s: string): string {
   return [...s]
     .map((c, i) => {
       const code = c.codePointAt(0) as number;
       if (code === 0) return '�';
-      if (code < 0x20 || code === 0x7f || (c >= '0' && c <= '9' && (i === 0 || (i === 1 && s[0] === '-')))) return `\\${code.toString(16)} `;
+      if (code < 0x20 || code === 0x7f || /\s/.test(c) || (c >= '0' && c <= '9' && (i === 0 || (i === 1 && s[0] === '-')))) return `\\${code.toString(16)} `;
       if (c === '-' && s.length === 1) return '\\-';
       return code >= 0x80 || /[\w-]/.test(c) ? c : `\\${c}`;
     })
@@ -23,7 +25,7 @@ function escapeIdent(s: string): string {
 }
 
 export function simpleSelector(info: ElementInfo): string {
-  if (PLAIN_ID.test(info.id)) return `#${info.id}`;
+  if (PLAIN_ID.test(info.id) && !generated(info.id)) return `#${info.id}`;
   const classes = info.classes.filter((c) => !generated(c));
   const tag = escapeIdent(info.tag);
   return classes.length ? `${tag}${classes.map((c) => `.${escapeIdent(c)}`).join('')}` : `${tag}:nth-of-type(${info.nth})`;

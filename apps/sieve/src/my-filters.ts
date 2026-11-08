@@ -17,7 +17,7 @@ const notSaved = (reason: string, errors: SaveResult['errors'] = []): SaveResult
 
 export async function saveMyFilters(text: string, base?: string): Promise<SaveResult> {
   const meta = (await (await fetch(chrome.runtime.getURL('meta.json'))).json()) as BuildMeta;
-  const compiled = await compileFilters(text, { firstId: 1, trusted: true, scriptlets: meta.scriptlets });
+  const compiled = await compileFilters(text, { firstId: 1, scriptlets: meta.scriptlets });
   const errors = [...compiled.errors, ...compiled.skipped].sort((a, b) => a.line - b.line).map((e) => ({ ...e, reason: plainReason(e.reason) }));
   // The lock covers the check, Chrome's rules and the write, not the slow compile: a pick or a switch waits only for those.
   return withSettingsLock(async () => {
@@ -40,7 +40,11 @@ export async function saveMyFilters(text: string, base?: string): Promise<SaveRe
       });
     } catch {
       // If putting the earlier rules back fails too, the answer is still "not saved": the worker's next apply sets Chrome's rules from storage, which still holds the earlier ones.
-      await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: dynamicRules.map((r) => r.id), addRules: previous }).catch(() => {});
+      try {
+        await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: dynamicRules.map((r) => r.id), addRules: previous });
+      } catch (e) {
+        console.error('Sieve could not put the earlier My filters rules back', e);
+      }
       return notSaved(TOO_MANY_TO_STORE, errors);
     }
     if (!s.enabled || s.blocking.paused) await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: dynamicRules.map((r) => r.id) });

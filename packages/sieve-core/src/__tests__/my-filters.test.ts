@@ -19,22 +19,30 @@ test('what the compiler says about a bad My filters line comes out in plain word
     '||x.com^$domain=',
     'example.com##+js(aopr',
     'example.com##',
+    '||x.com^$empty',
+    '||x.com^$elemhide',
+    '$domain=a.com|',
+    '/[/',
   ];
-  const out = await compileFilters(lines.join('\n'), { firstId: 1, trusted: true, scriptlets: ['abort-on-property-read'] });
+  const out = await compileFilters(lines.join('\n'), { firstId: 1, scriptlets: ['abort-on-property-read'] });
   const said = [...out.errors, ...out.skipped].sort((a, b) => a.line - b.line).map((e) => [e.line, plainReason(e.reason)]);
   assert.deepEqual(said, [
     [1, "Sieve can't read this line as a filter. Check it for typos and stray spaces."],
     [2, "Chrome can't run this regular expression. Take out lookarounds and back-references, or block a plain address."],
     [3, "Sieve doesn't know the option $frobnicate. Check its spelling, or remove it."],
     [4, "This selector isn't valid CSS. Check its brackets and quotes."],
-    [5, "trusted-set-cookie isn't available in this build"],
-    [6, "nosuch isn't available in this build"],
+    [5, "trusted-set-cookie isn't available in this build. Remove the line."],
+    [6, "nosuch isn't available in this build. Remove the line."],
     [7, 'This filter would block every site. Add an address, or limit it with $domain=.'],
     [8, "Chrome can't run extended selectors such as :has-text(). Use a plain CSS selector."],
-    [9, "Sieve can't swap a request for a stand-in file. Remove $redirect to block the request instead."],
+    [9, "Sieve can't swap a request for a stand-in file. Remove $redirect, $empty or $mp4 to block the request instead."],
     [10, 'An option is missing its value after =. Add the value, or remove the option.'],
     [11, "This scriptlet call isn't complete. Check its brackets and quotes."],
     [12, 'This filter has nothing after ##. Add a selector.'],
+    [13, "Sieve can't swap a request for a stand-in file. Remove $redirect, $empty or $mp4 to block the request instead."],
+    [14, 'This option only works in an exception. Start the line with @@, or remove the option.'],
+    [15, "An option's list has an empty entry. Remove the extra | or ~."],
+    [16, 'This filter is so short it would match almost every address. Write more of the address, or limit it with $domain=.'],
   ]);
   assert.equal(plainReason('Some message Sieve has not seen'), 'Some message Sieve has not seen');
 });

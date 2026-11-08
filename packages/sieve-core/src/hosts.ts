@@ -1,5 +1,6 @@
 // The host, each parent domain, and each of those with its last one or two labels as `*` (for `google.*` filters).
-// shortcut: no public-suffix list; extra candidates such as co.uk match nothing.
+// shortcut: no public-suffix list, so `google.github.io` also gets `google.*` and the lists' `google.*` rules apply there;
+// if one misfires, add the two-label `*` only when the second-to-last label is a suffix like co, com or org.
 export function hostCandidates(hostname: string): string[] {
   const host = hostname.toLowerCase().replace(/\.$/, '');
   if (!host.includes('.') || host.includes(':') || /^[\d.]+$/.test(host)) return host ? [host] : [];

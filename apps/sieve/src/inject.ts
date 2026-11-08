@@ -12,9 +12,20 @@ const RULE_END = '{display:none!important}';
 // Frames that went away, and pages Chrome never lets extensions script (the Chrome Web Store).
 const GONE = /No (?:tab|frame|document) with id|Invalid document id|was removed|showing error page|tab was closed|cannot be scripted/i;
 
+// A failed read is forgotten, so the next page tries again (a build may have been rewriting dist).
 const files = new Map<string, Promise<unknown>>();
 function load<T>(path: string, read: (r: Response) => Promise<T>): Promise<T> {
-  if (!files.has(path)) files.set(path, fetch(chrome.runtime.getURL(path)).then(read));
+  if (!files.has(path)) {
+    files.set(
+      path,
+      fetch(chrome.runtime.getURL(path))
+        .then(read)
+        .catch((e) => {
+          files.delete(path);
+          throw e;
+        }),
+    );
+  }
   return files.get(path) as Promise<T>;
 }
 const cosmetic = (f: string) => load(`cosmetic/${f}.json`, async (r) => ({ generic: [] as string[], ...((await r.json()) as Omit<CosmeticSet, 'generic'>) }));
@@ -57,7 +68,13 @@ export async function onCommitted(d: Committed): Promise<void> {
   if (tops.has(d.documentId)) return;
   try {
     const [{ settings: s, mine }, meta, top] = await Promise.all([
-      (stored ??= chrome.storage.local.get(['settings', 'myCosmetic']).then((r) => ({ settings: validateSettings(r.settings), mine: storedCosmetic(r.myCosmetic) }))),
+      (stored ??= chrome.storage.local
+        .get(['settings', 'myCosmetic'])
+        .then((r) => ({ settings: validateSettings(r.settings), mine: storedCosmetic(r.myCosmetic) }))
+        .catch((e) => {
+          stored = undefined;
+          throw e;
+        })),
       load('meta.json', (r) => r.json() as Promise<BuildMeta>),
       topUrl(d),
     ]);

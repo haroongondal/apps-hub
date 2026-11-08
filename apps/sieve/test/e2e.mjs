@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { isDeepStrictEqual as same } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { AD_HOST, SITE_HOST, TRACKER_HOST, UNHIDE_HOST, check, launch, results, startServers, startWorker, stopWorker } from './harness.mjs';
+import { checkPageEntry } from './page-entry.mjs';
 import { checkMovePanel } from './picker-move.mjs';
 
 const RULESETS = ['ads', 'trackers', 'distraction', 'cookies', 'antiadblock'];
@@ -38,7 +39,7 @@ const visit = async (ctx, url) => {
   return [...servers.hits];
 };
 
-// [promise answer, callback answer, PushManager.subscribe outcome]
+// [promise answer, callback answer, PushManager.subscribe outcome, requestPermission is the browser's own (no blocker)]
 const askNotifications = async (ctx, url) => {
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
@@ -47,6 +48,7 @@ const askNotifications = async (ctx, url) => {
     await Notification.requestPermission(),
     await new Promise((r) => Notification.requestPermission(r)),
     await PushManager.prototype.subscribe.call({}).then(() => 'subscribed', (e) => e.name),
+    Function.prototype.toString.call(Notification.requestPermission).includes('[native code]'),
   ]);
   await page.close();
   return out;
@@ -156,12 +158,12 @@ try {
   s = await settle(sw, (s) => s.dynamic.length === 3 && excludes('*://192.168.1.10/*')(s));
   check(
     'Chrome accepts an IP site entry and a page entry in the allow rules and the excluded patterns',
-    s.dynamic.length === 3 && !s.error && s.scripts.every((r) => r.excludeMatches?.includes('*://192.168.1.10/*') && r.excludeMatches.includes('*://127.0.0.1/ads.html*')),
+    s.dynamic.length === 3 && !s.error && s.scripts.every((r) => r.excludeMatches?.includes('*://192.168.1.10/*') && r.excludeMatches.includes('*://127.0.0.1/ads.html')),
     json({ rules: s.dynamic.length, error: s.error }),
   );
   hits = await visit(ctx, ADS_IP);
   const pageAnswers = await askNotifications(ctx, ADS_IP);
-  check('an allowlisted page with a port gets its ad request through and no notification blocker', hits.includes('/pagead/x.js') && pageAnswers.join() === 'granted,granted,TypeError', json({ hits, pageAnswers }));
+  check('an allowlisted page with a port gets its ad request through and no notification blocker', hits.includes('/pagead/x.js') && pageAnswers.join() === 'granted,granted,TypeError,true', json({ hits, pageAnswers }));
   await setBlocking(sw, { allowlist: [{ kind: 'site', host: 'localhost' }] });
   s = await settle(sw, (s) => s.dynamic.length === 1 && !s.scripts.some((r) => r.excludeMatches?.includes('*://192.168.1.10/*')));
   await sleep(300); // let that run finish its last call before counting
@@ -237,14 +239,22 @@ try {
     json({ fresh, rules: s.dynamic.map((r) => r.id), scripts: ids(s) }),
   );
 
+  await ctx.clearPermissions();
   let answers = await askNotifications(ctx, ADS_IP);
-  check('with Site notification requests on, a page is told "denied" and cannot subscribe to push', answers.join() === 'denied,denied,NotAllowedError', json(answers));
+  check('with Site notification requests on, a site that has not been answered yet is told "denied" and cannot subscribe to push', answers.join() === 'denied,denied,NotAllowedError,false', json(answers));
+  await ctx.grantPermissions(['notifications']);
+  answers = await askNotifications(ctx, ADS_IP);
+  check(
+    "with Site notification requests on, a site the owner already allowed gets Chrome's own answers: granted, and the browser's own push subscribe",
+    answers.join() === 'granted,granted,TypeError,false',
+    json(answers),
+  );
   answers = await askNotifications(ctx, ADS);
-  check('on an allowlisted site, the page gets its real notification permission', answers.join() === 'granted,granted,TypeError', json(answers));
+  check('on an allowlisted site, the page gets its real notification permission and no blocker', answers.join() === 'granted,granted,TypeError,true', json(answers));
   await setBlocking(sw2, { denyNotifications: false });
   s = await settle(sw2, (s) => !ids(s).includes('deny-notifications'));
   answers = await askNotifications(ctx, ADS_IP);
-  check('with Site notification requests off, the page gets its real permission', !ids(s).includes('deny-notifications') && answers.join() === 'granted,granted,TypeError', json(answers));
+  check('with Site notification requests off, the page gets its real permission and no blocker', !ids(s).includes('deny-notifications') && answers.join() === 'granted,granted,TypeError,true', json(answers));
 
   await setBlocking(sw2, { allowlist: [] });
   // Some lists exempt localhost from their generic CSS themselves (genericExcept), so only the others must drop it.
@@ -529,13 +539,19 @@ try {
     const restored = await until(async () => read(await blockingOf(sw4)), (v) => v === was);
     check(`the "${label}" switch changes its setting and changes it back`, flipped === !was && restored === was, json({ flipped, restored }));
   }
-  await buttonOf('Pause everywhere').click();
+  const focusedText = () => m.pop.evaluate(() => document.activeElement?.textContent);
+  await buttonOf('Pause everywhere').focus();
+  await m.pop.keyboard.press('Enter');
   await m.pop.getByText('Blocking is paused everywhere').waitFor();
   s = await settle(sw4, (st) => st.enabled.length === 0);
   check('"Pause everywhere" pauses blocking, and the menu says so with a Resume button in place of it', (await blockingOf(sw4)).paused === true && s.enabled.length === 0 && (await buttonOf('Pause everywhere').count()) === 0, json({ enabled: s.enabled }));
-  await buttonOf('Resume').click();
+  const afterPause = await focusedText();
+  await m.pop.keyboard.press('Enter');
+  await buttonOf('Pause everywhere').waitFor();
   s = await settle(sw4, listsOn);
   check('"Resume" brings blocking back', (await blockingOf(sw4)).paused === false && listsOn(s), json({ enabled: s.enabled }));
+  const afterResume = await focusedText();
+  check('from the keyboard, "Pause everywhere" hands focus to "Resume" and back, instead of dropping it', afterPause === 'Resume' && afterResume === 'Pause everywhere', json({ afterPause, afterResume }));
   await m.pop.getByRole('switch', { name: 'Sieve on' }).uncheck();
   s = await settle(sw4, (st) => st.enabled.length === 0);
   check('the "Sieve on" switch turns Sieve off, and the rest of the menu goes inert', s.enabled.length === 0 && (await m.pop.locator('.stack[inert]').count()) === 1, json({ enabled: s.enabled }));
@@ -546,7 +562,16 @@ try {
   await sw4.evaluate(() => chrome.storage.session.set({ blockingError: { message: 'Chrome refused a rule', at: Date.now() } }));
   await m.pop.getByRole('alert').waitFor();
   const banner = await m.pop.getByRole('alert').innerText();
-  check('the error banner shows the stored message, then how to fix it', banner === 'Chrome refused a rule. Turn a list off in Settings to make room.', banner);
+  check('the error banner shows the stored message, then how to fix it', banner === 'Chrome refused a rule. Open Settings and check My filters, or reload Sieve from chrome://extensions.', banner);
+  await m.pop.evaluate(() => (document.querySelector('.banner--danger').dataset.seen = 'yes'));
+  await sw4.evaluate(() => chrome.storage.session.set({ blockingError: { message: 'The set of enabled rulesets exceeds the rule count limit.', at: Date.now() } }));
+  await m.pop.getByText('Turn a list off in Settings to make room.', { exact: false }).waitFor();
+  const bannerKept = await m.pop.evaluate(() => [document.querySelectorAll('[role=alert]').length, document.querySelector('.banner--danger')?.dataset.seen, document.querySelector('.banner--danger')?.textContent]);
+  check(
+    "a redraw keeps the same alert node, so a screen reader does not announce the error again on every change, and a new error only updates its text; Chrome's rule limit says to turn a list off",
+    same(bannerKept, [1, 'yes', 'The set of enabled rulesets exceeds the rule count limit. Turn a list off in Settings to make room.']),
+    json(bannerKept),
+  );
   await sw4.evaluate(() => chrome.storage.session.remove('blockingError'));
   await m.pop.getByRole('alert').waitFor({ state: 'detached' });
   await m.pop.close();
@@ -873,15 +898,15 @@ try {
   const optSwitch = (name) => opt.getByRole('switch', { name, exact: true });
   const labelsIn = (n) => opt.locator('section').nth(n).locator('label.switch').allInnerTexts();
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const builtAt = new Date(meta.builtAt);
-  const footer = `Lists built on ${builtAt.getDate()} ${MONTHS[builtAt.getMonth()]} ${builtAt.getFullYear()}. Rebuild Sieve to update them.`;
+  const listsAt = new Date(meta.listsAt);
+  const footer = `Lists from ${listsAt.getDate()} ${MONTHS[listsAt.getMonth()]} ${listsAt.getFullYear()}. To update them, run pnpm --filter sieve build -- --refresh, then reload Sieve.`;
   const NAMES = { ads: 'Ads', trackers: 'Trackers', distraction: 'Distraction control', cookies: 'Cookie banners', antiadblock: 'Ad blocker warnings', ai: 'AI search summaries' };
   const rows = Object.entries(NAMES).map(([f, name]) => (meta.features[f].ruleCount ? `${name} · ${meta.features[f].ruleCount.toLocaleString('en-US')} rules` : name));
   const headings = await opt.getByRole('heading', { level: 2 }).allInnerTexts();
   const blockingLabels = (await labelsIn(0)).map((t) => t.trim());
   const rowLabels = (await labelsIn(1)).map((t) => t.trim());
   check(
-    `the settings page has Blocking (the menu's four switches, Ad blocker warnings and Trackers), Filter lists ("${rows[0]}", AI search summaries by name only), My filters and Allowlist, and says when the lists were built`,
+    `the settings page has Blocking (the menu's four switches, Ad blocker warnings and Trackers), Filter lists ("${rows[0]}", AI search summaries by name only), My filters and Allowlist, and says how old the lists are and how to refresh them`,
     same(headings, ['Blocking', 'Filter lists', 'My filters', 'Allowlist']) &&
       same(blockingLabels, ['Distraction control', 'Cookie banners', 'AI search summaries', 'Site notification requests', 'Ad blocker warnings', 'Trackers']) &&
       same(rowLabels, rows) &&
@@ -1394,9 +1419,11 @@ try {
     json({ ads: adsIn(yr), sameData: yr.sameData, wrapped: yr.wrapped, settings: (await pw.evaluate(() => chrome.storage.local.get('settings'))).settings }),
   );
   check(
-    "JSON.parse and Response.json act as the browser's own: same name, length, no prototype, `new` throws TypeError, the same SyntaxError for bad JSON and TypeError for a wrong this, a reviver runs, a short array loses its ad fields and other values pass through",
+    "JSON.parse and Response.json act as the browser's own: same name, length, toString text (and toString's own), no own keys, no prototype, `new` throws TypeError, the same SyntaxError for bad JSON and TypeError for a wrong this, a reviver runs, a short array loses its ad fields and other values pass through",
     same(yr.shape, yr.nativeShape) &&
       same(yr.shape, [['parse', 2, false], ['json', 0, false]]) &&
+      same(yr.text, yr.nativeText) &&
+      yr.text[0][0] === 'function parse() { [native code] }' &&
       same(yr.construct, yr.nativeConstruct) &&
       same(yr.construct, ['TypeError', 'TypeError']) &&
       yr.badParse?.[0] === 'SyntaxError' &&
@@ -1406,7 +1433,7 @@ try {
       same(yr.wrongThis, yr.nativeWrongThis) &&
       same(yr.reviver, { a: 10, b: [20] }) &&
       same(yr.plain, [5, 'x', null, [1, {}], [1, 2, 3, 4, 5, { adSlots: 1 }]]),
-    JSON.stringify({ shape: [yr.shape, yr.nativeShape], construct: [yr.construct, yr.nativeConstruct], bad: [yr.badParse, yr.nativeBadParse, yr.badJson, yr.nativeBadJson], wrongThis: [yr.wrongThis, yr.nativeWrongThis], reviver: yr.reviver, plain: yr.plain }),
+    JSON.stringify({ shape: [yr.shape, yr.nativeShape], text: [yr.text, yr.nativeText], construct: [yr.construct, yr.nativeConstruct], bad: [yr.badParse, yr.nativeBadParse, yr.badJson, yr.nativeBadJson], wrongThis: [yr.wrongThis, yr.nativeWrongThis], reviver: yr.reviver, plain: yr.plain }),
   );
 
   await yt.evaluate((real) => {
@@ -1488,6 +1515,7 @@ try {
   );
   check('the YouTube pages logged no errors', ytProblems.length === 0, json(ytProblems));
   await yt.close();
+  await checkPageEntry({ ctx, sw: pw, meta });
 
   const lateWarnings = await cardProblems();
   check('after the worker and the menu ran all of this, the extension card still shows no warning or error', lateWarnings.length === 0, json(lateWarnings));

@@ -6,7 +6,7 @@ import { onPanelConnect } from '../panels.ts';
 
 const feature = (ruleset: string | null, allowIds: number[] = [], modifyIds: number[] = []) => ({ ruleset, ruleCount: 10, hasGenericCss: false, genericExcept: [], allowIds, modifyIds });
 const meta: BuildMeta = {
-  builtAt: '2026-11-06T00:00:00.000Z',
+  listsAt: '2026-11-06T00:00:00.000Z',
   maxPriority: 10,
   features: { ads: feature('ads', [7]), trackers: feature('trackers'), distraction: feature('distraction'), cookies: feature('cookies'), antiadblock: feature('antiadblock', [], [5]), ai: feature(null) },
   scriptlets: [],

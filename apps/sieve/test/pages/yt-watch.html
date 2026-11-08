@@ -49,6 +49,8 @@
           nativeWrongThis: await failure(() => viaNative(native.Response.prototype.json)({})),
           shape: [JSON.parse, Response.prototype.json].map((f) => [f.name, f.length, 'prototype' in f]),
           nativeShape: [native.JSON.parse, native.Response.prototype.json].map((f) => [f.name, f.length, 'prototype' in f]),
+          text: [JSON.parse, Response.prototype.json].map((f) => [f.toString(), String(f), f.toString.toString(), Object.keys(f)]),
+          nativeText: [native.JSON.parse, native.Response.prototype.json].map((f) => [f.toString(), String(f), f.toString.toString(), Object.keys(f)]),
           construct: [await failure(() => new JSON.parse('1')), await failure(() => new Response.prototype.json())].map((e) => e?.[0]),
           nativeConstruct: [await failure(() => new native.JSON.parse('1')), await failure(() => new native.Response.prototype.json())].map((e) => e?.[0]),
           reviver: JSON.parse('{"a":1,"b":[2]}', (k, v) => (typeof v === 'number' ? v * 10 : v)),

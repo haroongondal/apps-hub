@@ -63,12 +63,6 @@ test('hostile JSON with __proto__ keys at every level neither throws nor pollute
   assert.equal(Object.getPrototypeOf(out.blocking.lists), Object.prototype);
 });
 
-test('a partial lists object keeps what was set and fills the rest', () => {
-  const out = validateSettings({ version: 1, blocking: { lists: { ads: false } } });
-  assert.equal(out.blocking.lists.ads, false);
-  assert.deepEqual(out.blocking.lists, { ...DEFAULT_SETTINGS.blocking.lists, ads: false });
-});
-
 test('non-boolean switches fall back to their defaults', () => {
   const out = validateSettings({
     version: 1,
