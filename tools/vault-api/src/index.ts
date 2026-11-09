@@ -95,11 +95,11 @@ async function route(req: Request, env: Env, now: () => number, sleep: (ms: numb
       return json({ headerRev: 1 });
     }
     if (body.ifRev === undefined) return fail(400, 'Send ifRev, the header revision this change is based on.');
-    const stored = body.recoveryHash !== undefined && !escrow ? await getAccount(db) : null;
+    const stored = body.recoveryHash !== undefined ? await getAccount(db) : null;
     const headerRev = await updateAccount(db, body, body.ifRev);
     if (headerRev === null) return fail(409, 'The account changed on another device. Pull and try again.');
+    if (stored && stored.recoveryHash !== body.recoveryHash) await clearEscrow(db);
     if (escrow) await setEscrow(db, escrow.email, escrow.blob, now());
-    else if (stored && stored.recoveryHash !== body.recoveryHash) await clearEscrow(db);
     return json({ headerRev });
   }
 

@@ -264,3 +264,72 @@ test('DELETE /v1/escrow needs the login role', async () => {
   assert.deepEqual(r, { status: 200, body: { ok: true } });
   assert.equal(w.escrowRow(), undefined);
 });
+
+test('re-enrolling escrow with a rotated recoveryHash invalidates an old confirmed lost_request', async () => {
+  const w = world();
+  await setUp(w);
+  const recoveryA = await enroll(w, 'owner@example.com', 'blob-A');
+  const oldClaim = randomBytes(32);
+  await w.call('POST', '/v1/lost/request', undefined, { claimHash: tokenHash(oldClaim) });
+  await w.call('GET', `/v1/lost/confirm?t=${tokenParam(w.mails[0].text)}`);
+  assert.equal(w.lostRow()?.releaseAt, NOW + DAY);
+
+  const recoveryB = tok(30);
+  const reEnrol = await w.call('PUT', '/v1/account', recoveryA, {
+    ...account({ recoveryHash: tokenHash(recoveryB) }),
+    ifRev: 2,
+    escrow: { email: 'owner@example.com', blob: btoa('blob-B'), code: 'NEW-CODE' },
+  });
+  assert.equal(reEnrol.status, 200);
+  assert.deepEqual(w.escrowRow(), { email: 'owner@example.com', blob: btoa('blob-B') });
+  assert.equal(w.lostRow(), undefined);
+
+  w.setClock(NOW + DAY);
+  const release = await w.call('POST', '/v1/lost/release', undefined, { claim: toBase64(oldClaim) });
+  assert.deepEqual(release, { status: 200, body: { state: 'waiting', releaseAt: null } });
+});
+
+test('a stranger cannot overwrite a confirmed, non-cancelled lost_request', async () => {
+  const w = world();
+  await setUp(w);
+  await enroll(w, 'owner@example.com', 'the-real-blob');
+  const ownerClaim = randomBytes(32);
+  await w.call('POST', '/v1/lost/request', undefined, { claimHash: tokenHash(ownerClaim) });
+  await w.call('GET', `/v1/lost/confirm?t=${tokenParam(w.mails[0].text)}`);
+  const confirmedRow = w.lostRow();
+  assert.equal(confirmedRow?.releaseAt, NOW + DAY);
+  const mailsAfterConfirm = w.mails.length;
+
+  w.setClock(NOW + HOUR + 1000);
+  const attempt = await w.call('POST', '/v1/lost/request', undefined, { claimHash: toBase64(randomBytes(32)) });
+  assert.deepEqual(attempt, { status: 200, body: { ok: true } });
+  assert.deepEqual(w.lostRow(), confirmedRow);
+  assert.equal(w.mails.length, mailsAfterConfirm);
+
+  w.setClock(NOW + DAY);
+  const release = await w.call('POST', '/v1/lost/release', undefined, { claim: toBase64(ownerClaim) });
+  assert.deepEqual(release, { status: 200, body: { state: 'ready', blob: btoa('the-real-blob') } });
+});
+
+test('parallel requests claim the rate-limit slot atomically; only one mail is sent', async () => {
+  const w = world();
+  await setUp(w);
+  await enroll(w);
+  const attempts = await Promise.all(
+    Array.from({ length: 10 }, () => w.call('POST', '/v1/lost/request', undefined, { claimHash: toBase64(randomBytes(32)) })),
+  );
+  for (const r of attempts) assert.deepEqual(r, { status: 200, body: { ok: true } });
+  assert.equal(w.mails.length, 1);
+});
+
+test('a claim shorter than 32 bytes (Task 15 length) still releases', async () => {
+  const w = world();
+  await setUp(w);
+  await enroll(w, 'owner@example.com', 'short-claim-blob');
+  const claim = randomBytes(20);
+  await w.call('POST', '/v1/lost/request', undefined, { claimHash: tokenHash(claim) });
+  await w.call('GET', `/v1/lost/confirm?t=${tokenParam(w.mails[0].text)}`);
+  w.setClock(NOW + DAY);
+  const r = await w.call('POST', '/v1/lost/release', undefined, { claim: toBase64(claim) });
+  assert.deepEqual(r, { status: 200, body: { state: 'ready', blob: btoa('short-claim-blob') } });
+});

@@ -89,15 +89,18 @@ export const getLostRequest = (db: Db) =>
     .prepare('SELECT claim_hash AS claimHash, confirm_hash AS confirmHash, requested_at AS requestedAt, release_at AS releaseAt, cancelled FROM lost_request WHERE id = 1')
     .first<LostRequest>();
 
-// A fresh request overwrites the row outright: new hashes, and release_at/cancelled reset, so an old confirm or cancel token stops working.
-export const setLostRequest = (db: Db, claimHash: string, confirmHash: string, now: number) =>
-  db
+// Atomic claim-or-skip: the WHERE guard makes concurrent callers race on one write, not a read-then-write window,
+// and refuses to clobber a request that is already confirmed (release_at set) and not cancelled.
+export const claimLostRequest = async (db: Db, claimHash: string, confirmHash: string, now: number, cooldownMs: number): Promise<boolean> =>
+  (await db
     .prepare(
       `INSERT INTO lost_request (id, claim_hash, confirm_hash, requested_at, release_at, cancelled) VALUES (1, ?, ?, ?, NULL, 0)
-       ON CONFLICT (id) DO UPDATE SET claim_hash = excluded.claim_hash, confirm_hash = excluded.confirm_hash, requested_at = excluded.requested_at, release_at = NULL, cancelled = 0`,
+       ON CONFLICT (id) DO UPDATE SET claim_hash = excluded.claim_hash, confirm_hash = excluded.confirm_hash, requested_at = excluded.requested_at, release_at = NULL, cancelled = 0
+       WHERE lost_request.cancelled = 1 OR (lost_request.release_at IS NULL AND ? - lost_request.requested_at >= ?)
+       RETURNING id`,
     )
-    .bind(claimHash, confirmHash, now)
-    .all();
+    .bind(claimHash, confirmHash, now, now, cooldownMs)
+    .first()) !== null;
 
 export const confirmLostRequest = async (db: Db, confirmHash: string, releaseAt: number): Promise<boolean> =>
   (await db.prepare('UPDATE lost_request SET release_at = ? WHERE id = 1 AND confirm_hash = ? AND cancelled = 0 RETURNING id').bind(releaseAt, confirmHash).first()) !== null;
