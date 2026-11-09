@@ -241,7 +241,7 @@ async function vaultScreen() {
 
   screen('Strongroom', null,
     h('div', { class: 'ui-toolbar' }, button('Add', () => editScreen(null), 'ui-btn--primary'), button('Import', openImport), button('Export', exportScreen),
-      h('span', { class: 'grow' }), button('Lock', () => guarded(msg, [], async () => { await call({ type: 'lock' }); await route(); }), 'ui-btn--ghost')),
+      h('span', { class: 'grow' }), button('Lock', () => guarded(msg, [], async () => { await call({ type: 'lock', manual: true }); await route(); }), 'ui-btn--ghost')),
     pendingCard, hereCard, search, list, syncCard(sync, vaultScreen),
     unreadable > 0 && h('p', { class: 'ui-meta' }, `${unreadable} saved item${unreadable === 1 ? '' : 's'} couldn't be read and ${unreadable === 1 ? 'was' : 'were'} left untouched.`),
     toast, msg);

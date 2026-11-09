@@ -11,7 +11,7 @@ import { createService } from '../service.ts';
 import type { Ctx, Detail, ImportPreview, KV, Pending, Row, Status, SyncStatus } from '../service.ts';
 import { createLocalStore, localKv } from '../storage.ts';
 import { createDeviceVault } from '../device-vault.ts';
-import type { KeyStore } from '../device-vault.ts';
+import type { DeviceVault, KeyStore } from '../device-vault.ts';
 import { fakeChrome, loginEntry, newWorld, PHONE_PASSWORD, useChrome } from './sync-world.ts';
 import type { World } from './sync-world.ts';
 
@@ -38,18 +38,25 @@ const memoryKv = (): KV & { data: Map<string, string> } => {
 const PASSWORD = 'a long master password';
 const LOW = { kdf: { memoryKiB: 1024, iterations: 1, parallelism: 1 }, floor: { memoryKiB: 8, iterations: 1, parallelism: 1 } };
 
-function setup() {
+// A real DeviceVault over in-memory storage, the same shape as `extension()`'s further down: no own crypto, just fake KV and KeyStore.
+function deviceVault(): DeviceVault {
+  let key: CryptoKey | undefined;
+  const keys: KeyStore = { get: async () => (key ??= await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])), put: async (k) => void (key = k) };
+  return createDeviceVault(memoryKv(), keys);
+}
+
+function setup(device?: DeviceVault) {
   const store = new MemoryStore();
   const session = memoryKv();
   const clock = { t: 1_000_000 };
   const timer = { resets: 0 };
-  const service = createService({ store, session, now: () => clock.t, resetAutoLock: () => timer.resets++, ...LOW });
+  const service = createService({ store, session, now: () => clock.t, resetAutoLock: () => timer.resets++, device, ...LOW });
   const call = <T>(req: object, ctx?: Ctx) => service.handle(req as never, ctx) as Promise<T>;
   return { store, session, clock, timer, service, call };
 }
 
-async function unlocked() {
-  const s = setup();
+async function unlocked(device?: DeviceVault) {
+  const s = setup(device);
   await s.call({ type: 'setup', password: PASSWORD });
   return s;
 }
@@ -243,6 +250,51 @@ test('fill is refused unless it comes from the page itself, so the popup cannot 
   await assert.rejects(s.call({ type: 'fill', id, page: page('https://login.bank.com/') }), /isn't allowed/);
 });
 
+test('without a DeviceVault, a page-side fill still needs an unlocked session (existing behavior unchanged)', async () => {
+  const s = await unlocked();
+  const { id } = await add(s);
+  await s.call({ type: 'lock' });
+  await assert.rejects(s.call({ type: 'fill', id }, page('https://login.bank.com/')), /locked/i);
+});
+
+test('after unlock, a fill works once the session is cleared: the device-held keys answer it', async () => {
+  const s = await unlocked(deviceVault());
+  const { id } = await add(s);
+  await s.call({ type: 'lock' });
+  assert.deepEqual(await s.call({ type: 'fill', id }, page('https://login.bank.com/')), { username: 'me', password: 'pw-1' });
+});
+
+test('a manual lock ends fills; the non-manual (auto-lock) request does not, though status still says locked', async () => {
+  const s = await unlocked(deviceVault());
+  const { id } = await add(s);
+  await s.call({ type: 'lock' });
+  assert.equal((await s.call<Status>({ type: 'status' })).state, 'locked');
+  assert.deepEqual(await s.call({ type: 'fill', id }, page('https://login.bank.com/')), { username: 'me', password: 'pw-1' });
+
+  await s.call({ type: 'lock', manual: true });
+  assert.equal((await s.call<Status>({ type: 'status' })).state, 'locked');
+  await assert.rejects(s.call({ type: 'fill', id }, page('https://login.bank.com/')), /locked/i);
+});
+
+test('candidates work from device keys with the popup locked, and a lookalike host is still refused', async () => {
+  const s = await unlocked(deviceVault());
+  const { id } = await add(s);
+  await s.call({ type: 'lock' });
+  const found = await s.call<{ locked: boolean; rows: Row[] }>({ type: 'candidates' }, page('https://login.bank.com/'));
+  assert.deepEqual([found.locked, found.rows.map((r) => r.id)], [false, [id]]);
+  await assert.rejects(s.call({ type: 'fill', id }, page('https://bank.com.evil.io/')), /isn't saved for this website/);
+});
+
+test('a page cannot reach export, get, list or save even while device keys answer fill, locked or not', async () => {
+  const s = await unlocked(deviceVault());
+  const { id } = await add(s);
+  await s.call({ type: 'lock' });
+  const ctx = page('https://login.bank.com/');
+  for (const req of [{ type: 'export', password: PASSWORD }, { type: 'get', id }, { type: 'list' }, { type: 'save', id: null, login: login() }]) {
+    await assert.rejects(s.call(req, ctx), /isn't allowed/, req.type);
+  }
+});
+
 test('the recovery key is shown only while the vault is unlocked', async () => {
   const s = await unlocked();
   await s.call({ type: 'lock' });
@@ -384,13 +436,14 @@ function extension(world: World, local = fakeChrome()) {
   const session = memoryKv();
   const alarms: boolean[] = [];
   const clock = { t: 1_000_000 };
-  const store = createLocalStore(createDeviceVault(localKv, deviceKeyStore(local)));
+  const device = createDeviceVault(localKv, deviceKeyStore(local));
+  const store = createLocalStore(device);
   const service = createService({
     store, session, now: () => clock.t, resetAutoLock() {}, syncAlarm: (on) => void alarms.push(on),
-    sync: { store, transport: world.transport }, ...LOW,
+    sync: { store, transport: world.transport }, device, ...LOW,
   });
   const call = <T = unknown>(req: object, ctx?: Ctx) => service.handle(req as never, ctx) as Promise<T>;
-  return { world, local, session, alarms, clock, service, store, call, restart: () => extension(world, local) };
+  return { world, local, session, alarms, clock, service, store, device, call, restart: () => extension(world, local) };
 }
 type Ext = ReturnType<typeof extension>;
 
@@ -475,10 +528,12 @@ test('failedSignInKeepsTheOldVault', async () => {
   const x = extension(world);
   await x.call({ type: 'setup', password: PASSWORD });
   await add(x, { name: 'Mine' });
-  const before = snapshot(x);
+  // deviceKeys is reread, not just the vault: each lock/unlock in the loop below reseals it with a fresh nonce, so it is left out of this comparison on purpose.
+  const stable = () => JSON.stringify([...x.local.data].filter(([k]) => k !== 'deviceKeys'));
+  const before = stable();
   const refused = async (over: object, message: RegExp) => {
     await assert.rejects(signIn(x, { replace: true, ...over }), message);
-    assert.equal(snapshot(x), before);
+    assert.equal(stable(), before);
     assert.equal((await status(x)).state, 'off');
     await x.call({ type: 'lock' });
     await x.call({ type: 'unlock', password: PASSWORD });
@@ -523,11 +578,11 @@ test('syncMergesAndShowsRemoteEdits', async () => {
   assert.deepEqual(await names(x), ['Bank', 'From the extension']);
 });
 
-test('lockClearsTheLoginTokenAndStopsSyncing', async () => {
+test('a manual lock clears the login token, the device-held keys, and stops syncing', async () => {
   const x = await signedIn();
   assert.ok(x.session.data.has('loginToken'));
   assert.equal(x.alarms.at(-1), true);
-  await x.call({ type: 'lock' });
+  await x.call({ type: 'lock', manual: true });
   assert.ok(!x.session.data.has('loginToken'));
   assert.ok(!x.session.data.has('vaultKey'));
   assert.equal(x.alarms.at(-1), false);
@@ -540,6 +595,19 @@ test('lockClearsTheLoginTokenAndStopsSyncing', async () => {
   await x.call({ type: 'unlock', password: PHONE_PASSWORD });
   assert.ok(x.session.data.has('loginToken'));
   await x.call({ type: 'syncNow' });
+  assert.ok(x.world.requests.length > seen);
+});
+
+test('sync runs from the device-held keys once the session is gone, after a plain (non-manual) lock', async () => {
+  const x = await signedIn();
+  await x.call({ type: 'lock' });
+  assert.ok(!x.session.data.has('loginToken'));
+  assert.ok(!x.session.data.has('vaultKey'));
+  assert.ok(await x.device.loadKeys());
+
+  const seen = x.world.requests.length;
+  const report = await x.call<{ pulled: number }>({ type: 'syncNow' });
+  assert.ok(report);
   assert.ok(x.world.requests.length > seen);
 });
 

@@ -7,6 +7,7 @@ import {
 } from 'strongroom-core';
 import type { Entry, Header, KdfParams, Login, RecordStore, Site, SignedIn, SyncReport, SyncStore, Transport } from 'strongroom-core';
 import { COMMON_PASSWORDS } from './common-passwords.ts';
+import type { DeviceVault } from './device-vault.ts';
 
 export type KV = { get(key: string): Promise<string | undefined>; set(key: string, value: string): Promise<void>; remove(key: string): Promise<void> };
 export type SyncInfo = { lastSyncAt: number | null; blocked: number; needsSignIn: boolean };
@@ -20,7 +21,10 @@ export interface SyncPort extends SyncStore {
   setAccount(a: { header: Header; headerRev: number; accountKey: Uint8Array; info: SyncInfo; pending: PendingUpdate | null; replace: { records: SyncRow[]; quarantine: SyncRow[]; lastRev: number } | null }): Promise<void>;
 }
 export type SyncDeps = { store: SyncPort; transport: Transport };
-export type Deps = { store: RecordStore; session: KV; now(): number; resetAutoLock(): void; syncAlarm?(on: boolean): void; sync?: SyncDeps; kdf?: KdfParams; floor?: KdfParams };
+export type Deps = {
+  store: RecordStore; session: KV; now(): number; resetAutoLock(): void; syncAlarm?(on: boolean): void; sync?: SyncDeps; kdf?: KdfParams; floor?: KdfParams;
+  device?: DeviceVault;
+};
 export type PageRef = { url: string; tabId: number };
 export type Ctx = PageRef;
 export type LoginInput = { name: string; username: string; password: string; websites: string; note: string };
@@ -31,7 +35,7 @@ export type Request =
   | { type: 'confirmRecovery'; group: string }
   | { type: 'unlock'; password: string }
   | { type: 'recover'; recoveryKey: string; password: string }
-  | { type: 'lock' }
+  | { type: 'lock'; manual?: boolean }
   | { type: 'list' }
   | { type: 'get'; id: string }
   | { type: 'save'; id: string | null; login: LoginInput }
@@ -112,6 +116,9 @@ export function createService(deps: Deps) {
     return stored ? fromBase64(stored) : null;
   };
   const requireKey = async (): Promise<Uint8Array> => (await keyOrNull()) ?? Promise.reject(new UserError(LOCKED));
+  // Autofill and sync fall back to the vault key the device holds on disk once the session copy is gone, so they keep working without an unlock.
+  const fillKey = async (): Promise<Uint8Array | null> => (await keyOrNull()) ?? (await deps.device?.loadKeys())?.vaultKey ?? null;
+  const requireFillKey = async (): Promise<Uint8Array> => (await fillKey()) ?? Promise.reject(new UserError(LOCKED));
   // The login token lives only in session storage (memory) while unlocked; lock clears it.
   const opened = async (key: Uint8Array, loginToken?: Uint8Array) => {
     await session.set('vaultKey', toBase64(key));
@@ -119,6 +126,7 @@ export function createService(deps: Deps) {
       await session.set('loginToken', toBase64(loginToken));
       deps.syncAlarm?.(true);
     }
+    await deps.device?.saveKeys({ vaultKey: key, ...(loginToken && { loginToken }) });
     deps.resetAutoLock();
   };
   const tokenOrNull = async () => {
@@ -211,8 +219,13 @@ export function createService(deps: Deps) {
     const { accountKey, info, pending } = await port.getSyncLocal();
     if (!accountKey) return null;
     if (info.needsSignIn) throw new UserError(new SyncAuthError().message);
-    const vaultKey = await keyOrNull();
-    const token = await tokenOrNull();
+    let vaultKey = await keyOrNull();
+    let token = await tokenOrNull();
+    if (!vaultKey || !token) {
+      const fromDevice = await deps.device?.loadKeys();
+      vaultKey ??= fromDevice?.vaultKey ?? null;
+      token ??= fromDevice?.loginToken ?? null;
+    }
     if (!vaultKey || !token) throw new UserError(LOCKED);
     syncing++;
     try {
@@ -374,6 +387,7 @@ export function createService(deps: Deps) {
           await session.remove('pending');
           await session.remove('loginToken');
           deps.syncAlarm?.(false);
+          if (req.manual) await deps.device?.clearKeys();
           return null;
         case 'syncStatus':
           return await syncStatus();
@@ -456,7 +470,7 @@ export function createService(deps: Deps) {
         }
         case 'candidates': {
           const site = where && siteFromUrl(where.url);
-          const key = await keyOrNull();
+          const key = await fillKey();
           if (!key) return { locked: true, rows: [] };
           const { found } = await logins(key);
           return { locked: false, rows: site ? found.filter((f) => matches(f.login.sites, site)).map(row).sort(byName) : [] };
@@ -464,7 +478,7 @@ export function createService(deps: Deps) {
         case 'fill': {
           const site = where && siteFromUrl(where.url);
           if (!site) throw new UserError(NOT_ALLOWED);
-          const target = (await logins(await requireKey())).found.find((f) => f.id === req.id);
+          const target = (await logins(await requireFillKey())).found.find((f) => f.id === req.id);
           if (!target || !matches(target.login.sites, site)) throw new UserError("That login isn't saved for this website.");
           deps.resetAutoLock();
           return { username: target.login.username, password: target.login.password };

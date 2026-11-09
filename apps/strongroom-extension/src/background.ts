@@ -18,6 +18,7 @@ const service = createService({
   resetAutoLock: () => void chrome.alarms.create('auto-lock', { delayInMinutes: AUTO_LOCK_MINUTES }),
   syncAlarm: (on) => void (on ? chrome.alarms.create('sync', { periodInMinutes: SYNC_MINUTES }) : chrome.alarms.clear('sync')),
   sync: SYNC_URL ? { store: localStore, transport: fetchTransport(SYNC_URL) } : undefined,
+  device,
 });
 
 // storage.local is readable from content scripts by default; the ciphertext and header should stay with the extension's own pages.
@@ -30,6 +31,7 @@ const ready = Promise.all([
 ]);
 
 chrome.alarms.onAlarm.addListener(({ name }) => {
+  // No `manual: true` here: the auto-lock alarm clears the session only, so autofill and sync keep answering from the device-held keys.
   if (name === 'auto-lock') void ready.then(() => service.handle({ type: 'lock' }));
   if (name === 'sync') void ready.then(() => service.handle({ type: 'syncNow' })).catch(() => {});
 });

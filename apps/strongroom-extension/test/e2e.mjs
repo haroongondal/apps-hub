@@ -136,7 +136,8 @@ async function syncSuite() {
     const secrets = [world.accountKeyText, world.accountKeyText.replaceAll('-', ''), world.tokens.loginToken, world.tokens.readToken, recoveryLoginToken(world.recoveryKey)]
       .flatMap((s) => (typeof s === 'string' ? [s, b64(new TextEncoder().encode(s))] : [b64(s), Buffer.from(s).toString('hex'), Buffer.from(s).toString('base64url')]));
     check('storageLocalHasNoReadableTokenOrAccountKeyText', secrets.every((s) => !dump.includes(s)), secrets.filter((s) => dump.includes(s)).length + ' found');
-    check('the account key is kept beside the header as raw bytes, nothing more', JSON.parse(dump).accountKey === b64(world.accountKey));
+    // Stale since Task 6/7 sealed the account key (apps-hub strongroom-extension-security plan): the plain `accountKey` entry is gone, replaced by `accountKeySealed`.
+    check('the account key is kept sealed beside the header, not as plain bytes', JSON.parse(dump).accountKey === undefined && typeof JSON.parse(dump).accountKeySealed === 'string');
 
     // The content script runs on every web page, so storage.local (the account key) must be closed to it: setAccessLevel(TRUSTED_CONTEXTS).
     const site = await ctx.newPage();
@@ -309,6 +310,20 @@ try {
   const ahead = (alarms.find((a) => a.name === 'auto-lock')?.scheduledTime ?? 0) - Date.now();
   check('the five-minute auto-lock alarm is set while unlocked', ahead > 4 * 60_000 && ahead <= 5 * 60_000 + 5_000, String(ahead));
 
+  // The auto-lock alarm sends a plain `lock` (no manual flag), simulated here the same way the alarm handler does it: fills must keep working from the device-held keys.
+  await send({ type: 'lock' });
+  const afterAlarm = await send({ type: 'status' });
+  check('status says locked once the auto-lock alarm fires', afterAlarm.ok && afterAlarm.data.state === 'locked', JSON.stringify(afterAlarm));
+  await page.goto(GOOD);
+  await page.locator('#u').click();
+  await page.waitForTimeout(1500);
+  check('fill still works after the popup session auto-locks', await menuShown(page));
+  const autoBox = await page.locator('#u').boundingBox();
+  await page.mouse.click(autoBox.x + 30, autoBox.y + autoBox.height + 18);
+  await page.waitForTimeout(800);
+  check('the fill after auto-lock restores the saved credentials', (await page.inputValue('#u')) === 'tester' && (await page.inputValue('#p')) === 'p4ssw0rd-local');
+  await send({ type: 'unlock', password: MASTER }); // restore the unlocked session for the checks below
+
   const noApi = await page.evaluate(() => typeof chrome === 'undefined' || typeof chrome.runtime?.sendMessage !== 'function');
   check('the web page itself has no way to message the extension', noApi);
 
@@ -372,11 +387,43 @@ try {
   await popup.getByRole('button', { name: 'Done' }).click();
   await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
 
+  // A plain restart (no manual Lock before it) must not block a fill: the popup's session is gone, but the device-held keys answer it.
   await ctx.close();
   ({ ctx, sw, id } = await launch());
   popup = await openPopup();
   await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
-  check('after a browser restart the vault is locked', true);
+  check('after a plain restart the popup still shows locked', true);
+  const restartedPage = await ctx.newPage();
+  restartedPage.on('pageerror', (e) => errors.push(`restarted page: ${e.message}`));
+  await restartedPage.goto(GOOD);
+  await restartedPage.locator('#u').click();
+  await restartedPage.waitForTimeout(1500);
+  check('fill still works after a plain restart (real suggestions, not a locked prompt)', await menuShown(restartedPage));
+  const restartedBox = await restartedPage.locator('#u').boundingBox();
+  await restartedPage.mouse.click(restartedBox.x + 30, restartedBox.y + restartedBox.height + 18);
+  await restartedPage.waitForTimeout(800);
+  check('a plain restart does not prevent a fill', (await restartedPage.inputValue('#u')) === 'tester' && (await restartedPage.inputValue('#p')) === 'p4ssw0rd-local');
+  await restartedPage.close();
+
+  // Only the popup's manual Lock button clears the device-held keys; it, and only it, should block a fill after the next restart.
+  await popup.locator('input[type=password]').fill(MASTER);
+  await popup.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+  await popup.getByRole('button', { name: 'Lock' }).click();
+  await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
+  await ctx.close();
+  ({ ctx, sw, id } = await launch());
+  popup = await openPopup();
+  await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
+  const lockedPage = await ctx.newPage();
+  lockedPage.on('pageerror', (e) => errors.push(`locked page: ${e.message}`));
+  await lockedPage.goto(GOOD);
+  await lockedPage.locator('#u').click();
+  await lockedPage.waitForTimeout(1500);
+  check('fill asks to unlock after the manual Lock button and a browser restart', await menuShown(lockedPage));
+  check('the locked prompt does not fill, unlike the plain-restart case above', (await lockedPage.inputValue('#u')) === '' && (await lockedPage.inputValue('#p')) === '');
+  await lockedPage.close();
+
   await popup.locator('input[type=password]').fill(MASTER);
   await popup.getByRole('button', { name: 'Unlock', exact: true }).click();
   await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
