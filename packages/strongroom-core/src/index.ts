@@ -2,6 +2,7 @@ export * from './chrome-export.ts';
 export * from './crypto.ts';
 export * from './csv.ts';
 export * from './entry.ts';
+export * from './escrow.ts';
 export * from './format.ts';
 export * from './google-import.ts';
 export * from './matching.ts';
