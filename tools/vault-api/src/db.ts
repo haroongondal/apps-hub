@@ -89,17 +89,19 @@ export const getLostRequest = (db: Db) =>
     .prepare('SELECT claim_hash AS claimHash, confirm_hash AS confirmHash, requested_at AS requestedAt, release_at AS releaseAt, cancelled FROM lost_request WHERE id = 1')
     .first<LostRequest>();
 
-// Atomic claim-or-skip: the WHERE guard makes concurrent callers race on one write, not a read-then-write window,
-// and refuses to clobber a request that is already confirmed (release_at set) and not cancelled.
-export const claimLostRequest = async (db: Db, claimHash: string, confirmHash: string, now: number, cooldownMs: number): Promise<boolean> =>
+// Atomic claim-or-skip, one write per race. A confirmed row is replaceable only graceMs after release_at — not the
+// instant it releases — so a stranger can't wipe it out from under the real claimant before they call /lost/release.
+export const claimLostRequest = async (db: Db, claimHash: string, confirmHash: string, now: number, cooldownMs: number, graceMs: number): Promise<boolean> =>
   (await db
     .prepare(
       `INSERT INTO lost_request (id, claim_hash, confirm_hash, requested_at, release_at, cancelled) VALUES (1, ?, ?, ?, NULL, 0)
        ON CONFLICT (id) DO UPDATE SET claim_hash = excluded.claim_hash, confirm_hash = excluded.confirm_hash, requested_at = excluded.requested_at, release_at = NULL, cancelled = 0
-       WHERE lost_request.cancelled = 1 OR (lost_request.release_at IS NULL AND ? - lost_request.requested_at >= ?)
+       WHERE lost_request.cancelled = 1
+          OR (lost_request.release_at IS NULL AND ? - lost_request.requested_at >= ?)
+          OR (lost_request.release_at IS NOT NULL AND ? >= lost_request.release_at + ?)
        RETURNING id`,
     )
-    .bind(claimHash, confirmHash, now, now, cooldownMs)
+    .bind(claimHash, confirmHash, now, now, cooldownMs, now, graceMs)
     .first()) !== null;
 
 export const confirmLostRequest = async (db: Db, confirmHash: string, releaseAt: number): Promise<boolean> =>

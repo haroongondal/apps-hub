@@ -333,3 +333,55 @@ test('a claim shorter than 32 bytes (Task 15 length) still releases', async () =
   const r = await w.call('POST', '/v1/lost/release', undefined, { claim: toBase64(claim) });
   assert.deepEqual(r, { status: 200, body: { state: 'ready', blob: btoa('short-claim-blob') } });
 });
+
+const GRACE = 7 * DAY;
+
+test('a released request stays put during its grace period, but a fresh request replaces it once the grace period passes', async () => {
+  const w = world();
+  await setUp(w);
+  await enroll(w, 'owner@example.com', 'blob-v1');
+  const claim1 = randomBytes(32);
+  await w.call('POST', '/v1/lost/request', undefined, { claimHash: tokenHash(claim1) });
+  await w.call('GET', `/v1/lost/confirm?t=${tokenParam(w.mails[0].text)}`);
+  w.setClock(NOW + DAY);
+  assert.deepEqual(await w.call('POST', '/v1/lost/release', undefined, { claim: toBase64(claim1) }), { status: 200, body: { state: 'ready', blob: btoa('blob-v1') } });
+  const released = w.lostRow();
+
+  w.setClock(NOW + DAY + GRACE - 1000);
+  const withinGrace = await w.call('POST', '/v1/lost/request', undefined, { claimHash: toBase64(randomBytes(32)) });
+  assert.deepEqual(withinGrace, { status: 200, body: { ok: true } });
+  assert.deepEqual(w.lostRow(), released);
+  assert.equal(w.mails.length, 2);
+
+  w.setClock(NOW + DAY + GRACE + 1000);
+  const claim2 = randomBytes(32);
+  const afterGrace = await w.call('POST', '/v1/lost/request', undefined, { claimHash: tokenHash(claim2) });
+  assert.deepEqual(afterGrace, { status: 200, body: { ok: true } });
+  assert.equal(w.mails.length, 3);
+  assert.equal(w.lostRow()?.claimHash, tokenHash(claim2));
+
+  const oldClaimNowRefused = await w.call('POST', '/v1/lost/release', undefined, { claim: toBase64(claim1) });
+  assert.deepEqual(oldClaimNowRefused, { status: 200, body: { state: 'waiting', releaseAt: null } });
+});
+
+test('an abandoned confirmed request (never released) is still replaceable only after the grace period counted from release_at', async () => {
+  const w = world();
+  await setUp(w);
+  await enroll(w);
+  await w.call('POST', '/v1/lost/request', undefined, { claimHash: toBase64(randomBytes(32)) });
+  await w.call('GET', `/v1/lost/confirm?t=${tokenParam(w.mails[0].text)}`);
+  const confirmedAt = w.lostRow();
+  assert.ok(confirmedAt?.releaseAt);
+
+  w.setClock(confirmedAt!.releaseAt! + GRACE - 1000);
+  assert.deepEqual(w.lostRow(), confirmedAt);
+  const stillBlocked = await w.call('POST', '/v1/lost/request', undefined, { claimHash: toBase64(randomBytes(32)) });
+  assert.deepEqual(stillBlocked, { status: 200, body: { ok: true } });
+  assert.deepEqual(w.lostRow(), confirmedAt);
+
+  w.setClock(confirmedAt!.releaseAt! + GRACE + 1000);
+  const claimHash = toBase64(randomBytes(32));
+  const nowReplaces = await w.call('POST', '/v1/lost/request', undefined, { claimHash });
+  assert.deepEqual(nowReplaces, { status: 200, body: { ok: true } });
+  assert.equal(w.lostRow()?.claimHash, claimHash);
+});

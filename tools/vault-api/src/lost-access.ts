@@ -7,6 +7,8 @@ export interface Mailer { send(to: string, subject: string, text: string): Promi
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
+// Long enough that a device which only just finished recovering still has time to call /lost/release; short enough that an abandoned or already-used request doesn't block a real future recovery forever.
+const RELEASE_GRACE_MS = 7 * DAY_MS;
 const link = (publicUrl: string | undefined, path: string, token: Uint8Array) => `${publicUrl ?? ''}${path}?t=${encodeURIComponent(toBase64(token))}`;
 
 // Only the hash is ever compared, so any sane length is fine; Task 15's claim isn't 32 bytes.
@@ -26,7 +28,7 @@ export async function requestLostAccess(db: Db, claimHash: string, now: number, 
   const escrow = await getEscrow(db);
   if (!escrow) return;
   const token = randomBytes(32);
-  const claimed = await claimLostRequest(db, claimHash, tokenHash(token), now, HOUR_MS);
+  const claimed = await claimLostRequest(db, claimHash, tokenHash(token), now, HOUR_MS, RELEASE_GRACE_MS);
   if (!claimed) return;
   try {
     await mail!.send(escrow.email, 'Strongroom: confirm you lost access', `Open this link to start the 24-hour wait: ${link(publicUrl, '/v1/lost/confirm', token)}`);
