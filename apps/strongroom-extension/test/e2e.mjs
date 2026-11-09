@@ -421,7 +421,10 @@ try {
   await lockedPage.locator('#u').click();
   await lockedPage.waitForTimeout(1500);
   check('fill asks to unlock after the manual Lock button and a browser restart', await menuShown(lockedPage));
-  check('the locked prompt does not fill, unlike the plain-restart case above', (await lockedPage.inputValue('#u')) === '' && (await lockedPage.inputValue('#p')) === '');
+  const lockedBox = await lockedPage.locator('#u').boundingBox();
+  await lockedPage.mouse.click(lockedBox.x + 30, lockedBox.y + lockedBox.height + 18);
+  await lockedPage.waitForTimeout(800);
+  check('clicking the locked prompt does not fill, unlike the plain-restart case above', (await lockedPage.inputValue('#u')) === '' && (await lockedPage.inputValue('#p')) === '');
   await lockedPage.close();
 
   await popup.locator('input[type=password]').fill(MASTER);

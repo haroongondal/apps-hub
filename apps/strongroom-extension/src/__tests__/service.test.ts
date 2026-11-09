@@ -600,10 +600,13 @@ test('a manual lock clears the login token, the device-held keys, and stops sync
 
 test('sync runs from the device-held keys once the session is gone, after a plain (non-manual) lock', async () => {
   const x = await signedIn();
+  assert.equal(x.alarms.at(-1), true);
   await x.call({ type: 'lock' });
   assert.ok(!x.session.data.has('loginToken'));
   assert.ok(!x.session.data.has('vaultKey'));
   assert.ok(await x.device.loadKeys());
+  // A plain lock leaves background sync running, unlike a manual one: the sync alarm is not turned off.
+  assert.equal(x.alarms.at(-1), true);
 
   const seen = x.world.requests.length;
   const report = await x.call<{ pulled: number }>({ type: 'syncNow' });

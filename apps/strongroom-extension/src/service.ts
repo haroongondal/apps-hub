@@ -386,7 +386,8 @@ export function createService(deps: Deps) {
           await session.remove('vaultKey');
           await session.remove('pending');
           await session.remove('loginToken');
-          deps.syncAlarm?.(false);
+          // A non-manual lock (auto-lock) leaves the device-held keys in place, so background sync keeps answering from them; only stop the alarm when it won't.
+          if (req.manual || !deps.device) deps.syncAlarm?.(false);
           if (req.manual) await deps.device?.clearKeys();
           return null;
         case 'syncStatus':
