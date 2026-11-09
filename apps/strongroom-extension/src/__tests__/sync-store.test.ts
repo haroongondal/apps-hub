@@ -172,3 +172,25 @@ test('setAccount stores the account key sealed, not as plain base64', async () =
   assert.deepEqual(await device.loadAccountKey(), ak);
   assert.ok(![...f.data.values()].some((v) => JSON.stringify(v).includes(toBase64(ak))));
 });
+
+test('getSyncLocal trusts a surviving plain entry over a stale sealed one', async () => {
+  const f = fresh();
+  const stale = bytes(10);
+  const plain = bytes(11);
+  const device = fakeDevice();
+  await device.saveAccountKey(stale);
+  f.data.set('accountKey', toBase64(plain));
+  store = createLocalStore(device);
+  assert.deepEqual((await store.getSyncLocal()).accountKey, plain);
+});
+
+test('setAccount removes a pre-existing plain entry on success', async () => {
+  const f = fresh();
+  f.data.set('accountKey', toBase64(bytes(12)));
+  const device = fakeDevice();
+  store = createLocalStore(device);
+  const ak = bytes(13);
+  await store.setAccount({ header: header(1), headerRev: 1, accountKey: ak, info: { lastSyncAt: null, blocked: 0, needsSignIn: false }, pending: null, replace: null });
+  assert.equal(f.data.has('accountKey'), false);
+  assert.deepEqual((await store.getSyncLocal()).accountKey, ak);
+});

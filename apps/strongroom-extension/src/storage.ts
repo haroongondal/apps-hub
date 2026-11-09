@@ -87,9 +87,8 @@ export function createLocalStore(device: DeviceVault): SyncPort {
 
     async getSyncLocal() {
       const { syncInfo, pendingAccount, accountKey: plain } = await local().get(['syncInfo', 'pendingAccount', 'accountKey']);
-      // Falls back to the plain entry so a read racing the one-time migration never sees the account key vanish.
-      const sealed = await device.loadAccountKey();
-      const accountKey = sealed ?? (typeof plain === 'string' ? fromBase64(plain) : null);
+      // A plain entry only survives a failed save/migration, so it's the one to trust, not a possibly-stale seal.
+      const accountKey = typeof plain === 'string' ? fromBase64(plain) : await device.loadAccountKey();
       return { accountKey, info: { ...NEVER_SYNCED, ...syncInfo }, pending: pendingAccount ?? null };
     },
     setSyncLocal(patch) {
@@ -103,7 +102,6 @@ export function createLocalStore(device: DeviceVault): SyncPort {
     },
     setAccount(a) {
       return queued(async () => {
-        await device.saveAccountKey(a.accountKey);
         const next: Record<string, unknown> = { header: headerToJson(a.header), syncInfo: a.info, pendingAccount: a.pending };
         if (a.replace) {
           next.records = Object.fromEntries(a.replace.records.map((r) => [r.id, { s: toBase64(r.sealed), rev: r.rev, dirty: false }]));
@@ -112,7 +110,10 @@ export function createLocalStore(device: DeviceVault): SyncPort {
         } else {
           next.syncMeta = { ...(await meta()), headerRev: a.headerRev };
         }
+        // Seal last: a crash before this point lands in the existing "no account key yet" state rather than a mismatched one.
         await local().set(next);
+        await device.saveAccountKey(a.accountKey);
+        await local().remove('accountKey');
       });
     },
   };
