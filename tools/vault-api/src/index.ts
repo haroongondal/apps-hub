@@ -1,17 +1,29 @@
 import { LIMITS } from 'strongroom-core/src/sync/protocol.ts';
 import type { AccountUpdate, Prelogin, Upsert } from 'strongroom-core/src/sync/protocol.ts';
 import { authorize, BASE64_32_BYTES } from './auth.ts';
-import { createAccount, getAccount, pull, push, updateAccount, type Db } from './db.ts';
+import { cancelLostRequest, clearEscrow, createAccount, getAccount, setEscrow, pull, push, updateAccount, type Db } from './db.ts';
+import { cancelLostAccessByToken, confirmLostAccess, lostAccessStatus, releaseLostAccess, requestLostAccess, type Mailer } from './lost-access.ts';
 
 export type { Db } from './db.ts';
-export interface Env { DB: Db; SETUP_TOKEN: string }
-type Deps = { now?: () => number; sleep?: (ms: number) => Promise<void> };
+export type { Mailer } from './lost-access.ts';
+export interface Env { DB: Db; SETUP_TOKEN: string; MAIL?: Mailer; PUBLIC_URL?: string }
+type Deps = { now?: () => number; sleep?: (ms: number) => Promise<void>; mail?: Mailer };
 
 const HEADERS = { 'content-type': 'application/json', 'cache-control': 'private, no-store' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: HEADERS });
 const fail = (status: number, error: string) => json({ error }, status);
 const unauthorized = () => fail(401, 'The token was not accepted. Sign in again.');
 const isBase64 = (s: unknown) => typeof s === 'string' && s.length > 0 && s.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(s);
+const html = (body: string, status = 200) =>
+  new Response(`<!doctype html><title>Strongroom</title><p>${body}</p>`, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'private, no-store' } });
+
+function escrowOf(o: any): { email: string; blob: string; code: string } | null | undefined {
+  if (o?.escrow === undefined) return undefined;
+  const { email, blob, code } = o.escrow ?? {};
+  const emailOk = typeof email === 'string' && email.length > 0 && email.length <= 320 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const codeOk = typeof code === 'string' && code.length > 0 && code.length <= 64;
+  return emailOk && isBase64(blob) && codeOk ? { email, blob, code } : null;
+}
 
 export function preloginOf(header: string): Prelogin | null {
   try {
@@ -50,7 +62,7 @@ function upsertsOf(o: any): Upsert[] | Response {
 
 const intParam = (v: string | null, fallback: number) => (v === null ? fallback : /^\d{1,15}$/.test(v) ? Number(v) : NaN);
 
-async function route(req: Request, env: Env, now: () => number, sleep: (ms: number) => Promise<void>): Promise<Response> {
+async function route(req: Request, env: Env, now: () => number, sleep: (ms: number) => Promise<void>, mail: Mailer | undefined): Promise<Response> {
   const url = new URL(req.url);
   const db = env.DB;
 
@@ -63,15 +75,70 @@ async function route(req: Request, env: Env, now: () => number, sleep: (ms: numb
   if (req.method === 'PUT' && url.pathname === '/v1/account') {
     const role = await authorize(req, db, env.SETUP_TOKEN, ['setup', 'login', 'recovery'], sleep);
     if (!role) return unauthorized();
-    const body = accountPutOf(await req.json().catch(() => null));
+    const raw = await req.json().catch(() => null);
+    const body = accountPutOf(raw);
     if (!body || (role === 'setup' && body.recoveryHash === undefined)) return fail(400, 'The account needs a valid header and three token hashes.');
+    const escrow = escrowOf(raw);
+    if (escrow === null) return fail(400, 'Escrow needs an email, a blob and a code.');
+    if (escrow && body.recoveryHash === undefined) return fail(400, 'Enrolling escrow needs a new recoveryHash.');
+    if (escrow) {
+      try {
+        await mail!.send(escrow.email, 'Your Strongroom recovery code', `Your recovery code is ${escrow.code}. Keep it safe; Strongroom never stores it.`);
+      } catch {
+        return fail(502, 'Could not send the recovery email. Try again later.');
+      }
+    }
     if (role === 'setup') {
       const created = await createAccount(db, { ...body, recoveryHash: body.recoveryHash! });
-      return created ? json({ headerRev: 1 }) : fail(403, 'The account already exists. Sign in instead.');
+      if (!created) return fail(403, 'The account already exists. Sign in instead.');
+      if (escrow) await setEscrow(db, escrow.email, escrow.blob, now());
+      return json({ headerRev: 1 });
     }
     if (body.ifRev === undefined) return fail(400, 'Send ifRev, the header revision this change is based on.');
+    const stored = body.recoveryHash !== undefined && !escrow ? await getAccount(db) : null;
     const headerRev = await updateAccount(db, body, body.ifRev);
-    return headerRev === null ? fail(409, 'The account changed on another device. Pull and try again.') : json({ headerRev });
+    if (headerRev === null) return fail(409, 'The account changed on another device. Pull and try again.');
+    if (escrow) await setEscrow(db, escrow.email, escrow.blob, now());
+    else if (stored && stored.recoveryHash !== body.recoveryHash) await clearEscrow(db);
+    return json({ headerRev });
+  }
+
+  if (req.method === 'DELETE' && url.pathname === '/v1/escrow') {
+    if (!(await authorize(req, db, env.SETUP_TOKEN, ['login'], sleep))) return unauthorized();
+    await clearEscrow(db);
+    return json({ ok: true });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/v1/lost/request') {
+    const raw = await req.json().catch(() => null);
+    await requestLostAccess(db, typeof raw?.claimHash === 'string' ? raw.claimHash : '', now(), mail, env.PUBLIC_URL);
+    return json({ ok: true });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/v1/lost/confirm') {
+    const ok = await confirmLostAccess(db, url.searchParams.get('t') ?? '', now(), mail, env.PUBLIC_URL);
+    return html(ok ? 'Confirmed. Strongroom will let you in after 24 hours.' : 'This link is no longer valid.');
+  }
+
+  if (req.method === 'GET' && url.pathname === '/v1/lost/cancel') {
+    await cancelLostAccessByToken(db, url.searchParams.get('t') ?? '');
+    return html('Cancelled. If a lost-access request was pending, it has stopped.');
+  }
+
+  if (req.method === 'POST' && url.pathname === '/v1/lost/cancel') {
+    if (!(await authorize(req, db, env.SETUP_TOKEN, ['login', 'recovery', 'read'], sleep))) return unauthorized();
+    await cancelLostRequest(db);
+    return json({ ok: true });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/v1/lost/status') {
+    if (!(await authorize(req, db, env.SETUP_TOKEN, ['login', 'recovery', 'read'], sleep))) return unauthorized();
+    return json(await lostAccessStatus(db));
+  }
+
+  if (req.method === 'POST' && url.pathname === '/v1/lost/release') {
+    const raw = await req.json().catch(() => null);
+    return json(await releaseLostAccess(db, typeof raw?.claim === 'string' ? raw.claim : '', now()));
   }
 
   if (req.method === 'GET' && url.pathname === '/v1/records') {
@@ -97,7 +164,7 @@ async function route(req: Request, env: Env, now: () => number, sleep: (ms: numb
 export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<Response> {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   try {
-    return await route(req, env, deps.now ?? Date.now, sleep);
+    return await route(req, env, deps.now ?? Date.now, sleep, deps.mail ?? env.MAIL);
   } catch {
     return fail(500, 'The vault server failed. Try again later.');
   }

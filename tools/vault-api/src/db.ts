@@ -70,6 +70,46 @@ async function stale(db: Db, ups: Upsert[]): Promise<{ id: string; rev: number }
   return ups.filter((u) => (revs.get(u.id) ?? 0) !== u.baseRev).map((u) => ({ id: u.id, rev: revs.get(u.id) ?? 0 }));
 }
 
+export type Escrow = { email: string; blob: string; createdAt: number };
+export const getEscrow = (db: Db) => db.prepare('SELECT email, blob, created_at AS createdAt FROM escrow WHERE id = 1').first<Escrow>();
+
+export const setEscrow = (db: Db, email: string, blob: string, now: number) =>
+  db
+    .prepare(
+      'INSERT INTO escrow (id, email, blob, created_at) VALUES (1, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET email = excluded.email, blob = excluded.blob, created_at = excluded.created_at',
+    )
+    .bind(email, blob, now)
+    .all();
+
+export const clearEscrow = (db: Db) => db.batch([db.prepare('DELETE FROM escrow WHERE id = 1'), db.prepare('DELETE FROM lost_request WHERE id = 1')]);
+
+export type LostRequest = { claimHash: string; confirmHash: string; requestedAt: number; releaseAt: number | null; cancelled: number };
+export const getLostRequest = (db: Db) =>
+  db
+    .prepare('SELECT claim_hash AS claimHash, confirm_hash AS confirmHash, requested_at AS requestedAt, release_at AS releaseAt, cancelled FROM lost_request WHERE id = 1')
+    .first<LostRequest>();
+
+// A fresh request overwrites the row outright: new hashes, and release_at/cancelled reset, so an old confirm or cancel token stops working.
+export const setLostRequest = (db: Db, claimHash: string, confirmHash: string, now: number) =>
+  db
+    .prepare(
+      `INSERT INTO lost_request (id, claim_hash, confirm_hash, requested_at, release_at, cancelled) VALUES (1, ?, ?, ?, NULL, 0)
+       ON CONFLICT (id) DO UPDATE SET claim_hash = excluded.claim_hash, confirm_hash = excluded.confirm_hash, requested_at = excluded.requested_at, release_at = NULL, cancelled = 0`,
+    )
+    .bind(claimHash, confirmHash, now)
+    .all();
+
+export const confirmLostRequest = async (db: Db, confirmHash: string, releaseAt: number): Promise<boolean> =>
+  (await db.prepare('UPDATE lost_request SET release_at = ? WHERE id = 1 AND confirm_hash = ? AND cancelled = 0 RETURNING id').bind(releaseAt, confirmHash).first()) !== null;
+
+export const cancelLostRequestByToken = async (db: Db, confirmHash: string): Promise<void> => {
+  await db.prepare('UPDATE lost_request SET cancelled = 1 WHERE id = 1 AND confirm_hash = ?').bind(confirmHash).all();
+};
+
+export const cancelLostRequest = async (db: Db): Promise<void> => {
+  await db.prepare('UPDATE lost_request SET cancelled = 1 WHERE id = 1').all();
+};
+
 export async function push(db: Db, ups: Upsert[], now: number): Promise<PushResponse | PushConflict> {
   const conflicts = await stale(db, ups);
   if (conflicts.length) return { conflicts };

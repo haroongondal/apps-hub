@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Cloudflare Worker: Strongroom sync server (D1); holds only ciphertext, record ids, sizes and timestamps",
   "scripts": {
-    "test": "node --disable-warning=ExperimentalWarning --test src/__tests__/worker.test.ts src/__tests__/schema.test.ts src/__tests__/sync-e2e.test.ts",
+    "test": "node --disable-warning=ExperimentalWarning --test src/__tests__/worker.test.ts src/__tests__/schema.test.ts src/__tests__/sync-e2e.test.ts src/__tests__/lost-access.test.ts",
     "typecheck": "tsc --noEmit",
     "deploy": "cf deploy --secrets-file .dev.vars"
   },
