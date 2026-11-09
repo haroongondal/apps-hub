@@ -9,7 +9,9 @@ import type { Header, RecordStore, StoredRecord, SyncReport } from 'strongroom-c
 import { COMMON_PASSWORDS } from '../common-passwords.ts';
 import { createService } from '../service.ts';
 import type { Ctx, Detail, ImportPreview, KV, Pending, Row, Status, SyncStatus } from '../service.ts';
-import { localStore } from '../storage.ts';
+import { createLocalStore, localKv } from '../storage.ts';
+import { createDeviceVault } from '../device-vault.ts';
+import type { KeyStore } from '../device-vault.ts';
 import { fakeChrome, loginEntry, newWorld, PHONE_PASSWORD, useChrome } from './sync-world.ts';
 import type { World } from './sync-world.ts';
 
@@ -365,17 +367,30 @@ const until = async (done: () => boolean) => {
   assert.ok(done());
 };
 
+// Mirrors idbKeyStore's generate-on-first-use, but keyed on the fake chrome.storage.local so a restart (same local) keeps the same wrapper key, as the real IndexedDB would.
+const deviceKeyStores = new WeakMap<ReturnType<typeof fakeChrome>, KeyStore>();
+function deviceKeyStore(local: ReturnType<typeof fakeChrome>): KeyStore {
+  let ks = deviceKeyStores.get(local);
+  if (!ks) {
+    let key: CryptoKey | undefined;
+    ks = { get: async () => (key ??= await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])), put: async (k) => void (key = k) };
+    deviceKeyStores.set(local, ks);
+  }
+  return ks;
+}
+
 function extension(world: World, local = fakeChrome()) {
   useChrome(local);
   const session = memoryKv();
   const alarms: boolean[] = [];
   const clock = { t: 1_000_000 };
+  const store = createLocalStore(createDeviceVault(localKv, deviceKeyStore(local)));
   const service = createService({
-    store: localStore, session, now: () => clock.t, resetAutoLock() {}, syncAlarm: (on) => void alarms.push(on),
-    sync: { store: localStore, transport: world.transport }, ...LOW,
+    store, session, now: () => clock.t, resetAutoLock() {}, syncAlarm: (on) => void alarms.push(on),
+    sync: { store, transport: world.transport }, ...LOW,
   });
   const call = <T = unknown>(req: object, ctx?: Ctx) => service.handle(req as never, ctx) as Promise<T>;
-  return { world, local, session, alarms, clock, service, call, restart: () => extension(world, local) };
+  return { world, local, session, alarms, clock, service, store, call, restart: () => extension(world, local) };
 }
 type Ext = ReturnType<typeof extension>;
 
@@ -385,7 +400,7 @@ const recoverySignIn = (x: Ext, over: object = {}) =>
 const names = async (x: Ext) => (await x.call<{ rows: Row[] }>({ type: 'list' })).rows.map((r) => r.name).sort();
 const status = (x: Ext) => x.call<SyncStatus>({ type: 'syncStatus' });
 const snapshot = (x: Ext) => JSON.stringify([...x.local.data]);
-const headerNow = async () => headerToJson((await localStore.getHeader())!);
+const headerNow = async (x: Ext) => headerToJson((await x.store.getHeader())!);
 
 async function signedIn(world?: World) {
   const x = extension(world ?? (await newWorld()));
@@ -410,15 +425,17 @@ test('signInReplacesTheLocalVaultOnlyAfterConfirmation', async () => {
   assert.equal(await signIn(x, { replace: true }), null);
   const writes = x.local.setCalls.filter((keys) => keys.includes('header'));
   assert.equal(writes.length, 1);
-  for (const key of ['records', 'quarantine', 'syncMeta', 'accountKey']) assert.ok(writes[0].includes(key), key);
+  for (const key of ['records', 'quarantine', 'syncMeta']) assert.ok(writes[0].includes(key), key);
+  assert.ok(x.local.setCalls.some((keys) => keys.includes('accountKeySealed')));
   assert.deepEqual(await names(x), ['Mail']);
-  assert.equal(await headerNow(), headerToJson(world.phone.store.header!));
-  assert.deepEqual(await localStore.getSyncMeta(), { lastRev: 1, headerRev: 1 });
-  assert.deepEqual((await localStore.getSyncLocal()).accountKey, world.accountKey);
+  assert.equal(await headerNow(x), headerToJson(world.phone.store.header!));
+  assert.deepEqual(await x.store.getSyncMeta(), { lastRev: 1, headerRev: 1 });
+  assert.deepEqual((await x.store.getSyncLocal()).accountKey, world.accountKey);
 
   await x.call({ type: 'lock' });
   await assert.rejects(x.call({ type: 'unlock', password: PASSWORD }), /isn't right/);
   await x.call({ type: 'unlock', password: PHONE_PASSWORD });
+  await x.service.settled();
   assert.equal((await status(x)).state, 'idle');
 });
 
@@ -548,7 +565,7 @@ test('aVaultThatNeedsAnAccountKeyThisComputerLostSaysSo', async () => {
   const x = await signedIn();
   await x.call({ type: 'lock' });
   assert.equal((await status(x)).keyLost, false);
-  x.local.data.delete('accountKey');
+  x.local.data.delete('accountKeySealed'); // the sealed entry is the only copy once signed in, same as losing it from storage
   await assert.rejects(x.call({ type: 'unlock', password: PHONE_PASSWORD }), /Sign in with your account/);
   const lost = await status(x);
   assert.deepEqual([lost.state, lost.keyLost], ['off', true]);
@@ -577,11 +594,11 @@ test('aRecoveryMadeWhileASyncIsSendingAnOlderUpdateWaitsForIt', async () => {
   world.gate = new Promise<void>((resolve) => (release = resolve));
   const syncing = x.call({ type: 'syncNow' });
   await until(() => world.requests.includes('PUT /v1/account'));
-  const stored = localStore.setAccount;
-  const written = new Promise<void>((resolve) => (localStore.setAccount = async (a) => (await stored(a), resolve())));
+  const stored = x.store.setAccount;
+  const written = new Promise<void>((resolve) => (x.store.setAccount = async (a) => (await stored(a), resolve())));
   const recovering = x.call({ type: 'recover', recoveryKey: world.recoveryKeyText, password: THIRD_PASSWORD });
   await Promise.race([written, new Promise((resolve) => setTimeout(resolve, 2500))]);
-  localStore.setAccount = stored;
+  x.store.setAccount = stored;
   release();
   await Promise.all([syncing, recovering]);
   await x.service.settled();
@@ -617,7 +634,7 @@ test('recoverySignInUpdatesTheServerWithTheNewPassword', async () => {
 
   const again = await signInWithPassword(world.phone.transport, NEW_PASSWORD, world.accountKey);
   assert.deepEqual(again.vaultKey, world.phone.vaultKey);
-  assert.deepEqual(await localStore.getSyncMeta(), { lastRev: 1, headerRev: again.headerRev });
+  assert.deepEqual(await x.store.getSyncMeta(), { lastRev: 1, headerRev: again.headerRev });
   await assert.rejects(signInWithPassword(world.phone.transport, PHONE_PASSWORD, world.accountKey), SyncAuthError);
   assert.ok(await signInWithRecovery(world.phone.transport, world.recoveryKey));
   const row = world.sqlite.prepare('SELECT recovery_hash FROM account').get() as { recovery_hash: string };
@@ -694,26 +711,26 @@ test('aHeaderChangedElsewhereIsAdoptedOnlyAtAPasswordUnlock', async () => {
   await world.phone.putHeader(changed, tokenHash(world.tokens.loginToken));
 
   assert.equal((await x.call<SyncReport>({ type: 'syncNow' })).headerChanged, true);
-  assert.notEqual(await headerNow(), headerToJson(changed));
+  assert.notEqual(await headerNow(x), headerToJson(changed));
   await x.call({ type: 'lock' });
   await x.call({ type: 'unlock', password: PHONE_PASSWORD });
   await x.service.settled();
-  assert.equal(await headerNow(), headerToJson(changed));
-  assert.equal((await localStore.getSyncMeta()).headerRev, 2);
+  assert.equal(await headerNow(x), headerToJson(changed));
+  assert.equal((await x.store.getSyncMeta()).headerRev, 2);
   assert.equal((await status(x)).state, 'idle');
 });
 
 test('aHeaderThatDoesNotOpenToThisVaultKeyIsNeverAdopted', async () => {
   const world = await newWorld();
   const x = await signedIn(world);
-  const before = await headerNow();
+  const before = await headerNow(x);
   const other = await createVault(PHONE_PASSWORD, randomBytes(20), { kdf: KDF_FLOOR, accountKey: world.accountKey });
   await world.phone.putHeader(other.header, tokenHash(world.tokens.loginToken));
   await x.call({ type: 'lock' });
   await x.call({ type: 'unlock', password: PHONE_PASSWORD });
   await x.service.settled();
-  assert.equal(await headerNow(), before);
-  assert.equal((await localStore.getSyncMeta()).headerRev, 1);
+  assert.equal(await headerNow(x), before);
+  assert.equal((await x.store.getSyncMeta()).headerRev, 1);
 });
 
 test('aRefusedTokenAsksToSignInAndStopsRetrying', async () => {
