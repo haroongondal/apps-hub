@@ -3,8 +3,10 @@ import { initRouter } from './router.ts';
 import { initSave } from './save.ts';
 import { initTakeover } from './takeover.ts';
 
-// Listeners must be added at the top level so Chrome can deliver the event that woke a stopped worker.
+// Listeners must be added synchronously at the top level so Chrome can deliver the event that woke a stopped worker.
 export function initDownloads(): void {
-  throw new Error('not implemented');
+  initRouter();
+  initSave();
+  initTakeover();
+  initMenus();
 }
-void [initMenus, initRouter, initSave, initTakeover];

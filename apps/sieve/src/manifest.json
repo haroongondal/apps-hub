@@ -28,6 +28,6 @@
       "all_frames": true
     }
   ],
-  "permissions": ["declarativeNetRequest", "declarativeNetRequestFeedback", "storage", "unlimitedStorage", "scripting", "webNavigation"],
+  "permissions": ["alarms", "contextMenus", "declarativeNetRequest", "declarativeNetRequestFeedback", "downloads", "offscreen", "scripting", "storage", "unlimitedStorage", "webNavigation"],
   "host_permissions": ["<all_urls>"]
 }

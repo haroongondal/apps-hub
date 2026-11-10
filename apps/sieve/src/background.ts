@@ -4,6 +4,7 @@ import { initBadge, onMatched, onNavigated, onTabRemoved } from './counts.ts';
 import { forgetStored, onCommitted } from './inject.ts';
 import { onPanelConnect } from './panels.ts';
 import { onMessage } from './pick-handler.ts';
+import { initDownloads } from './dl/background-dl.ts';
 
 // Listeners are added synchronously at the top level, so Chrome can deliver the event that woke a stopped worker.
 chrome.runtime.onInstalled.addListener(async () => {
@@ -24,3 +25,4 @@ initBadge();
 chrome.declarativeNetRequest.onRuleMatchedDebug?.addListener(onMatched);
 chrome.webNavigation.onCommitted.addListener(onNavigated);
 chrome.tabs.onRemoved.addListener(onTabRemoved);
+initDownloads();

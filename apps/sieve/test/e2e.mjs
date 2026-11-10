@@ -1591,6 +1591,7 @@ try {
   check('after the extension reloads, "Block it" says why it cannot save and is ready for another try instead of sticking', cutOff === 'Sieve was reloaded or turned off. Reload this page, then try again.' && unstuck, json({ cutOff, unstuck }));
   await ctx.close();
   for (const m of ['./ai-injection.mjs', './my-filters-regex.mjs']) await (await import(m)).run({ servers });
+  await (await import('./dl/e2e.mjs')).run({ servers });
 } catch (e) {
   check('the run finished without an exception', false, String(e?.stack ?? e).split('\n').slice(0, 4).join(' | '));
 } finally {
