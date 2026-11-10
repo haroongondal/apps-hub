@@ -84,6 +84,19 @@ Phase 1 is described in the most detail.
   email recovery sends the Worker the emailed code and the sealed blob in the
   same `PUT /v1/account` request, so for that one request the Worker could in
   principle open the blob itself. *(Security review's point, acknowledged, not fixed.)*
+  **Owner ruling, 2026-11-10:** accepted as-is for now — this is still the
+  development phase and no real vault data exists in the extension yet. Revisit
+  (the `mailto:`-draft alternative is the documented option) before this is used
+  with a real vault or released to anyone else.
+- The lock-free autofill device key is the full sign-in token, not a read-only
+  one, so someone with brief access to this browser profile could take over the
+  synced account (delete the email-recovery escrow, cancel a pending lost-access
+  request, rotate the password/recovery key) — not just read the vault, which is
+  the risk the design otherwise accepts. *(Security review's point, HIGH.)*
+  **Owner ruling, 2026-11-10:** accepted as-is for now, same reasoning as above
+  — development phase, no real vault data at stake yet. Revisit (the read-only
+  device token, matching how the Android app already does it, is the documented
+  option) before this is used with a real vault or released to anyone else.
 - A password filled into the wrong app or a lookalike site.
 - Losing the vault: a sync bug, a bad merge or a failed import that destroys
   entries.
