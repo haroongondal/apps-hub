@@ -1,7 +1,7 @@
 import {
   AccountKeyRequired, FLAG_PREFIX, ImportError, KdfOutOfRange, SyncAuthError, SyncHttpError, SyncOfflineError, SyncRollbackError, adoptHeader,
   equalBytes, exportForChrome, formatEmailCode, fromBase64, formatRecoveryKey, generateEmailCode, headerFromJson, headerToJson, kdfWeaker, matches,
-  newId, open, openEntry, openEscrow, openWithPassword, parseAccountKey, parseEmailCode, parseGoogleExport, parseRecoveryKey, readEntries,
+  newId, open, openEntry, openEscrow, openWithPassword, parseAccountKey, parseEmailCode, parseGoogleExport, parseRecoveryKey, randomBytes, readEntries,
   recoveryKeyGroup, recoveryLoginToken, recover, registrableDomain, rotateRecoveryKey, seal, sealEscrow, setupVault, signInWithPassword,
   signInWithRecovery, siteFromUrl, syncOnce, toBase64, tokenHash, unlockWithRecovery, utf8, withNewPassword, writeEntries,
 } from 'strongroom-core';
@@ -56,7 +56,10 @@ export type Request =
   | { type: 'emailRecovery'; action: 'enrol'; email: string; password: string }
   | { type: 'emailRecovery'; action: 'confirm'; code: string }
   | { type: 'emailRecovery'; action: 'off' }
-  | { type: 'emailRecovery'; action: 'cancelRecovery' };
+  | { type: 'emailRecovery'; action: 'cancelRecovery' }
+  | { type: 'lostAccess'; action: 'request' }
+  | { type: 'lostAccess'; action: 'check' }
+  | { type: 'lostAccess'; action: 'open'; code: string; newPassword: string; replace?: boolean };
 
 export type Status = { state: 'no-vault' | 'locked' | 'unlocked'; recoveryKey: string | null };
 export type Row = { id: string; name: string; username: string; sites: string[]; apps: number; flagged: boolean };
@@ -70,6 +73,7 @@ export type Pending = { intent: 'new' | 'update' | null; host: string; username:
 export type EmailRecoveryStatus = {
   available: boolean; enrolled: boolean; waitingForCode: boolean; pendingRecovery: { releaseAt: number | null } | null; wasTurnedOff: boolean;
 };
+export type LostAccessState = { state: 'none' } | { state: 'waiting'; releaseAt: number | null } | { state: 'ready' };
 
 export class UserError extends Error {}
 
@@ -96,6 +100,10 @@ const BAD_EMAIL = "That doesn't look like an email address.";
 const PENDING_AAD = utf8('strongroom/v1/pending-account-update');
 const ESCROW_BLOB = 'escrowBlob';
 const ESCROW_CONFIRMED = 'escrowConfirmed';
+const LOST_CLAIM = 'lostClaim';
+const LOST_BLOB = 'lostBlob';
+const CLAIM_BYTES = 20;
+const NOT_READY = 'Wait for the 24-hour release, then come back and try again.';
 const noop = () => {};
 
 // A word from the common-password list, one repeated character, or a straight run such as abcdefghijkl.
@@ -425,6 +433,60 @@ export function createService(deps: Deps) {
     return null;
   }
 
+  // Shared by signInRecovery (keys typed in by hand) and lostAccessOpen (keys taken straight out of the opened escrow blob).
+  async function recoverWithKeys(recoveryKey: Uint8Array, accountKey: Uint8Array, newPassword: string, replace: boolean): Promise<{ needsConfirm: true; entries: number } | null> {
+    const port = unavailable();
+    const held = await accountKeyOf();
+    if (held && !equalBytes(held, accountKey)) throw new UserError(KEY_DIFFERENT);
+    strong(newPassword);
+    return await exclusive(async () => {
+      const signed = await signInErrors(async () => {
+        const s = await signInWithRecovery(port.transport, recoveryKey);
+        if (!s.header.accountKey) throw new SyncAuthError();
+        return s;
+      }, RECOVERY_REFUSED);
+      const how = await plan(signed, replace);
+      if (typeof how === 'object') return how;
+      const header = await withNewPassword(signed.header, signed.vaultKey, newPassword, { floor: deps.floor, accountKey });
+      const queued = await pendingUpdate(header, newPassword, accountKey, recoveryKey, signed.vaultKey, signed.headerRev);
+      await takeAccount(signed, how, { header, accountKey, loginToken: queued.loginToken, pending: queued.pending });
+      return null;
+    });
+  }
+
+  async function lostAccessRequest(): Promise<null> {
+    const { transport } = unavailable();
+    const claim = randomBytes(CLAIM_BYTES);
+    await deps.settings.set(LOST_CLAIM, toBase64(claim));
+    await deps.settings.remove(LOST_BLOB);
+    await transport.lostRequest(tokenHash(claim));
+    return null;
+  }
+
+  async function lostAccessCheck(): Promise<LostAccessState> {
+    const { transport } = unavailable();
+    const claim = await deps.settings.get(LOST_CLAIM);
+    if (!claim) return { state: 'none' };
+    const released = await transport.lostRelease(claim);
+    if (released.state === 'waiting') return released;
+    await deps.settings.set(LOST_BLOB, released.blob);
+    return { state: 'ready' };
+  }
+
+  async function lostAccessOpen(code: string, newPassword: string, replace: boolean): Promise<{ needsConfirm: true; entries: number } | null> {
+    const blobB64 = await deps.settings.get(LOST_BLOB);
+    if (!blobB64) throw new UserError(NOT_READY);
+    const parsed = parseEmailCode(String(code));
+    const opened = parsed && (await openEscrow(parsed, fromBase64(blobB64)));
+    if (!opened) throw new UserError("That code isn't right. Check it and try again.");
+    const result = await recoverWithKeys(opened.recoveryKey, opened.accountKey, newPassword, replace);
+    if (result === null) {
+      await deps.settings.remove(LOST_CLAIM);
+      await deps.settings.remove(LOST_BLOB);
+    }
+    return result;
+  }
+
   async function handle(req: Request, ctx?: Ctx): Promise<unknown> {
     const type = (req as { type?: unknown })?.type;
     const fromPage = ctx !== undefined;
@@ -494,6 +556,16 @@ export function createService(deps: Deps) {
             case 'cancelRecovery': return await emailRecoveryCancel();
             default: throw new UserError(NOT_ALLOWED);
           }
+        case 'lostAccess': {
+          unavailable();
+          if (await keyOrNull()) throw new UserError('Strongroom is already unlocked. Lock it first.');
+          switch (req.action) {
+            case 'request': return await lostAccessRequest();
+            case 'check': return await lostAccessCheck();
+            case 'open': return await lostAccessOpen(req.code, req.newPassword, req.replace === true);
+            default: throw new UserError(NOT_ALLOWED);
+          }
+        }
         case 'signIn': {
           const port = unavailable();
           const accountKey = parseAccountKey(String(req.accountKey));
@@ -507,27 +579,12 @@ export function createService(deps: Deps) {
           });
         }
         case 'signInRecovery': {
-          const port = unavailable();
+          unavailable();
           const recoveryKey = parseRecoveryKey(String(req.recoveryKey));
           const accountKey = parseAccountKey(String(req.accountKey));
           if (!recoveryKey) throw new UserError(RECOVERY_REFUSED);
           if (!accountKey) throw new UserError(BAD_ACCOUNT_KEY);
-          const held = await accountKeyOf();
-          if (held && !equalBytes(held, accountKey)) throw new UserError(KEY_DIFFERENT);
-          strong(req.newPassword);
-          return await exclusive(async () => {
-            const signed = await signInErrors(async () => {
-              const s = await signInWithRecovery(port.transport, recoveryKey);
-              if (!s.header.accountKey) throw new SyncAuthError();
-              return s;
-            }, RECOVERY_REFUSED);
-            const how = await plan(signed, req.replace === true);
-            if (typeof how === 'object') return how;
-            const header = await withNewPassword(signed.header, signed.vaultKey, req.newPassword, { floor: deps.floor, accountKey });
-            const queued = await pendingUpdate(header, req.newPassword, accountKey, recoveryKey, signed.vaultKey, signed.headerRev);
-            await takeAccount(signed, how, { header, accountKey, loginToken: queued.loginToken, pending: queued.pending });
-            return null;
-          });
+          return await recoverWithKeys(recoveryKey, accountKey, req.newPassword, req.replace === true);
         }
         case 'list': {
           const { found, unreadable } = await logins(await requireKey());

@@ -1,4 +1,4 @@
-import type { Detail, EmailRecoveryStatus, ImportPreview, PageRef, Pending, Request, Row, Status, SyncStatus } from './service.ts';
+import type { Detail, EmailRecoveryStatus, ImportPreview, LostAccessState, PageRef, Pending, Request, Row, Status, SyncStatus } from './service.ts';
 import { syncLines } from './sync-copy.ts';
 
 type Child = Node | string | null | false | undefined;
@@ -112,7 +112,49 @@ function signInScreen(back: () => unknown) {
   screen('Sign in to sync', back,
     h('p', { class: 'ui-muted' }, 'Use the master password and account key from your phone. Strongroom was set up there first.'),
     label('Master password', pw), label('Account key', key), msg, go,
-    button('Forgot master password?', () => recoverySignInScreen(back), 'ui-btn--ghost'));
+    button('Forgot master password?', () => recoverySignInScreen(back), 'ui-btn--ghost'),
+    button('Lost access to your account?', () => lostAccessScreen(back), 'ui-btn--ghost'));
+}
+
+async function lostAccessScreen(back: () => unknown) {
+  const msg = msgBox();
+  const state = await call<LostAccessState>({ type: 'lostAccess', action: 'check' }).catch((): LostAccessState => ({ state: 'none' }));
+  if (state.state === 'ready') return lostAccessOpenScreen(back);
+  if (state.state === 'waiting') {
+    const again = button('Check again', () => guarded(msg, [again], () => lostAccessScreen(back)), 'ui-btn--primary');
+    screen('Lost access', back,
+      h('p', {}, state.releaseAt
+        ? `Confirmed by email. Strongroom lets you back in at ${new Date(state.releaseAt).toLocaleString()}.`
+        : 'Check your email and open the confirm link. The 24-hour wait starts once you do.'),
+      msg, again);
+    return;
+  }
+  const go = button('Request access by email', () => guarded(msg, [go], async () => {
+    await call({ type: 'lostAccess', action: 'request' });
+    await lostAccessScreen(back);
+  }), 'ui-btn--primary');
+  screen('Lost access', back,
+    h('p', { class: 'ui-muted' }, "If you turned on email recovery, this asks by email. You'll need the code it mailed you when you turned it on, and a 24-hour wait that another signed-in device can cancel."),
+    msg, go);
+}
+
+function lostAccessOpenScreen(back: () => unknown) {
+  const msg = msgBox();
+  const code = input({ placeholder: 'ABCD-EFGH-…' });
+  const pw = input({ type: 'password', autocomplete: 'new-password' });
+  const again = input({ type: 'password', autocomplete: 'new-password' });
+  const send = (replace: boolean) => async () => {
+    const reply = await call<Confirm>({ type: 'lostAccess', action: 'open', code: code.value, newPassword: pw.value, replace });
+    if (reply) confirmReplace(reply.entries, () => lostAccessOpenScreen(back), send(true));
+    else await route();
+  };
+  const go = button('Open and sign in', () => guarded(msg, [go], async () => {
+    if (pw.value !== again.value) throw new Error("The two passwords don't match. Type the same one twice.");
+    await send(false)();
+  }), 'ui-btn--primary');
+  screen('Lost access', back,
+    h('p', { class: 'ui-muted' }, 'Type the code from the email you got when you turned on email recovery, and set a new master password.'),
+    label('Code from the email', code), label('New master password (at least 12 characters)', pw), label('Type it again', again), msg, go);
 }
 
 function recoverySignInScreen(back: () => unknown) {
@@ -225,7 +267,8 @@ async function unlockScreen() {
   screen('Unlock Strongroom', null,
     pending && h('p', { class: 'ui-muted' }, `After you unlock, you can save the sign-in you just used on ${pending.host}.`),
     label('Master password', pw), msg, go, button('Forgot master password?', resetScreen, 'ui-btn--ghost'),
-    sync.available && (sync.state !== 'off' || sync.keyLost) && button('Sign in with your account', () => signInScreen(unlockScreen), 'ui-btn--ghost'));
+    sync.available && (sync.state !== 'off' || sync.keyLost) && button('Sign in with your account', () => signInScreen(unlockScreen), 'ui-btn--ghost'),
+    sync.available && button('Lost access to your account?', () => lostAccessScreen(unlockScreen), 'ui-btn--ghost'));
 }
 
 function resetScreen() {

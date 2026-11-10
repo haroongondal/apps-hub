@@ -952,3 +952,109 @@ test('none of the email-recovery requests work from a page', async () => {
     await assert.rejects(call({ type: 'emailRecovery', action, email: 'a@b.com', password: PASSWORD, code: 'x' }, page('https://example.com')), /isn't allowed/);
   }
 });
+
+async function emailEnrolled() {
+  const world = await newWorld();
+  const owner = await signedIn(world);
+  await enrol(owner);
+  const code = codeOf(world.mail.sent[0].text);
+  await owner.call({ type: 'emailRecovery', action: 'confirm', code });
+  return { world, code };
+}
+
+type LostAccessState = { state: 'none' } | { state: 'waiting'; releaseAt: number | null } | { state: 'ready' };
+const lostCheck = (x: Ext) => x.call<LostAccessState>({ type: 'lostAccess', action: 'check' });
+const lostRequestNow = (x: Ext) => x.call({ type: 'lostAccess', action: 'request' });
+// Simulates the account owner clicking the confirm link mailed by the server's lost/request, which starts the 24-hour wait.
+async function confirmByEmail(world: World) {
+  const token = /t=([^&\s]+)/.exec(world.mail.sent.at(-1)!.text)![1];
+  await world.serve(new Request('https://vault.example/v1/lost/confirm?t=' + token));
+}
+// Backdates the confirmed request's release time instead of a fake clock: the 24-hour wait is counted from real release_at, so this ends it early.
+const releaseLostRequest = (world: World) => world.sqlite.exec(`UPDATE lost_request SET release_at = ${Date.now() - 1000}`);
+
+test('a fresh device can request, wait, then open with the code and ends signed in with a new password', async () => {
+  const { world, code } = await emailEnrolled();
+  const fresh = extension(world);
+  assert.deepEqual(await lostCheck(fresh), { state: 'none' });
+  await lostRequestNow(fresh);
+  assert.deepEqual(await lostCheck(fresh), { state: 'waiting', releaseAt: null });
+  await confirmByEmail(world);
+  const waiting = await lostCheck(fresh);
+  assert.equal(waiting.state, 'waiting');
+  assert.ok((waiting as { releaseAt: number }).releaseAt > Date.now());
+  releaseLostRequest(world);
+  assert.deepEqual(await lostCheck(fresh), { state: 'ready' });
+  assert.equal(await fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), null);
+  assert.equal((await fresh.call<Status>({ type: 'status' })).state, 'unlocked');
+  assert.deepEqual((await fresh.store.getSyncLocal()).accountKey, world.accountKey);
+  assert.ok(!fresh.local.data.has('lostClaim'));
+  assert.ok(!fresh.local.data.has('lostBlob'));
+  await fresh.call({ type: 'lock', manual: true });
+  await fresh.call({ type: 'unlock', password: NEW_PASSWORD });
+  assert.equal((await fresh.call<Status>({ type: 'status' })).state, 'unlocked');
+});
+
+test('check before 24 hours reports waiting', async () => {
+  const { world } = await emailEnrolled();
+  const fresh = extension(world);
+  await lostRequestNow(fresh);
+  await confirmByEmail(world);
+  const waiting = await lostCheck(fresh);
+  assert.equal(waiting.state, 'waiting');
+  assert.ok(typeof (waiting as { releaseAt: number | null }).releaseAt === 'number');
+});
+
+test('a wrong code leaves the claim and blob in place and says so in plain words', async () => {
+  const { world } = await emailEnrolled();
+  const fresh = extension(world);
+  await lostRequestNow(fresh);
+  await confirmByEmail(world);
+  releaseLostRequest(world);
+  assert.deepEqual(await lostCheck(fresh), { state: 'ready' });
+  await assert.rejects(
+    fresh.call({ type: 'lostAccess', action: 'open', code: 'AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA', newPassword: NEW_PASSWORD }),
+    /isn't right/,
+  );
+  assert.ok(fresh.local.data.has('lostClaim'));
+  assert.ok(fresh.local.data.has('lostBlob'));
+  assert.deepEqual(await lostCheck(fresh), { state: 'ready' });
+});
+
+test('open without a ready blob is refused', async () => {
+  const { world, code } = await emailEnrolled();
+  const fresh = extension(world);
+  await assert.rejects(fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), /wait/i);
+  await lostRequestNow(fresh);
+  await assert.rejects(fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), /wait/i);
+  await confirmByEmail(world);
+  await assert.rejects(fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), /wait/i);
+});
+
+test('lostAccess refuses to run while the vault is unlocked', async () => {
+  const { world } = await emailEnrolled();
+  const x = extension(world);
+  await x.call({ type: 'setup', password: PASSWORD });
+  for (const req of [{ action: 'request' }, { action: 'check' }, { action: 'open', code: 'x', newPassword: NEW_PASSWORD }]) {
+    await assert.rejects(x.call({ type: 'lostAccess', ...req }), /already unlocked/);
+  }
+});
+
+test('lostAccess is refused from a page', async () => {
+  const { call } = await unlocked();
+  for (const action of ['request', 'check', 'open']) {
+    await assert.rejects(call({ type: 'lostAccess', action, code: 'x', newPassword: NEW_PASSWORD }, page('https://example.com')), /isn't allowed/);
+  }
+});
+
+test('after open the old recovery key is the rotated one (the pasted blob key works, an earlier key does not)', async () => {
+  const { world, code } = await emailEnrolled();
+  const fresh = extension(world);
+  await lostRequestNow(fresh);
+  await confirmByEmail(world);
+  releaseLostRequest(world);
+  await lostCheck(fresh);
+  assert.equal(await fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), null);
+  const header = (await fresh.store.getHeader())!;
+  assert.equal(await unlockWithRecovery(header, world.recoveryKey), null);
+});
