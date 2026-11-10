@@ -87,6 +87,8 @@ export interface EmailRecoveryStatus {
   // releaseAt is null until the owner opens the emailed link, which starts the 24-hour wait.
   pendingRecovery: { releaseAt: number | null } | null;
   wasTurnedOff: boolean;
+  // True from the moment turning it on made a new recovery key until the owner confirms they saved it; kept on this phone, so it holds whatever checked says.
+  keyUnseen: boolean;
 }
 
 // What a lost-access claim on this phone has reached; releaseAt is null until the owner opens the emailed link.
@@ -103,7 +105,7 @@ export interface SyncReport {
 
 // Rejections carry a code (LOCKED, NOT_SET_UP, KDF_OUT_OF_RANGE, HEADER_UNREADABLE, ACCOUNT_KEY_REQUIRED, BAD_SITE, IMPORT_*, NO_FINGERPRINT,
 // SYNC_UNAVAILABLE, SYNC_OFF, SYNC_SIGN_IN, SYNC_OFFLINE, SYNC_SERVER, SYNC_ROLLBACK, SYNC_KEY_LOST, HEADER_CHECK_FAILED, WRONG_RECOVERY_KEY,
-// WRONG_SETUP_TOKEN, BAD_ACCOUNT_KEY, ...) and an owner-ready message.
+// WRONG_SETUP_TOKEN, BAD_ACCOUNT_KEY, BAD_EMAIL, SYNC_FIRST, NOT_WAITING_FOR_CODE, LOST_STILL_ALIVE, LOST_NOT_READY, LOST_DIFFERENT_ACCOUNT, ...) and an owner-ready message.
 export interface StrongroomVaultApi {
   getStatus(): Status;
   generateRecoveryKey(): string;
@@ -148,6 +150,23 @@ export interface StrongroomVaultApi {
   // accountKey is needed only on a phone that holds none (a new phone, or one whose Keystore lost it); nothing can check it, so ask for it twice.
   recoverSync(recoveryKey: string, newPassword: string, accountKey?: string): Promise<void>;
   syncNow(): Promise<SyncReport>;
+  // Never rejects for being offline (checked is false instead); needs no unlocked vault.
+  emailRecoveryStatus(): Promise<EmailRecoveryStatus>;
+  // Null when the password is wrong. Makes a NEW recovery key (shown once, like newRecoveryKey) and emails a code; sent is false when the reply was lost and the next sync finishes it.
+  // Rejects with BAD_EMAIL, SYNC_OFF, SYNC_SIGN_IN or SYNC_FIRST (nothing changed). Does not mark the key as seen: call markRecoveryKeyShown once the owner has saved it.
+  enableEmailRecovery(email: string, password: string): Promise<{ recoveryKey: string; sent: boolean } | null>;
+  // False when the code is wrong; NOT_WAITING_FOR_CODE when there is nothing to confirm.
+  confirmEmailRecovery(code: string): Promise<boolean>;
+  turnOffEmailRecovery(): Promise<void>;
+  // Cancels a pending lost-access request on the account (works for an unconfirmed one too).
+  cancelLostRequest(): Promise<void>;
+  // Clears keyUnseen: call after the owner confirms they saved the new recovery key.
+  markRecoveryKeyShown(): Promise<void>;
+  // The next three need no unlocked vault and no sync account (the Unlock screen uses them). Request rejects with LOST_STILL_ALIVE while an earlier one is alive.
+  lostAccessRequest(): Promise<void>;
+  lostAccessCheck(): Promise<LostAccessState>;
+  // False when the code is wrong; LOST_NOT_READY before the wait ends, LOST_DIFFERENT_ACCOUNT on a phone holding another account. True unlocks the vault with the new password and starts sync.
+  lostAccessOpen(code: string, newPassword: string): Promise<boolean>;
   addListener(event: 'onLock', listener: () => void): { remove(): void };
   addListener(event: 'onSync', listener: (status: SyncStatus) => void): { remove(): void };
 }

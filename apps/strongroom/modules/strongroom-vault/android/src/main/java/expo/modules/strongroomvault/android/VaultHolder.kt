@@ -11,11 +11,14 @@ import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.util.AtomicFile
 import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.FragmentActivity
+import expo.modules.strongroomvault.core.EmailRecovery
 import expo.modules.strongroomvault.core.ImportResult
 import expo.modules.strongroomvault.core.IndexItem
 import expo.modules.strongroomvault.core.LockPolicy
 import expo.modules.strongroomvault.core.MatchIndex
 import expo.modules.strongroomvault.core.PendingSave
+import expo.modules.strongroomvault.core.RecoveryLocal
+import expo.modules.strongroomvault.core.RecoverySettings
 import expo.modules.strongroomvault.core.Saves
 import expo.modules.strongroomvault.core.Sealer
 import expo.modules.strongroomvault.core.SyncMode
@@ -51,6 +54,7 @@ object VaultHolder {
 
   @Volatile private var vault: Vault? = null
   @Volatile private var session: SyncSession? = null
+  @Volatile private var emailRecovery: EmailRecovery? = null
   @Volatile private var app: Context? = null
   @Volatile private var prompt: BiometricPrompt? = null
 
@@ -85,9 +89,11 @@ object VaultHolder {
           dropUnlockPassword()
           main.post { lockListener?.invoke() }
         }
-        val s = SyncSession(it, store, secrets, PrefsSyncSettings(prefs(ctx)), SyncConfig.transport(), System::currentTimeMillis)
+        val transport = SyncConfig.transport()
+        val s = SyncSession(it, store, secrets, PrefsSyncSettings(prefs(ctx)), transport, System::currentTimeMillis)
         s.onChange = { main.post { syncListener?.invoke(s.status()) } }
         session = s
+        emailRecovery = EmailRecovery(s, secrets, PrefsRecoverySettings(prefs(ctx)), transport, System::currentTimeMillis)
         app = ctx
         vault = it
         if (s.isOn) SyncJobService.schedule(ctx)
@@ -98,6 +104,11 @@ object VaultHolder {
   fun sync(context: Context): SyncSession {
     get(context)
     return session!!
+  }
+
+  fun recovery(context: Context): EmailRecovery {
+    get(context)
+    return emailRecovery!!
   }
 
   /** One sync on the sync thread after [delayMs], replacing one not yet started. [password] (an unlock's copy) is zeroed after that run. */
@@ -375,6 +386,29 @@ internal class PrefsSyncSettings(private val p: SharedPreferences) : SyncSetting
       .putBoolean("syncFailed", s.failed)
       .putString("syncPendingHeader", s.pendingHeader)
       .putString("syncRecoveryHash", s.recoveryHash)
+      .commit()
+  }
+}
+
+// Email recovery's local half. Every field is written, or the lost-key warning and the one-hour request cooldown would silently do nothing on a phone.
+internal class PrefsRecoverySettings(private val p: SharedPreferences) : RecoverySettings {
+  override fun load() = RecoveryLocal(
+    escrowBlob = p.getString("escrowBlob", null),
+    confirmed = p.getBoolean("escrowConfirmed", false),
+    lostClaim = p.getString("lostClaim", null),
+    lostBlob = p.getString("lostBlob", null),
+    keyUnseen = p.getBoolean("keyUnseen", false),
+    lostRequestedAt = p.getLong("lostRequestedAt", -1).takeIf { it >= 0 },
+  )
+
+  override fun save(r: RecoveryLocal) {
+    p.edit()
+      .putString("escrowBlob", r.escrowBlob)
+      .putBoolean("escrowConfirmed", r.confirmed)
+      .putString("lostClaim", r.lostClaim)
+      .putString("lostBlob", r.lostBlob)
+      .putBoolean("keyUnseen", r.keyUnseen)
+      .putLong("lostRequestedAt", r.lostRequestedAt ?: -1)
       .commit()
   }
 }

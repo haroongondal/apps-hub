@@ -13,6 +13,7 @@ const status = (o: Partial<EmailRecoveryStatus> = {}): EmailRecoveryStatus => ({
   waitingForCode: false,
   pendingRecovery: null,
   wasTurnedOff: false,
+  keyUnseen: false,
   ...o,
 });
 const coded = (code: string, message = 'native message') => Object.assign(new Error(message), { code });
@@ -118,6 +119,24 @@ test('emailRecoveryView says when it could not check, and when the server turned
   assert.equal(emailRecoveryView(status({ enrolled: true, pendingRecovery: { releaseAt: NOW + HOUR } })).tone, 'danger');
 });
 
+test('emailRecoveryView warns about an unseen recovery key and offers a new one, even when unchecked', () => {
+  for (const o of [{}, { checked: false }, { enrolled: true }, { waitingForCode: true }, { checked: false, enrolled: true }]) {
+    const v = emailRecoveryView(status({ keyUnseen: true, ...o }));
+    assert.equal(v.tone, 'danger', JSON.stringify(o));
+    assert.match(v.title, /recovery key changed/i);
+    assert.match(v.subtitle, /new one/i);
+    assert.ok(v.actions.includes('newKey'), JSON.stringify(o));
+  }
+  assert.ok(!emailRecoveryView(status()).actions.includes('newKey'));
+  assert.ok(!emailRecoveryView(status({ checked: false })).actions.includes('newKey'));
+});
+
+test('an unseen key keeps the other actions of the state it is in', () => {
+  assert.deepEqual(emailRecoveryView(status({ keyUnseen: true, waitingForCode: true })).actions, ['newKey', 'enterCode', 'turnOff']);
+  assert.deepEqual(emailRecoveryView(status({ keyUnseen: true, enrolled: true })).actions, ['newKey', 'turnOff']);
+  assert.deepEqual(emailRecoveryView(status({ keyUnseen: true, checked: false })).actions, ['newKey']);
+});
+
 test('emailRecoveryView is the same when the status is unchecked whatever the other flags say', () => {
   const v = emailRecoveryView(status({ checked: false, enrolled: true, waitingForCode: true }));
   assert.deepEqual(v.actions, []);
@@ -144,8 +163,9 @@ test('copy has no emoji and no ALL-CAPS words longer than three letters', () => 
       for (const enrolled of [true, false])
         for (const waitingForCode of [true, false])
           for (const wasTurnedOff of [true, false])
-            for (const pendingRecovery of [null, { releaseAt: null }, { releaseAt: NOW + 30 * 60_000 }, { releaseAt: NOW + HOUR }, { releaseAt: NOW + 20 * HOUR }, { releaseAt: NOW - 1 }])
-              statuses.push(status({ available, checked, enrolled, waitingForCode, wasTurnedOff, pendingRecovery }));
+            for (const keyUnseen of [true, false])
+              for (const pendingRecovery of [null, { releaseAt: null }, { releaseAt: NOW + 30 * 60_000 }, { releaseAt: NOW + HOUR }, { releaseAt: NOW + 20 * HOUR }, { releaseAt: NOW - 1 }])
+                statuses.push(status({ available, checked, enrolled, waitingForCode, wasTurnedOff, keyUnseen, pendingRecovery }));
   for (const s of statuses) {
     const v = emailRecoveryView(s);
     all.push(v.title, v.subtitle);

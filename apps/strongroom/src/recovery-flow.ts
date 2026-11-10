@@ -2,7 +2,7 @@ import type { EmailRecoveryStatus, LostAccessState } from 'strongroom-vault';
 import { hasCode, messageOf } from './call.ts';
 import type { SyncTone } from './sync-flow.ts';
 
-export type EmailRecoveryAction = 'turnOn' | 'enterCode' | 'turnOff' | 'cancel';
+export type EmailRecoveryAction = 'turnOn' | 'enterCode' | 'turnOff' | 'cancel' | 'newKey';
 export type LostAccessAction = 'request' | 'enterCode';
 
 export const EMAIL_DISCLOSURE: string[] = [
@@ -41,7 +41,19 @@ export interface EmailRecoveryView {
   actions: EmailRecoveryAction[];
 }
 
+// keyUnseen is local, so it warns whatever the server could or couldn't say; the other actions stay as the state offers them.
 export function emailRecoveryView(s: EmailRecoveryStatus): EmailRecoveryView {
+  const v = stateView(s);
+  if (!s.keyUnseen) return v;
+  return {
+    title: "Your recovery key changed but you haven't saved it",
+    subtitle: 'Make a new one now and write it down. Until you do, you may have no recovery key that works.',
+    tone: 'danger',
+    actions: ['newKey', ...v.actions],
+  };
+}
+
+function stateView(s: EmailRecoveryStatus): EmailRecoveryView {
   if (!s.available) return { title: "Email recovery isn't available in this build.", subtitle: 'This build has no vault server to keep it with.', tone: 'neutral', actions: [] };
   if (!s.checked) {
     return { title: 'Email recovery', subtitle: "Couldn't check email recovery. Make sure this phone is online, then open this screen again.", tone: 'warn', actions: [] };
