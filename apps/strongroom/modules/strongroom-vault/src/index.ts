@@ -78,6 +78,20 @@ export interface SyncStatus {
   available: boolean;
 }
 
+// Email recovery as the server and this phone last agreed; checked is false when the server couldn't be reached, and the other fields then mean nothing.
+export interface EmailRecoveryStatus {
+  available: boolean;
+  checked: boolean;
+  enrolled: boolean;
+  waitingForCode: boolean;
+  // releaseAt is null until the owner opens the emailed link, which starts the 24-hour wait.
+  pendingRecovery: { releaseAt: number | null } | null;
+  wasTurnedOff: boolean;
+}
+
+// What a lost-access claim on this phone has reached; releaseAt is null until the owner opens the emailed link.
+export type LostAccessState = { state: 'none' } | { state: 'waiting'; releaseAt: number | null } | { state: 'ready' };
+
 export interface SyncReport {
   pulled: number;
   pushed: number;
