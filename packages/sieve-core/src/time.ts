@@ -16,9 +16,9 @@ export function formatTime(seconds: number): string {
 
 export interface LoopPart { start: number; end: number }
 
-// Where to seek, or null to leave the video alone. `end` is clamped to the duration, so an open-ended part loops at the video's end.
+// Where to seek, or null to leave the video alone. `end` is clamped to the duration; a part shorter than half a second is ignored, so a seek cannot repeat faster than the player can follow.
 export function loopSeek(t: number, part: LoopPart | null, duration: number): number | null {
   if (!part) return null;
   const end = Math.min(part.end, duration);
-  return end > part.start && t >= end - 0.05 ? part.start : null;
+  return end - part.start >= 0.5 && t >= end - 0.05 ? part.start : null;
 }

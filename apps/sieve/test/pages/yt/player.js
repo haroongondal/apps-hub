@@ -106,9 +106,14 @@
     fire(manager, EV.data);
   };
 
+  // ?lag=ms delays a move, so the old video can end first; ?autonav=1 makes the fixture advance after `ended`, as YouTube does.
+  const lag = Number(params.get('lag')) || 0;
   const playVideoAt = (i) => {
-    if (listId && IDS[i]) go(IDS[i], { list: listId, index: i + 1 });
+    if (!listId || !IDS[i]) return;
+    if (lag) setTimeout(() => go(IDS[i], { list: listId, index: i + 1 }), lag);
+    else go(IDS[i], { list: listId, index: i + 1 });
   };
+  if (params.has('autonav')) video.addEventListener('ended', () => { if (listId) setTimeout(() => player.nextVideo(), 400); });
   const api = {
     getPlayerState: () => playerState,
     // Not from YouTube: state -1 and errorCode 'fixture.unplayable' for state=unplayable are this fixture's own choice (no real unplayable page was inspected).

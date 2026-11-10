@@ -2,8 +2,8 @@ import { formatTime, loopSeek, parseTime, type LoopPart } from '@apps-hub/sieve-
 import { h } from '../dom.ts';
 import SWITCH_CSS from '../switch.css';
 import { defineAction, notifyActions, runAction } from './actions.ts';
-import { feature, mainState, onNavigate, onSettings } from './bridge.ts';
-import { addButton, addMenuItem } from './row.ts';
+import { feature, mainState, onMainState, onNavigate, onSettings } from './bridge.ts';
+import { addButton, addMenuItem, refreshRow } from './row.ts';
 import { SEL } from './selectors.ts';
 
 const BAD_TIME = 'Enter a time like 1:05 or 75.';
@@ -27,7 +27,8 @@ feature('loop', () => {
     if (v && !wired.has(v)) {
       wired.add(v);
       v.addEventListener('timeupdate', () => {
-        const to = v.loop ? loopSeek(v.currentTime, part, v.duration) : null;
+        const ad = document.querySelector(SEL.player)?.classList.contains('ad-showing');
+        const to = v.loop && !ad ? loopSeek(v.currentTime, part, v.duration) : null;
         if (to !== null) v.currentTime = to;
       });
     }
@@ -101,6 +102,7 @@ feature('loop', () => {
     checked: () => mainState()?.playlist?.reversed === true,
   });
 
+  onMainState(() => refreshRow());
   onSettings((_y, isOn) => {
     if (on && !isOn) reset();
     on = isOn;

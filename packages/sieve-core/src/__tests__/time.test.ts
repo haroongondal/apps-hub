@@ -47,4 +47,6 @@ test('loopSeek: no part, or an empty one, does nothing', () => {
   assert.equal(loopSeek(1, { start: 10, end: 5 }, 60), null);
   assert.equal(loopSeek(7, { start: 5, end: 5 }, 60), null);
   assert.equal(loopSeek(1, null, 60), null);
+  assert.equal(loopSeek(5.4, { start: 5, end: 5.4 }, 60), null, 'a part under half a second is ignored');
+  assert.equal(loopSeek(5.5, { start: 5, end: 5.5 }, 60), 5, 'half a second is the shortest part');
 });

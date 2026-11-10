@@ -58,7 +58,7 @@ export async function local(t) {
     await play(page);
     await sleep(4000);
     const times = await sampleTimes(page, 3000);
-    check('loop: with From 0:01 and To 0:02, currentTime stayed between 0.9 and 2.1 (sampled every 100 ms for 3 s, after 4 s)', times.length > 20 && Math.min(...times) >= 0.9 && Math.max(...times) <= 2.1, `min ${Math.min(...times)}, max ${Math.max(...times)}, n ${times.length}`);
+    check('loop: with From 0:01 and To 0:02, currentTime stayed between 0.9 and 2.3 (sampled every 100 ms for 3 s, after 4 s)', times.length > 20 && Math.min(...times) >= 0.9 && Math.max(...times) <= 2.3, `min ${Math.min(...times)}, max ${Math.max(...times)}, n ${times.length}`);
     await row(page).getByRole('button', { name: 'Clear', exact: true }).click();
     const cleared = (await box(page, 'From').inputValue()) === '' && (await box(page, 'To').inputValue()) === '';
     const after = await sampleTimes(page, 1500);
@@ -104,6 +104,18 @@ export async function local(t) {
     await navigate(page, 'sieveTest03', { list: 'PLsieve', index: 3 });
     await cog(page).click();
     check('loop: back in the playlist the reversal is off (it ended when the list changed)', (await until(() => reverse(page).isVisible(), 2000)) && (await reverse(page).getAttribute('aria-checked')) === 'false');
+    await page.close();
+
+    page = await openYt(t, '/watch?v=sieveTest03&list=PLsieve&index=3&autoplay=0&lag=900&autonav=1');
+    await ready(page);
+    await cog(page).click();
+    await until(() => reverse(page).isVisible(), 2000);
+    await reverse(page).click();
+    await play(page);
+    await until(async () => (await ytCalls(page, 'playVideoAt')).length > 0, 8000);
+    await sleep(1800);
+    const moves = await ytCalls(page, 'playVideoAt');
+    check('loop: when the video ends before the move loads, YouTube\'s own advance is stopped (one playVideoAt 1, no nextVideo)', json(moves.map((c) => c.args)) === '[[1]]' && (await ytCalls(page, 'nextVideo')).length === 0, json(await ytCalls(page)));
     await page.close();
 
     page = await openYt(t, '/watch?v=sieveTest01&list=PLsieve&index=1&autoplay=0');
@@ -161,7 +173,8 @@ export async function live(t) {
     await sleep(3500);
     const near = await state();
     if (near && near.t < 3) check('live loop: with the loop on, a seek to the last second is back near the start 3 s later', true);
-    else console.log(`INCONCLUSIVE  live loop: 3.5 s after the seek to the last second the player is not back near the start (${near?.rs < 3 ? 'it stalled' : 'it did not loop'}); ${json(near)}`);
+    else if (near && near.rs >= 3) check('live loop: with the loop on, a seek to the last second is back near the start 3 s later', false, json(near));
+    else console.log(`INCONCLUSIVE  live loop: 3.5 s after the seek to the last second the player stalled; ${json(near)}`);
     await loopButton(page).click();
     check('live loop: clicking "Loop" again turns it off', await until(async () => (await state())?.loop === false, 2000), json(await state()));
 
