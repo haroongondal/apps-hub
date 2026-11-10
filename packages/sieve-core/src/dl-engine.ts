@@ -127,6 +127,7 @@ export function createEngine(deps: EngineDeps): Engine {
 
   async function startRecord(id: string): Promise<void> {
     starting.add(id);
+    let phase: 'space' | 'start' = 'space';
     try {
       const ok = () => starting.has(id) && !stopped && recs.get(id)?.state === 'queued';
       let r = recs.get(id)!;
@@ -141,6 +142,7 @@ export function createEngine(deps: EngineDeps): Engine {
           return;
         }
       }
+      phase = 'start';
       await persist(applyEvent(r, 'start', clock.now()));
       if (!ok()) return;
       const rec = applyEvent(recs.get(id)!, 'start', clock.now());
@@ -165,6 +167,19 @@ export function createEngine(deps: EngineDeps): Engine {
       }))().then((res): Settled => res, (error): Settled => ({ kind: 'threw', error }));
       cancelIdle();
       void run.finished.then((res) => background(() => settle(id, run, res)));
+    } catch (e) {
+      // a throwing disk or store must not leave the record queued: the reconcile below would retry it forever
+      log(e);
+      const cur = recs.get(id);
+      if (cur?.state === 'queued') {
+        const failed = applyEvent(cur, 'fail', clock.now(), { error: phase === 'space' ? ERRORS.unknown : ERRORS.storage });
+        set(failed);
+        try {
+          await persist(failed);
+        } catch (e2) {
+          log(e2);
+        }
+      }
     } finally {
       starting.delete(id);
       if (!runs.has(id)) background(reconcile); // the slot this start held is free again
@@ -218,7 +233,11 @@ export function createEngine(deps: EngineDeps): Engine {
           if (cur?.state !== 'saving') return;
           const next = applyEvent(cur, 'saveFailed', clock.now(), { error: ERRORS.save(res.message) });
           set(next);
-          await persist(next);
+          try {
+            await persist(next);
+          } finally {
+            reconcile(); // the failed save may leave the engine idle
+          }
         });
       });
   }

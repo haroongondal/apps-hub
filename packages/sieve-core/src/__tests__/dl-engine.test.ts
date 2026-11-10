@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import type { TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { EMIT_MS, IDLE_MS } from '../dl-engine.ts';
 import { ERRORS, partName } from '../dl-record.ts';
@@ -126,12 +127,13 @@ test('replay: a stale done record or another url does not match', async () => {
 });
 
 test('start and slots: maxParallel limits running transfers, config raises it', async () => {
-  const r = await makeRig({ records: [rec('a', { addedAt: 1 }), rec('b', { addedAt: 2 }), rec('c', { addedAt: 3 })], settings: settingsWith({}, 2) });
+  const sized = (id: string, addedAt: number) => rec(id, { addedAt, size: 100 });
+  const r = await makeRig({ records: [sized('a', 1), sized('b', 2), sized('c', 3)], settings: settingsWith({}, 2) });
   assert.deepEqual(r.transfer.started(), ['a', 'b']);
-  r.transfer.of('a').done({ size: null });
+  r.transfer.of('a').done();
   await flush();
+  assert.equal(r.state('a'), 'saving');
   assert.deepEqual(r.transfer.started(), ['a', 'b', 'c']);
-  r.transfer.of('c').finish({ kind: 'paused', record: r.transfer.of('c').record });
   const r2 = await makeRig({ records: [rec('a', { addedAt: 1 }), rec('b', { addedAt: 2 }), rec('c', { addedAt: 3 })], settings: settingsWith({}, 2) });
   assert.deepEqual(r2.transfer.started(), ['a', 'b']);
   r2.engine.config(settingsWith({}, 3));
@@ -413,6 +415,103 @@ test('serialisation: saveEvent and act in the same tick apply in call order', as
   assert.equal(r.state('a'), 'saving');
   assert.equal(r.host.saves.length, 2, 'once at start, once after the resume');
   assert.ok(r.store.puts.some((p) => p.record.error === ERRORS.save('X')));
+});
+
+const quiet = (t: TestContext) => t.mock.method(console, 'error', () => {});
+
+test('a files.space() that throws fails the record once and the loop ends', async (t) => {
+  quiet(t);
+  const r = await makeRig({ records: [rec('a', { size: 1000 })], noStart: true });
+  let calls = 0;
+  r.files.space = async () => {
+    calls++;
+    throw new Error('boom');
+  };
+  await r.engine.start(r.settings);
+  await flush();
+  r.engine.tick();
+  await flush();
+  assert.equal(r.state('a'), 'failed');
+  assert.equal(r.stored('a')!.error, ERRORS.unknown);
+  assert.equal(calls, 1);
+  assert.equal(r.transfer.runs.length, 0);
+});
+
+test('a store.put() that throws fails the record once and the loop ends', async (t) => {
+  quiet(t);
+  for (const everything of [false, true]) {
+    const r = await makeRig({ records: [rec('a')], noStart: true });
+    const put = r.store.put.bind(r.store);
+    let starts = 0;
+    r.store.put = async (record, o) => {
+      if (record.state === 'running') starts++;
+      if (everything || record.state === 'running') throw new Error('quota');
+      return put(record, o);
+    };
+    await r.engine.start(r.settings);
+    await flush();
+    r.engine.tick();
+    await flush();
+    assert.equal(r.state('a'), 'failed', String(everything));
+    assert.equal(starts, 1);
+    assert.equal(r.transfer.runs.length, 0);
+    if (!everything) assert.equal(r.stored('a')!.error, ERRORS.storage);
+  }
+});
+
+test('idle: the engine goes idle after a failed save', async () => {
+  const r = await makeRig({ records: [rec('a', { size: 100 })] });
+  r.host.saveAnswer = { ok: false, message: 'X' };
+  r.transfer.of('a').done();
+  await flush();
+  assert.equal(r.state('a'), 'failed');
+  await r.clock.advance(IDLE_MS);
+  assert.equal(r.host.idles, 1);
+});
+
+test('a pause or remove while a start waits on store.put wins', async () => {
+  for (const op of ['pause', 'remove'] as const) {
+    const r = await makeRig({ records: [rec('a')], noStart: true });
+    const release = r.store.hold();
+    await r.engine.start(r.settings);
+    await flush();
+    const acting = r.engine.act(op, ['a']);
+    await flush();
+    release();
+    await acting;
+    await flush();
+    assert.equal(r.transfer.runs.length, 0, op);
+    assert.equal(r.state('a'), op === 'pause' ? 'paused' : undefined, op);
+  }
+});
+
+test('a late failed host.save does not overwrite a record that is already done', async () => {
+  const r = await makeRig({ records: [rec('a', { size: 100 })] });
+  let answer!: (v: { ok: false; message: string }) => void;
+  r.host.save = () => new Promise((res) => (answer = res));
+  r.transfer.of('a').done();
+  await flush();
+  await r.engine.saveEvent({ id: 'a', kind: 'done', filename: 'x', chromeId: 1 });
+  const puts = r.store.puts.length;
+  answer({ ok: false, message: 'FILE_NO_SPACE' });
+  await flush();
+  assert.equal(r.store.puts.length, puts, 'nothing is written');
+  assert.equal(r.state('a'), 'done');
+  assert.equal(r.stored('a')!.error, null);
+});
+
+test('idle: a start that waits on space keeps the engine awake', async () => {
+  const r = await makeRig({ records: [rec('a', { size: 1000 })], noStart: true });
+  const release = r.files.holdSpace();
+  await r.engine.start(r.settings);
+  await flush();
+  r.engine.tick(); // a later reconcile sees the record as queued, not running
+  await flush();
+  await r.clock.advance(IDLE_MS * 2);
+  assert.equal(r.host.idles, 0);
+  release();
+  await flush();
+  assert.equal(r.transfer.runs.length, 1);
 });
 
 test('partName stays the shared file name', () => {
