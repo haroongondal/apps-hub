@@ -1,5 +1,5 @@
 /* The page's red, from the inspection in theme.ts. --sieve-accent is set beside this text (theme.ts). */
 :root:root:root { --yt-sys-color-baseline--static-brand-red: var(--sieve-accent); --yt-sys-color-baseline--overlay-background-brand: var(--sieve-accent); }
 html .ytp-play-progress { background: var(--sieve-accent); }
-/* YouTube's own rgb(204, 0, 0) is 80% of its red, so this keeps the same relation to the accent. */
+/* YouTube's own rgb(204, 0, 0) is 80% of the red channel of its #f03, so this keeps the same relation to the accent. */
 html .ytp-progress-linear-live-buffer { background: color-mix(in srgb, var(--sieve-accent) 80%, black); }

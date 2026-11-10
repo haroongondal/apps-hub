@@ -71,7 +71,7 @@ export async function local(t) {
     check('theme: my CSS gives the body an outline of rgb(1, 2, 3)', await until(async () => (await style(page, 'outlineColor', 'body')) === 'rgb(1, 2, 3)'), await style(page, 'outlineColor', 'body'));
     await setYouTube(t, { theme: { css: '.page-rule { background: rgb(9, 9, 9) }' } });
     await sleep(300);
-    // Not a check: a known limit. My CSS is appended to <html> at document_start, before <head>, so a page rule of equal specificity comes later and wins.
+    // Not a check: a limit, logged. `setStyle` appends to <html> once the first settings arrive, so My CSS lands after <head>'s styles; the logged value says whether it beats a page rule of equal specificity (observed: My CSS wins, rgb(9, 9, 9)).
     console.log(`theme limit: a page rule of equal specificity vs My CSS: ${await style(page, 'backgroundColor', '#pagerule')} (rgb(9, 9, 9) would mean My CSS wins, rgb(7, 7, 7) the page)`);
     await setYouTube(t, { theme: { accent: 'blue', css: 'html .ytp-play-progress { background: rgb(9, 9, 9) }' } });
     check('theme: my CSS wins over the accent for a rule of equal specificity (html .ytp-play-progress, so only the order decides)', await until(async () => (await style(page, 'backgroundColor')) === 'rgb(9, 9, 9)'), await style(page, 'backgroundColor'));
