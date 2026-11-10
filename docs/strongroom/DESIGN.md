@@ -422,7 +422,7 @@ Built from `@apps-hub/ui`. Rough layout in the mockups.
 - **Add**: login, card or note.
 - **Import from Google.**
 - **Settings**: auto-lock time, fingerprint on/off, change master password, new
-  recovery key, lock now. Turning fingerprint on and generating a new recovery key
+  recovery key, email recovery (2026-11-11, below), lock now. Turning fingerprint on and generating a new recovery key
   both ask for the master password (§6). Sync account and status come in Phase 2.
 
 Copy follows the repo rules: sentence case, active voice, errors say what
@@ -453,8 +453,13 @@ typed and turn off autocorrect and autocomplete (§7, own screens).
   rotates the recovery key and sends the owner a mail with the confirmation
   code. `POST /v1/lost/request`, `POST /v1/lost/release`, and the mailed links'
   `GET` (renders a form, no state change) and `POST` confirm/cancel routes take
-  no bearer token: they are reachable only by someone who holds the sealed blob
-  or opens the mailed link.
+  no bearer token. `POST /v1/lost/request` is open to anyone (it only mails the
+  owner a link, and the Worker answers ok whether or not it did); `/v1/lost/release`
+  returns the sealed blob only to the holder of the claim, and only after the
+  24-hour wait; the mailed links work only with their one-time token. *(Corrected
+  2026-11-11: this used to say the routes were reachable only by someone who holds
+  the blob or the link, which is not true of `request`. A stranger can re-claim an
+  unconfirmed request every hour, which is why the phone keeps and resends one claim.)*
 - `readToken` (HKDF `strongroom/v1/read` from the masterKey) can only call
   `GET /v1/records`. It is the token the phone keeps for background downloads.
   *(Reviewer's point, adopted.)*
@@ -528,6 +533,48 @@ mixed ──HKDF "wrap" | "login" | "read"──▶ wrapKey, loginToken, readTok
   `apps/strongroom/tools/vectors/account_key_vectors.py` (argon2-cffi and its own
   HKDF), not by either client.
 
+**Email recovery on the phone** (2026-11-11; the extension has had it since 2026-11-10;
+design `docs/superpowers/specs/2026-11-11-strongroom-mobile-email-recovery-design.md`,
+plan beside it). The Worker is unchanged. Owner decisions: a pending request shows in
+the app only (no system notification; the Worker already mails the cancel link), and
+the "I lost both" entry point is the Unlock screen's reset page, "I also lost my
+recovery key".
+- **Crypto**: `core/Escrow.kt` is the Kotlin port of `escrow.ts` (same label
+  `strongroom/v1/escrow`, 20-byte recovery key then 20-byte account key, 12-byte
+  nonce), checked against an independently computed `escrow` section of
+  `vault-vectors.json` (`apps/strongroom/tools/vectors/escrow_vectors.py`). The code
+  is the recovery-key text format (160 bits).
+- **Turning it on** (Settings, needs sync on): the owner reads a disclosure (whoever
+  controls that inbox can start a recovery; 24-hour wait they can cancel; keep the
+  email, its code is needed for the last step), then master password. The phone
+  rotates the recovery key **locally first** (through the same `prepare` bookkeeping
+  as New recovery key), then sends one `PUT /v1/account` with the escrow. A definite
+  refusal (4xx or the Worker's 502 mail failure) puts the old header back and the old
+  key stays valid. An unclear failure (offline, 5xx) keeps the new key and finishes at
+  the next sync (a lost reply is recognised by pulling the server header). The new key
+  is shown whatever happens, and a persisted `keyUnseen` flag raises a warning if the
+  app died before the owner saw it. Confirming types the emailed code; the local blob
+  is then deleted.
+- **New recovery key turns email recovery off** (the Worker deletes the escrow when
+  the recovery hash changes without a new one); that screen says so first.
+- **Lost both**: Request (the Worker mails a link) -> owner opens the link -> 24 hours
+  -> the phone fetches the sealed blob -> the owner types the code from the first
+  email and a new master password -> the existing `SyncSession.recover`. The claim is
+  minted once, saved before the call and resent on retries (a new claim after a lost
+  reply would orphan the first email's link and block recovery for 8 days). It works
+  with sync off, a locked vault or a fresh phone. After a successful recovery the
+  request is cancelled on the server; a normal password unlock clears a stored claim.
+  The recovery key and escrow are not rotated by a recovery.
+- **Warnings**: the vault screen shows a warning with Cancel only for a **confirmed**
+  request (an unconfirmed one can be created by anyone and cannot progress without the
+  owner's inbox). A status check never blocks or fails unlock, the vault or Settings.
+- **Known limits (owner-accepted or open)**: the Worker mails the code before it
+  writes, so an enrolment refused with 409 leaves a mailed code that matches nothing;
+  the Worker sees the code and blob together at enrolment (the 2026-11-10 ruling
+  above applies here too); the Worker's global failed-auth backoff does not limit
+  parallel guessing; a real mail test needs the Worker deployed with a real
+  `PUBLIC_URL` and a confirmed `MAIL_FROM`.
+
 **As built in Phase 2** (decisions the plan left open; rulings in the Phase 2 ledger):
 - Account update: `ifRev` (the last header revision this device took) is required,
   so a stale update gets 409 instead of overwriting. `recoveryHash` is optional and
@@ -595,7 +642,7 @@ Export for Chrome, lock-free autofill and background sync (a key sealed under a
 non-extractable WebCrypto key survives auto-lock and a browser restart; only the
 manual Lock button clears it), a sealed account key, and opt-in email recovery
 (rotates the recovery key, escrows it with the vault server under an emailed code,
-24-hour owner-cancellable wait). Fingerprint is designed but not built, pending the
+24-hour owner-cancellable wait). The phone has the same feature since 2026-11-11 (§10, "Email recovery on the phone"). Fingerprint is designed but not built, pending the
 owner's hardware spike.
 
 **With sync (Phase 2):** the phone creates the account; the extension signs in with
