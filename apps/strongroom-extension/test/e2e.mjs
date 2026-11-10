@@ -209,9 +209,9 @@ async function syncSuite() {
     await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
     await until('the unlock sync to bring the phone login', async () => (await names()).includes('After restart'));
     check('unlocking after a restart signs in again by itself and syncs', (await names()).join() === 'After restart,From Chrome,From phone,Phone mail', (await names()).join());
-    await ctx.close();
 
     // A separate profile with no local vault: the device that lost access, walked through the real Worker world with a backdated release time instead of a 24-hour wait.
+    // ctx (the owner's signed-in popup) stays open so it can cancel the lost-access request below, same as a real second device would.
     const lostProfile = mkdtempSync(join(tmpdir(), 'sg-lost-e2e-'));
     const lost = await launchWith(syncDist, lostProfile);
     const lostPopup = await lost.ctx.newPage();
@@ -220,10 +220,27 @@ async function syncSuite() {
     await lostPopup.getByRole('heading', { name: 'Create your vault' }).waitFor();
     await lostPopup.getByRole('button', { name: 'Use my Strongroom account instead' }).click();
     await lostPopup.getByRole('heading', { name: 'Sign in to sync' }).waitFor();
+
     await lostPopup.getByRole('button', { name: 'Lost access to your account?' }).click();
-    await lostPopup.getByRole('heading', { name: 'Lost access' }).waitFor();
     await lostPopup.getByRole('button', { name: 'Request access by email' }).click();
     await lostPopup.getByText('Check your email and open the confirm link').waitFor();
+    check('the waiting screen already offers a way to start over, not just Check again', (await lostPopup.getByRole('button', { name: 'Start a new request' }).count()) === 1);
+
+    // A claim is already stored, so this Check again does reach the network: a transport failure here must show a distinct retry state, never fall into the request-button state that would overwrite the real claim.
+    world.online = false;
+    await lostPopup.getByRole('button', { name: 'Check again' }).click();
+    await lostPopup.getByText("Couldn't check its status just now").waitFor();
+    check('a failed check shows a retry state, never the request button', (await lostPopup.getByRole('button', { name: 'Request access by email' }).count()) === 0);
+    world.online = true;
+    await lostPopup.getByRole('button', { name: 'Try again' }).click();
+    await lostPopup.getByText('Check your email and open the confirm link').waitFor();
+
+    await send({ type: 'emailRecovery', action: 'cancelRecovery' });
+    await lostPopup.getByRole('button', { name: 'Check again' }).click();
+    await lostPopup.getByText('Check your email and open the confirm link').waitFor();
+    await lostPopup.getByRole('button', { name: 'Start a new request' }).click();
+    await lostPopup.getByText('Check your email and open the confirm link').waitFor();
+
     const confirmToken = /t=([^&\s]+)/.exec(world.mail.sent.at(-1).text)[1];
     await fetch(new URL(`/v1/lost/confirm?t=${confirmToken}`, harness.url));
     await lostPopup.getByRole('button', { name: 'Check again' }).click();
@@ -236,9 +253,10 @@ async function syncSuite() {
     await lostPopup.getByLabel('Type it again').fill('a lost access password');
     await lostPopup.getByRole('button', { name: 'Open and sign in' }).click();
     await lostPopup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
-    check('lost access opens the escrow and signs in with the recovered vault', (await lostPopup.locator('.row').count()) > 0, await lostPopup.innerText('body'));
+    check('lost access recovers even after the first request was cancelled, by starting a new one', (await lostPopup.locator('.row').count()) > 0, await lostPopup.innerText('body'));
     await lost.ctx.close();
     rmSync(lostProfile, { recursive: true, force: true });
+    await ctx.close();
   } finally {
     await harness.close();
     rmSync(syncDist, { recursive: true, force: true });

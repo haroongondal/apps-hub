@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
-  createVault, formatAccountKey, headerToJson, KDF_FLOOR, loadPublicSuffixList, parseRecoveryKey, randomBytes, recoveryLoginToken, rotateRecoveryKey,
-  signInWithPassword, signInWithRecovery, SyncAuthError, toBase64, tokenHash, unlockWithRecovery,
+  createVault, formatAccountKey, fromBase64, headerToJson, KDF_FLOOR, loadPublicSuffixList, openEscrow, parseEmailCode, parseRecoveryKey, randomBytes,
+  recoveryLoginToken, rotateRecoveryKey, signInWithPassword, signInWithRecovery, SyncAuthError, toBase64, tokenHash, unlockWithRecovery,
 } from 'strongroom-core';
 import type { Header, RecordStore, StoredRecord, SyncReport } from 'strongroom-core';
 import { COMMON_PASSWORDS } from '../common-passwords.ts';
@@ -1031,6 +1031,24 @@ test('open without a ready blob is refused', async () => {
   await assert.rejects(fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), /wait/i);
 });
 
+test('a failed request leaves an existing claim and blob untouched', async () => {
+  const { world, code } = await emailEnrolled();
+  const fresh = extension(world);
+  await lostRequestNow(fresh);
+  await confirmByEmail(world);
+  releaseLostRequest(world);
+  await lostCheck(fresh);
+  const claimBefore = fresh.local.data.get('lostClaim');
+  const blobBefore = fresh.local.data.get('lostBlob');
+  world.online = false;
+  await assert.rejects(lostRequestNow(fresh));
+  world.online = true;
+  assert.equal(fresh.local.data.get('lostClaim'), claimBefore);
+  assert.equal(fresh.local.data.get('lostBlob'), blobBefore);
+  assert.deepEqual(await lostCheck(fresh), { state: 'ready' });
+  assert.equal(await fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), null);
+});
+
 test('lostAccess refuses to run while the vault is unlocked', async () => {
   const { world } = await emailEnrolled();
   const x = extension(world);
@@ -1054,7 +1072,10 @@ test('after open the old recovery key is the rotated one (the pasted blob key wo
   await confirmByEmail(world);
   releaseLostRequest(world);
   await lostCheck(fresh);
+  const blob = fresh.local.data.get('lostBlob') as string;
   assert.equal(await fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), null);
   const header = (await fresh.store.getHeader())!;
+  const opened = await openEscrow(parseEmailCode(code)!, fromBase64(blob));
+  assert.ok(await unlockWithRecovery(header, opened!.recoveryKey));
   assert.equal(await unlockWithRecovery(header, world.recoveryKey), null);
 });

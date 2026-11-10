@@ -457,9 +457,10 @@ export function createService(deps: Deps) {
   async function lostAccessRequest(): Promise<null> {
     const { transport } = unavailable();
     const claim = randomBytes(CLAIM_BYTES);
+    // The network call runs before any stored claim/blob is touched, so a failed or offline request leaves an existing one intact.
+    await transport.lostRequest(tokenHash(claim));
     await deps.settings.set(LOST_CLAIM, toBase64(claim));
     await deps.settings.remove(LOST_BLOB);
-    await transport.lostRequest(tokenHash(claim));
     return null;
   }
 

@@ -118,24 +118,30 @@ function signInScreen(back: () => unknown) {
 
 async function lostAccessScreen(back: () => unknown) {
   const msg = msgBox();
-  const state = await call<LostAccessState>({ type: 'lostAccess', action: 'check' }).catch((): LostAccessState => ({ state: 'none' }));
+  const state = await call<LostAccessState>({ type: 'lostAccess', action: 'check' }).catch(() => null);
+  if (state === null) {
+    const retry = button('Try again', () => guarded(msg, [retry], () => lostAccessScreen(back)), 'ui-btn--primary');
+    screen('Lost access', back, h('p', { class: 'ui-muted' }, "Couldn't check its status just now. Try again."), msg, retry);
+    return;
+  }
   if (state.state === 'ready') return lostAccessOpenScreen(back);
+  const request = button(state.state === 'waiting' ? 'Start a new request' : 'Request access by email', () => guarded(msg, [request], async () => {
+    await call({ type: 'lostAccess', action: 'request' });
+    await lostAccessScreen(back);
+  }), state.state === 'waiting' ? '' : 'ui-btn--primary');
   if (state.state === 'waiting') {
     const again = button('Check again', () => guarded(msg, [again], () => lostAccessScreen(back)), 'ui-btn--primary');
     screen('Lost access', back,
       h('p', {}, state.releaseAt
         ? `Confirmed by email. Strongroom lets you back in at ${new Date(state.releaseAt).toLocaleString()}.`
         : 'Check your email and open the confirm link. The 24-hour wait starts once you do.'),
-      msg, again);
+      msg, again,
+      h('p', { class: 'ui-muted' }, "Stuck, or this wasn't you? Starting a new request abandons this one."), request);
     return;
   }
-  const go = button('Request access by email', () => guarded(msg, [go], async () => {
-    await call({ type: 'lostAccess', action: 'request' });
-    await lostAccessScreen(back);
-  }), 'ui-btn--primary');
   screen('Lost access', back,
     h('p', { class: 'ui-muted' }, "If you turned on email recovery, this asks by email. You'll need the code it mailed you when you turned it on, and a 24-hour wait that another signed-in device can cancel."),
-    msg, go);
+    msg, request);
 }
 
 function lostAccessOpenScreen(back: () => unknown) {
