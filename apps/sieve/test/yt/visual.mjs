@@ -140,6 +140,7 @@ export async function live(t) {
     const ok = await until(async () => (await hit(page).catch(() => ({}))).corner === 'sieve-yt-backdrop', 10_000);
     const facts = await hit(page);
     check('live cinema: the corner is the backdrop and the player centre is inside the player', ok && facts.player, json(facts));
+    check('live cinema: the row stays above the backdrop', facts.row === 'sieve-yt-row', json(facts));
     await page.screenshot({ path: join(t.shots, 'yt-cinema.png') });
     await setYouTube(t, { player: { cinema: false } });
 
