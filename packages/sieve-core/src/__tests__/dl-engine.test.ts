@@ -1,0 +1,28 @@
+import { test } from 'node:test';
+
+test.todo('add: a manual add creates a queued record, persisted before add resolves');
+test.todo('add: a probed take-over item fills finalUrl, size, mime, validator, rangeOk, chromeId');
+test.todo('add: an ftp URL is skipped');
+test.todo('add: a given name is sanitised');
+test.todo('add: a caller category sets categoryFixed');
+test.todo('add: an unknown queue falls back to the first');
+test.todo('add: an unknown category is ignored');
+test.todo('add: a take-over item makes a forced record');
+test.todo('ids: 500 items with a constant random and a frozen clock give 500 distinct ids and terminate');
+test.todo('replay: the same take-over item twice gives one record');
+test.todo('replay: a stale done record or another url does not match');
+test.todo('start and slots: maxParallel limits running transfers, config raises it');
+test.todo('on false: nothing starts, resume forces, config stops non-forced');
+test.todo('pause and resume');
+test.todo('remove with the real queue does not deadlock');
+test.todo('remove: aborts, deletes part and record, lists removed');
+test.todo('finishing: saving, host.save, save failure, saveEvent path, done, failed, resume');
+test.todo('completeness: an incomplete done fails with ERRORS.length');
+test.todo('transfer failure keeps the error and parts');
+test.todo('start-up: restart, saving, done part, orphan sweep');
+test.todo('space: refusal and pass, partly done needs only the rest');
+test.todo('emit: batching, speeds, copies');
+test.todo('idle: host.idle after 60 s, cancelled by a start, not blocked by a closed window');
+test.todo('stop: shutdown leaves records running, second start queues them');
+test.todo('serialisation: one start, remove or pause wins over a waiting start, call order');
+test.todo('space failure: ends failed, resume checks again');
