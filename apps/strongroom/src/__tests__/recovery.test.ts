@@ -20,17 +20,21 @@ const coded = (code: string, message = 'native message') => Object.assign(new Er
 test('emailProblem accepts a padded address and rejects blank, too long and no at sign', () => {
   assert.equal(emailProblem(' A@B.co '), null);
   assert.ok(emailProblem('   '));
-  assert.ok(emailProblem(`${'a'.repeat(310)}@example.com`.padEnd(321, 'x')));
-  assert.equal(emailProblem(`${'a'.repeat(310)}@b.co`), null);
+  assert.ok(emailProblem(`${'a'.repeat(316)}@b.co`));
+  assert.equal(emailProblem(`${'a'.repeat(315)}@b.co`), null);
   assert.ok(emailProblem('ab.co'));
   assert.ok(emailProblem('a b@c.co'));
 });
 
+test('emailProblem refuses what the Worker refuses: no dot in the domain, or an empty part around it', () => {
+  for (const bad of ['a@b', 'a@localhost', 'a@b.', 'a@.b']) assert.ok(emailProblem(bad), bad);
+});
+
 test('emailProblem counts the trimmed address against 320 characters', () => {
-  const edge = `${'a'.repeat(317)}@b`;
-  assert.equal(edge.length, 319);
-  assert.equal(emailProblem(` ${edge}c `), null);
-  assert.ok(emailProblem(`${edge}cd`));
+  const edge = `${'a'.repeat(315)}@b.co`;
+  assert.equal(edge.length, 320);
+  assert.equal(emailProblem(` ${edge} `), null);
+  assert.ok(emailProblem(`${edge}c`));
 });
 
 test('pendingBanner only shows a confirmed request', () => {
@@ -39,7 +43,20 @@ test('pendingBanner only shows a confirmed request', () => {
   assert.equal(pendingBanner(status({ pendingRecovery: { releaseAt: null } }), NOW), null);
   const b = pendingBanner(status({ pendingRecovery: { releaseAt: NOW + 5 * HOUR } }), NOW);
   assert.ok(b);
-  assert.match(b.body, /5 hours/);
+  assert.match(b.body, /about 5 hours/);
+});
+
+test('pendingBanner is null when the status could not be checked', () => {
+  assert.equal(pendingBanner(status({ checked: false, pendingRecovery: { releaseAt: NOW + HOUR } }), NOW), null);
+});
+
+test('time left rounds down and says less than an hour under one', () => {
+  const body = (ms: number) => pendingBanner(status({ pendingRecovery: { releaseAt: NOW + ms } }), NOW)?.body ?? '';
+  assert.match(body(59 * 60_000), /less than an hour/);
+  assert.match(body(HOUR), /about 1 hour,/);
+  assert.match(body(HOUR + 1), /about 1 hour,/);
+  assert.match(body(2 * HOUR - 1), /about 1 hour,/);
+  assert.match(body(2 * HOUR), /about 2 hours,/);
 });
 
 test('pendingBanner reads differently once the wait is over', () => {
@@ -52,10 +69,11 @@ test('pendingBanner reads differently once the wait is over', () => {
 
 test('lostAccessView tells an unconfirmed claim from a confirmed one', () => {
   const link = lostAccessView({ state: 'waiting', releaseAt: null }, NOW);
-  const timed = lostAccessView({ state: 'waiting', releaseAt: NOW + 3 * HOUR }, NOW);
+  const timed = lostAccessView({ state: 'waiting', releaseAt: NOW + 3 * HOUR }, NOW, () => 'CLOCK');
   assert.match(link.body, /link we emailed/);
   assert.doesNotMatch(timed.body, /link we emailed/);
-  assert.match(timed.body, /3 hours/);
+  assert.match(timed.body, /about 3 hours/);
+  assert.match(timed.body, /CLOCK/);
   assert.deepEqual(link.actions, []);
   assert.deepEqual(timed.actions, []);
 });
@@ -96,6 +114,8 @@ test('emailRecoveryView says when it could not check, and when the server turned
   assert.match(off.subtitle, /turned off/);
   assert.notEqual(off.subtitle, emailRecoveryView(status()).subtitle);
   assert.equal(emailRecoveryView(status({ enrolled: true })).tone, 'ok');
+  assert.equal(emailRecoveryView(status({ enrolled: true, pendingRecovery: { releaseAt: null } })).tone, 'warn');
+  assert.equal(emailRecoveryView(status({ enrolled: true, pendingRecovery: { releaseAt: NOW + HOUR } })).tone, 'danger');
 });
 
 test('emailRecoveryView is the same when the status is unchecked whatever the other flags say', () => {
@@ -134,12 +154,12 @@ test('copy has no emoji and no ALL-CAPS words longer than three letters', () => 
   }
   const lost: LostAccessState[] = [{ state: 'none' }, { state: 'ready' }, { state: 'waiting', releaseAt: null }, { state: 'waiting', releaseAt: NOW + HOUR }, { state: 'waiting', releaseAt: NOW - 1 }];
   for (const s of lost) {
-    const v = lostAccessView(s, NOW);
+    const v = lostAccessView(s, NOW, () => '5 Nov 2026, 3:04 pm');
     all.push(v.title, v.body);
   }
   for (const c of ['BAD_EMAIL', 'SYNC_OFF', 'SYNC_FIRST', 'LOST_STILL_ALIVE', 'LOST_NOT_READY', 'LOST_DIFFERENT_ACCOUNT']) all.push(explainRecovery(coded(c)));
   all.push(emailProblem('') ?? '', emailProblem('x') ?? '', emailProblem('a'.repeat(400)) ?? '');
-  assert.equal(EMAIL_DISCLOSURE.length, 3);
+  assert.equal(EMAIL_DISCLOSURE.length, 4);
   for (const text of all) {
     assert.ok(text.length > 0);
     assert.doesNotMatch(text, /\p{Extended_Pictographic}/u, text);
