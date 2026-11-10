@@ -11,6 +11,10 @@ const { ctx, sw, id } = await launch({ extraHosts: ['www.youtube-nocookie.com'],
 const t = { ctx, sw, id, servers, check, errors: [], shots: process.env.SHOTS ?? tmpdir(), base: `https://www.youtube.com:${servers.httpsPort}` };
 try {
   for (const [name, mod] of modules) {
+    if (mod.importError) {
+      check(`${name}: the module loads`, false, mod.importError);
+      continue;
+    }
     if (typeof mod.local !== 'function') continue;
     try {
       await mod.local(t);

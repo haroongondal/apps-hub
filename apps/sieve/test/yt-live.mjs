@@ -112,9 +112,14 @@ try {
     }
   }
 
-  const modules = (await ytModules()).filter(([, mod]) => typeof mod.live === 'function');
+  let modules = [];
+  try {
+    modules = (await ytModules()).filter(([, mod]) => mod.importError || typeof mod.live === 'function');
+  } catch (e) {
+    check('the YouTube live modules were listed', false, String(e?.message ?? e));
+  }
   const page = await ctx.newPage();
-  await page.goto(`https://www.youtube.com/watch?v=${VIDEOS[0]}`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  await page.goto(`https://www.youtube.com/watch?v=${VIDEOS[0]}`, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
   await page
     .waitForFunction(() => document.querySelector('ytd-watch-metadata') && typeof document.querySelector('#movie_player')?.getPlayerState === 'function' && document.querySelector('#movie_player video'), null, { timeout: 30_000 })
     .catch(() => {});
@@ -122,6 +127,10 @@ try {
   if (gate.bot || gate.consent) console.log(`SKIP  YouTube page checks: ${gate.bot ? 'YouTube asked this address to sign in (bot check)' : 'consent page'}`);
   else {
     for (const [name, mod] of modules) {
+      if (mod.importError) {
+        check(`${name}: the module loads`, false, mod.importError);
+        continue;
+      }
       try {
         await mod.live({ ctx, sw, id, check, page, videoId: VIDEOS[0], shots: process.env.SHOTS ?? tmpdir() });
       } catch (e) {

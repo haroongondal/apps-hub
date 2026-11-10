@@ -3,6 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <title>sieveTest01 - YouTube</title>
+    <script>
+      if (new URLSearchParams(location.search).get('dark') === '1') document.documentElement.setAttribute('dark', '');
+    </script>
     <style>
       html { font-size: 62.5%; }
       body { margin: 0; font: 14px Roboto, Arial, sans-serif; background: #fff; color: #0f0f0f; }

@@ -10,7 +10,15 @@ export async function ytModules(only = null) {
   const dir = fileURLToPath(new URL('.', import.meta.url));
   const names = readdirSync(dir).filter((f) => f.endsWith('.mjs') && f !== 'helpers.mjs').map((f) => f.slice(0, -4)).sort();
   const wanted = names.filter((n) => n === 'fixture' || !only || only.includes(n));
-  return Promise.all(wanted.map(async (name) => [name, await import(`./${name}.mjs`)]));
+  const unknown = (only ?? []).filter((n) => !names.includes(n));
+  const loaded = await Promise.all(wanted.map(async (name) => {
+    try {
+      return [name, await import(`./${name}.mjs`)];
+    } catch (e) {
+      return [name, { importError: String(e?.message ?? e).split('\n')[0] }];
+    }
+  }));
+  return [...loaded, ...unknown.map((name) => [name, { importError: 'no such module in test/yt/' }])];
 }
 
 export function ytUrl(t, path, fixture = 'watch') {
@@ -50,9 +58,10 @@ export const rowButton = (page, name) => row(page).getByRole('button', { name })
 
 export async function navigate(page, id, query = {}) {
   await page.evaluate(
-    ([i, q, nav]) => new Promise((resolve) => {
+    ([i, q, nav]) => new Promise((resolve, reject) => {
       const target = nav.target === 'window' ? window : document;
-      target.addEventListener(nav.finish, () => resolve(), { once: true });
+      const timer = setTimeout(() => reject(new Error('NAV.finish did not fire')), 5000);
+      target.addEventListener(nav.finish, () => { clearTimeout(timer); resolve(); }, { once: true });
       window.__navigate(i, q);
     }),
     [id, query, NAV],

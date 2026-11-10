@@ -105,6 +105,7 @@
   };
   const api = {
     getPlayerState: () => playerState,
+    // Not from YouTube: state -1 and errorCode 'fixture.unplayable' for state=unplayable are this fixture's own choice (no real unplayable page was inspected).
     getVideoData: () => ({ video_id: videoId, author: 'Sieve fixture', title: videoId, isPlayable: !unplayable, errorCode: unplayable ? 'fixture.unplayable' : null, video_quality: quality, isLive: false, ...(listId ? { list: listId } : {}) }),
     getPlaybackRate: () => video.playbackRate,
     setPlaybackRate: (r) => { video.playbackRate = r; },
@@ -129,7 +130,7 @@
     nextVideo: () => playVideoAt(IDS.indexOf(videoId) + 1),
     stopVideo: () => { stopped = true; video.pause(); setState(5); },
     pauseVideo: () => video.pause(),
-    playVideo: () => video.play().catch(() => {}),
+    playVideo: () => { video.play().catch(() => {}); },
     seekTo: (s) => { video.currentTime = s; },
     addEventListener: (name, fn) => { if (typeof fn === 'function') (listeners[name] ??= []).push(fn); },
   };
@@ -149,7 +150,8 @@
     if (!parent) return;
     for (const child of [...parent.children]) {
       if (child.localName === 'template') continue;
-      child.replaceWith(child.cloneNode(true));
+      if (child.localName === 'sieve-yt-row') child.remove();
+      else child.replaceWith(child.cloneNode(true));
     }
   };
 
@@ -175,6 +177,7 @@
   });
 
   if (!unplayable) setSource();
+  // The real hard-load yt-navigate-finish comes about 3 s in; the fixture fires it at once.
   setTimeout(() => {
     const app = $('ytd-app') ?? document.documentElement;
     app.dispatchEvent(new CustomEvent(EV.finish, { bubbles: true, composed: true, detail: { pageType: 'watch', fromHistory: false } }));

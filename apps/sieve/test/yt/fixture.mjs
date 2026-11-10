@@ -58,6 +58,19 @@ export async function local(t) {
   });
   check('__rerenderBelow replaces the row anchor with a fresh copy', sameEl.replaced, JSON.stringify(sameEl));
 
+  const gone = await page.evaluate(() => {
+    const host = document.createElement('sieve-yt-row');
+    host.attachShadow({ mode: 'open' });
+    document.querySelector('ytd-watch-metadata').before(host);
+    window.__rerenderBelow();
+    return !host.isConnected && document.querySelector('sieve-yt-row') === null;
+  });
+  check('__rerenderBelow removes a sieve-yt-row host instead of cloning it', gone);
+  const rets = await page.evaluate(() => { const p = document.querySelector('#movie_player'); return [p.playVideo(), p.pauseVideo(), p.seekTo(1), p.setVolume(50), p.nextVideo()]; });
+  check('playVideo, pauseVideo, seekTo, setVolume and nextVideo return undefined, as on YouTube', rets.every((v) => v === undefined), JSON.stringify(rets));
+  const unreachable = await navigate(page, 'sieveTest04', { list: null }).then(() => 'ok', (e) => e.message);
+  check('navigate resolves when NAV.finish fires', unreachable === 'ok', unreachable);
+
   await page.evaluate(() => document.querySelector('.ytp-size-button').click());
   const theater = await page.evaluate(() => ({ theater: document.querySelector('ytd-watch-flexy').hasAttribute('theater'), inFullBleed: !!document.querySelector('#full-bleed-container #player-container') }));
   check('the size button toggles the theater attribute and moves the player into the full-bleed container', theater.theater && theater.inFullBleed, JSON.stringify(theater));
@@ -67,7 +80,7 @@ export async function local(t) {
   check('__keys and __ctx record keydown and contextmenu events', seen.keys.includes('k') && seen.ctx === 1, JSON.stringify(seen));
   await page.evaluate(() => { const p = document.querySelector('#movie_player'); p.setPlaybackRate(1.5); p.setVolume(30); });
   const calls = await ytCalls(page);
-  check('player-API calls are recorded with name and args', calls.some((c) => c.name === 'setPlaybackRate' && c.args[0] === 1.5) && (await ytCalls(page, 'setVolume')).length === 1, JSON.stringify(calls.slice(-3)));
+  check('player-API calls are recorded with name and args', calls.some((c) => c.name === 'setPlaybackRate' && c.args[0] === 1.5) && (await ytCalls(page, 'setVolume')).some((c) => c.args[0] === 30), JSON.stringify(calls.slice(-3)));
   await page.close();
 
   const listed = await openYt(t, `/watch?v=${FIXTURE_IDS[1]}&list=PLsieve&index=2`);
@@ -88,6 +101,13 @@ export async function local(t) {
   const dead = await bad.evaluate(() => { const p = document.querySelector('#movie_player'); return { state: p.getPlayerState(), playable: p.getVideoData().isPlayable, src: document.querySelector('#movie_player video').currentSrc }; });
   check('state=unplayable: no source, getPlayerState -1 and isPlayable false', dead.state === -1 && dead.playable === false && dead.src === '', JSON.stringify(dead));
   await bad.close();
+
+  const dark = await openYt(t, '/watch?v=sieveTest01&dark=1');
+  const light = await openYt(t, '/watch?v=sieveTest01');
+  const attrs = [await dark.evaluate(() => document.documentElement.getAttribute('dark')), await light.evaluate(() => document.documentElement.getAttribute('dark'))];
+  check('dark=1 puts a bare dark attribute on <html>, and a normal page has none', JSON.stringify(attrs) === JSON.stringify(['', null]), JSON.stringify(attrs));
+  await dark.close();
+  await light.close();
 
   const none2 = await openYt(t, '/watch?v=sieveTest01&noanchor=1');
   check('noanchor=1 leaves no row anchor', (await none2.locator(SEL.rowAnchor).count()) === 0);
