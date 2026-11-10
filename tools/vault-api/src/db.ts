@@ -37,9 +37,8 @@ export async function createAccount(db: Db, a: AccountCreate, escrow?: EscrowSet
   }
 }
 
-// One batch (one transaction): an escrow write that fails rolls back the header/hash update too, rather than leaving them split.
-// The escrow statements run BEFORE the account UPDATE and share its exact precondition (header_rev = ifRev, read pre-write): a stale
-// ifRev then leaves the escrow and the account row equally untouched, instead of checking two conditions that can disagree.
+// Escrow/lost_request run first, sharing the account UPDATE's exact precondition (header_rev = ifRev, read pre-write), so a stale
+// ifRev leaves all three rows untouched; the UPDATE runs last so its failure rolls back the escrow/lost_request writes ahead of it.
 export async function updateAccount(db: Db, a: Omit<AccountUpdate, 'ifRev'>, ifRev: number, escrow: EscrowChange = { clear: false, set: null }): Promise<number | null> {
   const unmoved = 'EXISTS (SELECT 1 FROM account WHERE id = 1 AND header_rev = ?)';
   const stmts: Stmt[] = [];

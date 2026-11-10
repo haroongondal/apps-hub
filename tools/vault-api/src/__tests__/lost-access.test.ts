@@ -153,6 +153,27 @@ test('a D1 failure on the escrow write during an account update rolls back the w
   assert.deepEqual(row(), before);
 });
 
+test('the account UPDATE failing rolls back the escrow/lost_request writes that already ran ahead of it in the same batch', async () => {
+  const w = world();
+  await setUp(w);
+  await enroll(w, 'owner@example.com', 'blob-A'); // rev 1 -> 2, escrow = blob-A
+  await w.call('POST', '/v1/lost/request', undefined, { claimHash: toBase64(randomBytes(32)) });
+  const escrowBefore = w.escrowRow();
+  const lostBefore = w.lostRow();
+  const revBefore = w.sqlite.prepare('SELECT header_rev AS headerRev FROM account WHERE id = 1').all()[0];
+
+  w.sqlite.exec("CREATE TRIGGER force_update_fail BEFORE UPDATE ON account BEGIN SELECT RAISE(ABORT, 'forced'); END");
+  const r = await w.call('PUT', '/v1/account', LOGIN, {
+    ...account({ recoveryHash: tokenHash(tok(70)) }), // clears the old escrow and would set a new one
+    ifRev: 2,
+    escrow: { email: 'new@example.com', blob: btoa('blob-new'), code: 'NEW-CODE' },
+  });
+  assert.equal(r.status, 500);
+  assert.deepEqual(w.escrowRow(), escrowBefore);
+  assert.deepEqual(w.lostRow(), lostBefore);
+  assert.deepEqual(w.sqlite.prepare('SELECT header_rev AS headerRev FROM account WHERE id = 1').all()[0], revBefore);
+});
+
 test('request with no escrow answers 200 and sends no mail', async () => {
   const w = world();
   await setUp(w);
