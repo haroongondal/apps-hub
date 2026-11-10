@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { SEL } from '../../src/yt/selectors.ts';
+import { FULLSCREEN_ATTR, SEL, THEATER_ATTR } from '../../src/yt/selectors.ts';
 import { navigate, row, setYouTube, storedYouTube, until } from './helpers.mjs';
 
 const json = (v) => JSON.stringify(v);
@@ -8,7 +8,7 @@ const btn = (page, name) => row(page).getByRole('button', { name, exact: true })
 const bg = (page) => page.evaluate(() => { const b = document.querySelector('sieve-yt-backdrop'); return b && getComputedStyle(b).backgroundColor; });
 const shown = (page) => page.evaluate(() => { const b = document.querySelector('sieve-yt-backdrop'); return !!b && getComputedStyle(b).display !== 'none'; });
 const videoCss = (page, prop) => page.evaluate(([sel, p]) => getComputedStyle(document.querySelector(sel))[p], [SEL.video, prop]);
-const theater = (page) => page.evaluate((sel) => document.querySelector(sel).hasAttribute('theater'), SEL.watch);
+const theater = (page) => page.evaluate(([sel, attr]) => document.querySelector(sel).hasAttribute(attr), [SEL.watch, THEATER_ATTR]);
 const hit = (page) => page.evaluate((sel) => {
   const el = (x, y) => document.elementFromPoint(x, y);
   const r = document.querySelector(sel.player).getBoundingClientRect();
@@ -21,14 +21,14 @@ const present = (page) => page.evaluate(() => !!document.querySelector('sieve-yt
 const open = async (t, path = '/watch?v=sieveTest01', hold = false) => {
   const page = await t.ctx.newPage();
   page.on('pageerror', (e) => t.errors.push(e.message));
-  await page.addInitScript(([sel, held]) => {
+  await page.addInitScript(([sel, held, attr, watch]) => {
     window.__sizeClicks = 0;
     window.__resizes = 0;
     window.__resizesAfterTheater = 0;
     window.__theaterAt = null;
     document.addEventListener('click', (e) => { if (e.target?.closest?.(sel)) window.__sizeClicks++; }, true);
     window.addEventListener('resize', () => { window.__resizes++; if (window.__theaterAt !== null) window.__resizesAfterTheater++; });
-    new MutationObserver(() => { if (window.__theaterAt === null && document.querySelector('ytd-watch-flexy')?.hasAttribute('theater')) window.__theaterAt = performance.now(); }).observe(document, { attributes: true, subtree: true, attributeFilter: ['theater'] });
+    new MutationObserver(() => { if (window.__theaterAt === null && document.querySelector(watch)?.hasAttribute(attr)) window.__theaterAt = performance.now(); }).observe(document, { attributes: true, subtree: true, attributeFilter: [attr] });
     if (!held) return;
     const send = EventTarget.prototype.dispatchEvent;
     const queue = [];
@@ -38,7 +38,7 @@ const open = async (t, path = '/watch?v=sieveTest01', hold = false) => {
       return send.call(this, e);
     };
     window.__release = () => { window.__hold = false; for (const [target, e] of queue.splice(0)) send.call(target, new CustomEvent(e.type, { bubbles: true, composed: true, detail: e.detail })); };
-  }, [SEL.sizeButton, hold]);
+  }, [SEL.sizeButton, hold, THEATER_ATTR, SEL.watch]);
   await page.goto(new URL(`${path}&fixture=watch`, t.base).href, { waitUntil: 'load' });
   await until(() => row(page).count());
   return page;
@@ -75,14 +75,14 @@ export async function local(t) {
     await Promise.all(pages.splice(0).map((p) => p.close()));
 
     page = await mk();
-    const facts = () => page.evaluate(([sel]) => ({ theater: document.querySelector(sel.watch).hasAttribute('theater'), box: Math.round(document.querySelector(sel.theaterBox).getBoundingClientRect().height), want: innerHeight - Math.round(document.querySelector(sel.masthead).getBoundingClientRect().height), resizes: window.__resizes }), [SEL]);
+    const facts = () => page.evaluate(([sel, attr]) => ({ theater: document.querySelector(sel.watch).hasAttribute(attr), box: Math.round(document.querySelector(sel.theaterBox).getBoundingClientRect().height), want: innerHeight - Math.round(document.querySelector(sel.masthead).getBoundingClientRect().height), resizes: window.__resizes }), [SEL, THEATER_ATTR]);
     await btn(page, 'Expand').click();
     check('visual expand: "Expand" sets theater, and the theater box is the viewport minus the masthead (+-1 px)', await until(async () => { const f = await facts(); return f.theater && Math.abs(f.box - f.want) <= 1; }), json(await facts()));
     check('visual expand: a resize event reached the window', await until(async () => (await facts()).resizes >= 1), json(await facts()));
     await page.screenshot({ path: join(t.shots, 'yt-expand-local.png') });
-    await page.evaluate((sel) => document.querySelector(sel).setAttribute('fullscreen', ''), SEL.watch);
+    await page.evaluate(([sel, attr]) => document.querySelector(sel).setAttribute(attr, ''), [SEL.watch, FULLSCREEN_ATTR]);
     check('visual expand: in full screen the override steps aside', await until(async () => (await facts()).box !== (await facts()).want), json(await facts()));
-    await page.evaluate((sel) => document.querySelector(sel).removeAttribute('fullscreen'), SEL.watch);
+    await page.evaluate(([sel, attr]) => document.querySelector(sel).removeAttribute(attr), [SEL.watch, FULLSCREEN_ATTR]);
     await btn(page, 'Flip').click();
     await setYouTube(t, { on: false });
     check('visual expand: with YouTube tools off the override is gone and so is the flip', await until(async () => (await facts()).box !== (await facts()).want && (await videoCss(page, 'transform')) === 'none'), json(await facts()));
@@ -93,9 +93,12 @@ export async function local(t) {
     pages.length = 0;
 
     await setYouTube(t, { player: { expand: true } });
-    page = await mk();
+    page = await mk('/watch?v=sieveTest01', true);
     const late = () => page.evaluate(() => ({ theaterAt: window.__theaterAt, after: window.__resizesAfterTheater }));
-    check('visual expand: a stored expand on a hard load sends a resize after the late theater click', await until(async () => (await late()).after >= 1), json(await late()));
+    await sleep(500);
+    const held = await late();
+    await page.evaluate(() => window.__release());
+    check('visual expand: a stored expand on a hard load sends a resize only after the late theater click', held.theaterAt === null && held.after === 0 && (await until(async () => (await late()).after >= 1)), json({ held, now: await late() }));
     await page.close();
     pages.length = 0;
     await setYouTube(t, { player: { expand: false } });
@@ -132,6 +135,10 @@ export async function local(t) {
     await row(page).getByRole('switch', { name: 'Flip horizontally' }).click();
     check('visual flip: the "Flip horizontally" switch turns the horizontal flip off, leaving the vertical one', await until(async () => (await videoCss(page, 'transform')) === 'matrix(1, 0, 0, -1, 0, 0)'), await videoCss(page, 'transform'));
     check('visual flip: the Flip button stays pressed with only the vertical flip', await until(async () => (await btn(page, 'Flip').getAttribute('aria-pressed')) === 'true'));
+    await btn(page, 'Flip').click();
+    check('visual flip: the Flip button with a flip on clears every flip', (await until(async () => (await videoCss(page, 'transform')) === 'none')) && (await until(async () => (await btn(page, 'Flip').getAttribute('aria-pressed')) === 'false')), await videoCss(page, 'transform'));
+    await btn(page, 'Flip').click();
+    await until(async () => (await videoCss(page, 'transform')) === 'matrix(-1, 0, 0, 1, 0, 0)');
     await navigate(page, 'sieveTest02');
     check('visual flip: a new video resets the flip', await until(async () => (await videoCss(page, 'transform')) === 'none'), await videoCss(page, 'transform'));
     check('visual flip: the stored settings never hold it', !('flip' in ((await storedYouTube(t))?.player ?? {})));
@@ -157,8 +164,11 @@ export async function local(t) {
     await t.sw.evaluate(() => { globalThis.__ytWrites = 0; });
     await row(page).getByRole('slider', { name: 'Blur', exact: true }).focus();
     await page.keyboard.press('ArrowRight');
+    const pending = (await storedYouTube(t))?.player.filters.blur;
     await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
-    check('visual filters: a page that unloads sends the pending slider change at once (before the 150 ms wait)', await until(async () => (await storedYouTube(t))?.player.filters.blur === 4, 130), json((await storedYouTube(t))?.player.filters));
+    await sleep(60);
+    const sent = (await storedYouTube(t))?.player.filters.blur;
+    check('visual filters: a page that unloads sends the pending slider change at once (stored 3 before pagehide, 4 within 60 ms after, inside the 150 ms wait)', pending === 3 && sent === 4, json({ pending, sent }));
     await row(page).getByRole('button', { name: 'Reset', exact: true }).click();
     check('visual filters: "Reset" gives none and stores the defaults', (await until(async () => (await videoCss(page, 'filter')) === 'none')) && (await until(async () => (await storedYouTube(t))?.player.filters.blur === 0)), await videoCss(page, 'filter'));
     await setYouTube(t, { player: { filters: { hue: 90, brightness: 120 } } });
@@ -191,12 +201,12 @@ export async function live(t) {
     await setYouTube(t, { player: { cinema: false } });
 
     await setYouTube(t, { player: { expand: true } });
-    const expand = () => page.evaluate(([sel]) => ({ theater: document.querySelector(sel.watch).hasAttribute('theater'), box: document.querySelector(sel.theaterBox).getBoundingClientRect().height, want: innerHeight - document.querySelector(sel.masthead).getBoundingClientRect().height }), [SEL]);
+    const expand = () => page.evaluate(([sel, attr]) => ({ theater: document.querySelector(sel.watch).hasAttribute(attr), box: document.querySelector(sel.theaterBox).getBoundingClientRect().height, want: innerHeight - document.querySelector(sel.masthead).getBoundingClientRect().height }), [SEL, THEATER_ATTR]);
     check('live expand: the theater container is the viewport minus the masthead (+-2 px)', await until(async () => { const f = await expand(); return f.theater && Math.abs(f.box - f.want) <= 2; }, 10_000), json(await expand()));
     await page.screenshot({ path: join(t.shots, 'yt-expand.png') });
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForFunction((sel) => document.querySelector(sel.watch)?.hasAttribute('theater'), SEL, { timeout: 30_000 }).catch(() => {});
+    await page.waitForFunction(([sel, attr]) => document.querySelector(sel.watch)?.hasAttribute(attr), [SEL, THEATER_ATTR], { timeout: 30_000 }).catch(() => {});
     const fit = () => page.evaluate((sel) => { const p = document.querySelector(sel.player).getBoundingClientRect(); const v = document.querySelector(sel.video).getBoundingClientRect(); return { box: [p.width, p.height].map(Math.round), video: [v.width, v.height].map(Math.round), want: Math.round(Math.min(p.height, (p.width * 9) / 16)) }; }, SEL);
     check('live expand: with expand stored, a hard load ends with the video filling its box (height within 3 px)', await until(async () => { const f = await fit(); return f.box[1] > 300 && Math.abs(f.video[1] - f.want) <= 3; }, 15_000), json(await fit()));
 

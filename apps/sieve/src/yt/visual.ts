@@ -94,6 +94,12 @@ function setFlip(): void {
   setFlag('flip', on && (flipH || flipV));
 }
 
+function clearFlip(): void {
+  flipH = flipV = false;
+  setFlip();
+  notifyActions();
+}
+
 function setFilters(): void {
   root.style.setProperty('--sieve-yt-filter', filterCss(live ?? y.player.filters));
   setFlag('filters', on && y.player.filtersOn);
@@ -198,7 +204,7 @@ feature('cinema, expand, flip and filters', () => {
   addButton({ id: 'cinema', label: 'Cinema', pressed: () => y.player.cinema, onClick: () => void runAction('cinema') });
   addButton({ id: 'expand', label: 'Expand', pressed: () => y.player.expand, onClick: () => void runAction('expand') });
   addButton({ id: 'filters', label: 'Filters', pressed: () => y.player.filtersOn, onClick: () => void runAction('filters'), menu: { label: 'Filter options', build: filterOptions } });
-  addButton({ id: 'flip', label: 'Flip', pressed: () => flipH || flipV, onClick: () => void runAction('flip-h'), menu: { label: 'Flip options', build: flipOptions } });
+  addButton({ id: 'flip', label: 'Flip', pressed: () => flipH || flipV, onClick: () => (flipH || flipV ? clearFlip() : void runAction('flip-h')), menu: { label: 'Flip options', build: flipOptions } });
 
   onSettings((next, isOn) => {
     y = next;
