@@ -5,7 +5,7 @@ import SWITCH_CSS from '../switch.css';
 import { defineAction, notifyActions, runAction } from './actions.ts';
 import { addStyle, currentPage, feature, onNavigate, onSettings, saveYouTube, setFlag } from './bridge.ts';
 import { addButton, toast } from './row.ts';
-import { NAV, SEL, THEATER_ATTR } from './selectors.ts';
+import { FULLSCREEN_ATTR, MASTHEAD_HEIGHT_VAR, NAV, SEL, THEATER_ATTR } from './selectors.ts';
 import VISUAL_CSS from './visual.css';
 
 // inspected 2026-11-10, signed out, Chrome for Testing 149.0.7827.55: fixed layers sit at z-index 2020 (masthead), 2028 (mini guide), 2030 (guide drawer, miniplayer), 2031 (persistent panel), 2100 (progress bar), 20000 (snackbar); visual.css puts the backdrop at 2200 and what it lifts at 2201.
@@ -33,15 +33,23 @@ let wasExpand = false;
 const root = document.documentElement;
 const watching = (): boolean => on && window === window.top && currentPage().kind === 'watch';
 
-async function save(p: unknown): Promise<void> {
+async function save(p: unknown): Promise<boolean> {
   const r = await saveYouTube(p);
   if (!r.ok) toast(r.message ?? 'Sieve could not save the setting. Reload the page, then try again.');
+  return r.ok;
+}
+
+// A failed filter save puts the stored values back on the video.
+async function saveFiltersNow(p: unknown): Promise<void> {
+  if (await save(p)) return;
+  live = null;
+  setFilters();
 }
 
 function mountBackdrop(): void {
   if (backdrop?.isConnected) return;
   if (!document.body) {
-    document.addEventListener('DOMContentLoaded', mountBackdrop, { once: true });
+    document.addEventListener('DOMContentLoaded', render, { once: true });
     return;
   }
   backdrop ??= h('sieve-yt-backdrop' as 'div', { onclick: (e: Event) => e.isTrusted && void save({ player: { cinema: false } }) });
@@ -56,7 +64,7 @@ function saveFilters(key: FilterKey, value: number): void {
 }
 function flush(): void {
   clearTimeout(patchTimer);
-  if (patch) void save(patch);
+  if (patch) void saveFiltersNow(patch);
   patch = null;
 }
 window.addEventListener('pagehide', flush);
@@ -71,7 +79,13 @@ function ensureTheater(): void {
   const button = document.querySelector<HTMLElement>(SEL.sizeButton);
   if (!flexy || !button) return;
   theaterFor = location.href;
-  if (!flexy.hasAttribute(THEATER_ATTR)) button.click();
+  if (flexy.hasAttribute(THEATER_ATTR)) return;
+  button.click();
+  if (y.player.expand) relayout();
+}
+
+function relayout(): void {
+  requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
 }
 
 // inspected 2026-11-10, signed out, Chrome for Testing 149.0.7827.55: the video's inline style is only width, height, left and top, and 2.5 s of a rate change and a seek added none; no YouTube rule sets transform or filter on it. So a plain rule in visual.css wins.
@@ -86,27 +100,28 @@ function setFilters(): void {
 }
 
 function render(): void {
-  if (!on) {
-    for (const flag of ['cinema', 'expand', 'flip', 'filters']) setFlag(flag, false);
-    for (const p of ['--sieve-yt-backdrop', '--sieve-yt-filter']) root.style.removeProperty(p);
-    document.querySelector<HTMLElement>(SEL.player)?.style.removeProperty('--sieve-yt-flip');
-  } else {
+  const cinema = watching() && y.player.cinema;
+  const expand = watching() && y.player.expand;
+  if (on) {
     if (live && filterCss(live) === filterCss(y.player.filters)) live = null;
-    const cinema = watching() && y.player.cinema;
-    if (cinema) mountBackdrop();
     root.style.setProperty('--sieve-yt-backdrop', backdropColor(y.player.backdrop, y.player.backdropOpacity));
-    setFlag('cinema', cinema);
-    setFlag('expand', watching() && y.player.expand);
     setFlip();
     setFilters();
+  } else {
+    for (const flag of ['flip', 'filters']) setFlag(flag, false);
+    for (const p of ['--sieve-yt-backdrop', '--sieve-yt-filter']) root.style.removeProperty(p);
+    document.querySelector<HTMLElement>(SEL.player)?.style.removeProperty('--sieve-yt-flip');
   }
-  const expand = watching() && y.player.expand;
+  setFlag('cinema', cinema);
+  setFlag('expand', expand);
+  if (cinema) mountBackdrop();
+  else backdrop?.remove();
   if (expand && !wasExpand) theaterFor = '';
   if (expand) ensureTheater();
   if (expand !== wasExpand) {
     wasExpand = expand;
     // inspected 2026-11-10, signed out, Chrome for Testing 149.0.7827.55: after the box height changed, the video's inline width, height and left stayed (1122x631) until a synthetic `resize` event on window made YouTube lay it out again (747x420).
-    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    relayout();
   }
 }
 
@@ -159,7 +174,7 @@ function filterOptions(): HTMLElement {
         s.out.textContent = shown(live[s.f.key], s.f.unit);
         s.input.setAttribute('aria-valuetext', s.out.textContent);
       }
-      void save({ player: { filters: DEFAULT_YOUTUBE.player.filters } });
+      void saveFiltersNow({ player: { filters: DEFAULT_YOUTUBE.player.filters } });
     },
   }, 'Reset');
   return h('div', { class: 'opts' }, h('style', {}, POP_CSS), switchRow('Filters on', y.player.filtersOn, (v) => void save({ player: { filtersOn: v } })), ...sliders.map((s) => s.row), reset);
@@ -170,9 +185,10 @@ function flipOptions(): HTMLElement {
 }
 
 feature('cinema, expand, flip and filters', () => {
-  addStyle(VISUAL_CSS.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => (SEL as Record<string, string>)[k] ?? ''));
+  const names: Record<string, string> = { ...SEL, theaterAttr: THEATER_ATTR, fullscreenAttr: FULLSCREEN_ATTR, mastheadVar: MASTHEAD_HEIGHT_VAR };
+  addStyle(VISUAL_CSS.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => names[k] ?? ''));
 
-  const toggle = (key: 'cinema' | 'expand' | 'filtersOn') => () => save({ player: { [key]: !y.player[key] } });
+  const toggle = (key: 'cinema' | 'expand' | 'filtersOn') => async () => void (await save({ player: { [key]: !y.player[key] } }));
   defineAction('cinema', toggle('cinema'), () => y.player.cinema);
   defineAction('expand', toggle('expand'), () => y.player.expand);
   defineAction('filters', toggle('filtersOn'), () => y.player.filtersOn);
@@ -182,7 +198,7 @@ feature('cinema, expand, flip and filters', () => {
   addButton({ id: 'cinema', label: 'Cinema', pressed: () => y.player.cinema, onClick: () => void runAction('cinema') });
   addButton({ id: 'expand', label: 'Expand', pressed: () => y.player.expand, onClick: () => void runAction('expand') });
   addButton({ id: 'filters', label: 'Filters', pressed: () => y.player.filtersOn, onClick: () => void runAction('filters'), menu: { label: 'Filter options', build: filterOptions } });
-  addButton({ id: 'flip', label: 'Flip', pressed: () => flipH, onClick: () => void runAction('flip-h'), menu: { label: 'Flip options', build: flipOptions } });
+  addButton({ id: 'flip', label: 'Flip', pressed: () => flipH || flipV, onClick: () => void runAction('flip-h'), menu: { label: 'Flip options', build: flipOptions } });
 
   onSettings((next, isOn) => {
     y = next;

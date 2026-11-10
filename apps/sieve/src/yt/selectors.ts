@@ -75,3 +75,9 @@ export const PLAYER_API = [
 // stays 1, so it is not a page load.
 // inspected 2026-11-10, signed out, Chrome for Testing 149.0.7827.55
 export const RELATED_LINK = 'ytd-watch-next-secondary-results-renderer a[href^="/watch"]';
+
+// inspected 2026-11-10, signed out, Chrome for Testing 149.0.7827.55: clicking the player's full screen button gave `ytd-watch-flexy[fullscreen]` and `document.fullscreenElement` html; YouTube's own rules for `#full-bleed-container` in that state are height 100vh, max-height none.
+export const FULLSCREEN_ATTR = 'fullscreen';
+
+// inspected 2026-11-10, signed out, Chrome for Testing 149.0.7827.55: `--ytd-watch-flexy-masthead-height` is 56px on `ytd-watch-flexy` in default and theater layout, 0px in full screen.
+export const MASTHEAD_HEIGHT_VAR = '--ytd-watch-flexy-masthead-height';
