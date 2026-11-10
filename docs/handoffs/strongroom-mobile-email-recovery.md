@@ -221,6 +221,8 @@ Open design questions for the new session's brainstorming pass:
 
 - 2026-11-11 02:15 (session 2): OWNER INSTRUCTION: too many review agents, optimize. New policy: no per-commit review agents and no re-review agents for fix rounds (the controller verifies each commit itself: contents, a real test run, probes). Keep the one adversarial review already running for Task 4 (lost access, the riskiest code). After the last task, ONE whole-branch review. Fixes are batched. Task 4 `f542073` (466 tests); Task 5 implementer running (OWNER module).
 
+- 2026-11-11 02:30 (session 2): Task 5 `06c28f4` (473 Kotlin, 83 TS tests; verified by controller). Task 4's adversarial review found C1 (lost reply + retry with a new claim orphans the first link: ~8-day lockout) and I1 (request stays pending forever after a successful open): fix round (resend the SAME stored claim; remove the cooldown and `lostRequestedAt`; best-effort cancel after open; `clearLost()` on normal unlock; plus Task 3 leftovers N1/N2) sent to the Task 4 agent. Task 7 (screens) running; it was told the copy requirements (hedge when no email arrives; only open the link if you asked just now). Next: verify the fix round myself, Task 8 (docs + gates), ONE whole-branch review.
+
 ## Current state and exact next step
 
 **State (updated 2026-11-11, later)**: design approved, plan written and committed, awaiting owner's plan review and execution-method choice; nothing implemented; worktree exists (see session log). The next step is executing the plan (subagent-driven-development recommended) from Task 1. Older text follows:
