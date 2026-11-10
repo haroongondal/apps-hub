@@ -11,6 +11,8 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class EmailRecoveryTest {
   private val fast = KdfParams(1024, 1, 1)
@@ -41,7 +43,20 @@ class EmailRecoveryTest {
       }
       return rev
     }
+
+    override fun lostStatus(token: ByteArray): LostStatus {
+      val answer = w.t.lostStatus(token)
+      statusHeld?.let {
+        statusAsked.countDown()
+        it.await(5, TimeUnit.SECONDS)
+      }
+      return answer
+    }
   }
+
+  // A status reply already answered by the Worker but still on its way to the phone.
+  private var statusHeld: CountDownLatch? = null
+  private val statusAsked = CountDownLatch(1)
 
   private class Killed : Error("the process died here")
 
@@ -66,6 +81,8 @@ class EmailRecoveryTest {
   private fun hashOf(rk: ByteArray) = Crypto.tokenHash(VaultFormat.recoveryLoginToken(rk))
 
   private fun opens(rk: ByteArray, h: Header) = VaultFormat.unlockWithRecovery(h, rk) != null
+
+  private fun codeHash(code: String) = Crypto.tokenHash(RecoveryKey.parse(code)!!)
 
   private fun status(checked: Boolean = true, enrolled: Boolean = false, waiting: Boolean = false, pending: PendingRecovery? = null, turnedOff: Boolean = false, unseen: Boolean = false) =
     EmailRecoveryStatus(available = true, checked = checked, enrolled = enrolled, waitingForCode = waiting, pendingRecovery = pending, wasTurnedOff = turnedOff, keyUnseen = unseen)
@@ -98,10 +115,10 @@ class EmailRecoveryTest {
     assertEquals(2, p.store.meta.headerRev)
     assertFalse(p.settings.state.accountPending)
     assertNull(p.secrets.get(SyncSecret.NEXT_LOGIN))
-    assertEquals(RecoveryLocal(escrowBlob = sealed.blob, keyUnseen = true), p.recoverySettings.state)
+    assertEquals(RecoveryLocal(escrowCodeHash = codeHash(sealed.code), keyUnseen = true), p.recoverySettings.state)
     assertEquals(status(waiting = true, unseen = true), p.recovery.status())
     p.recovery.keyShown()
-    assertEquals(RecoveryLocal(escrowBlob = sealed.blob), p.recoverySettings.state)
+    assertEquals(RecoveryLocal(escrowCodeHash = codeHash(sealed.code)), p.recoverySettings.state)
     assertEquals(status(waiting = true), p.recovery.status())
 
     assertThrows(SyncAuthError::class.java) { TestPhone(w.t).session.recover(recoveryKey, newPassword, ak) } // the old key no longer signs in
@@ -218,8 +235,10 @@ class EmailRecoveryTest {
     val server = w.header
     w.headerRev++ // another device moved the account on after this phone last synced
 
-    assertEquals(409, assertThrows(SyncHttpError::class.java) { p.recovery.enrol("new@example.com", password) }.status)
+    w.mails.clear()
+    refused("vault moved") { p.recovery.enrol("new@example.com", password) }
     assertPutBack(p, json, RecoveryLocal(confirmed = true))
+    assertEquals(1, w.mails.size) // the Worker mails before it checks ifRev, so that code opens nothing
     assertEquals(sealed, w.escrow)
     assertEquals(server, w.header)
     assertEquals(hashOf(first), w.recoveryHash)
@@ -239,7 +258,7 @@ class EmailRecoveryTest {
     val json = p.store.header()
     val server = w.header
     w.failMail = true
-    assertEquals(502, assertThrows(SyncHttpError::class.java) { p.recovery.enrol(email, password) }.status)
+    refused("mail failed") { p.recovery.enrol(email, password) }
     assertPutBack(p, json)
     assertTrue(w.mails.isEmpty())
     assertNull(w.escrow)
@@ -277,14 +296,14 @@ class EmailRecoveryTest {
     assertFalse(opens(recoveryKey, p.header()))
     assertTrue(p.settings.state.accountPending)
     assertEquals(hashOf(e.recoveryKey), p.settings.state.recoveryHash)
-    val blob = p.recoverySettings.state.escrowBlob!!
+    val hash = p.recoverySettings.state.escrowCodeHash!!
     assertTrue(p.recoverySettings.state.keyUnseen)
     p.recovery.keyShown()
 
     w.calls.clear()
     if (landed) {
       val sealed = w.escrow!!
-      assertEquals(blob, sealed.blob)
+      assertEquals(hash, codeHash(sealed.code))
       assertEquals(status(waiting = true), p.recovery.status()) // the code was mailed, so it can be typed now
       p.session.sync() // the resend's stale ifRev gets a 409, then the phone finds its own header on the server
       assertEquals("update login ifRev=1 recovery", w.calls.first { it.startsWith("update") })
@@ -347,6 +366,52 @@ class EmailRecoveryTest {
     assertEquals("idle", a.session.status().state)
   }
 
+  @Test fun nothingStoredAfterEnrolOpensTheEscrow() {
+    val (p, _) = syncedPhone()
+    p.enrolSeen()
+    val stored = p.recoverySettings.state
+    val code = RecoveryKey.parse(w.mails.single())!!
+    assertEquals(Crypto.tokenHash(code), stored.escrowCodeHash)
+    val bytes = SyncWire.fromBase64(stored.escrowCodeHash!!)!!
+    assertEquals(32, bytes.size) // a SHA-256 of the code, not the sealed escrow
+    assertNull(Escrow.open(code, bytes))
+    assertFalse(stored.toString().contains(w.escrow!!.blob))
+  }
+
+  @Test fun keyShownNeverWaitsOnAStatusCheck() {
+    val (p, _) = syncedPhone()
+    p.recovery.enrol(email, password)!!
+    val held = CountDownLatch(1).also { statusHeld = it }
+    var checked: EmailRecoveryStatus? = null
+    val check = Thread { checked = p.recovery.status() }.apply { start() }
+    assertTrue(statusAsked.await(5, TimeUnit.SECONDS))
+    val tap = Thread { p.recovery.keyShown() }.apply { start() }
+    tap.join(2000)
+    assertFalse(tap.isAlive) // done while the status reply is still on its way
+    assertFalse(p.recoverySettings.state.keyUnseen)
+    held.countDown()
+    check.join()
+    assertEquals(status(waiting = true), checked)
+  }
+
+  @Test fun aStatusAnswerIsNotAppliedOverAStateThatChangedMeanwhile() {
+    val (p, _) = syncedPhone()
+    p.enrolSeen()
+    w.escrow = null // the answer in flight says no escrow, which would drop the code hash it was asked about
+    val held = CountDownLatch(1).also { statusHeld = it }
+    val check = Thread { p.recovery.status() }.apply { start() }
+    assertTrue(statusAsked.await(5, TimeUnit.SECONDS))
+    statusHeld = null
+    p.enrolSeen() // a new enrol lands meanwhile
+    val fresh = p.recoverySettings.state
+    held.countDown()
+    check.join()
+    assertEquals(fresh, p.recoverySettings.state)
+    assertEquals(codeHash(w.mails.last()), fresh.escrowCodeHash)
+    assertEquals(status(waiting = true), p.recovery.status())
+    assertTrue(p.recovery.confirm(w.mails.last()))
+  }
+
   @Test fun aKillRightAfterTheHeaderWriteStillLeavesTheKeyUnseen() {
     val (p, _) = syncedPhone("Bank")
     val json = p.store.header()
@@ -356,11 +421,11 @@ class EmailRecoveryTest {
       override fun load() = state
 
       override fun save(r: RecoveryLocal) {
-        if (r.escrowBlob != null) throw Killed() // the first save after the rotated header reached the vault file
+        if (r.escrowCodeHash != null) throw Killed() // the first save after the rotated header reached the vault file
         state = r
       }
     }
-    assertThrows(Killed::class.java) { EmailRecovery(p.session, p.secrets, dying, net) { p.time }.enrol(email, password) }
+    assertThrows(Killed::class.java) { EmailRecovery(p.session, p.secrets, dying, net).enrol(email, password) }
     assertFalse(json == p.store.header())
     assertEquals(RecoveryLocal(keyUnseen = true), dying.state)
   }
@@ -411,7 +476,7 @@ class EmailRecoveryTest {
     val (p, ak) = syncedPhone("Bank")
     failBefore = Killed()
     assertThrows(Killed::class.java) { p.recovery.enrol(email, password) }
-    assertNotNull(p.recoverySettings.state.escrowBlob)
+    assertNotNull(p.recoverySettings.state.escrowCodeHash)
     assertTrue(p.settings.state.accountPending)
     val rotated = p.store.header()
 

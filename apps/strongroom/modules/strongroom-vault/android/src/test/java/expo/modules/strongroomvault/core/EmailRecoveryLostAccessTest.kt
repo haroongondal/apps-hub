@@ -437,7 +437,7 @@ class EmailRecoveryLostAccessTest {
 
   @Test fun clearLostDropsOnlyTheLostAccessState() {
     val e = enrolled()
-    val local =RecoveryLocal(escrowBlob = "YmxvYg==", confirmed = true, lostClaim = "Y2xhaW0=", lostBlob = "bG9zdA==", keyUnseen = true)
+    val local =RecoveryLocal(escrowCodeHash = "aGFzaA==", confirmed = true, lostClaim = "Y2xhaW0=", lostBlob = "bG9zdA==", keyUnseen = true)
     e.p.recoverySettings.state = local
     w.calls.clear()
     e.p.recovery.clearLost()

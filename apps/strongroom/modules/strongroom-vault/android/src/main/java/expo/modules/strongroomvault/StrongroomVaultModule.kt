@@ -669,6 +669,12 @@ internal fun coded(e: IllegalStateException): Exception = when (e.message) {
     e,
   )
   "sync first" -> CodedException("SYNC_FIRST", "This phone has changes it hasn't synced yet. Choose Sync now, then try again.", e)
+  "mail failed" -> CodedException("MAIL_FAILED", "We couldn't send the email, so nothing changed and your old recovery key still works. Try again later.", e)
+  "vault moved" -> CodedException(
+    "VAULT_MOVED",
+    "Your vault changed on another device, so nothing changed and your old recovery key still works. Choose Sync now, then try again.",
+    e,
+  )
   "not waiting" -> CodedException("NOT_WAITING_FOR_CODE", "There is no email code to enter. Turn on email recovery first.", e)
   "request alive" -> CodedException(
     "LOST_STILL_ALIVE",

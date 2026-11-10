@@ -4,7 +4,7 @@ import java.security.MessageDigest
 
 // keyUnseen: an enrol rotated the recovery key and the owner hasn't confirmed seeing the new one (a crash mid-PUT loses it).
 data class RecoveryLocal(
-  val escrowBlob: String? = null,
+  val escrowCodeHash: String? = null, // only a hash: storage plus the inbox must never open the escrow without the wait
   val confirmed: Boolean = false,
   val lostClaim: String? = null,
   val lostBlob: String? = null,
@@ -46,9 +46,8 @@ class EmailRecovery(
   private val secrets: SyncSecrets,
   private val settings: RecoverySettings,
   private val transport: SyncTransport?,
-  private val clock: () -> Long,
 ) {
-  /** Null for a wrong password. The blob is saved after the rotated header and before the PUT, so a run cut short leaves a blob that [status] drops. */
+  /** Null for a wrong password. The code's hash is saved after the rotated header and before the PUT, so a run cut short leaves a hash that [status] drops. */
   @Synchronized fun enrol(email: String, password: CharArray): Enrolment? {
     val clean = email.trim()
     require(clean.length <= MAX_EMAIL && EMAIL.matches(clean)) { "bad email" }
@@ -58,12 +57,13 @@ class EmailRecovery(
     settings.save(before.copy(keyUnseen = true)) // before the header write, so a kill right after it still warns
     try {
       return sync.enrolEscrow(password) { rk ->
-        val blob = SyncWire.toBase64(Escrow.seal(code, rk, ak))
-        settings.save(before.copy(escrowBlob = blob, confirmed = false, keyUnseen = true))
-        EscrowBody(clean, blob, RecoveryKey.format(code))
+        settings.save(before.copy(escrowCodeHash = Crypto.tokenHash(code), confirmed = false, keyUnseen = true))
+        EscrowBody(clean, SyncWire.toBase64(Escrow.seal(code, rk, ak)), RecoveryKey.format(code))
       }.also { if (it == null) settings.save(before) } // a wrong password: nothing rotated
     } catch (e: Exception) {
       settings.save(before) // a refusal left the server's escrow, and so this phone's state, as they were
+      if (e is SyncHttpError && e.status == 502) throw IllegalStateException("mail failed", e)
+      if (e is SyncHttpError && e.status == 409) throw IllegalStateException("vault moved", e)
       throw e
     } finally {
       code.fill(0)
@@ -73,16 +73,15 @@ class EmailRecovery(
 
   @Synchronized fun confirm(codeText: String): Boolean {
     val r = settings.load()
-    val blob = r.escrowBlob ?: throw IllegalStateException("not waiting")
+    val expected = r.escrowCodeHash ?: throw IllegalStateException("not waiting")
     val code = RecoveryKey.parse(codeText) ?: return false
-    val keys = try {
-      Escrow.open(code, SyncWire.fromBase64(blob) ?: return false)
+    val typed = try {
+      Crypto.tokenHash(code)
     } finally {
       code.fill(0)
-    } ?: return false
-    keys.recoveryKey.fill(0)
-    keys.accountKey.fill(0)
-    settings.save(r.copy(escrowBlob = null, confirmed = true)) // storage plus the code must never open anything
+    }
+    if (!MessageDigest.isEqual(Crypto.utf8(typed), Crypto.utf8(expected))) return false
+    settings.save(r.copy(escrowCodeHash = null, confirmed = true))
     return true
   }
 
@@ -99,10 +98,10 @@ class EmailRecovery(
 
   @Synchronized fun keyShown() = settings.save(settings.load().copy(keyUnseen = false))
 
-  /** Holds this object's monitor across a network call, so call it off the main thread (Dispatchers.IO). */
-  @Synchronized fun status(): EmailRecoveryStatus {
-    var r = settings.load()
-    val unchecked = EmailRecoveryStatus(transport != null, false, false, false, null, false, r.keyUnseen)
+  /** The network call runs outside this object's monitor, so keyShown, confirm and enrol never wait on it; still call it off the main thread (Dispatchers.IO). */
+  fun status(): EmailRecoveryStatus {
+    val read = synchronized(this) { settings.load() }
+    val unchecked = EmailRecoveryStatus(transport != null, false, false, false, null, false, read.keyUnseen)
     val t = transport?.takeIf { sync.isOn } ?: return unchecked
     val remote = try {
       val token = secrets.get(SyncSecret.READ_TOKEN) ?: return unchecked
@@ -114,11 +113,13 @@ class EmailRecovery(
     } catch (e: Exception) {
       return unchecked // offline, a server error, a refused token or a locked Keystore: never an error
     }
-    // No server escrow, so no mailed code for this blob. Accepted edge cases: a reply that timed out while the Worker was still mailing then wrote reads as enrolled
-    // with no confirm; an older escrow still held while a re-enrol never landed reads as waiting for the code until the next sync sends the rotation and drops it.
-    if (r.escrowBlob != null && !r.confirmed && !remote.escrow) r = r.copy(escrowBlob = null).also(settings::save)
-    val waiting = r.escrowBlob != null && !r.confirmed
-    return EmailRecoveryStatus(true, true, remote.escrow && !waiting, waiting, if (remote.pending) PendingRecovery(remote.releaseAt) else null, r.confirmed && !remote.escrow, r.keyUnseen)
+    synchronized(this) {
+      var r = settings.load()
+      // No server escrow, so no code was mailed for this hash; dropped only if nothing changed while the question was out (accepted edge cases: Task 3's notes in the plan).
+      if (r == read && r.escrowCodeHash != null && !r.confirmed && !remote.escrow) r = r.copy(escrowCodeHash = null).also(settings::save)
+      val waiting = r.escrowCodeHash != null && !r.confirmed
+      return EmailRecoveryStatus(true, true, remote.escrow && !waiting, waiting, if (remote.pending) PendingRecovery(remote.releaseAt) else null, r.confirmed && !remote.escrow, r.keyUnseen)
+    }
   }
 
   /** No account, token or unlocked vault needed. One claim, saved before the call and resent as is (the Worker ignores one it holds), so a lost reply never orphans the mailed link. */

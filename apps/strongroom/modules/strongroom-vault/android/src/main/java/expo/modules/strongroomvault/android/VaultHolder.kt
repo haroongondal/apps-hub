@@ -93,7 +93,7 @@ object VaultHolder {
         val s = SyncSession(it, store, secrets, PrefsSyncSettings(prefs(ctx)), transport, System::currentTimeMillis)
         s.onChange = { main.post { syncListener?.invoke(s.status()) } }
         session = s
-        emailRecovery = EmailRecovery(s, secrets, PrefsRecoverySettings(prefs(ctx)), transport, System::currentTimeMillis)
+        emailRecovery = EmailRecovery(s, secrets, PrefsRecoverySettings(prefs(ctx)), transport)
         app = ctx
         vault = it
         if (s.isOn) SyncJobService.schedule(ctx)
@@ -395,7 +395,7 @@ internal class PrefsSyncSettings(private val p: SharedPreferences) : SyncSetting
 // Email recovery's local half. Every field is written, or the lost-key warning or a lost-access claim would silently be lost on a phone.
 internal class PrefsRecoverySettings(private val p: SharedPreferences) : RecoverySettings {
   override fun load() = RecoveryLocal(
-    escrowBlob = p.getString("escrowBlob", null),
+    escrowCodeHash = p.getString("escrowCodeHash", null),
     confirmed = p.getBoolean("escrowConfirmed", false),
     lostClaim = p.getString("lostClaim", null),
     lostBlob = p.getString("lostBlob", null),
@@ -404,7 +404,8 @@ internal class PrefsRecoverySettings(private val p: SharedPreferences) : Recover
 
   override fun save(r: RecoveryLocal) {
     p.edit()
-      .putString("escrowBlob", r.escrowBlob)
+      .putString("escrowCodeHash", r.escrowCodeHash)
+      .remove("escrowBlob") // an earlier build kept the sealed escrow here, which the inbox's code opens with no wait
       .putBoolean("escrowConfirmed", r.confirmed)
       .putString("lostClaim", r.lostClaim)
       .putString("lostBlob", r.lostBlob)

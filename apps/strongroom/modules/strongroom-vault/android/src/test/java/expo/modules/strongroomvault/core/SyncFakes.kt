@@ -238,7 +238,7 @@ internal class TestPhone(transport: SyncTransport?) {
   val vault = Vault(store, { time }, { 0L }) { secrets.get(SyncSecret.ACCOUNT_KEY) }
   val session = SyncSession(vault, store, secrets, settings, transport) { time }
   val recoverySettings = MemoryRecoverySettings()
-  val recovery = EmailRecovery(session, secrets, recoverySettings, transport) { time }
+  val recovery = EmailRecovery(session, secrets, recoverySettings, transport)
 
   fun header() = Header.fromJson(store.header()!!)!!
 

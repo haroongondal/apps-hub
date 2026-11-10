@@ -3,12 +3,13 @@ package expo.modules.strongroomvault.android
 import android.content.SharedPreferences
 import expo.modules.strongroomvault.core.RecoveryLocal
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PrefsRecoverySettingsTest {
   private val full = RecoveryLocal(
-    escrowBlob = "YmxvYg==",
+    escrowCodeHash = "aGFzaA==",
     confirmed = true,
     lostClaim = "Y2xhaW0=",
     lostBlob = "bG9zdA==",
@@ -31,6 +32,14 @@ class PrefsRecoverySettingsTest {
     s.save(full)
     s.save(RecoveryLocal(keyUnseen = true))
     assertEquals(RecoveryLocal(keyUnseen = true), s.load())
+  }
+
+  @Test fun aSealedEscrowLeftByAnEarlierBuildIsIgnoredAndRemoved() {
+    val p = MemoryPrefs()
+    p.data["escrowBlob"] = "YmxvYg=="
+    assertEquals(RecoveryLocal(), PrefsRecoverySettings(p).load())
+    PrefsRecoverySettings(p).save(RecoveryLocal(keyUnseen = true))
+    assertFalse(p.data.containsKey("escrowBlob"))
   }
 
   @Test fun savesAreWrittenSynchronously() {
