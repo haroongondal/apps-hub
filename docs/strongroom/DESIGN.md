@@ -560,9 +560,17 @@ its own local vault (same format as §6, `packages/strongroom-core` passes the s
 vectors). The Android vault has no export and the release app has no network access, so
 the two vaults are separate until sync exists; joining them later means re-sealing one
 vault's entries under the other's key. Cut for now: cards and notes in the UI, change
-master password, new recovery key, clipboard auto-clear and adjustable auto-lock (fixed 5
+master password, clipboard auto-clear and adjustable auto-lock (fixed 5
 minutes). The common-password check came with sync: the same ten entries as the phone,
 with a test that keeps the two lists equal. Details and next steps: `docs/handoffs/strongroom-extension.md`.
+
+**Security hardening (2026-11-08 plan, `docs/handoffs/strongroom-extension-security.md`):**
+Export for Chrome, lock-free autofill and background sync (a key sealed under a
+non-extractable WebCrypto key survives auto-lock and a browser restart; only the
+manual Lock button clears it), a sealed account key, and opt-in email recovery
+(rotates the recovery key, escrows it with the vault server under an emailed code,
+24-hour owner-cancellable wait). Fingerprint is designed but not built, pending the
+owner's hardware spike.
 
 **With sync (Phase 2):** the phone creates the account; the extension signs in with
 the master password and the account key (§10). If the extension already holds the
@@ -578,8 +586,13 @@ after every step succeeded; one vault is never re-sealed into the other.
 - Content script detects login forms and shows a fill suggestion. On submit it
   offers save/update. Matching follows the same rules as §7.
 - The vault key, and with sync the login token, are held only in
-  `chrome.storage.session` (memory) while unlocked; locking clears both. The
-  encrypted vault is cached in `chrome.storage.local`. Same auto-lock times.
+  `chrome.storage.session` (memory) while unlocked; locking the popup clears
+  both. Since the 2026-11-08 security plan, a second copy of the vault key is
+  also sealed under a non-extractable WebCrypto key in `chrome.storage.local`/
+  IndexedDB, so autofill and background sync keep working through auto-lock
+  and a browser restart; only the Lock button clears that sealed copy too. The
+  encrypted vault is cached in `chrome.storage.local`. Same auto-lock times for
+  the popup itself.
 - Chrome on the Mac and on Windows: the same extension, loaded unpacked in
   developer mode. *(Fine for one owner; no Web Store listing.)* Check on the
   Windows machine whether Chrome warns about or disables developer-mode

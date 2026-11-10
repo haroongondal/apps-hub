@@ -59,6 +59,16 @@ Exact next step: Task 15 is complete (3 fix rounds — the plan's most contested
 
 After Task 16: Task 9-10 (fingerprint) only if the owner's spike (still pending, see "Owner-only steps") passed — these are the only tasks left after 16 besides Task 17. Task 17 (real mail adapter) stays blocked on the owner's answer to the email-sender question.
 
+### Task 16 final verification (2026-11-10, real output)
+
+- `pnpm test` (repo root, every workspace): exit 0. Every package/app passed, 0 failures,
+  including `strongroom-core` 159/159, `strongroom-extension` 122/122, `vault-api` 42/42.
+- `pnpm typecheck` (repo root): exit 0, all 29 projects report `Done`, no errors.
+- `pnpm --filter strongroom-extension build`: exit 0, wrote `dist/`.
+- `pnpm --filter strongroom-extension test:e2e`: exit 0, real Chromium, 78/78 checks passed.
+- Docs-only commit for this task: README, DESIGN §11, and the two handoffs above. No code
+  touched, no version bumped, nothing released, pushed or merged.
+
 ## Owner-only steps still pending (cannot be done by an agent)
 
 1. Fingerprint spike (plan Task 2): files are ready in `/private/tmp/claude-501/-Users-outsentia-Documents-apps-hub/ceb46fd4-ad8e-4fe4-972b-3dc0ef165dc7/scratchpad/spike/` (MV3 extension: `chrome://extensions` > Developer mode > Load unpacked > that folder > click its toolbar icon > Enroll, Verify, Verify from a popup window > paste the box). Decides whether Tasks 9-10 are built. Copy the folder somewhere permanent first if /tmp is cleaned.
