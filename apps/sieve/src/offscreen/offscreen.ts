@@ -6,7 +6,8 @@
 //   F4 chrome.runtime.getContexts lists it;
 //   F5 the Worker has OPFS (createSyncAccessHandle), IndexedDB and navigator.locks; a second sync handle on an open file fails;
 //   F7 IndexedDB and OPFS are one store for the worker, this document, its Worker and extension pages;
-//   F8 URL.createObjectURL exists here and not in the service worker.
+//   F8 URL.createObjectURL exists here and not in the service worker;
+//   F15 a 0.05-minute alarm fired about 3 s later in an unpacked extension (the worker's, not this document's: alarms are undefined here).
 import type { WorkerCommand, WorkerMessage, WorkerRequest } from './protocol.ts';
 
 const REPLY_MS = 20_000;
@@ -102,9 +103,11 @@ async function start() {
   latestConfig = null;
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  const cmd = COMMANDS[message?.type];
-  if (!cmd) return false;
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Own properties only ('constructor' and '__proto__' are not commands), and only from the extension's own pages and worker:
+  // a content script's sender.url is the web page's.
+  if (!sender.url?.startsWith(chrome.runtime.getURL('')) || typeof message?.type !== 'string' || !Object.hasOwn(COMMANDS, message.type)) return false;
+  const cmd = COMMANDS[message.type];
   const { type: _type, ...rest } = message;
   if (cmd === 'config' && !ready) {
     latestConfig = rest.settings;

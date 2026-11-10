@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual as same } from 'node:util';
 import { DEFAULT_DOWNLOADS } from '@apps-hub/sieve-core/src/dl-settings.ts';
 import { stopWorker } from '../harness.mjs';
-import { engineCount, resetDl, sendMsg, setDownloads, until } from './_helpers.mjs';
+import { engineCount, readRecords, resetDl, sendMsg, setDownloads, until } from './_helpers.mjs';
 
 const json = (v) => String(JSON.stringify(v)).slice(0, 400);
 const PERMISSIONS = ['alarms', 'contextMenus', 'declarativeNetRequest', 'declarativeNetRequestFeedback', 'downloads', 'offscreen', 'scripting', 'storage', 'unlimitedStorage', 'webNavigation'];
@@ -28,7 +28,11 @@ export async function run(t) {
 
   await closeEngine(t);
   const added = await sendMsg(t, { type: 'dl-add', items: [{ url: 'http://127.0.0.1:9/never.bin', source: 'manual' }] });
-  check('downloads: a command right after the document closed waits for the engine and succeeds', added?.ok === true && added.ids?.length === 1, json(added));
+  const stored = (await readRecords(t)).some((r) => r.id === added?.ids?.[0]);
+  check('downloads: a command right after the document closed waits for the engine, succeeds, and the record exists', added?.ok === true && added.ids?.length === 1 && stored, json({ added, stored }));
+
+  const proto = await Promise.race([sendMsg(t, { type: 'constructor' }).then(() => 'answered'), new Promise((r) => setTimeout(() => r('hung'), 3000))]);
+  check('downloads: a message type that is only an Object property is ignored, not left hanging', proto === 'answered', proto);
 
   const config = await sendMsg(t, { type: 'dl-eng-config', settings: DEFAULT_DOWNLOADS });
   check('downloads: the engine hears dl-eng-config', same(config, { ok: true }), json(config));

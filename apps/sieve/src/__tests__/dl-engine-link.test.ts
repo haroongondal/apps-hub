@@ -317,3 +317,36 @@ test('router returns false for an unknown type and for something that is not a m
   assert.equal((await t.send('dl-add')).keepsOpen, false);
   assert.equal((await t.send(null)).keepsOpen, false);
 });
+
+test('router replies { ok: false, message: T.actionFailed } when the engine answers { error: "TIMEOUT" }', async () => {
+  const t = await router({ documents: 1, sendMessage: async () => ({ error: 'TIMEOUT' }) });
+  assert.deepEqual((await t.send({ type: 'dl-do', op: 'pause', ids: ['a'] })).reply, { ok: false, message: T.actionFailed });
+});
+
+// The offscreen relay, run against a fake Worker that answers every request at once.
+test('the offscreen relay takes commands only from the extension, and only real command types', async () => {
+  const t = setup({ sendMessage: async () => ({ settings: DEFAULT_DOWNLOADS }) });
+  class FakeWorker {
+    onmessage: ((e: { data: unknown }) => void) | null = null;
+    onerror: (() => void) | null = null;
+    postMessage(m: { id: number }) {
+      queueMicrotask(() => this.onmessage?.({ data: { reply: m.id, result: { ok: true } } }));
+    }
+    terminate() {}
+  }
+  (globalThis as unknown as Record<string, unknown>).Worker = FakeWorker;
+  await import(`../offscreen/offscreen.ts?fresh=${++n}`);
+  await sleep(30);
+  const [listener] = t.listeners;
+  const ask = (message: unknown, url: string | undefined) =>
+    new Promise<{ keepsOpen: boolean; reply?: unknown }>((resolve) => {
+      const keepsOpen = listener(message, { url }, (reply) => resolve({ keepsOpen, reply }));
+      if (!keepsOpen) resolve({ keepsOpen });
+    });
+  assert.deepEqual(await ask({ type: 'dl-eng-tick' }, BASE + 'background.js'), { keepsOpen: true, reply: { ok: true } });
+  for (const type of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'dl-state']) assert.deepEqual(await ask({ type }, BASE + 'background.js'), { keepsOpen: false }, type);
+  assert.deepEqual(await ask({ type: 'dl-eng-tick' }, 'https://example.com/'), { keepsOpen: false }, 'a web page (a content script) is refused');
+  assert.deepEqual(await ask({ type: 'dl-eng-tick' }, undefined), { keepsOpen: false });
+  assert.deepEqual(await ask({ type: 'dl-eng-tick' }, 'chrome-extension://other/x.html'), { keepsOpen: false });
+  assert.deepEqual(await ask(null, BASE + 'background.js'), { keepsOpen: false });
+});
