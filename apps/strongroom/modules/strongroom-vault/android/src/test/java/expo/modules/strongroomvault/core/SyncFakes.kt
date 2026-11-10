@@ -207,6 +207,16 @@ internal class MemorySettings : SyncSettings {
   }
 }
 
+internal class MemoryRecoverySettings : RecoverySettings {
+  var state = RecoveryLocal()
+
+  override fun load() = state
+
+  override fun save(r: RecoveryLocal) {
+    state = r
+  }
+}
+
 /** A phone as VaultHolder wires it, with memory in place of SQLite, the Keystore and SharedPreferences. */
 internal class TestPhone(transport: SyncTransport?) {
   var time = 1_800_000_000_000L
@@ -215,6 +225,8 @@ internal class TestPhone(transport: SyncTransport?) {
   val settings = MemorySettings()
   val vault = Vault(store, { time }, { 0L }) { secrets.get(SyncSecret.ACCOUNT_KEY) }
   val session = SyncSession(vault, store, secrets, settings, transport) { time }
+  val recoverySettings = MemoryRecoverySettings()
+  val recovery = EmailRecovery(session, secrets, recoverySettings, transport) { time }
 
   fun header() = Header.fromJson(store.header()!!)!!
 

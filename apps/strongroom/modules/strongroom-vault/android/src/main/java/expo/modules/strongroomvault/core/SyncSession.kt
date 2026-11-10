@@ -41,6 +41,8 @@ interface SyncSecrets {
 
 data class SyncStatus(val state: String, val lastSyncAt: Long?, val blocked: Int, val quarantined: Int, val available: Boolean)
 
+class Enrolment(val recoveryKey: ByteArray, val sent: Boolean)
+
 class SyncSession(
   private val vault: Vault,
   private val store: SyncRecordStore,
@@ -217,6 +219,40 @@ class SyncSession(
   @Synchronized fun newRecoveryKey(password: CharArray): ByteArray? =
     vault.newRecoveryKey(password) { h, rk -> prepare(h, password, hashOf(VaultFormat.recoveryLoginToken(rk))) }
 
+  // Local first, then one PUT with the escrow. A definite refusal (4xx, or the 502 of a failed mail: the Worker wrote nothing) puts the old header back and
+  // rethrows; anything else may have landed, so the new header and its pending mark stay for the next sync and the owner is shown the key (sent = false).
+  @Synchronized fun enrolEscrow(password: CharArray, escrow: (recoveryKey: ByteArray) -> EscrowBody): Enrolment? {
+    val t = server()
+    check(settings.load().mode == SyncMode.ON) { "sync off" }
+    if (settings.load().accountPending) {
+      vault.vaultKeyCopy(password)?.fill(0) ?: return null // before the flush, so a typo makes no call
+      runCatching { sync(password) }
+      check(!settings.load().accountPending) { "sync first" }
+    }
+    val original = storedHeader()
+    val rk = newRecoveryKey(password) ?: return null
+    val undo = {
+      store.putHeader(original)
+      dropPending()
+      rk.fill(0)
+    }
+    val body = try {
+      escrow(rk)
+    } catch (e: Exception) {
+      undo()
+      throw e
+    }
+    try {
+      sendAccount(t, body)
+    } catch (e: Exception) {
+      if (e !is SyncHttpError || (e.status !in 400..499 && e.status != 502)) return Enrolment(rk, sent = false)
+      undo()
+      if (e.status == 409) runCatching { sync(password) }
+      throw e
+    }
+    return Enrolment(rk, sent = true)
+  }
+
   /**
    * Forgot master password, on this phone. [accountKey] is the typed one, used only on a flagged vault whose Keystore copy is gone. It is kept
    * last, just before the header write, so a reset that fails before then keeps no typo and a retry can correct it. Nothing can check it, so ask for it twice.
@@ -305,22 +341,27 @@ class SyncSession(
     }
   }
 
+  private fun updateAccount(t: SyncTransport) {
+    if (settings.load().pendingHeader != fingerprint(storedHeader())) return dropPending() // its header never reached the vault file
+    try {
+      sendAccount(t, null)
+    } catch (e: SyncHttpError) {
+      throw if (e.status == 409) SyncAuthError() else e
+    }
+  }
+
   // Signed with the token the server knows; ifRev is the last header this phone took from it. The waiting tokens replace the known ones only
   // after the update landed, NEXT_* and the mark go last, so a run cut short anywhere is finished by the next (or, after a lost reply, by a sign-in).
-  private fun updateAccount(t: SyncTransport) {
+  // The caller has checked that the pending mark names the stored header.
+  private fun sendAccount(t: SyncTransport, escrow: EscrowBody?) {
     val local = storedHeader()
-    if (settings.load().pendingHeader != fingerprint(local)) return dropPending() // its header never reached the vault file
     val auth = secrets.get(SyncSecret.LOGIN_TOKEN) ?: throw SyncAuthError()
     val login = secrets.get(SyncSecret.NEXT_LOGIN) ?: auth.copyOf()
     val read = secrets.get(SyncSecret.NEXT_READ) ?: secrets.get(SyncSecret.READ_TOKEN)
     try {
       if (read == null) throw SyncAuthError()
-      val body = AccountUpdate(local, Crypto.tokenHash(login), Crypto.tokenHash(read), store.syncMeta().headerRev, settings.load().recoveryHash)
-      val rev = try {
-        t.putAccount(auth, body)
-      } catch (e: SyncHttpError) {
-        throw if (e.status == 409) SyncAuthError() else e
-      }
+      val body = AccountUpdate(local, Crypto.tokenHash(login), Crypto.tokenHash(read), store.syncMeta().headerRev, settings.load().recoveryHash, escrow)
+      val rev = t.putAccount(auth, body)
       commitHeader(null, rev)
       secrets.put(SyncSecret.LOGIN_TOKEN, login)
       secrets.put(SyncSecret.READ_TOKEN, read)
