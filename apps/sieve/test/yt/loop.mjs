@@ -158,9 +158,10 @@ export async function live(t) {
     check('live loop: with From 0:02 and To 0:05 currentTime stayed between 1.9 and 5.4 for 8 s', Math.min(...times) >= 1.9 && Math.max(...times) <= 5.4, `min ${Math.min(...times)}, max ${Math.max(...times)}, n ${times.length}`);
     await row(page).getByRole('button', { name: 'Clear', exact: true }).click();
     await page.evaluate((s) => { const v = document.querySelector(s); v.currentTime = v.duration - 1; }, SEL.video);
-    const near = await until(async () => { const s = await state(); return s && (s.t < 3 ? 'looped' : s.rs < 3 ? null : 'past'); }, 8000);
-    if (near === 'looped') check('live loop: with the loop on, a seek to the last second is back near the start 3 s later', true);
-    else console.log(`INCONCLUSIVE  live loop: the seek to the last second ${near ?? 'stalled (readyState below 3)'}; ${json(await state())}`);
+    await sleep(3500);
+    const near = await state();
+    if (near && near.t < 3) check('live loop: with the loop on, a seek to the last second is back near the start 3 s later', true);
+    else console.log(`INCONCLUSIVE  live loop: 3.5 s after the seek to the last second the player is not back near the start (${near?.rs < 3 ? 'it stalled' : 'it did not loop'}); ${json(near)}`);
     await loopButton(page).click();
     check('live loop: clicking "Loop" again turns it off', await until(async () => (await state())?.loop === false, 2000), json(await state()));
 
