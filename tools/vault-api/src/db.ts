@@ -16,15 +16,20 @@ export const getAccount = (db: Db) =>
     .prepare('SELECT header, header_rev AS headerRev, login_hash AS loginHash, recovery_hash AS recoveryHash, read_hash AS readHash FROM account WHERE id = 1')
     .first<Account>();
 
+export type EscrowSet = { email: string; blob: string; now: number };
+export type EscrowChange = { clear: boolean; set: EscrowSet | null };
+
 // The primary key on setup_done is the once-ever guard: a second create fails here even after the account row is deleted.
-export async function createAccount(db: Db, a: AccountCreate): Promise<boolean> {
+export async function createAccount(db: Db, a: AccountCreate, escrow?: EscrowSet): Promise<boolean> {
   try {
-    await db.batch([
+    const stmts = [
       db.prepare("INSERT INTO meta (k, v) VALUES ('setup_done', '1')"),
       db
         .prepare('INSERT INTO account (id, header, header_rev, login_hash, recovery_hash, read_hash) VALUES (1, ?, 1, ?, ?, ?)')
         .bind(a.header, a.loginHash, a.recoveryHash, a.readHash),
-    ]);
+    ];
+    if (escrow) stmts.push(db.prepare('INSERT INTO escrow (id, email, blob, created_at) VALUES (1, ?, ?, ?)').bind(escrow.email, escrow.blob, escrow.now));
+    await db.batch(stmts);
     return true;
   } catch (e) {
     if (await db.prepare("SELECT 1 AS done FROM meta WHERE k = 'setup_done'").first()) return false;
@@ -32,15 +37,34 @@ export async function createAccount(db: Db, a: AccountCreate): Promise<boolean> 
   }
 }
 
-export const updateAccount = async (db: Db, a: Omit<AccountUpdate, 'ifRev'>, ifRev: number): Promise<number | null> =>
-  (
-    await db
+// One batch (one transaction): an escrow write that fails rolls back the header/hash update too, rather than leaving them split.
+export async function updateAccount(db: Db, a: Omit<AccountUpdate, 'ifRev'>, ifRev: number, escrow: EscrowChange = { clear: false, set: null }): Promise<number | null> {
+  const newRev = ifRev + 1;
+  const moved = 'EXISTS (SELECT 1 FROM account WHERE id = 1 AND header_rev = ?)';
+  const stmts: Stmt[] = [
+    db
       .prepare(
         'UPDATE account SET header = ?, header_rev = header_rev + 1, login_hash = ?, recovery_hash = COALESCE(?, recovery_hash), read_hash = ? WHERE id = 1 AND header_rev = ? RETURNING header_rev AS headerRev',
       )
-      .bind(a.header, a.loginHash, a.recoveryHash ?? null, a.readHash, ifRev)
-      .first<{ headerRev: number }>()
-  )?.headerRev ?? null;
+      .bind(a.header, a.loginHash, a.recoveryHash ?? null, a.readHash, ifRev),
+  ];
+  if (escrow.clear) {
+    stmts.push(db.prepare(`DELETE FROM escrow WHERE id = 1 AND ${moved}`).bind(newRev));
+    stmts.push(db.prepare(`DELETE FROM lost_request WHERE id = 1 AND ${moved}`).bind(newRev));
+  }
+  if (escrow.set) {
+    stmts.push(
+      db
+        .prepare(
+          `INSERT INTO escrow (id, email, blob, created_at) SELECT 1, ?, ?, ? WHERE ${moved}
+           ON CONFLICT (id) DO UPDATE SET email = excluded.email, blob = excluded.blob, created_at = excluded.created_at`,
+        )
+        .bind(escrow.set.email, escrow.set.blob, escrow.set.now, newRev),
+    );
+  }
+  const results = await db.batch(stmts);
+  return (results[0].results[0] as { headerRev: number } | undefined)?.headerRev ?? null;
+}
 
 export async function pull(db: Db, since: number, limit: number): Promise<PullResponse | null> {
   const [account, records, meta] = await db.batch([
@@ -104,8 +128,9 @@ export const claimLostRequest = async (db: Db, claimHash: string, confirmHash: s
     .bind(claimHash, confirmHash, now, now, cooldownMs, now, graceMs)
     .first()) !== null;
 
+// release_at IS NULL means not yet confirmed: a second confirm of an already-confirmed (or already-released) request is a no-op, not a fresh 24-hour wait.
 export const confirmLostRequest = async (db: Db, confirmHash: string, releaseAt: number): Promise<boolean> =>
-  (await db.prepare('UPDATE lost_request SET release_at = ? WHERE id = 1 AND confirm_hash = ? AND cancelled = 0 RETURNING id').bind(releaseAt, confirmHash).first()) !== null;
+  (await db.prepare('UPDATE lost_request SET release_at = ? WHERE id = 1 AND confirm_hash = ? AND cancelled = 0 AND release_at IS NULL RETURNING id').bind(releaseAt, confirmHash).first()) !== null;
 
 export const cancelLostRequestByToken = async (db: Db, confirmHash: string): Promise<void> => {
   await db.prepare('UPDATE lost_request SET cancelled = 1 WHERE id = 1 AND confirm_hash = ?').bind(confirmHash).all();

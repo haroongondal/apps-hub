@@ -23,7 +23,7 @@ const migration2 = readFileSync(new URL('../../migrations/0002_escrow.sql', impo
 
 type Body = Record<string, any>;
 const account = (over: object = {}) => ({ header: HEADER, loginHash: tokenHash(LOGIN), recoveryHash: tokenHash(RECOVERY), readHash: tokenHash(READ), ...over });
-const tokenParam = (mailText: string) => /t=([^&\s]+)/.exec(mailText)![1];
+const tokenParam = (mailText: string) => decodeURIComponent(/t=([^&\s]+)/.exec(mailText)![1]);
 
 function world() {
   const sqlite = new DatabaseSync(':memory:');
@@ -50,13 +50,21 @@ function world() {
     const ct = res.headers.get('content-type') ?? '';
     return { status: res.status, body: (ct.includes('json') ? await res.json() : await res.text()) as Body };
   };
+  // The real mailed link is a GET; the browser-rendered form it serves posts the token as a field, same as a real submit would.
+  const postForm = async (path: string, t: string) => {
+    const res = await handle(new Request(`https://vault.example${path}`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `t=${encodeURIComponent(t)}` }), env, deps);
+    const ct = res.headers.get('content-type') ?? '';
+    return { status: res.status, body: (ct.includes('json') ? await res.json() : await res.text()) as Body };
+  };
+  const confirmLink = (t: string) => postForm('/v1/lost/confirm', t);
+  const cancelLink = (t: string) => postForm('/v1/lost/cancel-link', t);
   const plain = <T>(row: unknown): T | undefined => (row ? ({ ...(row as object) } as T) : undefined);
   const escrowRow = () => plain<{ email: string; blob: string }>(sqlite.prepare('SELECT email, blob FROM escrow').all()[0]);
   const lostRow = () =>
     plain<{ claimHash: string; confirmHash: string; requestedAt: number; releaseAt: number | null; cancelled: number }>(
       sqlite.prepare('SELECT claim_hash AS claimHash, confirm_hash AS confirmHash, requested_at AS requestedAt, release_at AS releaseAt, cancelled FROM lost_request').all()[0],
     );
-  return { sqlite, mails, call, escrowRow, lostRow, setClock: (ms: number) => void (clock = ms), failMail: (v: boolean) => void (failMail = v) };
+  return { sqlite, mails, call, confirmLink, cancelLink, escrowRow, lostRow, setClock: (ms: number) => void (clock = ms), failMail: (v: boolean) => void (failMail = v) };
 }
 
 async function setUp(w: ReturnType<typeof world>) {
@@ -129,6 +137,22 @@ test('a changed recoveryHash deletes the escrow unless the same call carries a n
   assert.equal(w.escrowRow(), undefined);
 });
 
+test('a D1 failure on the escrow write during an account update rolls back the whole PUT; nothing is partially applied', async () => {
+  const w = world();
+  await setUp(w);
+  const row = () => w.sqlite.prepare('SELECT recovery_hash AS recoveryHash, header_rev AS headerRev FROM account WHERE id = 1').all()[0];
+  const before = row();
+  // Simulates the Worker's code deploying before migration 0002_escrow.sql has been applied: the escrow table does not exist yet.
+  w.sqlite.exec('DROP TABLE escrow');
+  const r = await w.call('PUT', '/v1/account', LOGIN, {
+    ...account({ recoveryHash: tokenHash(tok(9)) }),
+    ifRev: 1,
+    escrow: { email: 'owner@example.com', blob: btoa('sealed'), code: 'ABCD-EFGH' },
+  });
+  assert.equal(r.status, 500);
+  assert.deepEqual(row(), before);
+});
+
 test('request with no escrow answers 200 and sends no mail', async () => {
   const w = world();
   await setUp(w);
@@ -171,12 +195,80 @@ test('confirming starts a 24-hour wait and mails a notice', async () => {
   await setUp(w);
   await enroll(w);
   await w.call('POST', '/v1/lost/request', undefined, { claimHash: toBase64(randomBytes(32)) });
-  const r = await w.call('GET', `/v1/lost/confirm?t=${tokenParam(w.mails[0].text)}`);
+  const r = await w.confirmLink(tokenParam(w.mails[0].text));
   assert.equal(r.status, 200);
   assert.match(String(r.body), /Confirmed/);
   assert.equal(w.mails.length, 2);
   assert.match(w.mails[1].text, /\/v1\/lost\/cancel\?t=/);
   assert.equal(w.lostRow()?.releaseAt, NOW + DAY);
+});
+
+test('a GET on confirm or cancel only renders a form; it changes no row and sends no mail (an email prefetcher is safe)', async () => {
+  const w = world();
+  await setUp(w);
+  await enroll(w);
+  await w.call('POST', '/v1/lost/request', undefined, { claimHash: toBase64(randomBytes(32)) });
+  const token = tokenParam(w.mails[0].text);
+  const before = w.lostRow();
+  const mailsBefore = w.mails.length;
+
+  const confirmPage = await w.call('GET', `/v1/lost/confirm?t=${encodeURIComponent(token)}`);
+  assert.equal(confirmPage.status, 200);
+  assert.match(String(confirmPage.body), /<form method="post" action="\/v1\/lost\/confirm">/);
+  assert.ok(String(confirmPage.body).includes(`value="${token}"`));
+  assert.deepEqual(w.lostRow(), before);
+
+  const cancelPage = await w.call('GET', `/v1/lost/cancel?t=${encodeURIComponent(token)}`);
+  assert.equal(cancelPage.status, 200);
+  assert.match(String(cancelPage.body), /<form method="post" action="\/v1\/lost\/cancel-link">/);
+  assert.deepEqual(w.lostRow(), before);
+  assert.equal(w.mails.length, mailsBefore);
+
+  const posted = await w.confirmLink(token);
+  assert.match(String(posted.body), /Confirmed/);
+  assert.equal(w.lostRow()?.releaseAt, NOW + DAY);
+});
+
+test('a malformed token is refused before it is ever rendered into the page', async () => {
+  const w = world();
+  const page = await w.call('GET', '/v1/lost/confirm?t=<script>alert(1)</script>');
+  assert.equal(page.status, 200);
+  assert.doesNotMatch(String(page.body), /<script>/);
+  assert.match(String(page.body), /no longer valid/);
+});
+
+test('confirming an already-confirmed (not yet released) request again does not reset the 24-hour clock or mail again', async () => {
+  const w = world();
+  await setUp(w);
+  await enroll(w);
+  await w.call('POST', '/v1/lost/request', undefined, { claimHash: toBase64(randomBytes(32)) });
+  const token = tokenParam(w.mails[0].text);
+  await w.confirmLink(token);
+  const releaseAt = w.lostRow()?.releaseAt;
+  const mailsAfterFirstConfirm = w.mails.length;
+
+  w.setClock(NOW + HOUR);
+  const again = await w.confirmLink(token);
+  assert.match(String(again.body), /no longer valid/);
+  assert.equal(w.lostRow()?.releaseAt, releaseAt);
+  assert.equal(w.mails.length, mailsAfterFirstConfirm);
+});
+
+test('confirming an already-released request again is also a no-op', async () => {
+  const w = world();
+  await setUp(w);
+  await enroll(w);
+  await w.call('POST', '/v1/lost/request', undefined, { claimHash: toBase64(randomBytes(32)) });
+  const token = tokenParam(w.mails[0].text);
+  await w.confirmLink(token);
+  w.setClock(NOW + DAY);
+  const released = w.lostRow();
+  const mailsAfterRelease = w.mails.length;
+
+  const again = await w.confirmLink(token);
+  assert.match(String(again.body), /no longer valid/);
+  assert.deepEqual(w.lostRow(), released);
+  assert.equal(w.mails.length, mailsAfterRelease);
 });
 
 test('a wrong confirm token changes nothing', async () => {
@@ -185,7 +277,7 @@ test('a wrong confirm token changes nothing', async () => {
   await enroll(w);
   await w.call('POST', '/v1/lost/request', undefined, { claimHash: toBase64(randomBytes(32)) });
   assert.equal(w.mails.length, 1);
-  const r = await w.call('GET', `/v1/lost/confirm?t=${encodeURIComponent(toBase64(randomBytes(32)))}`);
+  const r = await w.confirmLink(toBase64(randomBytes(32)));
   assert.equal(r.status, 200);
   assert.match(String(r.body), /no longer valid/);
   assert.equal(w.mails.length, 1);
@@ -198,7 +290,7 @@ test('release before 24 hours is waiting with the release time', async () => {
   await enroll(w);
   const claim = randomBytes(32);
   await w.call('POST', '/v1/lost/request', undefined, { claimHash: tokenHash(claim) });
-  await w.call('GET', `/v1/lost/confirm?t=${tokenParam(w.mails[0].text)}`);
+  await w.confirmLink(tokenParam(w.mails[0].text));
   w.setClock(NOW + DAY - 1000);
   const r = await w.call('POST', '/v1/lost/release', undefined, { claim: toBase64(claim) });
   assert.deepEqual(r, { status: 200, body: { state: 'waiting', releaseAt: NOW + DAY } });
@@ -210,7 +302,7 @@ test('release at 24 hours returns the blob', async () => {
   await enroll(w, 'owner@example.com', 'sealed-blob-bytes');
   const claim = randomBytes(32);
   await w.call('POST', '/v1/lost/request', undefined, { claimHash: tokenHash(claim) });
-  await w.call('GET', `/v1/lost/confirm?t=${tokenParam(w.mails[0].text)}`);
+  await w.confirmLink(tokenParam(w.mails[0].text));
   w.setClock(NOW + DAY);
   const r = await w.call('POST', '/v1/lost/release', undefined, { claim: toBase64(claim) });
   assert.deepEqual(r, { status: 200, body: { state: 'ready', blob: btoa('sealed-blob-bytes') } });
@@ -235,8 +327,8 @@ test('release after cancel is refused', async () => {
   const claim = randomBytes(32);
   await w.call('POST', '/v1/lost/request', undefined, { claimHash: tokenHash(claim) });
   const token = tokenParam(w.mails[0].text);
-  await w.call('GET', `/v1/lost/confirm?t=${token}`);
-  await w.call('GET', `/v1/lost/cancel?t=${token}`);
+  await w.confirmLink(token);
+  await w.cancelLink(token);
   w.setClock(NOW + DAY);
   const r = await w.call('POST', '/v1/lost/release', undefined, { claim: toBase64(claim) });
   assert.deepEqual(r, { status: 200, body: { state: 'waiting', releaseAt: null } });
@@ -247,7 +339,7 @@ test('status shows the pending request to a signed-in device and nothing to a st
   await setUp(w);
   await enroll(w);
   await w.call('POST', '/v1/lost/request', undefined, { claimHash: toBase64(randomBytes(32)) });
-  await w.call('GET', `/v1/lost/confirm?t=${tokenParam(w.mails[0].text)}`);
+  await w.confirmLink(tokenParam(w.mails[0].text));
 
   assert.equal((await w.call('GET', '/v1/lost/status')).status, 401);
   const r = await w.call('GET', '/v1/lost/status', LOGIN);
@@ -271,7 +363,7 @@ test('re-enrolling escrow with a rotated recoveryHash invalidates an old confirm
   const recoveryA = await enroll(w, 'owner@example.com', 'blob-A');
   const oldClaim = randomBytes(32);
   await w.call('POST', '/v1/lost/request', undefined, { claimHash: tokenHash(oldClaim) });
-  await w.call('GET', `/v1/lost/confirm?t=${tokenParam(w.mails[0].text)}`);
+  await w.confirmLink(tokenParam(w.mails[0].text));
   assert.equal(w.lostRow()?.releaseAt, NOW + DAY);
 
   const recoveryB = tok(30);
@@ -295,7 +387,7 @@ test('a stranger cannot overwrite a confirmed, non-cancelled lost_request', asyn
   await enroll(w, 'owner@example.com', 'the-real-blob');
   const ownerClaim = randomBytes(32);
   await w.call('POST', '/v1/lost/request', undefined, { claimHash: tokenHash(ownerClaim) });
-  await w.call('GET', `/v1/lost/confirm?t=${tokenParam(w.mails[0].text)}`);
+  await w.confirmLink(tokenParam(w.mails[0].text));
   const confirmedRow = w.lostRow();
   assert.equal(confirmedRow?.releaseAt, NOW + DAY);
   const mailsAfterConfirm = w.mails.length;
@@ -328,7 +420,7 @@ test('a claim shorter than 32 bytes (Task 15 length) still releases', async () =
   await enroll(w, 'owner@example.com', 'short-claim-blob');
   const claim = randomBytes(20);
   await w.call('POST', '/v1/lost/request', undefined, { claimHash: tokenHash(claim) });
-  await w.call('GET', `/v1/lost/confirm?t=${tokenParam(w.mails[0].text)}`);
+  await w.confirmLink(tokenParam(w.mails[0].text));
   w.setClock(NOW + DAY);
   const r = await w.call('POST', '/v1/lost/release', undefined, { claim: toBase64(claim) });
   assert.deepEqual(r, { status: 200, body: { state: 'ready', blob: btoa('short-claim-blob') } });
@@ -342,7 +434,7 @@ test('a released request stays put during its grace period, but a fresh request 
   await enroll(w, 'owner@example.com', 'blob-v1');
   const claim1 = randomBytes(32);
   await w.call('POST', '/v1/lost/request', undefined, { claimHash: tokenHash(claim1) });
-  await w.call('GET', `/v1/lost/confirm?t=${tokenParam(w.mails[0].text)}`);
+  await w.confirmLink(tokenParam(w.mails[0].text));
   w.setClock(NOW + DAY);
   assert.deepEqual(await w.call('POST', '/v1/lost/release', undefined, { claim: toBase64(claim1) }), { status: 200, body: { state: 'ready', blob: btoa('blob-v1') } });
   const released = w.lostRow();
@@ -369,7 +461,7 @@ test('an abandoned confirmed request (never released) is still replaceable only 
   await setUp(w);
   await enroll(w);
   await w.call('POST', '/v1/lost/request', undefined, { claimHash: toBase64(randomBytes(32)) });
-  await w.call('GET', `/v1/lost/confirm?t=${tokenParam(w.mails[0].text)}`);
+  await w.confirmLink(tokenParam(w.mails[0].text));
   const confirmedAt = w.lostRow();
   assert.ok(confirmedAt?.releaseAt);
 

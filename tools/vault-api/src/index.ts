@@ -1,7 +1,7 @@
 import { LIMITS } from 'strongroom-core/src/sync/protocol.ts';
 import type { AccountUpdate, Prelogin, Upsert } from 'strongroom-core/src/sync/protocol.ts';
 import { authorize, BASE64_32_BYTES } from './auth.ts';
-import { cancelLostRequest, clearEscrow, createAccount, getAccount, setEscrow, pull, push, updateAccount, type Db } from './db.ts';
+import { cancelLostRequest, clearEscrow, createAccount, getAccount, pull, push, updateAccount, type Db } from './db.ts';
 import { cancelLostAccessByToken, confirmLostAccess, lostAccessStatus, releaseLostAccess, requestLostAccess, type Mailer } from './lost-access.ts';
 
 export type { Db } from './db.ts';
@@ -16,6 +16,23 @@ const unauthorized = () => fail(401, 'The token was not accepted. Sign in again.
 const isBase64 = (s: unknown) => typeof s === 'string' && s.length > 0 && s.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(s);
 const html = (body: string, status = 200) =>
   new Response(`<!doctype html><title>Strongroom</title><p>${body}</p>`, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'private, no-store' } });
+// A GET must change no state (mail prefetchers open links on arrival), so it only renders a form; the real action runs on the POST that form submits.
+// The token is checked against BASE64_32_BYTES before going anywhere near the HTML, since html()/this page do not escape.
+function confirmCancelForm(token: string, action: string, label: string): Response {
+  if (!BASE64_32_BYTES.test(token)) return html('This link is no longer valid.');
+  return new Response(
+    `<!doctype html><title>Strongroom</title><form method="post" action="${action}"><input type="hidden" name="t" value="${token}"><button type="submit">${label}</button></form>`,
+    { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'private, no-store' } },
+  );
+}
+const formToken = async (req: Request): Promise<string> => {
+  try {
+    const t = (await req.formData()).get('t');
+    return typeof t === 'string' ? t : '';
+  } catch {
+    return '';
+  }
+};
 
 function escrowOf(o: any): { email: string; blob: string; code: string } | null | undefined {
   if (o?.escrow === undefined) return undefined;
@@ -83,23 +100,21 @@ async function route(req: Request, env: Env, now: () => number, sleep: (ms: numb
     if (escrow && body.recoveryHash === undefined) return fail(400, 'Enrolling escrow needs a new recoveryHash.');
     if (escrow) {
       try {
-        await mail!.send(escrow.email, 'Your Strongroom recovery code', `Your recovery code is ${escrow.code}. Keep it safe; Strongroom never stores it.`);
+        await mail!.send(escrow.email, 'Your Strongroom email code', `Your email code is ${escrow.code}. Keep it safe; Strongroom never stores it.`);
       } catch {
         return fail(502, 'Could not send the recovery email. Try again later.');
       }
     }
     if (role === 'setup') {
-      const created = await createAccount(db, { ...body, recoveryHash: body.recoveryHash! });
+      const created = await createAccount(db, { ...body, recoveryHash: body.recoveryHash! }, escrow ? { email: escrow.email, blob: escrow.blob, now: now() } : undefined);
       if (!created) return fail(403, 'The account already exists. Sign in instead.');
-      if (escrow) await setEscrow(db, escrow.email, escrow.blob, now());
       return json({ headerRev: 1 });
     }
     if (body.ifRev === undefined) return fail(400, 'Send ifRev, the header revision this change is based on.');
     const stored = body.recoveryHash !== undefined ? await getAccount(db) : null;
-    const headerRev = await updateAccount(db, body, body.ifRev);
+    const clear = !!(stored && stored.recoveryHash !== body.recoveryHash);
+    const headerRev = await updateAccount(db, body, body.ifRev, { clear, set: escrow ? { email: escrow.email, blob: escrow.blob, now: now() } : null });
     if (headerRev === null) return fail(409, 'The account changed on another device. Pull and try again.');
-    if (stored && stored.recoveryHash !== body.recoveryHash) await clearEscrow(db);
-    if (escrow) await setEscrow(db, escrow.email, escrow.blob, now());
     return json({ headerRev });
   }
 
@@ -116,12 +131,21 @@ async function route(req: Request, env: Env, now: () => number, sleep: (ms: numb
   }
 
   if (req.method === 'GET' && url.pathname === '/v1/lost/confirm') {
-    const ok = await confirmLostAccess(db, url.searchParams.get('t') ?? '', now(), mail, env.PUBLIC_URL);
+    return confirmCancelForm(url.searchParams.get('t') ?? '', '/v1/lost/confirm', 'Confirm you lost access');
+  }
+
+  if (req.method === 'POST' && url.pathname === '/v1/lost/confirm') {
+    const ok = await confirmLostAccess(db, await formToken(req), now(), mail, env.PUBLIC_URL);
     return html(ok ? 'Confirmed. Strongroom will let you in after 24 hours.' : 'This link is no longer valid.');
   }
 
+  // Posts to a different path than the authenticated POST /v1/lost/cancel below: that one cancels by Bearer auth, this one by the mailed token.
   if (req.method === 'GET' && url.pathname === '/v1/lost/cancel') {
-    await cancelLostAccessByToken(db, url.searchParams.get('t') ?? '');
+    return confirmCancelForm(url.searchParams.get('t') ?? '', '/v1/lost/cancel-link', 'Cancel the lost-access request');
+  }
+
+  if (req.method === 'POST' && url.pathname === '/v1/lost/cancel-link') {
+    await cancelLostAccessByToken(db, await formToken(req));
     return html('Cancelled. If a lost-access request was pending, it has stopped.');
   }
 
