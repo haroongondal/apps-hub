@@ -1,4 +1,5 @@
 import type { AddItem } from '@apps-hub/sieve-core/src/dl-record.ts';
+import { syncRecordRules } from './net-rules.ts';
 
 export const ENGINE_PAGE = 'offscreen.html';
 const ATTEMPTS = 10;
@@ -54,6 +55,7 @@ export async function sendToEngine<T = unknown>(message: { type: `dl-eng-${strin
 
 export async function addRecords(items: AddItem[]): Promise<{ ids: string[] } | null> {
   try {
+    await syncRecordRules(items.map((i) => ({ url: i.url, finalUrl: i.probed?.finalUrl, referrer: i.referrer ?? '' })));
     const reply = await sendToEngine<{ ids?: string[] } | undefined>({ type: 'dl-eng-add', items });
     return Array.isArray(reply?.ids) ? { ids: reply.ids } : null;
   } catch {

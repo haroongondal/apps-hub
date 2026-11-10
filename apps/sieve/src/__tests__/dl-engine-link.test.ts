@@ -43,6 +43,7 @@ function setup(options: { documents?: number; sendMessage?: (m: unknown) => Prom
       },
       onMessage: { addListener: (cb: Listener) => void listeners.push(cb) },
     },
+    declarativeNetRequest: { updateSessionRules: async () => {} },
     offscreen: {
       createDocument: async (p: unknown) => {
         calls.create.push(p);
