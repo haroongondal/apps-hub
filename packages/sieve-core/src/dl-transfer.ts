@@ -122,7 +122,7 @@ export function createTransfer(deps: TransferDeps): Transfer {
           refusals++;
           await noteRefused(hostName(), 1);
           if (refusals >= MAX_ATTEMPTS) throw new Fail(ERRORS.refused);
-          await clock.sleep(backoffMs(refusals), sig);
+          await clock.sleep(backoffMs(refusals, parseRetryAfter(f.retryAfter ?? null, clock.now())), sig);
           continue;
         }
         if (f.status >= 400 && f.status < 500) throw new Fail(ERRORS.status(f.status));

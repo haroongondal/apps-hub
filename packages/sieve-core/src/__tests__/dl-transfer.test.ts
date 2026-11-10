@@ -185,6 +185,12 @@ test('7b five 429s in a row fail with ERRORS.refused after sleeps 2, 4, 8, 16 s;
   assert.equal(ok.kind, 'done');
   assertFile(reset.files, 2 * MiB);
 
+  const timed = setup();
+  timed.net.add(U, { size: MiB, script: [{ status: 429, retryAfter: '30' }] });
+  const t30 = await timed.run(rec(U));
+  assert.equal(t30.kind, 'done');
+  assert.ok(timed.net.log[1].at >= 30_000, `second probe at ${timed.net.log[1].at} ms`);
+
   const probe503 = setup();
   probe503.net.add(U, { size: MiB, script: [{ status: 503 }] });
   const p = await probe503.run(rec(U));
