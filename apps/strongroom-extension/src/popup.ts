@@ -125,23 +125,38 @@ async function lostAccessScreen(back: () => unknown) {
     return;
   }
   if (state.state === 'ready') return lostAccessOpenScreen(back);
-  const request = button(state.state === 'waiting' ? 'Start a new request' : 'Request access by email', () => guarded(msg, [request], async () => {
+  const startOver = async () => {
     await call({ type: 'lostAccess', action: 'request' });
     await lostAccessScreen(back);
-  }), state.state === 'waiting' ? '' : 'ui-btn--primary');
+  };
   if (state.state === 'waiting') {
     const again = button('Check again', () => guarded(msg, [again], () => lostAccessScreen(back)), 'ui-btn--primary');
+    // A known releaseAt means the server already confirmed this exact claim is alive and counting down: there is no good reason to let it be forgotten client-side, so no way to replace it is offered here.
+    if (state.releaseAt !== null) {
+      screen('Lost access', back, h('p', {}, `Confirmed by email. Strongroom lets you back in at ${new Date(state.releaseAt).toLocaleString()}.`), msg, again);
+      return;
+    }
+    let sure = false;
+    const request = button('Start a new request', () => guarded(msg, [request], async () => {
+      if (!sure) {
+        sure = true;
+        request.textContent = 'Yes, start a new request';
+        request.disabled = false;
+        return;
+      }
+      await startOver();
+    }), 'ui-btn--danger');
     screen('Lost access', back,
-      h('p', {}, state.releaseAt
-        ? `Confirmed by email. Strongroom lets you back in at ${new Date(state.releaseAt).toLocaleString()}.`
-        : 'Check your email and open the confirm link. The 24-hour wait starts once you do.'),
-      msg, again,
-      h('p', { class: 'ui-muted' }, "Stuck, or this wasn't you? Starting a new request abandons this one."), request);
+      h('p', {}, 'Check your email and open the confirm link. The 24-hour wait starts once you do.'), msg, again,
+      h('p', { class: 'ui-muted' },
+        "If you already sent a request and are waiting for the confirmation email, starting over won't reach the server and you'll need to wait the full time again from a fresh request. Only do this if you're sure the earlier request failed, was cancelled, or never arrived."),
+      request);
     return;
   }
+  const go = button('Request access by email', () => guarded(msg, [go], startOver), 'ui-btn--primary');
   screen('Lost access', back,
     h('p', { class: 'ui-muted' }, "If you turned on email recovery, this asks by email. You'll need the code it mailed you when you turned it on, and a 24-hour wait that another signed-in device can cancel."),
-    msg, request);
+    msg, go);
 }
 
 function lostAccessOpenScreen(back: () => unknown) {

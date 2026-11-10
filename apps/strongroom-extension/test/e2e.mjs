@@ -224,7 +224,19 @@ async function syncSuite() {
     await lostPopup.getByRole('button', { name: 'Lost access to your account?' }).click();
     await lostPopup.getByRole('button', { name: 'Request access by email' }).click();
     await lostPopup.getByText('Check your email and open the confirm link').waitFor();
-    check('the waiting screen already offers a way to start over, not just Check again', (await lostPopup.getByRole('button', { name: 'Start a new request' }).count()) === 1);
+    check('the waiting screen offers a way to start over before confirmation', (await lostPopup.getByRole('button', { name: 'Start a new request' }).count()) === 1);
+
+    // A single click only arms the dangerous action; declining it (navigating away without the second click) must never have fired the network call or touched the stored claim.
+    await lostPopup.getByRole('button', { name: 'Start a new request' }).click();
+    await lostPopup.getByRole('button', { name: 'Yes, start a new request' }).waitFor();
+    const claimBeforeDecline = (await lost.sw.evaluate(() => chrome.storage.local.get('lostClaim'))).lostClaim;
+    await lostPopup.getByRole('button', { name: 'Back' }).click();
+    await lostPopup.getByRole('heading', { name: 'Create your vault' }).waitFor();
+    const claimAfterDecline = (await lost.sw.evaluate(() => chrome.storage.local.get('lostClaim'))).lostClaim;
+    check('declining the start-over confirmation leaves the original claim untouched', !!claimBeforeDecline && claimAfterDecline === claimBeforeDecline);
+    await lostPopup.getByRole('button', { name: 'Use my Strongroom account instead' }).click();
+    await lostPopup.getByRole('button', { name: 'Lost access to your account?' }).click();
+    await lostPopup.getByText('Check your email and open the confirm link').waitFor();
 
     // A claim is already stored, so this Check again does reach the network: a transport failure here must show a distinct retry state, never fall into the request-button state that would overwrite the real claim.
     world.online = false;
@@ -239,12 +251,14 @@ async function syncSuite() {
     await lostPopup.getByRole('button', { name: 'Check again' }).click();
     await lostPopup.getByText('Check your email and open the confirm link').waitFor();
     await lostPopup.getByRole('button', { name: 'Start a new request' }).click();
+    await lostPopup.getByRole('button', { name: 'Yes, start a new request' }).click();
     await lostPopup.getByText('Check your email and open the confirm link').waitFor();
 
     const confirmToken = /t=([^&\s]+)/.exec(world.mail.sent.at(-1).text)[1];
     await fetch(new URL(`/v1/lost/confirm?t=${confirmToken}`, harness.url));
     await lostPopup.getByRole('button', { name: 'Check again' }).click();
     await lostPopup.getByText(/lets you back in at/).waitFor();
+    check('a confirmed, counting-down claim offers no way to replace it', (await lostPopup.getByRole('button', { name: 'Start a new request' }).count()) === 0);
     world.sqlite.exec(`UPDATE lost_request SET release_at = ${Date.now() - 1000}`);
     await lostPopup.getByRole('button', { name: 'Check again' }).click();
     await lostPopup.getByLabel('Code from the email').waitFor();
