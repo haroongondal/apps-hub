@@ -135,3 +135,15 @@ test('schedulePlan: nothing is mutated', () => {
   assert.deepEqual(recs, before);
   assert.deepEqual(qs, wq);
 });
+
+test('schedulePlan: a running forced record is never stopped and holds a slot', () => {
+  const recs = [rec('x', 'night', 'running', 1, true), rec('d', 'night', 'queued', 4)];
+  assert.deepEqual(schedulePlan(recs, wq, D(10, 12), true), { start: [], stop: [] });   // night is closed
+  assert.deepEqual(schedulePlan(recs, wq, D(10, 23), true), { start: [], stop: [] });   // open, but x fills the one slot
+  assert.deepEqual(schedulePlan(recs, wq, D(10, 23), false), { start: [], stop: [] });  // switch off: still not stopped
+});
+
+test('schedulePlan: start order is addedAt then id, forced or not', () => {
+  const recs = [rec('forced', 'main', 'queued', 5, true), rec('older', 'main', 'queued', 2)];
+  assert.deepEqual(schedulePlan(recs, [q('main', 3, OFF)], D(10, 12), true).start, ['older', 'forced']);
+});
