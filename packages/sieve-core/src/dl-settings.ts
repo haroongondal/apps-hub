@@ -58,7 +58,84 @@ export const DEFAULT_DOWNLOADS: DownloadSettings = {
   queues: [{ id: 'main', name: 'Main queue', maxParallel: 3, schedule: { on: false, days: [0, 1, 2, 3, 4, 5, 6], start: '01:00', stop: '07:00' } }],
 };
 
+const copy = (): DownloadSettings => structuredClone(DEFAULT_DOWNLOADS);
+const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
+const bool = (x: unknown, d: boolean): boolean => (typeof x === 'boolean' ? x : d);
+const num = (x: unknown, lo: number, hi: number, d: number): number =>
+  typeof x === 'number' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, Math.round(x))) : d;
+
+function list(x: unknown, ok: RegExp, clean: (s: string) => string, max: number, d: readonly string[]): string[] {
+  if (!Array.isArray(x)) return [...d];
+  const out: string[] = [];
+  for (const e of x) {
+    if (typeof e !== 'string') continue;
+    const s = clean(e);
+    if (ok.test(s) && !out.includes(s)) out.push(s);
+    if (out.length === max) break;
+  }
+  return out;
+}
+const EXT = /^[a-z0-9]{1,10}$/;
+const MIME = /^[a-z0-9][a-z0-9.+-]*\/([a-z0-9][a-z0-9.+-]*\*?|\*)$/;
+const extensions = (x: unknown, max: number, d: readonly string[]) => list(x, EXT, (s) => s.trim().toLowerCase().replace(/^\.+/, ''), max, d);
+const FOLDER_BAD = /[<>:"/\\|?*\u0000-\u001f\u007f]/;
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function category(id: CategoryId, input: unknown[]): CategorySetting {
+  const d = DEFAULT_CATEGORIES.find((c) => c.id === id)!;
+  const e = input.find((c) => isObj(c) && c.id === id) as Record<string, unknown> | undefined;
+  if (!e) return { id, folder: d.folder, extensions: [...d.extensions] };
+  const f = typeof e.folder === 'string' ? e.folder.trim() : '';
+  const folder = f.length >= 1 && f.length <= 40 && !FOLDER_BAD.test(f) && !f.startsWith('.') ? f : d.folder;
+  return { id, folder, extensions: id === 'other' ? [] : extensions(e.extensions, 100, d.extensions) };
+}
+
+function queues(input: unknown): QueueSetting[] {
+  if (!Array.isArray(input) || input.length === 0) return copy().queues;
+  const used = new Set<string>();
+  return input.slice(0, MAX_QUEUES).map((raw, i) => {
+    const q = isObj(raw) ? raw : {};
+    const pos = i + 1;
+    let id = typeof q.id === 'string' && /^[a-z0-9-]{1,24}$/.test(q.id) && !used.has(q.id) ? q.id : '';
+    for (let n = pos; !id; n++) if (!used.has(`q${n}`)) id = `q${n}`;
+    used.add(id);
+    const name = typeof q.name === 'string' ? q.name.trim() : '';
+    const s = isObj(q.schedule) ? q.schedule : {};
+    const days = Array.isArray(s.days)
+      ? [...new Set(s.days.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a, b) => a - b)
+      : [];
+    return {
+      id,
+      name: name.length >= 1 && name.length <= 40 ? name : `Queue ${pos}`,
+      maxParallel: num(q.maxParallel, 1, 8, 3),
+      schedule: {
+        on: bool(s.on, false),
+        days: days.length ? days : [0, 1, 2, 3, 4, 5, 6],
+        start: typeof s.start === 'string' && TIME.test(s.start) ? s.start : '00:00',
+        stop: typeof s.stop === 'string' && TIME.test(s.stop) ? s.stop : null,
+      },
+    };
+  });
+}
+
 // Never throws; idempotent. Rules: docs/superpowers/plans/2026-11-10-sieve-phase-3.md, Task 3.1.
-export function validateDownloadSettings(_input: unknown): DownloadSettings {
-  throw new Error('not implemented');
+export function validateDownloadSettings(input: unknown): DownloadSettings {
+  if (!isObj(input) || input.version !== 1) return copy();
+  const t = isObj(input.takeOver) ? input.takeOver : {};
+  const sl = isObj(input.speedLimit) ? input.speedLimit : {};
+  const cats = Array.isArray(input.categories) ? input.categories : [];
+  return {
+    version: 1,
+    on: bool(input.on, true),
+    takeOver: {
+      on: bool(t.on, true),
+      minMb: num(t.minMb, 0, 100000, 5),
+      extensions: extensions(t.extensions, 200, DEFAULT_TAKEOVER_EXTENSIONS),
+      mimeTypes: list(t.mimeTypes, MIME, (s) => s.trim().toLowerCase(), 100, DEFAULT_TAKEOVER_MIME_TYPES),
+    },
+    parts: num(input.parts, 1, 6, 1),
+    speedLimit: { on: bool(sl.on, false), kbPerSecond: num(sl.kbPerSecond, 10, 1_000_000, 1000) },
+    categories: CATEGORY_IDS.map((id) => category(id, cats)),
+    queues: queues(input.queues),
+  };
 }

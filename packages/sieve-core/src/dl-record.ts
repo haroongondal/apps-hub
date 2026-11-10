@@ -42,28 +42,62 @@ export type SaveEvent =
   | { id: string; kind: 'failed'; error: string };
 
 /** 'd' + now in base 36 + 8 base-36 digits of random() (4 digits collide about 1 time in 4 when 1000 ids are made in one millisecond). */
-export function newId(_now: number, _random: () => number): string {
-  throw new Error('not implemented');
+export function newId(now: number, random: () => number): string {
+  return 'd' + now.toString(36) + Math.floor(random() * 36 ** 8).toString(36).padStart(8, '0');
 }
-export function newRecord(_init: NewRecord, _now: number, _id: string): DlRecord {
-  throw new Error('not implemented');
+export function newRecord(init: NewRecord, now: number, id: string): DlRecord {
+  return {
+    id, url: init.url, finalUrl: init.finalUrl ?? init.url, referrer: init.referrer, name: init.name,
+    category: init.category, categoryFixed: init.categoryFixed, queue: init.queue,
+    state: 'queued', force: false, size: init.size ?? null, rangeOk: init.rangeOk ?? false,
+    validator: init.validator ?? null, mime: init.mime ?? '', parts: [], partsWanted: init.partsWanted,
+    addedAt: now, startedAt: null, finishedAt: null, error: null, saveOnly: false,
+    savedPath: null, savedId: null, chromeId: init.chromeId ?? null, source: init.source,
+  };
 }
+
+const TRANSITIONS: Record<DlState, Partial<Record<DlEvent, DlState>>> = {
+  queued: { start: 'running', pause: 'paused', fail: 'failed' },
+  running: { pause: 'paused', stop: 'queued', partsDone: 'saving', fail: 'failed', restart: 'queued' },
+  paused: { resume: 'queued' },
+  saving: { saved: 'done', saveFailed: 'failed', restart: 'saving' },
+  done: {},
+  failed: { resume: 'queued' },
+};
 /** null = illegal. */
-export function nextState(_state: DlState, _event: DlEvent): DlState | null {
-  throw new Error('not implemented');
+export function nextState(state: DlState, event: DlEvent): DlState | null {
+  return TRANSITIONS[state][event] ?? null;
 }
 /** An illegal event returns r itself. */
-export function applyEvent(_r: DlRecord, _event: DlEvent, _now: number, _payload?: { error?: string }): DlRecord {
-  throw new Error('not implemented');
+export function applyEvent(r: DlRecord, event: DlEvent, now: number, payload?: { error?: string }): DlRecord {
+  const state = nextState(r.state, event);
+  if (!state) return r;
+  const n = { ...r, state };
+  switch (event) {
+    case 'start': n.startedAt = r.startedAt ?? now; n.error = null; break;
+    case 'pause': case 'stop': n.force = false; break;
+    case 'resume':
+      n.force = true; n.error = null;
+      if (r.saveOnly || isComplete(r)) { n.state = 'saving'; n.saveOnly = true; }
+      break;
+    case 'partsDone': n.saveOnly = true; n.error = null; break;
+    case 'fail': n.error = payload?.error ?? ERRORS.unknown; n.force = false; break;
+    case 'saved': n.finishedAt = now; n.saveOnly = false; n.force = false; n.error = null; break;
+    case 'saveFailed': n.error = payload?.error ?? ERRORS.unknown; n.saveOnly = true; n.force = false; break;
+    case 'restart': break; // running goes back to queued with force kept; saving stays
+  }
+  return n;
 }
 export const partName = (id: string): string => `${id}.part`;               // the OPFS file of a record
 /** Sum of the parts' done. */
-export function bytesDone(_r: DlRecord): number {
-  throw new Error('not implemented');
+export function bytesDone(r: DlRecord): number {
+  return r.parts.reduce((sum, p) => sum + p.done, 0);
 }
 /** Size 0, or size known, parts planned and every part's done equals its length. */
-export function isComplete(_r: DlRecord): boolean {
-  throw new Error('not implemented');
+export function isComplete(r: DlRecord): boolean {
+  if (r.size === 0) return true;
+  if (r.size === null || r.parts.length === 0) return false;
+  return r.parts.every((p) => p.end !== null && p.done === p.end - p.start + 1);
 }
 
 export const ERRORS = {
