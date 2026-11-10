@@ -9,6 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class EscrowTest {
@@ -64,5 +65,15 @@ class EscrowTest {
     val a = Escrow.seal(code, recoveryKey, accountKey)
     val b = Escrow.seal(code, recoveryKey, accountKey)
     assertFalse(a.contentEquals(b))
+  }
+
+  @Test fun aBlobTooShortToHoldANonceAndTagOpensNothing() {
+    assertNull(Escrow.open(code, ByteArray(0)))
+    assertNull(Escrow.open(code, ByteArray(11)))
+  }
+
+  @Test fun sealRefusesKeysThatAreNot20Bytes() {
+    assertThrows(IllegalArgumentException::class.java) { Escrow.seal(code, ByteArray(19), accountKey) }
+    assertThrows(IllegalArgumentException::class.java) { Escrow.seal(code, recoveryKey, ByteArray(21)) }
   }
 }
