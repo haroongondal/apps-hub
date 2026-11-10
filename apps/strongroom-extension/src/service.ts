@@ -387,7 +387,7 @@ export function createService(deps: Deps) {
         await port.setSyncLocal({ headerRev: put.headerRev });
       } catch (e) {
         if (!(e instanceof SyncHttpError) || e.status !== 409) throw e;
-        await doSync().catch(noop);
+        await doSync(password).catch(noop);
         throw new UserError('The vault changed on another device. Sync it and try again.');
       }
       await deps.settings.set(ESCROW_BLOB, toBase64(blob));

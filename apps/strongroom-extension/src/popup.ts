@@ -160,9 +160,10 @@ async function whenSyncDone(card: HTMLElement, refresh: () => unknown) {
   }
 }
 
-function emailRecoveryGroup(s: EmailRecoveryStatus, refresh: () => unknown) {
+function emailRecoveryGroup(s: EmailRecoveryStatus | null, refresh: () => unknown) {
   const msg = msgBox();
   const caption = h('p', { class: 'ui-caption' }, 'Email recovery');
+  if (!s) return h('div', { class: 'ui-group' }, caption, h('p', { class: 'ui-muted' }, "Couldn't check its status just now. Try again later."));
   if (!s.available) return h('div', { class: 'ui-group' }, caption, h('p', { class: 'ui-muted' }, "Sync isn't available in this build."));
   if (s.waitingForCode) {
     const code = input({ placeholder: 'ABCD-EFGH-…' });
@@ -195,7 +196,7 @@ function emailRecoveryGroup(s: EmailRecoveryStatus, refresh: () => unknown) {
 }
 
 async function settingsScreen() {
-  const s = await call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' });
+  const s = await call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' }).catch(() => null);
   screen('Settings', vaultScreen, emailRecoveryGroup(s, settingsScreen));
 }
 
@@ -246,7 +247,7 @@ async function vaultScreen() {
     tab ? call<Pending | null>({ type: 'pending', tabId: tab.tabId }) : null,
     tab ? call<{ rows: Row[] }>({ type: 'candidates', page: tab }) : null,
     call<SyncStatus>({ type: 'syncStatus' }),
-    call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' }),
+    call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' }).catch(() => null),
   ]);
   const toast = h('p', { class: 'ui-meta', role: 'status' });
   const msg = msgBox();
@@ -269,7 +270,7 @@ async function vaultScreen() {
       button(pending.intent === 'update' ? 'Update' : 'Save', () => guarded(msg, [], async () => { await call({ type: 'resolvePending', tabId: tab!.tabId, action: 'save' }); await vaultScreen(); }), 'ui-btn--primary'),
       button('Not now', () => guarded(msg, [], async () => { await call({ type: 'resolvePending', tabId: tab!.tabId, action: 'dismiss' }); await vaultScreen(); }))));
 
-  const recoveryBanner = emailRecovery.pendingRecovery && h('div', { class: 'ui-group card' },
+  const recoveryBanner = emailRecovery?.pendingRecovery && h('div', { class: 'ui-group card' },
     h('p', {}, emailRecovery.pendingRecovery.releaseAt
       ? `Someone requested email recovery for this vault. It opens at ${new Date(emailRecovery.pendingRecovery.releaseAt).toLocaleString()} unless you cancel it.`
       : 'Someone requested email recovery for this vault. It is waiting to be confirmed by email.'),

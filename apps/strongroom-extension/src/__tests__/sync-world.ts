@@ -118,6 +118,8 @@ async function makePhone(world: { serve: (r: Request) => Promise<Response> }, m:
 
 export async function serveHttp(world: World): Promise<{ url: string; close(): Promise<void> }> {
   const server = createServer(async (req, res) => {
+    // A real browser talks to this real socket, so `world.online` (which only gates the in-process fetchFn) must also gate this path, by dropping the connection.
+    if (!world.online) return void req.socket.destroy();
     const chunks: Buffer[] = [];
     for await (const c of req) chunks.push(c as Buffer);
     const headers = new Headers();

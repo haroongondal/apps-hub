@@ -148,6 +148,18 @@ async function syncSuite() {
     await popup.getByRole('button', { name: 'Back' }).click();
     await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
 
+    // A transport failure in the email-recovery status check must degrade gracefully, not take down the whole popup.
+    world.online = false;
+    await popup.reload();
+    await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+    check('vaultScreen still renders its logins when the email-recovery status check is offline', (await popup.locator('.row').count()) > 0, await popup.innerText('body'));
+    await popup.getByRole('button', { name: 'Settings' }).click();
+    await popup.getByRole('heading', { name: 'Settings' }).waitFor();
+    check('settingsScreen still renders when the email-recovery status check is offline', (await popup.innerText('body')).includes("Couldn't check its status"), await popup.innerText('body'));
+    await popup.getByRole('button', { name: 'Back' }).click();
+    await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+    world.online = true;
+
     const session = await sw.evaluate(() => chrome.storage.session.get('loginToken'));
     check('the login token is in session storage while unlocked', session.loginToken === b64(world.tokens.loginToken));
     const alarm = await sw.evaluate(async () => (await chrome.alarms.getAll()).find((a) => a.name === 'sync'));

@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
-  createVault, formatAccountKey, headerToJson, KDF_FLOOR, loadPublicSuffixList, parseRecoveryKey, randomBytes, recoveryLoginToken, signInWithPassword,
-  signInWithRecovery, SyncAuthError, toBase64, tokenHash, unlockWithRecovery,
+  createVault, formatAccountKey, headerToJson, KDF_FLOOR, loadPublicSuffixList, parseRecoveryKey, randomBytes, recoveryLoginToken, rotateRecoveryKey,
+  signInWithPassword, signInWithRecovery, SyncAuthError, toBase64, tokenHash, unlockWithRecovery,
 } from 'strongroom-core';
 import type { Header, RecordStore, StoredRecord, SyncReport } from 'strongroom-core';
 import { COMMON_PASSWORDS } from '../common-passwords.ts';
@@ -924,13 +924,26 @@ test('status shows a pending recovery and cancelRecovery clears it', async () =>
   assert.equal((await emailStatus(x)).pendingRecovery, null);
 });
 
-test('enrol on a stale ifRev pulls and asks to try again, not to sign in again', async () => {
+test('enrol on a genuine 409 (the header changed elsewhere) pulls, adopts it, and a second attempt succeeds', async () => {
   const world = await newWorld();
   const x = await signedIn(world);
-  await world.phone.putHeader(world.phone.store.header!, tokenHash(world.phone.token));
+
+  // The phone rotates its own recovery key directly against the server: a real header change x does not yet know about.
+  const rotatedByPhone = await rotateRecoveryKey(world.phone.store.header!, world.phone.vaultKey);
+  const { headerRev, lastRev } = await world.phone.store.getSyncMeta();
+  const put = await world.phone.transport.putAccount(world.phone.token, {
+    header: headerToJson(rotatedByPhone.header), loginHash: tokenHash(world.phone.token), readHash: world.phone.readHash,
+    recoveryHash: rotatedByPhone.recoveryHash, ifRev: headerRev,
+  });
+  await world.phone.store.applyPull({ header: rotatedByPhone.header, headerRev: put.headerRev, records: [], quarantine: [], rebase: [], lastRev });
+
   await assert.rejects(enrol(x), /changed on another device/);
-  assert.equal((await x.store.getSyncMeta()).headerRev, (await world.phone.store.getSyncMeta()).headerRev);
+  assert.equal(await headerNow(x), headerToJson(rotatedByPhone.header));
+  assert.equal((await x.store.getSyncMeta()).headerRev, put.headerRev);
   assert.equal((await status(x)).state, 'idle');
+
+  const { recoveryKey } = await enrol(x);
+  assert.ok(await unlockWithRecovery((await x.store.getHeader())!, parseRecoveryKey(recoveryKey)!));
 });
 
 test('none of the email-recovery requests work from a page', async () => {
