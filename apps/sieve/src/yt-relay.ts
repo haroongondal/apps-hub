@@ -1,5 +1,7 @@
 import { validateSettings, type Channel } from '@apps-hub/sieve-core/src/settings.ts';
 import { watchChannel, youtubeAdsOn, ytChannel } from '@apps-hub/sieve-core/src/youtube-ads.ts';
+import './yt/actions.ts';
+import { startBridge } from './yt/bridge.ts';
 
 // By video id: a hover preview or an autoplay prefetch is another video, so the menu names the channel of the page's own one.
 const seen = new Map<string, Channel>();
@@ -24,4 +26,10 @@ chrome.runtime.onMessage.addListener((message: { type?: unknown } | null, _sende
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && 'settings' in changes) tell(changes.settings.newValue);
 });
-chrome.storage.local.get('settings').then(({ settings }) => tell(settings), (e) => console.error('Sieve could not read its settings on YouTube', e));
+chrome.storage.local.get(['settings', 'youtube']).then(
+  ({ settings, youtube }) => {
+    tell(settings);
+    startBridge(youtube);
+  },
+  (e) => console.error('Sieve could not read its settings on YouTube', e),
+);

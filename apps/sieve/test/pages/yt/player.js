@@ -20,6 +20,12 @@
   let tone = null;
   const listeners = {};
 
+  // The settings may reach the page before this script does, so it asks for them again with a hello, as Sieve's main world does.
+  window.__sieveDo = [];
+  document.addEventListener('sieve-yt-settings', (e) => { window.__lastSieveSettings = e.detail; });
+  document.addEventListener('sieve-yt-do', (e) => window.__sieveDo.push(e.detail));
+  document.dispatchEvent(new CustomEvent('sieve-yt-hello'));
+
   window.__ytCalls = [];
   window.__keys = [];
   window.__ctx = [];
