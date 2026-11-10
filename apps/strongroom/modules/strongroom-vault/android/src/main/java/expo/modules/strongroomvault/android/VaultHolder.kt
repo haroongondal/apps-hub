@@ -324,7 +324,8 @@ object VaultHolder {
     if (byPassword) {
       val boot = bootCount(context)
       prefs(context).edit().apply { if (boot == null) remove(PASSWORD_BOOT) else putInt(PASSWORD_BOOT, boot) }.commit()
-      recovery(context).clearLost() // the owner is in, so a released blob left from a lost-access request goes
+      // The owner is in, so a released blob left from a lost-access request goes. Off this thread: status() and lostCheck() hold the same monitor across a network call, and an unlock must never wait on one.
+      Thread { runCatching { recovery(context).clearLost() } }.start()
     }
     applyPending(context)
     rebuildIndex(context)
