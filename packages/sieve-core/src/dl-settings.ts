@@ -40,11 +40,11 @@ export const DEFAULT_TAKEOVER_MIME_TYPES: readonly string[] = [
 ];
 
 export const DEFAULT_CATEGORIES: readonly CategorySetting[] = [
-  { id: 'video', folder: 'Video', extensions: VIDEO },
-  { id: 'music', folder: 'Music', extensions: MUSIC },
-  { id: 'programs', folder: 'Programs', extensions: PROGRAMS },
-  { id: 'archives', folder: 'Archives', extensions: ARCHIVES },
-  { id: 'documents', folder: 'Documents', extensions: DOCUMENTS },
+  { id: 'video', folder: 'Video', extensions: [...VIDEO] },
+  { id: 'music', folder: 'Music', extensions: [...MUSIC] },
+  { id: 'programs', folder: 'Programs', extensions: [...PROGRAMS] },
+  { id: 'archives', folder: 'Archives', extensions: [...ARCHIVES] },
+  { id: 'documents', folder: 'Documents', extensions: [...DOCUMENTS] },
   { id: 'other', folder: 'Other', extensions: [] },
 ];
 
@@ -120,7 +120,7 @@ function queues(input: unknown): QueueSetting[] {
 
 // Never throws; idempotent. Rules: docs/superpowers/plans/2026-11-10-sieve-phase-3.md, Task 3.1.
 export function validateDownloadSettings(input: unknown): DownloadSettings {
-  if (!isObj(input) || input.version !== 1) return copy();
+  if (!isObj(input) || ('version' in input && input.version !== 1)) return copy();
   const t = isObj(input.takeOver) ? input.takeOver : {};
   const sl = isObj(input.speedLimit) ? input.speedLimit : {};
   const cats = Array.isArray(input.categories) ? input.categories : [];

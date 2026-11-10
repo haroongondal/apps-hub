@@ -75,7 +75,8 @@ test('applyEvent resume picks queued or saving', () => {
   assert.deepEqual([failedComplete.state, failedComplete.saveOnly], ['saving', true]);
   const failedPartial = applyEvent(rec({ state: 'failed', size: 100, parts: whole(100, 40), error: 'x' }), 'resume', 1);
   assert.deepEqual([failedPartial.state, failedPartial.saveOnly, failedPartial.force, failedPartial.error], ['queued', false, true, null]);
-  assert.equal(applyEvent(rec({ state: 'paused' }), 'resume', 1).state, 'queued');
+  const paused = applyEvent(rec({ state: 'paused' }), 'resume', 1);
+  assert.deepEqual([paused.state, paused.force], ['queued', true]);
 });
 
 test('applyEvent fail, saved, saveFailed and restart', () => {

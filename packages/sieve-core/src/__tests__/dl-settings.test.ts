@@ -52,8 +52,18 @@ test('undefined, a string and a wrong version give DEFAULT_DOWNLOADS', () => {
   assert.deepEqual(validate([]), DEFAULT_DOWNLOADS);
   assert.deepEqual(validate({ version: 2 }), DEFAULT_DOWNLOADS);
   assert.deepEqual(validate({}), DEFAULT_DOWNLOADS);
+  assert.deepEqual(validate({ version: 2, parts: 5, on: false }), DEFAULT_DOWNLOADS);
+  assert.deepEqual(validate({ version: '1', parts: 5, on: false }), DEFAULT_DOWNLOADS);
+  assert.deepEqual(validate({ version: undefined, parts: 5 }), DEFAULT_DOWNLOADS);
+  assert.equal(validate({ parts: 4 }).parts, 4, 'no version key: validated field by field');
+  assert.equal(validate({ parts: 4 }).on, true);
   assert.notEqual(validate(undefined), DEFAULT_DOWNLOADS, 'a copy, so a caller cannot change the defaults');
   assert.notEqual(validate(undefined).queues, DEFAULT_DOWNLOADS.queues);
+});
+
+test('DEFAULT_CATEGORIES do not share arrays with each other or with DEFAULT_DOWNLOADS', () => {
+  const all = [...DEFAULT_CATEGORIES.map((c) => c.extensions), ...DEFAULT_DOWNLOADS.categories.map((c) => c.extensions)];
+  assert.equal(new Set(all).size, all.length);
 });
 
 test('DEFAULT_DOWNLOADS equals the spelled-out literal', () => {
