@@ -194,7 +194,7 @@ test('copy has no emoji and no ALL-CAPS words longer than three letters', () => 
 
 test('explainRecovery words the two rotation refusals exactly, and a different account for a fresh phone', () => {
   assert.equal(explainRecovery(coded('MAIL_FAILED')), "We couldn't send the email, so nothing changed and your old recovery key still works. Try again later.");
-  assert.equal(explainRecovery(coded('VAULT_MOVED')), 'Your vault changed on another device, so nothing changed and your old recovery key still works. Choose Sync now, then try again.');
+  assert.equal(explainRecovery(coded('VAULT_MOVED')), 'Your vault changed on another device, so nothing changed and your old recovery key still works. If an email with a code arrived, ignore it. Choose Sync now, then try again.');
   assert.match(explainRecovery(coded('LOST_DIFFERENT_ACCOUNT')), /already set up with another Strongroom account.*Remove the Strongroom data from this phone, or use a phone that has none/);
 });
 

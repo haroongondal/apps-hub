@@ -132,7 +132,7 @@ const MESSAGES: Record<string, string> = {
   LOST_NOT_READY: "The 24-hour wait isn't over yet. Try again once it ends.",
   LOST_DIFFERENT_ACCOUNT: "This phone is already set up with another Strongroom account, so it can't open this vault. Remove the Strongroom data from this phone, or use a phone that has none.",
   MAIL_FAILED: "We couldn't send the email, so nothing changed and your old recovery key still works. Try again later.",
-  VAULT_MOVED: 'Your vault changed on another device, so nothing changed and your old recovery key still works. Choose Sync now, then try again.',
+  VAULT_MOVED: 'Your vault changed on another device, so nothing changed and your old recovery key still works. If an email with a code arrived, ignore it. Choose Sync now, then try again.',
 };
 
 export function explainRecovery(e: unknown): string {

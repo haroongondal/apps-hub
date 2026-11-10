@@ -553,8 +553,9 @@ recovery key".
   key stays valid. An unclear failure (offline, 5xx) keeps the new key and finishes at
   the next sync (a lost reply is recognised by pulling the server header). The new key
   is shown whatever happens, and a persisted `keyUnseen` flag raises a warning if the
-  app died before the owner saw it. Confirming types the emailed code; the local blob
-  is then deleted.
+  app died before the owner saw it. Confirming types the emailed code. Until then the phone keeps only a SHA-256 hash of
+  the code (never the sealed blob, so local storage plus the inbox cannot open the vault
+  without the server's wait); the hash is deleted on confirm.
 - **New recovery key turns email recovery off** (the Worker deletes the escrow when
   the recovery hash changes without a new one); that screen says so first.
 - **Lost both**: Request (the Worker mails a link) -> owner opens the link -> 24 hours
@@ -562,9 +563,14 @@ recovery key".
   email and a new master password -> the existing `SyncSession.recover`. The claim is
   minted once, saved before the call and resent on retries (a new claim after a lost
   reply would orphan the first email's link and block recovery for 8 days). It works
-  with sync off, a locked vault or a fresh phone. After a successful recovery the
+  with sync off, a locked vault or a fresh phone (entry points: the Unlock screen's
+  reset page, and the recovery step of the sync sign-in a fresh phone reaches from
+  setup). After a successful recovery the
   request is cancelled on the server; a normal password unlock clears a stored claim.
   The recovery key and escrow are not rotated by a recovery.
+- **Refusals in plain words**: a failed mail (the Worker's 502) and a vault that moved
+  on another device (409) put the old key back and say so; for the 409 the Worker has
+  already mailed a code that opens nothing, and the message tells the owner to ignore it.
 - **Warnings**: the vault screen shows a warning with Cancel only for a **confirmed**
   request (an unconfirmed one can be created by anyone and cannot progress without the
   owner's inbox). A status check never blocks or fails unlock, the vault or Settings.

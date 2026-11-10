@@ -130,7 +130,7 @@ class ModuleErrorsTest {
     assertEquals("We couldn't send the email, so nothing changed and your old recovery key still works. Try again later.", mail.message)
     val moved = failed(IllegalStateException("vault moved"))
     assertEquals("VAULT_MOVED", moved.code)
-    assertEquals("Your vault changed on another device, so nothing changed and your old recovery key still works. Choose Sync now, then try again.", moved.message)
+    assertEquals("Your vault changed on another device, so nothing changed and your old recovery key still works. If an email with a code arrived, ignore it. Choose Sync now, then try again.", moved.message)
     val alive = failed(IllegalStateException("request alive"))
     assertEquals("LOST_STILL_ALIVE", alive.code)
     assertEquals("A recovery request is already counting down on this account. Wait for it to finish, or cancel it from a device that is signed in.", alive.message)

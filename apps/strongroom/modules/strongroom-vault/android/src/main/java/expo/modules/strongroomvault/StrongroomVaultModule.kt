@@ -672,7 +672,7 @@ internal fun coded(e: IllegalStateException): Exception = when (e.message) {
   "mail failed" -> CodedException("MAIL_FAILED", "We couldn't send the email, so nothing changed and your old recovery key still works. Try again later.", e)
   "vault moved" -> CodedException(
     "VAULT_MOVED",
-    "Your vault changed on another device, so nothing changed and your old recovery key still works. Choose Sync now, then try again.",
+    "Your vault changed on another device, so nothing changed and your old recovery key still works. If an email with a code arrived, ignore it. Choose Sync now, then try again.",
     e,
   )
   "not waiting" -> CodedException("NOT_WAITING_FOR_CODE", "There is no email code to enter. Turn on email recovery first.", e)
