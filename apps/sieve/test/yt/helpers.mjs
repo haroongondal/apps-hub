@@ -89,4 +89,4 @@ export const sendToTab = (t, page, message) =>
 
 export const storedYouTube = (t) => t.sw.evaluate(() => chrome.storage.local.get('youtube').then((r) => r.youtube ?? null));
 
-export const latestDownload =(t) => t.sw.evaluate(() => chrome.downloads.search({ orderBy: ['-startTime'], limit: 1 }).then((r) => r[0]));
+export const latestDownload = (t) => t.sw.evaluate(() => chrome.downloads.search({ orderBy: ['-startTime'], limit: 1 }).then((r) => r[0]));

@@ -62,7 +62,7 @@ export function feature(name: string, init: () => void): void {
   } catch (e) {
     if (off.has(name)) return;
     off.add(name);
-    warn(`Sieve: ${name} is off on this page`, e);
+    warn('Sieve: %s is off on this page', name, e);
   }
 }
 

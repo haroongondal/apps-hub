@@ -141,7 +141,7 @@ export function validateYouTube(input: unknown): YouTubeSettings {
 }
 
 function merge(a: unknown, b: unknown): unknown {
-  if (!isRecord(b)) return b;
+  if (!isRecord(b)) return isRecord(a) ? a : b;
   const out: Record<string, unknown> = isRecord(a) ? { ...a } : {};
   for (const k of Object.keys(b)) out[k] = merge(out[k], b[k]);
   return out;

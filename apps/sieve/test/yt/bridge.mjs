@@ -1,5 +1,6 @@
 // Task 2.3: settings at document_start, the page bridge and the worker's yt-command, on the local fixture; the mark against first-paint live.
 import { setTimeout as sleep } from 'node:timers/promises';
+import { launch } from '../harness.mjs';
 import { openYt, sendToTab, setSettings, setYouTube, storedYouTube, until } from './helpers.mjs';
 
 const MARK = 'sieve-yt-applied';
@@ -69,21 +70,41 @@ export async function local(t) {
     await sendToTab(t, page, { type: 'yt-command', action: 'nope' });
     await sleep(300);
     check('bridge: an unknown yt-command causes no page error', t.errors.length === errorsBefore, t.errors.slice(errorsBefore).join(' | '));
-    const names = () => page.evaluate(() => [...new Set([...Object.keys(window), ...Object.getOwnPropertyNames(window)])]);
-    const withTools = await names();
+    const names = (p) => p.evaluate(() => ({ keys: Object.keys(window), own: Object.getOwnPropertyNames(window) }));
+    const withSieve = await names(page);
     await page.close();
-
-    await setYouTube(t, { on: false });
-    await setSettings(t, { enabled: false });
-    page = await settled(t, '/watch?v=sieveTest05');
-    const without = new Set(await names());
-    await page.close();
-    await setSettings(t, { enabled: true });
-    await setYouTube(t, { on: true });
-    const added = withTools.filter((n) => !without.has(n));
-    check('bridge: YouTube tools on add no window names compared with everything off', added.length === 0, json(added));
-    const sieveNames = withTools.filter((n) => /sieve/i.test(n) && !['__lastSieveSettings', '__sieveDo'].includes(n));
+    const bare = await launch({ extension: false, extraArgs: ['--autoplay-policy=no-user-gesture-required'] });
+    let clean;
+    try {
+      const p = await bare.ctx.newPage();
+      await p.goto(`${t.base}/watch?v=sieveTest05&fixture=watch`, { waitUntil: 'load' });
+      await sleep(500);
+      clean = await names(p);
+    } finally {
+      await bare.ctx.close().catch(() => {});
+    }
+    // The recorder is set only when Sieve answers; YouTube declares ytInitialPlayerResponse itself (the fixture does not).
+    const allowed = ['__lastSieveSettings', 'ytInitialPlayerResponse'];
+    const added = Object.fromEntries(['keys', 'own'].map((k) => [k, withSieve[k].filter((n) => !clean[k].includes(n) && !allowed.includes(n))]));
+    check('bridge: Sieve adds no window names (keys or own properties) compared with the same fixture without Sieve', added.keys.length + added.own.length === 0, json(added));
+    const sieveNames = withSieve.own.filter((n) => /sieve/i.test(n) && !['__lastSieveSettings', '__sieveDo'].includes(n));
     check('bridge: the page has no sieve-named globals beyond the fixture recorders', sieveNames.length === 0, json(sieveNames));
+
+    for (const url of [`https://m.youtube.com:${t.servers.httpsPort}/yt/watch.html`, `https://www.youtube-nocookie.com:${t.servers.httpsPort}/yt/watch.html`]) {
+      const p = await t.ctx.newPage();
+      p.on('pageerror', (e) => t.errors.push(e.message));
+      await p.goto(url, { waitUntil: 'load' });
+      await sleep(300);
+      const got = await p.evaluate(async (m) => {
+        let replied = false;
+        document.addEventListener('sieve-yt-settings', () => (replied = true));
+        document.dispatchEvent(new CustomEvent('sieve-yt-hello'));
+        await new Promise((r) => setTimeout(r, 300));
+        return { marks: performance.getEntriesByName(m).length, replied, recorded: window.__lastSieveSettings ?? null, attr: document.documentElement.hasAttribute('sieve-yt') };
+      }, MARK);
+      check(`bridge: ${new URL(url).hostname} (not www.youtube.com or an embed) gets no YouTube tools: no mark, no settings, a hello unanswered`, got.marks === 0 && !got.replied && got.recorded === null && !got.attr, json(got));
+      await p.close();
+    }
 
     const host = await t.ctx.newPage();
     host.on('pageerror', (e) => t.errors.push(e.message));

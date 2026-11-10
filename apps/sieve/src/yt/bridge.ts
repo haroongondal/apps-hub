@@ -2,8 +2,8 @@ import { EVENTS, mainSettings, readMainState, ytPage, type MainCommand, type Mai
 import { validateYouTube, YOUTUBE_KEY, type YouTubeSettings } from '@apps-hub/sieve-core/src/youtube-settings.ts';
 import { NAV } from './selectors.ts';
 
-// inspected 2026-11-10, Chrome for Testing 149.0.7827.55 headless, local watch fixture: an isolated-world mark at document_start is in the main world's
-// performance.getEntriesByName (one timeline, so no <html> attribute fallback), and headless records first-paint and first-contentful-paint.
+// inspected 2026-11-10, local watch fixture (not youtube.com, so no sign-in), Chrome for Testing 149.0.7827.55 headless: an isolated-world mark at
+// document_start is in the main world's performance.getEntriesByName (no <html> attribute fallback); headless records first-paint and first-contentful-paint.
 export const APPLIED_MARK = 'sieve-yt-applied';
 
 type SettingsCb = (y: YouTubeSettings, on: boolean) => void;
@@ -21,7 +21,7 @@ export function feature(name: string, init: () => void): void {
   } catch (e) {
     if (off.has(name)) return;
     off.add(name);
-    console.warn(`Sieve: ${name} is off on this page`, e);
+    console.warn('Sieve: %s is off on this page', name, e);
   }
 }
 
@@ -40,6 +40,7 @@ export function onSettings(cb: SettingsCb): void {
   if (current) safely(cb, current, current.on);
 }
 
+// Runs twice on a hard load (first settings, then YouTube's own hard-load NAV.finish), so callbacks must be idempotent.
 export function onNavigate(cb: (p: YtPage) => void): void {
   navCbs.push(cb);
 }
@@ -99,12 +100,14 @@ function apply(raw: unknown): void {
   if (first) for (const cb of navCbs) safely(cb, currentPage());
 }
 
-export const startBridge = (youtube: unknown): void => apply(youtube);
+export function startBridge(youtube: unknown): void {
+  if (currentPage().kind !== 'other') apply(youtube);
+}
 
 document.addEventListener(EVENTS.hello, tellMain);
 document.addEventListener(EVENTS.state, (e) => {
   const s = readMainState((e as CustomEvent).detail);
-  if (s === null) return;
+  if (s === null || !current) return;
   state = s;
   for (const cb of stateCbs) safely(cb, s);
 });

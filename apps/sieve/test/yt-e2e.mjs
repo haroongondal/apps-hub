@@ -7,7 +7,7 @@ const arg = process.argv.indexOf('--only');
 const only = arg > 0 ? (process.argv[arg + 1] ?? '').split(',').filter(Boolean) : null;
 const modules = await ytModules(only);
 const servers = await startServers();
-const { ctx, sw, id } = await launch({ extraHosts: ['www.youtube-nocookie.com'], extraArgs: ['--autoplay-policy=no-user-gesture-required'] });
+const { ctx, sw, id } = await launch({ extraHosts: ['www.youtube-nocookie.com', 'm.youtube.com'], extraArgs: ['--autoplay-policy=no-user-gesture-required'] });
 const t = { ctx, sw, id, servers, check, errors: [], shots: process.env.SHOTS ?? tmpdir(), base: `https://www.youtube.com:${servers.httpsPort}` };
 try {
   for (const [name, mod] of modules) {

@@ -28,7 +28,13 @@ export function onActionsChanged(cb: () => void): void {
 }
 
 export function notifyActions(): void {
-  for (const cb of changed) cb();
+  for (const cb of changed) {
+    try {
+      cb();
+    } catch (e) {
+      console.error('Sieve: a YouTube feature failed', e);
+    }
+  }
 }
 
 // A shortcut reaches every frame of the tab: the top frame acts on YouTube pages, an embed only while its video plays.

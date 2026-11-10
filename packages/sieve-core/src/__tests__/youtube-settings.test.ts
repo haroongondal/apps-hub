@@ -141,6 +141,9 @@ test('mergeYouTube: deep merge, arrays replaced, version ignored, then validated
   assert.deepEqual(mergeYouTube(a, { experiments: { presets: [] } }).experiments.presets, []);
   assert.equal(mergeYouTube(a, { speed: { default: 2 } }).experiments.presets[0], 'a');
   assert.deepEqual(DEFAULT_YOUTUBE.experiments.presets, []);
+  const cinema = mergeYouTube(DEFAULT_YOUTUBE, { player: { cinema: true } });
+  assert.deepEqual(mergeYouTube(cinema, { player: 'x' }).player, cinema.player, 'a wrong-typed section leaves it unchanged');
+  assert.deepEqual(mergeYouTube(cinema, { player: ['x'] }).player, cinema.player);
 });
 
 function leaves(o: unknown, prefix = ''): string[] {
