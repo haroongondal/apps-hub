@@ -108,7 +108,11 @@ export function lostAccessView(s: LostAccessState, now: number, format: (ms: num
         actions: ['request'],
       };
     case 'waiting':
-      if (s.releaseAt === null) return { title: 'Check your email', body: 'Open the link we emailed you to start the 24-hour wait, then come back here.', actions: [] };
+      if (s.releaseAt === null) return { title: 'Check your email', body: [
+          'Open the link we emailed to the address you set up for email recovery. It starts the 24-hour wait. Then come back here.',
+          'Only open the link if you asked for it from this phone just now. Someone else\'s request email looks the same, and opening it confirms their request.',
+          'If no email arrives within a few minutes, email recovery may not be turned on for this account; use your recovery key instead.',
+        ].join(' '), actions: ['request'] };
       return {
         title: 'Waiting for the 24 hours to pass',
         body: s.releaseAt > now ? `Your vault can be recovered at ${format(s.releaseAt)}, in ${timeLeft(s.releaseAt, now)}. Come back then.` : 'The wait is over. Open this screen again in a moment to continue.',

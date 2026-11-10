@@ -72,10 +72,14 @@ test('lostAccessView tells an unconfirmed claim from a confirmed one', () => {
   const link = lostAccessView({ state: 'waiting', releaseAt: null }, NOW);
   const timed = lostAccessView({ state: 'waiting', releaseAt: NOW + 3 * HOUR }, NOW, () => 'CLOCK');
   assert.match(link.body, /link we emailed/);
+  assert.match(link.body, /address you set up for email recovery/);
+  assert.match(link.body, /Only open the link if you asked for it from this phone just now/);
+  assert.match(link.body, /If no email arrives within a few minutes, email recovery may not be turned on for this account; use your recovery key instead/);
   assert.doesNotMatch(timed.body, /link we emailed/);
   assert.match(timed.body, /about 3 hours/);
   assert.match(timed.body, /CLOCK/);
-  assert.deepEqual(link.actions, []);
+  // An unconfirmed claim can ask for the email again; a confirmed one is counting down and offers nothing.
+  assert.deepEqual(link.actions, ['request']);
   assert.deepEqual(timed.actions, []);
 });
 
