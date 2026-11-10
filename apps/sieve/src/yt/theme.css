@@ -1,0 +1,3 @@
+/* The page's red, from the inspection in theme.ts. --sieve-accent is set beside this text (theme.ts). */
+:root:root:root { --yt-sys-color-baseline--static-brand-red: var(--sieve-accent); --yt-sys-color-baseline--overlay-background-brand: var(--sieve-accent); }
+html .ytp-play-progress, html .ytp-progress-linear-live-buffer { background: var(--sieve-accent); }

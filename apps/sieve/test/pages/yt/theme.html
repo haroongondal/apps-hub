@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en-GB" color-version="v2_0">
+  <head>
+    <meta charset="utf-8" />
+    <title>theme - YouTube</title>
+    <script>
+      // `?dark=1`: a server-rendered dark page, as a profile with YouTube's dark theme gets it (inspection recorded in src/yt/theme.ts).
+      if (new URLSearchParams(location.search).get('dark') === '1') document.documentElement.setAttribute('dark', '');
+    </script>
+    <style>
+      /* The rules the real page has for these items, from the inspection recorded in src/yt/theme.ts. */
+      html { background: #fff; }
+      html[dark] { background: #0f0f0f; }
+      html, [light] { --yt-sys-color-baseline--static-brand-red: #f03; --yt-sys-color-baseline--overlay-background-brand: rgba(225, 0, 45, 0.9); }
+      html[color-version='v2_0'] { --yt-sys-color-baseline--static-brand-red: #f03; --yt-sys-color-baseline--overlay-background-brand: rgba(225, 0, 45, 0.9); }
+      html[color-version='v2_0'][dark] { --yt-sys-color-baseline--static-brand-red: #f03; --yt-sys-color-baseline--overlay-background-brand: rgba(225, 0, 45, 0.9); }
+      .ytp-swatch-background-color { background-color: var(--yt-sys-color-baseline--static-brand-red, #f03); }
+      .ytp-play-progress { display: block; width: 200px; height: 4px; background: linear-gradient(90deg, rgb(255, 0, 51) 80%, rgb(255, 39, 145)); }
+      .ytp-scrubber-button { width: 12px; height: 12px; }
+      .ytp-live-badge::before { content: ''; display: inline-block; width: 6px; height: 6px; background: rgb(117, 117, 117); }
+      .ytp-livebadge-color .ytp-live-badge.ytp-live-badge-is-livehead::before { background: var(--yt-sys-color-baseline--overlay-background-brand, rgba(225, 0, 45, 0.9)); }
+      .ad-interrupting .ytp-play-progress.ytp-swatch-background-color { background: rgb(255, 204, 0); }
+    </style>
+  </head>
+  <body>
+    <script>
+      requestAnimationFrame(() => {
+        window.__darkAtFirstFrame = document.documentElement.hasAttribute('dark');
+      });
+    </script>
+    <div id="movie_player" class="html5-video-player ytp-livebadge-color">
+      <div id="bar" class="ytp-play-progress ytp-swatch-background-color"></div>
+      <div id="scrubber" class="ytp-scrubber-button ytp-swatch-background-color"></div>
+      <button id="badge" class="ytp-live-badge ytp-live-badge-is-livehead">Live</button>
+    </div>
+    <script>
+      if (new URLSearchParams(location.search).get('ad') === '1') document.getElementById('movie_player').classList.add('ad-interrupting');
+    </script>
+  </body>
+</html>

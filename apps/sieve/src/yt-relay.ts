@@ -4,6 +4,7 @@ import './yt/actions.ts';
 import { startBridge } from './yt/bridge.ts';
 import './yt/row.ts';
 import './yt/speed.ts';
+import './yt/theme.ts';
 import './yt/visual.ts';
 
 // By video id: a hover preview or an autoplay prefetch is another video, so the menu names the channel of the page's own one.
