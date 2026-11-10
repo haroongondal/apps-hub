@@ -553,7 +553,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
   - **Local, settings delivery:** `fixture=watch` has one `sieve-yt-applied` mark (or the attribute from Step 1). `player.js` records the last `sieve-yt-settings` detail in `window.__lastSieveSettings`.
   - **Local, live update:** after `setYouTube(t, { speed: { default: 1.5 } })`, without a reload, `__lastSieveSettings.speed.default === 1.5` within 1 s. It is still 1.5 after a reload.
   - **Local, YouTube tools off:** with `youtube.on` false, `__lastSieveSettings.on === false`. With `settings.enabled` false and `youtube.on` true, `__lastSieveSettings.on` stays `true`.
-  - **Local, commands while off:** with `youtube.on` false, `yt-command` `loop` leaves `video.loop` false.
+  - **Local, commands while off:** no action has a handler yet in this task, so `runAction` forwards every id to the main world as a `sieve-yt-do` event. `player.js` records each `sieve-yt-do` detail in `window.__sieveDo` (an array), as it records `__lastSieveSettings`. With `youtube.on` true, the worker's `yt-command` `speed-default` adds `{ action: 'speed-default' }` to `__sieveDo`. With `youtube.on` false, the same message leaves `__sieveDo` empty.
   - **Local, forged events:**
     - The page dispatches `sieve-yt-state` with a 5,000-character title and `sieve-yt-hello` 100 times: there are no page errors, and `chrome.storage.local.get('youtube')` is unchanged.
     - The page dispatches `sieve-yt-do` with `{ action: 'boost' }`: storage is unchanged.
@@ -613,7 +613,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
     - a test `MutationObserver` on the anchor's parent saw 0 removals of the host
     - the host's height, sampled in every animation frame during the navigation, never hit 0
   - **Local, re-render:** `__rerenderBelow()` puts the row back within 100 ms, with `data-mounts === '2'` and the same `window.__row`.
-  - **Local, tools off:** with `youtube.on` false the row host is `hidden` (and not mounted on a hard load), and turning it back on shows the same element.
+  - **Local, tools off:** with `youtube.on` false on a hard load there is no row host. Turning it on mounts one. Turning it off again sets `hidden` on that same host, and turning it on again removes `hidden` from the same element.
   - **Local, icon button:** a test-registered button with `icon` renders an SVG, has no text label and keeps its aria-label.
   - **Local, watch to home and back:** `navigate(page, 'home')` then a watch id shows the row again as the same element.
   - **Local, missing anchor or video:** `noanchor=1` gives no row and no page errors. `state=unplayable` gives a row and no page errors.
@@ -862,6 +862,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
   - **Local, bad time:** "From" `1:5` shows "Enter a time like 1:05 or 75.".
   - **Local, typing:** typing `1` in "From" leaves the fixture's `__keys` empty.
   - **Local, shortcut path:** `yt-command` `loop` toggles the loop.
+  - **Local, tools off:** with `youtube.on` false, `yt-command` `loop` leaves `video.loop` false.
   - **Local, reversed playlist:** with `list=PLsieve&index=3` and reversed on, near the end `ytCalls` has the recorded previous-item call and no next-item call. At the first item there is no call.
   - **Local, stop:** "Stop" makes the recorded call.
   - **Local, cog items:** "Reverse playlist" shows in the cog menu only with `list`.
@@ -896,7 +897,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
     2. It draws a canvas at `videoWidth × videoHeight`, with `ctx.filter` set to the video's computed `filter` and the flips taken from `flipFromMatrix` of its computed `transform`, so the picture matches the screen.
     3. `canvas.toBlob('image/png')`. A `SecurityError` shows the toast "Sieve can't take a screenshot of this video."
     4. It reads the blob as a data URL and sends `{ type: 'yt-screenshot', dataUrl, title: mainState()?.title ?? '', seconds: video.currentTime }`. On success the toast says "Screenshot saved". On failure it says "Sieve couldn't save the screenshot: " followed by the message.
-  - Row button `pip`, just after `screenshot`: `label: 'Picture-in-picture'` (the tooltip; the `icon`, an inline SVG with no emoji, replaces the visible text), aria-label "Picture-in-picture", `pressed` when `document.pictureInPictureElement` is the video. Action `pip`: it calls `video.requestPictureInPicture()`, or `document.exitPictureInPicture()` when PiP is already open. `notifyActions()` runs on the video's `enterpictureinpicture` and `leavepictureinpicture` events (one listener per element). A `NotAllowedError` shows the toast "Chrome only opens picture-in-picture from a click on the page. Use the Picture-in-picture button under the video." In an embed frame (no row) the toast reads "Chrome only opens picture-in-picture from a click on the page. Use the video's own picture-in-picture control."
+  - Row button `pip`, just after `screenshot`: `label: 'Picture-in-picture'` (the tooltip; the `icon`, an inline SVG with no emoji, replaces the visible text), aria-label "Picture-in-picture", `pressed` when `document.pictureInPictureElement` is the video. Action `pip`: it calls `video.requestPictureInPicture()`, or `document.exitPictureInPicture()` when PiP is already open. `notifyActions()` runs on the video's `enterpictureinpicture` and `leavepictureinpicture` events (one listener per element). A `NotAllowedError` shows the toast "Chrome only opens picture-in-picture from a click on the page. Use the Picture-in-picture button under the video." In an embed frame there is no row, so the error is not shown.
 - Worker: `yt-screenshot` checks `isPngDataUrl(dataUrl, 64 * 1024 * 1024)`, else it answers `{ ok: false, message: 'the picture is not a PNG or is too big' }`. Then it calls `chrome.downloads.download({ url: dataUrl, filename: 'Sieve/' + screenshotName(String(title), Number(seconds) || 0), conflictAction: 'uniquify', saveAs: false })` and answers `{ ok: true }` or the error's message. Chrome creates the `Sieve` subfolder in Downloads, so the file lands at `Downloads/Sieve/<title> <time>.png`. `screenshotName` removes `/`, so a title cannot change the folder. These downloads have `byExtensionId === chrome.runtime.id`, which phase 3's take-over must skip.
 
 - [ ] **Step 1: Inspect PiP and record the answer in `capture.ts`.** In the signed-out watch page, check:
