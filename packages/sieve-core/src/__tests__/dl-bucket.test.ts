@@ -77,18 +77,37 @@ test('simulated drain of 1,000,000 bytes at 100,000 per second', () => {
   assert.ok(clock.now >= 9_300 && clock.now <= 9_700, `clock ${clock.now}`);
 });
 
-test('two consumers sharing one bucket', () => {
-  const one = { now: 0 };
-  const b1 = makeBucket(100_000, 0);
-  for (let i = 0; i < 20; i++) drain(b1, one, 50_000);
-
-  const two = { now: 0 };
-  const b2 = makeBucket(100_000, 0);
-  for (let i = 0; i < 10; i++) {
-    drain(b2, two, 50_000); // consumer A
-    drain(b2, two, 50_000); // consumer B
+// Two consumers alternate single take() calls on the same bucket, each with its own wake-up time;
+// when both wait, the clock jumps to the earlier wake-up. `own` gives each its own bucket instead.
+function interleave(own: boolean) {
+  const shared = makeBucket(100_000, 0);
+  const cs = [0, 1].map(() => ({ b: own ? makeBucket(100_000, 0) : shared, remaining: 500_000, wakeAt: 0 }));
+  let now = 0;
+  let granted = 0;
+  while (cs.some((c) => c.remaining > 0)) {
+    const live = cs.filter((c) => c.remaining > 0);
+    const ready = live.filter((c) => c.wakeAt <= now);
+    if (!ready.length) {
+      now = Math.min(...live.map((c) => c.wakeAt));
+      continue;
+    }
+    for (const c of ready) {
+      const g = take(c.b, c.remaining, now);
+      c.remaining -= g.grant;
+      granted += g.grant;
+      c.wakeAt = now + g.waitMs;
+      if (!own) assert.ok(granted <= 65_536 + (100_000 * now) / 1000, `granted ${granted} at ${now}`);
+    }
   }
-  assert.ok(Math.abs(two.now - one.now) <= 20, `${two.now} vs ${one.now}`);
+  return now;
+}
+
+test('two consumers sharing one bucket', () => {
+  const end = interleave(false);
+  assert.ok(end >= 9_300 && end <= 9_700, `clock ${end}`);
+  // with a bucket each the same loop would finish near 4,345 ms, so the shared limit is what is tested
+  const apart = interleave(true);
+  assert.ok(apart < 4_700, `clock ${apart}`);
 });
 
 test('meter worked example, empty meter, span clamp, custom window, time going backwards', () => {
@@ -112,5 +131,19 @@ test('meter worked example, empty meter, span clamp, custom window, time going b
 
   const back = makeMeter(1000);
   addBytes(back, 10, 2000);
-  assert.doesNotThrow(() => rate(back, 500));
+  assert.equal(rate(back, 500), 10);
+
+  // the window edge: a sample exactly windowMs old still counts, one older does not
+  const edge = makeMeter(0);
+  addBytes(edge, 1000, 0);
+  assert.ok(rate(edge, 5000) > 0);
+  assert.equal(rate(edge, 5001), 0);
+});
+
+test('take grants whole bytes when the refill is fractional', () => {
+  const b = makeBucket(333, 0);
+  take(b, 1_000_000, 0); // drain the burst
+  const g = take(b, 5_000, 3_500); // 1165.5 tokens
+  assert.equal(g.grant, 1_165);
+  assert.ok(Number.isInteger(g.grant));
 });
