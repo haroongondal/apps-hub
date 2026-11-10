@@ -27,8 +27,7 @@ feature('loop', () => {
     if (v && !wired.has(v)) {
       wired.add(v);
       v.addEventListener('timeupdate', () => {
-        const ad = document.querySelector(SEL.player)?.classList.contains('ad-showing');
-        const to = v.loop && !ad ? loopSeek(v.currentTime, part, v.duration) : null;
+        const to = v.loop && part && !document.querySelector(SEL.player)?.classList.contains('ad-showing') ? loopSeek(v.currentTime, part, v.duration) : null;
         if (to !== null) v.currentTime = to;
       });
     }

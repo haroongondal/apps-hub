@@ -118,6 +118,19 @@ export async function local(t) {
     check('loop: when the video ends before the move loads, YouTube\'s own advance is stopped (one playVideoAt 1, no nextVideo)', json(moves.map((c) => c.args)) === '[[1]]' && (await ytCalls(page, 'nextVideo')).length === 0, json(await ytCalls(page)));
     await page.close();
 
+    page = await openYt(t, '/watch?v=sieveTest03&list=PLsieve&index=3&autoplay=0&lag=8000&autonav=1');
+    await ready(page);
+    await cog(page).click();
+    await until(() => reverse(page).isVisible(), 2000);
+    await reverse(page).click();
+    await play(page);
+    await until(async () => (await ytCalls(page, 'playVideoAt')).length > 0, 8000);
+    await page.evaluate((s) => document.querySelector(s).pause(), SEL.video);
+    await sleep(3300);
+    await play(page);
+    check('loop: when the move does nothing, an end 3 s later is not swallowed (the forward advance runs)', await until(async () => (await ytCalls(page, 'nextVideo')).length === 1, 4000), json((await ytCalls(page)).map((c) => c.name)));
+    await page.close();
+
     page = await openYt(t, '/watch?v=sieveTest01&list=PLsieve&index=1&autoplay=0');
     await ready(page);
     await cog(page).click();
@@ -174,7 +187,7 @@ export async function live(t) {
     const near = await state();
     if (near && near.t < 3) check('live loop: with the loop on, a seek to the last second is back near the start 3 s later', true);
     else if (near && near.rs >= 3) check('live loop: with the loop on, a seek to the last second is back near the start 3 s later', false, json(near));
-    else console.log(`INCONCLUSIVE  live loop: 3.5 s after the seek to the last second the player stalled; ${json(near)}`);
+    else console.log(`INCONCLUSIVE  live loop: 3.5 s after the seek to the last second ${near ? 'the player stalled' : 'the player could not be read'}; ${json(near)}`);
     await loopButton(page).click();
     check('live loop: clicking "Loop" again turns it off', await until(async () => (await state())?.loop === false, 2000), json(await state()));
 

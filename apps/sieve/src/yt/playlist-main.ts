@@ -5,6 +5,7 @@ import { NAV } from './selectors.ts';
 // inspected 2026-11-10, signed out, Chrome for Testing 149.0.7827.55 (26-item public playlist): getPlaylistIndex() is 0-based (the address's index= is 1-based); playVideoAt(i) moves to item i as an in-app navigation; stopVideo() leaves state 5, #movie_player.unstarted-mode, a black player with no src, and playVideo() restarts at 0:00.
 // Same run: at a new video's loadstart getPlaylist() is null and getPlaylistIndex() is -1 (both set by loadedmetadata, so the playlist is read there). NOT measured: playVideoAt 0.5 s before the end vs YouTube's own advance, because seeks and playback past about 45 s stall in the test profile.
 const REMAINING_S = 0.6;
+const SWALLOW_MS = 3000;
 const listen = EventTarget.prototype.addEventListener;
 const apply = Reflect.apply;
 
@@ -14,6 +15,7 @@ feature('stop and reversed playlist', () => {
   let reversed = false;
   let reversedFor: string | null = null;
   let advanced = false;
+  let movedAt = 0;
 
   function isReversed(): boolean {
     if (reversed && ytPage(location.href).list !== reversedFor) reversed = false;
@@ -51,6 +53,7 @@ feature('stop and reversed playlist', () => {
   };
 
   onVideo(() => (advanced = false));
+  apply(listen, document, ['loadstart', safe((e) => (e.target as HTMLVideoElement).currentTime < 1 && inPlayer(e.target) && (advanced = false)), true]);
   apply(listen, NAV.target === 'window' ? window : document, [NAV.finish, safe(sendPlaylist)]);
   apply(listen, document, ['loadedmetadata', safe(sendPlaylist), true]);
   apply(listen, document, [
@@ -62,10 +65,11 @@ feature('stop and reversed playlist', () => {
       const index = p.getPlaylistIndex();
       if (index <= 0) return;
       advanced = true;
+      movedAt = performance.now();
       p.playVideoAt(index - 1);
     }),
     true,
   ]);
-  // The video can still end before the move has loaded; YouTube's own advance would then go forward and undo it.
-  apply(listen, document, ['ended', safe((e) => advanced && !(e.target as HTMLVideoElement).loop && inPlayer(e.target) && e.stopImmediatePropagation()), true]);
+  // Assumed (fixture model), not measured on the real page: the video can end before the move has loaded, and YouTube's own advance would then undo it.
+  apply(listen, document, ['ended', safe((e) => advanced && performance.now() - movedAt < SWALLOW_MS && !(e.target as HTMLVideoElement).loop && inPlayer(e.target) && e.stopImmediatePropagation()), true]);
 });
