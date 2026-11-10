@@ -1,5 +1,7 @@
 package expo.modules.strongroomvault.core
 
+import java.security.MessageDigest
+
 // keyUnseen: an enrol rotated the recovery key and the owner hasn't confirmed seeing the new one (a crash mid-PUT loses it).
 data class RecoveryLocal(
   val escrowBlob: String? = null,
@@ -7,7 +9,16 @@ data class RecoveryLocal(
   val lostClaim: String? = null,
   val lostBlob: String? = null,
   val keyUnseen: Boolean = false,
+  val lostRequestedAt: Long? = null,
 )
+
+sealed interface LostState {
+  object None : LostState
+
+  data class Waiting(val releaseAt: Long?) : LostState
+
+  object Ready : LostState
+}
 
 interface RecoverySettings {
   fun load(): RecoveryLocal
@@ -29,6 +40,8 @@ data class EmailRecoveryStatus(
 
 private const val MAX_EMAIL = 320
 private val EMAIL = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$") // the Worker's escrowOf check
+private const val CLAIM_BYTES = 20
+private const val COOLDOWN_MS = 3_600_000L // the Worker ignores a new claim for an hour after the last one, yet still answers ok
 
 class EmailRecovery(
   private val sync: SyncSession,
@@ -108,4 +121,72 @@ class EmailRecovery(
     val waiting = r.escrowBlob != null && !r.confirmed
     return EmailRecoveryStatus(true, true, remote.escrow && !waiting, waiting, if (remote.pending) PendingRecovery(remote.releaseAt) else null, r.confirmed && !remote.escrow, r.keyUnseen)
   }
+
+  /** Needs no account, token or unlocked vault. Refuses ("request alive") while the stored claim is under an hour old or the server calls it confirmed or ready; a failed call keeps it. */
+  @Synchronized fun lostRequest() {
+    val t = transport ?: throw IllegalStateException("sync unavailable")
+    val r = settings.load()
+    if (r.lostClaim != null) {
+      if (r.lostRequestedAt?.let { clock() - it in 0 until COOLDOWN_MS } == true) throw IllegalStateException("request alive")
+      val alive = when (val s = t.lostRelease(r.lostClaim)) {
+        is LostRelease.Ready -> true
+        is LostRelease.Waiting -> s.releaseAt != null
+      }
+      if (alive) throw IllegalStateException("request alive")
+    }
+    val claim = Crypto.randomBytes(CLAIM_BYTES)
+    try {
+      t.lostRequest(Crypto.tokenHash(claim))
+      settings.save(r.copy(lostClaim = SyncWire.toBase64(claim), lostRequestedAt = clock(), lostBlob = null))
+    } finally {
+      claim.fill(0)
+    }
+  }
+
+  /** Waiting(null) also means a claim the Worker no longer holds (cancelled, replaced, dropped with the escrow); [lostRequest] replaces it after the hour. */
+  @Synchronized fun lostCheck(): LostState {
+    val r = settings.load()
+    val claim = r.lostClaim ?: return LostState.None
+    val t = transport ?: throw IllegalStateException("sync unavailable")
+    return when (val s = t.lostRelease(claim)) {
+      is LostRelease.Ready -> LostState.Ready.also { settings.save(r.copy(lostBlob = s.blob)) }
+      is LostRelease.Waiting -> LostState.Waiting(s.releaseAt).also { if (r.lostBlob != null) settings.save(r.copy(lostBlob = null)) } // the server's answer wins over a blob in hand
+    }
+  }
+
+  @Synchronized fun lostOpen(codeText: String, newPassword: CharArray): Boolean {
+    val blob = settings.load().lostBlob?.let(SyncWire::fromBase64) ?: throw IllegalStateException("not ready")
+    val code = RecoveryKey.parse(codeText) ?: return false
+    val keys = try {
+      Escrow.open(code, blob)
+    } finally {
+      code.fill(0)
+    } ?: return false
+    try {
+      val held = secrets.get(SyncSecret.ACCOUNT_KEY)
+      if (held != null) check(held.sameAs(keys.accountKey)) { "different account" } // recover would take the Keystore's key over the opened one
+      sync.recover(keys.recoveryKey, newPassword, keys.accountKey)
+    } finally {
+      keys.recoveryKey.fill(0)
+      keys.accountKey.fill(0)
+    }
+    settings.save(settings.load().copy(lostClaim = null, lostBlob = null, lostRequestedAt = null))
+    return true
+  }
+
+  @Synchronized fun cancelLost() {
+    val t = transport?.takeIf { sync.isOn } ?: throw IllegalStateException("sync off")
+    val token = secrets.get(SyncSecret.READ_TOKEN) ?: throw IllegalStateException("sync off")
+    try {
+      t.lostCancel(token)
+    } finally {
+      token.fill(0)
+    }
+  }
+}
+
+private fun ByteArray.sameAs(other: ByteArray) = try {
+  MessageDigest.isEqual(this, other)
+} finally {
+  fill(0)
 }
