@@ -54,8 +54,9 @@ export async function sendToEngine<T = unknown>(message: { type: `dl-eng-${strin
 }
 
 export async function addRecords(items: AddItem[]): Promise<{ ids: string[] } | null> {
-  const extras = items.map((i) => ({ url: i.url, finalUrl: i.probed?.finalUrl, referrer: i.referrer ?? '' }));
+  let extras: { url: string; finalUrl?: string; referrer: string }[] = [];
   try {
+    extras = items.map((i) => ({ url: i.url, finalUrl: i.probed?.finalUrl, referrer: i.referrer ?? '' }));
     await syncRecordRules(extras);
     const reply = await sendToEngine<{ ids?: string[] } | undefined>({ type: 'dl-eng-add', items });
     return Array.isArray(reply?.ids) ? { ids: reply.ids } : null;

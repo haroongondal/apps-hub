@@ -9,9 +9,9 @@ type Listener = (message: unknown, sender: unknown, reply: (r: unknown) => void)
 type Change = (changes: Record<string, { newValue?: unknown }>, area: string) => void;
 
 // An in-memory `chrome`: slow storage, a runtime whose sendMessage the test scripts, and an offscreen API that records createDocument.
-function setup(options: { documents?: number; sendMessage?: (m: unknown) => Promise<unknown>; createDocument?: () => Promise<void>; setFails?: boolean } = {}) {
+function setup(options: { rules?: (n: number) => Promise<void>; documents?: number; sendMessage?: (m: unknown) => Promise<unknown>; createDocument?: () => Promise<void>; setFails?: boolean } = {}) {
   const store = new Map<string, unknown>();
-  const calls = { create: [] as unknown[], send: [] as unknown[], get: 0 };
+  const calls = { create: [] as unknown[], send: [] as unknown[], get: 0, rules: [] as { addRules?: unknown[] }[] };
   const changed: Change[] = [];
   const listeners: Listener[] = [];
   let documents = options.documents ?? 0;
@@ -43,7 +43,12 @@ function setup(options: { documents?: number; sendMessage?: (m: unknown) => Prom
       },
       onMessage: { addListener: (cb: Listener) => void listeners.push(cb) },
     },
-    declarativeNetRequest: { updateSessionRules: async () => {} },
+    declarativeNetRequest: {
+      updateSessionRules: async (o: { addRules?: unknown[] }) => {
+        calls.rules.push(o);
+        await options.rules?.(calls.rules.length);
+      },
+    },
     offscreen: {
       createDocument: async (p: unknown) => {
         calls.create.push(p);
@@ -159,6 +164,24 @@ test('addRecords returns null when sendToEngine rejects, and the ids when the en
   assert.deepEqual(await (await fresh<Link>('engine-link.ts')).addRecords([{ url: 'https://x.test/a', source: 'manual' }]), { ids: ['x'] });
   setup({ sendMessage: async () => ({ error: 'TIMEOUT' }) });
   assert.equal(await (await fresh<Link>('engine-link.ts')).addRecords([{ url: 'https://x.test/a', source: 'manual' }]), null);
+});
+
+test('addRecords drops its Referer rules on every path: ok, null reply, engine rejects, rule sync fails', async () => {
+  const items = [{ url: 'https://x.test/a', referrer: 'https://r.test/', source: 'manual' as const }];
+  const cases = {
+    ok: { sendMessage: async () => ({ ids: ['x'] }) },
+    'null reply': { sendMessage: async () => ({ error: 'TIMEOUT' }) },
+    'engine rejects': { sendMessage: () => Promise.reject(new Error('Extension context invalidated.')) },
+    'sync fails': { rules: async (n: number) => { if (n === 1) throw new Error('bad rule'); } },
+  };
+  const rules = (await import('../dl/net-rules.ts')) as typeof import('../dl/net-rules.ts');
+  for (const [name, options] of Object.entries(cases)) {
+    const t = setup(options);
+    await (await fresh<Link>('engine-link.ts')).addRecords(items);
+    assert.equal(t.calls.rules[0].addRules?.length, 1, `${name}: the rule was installed for the add`);
+    await rules.syncRecordRules([]);
+    assert.deepEqual(t.calls.rules.at(-1)!.addRules, [], `${name}: nothing stays pending`);
+  }
 });
 
 test('fromExtensionPage accepts the extension page and refuses a web page, no url and another extension', async () => {

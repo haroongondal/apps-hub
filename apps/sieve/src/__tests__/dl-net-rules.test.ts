@@ -46,11 +46,16 @@ test('recordRules stops at 1000 rules', () => {
   assert.equal(recordRules(two, ID).length, 1000);
 });
 
-function fakeChrome() {
+function fakeChrome(onCall?: (n: number) => Promise<void>) {
   const calls: { removeRuleIds?: number[]; addRules?: chrome.declarativeNetRequest.Rule[] }[] = [];
   (globalThis as unknown as Record<string, unknown>).chrome = {
     runtime: { id: ID },
-    declarativeNetRequest: { updateSessionRules: async (o: (typeof calls)[number]) => void calls.push(o) },
+    declarativeNetRequest: {
+      updateSessionRules: async (o: (typeof calls)[number]) => {
+        calls.push(o);
+        await onCall?.(calls.length);
+      },
+    },
   };
   return calls;
 }
@@ -107,4 +112,32 @@ test('two overlapping syncRecordRules calls keep both rules, and a dropped extra
   m.dropPendingRules(a);
   await m.syncRecordRules([]);
   assert.deepEqual(calls.at(-1)!.addRules!.map((r) => r.condition.urlFilter), ['|https://x/b|']);
+});
+
+const urls = (c: { addRules?: chrome.declarativeNetRequest.Rule[] }) => c.addRules!.map((r) => r.condition.urlFilter);
+
+test('a failed sync rejects its caller, runs the next one anyway, and keeps its extras pending until dropped', async () => {
+  const calls = fakeChrome(async (n) => {
+    if (n === 1) throw new Error('bad rule');
+  });
+  const m = (await import(`../dl/net-rules.ts?fresh=${4}`)) as typeof import('../dl/net-rules.ts');
+  const a = [{ url: 'https://x/a', referrer: 'https://r/' }];
+  await assert.rejects(m.syncRecordRules(a), /bad rule/);
+  await m.syncRecordRules([{ url: 'https://x/b', referrer: 'https://r/' }]);
+  assert.deepEqual(urls(calls.at(-1)!), ['|https://x/a|', '|https://x/b|']);
+});
+
+test('syncs run one at a time', async () => {
+  let inFlight = 0;
+  let most = 0;
+  const calls = fakeChrome(async () => {
+    most = Math.max(most, ++inFlight);
+    await new Promise((r) => setTimeout(r, 20));
+    inFlight--;
+  });
+  const m = (await import(`../dl/net-rules.ts?fresh=${5}`)) as typeof import('../dl/net-rules.ts');
+  await Promise.all([m.syncRecordRules([{ url: 'https://x/a', referrer: 'https://r/' }]), m.syncRecordRules([{ url: 'https://x/b', referrer: 'https://r/' }])]);
+  assert.equal(most, 1);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(urls(calls[1]), ['|https://x/a|', '|https://x/b|']);
 });
