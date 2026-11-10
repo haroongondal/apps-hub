@@ -164,15 +164,16 @@ test('validatorOf prefers a strong ETag, ignores weak ones, then Last-Modified',
 test('factsFromResponse copies the headers and the final URL', () => {
   const h = new Headers({
     'content-range': 'bytes 0-0/10', 'content-encoding': 'identity', 'content-type': 'application/zip', etag: '"e"',
-    'last-modified': 'L', 'content-disposition': 'attachment; filename=a.zip', 'content-length': '1',
+    'last-modified': 'L', 'content-disposition': 'attachment; filename=a.zip', 'content-length': '1', 'retry-after': '7',
   });
   assert.deepEqual(factsFromResponse({ status: 206, url: 'https://h/final', headers: h }), {
     status: 206, url: 'https://h/final', contentRange: 'bytes 0-0/10', contentEncoding: 'identity', mime: 'application/zip',
-    etag: '"e"', lastModified: 'L', disposition: 'attachment; filename=a.zip', contentLength: '1',
+    etag: '"e"', lastModified: 'L', disposition: 'attachment; filename=a.zip', contentLength: '1', retryAfter: '7',
   });
   const bare = factsFromResponse({ status: 200, url: 'u', headers: new Headers() });
   assert.equal(bare.contentRange, null);
   assert.equal(bare.etag, null);
+  assert.equal(bare.retryAfter, null);
   assert.equal(bare.error, undefined);
 });
 test('factsFromError has the error, status 0 and no headers', () => {
@@ -181,6 +182,7 @@ test('factsFromError has the error, status 0 and no headers', () => {
   assert.equal(f.status, 0);
   assert.equal(f.url, 'https://h/a');
   assert.equal(f.contentRange, null);
+  assert.equal(f.retryAfter, undefined);
 });
 test('parseRangeTotal', () => {
   assert.equal(parseRangeTotal('bytes 0-0/12345'), 12345);

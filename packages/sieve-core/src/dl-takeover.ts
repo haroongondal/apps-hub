@@ -11,6 +11,7 @@ export interface ProbeFacts {
   status: number; url: string;                     // url is the final URL after redirects
   contentRange: string | null; contentEncoding: string | null; mime: string | null;
   etag: string | null; lastModified: string | null; disposition: string | null; contentLength: string | null;
+  retryAfter?: string | null;                      // the Retry-After header; Task 3.9 honours it for 429 and 503 back-off
 }
 
 export type LeaveReason = 'probe-failed' | 'no-range' | `status-${number}` | 'encoded' | 'no-size' | 'size-differs' | 'type-differs' | 'no-space';
@@ -76,6 +77,7 @@ export function factsFromResponse(r: { status: number; url: string; headers: { g
   return {
     status: r.status, url: r.url, contentRange: h('content-range'), contentEncoding: h('content-encoding'), mime: h('content-type'),
     etag: h('etag'), lastModified: h('last-modified'), disposition: h('content-disposition'), contentLength: h('content-length'),
+    retryAfter: h('retry-after'),
   };
 }
 
