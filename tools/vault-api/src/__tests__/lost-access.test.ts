@@ -456,6 +456,53 @@ test('a released request stays put during its grace period, but a fresh request 
   assert.deepEqual(oldClaimNowRefused, { status: 200, body: { state: 'waiting', releaseAt: null } });
 });
 
+// F1 reopened: a stale (losing) PUT must leave the escrow and lost_request completely untouched, not just skip the account row.
+test('a stale PUT that loses the rev race is rejected and leaves the winner\'s escrow untouched (loser carries its own escrow)', async () => {
+  const w = world();
+  await setUp(w);
+  await enroll(w, 'owner@example.com', 'blob-A'); // rev 1 -> 2, escrow = blob-A
+  assert.deepEqual(w.escrowRow(), { email: 'owner@example.com', blob: btoa('blob-A') });
+
+  const stale = await w.call('PUT', '/v1/account', LOGIN, {
+    ...account({ recoveryHash: tokenHash(tok(50)) }),
+    ifRev: 1, // stale: the account is already at rev 2
+    escrow: { email: 'attacker-or-stale@example.com', blob: btoa('blob-B'), code: 'STALE-CODE' },
+  });
+  assert.equal(stale.status, 409);
+  assert.deepEqual(w.escrowRow(), { email: 'owner@example.com', blob: btoa('blob-A') });
+});
+
+test('a stale PUT that loses the rev race is rejected and leaves the escrow and lost_request untouched (loser is a plain recovery rotation)', async () => {
+  const w = world();
+  await setUp(w);
+  await enroll(w, 'owner@example.com', 'blob-A'); // rev 1 -> 2
+  await w.call('POST', '/v1/lost/request', undefined, { claimHash: toBase64(randomBytes(32)) });
+  const pendingBefore = w.lostRow();
+  assert.ok(pendingBefore);
+
+  const stale = await w.call('PUT', '/v1/account', LOGIN, {
+    ...account({ recoveryHash: tokenHash(tok(50)) }), // a rotation, no escrow of its own
+    ifRev: 1, // stale
+  });
+  assert.equal(stale.status, 409);
+  assert.deepEqual(w.escrowRow(), { email: 'owner@example.com', blob: btoa('blob-A') });
+  assert.deepEqual(w.lostRow(), pendingBefore);
+});
+
+test('a normal, non-conflicting PUT still atomically updates the account and the escrow together', async () => {
+  const w = world();
+  await setUp(w);
+  const recoveryA = await enroll(w, 'owner@example.com', 'blob-A'); // rev 1 -> 2
+  const recoveryB = tok(60);
+  const r = await w.call('PUT', '/v1/account', recoveryA, {
+    ...account({ recoveryHash: tokenHash(recoveryB) }),
+    ifRev: 2, // correct, current rev
+    escrow: { email: 'owner@example.com', blob: btoa('blob-C'), code: 'FRESH-CODE' },
+  });
+  assert.deepEqual(r, { status: 200, body: { headerRev: 3 } });
+  assert.deepEqual(w.escrowRow(), { email: 'owner@example.com', blob: btoa('blob-C') });
+});
+
 test('an abandoned confirmed request (never released) is still replaceable only after the grace period counted from release_at', async () => {
   const w = world();
   await setUp(w);

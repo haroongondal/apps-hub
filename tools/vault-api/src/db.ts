@@ -38,32 +38,35 @@ export async function createAccount(db: Db, a: AccountCreate, escrow?: EscrowSet
 }
 
 // One batch (one transaction): an escrow write that fails rolls back the header/hash update too, rather than leaving them split.
+// The escrow statements run BEFORE the account UPDATE and share its exact precondition (header_rev = ifRev, read pre-write): a stale
+// ifRev then leaves the escrow and the account row equally untouched, instead of checking two conditions that can disagree.
 export async function updateAccount(db: Db, a: Omit<AccountUpdate, 'ifRev'>, ifRev: number, escrow: EscrowChange = { clear: false, set: null }): Promise<number | null> {
-  const newRev = ifRev + 1;
-  const moved = 'EXISTS (SELECT 1 FROM account WHERE id = 1 AND header_rev = ?)';
-  const stmts: Stmt[] = [
-    db
-      .prepare(
-        'UPDATE account SET header = ?, header_rev = header_rev + 1, login_hash = ?, recovery_hash = COALESCE(?, recovery_hash), read_hash = ? WHERE id = 1 AND header_rev = ? RETURNING header_rev AS headerRev',
-      )
-      .bind(a.header, a.loginHash, a.recoveryHash ?? null, a.readHash, ifRev),
-  ];
+  const unmoved = 'EXISTS (SELECT 1 FROM account WHERE id = 1 AND header_rev = ?)';
+  const stmts: Stmt[] = [];
   if (escrow.clear) {
-    stmts.push(db.prepare(`DELETE FROM escrow WHERE id = 1 AND ${moved}`).bind(newRev));
-    stmts.push(db.prepare(`DELETE FROM lost_request WHERE id = 1 AND ${moved}`).bind(newRev));
+    stmts.push(db.prepare(`DELETE FROM escrow WHERE id = 1 AND ${unmoved}`).bind(ifRev));
+    stmts.push(db.prepare(`DELETE FROM lost_request WHERE id = 1 AND ${unmoved}`).bind(ifRev));
   }
   if (escrow.set) {
     stmts.push(
       db
         .prepare(
-          `INSERT INTO escrow (id, email, blob, created_at) SELECT 1, ?, ?, ? WHERE ${moved}
+          `INSERT INTO escrow (id, email, blob, created_at) SELECT 1, ?, ?, ? WHERE ${unmoved}
            ON CONFLICT (id) DO UPDATE SET email = excluded.email, blob = excluded.blob, created_at = excluded.created_at`,
         )
-        .bind(escrow.set.email, escrow.set.blob, escrow.set.now, newRev),
+        .bind(escrow.set.email, escrow.set.blob, escrow.set.now, ifRev),
     );
   }
+  const updateIndex = stmts.length;
+  stmts.push(
+    db
+      .prepare(
+        'UPDATE account SET header = ?, header_rev = header_rev + 1, login_hash = ?, recovery_hash = COALESCE(?, recovery_hash), read_hash = ? WHERE id = 1 AND header_rev = ? RETURNING header_rev AS headerRev',
+      )
+      .bind(a.header, a.loginHash, a.recoveryHash ?? null, a.readHash, ifRev),
+  );
   const results = await db.batch(stmts);
-  return (results[0].results[0] as { headerRev: number } | undefined)?.headerRev ?? null;
+  return (results[updateIndex].results[0] as { headerRev: number } | undefined)?.headerRev ?? null;
 }
 
 export async function pull(db: Db, since: number, limit: number): Promise<PullResponse | null> {
