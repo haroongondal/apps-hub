@@ -85,6 +85,7 @@ export async function run(t) {
     const bad = await add(t, { url: `${fx.base}/file/1000000/r2.bin?ref=${encodeURIComponent(ref)}` });
     const failed = await reach(t, bad, 'failed');
     check('downloads: transfer: the same file without the referrer fails with the status sentence', failed.error === ERRORS.status(403), json(failed.error));
+    await consistent('cookies and Referer');
   });
 
   await attempt("Sieve's own blocking", async () => {
@@ -98,6 +99,7 @@ export async function run(t) {
       const b = await add(t, { url: `${adBase}/file/3000000/ad2.bin` });
       const failed = await reach(t, b, 'failed', 30000);
       check('downloads: transfer: without the allow rule the same add fails (the rule is what lets it through)', failed.error === ERRORS.probe, json(failed.error));
+    await consistent('ad host');
     } finally {
       await t.sw.evaluate(async (id) => {
         await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [1], addRules: [{ id: 1, priority: 2_000_000_000, action: { type: 'allow' }, condition: { initiatorDomains: [id], resourceTypes: ['xmlhttprequest', 'other'] } }] });
@@ -115,6 +117,7 @@ export async function run(t) {
     const together = ranged.at(-1).t - ranged[0].t < 1000;
     const part = await readPart(t, `${id}.part`);
     check('downloads: transfer: three parts make three disjoint ranged requests that overlap in time, and the file verifies', ranged.length === 3 && disjoint && together && r.parts.length >= 3 && part.size === 30000000 && part.ok, json({ ranged, spans, parts: r.parts.length, part }));
+    await consistent('three parts');
   });
 
   await attempt('429', async () => {
@@ -154,6 +157,7 @@ export async function run(t) {
     const from = Number(/bytes=(\d+)-/.exec(reqs.at(-1).range)?.[1]);
     const part = await readPart(t, `${id}.part`);
     check('downloads: transfer: a download continues after the engine document closes, from a saved offset above 0', reqs.length >= 2 && from > 0 && from >= done(before) && part.size === 40000000 && part.ok && r.parts.every((p) => p.done === p.end - p.start + 1), json({ from, saved: done(before), part, reqs: reqs.map((l) => l.range) }));
+    await consistent('engine dies');
   });
 
   await attempt('speed limit', async () => {
@@ -162,6 +166,7 @@ export async function run(t) {
     const r = await reach(t, id, 'saving', 30000);
     const took = Date.now() - r.startedAt;
     check('downloads: transfer: a 2000 KB/s limit makes 10 MB take between 4 and 7 seconds', took >= 4000 && took <= 7000, `took ${took} ms`);
+    await consistent('speed limit');
   });
 
   await attempt('no range', async () => {
@@ -176,6 +181,7 @@ export async function run(t) {
     const last = all.at(-1);
     const part = await readPart(t, `${id}.part`);
     check('downloads: transfer: a server without ranges is downloaded in one go and restarts at byte 0 after a kill', first.length === 2 && first[1].range === null && all.length === 3 && (last.range === null || last.range === 'bytes=0-') && r.rangeOk === false && part.size === 20000000 && part.ok, json({ first: first.map((l) => l.range), all: all.map((l) => l.range), rangeOk: r.rangeOk, part }));
+    await consistent('no range');
   });
 
   await attempt('hard error', async () => {
@@ -191,6 +197,7 @@ export async function run(t) {
     const id = await add(t, { url: `${fx.base}/file/5000000/z.bin?enc=gzip` });
     const r = await reach(t, id, 'failed', 30000);
     check('downloads: transfer: a gzip answer to a ranged request fails with the probe sentence after three requests', r.error === ERRORS.probe && requests(t, '/file/5000000/z.bin').length === 3, json({ error: r.error, n: requests(t, '/file/5000000/z.bin').length }));
+    await consistent('gzip');
   });
 
   await attempt('a command right after the engine starts', async () => {
@@ -200,6 +207,7 @@ export async function run(t) {
     const reply = await sendMsg(t, { type: 'dl-add', items: [{ url: `${fx.base}/file/1000000/s.bin`, source: 'manual' }] });
     const stored = reply?.ids?.length === 1 ? await get(t, reply.ids[0]) : null;
     check('downloads: transfer: an add sent right after the document closed is answered and stored', reply?.ok === true && !!stored, json({ reply, stored: stored?.id }));
+    await consistent('10c');
   });
 
   await attempt('changed file', async () => {

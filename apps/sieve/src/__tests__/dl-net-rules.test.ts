@@ -86,3 +86,25 @@ test('addProbeRule with an empty referrer returns a no-op', async () => {
   await remove();
   assert.equal(calls.length, 0);
 });
+
+test('recordRules and addProbeRule skip non-ASCII URLs and referrers without failing', async () => {
+  const rules = recordRules([rec('a', 'https://x/é.bin'), rec('b', 'https://x/b', 'https://r/é'), rec('c', 'https://x/c')], ID);
+  assert.deepEqual(rules.map((r) => r.condition.urlFilter), ['|https://x/c|']);
+  const calls = fakeChrome();
+  await (await addProbeRule('https://x/é.bin', 'https://r/'))();
+  assert.equal(calls.length, 0);
+});
+
+test('two overlapping syncRecordRules calls keep both rules, and a dropped extra leaves the next sync', async () => {
+  const calls = fakeChrome();
+  const m = (await import(`../dl/net-rules.ts?fresh=${3}`)) as typeof import('../dl/net-rules.ts');
+  const a = [{ url: 'https://x/a', referrer: 'https://r/' }];
+  const b = [{ url: 'https://x/b', referrer: 'https://r/' }];
+  const first = m.syncRecordRules(a);
+  const second = m.syncRecordRules(b);
+  await Promise.all([first, second]);
+  assert.deepEqual(calls.at(-1)!.addRules!.map((r) => r.condition.urlFilter), ['|https://x/a|', '|https://x/b|']);
+  m.dropPendingRules(a);
+  await m.syncRecordRules([]);
+  assert.deepEqual(calls.at(-1)!.addRules!.map((r) => r.condition.urlFilter), ['|https://x/b|']);
+});

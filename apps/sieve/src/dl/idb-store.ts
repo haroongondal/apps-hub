@@ -9,7 +9,6 @@ const request = <T>(r: IDBRequest<T>): Promise<T> => new Promise((ok, fail) => (
 const complete = (tx: IDBTransaction): Promise<void> =>
   new Promise((ok, fail) => {
     tx.oncomplete = () => ok();
-    tx.onerror = () => fail(tx.error);
     tx.onabort = () => fail(tx.error ?? new Error('transaction aborted'));
   });
 

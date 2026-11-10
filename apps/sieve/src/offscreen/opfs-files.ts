@@ -1,6 +1,6 @@
 import type { FileHandle, Files } from '@apps-hub/sieve-core/src/dl-ports.ts';
 
-// Re-checked 2026-11-10 in Chrome for Testing 149.0.7827.55 (probe p10):
+// inspected 2026-11-10, Chrome for Testing 149.0.7827.55 (probes p1, p10):
 // - F16: a Worker streams 1 GB from a local server into an OPFS sync handle in 0.4 s and the browser's resident memory grows about 100 to 200 MB (does not follow the file).
 // - F5: a second sync handle on a file that is already open fails with NoModificationAllowedError; truncate to 2.5 GiB is sparse and instant.
 // - F6: navigator.storage.estimate() quota follows the free disk space (the manifest has unlimitedStorage).
