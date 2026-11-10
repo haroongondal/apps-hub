@@ -1,0 +1,22 @@
+import { test } from 'node:test';
+
+test.todo('ensureEngine called five times at once calls createDocument once, with the parameters of the plan');
+test.todo('ensureEngine calls createDocument zero times when getContexts already lists a document');
+test.todo('ensureEngine does not throw when createDocument rejects with "Only a single offscreen document may be created."');
+test.todo('sendToEngine retries "Receiving end does not exist" and calls ensureEngine each time, answering after 3 calls');
+test.todo('sendToEngine rejects after ten "Receiving end does not exist" rejections');
+test.todo('sendToEngine rejects at once on a different error');
+test.todo('sendToEngine retries "message port closed" for a dl-eng-add whose items all have a chromeId');
+test.todo('sendToEngine rejects at once on "message port closed" for dl-eng-do and for a dl-eng-add with an item without chromeId');
+test.todo('addRecords returns null when sendToEngine rejects');
+test.todo('fromExtensionPage accepts the extension page and refuses a web page, no url and another extension');
+test.todo('saveDownloads: two concurrent edits both land with slow get and set');
+test.todo('saveDownloads resolves false when set fails');
+test.todo('readDownloads on garbage gives DEFAULT_DOWNLOADS');
+test.todo('getDownloads returns the cached copy until an onChanged for downloads arrives, then re-reads');
+test.todo('router ignores a dl-add from a web page sender (returns false)');
+test.todo('router refuses dl-add with no items, 501 items, a ftp URL, source takeover, a probed field, a bad category, a 25 character queue and a chromeId');
+test.todo('router replies { ok: true, ids } for a valid dl-add');
+test.todo('router replies { ok: false, message: T.actionFailed } for dl-do with op delete');
+test.todo('router replies the validated settings to dl-sw-ready');
+test.todo('router returns false for an unknown type');
