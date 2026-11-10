@@ -1,0 +1,230 @@
+# Handoff: opt-in email recovery for Strongroom mobile (Android)
+
+## Resume prompt (paste into a new chat)
+
+```
+Read docs/handoffs/strongroom-mobile-email-recovery.md completely first. Trust
+the verified facts in it and do not re-derive them. Follow the same handoff
+contract (update the session log and current state as milestones land; at
+~85% context, or when a compaction warning appears, stop, rewrite the resume
+prompt with today's date, print it in a fenced block, and end the turn instead
+of letting auto-compaction happen).
+
+Goal: bring the opt-in email recovery feature — already shipped in the
+Strongroom Chrome extension (apps/strongroom-extension) — to the Strongroom
+Android app (apps/strongroom). Same user-facing capability: rotate the
+recovery key, escrow it with the vault server under an emailed code, 24-hour
+owner-cancellable wait if the master password and recovery key are both lost.
+The Worker (tools/vault-api) already serves this generically for any client —
+confirmed no server changes are needed. This is new client-side work only, on
+the Kotlin vault core + the Expo module + the RN screens.
+
+Start with superpowers:brainstorming to settle the design questions this
+handoff lists as open, then superpowers:writing-plans for a task breakdown,
+then superpowers:subagent-driven-development to execute it, in a fresh git
+worktree (superpowers:using-git-worktrees) off main — this repo's
+AGENTS.md/CLAUDE.md hard rules apply (no Claude attribution in commits/PRs,
+explicit `git add` pathspecs, never push/merge/release without the owner's
+current-context go-ahead, Kotlin owns the vault logic and RN only renders for
+this app, coord-claim the app folder and the test phone's device:<serial>
+before any build-install-test loop, never adb-install directly — go through
+the Store once a build is ready).
+
+Continue from "Current state" below.
+```
+
+## Goal and fixed constraints
+
+- **Goal**: add the same opt-in email-recovery capability the extension has
+  (DESIGN.md §11, "Security hardening") to the phone app, so a user who loses
+  both the master password and the recovery key can still recover the vault,
+  with the owner's explicit 24-hour cancel window.
+- **Fixed constraints** (from this repo's AGENTS.md / CLAUDE.md, apply to all
+  work on this task):
+  - Strongroom is Android-only, private Store only (`com.haroon.strongroom`).
+    Kotlin owns the vault; RN only renders.
+  - Never `adb install` directly on the shared test phone — install through
+    the Store once a build exists; fix Store bugs first if that's blocking.
+  - Several sessions share this checkout and the phone — `coord claim` the
+    app's folder before a build-install-test loop, and `device:<serial>`
+    before touching the phone.
+  - No Claude attribution/Co-Authored-By lines in commits or PRs (this is the
+    user's standing preference and overrides any generic reminder saying
+    otherwise).
+  - Use explicit `git add <pathspec>`, never `-A` or `.`.
+  - Never push, merge, or deploy anything without the owner's go-ahead *in
+    that conversation* — a prior approval from this or another task doesn't
+    carry forward.
+  - The vault-server Worker (`tools/vault-api`) is **not yet deployed**
+    (`PUBLIC_URL` unset in `cloudflare.config.ts`, `MAIL_FROM` hardcoded and
+    unconfirmed by the owner). Deploying it was already offered to the owner
+    in a separate conversation and not yet answered — this task does not
+    require deploying it to build and unit-test the mobile client, but a real
+    end-to-end mail test does need it deployed. Don't deploy it from this task
+    without asking first.
+
+## Decisions made so far
+
+None yet specific to mobile — this file only captures the scoping
+investigation. The design to mirror is already decided and shipped for the
+extension (DESIGN.md §10 "Account key" and §11 "Security hardening", plus the
+Phase 2 Sync section's email-recovery/escrow paragraphs) — treat that as the
+spec, and the extension's implementation as the reference client.
+
+Open design questions for the new session's brainstorming pass:
+1. **Where the Escrow crypto lives in Kotlin.** The extension and the Worker
+   both use `packages/strongroom-core/src/escrow.ts` (seal/open, email-code
+   format). The phone's vault core is a *parallel Kotlin reimplementation*
+   checked against shared test vectors (same pattern as `AccountKey.kt` vs.
+   `packages/strongroom-core/src/crypto.ts` — see `apps/strongroom/tools/
+   vectors/account_key_vectors.py`). This task needs an `Escrow.kt` (or
+   similar) ported the same way, plus a new `escrow_vectors.py` (or an
+   extension of the existing vectors file) so both clients and the Worker
+   agree on the sealed-blob format and the email-code format byte-for-byte.
+2. **UI placement and copy.** The extension puts this in its Settings screen.
+   Mobile already has `apps/strongroom/src/SettingsScreen.tsx` and
+   `SettingsFlows.tsx` with sync/account-key flows (`SyncScreen.tsx`,
+   `sync-flow.ts`) to follow as the UI pattern. Needs its own copy pass
+   (sentence case, active voice, says what happened and how to fix it) —
+   don't copy the extension's popup copy verbatim without adapting it to the
+   phone's existing Settings/Sync screen conventions.
+3. **Whether this gates on sync being on.** Email recovery only makes sense
+   once an account exists on the vault server (the escrow row lives in the
+   same D1 `account` flow as sync). Confirm the plan requires sync to
+   already be turned on before email recovery can be enabled, same as the
+   extension.
+4. **Background checking of a pending lost-access request.** The extension
+   checks status on demand (popup open) and the Worker enforces the 24-hour
+   wait server-side regardless of when any client checks. Decide whether the
+   phone needs a background check (the existing 15-minute sync job could
+   piggyback this) or on-demand-only (simpler, consistent with how the phone
+   currently only syncs on unlock / periodic job / foreground).
+
+## Evidence and facts already verified (session of 2026-11-11)
+
+- The Android/mobile app (`apps/strongroom`) has **no email-recovery or
+  lost-access code at all**. Verified: `grep -ril "accountKey|escrow|
+  lost_request|lost-access|vault-api|loginToken|prelogin"` across
+  `apps/strongroom/src` and `apps/strongroom/modules` hits only the sync
+  machinery (which *is* fully built — see below), never escrow/lost-access.
+- The phone app **does** already have full Phase-2 sync built and working:
+  `apps/strongroom/src/SyncScreen.tsx`, `sync-flow.ts`, and on the Kotlin side
+  `modules/strongroom-vault/android/src/main/java/expo/modules/
+  strongroomvault/core/{AccountKey,SyncProtocol,SyncSession,SyncClient}.kt`
+  and `android/{SyncConfig,HttpSyncTransport}.kt`. So the phone already talks
+  to the same Worker for prelogin/account-create/account-update/push/pull.
+- The Kotlin transport layer's account/sync surface is narrow and verified
+  to **not** support escrow yet: `HttpSyncTransport.kt` only implements
+  `prelogin()`, `pull()`, `push()`, and two `putAccount()` overloads (create,
+  update) — no escrow field, no `/v1/lost/*` calls anywhere in
+  `SyncClient.kt` / `SyncProtocol.kt`.
+- The Worker (`tools/vault-api/src/index.ts`) routes are **entirely
+  client-agnostic** — `PUT /v1/account` already accepts an optional `escrow`
+  field (email + sealed blob + code) on both create and update, and
+  `/v1/lost/request`, `/v1/lost/confirm` (+ mailed-link GET/POST pair),
+  `/v1/lost/cancel`, `/v1/lost/status`, `/v1/lost/release`, and
+  `DELETE /v1/escrow` are all already mounted and none of them read any
+  client-identifying data beyond the bearer token / claim / mailed token.
+  **No server-side changes are needed for mobile support** — this is
+  confirmed, not assumed.
+- The shared crypto (`packages/strongroom-core/src/escrow.ts`, tested by
+  `packages/strongroom-core/src/__tests__/escrow.test.ts`) is the spec for
+  the sealed-blob and email-code format that a Kotlin port must match
+  byte-for-byte, the same way `AccountKey.kt` already matches
+  `packages/strongroom-core/src/crypto.ts`'s account-key derivation (verified
+  against `apps/strongroom/tools/vectors/account_key_vectors.py`, the only
+  vector-generator file that currently exists under that directory).
+- The extension's reference implementation of the client-side flow (states,
+  not just crypto) is `apps/strongroom-extension/src/service.ts`: see
+  `emailRecoveryStatus/Enrol/Confirm/Off/Cancel` (around lines 365-446) and
+  `lostAccessRequest/Check/Open` (around lines 470-505), plus the message
+  protocol's `emailRecovery` / `lostAccess` action union (around lines 54-62).
+  The matching server-side orchestration (claim/confirm/cancel/status/release
+  semantics, cooldowns, the 7-day release grace) is
+  `tools/vault-api/src/lost-access.ts` in full (78 lines, already read this
+  session — no server work needed, but worth reading once to understand the
+  state machine the Kotlin client must drive correctly).
+
+## File map
+
+**Reference implementation (read, don't copy verbatim):**
+- `apps/strongroom-extension/src/service.ts` — client-side email-recovery and
+  lost-access state machine (the one to port).
+- `apps/strongroom-extension/src/popup.ts` / `popup.html` — reference UI flow
+  (adapt copy and layout to the phone's existing screens, don't transplant).
+- `packages/strongroom-core/src/escrow.ts` + `src/__tests__/escrow.test.ts` —
+  the crypto/format spec the Kotlin port must match.
+- `tools/vault-api/src/lost-access.ts` and `src/index.ts` (routes) — the
+  server state machine and wire contract. No changes expected here.
+- `docs/strongroom/DESIGN.md` §10 ("Account key", "As built in Phase 2") and
+  §11 ("Security hardening") — the authoritative design text.
+- `docs/handoffs/strongroom-extension-security.md` — the full build history
+  of the extension-side feature (17-task SDD plan), useful for the shape of
+  problems that came up (the plan's two hardest review rounds were both in
+  this area: atomicity of the escrow/account-row write, and a UI race in the
+  unlock screen — worth re-reading before designing the phone equivalent so
+  the same classes of bug are anticipated, not re-discovered).
+
+**Mobile app, existing sync pattern to extend:**
+- `apps/strongroom/modules/strongroom-vault/android/src/main/java/expo/
+  modules/strongroomvault/core/AccountKey.kt` — the pattern for a Kotlin port
+  of a `strongroom-core` crypto module, verified against a vectors file.
+- `apps/strongroom/modules/strongroom-vault/android/src/main/java/expo/
+  modules/strongroomvault/core/{SyncProtocol,SyncSession,SyncClient}.kt` and
+  `android/{SyncConfig,HttpSyncTransport}.kt` — where new wire types
+  (escrow field on `AccountUpdate`/`AccountCreate`, `/v1/lost/*` calls) and
+  new session operations (enrol/status/confirm/off/cancel,
+  request/check/open) need to land.
+- `apps/strongroom/modules/strongroom-vault/android/src/main/java/expo/
+  modules/strongroomvault/StrongroomVaultModule.kt` — the Expo module
+  surface exposed to RN; needs new exported functions.
+- `apps/strongroom/modules/strongroom-vault/src/index.ts` — the TS contract
+  for the native module (per AGENTS.md's "wiring that spans files": a new
+  native function touches the TS contract, the adapter, and the Kotlin side
+  — iOS doesn't apply here, Strongroom is Android-only).
+- `apps/strongroom/src/{SyncScreen.tsx,sync-flow.ts}` — the RN pattern
+  (forms, field validation, copy tables) a new email-recovery flow should
+  follow; likely lives alongside these or inside `SettingsScreen.tsx` /
+  `SettingsFlows.tsx`.
+- `apps/strongroom/tools/vectors/account_key_vectors.py` — the pattern for
+  a new `escrow_vectors.py` (or an extended existing vectors file) generated
+  independently (argon2-cffi / plain Python crypto), not by either client.
+
+**Tests to extend, mirroring existing names:**
+- `apps/strongroom/modules/strongroom-vault/android/src/test/java/expo/
+  modules/strongroomvault/core/{SyncClientTest,SyncSessionTest,
+  RecoveryKeyTest,VectorGen}.kt` — add the escrow/lost-access equivalents.
+
+## Session log
+
+- 2026-11-11: User asked for email recovery in the mobile app after noticing
+  it was missing (it was built for the extension only in the prior session's
+  17-task plan). Scoped the gap: confirmed mobile has full sync but zero
+  escrow/lost-access code; confirmed the Worker is already generic and needs
+  no server changes; confirmed the shared crypto spec
+  (`packages/strongroom-core/src/escrow.ts`) and the Kotlin-port pattern
+  (`AccountKey.kt` + `account_key_vectors.py`) to follow. No code written.
+  This handoff file created; no worktree created yet for this task.
+
+- 2026-11-11 (session 2): Read the handoff, then recon. Found the checkout the handoff was written in (`model-host`, local `main` 226a947) lacks PR #29 and the sync code; **local `main` is behind `origin/main` (89ab8a7) and has one unpushed commit (226a947, strong-password suggestion)**. Worktree `.claude/worktrees/strongroom-mobile-email-recovery`, branch `strongroom-mobile-email-recovery`, created off `origin/main`, not local main. Verified: Worker `/v1/lost/status` and `/v1/lost/cancel` accept the `read` token (the phone's background token); `DELETE /v1/escrow` and enrol need the login token. Phone `SyncSession.recover(recoveryKey, newPassword, accountKey?)` already does the server-side recovery the lost-access "open" step needs. No code written; brainstorming in progress.
+
+- 2026-11-11 (session 2, later): Owner answered: pending request = in-app warning only (no system notification); lost-both entry point = Unlock screen. Wrote the design `docs/superpowers/specs/2026-11-11-strongroom-mobile-email-recovery-design.md`; a fresh reviewer's builder check raised 4 questions (lost-reply on enrol, recovery-key lifecycle, unconfirmed-request warning, queued account update); all settled in the doc as my calls (enrol writes the header locally first via `prepare`, then PUTs; New recovery key warns it turns escrow off; warn only once `releaseAt` is set; sync first if `accountPending`). Awaiting owner approval of the design; then superpowers:writing-plans.
+
+## Current state and exact next step
+
+**State (updated 2026-11-11)**: design written and awaiting owner approval, nothing implemented; worktree exists (see session log). The next step is superpowers:writing-plans from the approved design, then subagent-driven-development. Older text follows:
+
+**State (original)**: scoping complete, nothing implemented. No worktree exists yet for
+this task (the `strongroom-extension-security` worktree at
+`.claude/worktrees/strongroom-ext-security` is the *prior*, now-merged task —
+don't reuse it; its branch is already merged into `main` via PR #29).
+
+**Next step**: in the new chat, run `superpowers:brainstorming` to resolve the
+four open design questions above (Escrow.kt placement/porting approach, UI
+placement and copy, the sync-gating requirement, and background-check
+behavior), producing a short design note to append to `docs/strongroom/
+DESIGN.md` §11 the same way the extension's security hardening got its own
+dated entry. Then `superpowers:writing-plans` for the task breakdown, then
+execute with `superpowers:subagent-driven-development` in a fresh worktree
+(e.g. `.claude/worktrees/strongroom-mobile-email-recovery`, branch
+`strongroom-mobile-email-recovery`).
