@@ -459,6 +459,45 @@ test('a store.put() that throws fails the record once and the loop ends', async 
   }
 });
 
+test('a start write that throws after a pause leaves the paused record alone', async (t) => {
+  quiet(t);
+  const r = await makeRig({ records: [rec('a')], noStart: true });
+  const put = r.store.put.bind(r.store);
+  let fail!: () => void;
+  const gate = new Promise<void>((res) => (fail = res));
+  r.store.put = async (record, o) => {
+    if (record.state === 'running') {
+      await gate;
+      throw new Error('quota');
+    }
+    return put(record, o);
+  };
+  await r.engine.start(r.settings);
+  await flush();
+  await r.engine.act('pause', ['a']);
+  const puts = r.store.puts.length;
+  fail();
+  await flush();
+  assert.equal(r.state('a'), 'paused');
+  assert.equal(r.stored('a')!.error, null);
+  assert.equal(r.store.puts.length, puts, 'the catch writes nothing for a record that is no longer queued');
+  assert.equal(r.transfer.runs.length, 0);
+});
+
+test('after a start fails, the next queued record starts', async (t) => {
+  quiet(t);
+  const r = await makeRig({ records: [rec('a', { addedAt: 1 }), rec('b', { addedAt: 2 })], settings: settingsWith({}, 1), noStart: true });
+  const put = r.store.put.bind(r.store);
+  r.store.put = async (record, o) => {
+    if (record.id === 'a' && record.state === 'running') throw new Error('quota');
+    return put(record, o);
+  };
+  await r.engine.start(r.settings);
+  await flush();
+  assert.equal(r.state('a'), 'failed');
+  assert.deepEqual(r.transfer.started(), ['b']);
+});
+
 test('idle: the engine goes idle after a failed save', async () => {
   const r = await makeRig({ records: [rec('a', { size: 100 })] });
   r.host.saveAnswer = { ok: false, message: 'X' };
