@@ -1,9 +1,12 @@
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { ROW_ORDER } from '../../../../packages/sieve-core/src/yt-actions.ts';
 import { DARK_ATTR, NAV, RELATED_LINK, SEL } from '../../src/yt/selectors.ts';
 import { navigate, openYt, row, rowButton, setYouTube, until } from './helpers.mjs';
 
 const COG = 'More and settings';
+const ROW_MARK = 'sieve-yt-row'; // row.ts marks the row's first insertion (it imports CSS, so node cannot import it)
 const json = (v) => JSON.stringify(v);
 const placed = (page) => page.evaluate((a) => { const h = document.querySelector('sieve-yt-row'); return !!h && document.querySelector(a)?.previousElementSibling === h; }, SEL.rowAnchor);
 const same = (page) => page.evaluate(() => window.__row === document.querySelector('sieve-yt-row'));
@@ -26,6 +29,42 @@ const watchRow = (page, anchor) =>
     requestAnimationFrame(sample);
   }, anchor);
 const rowFacts = (page) => page.evaluate(() => ({ same: window.__row === document.querySelector('sieve-yt-row'), mounts: window.__row.dataset.mounts, removed: window.__removed, minHeight: window.__minHeight, frames: window.__frames }));
+const barIds = (page) => page.evaluate(() => [...document.querySelector('sieve-yt-row').shadowRoot.querySelector('.bar').children].map((el) => el.dataset.id));
+const inRowOrder = (ids) => ids.every((id, i) => i === 0 || ROW_ORDER.indexOf(ids[i - 1]) < ROW_ORDER.indexOf(id));
+
+// The open popover's box against the viewport (below the fixed masthead when there is one), and whether its first control is the topmost element at its centre.
+const popBox = (page) =>
+  page.evaluate(() => {
+    const shadow = document.querySelector('sieve-yt-row').shadowRoot;
+    const pop = shadow.querySelector('.pop');
+    if (!pop) return null;
+    const r = pop.getBoundingClientRect();
+    const first = pop.querySelector('button:not([hidden]), input');
+    const f = first.getBoundingClientRect();
+    const hit = shadow.elementFromPoint(f.x + f.width / 2, f.y + f.height / 2);
+    const top = document.querySelector('#masthead-container')?.getBoundingClientRect().bottom ?? 0;
+    return { x: r.x, y: r.y, right: r.right, bottom: r.bottom, top, vw: document.documentElement.clientWidth, vh: document.documentElement.clientHeight, firstVisible: !!hit && (hit === first || first.contains(hit) || hit.contains(first)), scrolls: pop.scrollHeight > pop.clientHeight };
+  });
+const inside = (b) => !!b && b.x >= 0 && b.right <= b.vw && b.y >= b.top && b.bottom <= b.vh && b.firstVisible;
+
+// row.ts bundled on its own into a blank page with a stub `chrome`, to register buttons in an order the extension's imports never use.
+async function lateAdd(t, ids) {
+  const { build } = await import('esbuild');
+  const entry = `import { addButton, rowElement } from './row.ts';
+for (const id of ${json(ids)}) addButton({ id, label: id, onClick() {} });
+window.__order = [...rowElement('settings').closest('.bar').children].map((el) => el.dataset.id);`;
+  const { outputFiles } = await build({ stdin: { contents: entry, resolveDir: fileURLToPath(new URL('../../src/yt/', import.meta.url)), loader: 'ts' }, bundle: true, format: 'iife', write: false, loader: { '.css': 'text' }, logLevel: 'silent' });
+  const page = await t.ctx.newPage();
+  try {
+    await page.setContent('<!doctype html><body></body>');
+    // The page's own `window.chrome` cannot be redefined, so the stub is a parameter the bundle's free `chrome` resolves to.
+    const stub = '{ storage: { onChanged: { addListener() {} } }, runtime: { onMessage: { addListener() {} }, sendMessage: async () => {} } }';
+    await page.addScriptTag({ content: `((chrome) => {\n${outputFiles[0].text}\n})(${stub});` });
+    return await page.evaluate(() => window.__order);
+  } finally {
+    await page.close();
+  }
+}
 
 export async function local(t) {
   const { check } = t;
@@ -34,6 +73,12 @@ export async function local(t) {
     page = await openYt(t, '/watch?v=sieveTest01');
     check('row: the row appears before the anchor within 2 s', await until(() => placed(page), 2000));
     check('row: it has one button named "More and settings"', (await rowButton(page, COG).count()) === 1);
+    const ids = await barIds(page);
+    const expected = ['loop', 'speed-down', 'speed', 'speed-up', 'cinema', 'expand', 'filters', 'flip', 'settings'];
+    check('row: every registered button is in the bar in ROW_ORDER order', expected.every((id) => ids.includes(id)) && inRowOrder(ids), json(ids));
+    const late = await lateAdd(t, ['flip', 'loop', 'cinema', 'speed-up', 'boost']);
+    check('row: buttons registered out of order (a late one too) land in ROW_ORDER order', json(late) === json(['loop', 'speed-up', 'boost', 'cinema', 'flip', 'settings']), json(late));
+    check('row: the cog says it opens a menu (aria-haspopup="true")', (await rowButton(page, COG).getAttribute('aria-haspopup')) === 'true');
 
     await watchRow(page, SEL.rowAnchor);
     const navs = [];
@@ -88,6 +133,29 @@ export async function local(t) {
     await rowButton(page, COG).click();
     await rowButton(page, COG).click();
     check('row: a second click on the cog closes the menu', !(await menuOpen(page)));
+    await rowButton(page, COG).click();
+    await navigate(page, 'sieveTest02');
+    check('row: an in-app navigation closes the open menu', !(await menuOpen(page)));
+
+    // Fit: a narrow window (the cog's menu would run off the right), Filters options with the row at the bottom, and a short window.
+    await page.setViewportSize({ width: 700, height: 720 });
+    await rowButton(page, COG).click();
+    const narrow = await popBox(page);
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.evaluate(() => document.querySelector('sieve-yt-row').scrollIntoView({ block: 'end' }));
+    await row(page).getByRole('button', { name: 'Filter options' }).click();
+    const low = await popBox(page);
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 1280, height: 400 });
+    await page.evaluate(() => document.querySelector('sieve-yt-row').scrollIntoView({ block: 'center' }));
+    await row(page).getByRole('button', { name: 'Filter options' }).click();
+    const short = await popBox(page);
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 1280, height: 720 });
+    check('row: in a 700 px wide window the cog menu is inside the viewport with its first item visible', inside(narrow), json(narrow));
+    check('row: Filters options opened at the bottom of the window stays inside the viewport', inside(low), json(low));
+    check('row: in a 400 px tall window Filters options stays inside the viewport and scrolls inside', inside(short) && short.scrolls, json(short));
 
     const theme = () => page.evaluate(() => document.querySelector('sieve-yt-row').shadowRoot.querySelector('[data-brand="sieve"]')?.dataset.theme);
     const light = await theme();
@@ -149,10 +217,17 @@ export async function local(t) {
 
 export async function live(t) {
   const { check, page } = t;
-  check('live row: the row appears under the player within 5 s', await until(() => placed(page), 5000));
+  // The page loaded before the earlier modules' live checks ran, so the row's own mark times it from navigation start.
+  const shown = await until(() => placed(page), 5000);
+  const at = await page.evaluate((m) => performance.getEntriesByName(m)[0]?.startTime ?? null, ROW_MARK);
+  const appeared = shown && at !== null && at <= 5000;
+  check('live row: the row appears under the player within 5 s of navigation', appeared, json({ shown, at }));
+  if (!appeared) return;
   const under = await page.evaluate((p) => document.querySelector('sieve-yt-row').getBoundingClientRect().top >= document.querySelector(p).getBoundingClientRect().bottom - 1, SEL.player);
   check('live row: the row is below the player', under);
+  if (!under) return;
   await watchRow(page, SEL.rowAnchor);
+  await page.evaluate((a) => (window.__parent = document.querySelector(a).parentElement), SEL.rowAnchor);
   const navs = [];
   for (let i = 0; i < 5; i++) {
     const before = page.url();
@@ -168,10 +243,15 @@ export async function live(t) {
     if (ok !== true) break;
   }
   console.log(`live row navigations: ${json(navs)}`);
+  console.log(`live row: the anchor's parent is the same element after the navigations: ${await page.evaluate((a) => document.querySelector(a)?.parentElement === window.__parent, SEL.rowAnchor)}`);
   check('live row: 5 related-video navigations keep the same element, data-mounts 1 and 0 removals', navs.length === 5 && navs.every((n) => n.ok === true && n.same && n.mounts === '1' && n.removed === 0), json(navs));
   check('live row: the row height stayed above 0 in every animation frame', navs.every((n) => n.minHeight > 0), json(navs.map((n) => n.minHeight)));
   await page.evaluate((a) => document.querySelector(a).scrollIntoView({ block: 'center' }), SEL.rowAnchor);
   const box = await row(page).boundingBox();
-  if (box) await page.screenshot({ path: join(t.shots, 'yt-row-live.png'), clip: { x: Math.max(0, box.x - 16), y: Math.max(0, box.y - 120), width: Math.min(1280, box.width + 32), height: 240 } });
+  await rowButton(page, COG).click();
+  const menu = await popBox(page);
+  check('live row: the cog menu opens inside the viewport with its first item visible', inside(menu), json(menu));
+  if (box) await page.screenshot({ path: join(t.shots, 'yt-row-live.png'), clip: { x: Math.max(0, box.x - 16), y: Math.max(0, box.y - 120), width: Math.min(1280, box.width + 32), height: 320 } });
+  await page.keyboard.press('Escape');
   console.log(`live row screenshot: ${join(t.shots, 'yt-row-live.png')}`);
 }

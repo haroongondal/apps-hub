@@ -34,6 +34,12 @@ const svg = (...shapes: [string, Record<string, string>][]): SVGElement => {
 const cog = () => svg(['circle', { cx: '12', cy: '12', r: '8.6', 'stroke-width': '3', 'stroke-dasharray': '3.4 3.35' }], ['circle', { cx: '12', cy: '12', r: '5.9', 'stroke-width': '2.6' }]);
 const chevron = () => svg(['path', { d: 'M7 10l5 5 5-5' }]);
 
+// Marks the row's first insertion on a page, so a check can time it from navigation start (as bridge.ts's APPLIED_MARK).
+export const ROW_MARK = 'sieve-yt-row';
+// Room kept between a popover and the window's edge, and between it and its button (var(--space-xs), 4 px).
+const EDGE = 8;
+const GAP = 4;
+
 const real = <E extends Event>(fn: (e: E) => void) => (e: E) => {
   if (e.isTrusted) fn(e);
 };
@@ -80,7 +86,8 @@ export function addButton(b: RowButton): void {
   }
   const r = { b, item, main };
   paint(r);
-  bar.insertBefore(item, rendered.find((x) => ROW_ORDER.indexOf(x.b.id) > order)?.item ?? null);
+  // By the bar's current children, not registration order: modules register in import order.
+  bar.insertBefore(item, [...bar.children].find((el) => ROW_ORDER.indexOf((el as HTMLElement).dataset.id ?? '') > order) ?? null);
   rendered.push(r);
 }
 
@@ -114,7 +121,9 @@ function toggle(opener: HTMLButtonElement, build: () => HTMLElement): void {
   if (again) return;
   const pop = build();
   pop.classList.add('pop', 'ui-sheet');
-  opener.parentElement?.append(pop);
+  const at = opener.parentElement as HTMLElement;
+  at.append(pop);
+  place(pop, at);
   opener.setAttribute('aria-expanded', 'true');
   open = { pop, opener };
   document.addEventListener('pointerdown', outside, true);
@@ -126,14 +135,31 @@ function toggle(opener: HTMLButtonElement, build: () => HTMLElement): void {
   }
 }
 
-function close(): void {
+// Below its button and from its left edge when it fits; else on the side with more room, scrolling inside, and moved left to stay in the window.
+// shortcut: placed once on open, not again on scroll or resize; a scroll moves it with the row.
+function place(pop: HTMLElement, at: HTMLElement): void {
+  pop.classList.remove('up');
+  pop.style.left = pop.style.maxHeight = '';
+  const a = at.getBoundingClientRect();
+  const { clientWidth: vw, clientHeight: vh } = document.documentElement;
+  // Under YouTube's fixed masthead (z-index 2020 > the popover's 2000) nothing shows.
+  const top = document.querySelector(SEL.masthead)?.getBoundingClientRect().bottom ?? 0;
+  const below = vh - a.bottom - GAP - EDGE;
+  const above = a.top - top - GAP - EDGE;
+  const up = pop.offsetHeight > below && above > below;
+  pop.classList.toggle('up', up);
+  pop.style.maxHeight = `${Math.max(0, up ? above : below)}px`;
+  pop.style.left = `${Math.max(EDGE - a.left, Math.min(0, vw - EDGE - a.left - pop.offsetWidth))}px`;
+}
+
+function close(refocus = true): void {
   if (!open) return;
   const { pop, opener } = open;
   open = null;
   document.removeEventListener('pointerdown', outside, true);
   pop.remove();
   opener.setAttribute('aria-expanded', 'false');
-  opener.focus();
+  if (refocus) opener.focus();
 }
 
 const outside = real((e: PointerEvent) => {
@@ -166,6 +192,8 @@ function build(): HTMLElement {
   shadow.adoptedStyleSheets = [sheet];
   wrap = h('div', { class: 'row', 'data-brand': 'sieve' }, bar, status);
   shadow.append(wrap);
+  // inspected 2026-11-10, signed out, Chrome for Testing 149.0.7827.55: `k` on the focused cog reached only YouTube's document capture
+  // listener and did not toggle the video (on <body> it did); playback keys act in bubble-phase listeners, so a bubble stop suffices.
   for (const type of ['keydown', 'keypress', 'keyup'] as const) {
     shadow.addEventListener(type, (e) => {
       e.stopPropagation();
@@ -206,6 +234,7 @@ function ensureMounted(): void {
   if (anchor.previousElementSibling !== el) {
     anchor.before(el);
     el.dataset.mounts = String(Number(el.dataset.mounts ?? 0) + 1);
+    if (el.dataset.mounts === '1') performance.mark(ROW_MARK);
   }
   parentWatch.disconnect();
   parentWatch.observe(anchor.parentElement, { childList: true });
@@ -215,6 +244,8 @@ function ensureMounted(): void {
 
 feature('the button row', () => {
   addButton({ id: 'settings', label: 'More and settings', icon: cog, onClick: () => toggle(rowElement('settings') as HTMLButtonElement, () => (refreshRow(), menu)) });
+  rowElement('settings')?.setAttribute('aria-haspopup', 'true');
+  rowElement('settings')?.setAttribute('aria-expanded', 'false');
   onActionsChanged(refreshRow);
   onSettings((_y, isOn) => {
     on = isOn;
@@ -226,6 +257,7 @@ feature('the button row', () => {
     }
   });
   onNavigate(() => {
+    close(false);
     stop();
     ensureMounted();
   });
