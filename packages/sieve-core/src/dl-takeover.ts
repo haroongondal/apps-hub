@@ -34,6 +34,7 @@ export const MIME_EXTENSIONS: Readonly<Record<string, string>> = {
   'audio/flac': 'flac',
 };
 
+// An empty finalUrl is lenient on purpose: it is judged by url alone. A non-empty one must be http(s) too.
 const isHttp = (u: string): boolean => /^https?:/i.test(u);
 
 export function isOurs(item: Pick<ChromeItem, 'url' | 'finalUrl' | 'byExtensionId'>, extensionId: string, retryUrls: readonly string[]): boolean {
@@ -121,12 +122,14 @@ export function verdict(item: ChromeItem, probe: ProbeFacts, freeBytes: number |
 export function parseDisposition(header: string | null): string | null {
   if (!header) return null;
   // shortcut: only UTF-8 in filename*; other charsets fall back to filename=, upgrade if a server needs it
+  const quoted = /(?:^|[;\s])filename\s*=\s*"((?:[^"\\]|\\.)*)"/i.exec(header);
   const star = /(?:^|[;\s])filename\*\s*=\s*([^;]+)/i.exec(header);
-  if (star) {
+  // a filename* that sits inside a quoted filename="..." value is part of that name, not a parameter
+  const starIsParam = star && !(quoted && star.index > quoted.index && star.index < quoted.index + quoted[0].length);
+  if (star && starIsParam) {
     const m = /^\s*utf-8'[^']*'(.*?)\s*$/i.exec(star[1]);
     if (m) { try { const v = decodeURIComponent(m[1]); if (v) return v; } catch { /* fall back to filename= */ } }
   }
-  const quoted = /(?:^|[;\s])filename\s*=\s*"((?:[^"\\]|\\.)*)"/i.exec(header);
   if (quoted) return quoted[1].replace(/\\(.)/g, '$1') || null;
   const bare = /(?:^|[;\s])filename\s*=\s*([^;\s]+)/i.exec(header);
   return bare ? bare[1] : null;

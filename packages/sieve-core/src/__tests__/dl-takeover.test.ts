@@ -89,6 +89,14 @@ test('wantsTakeover: type by extension (case-insensitive), MIME and prefix patte
   assert.deepEqual(wantsTakeover({ ...plain, mime: 'application/x-unlisted', url: 'https://x.com/movie.MKV', finalUrl: 'https://x.com/movie.MKV' }, TAKEOVER, true), { want: true });
   assert.deepEqual(wantsTakeover({ ...plain, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', url: 'https://x.com/get', finalUrl: 'https://x.com/get' }, TAKEOVER, true), { want: true });
 });
+test('wantsTakeover judges finalUrl || url', () => {
+  const r = wantsTakeover(item({ url: 'https://h/get?id=1', finalUrl: 'https://cdn/x.mkv', mime: 'application/x-unlisted' }), TAKEOVER, true);
+  assert.deepEqual(r, { want: true });
+});
+test('wantsTakeover: an empty finalUrl is judged by url alone', () => {
+  assert.deepEqual(wantsTakeover(item({ finalUrl: '' }), TAKEOVER, true), { want: true });
+  assert.deepEqual(wantsTakeover(item({ finalUrl: 'blob:https://x/u' }), TAKEOVER, true), { want: false, reason: 'not-http' });
+});
 test('wantsTakeover: minMb 0 takes a 1-byte file of a listed type', () => {
   assert.deepEqual(wantsTakeover(item({ totalBytes: 1 }), { ...TAKEOVER, minMb: 0 }, true), { want: true });
 });
@@ -134,6 +142,10 @@ test('verdict row 8: free space boundary', () => {
 test('verdict row 9: take over with size, mime, validator, final URL and name', () => {
   const v = verdict(item(), facts({ etag: '"abc"', url: 'https://cdn/a.zip', mime: 'Application/Zip; x=1' }), null);
   assert.deepEqual(v, { take: true, size: 9_000_000, mime: 'application/zip', validator: '"abc"', finalUrl: 'https://cdn/a.zip', name: 'a.zip' });
+});
+test('verdict: the first matching row wins when two facts fail', () => {
+  assert.deepEqual(verdict(item(), facts({ contentRange: 'bytes 0-0/9000001', mime: 'text/html' }), 1), { take: false, reason: 'size-differs' });
+  assert.deepEqual(verdict(item(), facts({ mime: 'text/html' }), 1), { take: false, reason: 'type-differs' });
 });
 test('verdict: validator choice', () => {
   const val = (o: Partial<ProbeFacts>) => { const v = verdict(item(), facts(o), null); assert.ok(v.take); return v.validator; };
@@ -197,6 +209,13 @@ test('parseDisposition', () => {
   assert.equal(parseDisposition(null), null);
   assert.equal(parseDisposition('attachment; filename="a\\"b.zip"'), 'a"b.zip');
   assert.equal(parseDisposition("attachment; filename=\"ok.bin\"; filename*=UTF-8''%E0%A4%A"), 'ok.bin');
+});
+test('parseDisposition: a filename* inside a quoted filename value is not a parameter', () => {
+  assert.equal(parseDisposition("attachment; filename=\"x; filename*=UTF-8''evil.exe\""), "x; filename*=UTF-8''evil.exe");
+  assert.equal(parseDisposition("attachment; filename=\"a.zip\"; filename*=UTF-8''b.zip"), 'b.zip');
+});
+test('sanitizeFileName: a cut that ends in a space is trimmed before the extension', () => {
+  assert.equal(sanitizeFileName('x'.repeat(145) + ' ' + 'y'.repeat(20) + '.mp4'), 'x'.repeat(145) + '.mp4');
 });
 test('sanitizeFileName', () => {
   const cases: [string, string][] = [
