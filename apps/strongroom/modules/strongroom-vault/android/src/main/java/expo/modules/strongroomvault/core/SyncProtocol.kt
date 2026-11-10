@@ -75,16 +75,15 @@ interface SyncTransport {
 
   fun putAccount(token: ByteArray, body: AccountUpdate): Long
 
-  // The defaults only keep older test doubles compiling; HttpSyncTransport and FakeWorker implement all five.
-  fun lostRequest(claimHash: String): Unit = throw UnsupportedOperationException("lostRequest")
+  fun lostRequest(claimHash: String)
 
-  fun lostRelease(claim: String): LostRelease = throw UnsupportedOperationException("lostRelease")
+  fun lostRelease(claim: String): LostRelease
 
-  fun lostStatus(token: ByteArray): LostStatus = throw UnsupportedOperationException("lostStatus")
+  fun lostStatus(token: ByteArray): LostStatus
 
-  fun lostCancel(token: ByteArray): Unit = throw UnsupportedOperationException("lostCancel")
+  fun lostCancel(token: ByteArray)
 
-  fun deleteEscrow(token: ByteArray): Unit = throw UnsupportedOperationException("deleteEscrow")
+  fun deleteEscrow(token: ByteArray)
 }
 
 /** Every reply is checked here, as strongroom-core's fetchTransport does, so a server that lies gives a SyncHttpError, never a crash deep in sync. */

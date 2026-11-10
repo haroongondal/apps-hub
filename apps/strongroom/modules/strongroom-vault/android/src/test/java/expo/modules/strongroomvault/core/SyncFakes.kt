@@ -44,7 +44,7 @@ internal class FakeWorker {
   }
 
   /** The owner opening the mailed confirm link: starts the wait. Like the Worker, it does nothing for a missing, cancelled or already confirmed request. */
-  fun confirmLost(releaseAt: Long) {
+  fun confirmLost(releaseAt: Long = time + DAY_MS) {
     lost = lost?.takeIf { !it.cancelled && it.confirmedReleaseAt == null }?.copy(confirmedReleaseAt = releaseAt) ?: lost
   }
 
@@ -78,6 +78,7 @@ internal class FakeWorker {
       reach()
       calls += "create"
       if (setupToken != SETUP_TOKEN) throw SyncAuthError()
+      if (!listOf(body.loginHash, body.recoveryHash, body.readHash).all(HASH::matches)) throw SyncHttpError(400)
       if (created) throw SyncHttpError(403)
       created = true
       header = body.header
@@ -93,6 +94,7 @@ internal class FakeWorker {
       val who = who(token)
       calls += "update $who ifRev=${body.ifRev}" + if (body.recoveryHash == null) "" else " recovery"
       refuse(who, readOk = false)
+      if (!listOfNotNull(body.loginHash, body.recoveryHash, body.readHash).all(HASH::matches)) throw SyncHttpError(400)
       val e = body.escrow
       if (e != null) {
         if (!validEscrow(e)) throw SyncHttpError(400)
@@ -119,7 +121,7 @@ internal class FakeWorker {
       val held = lost
       val free = held == null || held.cancelled || (held.confirmedReleaseAt == null && time - held.requestedAt >= HOUR_MS) ||
         (held.confirmedReleaseAt != null && time >= held.confirmedReleaseAt + GRACE_MS)
-      if (escrow != null && free && Regex("^[A-Za-z0-9+/]{43}=$").matches(claimHash)) lost = FakeLost(claimHash, time)
+      if (escrow != null && free && HASH.matches(claimHash)) lost = FakeLost(claimHash, time)
     }
 
     override fun lostRelease(claim: String): LostRelease {
@@ -165,10 +167,16 @@ internal class FakeWorker {
 }
 
 private const val HOUR_MS = 3_600_000L
-private const val GRACE_MS = 7 * 24 * HOUR_MS
+private const val DAY_MS = 24 * HOUR_MS
+private const val GRACE_MS = 7 * DAY_MS
+
+// JavaScript's \s, which the Worker's email check uses; Kotlin's own \s is ASCII only.
+private const val JS_SPACE = "\\t\\n\\u000B\\f\\r \\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF"
+private val EMAIL = Regex("^[^$JS_SPACE@]+@[^$JS_SPACE@]+\\.[^$JS_SPACE@]+$")
+private val HASH = Regex("^[A-Za-z0-9+/]{43}=$") // the Worker's BASE64_32_BYTES
 
 private fun validEscrow(e: EscrowBody) =
-  e.email.length in 1..320 && Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(e.email) && SyncWire.fromBase64(e.blob) != null && e.code.length in 1..64
+  e.email.length in 1..320 && EMAIL.matches(e.email) && e.blob.isNotEmpty() && SyncWire.fromBase64(e.blob) != null && e.code.length in 1..64
 
 internal class MemorySecrets : SyncSecrets {
   val values = HashMap<SyncSecret, ByteArray>()

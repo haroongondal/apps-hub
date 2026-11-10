@@ -38,7 +38,6 @@ internal class HttpSyncTransport(baseUrl: String) : SyncTransport {
   override fun putAccount(token: ByteArray, body: AccountUpdate) =
     call("PUT", "/v1/account", bearer(token), SyncWire.toJson(body)).let { (s, b) -> SyncWire.account(s, b) }
 
-  // The Worker ignores the cancel body; it is sent so no proxy refuses a POST without a length.
   override fun lostRequest(claimHash: String) =
     call("POST", "/v1/lost/request", null, SyncWire.lostRequestBody(claimHash)).let { (s, b) -> SyncWire.ok(s, b) }
 
@@ -48,6 +47,7 @@ internal class HttpSyncTransport(baseUrl: String) : SyncTransport {
   override fun lostStatus(token: ByteArray) =
     call("GET", "/v1/lost/status", bearer(token), null).let { (s, b) -> SyncWire.lostStatus(s, b) }
 
+  // The Worker ignores the cancel body; it is sent so no proxy refuses a POST without a length.
   override fun lostCancel(token: ByteArray) =
     call("POST", "/v1/lost/cancel", bearer(token), "{}").let { (s, b) -> SyncWire.ok(s, b) }
 

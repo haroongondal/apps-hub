@@ -91,13 +91,15 @@ class SyncWireEscrowTest {
   private val login = ByteArray(32) { 1 }
   private val recovery = ByteArray(32) { 2 }
   private val read = ByteArray(32) { 3 }
+  private val R2 = Crypto.tokenHash(ByteArray(32) { 22 })
+  private val R3 = Crypto.tokenHash(ByteArray(32) { 33 })
   private val escrow = EscrowBody("me@example.com", "AAAA", "CODE-1")
 
   private fun account(): FakeWorker = FakeWorker().also {
     it.t.putAccount(SETUP_TOKEN, AccountCreate("h1", Crypto.tokenHash(login), Crypto.tokenHash(recovery), Crypto.tokenHash(read)))
   }
 
-  private fun enrol(w: FakeWorker, recoveryHash: String? = "r2", ifRev: Long = w.headerRev, e: EscrowBody? = escrow) =
+  private fun enrol(w: FakeWorker, recoveryHash: String? = R2, ifRev: Long = w.headerRev, e: EscrowBody? = escrow) =
     w.t.putAccount(login, AccountUpdate("h2", Crypto.tokenHash(login), Crypto.tokenHash(read), ifRev, recoveryHash, e))
 
   private val claim = ByteArray(20) { (it + 9).toByte() }
@@ -108,7 +110,7 @@ class SyncWireEscrowTest {
     assertEquals(2L, enrol(w))
     assertEquals(FakeEscrow("me@example.com", "AAAA", "CODE-1"), w.escrow)
     assertEquals(listOf("CODE-1"), w.mails)
-    assertEquals("r2", w.recoveryHash)
+    assertEquals(R2, w.recoveryHash)
   }
 
   @Test fun fakeRefusesEscrowWithoutARecoveryHash() {
@@ -120,7 +122,7 @@ class SyncWireEscrowTest {
   }
 
   @Test fun fakeRefusesMalformedEscrow() {
-    for (bad in listOf(escrow.copy(email = "no-at-sign"), escrow.copy(email = "a@b.c".padEnd(321, 'x')), escrow.copy(blob = "not*base64"), escrow.copy(code = ""), escrow.copy(code = "x".repeat(65)))) {
+    for (bad in listOf(escrow.copy(email = "no-at-sign"), escrow.copy(email = "a\u00A0b@c.de"), escrow.copy(email = "a@b\u3000c.de"), escrow.copy(email = "a@b@c.de"), escrow.copy(blob = ""), escrow.copy(email = "a@b.c".padEnd(321, 'x')), escrow.copy(blob = "not*base64"), escrow.copy(code = ""), escrow.copy(code = "x".repeat(65)))) {
       assertEquals(400, assertThrows(SyncHttpError::class.java) { enrol(account(), e = bad) }.status)
     }
   }
@@ -150,7 +152,7 @@ class SyncWireEscrowTest {
     w.confirmLost(0) // no request yet: must do nothing
     w.t.lostRequest(Crypto.tokenHash(claim))
     assertTrue(w.lost != null)
-    enrol(w, recoveryHash = "r3", e = null)
+    enrol(w, recoveryHash = R3, e = null)
     assertNull(w.escrow)
     assertNull(w.lost)
   }
@@ -158,7 +160,7 @@ class SyncWireEscrowTest {
   @Test fun fakeKeepsTheEscrowWhenTheRecoveryHashIsUnchangedOrAbsent() {
     val w = account()
     enrol(w)
-    enrol(w, recoveryHash = "r2", e = null)
+    enrol(w, recoveryHash = R2, e = null)
     assertEquals("CODE-1", w.escrow!!.code)
     enrol(w, recoveryHash = null, e = null)
     assertEquals("CODE-1", w.escrow!!.code)
@@ -238,5 +240,46 @@ class SyncWireEscrowTest {
     w.t.lostStatus(read)
     w.t.deleteEscrow(login)
     assertEquals(listOf("create", "lostStatus read", "deleteEscrow login"), w.calls)
+  }
+
+  @Test fun fakeRefusesAnyHashThatIsNot32BytesOfBase64() {
+    for (bad in listOf("r2", "", Crypto.tokenHash(ByteArray(32)).dropLast(1), "A".repeat(44), "A".repeat(43) + "B")) {
+      val w = account()
+      assertEquals(bad, 400, assertThrows(SyncHttpError::class.java) { enrol(w, recoveryHash = bad) }.status)
+      assertEquals(bad, 400, assertThrows(SyncHttpError::class.java) { w.t.putAccount(login, AccountUpdate("h2", bad, Crypto.tokenHash(read), 1)) }.status)
+      assertEquals(bad, 400, assertThrows(SyncHttpError::class.java) { FakeWorker().t.putAccount(SETUP_TOKEN, AccountCreate("h", bad, R2, R3)) }.status)
+      assertEquals(1L, w.headerRev)
+      assertTrue(w.mails.isEmpty())
+    }
+  }
+
+  @Test fun fakeConfirmLostDefaultsToTheWorkers24HourWait() {
+    val w = account()
+    enrol(w)
+    w.t.lostRequest(Crypto.tokenHash(claim))
+    w.confirmLost()
+    assertEquals(w.time + 86_400_000, w.lost!!.confirmedReleaseAt)
+    w.confirmLost(5) // already confirmed: a second confirm is a no-op
+    assertEquals(w.time + 86_400_000, w.lost!!.confirmedReleaseAt)
+  }
+
+  @Test fun fakeReplacesAReleasedRequestOnlySevenDaysAfterRelease() {
+    val w = account()
+    enrol(w)
+    val other = Crypto.tokenHash(ByteArray(20) { 5 })
+    w.t.lostRequest(Crypto.tokenHash(claim))
+    w.confirmLost()
+    val releaseAt = w.time + 86_400_000
+    w.time = releaseAt
+    assertTrue(w.t.lostRelease(claimText) is LostRelease.Ready)
+    w.time = releaseAt + 7 * 86_400_000 - 1
+    w.t.lostRequest(other)
+    assertEquals(Crypto.tokenHash(claim), w.lost!!.claimHash) // one ms early: kept, still releasable
+    assertTrue(w.t.lostRelease(claimText) is LostRelease.Ready)
+    w.time = releaseAt + 7 * 86_400_000
+    w.t.lostRequest(other)
+    assertEquals(other, w.lost!!.claimHash)
+    assertNull(w.lost!!.confirmedReleaseAt)
+    assertEquals(LostRelease.Waiting(null), w.t.lostRelease(claimText))
   }
 }
