@@ -19,18 +19,22 @@
       .ytp-scrubber-button { width: 12px; height: 12px; }
       .ytp-live-badge::before { content: ''; display: inline-block; width: 6px; height: 6px; background: rgb(117, 117, 117); }
       .ytp-livebadge-color .ytp-live-badge.ytp-live-badge-is-livehead::before { background: var(--yt-sys-color-baseline--overlay-background-brand, rgba(225, 0, 45, 0.9)); }
+      .ytp-progress-linear-live-buffer { width: 200px; height: 4px; background: rgb(204, 0, 0); }
+      .page-rule { background: rgb(7, 7, 7); }
       .ad-interrupting .ytp-play-progress.ytp-swatch-background-color { background: rgb(255, 204, 0); }
     </style>
   </head>
   <body>
     <script>
       requestAnimationFrame(() => {
-        window.__darkAtFirstFrame = document.documentElement.hasAttribute('dark');
+        window.__first = { dark: document.documentElement.hasAttribute('dark'), applied: performance.getEntriesByName('sieve-yt-applied')[0]?.startTime ?? null };
       });
     </script>
     <div id="movie_player" class="html5-video-player ytp-livebadge-color">
       <div id="bar" class="ytp-play-progress ytp-swatch-background-color"></div>
       <div id="scrubber" class="ytp-scrubber-button ytp-swatch-background-color"></div>
+      <div id="buffer" class="ytp-progress-linear-live-buffer"></div>
+      <div id="pagerule" class="page-rule"></div>
       <button id="badge" class="ytp-live-badge ytp-live-badge-is-livehead">Live</button>
     </div>
     <script>
