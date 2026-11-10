@@ -62,6 +62,7 @@ export class FakeFiles implements Files {
   failWrite = false;
   shortBy = 0; // handle.size() reports this many bytes less
   maxWrite = 0;
+  writeCount = 0;
   openedSizes: (number | null)[] = [];
   clock: ManualClock;
   constructor(clock: ManualClock, log?: LogEntry[]) { this.clock = clock; this.log = log ?? []; }
@@ -81,6 +82,7 @@ export class FakeFiles implements Files {
         if (closed) throw new Error('write after close');
         if (me.failWrite) throw new Error('quota exceeded');
         me.maxWrite = Math.max(me.maxWrite, chunk.length);
+        me.writeCount++;
         let b = me.data.get(name)!;
         if (at + chunk.length > b.length) { const g = new Uint8Array(at + chunk.length); g.set(b); b = g; me.data.set(name, b); }
         b.set(chunk, at);
@@ -134,13 +136,15 @@ export interface Spec {
   rule?: (c: RuleCtx) => Override | undefined; // consulted when the script is empty
   finalUrl?: string;
 }
-export interface ReqLog { url: string; range?: string; ifRange?: string; status: number; at: number }
+export interface ReqLog { url: string; range?: string; ifRange?: string; status: number; at: number; open: number }
 
 export class FakeNet implements Net {
   specs = new Map<string, Spec>();
   log: ReqLog[] = [];
   counts = new Map<string, number>();
-  maxUnread = 0;
+  produced = 0; // chunks handed out
+  consumed: () => number = () => 0; // chunks the consumer has written, set by the test
+  maxHeld = 0; // most chunks handed out but not yet written
   inflight = new Map<string, number>(); // open response bodies per host
   maxInflight = new Map<string, number>();
   chunk = 65_536;
@@ -154,7 +158,7 @@ export class FakeNet implements Net {
     if (signal?.aborted) throw abortError();
     const n = (this.counts.get(url) ?? 0) + 1;
     this.counts.set(url, n);
-    const entry: ReqLog = { url, range: init.range, ifRange: init.ifRange, status: 0, at: this.clock.t };
+    const entry: ReqLog = { url, range: init.range, ifRange: init.ifRange, status: 0, at: this.clock.t, open: this.inflight.get(new URL(url).host) ?? 0 };
     this.log.push(entry);
     if (!spec) { entry.status = 404; return this.respond(404, {}, null, url); }
     const m = init.range ? /^bytes=(\d+)-(\d*)$/.exec(init.range) : null;
@@ -174,7 +178,8 @@ export class FakeNet implements Net {
     if (ov.retryAfter) base['retry-after'] = ov.retryAfter;
     if (ov.status !== undefined && ov.status !== 200 && ov.status !== 206) {
       entry.status = ov.status;
-      return this.respond(ov.status, base, null, spec.finalUrl ?? url);
+      // a real error response has a body; it stays open until the client closes it
+      return this.respond(ov.status, base, this.stream(0, 0, { stopAfter: 0 }, new URL(url).host, signal), spec.finalUrl ?? url);
     }
     const ranged = (spec.ranges ?? true) && m !== null && (!init.ifRange || init.ifRange === tag) && ov.status !== 200;
     let from = 0;
@@ -199,7 +204,6 @@ export class FakeNet implements Net {
   private stream(from: number, to: number, ov: Override, host: string, signal?: AbortSignal): ReadableStream<Uint8Array> {
     let pos = from;
     let sent = 0;
-    let outstanding = 0;
     let open = true;
     const limit = ov.deliver ?? Infinity;
     const now = (this.inflight.get(host) ?? 0) + 1;
@@ -209,7 +213,6 @@ export class FakeNet implements Net {
     return new ReadableStream<Uint8Array>({
       start: (c) => { signal?.addEventListener('abort', () => { end(); try { c.error(abortError()); } catch { /* closed */ } }, { once: true }); },
       pull: async (c) => {
-        outstanding = 0;
         if (signal?.aborted) throw abortError();
         if (pos > to || sent >= limit) { end(); c.close(); return; }
         if (ov.stopAfter !== undefined && sent >= ov.stopAfter) await new Promise<void>(() => {});
@@ -219,8 +222,8 @@ export class FakeNet implements Net {
         if (ov.stopAfter !== undefined) n = Math.min(n, ov.stopAfter - sent);
         if (ov.failAfter !== undefined) n = Math.min(n, ov.failAfter - sent);
         c.enqueue(pattern(pos, n));
-        outstanding++;
-        this.maxUnread = Math.max(this.maxUnread, outstanding);
+        this.produced++;
+        this.maxHeld = Math.max(this.maxHeld, this.produced - this.consumed());
         pos += n; sent += n;
       },
       cancel: () => { end(); },

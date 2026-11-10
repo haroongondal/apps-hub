@@ -198,12 +198,14 @@ export function createTransfer(deps: TransferDeps): Transfer {
             chunk = chunk.subarray(0, Math.min(chunk.length, q.end + 1 - at));
           }
           await writeChunk(h, at, chunk);
+          q = r.parts[i]; // the write was awaited: a re-split may have replaced the part object
           q.done += chunk.length;
           s.attempt = 0; s.refusals = 0; s.since = clock.now();
           hooks.bytes(chunk.length);
           hooks.update(clone(r));
           bytesSince += chunk.length;
           if (bytesSince >= CHECKPOINT_BYTES || clock.now() - lastCheckpoint >= CHECKPOINT_MS) await checkpoint(h);
+          q = r.parts[i];
           if (q.end !== null && q.start + q.done > q.end) break;
         }
       } finally {
@@ -223,8 +225,9 @@ export function createTransfer(deps: TransferDeps): Transfer {
         await acquire(host);
         s.since += clock.now() - waitedFrom; // waiting for a slot is not a failure and does not run the 15 minutes
         let held = true;
-        const free = () => { if (held) { held = false; use[host]--; } };
         const req = new AbortController();
+        // Aborting also closes a response whose body was never read (a refusal, an error status): its socket must not outlive the slot.
+        const free = () => { req.abort(); if (held) { held = false; use[host]--; } };
         const stop = () => req.abort();
         sig.addEventListener('abort', stop, { once: true });
         try {

@@ -141,8 +141,10 @@ test('6 429 with four parts: hostCaps cap 2, Retry-After honoured, caps expire a
   assert.equal(res.kind, 'done');
   const caps = s.store.meta.get('hostCaps') as HostCaps;
   assert.equal(caps['h.test'].cap, 2);
-  assert.ok(s.clock.sleeps.some((ms) => ms >= 3000));
-  const refusedStart = s.net.log.find((l) => l.status === 429)!.range!.split('-')[0];
+  const refused = s.net.log.find((l) => l.status === 429)!;
+  const refusedStart = refused.range!.split('-')[0];
+  const retry = s.net.log.find((l) => l !== refused && l.range!.startsWith(`${refusedStart}-`))!;
+  assert.ok(retry.at >= refused.at + 3000, `retried ${retry.at - refused.at} ms after the refusal`);
   assert.equal(s.net.log.filter((l) => l.range!.startsWith(`${refusedStart}-`)).length, 2, 'the refused part retries from its offset');
   assertFile(s.files, size);
 
@@ -174,6 +176,7 @@ test('7b five 429s in a row fail with ERRORS.refused after sleeps 2, 4, 8, 16 s;
   assert.equal(failed(res), ERRORS.refused);
   assert.deepEqual(five.clock.sleeps, [2000, 4000, 8000, 16000]);
   assert.equal(five.net.log.length, 5);
+  assert.equal(five.net.inflight.get('h.test'), 0, 'refused responses were closed');
 
   const reset = setup();
   const four = Array.from({ length: 4 }, (): Override => ({ status: 429 }));
@@ -200,6 +203,7 @@ test('8 hard errors 403, 404, 410 on probe and part fail at once', async () => {
     onPart.net.add(U, { size: MiB, script: [{ status: code }] });
     assert.equal(failed(await onPart.run(probed(U, MiB))), ERRORS.status(code));
     assert.equal(onPart.net.log.length, 1);
+    assert.equal(onPart.net.inflight.get('h.test'), 0, 'the error response was closed');
   }
 });
 
@@ -253,12 +257,12 @@ test('9b stall: aborted after STALL_MS and retried; speed limit sleep is not a s
   assertFile(s.files, 3 * MiB);
 
   const limited = setup();
-  limited.transfer.config({ ...DEFAULT_DOWNLOADS, speedLimit: { on: true, kbPerSecond: 10 } });
+  limited.transfer.config({ ...DEFAULT_DOWNLOADS, speedLimit: { on: true, kbPerSecond: 1 } }); // 1000 B/s: one chunk drains in about 65 s
   limited.net.add(U, { size: 524_288 });
   const slow = await limited.run(probed(U, 524_288));
   assert.equal(slow.kind, 'done');
   assert.equal(limited.net.log.length, 1, 'no request was aborted');
-  assert.ok(limited.clock.t > 40_000);
+  assert.ok(limited.clock.t > 400_000);
 });
 
 test('9c probe error three times fails with ERRORS.probe', async () => {
@@ -291,6 +295,16 @@ test('9d host total: HOST_MAX connections per host across records, cap after 429
   assert.equal(s.net.maxInflight.get('h.test'), 6);
   assert.equal(s.net.maxInflight.get('other.test'), 6);
 
+  const real = setup();
+  const delayed: Override = { delayMs: 10 };
+  real.net.add(U, { size: 12 * MiB, script: [delayed, delayed, delayed, delayed, delayed, { status: 429, retryAfter: '5' }], rule: () => delayed });
+  const refusedRun = await real.run(probed(U, 12 * MiB, { partsWanted: 6 }));
+  assert.equal(refusedRun.kind, 'done');
+  assert.equal((real.store.meta.get('hostCaps') as HostCaps)['h.test'].cap, 3);
+  const at = real.net.log.findIndex((l) => l.status === 429);
+  assert.ok(real.net.log.length > at + 1);
+  assert.ok(real.net.log.slice(at + 1).every((l) => l.open < 3), 'no connection opens while 3 are open');
+
   const capped = setup();
   capped.store.meta.set('hostCaps', { 'h.test': { cap: 3, until: 1e12 } });
   capped.net.add('https://h.test/a.bin', slow());
@@ -316,6 +330,7 @@ test('10 changed file: 200 to ranged request, 416, wrong Content-Range start, to
     s.net.add(U, { size: 2 * MiB, script: c.script, etag: c.etag });
     const res = await s.run(probed(U, 2 * MiB, c.validator === undefined ? {} : { validator: c.validator }));
     assert.equal(failed(res), c.error, JSON.stringify(c.script));
+    assert.equal(s.net.inflight.get('h.test'), 0, 'no response body is left open');
   }
   const s = setup();
   s.net.add(U, { size: 2 * MiB, etag: null });
@@ -427,7 +442,32 @@ test('16 length check: missing last byte keeps retrying then ERRORS.network; sho
 test('17 memory: no write above 1 MiB and at most one unread chunk per active part', async () => {
   const s = setup();
   s.net.add(U, { size: 6 * MiB });
+  s.net.consumed = () => s.files.writeCount;
   assert.equal((await s.run(probed(U, 6 * MiB, { partsWanted: 3 }))).kind, 'done');
   assert.ok(s.files.maxWrite > 0 && s.files.maxWrite <= MiB);
-  assert.ok(s.net.maxUnread <= 1);
+  assert.ok(s.net.maxHeld >= 1 && s.net.maxHeld <= 3, `held ${s.net.maxHeld} chunks for 3 parts`);
+});
+
+test('7c the slot is released before the 429 back-off: another download starts during the sleep', async () => {
+  const s = setup();
+  const B = 'https://h.test/b.bin';
+  s.net.add(U, { size: MiB, script: [{ status: 429 }] });
+  s.net.add(B, { size: MiB });
+  const never = new AbortController().signal;
+  const second = (async () => {
+    await s.clock.sleep(500);
+    return s.transfer.run(probed(B, MiB, { id: 'db' }), never, s.hooks);
+  })();
+  const [a, b] = await s.clock.drive(Promise.all([s.transfer.run(probed(U, MiB), never, s.hooks), second]));
+  assert.equal(a.kind, 'done');
+  assert.equal(b.kind, 'done');
+  const started = s.net.log.find((l) => l.url === B)!;
+  assert.equal(started.at, 500, 'the second download did not wait for the first one back-off');
+});
+
+test('3 a received byte resets the failure count: back-off stays at 2000 ms', async () => {
+  const s = setup();
+  s.net.add(U, { size: MiB, script: [{ failAfter: 65_536 }, { failAfter: 65_536 }, { failAfter: 65_536 }] });
+  assert.equal((await s.run(probed(U, MiB))).kind, 'done');
+  assert.deepEqual(s.clock.sleeps.filter((ms) => ms !== STALL_MS).slice(0, 3), [2000, 2000, 2000]);
 });
