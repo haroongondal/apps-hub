@@ -39,7 +39,7 @@ function defaults(): Settings {
 
 export const DEFAULT_SETTINGS: Settings = defaults();
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+export const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const bool = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean' ? v : fallback);
 const text = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
 
