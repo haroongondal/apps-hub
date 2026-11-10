@@ -5,6 +5,7 @@ import { FEATURES, validateSettings, type AllowEntry, type FeatureKey, type Sett
 import { NAMES, count, save, setBlocking, setList, toggle } from './controls.ts';
 import { h, type Child } from './dom.ts';
 import { FILTERS_CHANGED, TOO_MANY_TO_STORE, saveMyFilters, type SaveResult } from './my-filters.ts';
+import { backupSection } from './options-backup.ts';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const SHOWN_ERRORS = 50;
@@ -163,4 +164,4 @@ chrome.storage.onChanged.addListener((changes, where) => {
 });
 
 renderAllowlist();
-document.getElementById('app')!.replaceChildren(h('header', {}, h('h1', { class: 'ui-title' }, 'Sieve settings')), blocking, lists, mine, allow);
+document.getElementById('app')!.replaceChildren(h('header', {}, h('h1', { class: 'ui-title' }, 'Sieve settings')), blocking, lists, mine, allow, backupSection());

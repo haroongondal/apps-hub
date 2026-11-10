@@ -936,8 +936,8 @@ try {
   const blockingLabels = (await labelsIn(0)).map((t) => t.trim());
   const rowLabels = (await labelsIn(1)).map((t) => t.trim());
   check(
-    `the settings page has Blocking (the menu's four switches, Ad blocker warnings and Trackers), Filter lists ("${rows[0]}", AI search summaries by name only), My filters and Allowlist, and says how old the lists are and how to refresh them`,
-    same(headings, ['Blocking', 'Filter lists', 'My filters', 'Allowlist']) &&
+    `the settings page has Blocking (the menu's four switches, Ad blocker warnings and Trackers), Filter lists ("${rows[0]}", AI search summaries by name only), My filters, Allowlist and Backup and import, and says how old the lists are and how to refresh them`,
+    same(headings, ['Blocking', 'Filter lists', 'My filters', 'Allowlist', 'Backup and import']) &&
       same(blockingLabels, ['Distraction control', 'Cookie banners', 'AI search summaries', 'Site notification requests', 'Ad blocker warnings', 'Trackers']) &&
       same(rowLabels, rows) &&
       (await opt.getByText(footer, { exact: true }).isVisible()),
