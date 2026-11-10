@@ -11,10 +11,18 @@ import type { Entry, Header } from 'strongroom-core';
 import { MemorySyncStore } from 'strongroom-core/src/__tests__/memory-sync-store.ts';
 import { handle } from '../../../../tools/vault-api/src/index.ts';
 import { d1FromNodeSqlite } from '../../../../tools/vault-api/src/__tests__/d1-fake.ts';
+import type { Mailer } from '../../../../tools/vault-api/src/lost-access.ts';
+
+// Captures every mail the Worker would have sent, in order, so a test can read the emailed code or a confirm link without a real mailbox.
+export function fakeMailer(): Mailer & { sent: { to: string; subject: string; text: string }[] } {
+  const sent: { to: string; subject: string; text: string }[] = [];
+  return { sent, send: async (to, subject, text) => void sent.push({ to, subject, text }) };
+}
 
 export const SETUP_TOKEN = 'setup-token-for-tests-0123456789abcdef';
 export const PHONE_PASSWORD = 'first master password';
 const migration = readFileSync(new URL('../../../../tools/vault-api/migrations/0001_init.sql', import.meta.url), 'utf8');
+const migration2 = readFileSync(new URL('../../../../tools/vault-api/migrations/0002_escrow.sql', import.meta.url), 'utf8');
 
 export const loginEntry = (name: string, updatedAt: number): Entry => ({ type: 'login', name, username: 'me', password: 'pw', sites: [], apps: [], note: '', updatedAt });
 
@@ -33,11 +41,13 @@ export async function newWorld() {
   const m = await (made ??= make());
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec(migration);
+  sqlite.exec(migration2);
   const env = { DB: d1FromNodeSqlite(sqlite), SETUP_TOKEN };
-  const serve = (req: Request) => handle(req, env, { sleep: async () => {} });
+  const mail = fakeMailer();
+  const serve = (req: Request) => handle(req, env, { sleep: async () => {}, mail });
 
   const world = {
-    sqlite, env, serve,
+    sqlite, env, serve, mail,
     online: true,
     failPut: false,
     gate: undefined as undefined | Promise<void>,
@@ -57,7 +67,7 @@ export async function newWorld() {
     const url = new URL(req.url);
     world.requests.push(`${req.method} ${url.pathname}`);
     if (!world.online || (world.failPut && req.method === 'PUT')) throw new TypeError('offline');
-    if (world.gate && req.method === 'PUT') await world.gate;
+    if (world.gate) await world.gate;
     const res = await serve(req);
     if (!world.rewrite) return res;
     return new Response(JSON.stringify(world.rewrite(url.pathname, await res.json())), { status: res.status, headers: res.headers });
@@ -108,6 +118,9 @@ async function makePhone(world: { serve: (r: Request) => Promise<Response> }, m:
 
 export async function serveHttp(world: World): Promise<{ url: string; close(): Promise<void> }> {
   const server = createServer(async (req, res) => {
+    // A real browser talks to this real socket, so `world.online` (which only gates the in-process fetchFn) must also gate this path, by dropping the connection.
+    if (!world.online) return void req.socket.destroy();
+    if (world.gate) await world.gate;
     const chunks: Buffer[] = [];
     for await (const c of req) chunks.push(c as Buffer);
     const headers = new Headers();

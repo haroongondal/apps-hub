@@ -1,4 +1,4 @@
-import type { Detail, ImportPreview, PageRef, Pending, Request, Row, Status, SyncStatus } from './service.ts';
+import type { Detail, EmailRecoveryStatus, ImportPreview, LostAccessState, PageRef, Pending, Request, Row, Status, SyncStatus } from './service.ts';
 import { syncLines } from './sync-copy.ts';
 
 type Child = Node | string | null | false | undefined;
@@ -23,11 +23,14 @@ async function call<T = unknown>(req: Request | { type: string }): Promise<T> {
 
 const root = document.getElementById('app')!;
 let tab: PageRef | null = null;
+// Chrome closes the toolbar popup when the file picker opens, so Import runs in a full tab (popup.html#import).
+const inImportTab = () => location.hash === '#import';
+let importNext = false;
 
 const msgBox = () => h('p', { class: 'ui-meta msg', role: 'alert' });
 const label = (text: string, input: HTMLElement) => h('label', { class: 'ui-field' }, h('span', { class: 'ui-caption' }, text), input);
 const input = (props: Record<string, unknown> = {}) => h('input', { class: 'ui-input', autocomplete: 'off', spellcheck: false, ...props });
-const button = (text: string, onclick: () => unknown, kind = '') => h('button', { class: `ui-btn ${kind}`.trim(), type: 'button', onclick }, text);
+const button = (text: string, onclick: (e?: MouseEvent) => unknown, kind = '') => h('button', { class: `ui-btn ${kind}`.trim(), type: 'button', onclick }, text);
 
 async function guarded(msg: HTMLElement, buttons: HTMLButtonElement[], work: () => Promise<unknown>) {
   msg.textContent = '';
@@ -57,6 +60,10 @@ async function route() {
   if (status.recoveryKey) return recoveryScreen(status.recoveryKey);
   if (status.state === 'no-vault') return setupScreen();
   if (status.state === 'locked') return unlockScreen();
+  if (importNext) {
+    importNext = false;
+    return importScreen();
+  }
   return vaultScreen();
 }
 
@@ -91,7 +98,10 @@ function confirmReplace(entries: number, back: () => unknown, replace: () => Pro
     h('p', { class: 'ui-muted' }, "What's here now can't be brought back."), msg, yes, no);
 }
 
-function signInScreen(back: () => unknown) {
+async function signInScreen(back: () => unknown) {
+  // Lost access always refuses once the vault is unlocked (service.ts), which this screen is reached from too (syncCard's
+  // "Sign in again"); offering a dead-end entry there is worse than not offering it, so it only shows while locked.
+  const locked = (await call<Status>({ type: 'status' })).state !== 'unlocked';
   const msg = msgBox();
   const pw = input({ type: 'password', autocomplete: 'current-password' });
   const key = input({ placeholder: 'ABCD-EFGH-…' });
@@ -105,7 +115,75 @@ function signInScreen(back: () => unknown) {
   screen('Sign in to sync', back,
     h('p', { class: 'ui-muted' }, 'Use the master password and account key from your phone. Strongroom was set up there first.'),
     label('Master password', pw), label('Account key', key), msg, go,
-    button('Forgot master password?', () => recoverySignInScreen(back), 'ui-btn--ghost'));
+    button('Forgot master password?', () => recoverySignInScreen(back), 'ui-btn--ghost'),
+    locked && button('Lost access to your account?', () => lostAccessScreen(back), 'ui-btn--ghost'));
+}
+
+async function lostAccessScreen(back: () => unknown) {
+  const msg = msgBox();
+  const state = await call<LostAccessState>({ type: 'lostAccess', action: 'check' }).catch(() => null);
+  if (state === null) {
+    const retry = button('Try again', () => guarded(msg, [retry], () => lostAccessScreen(back)), 'ui-btn--primary');
+    screen('Lost access', back, h('p', { class: 'ui-muted' }, "Couldn't check its status just now. Try again."), msg, retry);
+    return;
+  }
+  if (state.state === 'ready') return lostAccessOpenScreen(back);
+  const startOver = async () => {
+    await call({ type: 'lostAccess', action: 'request' });
+    await lostAccessScreen(back);
+  };
+  if (state.state === 'waiting') {
+    // A known releaseAt means the server already confirmed this exact claim is alive and counting down: there is no good reason to let it be forgotten client-side, so no way to replace it is offered here.
+    if (state.releaseAt !== null) {
+      const again = button('Check again', () => guarded(msg, [again], () => lostAccessScreen(back)), 'ui-btn--primary');
+      screen('Lost access', back, h('p', {}, `Confirmed by email. Strongroom lets you back in at ${new Date(state.releaseAt).toLocaleString()}.`), msg, again);
+      return;
+    }
+    let sure = false;
+    const again = button('Check again', () => guarded(msg, [again, request], () => lostAccessScreen(back)), 'ui-btn--primary');
+    // A double-click's second press carries event.detail > 1: it is ignored outright here, not treated as a deliberate confirm, regardless of timing or disabled state.
+    const request = button('Start a new request', (e) => {
+      if ((e?.detail ?? 1) > 1) return;
+      return guarded(msg, [again, request], async () => {
+        if (!sure) {
+          sure = true;
+          request.textContent = 'Yes, start a new request';
+          setTimeout(() => { request.disabled = false; again.disabled = false; }, 600);
+          return;
+        }
+        await startOver();
+      });
+    }, 'ui-btn--danger');
+    screen('Lost access', back,
+      h('p', {}, 'Check your email and open the confirm link. The 24-hour wait starts once you do.'), msg, again,
+      h('p', { class: 'ui-muted' },
+        "If you already sent a request and are waiting for the confirmation email, starting over won't reach the server and you'll need to wait the full time again from a fresh request. Only do this if you're sure the earlier request failed, was cancelled, or never arrived."),
+      request);
+    return;
+  }
+  const go = button('Request access by email', () => guarded(msg, [go], startOver), 'ui-btn--primary');
+  screen('Lost access', back,
+    h('p', { class: 'ui-muted' }, "If you turned on email recovery, this asks by email. You'll need the code it mailed you when you turned it on, and a 24-hour wait that another signed-in device can cancel."),
+    msg, go);
+}
+
+function lostAccessOpenScreen(back: () => unknown) {
+  const msg = msgBox();
+  const code = input({ placeholder: 'ABCD-EFGH-…' });
+  const pw = input({ type: 'password', autocomplete: 'new-password' });
+  const again = input({ type: 'password', autocomplete: 'new-password' });
+  const send = (replace: boolean) => async () => {
+    const reply = await call<Confirm>({ type: 'lostAccess', action: 'open', code: code.value, newPassword: pw.value, replace });
+    if (reply) confirmReplace(reply.entries, () => lostAccessOpenScreen(back), send(true));
+    else await route();
+  };
+  const go = button('Open and sign in', () => guarded(msg, [go], async () => {
+    if (pw.value !== again.value) throw new Error("The two passwords don't match. Type the same one twice.");
+    await send(false)();
+  }), 'ui-btn--primary');
+  screen('Lost access', back,
+    h('p', { class: 'ui-muted' }, 'Type the code from the email you got when you turned on email recovery, and set a new master password.'),
+    label('Code from the email', code), label('New master password (at least 12 characters)', pw), label('Type it again', again), msg, go);
 }
 
 function recoverySignInScreen(back: () => unknown) {
@@ -153,6 +231,56 @@ async function whenSyncDone(card: HTMLElement, refresh: () => unknown) {
   }
 }
 
+function emailRecoveryGroup(s: EmailRecoveryStatus | null, refresh: () => unknown) {
+  const msg = msgBox();
+  const caption = h('p', { class: 'ui-caption' }, 'Email recovery');
+  if (!s) return h('div', { class: 'ui-group' }, caption, h('p', { class: 'ui-muted' }, "Couldn't check its status just now. Try again later."));
+  if (!s.available) return h('div', { class: 'ui-group' }, caption, h('p', { class: 'ui-muted' }, "Sync isn't available in this build."));
+  if (s.waitingForCode) {
+    const code = input({ placeholder: 'ABCD-EFGH-…' });
+    const go = button('Confirm', () => guarded(msg, [go, off], async () => {
+      await call({ type: 'emailRecovery', action: 'confirm', code: code.value });
+      await refresh();
+    }), 'ui-btn--primary');
+    const off = button('Turn off', () => guarded(msg, [go, off], async () => {
+      await call({ type: 'emailRecovery', action: 'off' });
+      await refresh();
+    }), 'ui-btn--danger');
+    return h('div', { class: 'ui-group' }, caption,
+      h('p', {}, 'Check your email for the code and type it here to turn on email recovery.'),
+      h('p', { class: 'ui-muted' }, "Wrong email, or the code never arrived? Turn it off and start over."),
+      label('Code from the email', code), msg, go, off);
+  }
+  if (s.enrolled) {
+    const off = button('Turn off', () => guarded(msg, [off], async () => {
+      await call({ type: 'emailRecovery', action: 'off' });
+      await refresh();
+    }), 'ui-btn--danger');
+    return h('div', { class: 'ui-group' }, caption,
+      h('p', {}, 'Recovery by email is on.'),
+      h('p', { class: 'ui-muted' }, 'Anyone who controls that inbox could start a recovery of your vault. You get 24 hours to cancel it by email before it goes through.'),
+      off, msg);
+  }
+  const email = input({ type: 'email', placeholder: 'you@example.com' });
+  const pw = input({ type: 'password', autocomplete: 'current-password' });
+  const go = button('Turn on', () => guarded(msg, [go], async () => {
+    await call({ type: 'emailRecovery', action: 'enrol', email: email.value, password: pw.value });
+    await route();
+  }), 'ui-btn--primary');
+  return h('div', { class: 'ui-group' }, caption,
+    s.wasTurnedOff && h('p', {}, 'Recovery by email is off. Turn it on again.'),
+    h('p', { class: 'ui-muted' }, "Email recovery lets you get back into your vault by email if you forget your master password. Anyone who controls that inbox could start a recovery of your vault, with 24 hours to cancel it. Turning this on replaces your current recovery key, so you'll need to save the new one."),
+    label('Email address', email), label('Master password', pw), msg, go);
+}
+
+// Anti-goal #4: lock-free autofill (Task 8) means a locked vault still answers fills, so both screens say so plainly.
+const PROFILE_NOTICE = 'Autofill works while locked. Anyone who can use this browser profile can use this vault. Press Lock to stop that.';
+
+async function settingsScreen() {
+  const s = await call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' }).catch(() => null);
+  screen('Settings', vaultScreen, h('p', { class: 'ui-muted' }, PROFILE_NOTICE), emailRecoveryGroup(s, settingsScreen));
+}
+
 function recoveryScreen(key: string) {
   const msg = msgBox();
   const group = input({ placeholder: 'First four characters', maxLength: 4 });
@@ -168,6 +296,8 @@ function recoveryScreen(key: string) {
 async function unlockScreen() {
   const msg = msgBox();
   const pw = input({ type: 'password', autocomplete: 'current-password', autofocus: true });
+  // pending/syncStatus are local-only; the email-recovery status call can reach a slow or unreachable Worker, so it must
+  // never hold up the one thing this screen needs to do instantly: let the owner type their master password.
   const pending = tab && await call<Pending | null>({ type: 'pending', tabId: tab.tabId });
   const sync = await call<SyncStatus>({ type: 'syncStatus' });
   const go = button('Unlock', () => guarded(msg, [go], async () => {
@@ -175,10 +305,25 @@ async function unlockScreen() {
     await route();
   }), 'ui-btn--primary');
   pw.addEventListener('keydown', (e) => e.key === 'Enter' && go.click());
+  const bannerSlot = h('div', {});
   screen('Unlock Strongroom', null,
+    bannerSlot,
     pending && h('p', { class: 'ui-muted' }, `After you unlock, you can save the sign-in you just used on ${pending.host}.`),
+    h('p', { class: 'ui-muted' }, PROFILE_NOTICE),
     label('Master password', pw), msg, go, button('Forgot master password?', resetScreen, 'ui-btn--ghost'),
-    sync.available && (sync.state !== 'off' || sync.keyLost) && button('Sign in with your account', () => signInScreen(unlockScreen), 'ui-btn--ghost'));
+    sync.available && (sync.state !== 'off' || sync.keyLost) && button('Sign in with your account', () => signInScreen(unlockScreen), 'ui-btn--ghost'),
+    sync.available && button('Lost access to your account?', () => lostAccessScreen(unlockScreen), 'ui-btn--ghost'));
+  if (sync.available) void loadRecoveryBanner(bannerSlot, msg);
+}
+
+const BANNER_TIMEOUT_MS = 5_000;
+
+async function loadRecoveryBanner(slot: HTMLElement, msg: HTMLElement) {
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), BANNER_TIMEOUT_MS));
+  const emailRecovery = await Promise.race([call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' }).catch(() => null), timeout]);
+  if (!slot.isConnected) return;
+  const banner = recoveryBanner(emailRecovery, msg, unlockScreen);
+  if (banner) slot.replaceWith(banner);
 }
 
 function resetScreen() {
@@ -194,12 +339,22 @@ function resetScreen() {
   screen('Reset master password', unlockScreen, label('Recovery key', key), label('New master password (at least 12 characters)', pw), label('Type it again', again), msg, go);
 }
 
+function recoveryBanner(s: EmailRecoveryStatus | null, msg: HTMLElement, refresh: () => unknown) {
+  if (!s?.pendingRecovery) return null;
+  return h('div', { class: 'ui-group card' },
+    h('p', {}, s.pendingRecovery.releaseAt
+      ? `Someone requested email recovery for this vault. It opens at ${new Date(s.pendingRecovery.releaseAt).toLocaleString()} unless you cancel it.`
+      : 'Someone requested email recovery for this vault. It is waiting to be confirmed by email.'),
+    button('Cancel', () => guarded(msg, [], async () => { await call({ type: 'emailRecovery', action: 'cancelRecovery' }); await refresh(); }), 'ui-btn--danger'));
+}
+
 async function vaultScreen() {
-  const [{ rows, unreadable }, pending, here, sync] = await Promise.all([
+  const [{ rows, unreadable }, pending, here, sync, emailRecovery] = await Promise.all([
     call<{ rows: Row[]; unreadable: number }>({ type: 'list' }),
     tab ? call<Pending | null>({ type: 'pending', tabId: tab.tabId }) : null,
     tab ? call<{ rows: Row[] }>({ type: 'candidates', page: tab }) : null,
     call<SyncStatus>({ type: 'syncStatus' }),
+    call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' }).catch(() => null),
   ]);
   const toast = h('p', { class: 'ui-meta', role: 'status' });
   const msg = msgBox();
@@ -233,9 +388,10 @@ async function vaultScreen() {
       button('Copy password', () => guarded(msg, [], async () => copy((await call<Detail>({ type: 'get', id: r.id })).password, 'Password', toast))))));
 
   screen('Strongroom', null,
-    h('div', { class: 'ui-toolbar' }, button('Add', () => editScreen(null), 'ui-btn--primary'), button('Import', importScreen),
-      h('span', { class: 'grow' }), button('Lock', () => guarded(msg, [], async () => { await call({ type: 'lock' }); await route(); }), 'ui-btn--ghost')),
-    pendingCard, hereCard, search, list, syncCard(sync, vaultScreen),
+    h('div', { class: 'ui-toolbar' }, button('Add', () => editScreen(null), 'ui-btn--primary'), button('Import', openImport), button('Export', exportScreen),
+      button('Settings', settingsScreen),
+      h('span', { class: 'grow' }), button('Lock', () => guarded(msg, [], async () => { await call({ type: 'lock', manual: true }); await route(); }), 'ui-btn--ghost')),
+    recoveryBanner(emailRecovery, msg, vaultScreen), pendingCard, hereCard, search, list, syncCard(sync, vaultScreen),
     unreadable > 0 && h('p', { class: 'ui-meta' }, `${unreadable} saved item${unreadable === 1 ? '' : 's'} couldn't be read and ${unreadable === 1 ? 'was' : 'were'} left untouched.`),
     toast, msg);
 }
@@ -291,6 +447,12 @@ function editScreen(d: Detail | null) {
     label('Websites (one per line)', sites), label('Note', note), msg, save);
 }
 
+async function openImport() {
+  if (inImportTab()) return importScreen();
+  await chrome.tabs.create({ url: chrome.runtime.getURL('popup.html#import') });
+  window.close();
+}
+
 function importScreen() {
   const msg = msgBox();
   const file = h('input', { type: 'file', accept: '.csv,text/csv', class: 'ui-input' });
@@ -309,9 +471,32 @@ function importScreen() {
     file, msg, out);
 }
 
+function exportScreen() {
+  const msg = msgBox();
+  const pw = input({ type: 'password', autocomplete: 'current-password' });
+  const out = h('div', { class: 'stack' });
+  const go = button('Export for Chrome', () => guarded(msg, [go], async () => {
+    const { csv, rows, leftOut } = await call<{ csv: string; rows: number; leftOut: number }>({ type: 'export', password: pw.value });
+    pw.value = '';
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    h('a', { href: url, download: 'strongroom-passwords.csv' }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    out.replaceChildren(h('div', { class: 'stack' },
+      h('p', {}, `Saved ${rows} ${rows === 1 ? 'login' : 'logins'} to strongroom-passwords.csv.`),
+      leftOut > 0 && h('p', { class: 'ui-muted' }, `${leftOut} ${leftOut === 1 ? 'login has' : 'logins have'} no website, so ${leftOut === 1 ? 'it was' : 'they were'} left out. Add a website to ${leftOut === 1 ? 'it' : 'them'} to export ${leftOut === 1 ? 'it' : 'them'}.`),
+      h('p', { class: 'ui-muted' }, 'Delete the file as soon as Chrome has imported it. It holds your passwords in plain text.'),
+      button('Done', vaultScreen, 'ui-btn--primary')));
+  }), 'ui-btn--primary');
+  pw.addEventListener('keydown', (e) => e.key === 'Enter' && go.click());
+  screen('Export for Chrome', vaultScreen,
+    h('p', { class: 'ui-muted' }, "This makes a file you can import into Chrome's password manager. The file holds your passwords in plain text, so anyone who gets it can read them. It leaves out cards, notes and logins without a website."),
+    label('Master password', pw), msg, go, out);
+}
+
 async function main() {
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-  tab = active?.id !== undefined && active.url ? { tabId: active.id, url: active.url } : null;
+  tab = inImportTab() ? null : active?.id !== undefined && active.url ? { tabId: active.id, url: active.url } : null;
+  importNext = inImportTab();
   await route();
 }
 

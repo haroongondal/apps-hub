@@ -46,6 +46,21 @@ async function account(o: { accountKey?: Uint8Array } = {}) {
     putAccount: async () => {
       throw new Error('sign-in never writes the account');
     },
+    lostRequest: async () => {
+      throw new Error('sign-in never touches escrow');
+    },
+    lostRelease: async () => {
+      throw new Error('sign-in never touches escrow');
+    },
+    lostStatus: async () => {
+      throw new Error('sign-in never touches escrow');
+    },
+    lostCancel: async () => {
+      throw new Error('sign-in never touches escrow');
+    },
+    deleteEscrow: async () => {
+      throw new Error('sign-in never touches escrow');
+    },
   };
   return { t, header, vaultKey, keys, sealed, recoveryKey, prelogin, pulls: () => pulls, setPage: (p: PullResponse) => (page = p) };
 }

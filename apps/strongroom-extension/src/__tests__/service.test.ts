@@ -2,14 +2,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
-  createVault, formatAccountKey, headerToJson, KDF_FLOOR, loadPublicSuffixList, randomBytes, recoveryLoginToken, signInWithPassword,
-  signInWithRecovery, SyncAuthError, toBase64, tokenHash,
+  createVault, formatAccountKey, fromBase64, headerToJson, KDF_FLOOR, loadPublicSuffixList, openEscrow, parseEmailCode, parseRecoveryKey, randomBytes,
+  recoveryLoginToken, rotateRecoveryKey, signInWithPassword, signInWithRecovery, SyncAuthError, toBase64, tokenHash, unlockWithRecovery,
 } from 'strongroom-core';
 import type { Header, RecordStore, StoredRecord, SyncReport } from 'strongroom-core';
 import { COMMON_PASSWORDS } from '../common-passwords.ts';
 import { createService } from '../service.ts';
-import type { Ctx, Detail, ImportPreview, KV, Pending, Row, Status, SyncStatus } from '../service.ts';
-import { localStore } from '../storage.ts';
+import type { Ctx, Detail, EmailRecoveryStatus, ImportPreview, KV, Pending, Row, Status, SyncStatus } from '../service.ts';
+import { createLocalStore, localKv } from '../storage.ts';
+import { createDeviceVault } from '../device-vault.ts';
+import type { DeviceVault, KeyStore } from '../device-vault.ts';
 import { fakeChrome, loginEntry, newWorld, PHONE_PASSWORD, useChrome } from './sync-world.ts';
 import type { World } from './sync-world.ts';
 
@@ -36,18 +38,25 @@ const memoryKv = (): KV & { data: Map<string, string> } => {
 const PASSWORD = 'a long master password';
 const LOW = { kdf: { memoryKiB: 1024, iterations: 1, parallelism: 1 }, floor: { memoryKiB: 8, iterations: 1, parallelism: 1 } };
 
-function setup() {
+// A real DeviceVault over in-memory storage, the same shape as `extension()`'s further down: no own crypto, just fake KV and KeyStore.
+function deviceVault(): DeviceVault {
+  let key: CryptoKey | undefined;
+  const keys: KeyStore = { get: async () => (key ??= await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])), put: async (k) => void (key = k) };
+  return createDeviceVault(memoryKv(), keys);
+}
+
+function setup(device?: DeviceVault) {
   const store = new MemoryStore();
   const session = memoryKv();
   const clock = { t: 1_000_000 };
   const timer = { resets: 0 };
-  const service = createService({ store, session, now: () => clock.t, resetAutoLock: () => timer.resets++, ...LOW });
+  const service = createService({ store, session, settings: memoryKv(), now: () => clock.t, resetAutoLock: () => timer.resets++, device, ...LOW });
   const call = <T>(req: object, ctx?: Ctx) => service.handle(req as never, ctx) as Promise<T>;
   return { store, session, clock, timer, service, call };
 }
 
-async function unlocked() {
-  const s = setup();
+async function unlocked(device?: DeviceVault) {
+  const s = setup(device);
   await s.call({ type: 'setup', password: PASSWORD });
   return s;
 }
@@ -63,6 +72,23 @@ test('a new profile has no vault; setup creates one, unlocks it and holds the re
   const status = await call<Status>({ type: 'status' });
   assert.equal(status.state, 'unlocked');
   assert.match(status.recoveryKey ?? '', /^([A-Z2-7]{4}-){7}[A-Z2-7]{4}$/);
+});
+
+test('a device-level saveKeys failure does not abort the unlock: the session is still genuinely usable', async () => {
+  const device: DeviceVault = {
+    saveKeys: async () => { throw new Error('IndexedDB is unavailable'); },
+    loadKeys: async () => null,
+    clearKeys: async () => {},
+    mode: async () => 'none',
+    protect: async () => {},
+    unprotect: async () => {},
+    saveAccountKey: async () => {},
+    loadAccountKey: async () => null,
+  };
+  const s = setup(device);
+  await s.call({ type: 'setup', password: PASSWORD });
+  assert.equal((await s.call<Status>({ type: 'status' })).state, 'unlocked');
+  assert.ok(await add(s));
 });
 
 test('setup refuses a master password shorter than 12 characters', async () => {
@@ -166,6 +192,38 @@ test('a web page may only ask for matching logins, fills and captures; everythin
   assert.ok(await s.call({ type: 'candidates' }, ctx));
 });
 
+test('export refuses a wrong master password', async () => {
+  const s = await unlocked();
+  await add(s);
+  await assert.rejects(s.call({ type: 'export', password: 'not the master password' }), /isn't right/);
+});
+
+test('export refuses while locked', async () => {
+  const s = await unlocked();
+  await add(s);
+  await s.call({ type: 'lock' });
+  await assert.rejects(s.call({ type: 'export', password: PASSWORD }), /locked/);
+});
+
+test('export returns one row per site and counts logins without a website', async () => {
+  const s = await unlocked();
+  await add(s);
+  await add(s, { name: 'Wifi', websites: '', password: 'pw-2', note: 'router' });
+  const out = await s.call<{ csv: string; rows: number; leftOut: number }>({ type: 'export', password: PASSWORD });
+  assert.deepEqual([out.rows, out.leftOut], [1, 1]);
+  const lines = out.csv.trim().split(/\r?\n/);
+  assert.equal(lines[0], 'name,url,username,password,note');
+  assert.equal(lines.length, 2);
+  assert.match(lines[1], /login\.bank\.com/);
+  assert.ok(!out.csv.includes('pw-2'));
+});
+
+test('export from a page context is refused, even for the right password', async () => {
+  const s = await unlocked();
+  await add(s);
+  await assert.rejects(s.call({ type: 'export', password: PASSWORD }, page('https://login.bank.com/')), /isn't allowed/);
+});
+
 test('candidates are the logins saved for this site, never a lookalike or an http copy of an https login', async () => {
   const s = await unlocked();
   const { id } = await add(s);
@@ -207,6 +265,51 @@ test('fill is refused unless it comes from the page itself, so the popup cannot 
   const s = await unlocked();
   const { id } = await add(s);
   await assert.rejects(s.call({ type: 'fill', id, page: page('https://login.bank.com/') }), /isn't allowed/);
+});
+
+test('without a DeviceVault, a page-side fill still needs an unlocked session (existing behavior unchanged)', async () => {
+  const s = await unlocked();
+  const { id } = await add(s);
+  await s.call({ type: 'lock' });
+  await assert.rejects(s.call({ type: 'fill', id }, page('https://login.bank.com/')), /locked/i);
+});
+
+test('after unlock, a fill works once the session is cleared: the device-held keys answer it', async () => {
+  const s = await unlocked(deviceVault());
+  const { id } = await add(s);
+  await s.call({ type: 'lock' });
+  assert.deepEqual(await s.call({ type: 'fill', id }, page('https://login.bank.com/')), { username: 'me', password: 'pw-1' });
+});
+
+test('a manual lock ends fills; the non-manual (auto-lock) request does not, though status still says locked', async () => {
+  const s = await unlocked(deviceVault());
+  const { id } = await add(s);
+  await s.call({ type: 'lock' });
+  assert.equal((await s.call<Status>({ type: 'status' })).state, 'locked');
+  assert.deepEqual(await s.call({ type: 'fill', id }, page('https://login.bank.com/')), { username: 'me', password: 'pw-1' });
+
+  await s.call({ type: 'lock', manual: true });
+  assert.equal((await s.call<Status>({ type: 'status' })).state, 'locked');
+  await assert.rejects(s.call({ type: 'fill', id }, page('https://login.bank.com/')), /locked/i);
+});
+
+test('candidates work from device keys with the popup locked, and a lookalike host is still refused', async () => {
+  const s = await unlocked(deviceVault());
+  const { id } = await add(s);
+  await s.call({ type: 'lock' });
+  const found = await s.call<{ locked: boolean; rows: Row[] }>({ type: 'candidates' }, page('https://login.bank.com/'));
+  assert.deepEqual([found.locked, found.rows.map((r) => r.id)], [false, [id]]);
+  await assert.rejects(s.call({ type: 'fill', id }, page('https://bank.com.evil.io/')), /isn't saved for this website/);
+});
+
+test('a page cannot reach export, get, list or save even while device keys answer fill, locked or not', async () => {
+  const s = await unlocked(deviceVault());
+  const { id } = await add(s);
+  await s.call({ type: 'lock' });
+  const ctx = page('https://login.bank.com/');
+  for (const req of [{ type: 'export', password: PASSWORD }, { type: 'get', id }, { type: 'list' }, { type: 'save', id: null, login: login() }]) {
+    await assert.rejects(s.call(req, ctx), /isn't allowed/, req.type);
+  }
 });
 
 test('the recovery key is shown only while the vault is unlocked', async () => {
@@ -333,17 +436,31 @@ const until = async (done: () => boolean) => {
   assert.ok(done());
 };
 
+// Mirrors idbKeyStore's generate-on-first-use, but keyed on the fake chrome.storage.local so a restart (same local) keeps the same wrapper key, as the real IndexedDB would.
+const deviceKeyStores = new WeakMap<ReturnType<typeof fakeChrome>, KeyStore>();
+function deviceKeyStore(local: ReturnType<typeof fakeChrome>): KeyStore {
+  let ks = deviceKeyStores.get(local);
+  if (!ks) {
+    let key: CryptoKey | undefined;
+    ks = { get: async () => (key ??= await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])), put: async (k) => void (key = k) };
+    deviceKeyStores.set(local, ks);
+  }
+  return ks;
+}
+
 function extension(world: World, local = fakeChrome()) {
   useChrome(local);
   const session = memoryKv();
   const alarms: boolean[] = [];
   const clock = { t: 1_000_000 };
+  const device = createDeviceVault(localKv, deviceKeyStore(local));
+  const store = createLocalStore(device);
   const service = createService({
-    store: localStore, session, now: () => clock.t, resetAutoLock() {}, syncAlarm: (on) => void alarms.push(on),
-    sync: { store: localStore, transport: world.transport }, ...LOW,
+    store, session, settings: localKv, now: () => clock.t, resetAutoLock() {}, syncAlarm: (on) => void alarms.push(on),
+    sync: { store, transport: world.transport }, device, ...LOW,
   });
   const call = <T = unknown>(req: object, ctx?: Ctx) => service.handle(req as never, ctx) as Promise<T>;
-  return { world, local, session, alarms, clock, service, call, restart: () => extension(world, local) };
+  return { world, local, session, alarms, clock, service, store, device, call, restart: () => extension(world, local) };
 }
 type Ext = ReturnType<typeof extension>;
 
@@ -353,7 +470,7 @@ const recoverySignIn = (x: Ext, over: object = {}) =>
 const names = async (x: Ext) => (await x.call<{ rows: Row[] }>({ type: 'list' })).rows.map((r) => r.name).sort();
 const status = (x: Ext) => x.call<SyncStatus>({ type: 'syncStatus' });
 const snapshot = (x: Ext) => JSON.stringify([...x.local.data]);
-const headerNow = async () => headerToJson((await localStore.getHeader())!);
+const headerNow = async (x: Ext) => headerToJson((await x.store.getHeader())!);
 
 async function signedIn(world?: World) {
   const x = extension(world ?? (await newWorld()));
@@ -378,15 +495,17 @@ test('signInReplacesTheLocalVaultOnlyAfterConfirmation', async () => {
   assert.equal(await signIn(x, { replace: true }), null);
   const writes = x.local.setCalls.filter((keys) => keys.includes('header'));
   assert.equal(writes.length, 1);
-  for (const key of ['records', 'quarantine', 'syncMeta', 'accountKey']) assert.ok(writes[0].includes(key), key);
+  for (const key of ['records', 'quarantine', 'syncMeta']) assert.ok(writes[0].includes(key), key);
+  assert.ok(x.local.setCalls.some((keys) => keys.includes('accountKeySealed')));
   assert.deepEqual(await names(x), ['Mail']);
-  assert.equal(await headerNow(), headerToJson(world.phone.store.header!));
-  assert.deepEqual(await localStore.getSyncMeta(), { lastRev: 1, headerRev: 1 });
-  assert.deepEqual((await localStore.getSyncLocal()).accountKey, world.accountKey);
+  assert.equal(await headerNow(x), headerToJson(world.phone.store.header!));
+  assert.deepEqual(await x.store.getSyncMeta(), { lastRev: 1, headerRev: 1 });
+  assert.deepEqual((await x.store.getSyncLocal()).accountKey, world.accountKey);
 
   await x.call({ type: 'lock' });
   await assert.rejects(x.call({ type: 'unlock', password: PASSWORD }), /isn't right/);
   await x.call({ type: 'unlock', password: PHONE_PASSWORD });
+  await x.service.settled();
   assert.equal((await status(x)).state, 'idle');
 });
 
@@ -426,10 +545,12 @@ test('failedSignInKeepsTheOldVault', async () => {
   const x = extension(world);
   await x.call({ type: 'setup', password: PASSWORD });
   await add(x, { name: 'Mine' });
-  const before = snapshot(x);
+  // deviceKeys is reread, not just the vault: each lock/unlock in the loop below reseals it with a fresh nonce, so it is left out of this comparison on purpose.
+  const stable = () => JSON.stringify([...x.local.data].filter(([k]) => k !== 'deviceKeys'));
+  const before = stable();
   const refused = async (over: object, message: RegExp) => {
     await assert.rejects(signIn(x, { replace: true, ...over }), message);
-    assert.equal(snapshot(x), before);
+    assert.equal(stable(), before);
     assert.equal((await status(x)).state, 'off');
     await x.call({ type: 'lock' });
     await x.call({ type: 'unlock', password: PASSWORD });
@@ -474,11 +595,11 @@ test('syncMergesAndShowsRemoteEdits', async () => {
   assert.deepEqual(await names(x), ['Bank', 'From the extension']);
 });
 
-test('lockClearsTheLoginTokenAndStopsSyncing', async () => {
+test('a manual lock clears the login token, the device-held keys, and stops syncing', async () => {
   const x = await signedIn();
   assert.ok(x.session.data.has('loginToken'));
   assert.equal(x.alarms.at(-1), true);
-  await x.call({ type: 'lock' });
+  await x.call({ type: 'lock', manual: true });
   assert.ok(!x.session.data.has('loginToken'));
   assert.ok(!x.session.data.has('vaultKey'));
   assert.equal(x.alarms.at(-1), false);
@@ -491,6 +612,22 @@ test('lockClearsTheLoginTokenAndStopsSyncing', async () => {
   await x.call({ type: 'unlock', password: PHONE_PASSWORD });
   assert.ok(x.session.data.has('loginToken'));
   await x.call({ type: 'syncNow' });
+  assert.ok(x.world.requests.length > seen);
+});
+
+test('sync runs from the device-held keys once the session is gone, after a plain (non-manual) lock', async () => {
+  const x = await signedIn();
+  assert.equal(x.alarms.at(-1), true);
+  await x.call({ type: 'lock' });
+  assert.ok(!x.session.data.has('loginToken'));
+  assert.ok(!x.session.data.has('vaultKey'));
+  assert.ok(await x.device.loadKeys());
+  // A plain lock leaves background sync running, unlike a manual one: the sync alarm is not turned off.
+  assert.equal(x.alarms.at(-1), true);
+
+  const seen = x.world.requests.length;
+  const report = await x.call<{ pulled: number }>({ type: 'syncNow' });
+  assert.ok(report);
   assert.ok(x.world.requests.length > seen);
 });
 
@@ -516,7 +653,7 @@ test('aVaultThatNeedsAnAccountKeyThisComputerLostSaysSo', async () => {
   const x = await signedIn();
   await x.call({ type: 'lock' });
   assert.equal((await status(x)).keyLost, false);
-  x.local.data.delete('accountKey');
+  x.local.data.delete('accountKeySealed'); // the sealed entry is the only copy once signed in, same as losing it from storage
   await assert.rejects(x.call({ type: 'unlock', password: PHONE_PASSWORD }), /Sign in with your account/);
   const lost = await status(x);
   assert.deepEqual([lost.state, lost.keyLost], ['off', true]);
@@ -545,11 +682,11 @@ test('aRecoveryMadeWhileASyncIsSendingAnOlderUpdateWaitsForIt', async () => {
   world.gate = new Promise<void>((resolve) => (release = resolve));
   const syncing = x.call({ type: 'syncNow' });
   await until(() => world.requests.includes('PUT /v1/account'));
-  const stored = localStore.setAccount;
-  const written = new Promise<void>((resolve) => (localStore.setAccount = async (a) => (await stored(a), resolve())));
+  const stored = x.store.setAccount;
+  const written = new Promise<void>((resolve) => (x.store.setAccount = async (a) => (await stored(a), resolve())));
   const recovering = x.call({ type: 'recover', recoveryKey: world.recoveryKeyText, password: THIRD_PASSWORD });
   await Promise.race([written, new Promise((resolve) => setTimeout(resolve, 2500))]);
-  localStore.setAccount = stored;
+  x.store.setAccount = stored;
   release();
   await Promise.all([syncing, recovering]);
   await x.service.settled();
@@ -585,7 +722,7 @@ test('recoverySignInUpdatesTheServerWithTheNewPassword', async () => {
 
   const again = await signInWithPassword(world.phone.transport, NEW_PASSWORD, world.accountKey);
   assert.deepEqual(again.vaultKey, world.phone.vaultKey);
-  assert.deepEqual(await localStore.getSyncMeta(), { lastRev: 1, headerRev: again.headerRev });
+  assert.deepEqual(await x.store.getSyncMeta(), { lastRev: 1, headerRev: again.headerRev });
   await assert.rejects(signInWithPassword(world.phone.transport, PHONE_PASSWORD, world.accountKey), SyncAuthError);
   assert.ok(await signInWithRecovery(world.phone.transport, world.recoveryKey));
   const row = world.sqlite.prepare('SELECT recovery_hash FROM account').get() as { recovery_hash: string };
@@ -662,26 +799,26 @@ test('aHeaderChangedElsewhereIsAdoptedOnlyAtAPasswordUnlock', async () => {
   await world.phone.putHeader(changed, tokenHash(world.tokens.loginToken));
 
   assert.equal((await x.call<SyncReport>({ type: 'syncNow' })).headerChanged, true);
-  assert.notEqual(await headerNow(), headerToJson(changed));
+  assert.notEqual(await headerNow(x), headerToJson(changed));
   await x.call({ type: 'lock' });
   await x.call({ type: 'unlock', password: PHONE_PASSWORD });
   await x.service.settled();
-  assert.equal(await headerNow(), headerToJson(changed));
-  assert.equal((await localStore.getSyncMeta()).headerRev, 2);
+  assert.equal(await headerNow(x), headerToJson(changed));
+  assert.equal((await x.store.getSyncMeta()).headerRev, 2);
   assert.equal((await status(x)).state, 'idle');
 });
 
 test('aHeaderThatDoesNotOpenToThisVaultKeyIsNeverAdopted', async () => {
   const world = await newWorld();
   const x = await signedIn(world);
-  const before = await headerNow();
+  const before = await headerNow(x);
   const other = await createVault(PHONE_PASSWORD, randomBytes(20), { kdf: KDF_FLOOR, accountKey: world.accountKey });
   await world.phone.putHeader(other.header, tokenHash(world.tokens.loginToken));
   await x.call({ type: 'lock' });
   await x.call({ type: 'unlock', password: PHONE_PASSWORD });
   await x.service.settled();
-  assert.equal(await headerNow(), before);
-  assert.equal((await localStore.getSyncMeta()).headerRev, 1);
+  assert.equal(await headerNow(x), before);
+  assert.equal((await x.store.getSyncMeta()).headerRev, 1);
 });
 
 test('aRefusedTokenAsksToSignInAndStopsRetrying', async () => {
@@ -706,4 +843,342 @@ test('aRefusedTokenAsksToSignInAndStopsRetrying', async () => {
   assert.deepEqual(await names(x), ['Mail', 'Written before the 401']);
   await world.phone.sync();
   assert.deepEqual(await world.phone.names(), ['Mail', 'Written before the 401']);
+});
+
+const codeOf = (text: string) => /code is ([A-Z2-7-]+)\./.exec(text)![1];
+const enrol = (x: Ext, email = 'me@example.com') => x.call<{ recoveryKey: string }>({ type: 'emailRecovery', action: 'enrol', email, password: PHONE_PASSWORD });
+const emailStatus = (x: Ext) => x.call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' });
+
+test('enrol rotates the recovery key: the new key opens the vault, the old one does not', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  const { recoveryKey } = await enrol(x);
+  const header = (await x.store.getHeader())!;
+  assert.ok(await unlockWithRecovery(header, parseRecoveryKey(recoveryKey)!));
+  assert.equal(await unlockWithRecovery(header, world.recoveryKey), null);
+});
+
+test('enrol sends the code to the mailer once and the server never stores it', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  await enrol(x);
+  assert.equal(world.mail.sent.length, 1);
+  assert.equal(world.mail.sent[0].to, 'me@example.com');
+  const code = codeOf(world.mail.sent[0].text);
+  const row = await world.env.DB.prepare('SELECT blob FROM escrow WHERE id = 1').first<{ blob: string }>();
+  assert.ok(!row!.blob.includes(code));
+});
+
+test('enrol needs sync signed in', async () => {
+  const x = extension(await newWorld());
+  await x.call({ type: 'setup', password: PASSWORD });
+  await assert.rejects(enrol(x), /Sign in to sync/);
+});
+
+test('enrol needs the vault unlocked', async () => {
+  const x = await signedIn();
+  await x.call({ type: 'lock' });
+  await assert.rejects(enrol(x), /locked/i);
+});
+
+test('confirm with the right code marks it enrolled', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  await enrol(x);
+  const before = await emailStatus(x);
+  assert.deepEqual([before.enrolled, before.waitingForCode], [false, true]);
+  await x.call({ type: 'emailRecovery', action: 'confirm', code: codeOf(world.mail.sent[0].text) });
+  const after = await emailStatus(x);
+  assert.deepEqual([after.enrolled, after.waitingForCode], [true, false]);
+});
+
+test('confirm removes the local escrow blob: storage.local plus the mailed code is no longer enough to open it, only the Worker wait can', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  await enrol(x);
+  assert.ok(x.local.data.has('escrowBlob'));
+  await x.call({ type: 'emailRecovery', action: 'confirm', code: codeOf(world.mail.sent[0].text) });
+  assert.equal(x.local.data.has('escrowBlob'), false);
+  assert.equal(x.local.data.get('escrowConfirmed'), 'true');
+});
+
+test('confirm with a wrong code does not', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  await enrol(x);
+  await assert.rejects(x.call({ type: 'emailRecovery', action: 'confirm', code: 'AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA' }), /isn't right/);
+  assert.equal((await emailStatus(x)).enrolled, false);
+});
+
+test('off deletes the escrow', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  await enrol(x);
+  await x.call({ type: 'emailRecovery', action: 'confirm', code: codeOf(world.mail.sent[0].text) });
+  await x.call({ type: 'emailRecovery', action: 'off' });
+  assert.equal(await world.env.DB.prepare('SELECT 1 FROM escrow WHERE id = 1').first(), null);
+  assert.equal((await emailStatus(x)).enrolled, false);
+});
+
+test('status shows wasTurnedOff after the server drops the escrow', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  await enrol(x);
+  await x.call({ type: 'emailRecovery', action: 'confirm', code: codeOf(world.mail.sent[0].text) });
+
+  // Simulates a recovery-key rotation landing from another device: same header, a recoveryHash that no longer matches the sealed escrow.
+  const header = (await x.store.getHeader())!;
+  const { headerRev } = await x.store.getSyncMeta();
+  await world.phone.transport.putAccount(world.phone.token, {
+    header: headerToJson(header), loginHash: tokenHash(world.phone.token), readHash: world.phone.readHash,
+    recoveryHash: tokenHash(randomBytes(32)), ifRev: headerRev,
+  });
+
+  const after = await emailStatus(x);
+  assert.deepEqual([after.enrolled, after.wasTurnedOff], [false, true]);
+});
+
+test('the pending-recovery banner still shows after a non-manual lock, from the device-held login token', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  await enrol(x);
+  await x.call({ type: 'emailRecovery', action: 'confirm', code: codeOf(world.mail.sent[0].text) });
+
+  await world.phone.transport.lostRequest(tokenHash(randomBytes(32)));
+  await x.call({ type: 'lock' }); // non-manual: device-held keys remain, the popup session does not
+  assert.deepEqual((await emailStatus(x)).pendingRecovery, { releaseAt: null });
+
+  await x.call({ type: 'emailRecovery', action: 'cancelRecovery' });
+  assert.equal((await emailStatus(x)).pendingRecovery, null);
+});
+
+// N2: emailRecoveryStatus must skip the Worker call exactly when doSync does (aRefusedTokenAsksToSignInAndStopsRetrying mirrors this
+// for doSync itself), or a token invalidated elsewhere keeps hitting the Worker's auth-failure rate limiter every 5 minutes forever.
+test('emailRecoveryStatus skips the Worker once this device needs to sign in again, same as doSync', async () => {
+  const world = await newWorld();
+  await world.phone.add('Mail');
+  await world.phone.sync();
+  const x = await signedIn(world);
+  await world.phone.changePassword(NEW_PASSWORD);
+
+  await add(x, { name: 'Written before the 401' });
+  await x.service.settled();
+  assert.equal((await status(x)).state, 'needsSignIn');
+
+  const seen = world.requests.length;
+  const s = await emailStatus(x);
+  assert.equal(world.requests.length, seen);
+  assert.deepEqual([s.available, s.enrolled, s.waitingForCode, s.pendingRecovery, s.wasTurnedOff], [true, false, false, null, false]);
+});
+
+test('status shows a pending recovery and cancelRecovery clears it', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  await enrol(x);
+  await x.call({ type: 'emailRecovery', action: 'confirm', code: codeOf(world.mail.sent[0].text) });
+
+  await world.phone.transport.lostRequest(tokenHash(randomBytes(32)));
+  assert.deepEqual((await emailStatus(x)).pendingRecovery, { releaseAt: null });
+
+  await x.call({ type: 'emailRecovery', action: 'cancelRecovery' });
+  assert.equal((await emailStatus(x)).pendingRecovery, null);
+});
+
+test('enrol on a genuine 409 (the header changed elsewhere) pulls, adopts it, and a second attempt succeeds', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+
+  // The phone rotates its own recovery key directly against the server: a real header change x does not yet know about.
+  const rotatedByPhone = await rotateRecoveryKey(world.phone.store.header!, world.phone.vaultKey);
+  const { headerRev, lastRev } = await world.phone.store.getSyncMeta();
+  const put = await world.phone.transport.putAccount(world.phone.token, {
+    header: headerToJson(rotatedByPhone.header), loginHash: tokenHash(world.phone.token), readHash: world.phone.readHash,
+    recoveryHash: rotatedByPhone.recoveryHash, ifRev: headerRev,
+  });
+  await world.phone.store.applyPull({ header: rotatedByPhone.header, headerRev: put.headerRev, records: [], quarantine: [], rebase: [], lastRev });
+
+  await assert.rejects(enrol(x), /changed on another device/);
+  assert.equal(await headerNow(x), headerToJson(rotatedByPhone.header));
+  assert.equal((await x.store.getSyncMeta()).headerRev, put.headerRev);
+  assert.equal((await status(x)).state, 'idle');
+
+  const { recoveryKey } = await enrol(x);
+  assert.ok(await unlockWithRecovery((await x.store.getHeader())!, parseRecoveryKey(recoveryKey)!));
+});
+
+test('none of the email-recovery requests work from a page', async () => {
+  const { call } = await unlocked();
+  for (const action of ['status', 'enrol', 'confirm', 'off', 'cancelRecovery']) {
+    await assert.rejects(call({ type: 'emailRecovery', action, email: 'a@b.com', password: PASSWORD, code: 'x' }, page('https://example.com')), /isn't allowed/);
+  }
+});
+
+async function emailEnrolled() {
+  const world = await newWorld();
+  const owner = await signedIn(world);
+  await enrol(owner);
+  const code = codeOf(world.mail.sent[0].text);
+  await owner.call({ type: 'emailRecovery', action: 'confirm', code });
+  return { world, code };
+}
+
+type LostAccessState = { state: 'none' } | { state: 'waiting'; releaseAt: number | null } | { state: 'ready' };
+const lostCheck = (x: Ext) => x.call<LostAccessState>({ type: 'lostAccess', action: 'check' });
+const lostRequestNow = (x: Ext) => x.call({ type: 'lostAccess', action: 'request' });
+// Simulates the account owner opening the mailed confirm link (a GET, now just a form) and submitting it, which starts the 24-hour wait.
+async function confirmByEmail(world: World) {
+  const token = decodeURIComponent(/t=([^&\s]+)/.exec(world.mail.sent.at(-1)!.text)![1]);
+  await world.serve(new Request('https://vault.example/v1/lost/confirm', {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `t=${encodeURIComponent(token)}`,
+  }));
+}
+// Backdates the confirmed request's release time instead of a fake clock: the 24-hour wait is counted from real release_at, so this ends it early.
+const releaseLostRequest = (world: World) => world.sqlite.exec(`UPDATE lost_request SET release_at = ${Date.now() - 1000}`);
+
+test('a fresh device can request, wait, then open with the code and ends signed in with a new password', async () => {
+  const { world, code } = await emailEnrolled();
+  const fresh = extension(world);
+  assert.deepEqual(await lostCheck(fresh), { state: 'none' });
+  await lostRequestNow(fresh);
+  assert.deepEqual(await lostCheck(fresh), { state: 'waiting', releaseAt: null });
+  await confirmByEmail(world);
+  const waiting = await lostCheck(fresh);
+  assert.equal(waiting.state, 'waiting');
+  assert.ok((waiting as { releaseAt: number }).releaseAt > Date.now());
+  releaseLostRequest(world);
+  assert.deepEqual(await lostCheck(fresh), { state: 'ready' });
+  assert.equal(await fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), null);
+  assert.equal((await fresh.call<Status>({ type: 'status' })).state, 'unlocked');
+  assert.deepEqual((await fresh.store.getSyncLocal()).accountKey, world.accountKey);
+  assert.ok(!fresh.local.data.has('lostClaim'));
+  assert.ok(!fresh.local.data.has('lostBlob'));
+  await fresh.call({ type: 'lock', manual: true });
+  await fresh.call({ type: 'unlock', password: NEW_PASSWORD });
+  assert.equal((await fresh.call<Status>({ type: 'status' })).state, 'unlocked');
+});
+
+test('a device that recovered through lostAccessOpen reports enrolled from the server, not its own never-set local flag', async () => {
+  const { world, code } = await emailEnrolled();
+  const fresh = extension(world);
+  await lostRequestNow(fresh);
+  await confirmByEmail(world);
+  releaseLostRequest(world);
+  await lostCheck(fresh);
+  assert.equal(await fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), null);
+
+  assert.equal(fresh.local.data.has('escrowBlob'), false);
+  assert.deepEqual([(await emailStatus(fresh)).enrolled, (await emailStatus(fresh)).waitingForCode], [true, false]);
+});
+
+test('check before 24 hours reports waiting', async () => {
+  const { world } = await emailEnrolled();
+  const fresh = extension(world);
+  await lostRequestNow(fresh);
+  await confirmByEmail(world);
+  const waiting = await lostCheck(fresh);
+  assert.equal(waiting.state, 'waiting');
+  assert.ok(typeof (waiting as { releaseAt: number | null }).releaseAt === 'number');
+});
+
+test('a wrong code leaves the claim and blob in place and says so in plain words', async () => {
+  const { world } = await emailEnrolled();
+  const fresh = extension(world);
+  await lostRequestNow(fresh);
+  await confirmByEmail(world);
+  releaseLostRequest(world);
+  assert.deepEqual(await lostCheck(fresh), { state: 'ready' });
+  await assert.rejects(
+    fresh.call({ type: 'lostAccess', action: 'open', code: 'AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA', newPassword: NEW_PASSWORD }),
+    /isn't right/,
+  );
+  assert.ok(fresh.local.data.has('lostClaim'));
+  assert.ok(fresh.local.data.has('lostBlob'));
+  assert.deepEqual(await lostCheck(fresh), { state: 'ready' });
+});
+
+test('open without a ready blob is refused', async () => {
+  const { world, code } = await emailEnrolled();
+  const fresh = extension(world);
+  await assert.rejects(fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), /wait/i);
+  await lostRequestNow(fresh);
+  await assert.rejects(fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), /wait/i);
+  await confirmByEmail(world);
+  await assert.rejects(fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), /wait/i);
+});
+
+test('a failed request leaves an existing claim and blob untouched', async () => {
+  const { world, code } = await emailEnrolled();
+  const fresh = extension(world);
+  await lostRequestNow(fresh);
+  await confirmByEmail(world);
+  releaseLostRequest(world);
+  await lostCheck(fresh);
+  const claimBefore = fresh.local.data.get('lostClaim');
+  const blobBefore = fresh.local.data.get('lostBlob');
+  world.online = false;
+  await assert.rejects(lostRequestNow(fresh));
+  world.online = true;
+  assert.equal(fresh.local.data.get('lostClaim'), claimBefore);
+  assert.equal(fresh.local.data.get('lostBlob'), blobBefore);
+  assert.deepEqual(await lostCheck(fresh), { state: 'ready' });
+  assert.equal(await fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), null);
+});
+
+test('a request is refused once the existing claim is confirmed server-side, even if this device never re-checked', async () => {
+  const { world } = await emailEnrolled();
+  const fresh = extension(world);
+  await lostRequestNow(fresh);
+  await confirmByEmail(world);
+  const claimBefore = fresh.local.data.get('lostClaim');
+  await assert.rejects(lostRequestNow(fresh), /already confirmed/i);
+  assert.equal(fresh.local.data.get('lostClaim'), claimBefore);
+  assert.ok(!fresh.local.data.has('lostBlob'));
+  releaseLostRequest(world);
+  assert.deepEqual(await lostCheck(fresh), { state: 'ready' });
+});
+
+test('a request is refused once the existing claim is already released and ready to open', async () => {
+  const { world, code } = await emailEnrolled();
+  const fresh = extension(world);
+  await lostRequestNow(fresh);
+  await confirmByEmail(world);
+  releaseLostRequest(world);
+  await lostCheck(fresh);
+  const claimBefore = fresh.local.data.get('lostClaim');
+  const blobBefore = fresh.local.data.get('lostBlob');
+  await assert.rejects(lostRequestNow(fresh), /already confirmed/i);
+  assert.equal(fresh.local.data.get('lostClaim'), claimBefore);
+  assert.equal(fresh.local.data.get('lostBlob'), blobBefore);
+  assert.equal(await fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), null);
+});
+
+test('lostAccess refuses to run while the vault is unlocked', async () => {
+  const { world } = await emailEnrolled();
+  const x = extension(world);
+  await x.call({ type: 'setup', password: PASSWORD });
+  for (const req of [{ action: 'request' }, { action: 'check' }, { action: 'open', code: 'x', newPassword: NEW_PASSWORD }]) {
+    await assert.rejects(x.call({ type: 'lostAccess', ...req }), /already unlocked/);
+  }
+});
+
+test('lostAccess is refused from a page', async () => {
+  const { call } = await unlocked();
+  for (const action of ['request', 'check', 'open']) {
+    await assert.rejects(call({ type: 'lostAccess', action, code: 'x', newPassword: NEW_PASSWORD }, page('https://example.com')), /isn't allowed/);
+  }
+});
+
+test('after open the old recovery key is the rotated one (the pasted blob key works, an earlier key does not)', async () => {
+  const { world, code } = await emailEnrolled();
+  const fresh = extension(world);
+  await lostRequestNow(fresh);
+  await confirmByEmail(world);
+  releaseLostRequest(world);
+  await lostCheck(fresh);
+  const blob = fresh.local.data.get('lostBlob') as string;
+  assert.equal(await fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), null);
+  const header = (await fresh.store.getHeader())!;
+  const opened = await openEscrow(parseEmailCode(code)!, fromBase64(blob));
+  assert.ok(await unlockWithRecovery(header, opened!.recoveryKey));
+  assert.equal(await unlockWithRecovery(header, world.recoveryKey), null);
 });

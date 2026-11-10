@@ -19,6 +19,7 @@ const header = (extra: object = { accountKey: true }) =>
   JSON.stringify({ version: 1, kdf: KDF, salt: SALT, passwordWrap: 'cA==', recoveryWrap: 'cg==', ...extra });
 const HEADER = header();
 const migration = readFileSync(new URL('../../migrations/0001_init.sql', import.meta.url), 'utf8');
+const escrowMigration = readFileSync(new URL('../../migrations/0002_escrow.sql', import.meta.url), 'utf8');
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const ct = (s: string) => btoa(s);
 
@@ -27,6 +28,7 @@ type Body = Record<string, any>;
 function world(setupToken = SETUP) {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec(migration);
+  sqlite.exec(escrowMigration);
   const env: Env = { DB: d1FromNodeSqlite(sqlite), SETUP_TOKEN: setupToken };
   const sleeps: number[] = [];
   const deps = { now: () => NOW, sleep: async (ms: number) => void sleeps.push(ms) };
