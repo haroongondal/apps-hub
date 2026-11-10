@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** draft for the owner's approval, written 2026-11-08. Nothing in it is approved yet.
+**Status:** written 2026-11-08. Approved as amended by the owner's answers of 2026-11-10 (see Questions for the owner). Where an answer differs from the text, the answer wins, and the text has been changed to match.
 
 **Goal:** Everything Enhancer for YouTube does that the design keeps (design goal 2), as Sieve's own code: the button row under the player, speed, quality, volume and the booster, the player tools, autoplay rules, page tidying, the theme and the owner's CSS, the experiments manager, keyboard shortcuts, the menu's YouTube tab, and backup and import of the whole extension's settings. The row's Download button is phase 5.
 
@@ -151,6 +151,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
   export interface VideoFilters { blur: number; brightness: number; contrast: number; grayscale: number; hue: number; invert: number; saturate: number; sepia: number }
   export interface YouTubeSettings {
     version: 1;
+    on: boolean;                             // the "YouTube tools" switch; independent of the header "Sieve on" switch (blocking)
     speed: { setDefault: boolean; default: number; step: number; anySpeed: boolean; wheel: SpeedWheel };
     volume: { setDefault: boolean; level: number; boostOn: boolean; boost: number; step: number; wheel: VolumeWheel };
     reverseWheel: boolean;
@@ -179,6 +180,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
   ```ts
   {
     version: 1,
+    on: true,
     speed: { setDefault: false, default: 1, step: 0.25, anySpeed: true, wheel: 'over-speed' },
     volume: { setDefault: false, level: 50, boostOn: false, boost: 2, step: 5, wheel: 'off' },
     reverseWheel: false,
@@ -196,6 +198,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
 
   | Path | Rule |
   |---|---|
+  | `on` | boolean, else `true` |
   | `speed.default` | finite number, rounded to 2 decimals, clamped to 0.1–16 (Chrome refuses rates outside 0.0625–16) |
   | `speed.step` | 2 decimals, 0.05–1 |
   | `volume.level` | integer, 0–100 |
@@ -219,6 +222,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
 
   | Group id, title (help) | Path | Kind and range | Label (help) |
   |---|---|---|---|
+  | `youtube`, "YouTube tools" | `on` | switch | "YouTube tools" ("Turns the button row and every YouTube feature on or off. Blocking has its own switch.") |
   | `speed`, "Speed" | `speed.setDefault` | switch | "Set a default speed" |
   | | `speed.default` | number 0.1–16, step 0.05, unit "×" | "Default speed" ("Each new video starts at this speed.") |
   | | `speed.anySpeed` | switch | "Allow any speed" ("Slower and Faster go past YouTube's own speeds, up to 16×.") |
@@ -278,7 +282,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
   ```ts
   export const YT_ACTIONS: readonly { id: string; command: string }[];   // `as const`
   export type YtActionId = (typeof YT_ACTIONS)[number]['id'];
-  export const ROW_ORDER: readonly string[];   // ['loop','speed-down','speed','speed-up','boost','cinema','expand','filters','flip','screenshot','download','settings']
+  export const ROW_ORDER: readonly string[];   // ['loop','speed-down','speed','speed-up','boost','cinema','expand','filters','flip','screenshot','pip','download','settings']
   export const SETTINGS_COMMAND = 'open-settings';
   export function commandsManifest(): Record<string, { description: string }>;
   export function actionOfCommand(command: string): YtActionId | null;
@@ -328,6 +332,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
     - Presets `['modern-player', 'modern-player', 'Bad Id!', 'x'.repeat(41)]` give `['modern-player']`.
     - 21 valid distinct ids keep the first 20.
     - A 10,001-character `overrides` gives `''`.
+  - On: `{ on: false }` is kept, and `{ on: 'no' }` gives `true`.
   - Unknown keys: `{ extra: 1, speed: { extra: 2 } }` deep-equals `DEFAULT_YOUTUBE`.
   - `mergeYouTube`:
     - `mergeYouTube(DEFAULT_YOUTUBE, { player: { cinema: true } })` differs from the default only in `player.cinema`.
@@ -336,14 +341,14 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
     - `{ version: 9, player: { expand: true } }` gives `player.expand === true`.
     - `presets: ['a']`, then `presets: []`, ends with `[]`.
   - Fields:
-    - Every leaf path of `DEFAULT_YOUTUBE` except `version` and `experiments.presets` is the `path` of exactly one field, and every field path is such a leaf.
+    - Every leaf path of `DEFAULT_YOUTUBE` except `version` and `experiments.presets` (so `on` is included) is the `path` of exactly one field, and every field path is such a leaf.
     - For each number field, `validateYouTube(setPath(DEFAULT_YOUTUBE, f.path, f.max + 1000))` reads back `f.max` at `f.path`, and `f.min - 1000` reads back `f.min`.
     - For each select field, every option value round-trips, and `'nope'` does not.
   - Paths: `getPath({ a: { b: 1 } }, 'a.b') === 1`, and `setPath({ a: { b: 1 } }, 'a.b', 2)` deep-equals `{ a: { b: 2 } }` while the input still has `b: 1`.
 - [ ] **Step 2: Write the failing `yt-actions.test.ts`.**
   - `commandsManifest()` has 30 keys. Each value's only key is `description`. `commandsManifest()['yt-loop'].description === 'YouTube: loop on or off'`, `['yt-quality-hd1080'].description === 'YouTube: quality 1080p'`, and `['open-settings'].description === 'Open Sieve settings'`.
   - `actionOfCommand('yt-loop') === 'loop'`, while `actionOfCommand('yt-nope')` and `actionOfCommand('open-settings')` are `null`.
-  - Action ids are unique. `ROW_ORDER` has 12 unique ids, and `'download'` comes just before `'settings'`.
+  - Action ids are unique. `ROW_ORDER` has 13 unique ids, `'pip'` comes just after `'screenshot'`, and `'download'` comes just before `'settings'`.
 - [ ] **Step 3: Run the tests.** Run `node --test packages/sieve-core/src/__tests__/youtube-settings.test.ts packages/sieve-core/src/__tests__/yt-actions.test.ts`. Expected: FAIL (module not found).
 - [ ] **Step 4: Implement both modules, and add both tests to the `test` script.**
 - [ ] **Step 5: Run the tests.** Run `pnpm --filter @apps-hub/sieve-core test && pnpm --filter @apps-hub/sieve-core typecheck`. Expected: PASS.
@@ -463,7 +468,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
   export type YtPageKind = 'watch' | 'browse' | 'shorts' | 'embed' | 'chat' | 'other';
   export interface YtPage { kind: YtPageKind; videoId: string | null; list: string | null }
   export function ytPage(url: string): YtPage;    // www.youtube.com (any port) and www.youtube-nocookie.com/embed only
-  export interface MainSettings { on: boolean; speed: YouTubeSettings['speed']; volume: { setDefault: boolean; level: number; step: number };
+  export interface MainSettings { on: boolean /* youtube.on, never settings.enabled */; speed: YouTubeSettings['speed']; volume: { setDefault: boolean; level: number; step: number };
                                   quality: YouTubeSettings['quality']; experiments: YouTubeSettings['experiments'] }
   export function mainSettings(y: YouTubeSettings, on: boolean): MainSettings;
   export function readMainSettings(detail: unknown): MainSettings | null;
@@ -478,7 +483,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
   ```ts
   export function feature(name: string, init: () => void): void;   // runs init; on a throw logs `Sieve: <name> is off on this page` once
   export function currentPage(): YtPage;
-  export function onSettings(cb: (y: YouTubeSettings, on: boolean) => void): void;  // at once if known; then on every change
+  export function onSettings(cb: (y: YouTubeSettings, on: boolean) => void): void;  // at once if known; then on every change; `on === y.on`
   export function onNavigate(cb: (p: YtPage) => void): void;         // after NAV.finish, and once after the first settings on a hard load
   export function addStyle(css: string): void;                      // attribute-gated static CSS, appended to <html> now
   export function setStyle(id: string, css: string): void;           // settings-driven CSS in its own <style data-sieve="id">
@@ -514,10 +519,10 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
   // Any other type returns false, so pick-handler.ts and the others keep their messages.
   ```
 - Behaviour:
-  - At `document_start` the relay calls `chrome.storage.local.get(['settings', 'youtube'])` once (Task 1.11's own read joins this one). It computes `on = validateSettings(settings).enabled` and `y = validateYouTube(youtube)`, runs every `onSettings` callback in the same task, and then calls `performance.mark('sieve-yt-applied')`. If Step 1 finds the mark is not visible to the main world, it sets `<html data-sieve-yt-at="<performance.now()>">` instead. Then it dispatches `sieve-yt-settings` with `mainSettings(y, on)`.
+  - At `document_start` the relay calls `chrome.storage.local.get(['settings', 'youtube'])` once (Task 1.11's own read joins this one, and still needs `settings`). It computes `y = validateYouTube(youtube)` and `on = y.on`, never `settings.enabled`, runs every `onSettings` callback in the same task, and then calls `performance.mark('sieve-yt-applied')`. If Step 1 finds the mark is not visible to the main world, it sets `<html data-sieve-yt-at="<performance.now()>">` instead. Then it dispatches `sieve-yt-settings` with `mainSettings(y, on)`.
   - The main script dispatches `sieve-yt-hello` when it starts. The relay answers every hello with the settings, so the order the two scripts start in does not matter.
-  - The relay follows `storage.onChanged` (local `settings` or `youtube`) the same way.
-  - "Sieve on" off (`settings.enabled` false) calls every callback with `on = false`. Each feature then removes what it added. "Pause everywhere" and the allowlist do not affect YouTube tools.
+  - The relay follows `storage.onChanged` (local `youtube`) the same way. A change to `settings` does not touch the YouTube tools, so the header "Sieve on" switch (blocking only, phase 1, unchanged) never changes `on`.
+  - "YouTube tools" off (`youtube.on` false) calls every callback with `on = false`. Each feature then removes what it added. The header "Sieve on" switch, "Pause everywhere" and the allowlist do not affect YouTube tools.
   - Runtime `{ type: 'yt-command', action, value? }` follows the frame rule. The top frame acts when its page kind is not `'other'`. An embed frame acts only while its video is playing.
 
 - [ ] **Step 1: Confirm two browser facts in the fixture, and record them in `bridge.ts`.** Are `performance.mark` entries made in the isolated world visible to `performance.getEntriesByName` in the main world? Does headless Chrome for Testing record a `first-paint` entry (else use `first-contentful-paint`)?
@@ -532,7 +537,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
     - `/live_chat?v=x` and `/live_chat_replay?x=1` give `'chat'`.
     - `https://www.youtube.com:8443/watch?v=dQw4w9WgXcQ` gives `'watch'`.
     - `https://m.youtube.com/watch?v=dQw4w9WgXcQ`, `https://music.youtube.com/watch?v=dQw4w9WgXcQ`, `https://example.com/` and `'nonsense'` give `'other'`.
-  - Main settings: `readMainSettings(mainSettings(DEFAULT_YOUTUBE, true))` deep-equals its input, and `readMainSettings('x')` and `readMainSettings({ on: 'yes' })` are `null`.
+  - Main settings: `readMainSettings(mainSettings(DEFAULT_YOUTUBE, true))` deep-equals its input, `mainSettings(y, y.on).on === y.on`, and `readMainSettings('x')` and `readMainSettings({ on: 'yes' })` are `null`.
   - Main state:
     - `readMainState({ rate: 99, qualities: ['hd1080', 'bogus', 'auto'], title: 'x'.repeat(1000), volume: 150 })` gives rate 16, qualities `['hd1080']`, a 300-character title and volume 100. Missing fields get the defaults `{ videoId: null, title: '', rate: 1, quality: 'auto', qualities: [], volume: 100, muted: false, live: false, playlist: null }`.
     - `readMainState(null)` is `null`.
@@ -547,7 +552,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
 - [ ] **Step 5: Write `test/yt/bridge.mjs`.**
   - **Local, settings delivery:** `fixture=watch` has one `sieve-yt-applied` mark (or the attribute from Step 1). `player.js` records the last `sieve-yt-settings` detail in `window.__lastSieveSettings`.
   - **Local, live update:** after `setYouTube(t, { speed: { default: 1.5 } })`, without a reload, `__lastSieveSettings.speed.default === 1.5` within 1 s. It is still 1.5 after a reload.
-  - **Local, Sieve off:** with `settings.enabled` false, `__lastSieveSettings.on === false`.
+  - **Local, YouTube tools off:** with `youtube.on` false, `__lastSieveSettings.on === false`. With `settings.enabled` false and `youtube.on` true, `__lastSieveSettings.on` stays `true`.
   - **Local, forged events:**
     - The page dispatches `sieve-yt-state` with a 5,000-character title and `sieve-yt-hello` 100 times: there are no page errors, and `chrome.storage.local.get('youtube')` is unchanged.
     - The page dispatches `sieve-yt-do` with `{ action: 'boost' }`: storage is unchanged.
@@ -574,6 +579,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
     label: string | (() => string);
     title?: string;                          // tooltip and aria-description
     ariaLabel?: string | (() => string);     // when the visible label is a symbol
+    icon?: () => SVGElement;                 // an inline SVG shown instead of the text label, built as the cog's is; ariaLabel is then required
     pressed?: () => boolean;                 // makes it a toggle (aria-pressed)
     onClick: () => void;                     // trusted clicks only
     menu?: { label: string; build: () => HTMLElement };   // adds a narrow arrow part that opens this popover; label is its aria-label
@@ -586,11 +592,12 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
   ```
 - The shell:
   - A host element `<sieve-yt-row>` with an open shadow root that adopts the UI tokens as `picker.ts` does. Inside is a wrapper with `data-brand="sieve"`, and `data-theme` set to `dark` or `light` from `DARK_ATTR` on `<html>`. An attribute observer on `<html>` only (`attributeFilter: [DARK_ATTR]`) keeps it current.
-  - The cog is always last. Its aria-label is "More and settings", and it shows an inline SVG cog, not an emoji. It opens a menu with the registered items, then "Sieve settings", which sends `{ type: 'open-settings', section: 'youtube' }`.
+  - The cog is always last. Its aria-label is "More and settings", and it shows an inline SVG cog, not an emoji. It opens a menu with the registered items (Stop, and Reverse playlist only with a playlist, both from Task 2.8), then "Sieve settings", which sends `{ type: 'open-settings', section: 'youtube' }`.
+  - Picture-in-picture is a row button, not a cog item. It sits just after Screenshot (`ROW_ORDER`, 13 ids). Task 2.9 registers it with the aria-label "Picture-in-picture", a pressed state while PiP is open, and an inline SVG icon (`icon`), no emoji.
 - Mounting:
-  - Only in the top frame, on `kind === 'watch'`, while Sieve is on.
+  - Only in the top frame, on `kind === 'watch'`, while the YouTube tools are on (`youtube.on`).
   - `ensureMounted()` runs on the first settings, on every `onNavigate`, and from an observer on the anchor's parent (`childList` only). It inserts the host before `SEL.rowAnchor` when it is not already there, and adds 1 to `data-mounts` on each insertion.
-  - It never removes the host on navigation. When Sieve is turned off, the host is `hidden`.
+  - It never removes the host on navigation. When the YouTube tools are turned off, the host is `hidden`.
   - If the anchor is missing, it retries every 100 ms for up to 10 s. The next navigation cancels the retries.
 - Input:
   - Every key event from inside the shadow root stops at the row (`stopPropagation`), so YouTube's own shortcuts never fire while the row has focus.
@@ -886,8 +893,8 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
     2. It draws a canvas at `videoWidth × videoHeight`, with `ctx.filter` set to the video's computed `filter` and the flips taken from `flipFromMatrix` of its computed `transform`, so the picture matches the screen.
     3. `canvas.toBlob('image/png')`. A `SecurityError` shows the toast "Sieve can't take a screenshot of this video."
     4. It reads the blob as a data URL and sends `{ type: 'yt-screenshot', dataUrl, title: mainState()?.title ?? '', seconds: video.currentTime }`. On success the toast says "Screenshot saved". On failure it says "Sieve couldn't save the screenshot: " followed by the message.
-  - Cog item "Picture-in-picture", action `pip`: it calls `video.requestPictureInPicture()`, or `document.exitPictureInPicture()` when PiP is already open. A `NotAllowedError` shows the toast "Chrome only opens picture-in-picture from a click on the page. Use the cog under the video."
-- Worker: `yt-screenshot` checks `isPngDataUrl(dataUrl, 64 * 1024 * 1024)`, else it answers `{ ok: false, message: 'the picture is not a PNG or is too big' }`. Then it calls `chrome.downloads.download({ url: dataUrl, filename: screenshotName(String(title), Number(seconds) || 0), conflictAction: 'uniquify', saveAs: false })` and answers `{ ok: true }` or the error's message. These downloads have `byExtensionId === chrome.runtime.id`, which phase 3's take-over must skip.
+  - Row button `pip`, just after `screenshot`: an inline SVG icon (no emoji), aria-label "Picture-in-picture", `pressed` when `document.pictureInPictureElement` is the video. Action `pip`: it calls `video.requestPictureInPicture()`, or `document.exitPictureInPicture()` when PiP is already open. `notifyActions()` runs on the video's `enterpictureinpicture` and `leavepictureinpicture` events (one listener per element). A `NotAllowedError` shows the toast "Chrome only opens picture-in-picture from a click on the page. Use the Picture-in-picture button under the video."
+- Worker: `yt-screenshot` checks `isPngDataUrl(dataUrl, 64 * 1024 * 1024)`, else it answers `{ ok: false, message: 'the picture is not a PNG or is too big' }`. Then it calls `chrome.downloads.download({ url: dataUrl, filename: 'Sieve/' + screenshotName(String(title), Number(seconds) || 0), conflictAction: 'uniquify', saveAs: false })` and answers `{ ok: true }` or the error's message. Chrome creates the `Sieve` subfolder in Downloads, so the file lands at `Downloads/Sieve/<title> <time>.png`. `screenshotName` removes `/`, so a title cannot change the folder. These downloads have `byExtensionId === chrome.runtime.id`, which phase 3's take-over must skip.
 
 - [ ] **Step 1: Inspect PiP and record the answer in `capture.ts`.** In the signed-out watch page, check:
   - whether `video.requestPictureInPicture()` succeeds from a trusted click in the page
@@ -903,14 +910,15 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
     - `('\u0000ctrl', 1)` gives `'ctrl 0-01.png'`.
   - `isPngDataUrl`: `'data:image/png;base64,iVBORw0KGgo='` is true. A JPEG data URL, `42`, and a PNG data URL longer than `maxBytes` are false.
   - `flipFromMatrix`: `'none'` gives `{ h: false, v: false }`, `'matrix(-1, 0, 0, 1, 0, 0)'` gives `{ h: true, v: false }`, and `'matrix(-1, 0, 0, -1, 0, 0)'` gives both true.
-  - `yt-handler.test.ts`: a PNG data URL calls `downloads.download` with the sanitised filename and `conflictAction: 'uniquify'`. A JPEG answers `ok: false` without calling it.
+  - `yt-handler.test.ts`: a PNG data URL calls `downloads.download` with the filename `'Sieve/' + screenshotName(title, seconds)` (for example `'Sieve/a b c d 0-05.png'` for the title `a/b:c*?"<>|d` at 5 s) and `conflictAction: 'uniquify'`. A JPEG answers `ok: false` without calling it.
 - [ ] **Step 3: Run, implement, and run again.** Run `pnpm --filter @apps-hub/sieve-core test && pnpm --filter sieve test`. Expected: FAIL, then PASS.
 - [ ] **Step 4: Write `test/yt/capture.mjs`.**
-  - **Local, click:** on `canvas=1`, "Screenshot" gives a newest download with `state: 'complete'`, `mime: 'image/png'` and `byExtensionId` equal to the extension id. Read its file in Node: the PNG signature is there, and IHDR width 320 and height 180. The toast says "Screenshot saved".
+  - **Local, click:** on `canvas=1`, "Screenshot" gives a newest download with `state: 'complete'`, `mime: 'image/png'` and `byExtensionId` equal to the extension id. Its `filename` ends in `.png` and its folder is named `Sieve`. Read its file in Node: the PNG signature is there, and IHDR width 320 and height 180. The toast says "Screenshot saved".
   - **Local, unplayable:** `state=unplayable` shows "Sieve can't take a screenshot yet. Play the video first." and makes no download.
   - **Local, shortcut path:** `yt-command` `screenshot` (no click) also downloads.
   - **Local, page clicks:** a page script's `click()` on the Screenshot button makes no download.
-  - **Local, PiP:** cog, then "Picture-in-picture", gives `document.pictureInPictureElement === video`. If Step 1 found that headless refuses PiP with `NotSupportedError`, the check accepts that error, and PiP goes on the owner checklist.
+  - **Local, PiP:** a trusted click on the row's "Picture-in-picture" button gives `document.pictureInPictureElement === video` and `aria-pressed="true"`. If Step 1 found that headless refuses PiP with `NotSupportedError`, the check accepts that error (the button stays unpressed), and PiP goes on the owner checklist.
+  - **Local, PiP button position:** the row's button order has "Picture-in-picture" right after "Screenshot".
   - **Live:** after 5 s of playback, "Screenshot" gives a PNG download whose IHDR size equals the video's `videoWidth × videoHeight`.
 - [ ] **Step 5: Run the checks.** Run `pnpm --filter sieve build && pnpm --filter sieve test:yt -- --only capture && pnpm --filter sieve test:e2e -- --live`. Expected: PASS.
 - [ ] **Step 6: Commit.** Commit with the message `Sieve: YouTube screenshot and picture-in-picture`.
@@ -1108,7 +1116,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
   - **Dark theme:** `theme.dark` sets YouTube's dark-theme attributes from Step 1 on `<html>` in the `document_start` settings call, in every page kind including chat frames. If Step 1 found that YouTube removes them, an attribute observer on `<html>` only puts them back. Turning it off removes only what Sieve added.
   - **Accent:** `theme.accent` calls `setStyle('accent', …)`, which maps Step 1's variables and selectors to the accent's hex. `'youtube'` writes nothing.
   - **My CSS:** `theme.css` calls `setStyle('my-css', theme.css)`, which sets the CSS as the style element's `textContent`, never as HTML.
-  - **Sieve off:** all three are removed.
+  - **YouTube tools off:** all three are removed.
 
 - [ ] **Step 1: Inspect, and record it in `theme.ts`.**
   - How YouTube switches to its dark theme (attributes on `<html>` and elsewhere), and whether it undoes an added attribute on a light profile.
@@ -1120,7 +1128,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
   - **Local, my CSS:**
     - `body { outline: 3px solid rgb(1, 2, 3) }` gives a computed outline colour of `rgb(1, 2, 3)`.
     - The CSS `</style><script>window.__pwned = 1</script>` leaves `window.__pwned` undefined, and that text is inside the style element.
-  - **Local, Sieve off:** none of the three applies.
+  - **Local, YouTube tools off:** with `youtube.on` false, none of the three applies.
   - **Live, dark theme:** the real page's background is dark (relative luminance of the recorded background element below 0.1).
   - **Live, accent:** accent blue colours the progress bar.
   - **Live, screenshot:** save `$SHOTS/yt-theme.png`.
@@ -1169,7 +1177,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
   - Every preset's flag names appear in `experiment-flags.json`.
 - [ ] **Step 3: Run, implement, and run again.** Run `pnpm --filter @apps-hub/sieve-core test`. Expected: FAIL, then PASS.
 - [ ] **Step 4: Write `experiments.html` and `test/yt/experiments.mjs`, then implement.** `experiments.html` reproduces Step 1's config mechanism, carrying `sieve_test_flag: true` and a serialized `sieve_test_flag=true&other=1`.
-  - **Local:** with the overrides `sieve_test_flag=false`, after load the fixture reads `false` and `'sieve_test_flag=false&other=1'`. With Sieve off, both are unchanged.
+  - **Local:** with the overrides `sieve_test_flag=false`, after load the fixture reads `false` and `'sieve_test_flag=false&other=1'`. With `youtube.on` false, both are unchanged.
   - **Live:** with the first preset on, the real page's flag reads the override, and the recorded DOM marker shows the older player. Save `$SHOTS/yt-experiments.png`.
 - [ ] **Step 5: Run the checks.** Run `pnpm --filter sieve build && pnpm --filter sieve test:yt -- --only experiments && pnpm --filter sieve test:e2e -- --live`. Expected: PASS.
 - [ ] **Step 6: Commit.** Commit with the message `Sieve: YouTube experiments manager`.
@@ -1222,6 +1230,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
 
 **Interfaces:**
 - Produces: `youtubeSection(): HTMLElement` (`id="youtube"`, heading "YouTube"). It renders `YOUTUBE_GROUPS` as sub-headed groups, plus the experiment presets.
+  - **YouTube tools switch:** the first control is the "YouTube tools" switch (field `on`). While it is off, every other control in the section stays visible but is greyed out with the existing disabled style.
   - **Controls by kind:**
     - switch: a `role="switch"` checkbox, as phase 1 does
     - number: `<input type="number">` with `min`, `max` and `step`, and the unit after it; it saves on `change`, then shows the stored (clamped) value
@@ -1238,7 +1247,8 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
 
 - [ ] **Step 1: Write `test/yt/settings-page.mjs` (failing).**
   - **Opening at the section:** `options.html#youtube` opens with the "YouTube" heading's top inside the viewport.
-  - **Rendering:** the section has one control per field, 53 of them, plus one per preset.
+  - **Rendering:** the section has one control per field, 54 of them (the "YouTube tools" switch first), plus one per preset.
+  - **YouTube tools switch:** turning it off stores `youtube.on === false`, greys out every other control, and hides the row in an open fixture tab. Turning it on undoes all three.
   - **Clamping:** "Default speed" 99 then Tab stores 16, and the input shows 16.
   - **Live effect:** "Hide comments" stores `tidy.hideComments === true`, and an open `watch-full` fixture tab hides its comments without a reload.
   - **Two writers:** two settings pages change two different fields at once, and both values land.
@@ -1266,6 +1276,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
 - **No answer:** if the port disconnects at once (not a YouTube page, or no content script), the tab shows the empty state.
 - **Starting tab:** the menu opens on "YouTube" when `ytPage(tab.url).kind !== 'other'`, otherwise on "Blocking". The tab bar shows "Blocking" and "YouTube".
 - **Copy** (`youtubeView`):
+  - the first control is the "YouTube tools" switch, shown from `settings.on` and written the way the settings page writes (`withSettingsLock`, `validateYouTube`). While it is off, every other control in the tab stays visible but is greyed out with the existing disabled style.
   - a "Speed" row with "−" (aria-label "Slower"), the value, and "+" (aria-label "Faster")
   - a "Quality" select: "Auto", then each available quality as its height ("1080p")
   - switches: "Loop", "Volume boost", "Cinema mode", "Expand player", "Video filters", "Flip horizontally", "Flip vertically", and "Reverse playlist" (only with a playlist)
@@ -1280,6 +1291,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
   - **Quality:** the select lists "Auto" and the fake player's levels as heights. Choosing "720p" makes the recorded setter call.
   - **Toggles:** "Loop" gives `video.loop === true`. "Cinema mode" stores `player.cinema === true`.
   - **Screenshot:** "Take a screenshot" makes a download.
+  - **YouTube tools switch:** it is the first control. Turning it off stores `youtube.on === false`, greys out the other controls, and hides the fixture's row. The header "Sieve on" switch on the Blocking tab is unaffected.
   - **Other pages:** a `https://localhost:PORT/ads.html` tab opens on "Blocking", and its "YouTube" tab shows "Open a YouTube video to use these tools."
   - **Phase 1:** the phase 1 menu checks still pass.
   - **Screenshots:** save `$SHOTS/menu-youtube-light.png` and `-dark.png`.
@@ -1305,6 +1317,7 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
   export function readBackup(text: string): ReadResult;
   export function backupFileName(now: Date): string;   // local date: 'sieve-settings-2026-11-08.json'
   ```
+  The `youtube` part carries `on` (the YouTube tools switch). An older file without it gives `true`.
   `readBackup` checks these in order:
   1. Over `BACKUP_MAX_CHARS`: "This file is too big to be a Sieve backup."
   2. Not JSON: "This file isn't a Sieve backup: it isn't valid JSON."
@@ -1360,16 +1373,16 @@ Actions: every row button, shortcut and menu control runs an action by id (`YT_A
   - what each tool does
   - where the settings live (the `youtube` key)
   - what YouTube can see (`MainSettings` in page events)
-  - the new `downloads` permission (screenshots)
+  - the new `downloads` permission (screenshots, saved in the `Sieve` folder inside Downloads)
   - the 30 shortcuts with no default keys
   - known limits gathered from each task's report, including: forcing H.264 can leave a video with no H.264 version unplayable; PiP needs a click on the page; reversed playlists reverse only the automatic advance
   - the owner's signed-in checklist:
-    1. With your account, the row appears under the player, and Speed, Loop, Boost volume, Cinema, Expand, Filters, Flip and Screenshot work. After 5 clicks on related videos the row never blinks.
+    1. With your account, the row appears under the player, and Speed, Loop, Boost volume, Cinema, Expand, Filters, Flip and Screenshot (saved in Downloads/Sieve) work. After 5 clicks on related videos the row never blinks.
     2. With Premium, picking 1080p causes no error and the row is unaffected.
     3. A members-only video you can watch, and an age-restricted video, play as before, with no errors in the console from Sieve.
     4. With "Boost volume" on, open a video in a new tab without clicking: it plays with sound. Click the page: the boost starts.
     5. With "Play H.264 only", "Stats for nerds" shows `avc1`. With "Play at most 30 frames per second", it shows 30 fps or fewer.
-    6. Picture-in-picture from the cog.
+    6. Picture-in-picture from its button in the row.
     7. Bind one shortcut in `chrome://extensions/shortcuts` and use it on a video.
     8. Save a backup, change a setting, import the backup: the setting is back.
     9. With your real Enhancer settings re-entered in Sieve, uninstall Enhancer and use YouTube for a day.
@@ -1384,9 +1397,13 @@ Each is a choice the design leaves open, with why and what it costs if wrong.
 1. **YouTube settings live in their own storage key, `youtube`, not inside `settings`.**
    - Why: the worker re-applies blocking and drops its cosmetic cache on every `settings` change (`background.ts`). A speed or cinema toggle would cost a blocking re-apply and a 4 MB map reload, and would rewrite My filters' text (megabytes) with each press.
    - Cost if wrong: the backup carries two parts (Task 2.18), and the lock covers one more key.
-2. **"Sieve on" (the menu header switch) also turns the YouTube tools off. "Pause everywhere" and the allowlist do not.**
-   - Why: the header switch reads as "all of Sieve", and pausing is a blocking word.
-   - Cost if wrong: one condition in `bridge.ts`. (Question 3.)
+2. **Sieve has three tools (Blocking, YouTube tools and Downloads), each with its own independent switch.**
+   - The menu header's "Sieve on" switch (`settings.enabled`) keeps meaning blocking only, as in phase 1.
+   - The YouTube tools switch is `youtube.on` (default on, so installing phase 2 still changes only the row). The bridge's `on` comes from it, never from `settings.enabled`.
+   - Phase 3 adds a Downloads switch the same way (`downloads.on`).
+   - "Pause everywhere" and the allowlist are blocking words and do not affect the YouTube tools.
+   - Why: the owner asked for a separate switch for each Sieve tool (Question 3).
+   - Cost if wrong: one field in `YouTubeSettings` and the places that read `on`: `bridge.ts`, the settings page and the menu's YouTube tab.
 3. **Every YouTube option starts at YouTube's own behaviour,** except the harmless speed wheel over the row's speed value.
    - Why: installing phase 2 then changes nothing surprising (anti-goals 2 and 4).
    - Cost if wrong: the owner re-enters their Enhancer choices once. (Question 1.)
@@ -1399,8 +1416,8 @@ Each is a choice the design leaves open, with why and what it costs if wrong.
 6. **Loop, Filters and Flip are split buttons.** The main part toggles, and a narrow arrow opens the options.
    - Why: one click for the common action, with the part loop, the sliders and vertical flip still within reach.
    - Cost if wrong: a CSS and markup change in `row.ts`.
-7. **The cog opens a short menu:** Picture-in-picture, Stop, Reverse playlist and Sieve settings.
-   - Why: Chrome opens picture-in-picture only from a click on the page (a shortcut or the toolbar menu does not count; Task 2.9 confirms), and the chosen row has no PiP button. Stop and Reverse playlist are not in the chosen row either.
+7. **The cog opens a short menu:** Stop, Reverse playlist (only with a playlist) and Sieve settings. Picture-in-picture has its own button in the row.
+   - Why: Chrome opens picture-in-picture only from a click on the page (a shortcut or the toolbar menu does not count; Task 2.9 confirms), and a row button is such a click. Stop and Reverse playlist are not in the chosen row.
    - Cost if wrong: settings are one click further away. (Question 4.)
 8. **The wheel.**
    - Speed: over the row's speed value, or over the video while holding the right button.
@@ -1411,7 +1428,7 @@ Each is a choice the design leaves open, with why and what it costs if wrong.
 9. **Reversed playlists reverse only the automatic advance,** not the panel's order or YouTube's Next button.
    - Why: reordering YouTube's panel means rewriting its list, and that breaks with its markup.
    - Cost if wrong: Next still goes forward.
-10. **Screenshots go to the Downloads folder root as `<title> <time>.png` through `chrome.downloads`,** which adds the `downloads` permission now (phase 3 needs it anyway). They include the flips and filters on screen.
+10. **Screenshots go to a `Sieve` subfolder of Downloads as `<title> <time>.png` through `chrome.downloads`** (final path `Downloads/Sieve/<title> <time>.png`, the `chrome.downloads` filename `Sieve/<title> <time>.png`), which adds the `downloads` permission now (phase 3 needs it anyway). They include the flips and filters on screen.
     - Why: a click-free download that also works from a shortcut, and a picture that matches what the owner sees.
     - Cost if wrong: one permission earlier than planned. (Question 5.)
 11. **The menu opens on the YouTube tab on YouTube pages,** the design's unconfirmed guess.
@@ -1437,11 +1454,18 @@ Each is a choice the design leaves open, with why and what it costs if wrong.
 
 ## Questions for the owner
 
+Answered 2026-11-10. The plan above is amended to match.
+
 1. **Which Enhancer options do you use today?** For example: default speed, quality, theme and accent, hidden Shorts or comments, autoplay. With your list, those become Sieve's defaults instead of "off".
+   - Answer (2026-11-10): defaults (reading). The owner sent no list, so every option starts at YouTube's own behaviour, as written.
 2. **Which YouTube test features do you want blocked?** The design names the "modern player". A signed-out test profile sees only the experiments YouTube gives a fresh profile, so tell me any you see signed in.
+   - Answer (2026-11-10): defaults (reading). The owner sent no list, so the presets are what inspection finds signed out, all off, plus the free-form "Flag overrides" box.
 3. **Should the menu's "Sieve on" switch also turn off the YouTube tools,** or only blocking?
+   - Answer (2026-11-10): "separate switch for each Sieve tool". The main session's reading: Blocking, YouTube tools and Downloads each get an independent switch, and the header switch keeps meaning blocking (Decision 2).
 4. **Picture-in-picture:** is it fine in the cog menu under the video, or do you want its own button in the row? Chrome only opens it from a click on the page.
+   - Answer (2026-11-10): its own button in the row, not in the cog menu (Decision 7).
 5. **Screenshots:** Downloads folder root or a "YouTube screenshots" subfolder? And with your filters and flips applied, or the raw frame?
+   - Answer (2026-11-10): a Downloads subfolder, with filters and flips applied (Decision 10). The owner did not name the subfolder: `Sieve` is the main session's reading.
 
 ## Scheduling
 
