@@ -1,0 +1,7 @@
+sieve-yt-backdrop { display: none; }
+html[sieve-yt~="cinema"] sieve-yt-backdrop { display: block; position: fixed; inset: 0; z-index: 2200; background: var(--sieve-yt-backdrop); }
+html[sieve-yt~="cinema"] {{playerBox}}, html[sieve-yt~="cinema"] {{theaterBox}} { z-index: 2201; }
+html[sieve-yt~="cinema"] sieve-yt-row { position: relative; z-index: 2201; border-radius: 12px; background: var(--yt-spec-base-background, #fff); }
+html[sieve-yt~="expand"] ytd-watch-flexy[theater]:not([fullscreen]) {{theaterBox}} { height: calc(100vh - var(--ytd-watch-flexy-masthead-height, 56px)) !important; max-height: none !important; min-height: 0 !important; }
+html[sieve-yt~="flip"] {{video}} { transform: var(--sieve-yt-flip, none); }
+html[sieve-yt~="filters"] {{video}} { filter: var(--sieve-yt-filter, none); }
