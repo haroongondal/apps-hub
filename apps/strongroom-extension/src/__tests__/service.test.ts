@@ -74,6 +74,23 @@ test('a new profile has no vault; setup creates one, unlocks it and holds the re
   assert.match(status.recoveryKey ?? '', /^([A-Z2-7]{4}-){7}[A-Z2-7]{4}$/);
 });
 
+test('a device-level saveKeys failure does not abort the unlock: the session is still genuinely usable', async () => {
+  const device: DeviceVault = {
+    saveKeys: async () => { throw new Error('IndexedDB is unavailable'); },
+    loadKeys: async () => null,
+    clearKeys: async () => {},
+    mode: async () => 'none',
+    protect: async () => {},
+    unprotect: async () => {},
+    saveAccountKey: async () => {},
+    loadAccountKey: async () => null,
+  };
+  const s = setup(device);
+  await s.call({ type: 'setup', password: PASSWORD });
+  assert.equal((await s.call<Status>({ type: 'status' })).state, 'unlocked');
+  assert.ok(await add(s));
+});
+
 test('setup refuses a master password shorter than 12 characters', async () => {
   const { call } = setup();
   await assert.rejects(call({ type: 'setup', password: 'too short' }), /12 characters/);
@@ -875,6 +892,16 @@ test('confirm with the right code marks it enrolled', async () => {
   assert.deepEqual([after.enrolled, after.waitingForCode], [true, false]);
 });
 
+test('confirm removes the local escrow blob: storage.local plus the mailed code is no longer enough to open it, only the Worker wait can', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  await enrol(x);
+  assert.ok(x.local.data.has('escrowBlob'));
+  await x.call({ type: 'emailRecovery', action: 'confirm', code: codeOf(world.mail.sent[0].text) });
+  assert.equal(x.local.data.has('escrowBlob'), false);
+  assert.equal(x.local.data.get('escrowConfirmed'), 'true');
+});
+
 test('confirm with a wrong code does not', async () => {
   const world = await newWorld();
   const x = await signedIn(world);
@@ -909,6 +936,20 @@ test('status shows wasTurnedOff after the server drops the escrow', async () => 
 
   const after = await emailStatus(x);
   assert.deepEqual([after.enrolled, after.wasTurnedOff], [false, true]);
+});
+
+test('the pending-recovery banner still shows after a non-manual lock, from the device-held login token', async () => {
+  const world = await newWorld();
+  const x = await signedIn(world);
+  await enrol(x);
+  await x.call({ type: 'emailRecovery', action: 'confirm', code: codeOf(world.mail.sent[0].text) });
+
+  await world.phone.transport.lostRequest(tokenHash(randomBytes(32)));
+  await x.call({ type: 'lock' }); // non-manual: device-held keys remain, the popup session does not
+  assert.deepEqual((await emailStatus(x)).pendingRecovery, { releaseAt: null });
+
+  await x.call({ type: 'emailRecovery', action: 'cancelRecovery' });
+  assert.equal((await emailStatus(x)).pendingRecovery, null);
 });
 
 test('status shows a pending recovery and cancelRecovery clears it', async () => {
@@ -965,10 +1006,12 @@ async function emailEnrolled() {
 type LostAccessState = { state: 'none' } | { state: 'waiting'; releaseAt: number | null } | { state: 'ready' };
 const lostCheck = (x: Ext) => x.call<LostAccessState>({ type: 'lostAccess', action: 'check' });
 const lostRequestNow = (x: Ext) => x.call({ type: 'lostAccess', action: 'request' });
-// Simulates the account owner clicking the confirm link mailed by the server's lost/request, which starts the 24-hour wait.
+// Simulates the account owner opening the mailed confirm link (a GET, now just a form) and submitting it, which starts the 24-hour wait.
 async function confirmByEmail(world: World) {
-  const token = /t=([^&\s]+)/.exec(world.mail.sent.at(-1)!.text)![1];
-  await world.serve(new Request('https://vault.example/v1/lost/confirm?t=' + token));
+  const token = decodeURIComponent(/t=([^&\s]+)/.exec(world.mail.sent.at(-1)!.text)![1]);
+  await world.serve(new Request('https://vault.example/v1/lost/confirm', {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `t=${encodeURIComponent(token)}`,
+  }));
 }
 // Backdates the confirmed request's release time instead of a fake clock: the 24-hour wait is counted from real release_at, so this ends it early.
 const releaseLostRequest = (world: World) => world.sqlite.exec(`UPDATE lost_request SET release_at = ${Date.now() - 1000}`);
@@ -993,6 +1036,19 @@ test('a fresh device can request, wait, then open with the code and ends signed 
   await fresh.call({ type: 'lock', manual: true });
   await fresh.call({ type: 'unlock', password: NEW_PASSWORD });
   assert.equal((await fresh.call<Status>({ type: 'status' })).state, 'unlocked');
+});
+
+test('a device that recovered through lostAccessOpen reports enrolled from the server, not its own never-set local flag', async () => {
+  const { world, code } = await emailEnrolled();
+  const fresh = extension(world);
+  await lostRequestNow(fresh);
+  await confirmByEmail(world);
+  releaseLostRequest(world);
+  await lostCheck(fresh);
+  assert.equal(await fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), null);
+
+  assert.equal(fresh.local.data.has('escrowBlob'), false);
+  assert.deepEqual([(await emailStatus(fresh)).enrolled, (await emailStatus(fresh)).waitingForCode], [true, false]);
 });
 
 test('check before 24 hours reports waiting', async () => {

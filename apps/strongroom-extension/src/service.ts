@@ -141,6 +141,7 @@ export function createService(deps: Deps) {
   // Autofill and sync fall back to the vault key the device holds on disk once the session copy is gone, so they keep working without an unlock.
   const fillKey = async (): Promise<Uint8Array | null> => (await keyOrNull()) ?? (await deps.device?.loadKeys())?.vaultKey ?? null;
   const requireFillKey = async (): Promise<Uint8Array> => (await fillKey()) ?? Promise.reject(new UserError(LOCKED));
+  const fillToken = async (): Promise<Uint8Array | null> => (await tokenOrNull()) ?? (await deps.device?.loadKeys())?.loginToken ?? null;
   // The login token lives only in session storage (memory) while unlocked; lock clears it.
   const opened = async (key: Uint8Array, loginToken?: Uint8Array) => {
     await session.set('vaultKey', toBase64(key));
@@ -148,8 +149,12 @@ export function createService(deps: Deps) {
       await session.set('loginToken', toBase64(loginToken));
       deps.syncAlarm?.(true);
     }
-    await deps.device?.saveKeys({ vaultKey: key, ...(loginToken && { loginToken }) });
     deps.resetAutoLock();
+    try {
+      await deps.device?.saveKeys({ vaultKey: key, ...(loginToken && { loginToken }) });
+    } catch {
+      // The session key above is already set: the unlock is genuinely usable even if device-level persistence (for lock-free autofill) failed.
+    }
   };
   const tokenOrNull = async () => {
     const stored = await session.get('loginToken');
@@ -362,10 +367,12 @@ export function createService(deps: Deps) {
     const blob = await deps.settings.get(ESCROW_BLOB);
     const confirmedLocally = (await deps.settings.get(ESCROW_CONFIRMED)) === 'true';
     const waitingForCode = blob !== undefined && !confirmedLocally;
-    const token = available ? await tokenOrNull() : null;
+    const token = available ? await fillToken() : null;
     if (!token || !deps.sync) return { available, enrolled: confirmedLocally, waitingForCode, pendingRecovery: null, wasTurnedOff: false };
     const remote = await deps.sync.transport.lostStatus(token);
-    return { available, enrolled: confirmedLocally && remote.escrow, waitingForCode, pendingRecovery: remote.pending, wasTurnedOff: confirmedLocally && !remote.escrow };
+    // enrolled reflects the account (the server), not just this device: a device that never did its own enrolling
+    // (e.g. one that just finished lostAccessOpen) must still see email recovery as on when the account has it.
+    return { available, enrolled: remote.escrow && !waitingForCode, waitingForCode, pendingRecovery: remote.pending, wasTurnedOff: confirmedLocally && !remote.escrow };
   }
 
   // Rotates the recovery key (Task 11) and mails a fresh code sealed around it and the account key (Task 11's sealEscrow); the put
@@ -413,6 +420,8 @@ export function createService(deps: Deps) {
     const opened = parsed && (await openEscrow(parsed, fromBase64(blobB64)));
     if (!opened) throw new UserError("That code isn't right. Check it and try again.");
     await deps.settings.set(ESCROW_CONFIRMED, 'true');
+    // storage.local plus the mailed code must not be enough on their own to open the vault: only the flag survives confirm.
+    await deps.settings.remove(ESCROW_BLOB);
     return null;
   }
 
@@ -428,7 +437,7 @@ export function createService(deps: Deps) {
 
   async function emailRecoveryCancel(): Promise<null> {
     const { transport } = unavailable();
-    const token = await tokenOrNull();
+    const token = await fillToken();
     if (!token) throw new UserError(SYNC_OFF);
     await transport.lostCancel(token);
     return null;

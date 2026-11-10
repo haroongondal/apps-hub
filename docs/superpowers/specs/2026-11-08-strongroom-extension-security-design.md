@@ -1,6 +1,6 @@
 # Strongroom for Chrome: lock-free autofill, fingerprint, export, email recovery
 
-Date: 2026-11-08. Status: draft for the owner's approval. Scope: `apps/strongroom-extension`, `packages/strongroom-core`, `tools/vault-api`. Not the Android app.
+Date: 2026-11-08. Status: executed — Tasks 1, 3-8, 11-16 complete; Tasks 9-10 (fingerprint) wait on an owner hardware spike; Task 17 blocked on the owner. Scope: `apps/strongroom-extension`, `packages/strongroom-core`, `tools/vault-api`. Not the Android app.
 
 ## Why
 

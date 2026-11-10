@@ -101,6 +101,7 @@ async function syncSuite() {
 
     await popup.getByRole('button', { name: 'Sign in to sync' }).click();
     await popup.getByRole('heading', { name: 'Sign in to sync' }).waitFor();
+    check('reached from an already-unlocked vault, sign-in offers no Lost access dead end', (await popup.getByRole('button', { name: 'Lost access to your account?' }).count()) === 0);
     await popup.getByLabel('Master password', { exact: true }).fill('not the password');
     await popup.getByLabel('Account key', { exact: true }).fill(world.accountKeyText);
     await popup.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -139,9 +140,26 @@ async function syncSuite() {
     await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
     await popup.getByRole('button', { name: 'Settings' }).click();
     await popup.getByRole('heading', { name: 'Settings' }).waitFor();
+    check('the Settings screen discloses that autofill works while locked', (await popup.innerText('body')).includes('Anyone who can use this browser profile can use this vault'));
     const mailCode = /code is ([A-Z2-7-]+)\./.exec(world.mail.sent.at(-1)?.text ?? '')?.[1];
     check('enrol asks for the emailed code', (await popup.innerText('body')).includes('Check your email for the code') && !!mailCode, mailCode);
-    await popup.getByLabel('Code from the email').fill(mailCode);
+
+    // Mistyped email, or the code never arrives: the waiting-for-code screen must offer a way out, not a dead end.
+    await popup.getByRole('button', { name: 'Turn off' }).click();
+    await popup.getByLabel('Email address').waitFor();
+    check('Turn off from the waiting-for-code screen returns to the pre-enrolment form', (await popup.getByRole('button', { name: 'Turn on' }).count()) === 1);
+    await popup.getByLabel('Email address').fill('me@example.com');
+    await popup.getByLabel('Master password').fill(world.password);
+    await popup.getByRole('button', { name: 'Turn on' }).click();
+    await popup.getByRole('heading', { name: 'Save your recovery key' }).waitFor();
+    const key2 = (await popup.locator('.key').innerText()).trim();
+    await popup.locator('input').first().fill(key2.slice(0, 4));
+    await popup.getByRole('button', { name: "I've saved it" }).click();
+    await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+    await popup.getByRole('button', { name: 'Settings' }).click();
+    await popup.getByRole('heading', { name: 'Settings' }).waitFor();
+    const mailCode2 = /code is ([A-Z2-7-]+)\./.exec(world.mail.sent.at(-1)?.text ?? '')?.[1];
+    await popup.getByLabel('Code from the email').fill(mailCode2);
     await popup.getByRole('button', { name: 'Confirm' }).click();
     await popup.getByText('Recovery by email is on.').waitFor();
     check('enrol, code typed, status enrolled', true);
@@ -188,6 +206,7 @@ async function syncSuite() {
 
     await popup.getByRole('button', { name: 'Lock' }).click();
     await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
+    check('the unlock screen discloses that autofill works while locked', (await popup.innerText('body')).includes('Anyone who can use this browser profile can use this vault'));
     check('a signed-in extension offers sign-in on the unlock screen', (await popup.getByRole('button', { name: 'Sign in with your account' }).count()) === 1);
     await popup.getByRole('button', { name: 'Sign in with your account' }).click();
     await popup.getByRole('heading', { name: 'Sign in to sync' }).waitFor();
@@ -268,7 +287,10 @@ async function syncSuite() {
 
     // Confirmed elsewhere while this popup still shows the armed, unconfirmed screen: the service's own truth check must refuse the stale click, not just whatever the UI happens to render.
     await lostPopup.waitForTimeout(700);
-    await fetch(new URL(`/v1/lost/confirm?t=${/t=([^&\s]+)/.exec(world.mail.sent.at(-1).text)[1]}`, harness.url));
+    await fetch(new URL('/v1/lost/confirm', harness.url), {
+      method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: `t=${/t=([^&\s]+)/.exec(world.mail.sent.at(-1).text)[1]}`,
+    });
     await lostPopup.getByRole('button', { name: 'Yes, start a new request' }).click();
     await lostPopup.locator('.msg:not(:empty)').waitFor();
     const msgSeen = await lostPopup.locator('.msg').innerText();
@@ -281,7 +303,7 @@ async function syncSuite() {
     world.sqlite.exec(`UPDATE lost_request SET release_at = ${Date.now() - 1000}`);
     await lostPopup.getByRole('button', { name: 'Check again' }).click();
     await lostPopup.getByLabel('Code from the email').waitFor();
-    await lostPopup.getByLabel('Code from the email').fill(mailCode);
+    await lostPopup.getByLabel('Code from the email').fill(mailCode2);
     await lostPopup.getByLabel('New master password (at least 12 characters)').fill('a lost access password');
     await lostPopup.getByLabel('Type it again').fill('a lost access password');
     await lostPopup.getByRole('button', { name: 'Open and sign in' }).click();

@@ -98,7 +98,10 @@ function confirmReplace(entries: number, back: () => unknown, replace: () => Pro
     h('p', { class: 'ui-muted' }, "What's here now can't be brought back."), msg, yes, no);
 }
 
-function signInScreen(back: () => unknown) {
+async function signInScreen(back: () => unknown) {
+  // Lost access always refuses once the vault is unlocked (service.ts), which this screen is reached from too (syncCard's
+  // "Sign in again"); offering a dead-end entry there is worse than not offering it, so it only shows while locked.
+  const locked = (await call<Status>({ type: 'status' })).state !== 'unlocked';
   const msg = msgBox();
   const pw = input({ type: 'password', autocomplete: 'current-password' });
   const key = input({ placeholder: 'ABCD-EFGH-…' });
@@ -113,7 +116,7 @@ function signInScreen(back: () => unknown) {
     h('p', { class: 'ui-muted' }, 'Use the master password and account key from your phone. Strongroom was set up there first.'),
     label('Master password', pw), label('Account key', key), msg, go,
     button('Forgot master password?', () => recoverySignInScreen(back), 'ui-btn--ghost'),
-    button('Lost access to your account?', () => lostAccessScreen(back), 'ui-btn--ghost'));
+    locked && button('Lost access to your account?', () => lostAccessScreen(back), 'ui-btn--ghost'));
 }
 
 async function lostAccessScreen(back: () => unknown) {
@@ -235,11 +238,18 @@ function emailRecoveryGroup(s: EmailRecoveryStatus | null, refresh: () => unknow
   if (!s.available) return h('div', { class: 'ui-group' }, caption, h('p', { class: 'ui-muted' }, "Sync isn't available in this build."));
   if (s.waitingForCode) {
     const code = input({ placeholder: 'ABCD-EFGH-…' });
-    const go = button('Confirm', () => guarded(msg, [go], async () => {
+    const go = button('Confirm', () => guarded(msg, [go, off], async () => {
       await call({ type: 'emailRecovery', action: 'confirm', code: code.value });
       await refresh();
     }), 'ui-btn--primary');
-    return h('div', { class: 'ui-group' }, caption, h('p', {}, 'Check your email for the code and type it here to turn on email recovery.'), label('Code from the email', code), msg, go);
+    const off = button('Turn off', () => guarded(msg, [go, off], async () => {
+      await call({ type: 'emailRecovery', action: 'off' });
+      await refresh();
+    }), 'ui-btn--danger');
+    return h('div', { class: 'ui-group' }, caption,
+      h('p', {}, 'Check your email for the code and type it here to turn on email recovery.'),
+      h('p', { class: 'ui-muted' }, "Wrong email, or the code never arrived? Turn it off and start over."),
+      label('Code from the email', code), msg, go, off);
   }
   if (s.enrolled) {
     const off = button('Turn off', () => guarded(msg, [off], async () => {
@@ -263,9 +273,12 @@ function emailRecoveryGroup(s: EmailRecoveryStatus | null, refresh: () => unknow
     label('Email address', email), label('Master password', pw), msg, go);
 }
 
+// Anti-goal #4: lock-free autofill (Task 8) means a locked vault still answers fills, so both screens say so plainly.
+const PROFILE_NOTICE = 'Autofill works while locked. Anyone who can use this browser profile can use this vault. Press Lock to stop that.';
+
 async function settingsScreen() {
   const s = await call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' }).catch(() => null);
-  screen('Settings', vaultScreen, emailRecoveryGroup(s, settingsScreen));
+  screen('Settings', vaultScreen, h('p', { class: 'ui-muted' }, PROFILE_NOTICE), emailRecoveryGroup(s, settingsScreen));
 }
 
 function recoveryScreen(key: string) {
@@ -285,13 +298,16 @@ async function unlockScreen() {
   const pw = input({ type: 'password', autocomplete: 'current-password', autofocus: true });
   const pending = tab && await call<Pending | null>({ type: 'pending', tabId: tab.tabId });
   const sync = await call<SyncStatus>({ type: 'syncStatus' });
+  const emailRecovery = await call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' }).catch(() => null);
   const go = button('Unlock', () => guarded(msg, [go], async () => {
     await call({ type: 'unlock', password: pw.value });
     await route();
   }), 'ui-btn--primary');
   pw.addEventListener('keydown', (e) => e.key === 'Enter' && go.click());
   screen('Unlock Strongroom', null,
+    recoveryBanner(emailRecovery, msg, unlockScreen),
     pending && h('p', { class: 'ui-muted' }, `After you unlock, you can save the sign-in you just used on ${pending.host}.`),
+    h('p', { class: 'ui-muted' }, PROFILE_NOTICE),
     label('Master password', pw), msg, go, button('Forgot master password?', resetScreen, 'ui-btn--ghost'),
     sync.available && (sync.state !== 'off' || sync.keyLost) && button('Sign in with your account', () => signInScreen(unlockScreen), 'ui-btn--ghost'),
     sync.available && button('Lost access to your account?', () => lostAccessScreen(unlockScreen), 'ui-btn--ghost'));
@@ -308,6 +324,15 @@ function resetScreen() {
     await route();
   }), 'ui-btn--primary');
   screen('Reset master password', unlockScreen, label('Recovery key', key), label('New master password (at least 12 characters)', pw), label('Type it again', again), msg, go);
+}
+
+function recoveryBanner(s: EmailRecoveryStatus | null, msg: HTMLElement, refresh: () => unknown) {
+  if (!s?.pendingRecovery) return null;
+  return h('div', { class: 'ui-group card' },
+    h('p', {}, s.pendingRecovery.releaseAt
+      ? `Someone requested email recovery for this vault. It opens at ${new Date(s.pendingRecovery.releaseAt).toLocaleString()} unless you cancel it.`
+      : 'Someone requested email recovery for this vault. It is waiting to be confirmed by email.'),
+    button('Cancel', () => guarded(msg, [], async () => { await call({ type: 'emailRecovery', action: 'cancelRecovery' }); await refresh(); }), 'ui-btn--danger'));
 }
 
 async function vaultScreen() {
@@ -339,12 +364,6 @@ async function vaultScreen() {
       button(pending.intent === 'update' ? 'Update' : 'Save', () => guarded(msg, [], async () => { await call({ type: 'resolvePending', tabId: tab!.tabId, action: 'save' }); await vaultScreen(); }), 'ui-btn--primary'),
       button('Not now', () => guarded(msg, [], async () => { await call({ type: 'resolvePending', tabId: tab!.tabId, action: 'dismiss' }); await vaultScreen(); }))));
 
-  const recoveryBanner = emailRecovery?.pendingRecovery && h('div', { class: 'ui-group card' },
-    h('p', {}, emailRecovery.pendingRecovery.releaseAt
-      ? `Someone requested email recovery for this vault. It opens at ${new Date(emailRecovery.pendingRecovery.releaseAt).toLocaleString()} unless you cancel it.`
-      : 'Someone requested email recovery for this vault. It is waiting to be confirmed by email.'),
-    button('Cancel', () => guarded(msg, [], async () => { await call({ type: 'emailRecovery', action: 'cancelRecovery' }); await vaultScreen(); }), 'ui-btn--danger'));
-
   const hereCard = here && here.rows.length > 0 && h('div', { class: 'ui-group card' },
     h('p', { class: 'ui-caption' }, 'For this site'),
     ...here.rows.map((r) => h('div', { class: 'ui-toolbar here' }, h('span', { class: 'grow' }, `${r.name}${r.username ? ` · ${r.username}` : ''}`),
@@ -359,7 +378,7 @@ async function vaultScreen() {
     h('div', { class: 'ui-toolbar' }, button('Add', () => editScreen(null), 'ui-btn--primary'), button('Import', openImport), button('Export', exportScreen),
       button('Settings', settingsScreen),
       h('span', { class: 'grow' }), button('Lock', () => guarded(msg, [], async () => { await call({ type: 'lock', manual: true }); await route(); }), 'ui-btn--ghost')),
-    recoveryBanner, pendingCard, hereCard, search, list, syncCard(sync, vaultScreen),
+    recoveryBanner(emailRecovery, msg, vaultScreen), pendingCard, hereCard, search, list, syncCard(sync, vaultScreen),
     unreadable > 0 && h('p', { class: 'ui-meta' }, `${unreadable} saved item${unreadable === 1 ? '' : 's'} couldn't be read and ${unreadable === 1 ? 'was' : 'were'} left untouched.`),
     toast, msg);
 }

@@ -80,7 +80,10 @@ Phase 1 is described in the most detail.
 
 **Anti-goals** (failure even if everything "works")
 - Any path where a password, or the key that unlocks them, reaches Cloudflare or
-  any other third party in readable form.
+  any other third party in readable form. One narrow, known exception: enrolling
+  email recovery sends the Worker the emailed code and the sealed blob in the
+  same `PUT /v1/account` request, so for that one request the Worker could in
+  principle open the blob itself. *(Security review's point, acknowledged, not fixed.)*
 - A password filled into the wrong app or a lookalike site.
 - Losing the vault: a sync bug, a bad merge or a failed import that destroys
   entries.
@@ -426,9 +429,19 @@ typed and turn off autocorrect and autocomplete (§7, own screens).
   keys). The device checks them against §6's floor and ceiling before deriving,
   so the server can't turn the login token into a cheap password check.
   *(Reviewer's point, adopted.)*
-- Every other call takes `Authorization: Bearer <loginToken | recoveryLoginToken>`.
-  The Worker hashes it and compares in constant time, the same way as the
-  store-api `safeEqual`. No sessions.
+- Every other call except the email-recovery routes below takes
+  `Authorization: Bearer <loginToken | recoveryLoginToken>`. The Worker hashes
+  it and compares in constant time, the same way as the store-api `safeEqual`.
+  No sessions.
+- Email recovery (security hardening, below) adds two D1 tables — `escrow`
+  (one row: the enrolled email and the sealed recovery+account-key blob) and
+  `lost_request` (one row: the claim/confirm hashes and the 24-hour
+  `release_at`) — and `PUT /v1/account` can carry an `escrow` field that
+  rotates the recovery key and sends the owner a mail with the confirmation
+  code. `POST /v1/lost/request`, `POST /v1/lost/release`, and the mailed links'
+  `GET` (renders a form, no state change) and `POST` confirm/cancel routes take
+  no bearer token: they are reachable only by someone who holds the sealed blob
+  or opens the mailed link.
 - `readToken` (HKDF `strongroom/v1/read` from the masterKey) can only call
   `GET /v1/records`. It is the token the phone keeps for background downloads.
   *(Reviewer's point, adopted.)*

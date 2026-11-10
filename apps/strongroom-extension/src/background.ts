@@ -31,10 +31,17 @@ const ready = Promise.all([
   migrateAccountKey(localKv, device),
 ]);
 
+// The owner rarely opens the popup now that autofill works while locked (Task 8), so the periodic sync alarm is this
+// banner's only reliable chance to be seen: it flags the toolbar, same as a captured sign-in does per tab.
+async function checkRecoveryBadge() {
+  const status = (await service.handle({ type: 'emailRecovery', action: 'status' })) as { pendingRecovery: unknown };
+  await chrome.action.setBadgeText({ text: status.pendingRecovery ? '!' : '' });
+}
+
 chrome.alarms.onAlarm.addListener(({ name }) => {
   // No `manual: true` here: the auto-lock alarm clears the session only, so autofill and sync keep answering from the device-held keys.
   if (name === 'auto-lock') void ready.then(() => service.handle({ type: 'lock' }));
-  if (name === 'sync') void ready.then(() => service.handle({ type: 'syncNow' })).catch(() => {});
+  if (name === 'sync') void ready.then(() => service.handle({ type: 'syncNow' }).catch(() => {})).then(() => checkRecoveryBadge().catch(() => {}));
 });
 
 // Chrome clears a tab's badge when the tab navigates, and a sign-in navigates right after the capture, so the badge is set again once the new page has loaded.
