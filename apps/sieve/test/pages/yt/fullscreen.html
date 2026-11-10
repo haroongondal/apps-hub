@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <title>sieveTest01 - YouTube</title>
+    <script>
+      if (new URLSearchParams(location.search).get('dark') === '1') document.documentElement.setAttribute('dark', '');
+    </script>
+    <style>
+      html { font-size: 62.5%; }
+      body { margin: 0; font: 14px Roboto, Arial, sans-serif; background: #fff; color: #0f0f0f; }
+      [hidden] { display: none !important; }
+      ytd-app, ytd-page-manager, ytd-watch-flexy, ytd-browse, ytd-player, ytd-watch-metadata, ytd-watch-next-secondary-results-renderer, yt-lockup-view-model, ytd-comments, ytd-rich-item-renderer { display: block; }
+      #masthead-container { position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 2020; background: #fff; }
+      ytd-masthead { display: block; height: 56px; }
+      ytd-page-manager { padding-top: 56px; }
+      #full-bleed-container { height: 0; }
+      [theater] #full-bleed-container { height: 631px; position: relative; }
+      #columns { display: flex; }
+      #primary { width: 896px; padding: 0 16px; box-sizing: border-box; flex: none; }
+      #secondary { width: 368px; flex: none; }
+      #player { position: relative; height: 495px; }
+      [theater] #player { height: 0; }
+      #player-container-outer, #player-container-inner { height: 100%; }
+      #player-container { position: absolute; top: 0; left: 0; width: 880px; height: 495px; }
+      [theater] #player-container { width: 100%; height: 631px; }
+      #container { height: 100%; }
+      #movie_player { position: relative; z-index: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+      .html5-video-container, video { display: block; width: 100%; height: 100%; }
+      .ytp-size-button { position: absolute; right: 80px; bottom: 8px; width: 48px; height: 40px; }
+      ytd-watch-metadata { padding-top: 12px; }
+      #title { height: 28px; }
+      #title h1 { margin: 0; font-size: 20px; }
+      #top-row { height: 54px; }
+      #comments { height: 200px; }
+      yt-lockup-view-model { padding: 4px 0; }
+      ytd-rich-item-renderer { display: inline-block; width: 200px; height: 120px; margin: 8px; background: #eee; }
+    </style>
+  </head>
+  <body>
+    <button id="fullscreen-fixture" type="button" style="position: fixed; bottom: 8px; left: 8px; z-index: 3000">Full screen</button>
+    <ytd-app>
+      <div id="masthead-container">
+        <ytd-masthead id="masthead" logo-type="YOUTUBE_LOGO" role="banner" is-watch-page=""><a id="logo" href="/?fixture=watch">YouTube</a></ytd-masthead>
+      </div>
+      <ytd-page-manager id="page-manager">
+        <ytd-watch-flexy class="watch-root-element" video-id="sieveTest01" default-layout="" role="main">
+          <div id="full-bleed-container"><div id="player-full-bleed-container"></div></div>
+          <div id="columns">
+            <div id="primary">
+              <div id="primary-inner">
+                <div id="player">
+                  <div id="player-container-outer">
+                    <div id="player-container-inner">
+                      <div id="player-container" role="complementary">
+                        <ytd-player id="ytd-player">
+                          <div id="container">
+                            <div id="movie_player" class="html5-video-player" tabindex="-1" aria-label="YouTube Video Player">
+                              <div class="html5-video-container"><video class="video-stream html5-main-video"></video></div>
+                              <button class="ytp-size-button ytp-button" aria-keyshortcuts="t" data-title-no-tooltip="Cinema mode" aria-label="Cinema mode (t)"></button>
+                            </div>
+                          </div>
+                        </ytd-player>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div id="below">
+                  <div id="shopping-timely-shelf" class="attached-message"></div>
+                  <div class="box">
+                    <div id="alerts"></div>
+                    <div id="messages"></div>
+                    <div id="clarify-box"></div>
+                    <div id="limited-state"></div>
+                    <template id="metadata-template">
+                      <ytd-watch-metadata class="watch-active-metadata" video-id="sieveTest01">
+                        <div id="above-the-fold">
+                          <div id="title-row"><div id="title"><h1>sieveTest01</h1></div></div>
+                          <div id="top-row"></div>
+                          <div id="middle-row"></div>
+                          <div id="bottom-row"></div>
+                        </div>
+                        <div id="metadata-row"></div>
+                      </ytd-watch-metadata>
+                    </template>
+                    <div></div>
+                    <div id="expandable-metadata"></div>
+                    <div id="ticket-shelf"></div>
+                  </div>
+                  <div class="box"><ytd-comments id="comments"></ytd-comments></div>
+                </div>
+              </div>
+            </div>
+            <div id="secondary">
+              <ytd-watch-next-secondary-results-renderer>
+                <yt-lockup-view-model><a href="/watch?v=sieveTest02&fixture=watch">Related sieveTest02</a></yt-lockup-view-model>
+                <yt-lockup-view-model><a href="/watch?v=sieveTest03&fixture=watch">Related sieveTest03</a></yt-lockup-view-model>
+                <yt-lockup-view-model><a href="/watch?v=sieveTest04&fixture=watch">Related sieveTest04</a></yt-lockup-view-model>
+                <yt-lockup-view-model><a href="/watch?v=sieveTest05&fixture=watch">Related sieveTest05</a></yt-lockup-view-model>
+              </ytd-watch-next-secondary-results-renderer>
+            </div>
+          </div>
+        </ytd-watch-flexy>
+        <ytd-browse hidden>
+          <ytd-rich-item-renderer><a href="/watch?v=sieveTest01&fixture=watch">Home sieveTest01</a></ytd-rich-item-renderer>
+          <ytd-rich-item-renderer><a href="/watch?v=sieveTest02&fixture=watch">Home sieveTest02</a></ytd-rich-item-renderer>
+          <ytd-rich-item-renderer><a href="/watch?v=sieveTest03&fixture=watch">Home sieveTest03</a></ytd-rich-item-renderer>
+        </ytd-browse>
+      </ytd-page-manager>
+    </ytd-app>
+    <script src="/yt/player.js"></script>
+    <script>
+      // A trusted click on the button gives requestFullscreen the user gesture it needs.
+      document.getElementById('fullscreen-fixture').addEventListener('click', () => document.querySelector('#movie_player').requestFullscreen());
+    </script>
+  </body>
+</html>
