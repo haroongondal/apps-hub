@@ -44,6 +44,20 @@ export async function local(t) {
     await rowButton(page, 'Faster').click();
     await sleep(300);
     check('speed: with any speed off, at the top of the offered speeds Faster stays 2', (await rate(page)) === 2, String(await rate(page)));
+    // A speed set above or below YouTube's list (any speed was on before) is never moved by Faster or Slower, nor snapped back into the list.
+    const direct = (r) => page.evaluate((v) => { document.querySelector('#movie_player video').playbackRate = v; }, r);
+    await direct(3);
+    await rateIs(page, 3);
+    await rowButton(page, 'Faster').click();
+    await sleep(300);
+    check('speed: with any speed off, Faster at 3 (above the list) leaves it at 3', (await rate(page)) === 3, String(await rate(page)));
+    await direct(0.1);
+    await rateIs(page, 0.1);
+    await rowButton(page, 'Slower').click();
+    await sleep(300);
+    check('speed: with any speed off, Slower at 0.1 (below the list) leaves it at 0.1', (await rate(page)) === 0.1, String(await rate(page)));
+    await direct(2);
+    await rateIs(page, 2);
     await setYouTube(t, { speed: { anySpeed: true } });
     await settled(page, 'anySpeed', true);
     await rowButton(page, 'Faster').click();
@@ -111,22 +125,56 @@ export async function local(t) {
     check('speed: with no default, a new video plays at 1 and the button reads "1×"', (await rateIs(page, 1)) && (await labelIs(page, '1×')), `${await rate(page)} ${await label(page)}`);
     await page.close();
 
-    // The safeguard that puts the default back at the first `playing` must not fight a speed the owner or Sieve chose since.
+    // The safeguard that puts the default back at the first `playing` must not fight a speed the owner or Sieve chose since. Each page loads
+    // paused (autoplay=0) with the default on it, the test plays it only after what it wants to show, and the first case is the control that
+    // proves the safeguard is armed (and inside its 5 s window) in this very setup.
     await setYouTube(t, { speed: { setDefault: true, default: 1.5 } });
-    page = await openYt(t, '/watch?v=sieveTest01&autoplay=0');
-    await rateIs(page, 1.5);
+    const armedPage = async () => {
+      const p = await openYt(t, '/watch?v=sieveTest01&autoplay=0');
+      await rateIs(p, 1.5);
+      await p.evaluate(() => { document.querySelector('#movie_player video').playbackRate = 1; }); // what YouTube may do after the default went on
+      return p;
+    };
+    const playFirst = async (p) => {
+      await p.evaluate(() => document.querySelector('#movie_player video').play());
+      await p.waitForFunction(() => document.querySelector('#movie_player video').currentTime > 0.3);
+      await sleep(300);
+    };
+    page = await armedPage();
+    await playFirst(page);
+    check('speed: control: with nothing in between, the first playing puts the default (1.5) back', (await rate(page)) === 1.5, String(await rate(page)));
+    await page.close();
+
+    page = await armedPage();
     await sendToTab(t, page, { type: 'yt-command', action: 'speed-normal' });
     await rateIs(page, 1);
-    await page.evaluate(() => document.querySelector('#movie_player video').play());
-    await page.waitForFunction(() => document.querySelector('#movie_player video').currentTime > 0.3);
-    await sleep(300);
+    await playFirst(page);
     check('speed: a speed command before the first playing keeps the default from coming back', (await rate(page)) === 1, String(await rate(page)));
     await page.close();
-    page = await openYt(t, '/watch?v=sieveTest01&autoplay=0');
-    await rateIs(page, 1.5);
-    await page.evaluate(() => { const v = document.querySelector('#movie_player video'); v.playbackRate = 1; v.currentTime = 4; v.play(); });
-    await page.waitForFunction(() => document.querySelector('#movie_player video').currentTime > 4.2);
-    await sleep(300);
+
+    page = await armedPage();
+    await page.keyboard.press('k');
+    await playFirst(page);
+    check('speed: a key press before the first playing keeps the default from coming back', (await rate(page)) === 1, String(await rate(page)));
+    await page.close();
+
+    page = await armedPage();
+    await page.mouse.click(5, 300);
+    await playFirst(page);
+    check('speed: a click before the first playing keeps the default from coming back', (await rate(page)) === 1, String(await rate(page)));
+    await page.close();
+
+    page = await armedPage();
+    await setYouTube(t, { on: false });
+    await until(() => page.evaluate(() => window.__lastSieveSettings?.on === false));
+    await playFirst(page);
+    check('speed: with the YouTube tools turned off before the first playing the default does not come back', (await rate(page)) === 1, String(await rate(page)));
+    await page.close();
+    await setYouTube(t, { on: true });
+
+    page = await armedPage();
+    await page.evaluate(() => { const v = document.querySelector('#movie_player video'); v.currentTime = 4; });
+    await playFirst(page);
     check('speed: a first playing after the video was seeked past 2 s does not bring the default back', (await rate(page)) === 1, String(await rate(page)));
     await page.close();
 

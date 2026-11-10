@@ -13,7 +13,8 @@ import { SEL } from './selectors.ts';
 // From this: `anySpeed` sets the rate directly on the video, otherwise through the player, snapped to its offered rates. The default goes on at
 // onVideo (loadstart). It goes on once more at the first `playing` when something changed it meanwhile (a signed-in profile may carry a
 // remembered speed; the signed-out inspection could not show one), but only within 5 s, in the first 2 s of the video, and when no speed
-// command, key or pointer press came in between.
+// command, key or pointer press came in between. The 2 s guard also skips the safeguard for a resumed video on a signed-in profile
+// (accepted trade-off; on the owner checklist, Task 2.19).
 const apply = Reflect.apply;
 const listen = EventTarget.prototype.addEventListener;
 const query = Document.prototype.querySelector;
@@ -52,7 +53,8 @@ feature('speed', () => {
     const p = player();
     if (!settings?.on || !v || !p) return;
     wanted = null;
-    setRate(rate(v, p));
+    const next = rate(v, p);
+    if (!near(next, v.playbackRate)) setRate(next); // a speed outside the offered ones is not snapped back into them by a step that went nowhere
     sendState({ rate: v.playbackRate });
   }
 
