@@ -1,6 +1,8 @@
 // `test:e2e -- --live`: real youtube.com, signed out, fresh profiles. A bot-check page is what this address got, not a Sieve failure.
+import { tmpdir } from 'node:os';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { check, launch, results } from './harness.mjs';
+import { ytModules } from './yt/helpers.mjs';
 
 const VIDEOS = ['dQw4w9WgXcQ', 'kJQP7kiw5Fk', '9bZkp7q19f0'];
 const SECONDS = 30;
@@ -87,7 +89,8 @@ try {
   await ctx.close();
 
   let sw;
-  ({ ctx, sw } = await launch({ mapHosts: false, extraArgs: ARGS }));
+  let id;
+  ({ ctx, sw, id } = await launch({ mapHosts: false, extraArgs: ARGS }));
   await sleep(1000); // onInstalled stores the default settings
   for (const id of VIDEOS) {
     const r = await watch(ctx, id);
@@ -108,6 +111,25 @@ try {
       console.log(`INCONCLUSIVE  ${id}: no ad was served, so removal cannot be shown`);
     }
   }
+
+  const modules = (await ytModules()).filter(([, mod]) => typeof mod.live === 'function');
+  const page = await ctx.newPage();
+  await page.goto(`https://www.youtube.com/watch?v=${VIDEOS[0]}`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  await page
+    .waitForFunction(() => document.querySelector('ytd-watch-metadata') && typeof document.querySelector('#movie_player')?.getPlayerState === 'function' && document.querySelector('#movie_player video'), null, { timeout: 30_000 })
+    .catch(() => {});
+  const gate = await page.evaluate(() => ({ bot: /confirm you.re not a bot/i.test(document.body?.innerText ?? ''), consent: location.hostname.startsWith('consent.') })).catch(() => ({ bot: false, consent: false }));
+  if (gate.bot || gate.consent) console.log(`SKIP  YouTube page checks: ${gate.bot ? 'YouTube asked this address to sign in (bot check)' : 'consent page'}`);
+  else {
+    for (const [name, mod] of modules) {
+      try {
+        await mod.live({ ctx, sw, id, check, page, videoId: VIDEOS[0], shots: process.env.SHOTS ?? tmpdir() });
+      } catch (e) {
+        check(`${name}: the live checks finished without throwing`, false, String(e?.stack ?? e).split('\n').slice(0, 3).join(' | '));
+      }
+    }
+  }
+  await page.close();
 
   await sw.evaluate(async () => {
     const { settings } = await chrome.storage.local.get('settings');

@@ -27,11 +27,70 @@ export function check(name, cond, extra = '') {
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${cond ? '' : `  ${extra}`}`);
 }
 
+const YT_HOSTS = ['www.youtube.com', 'www.youtube-nocookie.com'];
+
+// 5 s, 440 Hz, mono, 16-bit, 8 kHz: 44 + 80,000 bytes.
+const TONE = (() => {
+  const rate = 8000;
+  const samples = rate * 5;
+  const wav = Buffer.alloc(44 + samples * 2);
+  wav.write('RIFF', 0);
+  wav.writeUInt32LE(36 + samples * 2, 4);
+  wav.write('WAVEfmt ', 8);
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(rate, 24);
+  wav.writeUInt32LE(rate * 2, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write('data', 36);
+  wav.writeUInt32LE(samples * 2, 40);
+  for (let i = 0; i < samples; i++) wav.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 8000), 44 + i * 2);
+  return wav;
+})();
+
+// Chrome's media element asks for `bytes=0-` and seeks with ranges, so a plain 200 would break seeking.
+function serveTone(req, res) {
+  res.setHeader('content-type', 'audio/wav');
+  res.setHeader('accept-ranges', 'bytes');
+  const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '');
+  if (!m || (m[1] === '' && m[2] === '')) {
+    res.setHeader('content-length', TONE.length);
+    return res.end(TONE);
+  }
+  const start = m[1] === '' ? TONE.length - Number(m[2]) : Number(m[1]);
+  const end = m[1] === '' || m[2] === '' ? TONE.length - 1 : Math.min(Number(m[2]), TONE.length - 1);
+  if (start > end || start >= TONE.length) {
+    res.statusCode = 416;
+    res.setHeader('content-range', `bytes */${TONE.length}`);
+    return res.end();
+  }
+  res.statusCode = 206;
+  res.setHeader('content-range', `bytes ${start}-${end}/${TONE.length}`);
+  res.setHeader('content-length', end - start + 1);
+  res.end(TONE.subarray(start, end + 1));
+}
+
 export async function startServers() {
   const hits = [];
   const ports = {};
   const handler = (req, res) => {
     hits.push(req.url);
+    if (YT_HOSTS.includes((req.headers.host ?? '').split(':')[0])) {
+      const url = new URL(req.url, 'http://x');
+      const fixture = url.searchParams.get('fixture');
+      if (fixture && /^[a-z0-9-]+$/.test(fixture) && existsSync(join(PAGES, 'yt', `${fixture}.html`))) {
+        res.setHeader('content-type', 'text/html');
+        return res.end(readFileSync(join(PAGES, 'yt', `${fixture}.html`), 'utf8').replaceAll('%PORT%', ports.httpsPort));
+      }
+      const script = /^\/yt\/([a-z0-9-]+\.js)$/.exec(url.pathname);
+      if (script && existsSync(join(PAGES, 'yt', script[1]))) {
+        res.setHeader('content-type', 'text/javascript');
+        return res.end(readFileSync(join(PAGES, 'yt', script[1])));
+      }
+      if (url.pathname === '/media/tone.wav') return serveTone(req, res);
+    }
     if (req.url.startsWith('/watch?')) {
       res.setHeader('content-type', 'text/html');
       return res.end(readFileSync(join(PAGES, 'yt-watch.html'), 'utf8').replaceAll('%YT_FIXTURE%', YT_FIXTURE));
