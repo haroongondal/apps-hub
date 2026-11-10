@@ -2,6 +2,7 @@ import { validateSettings, type Channel } from '@apps-hub/sieve-core/src/setting
 import { watchChannel, youtubeAdsOn, ytChannel } from '@apps-hub/sieve-core/src/youtube-ads.ts';
 import './yt/actions.ts';
 import { startBridge } from './yt/bridge.ts';
+import './yt/row.ts';
 
 // By video id: a hover preview or an autoplay prefetch is another video, so the menu names the channel of the page's own one.
 const seen = new Map<string, Channel>();
