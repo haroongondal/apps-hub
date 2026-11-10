@@ -1,0 +1,23 @@
+import { test } from 'node:test';
+
+test.todo('1 probe, manual add: Range bytes=0-0 first, record filled, one ranged request with If-Range, file correct');
+test.todo('2 probe, no range (200): rangeOk false, no Range on download, size from Content-Length or received bytes');
+test.todo('3 take-over record already probed: no probe request, name unchanged');
+test.todo('4 three parts over 10 MiB: exact ranges with If-Range, file correct');
+test.todo('5 re-split: a finished part frees a slot and the slow part is cut in half');
+test.todo('6 429 with four parts: hostCaps cap 2, Retry-After honoured, caps expire after HOST_CAP_TTL_MS');
+test.todo('7 a 429 on one connection retries after 2000 ms');
+test.todo('7b five 429s in a row fail with ERRORS.refused after sleeps 2, 4, 8, 16 s; counter resets; 503 on the probe retried');
+test.todo('8 hard errors 403, 404, 410 on probe and part fail at once');
+test.todo('9 dropped connection resumes at the saved offset; 90 s outage survives; 15 minutes without a byte fails; bytes reset the clock');
+test.todo('9b stall: aborted after STALL_MS and retried; speed limit sleep is not a stall');
+test.todo('9c probe error three times fails with ERRORS.probe');
+test.todo('9d host total: HOST_MAX connections per host across records, cap after 429, second host unaffected');
+test.todo('10 changed file: 200 to ranged request, 416, wrong Content-Range start, total differs, ETag differs, null validator continues');
+test.todo('11 no range, restart: second run starts at 0 and the file is correct');
+test.todo('12 pause and resume: flush before persist, resumed request starts at persisted done');
+test.todo('13 checkpoints: every 4 MiB or 2000 ms, each preceded by flush');
+test.todo('14 speed limit: 5,000,000 bytes take 4.5 to 5.0 s; off takes none');
+test.todo('15 write errors: ERRORS.storage, ERRORS.space, handle closed and record persisted');
+test.todo('16 length check: missing last byte keeps retrying then ERRORS.network; short file fails with ERRORS.length');
+test.todo('17 memory: no write above 1 MiB and at most one unread chunk per active part');
