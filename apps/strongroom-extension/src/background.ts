@@ -14,6 +14,7 @@ const localStore = createLocalStore(device);
 const service = createService({
   store: localStore,
   session: sessionKv,
+  settings: localKv,
   now: Date.now,
   resetAutoLock: () => void chrome.alarms.create('auto-lock', { delayInMinutes: AUTO_LOCK_MINUTES }),
   syncAlarm: (on) => void (on ? chrome.alarms.create('sync', { periodInMinutes: SYNC_MINUTES }) : chrome.alarms.clear('sync')),

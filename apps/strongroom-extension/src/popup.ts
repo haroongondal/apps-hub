@@ -1,4 +1,4 @@
-import type { Detail, ImportPreview, PageRef, Pending, Request, Row, Status, SyncStatus } from './service.ts';
+import type { Detail, EmailRecoveryStatus, ImportPreview, PageRef, Pending, Request, Row, Status, SyncStatus } from './service.ts';
 import { syncLines } from './sync-copy.ts';
 
 type Child = Node | string | null | false | undefined;
@@ -160,6 +160,45 @@ async function whenSyncDone(card: HTMLElement, refresh: () => unknown) {
   }
 }
 
+function emailRecoveryGroup(s: EmailRecoveryStatus, refresh: () => unknown) {
+  const msg = msgBox();
+  const caption = h('p', { class: 'ui-caption' }, 'Email recovery');
+  if (!s.available) return h('div', { class: 'ui-group' }, caption, h('p', { class: 'ui-muted' }, "Sync isn't available in this build."));
+  if (s.waitingForCode) {
+    const code = input({ placeholder: 'ABCD-EFGH-…' });
+    const go = button('Confirm', () => guarded(msg, [go], async () => {
+      await call({ type: 'emailRecovery', action: 'confirm', code: code.value });
+      await refresh();
+    }), 'ui-btn--primary');
+    return h('div', { class: 'ui-group' }, caption, h('p', {}, 'Check your email for the code and type it here to turn on email recovery.'), label('Code from the email', code), msg, go);
+  }
+  if (s.enrolled) {
+    const off = button('Turn off', () => guarded(msg, [off], async () => {
+      await call({ type: 'emailRecovery', action: 'off' });
+      await refresh();
+    }), 'ui-btn--danger');
+    return h('div', { class: 'ui-group' }, caption,
+      h('p', {}, 'Recovery by email is on.'),
+      h('p', { class: 'ui-muted' }, 'Anyone who controls that inbox could start a recovery of your vault. You get 24 hours to cancel it by email before it goes through.'),
+      off, msg);
+  }
+  const email = input({ type: 'email', placeholder: 'you@example.com' });
+  const pw = input({ type: 'password', autocomplete: 'current-password' });
+  const go = button('Turn on', () => guarded(msg, [go], async () => {
+    await call({ type: 'emailRecovery', action: 'enrol', email: email.value, password: pw.value });
+    await route();
+  }), 'ui-btn--primary');
+  return h('div', { class: 'ui-group' }, caption,
+    s.wasTurnedOff && h('p', {}, 'Recovery by email is off. Turn it on again.'),
+    h('p', { class: 'ui-muted' }, "Email recovery lets you get back into your vault by email if you forget your master password. Anyone who controls that inbox could start a recovery of your vault, with 24 hours to cancel it. Turning this on replaces your current recovery key, so you'll need to save the new one."),
+    label('Email address', email), label('Master password', pw), msg, go);
+}
+
+async function settingsScreen() {
+  const s = await call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' });
+  screen('Settings', vaultScreen, emailRecoveryGroup(s, settingsScreen));
+}
+
 function recoveryScreen(key: string) {
   const msg = msgBox();
   const group = input({ placeholder: 'First four characters', maxLength: 4 });
@@ -202,11 +241,12 @@ function resetScreen() {
 }
 
 async function vaultScreen() {
-  const [{ rows, unreadable }, pending, here, sync] = await Promise.all([
+  const [{ rows, unreadable }, pending, here, sync, emailRecovery] = await Promise.all([
     call<{ rows: Row[]; unreadable: number }>({ type: 'list' }),
     tab ? call<Pending | null>({ type: 'pending', tabId: tab.tabId }) : null,
     tab ? call<{ rows: Row[] }>({ type: 'candidates', page: tab }) : null,
     call<SyncStatus>({ type: 'syncStatus' }),
+    call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' }),
   ]);
   const toast = h('p', { class: 'ui-meta', role: 'status' });
   const msg = msgBox();
@@ -229,6 +269,12 @@ async function vaultScreen() {
       button(pending.intent === 'update' ? 'Update' : 'Save', () => guarded(msg, [], async () => { await call({ type: 'resolvePending', tabId: tab!.tabId, action: 'save' }); await vaultScreen(); }), 'ui-btn--primary'),
       button('Not now', () => guarded(msg, [], async () => { await call({ type: 'resolvePending', tabId: tab!.tabId, action: 'dismiss' }); await vaultScreen(); }))));
 
+  const recoveryBanner = emailRecovery.pendingRecovery && h('div', { class: 'ui-group card' },
+    h('p', {}, emailRecovery.pendingRecovery.releaseAt
+      ? `Someone requested email recovery for this vault. It opens at ${new Date(emailRecovery.pendingRecovery.releaseAt).toLocaleString()} unless you cancel it.`
+      : 'Someone requested email recovery for this vault. It is waiting to be confirmed by email.'),
+    button('Cancel', () => guarded(msg, [], async () => { await call({ type: 'emailRecovery', action: 'cancelRecovery' }); await vaultScreen(); }), 'ui-btn--danger'));
+
   const hereCard = here && here.rows.length > 0 && h('div', { class: 'ui-group card' },
     h('p', { class: 'ui-caption' }, 'For this site'),
     ...here.rows.map((r) => h('div', { class: 'ui-toolbar here' }, h('span', { class: 'grow' }, `${r.name}${r.username ? ` · ${r.username}` : ''}`),
@@ -241,8 +287,9 @@ async function vaultScreen() {
 
   screen('Strongroom', null,
     h('div', { class: 'ui-toolbar' }, button('Add', () => editScreen(null), 'ui-btn--primary'), button('Import', openImport), button('Export', exportScreen),
+      button('Settings', settingsScreen),
       h('span', { class: 'grow' }), button('Lock', () => guarded(msg, [], async () => { await call({ type: 'lock', manual: true }); await route(); }), 'ui-btn--ghost')),
-    pendingCard, hereCard, search, list, syncCard(sync, vaultScreen),
+    recoveryBanner, pendingCard, hereCard, search, list, syncCard(sync, vaultScreen),
     unreadable > 0 && h('p', { class: 'ui-meta' }, `${unreadable} saved item${unreadable === 1 ? '' : 's'} couldn't be read and ${unreadable === 1 ? 'was' : 'were'} left untouched.`),
     toast, msg);
 }

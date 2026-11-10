@@ -127,6 +127,27 @@ async function syncSuite() {
     const synced = await send({ type: 'syncNow' });
     check('editOnOneSideAppearsOnTheOther', reached && synced.ok && (await names()).join() === 'From Chrome,From phone,Phone mail', JSON.stringify([synced, await names()]));
 
+    await popup.getByRole('button', { name: 'Settings' }).click();
+    await popup.getByRole('heading', { name: 'Settings' }).waitFor();
+    await popup.getByLabel('Email address').fill('me@example.com');
+    await popup.getByLabel('Master password').fill(world.password);
+    await popup.getByRole('button', { name: 'Turn on' }).click();
+    await popup.getByRole('heading', { name: 'Save your recovery key' }).waitFor();
+    const newKey = (await popup.locator('.key').innerText()).trim();
+    await popup.locator('input').first().fill(newKey.slice(0, 4));
+    await popup.getByRole('button', { name: "I've saved it" }).click();
+    await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+    await popup.getByRole('button', { name: 'Settings' }).click();
+    await popup.getByRole('heading', { name: 'Settings' }).waitFor();
+    const mailCode = /code is ([A-Z2-7-]+)\./.exec(world.mail.sent.at(-1)?.text ?? '')?.[1];
+    check('enrol asks for the emailed code', (await popup.innerText('body')).includes('Check your email for the code') && !!mailCode, mailCode);
+    await popup.getByLabel('Code from the email').fill(mailCode);
+    await popup.getByRole('button', { name: 'Confirm' }).click();
+    await popup.getByText('Recovery by email is on.').waitFor();
+    check('enrol, code typed, status enrolled', true);
+    await popup.getByRole('button', { name: 'Back' }).click();
+    await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+
     const session = await sw.evaluate(() => chrome.storage.session.get('loginToken'));
     check('the login token is in session storage while unlocked', session.loginToken === b64(world.tokens.loginToken));
     const alarm = await sw.evaluate(async () => (await chrome.alarms.getAll()).find((a) => a.name === 'sync'));

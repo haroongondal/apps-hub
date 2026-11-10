@@ -11,6 +11,13 @@ import type { Entry, Header } from 'strongroom-core';
 import { MemorySyncStore } from 'strongroom-core/src/__tests__/memory-sync-store.ts';
 import { handle } from '../../../../tools/vault-api/src/index.ts';
 import { d1FromNodeSqlite } from '../../../../tools/vault-api/src/__tests__/d1-fake.ts';
+import type { Mailer } from '../../../../tools/vault-api/src/lost-access.ts';
+
+// Captures every mail the Worker would have sent, in order, so a test can read the emailed code or a confirm link without a real mailbox.
+export function fakeMailer(): Mailer & { sent: { to: string; subject: string; text: string }[] } {
+  const sent: { to: string; subject: string; text: string }[] = [];
+  return { sent, send: async (to, subject, text) => void sent.push({ to, subject, text }) };
+}
 
 export const SETUP_TOKEN = 'setup-token-for-tests-0123456789abcdef';
 export const PHONE_PASSWORD = 'first master password';
@@ -36,10 +43,11 @@ export async function newWorld() {
   sqlite.exec(migration);
   sqlite.exec(migration2);
   const env = { DB: d1FromNodeSqlite(sqlite), SETUP_TOKEN };
-  const serve = (req: Request) => handle(req, env, { sleep: async () => {} });
+  const mail = fakeMailer();
+  const serve = (req: Request) => handle(req, env, { sleep: async () => {}, mail });
 
   const world = {
-    sqlite, env, serve,
+    sqlite, env, serve, mail,
     online: true,
     failPut: false,
     gate: undefined as undefined | Promise<void>,

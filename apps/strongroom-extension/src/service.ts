@@ -1,9 +1,9 @@
 import {
   AccountKeyRequired, FLAG_PREFIX, ImportError, KdfOutOfRange, SyncAuthError, SyncHttpError, SyncOfflineError, SyncRollbackError, adoptHeader,
-  equalBytes, exportForChrome, fromBase64, formatRecoveryKey, headerFromJson, headerToJson, kdfWeaker, matches, newId, open, openEntry, openWithPassword,
-  parseAccountKey, parseGoogleExport, parseRecoveryKey, readEntries, recoveryKeyGroup, recoveryLoginToken, recover, registrableDomain, seal,
-  setupVault, signInWithPassword, signInWithRecovery, siteFromUrl, syncOnce, toBase64, tokenHash, unlockWithRecovery, utf8, withNewPassword,
-  writeEntries,
+  equalBytes, exportForChrome, formatEmailCode, fromBase64, formatRecoveryKey, generateEmailCode, headerFromJson, headerToJson, kdfWeaker, matches,
+  newId, open, openEntry, openEscrow, openWithPassword, parseAccountKey, parseEmailCode, parseGoogleExport, parseRecoveryKey, readEntries,
+  recoveryKeyGroup, recoveryLoginToken, recover, registrableDomain, rotateRecoveryKey, seal, sealEscrow, setupVault, signInWithPassword,
+  signInWithRecovery, siteFromUrl, syncOnce, toBase64, tokenHash, unlockWithRecovery, utf8, withNewPassword, writeEntries,
 } from 'strongroom-core';
 import type { Entry, Header, KdfParams, Login, RecordStore, Site, SignedIn, SyncReport, SyncStore, Transport } from 'strongroom-core';
 import { COMMON_PASSWORDS } from './common-passwords.ts';
@@ -22,8 +22,8 @@ export interface SyncPort extends SyncStore {
 }
 export type SyncDeps = { store: SyncPort; transport: Transport };
 export type Deps = {
-  store: RecordStore; session: KV; now(): number; resetAutoLock(): void; syncAlarm?(on: boolean): void; sync?: SyncDeps; kdf?: KdfParams; floor?: KdfParams;
-  device?: DeviceVault;
+  store: RecordStore; session: KV; settings: KV; now(): number; resetAutoLock(): void; syncAlarm?(on: boolean): void; sync?: SyncDeps; kdf?: KdfParams;
+  floor?: KdfParams; device?: DeviceVault;
 };
 export type PageRef = { url: string; tabId: number };
 export type Ctx = PageRef;
@@ -50,7 +50,13 @@ export type Request =
   | { type: 'syncStatus' }
   | { type: 'signIn'; password: string; accountKey: string; replace?: boolean }
   | { type: 'signInRecovery'; recoveryKey: string; newPassword: string; accountKey: string; replace?: boolean }
-  | { type: 'syncNow' };
+  | { type: 'syncNow' }
+  | { type: 'emailRecovery'; action: 'status' }
+  // password (not in the brief's sketch): enrol must resend the current loginHash/readHash, derivable only from it.
+  | { type: 'emailRecovery'; action: 'enrol'; email: string; password: string }
+  | { type: 'emailRecovery'; action: 'confirm'; code: string }
+  | { type: 'emailRecovery'; action: 'off' }
+  | { type: 'emailRecovery'; action: 'cancelRecovery' };
 
 export type Status = { state: 'no-vault' | 'locked' | 'unlocked'; recoveryKey: string | null };
 export type Row = { id: string; name: string; username: string; sites: string[]; apps: number; flagged: boolean };
@@ -61,6 +67,9 @@ export type SyncStatus = {
   pendingUpdate: boolean; error: string | null; keyLost: boolean;
 };
 export type Pending = { intent: 'new' | 'update' | null; host: string; username: string; name: string | null; locked: boolean };
+export type EmailRecoveryStatus = {
+  available: boolean; enrolled: boolean; waitingForCode: boolean; pendingRecovery: { releaseAt: number | null } | null; wasTurnedOff: boolean;
+};
 
 export class UserError extends Error {}
 
@@ -82,7 +91,11 @@ const BAD_ACCOUNT_KEY = "That account key isn't complete. Check it and try again
 const KEY_LOST = 'This computer no longer holds your account key. Sign in with your account, using your master password and account key.';
 const KEY_DIFFERENT = "That account key doesn't match the one this computer uses. Check it and try again.";
 const WEAKER = "The vault server's key settings are weaker than the ones on this computer, so nothing was changed.";
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const BAD_EMAIL = "That doesn't look like an email address.";
 const PENDING_AAD = utf8('strongroom/v1/pending-account-update');
+const ESCROW_BLOB = 'escrowBlob';
+const ESCROW_CONFIRMED = 'escrowConfirmed';
 const noop = () => {};
 
 // A word from the common-password list, one repeated character, or a straight run such as abcdefghijkl.
@@ -335,6 +348,83 @@ export function createService(deps: Deps) {
     return null;
   }
 
+  async function emailRecoveryStatus(): Promise<EmailRecoveryStatus> {
+    const available = deps.sync !== undefined;
+    const blob = await deps.settings.get(ESCROW_BLOB);
+    const confirmedLocally = (await deps.settings.get(ESCROW_CONFIRMED)) === 'true';
+    const waitingForCode = blob !== undefined && !confirmedLocally;
+    const token = available ? await tokenOrNull() : null;
+    if (!token || !deps.sync) return { available, enrolled: confirmedLocally, waitingForCode, pendingRecovery: null, wasTurnedOff: false };
+    const remote = await deps.sync.transport.lostStatus(token);
+    return { available, enrolled: confirmedLocally && remote.escrow, waitingForCode, pendingRecovery: remote.pending, wasTurnedOff: confirmedLocally && !remote.escrow };
+  }
+
+  // Rotates the recovery key (Task 11) and mails a fresh code sealed around it and the account key (Task 11's sealEscrow); the put
+  // is immediate, not queued like pendingUpdate, so enrol can answer with the new recovery key or a clear "try again" right away.
+  async function emailRecoveryEnrol(email: string, password: string): Promise<{ recoveryKey: string }> {
+    const { transport, store: port } = unavailable();
+    const clean = String(email).trim();
+    if (!EMAIL_RE.test(clean) || clean.length > 320) throw new UserError(BAD_EMAIL);
+    const vaultKey = await requireKey();
+    const token = await tokenOrNull();
+    const accountKey = await accountKeyOf();
+    if (!token || !accountKey) throw new UserError(SYNC_OFF);
+    const header = await store.getHeader();
+    if (!header) throw new Error('No vault is set up yet');
+    return exclusive(async () => {
+      const rotated = await rotateRecoveryKey(header, vaultKey);
+      const opened = await openWithPassword(rotated.header, password, deps.floor, accountKey);
+      if (!opened || !equalBytes(opened.vaultKey, vaultKey)) throw new UserError("That master password isn't right.");
+      const code = generateEmailCode();
+      const blob = await sealEscrow(code, { recoveryKey: rotated.recoveryKey, accountKey });
+      const { headerRev } = await port.getSyncMeta();
+      try {
+        const put = await transport.putAccount(token, {
+          header: headerToJson(rotated.header), loginHash: tokenHash(opened.loginToken), readHash: tokenHash(opened.readToken),
+          recoveryHash: rotated.recoveryHash, ifRev: headerRev, escrow: { email: clean, blob: toBase64(blob), code: formatEmailCode(code) },
+        });
+        await store.commit({ header: rotated.header });
+        await port.setSyncLocal({ headerRev: put.headerRev });
+      } catch (e) {
+        if (!(e instanceof SyncHttpError) || e.status !== 409) throw e;
+        await doSync().catch(noop);
+        throw new UserError('The vault changed on another device. Sync it and try again.');
+      }
+      await deps.settings.set(ESCROW_BLOB, toBase64(blob));
+      await deps.settings.remove(ESCROW_CONFIRMED);
+      await session.set('recovery', formatRecoveryKey(rotated.recoveryKey));
+      return { recoveryKey: formatRecoveryKey(rotated.recoveryKey) };
+    });
+  }
+
+  async function emailRecoveryConfirm(code: string): Promise<null> {
+    const blobB64 = await deps.settings.get(ESCROW_BLOB);
+    if (!blobB64) throw new UserError('Turn on email recovery first.');
+    const parsed = parseEmailCode(String(code));
+    const opened = parsed && (await openEscrow(parsed, fromBase64(blobB64)));
+    if (!opened) throw new UserError("That code isn't right. Check it and try again.");
+    await deps.settings.set(ESCROW_CONFIRMED, 'true');
+    return null;
+  }
+
+  async function emailRecoveryOff(): Promise<null> {
+    const { transport } = unavailable();
+    const token = await tokenOrNull();
+    if (!token) throw new UserError(SYNC_OFF);
+    await transport.deleteEscrow(token);
+    await deps.settings.remove(ESCROW_BLOB);
+    await deps.settings.remove(ESCROW_CONFIRMED);
+    return null;
+  }
+
+  async function emailRecoveryCancel(): Promise<null> {
+    const { transport } = unavailable();
+    const token = await tokenOrNull();
+    if (!token) throw new UserError(SYNC_OFF);
+    await transport.lostCancel(token);
+    return null;
+  }
+
   async function handle(req: Request, ctx?: Ctx): Promise<unknown> {
     const type = (req as { type?: unknown })?.type;
     const fromPage = ctx !== undefined;
@@ -395,6 +485,15 @@ export function createService(deps: Deps) {
         case 'syncNow':
           unavailable();
           return await exclusive(async () => (await doSync()) ?? Promise.reject(new UserError(SYNC_OFF)));
+        case 'emailRecovery':
+          switch (req.action) {
+            case 'status': return await emailRecoveryStatus();
+            case 'enrol': return await emailRecoveryEnrol(req.email, req.password);
+            case 'confirm': return await emailRecoveryConfirm(req.code);
+            case 'off': return await emailRecoveryOff();
+            case 'cancelRecovery': return await emailRecoveryCancel();
+            default: throw new UserError(NOT_ALLOWED);
+          }
         case 'signIn': {
           const port = unavailable();
           const accountKey = parseAccountKey(String(req.accountKey));
