@@ -219,6 +219,8 @@ Open design questions for the new session's brainstorming pass:
 
 - 2026-11-11 02:00 (session 2): Task 3 `ff033d9` + review fix round `2ac0b22` (449 tests, 0 failures; re-review: all 6 items ADDRESSED, verdict approve). Small queued leftovers for a later fix commit with Task 4's review fixes: N1 (in `EmailRecovery.enrol` save `before.copy(keyUnseen = true)` BEFORE calling `enrolEscrow`, restore `before` on null/exception), N2 (stale comment SyncSession.kt ~357-358 saying a lost reply is finished "by a sign-in"; `runCatching` at ~374 should catch `Exception` not `Throwable`). Task 5 must persist `keyUnseen` and `lostRequestedAt`, map enrol's `SyncAuthError`, run status on IO, and the New recovery key screen must call `keyShown()`. Task 4 (opus, OWNER lost) running. Email-login draft design committed `552556e`; owner questions pending (3).
 
+- 2026-11-11 02:15 (session 2): OWNER INSTRUCTION: too many review agents, optimize. New policy: no per-commit review agents and no re-review agents for fix rounds (the controller verifies each commit itself: contents, a real test run, probes). Keep the one adversarial review already running for Task 4 (lost access, the riskiest code). After the last task, ONE whole-branch review. Fixes are batched. Task 4 `f542073` (466 tests); Task 5 implementer running (OWNER module).
+
 ## Current state and exact next step
 
 **State (updated 2026-11-11, later)**: design approved, plan written and committed, awaiting owner's plan review and execution-method choice; nothing implemented; worktree exists (see session log). The next step is executing the plan (subagent-driven-development recommended) from Task 1. Older text follows:
