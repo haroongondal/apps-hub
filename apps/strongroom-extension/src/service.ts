@@ -104,6 +104,7 @@ const LOST_CLAIM = 'lostClaim';
 const LOST_BLOB = 'lostBlob';
 const CLAIM_BYTES = 20;
 const NOT_READY = 'Wait for the 24-hour release, then come back and try again.';
+const LOST_STILL_ALIVE = 'A lost-access request is already confirmed, or ready to open. Check again instead of starting a new one.';
 const noop = () => {};
 
 // A word from the common-password list, one repeated character, or a straight run such as abcdefghijkl.
@@ -456,6 +457,12 @@ export function createService(deps: Deps) {
 
   async function lostAccessRequest(): Promise<null> {
     const { transport } = unavailable();
+    const existing = await deps.settings.get(LOST_CLAIM);
+    // Ground truth from the server, checked again right here: a stale screen, a double-click or any future UI bug can never overwrite a request the server still calls alive.
+    if (existing) {
+      const released = await transport.lostRelease(existing);
+      if (released.state === 'ready' || released.releaseAt !== null) throw new UserError(LOST_STILL_ALIVE);
+    }
     const claim = randomBytes(CLAIM_BYTES);
     // The network call runs before any stored claim/blob is touched, so a failed or offline request leaves an existing one intact.
     await transport.lostRequest(tokenHash(claim));

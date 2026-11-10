@@ -250,12 +250,31 @@ async function syncSuite() {
     await send({ type: 'emailRecovery', action: 'cancelRecovery' });
     await lostPopup.getByRole('button', { name: 'Check again' }).click();
     await lostPopup.getByText('Check your email and open the confirm link').waitFor();
+    const mailsBeforeRestart = world.mail.sent.length;
     await lostPopup.getByRole('button', { name: 'Start a new request' }).click();
     await lostPopup.getByRole('button', { name: 'Yes, start a new request' }).click();
-    await lostPopup.getByText('Check your email and open the confirm link').waitFor();
+    // The waiting-screen's text and the unarmed button's label are identical before and after a restart; only the mail count proves the new claim actually reached the server.
+    await until('the restarted request to mail its own confirm link', async () => world.mail.sent.length > mailsBeforeRestart);
 
-    const confirmToken = /t=([^&\s]+)/.exec(world.mail.sent.at(-1).text)[1];
-    await fetch(new URL(`/v1/lost/confirm?t=${confirmToken}`, harness.url));
+    // A literal double-click must not complete the two-step confirm in one gesture: the second press of the pair should land on a still-disabled button.
+    const mailsBeforeDblclick = world.mail.sent.length;
+    const claimBeforeDblclick = (await lost.sw.evaluate(() => chrome.storage.local.get('lostClaim'))).lostClaim;
+    await lostPopup.getByRole('button', { name: 'Start a new request' }).dblclick();
+    await lostPopup.getByRole('button', { name: 'Yes, start a new request' }).waitFor();
+    const claimAfterDblclick = (await lost.sw.evaluate(() => chrome.storage.local.get('lostClaim'))).lostClaim;
+    check('a double-click does not fire the destructive request in one gesture',
+      world.mail.sent.length === mailsBeforeDblclick && claimAfterDblclick === claimBeforeDblclick,
+      JSON.stringify({ mailsBefore: mailsBeforeDblclick, mailsAfter: world.mail.sent.length, claimBeforeDblclick, claimAfterDblclick }));
+
+    // Confirmed elsewhere while this popup still shows the armed, unconfirmed screen: the service's own truth check must refuse the stale click, not just whatever the UI happens to render.
+    await lostPopup.waitForTimeout(700);
+    await fetch(new URL(`/v1/lost/confirm?t=${/t=([^&\s]+)/.exec(world.mail.sent.at(-1).text)[1]}`, harness.url));
+    await lostPopup.getByRole('button', { name: 'Yes, start a new request' }).click();
+    await lostPopup.locator('.msg:not(:empty)').waitFor();
+    const msgSeen = await lostPopup.locator('.msg').innerText();
+    check('a stale screen cannot replace a claim the server now calls confirmed',
+      (await lost.sw.evaluate(() => chrome.storage.local.get('lostClaim'))).lostClaim === claimBeforeDblclick, msgSeen);
+
     await lostPopup.getByRole('button', { name: 'Check again' }).click();
     await lostPopup.getByText(/lets you back in at/).waitFor();
     check('a confirmed, counting-down claim offers no way to replace it', (await lostPopup.getByRole('button', { name: 'Start a new request' }).count()) === 0);

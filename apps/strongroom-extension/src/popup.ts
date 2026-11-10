@@ -30,7 +30,7 @@ let importNext = false;
 const msgBox = () => h('p', { class: 'ui-meta msg', role: 'alert' });
 const label = (text: string, input: HTMLElement) => h('label', { class: 'ui-field' }, h('span', { class: 'ui-caption' }, text), input);
 const input = (props: Record<string, unknown> = {}) => h('input', { class: 'ui-input', autocomplete: 'off', spellcheck: false, ...props });
-const button = (text: string, onclick: () => unknown, kind = '') => h('button', { class: `ui-btn ${kind}`.trim(), type: 'button', onclick }, text);
+const button = (text: string, onclick: (e?: MouseEvent) => unknown, kind = '') => h('button', { class: `ui-btn ${kind}`.trim(), type: 'button', onclick }, text);
 
 async function guarded(msg: HTMLElement, buttons: HTMLButtonElement[], work: () => Promise<unknown>) {
   msg.textContent = '';
@@ -130,22 +130,27 @@ async function lostAccessScreen(back: () => unknown) {
     await lostAccessScreen(back);
   };
   if (state.state === 'waiting') {
-    const again = button('Check again', () => guarded(msg, [again], () => lostAccessScreen(back)), 'ui-btn--primary');
     // A known releaseAt means the server already confirmed this exact claim is alive and counting down: there is no good reason to let it be forgotten client-side, so no way to replace it is offered here.
     if (state.releaseAt !== null) {
+      const again = button('Check again', () => guarded(msg, [again], () => lostAccessScreen(back)), 'ui-btn--primary');
       screen('Lost access', back, h('p', {}, `Confirmed by email. Strongroom lets you back in at ${new Date(state.releaseAt).toLocaleString()}.`), msg, again);
       return;
     }
     let sure = false;
-    const request = button('Start a new request', () => guarded(msg, [request], async () => {
-      if (!sure) {
-        sure = true;
-        request.textContent = 'Yes, start a new request';
-        request.disabled = false;
-        return;
-      }
-      await startOver();
-    }), 'ui-btn--danger');
+    const again = button('Check again', () => guarded(msg, [again, request], () => lostAccessScreen(back)), 'ui-btn--primary');
+    // A double-click's second press carries event.detail > 1: it is ignored outright here, not treated as a deliberate confirm, regardless of timing or disabled state.
+    const request = button('Start a new request', (e) => {
+      if ((e?.detail ?? 1) > 1) return;
+      return guarded(msg, [again, request], async () => {
+        if (!sure) {
+          sure = true;
+          request.textContent = 'Yes, start a new request';
+          setTimeout(() => { request.disabled = false; again.disabled = false; }, 600);
+          return;
+        }
+        await startOver();
+      });
+    }, 'ui-btn--danger');
     screen('Lost access', back,
       h('p', {}, 'Check your email and open the confirm link. The 24-hour wait starts once you do.'), msg, again,
       h('p', { class: 'ui-muted' },

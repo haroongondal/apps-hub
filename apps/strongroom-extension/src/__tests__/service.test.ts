@@ -1049,6 +1049,34 @@ test('a failed request leaves an existing claim and blob untouched', async () =>
   assert.equal(await fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), null);
 });
 
+test('a request is refused once the existing claim is confirmed server-side, even if this device never re-checked', async () => {
+  const { world } = await emailEnrolled();
+  const fresh = extension(world);
+  await lostRequestNow(fresh);
+  await confirmByEmail(world);
+  const claimBefore = fresh.local.data.get('lostClaim');
+  await assert.rejects(lostRequestNow(fresh), /already confirmed/i);
+  assert.equal(fresh.local.data.get('lostClaim'), claimBefore);
+  assert.ok(!fresh.local.data.has('lostBlob'));
+  releaseLostRequest(world);
+  assert.deepEqual(await lostCheck(fresh), { state: 'ready' });
+});
+
+test('a request is refused once the existing claim is already released and ready to open', async () => {
+  const { world, code } = await emailEnrolled();
+  const fresh = extension(world);
+  await lostRequestNow(fresh);
+  await confirmByEmail(world);
+  releaseLostRequest(world);
+  await lostCheck(fresh);
+  const claimBefore = fresh.local.data.get('lostClaim');
+  const blobBefore = fresh.local.data.get('lostBlob');
+  await assert.rejects(lostRequestNow(fresh), /already confirmed/i);
+  assert.equal(fresh.local.data.get('lostClaim'), claimBefore);
+  assert.equal(fresh.local.data.get('lostBlob'), blobBefore);
+  assert.equal(await fresh.call({ type: 'lostAccess', action: 'open', code, newPassword: NEW_PASSWORD }), null);
+});
+
 test('lostAccess refuses to run while the vault is unlocked', async () => {
   const { world } = await emailEnrolled();
   const x = extension(world);
