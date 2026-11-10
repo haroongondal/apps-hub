@@ -7,12 +7,13 @@ const clamp = (v: number, min: number, max: number): number => Math.min(max, Mat
 const tidy = (v: number): number => Math.round(v * 1000) / 1000; // 0.1 × 3 is 0.30000000000000004
 
 // The next rate up or down. With `anySpeed` (or no list of rates) it is the next multiple of `step`, so 1.1 goes to 1.25 or 1;
-// otherwise the next of YouTube's own rates, staying at the end of the list.
+// otherwise the next of YouTube's own rates, staying where it is at the end of the list.
 export function nextSpeed(current: number, dir: 1 | -1, o: { step: number; anySpeed: boolean; rates: readonly number[] }): number {
   if (!o.anySpeed && o.rates.length) {
     const rates = [...o.rates].sort((a, b) => a - b);
     const beyond = dir === 1 ? rates.filter((r) => r > current + EPS) : rates.filter((r) => r < current - EPS);
-    return (dir === 1 ? beyond[0] ?? rates.at(-1) : beyond.at(-1) ?? rates[0]) as number;
+    // At the end of the list the speed stays, so Faster never lowers a speed set above the list (any speed was on before) and Slower never raises one.
+    return (dir === 1 ? beyond[0] ?? Math.max(current, rates.at(-1)!) : beyond.at(-1) ?? Math.min(current, rates[0]!));
   }
   const k = current / o.step;
   const whole = Math.abs(k - Math.round(k)) < 1e-6 ? Math.round(k) : k;

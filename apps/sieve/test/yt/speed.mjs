@@ -8,6 +8,14 @@ const rateIs = (page, want) => until(async () => (await rate(page)) === want);
 const label = (page) => row(page).locator('[data-id="speed"] button').innerText();
 const labelIs = (page, want) => until(async () => (await label(page)) === want);
 const toastText = (page) => row(page).getByRole('status').innerText();
+// Real YouTube showed no ratechange when a new video reset the rate (Task 2.5 inspection), though Chrome queues one between `emptied` and
+// `loadstart`: swallow it before it reaches the page's and the module's listeners, so a stale rate shows as it would on the real page.
+const quietReset = (page) => page.evaluate(() => {
+  let quiet = false;
+  window.addEventListener('emptied', () => { quiet = true; }, true);
+  window.addEventListener('ratechange', (e) => { if (quiet) e.stopImmediatePropagation(); }, true);
+  window.addEventListener('loadstart', () => { quiet = false; }, true);
+});
 const settled = (page, key, value) => until(() => page.evaluate(([k, v]) => window.__lastSieveSettings?.speed[k] === v, [key, value]));
 
 export async function local(t) {
@@ -95,6 +103,31 @@ export async function local(t) {
     page = await openYt(t, '/watch?v=sieveTest01');
     await sleep(800);
     check('speed: without "Set a default speed" the video stays at 1', (await rate(page)) === 1, String(await rate(page)));
+    // A new video starts at 1 without a ratechange event (inspected), so the row has to be told the rate even when no default goes on.
+    await quietReset(page);
+    await rowButton(page, 'Faster').click();
+    check('speed: with no default, Faster gives "1.25×"', (await rateIs(page, 1.25)) && (await labelIs(page, '1.25×')), `${await rate(page)} ${await label(page)}`);
+    await navigate(page, 'sieveTest02');
+    check('speed: with no default, a new video plays at 1 and the button reads "1×"', (await rateIs(page, 1)) && (await labelIs(page, '1×')), `${await rate(page)} ${await label(page)}`);
+    await page.close();
+
+    // The safeguard that puts the default back at the first `playing` must not fight a speed the owner or Sieve chose since.
+    await setYouTube(t, { speed: { setDefault: true, default: 1.5 } });
+    page = await openYt(t, '/watch?v=sieveTest01&autoplay=0');
+    await rateIs(page, 1.5);
+    await sendToTab(t, page, { type: 'yt-command', action: 'speed-normal' });
+    await rateIs(page, 1);
+    await page.evaluate(() => document.querySelector('#movie_player video').play());
+    await page.waitForFunction(() => document.querySelector('#movie_player video').currentTime > 0.3);
+    await sleep(300);
+    check('speed: a speed command before the first playing keeps the default from coming back', (await rate(page)) === 1, String(await rate(page)));
+    await page.close();
+    page = await openYt(t, '/watch?v=sieveTest01&autoplay=0');
+    await rateIs(page, 1.5);
+    await page.evaluate(() => { const v = document.querySelector('#movie_player video'); v.playbackRate = 1; v.currentTime = 4; v.play(); });
+    await page.waitForFunction(() => document.querySelector('#movie_player video').currentTime > 4.2);
+    await sleep(300);
+    check('speed: a first playing after the video was seeked past 2 s does not bring the default back', (await rate(page)) === 1, String(await rate(page)));
     await page.close();
 
     await setYouTube(t, { on: false, speed: { setDefault: true, default: 1.5 } });

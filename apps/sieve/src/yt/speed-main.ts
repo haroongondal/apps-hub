@@ -12,17 +12,20 @@ import { SEL } from './selectors.ts';
 // - A rate set at loadstart (1.75) and one set at loadedmetadata (1.25) both held through canplay and playing, 3 s later too.
 // From this: `anySpeed` sets the rate directly on the video, otherwise through the player, snapped to its offered rates. The default goes on at
 // onVideo (loadstart). It goes on once more at the first `playing` when something changed it meanwhile (a signed-in profile may carry a
-// remembered speed; the signed-out inspection could not show one), unless the owner changed the speed by hand since.
+// remembered speed; the signed-out inspection could not show one), but only within 5 s, in the first 2 s of the video, and when no speed
+// command, key or pointer press came in between.
 const apply = Reflect.apply;
 const listen = EventTarget.prototype.addEventListener;
 const query = Document.prototype.querySelector;
+const now = performance.now.bind(performance);
 const near = (a: number, b: number): boolean => Math.abs(a - b) < 1e-6;
 
 feature('speed', () => {
   if (ytPage(location.href).kind === 'other') return;
   let settings: MainSettings | null = null;
   let seen = false; // a video has started on this page
-  let wanted: number | null = null; // the default applied to the current video, until its first `playing` or a speed command
+  let wanted: number | null = null; // the default applied to the current video, until its first `playing`, a speed command or a key or pointer press
+  let armed = 0; // when `wanted` was set
   const video = (): HTMLVideoElement | null => apply(query, document, [SEL.video]) as HTMLVideoElement | null;
 
   function setRate(rate: number): number | null {
@@ -40,6 +43,7 @@ feature('speed', () => {
     wanted = null;
     if (!settings?.on || !settings.speed.setDefault || !p || p.getVideoData()?.isLive) return;
     wanted = setRate(settings.speed.default);
+    armed = now();
   }
 
   // A command always reports the rate afterwards, so the row shows the toast even when the rate did not change.
@@ -60,18 +64,22 @@ feature('speed', () => {
   onVideo(() => {
     seen = true;
     applyDefault();
+    // A new video starts at 1 without a ratechange (inspected), so the row learns the rate here even when no default went on.
+    sendState({ rate: video()?.playbackRate ?? 1 });
   });
   apply(listen, document, ['ratechange', (e: Event) => {
     const v = video();
     if (v && e.target === v) sendState({ rate: v.playbackRate });
   }, true]);
+  // Only a video that has just started: later (a seek, a key press, a pointer press) a different rate is the owner's choice or the page's own.
   apply(listen, document, ['playing', (e: Event) => {
     const v = video();
     if (!v || e.target !== v || wanted === null) return;
     const goal = wanted;
     wanted = null;
-    if (!near(v.playbackRate, goal)) setRate(goal);
+    if (settings?.on && settings.speed.setDefault && v.currentTime <= 2 && now() - armed <= 5000 && !near(v.playbackRate, goal)) setRate(goal);
   }, true]);
+  for (const type of ['keydown', 'pointerdown']) apply(listen, document, [type, (e: Event) => { if (e.isTrusted) wanted = null; }, true]);
   onCommand('speed-step', (value) => {
     if (value === 1 || value === -1) command((v, p) => nextSpeed(v.playbackRate, value, { step: settings!.speed.step, anySpeed: settings!.speed.anySpeed, rates: p.getAvailablePlaybackRates() }));
   });

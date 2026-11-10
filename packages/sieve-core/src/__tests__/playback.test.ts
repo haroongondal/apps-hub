@@ -23,7 +23,9 @@ test("nextSpeed without any speed: YouTube's own rates, and an empty list behave
   assert.equal(nextSpeed(1.1, 1, LISTED), 1.25);
   assert.equal(nextSpeed(1.1, -1, LISTED), 1);
   assert.equal(nextSpeed(0.25, -1, LISTED), 0.25);
-  assert.equal(nextSpeed(3, 1, LISTED), 2);
+  assert.equal(nextSpeed(3, 1, LISTED), 3, 'Faster above the top rate never lowers the speed');
+  assert.equal(nextSpeed(0.1, -1, LISTED), 0.1, 'Slower below the lowest rate never raises it');
+  assert.equal(nextSpeed(3, -1, LISTED), 2);
   assert.equal(nextSpeed(1.1, 1, { ...LISTED, rates: [] }), 1.25);
 });
 
