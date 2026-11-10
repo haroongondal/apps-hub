@@ -98,6 +98,7 @@ test('parseAddInput: mixed input, max, empty', () => {
   assert.equal(parseAddInput(text, 1).truncated, true);
   assert.deepEqual(parseAddInput(text, 2), { urls: ['https://a.com/x', 'http://c.org/'], skipped: 2, truncated: false });
   assert.deepEqual(parseAddInput(''), { urls: [], skipped: 0, truncated: false });
+  assert.deepEqual(parseAddInput('   \n\t\n'), { urls: [], skipped: 0, truncated: false });
   assert.equal(parseAddInput(Array.from({ length: 250 }, (_, i) => `https://a.com/${i}`).join('\n')).urls.length, 200);
 });
 
@@ -113,6 +114,8 @@ test('statusText: every state, queue schedule, done folder, failed error', () =>
   const st = (r: DlRecord) => statusText(r, queues, categories, at, next);
   assert.equal(st(rec({ queue: 'main' })), 'Waiting in Main queue');
   assert.equal(st(rec({ queue: 'night' })), 'Scheduled for Tue 22:00');
+  assert.equal(st(rec({ queue: 'gone' })), 'Waiting in Main queue');
+  assert.equal(statusText(rec({ queue: 'gone' }), [queues[1], queues[0]], categories, at, next), 'Scheduled for Tue 22:00');
   assert.equal(st(rec({ state: 'running', size: null })), 'Starting');
   assert.equal(st(rec({ state: 'running', size: 10 })), 'Downloading');
   assert.equal(st(rec({ state: 'paused' })), 'Paused');

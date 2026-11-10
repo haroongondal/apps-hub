@@ -34,6 +34,7 @@ const doneBytes = (r: DlRecord) => r.parts.reduce((a, p) => a + p.done, 0);
 export function progressOf(r: DlRecord): { done: number; total: number | null; percent: number | null } {
   const done = doneBytes(r);
   const total = r.size;
+  // deviation from the plan, accepted: a done record reports its size as done, even when its parts were cleared
   if (r.state === 'done') return { done: total ?? done, total, percent: 100 };
   if (total === null) return { done, total, percent: null };
   return { done, total, percent: total === 0 ? 100 : Math.min(100, Math.max(0, Math.floor((done * 100) / total))) };
@@ -109,7 +110,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
 export function statusText(r: DlRecord, queues: readonly QueueSetting[], categories: DownloadSettings['categories'], at: Date, nextOpenAt: (q: QueueSetting, at: Date) => number | null): string {
   switch (r.state) {
     case 'queued': {
-      const q = queues.find((x) => x.id === r.queue);
+      const q = queues.find((x) => x.id === r.queue) ?? queues[0]; // the scheduler runs an unknown queue under the first one
       const open = q ? nextOpenAt(q, at) : null;
       if (open === null) return T.st.waiting(q?.name ?? r.queue);
       const d = new Date(open);
