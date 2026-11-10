@@ -2,6 +2,7 @@ import { validateSettings, type Channel } from '@apps-hub/sieve-core/src/setting
 import { watchChannel, youtubeAdsOn, ytChannel } from '@apps-hub/sieve-core/src/youtube-ads.ts';
 import './yt/actions.ts';
 import { startBridge } from './yt/bridge.ts';
+import './yt/loop.ts';
 import './yt/row.ts';
 import './yt/speed.ts';
 import './yt/theme.ts';
