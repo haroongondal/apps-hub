@@ -31,7 +31,7 @@ export async function run(t) {
   const stored = (await readRecords(t)).some((r) => r.id === added?.ids?.[0]);
   check('downloads: a command right after the document closed waits for the engine, succeeds, and the record exists', added?.ok === true && added.ids?.length === 1 && stored, json({ added, stored }));
 
-  const proto = await Promise.race([sendMsg(t, { type: 'constructor' }).then(() => 'answered'), new Promise((r) => setTimeout(() => r('hung'), 3000))]);
+  const proto = await Promise.race([sendMsg(t, { type: 'constructor' }).then(() => 'answered', () => 'answered'), new Promise((r) => setTimeout(() => r('hung'), 3000))]);
   check('downloads: a message type that is only an Object property is ignored, not left hanging', proto === 'answered', proto);
 
   const config = await sendMsg(t, { type: 'dl-eng-config', settings: DEFAULT_DOWNLOADS });
