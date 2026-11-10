@@ -3,7 +3,8 @@ import { Button, Field, Header, Notice, Screen, Text } from '@apps-hub/ui';
 import Vault, { type EmailRecoveryStatus } from 'strongroom-vault';
 import { isLocked, whileDeriving } from './call.ts';
 import { BackButton, RecoveryKeyCard, SecretField } from './parts.tsx';
-import { EMAIL_DISCLOSURE, emailProblem, emailRecoveryView, explainRecovery, type EmailRecoveryAction } from './recovery-flow.ts';
+import { EMAIL_DISCLOSURE, emailProblem, emailRecoveryView, emailSyncGate, explainRecovery, type EmailRecoveryAction } from './recovery-flow.ts';
+import { useSyncStatus } from './SyncScreen.tsx';
 import { useEmailRecovery } from './useEmailRecovery.ts';
 
 interface Props {
@@ -29,13 +30,14 @@ const LABEL: Record<EmailRecoveryAction, string> = {
 const WRONG_PASSWORD = 'That password is wrong. Try again.';
 const WRONG_CODE = "That code isn't right. Check the email we sent when you turned on email recovery, and try again.";
 const ROTATES_KEY = "Turning this on makes a new recovery key, and the old one stops working. You'll see the new key next, so have something to write it on.";
-// The phone saved the new key but the server hasn't confirmed it yet; the code email follows once this phone is online.
-const NOT_CONFIRMED = "Your recovery key changed, but email recovery isn't confirmed yet. It finishes when this phone is back online, and then we email you a code.";
+// The phone saved the new key but the server never confirmed the request, so a code email may never come.
+const NOT_CONFIRMED = "Your recovery key changed. We couldn't confirm email recovery. If no code email arrives, open Email recovery in Settings and turn it on again.";
 // Used when the status call itself fails, so the screen shows the same "couldn't check" row instead of a blank.
 const UNKNOWN: EmailRecoveryStatus = { available: true, checked: false, enrolled: false, waitingForCode: false, pendingRecovery: null, wasTurnedOff: false, keyUnseen: false };
 
 export function EmailRecoveryScreen({ onBack, onDone, onLocked, onNewKey, onHold }: Props) {
   const { status, loaded, reload } = useEmailRecovery();
+  const gate = emailSyncGate(useSyncStatus().status?.state);
   const [step, setStep] = useState<Step>('home');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -184,6 +186,9 @@ export function EmailRecoveryScreen({ onBack, onDone, onLocked, onNewKey, onHold
   }
 
   const view = loaded ? emailRecoveryView(status ?? UNKNOWN) : null;
+  // With sync off or signed out the answer is the sync notice, not "make sure this phone is online"; a key warning still shows.
+  const syncBlocked = gate !== null && !status?.checked && !status?.keyUnseen;
+  const actions = (view?.actions ?? []).filter((a) => !(gate !== null && a === 'turnOn'));
   return (
     <Screen scroll>
       <BackButton onPress={onBack} />
@@ -193,13 +198,17 @@ export function EmailRecoveryScreen({ onBack, onDone, onLocked, onNewKey, onHold
       {!loaded && <Notice tone="neutral">Checking email recovery.</Notice>}
       {view && (
         <>
-          <Notice tone={view.tone} title={view.title}>
-            {view.subtitle}
-          </Notice>
-          {view.actions.map((action, i) => (
+          {syncBlocked ? (
+            <Notice tone="warn">{gate}</Notice>
+          ) : (
+            <Notice tone={view.tone} title={view.title}>
+              {view.subtitle}
+            </Notice>
+          )}
+          {actions.map((action, i) => (
             <Button key={action} label={LABEL[action]} variant={i === 0 ? 'primary' : 'secondary'} onPress={() => act(action)} disabled={busy} block />
           ))}
-          {!(status?.checked ?? false) && <Button label="Check again" variant="ghost" onPress={() => void reload()} disabled={busy} />}
+          {!(status?.checked ?? false) && !syncBlocked && <Button label="Check again" variant="ghost" onPress={() => void reload()} disabled={busy} />}
         </>
       )}
     </Screen>

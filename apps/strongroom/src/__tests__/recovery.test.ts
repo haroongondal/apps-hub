@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { EmailRecoveryStatus, LostAccessState } from 'strongroom-vault';
-import { EMAIL_DISCLOSURE, NEW_KEY_ESCROW_WARNING, emailProblem, emailRecoveryView, explainRecovery, lostAccessView, pendingBanner } from '../recovery-flow.ts';
+import { EMAIL_DISCLOSURE, NEW_KEY_ESCROW_WARNING, emailProblem, emailRecoveryView, emailSyncGate, explainLostAccess, explainRecovery, lostAccessView, pendingBanner } from '../recovery-flow.ts';
 
 const NOW = 1_700_000_000_000;
 const HOUR = 3_600_000;
@@ -147,7 +147,7 @@ test('emailRecoveryView is the same when the status is unchecked whatever the ot
 });
 
 test('explainRecovery maps every email recovery code to its own message', () => {
-  const codes = ['BAD_EMAIL', 'SYNC_OFF', 'SYNC_FIRST', 'LOST_STILL_ALIVE', 'LOST_NOT_READY', 'LOST_DIFFERENT_ACCOUNT'];
+  const codes = ['BAD_EMAIL', 'SYNC_OFF', 'SYNC_FIRST', 'LOST_STILL_ALIVE', 'LOST_NOT_READY', 'LOST_DIFFERENT_ACCOUNT', 'MAIL_FAILED', 'VAULT_MOVED'];
   const messages = codes.map((c) => explainRecovery(coded(c)));
   for (const m of messages) assert.notEqual(m, 'native message');
   assert.equal(new Set(messages).size, codes.length);
@@ -181,12 +181,39 @@ test('copy has no emoji and no ALL-CAPS words longer than three letters', () => 
     const v = lostAccessView(s, NOW, () => '5 Nov 2026, 3:04 pm');
     all.push(v.title, v.body);
   }
-  for (const c of ['BAD_EMAIL', 'SYNC_OFF', 'SYNC_FIRST', 'LOST_STILL_ALIVE', 'LOST_NOT_READY', 'LOST_DIFFERENT_ACCOUNT']) all.push(explainRecovery(coded(c)));
+  for (const c of ['BAD_EMAIL', 'SYNC_OFF', 'SYNC_FIRST', 'LOST_STILL_ALIVE', 'LOST_NOT_READY', 'LOST_DIFFERENT_ACCOUNT', 'MAIL_FAILED', 'VAULT_MOVED']) all.push(explainRecovery(coded(c)));
+  all.push(explainLostAccess(coded('SYNC_SIGN_IN')), emailSyncGate('off') ?? '', emailSyncGate('needsSignIn') ?? '');
   all.push(emailProblem('') ?? '', emailProblem('x') ?? '', emailProblem('a'.repeat(400)) ?? '');
-  assert.equal(EMAIL_DISCLOSURE.length, 4);
+  assert.equal(EMAIL_DISCLOSURE.length, 5);
   for (const text of all) {
     assert.ok(text.length > 0);
     assert.doesNotMatch(text, /\p{Extended_Pictographic}/u, text);
     assert.doesNotMatch(text, /\b[A-Z]{4,}\b/, text);
   }
+});
+
+test('explainRecovery words the two rotation refusals exactly, and a different account for a fresh phone', () => {
+  assert.equal(explainRecovery(coded('MAIL_FAILED')), "We couldn't send the email, so nothing changed and your old recovery key still works. Try again later.");
+  assert.equal(explainRecovery(coded('VAULT_MOVED')), 'Your vault changed on another device, so nothing changed and your old recovery key still works. Choose Sync now, then try again.');
+  assert.match(explainRecovery(coded('LOST_DIFFERENT_ACCOUNT')), /already set up with another Strongroom account.*Remove the Strongroom data from this phone, or use a phone that has none/);
+});
+
+test('explainLostAccess says the recovery was refused on a SYNC_SIGN_IN, and defers to explainRecovery otherwise', () => {
+  assert.match(explainLostAccess(coded('SYNC_SIGN_IN', 'Sign in again with your master password and account key.')), /new recovery key after turning on email recovery, this code no longer works/);
+  assert.equal(explainLostAccess(coded('LOST_NOT_READY')), explainRecovery(coded('LOST_NOT_READY')));
+  assert.match(explainRecovery(coded('SYNC_SIGN_IN', 'Sign in again.')), /Sign in again/);
+});
+
+test('emailSyncGate blames sync, not the connection, when sync is off or signed out', () => {
+  assert.match(emailSyncGate('off') ?? '', /Turn on sync first/);
+  assert.match(emailSyncGate('pendingSetup') ?? '', /Turn on sync first/);
+  assert.match(emailSyncGate('needsSignIn') ?? '', /Sign in to sync first/);
+  for (const s of ['idle', 'syncing', 'error'] as const) assert.equal(emailSyncGate(s), null);
+  assert.equal(emailSyncGate(undefined), null);
+});
+
+test('the disclosure says a recovery can be finished, and that a request only emails a link', () => {
+  const text = EMAIL_DISCLOSURE.join(' ');
+  assert.match(text, /finish it after 24 hours unless you cancel/);
+  assert.match(text, /only emails a link/);
 });

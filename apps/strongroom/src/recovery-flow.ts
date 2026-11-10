@@ -1,4 +1,4 @@
-import type { EmailRecoveryStatus, LostAccessState } from 'strongroom-vault';
+import type { EmailRecoveryStatus, LostAccessState, SyncState } from 'strongroom-vault';
 import { hasCode, messageOf } from './call.ts';
 import type { SyncTone } from './sync-flow.ts';
 
@@ -6,11 +6,12 @@ export type EmailRecoveryAction = 'turnOn' | 'enterCode' | 'turnOff' | 'cancel' 
 export type LostAccessAction = 'request' | 'enterCode';
 
 export const EMAIL_DISCLOSURE: string[] = [
-  'Whoever controls that inbox can start a recovery of your vault.',
-  'Every recovery waits 24 hours before it can finish, and you can cancel it during that time.',
+  'Whoever controls that inbox can start a recovery of your vault, and can finish it after 24 hours unless you cancel.',
+  'A recovery request only emails a link. Nothing starts until someone opens it.',
+  'You can cancel during the 24-hour wait.',
   'Recovery replaces your master password. Your recovery key stays the same.',
   'Keep the email we send now: its code is needed for the last step of a recovery.',
-];
+]
 
 export const NEW_KEY_ESCROW_WARNING = 'A new recovery key turns email recovery off. You can turn it on again in Settings.';
 
@@ -129,10 +130,26 @@ const MESSAGES: Record<string, string> = {
   SYNC_FIRST: "This phone has changes it hasn't synced yet. Choose Sync now, then try again.",
   LOST_STILL_ALIVE: 'A recovery request is already counting down on this account. Wait for it to finish, or cancel it from a device that is signed in.',
   LOST_NOT_READY: "The 24-hour wait isn't over yet. Try again once it ends.",
-  LOST_DIFFERENT_ACCOUNT: "This phone is already set up with another Strongroom account, so it can't open this vault. Use a phone or a fresh install that has no Strongroom account.",
+  LOST_DIFFERENT_ACCOUNT: "This phone is already set up with another Strongroom account, so it can't open this vault. Remove the Strongroom data from this phone, or use a phone that has none.",
+  MAIL_FAILED: "We couldn't send the email, so nothing changed and your old recovery key still works. Try again later.",
+  VAULT_MOVED: 'Your vault changed on another device, so nothing changed and your old recovery key still works. Choose Sync now, then try again.',
 };
 
 export function explainRecovery(e: unknown): string {
   for (const code of Object.keys(MESSAGES)) if (hasCode(e, code)) return MESSAGES[code];
   return messageOf(e);
+}
+
+const LOST_REFUSED = "The vault server didn't accept this recovery. If you made a new recovery key after turning on email recovery, this code no longer works.";
+
+// On the lost-access screen a refused sign-in means the recovery itself was refused, not that the owner should sign in again.
+export const explainLostAccess = (e: unknown): string => (hasCode(e, 'SYNC_SIGN_IN') ? LOST_REFUSED : explainRecovery(e));
+
+const SYNC_FIRST_NOTICE = 'Turn on sync first. Email recovery keeps a sealed copy of your recovery key on your vault server, so it needs sync.';
+const SIGN_IN_FIRST_NOTICE = 'Sign in to sync first. Open Sync in Settings.';
+
+// Why email recovery can't be checked or turned on yet, when the cause is sync rather than the connection.
+export function emailSyncGate(state: SyncState | undefined): string | null {
+  if (state === 'off' || state === 'pendingSetup') return SYNC_FIRST_NOTICE;
+  return state === 'needsSignIn' ? SIGN_IN_FIRST_NOTICE : null;
 }

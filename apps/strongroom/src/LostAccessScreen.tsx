@@ -4,10 +4,10 @@ import Vault, { type LostAccessState } from 'strongroom-vault';
 import { whileDeriving } from './call.ts';
 import { validateMasterPassword } from './forms.ts';
 import { BackButton, NewPasswordFields, SecretField } from './parts.tsx';
-import { explainRecovery, lostAccessView } from './recovery-flow.ts';
+import { explainLostAccess, lostAccessView } from './recovery-flow.ts';
 
 const WRONG_CODE = "That code isn't right. Check the email we sent when you turned on email recovery, and try again.";
-const SENT = 'We sent you an email. Open the link in it to start the 24-hour wait.';
+const SENT = 'If this address is set up for email recovery, an email is on its way. You can ask again an hour after the first request.';
 
 // Runs with the vault locked: nothing here needs it, and the owner may be on a fresh phone with no account.
 export function LostAccessScreen({ onBack, onUnlocked }: { onBack: () => void; onUnlocked: () => void }) {
@@ -33,7 +33,7 @@ export function LostAccessScreen({ onBack, onUnlocked }: { onBack: () => void; o
     try {
       await call();
     } catch (e) {
-      if (mounted.current) setError(explainRecovery(e));
+      if (mounted.current) setError(explainLostAccess(e));
     }
     inFlight.current = false;
     if (mounted.current) setBusy(false);
@@ -81,7 +81,7 @@ export function LostAccessScreen({ onBack, onUnlocked }: { onBack: () => void; o
       {info && <Notice tone="ok">{info}</Notice>}
       {error && <Notice tone="danger">{error}</Notice>}
       {view && <Notice title={view.title}>{view.body}</Notice>}
-      {view?.actions.includes('request') && <Button label={waiting ? 'Send the email again' : 'Email me the link'} onPress={request} busy={busy} block />}
+      {view?.actions.includes('request') && <Button label={waiting ? 'Ask again' : 'Email me the link'} onPress={request} busy={busy} block />}
       {view?.actions.includes('enterCode') && (
         <>
           <SecretField label="Code from the email" value={code} onChangeText={setCode} error={codeError} mono />

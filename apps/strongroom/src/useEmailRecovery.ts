@@ -22,7 +22,7 @@ export function useEmailRecovery() {
   useEffect(() => {
     mounted.current = true;
     void reload();
-    // Not while a run is in flight: the status call waits on the same lock.
+    // A finished run is when the server's answer has changed; reloading mid-run would only repeat the last answer.
     const sub = addSyncListener((s) => {
       if (syncSettled(s)) void reload();
     });
