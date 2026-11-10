@@ -2,6 +2,11 @@ package expo.modules.strongroomvault.core
 
 internal const val SETUP_TOKEN = "a-setup-token-of-at-least-32-characters"
 
+internal data class FakeEscrow(val email: String, val blob: String, val code: String)
+
+/** The Worker's one lost-access row: confirmedReleaseAt stays null until the owner opens the mailed link. */
+internal data class FakeLost(val claimHash: String, val requestedAt: Long, val confirmedReleaseAt: Long? = null, val cancelled: Boolean = false)
+
 /** The vault-api Worker's rules in memory: one account, created once with the setup token; token hashes; ifRev; one global rev counter. */
 internal class FakeWorker {
   var header: String? = null
@@ -13,6 +18,11 @@ internal class FakeWorker {
   var latestRev = 0L
   val calls = ArrayList<String>()
   var offline = false
+  var time = 1_800_000_000_000L // the Worker's clock, for lost-access cooldowns and releases
+  var escrow: FakeEscrow? = null
+  val mails = ArrayList<String>() // the email codes the Worker mailed
+  var failMail = false // the mailer is down: an escrow update answers 502 before changing anything
+  var lost: FakeLost? = null
   private var created = false
 
   private fun who(token: ByteArray) = Crypto.tokenHash(token).let { h ->
@@ -31,6 +41,11 @@ internal class FakeWorker {
 
   private fun refuse(who: String, readOk: Boolean) {
     if (who == "refused" || (who == "read" && !readOk)) throw SyncAuthError()
+  }
+
+  /** The owner opening the mailed confirm link: starts the wait. Like the Worker, it does nothing for a missing, cancelled or already confirmed request. */
+  fun confirmLost(releaseAt: Long) {
+    lost = lost?.takeIf { !it.cancelled && it.confirmedReleaseAt == null }?.copy(confirmedReleaseAt = releaseAt) ?: lost
   }
 
   val t: SyncTransport = object : SyncTransport {
@@ -78,15 +93,82 @@ internal class FakeWorker {
       val who = who(token)
       calls += "update $who ifRev=${body.ifRev}" + if (body.recoveryHash == null) "" else " recovery"
       refuse(who, readOk = false)
+      val e = body.escrow
+      if (e != null) {
+        if (!validEscrow(e)) throw SyncHttpError(400)
+        if (body.recoveryHash == null) throw SyncHttpError(400)
+        if (failMail) throw SyncHttpError(502) // the Worker mails before it writes
+        mails += e.code
+      }
       if (body.ifRev != headerRev) throw SyncHttpError(409)
+      if (body.recoveryHash != null && body.recoveryHash != recoveryHash) {
+        escrow = null
+        lost = null
+      }
+      e?.let { escrow = FakeEscrow(it.email, it.blob, it.code) }
       header = body.header
       loginHash = body.loginHash
       readHash = body.readHash
       body.recoveryHash?.let { recoveryHash = it }
       return ++headerRev
     }
+
+    override fun lostRequest(claimHash: String) {
+      reach()
+      calls += "lostRequest"
+      val held = lost
+      val free = held == null || held.cancelled || (held.confirmedReleaseAt == null && time - held.requestedAt >= HOUR_MS) ||
+        (held.confirmedReleaseAt != null && time >= held.confirmedReleaseAt + GRACE_MS)
+      if (escrow != null && free && Regex("^[A-Za-z0-9+/]{43}=$").matches(claimHash)) lost = FakeLost(claimHash, time)
+    }
+
+    override fun lostRelease(claim: String): LostRelease {
+      reach()
+      calls += "lostRelease"
+      val bytes = if (claim.length in 24..88) SyncWire.fromBase64(claim) else null
+      val held = lost
+      if (bytes != null && bytes.size in 16..64 && held != null && !held.cancelled && held.claimHash == Crypto.tokenHash(bytes)) {
+        val at = held.confirmedReleaseAt
+        val sealed = escrow
+        if (at != null && time >= at && sealed != null) return LostRelease.Ready(sealed.blob)
+        return LostRelease.Waiting(at)
+      }
+      return LostRelease.Waiting(null)
+    }
+
+    override fun lostStatus(token: ByteArray): LostStatus {
+      reach()
+      val who = who(token)
+      calls += "lostStatus $who"
+      refuse(who, readOk = true)
+      val held = lost?.takeIf { !it.cancelled }
+      return LostStatus(escrow != null, held != null, held?.confirmedReleaseAt)
+    }
+
+    override fun lostCancel(token: ByteArray) {
+      reach()
+      val who = who(token)
+      calls += "lostCancel $who"
+      refuse(who, readOk = true)
+      lost = lost?.copy(cancelled = true)
+    }
+
+    override fun deleteEscrow(token: ByteArray) {
+      reach()
+      val who = who(token)
+      calls += "deleteEscrow $who"
+      if (who != "login") throw SyncAuthError()
+      escrow = null
+      lost = null
+    }
   }
 }
+
+private const val HOUR_MS = 3_600_000L
+private const val GRACE_MS = 7 * 24 * HOUR_MS
+
+private fun validEscrow(e: EscrowBody) =
+  e.email.length in 1..320 && Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(e.email) && SyncWire.fromBase64(e.blob) != null && e.code.length in 1..64
 
 internal class MemorySecrets : SyncSecrets {
   val values = HashMap<SyncSecret, ByteArray>()

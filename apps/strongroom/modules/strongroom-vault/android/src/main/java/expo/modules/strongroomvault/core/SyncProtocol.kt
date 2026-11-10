@@ -4,11 +4,13 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import kotlinx.serialization.json.putJsonArray
 import java.util.Base64
 
@@ -41,7 +43,26 @@ data class PushConflict(val conflicts: List<Pair<String?, Long?>>) : PushResult
 
 data class AccountCreate(val header: String, val loginHash: String, val recoveryHash: String, val readHash: String)
 
-data class AccountUpdate(val header: String, val loginHash: String, val readHash: String, val ifRev: Long, val recoveryHash: String? = null)
+/** The email-recovery escrow an account update may carry: the address, the sealed blob (standard Base64) and the code the Worker mails. */
+data class EscrowBody(val email: String, val blob: String, val code: String)
+
+data class AccountUpdate(
+  val header: String,
+  val loginHash: String,
+  val readHash: String,
+  val ifRev: Long,
+  val recoveryHash: String? = null,
+  val escrow: EscrowBody? = null,
+)
+
+/** What the server holds: whether an escrow exists, and whether a lost-access request is pending (releaseAt is null until the owner confirms it by mail). */
+data class LostStatus(val escrow: Boolean, val pending: Boolean, val releaseAt: Long?)
+
+sealed interface LostRelease {
+  data class Ready(val blob: String) : LostRelease
+
+  data class Waiting(val releaseAt: Long?) : LostRelease
+}
 
 interface SyncTransport {
   fun prelogin(): Prelogin?
@@ -53,6 +74,17 @@ interface SyncTransport {
   fun putAccount(setupToken: String, body: AccountCreate): Long
 
   fun putAccount(token: ByteArray, body: AccountUpdate): Long
+
+  // The defaults only keep older test doubles compiling; HttpSyncTransport and FakeWorker implement all five.
+  fun lostRequest(claimHash: String): Unit = throw UnsupportedOperationException("lostRequest")
+
+  fun lostRelease(claim: String): LostRelease = throw UnsupportedOperationException("lostRelease")
+
+  fun lostStatus(token: ByteArray): LostStatus = throw UnsupportedOperationException("lostStatus")
+
+  fun lostCancel(token: ByteArray): Unit = throw UnsupportedOperationException("lostCancel")
+
+  fun deleteEscrow(token: ByteArray): Unit = throw UnsupportedOperationException("deleteEscrow")
 }
 
 /** Every reply is checked here, as strongroom-core's fetchTransport does, so a server that lies gives a SyncHttpError, never a crash deep in sync. */
@@ -88,7 +120,12 @@ object SyncWire {
     a.recoveryHash?.let { put("recoveryHash", it) }
     put("readHash", a.readHash)
     put("ifRev", a.ifRev)
+    a.escrow?.let { e -> putJsonObject("escrow") { put("email", e.email); put("blob", e.blob); put("code", e.code) } }
   }.toString()
+
+  fun lostRequestBody(claimHash: String): String = buildJsonObject { put("claimHash", claimHash) }.toString()
+
+  fun lostReleaseBody(claim: String): String = buildJsonObject { put("claim", claim) }.toString()
 
   fun prelogin(status: Int, body: String): Prelogin? {
     val d = json(status, body)
@@ -120,6 +157,24 @@ object SyncWire {
   }
 
   fun account(status: Int, body: String): Long = shaped(status, json(status, body), 200) { it.safe("headerRev") }
+
+  fun lostStatus(status: Int, body: String): LostStatus = shaped(status, json(status, body), 200) {
+    val pending = it.getValue("pending")
+    LostStatus(it.flag("escrow"), pending !is JsonNull, if (pending is JsonNull) null else (pending as JsonObject).nullableTime("releaseAt"))
+  }
+
+  fun lostRelease(status: Int, body: String): LostRelease = shaped(status, json(status, body), 200) {
+    when (it.text("state")) {
+      "ready" -> LostRelease.Ready(it.text("blob")!!.also { b -> require(b.length <= MAX_CIPHERTEXT_CHARS && fromBase64(b) != null) })
+      "waiting" -> LostRelease.Waiting(it.nullableTime("releaseAt"))
+      else -> throw IllegalArgumentException()
+    }
+  }
+
+  /** The `{ok:true}` the Worker sends after a cancel, a delete or a request. */
+  fun ok(status: Int, body: String) {
+    shaped(status, json(status, body), 200) { require(it.flag("ok")) }
+  }
 
   fun toBase64(b: ByteArray): String = Base64.getEncoder().encodeToString(b)
 
@@ -154,6 +209,11 @@ object SyncWire {
   private fun JsonPrimitive.safe(): Long? = if (isString) null else longOrNull?.takeIf { it in -MAX_SAFE..MAX_SAFE }
 
   private fun JsonObject.safe(key: String): Long = (this[key] as JsonPrimitive).safe()!!
+
+  private fun JsonObject.flag(key: String): Boolean = (this[key] as JsonPrimitive).let { require(!it.isString); it.content.toBooleanStrict() }
+
+  // A time that is null until the owner confirms the request; the key must still be there.
+  private fun JsonObject.nullableTime(key: String): Long? = getValue(key).let { if (it is JsonNull) null else (it as JsonPrimitive).safe()!!.also { t -> require(t >= 0) } }
 
   private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
