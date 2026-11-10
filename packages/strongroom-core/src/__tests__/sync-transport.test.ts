@@ -77,6 +77,50 @@ test('malformedServerBodiesAreRefused', async () => {
   await assert.rejects(with_(200, { headerRev: '2' }).putAccount({ setupToken: 's' }, ACCOUNT), refused(200));
 });
 
+test('lostRequestPostsTheClaimHashWithNoAuthorizationHeader', async () => {
+  const f = fakeFetch(() => ({ status: 200, body: { ok: true } }));
+  const t = fetchTransport('https://vault.example', f.fn);
+  await t.lostRequest('a'.repeat(43) + '=');
+  assert.deepEqual(f.sent, [{ url: 'https://vault.example/v1/lost/request', method: 'POST', auth: null, body: { claimHash: 'a'.repeat(43) + '=' } }]);
+});
+
+test('lostReleaseReadsWaitingAndReady', async () => {
+  const waiting = fetchTransport('https://vault.example', fakeFetch(() => ({ status: 200, body: { state: 'waiting', releaseAt: 123 } })).fn);
+  assert.deepEqual(await waiting.lostRelease('claim'), { state: 'waiting', releaseAt: 123 });
+  const stillWaiting = fetchTransport('https://vault.example', fakeFetch(() => ({ status: 200, body: { state: 'waiting', releaseAt: null } })).fn);
+  assert.deepEqual(await stillWaiting.lostRelease('claim'), { state: 'waiting', releaseAt: null });
+  const f = fakeFetch((s) => ({ status: 200, body: { state: 'ready', blob: 'AA==' } }));
+  const ready = fetchTransport('https://vault.example', f.fn);
+  assert.deepEqual(await ready.lostRelease('the-claim'), { state: 'ready', blob: 'AA==' });
+  assert.deepEqual(f.sent, [{ url: 'https://vault.example/v1/lost/release', method: 'POST', auth: null, body: { claim: 'the-claim' } }]);
+});
+
+test('lostReleaseRejectsAMalformedBodyAsAReadableError', async () => {
+  const refused = (e: unknown) => e instanceof SyncHttpError && !(e instanceof SyncAuthError) && e.status === 200;
+  for (const body of [{}, { state: 'waiting' }, { state: 'waiting', releaseAt: '1' }, { state: 'ready' }, { state: 'ready', blob: 3 }, { state: 'other' }]) {
+    const t = fetchTransport('https://vault.example', fakeFetch(() => ({ status: 200, body })).fn);
+    await assert.rejects(t.lostRelease('claim'), refused, JSON.stringify(body));
+  }
+});
+
+test('lostStatusAndLostCancelSendTheBearerToken', async () => {
+  const f = fakeFetch((s) => (s.url.endsWith('/v1/lost/status') ? { status: 200, body: { escrow: true, pending: { releaseAt: null } } } : { status: 200, body: { ok: true } }));
+  const t = fetchTransport('https://vault.example', f.fn);
+  assert.deepEqual(await t.lostStatus(TOKEN), { escrow: true, pending: { releaseAt: null } });
+  await t.lostCancel(TOKEN);
+  assert.deepEqual(f.sent, [
+    { url: 'https://vault.example/v1/lost/status', method: 'GET', auth: BEARER, body: undefined },
+    { url: 'https://vault.example/v1/lost/cancel', method: 'POST', auth: BEARER, body: undefined },
+  ]);
+});
+
+test('deleteEscrowSendsDeleteWithTheBearerToken', async () => {
+  const f = fakeFetch(() => ({ status: 200, body: { ok: true } }));
+  const t = fetchTransport('https://vault.example', f.fn);
+  await t.deleteEscrow(TOKEN);
+  assert.deepEqual(f.sent, [{ url: 'https://vault.example/v1/escrow', method: 'DELETE', auth: BEARER, body: undefined }]);
+});
+
 test('fetchTransportGivesUpAfter30Seconds', async () => {
   mock.timers.enable({ apis: ['setTimeout'] });
   try {

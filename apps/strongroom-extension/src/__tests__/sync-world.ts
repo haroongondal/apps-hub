@@ -15,6 +15,7 @@ import { d1FromNodeSqlite } from '../../../../tools/vault-api/src/__tests__/d1-f
 export const SETUP_TOKEN = 'setup-token-for-tests-0123456789abcdef';
 export const PHONE_PASSWORD = 'first master password';
 const migration = readFileSync(new URL('../../../../tools/vault-api/migrations/0001_init.sql', import.meta.url), 'utf8');
+const migration2 = readFileSync(new URL('../../../../tools/vault-api/migrations/0002_escrow.sql', import.meta.url), 'utf8');
 
 export const loginEntry = (name: string, updatedAt: number): Entry => ({ type: 'login', name, username: 'me', password: 'pw', sites: [], apps: [], note: '', updatedAt });
 
@@ -33,6 +34,7 @@ export async function newWorld() {
   const m = await (made ??= make());
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec(migration);
+  sqlite.exec(migration2);
   const env = { DB: d1FromNodeSqlite(sqlite), SETUP_TOKEN };
   const serve = (req: Request) => handle(req, env, { sleep: async () => {} });
 
