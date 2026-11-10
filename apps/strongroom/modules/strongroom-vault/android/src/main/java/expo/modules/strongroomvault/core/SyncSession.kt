@@ -355,7 +355,7 @@ class SyncSession(
   }
 
   // Signed with the token the server knows; ifRev is the last header this phone took from it. The waiting tokens replace the known ones only
-  // after the update landed, NEXT_* and the mark go last, so a run cut short anywhere is finished by the next (or, after a lost reply, by a sign-in).
+  // after the update landed, NEXT_* and the mark go last, so a run cut short anywhere is finished by the next (or, after a lost reply to a password change, by a sign-in).
   // The caller has checked that the pending mark names the stored header.
   private fun sendAccount(t: SyncTransport, escrow: EscrowBody?, putting: () -> Unit = {}) {
     val local = storedHeader()
@@ -371,7 +371,12 @@ class SyncSession(
       } catch (e: SyncHttpError) {
         // A resend after a lost reply: it landed if the server holds this very header (never so for a fresh rotation).
         if (e.status != 409) throw e
-        runCatching { createdEarlier(t, auth) }.getOrNull() ?: throw e
+        val landed = try {
+          createdEarlier(t, auth)
+        } catch (x: Exception) {
+          null
+        }
+        landed ?: throw e
       }
       commitHeader(null, rev)
       secrets.put(SyncSecret.LOGIN_TOKEN, login)

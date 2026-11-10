@@ -13,7 +13,6 @@ class PrefsRecoverySettingsTest {
     lostClaim = "Y2xhaW0=",
     lostBlob = "bG9zdA==",
     keyUnseen = true,
-    lostRequestedAt = 1_800_000_000_123L,
   )
 
   @Test fun everyFieldSurvivesASaveAndLoad() {

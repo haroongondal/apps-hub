@@ -26,6 +26,7 @@ class EmailRecoveryLostAccessTest {
   private var putAfter: Throwable? = null
   private var requestBefore: Throwable? = null
   private var requestAfter: Throwable? = null
+  private var cancelBefore: Throwable? = null
   private val net = object : SyncTransport by w.t {
     override fun putAccount(token: ByteArray, body: AccountUpdate): Long {
       onPut?.let {
@@ -49,6 +50,14 @@ class EmailRecoveryLostAccessTest {
         requestAfter = null
         throw it
       }
+    }
+
+    override fun lostCancel(token: ByteArray) {
+      cancelBefore?.let {
+        cancelBefore = null
+        throw it
+      }
+      w.t.lostCancel(token)
     }
   }
 
@@ -77,9 +86,8 @@ class EmailRecoveryLostAccessTest {
     return Enrolled(p, ak, code)
   }
 
-  private fun later(ms: Long, vararg phones: TestPhone) {
+  private fun later(ms: Long) {
     w.time += ms
-    for (p in phones) p.time += ms
   }
 
   private fun TestPhone.claimHash() = Crypto.tokenHash(SyncWire.fromBase64(recoverySettings.state.lostClaim!!)!!)
@@ -87,7 +95,7 @@ class EmailRecoveryLostAccessTest {
   private fun TestPhone.readyToOpen() {
     recovery.lostRequest()
     w.confirmLost()
-    later(day, this)
+    later(day)
     assertEquals(LostState.Ready, recovery.lostCheck())
   }
 
@@ -101,7 +109,6 @@ class EmailRecoveryLostAccessTest {
     val s = q.recoverySettings.state
     assertEquals(20, SyncWire.fromBase64(s.lostClaim!!)!!.size)
     assertEquals(q.claimHash(), w.lost!!.claimHash)
-    assertEquals(q.time, s.lostRequestedAt)
     assertNull(s.lostBlob)
     assertEquals(listOf("lostRequest"), w.calls) // no stored claim, so nothing to ask about first
     assertEquals(LostState.Waiting(null), q.recovery.lostCheck())
@@ -119,7 +126,7 @@ class EmailRecoveryLostAccessTest {
     w.loginHash = "changed on another device"
     assertThrows(SyncAuthError::class.java) { e.p.session.sync() }
     e.p.vault.lock()
-    later(hour) // the Worker takes a new claim an hour after the last
+    later(hour) // the Worker takes another claim an hour after the last
     e.p.recovery.lostRequest()
     assertEquals(e.p.claimHash(), w.lost!!.claimHash)
     assertEquals(SyncMode.NEEDS_SIGN_IN, e.p.settings.state.mode)
@@ -136,67 +143,72 @@ class EmailRecoveryLostAccessTest {
     val first = q.recoverySettings.state
     val held = w.lost!!.claimHash
     w.confirmLost()
-    later(2 * hour, q) // past the cooldown, so only the server's answer can refuse it
     w.calls.clear()
     refused("request alive") { q.recovery.lostRequest() }
     assertEquals(listOf("lostRelease"), w.calls)
-    later(day, q)
+    later(day)
     refused("request alive") { q.recovery.lostRequest() } // ready
-    q.recoverySettings.state = first.copy(lostRequestedAt = null) // a stale or damaged local record changes nothing
-    refused("request alive") { q.recovery.lostRequest() }
-    later(8 * day, q)
+    later(8 * day)
     refused("request alive") { q.recovery.lostRequest() } // past the grace, but nobody replaced it: still ready
-    assertEquals(first.copy(lostRequestedAt = null), q.recoverySettings.state)
+    assertEquals(first, q.recoverySettings.state)
     assertEquals(held, w.lost!!.claimHash)
     assertEquals(LostState.Ready, q.recovery.lostCheck())
   }
 
-  @Test fun anUnconfirmedRequestIsKeptForAnHourThenReplaced() {
+  @Test fun aSecondRequestForAnUnconfirmedClaimResendsTheSameClaim() {
     enrolled()
     val q = TestPhone(net)
     q.recovery.lostRequest()
     val first = q.recoverySettings.state
     val held = w.lost
     w.calls.clear()
-    refused("request alive") { q.recovery.lostRequest() } // the Worker would ignore it yet answer ok, leaving the phone on a claim it never recorded
-    later(hour - 1, q)
-    refused("request alive") { q.recovery.lostRequest() }
-    assertTrue(w.calls.isEmpty())
+    q.recovery.lostRequest() // a double tap: the Worker already holds this claim and ignores it
+    assertEquals(listOf("lostRelease", "lostRequest"), w.calls)
     assertEquals(first, q.recoverySettings.state)
     assertEquals(held, w.lost)
 
-    later(1, q)
-    q.recovery.lostRequest()
-    assertNotEquals(first.lostClaim, q.recoverySettings.state.lostClaim)
-    assertEquals(q.claimHash(), w.lost!!.claimHash) // the phone and the Worker agree on the new claim
-    assertEquals(q.time, q.recoverySettings.state.lostRequestedAt)
+    later(hour)
+    q.recovery.lostRequest() // an hour on, the Worker takes it afresh and mails a new link for the same claim
+    assertEquals(first, q.recoverySettings.state)
+    assertEquals(q.claimHash(), w.lost!!.claimHash)
+    assertEquals(w.time, w.lost!!.requestedAt)
     w.confirmLost()
-    later(day, q)
+    later(day)
     assertEquals(LostState.Ready, q.recovery.lostCheck())
   }
 
-  @Test fun aFailedRequestKeepsTheOldClaim() {
+  @Test fun aRequestThatNeverArrivedIsRecordedByTheRetry() {
     enrolled()
     val q = TestPhone(net)
-    q.recovery.lostRequest()
-    later(hour, q)
+    requestBefore = SyncOfflineError()
+    assertThrows(SyncOfflineError::class.java) { q.recovery.lostRequest() }
     val first = q.recoverySettings.state
-    val held = w.lost
+    assertTrue(first.lostClaim != null) // saved before the call
+    assertNull(w.lost)
     w.offline = true
     assertThrows(SyncOfflineError::class.java) { q.recovery.lostRequest() }
     w.offline = false
-    requestBefore = SyncHttpError(503)
-    assertThrows(SyncHttpError::class.java) { q.recovery.lostRequest() }
     assertEquals(first, q.recoverySettings.state)
-    assertEquals(held, w.lost)
 
-    requestAfter = SyncOfflineError() // the Worker took it and the reply was lost: the phone can't know, so it keeps what it had
-    assertThrows(SyncOfflineError::class.java) { q.recovery.lostRequest() }
-    assertEquals(first, q.recoverySettings.state)
-    assertNotEquals(held, w.lost)
-    later(hour, q) // that unknown claim is never confirmed, so an hour later a new request replaces it
     q.recovery.lostRequest()
+    assertEquals(first, q.recoverySettings.state)
     assertEquals(q.claimHash(), w.lost!!.claimHash)
+  }
+
+  @Test fun aLostReplyThenARetryKeepsTheMailedLinkWorking() {
+    val e = enrolled("Bank")
+    val q = TestPhone(net)
+    requestAfter = SyncOfflineError() // the Worker recorded the claim and mailed the link; the phone saw an error
+    assertThrows(SyncOfflineError::class.java) { q.recovery.lostRequest() }
+    val held = w.lost
+    assertEquals(q.claimHash(), held!!.claimHash)
+    q.recovery.lostRequest() // the owner taps again: the same claim, which the Worker ignores
+    assertEquals(held, w.lost)
+    assertEquals(q.claimHash(), w.lost!!.claimHash)
+    w.confirmLost() // the link from the first email
+    later(day)
+    assertEquals(LostState.Ready, q.recovery.lostCheck())
+    assertTrue(q.recovery.lostOpen(e.code, newPassword))
   }
 
   @Test fun checkIsWaitingUntilReleaseThenReadyAndStoresTheBlob() {
@@ -207,10 +219,10 @@ class EmailRecoveryLostAccessTest {
     val at = w.time + day
     w.confirmLost(at)
     assertEquals(LostState.Waiting(at), q.recovery.lostCheck())
-    later(day - 1, q)
+    later(day - 1)
     assertEquals(LostState.Waiting(at), q.recovery.lostCheck())
     assertNull(q.recoverySettings.state.lostBlob)
-    later(1, q)
+    later(1)
     assertEquals(LostState.Ready, q.recovery.lostCheck())
     assertEquals(w.escrow!!.blob, q.recoverySettings.state.lostBlob)
     assertEquals(LostState.Ready, q.recovery.lostCheck())
@@ -231,9 +243,22 @@ class EmailRecoveryLostAccessTest {
     assertEquals(q.store.header(), w.header)
     assertEquals(recoveryHash, w.recoveryHash) // only the master password changed
     assertEquals(escrow, w.escrow) // email recovery stays on
+    assertTrue(w.lost!!.cancelled) // the used request no longer reads as pending
+    assertEquals(true, q.recovery.status().let { it.checked && it.pendingRecovery == null })
     q.vault.lock()
     assertFalse(q.vault.unlock(password))
     assertTrue(q.vault.unlock(newPassword))
+  }
+
+  @Test fun aFailedCancelAfterTheOpenStillRecovers() {
+    val e = enrolled("Bank")
+    val q = TestPhone(net)
+    q.readyToOpen()
+    cancelBefore = SyncOfflineError()
+    assertTrue(q.recovery.lostOpen(e.code, newPassword))
+    assertEquals(RecoveryLocal(), q.recoverySettings.state)
+    assertFalse(w.lost!!.cancelled)
+    assertEquals(listOf("Bank"), q.names())
   }
 
   @Test fun theLockedPhoneThatEnrolledRecoversItsOwnVault() {
@@ -258,7 +283,7 @@ class EmailRecoveryLostAccessTest {
     q.recovery.lostRequest()
     refused("not ready") { q.recovery.lostOpen(e.code, newPassword) }
     w.confirmLost()
-    later(day, q)
+    later(day)
     assertEquals(LostState.Ready, q.recovery.lostCheck())
     val ready = q.recoverySettings.state
     w.calls.clear()
@@ -285,6 +310,24 @@ class EmailRecoveryLostAccessTest {
     assertEquals(header, w.header)
     assertArrayEquals(other, q.secrets.get(SyncSecret.ACCOUNT_KEY))
     assertNull(q.store.header())
+  }
+
+  @Test fun openOnAPhoneWithAnotherVaultKeepsClaimAndBlob() {
+    val e = enrolled("Bank")
+    val q = TestPhone(net).also {
+      it.vault.setUp(password, ByteArray(20) { 9 }, fast)
+      it.vault.put(null, testLogin("Other"))
+      it.vault.lock()
+    }
+    val local = q.store.header()
+    q.readyToOpen()
+    val ready = q.recoverySettings.state
+    val header = w.header
+    refused("different vault") { q.recovery.lostOpen(e.code, newPassword) }
+    assertEquals(ready, q.recoverySettings.state)
+    assertEquals(local, q.store.header())
+    assertEquals(header, w.header)
+    assertFalse(w.lost!!.cancelled)
   }
 
   @Test fun aFailedRecoverKeepsClaimAndBlobSoTheOwnerCanRetry() {
@@ -321,23 +364,24 @@ class EmailRecoveryLostAccessTest {
     refused("not ready") { q.recovery.lostOpen(e.code, newPassword) }
   }
 
-  @Test fun aClaimTheServerNoLongerHoldsWaitsWithNoTimeAndCanBeReplacedAfterAnHour() {
+  @Test fun aClaimTheServerNoLongerHoldsWaitsWithNoTimeAndIsSentAgain() {
     val e = enrolled()
     val q = TestPhone(net)
     q.readyToOpen()
-    later(8 * day, q)
+    val claim = q.recoverySettings.state.lostClaim
+    later(8 * day)
     assertEquals(LostState.Ready, q.recovery.lostCheck()) // the grace alone ends nothing
     TestPhone(net).recovery.lostRequest() // anyone's request replaces it once the grace is over
     assertEquals(LostState.Waiting(null), q.recovery.lostCheck())
     assertNull(q.recoverySettings.state.lostBlob)
     refused("not ready") { q.recovery.lostOpen(e.code, newPassword) }
 
-    q.recovery.lostRequest() // over an hour old here, but the Worker still ignores it: the stranger's claim is younger than an hour
+    q.recovery.lostRequest() // the Worker ignores it while the stranger's claim is under an hour old
     assertNotEquals(q.claimHash(), w.lost!!.claimHash)
     assertEquals(LostState.Waiting(null), q.recovery.lostCheck())
-    refused("request alive") { q.recovery.lostRequest() }
-    later(hour, q)
+    later(hour)
     q.recovery.lostRequest()
+    assertEquals(claim, q.recoverySettings.state.lostClaim)
     assertEquals(q.claimHash(), w.lost!!.claimHash)
   }
 
@@ -352,10 +396,19 @@ class EmailRecoveryLostAccessTest {
     e.p.recovery.cancelLost()
     assertEquals(listOf("lostCancel read"), w.calls)
     assertTrue(w.lost!!.cancelled)
-    later(day, q)
+    later(day)
     assertEquals(LostState.Waiting(null), q.recovery.lostCheck()) // never ready after a cancel
     refused("not ready") { q.recovery.lostOpen(e.code, newPassword) }
-    q.recovery.lostRequest() // its claim is over an hour old and dead, so a new one may go
+  }
+
+  @Test fun aRetryAfterACancelRecordsTheSameClaimAgain() {
+    val e = enrolled()
+    val q = TestPhone(net)
+    q.recovery.lostRequest()
+    val claim = q.recoverySettings.state.lostClaim
+    e.p.recovery.cancelLost()
+    q.recovery.lostRequest() // a cancelled row is free at once
+    assertEquals(claim, q.recoverySettings.state.lostClaim)
     assertEquals(q.claimHash(), w.lost!!.claimHash)
     assertFalse(w.lost!!.cancelled)
   }
@@ -379,6 +432,16 @@ class EmailRecoveryLostAccessTest {
     refused("sync off") { e.p.recovery.cancelLost() }
     refused("sync off") { fresh.recovery.cancelLost() }
     refused("sync off") { TestPhone(null).recovery.cancelLost() }
+    assertTrue(w.calls.isEmpty())
+  }
+
+  @Test fun clearLostDropsOnlyTheLostAccessState() {
+    val e = enrolled()
+    val local =RecoveryLocal(escrowBlob = "YmxvYg==", confirmed = true, lostClaim = "Y2xhaW0=", lostBlob = "bG9zdA==", keyUnseen = true)
+    e.p.recoverySettings.state = local
+    w.calls.clear()
+    e.p.recovery.clearLost()
+    assertEquals(local.copy(lostClaim = null, lostBlob = null), e.p.recoverySettings.state)
     assertTrue(w.calls.isEmpty())
   }
 

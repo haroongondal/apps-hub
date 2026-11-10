@@ -324,6 +324,7 @@ object VaultHolder {
     if (byPassword) {
       val boot = bootCount(context)
       prefs(context).edit().apply { if (boot == null) remove(PASSWORD_BOOT) else putInt(PASSWORD_BOOT, boot) }.commit()
+      recovery(context).clearLost() // the owner is in, so a released blob left from a lost-access request goes
     }
     applyPending(context)
     rebuildIndex(context)
@@ -390,7 +391,7 @@ internal class PrefsSyncSettings(private val p: SharedPreferences) : SyncSetting
   }
 }
 
-// Email recovery's local half. Every field is written, or the lost-key warning and the one-hour request cooldown would silently do nothing on a phone.
+// Email recovery's local half. Every field is written, or the lost-key warning or a lost-access claim would silently be lost on a phone.
 internal class PrefsRecoverySettings(private val p: SharedPreferences) : RecoverySettings {
   override fun load() = RecoveryLocal(
     escrowBlob = p.getString("escrowBlob", null),
@@ -398,7 +399,6 @@ internal class PrefsRecoverySettings(private val p: SharedPreferences) : Recover
     lostClaim = p.getString("lostClaim", null),
     lostBlob = p.getString("lostBlob", null),
     keyUnseen = p.getBoolean("keyUnseen", false),
-    lostRequestedAt = p.getLong("lostRequestedAt", -1).takeIf { it >= 0 },
   )
 
   override fun save(r: RecoveryLocal) {
@@ -408,7 +408,6 @@ internal class PrefsRecoverySettings(private val p: SharedPreferences) : Recover
       .putString("lostClaim", r.lostClaim)
       .putString("lostBlob", r.lostBlob)
       .putBoolean("keyUnseen", r.keyUnseen)
-      .putLong("lostRequestedAt", r.lostRequestedAt ?: -1)
       .commit()
   }
 }

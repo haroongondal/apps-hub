@@ -347,6 +347,24 @@ class EmailRecoveryTest {
     assertEquals("idle", a.session.status().state)
   }
 
+  @Test fun aKillRightAfterTheHeaderWriteStillLeavesTheKeyUnseen() {
+    val (p, _) = syncedPhone("Bank")
+    val json = p.store.header()
+    val dying = object : RecoverySettings {
+      var state = RecoveryLocal()
+
+      override fun load() = state
+
+      override fun save(r: RecoveryLocal) {
+        if (r.escrowBlob != null) throw Killed() // the first save after the rotated header reached the vault file
+        state = r
+      }
+    }
+    assertThrows(Killed::class.java) { EmailRecovery(p.session, p.secrets, dying, net) { p.time }.enrol(email, password) }
+    assertFalse(json == p.store.header())
+    assertEquals(RecoveryLocal(keyUnseen = true), dying.state)
+  }
+
   @Test fun aKeystoreFailureBeforeThePutRestoresTheOldKey() {
     val (p, ak) = syncedPhone("Bank")
     val json = p.store.header()
