@@ -1,0 +1,83 @@
+import { MAX_RATE, MIN_RATE, nextSpeed, snapSpeed } from '@apps-hub/sieve-core/src/playback.ts';
+import { ytPage, type MainSettings } from '@apps-hub/sieve-core/src/yt-bridge.ts';
+import { feature, onCommand, onSettings, onVideo, player, sendState, type YtPlayer } from './bridge-main.ts';
+import { SEL } from './selectors.ts';
+
+// Speed facts, inspected 2026-11-10, signed out, Chrome for Testing 149.0.7827.55, no extension (dQw4w9WgXcQ, then related videos; Playwright addInitScript probes):
+// - player.setPlaybackRate(r) takes effect at once and fires the video's ratechange, but the player clamps to its own list: 2.5 and 3 gave 2, 0.3 gave 0.3.
+// - video.playbackRate = r (2.5, 16 and 0.1 tried) fires ratechange, stays after 5 s and after seekTo(20), and the player is not told:
+//   player.getPlaybackRate() kept answering the old 2. So the rate is read from the video, never from the player.
+// - A new video starts at 1 again, whether the rate was set through the player or directly, and localStorage held no speed key: YouTube remembers
+//   nothing here. The reset happens before the video's loadstart (rate 1 at loadstart, no ratechange).
+// - A rate set at loadstart (1.75) and one set at loadedmetadata (1.25) both held through canplay and playing, 3 s later too.
+// From this: `anySpeed` sets the rate directly on the video, otherwise through the player, snapped to its offered rates. The default goes on at
+// onVideo (loadstart). It goes on once more at the first `playing` when something changed it meanwhile (a signed-in profile may carry a
+// remembered speed; the signed-out inspection could not show one), unless the owner changed the speed by hand since.
+const apply = Reflect.apply;
+const listen = EventTarget.prototype.addEventListener;
+const query = Document.prototype.querySelector;
+const near = (a: number, b: number): boolean => Math.abs(a - b) < 1e-6;
+
+feature('speed', () => {
+  if (ytPage(location.href).kind === 'other') return;
+  let settings: MainSettings | null = null;
+  let seen = false; // a video has started on this page
+  let wanted: number | null = null; // the default applied to the current video, until its first `playing` or a speed command
+  const video = (): HTMLVideoElement | null => apply(query, document, [SEL.video]) as HTMLVideoElement | null;
+
+  function setRate(rate: number): number | null {
+    const p = player();
+    const v = video();
+    if (!p || !v || !settings) return null;
+    const r = Math.min(MAX_RATE, Math.max(MIN_RATE, settings.speed.anySpeed ? rate : snapSpeed(rate, p.getAvailablePlaybackRates())));
+    if (settings.speed.anySpeed) v.playbackRate = r;
+    else p.setPlaybackRate(r);
+    return r;
+  }
+
+  function applyDefault(): void {
+    const p = player();
+    wanted = null;
+    if (!settings?.on || !settings.speed.setDefault || !p || p.getVideoData()?.isLive) return;
+    wanted = setRate(settings.speed.default);
+  }
+
+  // A command always reports the rate afterwards, so the row shows the toast even when the rate did not change.
+  function command(rate: (v: HTMLVideoElement, p: YtPlayer) => number): void {
+    const v = video();
+    const p = player();
+    if (!settings?.on || !v || !p) return;
+    wanted = null;
+    setRate(rate(v, p));
+    sendState({ rate: v.playbackRate });
+  }
+
+  onSettings((s) => {
+    const first = settings === null;
+    settings = s;
+    if (first && seen) applyDefault(); // the settings reached a hard load after its first video had started
+  });
+  onVideo(() => {
+    seen = true;
+    applyDefault();
+  });
+  apply(listen, document, ['ratechange', (e: Event) => {
+    const v = video();
+    if (v && e.target === v) sendState({ rate: v.playbackRate });
+  }, true]);
+  apply(listen, document, ['playing', (e: Event) => {
+    const v = video();
+    if (!v || e.target !== v || wanted === null) return;
+    const goal = wanted;
+    wanted = null;
+    if (!near(v.playbackRate, goal)) setRate(goal);
+  }, true]);
+  onCommand('speed-step', (value) => {
+    if (value === 1 || value === -1) command((v, p) => nextSpeed(v.playbackRate, value, { step: settings!.speed.step, anySpeed: settings!.speed.anySpeed, rates: p.getAvailablePlaybackRates() }));
+  });
+  onCommand('speed-set', (value) => {
+    if (typeof value === 'number') command(() => value);
+  });
+  onCommand('speed-default', () => command(() => (settings!.speed.setDefault ? settings!.speed.default : 1)));
+  onCommand('speed-normal', () => command(() => 1));
+});
