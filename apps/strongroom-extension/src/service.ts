@@ -367,7 +367,10 @@ export function createService(deps: Deps) {
     const blob = await deps.settings.get(ESCROW_BLOB);
     const confirmedLocally = (await deps.settings.get(ESCROW_CONFIRMED)) === 'true';
     const waitingForCode = blob !== undefined && !confirmedLocally;
-    const token = available ? await fillToken() : null;
+    // Same as doSync: a device that needs to sign in again must not keep hitting the Worker with a token the server
+    // already refused, or it self-inflicts the Worker's own auth-failure backoff against its own future requests.
+    const needsSignIn = deps.sync ? (await deps.sync.store.getSyncLocal()).info.needsSignIn : false;
+    const token = available && !needsSignIn ? await fillToken() : null;
     if (!token || !deps.sync) return { available, enrolled: confirmedLocally, waitingForCode, pendingRecovery: null, wasTurnedOff: false };
     const remote = await deps.sync.transport.lostStatus(token);
     // enrolled reflects the account (the server), not just this device: a device that never did its own enrolling

@@ -952,6 +952,25 @@ test('the pending-recovery banner still shows after a non-manual lock, from the 
   assert.equal((await emailStatus(x)).pendingRecovery, null);
 });
 
+// N2: emailRecoveryStatus must skip the Worker call exactly when doSync does (aRefusedTokenAsksToSignInAndStopsRetrying mirrors this
+// for doSync itself), or a token invalidated elsewhere keeps hitting the Worker's auth-failure rate limiter every 5 minutes forever.
+test('emailRecoveryStatus skips the Worker once this device needs to sign in again, same as doSync', async () => {
+  const world = await newWorld();
+  await world.phone.add('Mail');
+  await world.phone.sync();
+  const x = await signedIn(world);
+  await world.phone.changePassword(NEW_PASSWORD);
+
+  await add(x, { name: 'Written before the 401' });
+  await x.service.settled();
+  assert.equal((await status(x)).state, 'needsSignIn');
+
+  const seen = world.requests.length;
+  const s = await emailStatus(x);
+  assert.equal(world.requests.length, seen);
+  assert.deepEqual([s.available, s.enrolled, s.waitingForCode, s.pendingRecovery, s.wasTurnedOff], [true, false, false, null, false]);
+});
+
 test('status shows a pending recovery and cancelRecovery clears it', async () => {
   const world = await newWorld();
   const x = await signedIn(world);

@@ -178,6 +178,26 @@ async function syncSuite() {
     await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
     world.online = true;
 
+    // N2: a hung email-recovery status check (the Worker never answers) must not block the unlock screen's password field,
+    // the one thing it must always do instantly. Non-manual lock keeps the device-held token, so the status call is attempted.
+    await send({ type: 'lock' });
+    let releaseGate = () => {};
+    world.gate = new Promise((resolve) => { releaseGate = resolve; });
+    try {
+      await popup.reload();
+      const reloadedAt = Date.now();
+      await popup.getByLabel('Master password', { exact: true }).waitFor({ timeout: 1000 });
+      check('the unlock screen shows the password field promptly while the email-recovery status check hangs', Date.now() - reloadedAt < 1000);
+    } catch (e) {
+      check('the unlock screen shows the password field promptly while the email-recovery status check hangs', false, String(e));
+    } finally {
+      releaseGate();
+      world.gate = undefined;
+    }
+    await popup.getByLabel('Master password', { exact: true }).fill(world.password);
+    await popup.getByRole('button', { name: 'Unlock', exact: true }).click();
+    await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+
     const session = await sw.evaluate(() => chrome.storage.session.get('loginToken'));
     check('the login token is in session storage while unlocked', session.loginToken === b64(world.tokens.loginToken));
     const alarm = await sw.evaluate(async () => (await chrome.alarms.getAll()).find((a) => a.name === 'sync'));

@@ -67,7 +67,7 @@ export async function newWorld() {
     const url = new URL(req.url);
     world.requests.push(`${req.method} ${url.pathname}`);
     if (!world.online || (world.failPut && req.method === 'PUT')) throw new TypeError('offline');
-    if (world.gate && req.method === 'PUT') await world.gate;
+    if (world.gate) await world.gate;
     const res = await serve(req);
     if (!world.rewrite) return res;
     return new Response(JSON.stringify(world.rewrite(url.pathname, await res.json())), { status: res.status, headers: res.headers });
@@ -120,6 +120,7 @@ export async function serveHttp(world: World): Promise<{ url: string; close(): P
   const server = createServer(async (req, res) => {
     // A real browser talks to this real socket, so `world.online` (which only gates the in-process fetchFn) must also gate this path, by dropping the connection.
     if (!world.online) return void req.socket.destroy();
+    if (world.gate) await world.gate;
     const chunks: Buffer[] = [];
     for await (const c of req) chunks.push(c as Buffer);
     const headers = new Headers();

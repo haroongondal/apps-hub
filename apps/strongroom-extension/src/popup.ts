@@ -296,21 +296,34 @@ function recoveryScreen(key: string) {
 async function unlockScreen() {
   const msg = msgBox();
   const pw = input({ type: 'password', autocomplete: 'current-password', autofocus: true });
+  // pending/syncStatus are local-only; the email-recovery status call can reach a slow or unreachable Worker, so it must
+  // never hold up the one thing this screen needs to do instantly: let the owner type their master password.
   const pending = tab && await call<Pending | null>({ type: 'pending', tabId: tab.tabId });
   const sync = await call<SyncStatus>({ type: 'syncStatus' });
-  const emailRecovery = await call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' }).catch(() => null);
   const go = button('Unlock', () => guarded(msg, [go], async () => {
     await call({ type: 'unlock', password: pw.value });
     await route();
   }), 'ui-btn--primary');
   pw.addEventListener('keydown', (e) => e.key === 'Enter' && go.click());
+  const bannerSlot = h('div', {});
   screen('Unlock Strongroom', null,
-    recoveryBanner(emailRecovery, msg, unlockScreen),
+    bannerSlot,
     pending && h('p', { class: 'ui-muted' }, `After you unlock, you can save the sign-in you just used on ${pending.host}.`),
     h('p', { class: 'ui-muted' }, PROFILE_NOTICE),
     label('Master password', pw), msg, go, button('Forgot master password?', resetScreen, 'ui-btn--ghost'),
     sync.available && (sync.state !== 'off' || sync.keyLost) && button('Sign in with your account', () => signInScreen(unlockScreen), 'ui-btn--ghost'),
     sync.available && button('Lost access to your account?', () => lostAccessScreen(unlockScreen), 'ui-btn--ghost'));
+  if (sync.available) void loadRecoveryBanner(bannerSlot, msg);
+}
+
+const BANNER_TIMEOUT_MS = 5_000;
+
+async function loadRecoveryBanner(slot: HTMLElement, msg: HTMLElement) {
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), BANNER_TIMEOUT_MS));
+  const emailRecovery = await Promise.race([call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' }).catch(() => null), timeout]);
+  if (!slot.isConnected) return;
+  const banner = recoveryBanner(emailRecovery, msg, unlockScreen);
+  if (banner) slot.replaceWith(banner);
 }
 
 function resetScreen() {
