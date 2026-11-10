@@ -3,10 +3,14 @@ import type { AccountUpdate, Prelogin, Upsert } from 'strongroom-core/src/sync/p
 import { authorize, BASE64_32_BYTES } from './auth.ts';
 import { cancelLostRequest, clearEscrow, createAccount, getAccount, pull, push, updateAccount, type Db } from './db.ts';
 import { cancelLostAccessByToken, confirmLostAccess, lostAccessStatus, releaseLostAccess, requestLostAccess, type Mailer } from './lost-access.ts';
+import { createCloudflareMailer, type SendEmailBinding } from './mailer.ts';
 
 export type { Db } from './db.ts';
 export type { Mailer } from './lost-access.ts';
 export interface Env { DB: Db; SETUP_TOKEN: string; MAIL?: Mailer; PUBLIC_URL?: string }
+// The real Worker env: MAIL is the native send_email binding, wrapped into a Mailer only at the fetch entry point below (keeps route()/handle() testable with plain fakes).
+interface WorkerEnv extends Omit<Env, 'MAIL'> { MAIL?: SendEmailBinding }
+const MAIL_FROM = 'strongroom@haroongondal.com'; // any address on haroongondal.com; only the destination is binding-restricted
 type Deps = { now?: () => number; sleep?: (ms: number) => Promise<void>; mail?: Mailer };
 
 const HEADERS = { 'content-type': 'application/json', 'cache-control': 'private, no-store' };
@@ -194,4 +198,6 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
   }
 }
 
-export default { fetch: (req: Request, env: Env) => handle(req, env) };
+export default {
+  fetch: (req: Request, env: WorkerEnv) => handle(req, { ...env, MAIL: env.MAIL && createCloudflareMailer(env.MAIL, MAIL_FROM) }),
+};
