@@ -183,8 +183,12 @@ internal class MemorySecrets : SyncSecrets {
   var keyLost = false // as a Keystore key the system invalidated: nothing it sealed opens, and it seals nothing new
   var resets = 0
   var failOn: SyncSecret? = null // a write that fails, as a full disk would
+  var failGet: SyncSecret? = null // a read that fails, as a Keystore that won't open would
 
-  override fun get(s: SyncSecret) = if (keyLost) null else values[s]?.copyOf()
+  override fun get(s: SyncSecret): ByteArray? {
+    check(s != failGet) { "keystore unavailable" }
+    return if (keyLost) null else values[s]?.copyOf()
+  }
 
   override fun put(s: SyncSecret, value: ByteArray) {
     check(!keyLost) { "sync key lost" }

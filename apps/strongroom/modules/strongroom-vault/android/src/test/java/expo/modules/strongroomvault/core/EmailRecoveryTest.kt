@@ -20,17 +20,22 @@ class EmailRecoveryTest {
   private val email = "me@example.com"
   private val w = FakeWorker()
 
-  // The network between the phone and the Worker: an escrow update can fail before it reaches the Worker, or after (a lost reply).
+  // The network between the phone and the Worker: the next account update can fail before it reaches the Worker, or after (a lost reply).
+  private var onPut: (() -> Unit)? = null
   private var failBefore: Throwable? = null
   private var failAfter: Throwable? = null
   private val net = object : SyncTransport by w.t {
     override fun putAccount(token: ByteArray, body: AccountUpdate): Long {
-      if (body.escrow != null) failBefore?.let {
+      onPut?.let {
+        onPut = null
+        it()
+      }
+      failBefore?.let {
         failBefore = null
         throw it
       }
       val rev = w.t.putAccount(token, body)
-      if (body.escrow != null) failAfter?.let {
+      failAfter?.let {
         failAfter = null
         throw it
       }
@@ -62,8 +67,10 @@ class EmailRecoveryTest {
 
   private fun opens(rk: ByteArray, h: Header) = VaultFormat.unlockWithRecovery(h, rk) != null
 
-  private fun status(checked: Boolean = true, enrolled: Boolean = false, waiting: Boolean = false, pending: PendingRecovery? = null, turnedOff: Boolean = false) =
-    EmailRecoveryStatus(available = true, checked = checked, enrolled = enrolled, waitingForCode = waiting, pendingRecovery = pending, wasTurnedOff = turnedOff)
+  private fun status(checked: Boolean = true, enrolled: Boolean = false, waiting: Boolean = false, pending: PendingRecovery? = null, turnedOff: Boolean = false, unseen: Boolean = false) =
+    EmailRecoveryStatus(available = true, checked = checked, enrolled = enrolled, waitingForCode = waiting, pendingRecovery = pending, wasTurnedOff = turnedOff, keyUnseen = unseen)
+
+  private fun TestPhone.enrolSeen(address: String = email): Enrolment = recovery.enrol(address, password)!!.also { recovery.keyShown() }
 
   private val unchecked = status(checked = false)
 
@@ -91,6 +98,9 @@ class EmailRecoveryTest {
     assertEquals(2, p.store.meta.headerRev)
     assertFalse(p.settings.state.accountPending)
     assertNull(p.secrets.get(SyncSecret.NEXT_LOGIN))
+    assertEquals(RecoveryLocal(escrowBlob = sealed.blob, keyUnseen = true), p.recoverySettings.state)
+    assertEquals(status(waiting = true, unseen = true), p.recovery.status())
+    p.recovery.keyShown()
     assertEquals(RecoveryLocal(escrowBlob = sealed.blob), p.recoverySettings.state)
     assertEquals(status(waiting = true), p.recovery.status())
 
@@ -102,7 +112,7 @@ class EmailRecoveryTest {
 
   @Test fun confirmWithTheMailedCodeTurnsItOnAndDropsTheLocalBlob() {
     val (p, _) = syncedPhone()
-    p.recovery.enrol(email, password)!!
+    p.enrolSeen()
     assertTrue(p.recovery.confirm(w.mails.single()))
     assertEquals(RecoveryLocal(confirmed = true), p.recoverySettings.state)
     assertEquals(status(enrolled = true), p.recovery.status())
@@ -112,7 +122,7 @@ class EmailRecoveryTest {
   @Test fun confirmWithAWrongCodeKeepsWaiting() {
     val (p, _) = syncedPhone()
     refused("not waiting") { p.recovery.confirm(RecoveryKey.format(RecoveryKey.generate())) }
-    p.recovery.enrol(email, password)!!
+    p.enrolSeen()
     val waiting = p.recoverySettings.state
     assertFalse(p.recovery.confirm(RecoveryKey.format(RecoveryKey.generate())))
     assertFalse(p.recovery.confirm("not a code"))
@@ -123,7 +133,7 @@ class EmailRecoveryTest {
 
   @Test fun confirmAcceptsLowercaseSpacedCodeWithoutDashes() {
     val (p, _) = syncedPhone()
-    p.recovery.enrol(email, password)!!
+    p.enrolSeen()
     val typed = " " + w.mails.single().replace("-", "").lowercase().chunked(8).joinToString(" ") + " "
     assertTrue(p.recovery.confirm(typed))
     assertEquals(RecoveryLocal(confirmed = true), p.recoverySettings.state)
@@ -161,6 +171,9 @@ class EmailRecoveryTest {
     assertTrue(w.calls.isEmpty())
     assertTrue(p.recovery.enrol("  A@B.co ", password)!!.sent)
     assertEquals("A@B.co", w.escrow!!.email)
+    val longest = "a".repeat(315) + "@b.co"
+    assertTrue(p.recovery.enrol(longest, password)!!.sent)
+    assertEquals(longest, w.escrow!!.email)
   }
 
   @Test fun enrolRefusedWhenSyncIsOffLockedOrAnUpdateIsStillQueued() {
@@ -169,7 +182,7 @@ class EmailRecoveryTest {
     refused("sync off") { off.recovery.enrol(email, password) }
     assertPutBack(off, offJson)
 
-    val (p, _) = syncedPhone("Bank")
+    val (p, ak) = syncedPhone("Bank")
     p.vault.lock()
     val json = p.store.header()
     refused("locked") { p.recovery.enrol(email, password) }
@@ -186,17 +199,19 @@ class EmailRecoveryTest {
     w.offline = false
     assertTrue(p.recovery.enrol(email, newPassword)!!.sent) // the flush goes first, then the enrol
     assertEquals(p.store.header(), w.header)
+    p.session.sync()
+    TestPhone(w.t).session.signIn(newPassword, ak) // the server's hashes are the new password's
 
     w.loginHash = "changed on another device"
     assertThrows(SyncAuthError::class.java) { p.session.sync() }
     val signedOut = p.store.header()
-    refused("sync off") { p.recovery.enrol(email, newPassword) } // needs sign-in is not on
+    assertThrows(SyncAuthError::class.java) { p.recovery.enrol(email, newPassword) } // as sync() answers needs sign-in
     assertEquals(signedOut, p.store.header())
   }
 
   @Test fun a409RestoresTheOldKeyAndTellsTheOwnerToSyncAndRetry() {
     val (p, ak) = syncedPhone("Bank")
-    val first = p.recovery.enrol(email, password)!!.recoveryKey
+    val first = p.enrolSeen().recoveryKey
     assertTrue(p.recovery.confirm(w.mails.single()))
     val sealed = w.escrow
     val json = p.store.header()
@@ -263,18 +278,24 @@ class EmailRecoveryTest {
     assertTrue(p.settings.state.accountPending)
     assertEquals(hashOf(e.recoveryKey), p.settings.state.recoveryHash)
     val blob = p.recoverySettings.state.escrowBlob!!
+    assertTrue(p.recoverySettings.state.keyUnseen)
+    p.recovery.keyShown()
 
     w.calls.clear()
     if (landed) {
       val sealed = w.escrow!!
       assertEquals(blob, sealed.blob)
       assertEquals(status(waiting = true), p.recovery.status()) // the code was mailed, so it can be typed now
-      assertThrows(SyncAuthError::class.java) { p.session.sync() } // the resend carries the same hash; its stale ifRev asks for sign-in
+      p.session.sync() // the resend's stale ifRev gets a 409, then the phone finds its own header on the server
       assertEquals("update login ifRev=1 recovery", w.calls.first { it.startsWith("update") })
-      assertEquals(sealed, w.escrow) // the same hash never clears the escrow
-      p.session.signIn(password, ak)
+      assertEquals(SyncMode.ON, p.settings.state.mode)
+      assertEquals("idle", p.session.status().state)
       assertEquals(w.header, p.store.header())
+      assertEquals(w.headerRev, p.store.meta.headerRev)
       assertFalse(p.settings.state.accountPending)
+      assertNull(p.secrets.get(SyncSecret.NEXT_LOGIN))
+      assertEquals(sealed, w.escrow)
+      assertEquals(status(waiting = true), p.recovery.status())
       assertTrue(p.recovery.confirm(w.mails.single()))
       assertEquals(status(enrolled = true), p.recovery.status())
     } else {
@@ -299,6 +320,75 @@ class EmailRecoveryTest {
 
   @Test fun aLocalFailureAfterTheWorkerTookItStillShowsTheNewKey() = aLostReply(landed = true, failure = IllegalStateException("disk full"))
 
+  @Test fun aReal409OnAQueuedUpdateStillAsksForSignIn() {
+    val (a, ak) = syncedPhone("Bank")
+    val b = TestPhone(w.t).also { it.session.signIn(password, ak) }
+    a.session.newRecoveryKey(password)!!
+    b.session.newRecoveryKey(password)!!
+    b.session.sync()
+    w.calls.clear()
+    assertThrows(SyncAuthError::class.java) { a.session.sync() }
+    assertEquals(SyncMode.NEEDS_SIGN_IN, a.settings.state.mode)
+    assertEquals(2, w.calls.size)
+    assertTrue(w.calls[1].startsWith("pull ")) // it looked for its own header and didn't find it
+    assertTrue(a.settings.state.accountPending)
+  }
+
+  @Test fun aLostReplyOnAPasswordChangeStillAsksForSignIn() {
+    val (a, ak) = syncedPhone("Bank")
+    assertTrue(a.session.changePassword(password, newPassword))
+    failAfter = SyncOfflineError()
+    assertThrows(SyncOfflineError::class.java) { a.session.sync() }
+    assertEquals(a.store.header(), w.header)
+    assertThrows(SyncAuthError::class.java) { a.session.sync() } // the old login token is refused (401) before any 409
+    assertEquals(SyncMode.NEEDS_SIGN_IN, a.settings.state.mode)
+    a.session.signIn(newPassword, ak)
+    a.session.sync()
+    assertEquals("idle", a.session.status().state)
+  }
+
+  @Test fun aKeystoreFailureBeforeThePutRestoresTheOldKey() {
+    val (p, ak) = syncedPhone("Bank")
+    val json = p.store.header()
+    w.calls.clear()
+    p.secrets.failGet = SyncSecret.LOGIN_TOKEN
+    refused("keystore unavailable") { p.recovery.enrol(email, password) }
+    p.secrets.failGet = null
+    assertPutBack(p, json)
+    assertFalse(w.calls.any { it.startsWith("update") })
+    p.session.sync()
+    TestPhone(w.t).session.recover(recoveryKey, newPassword, ak)
+  }
+
+  @Test fun anUndoThatCannotWriteKeepsTheRotationAndShowsTheKey() {
+    val (p, ak) = syncedPhone("Bank")
+    onPut = { p.store.headerWriteFails = true }
+    failBefore = SyncHttpError(400)
+    val e = p.recovery.enrol(email, password)!!
+    assertFalse(e.sent)
+    p.store.headerWriteFails = false
+    assertTrue(opens(e.recoveryKey, p.header()))
+    assertTrue(p.settings.state.accountPending)
+    assertTrue(p.recovery.status().keyUnseen)
+    p.session.sync()
+    assertEquals(p.store.header(), w.header)
+    assertEquals(hashOf(e.recoveryKey), w.recoveryHash)
+    TestPhone(w.t).session.recover(e.recoveryKey, newPassword, ak)
+  }
+
+  @Test fun aFlushThatNeedsSignInAsksForSignIn() {
+    val (p, _) = syncedPhone("Bank")
+    w.offline = true
+    assertTrue(p.session.changePassword(password, newPassword))
+    w.offline = false
+    w.loginHash = "changed on another device"
+    val queued = p.store.header()
+    assertThrows(SyncAuthError::class.java) { p.recovery.enrol(email, newPassword) }
+    assertEquals(SyncMode.NEEDS_SIGN_IN, p.settings.state.mode)
+    assertEquals(queued, p.store.header())
+    assertEquals(RecoveryLocal(), p.recoverySettings.state)
+  }
+
   @Test fun enrolCutShortBeforeThePutLeavesNoWaitingForCodeWithoutAnEscrow() {
     val (p, ak) = syncedPhone("Bank")
     failBefore = Killed()
@@ -307,21 +397,24 @@ class EmailRecoveryTest {
     assertTrue(p.settings.state.accountPending)
     val rotated = p.store.header()
 
-    assertEquals(status(), p.recovery.status())
-    assertEquals(RecoveryLocal(), p.recoverySettings.state)
+    assertEquals(status(unseen = true), p.recovery.status()) // the owner never saw the key the vault now needs
+    assertEquals(RecoveryLocal(keyUnseen = true), p.recoverySettings.state)
     p.session.sync()
     assertEquals(rotated, w.header) // the rotation still goes up, without an escrow
     assertNull(w.escrow)
     assertTrue(w.mails.isEmpty())
-    assertEquals(status(), p.recovery.status())
+    assertEquals(status(unseen = true), p.recovery.status())
     TestPhone(w.t).session.signIn(password, ak)
+    assertTrue(p.session.newRecoveryKey(password) != null) // the remedy: a new key, shown this time
+    p.recovery.keyShown()
+    assertEquals(status(), p.recovery.status())
   }
 
   @Test fun aSecondEnrolReplacesTheEscrowAndEmail() {
     val (p, ak) = syncedPhone()
-    val first = p.recovery.enrol("first@example.com", password)!!.recoveryKey
+    val first = p.enrolSeen("first@example.com").recoveryKey
     assertTrue(p.recovery.confirm(w.mails.single()))
-    val second = p.recovery.enrol("second@example.com", password)!!.recoveryKey
+    val second = p.enrolSeen("second@example.com").recoveryKey
     assertEquals(2, w.mails.size)
     val sealed = w.escrow!!
     assertEquals("second@example.com", sealed.email)
@@ -342,10 +435,11 @@ class EmailRecoveryTest {
     p.recovery.enrol(email, password)!!
     p.recovery.turnOff() // the way out of waiting for a code that never came
     assertNull(w.escrow)
-    assertEquals(RecoveryLocal(), p.recoverySettings.state)
-    assertEquals(status(), p.recovery.status())
+    assertEquals(RecoveryLocal(keyUnseen = true), p.recoverySettings.state) // turning off doesn't make the key seen
+    assertEquals(status(unseen = true), p.recovery.status())
+    p.recovery.keyShown()
 
-    p.recovery.enrol(email, password)!!
+    p.enrolSeen()
     assertTrue(p.recovery.confirm(w.mails.last()))
     w.calls.clear()
     p.recovery.turnOff()
@@ -365,11 +459,15 @@ class EmailRecoveryTest {
     val (p, _) = syncedPhone()
     p.recovery.enrol(email, password)!!
     val waiting = p.recoverySettings.state
+    val local = unchecked.copy(keyUnseen = true) // the one field that needs no server
     w.offline = true
-    assertEquals(unchecked, p.recovery.status())
+    assertEquals(local, p.recovery.status())
     w.offline = false
+    p.secrets.failGet = SyncSecret.READ_TOKEN
+    assertEquals(local, p.recovery.status())
+    p.secrets.failGet = null
     w.readHash = "changed on another device"
-    assertEquals(unchecked, p.recovery.status())
+    assertEquals(local, p.recovery.status())
     assertEquals(waiting, p.recoverySettings.state) // an unanswered check deletes nothing
     assertEquals(SyncMode.ON, p.settings.state.mode)
     assertEquals("idle", p.session.status().state)
@@ -389,7 +487,7 @@ class EmailRecoveryTest {
 
   @Test fun newRecoveryKeyWithoutEscrowTurnsItOffOnTheServer() {
     val (p, _) = syncedPhone()
-    p.recovery.enrol(email, password)!!
+    p.enrolSeen()
     assertTrue(p.recovery.confirm(w.mails.single()))
     p.session.newRecoveryKey(password)!!
     p.session.sync()
@@ -399,7 +497,7 @@ class EmailRecoveryTest {
 
   @Test fun aPendingRequestShowsInStatus() {
     val (p, _) = syncedPhone()
-    p.recovery.enrol(email, password)!!
+    p.enrolSeen()
     assertTrue(p.recovery.confirm(w.mails.single()))
     w.lost = FakeLost(Crypto.tokenHash(ByteArray(20)), w.time)
     assertEquals(status(enrolled = true, pending = PendingRecovery(null)), p.recovery.status())

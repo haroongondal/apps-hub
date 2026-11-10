@@ -1,6 +1,13 @@
 package expo.modules.strongroomvault.core
 
-data class RecoveryLocal(val escrowBlob: String? = null, val confirmed: Boolean = false, val lostClaim: String? = null, val lostBlob: String? = null)
+// keyUnseen: an enrol rotated the recovery key and the owner hasn't confirmed seeing the new one (a crash mid-PUT loses it).
+data class RecoveryLocal(
+  val escrowBlob: String? = null,
+  val confirmed: Boolean = false,
+  val lostClaim: String? = null,
+  val lostBlob: String? = null,
+  val keyUnseen: Boolean = false,
+)
 
 interface RecoverySettings {
   fun load(): RecoveryLocal
@@ -17,6 +24,7 @@ data class EmailRecoveryStatus(
   val waitingForCode: Boolean,
   val pendingRecovery: PendingRecovery?,
   val wasTurnedOff: Boolean,
+  val keyUnseen: Boolean, // local, so set whatever checked says
 )
 
 private const val MAX_EMAIL = 320
@@ -39,7 +47,7 @@ class EmailRecovery(
     try {
       return sync.enrolEscrow(password) { rk ->
         val blob = SyncWire.toBase64(Escrow.seal(code, rk, ak))
-        settings.save(before.copy(escrowBlob = blob, confirmed = false))
+        settings.save(before.copy(escrowBlob = blob, confirmed = false, keyUnseen = true))
         EscrowBody(clean, blob, RecoveryKey.format(code))
       }
     } catch (e: Exception) {
@@ -74,26 +82,30 @@ class EmailRecovery(
     } finally {
       token.fill(0)
     }
-    settings.save(RecoveryLocal()) // the Worker drops any lost-access request with the escrow
+    settings.save(RecoveryLocal(keyUnseen = settings.load().keyUnseen)) // the Worker drops any lost-access request with the escrow
   }
 
+  @Synchronized fun keyShown() = settings.save(settings.load().copy(keyUnseen = false))
+
+  /** Holds this object's monitor across a network call, so call it off the main thread (Dispatchers.IO). */
   @Synchronized fun status(): EmailRecoveryStatus {
-    val unchecked = EmailRecoveryStatus(transport != null, false, false, false, null, false)
-    val t = transport?.takeIf { sync.isOn } ?: return unchecked
-    val token = secrets.get(SyncSecret.READ_TOKEN) ?: return unchecked
-    val remote = try {
-      t.lostStatus(token)
-    } catch (e: SyncOfflineError) {
-      return unchecked
-    } catch (e: SyncHttpError) {
-      return unchecked
-    } finally {
-      token.fill(0)
-    }
     var r = settings.load()
-    // The enrol PUT never landed, or a later rotation dropped its escrow: no code the owner holds opens this blob's server copy.
+    val unchecked = EmailRecoveryStatus(transport != null, false, false, false, null, false, r.keyUnseen)
+    val t = transport?.takeIf { sync.isOn } ?: return unchecked
+    val remote = try {
+      val token = secrets.get(SyncSecret.READ_TOKEN) ?: return unchecked
+      try {
+        t.lostStatus(token)
+      } finally {
+        token.fill(0)
+      }
+    } catch (e: Exception) {
+      return unchecked // offline, a server error, a refused token or a locked Keystore: never an error
+    }
+    // No server escrow, so no mailed code for this blob. Accepted edge cases: a reply that timed out while the Worker was still mailing then wrote reads as enrolled
+    // with no confirm; an older escrow still held while a re-enrol never landed reads as waiting for the code until the next sync sends the rotation and drops it.
     if (r.escrowBlob != null && !r.confirmed && !remote.escrow) r = r.copy(escrowBlob = null).also(settings::save)
     val waiting = r.escrowBlob != null && !r.confirmed
-    return EmailRecoveryStatus(true, true, remote.escrow && !waiting, waiting, if (remote.pending) PendingRecovery(remote.releaseAt) else null, r.confirmed && !remote.escrow)
+    return EmailRecoveryStatus(true, true, remote.escrow && !waiting, waiting, if (remote.pending) PendingRecovery(remote.releaseAt) else null, r.confirmed && !remote.escrow, r.keyUnseen)
   }
 }
