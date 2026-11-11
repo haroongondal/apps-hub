@@ -12,11 +12,44 @@ const save = (patch: Record<string, unknown>): Promise<void> =>
     await chrome.storage.local.set({ [YOUTUBE_KEY]: mergeYouTube(validateYouTube(stored), patch) });
   });
 
-export function onYouTubeMessage(message: unknown, _sender: chrome.runtime.MessageSender, respond: (reply: unknown) => void): boolean {
+// Tabs that have played a video, and so hold a content script that can pause it. Session storage, so a stopped worker still knows them.
+const PLAYERS_KEY = 'ytPlayers';
+const TOKEN = /^[\w-]{1,64}$/;
+const GONE = /Receiving end does not exist|No tab with id/;
+let players: Promise<void> = Promise.resolve();
+
+// One at a time: each run reads the set, so two overlapping runs would drop a tab.
+function pauseOthers(tab: number, token: string): Promise<void> {
+  const run = async (): Promise<void> => {
+    const { [PLAYERS_KEY]: stored } = await chrome.storage.session.get(PLAYERS_KEY);
+    const ids = [...new Set<number>([...(Array.isArray(stored) ? stored.filter(Number.isInteger) : []), tab])];
+    // The sender's own tab is told too, so its other frames hear it; the frame that played spares itself by its token.
+    const gone = await Promise.all(ids.map((id) => chrome.tabs.sendMessage(id, { type: 'yt-pause', except: token }).then(() => false, (e) => GONE.test(String(e?.message ?? e)))));
+    await chrome.storage.session.set({ [PLAYERS_KEY]: ids.filter((_, i) => !gone[i]) });
+  };
+  return (players = players.then(run, run));
+}
+
+export function onYouTubeMessage(message: unknown, sender: chrome.runtime.MessageSender, respond: (reply: unknown) => void): boolean {
   const m = isRecord(message) ? message : {};
   if (m.type === 'open-settings' && m.section === 'youtube') {
     chrome.tabs.create({ url: chrome.runtime.getURL('options.html#youtube') }).catch((e) => console.error('Sieve could not open its settings', e));
     return false;
+  }
+  if (m.type === 'yt-playing') {
+    const tab = sender.tab?.id;
+    if (!Number.isInteger(tab) || (tab as number) < 0 || typeof m.token !== 'string' || !TOKEN.test(m.token)) {
+      respond({ ok: false });
+      return false;
+    }
+    pauseOthers(tab as number, m.token).then(
+      () => respond({ ok: true }),
+      (e) => {
+        console.error('Sieve could not pause the other videos', e);
+        respond({ ok: false });
+      },
+    );
+    return true;
   }
   if (m.type === 'yt-screenshot') {
     if (!isPngDataUrl(m.dataUrl, MAX_SCREENSHOT)) {

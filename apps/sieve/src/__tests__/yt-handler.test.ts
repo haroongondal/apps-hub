@@ -8,8 +8,10 @@ import { onYouTubeMessage } from '../yt-handler.ts';
 type Reply = { ok: boolean; message?: string };
 
 // Slow reads and writes, so two saves that overlap without the lock would lose one.
-function setup(options: { setFails?: boolean; downloadFails?: boolean } = {}) {
+function setup(options: { setFails?: boolean; downloadFails?: boolean; deadTabs?: Record<number, string> } = {}) {
   const store = new Map<string, unknown>();
+  const session = new Map<string, unknown>();
+  const pauses: { tab: number; message: unknown }[] = [];
   const tabs: unknown[] = [];
   const downloads: unknown[] = [];
   (globalThis as unknown as Record<string, unknown>).chrome = {
@@ -26,8 +28,18 @@ function setup(options: { setFails?: boolean; downloadFails?: boolean } = {}) {
           for (const [k, v] of Object.entries(items)) store.set(k, structuredClone(v));
         },
       },
+      session: {
+        get: async (key: string) => (session.has(key) ? { [key]: structuredClone(session.get(key)) } : {}),
+        set: async (items: Record<string, unknown>) => void Object.entries(items).forEach(([k, v]) => session.set(k, structuredClone(v))),
+      },
     },
-    tabs: { create: async (props: unknown) => void tabs.push(props) },
+    tabs: {
+      create: async (props: unknown) => void tabs.push(props),
+      sendMessage: async (tab: number, message: unknown) => {
+        if (options.deadTabs?.[tab]) throw new Error(options.deadTabs[tab]);
+        pauses.push({ tab, message });
+      },
+    },
     downloads: {
       download: async (options_: unknown) => {
         if (options.downloadFails) throw new Error('Invalid filename');
@@ -37,13 +49,13 @@ function setup(options: { setFails?: boolean; downloadFails?: boolean } = {}) {
     },
   };
   // `false` means no later reply: one given at once still counts.
-  const send = async (message: unknown) => {
+  const send = async (message: unknown, sender: unknown = {}) => {
     let respond: (r: Reply) => void = () => {};
     const replied = new Promise<Reply>((r) => (respond = r));
-    const handled = onYouTubeMessage(message, {} as chrome.runtime.MessageSender, (r) => respond(r as Reply));
+    const handled = onYouTubeMessage(message, sender as chrome.runtime.MessageSender, (r) => respond(r as Reply));
     return { handled, reply: handled ? await replied : await Promise.race([replied, undefined]) };
   };
-  return { store, tabs, downloads, send, youtube: () => store.get('youtube') as YouTubeSettings | undefined };
+  return { store, session, pauses, tabs, downloads, send, youtube: () => store.get('youtube') as YouTubeSettings | undefined };
 }
 
 test('two concurrent yt-set messages both land', async () => {
@@ -121,4 +133,53 @@ test('yt-screenshot refuses anything that is not a PNG data URL, or is too big, 
 test('a failed download answers with the browser\'s message', async () => {
   const { send } = setup({ downloadFails: true });
   assert.deepEqual((await send({ type: 'yt-screenshot', dataUrl: PNG, title: 't', seconds: 1 })).reply, { ok: false, message: 'Invalid filename' });
+});
+
+const fromTab = (id: number) => ({ tab: { id } });
+const pause = (tab: number, except: string) => ({ tab, message: { type: 'yt-pause', except } });
+
+test('yt-playing from tab 3 with tabs 3 and 5 in the set tells both to pause, sparing the token', async () => {
+  const { send, session, pauses } = setup();
+  session.set('ytPlayers', [3, 5]);
+  const { reply } = await send({ type: 'yt-playing', token: 'frame-a' }, fromTab(3));
+  assert.deepEqual(reply, { ok: true });
+  assert.deepEqual(pauses, [pause(3, 'frame-a'), pause(5, 'frame-a')]);
+  assert.deepEqual(session.get('ytPlayers'), [3, 5]);
+});
+
+test('yt-playing adds the sender\'s tab to the set', async () => {
+  const { send, session, pauses } = setup();
+  await send({ type: 'yt-playing', token: 'a' }, fromTab(3));
+  await send({ type: 'yt-playing', token: 'b' }, fromTab(5));
+  assert.deepEqual(session.get('ytPlayers'), [3, 5]);
+  assert.deepEqual(pauses, [pause(3, 'a'), pause(3, 'b'), pause(5, 'b')]);
+});
+
+test('a tab nobody answers for is dropped from the set; one that fails some other way stays', async () => {
+  const { send, session } = setup({ deadTabs: { 5: 'Could not establish connection. Receiving end does not exist.', 6: 'No tab with id: 6.', 7: 'The message port closed before a response was received.' } });
+  session.set('ytPlayers', [3, 5, 6, 7]);
+  await send({ type: 'yt-playing', token: 'a' }, fromTab(3));
+  assert.deepEqual(session.get('ytPlayers'), [3, 7]);
+});
+
+test('overlapping yt-playing messages keep every tab', async () => {
+  const { send, session } = setup();
+  await Promise.all([send({ type: 'yt-playing', token: 'a' }, fromTab(3)), send({ type: 'yt-playing', token: 'b' }, fromTab(5)), send({ type: 'yt-playing', token: 'c' }, fromTab(8))]);
+  assert.deepEqual((session.get('ytPlayers') as number[]).sort(), [3, 5, 8]);
+});
+
+test('yt-playing without a tab, or with a token that is not a short plain string, changes nothing', async () => {
+  const { send, session, pauses } = setup();
+  for (const [message, sender] of [
+    [{ type: 'yt-playing', token: 'a' }, {}],
+    [{ type: 'yt-playing', token: 'a' }, { tab: {} }],
+    [{ type: 'yt-playing', token: 'a' }, { tab: { id: -1 } }],
+    [{ type: 'yt-playing', token: 'a' }, { tab: { id: 1.5 } }],
+    [{ type: 'yt-playing', token: 5 }, fromTab(3)],
+    [{ type: 'yt-playing' }, fromTab(3)],
+    [{ type: 'yt-playing', token: 'x'.repeat(65) }, fromTab(3)],
+    [{ type: 'yt-playing', token: '<b>' }, fromTab(3)],
+  ] as const) assert.deepEqual((await send(message, sender)).reply, { ok: false }, JSON.stringify([message, sender]));
+  assert.equal(session.has('ytPlayers'), false);
+  assert.deepEqual(pauses, []);
 });
