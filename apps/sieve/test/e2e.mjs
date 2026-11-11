@@ -409,7 +409,7 @@ try {
   let m = await menu(countedId);
   check(`the menu says "${SENTENCE}"`, (await m.countsText()) === SENTENCE, await m.countsText());
   const switchCount = await m.pop.getByRole('switch').count();
-  check('the menu has the header switch, the site switch and four feature switches, and no tab bar (one tab)', switchCount === 6 && (await m.pop.locator('[role=tablist]').count()) === 0, String(switchCount));
+  check('the menu has the header switch, the site switch and four feature switches, and a tab bar with Blocking and YouTube', switchCount === 6 && (await m.pop.getByRole('tab').allInnerTexts()).join() === 'Blocking,YouTube', String(switchCount));
   await m.pop.screenshot({ path: join(SHOTS, 'menu.png'), fullPage: true });
   await m.pop.emulateMedia({ colorScheme: 'dark' });
   await sleep(400); // the buttons and switches fade between themes
@@ -1501,6 +1501,7 @@ try {
   }, RICK.id);
   const ytTab = await tabFor(pw, WATCH);
   let ytMenu = await menu(ytTab);
+  await ytMenu.pop.getByRole('tab', { name: 'Blocking', exact: true }).click();
   let allowSwitch = ytMenu.pop.getByRole('switch', { name: `Allow ads on ${RICK.name}` });
   const cardText = await ytMenu.pop.locator('.card').innerText();
   check(
@@ -1520,6 +1521,7 @@ try {
   const ytStop = await stopWorker(ctx);
   yr = await watchYt();
   ytMenu = await menu(ytTab);
+  await ytMenu.pop.getByRole('tab', { name: 'Blocking', exact: true }).click();
   allowSwitch = ytMenu.pop.getByRole('switch', { name: `Allow ads on ${RICK.name}` });
   check(
     'with the worker stopped, the allowed channel is kept: after a reload its ads stay in all three, and the menu shows its switch on',
