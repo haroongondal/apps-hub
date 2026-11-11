@@ -171,9 +171,10 @@ export async function run(t) {
     }, 8000).catch(list);
     const diag = { closed: pop.isClosed(), note: pop.isClosed() ? null : await pop.locator('.dl-note').innerText().catch(() => null), all: await t.sw.evaluate(async () => (await chrome.tabs.query({})).map((x) => x.url)) };
     check('downloads: popup: Open download list opens downloads.html once and a second press focuses the same tab', one.length === 1 && two.length === 1 && two[0][0] === one[0][0] && two[0][1], json({ one, two, diag }));
-    // The right-click menu navigates the open list tab to downloads.html?r=<n>#add; the button must still find it.
-    await t.sw.evaluate(([tabId, u]) => chrome.tabs.update(tabId, { url: `${u}?r=1#add` }), [one[0][0], `chrome-extension://${t.id}/downloads.html`]);
-    await until(async () => (await t.sw.evaluate(async (tabId) => (await chrome.tabs.get(tabId)).url, one[0][0]))?.includes('?r=1'), 5000).catch(() => {});
+    // The right-click menu navigates the open list tab to downloads.html?r=<n>#add. The page drops `#add` and the query once it has read them,
+    // so this uses `?r=1` alone, which stays in the tab's URL: the button must still find a list tab whose URL has a query.
+    await t.sw.evaluate(([tabId, u]) => chrome.tabs.update(tabId, { url: `${u}?r=1` }), [one[0][0], `chrome-extension://${t.id}/downloads.html`]);
+    await until(() => t.sw.evaluate(async (base) => (await chrome.runtime.getContexts({ contextTypes: ['TAB'] })).some((c) => c.documentUrl?.startsWith(base) && c.documentUrl.includes('?r=1')), `chrome-extension://${t.id}/downloads.html`), 5000);
     await host.bringToFront();
     const pop3 = await menu();
     await panel(pop3).getByRole('button', { name: T.menuSeeAll, exact: true }).click();
