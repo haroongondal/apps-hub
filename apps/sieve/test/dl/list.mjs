@@ -1,7 +1,7 @@
 import { ERRORS, newRecord } from '@apps-hub/sieve-core/src/dl-record.ts';
 import { CATEGORY_IDS } from '@apps-hub/sieve-core/src/dl-settings.ts';
 import { T } from '@apps-hub/sieve-core/src/dl-text.ts';
-import { extPage, localGet, opfsNames, readRecords, resetDl, sessionGet, setDownloads, until } from './_helpers.mjs';
+import { extPage, localGet, opfsNames, readRecords, resetDl, sendMsg, sessionGet, setDownloads, until } from './_helpers.mjs';
 
 const json = (v) => String(JSON.stringify(v)).slice(0, 400);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -54,6 +54,7 @@ export async function run(t) {
       db.close();
     }, records);
     await page.reload();
+    await until(async () => (await rowsOf(page)).length === records.length);
     return records;
   };
   const errorsBefore = t.errors.length;
@@ -242,6 +243,41 @@ export async function run(t) {
     const page2 = await open('#add');
     await page2.waitForSelector('dialog[open]');
     check('downloads: list: #add without a prefill opens an empty dialog', (await page2.inputValue('#dl-add-text')) === '');
+  });
+
+  await attempt('review fixes', async () => {
+    await fresh();
+    let page = await open();
+    await seed(page, [['sv.bin', { state: 'saving', saveOnly: true }]]);
+    await page.locator('tbody tr').first().click();
+    check('downloads: list: Delete is disabled while a selected row is saving', await bar(page, 'delete').isDisabled());
+
+    await fresh();
+    page = await open();
+    await seed(page, [['f1.bin']]);
+    await page.locator('tbody tr').first().locator('input').focus();
+    await page.evaluate(() => (window.__box = document.activeElement));
+    await sendMsg(t, { type: 'dl-add', items: [{ url: slow('f2.bin'), source: 'manual' }] });
+    await until(async () => (await rowsOf(page)).length === 2);
+    const kept1 = await page.evaluate(() => document.activeElement === window.__box);
+    await new Promise((r) => setTimeout(r, 2600));
+    const kept2 = await page.evaluate(() => document.activeElement === window.__box);
+    check('downloads: list: a re-order keeps the focused checkbox focused', kept1 && kept2, json({ kept1, kept2 }));
+
+    await fresh();
+    await t.sw.evaluate((v) => chrome.storage.session.set({ dlPrefill: v }), { urls: [slow('file-ref.bin')], referrer: 'file:///page.html' });
+    page = await open('#add');
+    await page.waitForSelector('dialog[open]');
+    check('downloads: list: #add is removed from the address after it is read', !page.url().includes('#add'), page.url());
+    await page.click(`dialog button:text-is("${T.addSubmit}")`);
+    await until(async () => (await readRecords(t)).length === 1);
+    check('downloads: list: a non-http referrer is dropped and the add still works', (await readRecords(t))[0].referrer === '');
+
+    await bar(page, 'add').click();
+    await page.fill('#dl-add-text', Array.from({ length: 501 }, (_, i) => `http://localhost:9/a${i}.bin`).join('\n'));
+    await page.click(`dialog button:text-is("${T.addSubmit}")`);
+    check('downloads: list: more than 500 addresses keeps the dialog open with T.addTooMany', (await page.locator('dialog[open] [role=alert]').textContent()) === T.addTooMany && (await readRecords(t)).length === 1);
+    await page.keyboard.press('Escape');
   });
 
   await attempt('screens', async () => {

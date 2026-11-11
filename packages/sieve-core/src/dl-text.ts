@@ -43,6 +43,7 @@ export const T = {
   addAutomatic: 'Automatic',
   addSubmit: 'Add',
   addNone: 'Enter at least one web address that starts with http:// or https://.',
+  addTooMany: 'You can add up to 500 web addresses at a time. Remove some lines, then try again.',
   addSkipped: (n: number) => `${plural(n, "line isn't a web address", "lines aren't web addresses")} and ${n === 1 ? 'was' : 'were'} skipped.`,
   addFailed: "Sieve couldn't add these downloads. Reload Sieve from chrome://extensions, then try again.",
   actionFailed: "Sieve couldn't do that. Reload Sieve from chrome://extensions, then try again.",

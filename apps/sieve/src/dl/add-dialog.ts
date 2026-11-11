@@ -24,16 +24,16 @@ export async function openAddDialog(opts: { urls?: string[]; referrer?: string }
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const { urls, skipped } = parseAddInput(text.value);
+    const { urls, skipped, truncated } = parseAddInput(text.value, 500);
     message.textContent = '';
-    if (urls.length === 0) {
-      message.textContent = T.addNone;
+    if (urls.length === 0 || truncated) {
+      message.textContent = urls.length === 0 ? T.addNone : T.addTooMany;
       return;
     }
     submit.disabled = true;
     const items: AddItem[] = urls.map((url) => ({
       url,
-      referrer: opts.referrer ?? '',
+      referrer: /^https?:/.test(opts.referrer ?? '') ? opts.referrer! : '',
       queue: queue.value,
       ...(category.value ? { category: category.value as AddItem['category'] } : {}),
       source: opts.urls ? 'menu' : 'manual',
@@ -44,9 +44,9 @@ export async function openAddDialog(opts: { urls?: string[]; referrer?: string }
       message.textContent = reply?.message ?? T.addFailed;
       return;
     }
+    dialog.close();
     const status = document.getElementById(STATUS_ID);
     if (status) status.textContent = skipped > 0 ? T.addSkipped(skipped) : '';
-    dialog.close();
   });
 
   return new Promise((done) => {

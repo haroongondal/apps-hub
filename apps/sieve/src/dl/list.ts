@@ -29,9 +29,12 @@ const status = h('p', { id: STATUS_ID, class: 'dl-note', role: 'status' });
 const say = (text: string) => (status.textContent = text);
 
 async function command(op: 'pause' | 'resume' | 'remove', ids: string[]) {
-  if (ids.length === 0) return;
-  const reply = await send({ type: 'dl-do', op, ids });
-  say(reply?.ok ? '' : (reply?.message ?? T.actionFailed));
+  let failed: string | undefined;
+  for (let i = 0; i < ids.length; i += 500) {
+    const reply = await send({ type: 'dl-do', op, ids: ids.slice(i, i + 500) });
+    if (!reply?.ok) failed ??= reply?.message ?? T.actionFailed;
+  }
+  if (ids.length > 0) say(failed ?? '');
 }
 
 const total$ = h('span', { class: 'ui-meta ui-mono dl-total', hidden: true });
@@ -190,7 +193,11 @@ function refresh(user = false) {
     updateRow(row, records.get(id)!, at);
   }
   const shown = [...tbody.children].map((tr) => (tr as HTMLElement).dataset.id);
-  if (shown.length !== order.length || shown.some((id, i) => id !== order[i])) tbody.replaceChildren(...order.map((id) => rows.get(id)!.tr));
+  if (shown.length !== order.length || shown.some((id, i) => id !== order[i])) {
+    const focused = document.activeElement;
+    tbody.replaceChildren(...order.map((id) => rows.get(id)!.tr));
+    if (focused instanceof HTMLElement && focused !== document.activeElement && tbody.contains(focused)) focused.focus({ preventScroll: true });
+  }
 
   for (const [key, th] of headers) {
     if (key === sort.key) th.setAttribute('aria-sort', sort.dir === 'asc' ? 'ascending' : 'descending');
@@ -203,7 +210,7 @@ function refresh(user = false) {
   const any = (states: DlState[]) => picked.some((r) => states.includes(r.state));
   tools.resume.disabled = !any(['paused', 'failed', 'queued']);
   tools.pause.disabled = !any(['queued', 'running']);
-  tools.delete.disabled = picked.length === 0;
+  tools.delete.disabled = picked.length === 0 || any(['saving']);
 }
 
 const pickRecords = () => [...selected].map((id) => records.get(id)).filter((r): r is DlRecord => !!r);
@@ -232,7 +239,7 @@ tbody.addEventListener('click', (e) => {
 
 function confirmDelete() {
   const picked = pickRecords();
-  if (picked.length === 0) return;
+  if (picked.length === 0 || picked.some((r) => r.state === 'saving')) return;
   const unfinished = picked.some((r) => r.state !== 'done');
   const ids = picked.map((r) => r.id);
   const text = unfinished ? T.confirmDeleteUnfinished(ids.length) : T.confirmDeleteFinished(ids.length);
@@ -262,5 +269,6 @@ refresh(true);
 if (location.hash === '#add') {
   const stored = (await chrome.storage.session.get('dlPrefill')).dlPrefill as { urls?: string[]; referrer?: string } | undefined;
   await chrome.storage.session.remove('dlPrefill');
+  history.replaceState(null, '', location.pathname);
   void openAddDialog(stored?.urls?.length ? { urls: stored.urls, referrer: stored.referrer ?? '' } : {}).then(() => refresh(true));
 }

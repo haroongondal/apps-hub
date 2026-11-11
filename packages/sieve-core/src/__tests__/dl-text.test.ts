@@ -36,6 +36,7 @@ const PLAIN: Record<string, string> = {
   addAutomatic: 'Automatic',
   addSubmit: 'Add',
   addNone: 'Enter at least one web address that starts with http:// or https://.',
+  addTooMany: 'You can add up to 500 web addresses at a time. Remove some lines, then try again.',
   addFailed: "Sieve couldn't add these downloads. Reload Sieve from chrome://extensions, then try again.",
   actionFailed: "Sieve couldn't do that. Reload Sieve from chrome://extensions, then try again.",
   retryGone: 'This download is no longer in the list.',
