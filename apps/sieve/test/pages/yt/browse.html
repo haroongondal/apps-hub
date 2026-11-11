@@ -58,6 +58,11 @@
       // ?sub=channels makes it a channel page (ytd-browse[page-subtype="channels"]).
       const sub = new URLSearchParams(location.search).get('sub');
       if (sub) document.querySelector('#browse').setAttribute('page-subtype', sub);
+      // An in-app navigation to a Short, as YouTube does it: the address changes with pushState, then yt-navigate-finish (src/yt/selectors.ts NAV) is dispatched on ytd-app.
+      window.__navigateShort = () => {
+        history.pushState(null, '', '/shorts/sieveTest01?fixture=browse');
+        document.querySelector('ytd-app').dispatchEvent(new CustomEvent('yt-navigate-finish', { bubbles: true, composed: true, detail: { pageType: 'shorts', fromHistory: false } }));
+      };
     </script>
   </body>
 </html>

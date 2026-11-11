@@ -92,13 +92,14 @@ function toWatch(): void {
   if (to) location.replace(to);
 }
 
+// Each step is its own feature(): one that throws is logged once and the others still run.
 function run(): void {
   stops.forEach((s) => s());
   stops = [];
   const p = currentPage();
-  toWatch();
-  pickNewest(p);
-  expandDescription(p);
+  feature('Shorts conversion', toWatch);
+  feature('newest comments', () => pickNewest(p));
+  feature('description expander', () => expandDescription(p));
 }
 
 async function toggle(key: 'hideComments' | 'hideRelated' | 'hideCards'): Promise<void> {
@@ -131,7 +132,7 @@ feature('page tidying', () => {
     y = next;
     on = isOn;
     for (const [flag, key] of FLAGS) setFlag(flag, on && y.tidy[key]);
-    setStyle('per-row', on ? perRow() : '');
+    feature('videos per row', () => setStyle('per-row', on ? perRow() : ''));
     run();
     notifyActions();
   });

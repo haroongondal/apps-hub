@@ -11,6 +11,10 @@ const prop = (page, sel, name) => page.evaluate(([s, n]) => getComputedStyle(doc
 const width = (page, sel) => page.evaluate((s) => Math.round(document.querySelector(s).getBoundingClientRect().width), sel);
 const picks = (page) => page.evaluate(() => window.__picks);
 const expands = (page) => page.evaluate(() => window.__expands);
+// Each pick is { i, gen, current }: gen is the header the click hit, current the newest header at that moment. gen !== current is a click on an old header.
+const pickLog = (page) => page.evaluate(() => window.__pickLog);
+const noStale = (log) => log.every((l) => l.i === 1 && l.gen === l.current);
+const headers = (page) => page.evaluate(() => [...document.querySelectorAll('#sort-menu a')].map((a) => `${a.dataset.gen}:${a.getAttribute('aria-selected')}`));
 const full = (t, query = '') => openYt(t, `/watch?v=sieveTest01${query}`, 'watch-full');
 const browse = (t, query = '') => openYt(t, `/?x=1${query}`, 'browse');
 
@@ -93,6 +97,23 @@ export async function local(t) {
     await sleep(800);
     check('tidy: and loading /shorts/sieveTest01 stays there', /\/shorts\/sieveTest01/.test(page.url()), page.url());
     await page.close();
+    await setYouTube(t, { tidy: { convertShorts: true } });
+    page = await browse(t);
+    await sleep(300);
+    await page.evaluate(() => window.__navigateShort());
+    await page.waitForURL(/\/watch\?v=sieveTest01$/, { timeout: 5000 }).catch(() => {});
+    check('tidy: an in-app navigation to /shorts/sieveTest01 ends at /watch?v=sieveTest01', /\/watch\?v=sieveTest01$/.test(page.url()), page.url());
+    await page.goBack();
+    await sleep(500);
+    check('tidy: and Back returns to the page before (not to the Short)', page.url().includes('x=1') && !/\/shorts\/|\/watch/.test(page.url()), page.url());
+    await page.close();
+    await setYouTube(t, { on: false, tidy: { convertShorts: true } });
+    page = await browse(t);
+    await sleep(500);
+    await page.click('#short-link');
+    await sleep(800);
+    check('tidy: with YouTube tools off a click on a Short\'s link is left alone (stays on /shorts/sieveTest01)', /\/shorts\/sieveTest01/.test(page.url()), page.url());
+    await page.close();
     await reset(t);
 
     // Newest comments and the description, early and late.
@@ -105,7 +126,9 @@ export async function local(t) {
       await sleep(1200);
       check(`tidy: (${label}) and not again later`, json(await picks(page)) === '[1]' && (await expands(page)) === 1, `${json(await picks(page))} ${await expands(page)}`);
       await navigate(page, 'sieveTest02');
-      check(`tidy: (${label}) after a navigation the next video gets one pick and one expand`, (await until(async () => json(await picks(page)) === '[1,1]' && (await expands(page)) === 2)) && (await (sleep(800), picks(page))).length === 2, `${json(await picks(page))} ${await expands(page)}`);
+      check(`tidy: (${label}) after a navigation the next video gets one pick (on its own header) and one expand`, (await until(async () => (await pickLog(page)).length === 2 && (await expands(page)) === 2)) && json((await pickLog(page)).map((l) => l.gen)) === '[1,2]' && noStale(await pickLog(page)), `${json(await pickLog(page))} ${await expands(page)}`);
+      await sleep(900);
+      check(`tidy: (${label}) and still only one each afterwards`, (await pickLog(page)).length === 2 && (await expands(page)) === 2, `${json(await pickLog(page))} ${await expands(page)}`);
       await page.close();
       await reset(t);
     }
@@ -116,15 +139,26 @@ export async function local(t) {
     await page.close();
     await reset(t);
 
-    // A stale header: the last video's header already says Newest, the new video's says Top later. Nothing is picked until the Top one shows.
+    // A stale header. The last video's header says Newest (picked); the new video's header comes 700 ms after the navigation started, after NAV.finish. Nothing may be clicked
+    // on the old header in between (generation 1), and the new header (generation 2) is picked once it exists.
     await setYouTube(t, { tidy: { newestComments: true } });
-    page = await full(t);
-    await until(async () => json(await picks(page)) === '[1]');
-    await page.evaluate(() => { document.querySelectorAll('#sort-menu a').forEach((a, i) => a.setAttribute('aria-selected', String(i === 1))); });
-    await page.evaluate(() => { window.__picks.length = 0; });
-    await page.evaluate(() => window.__navigate('sieveTest03'));
-    await sleep(100);
-    check('tidy: the next video\'s header (Top selected) is picked once it replaces the old one', await until(async () => json(await picks(page)) === '[1]'), json(await picks(page)));
+    page = await full(t, '&late=1');
+    await until(async () => (await pickLog(page)).length === 1);
+    await navigate(page, 'sieveTest02');
+    await sleep(350);
+    check('tidy: while the new header is still to come, nothing is clicked on the old one (still Newest, generation 1, one pick)', json(await pickLog(page)) === '[{"i":1,"gen":1,"current":1}]' && json(await headers(page)) === '["1:false","1:true"]', `${json(await pickLog(page))} ${json(await headers(page))}`);
+    check('tidy: once the new header (generation 2) exists its Newest item is picked, once, and no click ever hit an old header', (await until(async () => (await pickLog(page)).length === 2)) && json(await headers(page)) === '["2:false","2:true"]' && noStale(await pickLog(page)), `${json(await pickLog(page))} ${json(await headers(page))}`);
+    await page.close();
+    await reset(t);
+
+    // ytd-comments is not in the page when the settings arrive (a hard load's NAV.finish): #below is watched until it and its menu show up.
+    await setYouTube(t, { tidy: { newestComments: true } });
+    page = await full(t, '&nocomments=1');
+    await sleep(300);
+    const absent = (await page.locator('ytd-comments#comments').count()) === 0;
+    check('tidy: with ytd-comments added 800 ms after load, the newest-first item is picked once on its header', absent && (await until(async () => (await pickLog(page)).length === 1)) && noStale(await pickLog(page)), `absent at 300 ms: ${absent}, ${json(await pickLog(page))}`);
+    await sleep(1200);
+    check('tidy: and not again', (await pickLog(page)).length === 1, json(await pickLog(page)));
     await page.close();
     await reset(t);
 
@@ -161,7 +195,7 @@ export async function live(t) {
     let gate = await go(`https://www.youtube.com/watch?v=${t.videoId}`, TIDY_SEL.expander);
     if (gate) return console.log(`SKIP  tidy live: ${gate}`);
     await until(() => page.locator(TIDY_SEL.endScreen).count(), 15_000);
-    for (const [name, sel, min] of [['comments', TIDY_SEL.comments], ['description', TIDY_SEL.below], ['expander', TIDY_SEL.expander], ['expand button', `${TIDY_SEL.expander} ${TIDY_SEL.expand}`], ['related column', TIDY_SEL.related], ['info cards button', TIDY_SEL.cardsButton], ['end screen elements', TIDY_SEL.endScreen]]) await found(name, sel, min);
+    for (const [name, sel, min] of [['comments', TIDY_SEL.comments], ['description', TIDY_SEL.below], ['expander', TIDY_SEL.expander], ['expand button', `${TIDY_SEL.expander} ${TIDY_SEL.expand}`], ['related column', TIDY_SEL.related], ['info cards button', TIDY_SEL.cardsButton], ['info cards teaser', TIDY_SEL.cardsTeaser], ['end screen elements', TIDY_SEL.endScreen], ['end screen overlay', TIDY_SEL.endScreenOverlay], ['end screen grid', TIDY_SEL.endGrid]]) await found(name, sel, min);
     await page.evaluate((s) => document.querySelector(s)?.scrollIntoView(), TIDY_SEL.comments);
     await until(() => page.locator(`${TIDY_SEL.comments} ${TIDY_SEL.sortItems}`).count().then((n) => n >= 2), 15_000);
     await found('comments sort items, two', `${TIDY_SEL.comments} ${TIDY_SEL.sortItems}`, 2);
@@ -216,16 +250,19 @@ export async function live(t) {
     check('live tidy: "Shorts per row" 2 makes the Shorts on a channel\'s Shorts tab wider', sAfter > sBefore + 50, json({ sBefore, sAfter }));
     await reset(t);
 
-    // A public live stream with chat, found with the search filter for live. Not every address gets one: no stream is a note, not a failure.
+    // A public live stream with chat, found with the search filter for live. Not every address gets one: no stream is a SKIP with the reason, never a silent pass.
     gate = await go('https://www.youtube.com/results?search_query=live+news&sp=EgJAAQ%253D%253D', 'ytd-video-renderer');
     const href = gate ? null : await page.evaluate(() => [...document.querySelectorAll('ytd-video-renderer')].find((e) => /\blive\b/i.test(e.textContent))?.querySelector('a[href^="/watch"]')?.getAttribute('href') ?? null);
-    if (!href) console.log(`tidy live chat: no live stream found (${gate ?? 'search had none'}), chat selector unchecked`);
+    if (!href) console.log(`SKIP  tidy live chat: no live stream found (${gate ?? 'the search had none'}), so the chat selector and "Hide live chat" are unchecked`);
     else {
       await go(`https://www.youtube.com${href}`, TIDY_SEL.chat);
       await until(() => page.locator(TIDY_SEL.chat).count(), 15_000);
-      await found('the live chat frame', TIDY_SEL.chat);
-      await setYouTube(t, { tidy: { hideChat: true } });
-      check('live tidy: "Hide live chat" hides the real chat', await until(async () => (await page.locator(TIDY_SEL.chat).count()) === 0 || (await page.evaluate((s) => getComputedStyle(document.querySelector(s)).display, TIDY_SEL.chat)) === 'none'));
+      if ((await page.locator(TIDY_SEL.chat).count()) === 0) console.log(`SKIP  tidy live chat: ${href} has no chat frame, so the chat selector and "Hide live chat" are unchecked`);
+      else {
+        await found('the live chat frame', TIDY_SEL.chat);
+        await setYouTube(t, { tidy: { hideChat: true } });
+        check('live tidy: "Hide live chat" makes the present chat frame display none', await until(() => page.evaluate((s) => { const e = document.querySelector(s); return !!e && getComputedStyle(e).display === 'none'; }, TIDY_SEL.chat)));
+      }
     }
   } finally {
     await reset(t).catch(() => {});

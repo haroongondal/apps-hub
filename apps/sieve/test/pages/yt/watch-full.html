@@ -126,22 +126,41 @@
     </ytd-app>
     <script src="/yt/player.js"></script>
     <script>
-      // Shapes from the inspection recorded in src/yt/tidy-selectors.ts. ?late=1 builds the sort menu and the description 800 ms after load.
+      // Shapes from the inspection recorded in src/yt/tidy-selectors.ts.
+      // ?late=1 builds the sort menu and the description 800 ms after load, and a new video's 700 ms after its navigation starts (after NAV.finish), so the old header is still there when Sieve looks.
+      // ?nocomments=1 leaves ytd-comments out of the page until 800 ms after load (the sort menu comes with it), as a hard load's NAV.finish sees it.
+      // Every header is stamped with a generation. __pickLog records the generation of the header each click hit and the generation current at the time: a click on an old header is a mistake.
       window.__picks = [];
+      window.__pickLog = [];
+      window.__gen = 0;
       window.__expands = 0;
-      const late = new URLSearchParams(location.search).has('late');
+      const params = new URLSearchParams(location.search);
+      const late = params.has('late');
+      const noComments = params.has('nocomments');
+      const comments = document.querySelector('ytd-comments#comments');
+      const holder = comments.parentElement;
+      if (noComments) comments.remove();
       const sortHtml = '<ytd-comments-header-renderer><div id="title"><div id="additional-section"><span id="sort-menu"><yt-sort-filter-sub-menu-renderer><yt-dropdown-menu><tp-yt-paper-menu-button><tp-yt-paper-listbox id="menu">'
         + '<a class="yt-simple-endpoint" aria-selected="true" tabindex="0">Top</a><a class="yt-simple-endpoint" aria-selected="false" tabindex="-1">Newest</a>'
         + '</tp-yt-paper-listbox></tp-yt-paper-menu-button></yt-dropdown-menu></yt-sort-filter-sub-menu-renderer></span></div></div></ytd-comments-header-renderer>';
       const expanderHtml = '<ytd-text-inline-expander id="description-inline-expander" show-expand-button="" always-show-expand-button=""><div id="snippet">Description</div><tp-yt-paper-button id="expand" role="button">more</tp-yt-paper-button><tp-yt-paper-button id="collapse" role="button">Show less</tp-yt-paper-button></ytd-text-inline-expander>';
-      const build = () => {
-        document.querySelector('#comments-slot').innerHTML = sortHtml;
-        document.querySelector('#description-inner').innerHTML = expanderHtml;
+      const buildComments = () => {
+        const slot = document.querySelector('#comments-slot');
+        if (!slot) return;
+        const gen = ++window.__gen;
+        slot.innerHTML = sortHtml;
         // A pick moves the selection, as the real menu did (the first anchor false, the second true).
-        document.querySelectorAll('#sort-menu a').forEach((a, i, all) => a.addEventListener('click', () => {
-          window.__picks.push(i);
-          all.forEach((b, j) => b.setAttribute('aria-selected', String(i === j)));
-        }));
+        slot.querySelectorAll('#sort-menu a').forEach((a, i, all) => {
+          a.dataset.gen = String(gen);
+          a.addEventListener('click', () => {
+            window.__picks.push(i);
+            window.__pickLog.push({ i, gen, current: window.__gen });
+            all.forEach((b, j) => b.setAttribute('aria-selected', String(i === j)));
+          });
+        });
+      };
+      const buildDescription = () => {
+        document.querySelector('#description-inner').innerHTML = expanderHtml;
         document.querySelector('#expand').addEventListener('click', () => {
           window.__expands++;
           const e = document.querySelector('#description-inline-expander');
@@ -149,10 +168,21 @@
           e.removeAttribute('show-expand-button');
         });
       };
-      // YouTube replaces the comments header and collapses the description for each video: the fixture does the same when a navigation starts.
-      document.addEventListener('yt-navigate-start', () => setTimeout(build, late ? 300 : 0));
-      if (late) setTimeout(build, 800);
-      else build();
+      // YouTube replaces the comments header and collapses the description for each video: the fixture does the same after a navigation starts.
+      const rebuild = () => {
+        if (!document.querySelector('ytd-comments#comments')) return;
+        buildComments();
+        buildDescription();
+      };
+      document.addEventListener('yt-navigate-start', () => setTimeout(rebuild, late ? 700 : 0));
+      if (late) setTimeout(rebuild, 800);
+      else if (noComments) {
+        buildDescription();
+        setTimeout(() => {
+          holder.append(comments);
+          buildComments();
+        }, 800);
+      } else rebuild();
     </script>
   </body>
 </html>
