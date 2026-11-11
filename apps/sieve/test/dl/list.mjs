@@ -288,9 +288,16 @@ export async function run(t) {
     await bar(page, 'delete').click();
     await sendMsg(t, { type: 'dl-state', records: [{ ...rec, state: 'saving', saveOnly: true }], removed: [], speeds: {}, total: 0 });
     await until(async () => (await rowsOf(page))[0]?.status === T.st.saving);
+    await page.evaluate(() => {
+      window.__sent = [];
+      const original = chrome.runtime.sendMessage.bind(chrome.runtime);
+      chrome.runtime.sendMessage = (m, ...rest) => (window.__sent.push(m?.type === 'dl-do' ? `${m.type}:${m.op}` : m?.type), original(m, ...rest));
+      chrome.runtime.sendMessage({ type: 'dl-wrapper-check' }).catch(() => {});
+    });
     await page.click(`dialog button:text-is("${T.confirmDelete}")`);
-    await new Promise((r) => setTimeout(r, 800));
-    check('downloads: list: Delete skips a row that started saving while the dialog was open', (await rowsOf(page)).length === 1 && (await readRecords(t)).length === 1 && (await page.locator('#dl-status').textContent()) === '');
+    await page.waitForSelector('dialog', { state: 'detached' });
+    const sent = await page.evaluate(() => window.__sent);
+    check('downloads: list: Delete sends no remove for a row that started saving while the dialog was open', same(sent, ['dl-wrapper-check']) && (await rowsOf(page)).length === 1, json(sent));
 
     await fresh();
     page = await open();
