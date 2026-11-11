@@ -31,16 +31,18 @@ function keep(data: unknown): void {
 const apply = Reflect.apply;
 
 function wrap(cfg: unknown): void {
-  if (!isObject(cfg) || typeof cfg.set !== 'function') return;
-  const set = cfg.set as (...a: unknown[]) => unknown;
-  cfg.set = {
-    set(_a: unknown, _b?: unknown) {
-      try {
-        keep(typeof arguments[0] === 'string' ? { [arguments[0]]: arguments[1] } : arguments[0]);
-      } catch {}
-      return apply(set, this, arguments);
-    },
-  }.set;
+  try {
+    if (!isObject(cfg) || typeof cfg.set !== 'function') return;
+    const set = cfg.set as (...a: unknown[]) => unknown;
+    cfg.set = {
+      set(_a: unknown, _b?: unknown) {
+        try {
+          keep(typeof arguments[0] === 'string' ? { [arguments[0]]: arguments[1] } : arguments[0]);
+        } catch {}
+        return apply(set, this, arguments);
+      },
+    }.set;
+  } catch {}
 }
 
 feature('experiments', () => {

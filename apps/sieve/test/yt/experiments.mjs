@@ -56,6 +56,15 @@ export async function local(t) {
     await sleep(500);
     check('experiments: the watch fixture without a config page has no ytcfg and no page error', (await page.evaluate(() => typeof window.ytcfg)) === 'undefined');
     await page.close();
+
+    for (const odd of ['frozen', 'getter', 'throws']) {
+      const errors = t.errors.length;
+      page = await openYt(t, `/watch?v=sieveTest01&odd=${odd}`, 'experiments');
+      await sleep(900);
+      const result = await page.evaluate(() => ({ done: window.__oddDone === true, read: window.__reads.length === 1 && window.__reads[0].flag === false }));
+      check(`experiments: a page that assigns a ytcfg that is ${odd} still finishes its script, raises no page error, and its later config is patched`, result.done && result.read && t.errors.length === errors, json({ result, errors: t.errors.slice(errors) }));
+      await page.close();
+    }
   } finally {
     await page?.close().catch(() => {});
     await t.sw.evaluate(() => chrome.storage.local.remove('youtube'));
