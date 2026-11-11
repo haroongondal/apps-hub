@@ -1,4 +1,5 @@
 import './yt/codecs-main.ts';
+import './yt/experiments-main.ts';
 import { AD_KEYS, stripAds } from '@apps-hub/sieve-core/src/youtube-ads.ts';
 import './yt/bridge-main.ts';
 import './yt/playlist-main.ts';

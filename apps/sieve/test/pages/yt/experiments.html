@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <title>experiments - YouTube</title>
+    <script>
+      // The config mechanism inspected on the real page (recorded in src/yt/experiments-main.ts): ytcfg is a plain object set early, ytcfg.set gets
+      // EXPERIMENT_FLAGS and WEB_PLAYER_CONTEXT_CONFIGS in one call, a second ytcfg object follows, and the "player" reads the serialized string later.
+      window.__reads = [];
+      const data = {};
+      const make = () => ({ d: () => data, get: (k) => data[k], set(a, b) { if (typeof a === 'string') data[a] = b; else Object.assign(data, a); } });
+      window.ytcfg = make();
+      window.__write = (flag = true, serialized = 'sieve_test_flag=true&other=1') => ytcfg.set({
+        EXPERIMENT_FLAGS: { sieve_test_flag: flag, other: 1 },
+        WEB_PLAYER_CONTEXT_CONFIGS: { WEB_PLAYER_CONTEXT_CONFIG_ID_KEVLAR_WATCH: { serializedExperimentFlags: serialized } },
+      });
+      window.__read = () => ({
+        flag: ytcfg.get('EXPERIMENT_FLAGS').sieve_test_flag,
+        serialized: ytcfg.get('WEB_PLAYER_CONTEXT_CONFIGS').WEB_PLAYER_CONTEXT_CONFIG_ID_KEVLAR_WATCH.serializedExperimentFlags,
+      });
+      window.__write();
+      window.ytcfg = make();
+      setTimeout(() => window.__reads.push(window.__read()), 600);
+    </script>
+  </head>
+  <body>
+    <p id="status">experiments fixture</p>
+  </body>
+</html>
