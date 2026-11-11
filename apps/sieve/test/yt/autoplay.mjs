@@ -1,5 +1,11 @@
 // Task 2.11: autoplay rules. The fixture autoplays on load and after each navigation; the tests count the video's own play events.
+import { spawn } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { mergeYouTube, validateYouTube } from '@apps-hub/sieve-core/src/youtube-settings.ts';
 import { SEL } from '../../src/yt/selectors.ts';
 import { navigate, openYt, setYouTube, until, ytUrl } from './helpers.mjs';
 
@@ -17,10 +23,9 @@ const script = () => {
   // The link a Meta-click opens in a new background tab, and the fixture's own link handler must not turn into an in-app navigation.
   document.addEventListener('click', (e) => { if (e.metaKey) e.stopImmediatePropagation(); });
 };
-// Inert, so it may stay on the context: the play count, and the visibility at the page's start (a Meta-click tab is not made by `open`).
+// Inert, so it may stay on the context: the play count.
 const counters = () => {
   window.__plays = 0;
-  window.__first = document.visibilityState;
   document.addEventListener('play', (e) => { if (e.target === document.querySelector('#movie_player video')) window.__plays++; }, true);
 };
 
@@ -30,6 +35,91 @@ async function open(t, path, fixture) {
   await page.addInitScript(script);
   await page.goto(ytUrl(t, path, fixture), { waitUntil: 'load' });
   return page;
+}
+
+const CHROMIUM = process.env.CHROMIUM_PATH ?? join(homedir(), 'Library/Caches/ms-playwright/chromium-1228/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
+const EXT = fileURLToPath(new URL('../../dist', import.meta.url));
+const COUNT_PLAYS = `window.__plays = 0; window.__first = document.visibilityState; document.addEventListener('play', (e) => { if (e.target.matches('#movie_player video')) window.__plays++; }, true);`;
+
+// A tab opened with `background: true` over raw DevTools is hidden for real (headless Chrome, no driver emulating visibility), and its
+// first script sees `document.visibilityState === 'hidden'`: the case where "In tabs opened in the background" has to stop the video.
+async function hiddenTabs(t) {
+  const { check } = t;
+  const profile = mkdtempSync(join(tmpdir(), 'sieve-hidden-'));
+  const proc = spawn(CHROMIUM, [
+    `--user-data-dir=${profile}`, '--remote-debugging-port=0', '--headless=new', '--no-first-run', `--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`,
+    '--ignore-certificate-errors', '--host-resolver-rules=MAP www.youtube.com 127.0.0.1', '--autoplay-policy=no-user-gesture-required', 'about:blank',
+  ], { stdio: 'ignore' });
+  let ws;
+  try {
+    let port;
+    for (let i = 0; i < 100 && !port; i++) {
+      await sleep(100);
+      try { port = readFileSync(join(profile, 'DevToolsActivePort'), 'utf8').split('\n')[0]; } catch {}
+    }
+    ws = new WebSocket((await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).webSocketDebuggerUrl);
+    await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
+    let n = 0;
+    const waiting = new Map();
+    ws.onmessage = (m) => { const d = JSON.parse(m.data); waiting.get(d.id)?.(d); };
+    const send = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
+      const id = ++n;
+      waiting.set(id, (d) => (d.error ? reject(new Error(d.error.message)) : resolve(d.result)));
+      ws.send(JSON.stringify({ id, method, params, sessionId }));
+    });
+    const attach = async (targetId) => (await send('Target.attachToTarget', { targetId, flatten: true })).sessionId;
+    const run = async (sessionId, expression) => {
+      const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }, sessionId);
+      if (r.exceptionDetails) throw new Error(`${expression.slice(0, 60)}: ${r.exceptionDetails.exception?.description ?? r.exceptionDetails.text}`);
+      return r.result.value;
+    };
+
+    let sw;
+    for (let i = 0; i < 100 && !sw; i++) {
+      sw = (await send('Target.getTargets')).targetInfos.find((x) => x.type === 'service_worker' && /^chrome-extension:\/\/[a-z]+\/background\.js$/.test(x.url));
+      if (!sw) await sleep(100);
+    }
+    const settings = mergeYouTube(validateYouTube(null), { autoplay: { mode: 'background', playlists: true, pauseOthers: false } });
+    const swSession = await attach(sw.targetId);
+    // The worker's `chrome.storage` may not be there yet just after the extension loads.
+    for (let i = 0; i < 50; i++) {
+      if (await run(swSession, 'typeof chrome.storage === "object"').catch(() => false)) break;
+      await sleep(100);
+    }
+    await run(swSession, `chrome.storage.local.set({ youtube: ${JSON.stringify(settings)} }).then(() => true)`);
+
+    // Created at about:blank in the background, given the play counter, then sent to the address: the tab is hidden before the page's first script.
+    const open = async (path) => {
+      const { targetId } = await send('Target.createTarget', { url: 'about:blank', background: true });
+      const session = await attach(targetId);
+      await send('Page.enable', {}, session);
+      await send('Page.addScriptToEvaluateOnNewDocument', { source: COUNT_PLAYS }, session);
+      await send('Page.navigate', { url: `https://www.youtube.com:${t.servers.httpsPort}${path}` }, session);
+      return { targetId, session, state: () => run(session, `(() => { const v = document.querySelector('#movie_player video'); return { sieve: !!document.querySelector('style[data-sieve]'), first: window.__first, now: document.visibilityState, paused: v.paused, t: +v.currentTime.toFixed(2), plays: window.__plays }; })()`).catch(() => null) };
+    };
+    const settle = async (tab, ms) => { await sleep(ms); return tab.state(); };
+
+    // The tiny page calls play() again 1.5 s after the first, as YouTube does after a pause.
+    const tiny = await open('/sieve-tiny?fixture=autoplay-tiny');
+    let s = await settle(tiny, 3000);
+    check('autoplay background: the tiny tab started hidden', s?.first === 'hidden', JSON.stringify(s));
+    check('autoplay background: a tab opened behind another is paused, and so is the retry 1.5 s later', !!s && s.plays >= 2 && s.paused && s.t < 0.5, JSON.stringify(s));
+    await send('Target.activateTarget', { targetId: tiny.targetId });
+    s = await settle(tiny, 1200);
+    check('autoplay background: bringing it to the front does not start it', !!s && s.now === 'visible' && s.paused, JSON.stringify(s));
+    await run(tiny.session, 'location.reload()').catch(() => {});
+    s = await settle(tiny, 2000);
+    check('autoplay background: a second load, in the front, plays', !!s && s.first === 'visible' && !s.paused && s.t > 0.3, JSON.stringify(s));
+
+    const watch = await open('/watch?v=sieveTest01&fixture=watch');
+    s = await settle(watch, 3000);
+    check('autoplay background: the watch fixture opened behind another tab is paused at the start', !!s && s.first === 'hidden' && s.plays >= 1 && s.paused && s.t < 0.5, JSON.stringify(s));
+  } finally {
+    ws?.close();
+    proc.kill();
+    await sleep(500);
+    rmSync(profile, { recursive: true, force: true });
+  }
 }
 
 export async function local(t) {
@@ -79,6 +169,35 @@ export async function local(t) {
     check('autoplay always: with playlists off, a playlist video is paused', await until(async () => (await state(page)).paused) && (await state(page)).t < 0.5, json(await state(page)));
     await page.close();
 
+    // A source swap on the same video (YouTube does it between an ad and the content) is not a new video: it is not judged again.
+    const swap = (p) => p.evaluate((s) => { const v = document.querySelector(s); v.pause(); v.src = v.src; v.play().catch(() => {}); }, SEL.video);
+    page = await mk('/watch?v=sieveTest01&autoplay=0');
+    await page.locator(SEL.player).click();
+    await until(() => playing(page));
+    await sleep(1200); // the click is older than the second Sieve gives a press
+    await swap(page);
+    check('autoplay always: emptied and play on the same video id are not judged again', await until(() => playing(page, 0)), json(await state(page)));
+    await page.close();
+
+    // An ad is never stopped, and it leaves the state as it was for the video that follows.
+    const ad = (p, on) => p.evaluate((a) => document.querySelector('#movie_player').classList.toggle('ad-showing', a), on);
+    page = await mk('/watch?v=sieveTest01&autoplay=0');
+    await ad(page, true);
+    await page.evaluate((s) => document.querySelector(s).play().catch(() => {}), SEL.video);
+    check('autoplay always: a play while an ad shows is not stopped', await until(() => playing(page, 0.2)), json(await state(page)));
+    await ad(page, false);
+    await swap(page);
+    check('autoplay always: the content after an ad nobody started is judged as new and stopped', await until(async () => (await state(page)).paused) && (await sleep(500), (await state(page)).paused), json(await state(page)));
+    await page.close();
+    page = await mk('/watch?v=sieveTest01&autoplay=0');
+    await ad(page, true);
+    await page.locator(SEL.player).click();
+    await until(() => playing(page, 0.2));
+    await ad(page, false);
+    await swap(page);
+    check('autoplay always: an ad the owner started leaves the content after it playing', await until(() => playing(page, 0)), json(await state(page)));
+    await page.close();
+
     // The embed frame is a page of its own with its own content script.
     const host = await t.ctx.newPage();
     host.on('pageerror', (e) => t.errors.push(e.message));
@@ -99,32 +218,8 @@ export async function local(t) {
     check('autoplay allow: the video plays', await until(() => playing(page)), json(await state(page)));
     await page.close();
 
-    // Background tabs: a Meta-click opens a link in a tab behind this one, and headless Chrome reports that tab as hidden while its scripts start.
-    await setYouTube(t, { autoplay: { mode: 'background', playlists: true } });
-    const opener = await mk('/watch?v=sieveTest05');
-    check('autoplay background: a tab that loaded in the front plays', await until(() => playing(opener)), json(await state(opener)));
-    await opener.evaluate(() => { const a = document.createElement('a'); a.id = 'bg'; a.target = '_blank'; a.href = '/watch?v=sieveTest01&fixture=watch'; a.textContent = 'open'; a.style.cssText = 'position:fixed;top:80px;left:20px;z-index:99999;font-size:40px'; document.body.append(a); });
-    // Playwright makes a new tab "visible" a moment after it opens, so a script that starts first may or may not see "hidden": try a few times.
-    let bg;
-    let started = null;
-    for (let i = 0; i < 8 && started !== 'hidden'; i++) {
-      await bg?.close();
-      [bg] = await Promise.all([t.ctx.waitForEvent('page'), opener.click('#bg', { modifiers: ['Meta'] })]);
-      bg.on('pageerror', (e) => t.errors.push(e.message));
-      await bg.waitForLoadState('load');
-      await until(() => bg.evaluate(() => window.__plays > 0).catch(() => false));
-      started = await bg.evaluate(() => window.__first).catch(() => null);
-    }
-    if (started === 'hidden') {
-      check('autoplay background: a tab opened behind another is paused', await until(async () => (await state(bg)).paused) && (await state(bg)).t < 0.5, json(await state(bg)));
-      await bg.bringToFront();
-      await sleep(1200);
-      check('autoplay background: bringing it to the front does not start it', (await state(bg)).paused, json(await state(bg)));
-      await bg.reload({ waitUntil: 'load' });
-      check('autoplay background: a second load, in the front, plays', await until(() => playing(bg)), json(await state(bg)));
-    } else console.log(`SKIP  autoplay background: the new tab reported visibilityState ${started} at its start, so it was not behind another tab`);
-    await bg.close();
-    await opener.close();
+    // Background tabs: Playwright makes every tab it sees "visible", so these run in a Chrome of their own, driven by raw DevTools messages.
+    await hiddenTabs(t);
 
     // Pause others.
     await setYouTube(t, { autoplay: { mode: 'allow', pauseOthers: true } });

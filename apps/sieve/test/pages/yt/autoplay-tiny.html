@@ -1,0 +1,10 @@
+<!doctype html><title>tiny</title><div id="movie_player"><video></video></div><script>
+// Task 2.11: as small as a page can be, so that its scripts start before the browser test driver makes a new tab "visible".
+window.__tinyFirst = document.visibilityState;
+const v = document.querySelector('video');
+v.src = '/media/tone.wav';
+// Sieve's settings are read asynchronously: a play before they arrive is not judged (YouTube's own first play is seconds in).
+setTimeout(() => v.play().catch(() => {}), 300);
+// YouTube calls play() again about 1.5 s after a pause (see src/yt/autoplay.ts).
+setTimeout(() => v.play().catch(() => {}), 1800);
+</script>

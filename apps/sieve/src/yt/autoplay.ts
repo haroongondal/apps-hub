@@ -1,6 +1,6 @@
 import { stopThisPlay } from '@apps-hub/sieve-core/src/autoplay.ts';
 import type { AutoplayMode } from '@apps-hub/sieve-core/src/youtube-settings.ts';
-import { currentPage, feature, onSettings } from './bridge.ts';
+import { currentPage, feature, onNavigate, onSettings } from './bridge.ts';
 import { SEL } from './selectors.ts';
 
 // Page events. inspected 2026-11-11, signed out, Chrome for Testing 149.0.7827.55, dQw4w9WgXcQ in a playlist, "In every tab" and playlists off:
@@ -10,6 +10,7 @@ import { SEL } from './selectors.ts';
 // - A trusted click in the player gave `play` and `playing` at once and it played on (state 1, "Pause").
 // - `player.nextVideo()` in the playlist: `emptied`, `play`, `loadstart` for the new video, location already holding `list=` and the new index,
 //   so `currentPage().list` is right at play time. With playlists off the new video was paused (state -1, "Play"); with playlists on it played.
+// - `emptied` and `loadstart` also fire when YouTube swaps the source between an ad and the content (same video id), so they do not mean a new video.
 // - Not seen: an ad as the first play (`ad-showing` was never set), a key press, a non-playlist in-app navigation.
 const loadedHidden = document.visibilityState === 'hidden';
 // Random per frame: the worker tells every frame of every tab, and a frame spares the one token it sent.
@@ -38,16 +39,28 @@ feature('autoplay', () => {
   document.addEventListener('pointerdown', (e) => { if (e.isTrusted) input(e); }, true);
   document.addEventListener('keydown', (e) => { if (e.isTrusted) input(e); }, true);
 
-  // A new source on the element is a new video, whose first play is the one to judge.
-  when('emptied', () => { firstPlay = true; });
-  when('loadstart', () => { firstPlay = true; });
+  // A new video is a new address (or video id): a source swap on the same video, as between an ad and the content, is not one.
+  let judged: string | null | undefined;
+  const rearm = (): void => {
+    const id = currentPage().videoId;
+    if (id === judged) return;
+    judged = id;
+    firstPlay = true;
+  };
+  onNavigate(rearm);
   when('play', (v) => {
     if (!on) return;
+    rearm();
+    // An ad is never stopped. It leaves the state as it was for the video that follows, unless the owner started it.
+    if (document.querySelector(SEL.player)?.classList.contains('ad-showing')) {
+      if (performance.now() - lastInput < 1000) firstPlay = false;
+      return;
+    }
     const stop = stopThisPlay({ mode, playlists, loadedHidden, firstVideo, inPlaylist: currentPage().list !== null, firstPlay, sincePlayerInput: performance.now() - lastInput });
-    firstVideo = false;
-    // A video stays "new" until a play is let through, so a script that calls play() again after the pause is judged again.
+    // A video stays "new" until a play is let through, so a script that calls play() again after the pause is judged again,
+    // and a tab that loaded hidden stays on its first video until one has played.
     if (stop) v.pause();
-    else firstPlay = false;
+    else firstPlay = firstVideo = false;
   });
   when('playing', async (v) => {
     if (!on || !pauseOthers || v.paused) return;
