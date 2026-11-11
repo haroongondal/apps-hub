@@ -357,6 +357,7 @@ export function createEngine(deps: EngineDeps): Engine {
         }
         cancelIdle();
       } else {
+        if (r.state === 'saving') continue; // host.save is streaming the only copy; a failed or cancelled save leaves 'failed', which can be removed
         const run = runs.get(id);
         if (run) {
           run.reason = 'remove';

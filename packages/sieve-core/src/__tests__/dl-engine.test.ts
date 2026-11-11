@@ -177,6 +177,15 @@ test('pause and resume', async () => {
   assert.equal(r.state('a'), 'running');
 });
 
+test('remove: a saving record keeps its part file and its record', async () => {
+  const r = await makeRig({ records: [rec('a', { size: 100, state: 'saving', saveOnly: true, parts: [{ start: 0, end: 99, done: 100 }] })], files: ['a.part'] });
+  await r.engine.act('remove', ['a']);
+  assert.equal(r.state('a'), 'saving');
+  assert.equal(r.files.map.has('a.part'), true);
+  assert.equal(r.store.deleted.length, 0);
+  assert.ok(r.stored('a'));
+});
+
 test('remove with the real queue does not deadlock', async () => {
   const r = await makeRig({ records: [rec('a')], files: ['a.part'] });
   assert.deepEqual(r.transfer.started(), ['a']);
