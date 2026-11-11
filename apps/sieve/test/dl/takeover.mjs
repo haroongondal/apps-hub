@@ -66,11 +66,11 @@ export async function run(t) {
       return false;
     }
   };
-  const complete = (pathOnly) =>
+  const complete = (pathOnly, ms = 40000) =>
     until(async () => {
       const l = await chromeItems(pathOnly);
       return l.length > 0 && l.every((i) => i.state === 'complete') ? l : null;
-    }, 40000).catch(async (e) => Promise.reject(new Error(`${e.message}; items ${json((await items()).map((i) => [i.url.slice(-30), i.state, i.paused, i.bytesReceived, i.error]))}; local ${json(Object.keys(await localGet(t, null)))}`)));
+    }, ms).catch(async (e) => Promise.reject(new Error(`${e.message}; items ${json((await items()).map((i) => [i.url.slice(-30), i.state, i.paused, i.bytesReceived, i.error]))}; local ${json(Object.keys(await localGet(t, null)))}`)));
   const attempt = async (name, fn) => {
     if (process.env.TK_ONLY && !name.includes(process.env.TK_ONLY)) return;
     try {
@@ -124,13 +124,13 @@ export async function run(t) {
     }
   });
 
+  // No gzip row: Chrome reports no size for an encoded answer, so it is never a candidate (verified: no pause); see F17 and the unit `encoded` case.
   const matrix = [
     ['probeSize', `/shape/${SIZE}/s.zip?probeSize=19999999`, false],
     ['probeType', `/shape/${SIZE}/t.zip?probeType=text/html`, false],
     ['probeStatus 429', `/shape/${SIZE}/p.zip?probeStatus=429`, false],
     ['ranges=no', `/file/${SIZE}/n.zip?ranges=no`, false],
     ['one-time link', `/file/${SIZE}/o.zip?once=tok1`, false],
-    ['gzip', `/file/${SIZE}/z.zip?enc=gzip`, false],
     ['POST', `/form/${SIZE}/f.zip`, true],
     ['probe timeout', `/shape/${SIZE}/d.zip?probeDelay=12000`, false],
   ];
@@ -139,15 +139,6 @@ export async function run(t) {
       await fresh();
       await start(path, { post });
       const only = path.split('?')[0];
-      if (name === 'gzip') {
-        // Chrome cannot decode the fixture's plain bytes labelled gzip, so its own item may fail or not count as a candidate at all;
-        // either way Sieve must not take it: no record, no cancel, a pause is always followed by a resume.
-        await new Promise((r) => setTimeout(r, 8000));
-        const calls = await log();
-        const paused = calls.some((c) => c.n === 'pause');
-        check('downloads: take-over: gzip: Sieve takes nothing (no record, no cancel, a pause is resumed)', (await readRecords(t)).length === 0 && !calls.some((c) => c.n === 'cancel') && (!paused || calls.some((c) => c.n === 'resume')) && nonProbeRanged(fx, only).length === 0, json({ calls: calls.map((c) => c.n), ranged: nonProbeRanged(fx, only) }));
-        return;
-      }
       const l = await complete(only);
       const calls = await log();
       const all = await items();
@@ -218,7 +209,7 @@ export async function run(t) {
     const lag = Date.now() - paused.t;
     const status = await stopWorker(t.ctx);
     await wake();
-    const l = await complete('/shape/20000000/w.zip').catch(async (e) => Promise.reject(new Error(`status ${status}; lag ${lag}; pausedAt ${paused.t}; during ${json(during)}; ${e.message}; records ${json((await readRecords(t)).map((r) => [r.state, r.source, r.chromeId]))}; fixture ${json(fx.log.filter((x) => x.path.includes('/shape/')).map((x) => [x.range, x.status, x.closed, x.t]))}`)));
+    const l = await complete('/shape/20000000/w.zip', 15000).catch(async (e) => Promise.reject(new Error(`status ${status}; lag ${lag}; pausedAt ${paused.t}; during ${json(during)}; ${e.message}; records ${json((await readRecords(t)).map((r) => [r.state, r.source, r.chromeId]))}; fixture ${json(fx.log.filter((x) => x.path.includes('/shape/')).map((x) => [x.range, x.status, x.closed, x.t]))}`)));
     const after = Object.keys(await localGet(t, null)).filter((k) => k.startsWith('dlTakeover:'));
     check('downloads: take-over: the entry in local storage survives the worker, and the next worker resumes Chrome', status === 'stopped' && during?.url?.includes('/shape/20000000/w.zip') && l.length === 1 && verifies(l[0], SIZE) && (await readRecords(t)).length === 0 && after.length === 0, json({ status, during, items: l.length, after }));
   });

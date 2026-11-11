@@ -43,6 +43,7 @@ function fake(o: Partial<Omit<Deps, 'records'>> & { facts?: ProbeFacts; free?: n
     return typeof fn === 'function' ? (fn as (...x: unknown[]) => unknown)(...a) : undefined;
   }) as never;
   const added: unknown[] = [];
+  const store: DlRecord[] = Array.isArray(o.records) ? [...o.records] : [];
   const deps: Deps = {
     extensionId: 'ext',
     settings: async () => settings(),
@@ -57,10 +58,11 @@ function fake(o: Partial<Omit<Deps, 'records'>> & { facts?: ProbeFacts; free?: n
       calls.push('add');
       await sleep(20);
       added.push(...items);
+      store.push(rec({ chromeId: items[0].chromeId, url: items[0].url, addedAt: 5000, state: 'queued' }));
       calls.push('add-resolved');
       return { ids: ['d1'] };
     },
-    records: async () => (typeof o.records === 'function' ? o.records() : (o.records ?? [])),
+    records: async () => (typeof o.records === 'function' ? o.records() : store),
     remove: rec2('remove'),
     local,
     session: mem(),
@@ -160,6 +162,21 @@ test('an add that gets no answer but whose record the engine holds finishes the 
   assert.ok(f.calls.includes('cancel:7') && f.calls.includes('erase:7') && !f.calls.includes('resume:7'));
 });
 
+test('an add that returns a stale record is not trusted: Chrome is resumed and nothing is cancelled', async () => {
+  const stale = rec({ id: 'old', addedAt: 100, state: 'failed' });
+  const f = fake({ records: async () => [stale], add: async () => ({ ids: ['old'] }) });
+  await mod.onCreated(item(), f.deps);
+  assert.ok(f.calls.includes('resume:7') && !f.calls.includes('cancel:7') && !f.calls.includes('erase:7'));
+  assert.equal(f.local.data.size, 0);
+});
+
+test('an incognito download is never paused, probed or taken over', async () => {
+  const f = fake();
+  await mod.onCreated(item({ incognito: true }), f.deps);
+  assert.deepEqual(f.calls, []);
+  assert.equal(f.local.data.size, 0);
+});
+
 test('an exception between the pause and the add resumes Chrome and removes the entry', async () => {
   const f = fake({ probe: async () => { throw new Error('probe contract broken'); } });
   await assert.rejects(mod.onCreated(item(), f.deps));
@@ -213,6 +230,7 @@ test('replay: a worker that died before the cancel finished leaves one record an
   let hang = true;
   const make = () => {
     const f = fake({
+      records: async () => [...records].map(([chromeId, id]) => rec({ id, chromeId, addedAt: 5000 })),
       add: async (items) => {
         const chromeId = items[0].chromeId as number;
         if (!records.has(chromeId)) records.set(chromeId, 'd1');
@@ -319,6 +337,16 @@ test('retryInChrome writes the retry keys before download and removes the record
   assert.deepEqual(await mod.retryInChrome('d1', f.deps), { ok: true });
   assert.deepEqual(f.calls, ['set:dlRetry:https://x.test/a.zip,dlRetry:https://x.test/b.zip', 'download:https://x.test/a.zip', 'sleep:500', 'sleep:500', 'sleep:500', 'remove:d1']);
   assert.equal(f.session.data.get('dlRetry:https://x.test/a.zip'), 1000 + 120_000);
+});
+
+test('retryInChrome keeps a saveOnly record while Chrome only has some bytes, and removes it once Chrome is complete', async () => {
+  const saveOnly = [{ ...rec({ id: 'd1', url: 'https://x.test/a.zip' }), finalUrl: 'https://x.test/a.zip', saveOnly: true } as DlRecord];
+  const f = retryFake({ records: saveOnly, bytes: () => 10 });
+  assert.deepEqual(await mod.retryInChrome('d1', f.deps), { ok: true });
+  assert.ok(!f.calls.some((c) => c.startsWith('remove')));
+  const g = retryFake({ records: saveOnly, state: 'complete' });
+  await mod.retryInChrome('d1', g.deps);
+  assert.ok(g.calls.includes('remove:d1'));
 });
 
 test('retryInChrome removes the record when the Chrome download is already complete', async () => {

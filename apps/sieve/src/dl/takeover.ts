@@ -55,6 +55,7 @@ async function heldByEngine(deps: Pick<TakeoverDeps, 'records'>, id: number, url
 }
 
 export async function onCreated(item: chrome.downloads.DownloadItem, deps: TakeoverDeps = realTakeoverDeps()): Promise<void> {
+  if (item.incognito) return;
   const retryUrls = (await entries(deps.session, RETRY_PREFIX)).filter(([, until]) => typeof until === 'number' && until > deps.now()).map(([k]) => k.slice(RETRY_PREFIX.length));
   let ci: ChromeItem = { url: item.url, finalUrl: item.finalUrl, referrer: item.referrer, mime: item.mime, totalBytes: item.totalBytes, byExtensionId: item.byExtensionId, filename: item.filename };
   if (isOurs(ci, deps.extensionId, retryUrls)) return;
@@ -76,13 +77,12 @@ export async function onCreated(item: chrome.downloads.DownloadItem, deps: Takeo
     ci = { ...ci, filename: cur?.filename ?? '' };
     const v = verdict(ci, await deps.probe(ci), await deps.freeBytes());
     if (!v.take) return;
-    let res: { ids: string[] } | null = null;
     try {
-      res = await deps.add([{ url: item.url, referrer: item.referrer, source: 'takeover', chromeId: item.id, probed: { finalUrl: v.finalUrl, size: v.size, mime: v.mime, validator: v.validator, name: v.name } }]);
+      await deps.add([{ url: item.url, referrer: item.referrer, source: 'takeover', chromeId: item.id, probed: { finalUrl: v.finalUrl, size: v.size, mime: v.mime, validator: v.validator, name: v.name } }]);
     } catch {
-      res = null;
+      // unknown whether the engine stored it: the records decide below
     }
-    const ids = res?.ids.length ? res.ids : await heldByEngine(deps, item.id, item.url, at);
+    const ids = await heldByEngine(deps, item.id, item.url, at);
     if (ids.length === 0) return;
     try {
       await deps.cancel(item.id);
@@ -133,7 +133,7 @@ export async function retryInChrome(id: string, deps: RetryDeps = realRetryDeps(
   for (let i = 0; i < RETRY_POLLS; i++) {
     await deps.sleep(500);
     const cur = await deps.search(chromeId).catch(() => undefined);
-    if (cur && (cur.bytesReceived > 0 || cur.state === 'complete')) {
+    if (cur && (cur.state === 'complete' || (cur.bytesReceived > 0 && !record.saveOnly))) {
       await deps.remove([record.id]).catch(ignore);
       break;
     }
