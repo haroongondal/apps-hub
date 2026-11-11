@@ -1,5 +1,5 @@
 import { ERRORS } from '@apps-hub/sieve-core/src/dl-record.ts';
-import { extPage, readMeta, readPart, readRecords, resetDl, sendMsg, setDownloads, until } from './_helpers.mjs';
+import { deletePart, extPage, readMeta, readPart, readRecords, resetDl, sendMsg, setDownloads, until } from './_helpers.mjs';
 
 const json = (v) => String(JSON.stringify(v)).slice(0, 500);
 const closeEngine = (t) => t.sw.evaluate(() => chrome.offscreen.closeDocument());
@@ -158,6 +158,21 @@ export async function run(t) {
     const part = await readPart(t, `${id}.part`);
     check('downloads: transfer: a download continues after the engine document closes, from a saved offset above 0', reqs.length >= 2 && from > 0 && from >= done(before) && part.size === 40000000 && part.ok && r.parts.every((p) => p.done === p.end - p.start + 1), json({ from, saved: done(before), part, reqs: reqs.map((l) => l.range) }));
     await consistent('engine dies');
+  });
+
+  await attempt('the part file is lost', async () => {
+    await fresh();
+    const id = await add(t, { url: `${fx.base}/file/40000000/m.bin?rate=8000000` });
+    await progress(t, id);
+    await sendMsg(t, { type: 'dl-do', op: 'pause', ids: [id] });
+    const paused = await reach(t, id, 'paused');
+    await deletePart(t, `${id}.part`);
+    await sendMsg(t, { type: 'dl-do', op: 'resume', ids: [id] });
+    const r = await reach(t, id, 'saving', 30000);
+    const from = Number(/bytes=(\d+)-/.exec(requests(t, '/file/40000000/m.bin').filter((l) => l.range && l.range !== 'bytes=0-0').at(-1)?.range ?? '')?.[1]);
+    const part = await readPart(t, `${id}.part`);
+    check('downloads: transfer: a resume after the part file was deleted restarts at byte 0 and the file has no holes', done(paused) > 0 && from === 0 && part.size === 40000000 && part.ok && r.parts.every((p) => p.done === p.end - p.start + 1), json({ saved: done(paused), from, part }));
+    await consistent('part file lost');
   });
 
   await attempt('speed limit', async () => {

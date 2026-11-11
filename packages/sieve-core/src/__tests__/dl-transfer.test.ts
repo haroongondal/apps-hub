@@ -384,6 +384,66 @@ test('12 pause and resume: flush before persist, resumed request starts at persi
   assertFile(s.files, 10 * MiB);
 });
 
+// A paused download of `size` bytes with a persisted `done`; `damage` runs before the resume.
+async function pausedThenDamaged(damage: (s: ReturnType<typeof setup>) => void, size = 10 * MiB) {
+  const s = setup();
+  s.net.add(U, { size });
+  const ac = new AbortController();
+  s.setOnBytes((n) => { if (n >= 2.5 * MiB) ac.abort(); });
+  const first = await s.run(probed(U, size), ac.signal);
+  assert.equal(first.kind, 'paused');
+  const done = first.record.parts[0].done;
+  assert.ok(done > 0);
+  s.setOnBytes(() => {});
+  damage(s);
+  const second = await s.run(first.record);
+  return { s, done, second };
+}
+
+test('12a resume with the part file gone: every part restarts from its start and the bytes equal the source', async () => {
+  const { s, second } = await pausedThenDamaged((x) => x.files.data.delete(PART));
+  assert.equal(second.kind, 'done');
+  assert.equal(s.net.log.at(-1)!.range, 'bytes=0-');
+  assert.ok(s.persisted.some((r, i) => i > 0 && r.parts[0].done === 0 && s.persisted[i - 1].parts[0].done > 0), 'the reset is persisted');
+  assertFile(s.files, 10 * MiB);
+});
+
+test('12b resume with a truncated part file restarts; one that still holds the done bytes keeps them', async () => {
+  const cut = await pausedThenDamaged((x) => x.files.data.set(PART, x.files.data.get(PART)!.slice(0, 1 * MiB)));
+  assert.equal(cut.second.kind, 'done');
+  assert.equal(cut.s.net.log.at(-1)!.range, 'bytes=0-');
+  assertFile(cut.s.files, 10 * MiB);
+
+  // healthy resume: the file keeps its size, so done stays
+  const ok = await pausedThenDamaged(() => {});
+  assert.equal(ok.second.kind, 'done');
+  assert.equal(ok.s.net.log.at(-1)!.range, `bytes=${ok.done}-`);
+  assertFile(ok.s.files, 10 * MiB);
+});
+
+test('12c unknown size: a file shorter than the written bytes restarts at 0, one that holds them resumes', async () => {
+  const requested = async (fileSize: number) => {
+    const s = setup();
+    s.net.add(U, { size: 6 * MiB, lengthKnown: false });
+    s.files.data.set(PART, new Uint8Array(fileSize));
+    const open = rec(U, { rangeOk: true, parts: [{ start: 0, end: null, done: 2 * MiB }] });
+    await s.run(open); // the outcome does not matter, the first request does
+    return s.net.log.find((l) => l.range !== 'bytes=0-0')!.range;
+  };
+  assert.equal(await requested(1 * MiB), 'bytes=0-');
+  assert.equal(await requested(2 * MiB), `bytes=${2 * MiB}-`);
+});
+
+test('12d a full-size file with done 0 is untouched', async () => {
+  const s = setup();
+  s.net.add(U, { size: 2 * MiB });
+  s.files.data.set(PART, pattern(0, 2 * MiB));
+  const res = await s.run(probed(U, 2 * MiB));
+  assert.equal(res.kind, 'done');
+  assert.equal(s.net.log.length, 1, 'no probe, one request from byte 0');
+  assertFile(s.files, 2 * MiB);
+});
+
 test('13 checkpoints: every 4 MiB or 2000 ms, each preceded by flush', async () => {
   const s = setup();
   s.net.add(U, { size: 10 * MiB });

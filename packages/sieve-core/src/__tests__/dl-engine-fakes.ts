@@ -92,10 +92,11 @@ export function fakeFiles(names: string[] = []): FakeFiles {
       };
     },
     async open(name, length) {
-      const cur = f.map.get(name) ?? new Uint8Array(0);
+      const had = f.map.get(name);
+      const cur = had ?? new Uint8Array(0);
       const bytes = length === null ? cur : new Uint8Array(length);
       f.map.set(name, bytes);
-      const h: FileHandle = { write() {}, flush() {}, size: () => bytes.length, close() {} };
+      const h: FileHandle = { existingSize: had?.length ?? null, write() {}, flush() {}, size: () => bytes.length, close() {} };
       return h;
     },
     async exists(name) {

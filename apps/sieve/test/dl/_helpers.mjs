@@ -68,6 +68,9 @@ export const opfsNames = (t) =>
     return names;
   });
 
+export const deletePart = (t, name) =>
+  inPage(t, async (n) => (await navigator.storage.getDirectory()).removeEntry(n), name);
+
 // byte i of the fixture is i % 251; `ok` compares every byte, in 1 MiB slices.
 export const readPart = (t, name) =>
   inPage(

@@ -293,6 +293,13 @@ export function createTransfer(deps: TransferDeps): Transfer {
       }
       hooks.update(clone(r));
       const h = (handle = await files.open(partName(r.id), r.size));
+      // The part file was lost or cut short while the record survived: bytes below `done` are zeros now, so start over.
+      const reached = Math.max(0, ...r.parts.filter((p) => p.done > 0).map((p) => p.start + p.done));
+      if (reached > 0 && (h.existingSize === null || (h.existingSize < reached && (r.size === null || h.existingSize < r.size)))) {
+        for (const p of r.parts) p.done = 0;
+        hooks.update(clone(r));
+        try { await hooks.persist(clone(r)); } catch { throw new Fail(ERRORS.storage); }
+      }
       lastCheckpoint = clock.now();
       const active = new Map<number, Promise<{ i: number; error?: unknown }>>();
       let failure: Fail | null = null;

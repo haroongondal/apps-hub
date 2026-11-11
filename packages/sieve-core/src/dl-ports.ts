@@ -10,6 +10,7 @@ export interface Store {                                   // IndexedDB `sieve-d
   setMeta(key: string, value: unknown): Promise<void>;
 }
 export interface FileHandle {
+  existingSize: number | null;                             // the file's size before open set its length; null when the file did not exist
   write(chunk: Uint8Array, at: number): void;              // throws on failure (disk full)
   flush(): void;
   size(): number;

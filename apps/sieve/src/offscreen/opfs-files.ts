@@ -22,15 +22,20 @@ export function createOpfsFiles(): Files {
   const root = () => navigator.storage.getDirectory();
   return {
     async open(name, length): Promise<FileHandle> {
-      const file = await (await root()).getFileHandle(name, { create: true });
+      const dir = await root();
+      const had = await dir.getFileHandle(name).then((f) => f, (e) => { if ((e as Error).name === 'NotFoundError') return null; throw e; });
+      const file = had ?? (await dir.getFileHandle(name, { create: true }));
       const h = await openHandle(file);
+      let existingSize: number | null = null;
       try {
+        if (had) existingSize = h.getSize();
         if (length !== null && h.getSize() !== length) h.truncate(length);
       } catch (e) {
         h.close();
         throw e;
       }
       return {
+        existingSize,
         write(chunk, at) {
           let done = 0;
           while (done < chunk.byteLength) {

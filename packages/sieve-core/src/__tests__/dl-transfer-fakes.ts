@@ -68,6 +68,7 @@ export class FakeFiles implements Files {
   constructor(clock: ManualClock, log?: LogEntry[]) { this.clock = clock; this.log = log ?? []; }
   async open(name: string, length: number | null): Promise<FileHandle> {
     this.openedSizes.push(length);
+    const existingSize = this.data.get(name)?.length ?? null;
     let buf = this.data.get(name) ?? new Uint8Array(0);
     if (length !== null && buf.length !== length) {
       const next = new Uint8Array(length);
@@ -78,6 +79,7 @@ export class FakeFiles implements Files {
     let closed = false;
     const me = this;
     return {
+      existingSize,
       write: (chunk: Uint8Array, at: number) => {
         if (closed) throw new Error('write after close');
         if (me.failWrite) throw new Error('quota exceeded');
