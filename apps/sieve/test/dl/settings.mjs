@@ -4,6 +4,8 @@ import { T } from '@apps-hub/sieve-core/src/dl-text.ts';
 import { extPage, localGet, readRecords, resetDl, sendMsg, setDownloads, until } from './_helpers.mjs';
 
 const json = (v) => String(JSON.stringify(v)).slice(0, 500);
+// The raw stored value: the page must have repaired it itself, so a skipped saveDownloads fails the clamp checks.
+const raw = async (t) => (await localGet(t, 'downloads')).downloads ?? {};
 const stored = async (t) => validateDownloadSettings((await localGet(t, 'downloads')).downloads);
 
 export async function run(t) {
@@ -37,6 +39,10 @@ export async function run(t) {
     for (const l of reachable) if ((await by(l).count()) === 0) missing.push(l);
     for (const b of [T.setResetTypes, T.setAddQueue]) if ((await sec.getByRole('button', { name: b, exact: true }).count()) === 0) missing.push(b);
     check('downloads: settings: the heading is the section title and every control is reachable by its label', heading === T.sectionTitle && missing.length === 0, json({ heading, missing }));
+    const text = await sec.innerText();
+    const helps = [T.setOnHelp, T.setExtensionsHelp, T.setMimeHelp, T.setPartsHelp, T.setCategoriesHelp];
+    const described = await Promise.all([T.setOn, T.setExtensions, T.setMime, T.setParts].map((l) => by(l).evaluate((el) => document.getElementById(el.getAttribute('aria-describedby') ?? '')?.textContent ?? null)));
+    check('downloads: settings: every help text is on screen and tied to its control', helps.every((x) => text.includes(x)) && same(described, [T.setOnHelp, T.setExtensionsHelp, T.setMimeHelp, T.setPartsHelp]), json({ described }));
     const got = {
       on: await by(T.setOn).isChecked(),
       takeOver: await by(T.setTakeOver).isChecked(),
@@ -57,21 +63,23 @@ export async function run(t) {
 
   await attempt('writes and clamps', async () => {
     await setField(by(T.setMinMb), 7.6);
-    check('downloads: settings: 7.6 MB is stored as 8', await ok(async () => (await stored(t)).takeOver.minMb === 8 && (await by(T.setMinMb).inputValue()) === '8'));
+    check('downloads: settings: 7.6 MB is stored as 8', await ok(async () => (await raw(t)).takeOver.minMb === 8 && (await by(T.setMinMb).inputValue()) === '8'));
     await setField(by(T.setMinMb), 1e9);
-    check('downloads: settings: 1e9 MB is stored as 100000 and shown so', await ok(async () => (await stored(t)).takeOver.minMb === 100000 && (await by(T.setMinMb).inputValue()) === '100000'));
+    check('downloads: settings: 1e9 MB is stored as 100000 and shown so', await ok(async () => (await raw(t)).takeOver.minMb === 100000 && (await by(T.setMinMb).inputValue()) === '100000'));
     await setField(by(T.setParts), 9);
-    check('downloads: settings: 9 parts is stored as 6 and the input shows 6', await ok(async () => (await stored(t)).parts === 6 && (await by(T.setParts).inputValue()) === '6'));
+    check('downloads: settings: 9 parts is stored as 6 and the input shows 6', await ok(async () => (await raw(t)).parts === 6 && (await by(T.setParts).inputValue()) === '6'));
     await setField(by(T.limitValue), 5);
-    check('downloads: settings: a limit of 5 KB/s is stored as 10', await ok(async () => (await stored(t)).speedLimit.kbPerSecond === 10 && (await by(T.limitValue).inputValue()) === '10'));
+    check('downloads: settings: a limit of 5 KB/s is stored as 10', await ok(async () => (await raw(t)).speedLimit.kbPerSecond === 10 && (await by(T.limitValue).inputValue()) === '10'));
+    await setField(by(T.setMinMb), '');
+    check('downloads: settings: a blank minimum is repaired to the default 5, not 0', await ok(async () => (await raw(t)).takeOver.minMb === 5 && (await by(T.setMinMb).inputValue()) === '5'));
     const video = by(T.setFolder(T.categoryNames.video));
     await setField(video, 'a/b');
-    check('downloads: settings: the folder a/b is stored as the default folder and the input shows it', await ok(async () => (await stored(t)).categories[0].folder === 'Video' && (await video.inputValue()) === 'Video'));
+    check('downloads: settings: the folder a/b is stored as the default folder and the input shows it', await ok(async () => (await raw(t)).categories[0].folder === 'Video' && (await video.inputValue()) === 'Video'));
     await setField(video, 'Clips');
-    check('downloads: settings: the folder Clips is stored', await ok(async () => (await stored(t)).categories[0].folder === 'Clips' && (await video.inputValue()) === 'Clips'));
+    check('downloads: settings: the folder Clips is stored', await ok(async () => (await raw(t)).categories[0].folder === 'Clips' && (await video.inputValue()) === 'Clips'));
     const music = by(T.setCategoryExt(T.categoryNames.music));
     await setField(music, 'MP3 .flac nope!');
-    check('downloads: settings: category types are split, cleaned and shown back', await ok(async () => same((await stored(t)).categories[1].extensions, ['mp3', 'flac']) && (await music.inputValue()) === 'mp3 flac'));
+    check('downloads: settings: category types are split, cleaned and shown back', await ok(async () => same((await raw(t)).categories[1].extensions, ['mp3', 'flac']) && (await music.inputValue()) === 'mp3 flac'));
     check('downloads: settings: the Other category has no types box', await ok(async () => (await by(T.setCategoryExt(T.categoryNames.other)).count()) === 0));
     await resetDl(t);
     await until(async () => (await by(T.setParts).inputValue()) === '1');
@@ -80,9 +88,9 @@ export async function run(t) {
   await attempt('lists', async () => {
     // `x` is a valid extension, so the last word is one the validator rejects.
     await setField(by(T.setExtensions), '.MP4, mkv bad! no-way');
-    check('downloads: settings: the extensions box stores mp4 and mkv only and then shows them', await ok(async () => same((await stored(t)).takeOver.extensions, ['mp4', 'mkv']) && (await by(T.setExtensions).inputValue()) === 'mp4 mkv'));
+    check('downloads: settings: the extensions box stores mp4 and mkv only and then shows them', await ok(async () => same((await raw(t)).takeOver.extensions, ['mp4', 'mkv']) && (await by(T.setExtensions).inputValue()) === 'mp4 mkv'));
     await setField(by(T.setMime), 'Video/*\nbad');
-    check('downloads: settings: the content types box stores video/* only', await ok(async () => same((await stored(t)).takeOver.mimeTypes, ['video/*']) && (await by(T.setMime).inputValue()) === 'video/*'));
+    check('downloads: settings: the content types box stores video/* only', await ok(async () => same((await raw(t)).takeOver.mimeTypes, ['video/*']) && (await by(T.setMime).inputValue()) === 'video/*'));
     await sec.getByRole('button', { name: T.setResetTypes, exact: true }).click();
     const back = await until(async () => {
       const s = await stored(t);
@@ -187,13 +195,16 @@ export async function run(t) {
   await attempt('layout and screenshots', async () => {
     await resetDl(t);
     await until(async () => (await by(T.setParts).inputValue()) === '1');
-    const width = await sec.evaluate((el) => ({ box: el.getBoundingClientRect().width, scroll: el.scrollWidth, page: document.documentElement.scrollWidth, vw: innerWidth }));
-    check('downloads: settings: the section stays within the 720 px column', width.box <= 720 && width.scroll <= Math.ceil(width.box) && width.page <= width.vw, json(width));
     for (const scheme of ['light', 'dark']) {
       await page.emulateMedia({ colorScheme: scheme });
       await page.screenshot({ path: `${t.shots}/settings-downloads-${scheme}.png`, fullPage: true });
     }
     await page.emulateMedia({ colorScheme: null });
+    for (const vw of [1280, 360]) {
+      await page.setViewportSize({ width: vw, height: 900 });
+      const width = await sec.evaluate((el) => ({ box: el.getBoundingClientRect().width, scroll: el.scrollWidth, page: document.documentElement.scrollWidth, vw: innerWidth }));
+      check(`downloads: settings: the section fits a ${vw} px window without sideways scrolling`, width.box <= 720 && width.scroll <= Math.ceil(width.box) && width.page <= vw && width.vw === vw, json(width));
+    }
   });
 
   check('downloads: settings: no page errors', t.errors.length === errorsBefore, json(t.errors.slice(errorsBefore)));
