@@ -7,6 +7,8 @@
 .split > .ui-btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .split > .arrow { width: 24px; padding: 0; border-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .split > .arrow svg { width: 16px; height: 16px; }
+/* Room for "1.25×" whatever the speed, so a speed change never re-wraps the full row and moves the page under the pointer. */
+[data-id="speed"] > .ui-btn { min-width: calc(5ch + 2 * var(--space-md) + 2px); font-variant-numeric: tabular-nums; }
 /* Below YouTube's fixed masthead (z-index 2020, selectors.ts), above the blocks under the row. */
 .pop { position: absolute; top: calc(100% + var(--space-xs)); left: 0; z-index: 2000; display: grid; gap: var(--space-xs); min-width: 200px; padding: var(--space-xs); overflow: auto; overscroll-behavior: contain; border-radius: var(--radius-group); color: var(--c-text); }
 /* row.ts place(): no room below, so it opens above its button. */

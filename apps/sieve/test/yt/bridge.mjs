@@ -84,8 +84,9 @@ export async function local(t) {
       await bare.ctx.close().catch(() => {});
     }
     // The recorder is set only when Sieve answers; YouTube declares ytInitialPlayerResponse itself (the fixture does not).
-    const allowed = ['__lastSieveSettings', 'ytInitialPlayerResponse'];
-    const added = Object.fromEntries(['keys', 'own'].map((k) => [k, withSieve[k].filter((n) => !clean[k].includes(n) && !allowed.includes(n))]));
+    // So does ytcfg, whose hook (Task 2.14) must exist before the page's write: allowed as a non-enumerable own name only, never a new key.
+    const allowed = { keys: ['__lastSieveSettings', 'ytInitialPlayerResponse'], own: ['__lastSieveSettings', 'ytInitialPlayerResponse', 'ytcfg'] };
+    const added = Object.fromEntries(['keys', 'own'].map((k) => [k, withSieve[k].filter((n) => !clean[k].includes(n) && !allowed[k].includes(n))]));
     check('bridge: Sieve adds no window names (keys or own properties) compared with the same fixture without Sieve', added.keys.length + added.own.length === 0, json(added));
     const sieveNames = withSieve.own.filter((n) => /sieve/i.test(n) && !['__lastSieveSettings', '__sieveDo'].includes(n));
     check('bridge: the page has no sieve-named globals beyond the fixture recorders', sieveNames.length === 0, json(sieveNames));

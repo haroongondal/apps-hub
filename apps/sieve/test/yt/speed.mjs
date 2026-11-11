@@ -7,6 +7,7 @@ const rate = (page) => page.evaluate(() => document.querySelector('#movie_player
 const rateIs = (page, want) => until(async () => (await rate(page)) === want);
 const label = (page) => row(page).locator('[data-id="speed"] button').innerText();
 const labelIs = (page, want) => until(async () => (await label(page)) === want);
+const speedWidth = (page) => row(page).locator('[data-id="speed"] button').evaluate((el) => el.getBoundingClientRect().width);
 const toastText = (page) => row(page).getByRole('status').innerText();
 // Real YouTube showed no ratechange when a new video reset the rate (Task 2.5 inspection), though Chrome queues one between `emptied` and
 // `loadstart`: swallow it before it reaches the page's and the module's listeners, so a stale rate shows as it would on the real page.
@@ -16,6 +17,13 @@ const quietReset = (page) => page.evaluate(() => {
   window.addEventListener('ratechange', (e) => { if (quiet) e.stopImmediatePropagation(); }, true);
   window.addEventListener('loadstart', () => { quiet = false; }, true);
 });
+// The full row wraps on the fixture's column, so a toast that clears changes its height and, at the page's bottom, moves the button from
+// under the pointer: wait for the label and the toast to settle, then point at it again.
+const overSpeed = async (page, want) => {
+  await labelIs(page, want);
+  await until(async () => (await toastText(page)) === '');
+  await row(page).locator('[data-id="speed"] button').hover();
+};
 const settled = (page, key, value) => until(() => page.evaluate(([k, v]) => window.__lastSieveSettings?.speed[k] === v, [key, value]));
 
 export async function local(t) {
@@ -78,22 +86,25 @@ export async function local(t) {
 
     // The wheel: the page is scrolled first, so a wheel the module ignores visibly scrolls it.
     await page.evaluate(() => scrollTo(0, 300));
-    await row(page).locator('[data-id="speed"] button').hover();
+    await overSpeed(page, '1×');
     const y0 = await page.evaluate(() => scrollY);
+    const w0 = await speedWidth(page);
     await page.mouse.wheel(0, -100);
     check('speed: a wheel up over the speed button adds one step and does not scroll the page', (await rateIs(page, 1.25)) && (await page.evaluate(() => scrollY)) === y0, `${await rate(page)} ${y0} ${await page.evaluate(() => scrollY)}`);
+    check('speed: the speed button is as wide at "1.25×" as at "1×", so a speed change never re-wraps the row', (await labelIs(page, '1.25×')) && (await speedWidth(page)) === w0, `${w0} ${await speedWidth(page)}`);
     await page.mouse.wheel(0, 100);
     check('speed: a wheel down takes one step off', await rateIs(page, 1), String(await rate(page)));
     await setYouTube(t, { reverseWheel: true });
     await sleep(500); // reverseWheel is read by the isolated world only, so there is no page-visible setting to wait for
+    await overSpeed(page, '1×');
     await page.mouse.wheel(0, -100);
     check('speed: with the wheel reversed, up slows down', await rateIs(page, 0.75), String(await rate(page)));
     await setYouTube(t, { reverseWheel: false, speed: { wheel: 'off' } });
     await sleep(300);
     await rowButton(page, 'Faster').click();
     await rateIs(page, 1);
+    await overSpeed(page, '1×');
     const y1 = await page.evaluate(() => scrollY);
-    await row(page).locator('[data-id="speed"] button').hover();
     await page.mouse.wheel(0, -100); // the fixture page is only about 170 px scrollable and is already at the bottom, so the wheel goes up
     await sleep(400);
     check('speed: with the wheel off the page scrolls and the rate stays', (await page.evaluate(() => scrollY)) < y1 && (await rate(page)) === 1, `${y1} ${await page.evaluate(() => scrollY)} ${await rate(page)}`);

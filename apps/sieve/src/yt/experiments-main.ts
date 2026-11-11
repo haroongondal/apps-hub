@@ -48,9 +48,11 @@ function wrap(cfg: unknown): void {
 feature('experiments', () => {
   let current: unknown = (window as unknown as Record<string, unknown>).ytcfg;
   wrap(current);
+  // The hook has to be there before the page's own write, so the name exists from document_start; non-enumerable, as yt-main.ts's
+  // ytInitialPlayerResponse, so a page that never sets ytcfg sees no new key (YouTube's own pages define it themselves).
   Object.defineProperty(window, 'ytcfg', {
     configurable: true,
-    enumerable: true,
+    enumerable: false,
     get: () => current,
     set(value: unknown) {
       current = value;

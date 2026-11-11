@@ -23,7 +23,7 @@ const script = () => {
   // The link a Meta-click opens in a new background tab, and the fixture's own link handler must not turn into an in-app navigation.
   document.addEventListener('click', (e) => { if (e.metaKey) e.stopImmediatePropagation(); });
 };
-// Inert, so it may stay on the context: the play count.
+// The play count, on this module's own pages only: on the context it would leak into later modules' pages (bridge counts window names).
 const counters = () => {
   window.__plays = 0;
   document.addEventListener('play', (e) => { if (e.target === document.querySelector('#movie_player video')) window.__plays++; }, true);
@@ -33,6 +33,7 @@ async function open(t, path, fixture) {
   const page = await t.ctx.newPage();
   page.on('pageerror', (e) => t.errors.push(e.message));
   await page.addInitScript(script);
+  await page.addInitScript(counters);
   await page.goto(ytUrl(t, path, fixture), { waitUntil: 'load' });
   return page;
 }
@@ -142,7 +143,6 @@ export async function local(t) {
   const pages = [];
   const mk = async (...args) => pages[pages.push(await open(t, ...args)) - 1];
   try {
-    await t.ctx.addInitScript(counters);
     // Every tab.
     await setYouTube(t, { autoplay: { mode: 'always', playlists: true, pauseOthers: false } });
     let page = await mk('/watch?v=sieveTest01');

@@ -113,9 +113,10 @@ export async function local(t) {
     page = await openYt(t, '/watch?v=sieveTest01&canvas=1');
     m = await openMenu(t, await tabIdOf(t, page));
     const downloads = () => t.sw.evaluate(() => chrome.downloads.search({}));
-    const had = (await downloads()).length;
+    // By id: search() has no set order, and earlier modules (backup, capture) leave downloads in this profile.
+    const had = new Set((await downloads()).map((d) => d.id));
     await button(m.pop, 'Take a screenshot').click();
-    const got = await until(async () => (await downloads()).length > had && (await downloads()).at(-1), 5000);
+    const got = await until(async () => (await downloads()).find((d) => !had.has(d.id)), 5000);
     check('menu: "Take a screenshot" makes a PNG download from the extension', !!got && got.mime === 'image/png' && got.byExtensionId === t.id, json(got));
     await m.pop.close();
     await page.close();
