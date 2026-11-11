@@ -33,7 +33,18 @@ Read docs/handoffs/email-login.md completely first. Trust the verified facts in 
 ## Session log
 - 2026-11-11: owner chose serialised logins, wait variable off, separate sign-in blob, owner notice on every request. Worker build started on the branch (agent a88fe4...). Owner asked for a graceful pause; agent asked to stop at a safe point and report.
 
+- 2026-11-11 (paused): Worker build committed as `989fe50` (sign-in routes, sign-in blob on PUT /v1/account, migration 0003, LoginGate Durable Object, SIGNIN_WAIT_HOURS="0", tests). vault-api: 87 tests pass, typecheck clean, no bidi characters (Semgrep fix applied). Root `pnpm test` FAILS in apps/strongroom-extension: 20 of 128 tests get a 500 because its sync-world loads migrations 0001-0002 only. Fix is a two-line test change, saved at scratchpad/extension-sync-world-0003.patch (verified: 128/128 in a scratch copy); NOT applied (owner said pause).
+
+## Open decisions for the owner
+1. Parallel guessing: a correct token answers at once, so an attacker who treats "no quick answer" as wrong is not slowed. Closing that makes the token check wait its turn, which can delay the owner's own sign-in, against the no-lockout rule.
+2. A refused device on a slow or attacked network can wait over 30 s and then show "offline" rather than "sign in again".
+3. Each successful owner sync resets the failure count, giving an attacker 5 more free guesses.
+4. One pending sign-in row: a stranger can take the slot every hour and block the owner's email sign-in.
+
+## Deploy order
+Apply migration 0003 to the live D1 before deploying the Worker, or the email-recovery and sign-in calls return 500.
+
 ## Current state and exact next step
 - Done: decisions committed (`1ddfdb1`).
-- In progress when paused: Worker build (serialised logins, wait variable, signin blob, signin routes, tests). Its state is in its report; check `git log extension-email-login` and `git status` in this worktree first.
-- Next: (1) read the paused agent's report and the uncommitted files; finish or drop the partial step; (2) run `pnpm --filter @apps-hub/vault-api test` and `typecheck`; (3) only then extension UI and phone enrolment of the signin blob; (4) deploy only with the owner's go-ahead, after the mail destination is verified.
+- Worker build finished at `989fe50` (see the log above). Tree clean.
+- Next: (1) owner decides open decision 1 (and 2-4); (2) apply the two-line extension test patch and re-run root `pnpm test`; (3) extension UI and phone enrolment of the sign-in blob; (4) deploy only with the owner's go-ahead, after migration 0003 is applied and the mail destination is verified.
