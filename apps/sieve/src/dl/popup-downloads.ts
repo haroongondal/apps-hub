@@ -88,13 +88,8 @@ const showSettings = (on: boolean) => {
 async function openList(): Promise<void> {
   const url = new URL(chrome.runtime.getURL('downloads.html'));
   // Chrome hides the url of an extension page from tabs.query without the "tabs" permission; the extension's own contexts say it.
-  const open = (await chrome.runtime.getContexts({ contextTypes: ['TAB'] })).find((c) => {
-    try {
-      return new URL(c.documentUrl ?? '').href.split('#')[0] === url.href && c.tabId >= 0;
-    } catch {
-      return false;
-    }
-  });
+  // The right-click menu navigates an open list tab to downloads.html?r=<n>#add, so match the prefix.
+  const open = (await chrome.runtime.getContexts({ contextTypes: ['TAB'] })).find((c) => c.documentUrl?.startsWith(url.href) && c.tabId >= 0);
   if (open) {
     await chrome.tabs.update(open.tabId, { active: true });
     await chrome.windows.update(open.windowId, { focused: true });
