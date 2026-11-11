@@ -936,8 +936,8 @@ try {
   const blockingLabels = (await labelsIn(0)).map((t) => t.trim());
   const rowLabels = (await labelsIn(1)).map((t) => t.trim());
   check(
-    `the settings page has Blocking (the menu's four switches, Ad blocker warnings and Trackers), Filter lists ("${rows[0]}", AI search summaries by name only), My filters, Allowlist, Shortcuts and Backup and import, and says how old the lists are and how to refresh them`,
-    same(headings, ['Blocking', 'Filter lists', 'My filters', 'Allowlist', 'Shortcuts', 'Backup and import']) &&
+    `the settings page has Blocking (the menu's four switches, Ad blocker warnings and Trackers), Filter lists ("${rows[0]}", AI search summaries by name only), My filters, Allowlist, YouTube, Shortcuts and Backup and import, and says how old the lists are and how to refresh them`,
+    same(headings, ['Blocking', 'Filter lists', 'My filters', 'Allowlist', 'YouTube', 'Shortcuts', 'Backup and import']) &&
       same(blockingLabels, ['Distraction control', 'Cookie banners', 'AI search summaries', 'Site notification requests', 'Ad blocker warnings', 'Trackers']) &&
       same(rowLabels, rows) &&
       (await opt.getByText(footer, { exact: true }).isVisible()),
@@ -970,7 +970,7 @@ try {
       el.dispatchEvent(new Event('input', { bubbles: true }));
     }, text);
   const pressSave = async () => {
-    await opt.getByRole('button', { name: 'Save', exact: true }).click();
+    await opt.locator('#my-filters').getByRole('button', { name: 'Save', exact: true }).click();
     await opt.waitForFunction(() => !document.querySelector('.result').textContent.includes('Saving'), null, { timeout: 60_000 });
     return opt.locator('.result').innerText();
   };
@@ -1108,7 +1108,7 @@ try {
 
   const big = Array.from({ length: 20_000 }, (_, i) => `||big${i}.example^`).join('\n');
   await typeFilters(big);
-  await opt.getByRole('button', { name: 'Save', exact: true }).click();
+  await opt.locator('#my-filters').getByRole('button', { name: 'Save', exact: true }).click();
   const typedDuring = await filtersBox.evaluate((el) => {
     el.value += '\nexample.com##.typed-during-save';
     el.dispatchEvent(new Event('input', { bubbles: true }));

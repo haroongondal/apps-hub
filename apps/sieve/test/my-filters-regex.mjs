@@ -24,7 +24,7 @@ export async function run({ servers }) {
         el.value = t;
         el.dispatchEvent(new Event('input', { bubbles: true }));
       }, text);
-      await opt.getByRole('button', { name: 'Save', exact: true }).click();
+      await opt.locator('#my-filters').getByRole('button', { name: 'Save', exact: true }).click();
       await opt.waitForFunction(() => !document.querySelector('.result').textContent.includes('Saving'), null, { timeout: 60_000 });
       return opt.locator('.result').innerText();
     };

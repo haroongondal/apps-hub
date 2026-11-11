@@ -34,7 +34,7 @@ export async function local(t) {
     await page.getByRole('button', { name: 'Add', exact: true }).click();
     await page.getByRole('switch', { name: 'Trackers', exact: true }).uncheck();
     await page.getByRole('textbox', { name: 'My filters' }).fill(FILTER);
-    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.locator('#my-filters').getByRole('button', { name: 'Save', exact: true }).click();
     await page.getByText('Saved 1 filter.').waitFor();
     await setYouTube(t, { speed: { default: 1.5 }, on: false });
     check('backup: with the filter and the Trackers list off, the tracker request is blocked', !(await trackerThrough()));

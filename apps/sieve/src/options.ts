@@ -7,6 +7,7 @@ import { h, type Child } from './dom.ts';
 import { FILTERS_CHANGED, TOO_MANY_TO_STORE, saveMyFilters, type SaveResult } from './my-filters.ts';
 import { backupSection } from './options-backup.ts';
 import { shortcutsSection } from './options-shortcuts.ts';
+import { youtubeSection } from './options-youtube.ts';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const SHOWN_ERRORS = 50;
@@ -24,10 +25,11 @@ function liveToggle(label: string, read: (s: Settings) => boolean, change: (on: 
   return row;
 }
 const listToggle = (f: FeatureKey, label = NAMES[f]) => liveToggle(label, (s) => s.blocking.lists[f], (on) => setList(f, on));
-const section = (title: string, ...kids: Child[]) => h('section', {}, h('h2', { class: 'ui-heading' }, title), ...kids);
+const section = (id: string, title: string, ...kids: Child[]) => h('section', { id }, h('h2', { class: 'ui-heading' }, title), ...kids);
 
 const listsAt = new Date(meta.listsAt);
 const blocking = section(
+  'blocking',
   'Blocking',
   h(
     'div',
@@ -41,6 +43,7 @@ const blocking = section(
   ),
 );
 const lists = section(
+  'lists',
   'Filter lists',
   h('div', { class: 'ui-group rows' }, ...FEATURES.map((f) => listToggle(f, meta.features[f].ruleCount ? `${NAMES[f]} · ${count(meta.features[f].ruleCount, 'rule', 'rules')}` : NAMES[f]))),
   h(
@@ -118,6 +121,7 @@ async function saveFilters(): Promise<void> {
 }
 
 const mine = section(
+  'my-filters',
   'My filters',
   h('p', { class: 'ui-meta' }, 'One filter per line, in Adblock Plus or AdGuard syntax.'),
   area,
@@ -149,6 +153,7 @@ function add(): void {
   void save((s) => ({ ...s, blocking: { ...s.blocking, allowlist: s.blocking.allowlist.some((x) => same(x, entry)) ? s.blocking.allowlist : [...s.blocking.allowlist, entry] } }));
 }
 const allow = section(
+  'allowlist',
   'Allowlist',
   h('p', { class: 'ui-meta' }, "Sieve doesn't block anything on these sites and pages."),
   entries,
@@ -165,4 +170,8 @@ chrome.storage.onChanged.addListener((changes, where) => {
 });
 
 renderAllowlist();
-document.getElementById('app')!.replaceChildren(h('header', {}, h('h1', { class: 'ui-title' }, 'Sieve settings')), blocking, lists, mine, allow, shortcutsSection(), backupSection());
+const sections = [blocking, lists, mine, allow, youtubeSection(), shortcutsSection(), backupSection()];
+const nav = h('nav', { 'aria-label': 'Settings sections' }, ...sections.map((s) => h('a', { href: `#${s.id}` }, s.querySelector('h2')!.textContent)));
+document.getElementById('app')!.replaceChildren(h('header', {}, h('h1', { class: 'ui-title' }, 'Sieve settings')), nav, h('div', { class: 'content' }, ...sections));
+// The sections are drawn after the page loads, so the browser may have missed the address's #section.
+document.getElementById(location.hash.slice(1))?.scrollIntoView();
