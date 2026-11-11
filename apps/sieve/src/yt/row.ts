@@ -6,6 +6,7 @@ import { onActionsChanged } from './actions.ts';
 import { currentPage, feature, onNavigate, onSettings } from './bridge.ts';
 import LOCAL_CSS from './row.css';
 import { DARK_ATTR, SEL } from './selectors.ts';
+import { TIDY_SEL } from './tidy-selectors.ts';
 
 export interface RowButton {
   id: string;
@@ -55,7 +56,7 @@ const menu = h('div', { class: 'menu', role: 'menu', 'aria-label': 'More and set
 let host: HTMLElement | null = null;
 let wrap: HTMLElement | null = null;
 let on = false;
-let open: { pop: HTMLElement; opener: HTMLButtonElement } | null = null;
+let open: { pop: HTMLElement; opener: HTMLButtonElement; below: HTMLElement | null; vt: string } | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let deadline = 0;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -125,7 +126,10 @@ function toggle(opener: HTMLButtonElement, build: () => HTMLElement): void {
   at.append(pop);
   place(pop, at);
   opener.setAttribute('aria-expanded', 'true');
-  open = { pop, opener };
+  // inspected 2026-11-11, signed out, Chrome for Testing 149.0.7827.55: #below's view-transition-name makes a stacking context that let the related videos cover the popover (visual.css drops it for cinema too).
+  const below = host?.closest<HTMLElement>(TIDY_SEL.below) ?? null;
+  open = { pop, opener, below, vt: below?.style.getPropertyValue('view-transition-name') ?? '' };
+  below?.style.setProperty('view-transition-name', 'none');
   document.addEventListener('pointerdown', outside, true);
   const first = pop.querySelector<HTMLElement>('button:not([hidden]), input, select, textarea, [tabindex]');
   if (first) first.focus();
@@ -154,8 +158,9 @@ function place(pop: HTMLElement, at: HTMLElement): void {
 
 function close(refocus = true): void {
   if (!open) return;
-  const { pop, opener } = open;
+  const { pop, opener, below, vt } = open;
   open = null;
+  below?.style.setProperty('view-transition-name', vt);
   document.removeEventListener('pointerdown', outside, true);
   pop.remove();
   opener.setAttribute('aria-expanded', 'false');

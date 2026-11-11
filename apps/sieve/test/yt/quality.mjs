@@ -154,7 +154,7 @@ async function codecs(t) {
 // accident at hd720 on a headless run (YouTube picks 720p there), so the quality check uses large (480p) first, then hd720.
 export async function live(t) {
   const { check, page } = t;
-  const state = () => page.evaluate(() => { const p = document.querySelector('#movie_player'); return { quality: p.getPlaybackQuality(), preferred: p.getPreferredQuality?.(), codecs: p.getStatsForNerds?.().codecs ?? null, id: p.getVideoData().video_id }; }).catch(() => null);
+  const state = () => page.evaluate(() => { const p = document.querySelector('#movie_player'); return { quality: p.getPlaybackQuality(), preferred: p.getPreferredQuality?.(), codecs: p.getStatsForNerds?.().codecs ?? null, id: p.getVideoData().video_id, playerState: p.getPlayerState() }; }).catch(() => null);
   const ready = () => page.waitForFunction(() => typeof document.querySelector('#movie_player')?.getStatsForNerds === 'function' && document.querySelector('#movie_player video')?.currentTime > 1, null, { timeout: 30_000 }).catch(() => {});
   const gated = () => page.evaluate(() => ({ bot: /confirm you.re not a bot/i.test(document.body?.innerText ?? ''), consent: location.hostname.startsWith('consent.') })).then((g) => (g.bot ? 'bot check' : g.consent ? 'consent page' : null), () => null);
   try {
@@ -168,8 +168,10 @@ export async function live(t) {
     check('live quality: changing the setting to 720p applies it to the playing video', await until(async () => (await state())?.quality === 'hd720', 10_000), json(await state()));
     await setYouTube(t, { quality: { videos: 'large' } });
     await until(async () => (await state())?.quality === 'large', 10_000);
-    await page.locator('ytd-watch-next-secondary-results-renderer a[href^="/watch"]').first().click({ timeout: 10_000 });
-    await until(async () => (await state())?.id !== t.videoId, 10_000);
+    // inspected 2026-11-11, signed out, Chrome for Testing 149.0.7827.55: the first related link can be a Mix (`&list=RD…`), a playlist page where the playlists setting applies, and the new video
+    // sat buffering (state 3, `unknown`) for 16 s before it played, so the 10 s start once it plays (state 1).
+    await page.locator('ytd-watch-next-secondary-results-renderer a[href^="/watch"]:not([href*="list="])').first().click({ timeout: 10_000 });
+    await until(async () => { const s = await state(); return s?.id !== t.videoId && s?.playerState === 1; }, 30_000);
     check('live quality: after an in-app navigation the new video is on large too', await until(async () => (await state())?.quality === 'large', 10_000), json(await state()));
 
     await setYouTube(t, { quality: { videos: 'hd720', h264: true } });
