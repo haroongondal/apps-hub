@@ -5,6 +5,7 @@ import './yt/bridge-main.ts';
 import './yt/playlist-main.ts';
 import './yt/quality-main.ts';
 import './yt/speed-main.ts';
+import './yt/volume-main.ts';
 
 // shortcut: settings arrive asynchronously, so player data YouTube reads before they do is stripped, even on an allowed channel and even when Sieve is off, paused, the site is allowlisted or the Ads list is off. Upgrade if the owner notices.
 let told = false;
