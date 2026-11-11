@@ -224,7 +224,7 @@ test('realProbe adds a Referer rule for the original URL and the redirect target
   assert.equal(ops.filter((o) => !o.addRules).length, 2);
 });
 
-test('replay: a worker that died before the cancel finished leaves one record and one completed cancel', async () => {
+test('replay: a worker that died before the cancel finished is finished by recoverPaused: one record, one completed cancel, no resume', async () => {
   const records = new Map<number, string>();
   let completedCancels = 0;
   let hang = true;
@@ -243,12 +243,18 @@ test('replay: a worker that died before the cancel finished leaves one record an
     });
     return f;
   };
-  void mod.onCreated(item(), make().deps);
+  const first = make();
+  void mod.onCreated(item(), first.deps);
   await sleep(30);
   hang = false;
-  await mod.onCreated(item(), make().deps);
+  const second = make();
+  second.local.data.set('dlTakeover:7', first.local.data.get('dlTakeover:7'));
+  second.deps.search = async () => ({ state: 'in_progress', paused: true, filename: '' });
+  await mod.recoverPaused(second.deps);
   assert.equal(records.size, 1);
   assert.equal(completedCancels, 1);
+  assert.ok(!second.calls.includes('resume:7'));
+  assert.equal(second.local.data.size, 0);
 });
 
 const entry = (at = 1000, url = 'https://x.test/pack.zip') => ({ at, url });
@@ -339,14 +345,22 @@ test('retryInChrome writes the retry keys before download and removes the record
   assert.equal(f.session.data.get('dlRetry:https://x.test/a.zip'), 1000 + 120_000);
 });
 
-test('retryInChrome keeps a saveOnly record while Chrome only has some bytes, and removes it once Chrome is complete', async () => {
-  const saveOnly = [{ ...rec({ id: 'd1', url: 'https://x.test/a.zip' }), finalUrl: 'https://x.test/a.zip', saveOnly: true } as DlRecord];
-  const f = retryFake({ records: saveOnly, bytes: () => 10 });
-  assert.deepEqual(await mod.retryInChrome('d1', f.deps), { ok: true });
-  assert.ok(!f.calls.some((c) => c.startsWith('remove')));
-  const g = retryFake({ records: saveOnly, state: 'complete' });
+test('retryInChrome keeps a whole private copy unless Chrome has the whole file', async () => {
+  const saveOnly = [{ ...rec({ id: 'd1', url: 'https://x.test/a.zip' }), finalUrl: 'https://x.test/a.zip', saveOnly: true, size: 10 } as DlRecord];
+  for (const o of [{ bytes: () => 10 }, { state: 'complete', bytes: () => 5000 }, { state: 'interrupted', bytes: () => 10 }]) {
+    const f = retryFake({ records: saveOnly, ...o });
+    assert.deepEqual(await mod.retryInChrome('d1', f.deps), { ok: true });
+    assert.ok(!f.calls.some((c) => c.startsWith('remove')), JSON.stringify(o));
+  }
+  const g = retryFake({ records: saveOnly, state: 'complete', bytes: () => 10 });
   await mod.retryInChrome('d1', g.deps);
   assert.ok(g.calls.includes('remove:d1'));
+});
+
+test('retryInChrome keeps a partial record when Chrome interrupts with some bytes', async () => {
+  const f = retryFake({ state: 'interrupted', bytes: () => 10 });
+  await mod.retryInChrome('d1', f.deps);
+  assert.ok(!f.calls.some((c) => c.startsWith('remove')));
 });
 
 test('retryInChrome removes the record when the Chrome download is already complete', async () => {

@@ -133,7 +133,7 @@ export async function retryInChrome(id: string, deps: RetryDeps = realRetryDeps(
   for (let i = 0; i < RETRY_POLLS; i++) {
     await deps.sleep(500);
     const cur = await deps.search(chromeId).catch(() => undefined);
-    if (cur && (cur.state === 'complete' || (cur.bytesReceived > 0 && !record.saveOnly))) {
+    if (cur && (cur.state === 'complete' ? !record.saveOnly || cur.bytesReceived === record.size : cur.state === 'in_progress' && cur.bytesReceived > 0 && !record.saveOnly)) {
       await deps.remove([record.id]).catch(ignore);
       break;
     }
