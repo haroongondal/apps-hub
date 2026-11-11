@@ -8,5 +8,6 @@ internal object SyncConfig {
   const val BASE_URL = "https://strongroom-vault.haroonmukhtar4.workers.dev"
 
   // TEST_SYNC_URL is "" in every build but a debug phone proof build (-PstrongroomSyncUrl).
-  fun transport(): SyncTransport? = BASE_URL.ifEmpty { BuildConfig.TEST_SYNC_URL }.takeIf { it.isNotEmpty() }?.let(::HttpSyncTransport)
+  // emu-e2e test rig only: a debug build made with -PstrongroomSyncUrl prefers it (release has it empty, so unchanged).
+  fun transport(): SyncTransport? = BuildConfig.TEST_SYNC_URL.ifEmpty { BASE_URL }.takeIf { it.isNotEmpty() }?.let(::HttpSyncTransport)
 }
