@@ -41,3 +41,9 @@ th[aria-sort='descending'] .dl-sort::after { content: ' \2193'; }
 .dl-textarea { width: 100%; min-height: 120px; padding: var(--space-md); font: var(--type-meta) var(--font-mono); resize: vertical; }
 .dl-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); margin-top: var(--space-md); }
 @media (max-width: 759px) { .dl-layout { grid-template-columns: minmax(0, 1fr); } .dl-nav, .dl-group { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } .dl-group > .ui-caption { grid-column: 1 / -1; } }
+.dl-dialog--wide { max-width: min(640px, calc(100vw - 2 * var(--space-lg))); max-height: calc(100vh - 2 * var(--space-lg)); }
+.dl-queues, .dl-queues-editor { display: grid; gap: var(--space-md); }
+.dl-queue { display: grid; gap: var(--space-md); margin: 0; padding: var(--space-md); border: 1px solid var(--c-line); border-radius: var(--radius-control); min-width: 0; }
+.dl-days, .dl-times { display: flex; flex-wrap: wrap; gap: var(--space-sm) var(--space-md); }
+.dl-day { display: inline-flex; align-items: center; gap: var(--space-xs); font: var(--type-meta) var(--font-sans); }
+.dl-times > .ui-field { flex: 1 1 120px; }
