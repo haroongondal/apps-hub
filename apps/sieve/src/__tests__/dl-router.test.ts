@@ -360,7 +360,11 @@ test('the extras handed to the rule sync are the ones dropped afterwards', async
 });
 
 test('a failing reconcile in an alarm does not stop dl-eng-tick when the engine exists', async () => {
-  const t = await boot({ documents: 1, rulesFail: true });
+  const t = await boot({ documents: 1 });
+  t.router.io.records = async () => {
+    throw new Error('idb gone');
+  };
+  await assert.rejects(t.router.reconcile(), /idb gone/);
   t.onAlarm[0]({ name: ALARM_WATCHDOG });
   await sleep(30);
   assert.deepEqual(t.send, [{ type: 'dl-eng-tick' }]);
