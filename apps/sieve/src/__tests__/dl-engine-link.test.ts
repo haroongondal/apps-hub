@@ -43,6 +43,7 @@ function setup(options: { rules?: (n: number) => Promise<void>; documents?: numb
       },
       onMessage: { addListener: (cb: Listener) => void listeners.push(cb) },
     },
+    alarms: { onAlarm: { addListener: () => {} }, create: async () => {}, clear: async () => true },
     declarativeNetRequest: {
       updateSessionRules: async (o: { addRules?: unknown[] }) => {
         calls.rules.push(o);
