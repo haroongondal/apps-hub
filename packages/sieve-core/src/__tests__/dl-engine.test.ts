@@ -244,6 +244,36 @@ test('resume: a save-only record whose part file is gone downloads again', async
   assert.equal(s.parts[0].done, 0);
 });
 
+test('resume: a save-only record whose copy is cut short downloads again from the cut', async () => {
+  const parts = [{ start: 0, end: 49, done: 50 }, { start: 50, end: 99, done: 50 }];
+  const r = await makeRig({ records: [rec('a', { size: 100, state: 'failed', saveOnly: true, error: ERRORS.saveCanceled, parts })], files: ['a.part'] });
+  r.files.map.set('a.part', new Uint8Array(70));
+  await r.engine.act('resume', ['a']);
+  await flush();
+  assert.equal(r.transfer.runs.length, 1, 'the transfer runs');
+  assert.equal(r.host.saves.length, 0);
+  const s = r.stored('a')!;
+  assert.equal(s.saveOnly, false);
+  assert.deepEqual(s.parts.map((p) => p.done), [50, 20]);
+});
+
+test('resume: a complete record (not save-only) whose part file is gone downloads again', async () => {
+  const r = await makeRig({ records: [rec('a', { size: 100, state: 'failed', error: ERRORS.saveCanceled, parts: [{ start: 0, end: 99, done: 100 }] })] });
+  await r.engine.act('resume', ['a']);
+  await flush();
+  assert.equal(r.transfer.runs.length, 1);
+  assert.equal(r.host.saves.length, 0);
+  assert.equal(r.stored('a')!.parts[0].done, 0);
+});
+
+test('resume: a whole copy goes straight to saving', async () => {
+  const r = await makeRig({ records: [rec('a', { size: 100, state: 'failed', saveOnly: true, error: ERRORS.saveCanceled, parts: [{ start: 0, end: 99, done: 100 }] })], files: ['a.part'] });
+  await r.engine.act('resume', ['a']);
+  await flush();
+  assert.equal(r.transfer.runs.length, 0);
+  assert.equal(r.host.saves.length, 1);
+});
+
 test('finishing: a failed host.save ends failed with saveOnly', async () => {
   const r = await makeRig({ records: [rec('a', { size: 100 })] });
   r.host.saveAnswer = { ok: false, message: 'FILE_NO_SPACE' };

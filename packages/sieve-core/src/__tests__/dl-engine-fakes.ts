@@ -1,6 +1,7 @@
 import { createEngine } from '../dl-engine.ts';
 import type { Engine, StateChange } from '../dl-engine.ts';
 import type { Clock, FileHandle, Files, Store, Transfer, TransferHooks, TransferResult } from '../dl-ports.ts';
+import { partName } from '../dl-record.ts';
 import type { DlRecord } from '../dl-record.ts';
 import { DEFAULT_DOWNLOADS } from '../dl-settings.ts';
 import type { DownloadSettings } from '../dl-settings.ts';
@@ -253,6 +254,11 @@ export interface Rig {
 export async function makeRig(opts: { settings?: DownloadSettings; records?: DlRecord[]; files?: string[]; random?: () => number; noStart?: boolean } = {}): Promise<Rig> {
   const store = fakeStore(opts.records);
   const files = fakeFiles(opts.files);
+  // a listed part file is as long as its record says, so the copy looks whole
+  for (const n of opts.files ?? []) {
+    const size = (opts.records ?? []).find((r) => partName(r.id) === n)?.size;
+    if (size) files.map.set(n, new Uint8Array(size));
+  }
   const clock = fakeClock();
   const transfer = fakeTransfer();
   const host = fakeHost();

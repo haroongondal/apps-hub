@@ -434,6 +434,23 @@ test('12c unknown size: a file shorter than the written bytes resumes at its len
   assert.equal(await requested(2 * MiB), `bytes=${2 * MiB}-`);
 });
 
+for (const cut of [4 * MiB, 7 * MiB]) {
+  test(`12f three parts, file cut to ${cut / MiB} MiB: every part keeps only what is below the cut and the file equals the source`, async () => {
+    const s = setup();
+    s.net.add(U, { size: 10 * MiB });
+    const ac = new AbortController();
+    s.setOnBytes((n) => { if (n >= 2.5 * MiB) ac.abort(); });
+    const first = await s.run(probed(U, 10 * MiB, { partsWanted: 3 }), ac.signal);
+    assert.equal(first.kind, 'paused');
+    assert.ok(first.record.parts.filter((p) => p.done > 0).length >= 2, JSON.stringify(first.record.parts));
+    s.setOnBytes(() => {});
+    s.files.data.set(PART, s.files.data.get(PART)!.slice(0, cut));
+    const second = await s.run(first.record);
+    assert.equal(second.kind, 'done');
+    assertFile(s.files, 10 * MiB);
+  });
+}
+
 test('12e the reset is not stored (store down): the next run still restarts, no zero holes', async () => {
   const s = setup();
   s.net.add(U, { size: 10 * MiB });

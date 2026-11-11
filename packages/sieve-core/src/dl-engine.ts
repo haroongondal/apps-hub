@@ -314,6 +314,21 @@ export function createEngine(deps: EngineDeps): Engine {
     return { ids };
   }
 
+  // A finished or save-only record goes straight to saving, so its copy must still be whole: a lost or short one is downloaded again from the cut.
+  async function recopy(r: DlRecord): Promise<DlRecord> {
+    if (!(r.saveOnly || isComplete(r))) return r;
+    let have = 0;
+    if (await files.exists(partName(r.id))) {
+      try {
+        const h = await files.open(partName(r.id), null);
+        have = h.size();
+        h.close();
+      } catch { return r; } // busy: the save that holds it will say what is wrong
+    }
+    if (have >= (r.size ?? 1)) return r;
+    return { ...r, saveOnly: false, parts: r.parts.map((p) => ({ ...p, done: Math.max(0, Math.min(p.done, have - p.start)) })) };
+  }
+
   async function act(op: DoOp, ids: string[]): Promise<void> {
     for (const id of ids) {
       const r = recs.get(id);
@@ -331,10 +346,7 @@ export function createEngine(deps: EngineDeps): Engine {
         }
       } else if (op === 'resume') {
         if (r.state === 'paused' || r.state === 'failed') {
-          // A finished or save-only record whose part file is gone has nothing to save: download it again.
-          const lost = (r.saveOnly || isComplete(r)) && !(await files.exists(partName(id)));
-          const base = lost ? { ...r, saveOnly: false, parts: r.parts.map((p) => ({ ...p, done: 0 })) } : r;
-          const next = applyEvent(base, 'resume', now);
+          const next = applyEvent(await recopy(r), 'resume', now);
           set(next);
           await persist(next);
           if (next.state === 'saving') save(id);
