@@ -50,6 +50,9 @@ async function hiddenTabs(t) {
     `--user-data-dir=${profile}`, '--remote-debugging-port=0', '--headless=new', '--no-first-run', `--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`,
     '--ignore-certificate-errors', '--host-resolver-rules=MAP www.youtube.com 127.0.0.1', '--autoplay-policy=no-user-gesture-required', 'about:blank',
   ], { stdio: 'ignore' });
+  const exited = new Promise((resolve) => proc.once('exit', resolve));
+  let spawnError;
+  proc.on('error', (e) => { spawnError = e; });
   let ws;
   try {
     let port;
@@ -57,14 +60,22 @@ async function hiddenTabs(t) {
       await sleep(100);
       try { port = readFileSync(join(profile, 'DevToolsActivePort'), 'utf8').split('\n')[0]; } catch {}
     }
+    if (!port) throw spawnError ?? new Error('Chrome did not write DevToolsActivePort');
     ws = new WebSocket((await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).webSocketDebuggerUrl);
     await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
     let n = 0;
     const waiting = new Map();
     ws.onmessage = (m) => { const d = JSON.parse(m.data); waiting.get(d.id)?.(d); };
+    ws.onclose = () => { for (const fail of waiting.values()) fail({ error: { message: 'the DevTools connection closed' } }); };
     const send = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
       const id = ++n;
-      waiting.set(id, (d) => (d.error ? reject(new Error(d.error.message)) : resolve(d.result)));
+      const timer = setTimeout(() => reject(new Error(`${method} got no answer in 15 s`)), 15_000);
+      waiting.set(id, (d) => {
+        clearTimeout(timer);
+        waiting.delete(id);
+        if (d.error) reject(new Error(d.error.message));
+        else resolve(d.result);
+      });
       ws.send(JSON.stringify({ id, method, params, sessionId }));
     });
     const attach = async (targetId) => (await send('Target.attachToTarget', { targetId, flatten: true })).sessionId;
@@ -117,8 +128,12 @@ async function hiddenTabs(t) {
   } finally {
     ws?.close();
     proc.kill();
-    await sleep(500);
-    rmSync(profile, { recursive: true, force: true });
+    // Chrome writes to the profile until it is gone: wait for it (killed hard after 5 s), then remove the folder.
+    if ((await Promise.race([exited.then(() => true), sleep(5000).then(() => false)])) === false) {
+      proc.kill('SIGKILL');
+      if (!spawnError) await exited;
+    }
+    try { rmSync(profile, { recursive: true, force: true, maxRetries: 5 }); } catch {}
   }
 }
 
@@ -179,21 +194,23 @@ export async function local(t) {
     check('autoplay always: emptied and play on the same video id are not judged again', await until(() => playing(page, 0)), json(await state(page)));
     await page.close();
 
-    // An ad is never stopped, and it leaves the state as it was for the video that follows.
+    // An ad is judged like any play: a pre-roll nobody started is stopped, and one the owner started lets the content after it play.
     const ad = (p, on) => p.evaluate((a) => document.querySelector('#movie_player').classList.toggle('ad-showing', a), on);
     page = await mk('/watch?v=sieveTest01&autoplay=0');
     await ad(page, true);
     await page.evaluate((s) => document.querySelector(s).play().catch(() => {}), SEL.video);
-    check('autoplay always: a play while an ad shows is not stopped', await until(() => playing(page, 0.2)), json(await state(page)));
+    await sleep(300);
+    check('autoplay always: a pre-roll ad nobody started is stopped', (await state(page)).paused && (await state(page)).t < 0.5, json(await state(page)));
     await ad(page, false);
     await swap(page);
-    check('autoplay always: the content after an ad nobody started is judged as new and stopped', await until(async () => (await state(page)).paused) && (await sleep(500), (await state(page)).paused), json(await state(page)));
+    check('autoplay always: the content after an ad nobody started is stopped too', await until(async () => (await state(page)).paused) && (await sleep(500), (await state(page)).paused), json(await state(page)));
     await page.close();
     page = await mk('/watch?v=sieveTest01&autoplay=0');
     await ad(page, true);
     await page.locator(SEL.player).click();
     await until(() => playing(page, 0.2));
     await ad(page, false);
+    await sleep(1200); // the click is older than the second Sieve gives a press, so only the owner's play of the ad lets the content through
     await swap(page);
     check('autoplay always: an ad the owner started leaves the content after it playing', await until(() => playing(page, 0)), json(await state(page)));
     await page.close();

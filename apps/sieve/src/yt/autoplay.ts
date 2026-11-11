@@ -44,6 +44,8 @@ feature('autoplay', () => {
   const rearm = (): void => {
     const id = currentPage().videoId;
     if (id === judged) return;
+    // Moving on from a judged page is no longer the tab's first video; the hard load's second onNavigate has the same id.
+    if (judged !== undefined) firstVideo = false;
     judged = id;
     firstPlay = true;
   };
@@ -51,11 +53,6 @@ feature('autoplay', () => {
   when('play', (v) => {
     if (!on) return;
     rearm();
-    // An ad is never stopped. It leaves the state as it was for the video that follows, unless the owner started it.
-    if (document.querySelector(SEL.player)?.classList.contains('ad-showing')) {
-      if (performance.now() - lastInput < 1000) firstPlay = false;
-      return;
-    }
     const stop = stopThisPlay({ mode, playlists, loadedHidden, firstVideo, inPlaylist: currentPage().list !== null, firstPlay, sincePlayerInput: performance.now() - lastInput });
     // A video stays "new" until a play is let through, so a script that calls play() again after the pause is judged again,
     // and a tab that loaded hidden stays on its first video until one has played.
