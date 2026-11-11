@@ -114,6 +114,12 @@ export async function local(t) {
     await page.evaluate(() => document.querySelector('sieve-yt-row').shadowRoot.querySelector('[data-id="screenshot"] > button').click());
     await sleep(1500);
     check('capture: a page script\'s click() on the Screenshot button makes no download', (await downloads(t)).length === n, `${(await downloads(t)).length} vs ${n}`);
+    await page.evaluate(() => { document.title = 'a~b\u200fc\u0085d - YouTube'; });
+    n = (await downloads(t)).length;
+    await shot.click();
+    const odd = await newDownload(t, n);
+    const oddName = (await asked(t)).at(-1)?.filename ?? '';
+    check('capture: a title with ~, a right-to-left mark and a C1 control gives a legal name (no ~, Cc or Cf) and the download finishes', /^Sieve\/a bc d \d+-\d\d\.png$/.test(oddName) && !/[~\p{Cc}\p{Cf}]/u.test(oddName) && odd?.state === 'complete', json({ oddName, state: odd?.state, error: odd?.error }));
     await page.close();
 
     page = await openYt(t, '/watch?v=sieveTest01&canvas=1&autoplay=0');

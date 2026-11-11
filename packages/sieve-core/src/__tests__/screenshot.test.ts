@@ -23,6 +23,19 @@ test('screenshotName: path characters, controls, dots and length cannot change t
   assert.equal(screenshotName('😀'.repeat(200), 1), '😀'.repeat(120) + ' 0-01.png', 'a cut never splits a character');
 });
 
+test('screenshotName: characters Chrome refuses in a download name are gone (~, control and format characters)', () => {
+  assert.equal(screenshotName('a~b', 5), 'a b 0-05.png');
+  assert.equal(screenshotName('a\u0085b', 5), 'a b 0-05.png', 'a C1 control (NEL)');
+  assert.equal(screenshotName('a\u0090b', 5), 'a b 0-05.png', 'a C1 control');
+  assert.equal(screenshotName('a\u007fb', 5), 'a b 0-05.png');
+  assert.equal(screenshotName('مرحبا\u200fعالم', 5), 'مرحباعالم 0-05.png', 'a right-to-left mark is dropped, the words stay joined');
+  assert.equal(screenshotName('a\u200eb\u200fc', 5), 'abc 0-05.png');
+  assert.equal(screenshotName('👨\u200d👩\u200d👧', 5), '👨👩👧 0-05.png', 'a joiner is dropped');
+  assert.equal(screenshotName('a\u{e0067}b', 5), 'ab 0-05.png', 'a tag character');
+  assert.equal(screenshotName('\u200f\u200f', 5), 'YouTube video 0-05.png', 'only format characters is an empty title');
+  assert.equal(screenshotName('~~hidden', 5), 'hidden 0-05.png');
+});
+
 test('isPngDataUrl', () => {
   assert.equal(isPngDataUrl('data:image/png;base64,iVBORw0KGgo=', 1000), true);
   assert.equal(isPngDataUrl('data:image/jpeg;base64,/9j/4AAQ', 1000), false);
