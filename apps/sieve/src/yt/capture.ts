@@ -68,6 +68,8 @@ async function screenshot(): Promise<void> {
   }
 }
 
+// inspected 2026-11-11, signed out, Chrome for Testing 149.0.7827.55 headless (dQw4w9WgXcQ): requestPictureInPicture() from a trusted click resolved with pictureInPictureElement the video, exitPictureInPicture() closed it, disablePictureInPicture false.
+// Headless reports userActivation.isActive true with no input and also opened it from page.evaluate and from a yt-command, so the NotAllowedError case was not seen: headed Chrome's refusal is on the owner checklist.
 async function pip(): Promise<void> {
   const v = video();
   if (!v) return;
