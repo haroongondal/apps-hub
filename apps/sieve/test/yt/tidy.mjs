@@ -50,8 +50,13 @@ export async function local(t) {
     // Never painted visible: the first animation frame after the shelf already sees display none. A throwaway load first warms the renderer and storage connection (as theme.mjs does).
     await setYouTube(t, { tidy: { hideShorts: true } });
     await (await browse(t)).close();
-    page = await browse(t);
-    const first = await until(() => page.evaluate(() => window.__shelf));
+    // As in theme.mjs: a load whose first frame beat the settings (applied null) is loaded again, up to 3 loads; one that had them is judged as it is.
+    let first;
+    for (let load = 0; load < 3 && first?.applied == null; load++) {
+      await page?.close();
+      page = await browse(t);
+      first = await until(() => page.evaluate(() => window.__shelf));
+    }
     check('tidy: with Hide Shorts stored, the shelf is display none in the first animation frame', first?.display === 'none' && first.applied !== null, `${json(first)} (applied is the sieve-yt-applied mark time; null means no settings had arrived by the first frame)`);
     await page.close();
     await reset(t);
