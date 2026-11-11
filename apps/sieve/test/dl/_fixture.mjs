@@ -97,6 +97,7 @@ export async function startFixture() {
 
     let sent = 0;
     res.on('close', () => {
+      entry.sent = sent;
       if (res.writableFinished) return;
       log.push({ path, closed: true, sent });
       if (kind === 'flip' && len > 1) flip.set(path, (flip.get(path) ?? 1) + 1);

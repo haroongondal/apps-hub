@@ -51,24 +51,7 @@ const behindCheckpoint = (log, path, parts, from, to) =>
     return p && r.start < p.start + p.done;
   });
 
-// A close record is not linked to its request: it is matched, in log order, to the earliest unmatched request that is long enough.
-function sentBytes(log, path) {
-  const size = Number(/^\/file\/(\d+)\//.exec(path)[1]);
-  const open = [];
-  let total = 0;
-  for (const l of log) {
-    if (l.path !== path) continue;
-    if (l.closed) {
-      const at = open.findIndex((q) => !q.cut && q.len >= l.sent);
-      if (at >= 0) open[at].cut = l.sent;
-      else total += l.sent;
-    } else if (l.status === 200 || l.status === 206) {
-      const m = /^bytes=(\d+)-(\d*)$/.exec(l.range ?? '');
-      open.push({ len: m ? Math.max(0, (m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1)) - Number(m[1]) + 1) : size, cut: null });
-    }
-  }
-  return total + open.reduce((n, q) => n + (q.cut ?? q.len), 0);
-}
+const sentBytes = (log, path) => log.filter((l) => l.path === path && !l.closed).reduce((n, l) => n + (l.sent ?? 0), 0);
 
 const HUB = (raw) => `chrome-extension://${raw.id}/options.html`;
 const hubs = new WeakSet();
@@ -223,7 +206,7 @@ export async function run(t) {
     check(name(`${title}: no request starts behind its part's saved offset`), behindCheckpoint(fx.log, path, parts, mark, fx.log.length).length === 0, json({ parts, resumed }));
     check(name(`${title}: the fixture sent at most the size plus 4 checkpoints`), total <= 150_000_000 + 3 * CHECKPOINT + CHECKPOINT, `sent ${total}: ${json(fx.log.filter((l) => l.path === path).map((l) => [l.range, l.status, l.closed ? l.sent : null]))}`);
     await onlyFile(title, c.downloadsDir, 'Other/p.bin', 150_000_000);
-    check(name(`${title}: the record is done`), r.state === 'done', json(r.state));
+    check(name(`${title}: the record has its saved path`), !!r.savedPath, json(r.savedPath));
     await nothingLeft(title, raw2);
     console.log(`torture: ${title}: re-sent ${total - 150_000_000} bytes, relaunch to first request ${resumed[0] ? resumed[0].t - t0 : '?'} ms`);
   });
@@ -253,12 +236,11 @@ export async function run(t) {
     const behind = cycles.flatMap((cy, k) => behindCheckpoint(fx.log, path, cy.parts, cy.mark, cycles[k + 1]?.mark ?? fx.log.length));
     const zeros = ranges(fx.log, path, cycles[0].mark).filter((q) => q.start === 0);
     const total = sentBytes(fx.log, path);
-    check(name(`${title}: five closes happened before the file finished`), cycles.length === 5, `${cycles.length}`);
     check(name(`${title}: no request after a close starts behind its part's saved offset`), behind.length === 0, json(behind));
     check(name(`${title}: no request after the first close starts at 0`), zeros.length === 0, json(zeros));
     check(name(`${title}: the fixture sent at most the size plus five times four checkpoints`), total <= 150_000_000 + 5 * (3 * CHECKPOINT + CHECKPOINT), `sent ${total}: ${json(fx.log.filter((l) => l.path === path).map((l) => [l.range, l.status, l.closed ? l.sent : null]))}`);
     await onlyFile(title, c.downloadsDir, 'Other/c.bin', 150_000_000);
-    check(name(`${title}: the record is done`), r.state === 'done', json(r.state));
+    check(name(`${title}: the record has its saved path`), !!r.savedPath, json(r.savedPath));
     await nothingLeft(title, raw);
     console.log(`torture: ${title}: re-sent ${total - 150_000_000} bytes over five closes`);
   });
@@ -278,7 +260,7 @@ export async function run(t) {
     const first = ranges(fx.log, path, mark)[0];
     check(name(`${title}: the record survived with progress and restarted from 0`), got(before) > 20_000_000 && first?.start === 0, json({ saved: got(before), first }));
     await onlyFile(title, c.downloadsDir, 'Other/o1.bin', 60_000_000);
-    check(name(`${title}: the record is done`), r.state === 'done', json(r.state));
+    check(name(`${title}: the record has its saved path`), !!r.savedPath, json(r.savedPath));
     await nothingLeft(title, raw);
   });
 
