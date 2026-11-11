@@ -17,7 +17,7 @@ const item = (o: Record<string, unknown> = {}) =>
   ({ id: 7, url: 'https://x.test/pack.zip', finalUrl: 'https://x.test/pack.zip', referrer: 'https://x.test/page', mime: 'application/zip', totalBytes: SIZE, filename: '', state: 'in_progress', paused: false, ...o }) as unknown as chrome.downloads.DownloadItem;
 const facts = (o: Partial<ProbeFacts> = {}): ProbeFacts => ({ status: 206, url: 'https://x.test/pack.zip', contentRange: `bytes 0-0/${SIZE}`, contentEncoding: null, mime: 'application/zip', etag: '"e1"', lastModified: null, disposition: null, contentLength: '1', ...o });
 const settings = (o: Partial<DownloadSettings> = {}): DownloadSettings => ({ ...DEFAULT_DOWNLOADS, ...o, takeOver: { ...DEFAULT_DOWNLOADS.takeOver, minMb: 1, ...(o.takeOver ?? {}) } });
-const rec = (o: Partial<DlRecord> = {}) => ({ id: 'd1', url: 'https://x.test/pack.zip', chromeId: 7, addedAt: 2000, state: 'running', ...o }) as unknown as DlRecord;
+const rec = (o: Partial<DlRecord> = {}) => ({ id: 'd1', url: 'https://x.test/pack.zip', chromeId: 7, addedAt: 2000, state: 'running', size: null, parts: [], ...o }) as unknown as DlRecord;
 
 function mem(initial: Record<string, unknown> = {}, delay = 0) {
   const data = new Map(Object.entries(initial));
@@ -353,6 +353,16 @@ test('retryInChrome keeps a whole private copy unless Chrome has the whole file'
     assert.ok(!f.calls.some((c) => c.startsWith('remove')), JSON.stringify(o));
   }
   const g = retryFake({ records: saveOnly, state: 'complete', bytes: () => 10 });
+  await mod.retryInChrome('d1', g.deps);
+  assert.ok(g.calls.includes('remove:d1'));
+});
+
+test('retryInChrome keeps a failed record whose parts are all done even when saveOnly is false', async () => {
+  const whole = [{ ...rec({ id: 'd1', url: 'https://x.test/a.zip' }), finalUrl: 'https://x.test/a.zip', saveOnly: false, size: 10, parts: [{ start: 0, end: 9, done: 10 }] } as DlRecord];
+  const f = retryFake({ records: whole, bytes: () => 1 });
+  assert.deepEqual(await mod.retryInChrome('d1', f.deps), { ok: true });
+  assert.ok(!f.calls.some((c) => c.startsWith('remove')));
+  const g = retryFake({ records: whole, state: 'complete', bytes: () => 10 });
   await mod.retryInChrome('d1', g.deps);
   assert.ok(g.calls.includes('remove:d1'));
 });

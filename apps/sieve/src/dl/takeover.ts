@@ -1,4 +1,4 @@
-import type { AddItem, DlRecord } from '@apps-hub/sieve-core/src/dl-record.ts';
+import { isComplete, type AddItem, type DlRecord } from '@apps-hub/sieve-core/src/dl-record.ts';
 import type { DownloadSettings } from '@apps-hub/sieve-core/src/dl-settings.ts';
 import { factsFromError, factsFromResponse, isOurs, verdict, wantsTakeover, type ChromeItem, type ProbeFacts } from '@apps-hub/sieve-core/src/dl-takeover.ts';
 import { PROBE_TIMEOUT_MS } from '@apps-hub/sieve-core/src/dl-transfer.ts';
@@ -130,10 +130,11 @@ export async function retryInChrome(id: string, deps: RetryDeps = realRetryDeps(
     await deps.session.remove(keys).catch(ignore);
     return { ok: false, message: T.retryRefused };
   }
+  const whole = record.saveOnly || isComplete(record);
   for (let i = 0; i < RETRY_POLLS; i++) {
     await deps.sleep(500);
     const cur = await deps.search(chromeId).catch(() => undefined);
-    if (cur && (cur.state === 'complete' ? !record.saveOnly || cur.bytesReceived === record.size : cur.state === 'in_progress' && cur.bytesReceived > 0 && !record.saveOnly)) {
+    if (cur && (cur.state === 'complete' ? !whole || cur.bytesReceived === record.size : cur.state === 'in_progress' && cur.bytesReceived > 0 && !whole)) {
       await deps.remove([record.id]).catch(ignore);
       break;
     }
