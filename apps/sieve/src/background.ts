@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS } from '@apps-hub/sieve-core/src/settings.ts';
 import { applyBlockingSoon } from './blocking.ts';
+import { onCommand } from './commands.ts';
 import { initBadge, onMatched, onNavigated, onTabRemoved } from './counts.ts';
 import { forgetStored, onCommitted } from './inject.ts';
 import { onPanelConnect } from './panels.ts';
@@ -20,6 +21,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 chrome.runtime.onMessage.addListener(onMessage);
 chrome.runtime.onMessage.addListener(onYouTubeMessage);
 chrome.runtime.onConnect.addListener(onPanelConnect);
+chrome.commands.onCommand.addListener(onCommand);
 chrome.webNavigation.onCommitted.addListener(onCommitted, { url: [{ schemes: ['http', 'https'] }] });
 initBadge();
 // Only unpacked extensions have the debug event; without it the menu shows no counts, and the worker still starts.

@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { DEFAULT_SETTINGS, FEATURES, compileFilters, isHost, scriptletFunction, stripSections } from '@apps-hub/sieve-core';
 import { checkRegexesWithRe2 } from '@apps-hub/sieve-core/src/node-regex.ts';
+import { commandsManifest } from '@apps-hub/sieve-core/src/yt-actions.ts';
 import { LISTS } from './src/lists.ts';
 import { COMMON_SUFFIXES, GOOGLE_SUFFIXES } from './src/tlds.ts';
 
@@ -136,6 +137,7 @@ const broken = meta.scriptlets.filter((name) => typeof SCRIPTLETS[name] !== 'fun
 if (broken.length) throw new Error(`scriptlets.js has no function for ${broken.join(', ')}`);
 
 const manifest = JSON.parse(readFileSync(root('src/manifest.json'), 'utf8'));
+manifest.commands = commandsManifest();
 manifest.declarative_net_request = {
   rule_resources: FEATURES.filter((f) => meta.features[f].ruleset).map((f) => ({ id: f, enabled: onByDefault(f), path: `rules/${f}.json` })),
 };
