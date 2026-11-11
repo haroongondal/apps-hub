@@ -130,4 +130,5 @@ export function initSave(): void {
     onSave(message, sender).then(sendResponse, () => sendResponse(INVALID));
     return true;
   });
+  void recoverSaves().catch(() => {}); // a worker that died mid-save: send what Chrome finished meanwhile
 }

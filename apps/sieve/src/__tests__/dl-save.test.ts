@@ -179,7 +179,7 @@ test('onChanged: an unknown url (an ordinary Chrome download) sends nothing', as
 });
 
 test('onChanged: a failing sendToEngine keeps the entry', async () => {
-  const env = setup({ send: async () => { throw new Error('Receiving end does not exist'); } });
+  const env = setup({ send: async () => { throw new Error('boom'); } });
   await started(env, { state: 'complete', fileSize: 100, filename: '/f' });
   env.fire({ id: 7, state: { current: 'complete' } });
   await settle();
@@ -232,4 +232,15 @@ test('recoverSaves leaves an entry alone while onSave is still starting it', asy
   await recoverSaves();
   assert.equal(events(env.calls).length, 0);
   await running;
+});
+
+test('initSave sends what Chrome finished while the worker was gone', async () => {
+  const env = setup();
+  const { initSave } = await load();
+  env.items.set(40, { id: 40, url: `${BLOB}i`, state: 'complete', filename: '/h', fileSize: 100 });
+  env.session.set(`dlSave:${BLOB}i`, entry({ id: 'i', chromeId: 40 }));
+  initSave();
+  await settle();
+  assert.deepEqual(events(env.calls), [{ id: 'i', kind: 'done', filename: '/h', chromeId: 40 }]);
+  assert.equal(env.session.size, 0);
 });
