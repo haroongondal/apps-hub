@@ -52,6 +52,7 @@ export async function onMenuClicked(info: Info, tab: TabLike | undefined): Promi
   if (open?.id === undefined) await chrome.tabs.create({ url: `${page}#add` });
   else {
     await chrome.tabs.update(open.id, { active: true, url: `${page}#add` });
+    await chrome.tabs.reload(open.id); // only the fragment changed: reload so the page reads the new dlPrefill
     if (open.windowId !== undefined) await chrome.windows.update(open.windowId, { focused: true });
   }
 }

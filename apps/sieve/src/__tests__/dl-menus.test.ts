@@ -10,18 +10,27 @@ type Msg = (m: unknown, sender: unknown, reply: (r: unknown) => void) => boolean
 
 function setup(options: { on?: boolean; result?: unknown[]; reject?: boolean; tabs?: { id: number; windowId?: number }[] } = {}) {
   const items: { id: string; title: string; contexts: string[] }[] = [];
-  const calls = { removeAll: 0, scripts: [] as { target: { tabId: number; frameIds: number[] } }[], created: [] as { url: string }[], updated: [] as unknown[], windows: [] as unknown[] };
+  const log: string[] = [];
+  const onClicked: unknown[] = [];
+  const onInstalled: unknown[] = [];
+  const onChanged: ((c: Record<string, { newValue?: unknown }>, area: string) => void)[] = [];
+  const calls = { reload: [] as unknown[], removeAll: 0, scripts: [] as { target: { tabId: number; frameIds: number[] } }[], created: [] as { url: string }[], updated: [] as unknown[], windows: [] as unknown[] };
   const session = new Map<string, unknown>();
   const messageListeners: Msg[] = [];
   (globalThis as unknown as Record<string, unknown>).chrome = {
     contextMenus: {
       removeAll: async () => {
         calls.removeAll++;
+        log.push('remove-start');
         await new Promise((r) => setTimeout(r, 2));
         items.length = 0;
+        log.push('remove-end');
       },
-      create: (item: { id: string; title: string; contexts: string[] }) => void items.push(item),
-      onClicked: { addListener() {} },
+      create: (item: { id: string; title: string; contexts: string[] }) => {
+        log.push('create');
+        items.push(item);
+      },
+      onClicked: { addListener: (cb: unknown) => void onClicked.push(cb) },
     },
     scripting: {
       executeScript: async (inj: { target: { tabId: number; frameIds: number[] } }) => {
@@ -33,17 +42,18 @@ function setup(options: { on?: boolean; result?: unknown[]; reject?: boolean; ta
     storage: {
       local: { get: async () => ({ downloads: { ...DEFAULT_DOWNLOADS, on: options.on ?? true } }) },
       session: { set: async (o: Record<string, unknown>) => void Object.entries(o).forEach(([k, v]) => session.set(k, v)) },
-      onChanged: { addListener() {} },
+      onChanged: { addListener: (cb: (typeof onChanged)[number]) => void onChanged.push(cb) },
     },
     tabs: {
       query: async () => options.tabs ?? [],
       create: async (p: { url: string }) => void calls.created.push(p),
       update: async (...a: unknown[]) => void calls.updated.push(a),
+      reload: async (id: number) => void calls.reload.push(id),
     },
     windows: { update: async (...a: unknown[]) => void calls.windows.push(a) },
-    runtime: { getURL: (p: string) => BASE + p, onInstalled: { addListener() {} }, onMessage: { addListener: (cb: Msg) => void messageListeners.push(cb) } },
+    runtime: { getURL: (p: string) => BASE + p, onInstalled: { addListener: (cb: unknown) => void onInstalled.push(cb) }, onMessage: { addListener: (cb: Msg) => void messageListeners.push(cb) } },
   };
-  return { items, calls, session, messageListeners };
+  return { items, calls, session, messageListeners, log, onClicked, onInstalled, onChanged };
 }
 
 test('normaliseLinks keeps http(s), normalises, deduplicates and caps', () => {
@@ -64,6 +74,29 @@ test('rebuildMenus removes all first, creates three items when on, none when off
   await Promise.all([rebuildMenus({ ...DEFAULT_DOWNLOADS, on: true }), rebuildMenus({ ...DEFAULT_DOWNLOADS, on: true })]);
   assert.equal(items.length, 3);
   await rebuildMenus({ ...DEFAULT_DOWNLOADS, on: false });
+  assert.equal(items.length, 0);
+});
+
+test('overlapping rebuilds run one after the other and leave exactly three items', async () => {
+  const { items, log } = setup();
+  const on = { ...DEFAULT_DOWNLOADS, on: true };
+  await Promise.all([rebuildMenus(on), rebuildMenus(on)]);
+  const one = ['remove-start', 'remove-end', 'create', 'create', 'create'];
+  assert.deepEqual(log, [...one, ...one]);
+  assert.equal(items.length, 3);
+});
+
+test('initMenus registers the click and install listeners and rebuilds when downloads.on changes', async () => {
+  const { items, calls, onClicked, onInstalled, onChanged } = setup();
+  initMenus();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(onClicked.length, 1);
+  assert.equal(onInstalled.length, 1);
+  assert.equal(items.length, 3); // built once at worker start
+  const before = calls.removeAll;
+  for (const cb of onChanged) cb({ downloads: { newValue: { ...DEFAULT_DOWNLOADS, on: false } } }, 'local');
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(calls.removeAll, before + 1);
   assert.equal(items.length, 0);
 });
 
@@ -112,6 +145,7 @@ test('an existing downloads tab is updated and focused instead of a new one', as
   assert.equal(calls.created.length, 0);
   assert.deepEqual(calls.updated, [[9, { active: true, url: `${BASE}downloads.html#add` }]]);
   assert.deepEqual(calls.windows, [[4, { focused: true }]]);
+  assert.deepEqual(calls.reload, [9]); // the fragment alone would not make the page read the new prefill
 });
 
 test('downloads.on false does nothing at all', async () => {
