@@ -292,11 +292,13 @@ export function createTransfer(deps: TransferDeps): Transfer {
         for (const p of r.parts) p.done = 0;
       }
       hooks.update(clone(r));
-      const h = (handle = await files.open(partName(r.id), r.size));
-      // The part file was lost or cut short while the record survived: bytes below `done` are zeros now, so start over.
+      // A resumed file keeps the length it has until the cut is stored: a lost file must not be pre-sized to zeros that look done.
       const reached = Math.max(0, ...r.parts.filter((p) => p.done > 0).map((p) => p.start + p.done));
-      if (reached > 0 && (h.existingSize === null || (h.existingSize < reached && (r.size === null || h.existingSize < r.size)))) {
-        for (const p of r.parts) p.done = 0;
+      const h = (handle = await files.open(partName(r.id), reached > 0 ? null : r.size));
+      const had = h.existingSize ?? 0;
+      if (had < reached) {
+        // The part file was lost or cut short while the record survived: keep what lies below the cut, restart the rest.
+        for (const p of r.parts) p.done = Math.max(0, Math.min(p.done, had - p.start));
         hooks.update(clone(r));
         try { await hooks.persist(clone(r)); } catch { throw new Fail(ERRORS.storage); }
       }

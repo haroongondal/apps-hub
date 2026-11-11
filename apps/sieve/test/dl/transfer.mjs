@@ -34,6 +34,8 @@ export async function run(t) {
   });
   const fresh = async (patch = {}) => {
     fx.reset();
+    // Finishing is checked in save.mjs; here the private copy must stay in OPFS at `saving` so its bytes can be read.
+    await t.sw.evaluate(() => { chrome.downloads.download = () => new Promise(() => {}); });
     await resetDl(t);
     await states.evaluate(() => window.__states.clear());
     if (Object.keys(patch).length) await setDownloads(t, patch);
@@ -173,6 +175,24 @@ export async function run(t) {
     const part = await readPart(t, `${id}.part`);
     check('downloads: transfer: a resume after the part file was deleted restarts at byte 0 and the file has no holes', done(paused) > 0 && from === 0 && part.size === 40000000 && part.ok && r.parts.every((p) => p.done === p.end - p.start + 1), json({ saved: done(paused), from, part }));
     await consistent('part file lost');
+  });
+
+  await attempt('the part file is lost, three parts', async () => {
+    // Parts beyond byte 0 write past the end of the empty file: the real file system must zero-fill below them.
+    await fresh({ parts: 3 });
+    const url = '/file/30000000/n.bin?rate=6000000';
+    const id = await add(t, { url: `${fx.base}${url}` });
+    await progress(t, id);
+    await sendMsg(t, { type: 'dl-do', op: 'pause', ids: [id] });
+    const paused = await reach(t, id, 'paused');
+    await deletePart(t, `${id}.part`);
+    const before = requests(t, '/file/30000000/n.bin').length;
+    await sendMsg(t, { type: 'dl-do', op: 'resume', ids: [id] });
+    const r = await reach(t, id, 'saving', 40000);
+    const starts = requests(t, '/file/30000000/n.bin').slice(before).filter((l) => l.range && l.range !== 'bytes=0-0').map((l) => Number(/bytes=(\d+)-/.exec(l.range)?.[1]));
+    const part = await readPart(t, `${id}.part`);
+    check('downloads: transfer: three parts resumed after the part file was deleted restart every part and the file has no holes', done(paused) > 0 && starts.includes(0) && starts.every((x) => paused.parts.some((p) => p.start === x)) && part.size === 30000000 && part.ok && r.parts.every((p) => p.done === p.end - p.start + 1), json({ saved: done(paused), starts, parts: paused.parts.map((p) => [p.start, p.done]), part }));
+    await consistent('part file lost, three parts');
   });
 
   await attempt('speed limit', async () => {

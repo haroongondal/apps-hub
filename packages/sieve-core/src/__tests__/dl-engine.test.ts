@@ -233,6 +233,17 @@ test('finishing: saving, host.save, save failure, saveEvent path, done, failed, 
   await r.engine.saveEvent({ id: 'zzz', kind: 'done', filename: 'x', chromeId: 1 });
 });
 
+test('resume: a save-only record whose part file is gone downloads again', async () => {
+  const r = await makeRig({ records: [rec('a', { size: 100, state: 'failed', saveOnly: true, error: ERRORS.saveCanceled, parts: [{ start: 0, end: 99, done: 100 }] })] });
+  await r.engine.act('resume', ['a']);
+  await flush();
+  assert.equal(r.transfer.runs.length, 1, 'the transfer runs');
+  assert.equal(r.host.saves.length, 0);
+  const s = r.stored('a')!;
+  assert.equal(s.saveOnly, false);
+  assert.equal(s.parts[0].done, 0);
+});
+
 test('finishing: a failed host.save ends failed with saveOnly', async () => {
   const r = await makeRig({ records: [rec('a', { size: 100 })] });
   r.host.saveAnswer = { ok: false, message: 'FILE_NO_SPACE' };
@@ -407,7 +418,7 @@ test('serialisation: a remove or pause issued while a start waits on space wins'
 });
 
 test('serialisation: saveEvent and act in the same tick apply in call order', async () => {
-  const r = await makeRig({ records: [rec('a', { state: 'saving', saveOnly: true, size: 10 })] });
+  const r = await makeRig({ records: [rec('a', { state: 'saving', saveOnly: true, size: 10 })], files: ['a.part'] });
   const e = r.engine.saveEvent({ id: 'a', kind: 'failed', error: 'X' });
   const a = r.engine.act('resume', ['a']);
   await Promise.all([e, a]);

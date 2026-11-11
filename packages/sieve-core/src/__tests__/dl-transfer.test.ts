@@ -408,10 +408,10 @@ test('12a resume with the part file gone: every part restarts from its start and
   assertFile(s.files, 10 * MiB);
 });
 
-test('12b resume with a truncated part file restarts; one that still holds the done bytes keeps them', async () => {
+test('12b resume with a truncated part file keeps what is below the cut; one that still holds the done bytes keeps them', async () => {
   const cut = await pausedThenDamaged((x) => x.files.data.set(PART, x.files.data.get(PART)!.slice(0, 1 * MiB)));
   assert.equal(cut.second.kind, 'done');
-  assert.equal(cut.s.net.log.at(-1)!.range, 'bytes=0-');
+  assert.equal(cut.s.net.log.at(-1)!.range, `bytes=${1 * MiB}-`, 'what lies below the cut is kept');
   assertFile(cut.s.files, 10 * MiB);
 
   // healthy resume: the file keeps its size, so done stays
@@ -421,7 +421,7 @@ test('12b resume with a truncated part file restarts; one that still holds the d
   assertFile(ok.s.files, 10 * MiB);
 });
 
-test('12c unknown size: a file shorter than the written bytes restarts at 0, one that holds them resumes', async () => {
+test('12c unknown size: a file shorter than the written bytes resumes at its length, one that holds them resumes there', async () => {
   const requested = async (fileSize: number) => {
     const s = setup();
     s.net.add(U, { size: 6 * MiB, lengthKnown: false });
@@ -430,18 +430,35 @@ test('12c unknown size: a file shorter than the written bytes restarts at 0, one
     await s.run(open); // the outcome does not matter, the first request does
     return s.net.log.find((l) => l.range !== 'bytes=0-0')!.range;
   };
-  assert.equal(await requested(1 * MiB), 'bytes=0-');
+  assert.equal(await requested(1 * MiB), `bytes=${1 * MiB}-`);
   assert.equal(await requested(2 * MiB), `bytes=${2 * MiB}-`);
 });
 
-test('12d a full-size file with done 0 is untouched', async () => {
+test('12e the reset is not stored (store down): the next run still restarts, no zero holes', async () => {
   const s = setup();
-  s.net.add(U, { size: 2 * MiB });
-  s.files.data.set(PART, pattern(0, 2 * MiB));
-  const res = await s.run(probed(U, 2 * MiB));
-  assert.equal(res.kind, 'done');
-  assert.equal(s.net.log.length, 1, 'no probe, one request from byte 0');
-  assertFile(s.files, 2 * MiB);
+  s.net.add(U, { size: 10 * MiB });
+  let storeDown = false;
+  let stored: DlRecord | null = null;
+  let total = 0;
+  const ac = new AbortController();
+  const hooks: TransferHooks = {
+    persist: async (r) => { if (storeDown) throw new Error('QuotaExceededError'); stored = structuredClone(r); },
+    update: () => {},
+    bytes: (n) => { total += n; if (total >= 2.5 * MiB) ac.abort(); },
+  };
+  const first = await s.clock.drive(s.transfer.run(probed(U, 10 * MiB), ac.signal, hooks));
+  assert.equal(first.kind, 'paused');
+  const keep = structuredClone(stored!);
+  assert.ok(keep.parts[0].done > 0);
+  hooks.bytes = () => {};
+  s.files.data.delete(PART);
+  storeDown = true;
+  const second = await s.clock.drive(s.transfer.run(keep, new AbortController().signal, hooks));
+  assert.equal(second.kind, 'failed');
+  storeDown = false;
+  const third = await s.clock.drive(s.transfer.run(keep, new AbortController().signal, hooks));
+  assert.equal(third.kind, 'done');
+  assertFile(s.files, 10 * MiB);
 });
 
 test('13 checkpoints: every 4 MiB or 2000 ms, each preceded by flush', async () => {

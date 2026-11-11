@@ -331,7 +331,10 @@ export function createEngine(deps: EngineDeps): Engine {
         }
       } else if (op === 'resume') {
         if (r.state === 'paused' || r.state === 'failed') {
-          const next = applyEvent(r, 'resume', now);
+          // A finished or save-only record whose part file is gone has nothing to save: download it again.
+          const lost = (r.saveOnly || isComplete(r)) && !(await files.exists(partName(id)));
+          const base = lost ? { ...r, saveOnly: false, parts: r.parts.map((p) => ({ ...p, done: 0 })) } : r;
+          const next = applyEvent(base, 'resume', now);
           set(next);
           await persist(next);
           if (next.state === 'saving') save(id);
