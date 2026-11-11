@@ -142,7 +142,8 @@ export async function run(t) {
 
   await attempt('schedule window', async () => {
     await fresh();
-    const open = new Date(Date.now() + 60_000);
+    // The next whole minute at least 25 s ahead (hhmm drops seconds), so the checks before the window opens cannot be overtaken by it.
+    const open = new Date(Math.ceil((Date.now() + 25_000) / 60_000) * 60_000);
     const queue = { id: 'main', name: 'Main queue', maxParallel: 3, schedule: { on: true, days: [0, 1, 2, 3, 4, 5, 6], start: hhmm(open), stop: null } };
     await setDownloads(t, { queues: [queue] });
     const path = '/file/3000000/win.bin';
@@ -152,7 +153,7 @@ export async function run(t) {
     await new Promise((r) => setTimeout(r, 1500));
     const waiting = await get(t, id);
     check('downloads: router: a record in a closed window stays queued, the schedule alarm exists, and no engine runs', waiting?.state === 'queued' && !!before && (await engineCount(t)) === 0 && requests(t, path).length === 0, json({ state: waiting?.state, before, engines: await engineCount(t), requests: requests(t, path).length }));
-    const started = await until(async () => (await engineCount(t)) === 1 && (await get(t, id))?.state === 'running', 100_000).catch(() => false);
+    const started = await until(async () => (await engineCount(t)) === 1 && (await get(t, id))?.state === 'running', 130_000).catch(() => false);
     const during = await until(() => alarm(t, 'dl-schedule'), 5000).catch(() => null);
     check('downloads: router: the schedule alarm opens the window, the engine appears and the record runs, and the alarm exists while it runs', !!started && !!during, json({ started, during }));
     await reach(t, id, ['saving', 'done'], 30000);
