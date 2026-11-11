@@ -48,6 +48,8 @@ export function youtubeSection(): HTMLElement {
     };
     el.addEventListener('change', async () => {
       const value = f.kind === 'number' ? (el as HTMLInputElement).valueAsNumber : el.value;
+      // An empty or mistyped number is not a value to store: validation would turn it into the default.
+      if (typeof value === 'number' && Number.isNaN(value)) return show(current, true);
       show((await writePath(f.path, value)) ?? current, true);
     });
     shows.push(show);
@@ -82,8 +84,9 @@ export function youtubeSection(): HTMLElement {
       if (text === loaded || (edited && text !== area.value)) return;
       area.value = loaded = text;
       edited = false;
+      result.replaceChildren(); // a result from a save before this change would describe other text
     });
-    return wrap(f.path, f.help, h('label', { for: id }, f.label), area, h('div', { class: 'row' }, save), result);
+    return wrap(f.path, undefined, h('label', { for: id }, f.label), f.help && h('p', { class: 'ui-meta', id: `${id}-help` }, f.help), area, h('div', { class: 'row' }, save), result);
   }
 
   function presetSwitch(p: (typeof EXPERIMENT_PRESETS)[number]): HTMLElement {
@@ -115,11 +118,17 @@ export function youtubeSection(): HTMLElement {
     stack.inert = !y.on;
     for (const show of shows) show(y, force);
   };
+  // Until the first read the controls show defaults, so none can be used: a stored `on: false` must not be briefly interactive.
+  const section = h('section', { id: 'youtube', inert: true }, h('h2', { class: 'ui-heading' }, 'YouTube'), tools, stack);
+  const ready = () => (section.inert = false);
   apply(current, true);
-  void read().then((y) => apply(y, true), (e) => console.error('Sieve could not read the YouTube settings', e));
+  void read().then(
+    (y) => (apply(y, true), ready()),
+    (e) => (console.error('Sieve could not read the YouTube settings', e), ready()),
+  );
   chrome.storage.onChanged.addListener((changes, where) => {
     if (where === 'local' && YOUTUBE_KEY in changes) apply(validateYouTube(changes[YOUTUBE_KEY].newValue));
   });
 
-  return h('section', { id: 'youtube' }, h('h2', { class: 'ui-heading' }, 'YouTube'), tools, stack);
+  return section;
 }

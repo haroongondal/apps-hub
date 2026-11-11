@@ -37,6 +37,24 @@ export async function local(t) {
     const opt = await openOptions(t);
     pages.push(opt);
 
+    const slow = await t.ctx.newPage();
+    pages.push(slow);
+    slow.on('pageerror', (e) => t.errors.push(`options: ${e.message}`));
+    await setYouTube(t, { on: false });
+    await slow.addInitScript(() => {
+      const get = chrome.storage.local.get.bind(chrome.storage.local);
+      let reads = 0;
+      chrome.storage.local.get = (...a) => (String(a[0]) === 'youtube' && reads++ === 0 ? new Promise((r) => setTimeout(() => r(get(...a)), 1200)) : get(...a));
+    });
+    await slow.goto(`chrome-extension://${t.id}/options.html#youtube`);
+    await slow.locator('#youtube').waitFor();
+    const early = await slow.evaluate(() => document.querySelector('#youtube').inert);
+    check('settings-page: until the first read of the stored settings finishes the whole section is inert', early === true);
+    await until(() => slow.evaluate(() => !document.querySelector('#youtube').inert), 5000);
+    check('settings-page: then it shows the stored "YouTube tools" off, with the other controls inert', !(await switchNamed(slow, 'YouTube tools').isChecked()) && (await slow.evaluate(() => document.querySelectorAll('#youtube .yt-rest[inert]').length)) === 1);
+    await slow.close();
+    await reset(t);
+
     const heading = opt.locator('#youtube').getByRole('heading', { level: 2, name: 'YouTube', exact: true });
     const inView = async () => {
       const box = await heading.boundingBox();
@@ -106,10 +124,29 @@ export async function local(t) {
     const other = await openOptions(t);
     pages.push(other);
     const step = control(opt, 'speed.step');
+    // A third page holds the settings lock, so both writes are in flight together and have to take turns: neither may land first from a stale read.
+    const holder = await openOptions(t);
+    pages.push(holder);
+    await holder.evaluate(() => new Promise((granted) => void navigator.locks.request('sieve-settings', () => new Promise((release) => { window.__release = release; granted(); }))));
     await step.fill('0.5');
-    await Promise.all([step.press('Tab'), switchNamed(other, 'Cinema mode').check()]);
-    check('settings-page: two pages writing at once both land (Speed step 0.5, Cinema mode on)', (await storedIs(t, 'speed.step', 0.5)) && (await storedIs(t, 'player.cinema', true)), json(await storedYouTube(t)));
+    const writes = Promise.all([step.press('Tab'), switchNamed(other, 'Cinema mode').check()]);
+    await sleep(400);
+    check('settings-page: while another page holds the settings lock neither write lands', (await stored(t, 'speed.step')) === 0.25 && (await stored(t, 'player.cinema')) === false, json(await storedYouTube(t)));
+    await holder.evaluate(() => window.__release());
+    await writes;
+    check('settings-page: when the lock frees, both writes land (Speed step 0.5, Cinema mode on)', (await storedIs(t, 'speed.step', 0.5)) && (await storedIs(t, 'player.cinema', true)), json(await storedYouTube(t)));
     check('settings-page: and each page follows the other', (await until(() => switchNamed(opt, 'Cinema mode').isChecked())) && (await until(async () => (await control(other, 'speed.step').inputValue()) === '0.5')));
+    await holder.close();
+    const lost = [];
+    for (let i = 0; i < 10; i++) {
+      const stepValue = i % 2 ? '0.25' : '0.75';
+      await step.fill(stepValue);
+      await Promise.all([step.press('Tab'), i % 2 ? switchNamed(other, 'Hide Shorts').uncheck() : switchNamed(other, 'Hide Shorts').check()]);
+      await Promise.all([storedIs(t, 'speed.step', Number(stepValue)), storedIs(t, 'tidy.hideShorts', !(i % 2))]);
+      const y = await storedYouTube(t);
+      if (y.speed.step !== Number(stepValue) || y.tidy.hideShorts !== !(i % 2)) lost.push([i, y.speed.step, y.tidy.hideShorts]);
+    }
+    check('settings-page: ten rounds of two pages writing at once lose nothing', lost.length === 0, json(lost));
     await other.close();
 
     const over = control(opt, 'experiments.overrides');
@@ -118,10 +155,17 @@ export async function local(t) {
     check('settings-page: saving "Flag overrides" with a bad line shows "Line 2: Write it as name=value."', await until(async () => (await field(opt, 'experiments.overrides').innerText()).includes('Line 2: Write it as name=value.')), await field(opt, 'experiments.overrides').innerText());
     check('settings-page: and stores the text as typed', await storedIs(t, 'experiments.overrides', 'a=1\nbad'), json(await stored(t, 'experiments.overrides')));
 
-    await control(opt, 'volume.step').focus();
-    await setYouTube(t, { tidy: { hideShorts: true }, speed: { wheel: 'off' }, player: { backdrop: '#123456' } });
+    const vol = control(opt, 'volume.step');
+    await vol.fill('9');
+    await setYouTube(t, { volume: { step: 3 }, tidy: { hideShorts: true }, speed: { wheel: 'off' }, player: { backdrop: '#123456' } });
     check('settings-page: a change from the worker updates the switch, select and colour control', (await until(() => switchNamed(opt, 'Hide Shorts').isChecked())) && (await until(async () => (await control(opt, 'speed.wheel').inputValue()) === 'off')) && (await until(async () => (await control(opt, 'player.backdrop').inputValue()) === '#123456')));
-    check('settings-page: while another input keeps focus', (await focusedPath(opt)) === 'volume.step', String(await focusedPath(opt)));
+    check('settings-page: while a number the owner is typing in keeps its text and focus, though the worker stored 3', (await vol.inputValue()) === '9' && (await focusedPath(opt)) === 'volume.step', `${await vol.inputValue()} ${await focusedPath(opt)}`);
+    await vol.press('Tab');
+    check('settings-page: and when they leave it their value is what is stored', await storedIs(t, 'volume.step', 9), json(await stored(t, 'volume.step')));
+    await vol.fill('');
+    await vol.press('Tab');
+    await sleep(300);
+    check('settings-page: clearing a number field and leaving it stores nothing and shows the stored value again', (await stored(t, 'volume.step')) === 9 && (await vol.inputValue()) === '9', `${await stored(t, 'volume.step')} ${await vol.inputValue()}`);
     const css = control(opt, 'theme.css');
     await css.fill('x { }');
     await setYouTube(t, { theme: { css: 'y { }' }, experiments: { overrides: 'z=1' } });
