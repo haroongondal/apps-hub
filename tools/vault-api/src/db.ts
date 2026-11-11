@@ -16,7 +16,7 @@ export const getAccount = (db: Db) =>
     .prepare('SELECT header, header_rev AS headerRev, login_hash AS loginHash, recovery_hash AS recoveryHash, read_hash AS readHash FROM account WHERE id = 1')
     .first<Account>();
 
-export type EscrowSet = { email: string; blob: string; now: number };
+export type EscrowSet = { email: string; blob: string; now: number; signinBlob?: string };
 export type EscrowChange = { clear: boolean; set: EscrowSet | null };
 
 // The primary key on setup_done is the once-ever guard: a second create fails here even after the account row is deleted.
@@ -29,6 +29,7 @@ export async function createAccount(db: Db, a: AccountCreate, escrow?: EscrowSet
         .bind(a.header, a.loginHash, a.recoveryHash, a.readHash),
     ];
     if (escrow) stmts.push(db.prepare('INSERT INTO escrow (id, email, blob, created_at) VALUES (1, ?, ?, ?)').bind(escrow.email, escrow.blob, escrow.now));
+    if (escrow?.signinBlob) stmts.push(db.prepare('INSERT INTO signin (id, blob, created_at) VALUES (1, ?, ?)').bind(escrow.signinBlob, escrow.now));
     await db.batch(stmts);
     return true;
   } catch (e) {
@@ -43,8 +44,7 @@ export async function updateAccount(db: Db, a: Omit<AccountUpdate, 'ifRev'>, ifR
   const unmoved = 'EXISTS (SELECT 1 FROM account WHERE id = 1 AND header_rev = ?)';
   const stmts: Stmt[] = [];
   if (escrow.clear) {
-    stmts.push(db.prepare(`DELETE FROM escrow WHERE id = 1 AND ${unmoved}`).bind(ifRev));
-    stmts.push(db.prepare(`DELETE FROM lost_request WHERE id = 1 AND ${unmoved}`).bind(ifRev));
+    for (const table of ['escrow', 'lost_request', 'signin', 'signin_request']) stmts.push(db.prepare(`DELETE FROM ${table} WHERE id = 1 AND ${unmoved}`).bind(ifRev));
   }
   if (escrow.set) {
     stmts.push(
@@ -55,6 +55,15 @@ export async function updateAccount(db: Db, a: Omit<AccountUpdate, 'ifRev'>, ifR
         )
         .bind(escrow.set.email, escrow.set.blob, escrow.set.now, ifRev),
     );
+  }
+  // A new sign-in blob is a new code, so a request approved under the old one must not hand it out.
+  if (escrow.set?.signinBlob) {
+    stmts.push(
+      db
+        .prepare(`INSERT INTO signin (id, blob, created_at) SELECT 1, ?, ? WHERE ${unmoved} ON CONFLICT (id) DO UPDATE SET blob = excluded.blob, created_at = excluded.created_at`)
+        .bind(escrow.set.signinBlob, escrow.set.now, ifRev),
+    );
+    stmts.push(db.prepare(`DELETE FROM signin_request WHERE id = 1 AND ${unmoved}`).bind(ifRev));
   }
   const updateIndex = stmts.length;
   stmts.push(
@@ -107,7 +116,7 @@ export const setEscrow = (db: Db, email: string, blob: string, now: number) =>
     .bind(email, blob, now)
     .all();
 
-export const clearEscrow = (db: Db) => db.batch([db.prepare('DELETE FROM escrow WHERE id = 1'), db.prepare('DELETE FROM lost_request WHERE id = 1')]);
+export const clearEscrow = (db: Db) => db.batch(['escrow', 'lost_request', 'signin', 'signin_request'].map((table) => db.prepare(`DELETE FROM ${table} WHERE id = 1`)));
 
 export type LostRequest = { claimHash: string; confirmHash: string; requestedAt: number; releaseAt: number | null; cancelled: number };
 export const getLostRequest = (db: Db) =>
@@ -140,6 +149,49 @@ export const cancelLostRequestByToken = async (db: Db, confirmHash: string): Pro
 
 export const cancelLostRequest = async (db: Db): Promise<void> => {
   await db.prepare('UPDATE lost_request SET cancelled = 1 WHERE id = 1').all();
+};
+
+export const getSigninBlob = async (db: Db): Promise<string | null> => (await db.prepare('SELECT blob FROM signin WHERE id = 1').first<{ blob: string }>())?.blob ?? null;
+
+export type SigninRequest = { claimHash: string; approvedAt: number | null; cancelled: number };
+export const getSigninRequest = (db: Db) =>
+  db.prepare('SELECT claim_hash AS claimHash, approved_at AS approvedAt, cancelled FROM signin_request WHERE id = 1').first<SigninRequest>();
+
+// Same atomic claim-or-skip as claimLostRequest; an approved row is replaceable only graceMs after its release time.
+export const claimSigninRequest = async (
+  db: Db,
+  hashes: { claim: string; approve: string; deny: string },
+  now: number,
+  cooldownMs: number,
+  releaseWaitMs: number,
+  graceMs: number,
+): Promise<boolean> =>
+  (await db
+    .prepare(
+      `INSERT INTO signin_request (id, claim_hash, approve_hash, deny_hash, requested_at, approved_at, cancelled) VALUES (1, ?, ?, ?, ?, NULL, 0)
+       ON CONFLICT (id) DO UPDATE SET claim_hash = excluded.claim_hash, approve_hash = excluded.approve_hash, deny_hash = excluded.deny_hash,
+         requested_at = excluded.requested_at, approved_at = NULL, cancelled = 0
+       WHERE signin_request.cancelled = 1
+          OR (signin_request.approved_at IS NULL AND ? - signin_request.requested_at >= ?)
+          OR (signin_request.approved_at IS NOT NULL AND ? >= signin_request.approved_at + ?)
+       RETURNING id`,
+    )
+    .bind(hashes.claim, hashes.approve, hashes.deny, now, now, cooldownMs, now, releaseWaitMs + graceMs)
+    .first()) !== null;
+
+export async function approveSigninRequest(db: Db, approveHash: string, now: number): Promise<'approved' | 'already' | 'invalid'> {
+  const set = await db.prepare('UPDATE signin_request SET approved_at = ? WHERE id = 1 AND approve_hash = ? AND cancelled = 0 AND approved_at IS NULL RETURNING id').bind(now, approveHash).first();
+  if (set) return 'approved';
+  const row = await db.prepare('SELECT approved_at AS approvedAt FROM signin_request WHERE id = 1 AND approve_hash = ? AND cancelled = 0').bind(approveHash).first<{ approvedAt: number | null }>();
+  return row?.approvedAt != null ? 'already' : 'invalid';
+}
+
+export const denySigninRequestByToken = async (db: Db, denyHash: string): Promise<void> => {
+  await db.prepare('UPDATE signin_request SET cancelled = 1 WHERE id = 1 AND deny_hash = ?').bind(denyHash).all();
+};
+
+export const cancelSigninRequest = async (db: Db): Promise<void> => {
+  await db.prepare('UPDATE signin_request SET cancelled = 1 WHERE id = 1').all();
 };
 
 export async function push(db: Db, ups: Upsert[], now: number): Promise<PushResponse | PushConflict> {
