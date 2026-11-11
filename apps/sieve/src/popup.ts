@@ -2,8 +2,10 @@ import { isAllowed, tabSite } from '@apps-hub/sieve-core/src/allowlist.ts';
 import { countsKey, type Counts } from '@apps-hub/sieve-core/src/counts.ts';
 import { validateSettings, type AllowEntry, type Settings } from '@apps-hub/sieve-core/src/settings.ts';
 import { youtubeAdsOn, ytChannel } from '@apps-hub/sieve-core/src/youtube-ads.ts';
+import { ytPage } from '@apps-hub/sieve-core/src/yt-bridge.ts';
 import { NAMES, count, errorText, save, setBlocking, setList, toggle } from './controls.ts';
 import { h, type Child } from './dom.ts';
+import { createYoutubeView } from './popup-youtube.ts';
 
 interface State {
   settings: Settings;
@@ -123,8 +125,11 @@ function blockingView({ settings: s, error, counts }: State): Child[] {
   ];
 }
 
-const tabs = [{ id: 'blocking', label: 'Blocking', view: blockingView }];
-let current = tabs[0].id;
+const tabs = [
+  { id: 'blocking', label: 'Blocking', view: blockingView },
+  { id: 'youtube', label: 'YouTube', view: await createYoutubeView(tab) },
+];
+let current = ytPage(tab?.url ?? '').kind === 'other' ? tabs[0].id : 'youtube';
 
 function view(state: State): Child[] {
   return [

@@ -15,3 +15,7 @@ body { width: 340px; max-height: 600px; overflow-y: auto; }
 .banner--danger { background: var(--c-danger-soft); border-color: var(--c-danger); }
 .banner--warn { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); background: var(--c-warn-soft); border-color: var(--c-warn); font-weight: 600; }
 footer { display: flex; justify-content: flex-end; }
+[hidden] { display: none !important; }
+.speed-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); }
+.speed-value { min-width: 5ch; text-align: center; }
+a.ui-btn { text-decoration: none; }
