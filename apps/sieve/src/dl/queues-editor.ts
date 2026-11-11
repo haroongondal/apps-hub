@@ -68,7 +68,7 @@ export function queuesEditor(): HTMLElement {
     } });
     const stop = h('input', { type: 'time', class: 'ui-input', value: '07:00', onchange: () => {
       const value = stop.value;
-      void edit(id, (x) => ({ ...x, schedule: { ...x.schedule, stop: value || null } })).then(() => sync(stop));
+      void edit(id, (x) => ({ ...x, schedule: { ...x.schedule, stop: value || x.schedule.stop } })).then(() => sync(stop));
     } });
     const noStop = h('input', {
       type: 'checkbox',

@@ -101,6 +101,9 @@ export async function run(t) {
     check('downloads: dialogs: no stop stores null and disables the stop input', await main.getByLabel(T.scheduleStop).isDisabled());
     await main.getByLabel(T.scheduleNoStop).uncheck();
     await until(async () => (await stored()).queues[0].schedule.stop !== null);
+    await commit(main.getByLabel(T.scheduleStop), '');
+    await until(async () => (await main.getByLabel(T.scheduleStop).inputValue()) === '06:00');
+    check('downloads: dialogs: clearing the stop field keeps the stored stop and the input enabled', (await stored()).queues[0].schedule.stop === '06:00' && (await main.getByLabel(T.scheduleStop).isEnabled()), json((await stored()).queues[0].schedule));
     await commit(main.getByLabel(T.scheduleParallel), 5);
     await until(async () => (await stored()).queues[0].maxParallel === 5);
     check('downloads: dialogs: the parallel count is stored', true);
