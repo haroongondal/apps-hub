@@ -70,6 +70,8 @@ export function reconcile(): Promise<void> {
     );
     try {
       await io.syncRules(extras);
+    } catch (e) {
+      logFailure(e);
     } finally {
       io.dropRules(extras);
     }
@@ -121,7 +123,7 @@ function onMessage(message: unknown, sender: chrome.runtime.MessageSender, sendR
 
 async function onAlarm(alarm: chrome.alarms.Alarm): Promise<void> {
   if (alarm.name !== ALARM_WATCHDOG && alarm.name !== ALARM_SCHEDULE) return;
-  await reconcile();
+  await reconcile().catch(logFailure);
   // Windows are re-evaluated within a minute even if a schedule alarm was lost.
   if (await engineExists()) await sendToEngine({ type: 'dl-eng-tick' });
 }

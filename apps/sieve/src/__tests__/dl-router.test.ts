@@ -29,7 +29,7 @@ const withQueue = (schedule: Schedule, extra: Partial<DownloadSettings> = {}): D
 
 // An in-memory chrome (storage with change listeners, alarms, a runtime whose sendMessage the test scripts, an offscreen API that counts documents)
 // and a fresh copy of router.ts whose record reader and rule sync are fakes.
-async function boot(options: { records?: DlRecord[]; settings?: DownloadSettings; documents?: number; createSlow?: boolean } = {}) {
+async function boot(options: { records?: DlRecord[]; settings?: DownloadSettings; documents?: number; createSlow?: boolean; rulesFail?: boolean; rulesSlow?: boolean } = {}) {
   const t = {
     records: options.records ?? [],
     documents: options.documents ?? 0,
@@ -39,6 +39,9 @@ async function boot(options: { records?: DlRecord[]; settings?: DownloadSettings
     alarms: new Map<string, { periodInMinutes?: number; when?: number }>(),
     syncs: 0,
     extras: [] as unknown[],
+    drops: [] as unknown[],
+    rulesRunning: 0,
+    rulesMax: 0,
     concurrent: 0,
     maxConcurrent: 0,
     store: new Map<string, unknown>(),
@@ -83,14 +86,25 @@ async function boot(options: { records?: DlRecord[]; settings?: DownloadSettings
   console.error = () => {};
   const router = await (import(`../dl/router.ts?fresh=${++n}`) as Promise<Router>);
   router.io.records = async () => t.records;
-  router.io.syncRules = async (extra) => void (t.syncs++, t.extras.push(extra));
-  router.io.dropRules = () => {};
+  router.io.syncRules = async (extra) => {
+    t.syncs++;
+    t.extras.push(extra);
+    t.rulesMax = Math.max(t.rulesMax, ++t.rulesRunning);
+    try {
+      if (options.rulesSlow) await sleep(10);
+      if (options.rulesFail) throw new Error('rules refused');
+    } finally {
+      t.rulesRunning--;
+    }
+  };
+  router.io.dropRules = (extra) => void t.drops.push(extra);
   router.initRouter();
   await router.reconcile(); // the start-up reconcile and this one have both finished
   const zero = () => {
     t.created = t.closed = t.syncs = 0;
     t.send.length = 0;
     t.extras.length = 0;
+    t.drops.length = 0;
   };
   zero();
   const post = (message: unknown, url = BASE + 'offscreen.html') =>
@@ -314,10 +328,40 @@ test('dl-add calls reconcile after a successful add and not after a refused one'
   assert.equal(t.t.syncs, 0);
 });
 
-test('serialisation: two reconcile calls started together never run ensureEngine concurrently', async () => {
-  const t = await boot({ records: [rec('running')], createSlow: true });
+test('serialisation: three overlapping reconcile calls never overlap in the rule sync or in ensureEngine', async () => {
+  const t = await boot({ records: [rec('running')], createSlow: true, rulesSlow: true });
   t.t.documents = 0;
   await Promise.all([t.router.reconcile(), t.router.reconcile(), t.router.reconcile()]);
+  assert.equal(t.t.rulesMax, 1);
   assert.equal(t.t.maxConcurrent, 1);
   assert.equal(t.t.documents, 1);
+});
+
+test('a failing rule sync does not stop the alarms or the engine, and the pending extras are still dropped (the same array that was synced)', async () => {
+  const t = await boot({ records: [rec('running')], rulesFail: true });
+  t.t.documents = 0;
+  t.alarms.clear();
+  t.zero();
+  await t.router.reconcile();
+  assert.equal(t.t.documents, 1);
+  assert.deepEqual(t.alarms.get(ALARM_WATCHDOG), { periodInMinutes: 1 });
+  assert.equal(t.t.extras.length, 1);
+  assert.equal(t.t.drops.length, 1);
+  assert.equal(t.t.drops[0], t.t.extras[0]);
+});
+
+test('the extras handed to the rule sync are the ones dropped afterwards', async () => {
+  const t = await boot();
+  await t.post(stateMsg([rec('running', { id: 'd', referrer: 'https://example.com/page', finalUrl: 'https://cdn.example.com/d.zip' })]));
+  await sleep(100);
+  assert.equal(t.t.extras.length, 1);
+  assert.equal((t.t.extras[0] as unknown[]).length, 1);
+  assert.equal(t.t.drops[0], t.t.extras[0]);
+});
+
+test('a failing reconcile in an alarm does not stop dl-eng-tick when the engine exists', async () => {
+  const t = await boot({ documents: 1, rulesFail: true });
+  t.onAlarm[0]({ name: ALARM_WATCHDOG });
+  await sleep(30);
+  assert.deepEqual(t.send, [{ type: 'dl-eng-tick' }]);
 });
