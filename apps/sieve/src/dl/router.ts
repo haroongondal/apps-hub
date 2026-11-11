@@ -53,6 +53,11 @@ function onMessage(message: unknown, sender: chrome.runtime.MessageSender, sendR
   return true;
 }
 
+// Task 3.11 contract: settings read, record read, session-rule sync, alarm sync, engine created only when work is runnable.
+export async function reconcile(): Promise<void> {
+  throw new Error('not implemented');
+}
+
 export function initRouter(): void {
   chrome.runtime.onMessage.addListener(onMessage);
 }
