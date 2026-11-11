@@ -10,6 +10,7 @@ feature('wheel', () => {
   let volumeMode = 'off';
   let reverse = false;
   let held: MouseEvent | null = null; // the right button's press, while it is down
+  // inspected 2026-11-11, signed out, Chrome for Testing 149.0.7827.55: an untrusted contextmenu on #movie_player's video opens YouTube's own menu (.ytp-contextmenu), so the copy below works.
   let withheld = false; // macOS and Linux send the contextmenu at the press, before any wheel: it is kept back until the release shows whether the wheel was used
   let silence = false; // a wheel step used the button, so a contextmenu at the release (Windows) is not wanted
   let announce = 0;
