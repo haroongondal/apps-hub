@@ -108,15 +108,22 @@ export async function until(fn, ms = 10000) {
   }
 }
 
-// Closes the engine, deletes IndexedDB `sieve-dl` and every OPFS entry, and removes the `downloads` key and every `dl*` key.
-export async function resetDl(t) {
-  await inPage(t, async () => {
+const closeDoc = (t) =>
+  inPage(t, async () => {
     try {
       await chrome.offscreen.closeDocument();
     } catch {
       // none open
     }
   });
+
+// Closes the engine, deletes IndexedDB `sieve-dl` and every OPFS entry, and removes the `downloads` key and every `dl*` key.
+// The worker may re-create the engine while a record or an alarm still exists, so the alarms go first and the last wait closes it again.
+export async function resetDl(t) {
+  await inPage(t, async () => {
+    for (const name of ['dl-schedule', 'dl-watchdog']) await chrome.alarms.clear(name);
+  });
+  await closeDoc(t);
   await until(async () => (await engineCount(t)) === 0);
   await inPage(t, async () => {
     // The engine's connections close on `versionchange`, so this does not hang.
@@ -128,5 +135,15 @@ export async function resetDl(t) {
     const session = await chrome.storage.session.get(null);
     await chrome.storage.session.remove(Object.keys(session).filter((k) => k.startsWith('dl')));
   });
-  await until(async () => (await engineCount(t)) === 0);
+  // Closed twice in a row, 300 ms apart, so a re-creation that was already under way is caught too.
+  let closedAt = 0;
+  await until(async () => {
+    if ((await engineCount(t)) !== 0) {
+      closedAt = 0;
+      await closeDoc(t);
+      return false;
+    }
+    closedAt ||= Date.now();
+    return Date.now() - closedAt >= 300;
+  }, 15000);
 }
