@@ -156,10 +156,11 @@ export async function live(t) {
     await sleep(2500);
     return gated();
   };
-  const found = async (name, sel, min = 1) => check(`live tidy: ${name} (${sel}) is on its page`, (await page.locator(sel).count()) >= min, `${await page.locator(sel).count()} found`);
+  const found = async (name, sel, min = 1) => (await until(async () => (await page.locator(sel).count()) >= min, 8000), check(`live tidy: ${name} (${sel}) is on its page`, (await page.locator(sel).count()) >= min, `${await page.locator(sel).count()} found`));
   try {
     let gate = await go(`https://www.youtube.com/watch?v=${t.videoId}`, TIDY_SEL.expander);
     if (gate) return console.log(`SKIP  tidy live: ${gate}`);
+    await until(() => page.locator(TIDY_SEL.endScreen).count(), 15_000);
     for (const [name, sel, min] of [['comments', TIDY_SEL.comments], ['description', TIDY_SEL.below], ['expander', TIDY_SEL.expander], ['expand button', `${TIDY_SEL.expander} ${TIDY_SEL.expand}`], ['related column', TIDY_SEL.related], ['info cards button', TIDY_SEL.cardsButton], ['end screen elements', TIDY_SEL.endScreen]]) await found(name, sel, min);
     await page.evaluate((s) => document.querySelector(s)?.scrollIntoView(), TIDY_SEL.comments);
     await until(() => page.locator(`${TIDY_SEL.comments} ${TIDY_SEL.sortItems}`).count().then((n) => n >= 2), 15_000);
@@ -172,17 +173,20 @@ export async function live(t) {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForSelector(TIDY_SEL.expander, { state: 'attached', timeout: 20_000 }).catch(() => {});
     check('live tidy: "Expand video descriptions" expands the real description', await until(() => page.evaluate(([s, a]) => document.querySelector(s)?.hasAttribute(a), [TIDY_SEL.expander, 'is-expanded']), 15_000));
-    await page.evaluate((s) => document.querySelector(s)?.scrollIntoView(), TIDY_SEL.comments);
-    check('live tidy: after scrolling to the comments the newest-first item is selected', await until(() => page.evaluate(([s]) => document.querySelectorAll(s)[1]?.getAttribute('aria-selected') === 'true', [`${TIDY_SEL.comments} ${TIDY_SEL.sortItems}`]), 20_000));
+    const sortState = () => page.evaluate(([s]) => ({ items: [...document.querySelectorAll(s)].map((a) => a.getAttribute('aria-selected')), y: scrollY }), [`${TIDY_SEL.comments} ${TIDY_SEL.sortItems}`]);
+    check('live tidy: after scrolling to the comments the newest-first item is selected', await until(async () => (await page.evaluate((s) => document.querySelector(s)?.scrollIntoView(), TIDY_SEL.comments), (await sortState()).items[1] === 'true'), 25_000), json(await sortState()));
     await reset(t);
 
     gate = await go('https://www.youtube.com/results?search_query=funny+cats', TIDY_SEL.gridShelf);
     if (gate) return console.log(`SKIP  tidy live search: ${gate}`);
     await found('a Shorts lockup in a search shelf', `${TIDY_SEL.gridShelf} ${TIDY_SEL.shortsLockup}`);
-    await found('the side guide\'s Shorts entry', TIDY_SEL.guideShorts);
+    // The full guide shows at 1400 px wide; at 1280 px it is the mini guide.
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await until(() => page.locator(TIDY_SEL.guideShorts).count(), 8000);
+    await found('the side guide\'s Shorts entry (1400 px wide)', TIDY_SEL.guideShorts);
     await setYouTube(t, { tidy: { hideShorts: true } });
     const shelfHidden = () => page.evaluate(([g, l]) => [...document.querySelectorAll(g)].filter((e) => e.querySelector(l)).every((e) => getComputedStyle(e).display === 'none'), [TIDY_SEL.gridShelf, TIDY_SEL.shortsLockup]);
-    check('live tidy: "Hide Shorts" hides the Shorts shelves of a search and the guide entry', (await until(shelfHidden)) && (await page.evaluate((s) => getComputedStyle(document.querySelector(s).closest('ytd-guide-entry-renderer')).display, TIDY_SEL.guideShorts)) === 'none');
+    check('live tidy: "Hide Shorts" hides the Shorts shelves of a search and the guide entry', (await until(shelfHidden)) && (await page.evaluate((s) => document.querySelector(s) && getComputedStyle(document.querySelector(s).closest('ytd-guide-entry-renderer')).display, TIDY_SEL.guideShorts)) === 'none');
     await reset(t);
     await page.setViewportSize({ width: 800, height: 900 });
     await sleep(800);

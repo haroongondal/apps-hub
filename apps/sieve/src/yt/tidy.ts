@@ -40,11 +40,12 @@ function until(root: Element, attributes: string[], ms: number, attempt: () => b
 }
 
 function pickNewest(p: YtPage): void {
-  const box = document.querySelector(TIDY_SEL.comments);
-  if (!y.tidy.newestComments || !watching(p) || !box || sortedFor === p.videoId) return;
+  // The comments element is not there yet at a hard load's NAV.finish (live check: it came with the first scroll), so #below, its parent, is watched until the menu shows.
+  const root = document.querySelector(TIDY_SEL.comments) ?? document.querySelector(TIDY_SEL.below);
+  if (!y.tidy.newestComments || !watching(p) || !root || sortedFor === p.videoId) return;
   // Only when the list says Top is the chosen one: a header left from the last video, already on Newest, is waited out until the new one replaces it.
-  until(box, [SELECTED_ATTR], COMMENTS_MS, () => {
-    const items = box.querySelectorAll<HTMLElement>(TIDY_SEL.sortItems);
+  until(root, [SELECTED_ATTR], COMMENTS_MS, () => {
+    const items = root.querySelectorAll<HTMLElement>(`${TIDY_SEL.comments} ${TIDY_SEL.sortItems}`);
     if (items.length < 2 || items[0].getAttribute(SELECTED_ATTR) !== 'true') return false;
     items[1].click();
     sortedFor = p.videoId ?? '';
