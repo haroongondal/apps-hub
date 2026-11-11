@@ -3,6 +3,7 @@ import { watchChannel, youtubeAdsOn, ytChannel } from '@apps-hub/sieve-core/src/
 import './yt/actions.ts';
 import './yt/autoplay.ts';
 import { startBridge } from './yt/bridge.ts';
+import './yt/capture.ts';
 import './yt/loop.ts';
 import './yt/menu.ts';
 import './yt/row.ts';
