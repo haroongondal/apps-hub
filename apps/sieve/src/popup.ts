@@ -4,6 +4,7 @@ import { validateSettings, type AllowEntry, type Settings } from '@apps-hub/siev
 import { youtubeAdsOn, ytChannel } from '@apps-hub/sieve-core/src/youtube-ads.ts';
 import { NAMES, count, errorText, save, setBlocking, setList, toggle } from './controls.ts';
 import { h, type Child } from './dom.ts';
+import { downloadsTab } from './dl/popup-downloads.ts';
 
 interface State {
   settings: Settings;
@@ -125,6 +126,7 @@ function blockingView({ settings: s, error, counts }: State): Child[] {
 
 const tabs = [{ id: 'blocking', label: 'Blocking', view: blockingView }];
 let current = tabs[0].id;
+tabs.splice(1, 0, downloadsTab);
 
 function view(state: State): Child[] {
   return [

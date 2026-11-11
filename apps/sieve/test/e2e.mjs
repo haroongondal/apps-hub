@@ -409,7 +409,7 @@ try {
   let m = await menu(countedId);
   check(`the menu says "${SENTENCE}"`, (await m.countsText()) === SENTENCE, await m.countsText());
   const switchCount = await m.pop.getByRole('switch').count();
-  check('the menu has the header switch, the site switch and four feature switches, and no tab bar (one tab)', switchCount === 6 && (await m.pop.locator('[role=tablist]').count()) === 0, String(switchCount));
+  check('the menu has the header switch, the site switch and four feature switches, and a tab bar with Blocking and Downloads', switchCount === 6 && (await m.pop.locator('[role=tablist] [role=tab]').count()) >= 2, String(switchCount));
   await m.pop.screenshot({ path: join(SHOTS, 'menu.png'), fullPage: true });
   await m.pop.emulateMedia({ colorScheme: 'dark' });
   await sleep(400); // the buttons and switches fade between themes
