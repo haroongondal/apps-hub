@@ -41,6 +41,8 @@ interface SyncSecrets {
 
 data class SyncStatus(val state: String, val lastSyncAt: Long?, val blocked: Int, val quarantined: Int, val available: Boolean)
 
+class Enrolment(val recoveryKey: ByteArray, val sent: Boolean)
+
 class SyncSession(
   private val vault: Vault,
   private val store: SyncRecordStore,
@@ -185,11 +187,7 @@ class SyncSession(
 
   @Synchronized fun sync(password: CharArray? = null): SyncReport {
     val t = server()
-    when (settings.load().mode) {
-      SyncMode.ON -> Unit
-      SyncMode.NEEDS_SIGN_IN -> throw SyncAuthError()
-      else -> throw IllegalStateException("sync off")
-    }
+    requireOn()
     val k = vault.keyCopy() ?: throw IllegalStateException("locked")
     try {
       return syncWith(t, k, password)
@@ -217,6 +215,42 @@ class SyncSession(
   @Synchronized fun newRecoveryKey(password: CharArray): ByteArray? =
     vault.newRecoveryKey(password) { h, rk -> prepare(h, password, hashOf(VaultFormat.recoveryLoginToken(rk))) }
 
+  // Local first, then one PUT with the escrow. A failure before the PUT, or a definite refusal (4xx, or the 502 of a failed mail: the Worker wrote nothing), puts the old header back and
+  // rethrows; anything else may have landed, so the new header and its pending mark stay for the next sync and the owner is shown the key (sent = false).
+  @Synchronized fun enrolEscrow(password: CharArray, escrow: (recoveryKey: ByteArray) -> EscrowBody): Enrolment? {
+    val t = server()
+    requireOn()
+    if (settings.load().accountPending) {
+      vault.vaultKeyCopy(password)?.fill(0) ?: return null // before the flush, so a typo makes no call
+      runCatching { sync(password) }
+      requireOn()
+      check(!settings.load().accountPending) { "sync first" }
+    }
+    val original = storedHeader()
+    val rk = newRecoveryKey(password) ?: return null
+    // False when the old header can't be written back: the rotation then stands, so the owner must still be shown the new key.
+    fun undo(): Boolean {
+      try {
+        store.putHeader(original)
+      } catch (e: Exception) {
+        return false
+      }
+      rk.fill(0)
+      dropPending()
+      return true
+    }
+    var putting = false
+    try {
+      sendAccount(t, escrow(rk)) { putting = true }
+    } catch (e: Exception) {
+      val definite = !putting || (e is SyncHttpError && (e.status in 400..499 || e.status == 502))
+      if (!definite || !undo()) return Enrolment(rk, sent = false)
+      if (e is SyncHttpError && e.status == 409) runCatching { sync(password) }
+      throw e
+    }
+    return Enrolment(rk, sent = true)
+  }
+
   /**
    * Forgot master password, on this phone. [accountKey] is the typed one, used only on a flagged vault whose Keystore copy is gone. It is kept
    * last, just before the header write, so a reset that fails before then keeps no typo and a retry can correct it. Nothing can check it, so ask for it twice.
@@ -232,6 +266,12 @@ class SyncSession(
   }
 
   private fun server(): SyncTransport = transport ?: throw IllegalStateException("sync unavailable")
+
+  private fun requireOn() = when (settings.load().mode) {
+    SyncMode.ON -> Unit
+    SyncMode.NEEDS_SIGN_IN -> throw SyncAuthError()
+    else -> throw IllegalStateException("sync off")
+  }
 
   private fun update(change: (SyncState) -> SyncState) = settings.save(change(settings.load()))
 
@@ -305,21 +345,38 @@ class SyncSession(
     }
   }
 
-  // Signed with the token the server knows; ifRev is the last header this phone took from it. The waiting tokens replace the known ones only
-  // after the update landed, NEXT_* and the mark go last, so a run cut short anywhere is finished by the next (or, after a lost reply, by a sign-in).
   private fun updateAccount(t: SyncTransport) {
+    if (settings.load().pendingHeader != fingerprint(storedHeader())) return dropPending() // its header never reached the vault file
+    try {
+      sendAccount(t, null)
+    } catch (e: SyncHttpError) {
+      throw if (e.status == 409) SyncAuthError() else e
+    }
+  }
+
+  // Signed with the token the server knows; ifRev is the last header this phone took from it. The waiting tokens replace the known ones only
+  // after the update landed, NEXT_* and the mark go last, so a run cut short anywhere is finished by the next (or, after a lost reply to a password change, by a sign-in).
+  // The caller has checked that the pending mark names the stored header.
+  private fun sendAccount(t: SyncTransport, escrow: EscrowBody?, putting: () -> Unit = {}) {
     val local = storedHeader()
-    if (settings.load().pendingHeader != fingerprint(local)) return dropPending() // its header never reached the vault file
     val auth = secrets.get(SyncSecret.LOGIN_TOKEN) ?: throw SyncAuthError()
     val login = secrets.get(SyncSecret.NEXT_LOGIN) ?: auth.copyOf()
     val read = secrets.get(SyncSecret.NEXT_READ) ?: secrets.get(SyncSecret.READ_TOKEN)
     try {
       if (read == null) throw SyncAuthError()
-      val body = AccountUpdate(local, Crypto.tokenHash(login), Crypto.tokenHash(read), store.syncMeta().headerRev, settings.load().recoveryHash)
+      val body = AccountUpdate(local, Crypto.tokenHash(login), Crypto.tokenHash(read), store.syncMeta().headerRev, settings.load().recoveryHash, escrow)
+      putting()
       val rev = try {
         t.putAccount(auth, body)
       } catch (e: SyncHttpError) {
-        throw if (e.status == 409) SyncAuthError() else e
+        // A resend after a lost reply: it landed if the server holds this very header (never so for a fresh rotation).
+        if (e.status != 409) throw e
+        val landed = try {
+          createdEarlier(t, auth)
+        } catch (x: Exception) {
+          null
+        }
+        landed ?: throw e
       }
       commitHeader(null, rev)
       secrets.put(SyncSecret.LOGIN_TOKEN, login)

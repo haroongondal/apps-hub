@@ -4,8 +4,10 @@ import { Button, Empty, Field, Group, Header, Notice, Pill, Row, Screen, Segment
 import Vault, { addSyncListener, type Row as VaultRow, type Status } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
 import { filterRows } from './forms.ts';
+import { pendingBanner } from './recovery-flow.ts';
 import { SyncFooter } from './SyncScreen.tsx';
 import { syncSettled } from './sync-flow.ts';
+import { useEmailRecovery } from './useEmailRecovery.ts';
 
 export interface VaultView {
   kind: VaultRow['type'];
@@ -42,6 +44,9 @@ export function VaultScreen({ status, refresh, view, onView, onOpen, onAdd, onOp
   const { c } = useTheme();
   const [rows, setRows] = useState<VaultRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const recovery = useEmailRecovery();
+  const [cancelling, setCancelling] = useState(false);
+  const banner = pendingBanner(recovery.status, recovery.now);
 
   useEffect(() => {
     const load = () => {
@@ -70,6 +75,17 @@ export function VaultScreen({ status, refresh, view, onView, onOpen, onAdd, onOp
       if (isLocked(e)) refresh();
       else setError(messageOf(e));
     }
+  };
+
+  const cancelRequest = async () => {
+    setCancelling(true);
+    try {
+      await Vault.cancelLostRequest();
+    } catch (e) {
+      setError(messageOf(e));
+    }
+    setCancelling(false);
+    void recovery.reload();
   };
 
   const searching = view.query.trim() !== '';
@@ -127,6 +143,11 @@ export function VaultScreen({ status, refresh, view, onView, onOpen, onAdd, onOp
             />
           ))}
         </Group>
+      )}
+      {banner && (
+        <Notice tone="warn" title={banner.title} action={<Button label="Cancel the request" size="sm" variant="secondary" onPress={cancelRequest} busy={cancelling} />}>
+          {banner.body}
+        </Notice>
       )}
       <SyncFooter onPress={onOpenSync} />
     </Screen>
