@@ -18,9 +18,10 @@ feature('wheel', () => {
   let tries = 0;
   const wheel: WheelState = { acc: 0, at: 0 };
   const wired = new WeakSet<Element>();
+  const rightMode = (): boolean => tools && (speedMode === 'right-button' || volumeMode === 'right-button');
 
   function onWheel(e: WheelEvent): void {
-    if (!e.isTrusted || !tools || e.ctrlKey) return; // ctrl + wheel is the browser's zoom
+    if (!e.isTrusted || !tools || e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; // ctrl + wheel is the browser's zoom; a sideways swipe stays the page's
     const speed = held !== null && speedMode === 'right-button';
     const volume = !speed && (held ? volumeMode === 'right-button' : volumeMode === 'over-video');
     if (!speed && !volume) return;
@@ -48,7 +49,7 @@ feature('wheel', () => {
     wired.add(player);
     player.addEventListener('wheel', (e) => onWheel(e as WheelEvent), { passive: false });
     player.addEventListener('mousedown', (e) => {
-      if (e.isTrusted && (e as MouseEvent).button === 2) {
+      if (e.isTrusted && (e as MouseEvent).button === 2 && rightMode()) {
         held = e as MouseEvent;
         silence = withheld = false;
       }
@@ -65,9 +66,12 @@ feature('wheel', () => {
     withheld = false;
     if (silence) setTimeout(() => (silence = false), 100); // the release's own contextmenu (Windows) follows at once; none may eat a later one
   }, true);
-  window.addEventListener('blur', () => (held = null));
+  window.addEventListener('blur', () => {
+    held = null;
+    silence = withheld = false;
+  });
   document.addEventListener('contextmenu', (e) => {
-    const keep = held !== null && !silence && (speedMode === 'right-button' || volumeMode === 'right-button') && tools;
+    const keep = held !== null && !silence && rightMode();
     if (!e.isTrusted || !(keep || silence)) return;
     if (keep) withheld = true;
     silence = false;

@@ -110,8 +110,7 @@ export async function local(t) {
     await boost.click();
     check('boost: a second click turns it off, drops the mark, and keeps the one context', (await until(async () => (await boost.getAttribute('aria-pressed')) === 'false' && (await video(page)).mark === null)) && audio.contexts.size === 1, json({ ...(await video(page)), contexts: audio.contexts.size }));
     await boost.click();
-    await until(async () => (await video(page)).mark === 'running');
-    check('boost: turning it on again reuses the source node', sources(audio) === 1, String(sources(audio)));
+    check('boost: turning it on again routes the video again with the same source node', (await until(async () => (await video(page)).mark === 'running')) && sources(audio) === 1, json({ ...(await video(page)), sources: sources(audio) }));
     await setYouTube(t, { on: false });
     check('boost: with the YouTube tools off the gain goes back to 1 (no mark)', await until(async () => (await video(page)).mark === null), json(await video(page)));
     await setYouTube(t, { on: true });
@@ -178,6 +177,33 @@ export async function local(t) {
     await page.mouse.click(400, 80, { button: 'right' });
     await sleep(200);
     check('wheel: a later plain right click still reaches the page\'s context menu', (await page.evaluate(() => window.__ctx.length)) === 1, json(await page.evaluate(() => window.__ctx)));
+    await page.close();
+
+    // Review fixes: sideways wheels, a right press that no right-button mode wants, and a blur in the middle of a gesture.
+    await setYouTube(t, { volume: { wheel: 'over-video' }, speed: { wheel: 'over-speed' } });
+    page = await scrolled();
+    await until(async () => (await volumes(page)).includes(50));
+    await page.evaluate(() => { window.__wheelPrevented = []; document.addEventListener('wheel', (e) => window.__wheelPrevented.push(e.defaultPrevented)); });
+    await page.mouse.wheel(100, 0);
+    await sleep(300);
+    check('wheel: a sideways wheel over the video is not default-prevented and sets no volume', json(await page.evaluate(() => window.__wheelPrevented)) === '[false]' && (await volumes(page)).length === 1, json({ prevented: await page.evaluate(() => window.__wheelPrevented), calls: await volumes(page) }));
+    await page.mouse.down({ button: 'right' });
+    await page.mouse.wheel(0, -100);
+    check('wheel: with no right-button mode on, a right press does not stop the plain wheel from changing the volume', await until(async () => (await volumes(page)).includes(55)), json(await volumes(page)));
+    await page.mouse.up({ button: 'right' });
+    await page.close();
+
+    await setYouTube(t, { volume: { wheel: 'right-button' }, speed: { wheel: 'over-speed' } });
+    page = await scrolled();
+    await until(async () => (await volumes(page)).includes(50));
+    await page.mouse.down({ button: 'right' });
+    await page.mouse.wheel(0, -100);
+    await until(async () => (await volumes(page)).includes(55));
+    await page.evaluate(() => { window.__ctx.length = 0; window.dispatchEvent(new Event('blur')); });
+    await page.mouse.up({ button: 'right' });
+    await page.mouse.click(5, 300, { button: 'right' });
+    await sleep(200);
+    check('wheel: after a blur mid-gesture a plain right click elsewhere is not eaten', (await page.evaluate(() => window.__ctx.length)) === 1, json(await page.evaluate(() => window.__ctx)));
     await page.close();
 
     await setYouTube(t, { volume: { setDefault: false, wheel: 'off' }, speed: { wheel: 'right-button', setDefault: false, step: 0.25, anySpeed: true } });
