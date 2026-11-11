@@ -45,13 +45,12 @@ function setup(options: { on?: boolean; result?: unknown[]; reject?: boolean; ta
       onChanged: { addListener: (cb: (typeof onChanged)[number]) => void onChanged.push(cb) },
     },
     tabs: {
-      query: async () => options.tabs ?? [],
       create: async (p: { url: string }) => void calls.created.push(p),
       update: async (...a: unknown[]) => void calls.updated.push(a),
       reload: async (id: number) => void calls.reload.push(id),
     },
     windows: { update: async (...a: unknown[]) => void calls.windows.push(a) },
-    runtime: { getURL: (p: string) => BASE + p, onInstalled: { addListener: (cb: unknown) => void onInstalled.push(cb) }, onMessage: { addListener: (cb: Msg) => void messageListeners.push(cb) } },
+    runtime: { getURL: (p: string) => BASE + p, getContexts: async () => [{ tabId: -1, windowId: -1, documentUrl: `${BASE}offscreen.html` }, ...(options.tabs ?? []).map((x) => ({ tabId: x.id, windowId: x.windowId, documentUrl: `${BASE}downloads.html#add` }))], onInstalled: { addListener: (cb: unknown) => void onInstalled.push(cb) }, onMessage: { addListener: (cb: Msg) => void messageListeners.push(cb) } },
   };
   return { items, calls, session, messageListeners, log, onClicked, onInstalled, onChanged };
 }
@@ -143,9 +142,12 @@ test('an existing downloads tab is updated and focused instead of a new one', as
   const { calls } = setup({ tabs: [{ id: 9, windowId: 4 }] });
   await onMenuClicked({ menuItemId: 'dl-link', linkUrl: 'https://x.com/a.zip' }, { id: 1 });
   assert.equal(calls.created.length, 0);
-  assert.deepEqual(calls.updated, [[9, { active: true, url: `${BASE}downloads.html#add` }]]);
+  const [[id, props]] = calls.updated as [[number, { active: boolean; url: string }]];
+  assert.equal(id, 9);
+  assert.equal(props.active, true);
+  assert.match(props.url, /^chrome-extension:\/\/sieve\/downloads\.html\?r=\d+#add$/); // a fresh query forces a real navigation
   assert.deepEqual(calls.windows, [[4, { focused: true }]]);
-  assert.deepEqual(calls.reload, [9]); // the fragment alone would not make the page read the new prefill
+  assert.deepEqual(calls.reload, []);
 });
 
 test('downloads.on false does nothing at all', async () => {

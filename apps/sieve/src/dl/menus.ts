@@ -48,12 +48,13 @@ export async function onMenuClicked(info: Info, tab: TabLike | undefined): Promi
   if (!urls.length) return;
   await chrome.storage.session.set({ dlPrefill: { urls, referrer: info.pageUrl ?? tab?.url ?? '' } });
   const page = chrome.runtime.getURL('downloads.html');
-  const [open] = await chrome.tabs.query({ url: `${page}*` });
-  if (open?.id === undefined) await chrome.tabs.create({ url: `${page}#add` });
+  // tabs.query hides the URL of our own pages without the `tabs` permission, so it cannot find the list page; getContexts can.
+  const open = (await chrome.runtime.getContexts({ contextTypes: ['TAB'] })).find((c) => c.documentUrl?.startsWith(page) && c.tabId >= 0);
+  if (!open) await chrome.tabs.create({ url: `${page}#add` });
   else {
-    await chrome.tabs.update(open.id, { active: true, url: `${page}#add` });
-    await chrome.tabs.reload(open.id); // only the fragment changed: reload so the page reads the new dlPrefill
-    if (open.windowId !== undefined) await chrome.windows.update(open.windowId, { focused: true });
+    // A fresh query makes this a real navigation; a fragment alone would not reload the page, and update-then-reload raced the fragment change.
+    await chrome.tabs.update(open.tabId, { active: true, url: `${page}?r=${Date.now()}#add` });
+    await chrome.windows.update(open.windowId, { focused: true });
   }
 }
 

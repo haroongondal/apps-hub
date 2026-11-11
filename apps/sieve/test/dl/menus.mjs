@@ -68,6 +68,14 @@ export async function run(t) {
   const manifest = JSON.parse(readFileSync(new URL('../../dist/manifest.json', import.meta.url), 'utf8'));
   check('downloads: menus: no dl* content script is registered and the manifest keeps its two content scripts', !scripts.some((id) => id.startsWith('dl')) && manifest.content_scripts.length === 2, json({ scripts, n: manifest.content_scripts.length }));
 
+  // An already-open list page: the click must reuse that tab (no second one), reload it, and the Add dialog must show the link.
+  await clear();
+  const open = await extPage(t, 'downloads.html');
+  await click({ menuItemId: 'dl-link', linkUrl: link(5) });
+  const shown = await until(async () => (await open.isClosed()) ? null : open.inputValue('#dl-add-text'), 8000).catch((e) => String(e.message));
+  check('downloads: menus: with downloads.html already open, the click reloads it and the Add dialog shows the link', shown === link(5), json({ shown, tabs: (await listTabs()).length, url: open.url() }));
+  check('downloads: menus: that case reuses the open tab and the page consumed dlPrefill', (await listTabs()).length === 1 && (await prefill()) === undefined, json({ tabs: (await listTabs()).length, prefill: await prefill() }));
+
   await clear();
   await page.close();
   await hub.close();
