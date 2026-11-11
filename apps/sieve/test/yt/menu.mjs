@@ -1,8 +1,7 @@
 // Task 2.17: the menu's YouTube tab. `popup.html?tab=<id>` stands in for the toolbar button, as in test/e2e.mjs.
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { latestDownload, openYt, row, storedYouTube, until, ytCalls } from './helpers.mjs';
+import { openYt, row, storedYouTube, until, ytCalls } from './helpers.mjs';
 
 const json = (v) => JSON.stringify(v);
 const tabIdOf = (t, page) => t.sw.evaluate(async (url) => (await chrome.tabs.query({})).find((x) => x.url === url)?.id, page.url());
@@ -69,12 +68,6 @@ export async function local(t) {
     check('menu: "Flip horizontally" flips the video and the switch shows it', (await until(() => page.evaluate(() => getComputedStyle(document.querySelector('#movie_player video')).transform !== 'none'), 1000)) && (await until(() => toggle(pop, 'Flip horizontally').isChecked(), 1000)));
     await toggle(pop, 'Flip horizontally').click();
 
-    // Task 2.9 owns the screenshot action; until yt-relay.ts imports it the click only reaches the page's main world.
-    if (readFileSync(new URL('../../src/yt-relay.ts', import.meta.url), 'utf8').includes('./yt/capture.ts')) {
-      const before = (await latestDownload(t))?.id ?? 0;
-      await button(pop, 'Take a screenshot').click();
-      check('menu: "Take a screenshot" makes a download', await until(async () => ((await latestDownload(t))?.id ?? 0) > before, 5000), json(await latestDownload(t)));
-    } else console.log('SKIP  menu: "Take a screenshot" makes a download (yt-relay.ts does not import capture.ts of Task 2.9 yet)');
     await button(pop, 'Stop').click();
     check('menu: "Stop" makes the recorded stopVideo call', await until(async () => (await ytCalls(page, 'stopVideo')).length === 1, 2000), json(await ytCalls(page, 'stopVideo')));
 
@@ -113,6 +106,17 @@ export async function local(t) {
     check('menu: on a playlist page "Reverse playlist" is shown', await until(() => toggle(m.pop, 'Reverse playlist').isVisible(), 3000));
     await toggle(m.pop, 'Reverse playlist').click();
     check('menu: "Reverse playlist" turns the reversal on', await until(() => toggle(m.pop, 'Reverse playlist').isChecked(), 2000));
+    await m.pop.close();
+    await page.close();
+    page = null;
+
+    page = await openYt(t, '/watch?v=sieveTest01&canvas=1');
+    m = await openMenu(t, await tabIdOf(t, page));
+    const downloads = () => t.sw.evaluate(() => chrome.downloads.search({}));
+    const had = (await downloads()).length;
+    await button(m.pop, 'Take a screenshot').click();
+    const got = await until(async () => (await downloads()).length > had && (await downloads()).at(-1), 5000);
+    check('menu: "Take a screenshot" makes a PNG download from the extension', !!got && got.mime === 'image/png' && got.byExtensionId === t.id, json(got));
     await m.pop.close();
     await page.close();
     page = null;
