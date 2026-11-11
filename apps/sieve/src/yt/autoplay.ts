@@ -3,6 +3,14 @@ import type { AutoplayMode } from '@apps-hub/sieve-core/src/youtube-settings.ts'
 import { currentPage, feature, onSettings } from './bridge.ts';
 import { SEL } from './selectors.ts';
 
+// Page events. inspected 2026-11-11, signed out, Chrome for Testing 149.0.7827.55, dQw4w9WgXcQ in a playlist, "In every tab" and playlists off:
+// - On a hard load the real <video> fires trusted `emptied`, `play`, `loadstart` (in that order, within 10 ms) about 1.5 s in, and `pause` from my
+//   `video.pause()`; the play button then reads "Play" (getPlayerState 2). YouTube itself calls play() again about 1.5 s later (a second `play` and
+//   `playing`, trusted, no input), so a video stays "new" until a play is let through: with "the first play only" that retry would have started it.
+// - A trusted click in the player gave `play` and `playing` at once and it played on (state 1, "Pause").
+// - `player.nextVideo()` in the playlist: `emptied`, `play`, `loadstart` for the new video, location already holding `list=` and the new index,
+//   so `currentPage().list` is right at play time. With playlists off the new video was paused (state -1, "Play"); with playlists on it played.
+// - Not seen: an ad as the first play (`ad-showing` was never set), a key press, a non-playlist in-app navigation.
 const loadedHidden = document.visibilityState === 'hidden';
 // Random per frame: the worker tells every frame of every tab, and a frame spares the one token it sent.
 const token = crypto.randomUUID();

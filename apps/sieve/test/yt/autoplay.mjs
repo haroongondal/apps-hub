@@ -11,15 +11,17 @@ const players = (t) => t.sw.evaluate(() => chrome.storage.session.get('ytPlayers
 
 // What YouTube does for a click or a space on the player: toggle play. Counts every play event, as the module sees them.
 const script = () => {
-  window.__plays = 0;
-  window.__trace = [];
   const video = () => document.querySelector('#movie_player video');
-  document.addEventListener('play', (e) => { if (e.target === video()) window.__plays++; }, true);
   document.addEventListener('click', (e) => { if (e.isTrusted && e.target.closest?.('#movie_player') && video().paused) video().play().catch(() => {}); });
   document.addEventListener('keydown', (e) => { if (e.isTrusted && e.key === ' ' && !e.target.closest?.('input, textarea') && video().paused) video().play().catch(() => {}); });
   // The link a Meta-click opens in a new background tab, and the fixture's own link handler must not turn into an in-app navigation.
   document.addEventListener('click', (e) => { if (e.metaKey) e.stopImmediatePropagation(); });
+};
+// Inert, so it may stay on the context: the play count, and the visibility at the page's start (a Meta-click tab is not made by `open`).
+const counters = () => {
+  window.__plays = 0;
   window.__first = document.visibilityState;
+  document.addEventListener('play', (e) => { if (e.target === document.querySelector('#movie_player video')) window.__plays++; }, true);
 };
 
 async function open(t, path, fixture) {
@@ -35,6 +37,7 @@ export async function local(t) {
   const pages = [];
   const mk = async (...args) => pages[pages.push(await open(t, ...args)) - 1];
   try {
+    await t.ctx.addInitScript(counters);
     // Every tab.
     await setYouTube(t, { autoplay: { mode: 'always', playlists: true, pauseOthers: false } });
     let page = await mk('/watch?v=sieveTest01');
@@ -99,12 +102,19 @@ export async function local(t) {
     // Background tabs: a Meta-click opens a link in a tab behind this one, and headless Chrome reports that tab as hidden while its scripts start.
     await setYouTube(t, { autoplay: { mode: 'background', playlists: true } });
     const opener = await mk('/watch?v=sieveTest05');
+    check('autoplay background: a tab that loaded in the front plays', await until(() => playing(opener)), json(await state(opener)));
     await opener.evaluate(() => { const a = document.createElement('a'); a.id = 'bg'; a.target = '_blank'; a.href = '/watch?v=sieveTest01&fixture=watch'; a.textContent = 'open'; a.style.cssText = 'position:fixed;top:80px;left:20px;z-index:99999;font-size:40px'; document.body.append(a); });
-    const [bg] = await Promise.all([t.ctx.waitForEvent('page'), opener.click('#bg', { modifiers: ['Meta'] })]);
-    bg.on('pageerror', (e) => t.errors.push(e.message));
-    await bg.waitForLoadState('load');
-    await until(() => bg.evaluate(() => window.__plays > 0).catch(() => false));
-    const started = await bg.evaluate(() => window.__first).catch(() => null);
+    // Playwright makes a new tab "visible" a moment after it opens, so a script that starts first may or may not see "hidden": try a few times.
+    let bg;
+    let started = null;
+    for (let i = 0; i < 8 && started !== 'hidden'; i++) {
+      await bg?.close();
+      [bg] = await Promise.all([t.ctx.waitForEvent('page'), opener.click('#bg', { modifiers: ['Meta'] })]);
+      bg.on('pageerror', (e) => t.errors.push(e.message));
+      await bg.waitForLoadState('load');
+      await until(() => bg.evaluate(() => window.__plays > 0).catch(() => false));
+      started = await bg.evaluate(() => window.__first).catch(() => null);
+    }
     if (started === 'hidden') {
       check('autoplay background: a tab opened behind another is paused', await until(async () => (await state(bg)).paused) && (await state(bg)).t < 0.5, json(await state(bg)));
       await bg.bringToFront();
@@ -114,7 +124,6 @@ export async function local(t) {
       check('autoplay background: a second load, in the front, plays', await until(() => playing(bg)), json(await state(bg)));
     } else console.log(`SKIP  autoplay background: the new tab reported visibilityState ${started} at its start, so it was not behind another tab`);
     await bg.close();
-    check('autoplay background: a tab that loaded in the front plays', await until(() => playing(opener)), json(await state(opener)));
     await opener.close();
 
     // Pause others.
