@@ -141,6 +141,10 @@ export async function run(t) {
     await p.getByRole('button', { name: T.addSubmit, exact: true }).click();
     await p.getByText(T.addNone, { exact: true }).waitFor();
     check('downloads: popup: only a bad line shows the none line and adds nothing', (await readRecords(t)).length === 1, '');
+    await box.fill(Array.from({ length: 501 }, (_, i) => `${fx.base}/file/1000/n${i}.bin`).join('\n'));
+    await p.getByRole('button', { name: T.addSubmit, exact: true }).click();
+    await p.getByText(T.addTooMany, { exact: true }).waitFor();
+    check('downloads: popup: more than 500 lines show the too-many line and add nothing', (await readRecords(t)).length === 1 && (await box.inputValue()) !== '', '');
     await pop.close();
   });
 

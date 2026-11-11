@@ -109,8 +109,10 @@ const submit = h('button', { class: 'ui-btn ui-btn--primary', type: 'button' }, 
 const form = h('div', { class: 'dl-form', hidden: true }, h('label', { class: 'ui-field' }, h('span', { class: 'ui-meta' }, T.addLabel), box), submit);
 
 submit.addEventListener('click', async () => {
-  const { urls, skipped } = parseAddInput(box.value);
+  // The router takes at most 500 items in one message.
+  const { urls, skipped, truncated } = parseAddInput(box.value, 500);
   if (urls.length === 0) return say(T.addNone);
+  if (truncated) return say(T.addTooMany);
   submit.disabled = true;
   try {
     const reply = await chrome.runtime.sendMessage({ type: 'dl-add', items: urls.map((url) => ({ url, source: 'manual' })) });

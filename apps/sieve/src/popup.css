@@ -33,4 +33,5 @@ footer { display: flex; justify-content: flex-end; }
 .dl-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-sm); }
 .dl-form { display: grid; gap: var(--space-sm); }
 .dl-box { min-height: 72px; padding: var(--space-sm) var(--space-md); resize: vertical; }
-.dl-note:empty { display: none; }
+/* Empty, the status region stays in the page (a screen reader only hears a region that already exists) but takes no room. */
+.dl-note:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
