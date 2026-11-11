@@ -243,7 +243,7 @@ function confirmDelete() {
   const unfinished = picked.some((r) => r.state !== 'done');
   const ids = picked.map((r) => r.id);
   const text = unfinished ? T.confirmDeleteUnfinished(ids.length) : T.confirmDeleteFinished(ids.length);
-  const ok = h('button', { class: 'ui-btn ui-btn--danger', onclick: () => (void command('remove', ids), dialog.close()) }, unfinished ? T.confirmDelete : T.confirmRemove);
+  const ok = h('button', { class: 'ui-btn ui-btn--danger', onclick: () => (void command('remove', ids.filter((id) => records.get(id)?.state !== 'saving')), dialog.close()) }, unfinished ? T.confirmDelete : T.confirmRemove);
   const dialog = h('dialog', { class: 'ui-sheet dl-dialog', 'aria-label': T.delete }, h('p', {}, text), h('div', { class: 'dl-actions' }, h('button', { class: 'ui-btn', onclick: () => dialog.close() }, T.cancel), ok));
   dialog.addEventListener('close', () => dialog.remove());
   document.body.append(dialog);

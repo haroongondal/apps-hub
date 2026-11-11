@@ -54,7 +54,7 @@ export async function run(t) {
       db.close();
     }, records);
     await page.reload();
-    await until(async () => (await rowsOf(page)).length === records.length);
+    await until(async () => (await rowsOf(page)).length === records.length, 30000);
     return records;
   };
   const errorsBefore = t.errors.length;
@@ -278,6 +278,34 @@ export async function run(t) {
     await page.click(`dialog button:text-is("${T.addSubmit}")`);
     check('downloads: list: more than 500 addresses keeps the dialog open with T.addTooMany', (await page.locator('dialog[open] [role=alert]').textContent()) === T.addTooMany && (await readRecords(t)).length === 1);
     await page.keyboard.press('Escape');
+  });
+
+  await attempt('delete safety and chunks', async () => {
+    await fresh();
+    let page = await open();
+    const [rec] = await seed(page, [['turns-saving.bin']]);
+    await page.locator('tbody tr').first().click();
+    await bar(page, 'delete').click();
+    await sendMsg(t, { type: 'dl-state', records: [{ ...rec, state: 'saving', saveOnly: true }], removed: [], speeds: {}, total: 0 });
+    await until(async () => (await rowsOf(page))[0]?.status === T.st.saving);
+    await page.click(`dialog button:text-is("${T.confirmDelete}")`);
+    await new Promise((r) => setTimeout(r, 800));
+    check('downloads: list: Delete skips a row that started saving while the dialog was open', (await rowsOf(page)).length === 1 && (await readRecords(t)).length === 1 && (await page.locator('#dl-status').textContent()) === '');
+
+    await fresh();
+    page = await open();
+    await seed(page, Array.from({ length: 501 }, (_, i) => [`m${i}.bin`])).catch(async (e) => {
+      throw new Error(`seed: ${e.message}; rows ${(await rowsOf(page)).length}`);
+    });
+    await page.locator('tbody tr').first().click();
+    await page.locator('tbody tr').last().click({ modifiers: ['Shift'] });
+    await bar(page, 'delete').click();
+    check('downloads: list: 501 selected rows read T.confirmDeleteUnfinished(501)', (await page.locator('dialog[open] p').textContent()) === T.confirmDeleteUnfinished(501));
+    await page.click(`dialog button:text-is("${T.confirmDelete}")`);
+    await until(async () => (await rowsOf(page)).length === 0, 40000).catch(async (e) => {
+      throw new Error(`${e.message}; rows ${(await rowsOf(page)).length}, records ${(await readRecords(t)).length}, status ${await page.locator('#dl-status').textContent()}`);
+    });
+    check('downloads: list: deleting 501 rows works in chunks and leaves the status line empty', (await page.locator('#dl-status').textContent()) === '');
   });
 
   await attempt('screens', async () => {
