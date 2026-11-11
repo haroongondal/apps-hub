@@ -447,6 +447,7 @@ for (const cut of [4 * MiB, 7 * MiB]) {
     s.files.data.set(PART, s.files.data.get(PART)!.slice(0, cut));
     const second = await s.run(first.record);
     assert.equal(second.kind, 'done');
+    assert.ok(s.persisted.every((r) => r.parts.every((p) => p.done >= 0)), 'no part goes below 0');
     assertFile(s.files, 10 * MiB);
   });
 }

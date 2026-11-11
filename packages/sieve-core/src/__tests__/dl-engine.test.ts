@@ -257,6 +257,24 @@ test('resume: a save-only record whose copy is cut short downloads again from th
   assert.deepEqual(s.parts.map((p) => p.done), [50, 20]);
 });
 
+test('resume: a copy shorter than a part start clamps that part to 0, not below', async () => {
+  const parts = [{ start: 0, end: 49, done: 50 }, { start: 50, end: 99, done: 50 }];
+  const r = await makeRig({ records: [rec('a', { size: 100, state: 'failed', saveOnly: true, error: ERRORS.saveCanceled, parts })], files: ['a.part'] });
+  r.files.map.set('a.part', new Uint8Array(30));
+  await r.engine.act('resume', ['a']);
+  await flush();
+  assert.deepEqual(r.stored('a')!.parts.map((p) => p.done), [30, 0]);
+});
+
+test('resume: a copy that is busy (sync handle held) is left alone and goes to saving', async () => {
+  const r = await makeRig({ records: [rec('a', { size: 100, state: 'failed', saveOnly: true, error: ERRORS.saveCanceled, parts: [{ start: 0, end: 99, done: 100 }] })], files: ['a.part'] });
+  r.files.open = async () => { throw Object.assign(new Error('busy'), { name: 'NoModificationAllowedError' }); };
+  await r.engine.act('resume', ['a']);
+  await flush();
+  assert.equal(r.transfer.runs.length, 0);
+  assert.equal(r.host.saves.length, 1);
+});
+
 test('resume: a complete record (not save-only) whose part file is gone downloads again', async () => {
   const r = await makeRig({ records: [rec('a', { size: 100, state: 'failed', error: ERRORS.saveCanceled, parts: [{ start: 0, end: 99, done: 100 }] })] });
   await r.engine.act('resume', ['a']);
