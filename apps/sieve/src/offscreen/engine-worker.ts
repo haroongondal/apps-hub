@@ -6,11 +6,11 @@ import type { DownloadSettings } from '@apps-hub/sieve-core/src/dl-settings.ts';
 import { savePath } from '@apps-hub/sieve-core/src/dl-takeover.ts';
 import { createTransfer } from '@apps-hub/sieve-core/src/dl-transfer.ts';
 import { openStore } from '../dl/idb-store.ts';
-import type { WorkerMessage, WorkerRequest } from './protocol.ts';
+import type { SaveReply, WorkerMessage, WorkerRequest } from './protocol.ts';
 import { createOpfsFiles } from './opfs-files.ts';
 
 const scope = self as unknown as {
-  onmessage: (e: MessageEvent<WorkerRequest>) => void;
+  onmessage: (e: MessageEvent<WorkerRequest | SaveReply>) => void;
   postMessage(m: WorkerMessage): void;
   addEventListener(type: 'online', fn: () => void): void;
   removeEventListener(type: 'online', fn: () => void): void;
@@ -54,14 +54,26 @@ const clock: Clock = {
 
 let settings: DownloadSettings;
 let saveRequests = 0;
+const SAVE_REPLY_MS = 30_000;
+const saveReplies = new Map<number, (result: SaveReply['result']) => void>();
 const host: Host = {
   emit: (payload) => post({ push: 'state', payload }),
   idle: () => post({ push: 'idle' }),
-  // The save is handed to the worker in Task 3.12; until then a finished record rests in `saving`.
-  async save(r) {
+  // Answers when Chrome has been asked (or refused), not before: the offscreen thread replies with `{ saveReply, result }`.
+  save(r) {
     const category = settings.categories.find((c) => c.id === r.category) ?? settings.categories[settings.categories.length - 1];
-    post({ push: 'save', req: ++saveRequests, payload: { id: r.id, name: r.name, path: savePath(category, r.name), size: r.size } });
-    return { ok: true };
+    const req = ++saveRequests;
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        saveReplies.delete(req);
+        resolve({ ok: false, message: 'TIMEOUT' });
+      }, SAVE_REPLY_MS);
+      saveReplies.set(req, (result) => {
+        clearTimeout(timer);
+        resolve(result);
+      });
+      post({ push: 'save', req, payload: { id: r.id, name: r.name, path: savePath(category, r.name), size: r.size } });
+    });
   },
 };
 
@@ -102,6 +114,12 @@ async function run({ cmd, payload }: WorkerRequest): Promise<unknown> {
 }
 
 scope.onmessage = async ({ data }) => {
+  if ('saveReply' in data) {
+    const done = saveReplies.get(data.saveReply);
+    saveReplies.delete(data.saveReply);
+    done?.(data.result);
+    return;
+  }
   try {
     post({ reply: data.id, result: await run(data) });
   } catch (e) {

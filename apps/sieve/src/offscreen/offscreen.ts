@@ -8,7 +8,7 @@
 //   F7 IndexedDB and OPFS are one store for the worker, this document, its Worker and extension pages;
 //   F8 URL.createObjectURL exists here and not in the service worker;
 //   F15 a 0.05-minute alarm fired about 3 s later in an unpacked extension (the worker's, not this document's: alarms are undefined here).
-import type { WorkerCommand, WorkerMessage, WorkerRequest } from './protocol.ts';
+import type { SaveReply, WorkerCommand, WorkerMessage, WorkerRequest } from './protocol.ts';
 
 const REPLY_MS = 20_000;
 const COMMANDS: Record<string, WorkerCommand> = { 'dl-eng-add': 'add', 'dl-eng-do': 'do', 'dl-eng-config': 'config', 'dl-eng-tick': 'tick', 'dl-eng-save-event': 'save-event' };
@@ -61,7 +61,31 @@ function onWorkerMessage(m: WorkerMessage) {
   if ('reply' in m) pending.get(m.reply)?.(m.result);
   else if (m.push === 'state') chrome.runtime.sendMessage({ type: 'dl-state', ...m.payload }).catch(() => {});
   else if (m.push === 'idle') chrome.runtime.sendMessage({ type: 'dl-sw-idle' }).catch(() => {});
-  // `{ push: 'save' }` is handled by Task 3.12
+  else if (m.push === 'save') {
+    const w = worker;
+    void prepareSave(m.payload).then((result) => w === worker && w.postMessage({ saveReply: m.req, result } satisfies SaveReply));
+  }
+}
+
+// One blob URL per record while its save runs; revoked when the save is done or failed.
+const blobUrls = new Map<string, string>();
+
+// The blob's type is set because with none Chrome picked .txt for clip.mp4 (the raw-Chrome e2e); a slice still reads from disk.
+// The copy needs as much free disk again (the quota follows free space, inspected F6); the file is read from disk by Chrome, nothing is copied into memory (F9).
+async function prepareSave({ id, path, size }: { id: string; path: string; size: number | null }): Promise<SaveReply['result']> {
+  try {
+    const { quota = 0, usage = 0 } = await navigator.storage.estimate();
+    if (size !== null && quota - usage < size) return { ok: false, message: 'FILE_NO_SPACE' };
+    const root = await navigator.storage.getDirectory();
+    const file = await (await root.getFileHandle(`${id}.part`)).getFile();
+    if (size !== null && file.size !== size) return { ok: false, message: 'FILE_TOO_SHORT' };
+    const blobUrl = blobUrls.get(id) ?? URL.createObjectURL(file.slice(0, file.size, 'application/octet-stream'));
+    blobUrls.set(id, blobUrl);
+    const reply = await chrome.runtime.sendMessage({ type: 'dl-sw-save', id, blobUrl, path, size: file.size });
+    return reply?.ok ? { ok: true } : { ok: false, message: String(reply?.message ?? 'NO_REPLY') };
+  } catch (e) {
+    return { ok: false, message: String((e as Error)?.message ?? e) };
+  }
 }
 
 function restart() {
@@ -109,6 +133,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!sender.url?.startsWith(chrome.runtime.getURL('')) || typeof message?.type !== 'string' || !Object.hasOwn(COMMANDS, message.type)) return false;
   const cmd = COMMANDS[message.type];
   const { type: _type, ...rest } = message;
+  if (cmd === 'save-event' && (rest.kind === 'done' || rest.kind === 'failed') && blobUrls.has(rest.id)) {
+    URL.revokeObjectURL(blobUrls.get(rest.id)!);
+    blobUrls.delete(rest.id);
+  }
   if (cmd === 'config' && !ready) {
     latestConfig = rest.settings;
     sendResponse({ ok: true });
