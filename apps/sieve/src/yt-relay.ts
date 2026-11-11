@@ -10,6 +10,7 @@ import './yt/menu.ts';
 import './yt/row.ts';
 import './yt/speed.ts';
 import './yt/theme.ts';
+import './yt/tidy.ts';
 import './yt/visual.ts';
 import './yt/wheel.ts';
 
