@@ -4,6 +4,7 @@ import type { BuildMeta } from '@apps-hub/sieve-core/src/plan.ts';
 import { FEATURES, validateSettings, type AllowEntry, type FeatureKey, type Settings } from '@apps-hub/sieve-core/src/settings.ts';
 import { NAMES, count, save, setBlocking, setList, toggle } from './controls.ts';
 import { h, type Child } from './dom.ts';
+import { downloadsSection } from './dl/options-downloads.ts';
 import { FILTERS_CHANGED, TOO_MANY_TO_STORE, saveMyFilters, type SaveResult } from './my-filters.ts';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -164,3 +165,4 @@ chrome.storage.onChanged.addListener((changes, where) => {
 
 renderAllowlist();
 document.getElementById('app')!.replaceChildren(h('header', {}, h('h1', { class: 'ui-title' }, 'Sieve settings')), blocking, lists, mine, allow);
+document.getElementById('app')!.append(downloadsSection());
