@@ -18,5 +18,6 @@ object StoreHolder {
 
   fun storeError(context: Context): String? = get(context).exceptionOrNull()?.message
 
-  fun ingest(context: Context, store: SqlItemStore) = Ingest(store, context.packageName, System::currentTimeMillis)
+  fun ingest(context: Context, store: SqlItemStore, onOtpSaved: (Long) -> Unit = {}) =
+    Ingest(store, context.packageName, System::currentTimeMillis, onOtpSaved)
 }

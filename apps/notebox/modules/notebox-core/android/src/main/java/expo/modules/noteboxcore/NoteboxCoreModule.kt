@@ -31,7 +31,7 @@ class NoteboxCoreModule : Module() {
     context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
   }
 
-  private fun settingFor(store: SqlItemStore, pkg: String): AppSetting = store.appSetting(pkg) ?: Retention.default(pkg, pkg)
+  private fun settingFor(store: SqlItemStore, pkg: String): AppSetting = store.appSetting(pkg) ?: Retention.default(pkg, NoteboxListener.label(context, pkg))
 
   override fun definition() = ModuleDefinition {
     Name("NoteboxCore")

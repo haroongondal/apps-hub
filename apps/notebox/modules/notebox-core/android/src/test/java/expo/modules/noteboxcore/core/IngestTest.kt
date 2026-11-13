@@ -12,7 +12,8 @@ class IngestTest {
   private val day = Ingest.DAY_MS
   private var clock = 1_700_000_000_000L
   private val store = MemoryItemStore()
-  private val ingest = Ingest(store, own) { clock }
+  private val otpExpiries = mutableListOf<Long>()
+  private val ingest = Ingest(store, own, { clock }, { otpExpiries += it })
 
   private fun raw(
     pkg: String = "com.example.app",
@@ -89,6 +90,14 @@ class IngestTest {
     assertTrue(store.items.isEmpty())
     assertEquals(0, ingest.onNotification(otp))
     assertTrue(store.items.isEmpty())
+  }
+
+  @Test fun savedOtpReportsItsExpiryOnce() {
+    val otp = raw(title = "Bank", text = "Your OTP is 482913. Do not share it.")
+    ingest.onNotification(raw(title = "Bank", text = "Hello"))
+    ingest.onNotification(otp)
+    ingest.onNotification(otp)
+    assertEquals(listOf(clock + Ingest.OTP_TTL_MS), otpExpiries)
   }
 
   @Test fun deletedBySenderKeepsOriginal() {

@@ -12,7 +12,9 @@ import expo.modules.noteboxcore.core.OpenPlan
 import expo.modules.noteboxcore.core.SearchText
 import expo.modules.noteboxcore.core.openPlan
 import net.zetetic.database.DatabaseErrorHandler
+import net.zetetic.database.sqlcipher.SQLiteConnection
 import net.zetetic.database.sqlcipher.SQLiteDatabase
+import net.zetetic.database.sqlcipher.SQLiteDatabaseHook
 import net.zetetic.database.sqlcipher.SQLiteStatement
 
 class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemStore {
@@ -221,6 +223,14 @@ class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemSto
       override fun onCorruption(db: SQLiteDatabase, e: SQLiteException) {}
     }
 
+    // Per connection: deleted rows (expired OTPs) are overwritten, not left in free pages.
+    private val secureDelete = object : SQLiteDatabaseHook {
+      override fun preKey(connection: SQLiteConnection) {}
+      override fun postKey(connection: SQLiteConnection) {
+        connection.executeForLong("PRAGMA secure_delete = ON", null, null)
+      }
+    }
+
     fun open(context: Context): Result<SqlItemStore> = synchronized(lock) {
       try {
         System.loadLibrary("sqlcipher")
@@ -233,7 +243,7 @@ class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemSto
         val raw = ("x'" + key.joinToString("") { "%02x".format(it) } + "'").toByteArray(Charsets.US_ASCII)
         key.fill(0)
         // raw is not zeroed: SQLCipher's connection config keeps this array and re-reads it if a connection is reopened.
-        val db = SQLiteDatabase.openOrCreateDatabase(file, raw, null, neverDeleteOnCorruption, null).also { ensureSchema(it) }
+        val db = SQLiteDatabase.openOrCreateDatabase(file, raw, null, neverDeleteOnCorruption, secureDelete).also { ensureSchema(it) }
         Result.success(SqlItemStore(db))
       } catch (e: SQLiteDatabaseCorruptException) {
         Result.failure(IllegalStateException(KEY_LOST_MESSAGE, e))

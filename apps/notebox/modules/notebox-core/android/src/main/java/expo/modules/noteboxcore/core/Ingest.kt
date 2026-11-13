@@ -1,6 +1,11 @@
 package expo.modules.noteboxcore.core
 
-class Ingest(private val store: ItemStore, private val ownPkg: String, private val now: () -> Long) {
+class Ingest(
+  private val store: ItemStore,
+  private val ownPkg: String,
+  private val now: () -> Long,
+  private val onOtpSaved: (expiresAt: Long) -> Unit = {},
+) {
   fun onNotification(raw: RawNotification): Int {
     if (raw.pkg == ownPkg) return 0
     val setting = store.appSetting(raw.pkg)
@@ -15,7 +20,10 @@ class Ingest(private val store: ItemStore, private val ownPkg: String, private v
       }
       val search = SearchText.normalize(listOfNotNull(c.sender, c.conversation, c.title, c.text).joinToString(" "))
       val otpExpiresAt = if (OtpDetector.isOtp(c.pkg, c.text)) now() + OTP_TTL_MS else null
-      if (store.insert(c, search, otpExpiresAt)) saved++
+      if (store.insert(c, search, otpExpiresAt)) {
+        saved++
+        otpExpiresAt?.let(onOtpSaved)
+      }
     }
     housekeeping()
     return saved
