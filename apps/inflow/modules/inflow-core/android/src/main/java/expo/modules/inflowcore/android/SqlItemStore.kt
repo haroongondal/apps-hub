@@ -6,6 +6,7 @@ import android.database.sqlite.SQLiteDatabaseCorruptException
 import android.database.sqlite.SQLiteException
 import expo.modules.inflowcore.core.AppSetting
 import expo.modules.inflowcore.core.Capture
+import expo.modules.inflowcore.core.Email
 import expo.modules.inflowcore.core.ItemStore
 import expo.modules.inflowcore.core.KEY_LOST_MESSAGE
 import expo.modules.inflowcore.core.OpenPlan
@@ -30,14 +31,15 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
     )
   }
 
-  override fun insert(c: Capture, search: String, otpExpiresAt: Long?, smsHash: String?): Long? {
+  override fun insert(c: Capture, search: String, otpExpiresAt: Long?, smsHash: String?, emailHash: String?): Long? {
     if (isTombstoned(c.hash)) return null
     if (smsHash != null && hasSmsHash(smsHash)) return null
+    if (emailHash != null && hasEmailHash(emailHash)) return null
     val added = run(
       "INSERT OR IGNORE INTO items(hash, pkg, app_label, sender, sender_key, conversation, conversation_key, title, text, " +
-        "posted_at, captured_at, otp_expires_at, deleted_by_sender, search, sms_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
+        "posted_at, captured_at, otp_expires_at, deleted_by_sender, search, sms_hash, email_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
       c.hash, c.pkg, c.appLabel, c.sender, c.senderKey, c.conversation, c.conversationKey, c.title, c.text,
-      c.postedAt, System.currentTimeMillis(), otpExpiresAt, search, smsHash,
+      c.postedAt, System.currentTimeMillis(), otpExpiresAt, search, smsHash, emailHash,
     )
     if (added == 0) return null
     return query("SELECT id FROM items WHERE hash = ?", c.hash).use { if (it.moveToFirst()) it.getLong(0) else null }
@@ -46,6 +48,27 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
   override fun isTombstoned(hash: String): Boolean = query("SELECT 1 FROM tombstones WHERE hash = ?", hash).use { it.moveToFirst() }
 
   override fun hasSmsHash(smsHash: String): Boolean = query("SELECT 1 FROM items WHERE sms_hash = ?", smsHash).use { it.moveToFirst() }
+
+  override fun hasEmailHash(emailHash: String): Boolean = query("SELECT 1 FROM items WHERE email_hash = ?", emailHash).use { it.moveToFirst() }
+
+  override fun emailTwin(subject: String, at: Long, windowMs: Long): Long? {
+    if (subject.isBlank()) return null
+    return query(
+      "SELECT id FROM items WHERE pkg = ? AND email_hash IS NULL AND posted_at BETWEEN ? AND ? AND substr(text, 1, length(?)) = ? " +
+        "ORDER BY posted_at DESC, id DESC LIMIT 1",
+      Email.GMAIL, at - windowMs, at + windowMs, subject, subject,
+    ).use { if (it.moveToFirst()) it.getLong(0) else null }
+  }
+
+  override fun emailItemNear(text: String, at: Long, windowMs: Long): Boolean =
+    query(
+      "SELECT 1 FROM items WHERE pkg = ? AND email_hash IS NOT NULL AND posted_at BETWEEN ? AND ? AND title <> '' AND substr(?, 1, length(title)) = title LIMIT 1",
+      Email.GMAIL, at - windowMs, at + windowMs, text,
+    ).use { it.moveToFirst() }
+
+  override fun claimEmail(itemId: Long, emailHash: String, emailText: String, search: String) {
+    run("UPDATE items SET email_hash = ?, email_text = ?, search = search || ' ' || ? WHERE id = ?", emailHash, emailText, search, itemId)
+  }
 
   override fun smsItemNear(text: String, at: Long, windowMs: Long): Boolean =
     query("SELECT 1 FROM items WHERE sms_hash IS NOT NULL AND posted_at BETWEEN ? AND ? AND text = ? LIMIT 1", at - windowMs, at + windowMs, text)
@@ -217,7 +240,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
   private fun Cursor.toItem(): Map<String, Any?> = mapOf(
     "id" to getLong(0), "pkg" to getString(1), "appLabel" to getString(2), "sender" to str(3), "senderKey" to str(4),
     "displayName" to str(5), "conversation" to str(6), "conversationKey" to str(7), "title" to str(8),
-    "text" to getString(9), "postedAt" to getLong(10), "deletedBySender" to (getInt(11) != 0),
+    "text" to getString(9), "postedAt" to getLong(10), "deletedBySender" to (getInt(11) != 0), "emailText" to str(12),
   )
 
   private fun Cursor.str(i: Int): String? = if (isNull(i)) null else getString(i)
@@ -226,11 +249,11 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
 
   companion object {
     private const val DB_NAME = "inflow.db"
-    private const val SCHEMA_VERSION = 2
+    private const val SCHEMA_VERSION = 3
     private const val GENERIC_FAILURE =
       "Inflow can't open your saved history. The history file is kept, not deleted. Restart the phone and try again."
     private const val ITEM_COLUMNS = "i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, " +
-      "i.conversation_key, i.title, i.text, i.posted_at, i.deleted_by_sender"
+      "i.conversation_key, i.title, i.text, i.posted_at, i.deleted_by_sender, i.email_text"
     private const val ITEM_FROM = "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.sender_key"
     private const val VISIBLE_I = "(i.otp_expires_at IS NULL OR i.otp_expires_at > ?)"
     private const val VISIBLE_J = "(j.otp_expires_at IS NULL OR j.otp_expires_at > ?)"
@@ -279,6 +302,14 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
       "CREATE INDEX txn_sources_txn ON txn_sources(txn_id)",
     )
 
+    // Not idempotent, like v2: ensureSchema runs it once. email_hash/email_text hold a Gmail message and the notification it merged with.
+    private val SCHEMA_V3 = listOf(
+      "ALTER TABLE items ADD COLUMN email_hash TEXT",
+      "ALTER TABLE items ADD COLUMN email_text TEXT",
+      "CREATE UNIQUE INDEX items_email ON items(email_hash) WHERE email_hash IS NOT NULL",
+      "CREATE TABLE gmail_senders(query TEXT PRIMARY KEY, uid_validity INTEGER, last_uid INTEGER NOT NULL DEFAULT 0)",
+    )
+
     private val neverDeleteOnCorruption = object : DatabaseErrorHandler {
       override fun onCorruption(db: SQLiteDatabase, e: SQLiteException) {}
     }
@@ -320,7 +351,8 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
         db.beginTransaction()
         try {
           if (db.version < 1) SCHEMA_V1.forEach(db::execSQL)
-          SCHEMA_V2.forEach(db::execSQL)
+          if (db.version < 2) SCHEMA_V2.forEach(db::execSQL)
+          SCHEMA_V3.forEach(db::execSQL)
           db.version = SCHEMA_VERSION
           db.setTransactionSuccessful()
         } finally {

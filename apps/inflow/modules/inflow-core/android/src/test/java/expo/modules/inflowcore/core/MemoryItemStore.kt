@@ -1,6 +1,9 @@
 package expo.modules.inflowcore.core
 
-class StoredItem(val id: Long, val capture: Capture, val search: String, val otpExpiresAt: Long?, var smsHash: String? = null, var deleted: Boolean = false)
+class StoredItem(
+  val id: Long, val capture: Capture, var search: String, val otpExpiresAt: Long?, var smsHash: String? = null, var deleted: Boolean = false,
+  var emailHash: String? = null, var emailText: String? = null,
+)
 
 class MemoryItemStore : ItemStore {
   val items = LinkedHashMap<String, StoredItem>()
@@ -15,11 +18,12 @@ class MemoryItemStore : ItemStore {
     settings[s.pkg] = s
   }
 
-  override fun insert(c: Capture, search: String, otpExpiresAt: Long?, smsHash: String?): Long? {
+  override fun insert(c: Capture, search: String, otpExpiresAt: Long?, smsHash: String?, emailHash: String?): Long? {
     if (c.hash in items || c.hash in tombstones) return null
     if (smsHash != null && hasSmsHash(smsHash)) return null
+    if (emailHash != null && hasEmailHash(emailHash)) return null
     val id = nextId++
-    items[c.hash] = StoredItem(id, c, search, otpExpiresAt, smsHash)
+    items[c.hash] = StoredItem(id, c, search, otpExpiresAt, smsHash, emailHash = emailHash)
     return id
   }
 
@@ -34,6 +38,30 @@ class MemoryItemStore : ItemStore {
     items.values
       .filter { it.smsHash == null && it.capture.pkg in pkgs && it.capture.text == text && Math.abs(it.capture.postedAt - at) <= windowMs }
       .maxWithOrNull(compareBy<StoredItem>({ it.capture.postedAt }, { it.id }))?.id
+
+  override fun hasEmailHash(emailHash: String) = items.values.any { it.emailHash == emailHash }
+
+  override fun emailTwin(subject: String, at: Long, windowMs: Long): Long? =
+    if (subject.isBlank()) null
+    else items.values
+      .filter {
+        it.capture.pkg == Email.GMAIL && it.emailHash == null && Math.abs(it.capture.postedAt - at) <= windowMs && it.capture.text.startsWith(subject)
+      }
+      .maxWithOrNull(compareBy<StoredItem>({ it.capture.postedAt }, { it.id }))?.id
+
+  override fun emailItemNear(text: String, at: Long, windowMs: Long) =
+    items.values.any {
+      val title = it.capture.title
+      it.capture.pkg == Email.GMAIL && it.emailHash != null && Math.abs(it.capture.postedAt - at) <= windowMs &&
+        !title.isNullOrBlank() && text.startsWith(title)
+    }
+
+  override fun claimEmail(itemId: Long, emailHash: String, emailText: String, search: String) {
+    val it = items.values.first { it.id == itemId }
+    it.emailHash = emailHash
+    it.emailText = emailText
+    it.search = it.search + " " + search
+  }
 
   override fun setSmsHash(itemId: Long, smsHash: String) {
     items.values.first { it.id == itemId }.smsHash = smsHash
