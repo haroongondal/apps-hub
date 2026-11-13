@@ -13,11 +13,12 @@ import {
   OpenTunnelError,
   buildTunnelConfigFromNode,
   type OpenTunnelBinding,
+  type OpenTunnelErrorCode,
   type VpnStatusState,
 } from 'open-tunnel-native';
 
 export { buildTunnelConfigFromNode, OPEN_TUNNEL_ERROR_CODES, OpenTunnelError } from 'open-tunnel-native';
-export type { VpnStatusState, VpnTunnelConfig } from 'open-tunnel-native';
+export type { OpenTunnelErrorCode, VpnStatusState, VpnTunnelConfig } from 'open-tunnel-native';
 
 export interface TunnelTrafficSnapshot {
   bytesIn: number;
@@ -29,6 +30,9 @@ export interface TunnelSnapshot {
   state: VpnStatusState;
   /** Native failure wording when `state === 'error'`, else null. */
   message: string | null;
+  /** Typed failure code when `state === 'error'` carries one (e.g.
+   * `ERR_AUTH_FAILED` rides the status event), else null. */
+  code: OpenTunnelErrorCode | null;
   /** Latest traffic tick; values freeze whenever emission stops. */
   traffic: TunnelTrafficSnapshot | null;
 }
@@ -57,6 +61,7 @@ export function createTunnelClient(binding: OpenTunnelBinding): TunnelClient {
   let snapshot: TunnelSnapshot = {
     state: 'disconnected',
     message: null,
+    code: null,
     traffic: null,
   };
 
@@ -67,7 +72,7 @@ export function createTunnelClient(binding: OpenTunnelBinding): TunnelClient {
     for (const listener of listeners) listener(snapshot);
   }
 
-  function applyStatus(state: VpnStatusState, message?: string) {
+  function applyStatus(state: VpnStatusState, message?: string, code?: OpenTunnelErrorCode) {
     // `error` is terminal: only an explicit start (`connecting`) may leave
     // this state — later native events cannot silently resurrect it.
     if (snapshot.state === 'error' && state !== 'connecting') {
@@ -77,26 +82,28 @@ export function createTunnelClient(binding: OpenTunnelBinding): TunnelClient {
       commit({
         state: 'error',
         message: message ?? snapshot.message ?? 'tunnel error (native wording unavailable)',
+        code: code ?? null,
         traffic: snapshot.traffic,
       });
       return;
     }
-    // A new explicit start wipes the previous terminal message and resets
-    // the frozen counters; the ticker re-seeds its baselines on start.
+    // A new explicit start wipes the previous terminal message, typed code,
+    // and the frozen counters; the ticker re-seeds its baselines on start.
     if (state === 'connecting') {
-      commit({ state, message: null, traffic: null });
+      commit({ state, message: null, code: null, traffic: null });
       return;
     }
-    commit({ state, message: null, traffic: snapshot.traffic });
+    commit({ state, message: null, code: null, traffic: snapshot.traffic });
   }
 
   const statusHandle = binding.addOnStatusChanged((payload) =>
-    applyStatus(payload.state, payload.message),
+    applyStatus(payload.state, payload.message, payload.code),
   );
   const trafficHandle = binding.addOnTrafficUpdate((payload) => {
     commit({
       state: snapshot.state,
       message: snapshot.message,
+      code: snapshot.code,
       traffic: {
         bytesIn: payload.bytesIn,
         bytesOut: payload.bytesOut,
@@ -134,6 +141,16 @@ export function createTunnelClient(binding: OpenTunnelBinding): TunnelClient {
       return snapshot;
     },
     async stopTunnel() {
+      // Optimistic power-off: the native stop can take seconds to confirm
+      // (engine teardown), so the first tap already commits `disconnecting`
+      // and the shield reacts instantly instead of needing several taps.
+      // Terminal/idle states never fabricate the transition — a tunnel that
+      // is disconnected or errored cannot be live — but the binding call
+      // still runs so a stuck native engine gets the stop request.
+      const current = snapshot.state;
+      if (current === 'connected' || current === 'reasserting' || current === 'connecting') {
+        commit({ state: 'disconnecting', message: null, code: null, traffic: snapshot.traffic });
+      }
       try {
         await binding.stopTunnel();
       } catch (error) {
@@ -159,13 +176,6 @@ export function createTunnelClient(binding: OpenTunnelBinding): TunnelClient {
   };
 }
 
-/**
- * Snapshot wording for a tunnel call failure. Native rejections arrive as
- * Expo `CodedError`s — `code` (one of `OPEN_TUNNEL_ERROR_CODES`) plus the
- * reason as `message` — so their typed code surfaces verbatim. A plain
- * error keeps the conservative start-failure code; the reason text is
- * still quoted word for word.
- */
 /** Resolves once a started tunnel settles: connected, failed, or stopped. */
 export function settled(client: TunnelClient): Promise<TunnelSnapshot['state']> {
   const done = (state: TunnelSnapshot['state']) => state === 'connected' || state === 'error' || state === 'disconnected';
@@ -180,6 +190,13 @@ export function settled(client: TunnelClient): Promise<TunnelSnapshot['state']> 
   });
 }
 
+/**
+ * Snapshot wording for a tunnel call failure. Native rejections arrive as
+ * Expo `CodedError`s — `code` (one of `OPEN_TUNNEL_ERROR_CODES`) plus the
+ * reason as `message` — so their typed code surfaces verbatim. A plain
+ * error keeps the conservative start-failure code; the reason text is
+ * still quoted word for word.
+ */
 function describeError(error: unknown): string {
   if (error instanceof OpenTunnelError) {
     return `${error.code}: ${error.message}`;
