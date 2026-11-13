@@ -127,24 +127,25 @@ most likely to be second-guessed:
   `listItems(filter, before, limit, beforeId)`), and `raw.fill(0)` on the SQLCipher key array removed
   because the connection config re-reads it. Gates re-run green after the fixes.
 
+  2026-11-13 (session 4): asked the owner for the release go. Answer: "not yet", fix all three
+  deferred minors first. Fixed in 7cbdb47: `PRAGMA secure_delete = ON` through a `SQLiteDatabaseHook`
+  `postKey` on every connection; the listener schedules a purge at each saved OTP's expiry
+  (`Ingest(onOtpSaved)` callback, scheduled single-thread executor; in-process, so the old purge on next
+  notification or Home stays as the fallback); `settingFor` looks up the app name. Kotlin 46/46 (forced
+  re-run), `:app:assembleDebug` green; no TS changed. `origin/main` was 2 Strongroom commits ahead;
+  `git merge-tree` showed a clean merge.
+
 ## Current state and next step
 
-State: Tasks 1-8 complete, Task 9 step 1 (gates and final reviewers) complete and fixes committed.
-Kotlin 45 JVM tests, Gradle gate green; TS 16 tests, typecheck clean. Release (Task 9 step 2) NOT
-done. SQL is unproven on a JVM (no SQLCipher): the device check in Task 9 step 3 is the proof.
-Deferred minors (progress.md): no `PRAGMA secure_delete`; expired OTP rows are purged only on the next
-notification or when Home opens (hidden from every read meanwhile; a scheduled purge would make the 5
-minutes strict); `settingFor` stores the package name as label for a never-seen app.
+State: stage 1 built, reviewed, and the three deferred minors fixed (7cbdb47). Kotlin 46 JVM tests,
+Gradle gate green; TS 16 tests, typecheck clean (unchanged since). Release (Task 9 step 2) NOT done.
+SQL is unproven on a JVM (no SQLCipher), including the new `secure_delete` hook: the device check in
+Task 9 step 3 is the proof.
 
-Next step: ask the owner for the go to release (Task 9 step 2: merge with `[skip ci]`, then
-`pnpm release notebox` locally). Then the phone check (step 3, claim `device:<serial>`, install from
-the Store only), step 4 handoff update, step 5 commit `Notebox stage 1: handoff`.
-
-Next step:
-1. Work only in `/Users/outsentia/Documents/apps-hub-wt/notebox` (branch `notebox/stage-1`).
-   Claim the folder with coord first (`CLAUDE_CODE_SESSION_ID=<this session id> coord claim <folder>`).
-2. Read `progress.md`; tasks with a `Task <N>: complete` line are done. Continue the plan order:
-   Task 3 after Task 2, Task 4 after 3, Task 5 after 4, Task 6 after 5, Task 8 after 6 and 7.
-   Stop before Task 9 step 2 (release) and ask the owner for the go.
-3. Before planning stage 4, ask the owner the design's open question (do AI-only
-   transactions count straight away or wait in "to check").
+Next step: ask the owner again for the go to release (Task 9 step 2: push, PR, squash-merge with
+`[skip ci]`, then `pnpm release notebox` locally from a clean checkout of merged main). Then the phone
+check (step 3, claim `device:<serial>`, install from the Store only), step 4 handoff update, step 5
+commit `Notebox stage 1: handoff`. After the merge, with the owner's OK, delete the stale untracked
+Notebox copies in the main checkout (`docs/handoffs/notebox.md`, the design spec). Then stage 2: check
+READ_SMS under the Store installer first, plan stage 2 only, show the owner the summary. Before planning
+stage 4, ask the design's open question (AI-only transactions: count at once or wait in "to check").
