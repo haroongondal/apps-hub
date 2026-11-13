@@ -6,6 +6,7 @@ export interface Status {
   lastCaptureAt: number | null;
   batteryUnrestricted: boolean;
   storeError: string | null;
+  smsGranted: boolean;
 }
 
 export interface Item {
@@ -65,6 +66,42 @@ export interface SenderName {
   name: string;
 }
 
+export interface Txn {
+  id: number;
+  direction: 'in' | 'out';
+  amount: number; // minor units
+  currency: string;
+  account: string;
+  counterparty: string | null;
+  txId: string | null;
+  at: number;
+  own: boolean;
+  paired: boolean;
+  itemIds: number[];
+}
+
+export interface AccountTotal {
+  account: string;
+  currency: string;
+  moneyIn: number;
+  moneyOut: number;
+  count: number;
+}
+
+// Money out only, top 10.
+export interface MerchantTotal {
+  counterparty: string;
+  currency: string;
+  total: number;
+  count: number;
+}
+
+// Own transfers are left out.
+export interface MoneySummary {
+  accounts: AccountTotal[];
+  merchants: MerchantTotal[];
+}
+
 export interface InflowCoreApi {
   getStatus(): Status;
   openNotificationAccess(): void;
@@ -80,6 +117,18 @@ export interface InflowCoreApi {
   setKeep(pkg: string, days: number | null): void;
   renameSender(senderKey: string, name: string | null): void;
   listSenderNames(): SenderName[];
+  // Inbox rows newer than the last import; the first call imports everything.
+  importSms(): Promise<{ imported: number }>;
+  // at >= from and at < to.
+  money(from: number, to: number): MoneySummary;
+  // Newest first, paged like listItems.
+  listTxns(account: string | null, before: number | null, limit: number, beforeId: number | null): Txn[];
+  setOwnTransfer(txnId: number, own: boolean): void;
+  // null when the keep-for period removed the item.
+  getItem(id: number): Item | null;
+  getOwnerName(): string | null;
+  // Blank or null clears it.
+  setOwnerName(name: string | null): void;
   addListener(event: 'onCaptured', listener: (e: { count: number }) => void): { remove(): void };
 }
 

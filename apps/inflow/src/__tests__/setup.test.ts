@@ -9,6 +9,7 @@ const base: Status = {
   lastCaptureAt: null,
   batteryUnrestricted: true,
   storeError: null,
+  smsGranted: true,
 };
 
 test('access off makes the access row a todo and setup incomplete', () => {
@@ -21,7 +22,7 @@ test('access and battery on complete setup; manual rows do not block', () => {
   const rows = setupRows(base);
   assert.deepEqual(
     rows.map((r) => r.id),
-    ['access', 'restricted', 'battery', 'autostart'],
+    ['access', 'restricted', 'battery', 'autostart', 'sms'],
   );
   assert.equal(rows.find((r) => r.id === 'restricted')?.status, 'manual');
   assert.equal(rows.find((r) => r.id === 'autostart')?.status, 'manual');
@@ -36,5 +37,14 @@ test('battery limited makes the battery row a todo', () => {
 
 test('rows open the right settings screen', () => {
   const actions = Object.fromEntries(setupRows(base).map((r) => [r.id, r.action]));
-  assert.deepEqual(actions, { access: 'access', restricted: 'appInfo', battery: 'battery', autostart: 'appInfo' });
+  assert.deepEqual(actions, { access: 'access', restricted: 'appInfo', battery: 'battery', autostart: 'appInfo', sms: 'sms' });
+});
+
+test('the sms row follows the permission', () => {
+  assert.equal(setupRows(base).find((r) => r.id === 'sms')?.status, 'ok');
+  assert.equal(setupRows({ ...base, smsGranted: false }).find((r) => r.id === 'sms')?.status, 'todo');
+});
+
+test('setup is complete while SMS is still a todo', () => {
+  assert.equal(setupComplete(setupRows({ ...base, smsGranted: false })), true);
 });

@@ -1,11 +1,11 @@
 import type { Status } from 'inflow-core';
 
 export interface SetupRow {
-  id: 'access' | 'restricted' | 'battery' | 'autostart';
+  id: 'access' | 'restricted' | 'battery' | 'autostart' | 'sms';
   title: string;
   detail: string;
   status: 'ok' | 'todo' | 'manual';
-  action: 'access' | 'appInfo' | 'battery';
+  action: 'access' | 'appInfo' | 'battery' | 'sms';
 }
 
 export function setupRows(s: Status): SetupRow[] {
@@ -39,7 +39,15 @@ export function setupRows(s: Status): SetupRow[] {
       status: 'manual',
       action: 'appInfo',
     },
+    {
+      id: 'sms',
+      title: 'Read SMS',
+      detail: 'Inflow saves your text messages and reads bank messages to total your money. It never sends or changes a message.',
+      status: live(s.smsGranted),
+      action: 'sms',
+    },
   ];
 }
 
-export const setupComplete = (rows: SetupRow[]): boolean => rows.every((r) => r.status !== 'todo');
+// SMS never blocks setup: if the phone refuses it, the app must still open.
+export const setupComplete = (rows: SetupRow[]): boolean => rows.every((r) => r.id === 'sms' || r.status !== 'todo');

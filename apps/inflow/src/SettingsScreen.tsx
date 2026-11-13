@@ -4,7 +4,7 @@ import InflowCore, { type AppSetting, type SenderName, type Status } from 'inflo
 import { keepLabel } from './format.ts';
 import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
 import { RenameSheet, type RenameTarget } from './RenameSheet.tsx';
-import { runSetupAction, setupRowElements } from './SetupScreen.tsx';
+import { setupRowElements, useSetupAction } from './SetupScreen.tsx';
 import { setupRows } from './setup.ts';
 
 const KEEP = [null, 365, 90, 30] as const;
@@ -22,6 +22,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
   const [error, setError] = useState<string | null>(null);
   const [stopping, setStopping] = useState<AppSetting | null>(null);
   const [renaming, setRenaming] = useState<RenameTarget | null>(null);
+  const { run, notice } = useSetupAction(refreshStatus);
 
   const load = useCallback(() => {
     try {
@@ -82,11 +83,9 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
         )}
       </Group>
       <Group title="Setup">
-        {setupRowElements(setupRows(status), (a) => {
-          runSetupAction(a);
-          refreshStatus();
-        })}
+        {setupRowElements(setupRows(status), run)}
       </Group>
+      {notice}
       <Notice>{LOCK_NOTE}</Notice>
       <Sheet visible={stopping !== null} onClose={() => setStopping(null)} title="Stop saving?" doneLabel="Cancel">
         <Text>{`Stop saving ${stopping?.label ?? 'this app'}? Also delete the items already saved from it?`}</Text>

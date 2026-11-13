@@ -11,6 +11,7 @@ const healthy: Status = {
   lastCaptureAt: NOW - 1000,
   batteryUnrestricted: true,
   storeError: null,
+  smsGranted: true,
 };
 
 test('a store error comes first, with the error as the body and no action', () => {
