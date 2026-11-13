@@ -7,6 +7,7 @@ data class Parsed(
   val account: String,
   val counterparty: String?,
   val txId: String?,
+  val accountPartial: Boolean = false,   // account = "<Bank> <fewer than 4 digits>"
 )
 
 object BankParser {
@@ -24,6 +25,18 @@ object BankParser {
     "$AMT\\s+received\\s+from\\s+(.+?)\\s+in\\s+your\\s+UBL\\s+A/C\\s*\\*?(\\d{4})(?!\\d)(?:.*?Tx\\s*ID\\s*:?\\s*(\\d+))?",
     FLAGS,
   )
+  // Bank emails (HtmlText output or the raw text): "PKR." and no gap are allowed after the currency.
+  private const val EMAIL_AMT = "PKR\\.?\\s*([\\d,]+(?:\\.\\d+)?)"
+  private val UBL_RAAST_OUT = Regex(
+    "You\\s+paid\\s+$EMAIL_AMT\\s+to\\s+(.+?)\\s+via\\s+Raast.*?Account\\s+Details:.*?-\\s*([\\d*]+)(?![\\d*]).*?Transaction\\s+ID:\\s*(\\d+)",
+    FLAGS,
+  )
+  // Only POS is known (R18); Tax/Charges also shows "PKR 0.0000/-", so the amount must follow the Amount label.
+  private val ALFALAH_POS = Regex(
+    "Account/IBAN\\s+[\\d*]*?(\\d{4})(?![\\d*]).*?Transaction\\s+Type\\s+POS\\b.*?\\bAmount\\s+$EMAIL_AMT\\s*/-",
+    FLAGS,
+  )
+  private val ALFALAH_REF = Regex("Ref#\\s*([A-Za-z0-9]+)")
   private val SPACES = Regex("\\s+")
 
   fun parse(text: String): Parsed? {
@@ -37,12 +50,23 @@ object BankParser {
     UBL_RAAST.find(text)?.let { m ->
       return parsed(Direction.IN, m.groupValues[1], "UBL ${m.groupValues[3]}", m.groupValues[2].replace(SPACES, " "), m.groups[4]?.value)
     }
+    UBL_RAAST_OUT.find(text)?.let { m ->
+      val shown = m.groupValues[3]
+      val digits = if ('*' in shown) shown.substringAfterLast('*') else shown.takeLast(4)
+      if (digits.isEmpty()) return null
+      return parsed(Direction.OUT, m.groupValues[1], "UBL $digits", m.groupValues[2].replace(SPACES, " "), m.groupValues[4], digits.length < 4)
+    }
+    ALFALAH_POS.find(text)?.let { m ->
+      return parsed(Direction.OUT, m.groupValues[2], "Alfalah ${m.groupValues[1]}", null, ALFALAH_REF.find(text)?.groupValues?.get(1))
+    }
     return null
   }
 
-  private fun parsed(d: Direction, amount: String, account: String, counterparty: String?, txId: String?): Parsed? {
+  private fun parsed(
+    d: Direction, amount: String, account: String, counterparty: String?, txId: String?, partial: Boolean = false,
+  ): Parsed? {
     val minor = minor(amount) ?: return null
-    return Parsed(d, minor, "PKR", account, counterparty, txId)
+    return Parsed(d, minor, "PKR", account, counterparty, txId, partial)
   }
 
   private fun minor(amount: String): Long? {
