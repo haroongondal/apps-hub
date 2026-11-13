@@ -29,6 +29,6 @@ object Sms {
     )
   }
 
-  private fun sha256Hex(s: String): String =
+  internal fun sha256Hex(s: String): String =
     MessageDigest.getInstance("SHA-256").digest(s.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 }

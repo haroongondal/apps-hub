@@ -193,4 +193,39 @@ class LedgerTest {
     assertTrue(store.get(into)!!.own)
     assertEquals(pairId, store.get(into)!!.pairId)
   }
+
+  private fun alfalahPos(amount: String = "1,700.00") = Samples.ALFALAH_EMAIL.replace("1,700.00", amount)
+
+  @Test fun emailMergesWithSmsByWindow() {
+    val sms = item(debit("1,700.00"), Channel.SMS, t0)!!
+    val email = item(alfalahPos(), Channel.EMAIL, t0 + 4 * min)
+    assertEquals(sms, email)
+    val t = store.txns.values.single()
+    assertEquals(setOf(Channel.SMS, Channel.EMAIL), t.channels)
+    assertEquals("FT263160G6MC4S12", t.txId)
+  }
+
+  @Test fun emailFillsMissingCounterparty() {
+    val id = item(alfalahPos(), Channel.EMAIL, t0)!!
+    assertNull(store.get(id)!!.counterparty)
+    assertEquals(id, item(debit("1,700.00"), Channel.SMS, t0 + min))
+    assertEquals("SHAAFI INTERNATIONAL HOSPIslamabad PK", store.get(id)!!.counterparty)
+  }
+
+  @Test fun mergeKeepsAnExistingCounterparty() {
+    val id = item(debit("1,700.00"), Channel.SMS, t0)!!
+    item(alfalahPos(), Channel.EMAIL, t0 + min)
+    assertEquals("SHAAFI INTERNATIONAL HOSPIslamabad PK", store.get(id)!!.counterparty)
+  }
+
+  @Test fun ublEmailResolvesToKnownAccount() {
+    item(ubl(), Channel.SMS, t0)
+    val id = item(Samples.UBL_EMAIL, Channel.EMAIL, t0 + min)!!
+    assertEquals("UBL 1733", store.get(id)!!.account)
+  }
+
+  @Test fun ublEmailWithNoKnownAccountKeepsPartial() {
+    val id = item(Samples.UBL_EMAIL, Channel.EMAIL, t0)!!
+    assertEquals("UBL 33", store.get(id)!!.account)
+  }
 }

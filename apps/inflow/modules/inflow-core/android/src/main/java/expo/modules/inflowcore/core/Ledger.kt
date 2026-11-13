@@ -28,6 +28,9 @@ interface LedgerStore {
   fun addChannel(itemId: Long, channel: Channel)
   /** Transactions the owner has not decided on and that are not paired: the ones the owner's name may re-label. */
   fun undecided(): List<Txn>
+  /** Every distinct account string of known transactions, for Accounts.resolve. */
+  fun accounts(): List<String>
+  fun setCounterpartyIfNull(id: Long, counterparty: String)
 }
 
 object Dedup {
@@ -63,12 +66,13 @@ object OwnTransfer {
 class Ledger(private val store: LedgerStore, private val ownerName: () -> String?) {
   fun onItem(itemId: Long, text: String, channel: Channel, at: Long): Long? {
     if (store.hasSource(itemId)) return null
-    val p = BankParser.parse(text) ?: return null
+    val p = Accounts.resolve(BankParser.parse(text) ?: return null, store.accounts())
     val w = Dedup.MERGE_WINDOW_MS
     val hit = Dedup.match(p, channel, at, store.near(p.direction, p.amountMinor, p.currency, at - w, at + w), p.txId?.let(store::byTxId))
     if (hit != null) {
       store.addSource(hit, itemId, channel, p.txId, at)
       p.txId?.let { store.setTxIdIfNull(hit, it) }
+      p.counterparty?.let { store.setCounterpartyIfNull(hit, it) }
       return hit
     }
     val id = store.add(p, at, OwnTransfer.nameMatches(p.counterparty, ownerName()))

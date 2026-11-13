@@ -49,6 +49,13 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
     run("UPDATE txn_sources SET channel = channel || ',' || ? WHERE item_id = ? AND instr(',' || channel || ',', ',' || ? || ',') = 0", channel.name, itemId, channel.name)
   }
 
+  override fun accounts(): List<String> =
+    db.rawQuery("SELECT DISTINCT account FROM txns").use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
+
+  override fun setCounterpartyIfNull(id: Long, counterparty: String) {
+    run("UPDATE txns SET counterparty = ? WHERE id = ? AND counterparty IS NULL", counterparty, id)
+  }
+
   override fun undecided(): List<Txn> = txns("t.own_set = 0 AND t.pair_id IS NULL")
 
   /** Own transfers left out; per account and currency, never converted. */

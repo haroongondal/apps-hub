@@ -10,6 +10,17 @@ data class Parsed(
   val accountPartial: Boolean = false,   // account = "<Bank> <fewer than 4 digits>"
 )
 
+object Accounts {
+  /** R17: a partial account becomes the one known "<Bank> NNNN" ending in its digits; otherwise unchanged. */
+  fun resolve(p: Parsed, known: List<String>): Parsed {
+    if (!p.accountPartial) return p
+    val bank = p.account.substringBeforeLast(' ')
+    val digits = p.account.substringAfterLast(' ')
+    val hits = known.filter { it.substringBeforeLast(' ') == bank && it.substringAfterLast(' ').let { d -> d.length == 4 && d.endsWith(digits) } }.distinct()
+    return if (hits.size == 1) p.copy(account = hits.single(), accountPartial = false) else p
+  }
+}
+
 object BankParser {
   private val FLAGS = setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
   private const val AMT = "PKR\\s+([\\d,]+(?:\\.\\d+)?)"

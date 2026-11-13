@@ -42,5 +42,12 @@ class MemoryLedgerStore : LedgerStore {
     txns[id] = txns.getValue(id).let { it.copy(channels = it.channels + channel) }
   }
 
+  override fun accounts() = txns.values.map { it.account }.distinct()
+
+  override fun setCounterpartyIfNull(id: Long, counterparty: String) {
+    val t = txns.getValue(id)
+    if (t.counterparty == null) txns[id] = t.copy(counterparty = counterparty)
+  }
+
   override fun undecided() = txns.values.filter { !it.ownSet && it.pairId == null }
 }
