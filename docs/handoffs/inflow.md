@@ -1,30 +1,26 @@
 # Inflow handoff (formerly Notebox)
 
-## Resume prompt (2026-11-13, stage 1 built and reviewed, waiting for the release go)
-
-Stage 1 is built (Tasks 1-8), gated and reviewed. Read the "Current state and next step" section
-first: the only open step is asking the owner for the go to release (Task 9 step 2), then the phone
-check. The prompt below is the original one; skip its build instructions.
+## Resume prompt (2026-11-13, stage 2 in progress)
 
 ```
-Continue the Inflow work. Work only in the worktree
-/Users/outsentia/Documents/apps-hub-wt/inflow (branch inflow/stage-1), never in
-the main checkout. Claim that folder with coord before you start.
+Continue the Inflow work (formerly Notebox). Work only in the worktree
+/Users/outsentia/Documents/apps-hub-wt/inflow (branch inflow/stage-2), never in the main
+checkout (/Users/outsentia/Documents/apps-hub, branch model-host, unrelated uncommitted work;
+its untracked docs/handoffs/notebox.md and design copy are stale leftovers). Claim the worktree
+folder with coord before you start.
 
-1. Read docs/handoffs/inflow.md completely first, then the design
-   docs/superpowers/specs/2026-11-13-inflow-design.md and the plan
-   docs/superpowers/plans/2026-11-13-inflow-stage-1.md. Trust the decisions and
-   verified facts in them; do not re-ask the owner what they already settled.
-2. The owner asked for stage 1 to be built. Commit the design, handoff and plan as
-   the first commit, then execute the plan task by task with
-   cd-engineering-tools:parallel-agents-coord (not
-   superpowers:subagent-driven-development), following the task order and parallel
-   groups at the top of the plan. Stop before Task 9 step 2 (release) and ask the
-   owner for the go.
-3. Follow the handoff contract in ~/.claude/CLAUDE.md: keep docs/handoffs/inflow.md
-   current (session log, current state, next step) as tasks land, and when context
-   reaches ~85% stop, rewrite this resume prompt with the date and print it for a
-   new chat.
+1. Read docs/handoffs/inflow.md completely first, then progress.md (stage 2 ledger, untracked),
+   then the design docs/superpowers/specs/2026-11-13-inflow-design.md and the stage 2 plan
+   docs/superpowers/plans/2026-11-13-inflow-stage-2.md. Trust the decisions, rulings and
+   verified facts in them; do not re-ask the owner what they settled.
+2. Execute with cd-engineering-tools:parallel-agents-coord (never
+   superpowers:subagent-driven-development). Tasks with a "complete" line in progress.md are
+   done; continue from "Current state and next step" below.
+3. Never merge, release or install without the owner's go. Install only from the Store; never
+   adb-install on the owner's phone; claim device:<serial> with coord first. No Claude
+   attribution lines in commits or PRs.
+4. Keep this handoff current as milestones land; at ~85% context stop, rewrite this prompt
+   with the date and print it for a new chat.
 ```
 
 ## Goal and fixed constraints
@@ -146,15 +142,14 @@ most likely to be second-guessed:
 
 ## Current state and next step
 
-State: stage 1 built, reviewed, and the three deferred minors fixed (7cbdb47). Kotlin 46 JVM tests,
-Gradle gate green; TS 16 tests, typecheck clean (unchanged since). Release (Task 9 step 2) NOT done.
-SQL is unproven on a JVM (no SQLCipher), including the new `secure_delete` hook: the device check in
-Task 9 step 3 is the proof.
+State: stage 1 built and reviewed on `inflow/stage-1` (not released; the owner chose to build stage 2
+first). Stage 2 plan committed (1aecca6) on `inflow/stage-2`. Agent K (Kotlin K1-K4) and agent T
+(TS T1-T2) were dispatched in parallel from 1aecca6; check `git log 1aecca6..` and progress.md for
+what landed. READ_SMS under the Store installer: AOSP evidence says allowed by default (plan,
+"Verified before planning"); not yet seen on the phone (it wasn't connected).
 
-Next step: ask the owner again for the go to release (Task 9 step 2: push, PR, squash-merge with
-`[skip ci]`, then `pnpm release inflow` locally from a clean checkout of merged main). Then the phone
-check (step 3, claim `device:<serial>`, install from the Store only), step 4 handoff update, step 5
-commit `Inflow stage 1: handoff`. After the merge, with the owner's OK, delete the stale untracked
-Inflow copies in the main checkout (`docs/handoffs/inflow.md`, the design spec). Then stage 2: check
-READ_SMS under the Store installer first, plan stage 2 only, show the owner the summary. Before planning
-stage 4, ask the design's open question (AI-only transactions: count at once or wait in "to check").
+Next step: when K and T have committed, run the controller close in the plan (gates, one
+most-capable whole-branch review plus invariant-reviewer, one fix agent, handoff commit). Then ask
+the owner for the release go (stage 1 + 2 together, or stage 1 first) and run both phone checks.
+Before planning stage 4, ask the design's open question (AI-only transactions: count at once or
+wait in "to check").
