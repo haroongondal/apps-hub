@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { capLabel, dueLabel, kindLabel, parseCap } from '../ai.ts';
+import { capLabel, dueLabel, kindLabel, parseCap, sendResultLabel } from '../ai.ts';
 
 // TZ is Asia/Karachi (UTC+5, no daylight saving) in the test script.
 const KARACHI = 5 * 3600 * 1000;
@@ -46,4 +46,10 @@ test('parseCap reads dollars, blank as no limit, and rejects the rest', () => {
   assert.equal(parseCap('abc'), 'invalid');
   assert.equal(parseCap('-1'), 'invalid');
   assert.equal(parseCap('1e3'), 'invalid');
+});
+
+test('sendResultLabel says what happened in plain words', () => {
+  assert.equal(sendResultLabel(0, 0), 'Nothing was waiting to send.');
+  assert.equal(sendResultLabel(1, 1), 'Sent 1 item. 1 came back with a summary.');
+  assert.equal(sendResultLabel(12, 10), 'Sent 12 items. 10 came back with a summary.');
 });

@@ -1,11 +1,33 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { Button, Group, Row, Sheet, Text, space } from '@apps-hub/ui';
-import type { Item } from 'inflow-core';
+import { Button, Group, Notice, Row, Sheet, Text, space } from '@apps-hub/ui';
+import InflowCore, { type Item } from 'inflow-core';
 import { exactTime } from './format.ts';
+import { SAVE_ERROR } from './messages.ts';
 
 export function ItemSheet({ item, onClose, onRename, onShowSender }: { item: Item | null; onClose: () => void; onRename: (item: Item) => void; onShowSender: (name: string) => void }) {
   const who = item ? (item.displayName ?? item.sender) : null;
+  const [kept, setKept] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const senderKey = item?.senderKey ?? null;
+  useEffect(() => {
+    try {
+      setKept(senderKey !== null && InflowCore.listAiBlocks().includes(`sender:${senderKey}`));
+    } catch {
+      setKept(false);
+    }
+    setError(null);
+  }, [senderKey]);
+  const toggleKept = () => {
+    if (senderKey === null) return;
+    try {
+      InflowCore.setAiBlocked(`sender:${senderKey}`, !kept);
+      setKept(!kept);
+      setError(null);
+    } catch {
+      setError(SAVE_ERROR);
+    }
+  };
   return (
     <Sheet visible={item !== null} onClose={onClose} title={item?.title ?? item?.appLabel ?? 'Notification'}>
       {item && (
@@ -26,6 +48,8 @@ export function ItemSheet({ item, onClose, onRename, onShowSender }: { item: Ite
             {item.deletedBySender ? <Row title="Status" subtitle="The sender deleted this message after Inflow saved it." /> : null}
           </Group>
           {item.senderKey !== null && <Button label="Rename sender" variant="secondary" onPress={() => onRename(item)} block />}
+          {error !== null && <Notice tone="danger">{error}</Notice>}
+          {senderKey !== null && <Button label={kept ? 'Send this sender to AI again' : "Don't send this sender to AI"} variant="secondary" onPress={toggleKept} block />}
           {who !== null && <Button label="Show everything from this sender" variant="secondary" onPress={() => onShowSender(who)} block />}
         </>
       )}

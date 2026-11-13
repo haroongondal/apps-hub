@@ -42,3 +42,9 @@ export function parseCap(text: string): number | null | 'invalid' {
   const n = Number(t);
   return n >= 0.01 && n <= 100 ? n : 'invalid';
 }
+
+export const CAP_ERROR = 'Enter an amount from 0.01 to 100 dollars, or leave it empty for no limit.';
+export const CAP_REACHED = "Inflow reached today's AI spending limit. It will send the rest tomorrow, or raise the limit in Settings.";
+
+export const sendResultLabel = (sent: number, saved: number): string =>
+  sent === 0 ? 'Nothing was waiting to send.' : `Sent ${sent} ${sent === 1 ? 'item' : 'items'}. ${saved} came back with a summary.`;

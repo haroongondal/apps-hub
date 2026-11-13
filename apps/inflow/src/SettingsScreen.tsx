@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Button, Field, Group, Header, Notice, Row, Screen, Segmented, Sheet, Text } from '@apps-hub/ui';
 import InflowCore, { type AppSetting, type SenderName, type Status } from 'inflow-core';
+import { AiSettings } from './AiSettings.tsx';
 import { keepLabel } from './format.ts';
 import { GmailSettings } from './GmailSettings.tsx';
 import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
@@ -15,7 +16,17 @@ const RECORD_OPTIONS = [
   { key: 'on', label: 'On' },
   { key: 'off', label: 'Off' },
 ] as const;
+const AI_OPTIONS = [
+  { key: 'on', label: 'On' },
+  { key: 'off', label: 'Off' },
+] as const;
 const LOCK_NOTE = "Your fingerprint locks these screens. Your history is encrypted with a key this phone keeps, so Inflow can keep saving notifications while it's locked.";
+
+function blockTitle(key: string, apps: AppSetting[], names: SenderName[]): string {
+  const id = key.slice(key.indexOf(':') + 1);
+  if (key.startsWith('app:')) return apps.find((a) => a.pkg === id)?.label ?? id;
+  return names.find((n) => n.senderKey === id)?.name ?? id;
+}
 
 export function SettingsScreen({ status, refreshStatus }: { status: Status; refreshStatus: () => void }) {
   const [apps, setApps] = useState<AppSetting[]>([]);
@@ -24,6 +35,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
   const [stopping, setStopping] = useState<AppSetting | null>(null);
   const [renaming, setRenaming] = useState<RenameTarget | null>(null);
   const [ownerName, setOwnerName] = useState('');
+  const [blocks, setBlocks] = useState<string[]>([]);
   const { run, notice } = useSetupAction(refreshStatus);
 
   const load = useCallback(() => {
@@ -31,6 +43,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
       setApps(InflowCore.listApps());
       setNames(InflowCore.listSenderNames());
       setOwnerName(InflowCore.getOwnerName() ?? '');
+      setBlocks(InflowCore.listAiBlocks());
       setError(null);
     } catch {
       setError(LOAD_ERROR);
@@ -71,6 +84,12 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
               }}
             />
             <Segmented
+              accessibilityLabel={`Send ${a.label} to AI`}
+              options={AI_OPTIONS}
+              value={blocks.includes(`app:${a.pkg}`) ? 'off' : 'on'}
+              onChange={(k) => change(() => InflowCore.setAiBlocked(`app:${a.pkg}`, k === 'off'))}
+            />
+            <Segmented
               accessibilityLabel={`Keep ${a.label} notifications for`}
               options={KEEP_OPTIONS}
               value={keepKey(a.keepDays)}
@@ -89,6 +108,21 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
         autoCapitalize="words"
       />
       <GmailSettings />
+      <AiSettings />
+      <Group title="Kept from AI" footer="Inflow never sends these to the AI.">
+        {blocks.length === 0 ? (
+          <Row title={<Text tone="muted">Nothing is kept from AI</Text>} />
+        ) : (
+          blocks.map((b) => (
+            <Row
+              key={b}
+              title={blockTitle(b, apps, names)}
+              subtitle={b.startsWith('app:') ? 'App' : 'Sender'}
+              trailing={<Button label="Remove" variant="ghost" size="sm" onPress={() => change(() => InflowCore.setAiBlocked(b, false))} />}
+            />
+          ))
+        )}
+      </Group>
       <Group title="Renamed senders">
         {names.length === 0 ? (
           <Row title={<Text tone="muted">No renamed senders yet</Text>} />
