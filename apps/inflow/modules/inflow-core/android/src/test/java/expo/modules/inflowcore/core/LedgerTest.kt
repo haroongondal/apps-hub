@@ -228,4 +228,122 @@ class LedgerTest {
     val id = item(Samples.UBL_EMAIL, Channel.EMAIL, t0)!!
     assertEquals("UBL 33", store.get(id)!!.account)
   }
+
+  // --- AI money (R28)
+  private fun aiMoney(
+    amount: Long = 150_000, direction: Direction = Direction.OUT, own: Boolean = false, account: String? = "Alfalah 2310",
+    counterparty: String? = "Dr Khan", category: String = "Health",
+  ) = AiMoney(direction, own, amount, "PKR", account, counterparty, category)
+
+  private fun ai(money: AiMoney, channel: Channel, at: Long) = ledger.onAi(nextItem++, money, channel, at)
+
+  @Test fun aiOnPatternTxnSetsCategoryOnly() {
+    val id = item(debit("1,500.00"), Channel.SMS, t0)!!
+    val source = nextItem - 1
+    assertEquals(id, ledger.onAi(source, aiMoney(amount = 999_900, direction = Direction.IN, account = "UBL 1733", category = "Health"), Channel.SMS, t0))
+    val t = store.get(id)!!
+    assertEquals(150_000L, t.amountMinor)
+    assertEquals(Direction.OUT, t.direction)
+    assertEquals("Alfalah 2310", t.account)
+    assertEquals("Health", t.category)
+    assertEquals("Dr Khan", t.label)
+    assertEquals("SHAAFI INTERNATIONAL HOSPIslamabad PK", t.counterparty)
+    assertFalse(t.byAi)
+    assertEquals(1, store.txns.size)
+  }
+
+  @Test fun aiOnlyTxnCountsAndIsMarked() {
+    val id = ai(aiMoney(amount = 50_000, counterparty = "Daraz", category = "Shopping"), Channel.NOTIFICATION, t0)!!
+    val t = store.get(id)!!
+    assertTrue(t.byAi)
+    assertFalse(t.own)
+    assertEquals(50_000L, t.amountMinor)
+    assertEquals("Shopping", t.category)
+    assertEquals("Daraz", t.label)
+    assertEquals("Daraz", t.counterparty)
+    assertEquals("Other account", t.account)
+    assertEquals(setOf(Channel.NOTIFICATION), t.channels)
+    assertEquals(id, store.txnOfItem(nextItem - 1))
+  }
+
+  @Test fun aiAccountMatchesAKnownAccountIgnoringCaseElseIsOtherAccount() {
+    item(debit(), Channel.SMS, t0)
+    val known = ai(aiMoney(amount = 700, account = "alfalah 2310"), Channel.NOTIFICATION, t0 + 20 * min)!!
+    assertEquals("Alfalah 2310", store.get(known)!!.account)
+    val unknown = ai(aiMoney(amount = 800, account = "Invented Bank 0000"), Channel.NOTIFICATION, t0 + 20 * min)!!
+    assertEquals("Other account", store.get(unknown)!!.account)
+    val none = ai(aiMoney(amount = 900, account = null), Channel.NOTIFICATION, t0 + 20 * min)!!
+    assertEquals("Other account", store.get(none)!!.account)
+  }
+
+  @Test fun aiOnlyMergesWithSmsByDedup() {
+    val sms = item(debit("1,500.00"), Channel.SMS, t0)!!
+    val merged = ai(aiMoney(amount = 150_000, account = "Alfalah 2310", counterparty = "Shaafi Hospital", category = "Health"), Channel.NOTIFICATION, t0 + 4 * min)
+    assertEquals(sms, merged)
+    assertEquals(1, store.txns.size)
+    val t = store.get(sms)!!
+    assertEquals(setOf(Channel.SMS, Channel.NOTIFICATION), t.channels)
+    assertEquals("Health", t.category)
+    assertEquals("Shaafi Hospital", t.label)
+    assertFalse(t.byAi)
+    assertEquals("SHAAFI INTERNATIONAL HOSPIslamabad PK", t.counterparty)
+  }
+
+  @Test fun aiOnlyDoesNotMergeOnTheSameChannelOrAnotherAccount() {
+    item(debit("1,500.00"), Channel.SMS, t0)
+    ai(aiMoney(account = "Alfalah 2310"), Channel.SMS, t0 + min)
+    ai(aiMoney(account = "UBL 1733"), Channel.NOTIFICATION, t0 + min)
+    assertEquals(3, store.txns.size)
+  }
+
+  @Test fun aiOwnFlagNeverOverridesOwner() {
+    val id = item(ubl(), Channel.SMS, t0)!!
+    val source = nextItem - 1
+    ledger.setOwnTransfer(id, false)
+    ledger.onAi(source, aiMoney(amount = 5_000_000, direction = Direction.IN, own = true, account = "UBL 1733"), Channel.SMS, t0)
+    val t = store.get(id)!!
+    assertFalse(t.own)
+    assertTrue(t.ownSet)
+  }
+
+  @Test fun aiOwnTransferMarksOwn() {
+    val id = ai(aiMoney(amount = 50_000, own = true, account = null, counterparty = null, category = "Other"), Channel.NOTIFICATION, t0)!!
+    assertTrue(store.get(id)!!.own)
+    assertFalse(store.get(id)!!.ownSet)
+    val pattern = item(ubl(txId = "55"), Channel.SMS, t0 + 40 * min)!!
+    ledger.onAi(nextItem - 1, aiMoney(amount = 5_000_000, direction = Direction.IN, own = true, account = "UBL 1733"), Channel.SMS, t0)
+    assertTrue(store.get(pattern)!!.own)
+    assertFalse(store.get(pattern)!!.ownSet)
+  }
+
+  @Test fun aiNeverTakesOwnAwayFromAPatternTxn() {
+    owner = "Haroon Mukhtar"
+    val id = item(ubl(), Channel.SMS, t0)!!
+    ledger.onAi(nextItem - 1, aiMoney(amount = 5_000_000, direction = Direction.IN, own = false, account = "UBL 1733"), Channel.SMS, t0)
+    assertTrue(store.get(id)!!.own)
+  }
+
+  @Test fun aiOnlyTxnNeverPairsWithAnOppositeTxn() {
+    val out = item(debit("50,000.00"), Channel.SMS, t0)!!
+    val inn = ai(aiMoney(amount = 5_000_000, direction = Direction.IN, account = "Invented 1", counterparty = "Someone", category = "Other"), Channel.NOTIFICATION, t0 + 10 * min)!!
+    assertFalse(store.get(out)!!.own)
+    assertFalse(store.get(inn)!!.own)
+    assertNull(store.get(inn)!!.pairId)
+  }
+
+  @Test fun aiForTheSameItemTwiceStaysOneTxn() {
+    val source = nextItem++
+    val a = ledger.onAi(source, aiMoney(amount = 700), Channel.NOTIFICATION, t0)
+    val b = ledger.onAi(source, aiMoney(amount = 700, category = "Food"), Channel.NOTIFICATION, t0)
+    assertEquals(a, b)
+    assertEquals(1, store.txns.size)
+    assertEquals("Food", store.get(a!!)!!.category)
+  }
+
+  @Test fun aiOwnerNameStillMarksAnAiOnlyTxnOwn() {
+    owner = "Haroon Mukhtar"
+    val id = ai(aiMoney(amount = 700, counterparty = "HAROON MUKHTAR"), Channel.NOTIFICATION, t0)!!
+    assertTrue(store.get(id)!!.own)
+    assertFalse(store.get(id)!!.ownSet)
+  }
 }

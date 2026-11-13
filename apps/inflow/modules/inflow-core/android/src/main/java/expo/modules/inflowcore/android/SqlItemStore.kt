@@ -287,7 +287,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
 
   companion object {
     private const val DB_NAME = "inflow.db"
-    private const val SCHEMA_VERSION = 3
+    private const val SCHEMA_VERSION = 4
     private const val GENERIC_FAILURE =
       "Inflow can't open your saved history. The history file is kept, not deleted. Restart the phone and try again."
     private const val ITEM_COLUMNS = "i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, " +
@@ -348,6 +348,20 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
       "CREATE TABLE gmail_senders(query TEXT PRIMARY KEY, uid_validity INTEGER, last_uid INTEGER NOT NULL DEFAULT 0)",
     )
 
+    // Not idempotent, like v2 and v3. ai_keys holds the owner's API keys in this SQLCipher file (R23): a future export must skip it.
+    private val SCHEMA_V4 = listOf(
+      "CREATE TABLE ai_results(item_id INTEGER PRIMARY KEY, kind TEXT NOT NULL, summary TEXT NOT NULL, importance TEXT NOT NULL, tags TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL)",
+      "CREATE TABLE ai_queue(item_id INTEGER PRIMARY KEY, at INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0)",
+      "CREATE TABLE ai_blocks(block_key TEXT PRIMARY KEY)",
+      "CREATE TABLE ai_keys(id INTEGER PRIMARY KEY AUTOINCREMENT, base_url TEXT NOT NULL, api_key TEXT NOT NULL)",
+      "CREATE TABLE ai_spend(day TEXT PRIMARY KEY, usd REAL NOT NULL)",
+      "CREATE TABLE todos(id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, text TEXT NOT NULL, due_at INTEGER, done INTEGER NOT NULL DEFAULT 0)",
+      "CREATE INDEX todos_due ON todos(done, due_at)",
+      "ALTER TABLE txns ADD COLUMN category TEXT",
+      "ALTER TABLE txns ADD COLUMN label TEXT",
+      "ALTER TABLE txns ADD COLUMN by_ai INTEGER NOT NULL DEFAULT 0",
+    )
+
     private val neverDeleteOnCorruption = object : DatabaseErrorHandler {
       override fun onCorruption(db: SQLiteDatabase, e: SQLiteException) {}
     }
@@ -390,7 +404,8 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
         try {
           if (db.version < 1) SCHEMA_V1.forEach(db::execSQL)
           if (db.version < 2) SCHEMA_V2.forEach(db::execSQL)
-          SCHEMA_V3.forEach(db::execSQL)
+          if (db.version < 3) SCHEMA_V3.forEach(db::execSQL)
+          SCHEMA_V4.forEach(db::execSQL)
           db.version = SCHEMA_VERSION
           db.setTransactionSuccessful()
         } finally {

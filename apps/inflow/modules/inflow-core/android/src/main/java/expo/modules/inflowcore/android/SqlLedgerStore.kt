@@ -22,12 +22,15 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
 
   override fun hasSource(itemId: Long): Boolean = db.rawQuery("SELECT 1 FROM txn_sources WHERE item_id = ?", itemId).use { it.moveToFirst() }
 
-  override fun add(p: Parsed, at: Long, own: Boolean): Long =
+  override fun txnOfItem(itemId: Long): Long? =
+    db.rawQuery("SELECT txn_id FROM txn_sources WHERE item_id = ?", itemId).use { if (it.moveToFirst()) it.getLong(0) else null }
+
+  override fun add(p: Parsed, at: Long, own: Boolean, byAi: Boolean): Long =
     db.compileStatement(
-      "INSERT INTO txns(direction, amount_minor, currency, account, counterparty, tx_id, at, own, own_set) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
+      "INSERT INTO txns(direction, amount_minor, currency, account, counterparty, tx_id, at, own, own_set, by_ai) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)",
     ).use { st ->
       st.bind(1, p.direction.name); st.bind(2, p.amountMinor); st.bind(3, p.currency); st.bind(4, p.account)
-      st.bind(5, p.counterparty); st.bind(6, p.txId); st.bind(7, at); st.bind(8, if (own) 1L else 0L)
+      st.bind(5, p.counterparty); st.bind(6, p.txId); st.bind(7, at); st.bind(8, if (own) 1L else 0L); st.bind(9, if (byAi) 1L else 0L)
       st.executeInsert()
     }
 
@@ -56,6 +59,10 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
     run("UPDATE txns SET counterparty = ? WHERE id = ? AND counterparty IS NULL", counterparty, id)
   }
 
+  override fun setAiDetails(id: Long, category: String, label: String?) {
+    run("UPDATE txns SET category = ?, label = COALESCE(?, label) WHERE id = ?", category, label, id)
+  }
+
   override fun undecided(): List<Txn> = txns("t.own_set = 0 AND t.pair_id IS NULL")
 
   /** Own transfers left out; per account and currency, never converted. */
@@ -82,7 +89,18 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
         while (c.moveToNext()) add(mapOf("counterparty" to c.getString(0), "currency" to c.getString(1), "total" to c.getLong(2), "count" to c.getInt(3)))
       }
     }
-    return mapOf("accounts" to accounts, "merchants" to merchants)
+    // Money out only. A transaction nobody has sorted yet (no AI result) is not in any category.
+    val categories = db.rawQuery(
+      "SELECT category, currency, SUM(amount_minor), COUNT(*) FROM txns " +
+        "WHERE own = 0 AND direction = 'OUT' AND category IS NOT NULL AND at >= ? AND at < ? " +
+        "GROUP BY category, currency ORDER BY SUM(amount_minor) DESC, category",
+      from, to,
+    ).use { c ->
+      buildList {
+        while (c.moveToNext()) add(mapOf("category" to c.getString(0), "currency" to c.getString(1), "total" to c.getLong(2), "count" to c.getInt(3)))
+      }
+    }
+    return mapOf("accounts" to accounts, "merchants" to merchants, "categories" to categories)
   }
 
   /** Newest first; paging matches SqlItemStore.list. */
@@ -101,7 +119,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
     args += limit.toLong()
     return db.rawQuery(
       "SELECT t.id, t.direction, t.amount_minor, t.currency, t.account, t.counterparty, t.tx_id, t.at, t.own, t.pair_id, " +
-        "(SELECT group_concat(item_id) FROM txn_sources s WHERE s.txn_id = t.id) " +
+        "(SELECT group_concat(item_id) FROM txn_sources s WHERE s.txn_id = t.id), t.category, t.label, t.by_ai " +
         "FROM txns t WHERE ${where.joinToString(" AND ")} ORDER BY t.at DESC, t.id DESC LIMIT ?",
       *args.toTypedArray(),
     ).use { c ->
@@ -113,6 +131,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
               "account" to c.getString(4), "counterparty" to c.str(5), "txId" to c.str(6), "at" to c.getLong(7),
               "own" to (c.getInt(8) != 0), "paired" to !c.isNull(9),
               "itemIds" to (c.str(10)?.split(',')?.map { it.toLong() } ?: emptyList()),
+              "category" to c.str(11), "label" to c.str(12), "byAi" to (c.getInt(13) != 0),
             ),
           )
         }
@@ -123,7 +142,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
   private fun txns(where: String, vararg args: Any?): List<Txn> =
     db.rawQuery(
       "SELECT t.id, t.direction, t.amount_minor, t.currency, t.account, t.counterparty, t.tx_id, t.at, t.own, t.own_set, t.pair_id, " +
-        "(SELECT group_concat(channel) FROM txn_sources s WHERE s.txn_id = t.id) FROM txns t WHERE $where",
+        "(SELECT group_concat(channel) FROM txn_sources s WHERE s.txn_id = t.id), t.category, t.label, t.by_ai FROM txns t WHERE $where",
       *args,
     ).use { c ->
       buildList {
@@ -133,6 +152,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
               c.getLong(0), Direction.valueOf(c.getString(1)), c.getLong(2), c.getString(3), c.getString(4), c.str(5), c.str(6), c.getLong(7),
               c.getInt(8) != 0, c.getInt(9) != 0, if (c.isNull(10)) null else c.getLong(10),
               c.str(11)?.split(',')?.map { Channel.valueOf(it) }?.toSet() ?: emptySet(),
+              c.str(12), c.str(13), c.getInt(14) != 0,
             ),
           )
         }

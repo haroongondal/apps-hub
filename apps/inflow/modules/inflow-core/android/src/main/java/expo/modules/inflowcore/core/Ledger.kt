@@ -10,6 +10,7 @@ data class Txn(
   val counterparty: String?, val txId: String?, val at: Long,
   val own: Boolean, val ownSet: Boolean,   // ownSet = the owner chose `own` by hand; automation never changes it again
   val pairId: Long?, val channels: Set<Channel>,
+  val category: String? = null, val label: String? = null, val byAi: Boolean = false,   // set from an AI result; the numbers above never come from it for a pattern txn
 )
 
 interface LedgerStore {
@@ -19,7 +20,9 @@ interface LedgerStore {
   /** Every transaction carrying this pairId, so unlinking reaches the partner whichever side the owner tapped. */
   fun paired(pairId: Long): List<Txn>
   fun hasSource(itemId: Long): Boolean
-  fun add(p: Parsed, at: Long, own: Boolean): Long
+  /** The transaction this item is a source of, if any. */
+  fun txnOfItem(itemId: Long): Long?
+  fun add(p: Parsed, at: Long, own: Boolean, byAi: Boolean = false): Long
   /** Also lowers the transaction's time to `at` when that is earlier: a transaction keeps its earliest source's time. */
   fun addSource(txnId: Long, itemId: Long, channel: Channel, txId: String?, at: Long)
   fun setOwn(id: Long, own: Boolean, ownSet: Boolean, pairId: Long?)
@@ -31,7 +34,11 @@ interface LedgerStore {
   /** Every distinct account string of known transactions, for Accounts.resolve. */
   fun accounts(): List<String>
   fun setCounterpartyIfNull(id: Long, counterparty: String)
+  /** A null label keeps the label already there. */
+  fun setAiDetails(id: Long, category: String, label: String?)
 }
+
+const val OTHER_ACCOUNT = "Other account"
 
 object Dedup {
   const val MERGE_WINDOW_MS = 10 * 60_000L
@@ -99,6 +106,41 @@ class Ledger(private val store: LedgerStore, private val ownerName: () -> String
       val own = OwnTransfer.nameMatches(t.counterparty, name)
       if (own != t.own) store.setOwn(t.id, own, false, null)
     }
+  }
+
+  /**
+   * R28. An item that already made a transaction only gives it a category and a clean name: pattern numbers stand.
+   * Otherwise the AI's transaction goes through Dedup like a pattern source, flagged byAi. It never un-owns a transaction, never
+   * touches one the owner decided, and never pairs (a message cannot pair itself with real money by asking).
+   */
+  fun onAi(itemId: Long, money: AiMoney, channel: Channel, at: Long): Long? {
+    val existing = store.txnOfItem(itemId)
+    if (existing != null) {
+      details(existing, money)
+      return existing
+    }
+    // The prompt lists the known accounts; an account the model made up must not become a new one.
+    val known = store.accounts()
+    val account = known.firstOrNull { it.equals(money.account, ignoreCase = true) } ?: OTHER_ACCOUNT
+    val p = Parsed(money.direction, money.amountMinor, money.currency, account, money.counterparty, null)
+    val w = Dedup.MERGE_WINDOW_MS
+    val hit = Dedup.match(p, channel, at, store.near(p.direction, p.amountMinor, p.currency, at - w, at + w), null)
+    if (hit != null) {
+      store.addSource(hit, itemId, channel, null, at)
+      money.counterparty?.let { store.setCounterpartyIfNull(hit, it) }
+      details(hit, money)
+      return hit
+    }
+    val id = store.add(p, at, money.own || OwnTransfer.nameMatches(money.counterparty, ownerName()), byAi = true)
+    store.addSource(id, itemId, channel, null, at)
+    store.setAiDetails(id, money.category, money.counterparty)
+    return id
+  }
+
+  private fun details(txnId: Long, money: AiMoney) {
+    store.setAiDetails(txnId, money.category, money.counterparty)
+    val t = store.get(txnId) ?: return
+    if (money.own && !t.own && !t.ownSet) store.setOwn(txnId, true, false, t.pairId)
   }
 
   fun addChannel(itemId: Long, channel: Channel) = store.addChannel(itemId, channel)

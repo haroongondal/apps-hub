@@ -16,9 +16,11 @@ class MemoryLedgerStore : LedgerStore {
 
   override fun hasSource(itemId: Long) = itemId in sources
 
-  override fun add(p: Parsed, at: Long, own: Boolean): Long {
+  override fun txnOfItem(itemId: Long) = sources[itemId]
+
+  override fun add(p: Parsed, at: Long, own: Boolean, byAi: Boolean): Long {
     val id = nextId++
-    txns[id] = Txn(id, p.direction, p.amountMinor, p.currency, p.account, p.counterparty, p.txId, at, own, false, null, emptySet())
+    txns[id] = Txn(id, p.direction, p.amountMinor, p.currency, p.account, p.counterparty, p.txId, at, own, false, null, emptySet(), byAi = byAi)
     return id
   }
 
@@ -50,4 +52,8 @@ class MemoryLedgerStore : LedgerStore {
   }
 
   override fun undecided() = txns.values.filter { !it.ownSet && it.pairId == null }
+
+  override fun setAiDetails(id: Long, category: String, label: String?) {
+    txns[id] = txns.getValue(id).let { it.copy(category = category, label = label ?: it.label) }
+  }
 }
