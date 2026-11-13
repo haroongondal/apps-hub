@@ -1,11 +1,16 @@
 package expo.modules.inflowcore.core
 
+import jakarta.mail.FolderClosedException
+import jakarta.mail.Message
+import jakarta.mail.MessagingException
 import jakarta.mail.Multipart
 import jakarta.mail.Part
 import jakarta.mail.Session
+import jakarta.mail.StoreClosedException
 import jakarta.mail.internet.InternetAddress
 import jakarta.mail.internet.MimeMessage
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.util.Properties
 
 data class RawEmail(
@@ -17,6 +22,7 @@ data class RawEmail(
 object Email {
   const val GMAIL = "com.google.android.gm"
 
+  private const val NBSP = '\u00A0'
   private val session: Session by lazy { Session.getInstance(Properties()) }
 
   private class Found { var html: String? = null; var plain: String? = null }
@@ -27,7 +33,7 @@ object Email {
     val from = msg.getFrom()?.firstOrNull() as? InternetAddress
     val address = from?.address?.trim()
     val found = Found().also { collect(msg, it) }
-    val text = (found.html?.let(HtmlText::toPlain) ?: found.plain)?.trim()
+    val text = (found.html?.let(HtmlText::toPlain) ?: found.plain?.replace(NBSP, ' '))?.trim()
     if (address.isNullOrEmpty() || text.isNullOrEmpty()) null
     else RawEmail(msg.messageID?.trim(), from.personal?.trim()?.ifEmpty { null }, address, msg.subject.orEmpty(), text, at)
   } catch (e: Exception) {
@@ -45,6 +51,34 @@ object Email {
       p.isMimeType("text/html") -> if (out.html == null) out.html = runCatching { p.content as? String }.getOrNull()
       p.isMimeType("text/plain") -> if (out.plain == null) out.plain = runCatching { p.content as? String }.getOrNull()
     }
+  }
+
+  /**
+   * The IMAP FROM search is a substring match, so a lookalike domain would pass it. An address query (has '@') must equal the
+   * sender's address; a name query (R13) matches a substring of the name or the address. R20: no DKIM/DMARC gate.
+   */
+  fun fromMatches(e: RawEmail, query: String): Boolean {
+    val q = query.trim()
+    if ('@' in q) return e.fromAddress.equals(q, ignoreCase = true)
+    return e.fromName.orEmpty().contains(q, ignoreCase = true) || e.fromAddress.contains(q, ignoreCase = true)
+  }
+
+  /**
+   * Null for a message that is too big, expunged meanwhile or cannot be downloaded, so the cursor moves past it (G3).
+   * A closed folder or store is a lost connection and still propagates.
+   */
+  fun fromMessage(msg: Message, maxBytes: Int): RawEmail? = try {
+    if (msg.size > maxBytes) null
+    else {
+      val at = msg.receivedDate?.time ?: msg.sentDate?.time ?: System.currentTimeMillis()
+      read(ByteArrayOutputStream().also { msg.writeTo(it) }.toByteArray(), at)
+    }
+  } catch (e: FolderClosedException) {
+    throw e
+  } catch (e: StoreClosedException) {
+    throw e
+  } catch (e: MessagingException) {
+    null
   }
 
   fun hash(e: RawEmail): String = Sms.sha256Hex("email\u0000${e.messageId ?: "${e.fromAddress}\u0000${e.at}\u0000${e.subject}"}")

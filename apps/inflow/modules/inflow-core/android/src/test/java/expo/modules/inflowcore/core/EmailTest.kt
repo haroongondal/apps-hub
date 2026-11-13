@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Random
@@ -102,5 +103,49 @@ JVBERi0xLjQK
     assertEquals(p, Accounts.resolve(p, listOf("UBL 9933")))
     assertTrue(Accounts.resolve(p, listOf("UBL 1733")).account == "UBL 1733")
     assertNotNull(p)
+  }
+
+  private fun from(address: String, name: String? = null) = RawEmail("<m>", name, address, "s", "body", at)
+
+  @Test fun spoofedSendersDoNotMatchAnAddressQuery() {
+    val q = "admin.ebanking@ubl.com.pk"
+    assertTrue(Email.fromMatches(from("admin.ebanking@ubl.com.pk"), q))
+    assertTrue(Email.fromMatches(from("Admin.Ebanking@UBL.com.pk"), " $q "))
+    assertFalse(Email.fromMatches(from("admin.ebanking@ubl.com.pk.evil.example"), q))
+    assertFalse(Email.fromMatches(from("x@evil.example", "\"admin.ebanking@ubl.com.pk\""), q))
+  }
+
+  @Test fun aNameQueryMatchesNameOrAddress() {
+    assertTrue(Email.fromMatches(from("a@b.example", "Bank Alfalah"), "alfalah"))
+    assertTrue(Email.fromMatches(from("alfalah@b.example"), "Alfalah"))
+    assertFalse(Email.fromMatches(from("a@b.example", "UBL Digital"), "alfalah"))
+  }
+
+  private val session = jakarta.mail.Session.getInstance(java.util.Properties())
+
+  private fun failing(error: () -> Exception) = object : jakarta.mail.internet.MimeMessage(session) {
+    override fun getSize(): Int = 10
+    override fun writeTo(os: java.io.OutputStream) { throw error() }
+  }
+
+  @Test fun anUndownloadableMessageIsSkipped() {
+    assertNull(Email.fromMessage(failing { jakarta.mail.MessagingException("bad part") }, 1000))
+    assertNull(Email.fromMessage(failing { jakarta.mail.MessageRemovedException("gone") }, 1000))
+    assertNull(Email.fromMessage(failing { jakarta.mail.MessagingException("bad part") }, 5))
+  }
+
+  @Test fun aLostConnectionStillEndsTheRun() {
+    assertThrows(jakarta.mail.FolderClosedException::class.java) {
+      Email.fromMessage(failing { jakarta.mail.FolderClosedException(null as jakarta.mail.Folder?, "closed") }, 1000)
+    }
+    assertThrows(jakarta.mail.StoreClosedException::class.java) {
+      Email.fromMessage(failing { jakarta.mail.StoreClosedException(null as jakarta.mail.Store?, "closed") }, 1000)
+    }
+  }
+
+  @Test fun noBreakSpaceOnThePlainTextPathParses() {
+    val body = Samples.ALFALAH_EMAIL.replace("PKR 1,700.00/-", "PKR\u00A01,700.00/-")
+    val raw = "From: a@b.example\nSubject: s\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\n\n$body"
+    assertEquals(170000L, BankParser.parse(Email.read(raw.toByteArray(Charsets.UTF_8), at)!!.text)?.amountMinor)
   }
 }

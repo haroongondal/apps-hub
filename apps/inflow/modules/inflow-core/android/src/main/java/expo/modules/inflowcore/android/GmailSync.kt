@@ -3,15 +3,14 @@ package expo.modules.inflowcore.android
 import android.content.Context
 import android.util.Log
 import expo.modules.inflowcore.core.Email
+import expo.modules.inflowcore.core.GmailPolicy
 import expo.modules.inflowcore.core.Ingest
-import expo.modules.inflowcore.core.RawEmail
-import jakarta.mail.AuthenticationFailedException
 import jakarta.mail.FetchProfile
-import jakarta.mail.MessageRemovedException
+import jakarta.mail.FolderClosedException
+import jakarta.mail.StoreClosedException
 import jakarta.mail.UIDFolder
 import jakarta.mail.search.FromStringTerm
 import org.eclipse.angus.mail.imap.IMAPFolder
-import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -25,8 +24,8 @@ object GmailSync {
   const val LAST_SYNC_AT = "gmailLastSyncAt"
   const val ERROR = "gmailError"
 
-  const val AUTH_ERROR = "Gmail refused the sign-in. Check the address, make a new app password and try again."
-  const val NETWORK_ERROR = "Inflow could not reach Gmail. It will try again in a few minutes."
+  const val AUTH_ERROR = GmailPolicy.AUTH_ERROR
+  const val NETWORK_ERROR = GmailPolicy.NETWORK_ERROR
   const val ADDRESS_ERROR = "Enter your Gmail address."
   const val PASSWORD_ERROR = "An app password has 16 letters. Copy it again from your Google account."
 
@@ -58,6 +57,8 @@ object GmailSync {
 
   private fun runAndNotify(ctx: Context) {
     try {
+      // A refused password is not retried on a schedule (G7); "Check now" and a new sign-in still run.
+      if (!GmailPolicy.scheduledMayRun(StoreHolder.get(ctx).getOrNull()?.meta(ERROR))) return
       val n = sync(ctx)
       if (n > 0) StoreHolder.onCaptured?.invoke(n)
     } catch (e: Exception) {
@@ -75,52 +76,72 @@ object GmailSync {
     var imported = 0
     try {
       val ingest = StoreHolder.ingest(context, store) { InflowListener.schedulePurge(context, it) }
+      var failed = false
       GmailClient.open(address, password).use { session ->
-        for (sender in store.gmailSenders()) imported += syncSender(store, ingest, session.folder, sender)
+        for (sender in store.gmailSenders()) {
+          try {
+            imported += syncSender(store, ingest, session.folder, sender, address)
+          } catch (e: SignedOut) {
+            throw e
+          } catch (e: FolderClosedException) {
+            throw e   // the connection is gone: end the run
+          } catch (e: StoreClosedException) {
+            throw e
+          } catch (e: Exception) {
+            // One sender's failure must not stop the others; its cursor stays, so it is retried next time.
+            Log.w(TAG, "sender sync failed: ${e.javaClass.simpleName}")
+            failed = true
+          }
+        }
       }
-      store.setMeta(LAST_SYNC_AT, System.currentTimeMillis().toString())
-      store.deleteMeta(ERROR)
+      // Disconnect may have run meanwhile: then nothing of this run is written back (G11).
+      store.inTransaction {
+        if (signedIn(store, address)) {
+          store.setMeta(LAST_SYNC_AT, System.currentTimeMillis().toString())
+          if (failed) store.setMeta(ERROR, NETWORK_ERROR) else store.deleteMeta(ERROR)
+        }
+      }
+    } catch (e: SignedOut) {
+      // Disconnected mid-run.
     } catch (e: Exception) {
       Log.w(TAG, "sync failed: ${e.javaClass.simpleName}")
-      store.setMeta(ERROR, if (e is AuthenticationFailedException) AUTH_ERROR else NETWORK_ERROR)
+      store.inTransaction { if (signedIn(store, address)) store.setMeta(ERROR, GmailPolicy.errorCopy(e)) }
     } finally {
       running.set(false)
     }
     return imported
   }
 
-  private fun syncSender(store: SqlItemStore, ingest: Ingest, folder: IMAPFolder, sender: GmailSender): Int {
+  private class SignedOut : Exception()
+
+  private fun signedIn(store: SqlItemStore, address: String) = store.meta(ADDRESS) == address
+
+  private fun syncSender(store: SqlItemStore, ingest: Ingest, folder: IMAPFolder, sender: GmailSender, address: String): Int {
     val validity = folder.uidValidity
     val last = if (sender.uidValidity == validity) sender.lastUid else 0L
     val found = folder.search(FromStringTerm(sender.query))
     folder.fetch(found, FetchProfile().apply { add(UIDFolder.FetchProfileItem.UID) })
     val fresh = found.map { it to folder.getUID(it) }.filter { it.second > last }.sortedBy { it.second }
     if (fresh.isEmpty()) {
-      if (sender.uidValidity != validity) store.setGmailCursor(sender.query, validity, last)
+      if (sender.uidValidity != validity) store.inTransaction {
+        if (!signedIn(store, address)) throw SignedOut()
+        store.setGmailCursor(sender.query, validity, last)
+      }
       return 0
     }
     var imported = 0
     for (batch in fresh.chunked(BATCH)) {
       folder.fetch(batch.map { it.first }.toTypedArray(), FetchProfile().apply { add(FetchProfile.Item.ENVELOPE) })
       // Network reads first, so the write lock is held only for the saves.
-      val emails = batch.mapNotNull { (msg, _) -> read(msg) }
+      // The IMAP search is a substring match: only the marked sender's own mail is kept (G1).
+      val emails = batch.mapNotNull { (msg, _) -> Email.fromMessage(msg, MAX_BYTES) }.filter { Email.fromMatches(it, sender.query) }
       imported += store.inTransaction {
+        if (!signedIn(store, address)) throw SignedOut()
         val n = emails.sumOf { ingest.onEmail(it, LABEL) }
         store.setGmailCursor(sender.query, validity, batch.last().second)
         n
       }
     }
     return imported
-  }
-
-  // Over 2 MB is skipped (the cursor still moves on); a message expunged meanwhile is gone, not an error.
-  private fun read(msg: jakarta.mail.Message): RawEmail? = try {
-    if (msg.size > MAX_BYTES) null
-    else {
-      val at = msg.receivedDate?.time ?: msg.sentDate?.time ?: System.currentTimeMillis()
-      Email.read(ByteArrayOutputStream().also { msg.writeTo(it) }.toByteArray(), at)
-    }
-  } catch (e: MessageRemovedException) {
-    null
   }
 }

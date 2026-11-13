@@ -71,7 +71,8 @@ class Ingest(
     if (!setting.record) return 0
     val h = Email.hash(e)
     if (store.hasEmailHash(h) || store.isTombstoned(h)) return 0
-    if (isOtp(Email.GMAIL, e.text)) return 0
+    // The Alfalah template carries "WhatsApp QR Code" and 4-digit tokens, so the body alone is not enough: the subject must ask for a code too.
+    if (OtpDetector.hasKeyword(e.subject) && isOtp(Email.GMAIL, e.text)) return 0
     val twin = store.emailTwin(e.subject, e.at, Dedup.MERGE_WINDOW_MS)
     if (twin != null) {
       store.claimEmail(twin, h, e.text, SearchText.normalize(e.text))

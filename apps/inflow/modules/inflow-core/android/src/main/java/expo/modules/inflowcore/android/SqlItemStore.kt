@@ -55,14 +55,14 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
     if (subject.isBlank()) return null
     return query(
       "SELECT id FROM items WHERE pkg = ? AND email_hash IS NULL AND posted_at BETWEEN ? AND ? AND substr(text, 1, length(?)) = ? " +
-        "ORDER BY posted_at DESC, id DESC LIMIT 1",
-      Email.GMAIL, at - windowMs, at + windowMs, subject, subject,
+        "ORDER BY abs(posted_at - ?), id DESC LIMIT 1",
+      Email.GMAIL, at - windowMs, at + windowMs, subject, subject, at,
     ).use { if (it.moveToFirst()) it.getLong(0) else null }
   }
 
   override fun emailItemNear(text: String, at: Long, windowMs: Long): Boolean =
     query(
-      "SELECT 1 FROM items WHERE pkg = ? AND email_hash IS NOT NULL AND posted_at BETWEEN ? AND ? AND title <> '' AND substr(?, 1, length(title)) = title LIMIT 1",
+      "SELECT 1 FROM items WHERE pkg = ? AND email_hash IS NOT NULL AND email_text IS NULL AND posted_at BETWEEN ? AND ? AND title <> '' AND substr(?, 1, length(title)) = title LIMIT 1",
       Email.GMAIL, at - windowMs, at + windowMs, text,
     ).use { it.moveToFirst() }
 
@@ -105,9 +105,20 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
     run("DELETE FROM items WHERE otp_expires_at IS NOT NULL AND otp_expires_at <= ?", now)
   }
 
-  override fun purgeOlder(pkg: String, cutoff: Long): Int = run("DELETE FROM items WHERE pkg = ? AND posted_at < ?", pkg, cutoff)
+  override fun purgeOlder(pkg: String, cutoff: Long): Int = transaction {
+    tombstoneEmails("pkg = ? AND posted_at < ?", pkg, cutoff)
+    run("DELETE FROM items WHERE pkg = ? AND posted_at < ?", pkg, cutoff)
+  }
 
-  override fun deleteApp(pkg: String): Int = run("DELETE FROM items WHERE pkg = ?", pkg)
+  override fun deleteApp(pkg: String): Int = transaction {
+    tombstoneEmails("pkg = ?", pkg)
+    run("DELETE FROM items WHERE pkg = ?", pkg)
+  }
+
+  // Deleted emails would otherwise come back when a reconnect resets the cursors.
+  private fun tombstoneEmails(where: String, vararg args: Any?) {
+    run("INSERT OR IGNORE INTO tombstones(hash, at) SELECT email_hash, ? FROM items WHERE email_hash IS NOT NULL AND $where", System.currentTimeMillis(), *args)
+  }
 
   override fun allAppSettings(): List<AppSetting> =
     query("SELECT pkg, label, record, keep_days FROM apps ORDER BY label COLLATE NOCASE, pkg").use { c ->

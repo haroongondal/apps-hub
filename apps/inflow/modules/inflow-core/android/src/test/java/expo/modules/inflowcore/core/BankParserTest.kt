@@ -74,4 +74,10 @@ class BankParserTest {
   @Test fun taxLineIsNotAmount() {
     assertNull(BankParser.parse(alfalahEmail.replace("Amount\n\nPKR 1,700.00/-\n\n", "")))
   }
+
+  @Test fun hyphenatedBranchNameDoesNotBreakTheAccount() {
+    val text = Samples.UBL_EMAIL.replace("Pwd Colony Road Branch, Islamabad", "F-10 Markaz Branch, Islamabad")
+    assertEquals("UBL 33", BankParser.parse(text)?.account)
+    assertEquals(true, BankParser.parse(text)?.accountPartial)
+  }
 }

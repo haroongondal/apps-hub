@@ -47,12 +47,12 @@ class MemoryItemStore : ItemStore {
       .filter {
         it.capture.pkg == Email.GMAIL && it.emailHash == null && Math.abs(it.capture.postedAt - at) <= windowMs && it.capture.text.startsWith(subject)
       }
-      .maxWithOrNull(compareBy<StoredItem>({ it.capture.postedAt }, { it.id }))?.id
+      .minWithOrNull(compareBy<StoredItem>({ Math.abs(it.capture.postedAt - at) }, { -it.id }))?.id
 
   override fun emailItemNear(text: String, at: Long, windowMs: Long) =
     items.values.any {
       val title = it.capture.title
-      it.capture.pkg == Email.GMAIL && it.emailHash != null && Math.abs(it.capture.postedAt - at) <= windowMs &&
+      it.capture.pkg == Email.GMAIL && it.emailHash != null && it.emailText == null && Math.abs(it.capture.postedAt - at) <= windowMs &&
         !title.isNullOrBlank() && text.startsWith(title)
     }
 
@@ -84,13 +84,13 @@ class MemoryItemStore : ItemStore {
 
   override fun purgeOlder(pkg: String, cutoff: Long): Int {
     val old = items.filterValues { it.capture.pkg == pkg && it.capture.postedAt < cutoff }.keys.toList()
-    old.forEach { items.remove(it) }
+    old.forEach { items.remove(it)?.emailHash?.let(tombstones::add) }
     return old.size
   }
 
   override fun deleteApp(pkg: String): Int {
     val mine = items.filterValues { it.capture.pkg == pkg }.keys.toList()
-    mine.forEach { items.remove(it) }
+    mine.forEach { items.remove(it)?.emailHash?.let(tombstones::add) }
     return mine.size
   }
 

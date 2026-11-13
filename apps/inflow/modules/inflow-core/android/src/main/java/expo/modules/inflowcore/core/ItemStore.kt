@@ -15,9 +15,9 @@ interface ItemStore {
   /** Newest notification item (sms_hash null) from one of pkgs with exactly this text within ±window. */
   fun notificationTwin(text: String, at: Long, windowMs: Long, pkgs: Set<String>): Long?
   fun hasEmailHash(emailHash: String): Boolean
-  /** Newest Gmail item with email_hash null, posted within ±window, whose text starts with subject (subject non-blank). */
+  /** The Gmail item with email_hash null, posted within ±window, whose text starts with subject (subject non-blank), nearest to `at` in time (ties: newest id). */
   fun emailTwin(subject: String, at: Long, windowMs: Long): Long?
-  /** A Gmail item with email_hash set, posted within ±window, whose non-blank title the given notification text starts with. */
+  /** A standalone email item (email_hash set, email_text null), posted within ±window, whose non-blank title the given notification text starts with. */
   fun emailItemNear(text: String, at: Long, windowMs: Long): Boolean
   /** Sets email_hash and email_text on a notification item and adds the email text to its search column. */
   fun claimEmail(itemId: Long, emailHash: String, emailText: String, search: String)
@@ -26,7 +26,9 @@ interface ItemStore {
   fun markDeletedBySender(pkg: String, conversationKey: String?, sender: String?, postedAt: Long): Boolean
   /** Also tombstones Sms.textHash(text) of each purged row. */
   fun purgeExpiredOtps(now: Long): Int
+  /** Also tombstones the email_hash of each deleted row that has one, so a re-read email does not return. */
   fun purgeOlder(pkg: String, cutoff: Long): Int
+  /** Also tombstones email hashes, like purgeOlder. */
   fun deleteApp(pkg: String): Int
   fun allAppSettings(): List<AppSetting>
   fun meta(key: String): String?

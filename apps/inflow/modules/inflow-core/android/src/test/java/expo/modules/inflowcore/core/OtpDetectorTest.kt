@@ -80,4 +80,9 @@ class OtpDetectorTest {
     assertFalse(OtpDetector.isOtp(sms, "Verification fee is 1500.50 today"))
     assertFalse(OtpDetector.isOtp(sms, "Verify balance 1,500.00 now"))
   }
+
+  @Test fun keywordIsExposed() {
+    assertTrue(OtpDetector.hasKeyword("Your one-time password"))
+    assertFalse(OtpDetector.hasKeyword("Transaction Successful"))
+  }
 }

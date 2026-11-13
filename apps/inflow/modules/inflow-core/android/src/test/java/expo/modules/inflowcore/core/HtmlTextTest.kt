@@ -28,4 +28,10 @@ class HtmlTextTest {
   @Test fun inlineTagsWithoutSpaceBecomeASpace() {
     assertEquals("a b", HtmlText.toPlain("a<i>b</i>"))
   }
+
+  @Test fun rawNoBreakSpaceBecomesASpace() {
+    assertEquals("Amount\nPKR 1,700.00/-", HtmlText.toPlain("<tr><td>Amount</td><td>PKR\u00A01,700.00/-</td></tr>"))
+    val html = "<p>" + Samples.ALFALAH_EMAIL.replace("PKR 1,700.00/-", "PKR\u00A01,700.00/-") + "</p>"
+    assertEquals(170000L, BankParser.parse(HtmlText.toPlain(html))?.amountMinor)
+  }
 }

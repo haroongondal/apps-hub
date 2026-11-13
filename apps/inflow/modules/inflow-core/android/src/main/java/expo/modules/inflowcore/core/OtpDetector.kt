@@ -28,6 +28,8 @@ object OtpDetector {
     IGNORE,
   )
 
+  fun hasKeyword(text: String): Boolean = KEYWORD.containsMatchIn(text)
+
   fun isOtp(pkg: String, text: String): Boolean {
     if (pkg in EXEMPT_PKGS) return false
     if (!KEYWORD.containsMatchIn(text) || !DIGIT_TOKEN.containsMatchIn(text)) return false

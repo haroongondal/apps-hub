@@ -39,7 +39,7 @@ object BankParser {
   // Bank emails (HtmlText output or the raw text): "PKR." and no gap are allowed after the currency.
   private const val EMAIL_AMT = "PKR\\.?\\s*([\\d,]+(?:\\.\\d+)?)"
   private val UBL_RAAST_OUT = Regex(
-    "You\\s+paid\\s+$EMAIL_AMT\\s+to\\s+(.+?)\\s+via\\s+Raast.*?Account\\s+Details:.*?-\\s*([\\d*]+)(?![\\d*]).*?Transaction\\s+ID:\\s*(\\d+)",
+    "You\\s+paid\\s+$EMAIL_AMT\\s+to\\s+(.+?)\\s+via\\s+Raast.*?Account\\s+Details:.*?-\\s*(\\d*\\*+\\d{1,4})(?![\\d*]).*?Transaction\\s+ID:\\s*(\\d+)",
     FLAGS,
   )
   // Only POS is known (R18); Tax/Charges also shows "PKR 0.0000/-", so the amount must follow the Amount label.

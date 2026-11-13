@@ -12,7 +12,7 @@ object HtmlText {
 
   fun toPlain(html: String): String {
     val flat = html.replace(DROPPED, " ").replace(BREAKS, "\n").replace(TAG, " ")
-    return decode(flat).replace("\r\n", "\n").replace('\r', '\n')
+    return decode(flat).replace('\u00A0', ' ').replace("\r\n", "\n").replace('\r', '\n')
       .lines().joinToString("\n") { it.replace(BLANKS, " ").trim() }
       .replace(GAPS, "\n\n").trim()
   }

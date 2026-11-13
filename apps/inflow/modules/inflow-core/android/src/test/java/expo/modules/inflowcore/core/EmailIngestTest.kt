@@ -99,4 +99,49 @@ class EmailIngestTest {
     assertNotNull(item.emailHash)
     assertEquals(Channel.EMAIL, ledgerStore.txns.values.single().channels.single())
   }
+
+  @Test fun nonPosAlfalahEmailIsSavedNotLostAsOtp() {
+    val ibft = posEmail.replace("POS", "IBFT")
+    assertEquals(1, ingest.onEmail(email(text = ibft), "Gmail"))
+    assertEquals(1, store.items.size)
+    assertTrue(ledgerStore.txns.isEmpty())
+  }
+
+  @Test fun otpSubjectAndBodyStillDropped() {
+    assertEquals(0, ingest.onEmail(email(subject = "Your one-time password", text = "Your OTP is 482913"), "Gmail"))
+    assertTrue(store.items.isEmpty())
+  }
+
+  @Test fun theNearestNotificationIsClaimed() {
+    ingest.onNotification(notification(at = t0))
+    ingest.onNotification(notification(at = t0 + 3 * min).copy(key = "0|$gm|2|null|10002"))
+    assertEquals(2, store.items.size)
+    assertEquals(1, ingest.onEmail(email(at = t0 + 30_000), "Gmail"))
+    val byTime = store.items.values.sortedBy { it.capture.postedAt }
+    assertNotNull(byTime[0].emailText)
+    assertNull(byTime[1].emailText)
+  }
+
+  @Test fun aClaimedNotificationDoesNotHideAnotherSendersGmailNotification() {
+    ingest.onNotification(notification())
+    ingest.onEmail(email(), "Gmail")
+    val other = notification(subject = "Bank Alfalah update", at = t0 + min).copy(title = "Other Bank")
+    assertEquals(1, ingest.onNotification(other))
+    assertEquals(2, store.items.size)
+  }
+
+  @Test fun deletedEmailsDoNotReturnWhenReadAgain() {
+    assertEquals(1, ingest.onEmail(email(), "Gmail"))
+    store.deleteApp(gm)
+    assertTrue(store.items.isEmpty())
+    assertEquals(0, ingest.onEmail(email(), "Gmail"))
+    assertTrue(store.items.isEmpty())
+  }
+
+  @Test fun emailsPurgedByRetentionDoNotReturnEither() {
+    assertEquals(1, ingest.onEmail(email(), "Gmail"))
+    store.purgeOlder(gm, t0 + 10 * min)
+    assertTrue(store.items.isEmpty())
+    assertEquals(0, ingest.onEmail(email(), "Gmail"))
+  }
 }

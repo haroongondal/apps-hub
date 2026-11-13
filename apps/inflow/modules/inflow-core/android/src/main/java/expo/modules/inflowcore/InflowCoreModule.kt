@@ -20,8 +20,10 @@ import expo.modules.inflowcore.android.SqlItemStore
 import expo.modules.inflowcore.android.SqlLedgerStore
 import expo.modules.inflowcore.android.StoreHolder
 import expo.modules.inflowcore.core.AppSetting
+import expo.modules.inflowcore.core.GmailPolicy
 import expo.modules.inflowcore.core.Retention
-import jakarta.mail.AuthenticationFailedException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private const val CAPTURED_EVENT = "onCaptured"
 
@@ -165,8 +167,9 @@ class InflowCoreModule : Module() {
       )
     }
 
-    // Tests the sign-in first, saves only on success; Expo runs AsyncFunction off the JS thread.
-    AsyncFunction("connectGmail") { address: String, appPassword: String ->
+    // Tests the sign-in first, saves only on success. The network work runs on Dispatchers.IO so it never holds
+    // Expo's shared AsyncFunction queue (authenticate and importSms share it). The first sync is the caller's: syncGmail.
+    AsyncFunction("connectGmail") Coroutine { address: String, appPassword: String ->
       val mail = address.trim()
       val password = GmailClient.clean(appPassword)
       val invalid = when {
@@ -174,13 +177,13 @@ class InflowCoreModule : Module() {
         password.length != 16 || !password.all { it.isLetter() } -> GmailSync.PASSWORD_ERROR
         else -> null
       }
-      val failure = invalid ?: try {
-        GmailClient.check(mail, password)
-        null
-      } catch (e: AuthenticationFailedException) {
-        GmailSync.AUTH_ERROR
-      } catch (e: Exception) {
-        GmailSync.NETWORK_ERROR
+      val failure = invalid ?: withContext(Dispatchers.IO) {
+        try {
+          GmailClient.check(mail, password)
+          null
+        } catch (e: Exception) {
+          GmailPolicy.errorCopy(e)
+        }
       }
       if (failure == null) {
         val store = store()
@@ -190,7 +193,6 @@ class InflowCoreModule : Module() {
           store.deleteMeta(GmailSync.ERROR)
           if (store.gmailSenders().isEmpty()) GmailSync.DEFAULT_SENDERS.forEach(store::addGmailSender)
         }
-        GmailSync.schedule(context, 0)
       }
       mapOf("ok" to (failure == null), "message" to failure)
     }
@@ -212,8 +214,8 @@ class InflowCoreModule : Module() {
       store().removeGmailSender(query.trim().lowercase())
     }
 
-    AsyncFunction("syncGmail") { ->
-      val imported = GmailSync.sync(context)
+    AsyncFunction("syncGmail") Coroutine { ->
+      val imported = withContext(Dispatchers.IO) { GmailSync.sync(context) }
       if (imported > 0) StoreHolder.onCaptured?.invoke(imported)
       mapOf("imported" to imported)
     }
