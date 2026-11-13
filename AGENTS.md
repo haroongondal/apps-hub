@@ -48,9 +48,12 @@ Current apps:
   money archive: saves every notification, the SMS inbox and marked Gmail senders'
   emails (IMAP with an app password) into an encrypted on-phone store (SQLCipher),
   reads bank SMS and emails into a spending ledger, and shows it behind a fingerprint
-  lock. Android only, private Store only (`com.haroon.inflow`; READ_SMS, RECEIVE_SMS,
-  INTERNET for `imap.gmail.com` only). Kotlin owns capture, storage, parsing and
-  Gmail; RN only renders. Spec:
+  lock, with AI summaries, importance, to-dos, money categories and an Ask AI tab
+  through the owner's OpenAI-compatible API key (https only; never sent: OTPs,
+  blocked apps or senders, apps not recorded, items saved before the first key).
+  Android only, private Store only (`com.haroon.inflow`; READ_SMS, RECEIVE_SMS,
+  INTERNET for `imap.gmail.com` and the owner's chosen AI address). Kotlin owns
+  capture, storage, parsing, Gmail and AI; RN only renders. Spec:
   `docs/superpowers/specs/2026-11-13-inflow-design.md`; plans:
   `docs/superpowers/plans/2026-11-13-inflow-stage-*.md`; progress:
   `docs/handoffs/inflow.md`.
