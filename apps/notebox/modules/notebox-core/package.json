@@ -1,0 +1,11 @@
+{
+  "name": "notebox-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Notebox's notification capture and encrypted store (Expo local module, Android only)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "expo-modules-core": "~3.0.30"
+  }
+}
