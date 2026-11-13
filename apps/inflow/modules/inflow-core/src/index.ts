@@ -209,12 +209,13 @@ export interface InflowCoreApi {
   syncGmail(): Promise<{ imported: number }>;
   aiStatus(): AiStatus;
   knownModels(): KnownModelInfo[];
-  // Throws with the validation copy for a non-https address or a bad price. Null prices = the built-in ones.
-  setAiModel(baseUrl: string, model: string, prices: { inputPerM: number; cachedPerM: number; outputPerM: number } | null): void;
+  // Returns the validation copy for a non-https address or a bad price, or null once saved. Null prices = the built-in ones.
+  setAiModel(baseUrl: string, model: string, prices: { inputPerM: number; cachedPerM: number; outputPerM: number } | null): string | null;
   addAiKey(apiKey: string): string | null;
   removeAiKey(id: number): void;
   testAiKey(id: number): Promise<string | null>;
-  setAiCap(usd: number | null): void;
+  // Returns the error copy for a limit outside 0.01 to 100, or null once saved.
+  setAiCap(usd: number | null): string | null;
   sendAiNow(): Promise<{ sent: number; saved: number; stoppedByCap: boolean; error: string | null }>;
   setAiBlocked(blockKey: string, blocked: boolean): void;
   listAiBlocks(): string[];

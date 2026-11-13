@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-// Inflow's only network code is Gmail over IMAP/TLS; these pin that surface so a change to it fails here first.
+// Inflow's network code is Gmail over IMAP/TLS and the owner's AI address (ai-network.test.mjs pins that one); these pin the Gmail surface and the manifests so a change fails here first.
 const app = join(import.meta.dirname, '..', '..');
 const read = (...p) => readFileSync(join(app, ...p), 'utf8');
 const client = read('modules', 'inflow-core', 'android', 'src', 'main', 'java', 'expo', 'modules', 'inflowcore', 'android', 'GmailClient.kt');

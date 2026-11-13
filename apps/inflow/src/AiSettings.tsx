@@ -59,11 +59,11 @@ function ModelPanel({ status, models, onChanged }: { status: AiStatus; models: K
 
   const pick = (m: KnownModelInfo) => {
     try {
-      InflowCore.setAiModel(m.baseUrl, m.model, null);
-      setOther(false);
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message || SAVE_ERROR);
+      const e = InflowCore.setAiModel(m.baseUrl, m.model, null);
+      if (e === null) setOther(false);
+      setError(e);
+    } catch {
+      setError(SAVE_ERROR);
     }
     onChanged();
   };
@@ -76,10 +76,9 @@ function ModelPanel({ status, models, onChanged }: { status: AiStatus; models: K
       return;
     }
     try {
-      InflowCore.setAiModel(baseUrl.trim(), model.trim(), given[0] === '' ? null : { inputPerM: numbers[0], cachedPerM: numbers[1], outputPerM: numbers[2] });
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message || SAVE_ERROR);
+      setError(InflowCore.setAiModel(baseUrl.trim(), model.trim(), given[0] === '' ? null : { inputPerM: numbers[0], cachedPerM: numbers[1], outputPerM: numbers[2] }));
+    } catch {
+      setError(SAVE_ERROR);
     }
     onChanged();
   };
@@ -244,8 +243,7 @@ function RunPanel({ status, onChanged }: { status: AiStatus; onChanged: () => vo
       return;
     }
     try {
-      InflowCore.setAiCap(parsed);
-      setCapError(null);
+      setCapError(InflowCore.setAiCap(parsed));
     } catch {
       setCapError(SAVE_ERROR);
     }
@@ -256,7 +254,7 @@ function RunPanel({ status, onChanged }: { status: AiStatus; onChanged: () => vo
     setBusy(true);
     setSent(null);
     InflowCore.sendAiNow()
-      .then((r) => setSent(r.error !== null ? { tone: 'danger', text: r.error } : r.stoppedByCap ? { tone: 'warn', text: CAP_REACHED } : { tone: 'ok', text: sendResultLabel(r.sent, r.saved) }))
+      .then((r) => setSent(r.error === CAP_REACHED || r.stoppedByCap ? { tone: 'warn', text: CAP_REACHED } : r.error !== null ? { tone: 'danger', text: r.error } : { tone: 'ok', text: sendResultLabel(r.sent, r.saved) }))
       .catch(() => setSent({ tone: 'danger', text: SAVE_ERROR }))
       .finally(() => {
         setBusy(false);
@@ -281,10 +279,14 @@ function RunPanel({ status, onChanged }: { status: AiStatus; onChanged: () => vo
         <Row title={capLabel(status.capUsd, status.spentTodayUsd)} subtitle={`${status.queued === 0 ? 'Nothing waiting' : `${status.queued} waiting`} · ${status.lastRunAt === null ? 'Not sent yet' : `Last sent ${whenLabel(status.lastRunAt, Date.now())}`}`} />
         {!status.on && <Row title={<Text tone="muted">Add an API key to turn AI on.</Text>} />}
       </Group>
-      {status.error !== null && (
-        <Notice tone="danger" title="The last send failed">
-          {status.error}
-        </Notice>
+      {status.error === CAP_REACHED ? (
+        <Notice tone="warn">{CAP_REACHED}</Notice>
+      ) : (
+        status.error !== null && (
+          <Notice tone="danger" title="The last send failed">
+            {status.error}
+          </Notice>
+        )
       )}
       <Button label="Send now" variant="secondary" busy={busy} disabled={!status.on} onPress={sendNow} block />
       {sent !== null && <Notice tone={sent.tone}>{sent.text}</Notice>}

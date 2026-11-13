@@ -17,8 +17,8 @@ const RECORD_OPTIONS = [
   { key: 'off', label: 'Off' },
 ] as const;
 const AI_OPTIONS = [
-  { key: 'on', label: 'On' },
-  { key: 'off', label: 'Off' },
+  { key: 'on', label: 'Send to AI' },
+  { key: 'off', label: 'Keep from AI' },
 ] as const;
 const LOCK_NOTE = "Your fingerprint locks these screens. Your history is encrypted with a key this phone keeps, so Inflow can keep saving notifications while it's locked.";
 
