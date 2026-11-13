@@ -1,31 +1,32 @@
 # Inflow handoff (formerly Notebox)
 
-## Resume prompt (2026-11-13, stage 3 built, reviewed and fixed; release go pending)
+## Resume prompt (2026-11-14, stages 1-4 built, reviewed and fixed; release on hold)
 
 ```
-Continue the Inflow work (formerly Notebox), resume prompt dated 2026-11-13. Work only in the
-worktree /Users/outsentia/Documents/apps-hub-wt/inflow (branch inflow/stage-3, which holds stages
-1, 2 and 3), never in the main checkout /Users/outsentia/Documents/apps-hub (branch model-host,
-unrelated uncommitted work; its untracked docs/handoffs/notebox.md and Notebox design copy are
-stale leftovers, delete only after the merge and with the owner's OK). Claim the worktree folder
-with coord before you start (~/.claude/plugins/cache/claude-agent-workflow/coord/1.0.0/bin/coord
-claim <folder>) and release it when you stop.
+Continue the Inflow work (formerly Notebox), resume prompt dated 2026-11-14. Work only in the
+worktree /Users/outsentia/Documents/apps-hub-wt/inflow (branch inflow/stage-4, which holds stages
+1-4), never in the main checkout /Users/outsentia/Documents/apps-hub (branch model-host, unrelated
+uncommitted work; its untracked docs/handoffs/notebox.md and Notebox design copy are stale
+leftovers, delete only after the merge and with the owner's OK). Claim the worktree folder with
+coord before you start (~/.claude/plugins/cache/claude-agent-workflow/coord/1.0.0/bin/coord claim
+<folder>) and release it when you stop.
 
 1. Read docs/handoffs/inflow.md completely first (especially "Current state and next step"),
-   then progress.md (stage 3 ledger, untracked: rulings R13-R22, reviews, fix wave, re-review;
-   progress-stage-2.md and progress-stage-1.md hold the earlier stages). Design:
+   then progress.md (stage 4 ledger, untracked: rulings R23-R34, reviews, fix waves;
+   progress-stage-{1,2,3}.md hold the earlier stages). Design:
    docs/superpowers/specs/2026-11-13-inflow-design.md; plans: docs/superpowers/plans/
-   2026-11-13-inflow-stage-{1,2,3}.md. Trust the decisions, rulings and verified facts; do not
-   re-ask the owner what they settled; do not re-run reviews or fix waves.
-2. Next step: release waits for the owner's word (they chose "Fix both, hold release"; both R22
-   Minors are fixed in 78798c6). When they say go: never merge, release or install without that go.
-   Process: push, PR, squash-merge with [skip ci], then pnpm release inflow locally from a clean
-   checkout of merged main. Install only from the Store; never adb-install on the owner's phone;
-   claim device:<ro.serialno> with coord first. Run the phone checks of stages 1, 2 and 3 (stage 1
-   plan Task 9 step 3; stage 2 and stage 3 plans "Controller: close"; extra checks under "Current
-   state and next step") and record actual observations. No Claude attribution lines.
-3. Stage 4 (AI) is next after the phone checks: AI-only transactions count straight away
-   (owner, 2026-11-13). Unparsed Alfalah non-POS emails are saved for it (R18, G2).
+   2026-11-13-inflow-stage-{1,2,3}.md and 2026-11-14-inflow-stage-4.md. Trust the decisions,
+   rulings and verified facts; do not re-ask the owner what they settled; do not re-run reviews
+   or fix waves.
+2. Release waits for the owner's word (last answer: "Fix both, hold release"). When they say go:
+   push, PR, squash-merge with [skip ci], then pnpm release inflow locally from a clean checkout
+   of merged main. Install only from the Store; never adb-install on the owner's phone; claim
+   device:<ro.serialno> with coord first. Run the phone checks of stages 1-4 (each plan's
+   "Controller: close" and Task 9 step 3 of stage 1, plus the extra checks below) and record
+   actual observations. No Claude attribution lines.
+3. Stage 5 (rules: tags, hide, important, sender and word matching, apply to saved items) is the
+   last stage. It inherits: suggested AI tags are stored but inert until rules/tags exist (R26);
+   the owner's rules override AI importance (design).
 4. Keep this handoff current as milestones land; at ~85% context stop, rewrite this prompt
    with the date and print it for a new chat.
 ```
@@ -177,35 +178,32 @@ most likely to be second-guessed:
 
 ## Current state and next step
 
-State (2026-11-13): stages 1, 2 and 3 built, reviewed and fixed on `inflow/stage-3` (code HEAD
-78798c6). Nothing pushed, merged, released or installed: the owner chose "Fix both, hold release",
-so release waits for the owner's word. All gates green at 78798c6: Kotlin 137 tests 0 failures,
-assembleDebug, pnpm test, pnpm typecheck (inflow 31/31).
+State (2026-11-14): stages 1-4 built, reviewed and fixed on `inflow/stage-4` (code HEAD 2ed42e5).
+Nothing pushed, merged, released or installed; release waits for the owner's word. Gates at
+2ed42e5: Kotlin 228 tests 0 failures, assembleDebug, pnpm test 0, pnpm typecheck 0 (inflow 41/41).
 
-Stage 3 facts: the release INTERNET strip overlay is deleted; INTERNET is in the module manifest
-and only `imap.gmail.com:993` (TLS, server identity checked) is contacted; a test
-(`apps/inflow/tools/__tests__/gmail-network.test.mjs`) pins that. Mail library Angus Mail 2.0.3
-(+ jakarta.mail-api 2.1.3, angus-activation 2.0.2, jakarta.activation-api 2.1.3; EPL-2.0 / GPL-2.0
-+CE / EDL-1.0); their LICENSE.md/NOTICE.md are merged into the APK (R19). Senders: exact address
-match for queries with '@' (R20; both banks publish DMARC p=reject); "@domain" matches that exact
-domain. The two R22 Minors were fixed in 78798c6 at the owner's request ("Fix both, hold release").
+Stage 3 facts: INTERNET in the module manifest; Gmail only to `imap.gmail.com:993` (TLS, identity
+checked); Angus Mail 2.0.3 (EPL/GPL+CE/EDL), licence files merged into the APK (R19); exact From
+address match, "@domain" for a whole domain (R20).
 
-Unproven until the phone check: all SQL under SQLCipher (v2 rebuild, v3 columns, email queries,
-tombstones), SMS provider queries and permission grant under a Store install, real IMAP (app
-password sign-in, `\All` folder lookup, FROM search, Angus provider loading on Android), the
-fingerprint prompt not delayed by a Gmail sync, every screen.
+Stage 4 facts: AI through the owner's OpenAI-compatible https address (Deputy's provider copied
+into `core/AiProvider.kt`; kotlinx-serialization-json 1.8.1, Apache-2.0; HttpURLConnection, no
+redirects). Keys in SQLCipher `ai_keys`, only the last four reach JS. Only items saved after the
+first key are sent (meta `aiSince`); Ask AI money follows the same rule (R31). Daily cap $0.50
+default. Batches: at most 40 items and 60,000 characters, `max_tokens` 8,000. AI amounts must
+appear in the item text (R27); duplicate ids dropped; AI-only txns count straight away, never pair,
+and yield to a later bank pattern on the same item (keeping category and own mark). A refused
+batch is dropped only after one retry and only when another batch in the run worked (R34); two
+refusals in a row stop the run and keep the queue. Items blocked mid-queue are dropped for good.
+Tabs: Home, Money, Ask AI, Settings.
+
+Unproven until the phone check: all SQL under SQLCipher (v2 rebuild, v3, v4, email and AI queries,
+tombstones, Ask filters; proven only in desktop sqlite3, no store-level harness, R32), SMS provider
+queries and permission grant under a Store install, real IMAP, real model replies (JSON shape,
+token usage, timeouts), the 30-minute runners on HyperOS, every screen.
 
 Extra phone checks: a new SMS appears within ~30 s with the app closed; first open imports the
-inbox once; stage 3 plan "Controller: close" list (connect, history download, email + notification
-= one item, SMS + email = one transaction, wrong password copy, airplane mode copy and recovery).
+inbox once; stage 3 and stage 4 plans' "Controller: close" lists; a wrong model name shows the
+refusal in Settings and keeps the queue.
 
-Next step: resume prompt step 2.
-
-Stage 4 (AI), started 2026-11-14 on branch `inflow/stage-4` (from `inflow/stage-3`; stage 3 ledger
-renamed `progress-stage-3.md`). Owner answers: only items saved after the first API key are sent;
-daily AI cap $0.50 by default (design "Stage 4 answers"). Plan committed:
-`docs/superpowers/plans/2026-11-14-inflow-stage-4.md` (545714c; rulings R23-R30: keys in SQLCipher,
-in-process 30-min runner, fixed category list, tags inert until stage 5, AI amounts must appear in
-the item text, AI on pattern txns sets category only, two-call Ask AI, 60k-char requests and the
-cap checked per request). Ledger `progress.md` (untracked) has the conflict scan. Next: the owner
-reviews the plan; then dispatch agent K (K1-K5) and agent T (T1-T3) in parallel.
+Next step: resume prompt step 2 (or stage 5 planning if the owner asks for it first).
