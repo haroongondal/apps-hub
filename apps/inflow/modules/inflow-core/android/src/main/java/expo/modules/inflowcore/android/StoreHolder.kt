@@ -1,8 +1,11 @@
 package expo.modules.inflowcore.android
 
 import android.content.Context
+import android.provider.Telephony
+import expo.modules.inflowcore.core.Ledger
 import expo.modules.inflowcore.core.Ingest
 import expo.modules.inflowcore.core.KEY_LOST_MESSAGE
+import expo.modules.inflowcore.core.Sms
 
 /** The one store the listener and the module share. A failed open is retried later unless the key is lost; the database file is never touched. */
 object StoreHolder {
@@ -18,6 +21,13 @@ object StoreHolder {
 
   fun storeError(context: Context): String? = get(context).exceptionOrNull()?.message
 
+  const val OWNER_NAME = "ownerName"
+
+  fun ledger(store: SqlItemStore) = Ledger(SqlLedgerStore(store.db)) { store.meta(OWNER_NAME)?.takeIf { it.isNotBlank() } }
+
   fun ingest(context: Context, store: SqlItemStore, onOtpSaved: (Long) -> Unit = {}) =
-    Ingest(store, context.packageName, System::currentTimeMillis, onOtpSaved)
+    Ingest(
+      store, context.packageName, System::currentTimeMillis, onOtpSaved, ledger(store),
+      Sms.KNOWN_APPS + listOfNotNull(Telephony.Sms.getDefaultSmsPackage(context)),
+    )
 }

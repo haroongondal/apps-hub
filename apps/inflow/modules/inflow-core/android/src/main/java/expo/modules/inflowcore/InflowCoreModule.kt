@@ -13,7 +13,9 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.inflowcore.android.Lock
 import expo.modules.inflowcore.android.InflowListener
+import expo.modules.inflowcore.android.SmsImporter
 import expo.modules.inflowcore.android.SqlItemStore
+import expo.modules.inflowcore.android.SqlLedgerStore
 import expo.modules.inflowcore.android.StoreHolder
 import expo.modules.inflowcore.core.AppSetting
 import expo.modules.inflowcore.core.Retention
@@ -55,6 +57,7 @@ class InflowCoreModule : Module() {
         "lastCaptureAt" to holder.getOrNull()?.meta(InflowListener.LAST_CAPTURE_AT)?.toLongOrNull(),
         "batteryUnrestricted" to (ctx.getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(ctx.packageName) ?: false),
         "storeError" to holder.exceptionOrNull()?.message,
+        "smsGranted" to SmsImporter.granted(ctx),
       )
     }
 
@@ -92,6 +95,37 @@ class InflowCoreModule : Module() {
 
     Function("listApps") { ->
       store().allAppSettings().map { mapOf("pkg" to it.pkg, "label" to it.label, "record" to it.record, "keepDays" to it.keepDays) }
+    }
+
+    AsyncFunction("importSms") { ->
+      val imported = SmsImporter.sync(context)
+      if (imported > 0) StoreHolder.onCaptured?.invoke(imported)
+      mapOf("imported" to imported)
+    }
+
+    Function("money") { from: Long, to: Long ->
+      SqlLedgerStore(store().db).money(from, to)
+    }
+
+    Function("listTxns") { account: String?, before: Long?, limit: Int, beforeId: Long? ->
+      SqlLedgerStore(store().db).listTxns(account, before, limit, beforeId)
+    }
+
+    Function("setOwnTransfer") { txnId: Long, own: Boolean ->
+      val store = store()
+      store.inTransaction { StoreHolder.ledger(store).setOwnTransfer(txnId, own) }
+    }
+
+    Function("getItem") { id: Long ->
+      store().item(id, System.currentTimeMillis())
+    }
+
+    Function("getOwnerName") { ->
+      store().meta(StoreHolder.OWNER_NAME)?.takeIf { it.isNotBlank() }
+    }
+
+    Function("setOwnerName") { name: String? ->
+      store().setMeta(StoreHolder.OWNER_NAME, name?.trim().orEmpty())
     }
 
     Function("setRecord") { pkg: String, record: Boolean, deleteSaved: Boolean ->

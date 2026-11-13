@@ -34,8 +34,9 @@ class InflowListener : NotificationListenerService() {
         Log.w(TAG, "store unavailable, notification dropped")
         return
       }
-      val saved = StoreHolder.ingest(applicationContext, store, ::schedulePurge)
-        .onNotification(RawFromSbn.from(sbn, label(applicationContext, sbn.packageName)))
+      val ingest = StoreHolder.ingest(applicationContext, store) { schedulePurge(applicationContext, it) }
+      val raw = RawFromSbn.from(sbn, label(applicationContext, sbn.packageName))
+      val saved = store.inTransaction { ingest.onNotification(raw) }
       store.setMeta(LAST_CAPTURE_AT, System.currentTimeMillis().toString())
       if (saved > 0) StoreHolder.onCaptured?.invoke(saved)
     } catch (e: Exception) {
@@ -43,24 +44,23 @@ class InflowListener : NotificationListenerService() {
     }
   }
 
-  // shortcut: an in-process timer dies with the process; then the OTP stays hidden and is purged on the next
-  // notification or when Home opens. Use AlarmManager if the phone check shows HyperOS kills the listener often.
-  private fun schedulePurge(expiresAt: Long) {
-    val ctx = applicationContext
-    executor.schedule({
-      try {
-        StoreHolder.get(ctx).getOrNull()?.let { StoreHolder.ingest(ctx, it).housekeeping() }
-      } catch (e: Exception) {
-        Log.w(TAG, "otp purge failed: ${e.javaClass.simpleName}")
-      }
-    }, expiresAt - System.currentTimeMillis() + 1_000, TimeUnit.MILLISECONDS)
-  }
-
   companion object {
     const val LAST_CAPTURE_AT = "lastCaptureAt"
     private const val TAG = "InflowListener"
     val connected = AtomicBoolean(false)
-    private val executor = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "inflow-capture").apply { isDaemon = true } }
+    val executor = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "inflow-capture").apply { isDaemon = true } }
+
+    // shortcut: an in-process timer dies with the process; then the OTP stays hidden and is purged on the next
+    // notification or when Home opens. Use AlarmManager if the phone check shows HyperOS kills the listener often.
+    fun schedulePurge(ctx: Context, expiresAt: Long) {
+      executor.schedule({
+        try {
+          StoreHolder.get(ctx).getOrNull()?.let { StoreHolder.ingest(ctx, it).housekeeping() }
+        } catch (e: Exception) {
+          Log.w(TAG, "otp purge failed: ${e.javaClass.simpleName}")
+        }
+      }, expiresAt - System.currentTimeMillis() + 1_000, TimeUnit.MILLISECONDS)
+    }
 
     fun label(context: Context, pkg: String): String = try {
       val pm = context.packageManager

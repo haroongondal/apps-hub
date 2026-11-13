@@ -18,7 +18,7 @@ import net.zetetic.database.sqlcipher.SQLiteDatabase
 import net.zetetic.database.sqlcipher.SQLiteDatabaseHook
 import net.zetetic.database.sqlcipher.SQLiteStatement
 
-class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemStore {
+class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemStore {
   override fun appSetting(pkg: String): AppSetting? =
     query("SELECT pkg, label, record, keep_days FROM apps WHERE pkg = ?", pkg).use { if (it.moveToFirst()) it.toSetting() else null }
 
@@ -157,24 +157,13 @@ class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemSto
       }
     }
     args += limit.toLong()
-    val sql = "SELECT i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, i.conversation_key, " +
-      "i.title, i.text, i.posted_at, i.deleted_by_sender " +
-      "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
-      "WHERE ${where.joinToString(" AND ")} ORDER BY i.posted_at DESC, i.id DESC LIMIT ?"
-    return query(sql, *args.toTypedArray()).use { c ->
-      buildList {
-        while (c.moveToNext()) {
-          add(
-            mapOf(
-              "id" to c.getLong(0), "pkg" to c.getString(1), "appLabel" to c.getString(2), "sender" to c.str(3), "senderKey" to c.str(4),
-              "displayName" to c.str(5), "conversation" to c.str(6), "conversationKey" to c.str(7), "title" to c.str(8),
-              "text" to c.getString(9), "postedAt" to c.getLong(10), "deletedBySender" to (c.getInt(11) != 0),
-            ),
-          )
-        }
-      }
-    }
+    val sql = "SELECT $ITEM_COLUMNS $ITEM_FROM WHERE ${where.joinToString(" AND ")} ORDER BY i.posted_at DESC, i.id DESC LIMIT ?"
+    return query(sql, *args.toTypedArray()).use { c -> buildList { while (c.moveToNext()) add(c.toItem()) } }
   }
+
+  /** Null when retention removed the item or it is an OTP past its 5 minutes. */
+  fun item(id: Long, now: Long): Map<String, Any?>? =
+    query("SELECT $ITEM_COLUMNS $ITEM_FROM WHERE i.id = ? AND $VISIBLE_I", id, now).use { if (it.moveToFirst()) it.toItem() else null }
 
   fun rename(senderKey: String, name: String?) {
     val clean = name?.trim().orEmpty()
@@ -203,6 +192,9 @@ class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemSto
       st.executeUpdateDelete()
     }
 
+  /** One write lock for the whole block; nested use joins the outer transaction. */
+  fun <T> inTransaction(block: () -> T): T = transaction(block)
+
   private fun <T> transaction(block: () -> T): T {
     db.beginTransaction()
     try {
@@ -222,6 +214,12 @@ class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemSto
     }
   }
 
+  private fun Cursor.toItem(): Map<String, Any?> = mapOf(
+    "id" to getLong(0), "pkg" to getString(1), "appLabel" to getString(2), "sender" to str(3), "senderKey" to str(4),
+    "displayName" to str(5), "conversation" to str(6), "conversationKey" to str(7), "title" to str(8),
+    "text" to getString(9), "postedAt" to getLong(10), "deletedBySender" to (getInt(11) != 0),
+  )
+
   private fun Cursor.str(i: Int): String? = if (isNull(i)) null else getString(i)
 
   private fun Cursor.toSetting() = AppSetting(getString(0), getString(1), getInt(2) != 0, if (isNull(3)) null else getInt(3))
@@ -231,6 +229,9 @@ class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemSto
     private const val SCHEMA_VERSION = 2
     private const val GENERIC_FAILURE =
       "Inflow can't open your saved history. The history file is kept, not deleted. Restart the phone and try again."
+    private const val ITEM_COLUMNS = "i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, " +
+      "i.conversation_key, i.title, i.text, i.posted_at, i.deleted_by_sender"
+    private const val ITEM_FROM = "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.sender_key"
     private const val VISIBLE_I = "(i.otp_expires_at IS NULL OR i.otp_expires_at > ?)"
     private const val VISIBLE_J = "(j.otp_expires_at IS NULL OR j.otp_expires_at > ?)"
     private const val VISIBLE_T = "(t.otp_expires_at IS NULL OR t.otp_expires_at > ?)"
