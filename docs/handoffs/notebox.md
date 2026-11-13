@@ -97,15 +97,26 @@ most likely to be second-guessed:
   plan written there: `docs/superpowers/plans/2026-11-13-notebox-stage-1.md` (9 tasks).
   Nothing committed yet.
 
+- 2026-11-13 (build session 1): design, plan and handoff committed (bbe0e5c). Controller ledger
+  is `progress.md` in the worktree root (untracked on purpose; it holds the conflict scan,
+  rulings and per-task status). coord claim on the worktree needs
+  `CLAUDE_CODE_SESSION_ID` set by hand in this harness. Task 1 done (588e74f): app shell,
+  `notebox` brand, backup rules, Store registration; Gradle gate green. Plan gaps found and fixed:
+  `ANDROID_PACKAGES` in `packages/store-manifest/src/index.ts` needs the new app, `.gitignore`
+  entries per app, INTERNET only in debug manifests plus a release `tools:node="remove"` overlay.
+  Ruling: Tasks 2 and 3 run one after the other (a red test file breaks the other agent's Gradle
+  compile); Task 7 (TS only) runs alongside the Kotlin chain.
+
 ## Current state and next step
 
-State: design and stage 1 plan written in the `notebox/stage-1` worktree, uncommitted; no code.
+State: Task 1 complete (588e74f). Tasks 2 (parser) and 7 (TS contract and helpers) dispatched in
+parallel. Tasks 3, 4, 5, 6, 8 and 9 not started. See `progress.md` for the live status.
 
 Next step:
 1. Work only in `/Users/outsentia/Documents/apps-hub-wt/notebox` (branch `notebox/stage-1`).
-   Claim the folder with coord first.
-2. The owner asked for stage 1 to be built (2026-11-13). Commit the design, this handoff
-   and the plan as the first commit, then execute the plan with `cd-engineering-tools:parallel-agents-coord`
-   (task order and parallel groups are at the top of the plan).
+   Claim the folder with coord first (`CLAUDE_CODE_SESSION_ID=<this session id> coord claim <folder>`).
+2. Read `progress.md`; tasks with a `Task <N>: complete` line are done. Continue the plan order:
+   Task 3 after Task 2, Task 4 after 3, Task 5 after 4, Task 6 after 5, Task 8 after 6 and 7.
+   Stop before Task 9 step 2 (release) and ask the owner for the go.
 3. Before planning stage 4, ask the owner the design's open question (do AI-only
    transactions count straight away or wait in "to check").
