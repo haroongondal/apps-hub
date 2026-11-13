@@ -44,12 +44,12 @@ export function ListScreen({ title, filter, onBack, onOpen }: { title: string; f
   const count = useRef(0);
 
   const load = useCallback(
-    (reset: boolean, before: number | null) => {
+    (reset: boolean, before: Item | null) => {
       if (busy.current) return;
       busy.current = true;
       try {
         const limit = reset ? Math.max(PAGE, count.current) : PAGE;
-        const page = NoteboxCore.listItems(filter, reset ? null : before, limit);
+        const page = NoteboxCore.listItems(filter, reset || before === null ? null : before.postedAt, limit, reset || before === null ? null : before.id);
         setItems((prev) => (reset ? page : [...prev, ...page]));
         count.current = reset ? page.length : count.current + page.length;
         setMore(page.length >= limit);
@@ -68,7 +68,7 @@ export function ListScreen({ title, filter, onBack, onOpen }: { title: string; f
   useEffect(() => load(true, null), [load]);
 
   const now = Date.now();
-  const last = items.length > 0 ? items[items.length - 1].postedAt : null;
+  const last = items.length > 0 ? items[items.length - 1] : null;
   return (
     <Screen>
       <View style={{ paddingHorizontal: space.lg, gap: space.sm, paddingBottom: space.md }}>

@@ -99,7 +99,7 @@ class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemSto
     return mapOf("conversations" to conversations, "apps" to apps)
   }
 
-  fun list(filter: Map<String, Any?>, before: Long?, limit: Int, now: Long): List<Map<String, Any?>> {
+  fun list(filter: Map<String, Any?>, before: Long?, limit: Int, now: Long, beforeId: Long? = null): List<Map<String, Any?>> {
     val where = mutableListOf(VISIBLE_I)
     val args = mutableListOf<Any?>(now)
     when (filter["kind"] as? String) {
@@ -114,7 +114,14 @@ class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemSto
         }
       }
     }
-    if (before != null) { where += "i.posted_at < ?"; args += before }
+    if (before != null) {
+      if (beforeId != null) {
+        where += "(i.posted_at < ? OR (i.posted_at = ? AND i.id < ?))"
+        args += before; args += before; args += beforeId
+      } else {
+        where += "i.posted_at < ?"; args += before
+      }
+    }
     args += limit.toLong()
     val sql = "SELECT i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, i.conversation_key, " +
       "i.title, i.text, i.posted_at, i.deleted_by_sender " +
@@ -225,11 +232,8 @@ class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemSto
           ?: return Result.failure(IllegalStateException(if (plan is OpenPlan.Open) KEY_LOST_MESSAGE else GENERIC_FAILURE))
         val raw = ("x'" + key.joinToString("") { "%02x".format(it) } + "'").toByteArray(Charsets.US_ASCII)
         key.fill(0)
-        val db = try {
-          SQLiteDatabase.openOrCreateDatabase(file, raw, null, neverDeleteOnCorruption, null).also { ensureSchema(it) }
-        } finally {
-          raw.fill(0)
-        }
+        // raw is not zeroed: SQLCipher's connection config keeps this array and re-reads it if a connection is reopened.
+        val db = SQLiteDatabase.openOrCreateDatabase(file, raw, null, neverDeleteOnCorruption, null).also { ensureSchema(it) }
         Result.success(SqlItemStore(db))
       } catch (e: SQLiteDatabaseCorruptException) {
         Result.failure(IllegalStateException(KEY_LOST_MESSAGE, e))

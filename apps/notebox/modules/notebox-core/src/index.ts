@@ -73,8 +73,8 @@ export interface NoteboxCoreApi {
   reconnect(): void;
   authenticate(): Promise<{ ok: boolean; message: string | null }>;
   home(startOfDay: number): HomeSummary;
-  // Newest first; before is the postedAt of the last item already shown, null for the first page.
-  listItems(filter: ItemFilter, before: number | null, limit: number): Item[];
+  // Newest first; before and beforeId are the postedAt and id of the last item shown, null for the first page.
+  listItems(filter: ItemFilter, before: number | null, limit: number, beforeId: number | null): Item[];
   listApps(): AppSetting[];
   setRecord(pkg: string, record: boolean, deleteSaved: boolean): void;
   setKeep(pkg: string, days: number | null): void;

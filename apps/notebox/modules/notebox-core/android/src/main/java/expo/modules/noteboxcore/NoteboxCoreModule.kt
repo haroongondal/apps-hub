@@ -86,8 +86,8 @@ class NoteboxCoreModule : Module() {
       store.home(startOfDay, System.currentTimeMillis())
     }
 
-    Function("listItems") { filter: Map<String, Any?>, before: Long?, limit: Int ->
-      store().list(filter, before, limit, System.currentTimeMillis())
+    Function("listItems") { filter: Map<String, Any?>, before: Long?, limit: Int, beforeId: Long? ->
+      store().list(filter, before, limit, System.currentTimeMillis(), beforeId)
     }
 
     Function("listApps") { ->

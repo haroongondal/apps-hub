@@ -107,13 +107,34 @@ most likely to be second-guessed:
   Ruling: Tasks 2 and 3 run one after the other (a red test file breaks the other agent's Gradle
   compile); Task 7 (TS only) runs alongside the Kotlin chain.
 
+- 2026-11-13 (session 3): coord claim on the worktree needs `CLAUDE_CODE_SESSION_ID` set by hand
+  (harness does not export it; any unique string works, none held the folder). The batched review of
+  the risky commits was finished by reading the code myself (opus and sonnet reviewers had timed out):
+  OTP detector, ingest, listener, store key paths and tombstones, no Important findings. Task 9 step 1
+  gates run from the repo root: `pnpm test` exit 0 (notebox 16/16), `pnpm typecheck` exit 0, Gradle
+  `:notebox-core:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL. `expo-doctor` run from
+  `apps/notebox` (Notebox has no doctor script, like Strongroom and Deputy): 16/18, the two failures
+  are the usual prebuild-app warnings (gitignored `modules/*/android/build`, app.json fields with a
+  committed `android/`); module sources are tracked (27 files).
+
+  Final reviewers on `226a947..HEAD`: invariant-reviewer "no findings" (merged release manifest
+  re-checked by hand: no INTERNET, no QUERY_ALL_PACKAGES, allowBackup false); code-reviewer "approve
+  with comments", fixed: list paging skipped items sharing a `posted_at` (now pages on time and id,
+  `listItems(filter, before, limit, beforeId)`), and `raw.fill(0)` on the SQLCipher key array removed
+  because the connection config re-reads it. Gates re-run green after the fixes.
+
 ## Current state and next step
 
-State: Tasks 1-8 complete and committed (last: 67013db screens). Kotlin: 45 JVM tests, Gradle gate
-green; TS: 16 tests, typecheck clean. Batched review of the risky commits (OTP, ingest, encrypted
-store, listener) is running or its findings are being fixed. Task 9 not started. See `progress.md`
-for the live status and the deferred minors. SQL is unproven on a JVM (no SQLCipher): the device
-check in Task 9 step 3 is the proof.
+State: Tasks 1-8 complete, Task 9 step 1 (gates and final reviewers) complete and fixes committed.
+Kotlin 45 JVM tests, Gradle gate green; TS 16 tests, typecheck clean. Release (Task 9 step 2) NOT
+done. SQL is unproven on a JVM (no SQLCipher): the device check in Task 9 step 3 is the proof.
+Deferred minors (progress.md): no `PRAGMA secure_delete`; expired OTP rows are purged only on the next
+notification or when Home opens (hidden from every read meanwhile; a scheduled purge would make the 5
+minutes strict); `settingFor` stores the package name as label for a never-seen app.
+
+Next step: ask the owner for the go to release (Task 9 step 2: merge with `[skip ci]`, then
+`pnpm release notebox` locally). Then the phone check (step 3, claim `device:<serial>`, install from
+the Store only), step 4 handoff update, step 5 commit `Notebox stage 1: handoff`.
 
 Next step:
 1. Work only in `/Users/outsentia/Documents/apps-hub-wt/notebox` (branch `notebox/stage-1`).
