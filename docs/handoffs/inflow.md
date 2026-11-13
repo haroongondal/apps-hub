@@ -1,6 +1,6 @@
 # Inflow handoff (formerly Notebox)
 
-## Resume prompt (2026-11-13, stage 2 built, review fix wave pending)
+## Resume prompt (2026-11-13, stage 2 fixed and re-reviewed, release go pending)
 
 ```
 Continue the Inflow work (formerly Notebox), resume prompt dated 2026-11-13. Work only in the
@@ -12,37 +12,25 @@ the merge and with the owner's OK). Claim the worktree folder with coord before 
 it when you stop.
 
 1. Read docs/handoffs/inflow.md completely first (especially "Current state and next step"),
-   then progress.md (stage 2 ledger, untracked: conflict scan, rulings R1-R12, both review
-   reports), then fix-1-brief.md (untracked: findings F1-F10 to fix), then the design
-   docs/superpowers/specs/2026-11-13-inflow-design.md and the stage 2 plan
-   docs/superpowers/plans/2026-11-13-inflow-stage-2.md. Trust the decisions, rulings and
-   verified facts in them; do not re-ask the owner what they settled, and do not re-run the
-   reviews: their findings are in progress.md and fix-1-brief.md.
-2. Next step: run the fix wave for F1-F10 (fix-1-brief.md) with one fix agent, following
-   cd-engineering-tools:parallel-agents-coord (never superpowers:subagent-driven-development).
-   Four red tests from the stopped fix agent are uncommitted in LedgerTest.kt and
-   SmsIngestTest.kt (bankPatternIsNeverOtp, claimedNotificationTwinCountsAsSmsChannel,
-   ownerNameChangedReevaluatesPastTransactions, ownerNameChangeLeavesPairedAndHandSetAlone):
-   tell the fix agent to check them against the brief and keep or rewrite them. The fix
-   boundary for auditing is c793110 (250d62a after it is a docs-only commit). After the fix:
-   gates (Gradle :inflow-core:testDebugUnitTest :app:assembleDebug, pnpm test, pnpm
-   typecheck), one scoped re-review on the most capable model over the fix commits
-   (it touches ledger, ingest and SQL), then update this handoff and commit
-   "Inflow stage 2: handoff".
-3. Then ask the owner for the release go and how: stage 1 and 2 together (merge
+   then progress.md (stage 2 ledger, untracked: conflict scan, rulings R1-R12, reviews, fix
+   wave and re-review results). Design: docs/superpowers/specs/2026-11-13-inflow-design.md;
+   stage 2 plan: docs/superpowers/plans/2026-11-13-inflow-stage-2.md. Trust the decisions,
+   rulings and verified facts in them; do not re-ask the owner what they settled, and do not
+   re-run the reviews or the fix wave: all of F1-F10 are fixed, gated and re-reviewed.
+2. Next step: ask the owner for the release go and how: stage 1 and 2 together (merge
    inflow/stage-2, which contains stage 1) or stage 1 first. Never merge, release or install
    without that go. Process: push, PR, squash-merge with [skip ci], then pnpm release inflow
    locally from a clean checkout of merged main. Install only from the Store; never
    adb-install on the owner's phone; claim device:<ro.serialno> with coord first. Run both
-   phone checks (stage 1 plan Task 9 step 3; stage 2 plan "Controller: close") and record the
-   actual observations, including whether "Allow restricted settings" was needed for
-   notification access and for SMS, and whether one bank SMS gives exactly one item and one
-   transaction after both the live trigger and Home's sync. No Claude attribution lines in
-   commits or PRs.
-4. Before planning stage 3 (Gmail) or stage 4 (AI): ask the owner the design's open question
+   phone checks (stage 1 plan Task 9 step 3; stage 2 plan "Controller: close", plus the
+   extra checks under "Current state and next step") and record the actual observations,
+   including whether "Allow restricted settings" was needed for notification access and for
+   SMS, and whether one bank SMS gives exactly one item and one transaction after both the
+   live trigger and Home's sync. No Claude attribution lines in commits or PRs.
+3. Before planning stage 3 (Gmail) or stage 4 (AI): ask the owner the design's open question
    (do AI-only transactions count straight away or wait in "to check"). Stage 3 needs the
    "mark sender as bank" switch deferred by ruling R2.
-5. Keep this handoff current as milestones land; at ~85% context stop, rewrite this prompt
+4. Keep this handoff current as milestones land; at ~85% context stop, rewrite this prompt
    with the date and print it for a new chat.
 ```
 
@@ -177,14 +165,30 @@ most likely to be second-guessed:
   250d62a updated AGENTS.md's Inflow entry. The fix agent was stopped by a session restart
   after writing four red tests (uncommitted); no fix code landed.
 
+  2026-11-13 (session 6): fix wave 1, one sonnet fix agent: 496f08e (Kotlin F1-F7, kept the four
+  red tests; three were red without the fix, ownerNameChangeLeavesPairedAndHandSetAlone is a
+  guard) and 9372f96 (TS F8-F10). F2 design: `txn_sources.channel` holds a comma list
+  ("SMS_NOTIFICATION,SMS"), appended with a whole-token `instr` guard; no schema change. F6: two
+  importer passes (`_id <= start AND date > lastSmsDate`, then `_id > lastSmsId`), meta
+  `lastSmsDate`, 100-row batches. Controller re-ran: Kotlin 88 tests 0 failures (--rerun-tasks),
+  assembleDebug green, pnpm test 0, pnpm typecheck 0, each commit only its files. Scoped opus
+  re-review over e7412d2..9372f96: approve, F1-F10 all ADDRESSED, no Important. It ran SCHEMA_V1
+  then the v2 rebuild in desktop sqlite3 3.50.6 on a v1 db with rows (ids kept, five indexes back,
+  no reuse after) and the F2 UPDATE twice (idempotent). Its conditional Minor: a db from a pre-fix
+  stage-2 build would re-read the whole inbox once and could double count purged SMS; no such
+  build was ever installed, so no change (wipe such an install if one turns up). Nit left:
+  `setOwnerName` re-labels on the JS thread (sync Function); fine at current sizes.
+
 ## Current state and next step
 
-State: stage 1 built and reviewed (`inflow/stage-1`, not released). Stage 2 built on
-`inflow/stage-2` (HEAD 250d62a) and reviewed; review findings F1-F10 NOT fixed yet
-(`fix-1-brief.md`, untracked). Four red tests for F1, F2 and F5 are uncommitted in
-`LedgerTest.kt` and `SmsIngestTest.kt`. All SQL (both stages), the SMS permission grant under a
-Store install and every screen are unproven until the phone check. The phone was not connected
-this session.
+State: stage 1 built and reviewed (`inflow/stage-1`, not released). Stage 2 built, reviewed,
+fixed (F1-F10) and re-reviewed on `inflow/stage-2`; all gates green. Nothing pushed, merged,
+released or installed. Unproven until the phone check: all SQL under SQLCipher (both stages,
+including the v2 rebuild), the SMS provider queries, the SMS permission grant under a Store
+install, and every screen.
 
-Next step: the fix wave (resume prompt, step 2), then the release question to the owner
-(step 3).
+Extra phone checks from the re-review: a new SMS shows up within ~30 s with the app closed
+(the receiver's delayed syncs need the process alive; the bound notification listener should keep
+it alive); the first open after install imports the inbox once (count close to the Messages app).
+
+Next step: ask the owner for the release go (resume prompt, step 2).
