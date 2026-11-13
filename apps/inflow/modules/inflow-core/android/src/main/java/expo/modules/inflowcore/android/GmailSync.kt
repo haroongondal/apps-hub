@@ -74,6 +74,7 @@ object GmailSync {
     if (address == null || password == null) return 0
     if (!running.compareAndSet(false, true)) return 0
     var imported = 0
+    var signedOut = false
     try {
       val ingest = StoreHolder.ingest(context, store) { InflowListener.schedulePurge(context, it) }
       var failed = false
@@ -103,12 +104,15 @@ object GmailSync {
       }
     } catch (e: SignedOut) {
       // Disconnected mid-run.
+      signedOut = true
     } catch (e: Exception) {
       Log.w(TAG, "sync failed: ${e.javaClass.simpleName}")
       store.inTransaction { if (signedIn(store, address)) store.setMeta(ERROR, GmailPolicy.errorCopy(e)) }
     } finally {
       running.set(false)
     }
+    // A new account that connected during this run was refused by the running flag: sync it now (no-op when signed out).
+    if (signedOut) schedule(context, 0)
     return imported
   }
 

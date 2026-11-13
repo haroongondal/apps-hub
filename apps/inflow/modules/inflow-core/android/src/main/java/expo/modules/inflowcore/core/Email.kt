@@ -55,10 +55,12 @@ object Email {
 
   /**
    * The IMAP FROM search is a substring match, so a lookalike domain would pass it. An address query (has '@') must equal the
-   * sender's address; a name query (R13) matches a substring of the name or the address. R20: no DKIM/DMARC gate.
+   * sender's address; "@domain" matches that exact domain only; a name query (R13) matches a substring of the name or the
+   * address. R20: no DKIM/DMARC gate.
    */
   fun fromMatches(e: RawEmail, query: String): Boolean {
     val q = query.trim()
+    if (q.startsWith("@")) return e.fromAddress.endsWith(q, ignoreCase = true)
     if ('@' in q) return e.fromAddress.equals(q, ignoreCase = true)
     return e.fromName.orEmpty().contains(q, ignoreCase = true) || e.fromAddress.contains(q, ignoreCase = true)
   }

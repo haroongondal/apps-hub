@@ -137,7 +137,7 @@ export function GmailSettings() {
       </Group>
       <Field
         label="Add a sender"
-        hint="An email address or a name, as it appears in the From line."
+        hint="An email address, @ and a domain (all mail from it), or a name as it appears in the From line."
         value={sender}
         onChangeText={setSender}
         onSubmitEditing={addSender}

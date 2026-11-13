@@ -115,6 +115,14 @@ JVBERi0xLjQK
     assertFalse(Email.fromMatches(from("x@evil.example", "\"admin.ebanking@ubl.com.pk\""), q))
   }
 
+  @Test fun aDomainQueryMatchesTheWholeDomainOnly() {
+    val q = "@bankalfalah.com"
+    assertTrue(Email.fromMatches(from("email.notification@bankalfalah.com"), q))
+    assertTrue(Email.fromMatches(from("Alerts@BankAlfalah.com"), " $q "))
+    assertFalse(Email.fromMatches(from("x@evil-bankalfalah.com"), q))
+    assertFalse(Email.fromMatches(from("x@mail.bankalfalah.com"), q))
+  }
+
   @Test fun aNameQueryMatchesNameOrAddress() {
     assertTrue(Email.fromMatches(from("a@b.example", "Bank Alfalah"), "alfalah"))
     assertTrue(Email.fromMatches(from("alfalah@b.example"), "Alfalah"))

@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private const val CAPTURED_EVENT = "onCaptured"
+private val ADDRESS_QUERY = Regex("[^@\\s]*@[^@\\s.]+\\.[^@\\s]+")
 
 class InflowCoreModule : Module() {
   private val context: Context
@@ -207,7 +208,8 @@ class InflowCoreModule : Module() {
     }
 
     Function("addGmailSender") { query: String ->
-      query.trim().lowercase().takeIf { it.isNotEmpty() }?.let(store()::addGmailSender)
+      // A query with '@' must be "@domain.tld" or "local@domain.tld"; anything else could never match and would eat the cursor.
+      query.trim().lowercase().takeIf { it.isNotEmpty() && ('@' !in it || ADDRESS_QUERY.matches(it)) }?.let(store()::addGmailSender)
     }
 
     Function("removeGmailSender") { query: String ->
