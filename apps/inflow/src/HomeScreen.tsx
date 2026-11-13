@@ -48,18 +48,30 @@ export function HomeScreen({
     InflowCore.importSms().catch(() => {});
   }, [status.smsGranted]);
 
+  // Only when signed in; Settings shows any error.
+  const syncGmail = useCallback(() => {
+    try {
+      if (InflowCore.gmailStatus().address === null) return;
+    } catch {
+      return;
+    }
+    InflowCore.syncGmail().catch(() => {});
+  }, []);
+
   useEffect(() => {
     load();
     importSms();
+    syncGmail();
     const sub = addCapturedListener(load);
     return () => sub.remove();
-  }, [load, importSms]);
+  }, [load, importSms, syncGmail]);
 
   const pull = () => {
     setRefreshing(true);
     refreshStatus();
     load();
     importSms();
+    syncGmail();
     setRefreshing(false);
   };
 

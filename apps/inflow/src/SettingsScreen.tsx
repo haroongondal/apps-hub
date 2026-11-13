@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Button, Field, Group, Header, Notice, Row, Screen, Segmented, Sheet, Text } from '@apps-hub/ui';
 import InflowCore, { type AppSetting, type SenderName, type Status } from 'inflow-core';
 import { keepLabel } from './format.ts';
+import { GmailSettings } from './GmailSettings.tsx';
 import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
 import { RenameSheet, type RenameTarget } from './RenameSheet.tsx';
 import { setupRowElements, useSetupAction } from './SetupScreen.tsx';
@@ -87,6 +88,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
         returnKeyType="done"
         autoCapitalize="words"
       />
+      <GmailSettings />
       <Group title="Renamed senders">
         {names.length === 0 ? (
           <Row title={<Text tone="muted">No renamed senders yet</Text>} />

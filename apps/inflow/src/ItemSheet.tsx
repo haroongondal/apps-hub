@@ -13,6 +13,11 @@ export function ItemSheet({ item, onClose, onRename, onShowSender }: { item: Ite
           <View style={{ gap: space.sm }}>
             <Text selectable>{item.text}</Text>
           </View>
+          {item.emailText !== null && (
+            <Group title="Full email">
+              <Row title={<Text selectable>{item.emailText}</Text>} />
+            </Group>
+          )}
           <Group>
             <Row title="App" subtitle={item.appLabel} />
             {who !== null ? <Row title="Sender" subtitle={item.displayName !== null && item.sender !== null ? `${item.displayName} (${item.sender})` : who} /> : null}
