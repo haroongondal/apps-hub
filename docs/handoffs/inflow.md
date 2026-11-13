@@ -1,25 +1,48 @@
 # Inflow handoff (formerly Notebox)
 
-## Resume prompt (2026-11-13, stage 2 in progress)
+## Resume prompt (2026-11-13, stage 2 built, review fix wave pending)
 
 ```
-Continue the Inflow work (formerly Notebox). Work only in the worktree
-/Users/outsentia/Documents/apps-hub-wt/inflow (branch inflow/stage-2), never in the main
-checkout (/Users/outsentia/Documents/apps-hub, branch model-host, unrelated uncommitted work;
-its untracked docs/handoffs/notebox.md and design copy are stale leftovers). Claim the worktree
-folder with coord before you start.
+Continue the Inflow work (formerly Notebox), resume prompt dated 2026-11-13. Work only in the
+worktree /Users/outsentia/Documents/apps-hub-wt/inflow (branch inflow/stage-2), never in the main
+checkout /Users/outsentia/Documents/apps-hub (branch model-host, unrelated uncommitted work; its
+untracked docs/handoffs/notebox.md and Notebox design copy are stale leftovers, delete only after
+the merge and with the owner's OK). Claim the worktree folder with coord before you start
+(~/.claude/plugins/cache/claude-agent-workflow/coord/1.0.0/bin/coord claim <folder>) and release
+it when you stop.
 
-1. Read docs/handoffs/inflow.md completely first, then progress.md (stage 2 ledger, untracked),
-   then the design docs/superpowers/specs/2026-11-13-inflow-design.md and the stage 2 plan
+1. Read docs/handoffs/inflow.md completely first (especially "Current state and next step"),
+   then progress.md (stage 2 ledger, untracked: conflict scan, rulings R1-R12, both review
+   reports), then fix-1-brief.md (untracked: findings F1-F10 to fix), then the design
+   docs/superpowers/specs/2026-11-13-inflow-design.md and the stage 2 plan
    docs/superpowers/plans/2026-11-13-inflow-stage-2.md. Trust the decisions, rulings and
-   verified facts in them; do not re-ask the owner what they settled.
-2. Execute with cd-engineering-tools:parallel-agents-coord (never
-   superpowers:subagent-driven-development). Tasks with a "complete" line in progress.md are
-   done; continue from "Current state and next step" below.
-3. Never merge, release or install without the owner's go. Install only from the Store; never
-   adb-install on the owner's phone; claim device:<serial> with coord first. No Claude
-   attribution lines in commits or PRs.
-4. Keep this handoff current as milestones land; at ~85% context stop, rewrite this prompt
+   verified facts in them; do not re-ask the owner what they settled, and do not re-run the
+   reviews: their findings are in progress.md and fix-1-brief.md.
+2. Next step: run the fix wave for F1-F10 (fix-1-brief.md) with one fix agent, following
+   cd-engineering-tools:parallel-agents-coord (never superpowers:subagent-driven-development).
+   Four red tests from the stopped fix agent are uncommitted in LedgerTest.kt and
+   SmsIngestTest.kt (bankPatternIsNeverOtp, claimedNotificationTwinCountsAsSmsChannel,
+   ownerNameChangedReevaluatesPastTransactions, ownerNameChangeLeavesPairedAndHandSetAlone):
+   tell the fix agent to check them against the brief and keep or rewrite them. The fix
+   boundary for auditing is c793110 (250d62a after it is a docs-only commit). After the fix:
+   gates (Gradle :inflow-core:testDebugUnitTest :app:assembleDebug, pnpm test, pnpm
+   typecheck), one scoped re-review on the most capable model over the fix commits
+   (it touches ledger, ingest and SQL), then update this handoff and commit
+   "Inflow stage 2: handoff".
+3. Then ask the owner for the release go and how: stage 1 and 2 together (merge
+   inflow/stage-2, which contains stage 1) or stage 1 first. Never merge, release or install
+   without that go. Process: push, PR, squash-merge with [skip ci], then pnpm release inflow
+   locally from a clean checkout of merged main. Install only from the Store; never
+   adb-install on the owner's phone; claim device:<ro.serialno> with coord first. Run both
+   phone checks (stage 1 plan Task 9 step 3; stage 2 plan "Controller: close") and record the
+   actual observations, including whether "Allow restricted settings" was needed for
+   notification access and for SMS, and whether one bank SMS gives exactly one item and one
+   transaction after both the live trigger and Home's sync. No Claude attribution lines in
+   commits or PRs.
+4. Before planning stage 3 (Gmail) or stage 4 (AI): ask the owner the design's open question
+   (do AI-only transactions count straight away or wait in "to check"). Stage 3 needs the
+   "mark sender as bank" switch deferred by ruling R2.
+5. Keep this handoff current as milestones land; at ~85% context stop, rewrite this prompt
    with the date and print it for a new chat.
 ```
 
@@ -140,16 +163,28 @@ most likely to be second-guessed:
   `com.haroon.inflow` / "Inflow". The baseline experiment keeps its old names
   (`apps-hub-wt/notebox-baseline`, branch `notebox/baseline-single`).
 
+  2026-11-13 (session 5, continued): stage 2 plan committed (1aecca6). Agent T: 787c43c (contract,
+  money helpers, SMS setup row), f7298f4 (Money tab, Home money block, owner name, TxnSheet). Agent
+  K: 45361c2 (bank parser), 33e84a3 (ledger, dedup, own transfers), 5ce6426 (SMS ingest, merge,
+  schema v2), c793110 (importer, receiver, SqlLedgerStore, module API). Controller-checked: pnpm
+  test 0, pnpm typecheck 0, Kotlin 84/84 (--rerun-tasks), assembleDebug green, 21 module functions
+  match the TS contract, each commit only its agent's files. Final reviews: invariant-reviewer
+  clean on manifest (no INTERNET, no QUERY_ALL_PACKAGES), receiver (BROADCAST_SMS), logs,
+  backup, deps and rename wiring, one Important (bank SMS can be classed OTP and purged);
+  code-reviewer (opus) four Important + two Minor + three nits. All are F1-F10 in
+  fix-1-brief.md; rulings R10-R12 in progress.md (receiver only triggers inbox syncs; items
+  rebuilt with AUTOINCREMENT in the v2 step; one fix agent then a scoped opus re-review).
+  250d62a updated AGENTS.md's Inflow entry. The fix agent was stopped by a session restart
+  after writing four red tests (uncommitted); no fix code landed.
+
 ## Current state and next step
 
-State: stage 1 built and reviewed on `inflow/stage-1` (not released; the owner chose to build stage 2
-first). Stage 2 plan committed (1aecca6) on `inflow/stage-2`. Agent K (Kotlin K1-K4) and agent T
-(TS T1-T2) were dispatched in parallel from 1aecca6; check `git log 1aecca6..` and progress.md for
-what landed. READ_SMS under the Store installer: AOSP evidence says allowed by default (plan,
-"Verified before planning"); not yet seen on the phone (it wasn't connected).
+State: stage 1 built and reviewed (`inflow/stage-1`, not released). Stage 2 built on
+`inflow/stage-2` (HEAD 250d62a) and reviewed; review findings F1-F10 NOT fixed yet
+(`fix-1-brief.md`, untracked). Four red tests for F1, F2 and F5 are uncommitted in
+`LedgerTest.kt` and `SmsIngestTest.kt`. All SQL (both stages), the SMS permission grant under a
+Store install and every screen are unproven until the phone check. The phone was not connected
+this session.
 
-Next step: when K and T have committed, run the controller close in the plan (gates, one
-most-capable whole-branch review plus invariant-reviewer, one fix agent, handoff commit). Then ask
-the owner for the release go (stage 1 + 2 together, or stage 1 first) and run both phone checks.
-Before planning stage 4, ask the design's open question (AI-only transactions: count at once or
-wait in "to check").
+Next step: the fix wave (resume prompt, step 2), then the release question to the owner
+(step 3).
