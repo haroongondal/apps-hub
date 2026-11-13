@@ -1,7 +1,7 @@
 # Inflow: design
 
-Status: the owner asked to start implementing on 2026-11-13. One question is still
-open (see "Open question" at the end).
+Status: the owner asked to start implementing on 2026-11-13. The one open question
+was settled the same day (see "Settled question" at the end).
 "Inflow" (`com.haroon.inflow`, Store release id `inflow`, brand `inflow`) is the
 owner's pick (2026-11-13), renamed from the working name "Notebox" before stage 1
 shipped, because the owner plans a separate note-taking app.
@@ -273,11 +273,9 @@ private Store. Nothing is shared or synced.
 - Test strategy: Kotlin JVM tests for pure logic (parsers, OTP detection,
   de-duplication, rule matching, batching) as in Deputy and Strongroom.
 
-## Open question (owner hasn't answered; affects stage 4 only)
+## Settled question (was open; affects stage 4)
 
-Do transactions found only by the AI (no bank pattern matched: wallet alerts,
-card-app pushes, a "PKR 500 cashback" promotion misread as money in) count in
-the Money totals straight away, or wait in a "to check" list until the owner
-confirms them? Until the owner answers, the default is **"to check"**: they are
-shown in the Money tab, marked "read by AI", and left out of totals until
-confirmed. Ask the owner again before planning stage 4.
+Transactions found only by the AI (no bank pattern matched: wallet alerts,
+card-app pushes, a misread "PKR 500 cashback" promotion) **count in the Money
+totals straight away**, marked "read by AI"; the owner fixes a misread by hand.
+The owner chose this on 2026-11-13 over the "to check" default.

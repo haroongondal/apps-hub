@@ -191,4 +191,13 @@ Extra phone checks from the re-review: a new SMS shows up within ~30 s with the 
 (the receiver's delayed syncs need the process alive; the bound notification listener should keep
 it alive); the first open after install imports the inbox once (count close to the Messages app).
 
-Next step: ask the owner for the release go (resume prompt, step 2).
+Release: asked 2026-11-13, owner said "not yet"; ask again when stage 3 is ready or the owner
+raises it.
+
+Stage 3 (Gmail), started 2026-11-13 on branch `inflow/stage-3` (from `inflow/stage-2`, so it
+holds stages 1 and 2; stage 2 ledger renamed `progress-stage-2.md`). Owner answers: AI-only
+transactions count straight away (design updated); the owner will paste one sample bank email
+per type (numbers changed) for the email patterns. Verified: Jakarta Mail 2.0+ (Eclipse Angus
+Mail) runs on Android as is (min API 19; no SASL on Android, not needed for an app password).
+Next step: write `docs/superpowers/plans/2026-11-13-inflow-stage-3.md` once the samples arrive,
+then execute it with cd-engineering-tools:parallel-agents-coord.
