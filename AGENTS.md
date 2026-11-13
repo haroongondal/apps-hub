@@ -45,11 +45,12 @@ Current apps:
   through the vault server (`tools/vault-api`, Phase 2, not deployed yet). Handoffs:
   `docs/handoffs/strongroom-extension.md`, `docs/handoffs/strongroom-sync.md`.
 - **inflow** (`apps/inflow`, formerly Notebox) — personal notification, SMS and
-  money archive: saves every notification and the SMS inbox into an encrypted
-  on-phone store (SQLCipher), reads bank SMS into a spending ledger, and shows it
-  behind a fingerprint lock. Android only, private Store only (`com.haroon.inflow`;
-  READ_SMS and RECEIVE_SMS, no INTERNET permission until the AI stage). Kotlin owns
-  capture, storage and parsing; RN only renders. Spec:
+  money archive: saves every notification, the SMS inbox and marked Gmail senders'
+  emails (IMAP with an app password) into an encrypted on-phone store (SQLCipher),
+  reads bank SMS and emails into a spending ledger, and shows it behind a fingerprint
+  lock. Android only, private Store only (`com.haroon.inflow`; READ_SMS, RECEIVE_SMS,
+  INTERNET for `imap.gmail.com` only). Kotlin owns capture, storage, parsing and
+  Gmail; RN only renders. Spec:
   `docs/superpowers/specs/2026-11-13-inflow-design.md`; plans:
   `docs/superpowers/plans/2026-11-13-inflow-stage-*.md`; progress:
   `docs/handoffs/inflow.md`.
