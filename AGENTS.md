@@ -44,12 +44,14 @@ Current apps:
   `vault-vectors.json`); fills and saves logins; signs in to sync with the phone
   through the vault server (`tools/vault-api`, Phase 2, not deployed yet). Handoffs:
   `docs/handoffs/strongroom-extension.md`, `docs/handoffs/strongroom-sync.md`.
-- **inflow** (`apps/inflow`) — personal notification archive: saves every
-  notification into an encrypted on-phone store (SQLCipher) and lets the owner
-  browse it behind a fingerprint lock. Android only, private Store only
-  (`com.haroon.inflow`, no INTERNET permission in stage 1). Kotlin owns capture
-  and storage; RN only renders. Spec: `docs/superpowers/specs/2026-11-13-inflow-design.md`;
-  plan: `docs/superpowers/plans/2026-11-13-inflow-stage-1.md`; progress:
+- **inflow** (`apps/inflow`, formerly Notebox) — personal notification, SMS and
+  money archive: saves every notification and the SMS inbox into an encrypted
+  on-phone store (SQLCipher), reads bank SMS into a spending ledger, and shows it
+  behind a fingerprint lock. Android only, private Store only (`com.haroon.inflow`;
+  READ_SMS and RECEIVE_SMS, no INTERNET permission until the AI stage). Kotlin owns
+  capture, storage and parsing; RN only renders. Spec:
+  `docs/superpowers/specs/2026-11-13-inflow-design.md`; plans:
+  `docs/superpowers/plans/2026-11-13-inflow-stage-*.md`; progress:
   `docs/handoffs/inflow.md`.
 
 Not here on purpose: `~/Documents/browser-automation` (stays standalone) and
