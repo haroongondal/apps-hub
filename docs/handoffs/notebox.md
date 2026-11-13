@@ -1,6 +1,10 @@
 # Notebox handoff
 
-## Resume prompt (2026-11-13, stage 1 ready to build)
+## Resume prompt (2026-11-13, stage 1 built and reviewed, waiting for the release go)
+
+Stage 1 is built (Tasks 1-8), gated and reviewed. Read the "Current state and next step" section
+first: the only open step is asking the owner for the go to release (Task 9 step 2), then the phone
+check. The prompt below is the original one; skip its build instructions.
 
 ```
 Continue the Notebox work. Work only in the worktree
