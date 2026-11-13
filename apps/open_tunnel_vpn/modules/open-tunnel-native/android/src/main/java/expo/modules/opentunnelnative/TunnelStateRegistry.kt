@@ -39,6 +39,12 @@ object TunnelStateRegistry {
   var statusMessage: String? = null
     private set
 
+  /** Typed failure code (TS contract `OPEN_TUNNEL_ERROR_CODES`) when the
+   * failure carries one; null otherwise, and the event omits the key. */
+  @Volatile
+  var statusCode: String? = null
+    private set
+
   /**
    * elapsedRealtime anchor of the current connected period; null unless the
    * status is `connected`. Traffic duration derives from this (wall-clock
@@ -48,10 +54,11 @@ object TunnelStateRegistry {
   var connectedAtMs: Long? = null
     private set
 
-  fun setStatus(state: String, message: String? = null) {
+  fun setStatus(state: String, message: String? = null, code: String? = null) {
     TunnelStatus.requireKnown(state)
     statusState = state
     statusMessage = message
+    statusCode = code
     connectedAtMs =
       if (state == TunnelStatus.CONNECTED) SystemClock.elapsedRealtime() else null
   }
