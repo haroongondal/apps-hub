@@ -9,6 +9,15 @@ export interface Status {
   smsGranted: boolean;
 }
 
+export type AiKind = 'money' | 'message' | 'delivery' | 'bill' | 'reminder' | 'promotion' | 'account_alert' | 'other';
+
+export interface AiInfo {
+  kind: AiKind;
+  summary: string;
+  importance: 'high' | 'normal' | 'low';
+  tags: string[];
+}
+
 export interface Item {
   id: number;
   pkg: string;
@@ -24,6 +33,16 @@ export interface Item {
   deletedBySender: boolean;
   // The full email when it merged into this notification; text stays as captured.
   emailText: string | null;
+  // What the AI made of it; null until it has been read. The original text is never changed.
+  ai: AiInfo | null;
+}
+
+export interface Todo {
+  id: number;
+  itemId: number;
+  text: string;
+  dueAt: number | null;
+  done: boolean;
 }
 
 export type ItemFilter =
@@ -53,6 +72,10 @@ export interface AppRow {
 export interface HomeSummary {
   conversations: ConversationRow[];
   apps: AppRow[];
+  // High importance, last 7 days, newest first, at most 5.
+  important: Item[];
+  // Not done, due from the start of today (or undated, from the last 3 days), soonest first, at most 5.
+  comingUp: Todo[];
 }
 
 export interface AppSetting {
@@ -80,6 +103,11 @@ export interface Txn {
   own: boolean;
   paired: boolean;
   itemIds: number[];
+  category: string | null;
+  // A clean name for the other side, set by the AI.
+  label: string | null;
+  // Found only by the AI (no bank pattern matched); counted in the totals.
+  byAi: boolean;
 }
 
 export interface AccountTotal {
@@ -102,6 +130,35 @@ export interface MerchantTotal {
 export interface MoneySummary {
   accounts: AccountTotal[];
   merchants: MerchantTotal[];
+  categories: CategoryTotal[];
+}
+
+// Money out only; own transfers are left out.
+export interface CategoryTotal {
+  category: string;
+  currency: string;
+  total: number;
+  count: number;
+}
+
+export interface AiStatus {
+  baseUrl: string;
+  model: string;
+  knownModel: string | null;
+  // Only the last four characters of each key ever reach JS.
+  keys: { id: number; ending: string }[];
+  capUsd: number | null; // null = no limit
+  spentTodayUsd: number;
+  queued: number;
+  lastRunAt: number | null;
+  error: string | null;
+  on: boolean;
+}
+
+export interface KnownModelInfo {
+  name: string;
+  baseUrl: string;
+  model: string;
 }
 
 export interface GmailStatus {
@@ -150,6 +207,19 @@ export interface InflowCoreApi {
   removeGmailSender(query: string): void;
   // Sends onCaptured when it imported anything.
   syncGmail(): Promise<{ imported: number }>;
+  aiStatus(): AiStatus;
+  knownModels(): KnownModelInfo[];
+  // Throws with the validation copy for a non-https address or a bad price. Null prices = the built-in ones.
+  setAiModel(baseUrl: string, model: string, prices: { inputPerM: number; cachedPerM: number; outputPerM: number } | null): void;
+  addAiKey(apiKey: string): string | null;
+  removeAiKey(id: number): void;
+  testAiKey(id: number): Promise<string | null>;
+  setAiCap(usd: number | null): void;
+  sendAiNow(): Promise<{ sent: number; saved: number; stoppedByCap: boolean; error: string | null }>;
+  setAiBlocked(blockKey: string, blocked: boolean): void;
+  listAiBlocks(): string[];
+  setTodoDone(id: number, done: boolean): void;
+  ask(question: string): Promise<{ answer: string | null; error: string | null; from: number; to: number; items: number; txns: number }>;
   addListener(event: 'onCaptured', listener: (e: { count: number }) => void): { remove(): void };
 }
 
