@@ -77,7 +77,7 @@ class AiRun(
       sent += batch.size
       saved += results.size
     }
-    refused?.let(store::failed)
+    if (sent > 0) refused?.let(store::failed)   // only a run where another batch worked proves the setup is fine and this batch is the bad one
     return AiRunResult(sent, saved, false, refusal)
   }
 

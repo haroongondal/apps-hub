@@ -334,6 +334,16 @@ class AiRunTest {
     assertTrue(store.queue.values.all { it.second == 0 })
   }
 
+  @Test fun aLoneRefusedBatchKeepsTheQueueWhenNothingElseSucceeded() {
+    keyAdded()
+    (1..5).forEach { save("note $it") }   // one request
+    httpCode = { 404 }
+    assertNotNull(runner().run().error)
+    assertNotNull(runner().run().error)
+    assertEquals(5, store.queue.size)
+    assertTrue(store.queue.values.all { it.second == 0 })
+  }
+
   @Test fun anItemBlockedDuringARunIsNeverSentAfterItIsUnblocked() {
     keyAdded()
     save("secret plan", pkg = "com.blocked.app")
