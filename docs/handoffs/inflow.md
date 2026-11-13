@@ -1,35 +1,31 @@
 # Inflow handoff (formerly Notebox)
 
-## Resume prompt (2026-11-13, stage 2 fixed and re-reviewed, release go pending)
+## Resume prompt (2026-11-13, stage 3 built, reviewed and fixed; release go pending)
 
 ```
 Continue the Inflow work (formerly Notebox), resume prompt dated 2026-11-13. Work only in the
-worktree /Users/outsentia/Documents/apps-hub-wt/inflow (branch inflow/stage-2), never in the main
-checkout /Users/outsentia/Documents/apps-hub (branch model-host, unrelated uncommitted work; its
-untracked docs/handoffs/notebox.md and Notebox design copy are stale leftovers, delete only after
-the merge and with the owner's OK). Claim the worktree folder with coord before you start
-(~/.claude/plugins/cache/claude-agent-workflow/coord/1.0.0/bin/coord claim <folder>) and release
-it when you stop.
+worktree /Users/outsentia/Documents/apps-hub-wt/inflow (branch inflow/stage-3, which holds stages
+1, 2 and 3), never in the main checkout /Users/outsentia/Documents/apps-hub (branch model-host,
+unrelated uncommitted work; its untracked docs/handoffs/notebox.md and Notebox design copy are
+stale leftovers, delete only after the merge and with the owner's OK). Claim the worktree folder
+with coord before you start (~/.claude/plugins/cache/claude-agent-workflow/coord/1.0.0/bin/coord
+claim <folder>) and release it when you stop.
 
 1. Read docs/handoffs/inflow.md completely first (especially "Current state and next step"),
-   then progress.md (stage 2 ledger, untracked: conflict scan, rulings R1-R12, reviews, fix
-   wave and re-review results). Design: docs/superpowers/specs/2026-11-13-inflow-design.md;
-   stage 2 plan: docs/superpowers/plans/2026-11-13-inflow-stage-2.md. Trust the decisions,
-   rulings and verified facts in them; do not re-ask the owner what they settled, and do not
-   re-run the reviews or the fix wave: all of F1-F10 are fixed, gated and re-reviewed.
-2. Next step: ask the owner for the release go and how: stage 1 and 2 together (merge
-   inflow/stage-2, which contains stage 1) or stage 1 first. Never merge, release or install
-   without that go. Process: push, PR, squash-merge with [skip ci], then pnpm release inflow
-   locally from a clean checkout of merged main. Install only from the Store; never
-   adb-install on the owner's phone; claim device:<ro.serialno> with coord first. Run both
-   phone checks (stage 1 plan Task 9 step 3; stage 2 plan "Controller: close", plus the
-   extra checks under "Current state and next step") and record the actual observations,
-   including whether "Allow restricted settings" was needed for notification access and for
-   SMS, and whether one bank SMS gives exactly one item and one transaction after both the
-   live trigger and Home's sync. No Claude attribution lines in commits or PRs.
-3. Before planning stage 3 (Gmail) or stage 4 (AI): ask the owner the design's open question
-   (do AI-only transactions count straight away or wait in "to check"). Stage 3 needs the
-   "mark sender as bank" switch deferred by ruling R2.
+   then progress.md (stage 3 ledger, untracked: rulings R13-R22, reviews, fix wave, re-review;
+   progress-stage-2.md and progress-stage-1.md hold the earlier stages). Design:
+   docs/superpowers/specs/2026-11-13-inflow-design.md; plans: docs/superpowers/plans/
+   2026-11-13-inflow-stage-{1,2,3}.md. Trust the decisions, rulings and verified facts; do not
+   re-ask the owner what they settled; do not re-run reviews or fix waves.
+2. Next step: ask the owner for the release go (they said "not yet" for stages 1-2) and whether
+   to fix the two parked Minors (R22) first. Never merge, release or install without that go.
+   Process: push, PR, squash-merge with [skip ci], then pnpm release inflow locally from a clean
+   checkout of merged main. Install only from the Store; never adb-install on the owner's phone;
+   claim device:<ro.serialno> with coord first. Run the phone checks of stages 1, 2 and 3 (stage 1
+   plan Task 9 step 3; stage 2 and stage 3 plans "Controller: close"; extra checks under "Current
+   state and next step") and record actual observations. No Claude attribution lines.
+3. Stage 4 (AI) is next after the phone checks: AI-only transactions count straight away
+   (owner, 2026-11-13). Unparsed Alfalah non-POS emails are saved for it (R18, G2).
 4. Keep this handoff current as milestones land; at ~85% context stop, rewrite this prompt
    with the date and print it for a new chat.
 ```
@@ -181,27 +177,27 @@ most likely to be second-guessed:
 
 ## Current state and next step
 
-State: stage 1 built and reviewed (`inflow/stage-1`, not released). Stage 2 built, reviewed,
-fixed (F1-F10) and re-reviewed on `inflow/stage-2`; all gates green. Nothing pushed, merged,
-released or installed. Unproven until the phone check: all SQL under SQLCipher (both stages,
-including the v2 rebuild), the SMS provider queries, the SMS permission grant under a Store
-install, and every screen.
+State (2026-11-13): stages 1, 2 and 3 built, reviewed and fixed on `inflow/stage-3` (stage 3 HEAD
+5b93dd9 plus docs). Nothing pushed, merged, released or installed; the owner said "not yet" to
+releasing stages 1-2 and has not been asked about stage 3. All gates green at 5b93dd9: Kotlin 136
+tests 0 failures, assembleDebug, pnpm test, pnpm typecheck (inflow 31/31).
 
-Extra phone checks from the re-review: a new SMS shows up within ~30 s with the app closed
-(the receiver's delayed syncs need the process alive; the bound notification listener should keep
-it alive); the first open after install imports the inbox once (count close to the Messages app).
+Stage 3 facts: the release INTERNET strip overlay is deleted; INTERNET is in the module manifest
+and only `imap.gmail.com:993` (TLS, server identity checked) is contacted; a test
+(`apps/inflow/tools/__tests__/gmail-network.test.mjs`) pins that. Mail library Angus Mail 2.0.3
+(+ jakarta.mail-api 2.1.3, angus-activation 2.0.2, jakarta.activation-api 2.1.3; EPL-2.0 / GPL-2.0
++CE / EDL-1.0); their LICENSE.md/NOTICE.md are merged into the APK (R19). Senders: exact address
+match for queries with '@' (R20; both banks publish DMARC p=reject). Parked Minors (R22): a
+partial '@domain' sender query imports nothing silently; Disconnect+Connect during a running sync
+delays the new account's first sync until the next trigger.
 
-Release: asked 2026-11-13, owner said "not yet"; ask again when stage 3 is ready or the owner
-raises it.
+Unproven until the phone check: all SQL under SQLCipher (v2 rebuild, v3 columns, email queries,
+tombstones), SMS provider queries and permission grant under a Store install, real IMAP (app
+password sign-in, `\All` folder lookup, FROM search, Angus provider loading on Android), the
+fingerprint prompt not delayed by a Gmail sync, every screen.
 
-Stage 3 (Gmail), started 2026-11-13 on branch `inflow/stage-3` (from `inflow/stage-2`, so it
-holds stages 1 and 2; stage 2 ledger renamed `progress-stage-2.md`). Owner answers: AI-only
-transactions count straight away (design updated); the owner will paste one sample bank email
-per type (numbers changed) for the email patterns. Verified: Jakarta Mail 2.0+ (Eclipse Angus
-Mail) runs on Android as is (min API 19; no SASL on Android, not needed for an app password).
-Samples arrived (UBL Raast out email, Alfalah POS email; verbatim in the plan). Plan committed:
-`docs/superpowers/plans/2026-11-13-inflow-stage-3.md` (056d9a3; rulings R13-R18 inside: senders
-list in Settings seeded with the two bank addresses, password in the SQLCipher meta, All Mail,
-own sync executor, partial UBL account resolution, Alfalah POS only). Ledger `progress.md`
-(untracked) has the conflict scan. Next step: the owner reviews the plan; then dispatch agent K
-(K1-K4) and agent T (T1-T2) in parallel per the plan.
+Extra phone checks: a new SMS appears within ~30 s with the app closed; first open imports the
+inbox once; stage 3 plan "Controller: close" list (connect, history download, email + notification
+= one item, SMS + email = one transaction, wrong password copy, airplane mode copy and recovery).
+
+Next step: resume prompt step 2.
