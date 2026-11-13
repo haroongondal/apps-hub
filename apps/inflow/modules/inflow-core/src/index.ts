@@ -22,6 +22,8 @@ export interface Item {
   text: string;
   postedAt: number;
   deletedBySender: boolean;
+  // The full email when it merged into this notification; text stays as captured.
+  emailText: string | null;
 }
 
 export type ItemFilter =
@@ -102,6 +104,14 @@ export interface MoneySummary {
   merchants: MerchantTotal[];
 }
 
+export interface GmailStatus {
+  address: string | null;
+  lastSyncAt: number | null;
+  error: string | null;
+  // Download emails from these senders (address or name substring, lowercase).
+  senders: string[];
+}
+
 export interface InflowCoreApi {
   getStatus(): Status;
   openNotificationAccess(): void;
@@ -129,6 +139,17 @@ export interface InflowCoreApi {
   getOwnerName(): string | null;
   // Blank or null clears it.
   setOwnerName(name: string | null): void;
+  gmailStatus(): GmailStatus;
+  // Tests the sign-in, then saves it; seeds senders when the list is empty and starts a sync. The password never comes back to JS.
+  connectGmail(address: string, appPassword: string): Promise<{ ok: boolean; message: string | null }>;
+  // Forgets the address and password; keeps senders and saved emails.
+  disconnectGmail(): void;
+  // Trimmed and lowercased; blank is ignored.
+  addGmailSender(query: string): void;
+  // Keeps emails already saved.
+  removeGmailSender(query: string): void;
+  // Sends onCaptured when it imported anything.
+  syncGmail(): Promise<{ imported: number }>;
   addListener(event: 'onCaptured', listener: (e: { count: number }) => void): { remove(): void };
 }
 
