@@ -26,5 +26,7 @@ dependencies {
   implementation("androidx.sqlite:sqlite:2.5.0")
   // Gmail over IMAP. Eclipse Angus Mail (Jakarta Mail 2.1): EPL-2.0 OR GPL-2.0 with Classpath Exception OR BSD-3-Clause, no analytics code.
   implementation("org.eclipse.angus:angus-mail:2.0.3")
+  // JSON element API for the AI request and reply (no compiler plugin). Apache-2.0, Kotlin team, no network or analytics code; Deputy ships the same version.
+  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
   testImplementation("junit:junit:4.13.2")
 }
