@@ -33,6 +33,7 @@ Native gates (Gradle JVM tests, iOS simulator build) are in AGENTS.md under "Ver
 - Node strips types: write erasable TypeScript only (no enums, namespaces or parameter properties) and import with the `.ts` extension (`packages/config/tsconfig.base.json` sets `allowImportingTsExtensions` and `verbatimModuleSyntax`).
 - `pnpm install` blocks dependency build scripts. The allowed ones are in `allowBuilds` in `pnpm-workspace.yaml`; use the `upgrading-dependencies` skill when pnpm refuses an install.
 - Each app's `android/` is a committed Expo prebuild (iOS too, except Store), not regenerated at build time.
+- Several Claude sessions share this checkout and the test phone (the owner and Deputy use the phone too). The `coord` plugin, enabled in `.claude/settings.json`, makes sessions take turns: claim `device:<ro.serialno>` before installing on or driving the phone, and an app's folder before a build-install-test loop.
 
 ## Wiring that spans files
 
