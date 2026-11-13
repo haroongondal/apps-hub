@@ -23,7 +23,7 @@ class AiBatchTest {
   @Test fun splitKeepsRequestsUnderLimit() {
     val items = (1L..130L).map { input(it, "x".repeat(1_000)) }
     val parts = AiBatch.split(items)
-    assertEquals(3, parts.size)
+    assertEquals(listOf(40, 40, 40, 10), parts.map { it.size })   // 130 x 1,000 chars would fit 60 per request by size alone
     assertTrue(parts.all { p -> p.sumOf { it.text.length } <= AiBatch.MAX_REQUEST_CHARS })
     assertEquals(items.map { it.itemId }, parts.flatten().map { it.itemId })
   }
@@ -106,9 +106,15 @@ class AiBatchTest {
     assertEquals(listOf(1L), r.map { it.itemId })
   }
 
-  @Test fun duplicateIdKeepsTheFirstAnswerOnly() {
-    val r = AiBatch.parse(reply(item(1, summary = "First."), item(1, summary = "Second.")), listOf(input(1)), karachi)
-    assertEquals(listOf("First."), r.map { it.summary })
+  @Test fun duplicateIdDropsEveryAnswerForThatItem() {
+    val r = AiBatch.parse(reply(item(1, summary = "First."), item(2, summary = "Other."), item(1, summary = "Second.")), listOf(input(1), input(2)), karachi)
+    assertEquals(listOf("Other."), r.map { it.summary })
+  }
+
+  @Test fun splitCapsEachRequestAtFortyItems() {
+    val parts = AiBatch.split((1L..130L).map { input(it, "short") })
+    assertEquals(listOf(40, 40, 40, 10), parts.map { it.size })
+    assertEquals((1L..130L).toList(), parts.flatten().map { it.itemId })
   }
 
   @Test fun badEnumDropsThatItemOnly() {

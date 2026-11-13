@@ -42,6 +42,7 @@ data class AiResult(
 object AiBatch {
   const val MAX_ITEM_CHARS = 2_000
   const val MAX_REQUEST_CHARS = 60_000
+  const val MAX_ITEMS = 40
   private const val MAX_SUMMARY = 200
   private const val MAX_TODOS = 5
   private const val MAX_TAGS = 5
@@ -56,13 +57,13 @@ object AiBatch {
   /** The local time format the model is asked for and the prompt shows. */
   private val DUE = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
 
-  /** As few requests as fit: item text is cut to MAX_ITEM_CHARS first, and a request carries at most MAX_REQUEST_CHARS of it. Order is kept. */
+  /** As few requests as fit: item text is cut to MAX_ITEM_CHARS first, and a request carries at most MAX_REQUEST_CHARS of it and MAX_ITEMS items. Order is kept. */
   fun split(items: List<AiInput>): List<List<AiInput>> {
     val parts = mutableListOf<MutableList<AiInput>>()
     var size = 0
     for (item in items) {
       val n = item.text.take(MAX_ITEM_CHARS).length
-      if (parts.isEmpty() || size + n > MAX_REQUEST_CHARS) {
+      if (parts.isEmpty() || size + n > MAX_REQUEST_CHARS || parts.last().size >= MAX_ITEMS) {
         parts += mutableListOf<AiInput>()
         size = 0
       }
@@ -120,10 +121,11 @@ Rules:
     if (from < 0 || to <= from) return emptyList()
     val entries = runCatching { (Json.parseToJsonElement(reply.substring(from, to + 1)).jsonObject["items"] as? JsonArray) }.getOrNull() ?: return emptyList()
     val texts = batch.associate { it.itemId to it.text.take(MAX_ITEM_CHARS) }
-    val seen = mutableSetOf<Long>()
+    // An id answered twice is dropped whole: which of the two is the model's own answer cannot be told, so that item is retried.
+    val twice = entries.mapNotNull { (it as? JsonObject)?.long("id") }.groupingBy { it }.eachCount().filterValues { it > 1 }.keys
     return entries.mapNotNull { e ->
       val o = e as? JsonObject ?: return@mapNotNull null
-      val id = o.long("id")?.takeIf { it in texts && seen.add(it) } ?: return@mapNotNull null
+      val id = o.long("id")?.takeIf { it in texts && it !in twice } ?: return@mapNotNull null
       result(id, o, texts.getValue(id), zone)
     }
   }

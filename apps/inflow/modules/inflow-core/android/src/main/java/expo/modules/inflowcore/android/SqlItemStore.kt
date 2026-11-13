@@ -101,8 +101,10 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
   override fun enabledSince(): Long? = meta(AiMeta.SINCE)?.toLongOrNull()
 
   // The send-time filter (also behind queuedCount): the item still exists, is no OTP, was posted after the first key, its app records, and neither app nor sender is blocked.
+  // A row that fails it is deleted first, so an item blocked or left out at send time can never go out later (unblocking does not bring it back).
   override fun queued(limit: Int): List<AiInput> {
     val since = enabledSince() ?: return emptyList()
+    run("DELETE FROM ai_queue WHERE item_id NOT IN (SELECT i.id FROM items i WHERE i.posted_at >= ? AND $NEVER_SEND_FILTER)", since)
     return query(
       "SELECT i.id, i.app_label, COALESCE(n.name, i.sender), i.title, COALESCE(i.email_text, i.text), i.posted_at $QUEUE_FROM ORDER BY q.at, q.item_id LIMIT ?",
       since, limit.toLong(),

@@ -48,6 +48,7 @@ class AiProviderTest {
     val (url, headers, body) = http.calls.single()
     assertEquals("https://api.example.com/v1/chat/completions", url)
     assertEquals("Bearer sk-secret", headers["Authorization"])
+    assertTrue(body.contains("\"max_tokens\":8000"))
     assertTrue(body, body.contains("\"model\":\"m-1\"") && body.contains("\"SYS\"") && body.contains("\"USR\"") && body.contains("\"reasoning_effort\":\"low\""))
     assertFalse(body, body.contains("tools"))
   }

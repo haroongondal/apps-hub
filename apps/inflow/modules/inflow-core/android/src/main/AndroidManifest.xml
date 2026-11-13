@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.READ_SMS" />
   <uses-permission android:name="android.permission.RECEIVE_SMS" />
-  <!-- Gmail over IMAP (imap.gmail.com:993) and nothing else. -->
+  <!-- Gmail over IMAP (imap.gmail.com:993), and https to the AI address the owner sets in Settings; nothing else. -->
   <uses-permission android:name="android.permission.INTERNET" />
   <queries>
     <intent>

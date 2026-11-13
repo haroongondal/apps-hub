@@ -36,6 +36,11 @@ interface LedgerStore {
   fun setCounterpartyIfNull(id: Long, counterparty: String)
   /** A null label keeps the label already there. */
   fun setAiDetails(id: Long, category: String, label: String?)
+  fun sourceCount(txnId: Long): Int
+  /** Removes the transaction and its source rows. */
+  fun deleteTxn(id: Long)
+  /** A pattern source confirmed an AI transaction: it stops being "by AI". */
+  fun clearByAi(id: Long)
 }
 
 const val OTHER_ACCOUNT = "Other account"
@@ -72,12 +77,18 @@ object OwnTransfer {
 
 class Ledger(private val store: LedgerStore, private val ownerName: () -> String?) {
   fun onItem(itemId: Long, text: String, channel: Channel, at: Long): Long? {
-    if (store.hasSource(itemId)) return null
     val p = Accounts.resolve(BankParser.parse(text) ?: return null, store.accounts())
+    // An AI-only transaction on this item would block the pattern: the bank's numbers replace it (unless the owner decided on it).
+    store.txnOfItem(itemId)?.let { existing ->
+      val t = store.get(existing)
+      if (t == null || !t.byAi || t.ownSet || store.sourceCount(existing) != 1) return null
+      store.deleteTxn(existing)
+    }
     val w = Dedup.MERGE_WINDOW_MS
     val hit = Dedup.match(p, channel, at, store.near(p.direction, p.amountMinor, p.currency, at - w, at + w), p.txId?.let(store::byTxId))
     if (hit != null) {
       store.addSource(hit, itemId, channel, p.txId, at)
+      if (store.get(hit)?.byAi == true) store.clearByAi(hit)
       p.txId?.let { store.setTxIdIfNull(hit, it) }
       p.counterparty?.let { store.setCounterpartyIfNull(hit, it) }
       return hit
@@ -88,23 +99,24 @@ class Ledger(private val store: LedgerStore, private val ownerName: () -> String
     return id
   }
 
+  // Only pattern transactions pair: an AI-only one is a model's reading of a message, never proof that money moved between accounts.
   private fun pair(id: Long, p: Parsed, at: Long) {
     val w = OwnTransfer.PAIR_WINDOW_MS
     val opposite = if (p.direction == Direction.IN) Direction.OUT else Direction.IN
     val other = store.near(opposite, p.amountMinor, p.currency, at - w, at + w)
-      .filter { it.account != p.account && it.pairId == null && !it.ownSet }
+      .filter { it.account != p.account && it.pairId == null && !it.ownSet && !it.byAi }
       .minWithOrNull(compareBy<Txn>({ abs(at - it.at) }, { it.id })) ?: return
     val pairId = minOf(id, other.id)
     store.setOwn(id, true, false, pairId)
     store.setOwn(other.id, true, false, pairId)
   }
 
-  /** The owner's name changed: re-label past transactions by name. Paired and hand-set ones keep their answer. */
-  fun ownerNameChanged() {
+  /** The owner's name changed from `oldName`: only a transaction whose name match changed is re-labelled, so an AI own mark the name never decided stays. Paired and hand-set ones keep their answer. */
+  fun ownerNameChanged(oldName: String?) {
     val name = ownerName()
     for (t in store.undecided()) {
       val own = OwnTransfer.nameMatches(t.counterparty, name)
-      if (own != t.own) store.setOwn(t.id, own, false, null)
+      if (own != OwnTransfer.nameMatches(t.counterparty, oldName) && own != t.own) store.setOwn(t.id, own, false, null)
     }
   }
 

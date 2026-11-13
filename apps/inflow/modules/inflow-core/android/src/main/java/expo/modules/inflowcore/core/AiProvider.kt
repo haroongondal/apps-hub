@@ -91,6 +91,7 @@ class OpenAiCompatProvider(
         ),
       ),
     )
+    put("max_tokens", MAX_TOKENS)
     effort?.let { put("reasoning_effort", it) }
   }.toString()
 
@@ -110,6 +111,7 @@ class OpenAiCompatProvider(
   private companion object {
     val RETRY_DELAYS = listOf(1_000L, 2_000L, 4_000L)
     const val MAX_WAIT_MS = 60_000L
+    const val MAX_TOKENS = 8_000   // a batch of 40 items needs well under this; a runaway reply cannot cost more
   }
 }
 

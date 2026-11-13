@@ -56,4 +56,15 @@ class MemoryLedgerStore : LedgerStore {
   override fun setAiDetails(id: Long, category: String, label: String?) {
     txns[id] = txns.getValue(id).let { it.copy(category = category, label = label ?: it.label) }
   }
+
+  override fun sourceCount(txnId: Long) = sources.values.count { it == txnId }
+
+  override fun deleteTxn(id: Long) {
+    txns.remove(id)
+    sources.values.removeAll { it == id }
+  }
+
+  override fun clearByAi(id: Long) {
+    txns[id] = txns.getValue(id).copy(byAi = false)
+  }
 }

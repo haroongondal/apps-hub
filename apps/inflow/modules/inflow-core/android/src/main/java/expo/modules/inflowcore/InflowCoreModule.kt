@@ -138,8 +138,9 @@ class InflowCoreModule : Module() {
     Function("setOwnerName") { name: String? ->
       val store = store()
       store.inTransaction {
+        val old = store.meta(StoreHolder.OWNER_NAME)?.takeIf { it.isNotBlank() }
         store.setMeta(StoreHolder.OWNER_NAME, name?.trim().orEmpty())
-        StoreHolder.ledger(store).ownerNameChanged()
+        StoreHolder.ledger(store).ownerNameChanged(old)
       }
     }
 
@@ -235,11 +236,13 @@ class InflowCoreModule : Module() {
       AiModels.KNOWN.map { mapOf("name" to it.name, "baseUrl" to it.baseUrl, "model" to it.model) }
     }
 
-    // `prices` is null for a model Inflow knows; the validation copy is Deputy's.
+    // `prices` is null for a model Inflow knows. Returns the validation copy, or null once saved (a thrown message would reach JS wrapped by Expo).
     Function("setAiModel") { baseUrl: String, model: String, prices: Map<String, Any?>? ->
       val custom = prices?.let { Prices(price(it, "inputPerM"), price(it, "cachedPerM"), price(it, "outputPerM")) }
-      AiModels.validate(baseUrl, model, custom)?.let { throw CodedException("AI_MODEL_INVALID", it, null) }
-      AiConfig(store()).setModel(baseUrl, model, custom)
+      AiModels.validate(baseUrl, model, custom) ?: run {
+        AiConfig(store()).setModel(baseUrl, model, custom)
+        null
+      }
     }
 
     // Returns the error copy, or null once the key is saved. It is never returned to JS again except its last four characters.
@@ -263,9 +266,13 @@ class InflowCoreModule : Module() {
       withContext(Dispatchers.IO) { AiRunner.test(context, id) }
     }
 
+    // Returns the error copy, or null once saved.
     Function("setAiCap") { usd: Double? ->
-      if (usd != null && !(usd.isFinite() && usd in 0.01..100.0)) throw CodedException("AI_CAP_INVALID", "The daily limit must be a number from 0.01 to 100.", null)
-      AiConfig(store()).setCap(usd)
+      if (usd != null && !(usd.isFinite() && usd in 0.01..100.0)) "The daily limit must be a number from 0.01 to 100."
+      else {
+        AiConfig(store()).setCap(usd)
+        null
+      }
     }
 
     AsyncFunction("sendAiNow") Coroutine { ->

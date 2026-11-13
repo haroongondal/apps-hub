@@ -106,12 +106,13 @@ class AiConfig(private val store: SqlItemStore) {
   }
 }
 
-/** The one place a request leaves the phone: a POST to an https address, 20 s to connect, 60 s to read. IOException means the network failed. */
+/** The one place a request leaves the phone: a POST to an https address (never redirected), 20 s to connect, 60 s to read. IOException means the network failed. */
 object AiHttp {
   fun post(url: String, headers: Map<String, String>, body: String): HttpReply {
     val c = URL(url).openConnection() as HttpURLConnection
     try {
       c.requestMethod = "POST"
+      c.instanceFollowRedirects = false   // a 3xx is a refused request: the key must never follow a redirect to another address
       c.connectTimeout = 20_000
       c.readTimeout = 60_000
       c.doOutput = true

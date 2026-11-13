@@ -125,13 +125,15 @@ class MemoryItemStore : ItemStore, AiStore {
   // Mirrors SqlItemStore.queued: the same conditions, evaluated now.
   override fun queued(limit: Int): List<AiInput> {
     val since = enabledSince() ?: return emptyList()
-    return queue.entries.sortedWith(compareBy({ it.value.first }, { it.key })).mapNotNull { (id, _) ->
-      val it = items.values.firstOrNull { s -> s.id == id } ?: return@mapNotNull null
-      val c = it.capture
-      val ok = it.otpExpiresAt == null && c.postedAt >= since && (settings[c.pkg]?.record ?: true) &&
+    val sendable = queue.entries.sortedWith(compareBy({ it.value.first }, { it.key })).mapNotNull { (id, _) ->
+      val it = items.values.firstOrNull { s -> s.id == id }
+      val c = it?.capture
+      val ok = it != null && c != null && it.otpExpiresAt == null && c.postedAt >= since && (settings[c.pkg]?.record ?: true) &&
         "app:${c.pkg}" !in aiBlocks && (c.senderKey == null || "sender:${c.senderKey}" !in aiBlocks)
-      if (ok) AiInput(id, c.appLabel, c.sender, c.title, it.emailText ?: c.text, c.postedAt) else null
-    }.take(limit)
+      if (ok) AiInput(id, c!!.appLabel, c.sender, c.title, it!!.emailText ?: c.text, c.postedAt) else null
+    }
+    queue.keys.retainAll(sendable.map { it.itemId }.toSet())
+    return sendable.take(limit)
   }
 
   override fun save(results: List<AiResult>, now: Long) {

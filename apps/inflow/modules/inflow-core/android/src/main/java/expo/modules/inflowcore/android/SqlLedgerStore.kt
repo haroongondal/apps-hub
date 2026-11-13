@@ -63,15 +63,28 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
     run("UPDATE txns SET category = ?, label = COALESCE(?, label) WHERE id = ?", category, label, id)
   }
 
+  override fun sourceCount(txnId: Long): Int =
+    db.rawQuery("SELECT COUNT(*) FROM txn_sources WHERE txn_id = ?", txnId).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+
+  override fun deleteTxn(id: Long) {
+    run("DELETE FROM txn_sources WHERE txn_id = ?", id)
+    run("DELETE FROM txns WHERE id = ?", id)
+  }
+
+  override fun clearByAi(id: Long) {
+    run("UPDATE txns SET by_ai = 0 WHERE id = ?", id)
+  }
+
   /**
-   * Ask AI: the newest `limit` non-own transactions in the range. One whose source belongs to an app, sender or recording the owner
-   * kept from the AI is left out; sources retention already deleted do not hold it back, so the totals match the Money tab.
+   * Ask AI: the newest `limit` non-own transactions in the range, at or after `aiSince` (the first key; Long.MAX_VALUE = AI off). One with a
+   * source that is an OTP, or belongs to an app, sender or recording the owner kept from the AI, is left out; sources retention already
+   * deleted do not hold it back, so a purged-source transaction still counts.
    */
-  fun askTxns(from: Long, to: Long, limit: Int): List<Txn> =
+  fun askTxns(from: Long, to: Long, aiSince: Long, limit: Int): List<Txn> =
     txns(
-      "t.own = 0 AND t.at BETWEEN ? AND ? AND NOT EXISTS (SELECT 1 FROM txn_sources s JOIN items i ON i.id = s.item_id " +
-        "WHERE s.txn_id = t.id AND NOT (${SqlItemStore.SENDABLE})) ORDER BY t.at DESC, t.id DESC LIMIT ?",
-      from, to, limit.toLong(),
+      "t.own = 0 AND t.at BETWEEN ? AND ? AND t.at >= ? AND NOT EXISTS (SELECT 1 FROM txn_sources s JOIN items i ON i.id = s.item_id " +
+        "WHERE s.txn_id = t.id AND NOT (${SqlItemStore.NEVER_SEND_FILTER})) ORDER BY t.at DESC, t.id DESC LIMIT ?",
+      from, to, aiSince, limit.toLong(),
     )
 
   override fun undecided(): List<Txn> = txns("t.own_set = 0 AND t.pair_id IS NULL")

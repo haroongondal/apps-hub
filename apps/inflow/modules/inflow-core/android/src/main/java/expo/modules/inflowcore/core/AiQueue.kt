@@ -18,7 +18,7 @@ object AiMeta {
 interface AiStore {
   /** Time the first key was added; null = AI off. */
   fun enabledSince(): Long?
-  /** The send-time filter: item exists, not OTP, posted_at >= enabledSince, app record on, app and sender not blocked. Oldest first. */
+  /** The send-time filter: item exists, not OTP, posted_at >= enabledSince, app record on, app and sender not blocked. Oldest first. Queue rows that fail it are deleted. */
   fun queued(limit: Int): List<AiInput>
   /** Results and their to-dos; removes those items from the queue. */
   fun save(results: List<AiResult>, now: Long)
@@ -52,7 +52,11 @@ class AiRun(
       val reply = try {
         provider.complete(AiBatch.system(), AiBatch.user(batch, accounts(), t, zone))
       } catch (e: AiError) {
-        return AiRunResult(sent, saved, false, e.message)   // the queue is kept as it was
+        if (e.kind != AiError.Kind.BAD_REQUEST) return AiRunResult(sent, saved, false, e.message)   // the queue is kept as it was
+        // A refused batch gets one retry on a later run, then is dropped; the other batches still go.
+        store.failed(batch.map { it.itemId })
+        tried += batch.map { it.itemId }
+        continue
       }
       store.addSpend(day, prices().cost(reply.usage))
       val results = AiBatch.parse(reply.text, batch, zone)

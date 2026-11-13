@@ -169,11 +169,11 @@ class LedgerTest {
     val id = item(ubl(), Channel.SMS, t0)!!
     assertFalse(store.get(id)!!.own)
     owner = "Haroon Mukhtar"
-    ledger.ownerNameChanged()
+    ledger.ownerNameChanged(null)
     assertTrue(store.get(id)!!.own)
     assertFalse(store.get(id)!!.ownSet)
     owner = null
-    ledger.ownerNameChanged()
+    ledger.ownerNameChanged("Haroon Mukhtar")
     assertFalse(store.get(id)!!.own)
   }
 
@@ -186,7 +186,7 @@ class LedgerTest {
     val pairId = store.get(out)!!.pairId
     assertNotNull(pairId)
     owner = "Someone Else"
-    ledger.ownerNameChanged()
+    ledger.ownerNameChanged("Haroon Mukhtar")
     assertFalse(store.get(chosen)!!.own)
     assertTrue(store.get(chosen)!!.ownSet)
     assertTrue(store.get(out)!!.own)
@@ -345,5 +345,54 @@ class LedgerTest {
     val id = ai(aiMoney(amount = 700, counterparty = "HAROON MUKHTAR"), Channel.NOTIFICATION, t0)!!
     assertTrue(store.get(id)!!.own)
     assertFalse(store.get(id)!!.ownSet)
+  }
+
+  @Test fun ownerNameChangeKeepsAnAiOwnMarkWithAnUnrelatedCounterparty() {
+    val id = ai(aiMoney(amount = 50_000, own = true, counterparty = "Ali Traders", category = "Other"), Channel.NOTIFICATION, t0)!!
+    assertTrue(store.get(id)!!.own)
+    owner = "Haroon Mukhtar"
+    ledger.ownerNameChanged(null)
+    assertTrue(store.get(id)!!.own)
+    owner = null
+    ledger.ownerNameChanged("Haroon Mukhtar")
+    assertTrue(store.get(id)!!.own)
+  }
+
+  @Test fun aiOnlyTxnOnAGmailNotificationYieldsToTheEmailsPattern() {
+    val sms = item(debit("1,700.00"), Channel.SMS, t0)!!
+    val notification = nextItem++
+    val aiTxn = ledger.onAi(notification, aiMoney(amount = 170_000, account = null, counterparty = "Shaafi", category = "Health"), Channel.EMAIL_NOTIFICATION, t0 + 2 * min)!!
+    assertNotEquals(sms, aiTxn)
+    assertEquals("Other account", store.get(aiTxn)!!.account)
+    assertEquals(sms, ledger.onItem(notification, alfalahPos(), Channel.EMAIL, t0 + 4 * min))
+    assertEquals(1, store.txns.size)
+    assertNull(store.get(aiTxn))
+    assertEquals(setOf(Channel.SMS, Channel.EMAIL), store.get(sms)!!.channels)
+    assertEquals(sms, store.txnOfItem(notification))
+  }
+
+  @Test fun aiTxnWithAnotherSourceOrAnOwnerDecisionIsNotDeletedByAPatternItem() {
+    val notification = nextItem++
+    val aiTxn = ledger.onAi(notification, aiMoney(amount = 170_000, account = null), Channel.EMAIL_NOTIFICATION, t0)!!
+    store.setOwn(aiTxn, false, true, null)
+    assertNull(ledger.onItem(notification, alfalahPos(), Channel.EMAIL, t0 + min))
+    assertNotNull(store.get(aiTxn))
+  }
+
+  @Test fun aiOnlyTxnIsNeverPairedByALaterPatternTxn() {
+    val inn = ai(aiMoney(amount = 5_000_000, direction = Direction.IN, account = null, counterparty = "Someone", category = "Other"), Channel.NOTIFICATION, t0)!!
+    val out = item(debit("50,000.00"), Channel.SMS, t0 + 10 * min)!!
+    assertNull(store.get(inn)!!.pairId)
+    assertNull(store.get(out)!!.pairId)
+    assertFalse(store.get(inn)!!.own)
+    assertFalse(store.get(out)!!.own)
+  }
+
+  @Test fun aPatternSourceMergingIntoAnAiTxnConfirmsIt() {
+    item(debit("999.00"), Channel.SMS, t0 - 180 * min)   // makes "Alfalah 2310" a known account
+    val aiTxn = ai(aiMoney(amount = 150_000, account = "Alfalah 2310"), Channel.NOTIFICATION, t0)!!
+    assertTrue(store.get(aiTxn)!!.byAi)
+    assertEquals(aiTxn, item(debit("1,500.00"), Channel.SMS, t0 + min))
+    assertFalse(store.get(aiTxn)!!.byAi)
   }
 }

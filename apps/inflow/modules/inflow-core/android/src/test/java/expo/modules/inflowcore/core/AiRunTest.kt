@@ -27,6 +27,8 @@ class AiRunTest {
   private var usage = Usage(1_000, 0, 100)
   private var offline = false
   private var answer: (List<Long>) -> String = { ids -> reply(ids) }
+  private var calls = 0
+  private var httpCode: (Int) -> Int = { 200 }   // the status of the nth request (1-based)
   private val prices = Prices(1.0, 0.0, 1.0)
 
   private fun reply(ids: List<Long>, extra: (Long) -> String = { "null" }) =
@@ -36,6 +38,8 @@ class AiRunTest {
     if (offline) throw IOException("down")
     val user = Json.parseToJsonElement(body).jsonObject["messages"]!!.jsonArray[1].jsonObject["content"]!!.jsonPrimitive.content
     prompts += user
+    val code = httpCode(++calls)
+    if (code != 200) return HttpReply(code, "no")
     val ids = Regex("\"id\":(\\d+)").findAll(user).map { it.groupValues[1].toLong() }.toList()
     val content = Json.encodeToString(kotlinx.serialization.serializer<String>(), answer(ids))
     return HttpReply(200, """{"choices":[{"message":{"role":"assistant","content":$content}}],"usage":{"prompt_tokens":${usage.inputTokens},"completion_tokens":${usage.outputTokens}}}""")
@@ -140,7 +144,7 @@ class AiRunTest {
 
   private fun bigQueue() {
     keyAdded()
-    (1..61).forEach { save("item $it " + "x".repeat(990)) }   // 61 items of 1,000 characters: two requests
+    (1..61).forEach { save("item $it " + "x".repeat(990)) }   // 61 items: two requests (40 and 21)
   }
 
   @Test fun capStopsBeforeNextRequest() {
@@ -151,8 +155,8 @@ class AiRunTest {
     assertEquals(1, prompts.size)
     assertTrue(r.stoppedByCap)
     assertEquals(AiRun.CAP_REACHED, r.error)
-    assertEquals(60, r.saved)
-    assertEquals(1, store.queue.size)   // the rest waits
+    assertEquals(40, r.saved)
+    assertEquals(21, store.queue.size)   // the rest waits
     assertEquals(0.51, store.spentToday("2026-11-14"), 1e-9)
     assertEquals("Inflow reached today's AI spending limit. It will send the rest tomorrow, or raise the limit in Settings.", r.error)
   }
@@ -284,5 +288,48 @@ class AiRunTest {
     assertEquals(1, store.aiResults.size)
     store.deleteApp("com.gone")
     assertTrue(store.aiResults.isEmpty() && store.queue.isEmpty())
+  }
+
+  @Test fun refusedBatchIsRetriedOnceThenDroppedAndTheNextBatchStillGoes() {
+    keyAdded()
+    (1..41).forEach { save("note $it") }   // two requests: 40 and 1
+    httpCode = { n -> if (n == 1) 400 else 200 }
+    val r = runner().run()
+    assertEquals(2, calls)
+    assertNull(r.error)
+    assertEquals(1, r.saved)
+    assertEquals(40, store.queue.size)   // the refused batch used its first try
+    assertTrue(store.queue.values.all { it.second == 1 })
+    runner().run()
+    assertEquals(3, calls)
+    assertTrue(store.queue.isEmpty())
+  }
+
+  @Test fun authOfflineAndServerErrorsStopTheRunAndKeepTheQueue() {
+    keyAdded()
+    save("hello")
+    httpCode = { 401 }
+    assertTrue(runner().run().error!!.contains("refused the API key"))
+    assertEquals(0, store.queue.getValue(1).second)
+  }
+
+  @Test fun anItemBlockedDuringARunIsNeverSentAfterItIsUnblocked() {
+    keyAdded()
+    save("secret plan", pkg = "com.blocked.app")
+    save("fine plan")
+    store.aiBlocks += "app:com.blocked.app"
+    runner().run()
+    assertFalse(prompts.single().contains("secret plan"))
+    store.aiBlocks -= "app:com.blocked.app"
+    runner().run()
+    assertEquals(1, prompts.size)
+  }
+
+  @Test fun rowsBeforeTheFirstKeyAreDroppedFromTheQueue() {
+    keyAdded(at = t0 + 1_000)
+    save("before the key", at = t0)
+    assertEquals(1, store.queue.size)
+    runner().run()
+    assertTrue(store.queue.isEmpty())
   }
 }
