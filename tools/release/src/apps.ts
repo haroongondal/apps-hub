@@ -33,7 +33,7 @@ export const APPS: Record<string, ReleasableApp> = {
   store: { name: 'Store', dir: 'apps/store', android: { packageName: ANDROID_PACKAGES.store } },
   deputy: { name: 'Deputy', dir: 'apps/deputy', android: { packageName: ANDROID_PACKAGES.deputy } },
   strongroom: { name: 'Strongroom', dir: 'apps/strongroom', android: { packageName: ANDROID_PACKAGES.strongroom } },
-  notebox: { name: 'Notebox', dir: 'apps/notebox', android: { packageName: ANDROID_PACKAGES.notebox } },
+  inflow: { name: 'Inflow', dir: 'apps/inflow', android: { packageName: ANDROID_PACKAGES.inflow } },
 };
 
 /** Release ids of the apps whose workspace-relative dir is in `dirs` (the packages pnpm says changed). */

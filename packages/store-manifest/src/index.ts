@@ -14,7 +14,7 @@ export const ANDROID_PACKAGES = {
   store: 'com.haroon.store',
   deputy: 'com.haroon.deputy',
   strongroom: 'com.haroon.strongroom',
-  notebox: 'com.haroon.notebox',
+  inflow: 'com.haroon.inflow',
 } as const;
 
 export function androidPackageFor(id: string): string | undefined {

@@ -367,7 +367,7 @@ importers:
         specifier: ~3.0.30
         version: 3.0.30(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
 
-  apps/notebox:
+  apps/inflow:
     dependencies:
       '@apps-hub/ui':
         specifier: workspace:*
@@ -378,9 +378,9 @@ importers:
       expo-font:
         specifier: ~14.0.12
         version: 14.0.12(expo@54.0.38)(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
-      notebox-core:
+      inflow-core:
         specifier: workspace:*
-        version: link:modules/notebox-core
+        version: link:modules/inflow-core
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -401,7 +401,7 @@ importers:
         specifier: ~5.9.2
         version: 5.9.3
 
-  apps/notebox/modules/notebox-core:
+  apps/inflow/modules/inflow-core:
     dependencies:
       expo-modules-core:
         specifier: ~3.0.30

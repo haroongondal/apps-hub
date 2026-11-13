@@ -451,7 +451,7 @@
   --c-danger-soft: #F8717129;
 }
 
-[data-brand='notebox'], [data-brand='notebox'][data-theme='light'] {
+[data-brand='inflow'], [data-brand='inflow'][data-theme='light'] {
   color-scheme: light;
   --c-bg: #F2F6F7;
   --c-surface: #FFFFFF;
@@ -471,7 +471,7 @@
   --c-danger-soft: #B91C1C1A;
 }
 @media (prefers-color-scheme: dark) {
-  [data-brand='notebox']:not([data-theme='light']) {
+  [data-brand='inflow']:not([data-theme='light']) {
   color-scheme: dark;
   --c-bg: #0B1619;
   --c-surface: #142224;
@@ -491,7 +491,7 @@
   --c-danger-soft: #F8717129;
   }
 }
-[data-brand='notebox'][data-theme='dark'] {
+[data-brand='inflow'][data-theme='dark'] {
   color-scheme: dark;
   --c-bg: #0B1619;
   --c-surface: #142224;
