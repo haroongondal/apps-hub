@@ -40,6 +40,17 @@ export function GmailSettings() {
     load();
   };
 
+  const check = () => {
+    setBusy('sync');
+    setError(null);
+    InflowCore.syncGmail()
+      .catch(() => setError(SAVE_ERROR))
+      .finally(() => {
+        setBusy(null);
+        load();
+      });
+  };
+
   const connect = () => {
     const problem = gmailFormError(address, password);
     if (problem !== null) {
@@ -50,26 +61,21 @@ export function GmailSettings() {
     setError(null);
     InflowCore.connectGmail(address.trim(), cleanAppPassword(password))
       .then((r) => {
-        if (r.ok) {
+        if (!r.ok) setError(r.message ?? SAVE_ERROR);
+        else {
           setPassword('');
           setAddress('');
-        } else setError(r.message ?? SAVE_ERROR);
+        }
+        return r.ok;
       })
-      .catch(() => setError(SAVE_ERROR))
-      .finally(() => {
+      .catch(() => {
+        setError(SAVE_ERROR);
+        return false;
+      })
+      .then((ok) => {
         setBusy(null);
         load();
-      });
-  };
-
-  const check = () => {
-    setBusy('sync');
-    setError(null);
-    InflowCore.syncGmail()
-      .catch(() => setError(SAVE_ERROR))
-      .finally(() => {
-        setBusy(null);
-        load();
+        if (ok) check();   // the first sync; a refused password or no network then shows in the status
       });
   };
 
