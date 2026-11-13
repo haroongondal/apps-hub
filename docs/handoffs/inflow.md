@@ -200,3 +200,12 @@ inbox once; stage 3 plan "Controller: close" list (connect, history download, em
 = one item, SMS + email = one transaction, wrong password copy, airplane mode copy and recovery).
 
 Next step: resume prompt step 2.
+
+Stage 4 (AI), started 2026-11-14 on branch `inflow/stage-4` (from `inflow/stage-3`; stage 3 ledger
+renamed `progress-stage-3.md`). Owner answers: only items saved after the first API key are sent;
+daily AI cap $0.50 by default (design "Stage 4 answers"). Plan committed:
+`docs/superpowers/plans/2026-11-14-inflow-stage-4.md` (545714c; rulings R23-R30: keys in SQLCipher,
+in-process 30-min runner, fixed category list, tags inert until stage 5, AI amounts must appear in
+the item text, AI on pattern txns sets category only, two-call Ask AI, 60k-char requests and the
+cap checked per request). Ledger `progress.md` (untracked) has the conflict scan. Next: the owner
+reviews the plan; then dispatch agent K (K1-K5) and agent T (T1-T3) in parallel.
