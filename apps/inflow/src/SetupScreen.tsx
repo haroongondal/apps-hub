@@ -23,8 +23,8 @@ export function useSetupAction(onDone: () => void) {
       onDone();
       return;
     }
-    void requestSms().then((granted) => {
-      setBlocked(!granted);
+    void requestSms().then((result) => {
+      setBlocked(result === 'never_ask_again');
       onDone();
     });
   };

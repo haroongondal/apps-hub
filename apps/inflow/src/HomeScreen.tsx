@@ -42,13 +42,11 @@ export function HomeScreen({
     }
   }, []);
 
-  // A failed import is not worth a message: the next open or pull tries again.
+  // A failed import is not worth a message: the next open or pull tries again. New items reload Home through onCaptured.
   const importSms = useCallback(() => {
     if (!status.smsGranted) return;
-    InflowCore.importSms()
-      .then((r) => r.imported > 0 && load())
-      .catch(() => {});
-  }, [status.smsGranted, load]);
+    InflowCore.importSms().catch(() => {});
+  }, [status.smsGranted]);
 
   useEffect(() => {
     load();
