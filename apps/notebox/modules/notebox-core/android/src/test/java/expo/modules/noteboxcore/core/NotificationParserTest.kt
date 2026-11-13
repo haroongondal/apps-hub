@@ -42,6 +42,17 @@ class NotificationParserTest {
     assertTrue(NotificationParser.parse(raw(title = " ", text = "", bigText = null, textLines = listOf(" ")), own).isEmpty())
   }
 
+  @Test fun messagesWithBlankTitleAndTextAreKept() {
+    val n = raw(
+      title = " ", text = "", bigText = null, textLines = emptyList(),
+      messages = listOf(RawMessage("Ali", "Hello", 7L)),
+    )
+    val out = NotificationParser.parse(n, own)
+    assertEquals(1, out.size)
+    assertEquals("Hello", out[0].text)
+    assertEquals("Ali", out[0].sender)
+  }
+
   @Test fun smsShortCodeKeepsTextExactly() {
     val sample = "Dear Customer,\n" +
       "Your Debit Card against A/C: 0847-1***2310 is charged for PKR 1,500.00 on 12-Nov-26 at 16:23:38 at SHAAFI INTERNATIONAL HOSPIslamabad PK."

@@ -11,8 +11,8 @@ object NotificationParser {
 
   fun parse(raw: RawNotification, ownPkg: String): List<Capture> {
     if (raw.pkg == ownPkg || raw.ongoing || raw.groupSummary) return emptyList()
-    if (raw.title.isNullOrBlank() && raw.text.isNullOrBlank() && raw.bigText.isNullOrBlank() &&
-      raw.textLines.all { it.isBlank() }
+    if (raw.messages.isEmpty() && raw.title.isNullOrBlank() && raw.text.isNullOrBlank() &&
+      raw.bigText.isNullOrBlank() && raw.textLines.all { it.isBlank() }
     ) return emptyList()
 
     return if (raw.messages.isNotEmpty()) fromMessages(raw) else fromSingle(raw)
