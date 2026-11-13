@@ -109,8 +109,11 @@ most likely to be second-guessed:
 
 ## Current state and next step
 
-State: Task 1 complete (588e74f). Tasks 2 (parser) and 7 (TS contract and helpers) dispatched in
-parallel. Tasks 3, 4, 5, 6, 8 and 9 not started. See `progress.md` for the live status.
+State: Tasks 1-8 complete and committed (last: 67013db screens). Kotlin: 45 JVM tests, Gradle gate
+green; TS: 16 tests, typecheck clean. Batched review of the risky commits (OTP, ingest, encrypted
+store, listener) is running or its findings are being fixed. Task 9 not started. See `progress.md`
+for the live status and the deferred minors. SQL is unproven on a JVM (no SQLCipher): the device
+check in Task 9 step 3 is the proof.
 
 Next step:
 1. Work only in `/Users/outsentia/Documents/apps-hub-wt/notebox` (branch `notebox/stage-1`).
