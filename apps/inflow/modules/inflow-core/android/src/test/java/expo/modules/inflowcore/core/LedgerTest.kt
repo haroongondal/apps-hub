@@ -164,4 +164,33 @@ class LedgerTest {
     assertNull(item("OTP 123456 for PKR 25,000 at Daraz", Channel.SMS, t0))
     assertTrue(store.txns.isEmpty())
   }
+
+  @Test fun ownerNameChangedReevaluatesPastTransactions() {
+    val id = item(ubl(), Channel.SMS, t0)!!
+    assertFalse(store.get(id)!!.own)
+    owner = "Haroon Mukhtar"
+    ledger.ownerNameChanged()
+    assertTrue(store.get(id)!!.own)
+    assertFalse(store.get(id)!!.ownSet)
+    owner = null
+    ledger.ownerNameChanged()
+    assertFalse(store.get(id)!!.own)
+  }
+
+  @Test fun ownerNameChangeLeavesPairedAndHandSetAlone() {
+    owner = "Haroon Mukhtar"
+    val chosen = item(ubl(txId = "1"), Channel.SMS, t0)!!
+    ledger.setOwnTransfer(chosen, false)
+    val out = item(debit("50,000"), Channel.SMS, t0 + 40 * min)!!
+    val into = item(credit("50,000", "9999"), Channel.SMS, t0 + 41 * min)!!
+    val pairId = store.get(out)!!.pairId
+    assertNotNull(pairId)
+    owner = "Someone Else"
+    ledger.ownerNameChanged()
+    assertFalse(store.get(chosen)!!.own)
+    assertTrue(store.get(chosen)!!.ownSet)
+    assertTrue(store.get(out)!!.own)
+    assertTrue(store.get(into)!!.own)
+    assertEquals(pairId, store.get(into)!!.pairId)
+  }
 }

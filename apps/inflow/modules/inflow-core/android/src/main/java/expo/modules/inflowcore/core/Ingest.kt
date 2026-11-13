@@ -24,7 +24,7 @@ class Ingest(
       // The SMS path owns this message; a purged OTP's text stays tombstoned against a re-posted notification.
       if (fromSmsApp && (store.smsItemNear(c.text, c.postedAt, Dedup.MERGE_WINDOW_MS) || store.isTombstoned(Sms.textHash(c.text)))) continue
       val search = searchOf(c)
-      val otpExpiresAt = if (OtpDetector.isOtp(c.pkg, c.text)) now() + OTP_TTL_MS else null
+      val otpExpiresAt = if (isOtp(c.pkg, c.text)) now() + OTP_TTL_MS else null
       val id = store.insert(c, search, otpExpiresAt) ?: continue
       saved++
       otpExpiresAt?.let(onOtpSaved)
@@ -46,11 +46,12 @@ class Ingest(
     if (!setting.record) return 0
     val c = Sms.capture(sms, smsPkg, smsLabel)
     if (store.hasSmsHash(c.hash) || store.isTombstoned(c.hash) || store.isTombstoned(Sms.textHash(sms.body))) return 0
-    val isOtp = OtpDetector.isOtp(smsPkg, sms.body)
+    val isOtp = isOtp(smsPkg, sms.body)
     if (isOtp && c.postedAt + OTP_TTL_MS <= now()) return 0
     val twin = store.notificationTwin(sms.body, c.postedAt, Dedup.MERGE_WINDOW_MS, smsPackages)
     if (twin != null) {
       store.setSmsHash(twin, c.hash)
+      ledger?.addChannel(twin, Channel.SMS)
       return 0
     }
     // An OTP from the inbox lives only what is left of its 5 minutes.
@@ -61,6 +62,9 @@ class Ingest(
     housekeeping()
     return 1
   }
+
+  // A bank-pattern message is money news, never an OTP, whatever warning text it carries.
+  private fun isOtp(pkg: String, text: String) = OtpDetector.isOtp(pkg, text) && BankParser.parse(text) == null
 
   private fun searchOf(c: Capture) = SearchText.normalize(listOfNotNull(c.sender, c.conversation, c.title, c.text).joinToString(" "))
 

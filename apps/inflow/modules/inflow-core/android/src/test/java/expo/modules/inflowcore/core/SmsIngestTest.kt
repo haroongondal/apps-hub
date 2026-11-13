@@ -115,4 +115,21 @@ class SmsIngestTest {
     assertEquals(0, ingest.onNotification(notification(otp, clock + min)))
     assertTrue(ledgerStore.txns.isEmpty())
   }
+
+  @Test fun bankPatternIsNeverOtp() {
+    val text = "PKR  5,000.00 Credited to your A/C: 0847-1***2310 on 13-Nov-26 at 12:02:54. Never share your PIN or OTP with anyone."
+    assertEquals(1, ingest.onSms(sms(text), pkg, "Messages"))
+    assertEquals(1, ingest.onNotification(notification(text.replace("5,000", "6,000"), clock + 20 * min)))
+    assertEquals(2, store.items.size)
+    assertTrue(store.items.values.all { it.otpExpiresAt == null })
+    assertEquals(2, ledgerStore.txns.size)
+  }
+
+  @Test fun claimedNotificationTwinCountsAsSmsChannel() {
+    ingest.onNotification(notification(debit, clock))
+    assertEquals(0, ingest.onSms(sms(debit, sentAt = clock), pkg, "Messages"))
+    assertEquals(1, ingest.onSms(sms(debit, sentAt = clock + min, receivedAt = clock + min), pkg, "Messages"))
+    assertEquals(setOf(Channel.SMS_NOTIFICATION, Channel.SMS), ledgerStore.txns.values.first().channels)
+    assertEquals(2, ledgerStore.txns.size)
+  }
 }

@@ -125,7 +125,11 @@ class InflowCoreModule : Module() {
     }
 
     Function("setOwnerName") { name: String? ->
-      store().setMeta(StoreHolder.OWNER_NAME, name?.trim().orEmpty())
+      val store = store()
+      store.inTransaction {
+        store.setMeta(StoreHolder.OWNER_NAME, name?.trim().orEmpty())
+        StoreHolder.ledger(store).ownerNameChanged()
+      }
     }
 
     Function("setRecord") { pkg: String, record: Boolean, deleteSaved: Boolean ->

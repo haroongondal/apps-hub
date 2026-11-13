@@ -5,39 +5,30 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
 import android.util.Log
-import expo.modules.inflowcore.core.RawSms
+import java.util.concurrent.TimeUnit
 
+/**
+ * Only a wake-up. Every SMS item comes from a provider row (SmsImporter), so one message has one identity: the default SMS app
+ * writes that row asynchronously, hence two inbox syncs a little after the broadcast; a row it writes later waits for the next sync.
+ */
 class SmsReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
-    val parts = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
-    // One long SMS arrives as several PDUs from the same address, in order.
-    val messages = parts.filterNotNull().filter { !it.originatingAddress.isNullOrBlank() }.groupBy { it.originatingAddress!! }.map { (address, ps) ->
-      RawSms(address, ps.joinToString("") { it.messageBody.orEmpty() }, ps.first().timestampMillis, System.currentTimeMillis())
-    }
     val app = context.applicationContext
-    val pending = goAsync()
-    InflowListener.executor.execute {
-      try {
-        val store = StoreHolder.get(app).getOrNull()
-        if (store == null) {
-          Log.w(TAG, "store unavailable, sms dropped")
-          return@execute
+    for (delay in SYNC_DELAYS_S) {
+      InflowListener.executor.schedule({
+        try {
+          val saved = SmsImporter.sync(app)
+          if (saved > 0) StoreHolder.onCaptured?.invoke(saved)
+        } catch (e: Exception) {
+          Log.w(TAG, "sms sync failed: ${e.javaClass.simpleName}")
         }
-        val ingest = StoreHolder.ingest(app, store) { InflowListener.schedulePurge(app, it) }
-        val pkg = SmsImporter.defaultPkg(app)
-        val label = InflowListener.label(app, pkg)
-        val saved = store.inTransaction { messages.sumOf { ingest.onSms(it, pkg, label) } }
-        if (saved > 0) StoreHolder.onCaptured?.invoke(saved)
-      } catch (e: Exception) {
-        Log.w(TAG, "sms capture failed: ${e.javaClass.simpleName}")
-      } finally {
-        pending.finish()
-      }
+      }, delay, TimeUnit.SECONDS)
     }
   }
 
   private companion object {
     const val TAG = "SmsReceiver"
+    val SYNC_DELAYS_S = listOf(3L, 30L)
   }
 }

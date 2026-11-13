@@ -24,6 +24,10 @@ interface LedgerStore {
   fun addSource(txnId: Long, itemId: Long, channel: Channel, txId: String?, at: Long)
   fun setOwn(id: Long, own: Boolean, ownSet: Boolean, pairId: Long?)
   fun setTxIdIfNull(id: Long, txId: String)
+  /** Records `channel` on the transaction sourced by this item, without a new source row (item_id is unique). */
+  fun addChannel(itemId: Long, channel: Channel)
+  /** Transactions the owner has not decided on and that are not paired: the ones the owner's name may re-label. */
+  fun undecided(): List<Txn>
 }
 
 object Dedup {
@@ -83,6 +87,17 @@ class Ledger(private val store: LedgerStore, private val ownerName: () -> String
     store.setOwn(id, true, false, pairId)
     store.setOwn(other.id, true, false, pairId)
   }
+
+  /** The owner's name changed: re-label past transactions by name. Paired and hand-set ones keep their answer. */
+  fun ownerNameChanged() {
+    val name = ownerName()
+    for (t in store.undecided()) {
+      val own = OwnTransfer.nameMatches(t.counterparty, name)
+      if (own != t.own) store.setOwn(t.id, own, false, null)
+    }
+  }
+
+  fun addChannel(itemId: Long, channel: Channel) = store.addChannel(itemId, channel)
 
   fun setOwnTransfer(txnId: Long, own: Boolean) {
     val txn = store.get(txnId) ?: return

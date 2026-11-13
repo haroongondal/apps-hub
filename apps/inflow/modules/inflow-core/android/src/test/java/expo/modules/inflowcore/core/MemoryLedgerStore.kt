@@ -2,7 +2,7 @@ package expo.modules.inflowcore.core
 
 class MemoryLedgerStore : LedgerStore {
   val txns = LinkedHashMap<Long, Txn>()
-  private val sources = HashSet<Long>()
+  private val sources = HashMap<Long, Long>()   // itemId -> txnId
   private var nextId = 1L
 
   override fun near(direction: Direction, amountMinor: Long, currency: String, from: Long, to: Long) =
@@ -23,7 +23,7 @@ class MemoryLedgerStore : LedgerStore {
   }
 
   override fun addSource(txnId: Long, itemId: Long, channel: Channel, txId: String?, at: Long) {
-    sources += itemId
+    sources[itemId] = txnId
     val t = txns.getValue(txnId)
     txns[txnId] = t.copy(channels = t.channels + channel, at = minOf(t.at, at))
   }
@@ -36,4 +36,11 @@ class MemoryLedgerStore : LedgerStore {
     val t = txns.getValue(id)
     if (t.txId == null) txns[id] = t.copy(txId = txId)
   }
+
+  override fun addChannel(itemId: Long, channel: Channel) {
+    val id = sources[itemId] ?: return
+    txns[id] = txns.getValue(id).let { it.copy(channels = it.channels + channel) }
+  }
+
+  override fun undecided() = txns.values.filter { !it.ownSet && it.pairId == null }
 }

@@ -252,9 +252,22 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
       "CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT NOT NULL)",
     )
 
-    // Not idempotent (ALTER TABLE): ensureSchema runs it once, in the same transaction as the version bump.
+    // Not idempotent: ensureSchema runs it once, in the same transaction as the version bump.
+    // items is rebuilt with AUTOINCREMENT (ids kept) because txn_sources.item_id has no foreign key: a deleted item's id must never come back.
     private val SCHEMA_V2 = listOf(
-      "ALTER TABLE items ADD COLUMN sms_hash TEXT",
+      "CREATE TABLE items_new(id INTEGER PRIMARY KEY AUTOINCREMENT, hash TEXT NOT NULL UNIQUE, pkg TEXT NOT NULL, app_label TEXT NOT NULL, " +
+        "sender TEXT, sender_key TEXT, conversation TEXT, conversation_key TEXT, title TEXT, text TEXT NOT NULL, " +
+        "posted_at INTEGER NOT NULL, captured_at INTEGER NOT NULL, otp_expires_at INTEGER, " +
+        "deleted_by_sender INTEGER NOT NULL DEFAULT 0, search TEXT NOT NULL, sms_hash TEXT)",
+      "INSERT INTO items_new(id, hash, pkg, app_label, sender, sender_key, conversation, conversation_key, title, text, posted_at, " +
+        "captured_at, otp_expires_at, deleted_by_sender, search) SELECT id, hash, pkg, app_label, sender, sender_key, conversation, " +
+        "conversation_key, title, text, posted_at, captured_at, otp_expires_at, deleted_by_sender, search FROM items",
+      "DROP TABLE items",
+      "ALTER TABLE items_new RENAME TO items",
+      "CREATE INDEX items_posted ON items(posted_at DESC)",
+      "CREATE INDEX items_pkg ON items(pkg, posted_at DESC)",
+      "CREATE INDEX items_conv ON items(conversation_key, posted_at DESC)",
+      "CREATE INDEX items_otp ON items(otp_expires_at) WHERE otp_expires_at IS NOT NULL",
       "CREATE UNIQUE INDEX items_sms ON items(sms_hash) WHERE sms_hash IS NOT NULL",
       "CREATE TABLE txns(id INTEGER PRIMARY KEY, direction TEXT NOT NULL, amount_minor INTEGER NOT NULL, currency TEXT NOT NULL, " +
         "account TEXT NOT NULL, counterparty TEXT, tx_id TEXT, at INTEGER NOT NULL, " +

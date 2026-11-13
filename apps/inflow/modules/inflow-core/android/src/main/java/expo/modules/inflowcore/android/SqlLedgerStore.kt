@@ -44,6 +44,13 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
     run("UPDATE txns SET tx_id = ? WHERE id = ? AND tx_id IS NULL", txId, id)
   }
 
+  // The channel column holds a comma list, which txns() already splits; ',SMS,' is matched whole because 'SMS' is inside 'SMS_NOTIFICATION'.
+  override fun addChannel(itemId: Long, channel: Channel) {
+    run("UPDATE txn_sources SET channel = channel || ',' || ? WHERE item_id = ? AND instr(',' || channel || ',', ',' || ? || ',') = 0", channel.name, itemId, channel.name)
+  }
+
+  override fun undecided(): List<Txn> = txns("t.own_set = 0 AND t.pair_id IS NULL")
+
   /** Own transfers left out; per account and currency, never converted. */
   fun money(from: Long, to: Long): Map<String, Any> {
     val accounts = db.rawQuery(
