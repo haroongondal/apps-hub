@@ -279,3 +279,9 @@ Transactions found only by the AI (no bank pattern matched: wallet alerts,
 card-app pushes, a misread "PKR 500 cashback" promotion) **count in the Money
 totals straight away**, marked "read by AI"; the owner fixes a misread by hand.
 The owner chose this on 2026-11-13 over the "to check" default.
+
+## Stage 4 answers (owner, 2026-11-14)
+
+- Items saved before the first API key is added are never sent to the AI ("only new items").
+- AI spending stops for the day at **$0.50** by default (counted from the tokens each reply
+  reports); the owner can change it in Settings.
