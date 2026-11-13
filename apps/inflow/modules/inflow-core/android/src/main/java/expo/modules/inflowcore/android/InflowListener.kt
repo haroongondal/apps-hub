@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import expo.modules.inflowcore.core.Email
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -20,6 +21,7 @@ class InflowListener : NotificationListenerService() {
 
   override fun onListenerConnected() {
     connected.set(true)
+    GmailSync.startPeriodic(applicationContext)
   }
 
   override fun onListenerDisconnected() {
@@ -39,6 +41,8 @@ class InflowListener : NotificationListenerService() {
       val saved = store.inTransaction { ingest.onNotification(raw) }
       store.setMeta(LAST_CAPTURE_AT, System.currentTimeMillis().toString())
       if (saved > 0) StoreHolder.onCaptured?.invoke(saved)
+      // The notification says an email arrived; fetch its full text soon (coalesced).
+      if (raw.pkg == Email.GMAIL) GmailSync.schedule(applicationContext, 10_000)
     } catch (e: Exception) {
       Log.w(TAG, "capture failed: ${e.javaClass.simpleName}")
     }

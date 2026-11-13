@@ -121,6 +121,33 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
     run("INSERT INTO meta(k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v", key, value)
   }
 
+  fun deleteMeta(key: String) {
+    run("DELETE FROM meta WHERE k = ?", key)
+  }
+
+  fun gmailSenders(): List<GmailSender> =
+    query("SELECT query, uid_validity, last_uid FROM gmail_senders ORDER BY query").use { c ->
+      buildList { while (c.moveToNext()) add(GmailSender(c.getString(0), if (c.isNull(1)) null else c.getLong(1), c.getLong(2))) }
+    }
+
+  fun addGmailSender(query: String) {
+    run("INSERT OR IGNORE INTO gmail_senders(query) VALUES (?)", query)
+  }
+
+  /** Emails already saved stay. */
+  fun removeGmailSender(query: String) {
+    run("DELETE FROM gmail_senders WHERE query = ?", query)
+  }
+
+  fun setGmailCursor(query: String, uidValidity: Long, lastUid: Long) {
+    run("UPDATE gmail_senders SET uid_validity = ?, last_uid = ? WHERE query = ?", uidValidity, lastUid, query)
+  }
+
+  /** A different mailbox starts over; saved emails dedupe by message id, so re-reading is harmless. */
+  fun resetGmailCursors() {
+    run("UPDATE gmail_senders SET uid_validity = NULL, last_uid = 0")
+  }
+
   fun home(startOfDay: Long, now: Long): Map<String, Any> {
     val conversations = query(
       "SELECT i.conversation_key, i.pkg, i.app_label, COALESCE(n.name, i.conversation, i.conversation_key), i.text, i.posted_at, " +

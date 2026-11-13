@@ -1,4 +1,0 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
-  <!-- Nothing leaves the phone in stage 1: strip INTERNET even if a dependency's manifest asks for it. -->
-  <uses-permission android:name="android.permission.INTERNET" tools:node="remove"/>
-</manifest>

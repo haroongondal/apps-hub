@@ -12,6 +12,8 @@ import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.inflowcore.android.Lock
+import expo.modules.inflowcore.android.GmailClient
+import expo.modules.inflowcore.android.GmailSync
 import expo.modules.inflowcore.android.InflowListener
 import expo.modules.inflowcore.android.SmsImporter
 import expo.modules.inflowcore.android.SqlItemStore
@@ -19,6 +21,7 @@ import expo.modules.inflowcore.android.SqlLedgerStore
 import expo.modules.inflowcore.android.StoreHolder
 import expo.modules.inflowcore.core.AppSetting
 import expo.modules.inflowcore.core.Retention
+import jakarta.mail.AuthenticationFailedException
 
 private const val CAPTURED_EVENT = "onCaptured"
 
@@ -149,6 +152,70 @@ class InflowCoreModule : Module() {
 
     Function("listSenderNames") { ->
       store().senderNames()
+    }
+
+    // Never returns the password.
+    Function("gmailStatus") { ->
+      val store = store()
+      mapOf(
+        "address" to store.meta(GmailSync.ADDRESS)?.takeIf { it.isNotBlank() },
+        "lastSyncAt" to store.meta(GmailSync.LAST_SYNC_AT)?.toLongOrNull(),
+        "error" to store.meta(GmailSync.ERROR)?.takeIf { it.isNotBlank() },
+        "senders" to store.gmailSenders().map { it.query },
+      )
+    }
+
+    // Tests the sign-in first, saves only on success; Expo runs AsyncFunction off the JS thread.
+    AsyncFunction("connectGmail") { address: String, appPassword: String ->
+      val mail = address.trim()
+      val password = GmailClient.clean(appPassword)
+      val invalid = when {
+        !mail.contains('@') -> GmailSync.ADDRESS_ERROR
+        password.length != 16 || !password.all { it.isLetter() } -> GmailSync.PASSWORD_ERROR
+        else -> null
+      }
+      val failure = invalid ?: try {
+        GmailClient.check(mail, password)
+        null
+      } catch (e: AuthenticationFailedException) {
+        GmailSync.AUTH_ERROR
+      } catch (e: Exception) {
+        GmailSync.NETWORK_ERROR
+      }
+      if (failure == null) {
+        val store = store()
+        store.inTransaction {
+          store.setMeta(GmailSync.ADDRESS, mail)
+          store.setMeta(GmailSync.PASSWORD, password)
+          store.deleteMeta(GmailSync.ERROR)
+          if (store.gmailSenders().isEmpty()) GmailSync.DEFAULT_SENDERS.forEach(store::addGmailSender)
+        }
+        GmailSync.schedule(context, 0)
+      }
+      mapOf("ok" to (failure == null), "message" to failure)
+    }
+
+    // Forgets the sign-in; marked senders and saved emails stay.
+    Function("disconnectGmail") { ->
+      val store = store()
+      store.inTransaction {
+        listOf(GmailSync.ADDRESS, GmailSync.PASSWORD, GmailSync.ERROR, GmailSync.LAST_SYNC_AT).forEach(store::deleteMeta)
+        store.resetGmailCursors()
+      }
+    }
+
+    Function("addGmailSender") { query: String ->
+      query.trim().lowercase().takeIf { it.isNotEmpty() }?.let(store()::addGmailSender)
+    }
+
+    Function("removeGmailSender") { query: String ->
+      store().removeGmailSender(query.trim().lowercase())
+    }
+
+    AsyncFunction("syncGmail") { ->
+      val imported = GmailSync.sync(context)
+      if (imported > 0) StoreHolder.onCaptured?.invoke(imported)
+      mapOf("imported" to imported)
     }
   }
 }
