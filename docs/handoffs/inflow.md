@@ -199,5 +199,9 @@ holds stages 1 and 2; stage 2 ledger renamed `progress-stage-2.md`). Owner answe
 transactions count straight away (design updated); the owner will paste one sample bank email
 per type (numbers changed) for the email patterns. Verified: Jakarta Mail 2.0+ (Eclipse Angus
 Mail) runs on Android as is (min API 19; no SASL on Android, not needed for an app password).
-Next step: write `docs/superpowers/plans/2026-11-13-inflow-stage-3.md` once the samples arrive,
-then execute it with cd-engineering-tools:parallel-agents-coord.
+Samples arrived (UBL Raast out email, Alfalah POS email; verbatim in the plan). Plan committed:
+`docs/superpowers/plans/2026-11-13-inflow-stage-3.md` (056d9a3; rulings R13-R18 inside: senders
+list in Settings seeded with the two bank addresses, password in the SQLCipher meta, All Mail,
+own sync executor, partial UBL account resolution, Alfalah POS only). Ledger `progress.md`
+(untracked) has the conflict scan. Next step: the owner reviews the plan; then dispatch agent K
+(K1-K4) and agent T (T1-T2) in parallel per the plan.
