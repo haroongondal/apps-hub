@@ -9,6 +9,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -296,7 +297,7 @@ class AiRunTest {
     httpCode = { n -> if (n == 1) 400 else 200 }
     val r = runner().run()
     assertEquals(2, calls)
-    assertNull(r.error)
+    assertTrue(r.error!!.contains("rejected the request (HTTP 400)"))   // the refusal is reported, so Settings shows it
     assertEquals(1, r.saved)
     assertEquals(40, store.queue.size)   // the refused batch used its first try
     assertTrue(store.queue.values.all { it.second == 1 })
@@ -311,6 +312,26 @@ class AiRunTest {
     httpCode = { 401 }
     assertTrue(runner().run().error!!.contains("refused the API key"))
     assertEquals(0, store.queue.getValue(1).second)
+    httpCode = { 503 }
+    assertNotNull(runner().run().error)
+    assertEquals(0, store.queue.getValue(1).second)
+    httpCode = { 200 }
+    offline = true
+    assertNotNull(runner().run().error)
+    assertEquals(0, store.queue.getValue(1).second)
+  }
+
+  @Test fun whenEveryBatchIsRefusedTheQueueIsKeptAndTheErrorIsReported() {
+    keyAdded()
+    (1..41).forEach { save("note $it") }   // two requests: 40 and 1
+    httpCode = { 404 }
+    val first = runner().run()
+    assertEquals(2, calls)   // stops at the second refusal
+    assertNotNull(first.error)
+    val second = runner().run()
+    assertNotNull(second.error)
+    assertEquals(41, store.queue.size)
+    assertTrue(store.queue.values.all { it.second == 0 })
   }
 
   @Test fun anItemBlockedDuringARunIsNeverSentAfterItIsUnblocked() {

@@ -19,7 +19,6 @@ interface LedgerStore {
   fun get(id: Long): Txn?
   /** Every transaction carrying this pairId, so unlinking reaches the partner whichever side the owner tapped. */
   fun paired(pairId: Long): List<Txn>
-  fun hasSource(itemId: Long): Boolean
   /** The transaction this item is a source of, if any. */
   fun txnOfItem(itemId: Long): Long?
   fun add(p: Parsed, at: Long, own: Boolean, byAi: Boolean = false): Long
@@ -79,23 +78,32 @@ class Ledger(private val store: LedgerStore, private val ownerName: () -> String
   fun onItem(itemId: Long, text: String, channel: Channel, at: Long): Long? {
     val p = Accounts.resolve(BankParser.parse(text) ?: return null, store.accounts())
     // An AI-only transaction on this item would block the pattern: the bank's numbers replace it (unless the owner decided on it).
+    var replaced: Txn? = null   // its category, label and own mark carry over to the transaction that takes its place
     store.txnOfItem(itemId)?.let { existing ->
       val t = store.get(existing)
       if (t == null || !t.byAi || t.ownSet || store.sourceCount(existing) != 1) return null
+      replaced = t
       store.deleteTxn(existing)
     }
     val w = Dedup.MERGE_WINDOW_MS
     val hit = Dedup.match(p, channel, at, store.near(p.direction, p.amountMinor, p.currency, at - w, at + w), p.txId?.let(store::byTxId))
-    if (hit != null) {
+    val id = if (hit != null) {
       store.addSource(hit, itemId, channel, p.txId, at)
       if (store.get(hit)?.byAi == true) store.clearByAi(hit)
       p.txId?.let { store.setTxIdIfNull(hit, it) }
       p.counterparty?.let { store.setCounterpartyIfNull(hit, it) }
-      return hit
+      hit
+    } else {
+      val added = store.add(p, at, OwnTransfer.nameMatches(p.counterparty, ownerName()))
+      store.addSource(added, itemId, channel, p.txId, at)
+      pair(added, p, at)
+      added
     }
-    val id = store.add(p, at, OwnTransfer.nameMatches(p.counterparty, ownerName()))
-    store.addSource(id, itemId, channel, p.txId, at)
-    pair(id, p, at)
+    replaced?.let { r ->
+      val target = store.get(id) ?: return id
+      if (target.category == null && r.category != null) store.setAiDetails(id, r.category, r.label)
+      if (r.own && !target.own && !target.ownSet) store.setOwn(id, true, false, target.pairId)
+    }
     return id
   }
 

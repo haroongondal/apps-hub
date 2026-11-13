@@ -20,7 +20,6 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
 
   override fun paired(pairId: Long): List<Txn> = txns("t.pair_id = ?", pairId)
 
-  override fun hasSource(itemId: Long): Boolean = db.rawQuery("SELECT 1 FROM txn_sources WHERE item_id = ?", itemId).use { it.moveToFirst() }
 
   override fun txnOfItem(itemId: Long): Long? =
     db.rawQuery("SELECT txn_id FROM txn_sources WHERE item_id = ?", itemId).use { if (it.moveToFirst()) it.getLong(0) else null }

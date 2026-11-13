@@ -43,6 +43,8 @@ class AiRun(
     val tried = mutableSetOf<Long>()
     var sent = 0
     var saved = 0
+    var refusal: String? = null           // the last refusal message; the run reports it so Settings shows it
+    var refused: List<Long>? = null       // the previous batch, refused: its failed() waits to see whether the next one is refused too
     while (true) {
       val batch = AiBatch.split(store.queued(FETCH).filter { it.itemId !in tried }).firstOrNull() ?: break
       val t = now()
@@ -53,11 +55,16 @@ class AiRun(
         provider.complete(AiBatch.system(), AiBatch.user(batch, accounts(), t, zone))
       } catch (e: AiError) {
         if (e.kind != AiError.Kind.BAD_REQUEST) return AiRunResult(sent, saved, false, e.message)   // the queue is kept as it was
-        // A refused batch gets one retry on a later run, then is dropped; the other batches still go.
-        store.failed(batch.map { it.itemId })
-        tried += batch.map { it.itemId }
+        refusal = e.message
+        // Two refused batches in a row mean the setup is wrong (model name, address): keep the whole queue.
+        if (refused != null) return AiRunResult(sent, saved, false, refusal)
+        // One refused batch gets one retry on a later run, then is dropped; the other batches still go.
+        refused = batch.map { it.itemId }
+        tried += refused
         continue
       }
+      refused?.let(store::failed)
+      refused = null
       store.addSpend(day, prices().cost(reply.usage))
       val results = AiBatch.parse(reply.text, batch, zone)
       // Ledger first: a crash between the two leaves the items queued, and onAi on an item it already handled only sets details.
@@ -70,7 +77,8 @@ class AiRun(
       sent += batch.size
       saved += results.size
     }
-    return AiRunResult(sent, saved, false, null)
+    refused?.let(store::failed)
+    return AiRunResult(sent, saved, false, refusal)
   }
 
   companion object {

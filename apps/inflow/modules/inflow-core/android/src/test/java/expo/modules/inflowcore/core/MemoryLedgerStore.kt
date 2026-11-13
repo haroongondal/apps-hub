@@ -14,8 +14,6 @@ class MemoryLedgerStore : LedgerStore {
 
   override fun paired(pairId: Long) = txns.values.filter { it.pairId == pairId }
 
-  override fun hasSource(itemId: Long) = itemId in sources
-
   override fun txnOfItem(itemId: Long) = sources[itemId]
 
   override fun add(p: Parsed, at: Long, own: Boolean, byAi: Boolean): Long {

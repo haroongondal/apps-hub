@@ -379,6 +379,28 @@ class LedgerTest {
     assertNotNull(store.get(aiTxn))
   }
 
+  @Test fun aiTxnWithTwoSourcesIsNotDeletedByAPatternItemOnOneOfThem() {
+    val a = nextItem++
+    val b = nextItem++
+    val aiTxn = ledger.onAi(a, aiMoney(amount = 170_000, account = null), Channel.NOTIFICATION, t0)!!
+    assertEquals(aiTxn, ledger.onAi(b, aiMoney(amount = 170_000, account = null), Channel.EMAIL_NOTIFICATION, t0 + min))
+    assertEquals(2, store.sourceCount(aiTxn))
+    assertNull(ledger.onItem(a, alfalahPos(), Channel.EMAIL, t0 + 2 * min))
+    assertNotNull(store.get(aiTxn))
+    assertEquals(2, store.sourceCount(aiTxn))
+  }
+
+  @Test fun aReplacedAiTxnPassesItsCategoryAndOwnMarkToThePatternTxn() {
+    val notification = nextItem++
+    val aiTxn = ledger.onAi(notification, aiMoney(amount = 170_000, account = null, own = true, category = "Food"), Channel.EMAIL_NOTIFICATION, t0)!!
+    assertTrue(store.get(aiTxn)!!.own)
+    val id = ledger.onItem(notification, alfalahPos(), Channel.EMAIL, t0 + min)!!
+    assertNull(store.get(aiTxn))
+    assertEquals("Food", store.get(id)!!.category)
+    assertTrue(store.get(id)!!.own)
+    assertFalse(store.get(id)!!.ownSet)
+  }
+
   @Test fun aiOnlyTxnIsNeverPairedByALaterPatternTxn() {
     val inn = ai(aiMoney(amount = 5_000_000, direction = Direction.IN, account = null, counterparty = "Someone", category = "Other"), Channel.NOTIFICATION, t0)!!
     val out = item(debit("50,000.00"), Channel.SMS, t0 + 10 * min)!!
