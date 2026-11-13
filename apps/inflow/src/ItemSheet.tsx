@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Button, Group, Notice, Row, Sheet, Text, space } from '@apps-hub/ui';
 import InflowCore, { type Item } from 'inflow-core';
+import { importanceLabel, kindLabel } from './ai.ts';
 import { exactTime } from './format.ts';
 import { SAVE_ERROR } from './messages.ts';
 
@@ -38,6 +39,14 @@ export function ItemSheet({ item, onClose, onRename, onShowSender }: { item: Ite
           {item.emailText !== null && (
             <Group title="Full email">
               <Row title={<Text selectable>{item.emailText}</Text>} />
+            </Group>
+          )}
+          {item.ai !== null && (
+            <Group title="Read by AI">
+              <Row title="Summary" subtitle={item.ai.summary} />
+              <Row title="Kind" subtitle={kindLabel(item.ai.kind)} />
+              <Row title="Importance" subtitle={importanceLabel(item.ai.importance)} />
+              {item.ai.tags.length > 0 ? <Row title="Suggested tags" subtitle={item.ai.tags.join(', ')} /> : null}
             </Group>
           )}
           <Group>

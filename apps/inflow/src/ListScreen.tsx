@@ -23,7 +23,16 @@ function ItemRow({ item, now, onPress }: { item: Item; now: number; onPress: () 
               {item.title}
             </Text>
           )}
-          <Text numberOfLines={3}>{item.text}</Text>
+          {item.ai !== null ? (
+            <>
+              <Text numberOfLines={2}>{item.ai.summary}</Text>
+              <Text variant="meta" tone="muted" numberOfLines={1}>
+                {item.text}
+              </Text>
+            </>
+          ) : (
+            <Text numberOfLines={3}>{item.text}</Text>
+          )}
           <Text variant="caption" tone="muted">{`${item.appLabel} · ${whenLabel(item.postedAt, now)}`}</Text>
           {item.deletedBySender && <Pill label="Deleted by sender" tone="warn" />}
         </View>

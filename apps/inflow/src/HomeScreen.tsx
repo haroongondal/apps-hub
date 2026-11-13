@@ -1,10 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { Button, Empty, Field, Group, Header, Notice, Row, Screen, Text } from '@apps-hub/ui';
-import InflowCore, { addCapturedListener, type HomeSummary, type ItemFilter, type MoneySummary, type Status } from 'inflow-core';
+import InflowCore, { addCapturedListener, type HomeSummary, type Item, type ItemFilter, type MoneySummary, type Status } from 'inflow-core';
+import { dueLabel } from './ai.ts';
 import { whenLabel } from './format.ts';
+import { ItemSheet } from './ItemSheet.tsx';
 import { healthNotice } from './health.ts';
-import { LOAD_ERROR } from './messages.ts';
+import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
 import { formatAmount, monthRange } from './money.ts';
+import { RenameSheet, type RenameTarget } from './RenameSheet.tsx';
 
 const EMPTY_TEXT = "New notifications will appear here as they arrive. Inflow can't read ones that came before it was set up.";
 
@@ -29,6 +33,8 @@ export function HomeScreen({
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<Item | null>(null);
+  const [renaming, setRenaming] = useState<RenameTarget | null>(null);
 
   const load = useCallback(() => {
     try {
@@ -92,6 +98,22 @@ export function HomeScreen({
     refreshStatus();
     load();
   };
+  const finishTodo = (id: number) => {
+    try {
+      InflowCore.setTodoDone(id, true);
+    } catch {
+      setError(SAVE_ERROR);
+      return;
+    }
+    load();
+  };
+  const openTodoItem = (itemId: number) => {
+    try {
+      setSelected(InflowCore.getItem(itemId));
+    } catch {
+      setError(LOAD_ERROR);
+    }
+  };
   const empty = summary !== null && summary.conversations.length === 0 && summary.apps.length === 0;
 
   return (
@@ -126,6 +148,40 @@ export function HomeScreen({
           ))
         )}
       </Group>
+      {summary !== null && summary.important.length > 0 && (
+        <Group title="Important">
+          {summary.important.map((i) => (
+            <Row
+              key={i.id}
+              title={i.displayName ?? i.sender ?? i.appLabel}
+              subtitle={
+                <View style={{ gap: 2 }}>
+                  <Text numberOfLines={2}>{i.ai?.summary ?? i.text}</Text>
+                  <Text variant="caption" tone="muted">{`${i.appLabel} · ${whenLabel(i.postedAt, now)}`}</Text>
+                </View>
+              }
+              onPress={() => setSelected(i)}
+            />
+          ))}
+        </Group>
+      )}
+      {summary !== null && (
+        <Group title="Coming up">
+          {summary.comingUp.length === 0 ? (
+            <Row title={<Text tone="muted">Nothing coming up.</Text>} />
+          ) : (
+            summary.comingUp.map((t) => (
+              <Row
+                key={t.id}
+                title={t.text}
+                subtitle={dueLabel(t.dueAt, now)}
+                onPress={() => openTodoItem(t.itemId)}
+                trailing={<Button label="Done" variant="secondary" size="sm" onPress={() => finishTodo(t.id)} />}
+              />
+            ))
+          )}
+        </Group>
+      )}
       {empty && <Empty title="Nothing saved yet" body={EMPTY_TEXT} />}
       {summary !== null && !empty && (
         <Group title="Messages">
@@ -161,6 +217,26 @@ export function HomeScreen({
           ))}
         </Group>
       )}
+      <ItemSheet
+        item={selected}
+        onClose={() => setSelected(null)}
+        onRename={(item) => {
+          setSelected(null);
+          if (item.senderKey !== null) setRenaming({ senderKey: item.senderKey, sender: item.sender ?? item.appLabel, name: item.displayName });
+        }}
+        onShowSender={(name) => {
+          setSelected(null);
+          onOpen({ kind: 'sender', name }, name);
+        }}
+      />
+      <RenameSheet
+        target={renaming}
+        onClose={() => setRenaming(null)}
+        onSaved={() => {
+          setRenaming(null);
+          load();
+        }}
+      />
     </Screen>
   );
 }

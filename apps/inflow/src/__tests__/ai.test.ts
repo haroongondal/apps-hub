@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { capLabel, dueLabel, kindLabel, parseCap, sendResultLabel } from '../ai.ts';
+import { capLabel, dueLabel, kindLabel, parseCap, sendResultLabel, askBasis, importanceLabel } from '../ai.ts';
 
 // TZ is Asia/Karachi (UTC+5, no daylight saving) in the test script.
 const KARACHI = 5 * 3600 * 1000;
@@ -52,4 +52,16 @@ test('sendResultLabel says what happened in plain words', () => {
   assert.equal(sendResultLabel(0, 0), 'Nothing was waiting to send.');
   assert.equal(sendResultLabel(1, 1), 'Sent 1 item. 1 came back with a summary.');
   assert.equal(sendResultLabel(12, 10), 'Sent 12 items. 10 came back with a summary.');
+});
+
+test('importanceLabel capitalises', () => {
+  assert.equal(importanceLabel('high'), 'High');
+  assert.equal(importanceLabel('low'), 'Low');
+});
+
+test('askBasis counts and names the range, an exclusive midnight end included', () => {
+  assert.equal(askBasis(12, 3, at(2026, 11, 1, 0, 0), at(2026, 11, 14, 8, 0), now), 'Based on 12 messages and 3 transactions from 1 Nov to 14 Nov');
+  assert.equal(askBasis(1, 1, at(2026, 11, 1, 0, 0), at(2026, 12, 1, 0, 0), now), 'Based on 1 message and 1 transaction from 1 Nov to 30 Nov');
+  assert.equal(askBasis(0, 0, at(2026, 11, 14, 0, 0), at(2026, 11, 15, 0, 0), now), 'Based on 0 messages and 0 transactions from 14 Nov');
+  assert.equal(askBasis(2, 0, at(2025, 12, 20, 0, 0), at(2026, 1, 5, 12, 0), now), 'Based on 2 messages and 0 transactions from 20 Dec 2025 to 5 Jan');
 });

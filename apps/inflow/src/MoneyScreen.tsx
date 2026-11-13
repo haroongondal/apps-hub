@@ -13,11 +13,12 @@ function TxnRow({ txn, now, onPress }: { txn: Txn; now: number; onPress: () => v
   return (
     <Row
       onPress={onPress}
-      title={txn.counterparty ?? (txn.direction === 'in' ? 'Money in' : 'Money out')}
+      title={txn.label ?? txn.counterparty ?? (txn.direction === 'in' ? 'Money in' : 'Money out')}
       subtitle={
         <View style={{ gap: 2 }}>
           <Text variant="caption" tone="muted">{`${txn.account} · ${whenLabel(txn.at, now)}`}</Text>
           {txn.own && <Pill label="Own transfer" />}
+          {txn.byAi && <Pill label="Read by AI" />}
         </View>
       }
       trailing={
@@ -100,6 +101,18 @@ export function MoneyScreen({ status }: { status: Status }) {
           <Row title="Transactions" trailing={<Text variant="data">{String(a.count)}</Text>} />
         </Group>
       ))}
+      {summary !== null && summary.categories.length > 0 && (
+        <Group title="By category">
+          {summary.categories.map((cat) => (
+            <Row
+              key={`${cat.category}|${cat.currency}`}
+              title={cat.category}
+              subtitle={`${cat.count} ${cat.count === 1 ? 'payment' : 'payments'}`}
+              trailing={<Text variant="data">{formatAmount(cat.total, cat.currency)}</Text>}
+            />
+          ))}
+        </Group>
+      )}
       {summary !== null && summary.merchants.length > 0 && (
         <Group title="Where it went">
           {summary.merchants.map((m) => (

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { AppState, BackHandler, View } from 'react-native';
 import { Button, Header, Notice, Screen, TabBar, ThemeProvider } from '@apps-hub/ui';
 import InflowCore, { type ItemFilter, type Status } from 'inflow-core';
+import { AskScreen } from './src/AskScreen.tsx';
 import { HomeScreen } from './src/HomeScreen.tsx';
 import { ListScreen } from './src/ListScreen.tsx';
 import { LockScreen } from './src/LockScreen.tsx';
@@ -11,7 +12,7 @@ import { SettingsScreen } from './src/SettingsScreen.tsx';
 import { SetupScreen } from './src/SetupScreen.tsx';
 import { setupComplete, setupRows } from './src/setup.ts';
 
-type Tab = 'home' | 'money' | 'settings';
+type Tab = 'home' | 'money' | 'ask' | 'settings';
 interface Route {
   filter: ItemFilter;
   title: string;
@@ -20,6 +21,7 @@ interface Route {
 const TABS: ReadonlyArray<{ key: Tab; label: string }> = [
   { key: 'home', label: 'Home' },
   { key: 'money', label: 'Money' },
+  { key: 'ask', label: 'Ask AI' },
   { key: 'settings', label: 'Settings' },
 ];
 
@@ -104,6 +106,8 @@ function Root() {
           <HomeScreen status={status} refreshStatus={refresh} onOpen={open} onOpenMoney={() => setTab('money')} />
         ) : tab === 'money' ? (
           <MoneyScreen status={status} />
+        ) : tab === 'ask' ? (
+          <AskScreen />
         ) : (
           <SettingsScreen status={status} refreshStatus={refresh} />
         )}

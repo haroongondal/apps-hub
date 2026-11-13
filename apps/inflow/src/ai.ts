@@ -48,3 +48,23 @@ export const CAP_REACHED = "Inflow reached today's AI spending limit. It will se
 
 export const sendResultLabel = (sent: number, saved: number): string =>
   sent === 0 ? 'Nothing was waiting to send.' : `Sent ${sent} ${sent === 1 ? 'item' : 'items'}. ${saved} came back with a summary.`;
+
+export const importanceLabel = (importance: 'high' | 'normal' | 'low'): string => importance.charAt(0).toUpperCase() + importance.slice(1);
+
+export const ASK_OFF = 'Add an API key in Settings to ask questions.';
+export const ASK_EMPTY = "Inflow didn't get an answer. Try again.";
+
+const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+const dayText = (d: Date, now: Date): string => `${d.getDate()} ${MONTHS[d.getMonth()]}${d.getFullYear() === now.getFullYear() ? '' : ` ${d.getFullYear()}`}`;
+
+// `to` may be the first instant of the next day (an exclusive end); then the last day shown is the day before.
+export function askBasis(items: number, txns: number, from: number, to: number, now: number): string {
+  const n = new Date(now);
+  const first = new Date(from);
+  const exclusive = new Date(to);
+  const midnight = exclusive.getHours() === 0 && exclusive.getMinutes() === 0 && exclusive.getSeconds() === 0 && exclusive.getMilliseconds() === 0;
+  const last = midnight ? new Date(to - 1) : exclusive;
+  const a = dayText(first, n);
+  const b = dayText(last, n);
+  return `Based on ${plural(items, 'message', 'messages')} and ${plural(txns, 'transaction', 'transactions')} from ${a === b ? a : `${a} to ${b}`}`;
+}
