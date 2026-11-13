@@ -29,6 +29,8 @@ import expo.modules.opentunnelnative.firewall.FirewallStartPolicy
 import expo.modules.opentunnelnative.firewall.FirewallStore
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The app's own VpnService host — package `com.opentunnel.open_tunnel_vpn`,
@@ -58,6 +60,15 @@ class OpenTunnelVpnService : VpnService() {
 
   private var engine: TunnelEngine? = null
   private val main = Handler(Looper.getMainLooper())
+
+  // Engine stop waits up to 3 s for the OpenVPN engine's down-latch; on the
+  // main thread that stall queued a repeated power-off tap behind the latch
+  // (the multiple-taps bug). One executor thread keeps the stop steps in
+  // order, and the main thread returns right after posting `disconnecting`.
+  private val stopExecutor by lazy { Executors.newSingleThreadExecutor() }
+
+  /** True from the accepted stop until its final `disconnected` post; a repeated tap is ignored (StopPolicy). */
+  private val stopInFlight = AtomicBoolean(false)
 
   // The firewall lives in the :firewall process and shares only this store (plan Task 6).
   private val firewallStore by lazy { FirewallStore(this) }
@@ -231,24 +242,45 @@ class OpenTunnelVpnService : VpnService() {
   }
 
   /** Tidy stop: disconnecting → engine down → disconnected, notification
-   * removed, ticker stopped, service ends itself. */
+   * removed, ticker stopped, service ends itself. The engine stop can block
+   * up to 3 s on the OpenVPN engine's down-latch, so it runs on the stop
+   * executor: the main thread only posts `disconnecting` and returns, and a
+   * repeated tap while a stop is in flight changes nothing (StopPolicy) —
+   * the running run owns the engine stop and the final post. */
   private fun stopTunnel() {
     cancelPendingStart()
+    if (!StopPolicy.shouldRunStop(stopInFlight.get())) {
+      return
+    }
+    stopInFlight.set(true)
     TunnelStateRegistry.setStatus(TunnelStatus.DISCONNECTING)
     TunnelEventBus.postStatus(TunnelStatus.DISCONNECTING, null)
 
-    val active = engine
-    engine = null
-    if (active != null) runCatching { active.stop() }
+    stopExecutor.execute {
+      try {
+        val active = engine
+        engine = null
+        // A stop that throws (engine still starting) must not skip the final
+        // state: `disconnected` is posted either way.
+        runCatching { active?.stop() }
+          .onFailure {
+            Log.w(TAG, "engine stop failed: ${it.javaClass.simpleName}: ${it.message?.take(200)}")
+          }
 
-    TrafficTicker.stop()
-    TunnelStateRegistry.setStatus(TunnelStatus.DISCONNECTED)
-    TunnelEventBus.postStatus(TunnelStatus.DISCONNECTED, null)
-    setServerActive(false)
-    restoreFirewall()
+        TrafficTicker.stop()
+        TunnelStateRegistry.setStatus(TunnelStatus.DISCONNECTED)
+        TunnelEventBus.postStatus(TunnelStatus.DISCONNECTED, null)
+        setServerActive(false)
+        restoreFirewall()
 
-    stopForegroundCompat()
-    stopSelf()
+        stopForegroundCompat()
+        stopSelf()
+      } finally {
+        // Released only after this run's final post, so a later tap cannot
+        // start a second stop run mid-flight.
+        stopInFlight.set(false)
+      }
+    }
   }
 
   /** The system revoked the VPN (another app started one, or the user
@@ -276,12 +308,17 @@ class OpenTunnelVpnService : VpnService() {
     // Revoke and a stale intent end here with the engine stopped but no stopTunnel.
     setServerActive(false)
 
-    // Final convergence: leave the registry only on true terminal states.
+    // Final convergence: leave the registry only on true terminal states. A
+    // stop run still in flight posts the final `disconnected` itself (the
+    // executor finishes its task even after shutdown), so it is not doubled
+    // here — `disconnecting` never stays stuck with no exit path.
     val status = TunnelStateRegistry.statusState
-    if (status != TunnelStatus.DISCONNECTED && status != TunnelStatus.ERROR) {
+    if (!stopInFlight.get() && status != TunnelStatus.DISCONNECTED && status != TunnelStatus.ERROR) {
       TunnelStateRegistry.setStatus(TunnelStatus.DISCONNECTED)
       TunnelEventBus.postStatus(TunnelStatus.DISCONNECTED, null)
     }
+    // Queued or running stop tasks still complete after shutdown().
+    stopExecutor.shutdown()
     super.onDestroy()
   }
 
