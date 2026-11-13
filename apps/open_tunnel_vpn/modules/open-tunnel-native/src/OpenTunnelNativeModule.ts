@@ -40,6 +40,9 @@ export interface VpnTunnelConfig {
 export interface VpnStatusPayload {
   state: VpnStatusState;
   message?: string;
+  /** Typed failure code when `state === 'error'`, e.g. `ERR_AUTH_FAILED`;
+   * absent when the engine failure has no code. */
+  code?: OpenTunnelErrorCode;
 }
 
 export interface VpnTrafficPayload {
@@ -171,7 +174,9 @@ export interface OpenTunnelNativeApi extends FirewallNativeApi {
 
 /** Typed native rejects (Expo `Promise.reject` codes, plan §4.1). The
  * probe's parameter-validation code (netlens-style `ERR_INVALID_PARAMS`)
- * is module-side and surfaced on transport-independent misuse. */
+ * is module-side and surfaced on transport-independent misuse. Engine-raised
+ * async failures (e.g. `ERR_AUTH_FAILED`) are not rejects: they ride the
+ * status event as `VpnStatusPayload.code`. */
 export const OPEN_TUNNEL_ERROR_CODES = {
   INVALID_CONFIG: 'ERR_INVALID_CONFIG',
   INVALID_PARAMS: 'ERR_INVALID_PARAMS',
@@ -179,6 +184,9 @@ export const OPEN_TUNNEL_ERROR_CODES = {
   ENGINE_UNAVAILABLE: 'ERR_ENGINE_UNAVAILABLE',
   SERVICE_START_FAILED: 'ERR_SERVICE_START_FAILED',
   PROBE_FAILED: 'ERR_PROBE_FAILED',
+  /** Engine-raised auth rejection (`LEVEL_AUTH_FAILED`, `LEVEL_WAITING_FOR_USER_INPUT`);
+   * rides the status event as `VpnStatusPayload.code`, not a reject. */
+  AUTH_FAILED: 'ERR_AUTH_FAILED',
   FIREWALL_NOT_SUPPORTED: 'ERR_FIREWALL_NOT_SUPPORTED',
   FIREWALL_FAILED: 'ERR_FIREWALL_FAILED',
 } as const;
