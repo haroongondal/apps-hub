@@ -17,8 +17,8 @@ claim <folder>) and release it when you stop.
    docs/superpowers/specs/2026-11-13-inflow-design.md; plans: docs/superpowers/plans/
    2026-11-13-inflow-stage-{1,2,3}.md. Trust the decisions, rulings and verified facts; do not
    re-ask the owner what they settled; do not re-run reviews or fix waves.
-2. Next step: ask the owner for the release go (they said "not yet" for stages 1-2) and whether
-   to fix the two parked Minors (R22) first. Never merge, release or install without that go.
+2. Next step: release waits for the owner's word (they chose "Fix both, hold release"; both R22
+   Minors are fixed in 78798c6). When they say go: never merge, release or install without that go.
    Process: push, PR, squash-merge with [skip ci], then pnpm release inflow locally from a clean
    checkout of merged main. Install only from the Store; never adb-install on the owner's phone;
    claim device:<ro.serialno> with coord first. Run the phone checks of stages 1, 2 and 3 (stage 1
@@ -177,19 +177,18 @@ most likely to be second-guessed:
 
 ## Current state and next step
 
-State (2026-11-13): stages 1, 2 and 3 built, reviewed and fixed on `inflow/stage-3` (stage 3 HEAD
-5b93dd9 plus docs). Nothing pushed, merged, released or installed; the owner said "not yet" to
-releasing stages 1-2 and has not been asked about stage 3. All gates green at 5b93dd9: Kotlin 136
-tests 0 failures, assembleDebug, pnpm test, pnpm typecheck (inflow 31/31).
+State (2026-11-13): stages 1, 2 and 3 built, reviewed and fixed on `inflow/stage-3` (code HEAD
+78798c6). Nothing pushed, merged, released or installed: the owner chose "Fix both, hold release",
+so release waits for the owner's word. All gates green at 78798c6: Kotlin 137 tests 0 failures,
+assembleDebug, pnpm test, pnpm typecheck (inflow 31/31).
 
 Stage 3 facts: the release INTERNET strip overlay is deleted; INTERNET is in the module manifest
 and only `imap.gmail.com:993` (TLS, server identity checked) is contacted; a test
 (`apps/inflow/tools/__tests__/gmail-network.test.mjs`) pins that. Mail library Angus Mail 2.0.3
 (+ jakarta.mail-api 2.1.3, angus-activation 2.0.2, jakarta.activation-api 2.1.3; EPL-2.0 / GPL-2.0
 +CE / EDL-1.0); their LICENSE.md/NOTICE.md are merged into the APK (R19). Senders: exact address
-match for queries with '@' (R20; both banks publish DMARC p=reject). Parked Minors (R22): a
-partial '@domain' sender query imports nothing silently; Disconnect+Connect during a running sync
-delays the new account's first sync until the next trigger.
+match for queries with '@' (R20; both banks publish DMARC p=reject); "@domain" matches that exact
+domain. The two R22 Minors were fixed in 78798c6 at the owner's request ("Fix both, hold release").
 
 Unproven until the phone check: all SQL under SQLCipher (v2 rebuild, v3 columns, email queries,
 tombstones), SMS provider queries and permission grant under a Store install, real IMAP (app
