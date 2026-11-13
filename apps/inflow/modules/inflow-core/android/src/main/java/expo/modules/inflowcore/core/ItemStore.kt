@@ -6,10 +6,18 @@ interface ItemStore {
   fun appSetting(pkg: String): AppSetting?
   fun putAppSetting(s: AppSetting)
 
-  /** False when the hash is already saved or tombstoned. */
-  fun insert(c: Capture, search: String, otpExpiresAt: Long?): Boolean
+  /** The new row id; null when the hash or SMS hash is already saved or tombstoned. */
+  fun insert(c: Capture, search: String, otpExpiresAt: Long?, smsHash: String? = null): Long?
+  fun isTombstoned(hash: String): Boolean
+  fun hasSmsHash(smsHash: String): Boolean
+  /** An item from the SMS channel (sms_hash set) with exactly this text, posted within ±window. Expired but unpurged OTP rows count: they are about to be tombstoned. */
+  fun smsItemNear(text: String, at: Long, windowMs: Long): Boolean
+  /** Newest notification item (sms_hash null) from one of pkgs with exactly this text within ±window. */
+  fun notificationTwin(text: String, at: Long, windowMs: Long, pkgs: Set<String>): Long?
+  fun setSmsHash(itemId: Long, smsHash: String)
 
   fun markDeletedBySender(pkg: String, conversationKey: String?, sender: String?, postedAt: Long): Boolean
+  /** Also tombstones Sms.textHash(text) of each purged row. */
   fun purgeExpiredOtps(now: Long): Int
   fun purgeOlder(pkg: String, cutoff: Long): Int
   fun deleteApp(pkg: String): Int

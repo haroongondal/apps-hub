@@ -1,12 +1,13 @@
 package expo.modules.inflowcore.core
 
-class StoredItem(val capture: Capture, val search: String, val otpExpiresAt: Long?, var deleted: Boolean = false)
+class StoredItem(val id: Long, val capture: Capture, val search: String, val otpExpiresAt: Long?, var smsHash: String? = null, var deleted: Boolean = false)
 
 class MemoryItemStore : ItemStore {
   val items = LinkedHashMap<String, StoredItem>()
   val tombstones = mutableSetOf<String>()
   private val settings = LinkedHashMap<String, AppSetting>()
   private val meta = HashMap<String, String>()
+  private var nextId = 1L
 
   override fun appSetting(pkg: String): AppSetting? = settings[pkg]
 
@@ -14,10 +15,28 @@ class MemoryItemStore : ItemStore {
     settings[s.pkg] = s
   }
 
-  override fun insert(c: Capture, search: String, otpExpiresAt: Long?): Boolean {
-    if (c.hash in items || c.hash in tombstones) return false
-    items[c.hash] = StoredItem(c, search, otpExpiresAt)
-    return true
+  override fun insert(c: Capture, search: String, otpExpiresAt: Long?, smsHash: String?): Long? {
+    if (c.hash in items || c.hash in tombstones) return null
+    if (smsHash != null && hasSmsHash(smsHash)) return null
+    val id = nextId++
+    items[c.hash] = StoredItem(id, c, search, otpExpiresAt, smsHash)
+    return id
+  }
+
+  override fun isTombstoned(hash: String) = hash in tombstones
+
+  override fun hasSmsHash(smsHash: String) = items.values.any { it.smsHash == smsHash }
+
+  override fun smsItemNear(text: String, at: Long, windowMs: Long) =
+    items.values.any { it.smsHash != null && it.capture.text == text && Math.abs(it.capture.postedAt - at) <= windowMs }
+
+  override fun notificationTwin(text: String, at: Long, windowMs: Long, pkgs: Set<String>): Long? =
+    items.values
+      .filter { it.smsHash == null && it.capture.pkg in pkgs && it.capture.text == text && Math.abs(it.capture.postedAt - at) <= windowMs }
+      .maxWithOrNull(compareBy<StoredItem>({ it.capture.postedAt }, { it.id }))?.id
+
+  override fun setSmsHash(itemId: Long, smsHash: String) {
+    items.values.first { it.id == itemId }.smsHash = smsHash
   }
 
   override fun markDeletedBySender(pkg: String, conversationKey: String?, sender: String?, postedAt: Long): Boolean {
@@ -31,7 +50,7 @@ class MemoryItemStore : ItemStore {
 
   override fun purgeExpiredOtps(now: Long): Int {
     val expired = items.filterValues { (it.otpExpiresAt ?: Long.MAX_VALUE) <= now }.keys.toList()
-    expired.forEach { items.remove(it); tombstones.add(it) }
+    expired.forEach { tombstones.add(it); tombstones.add(Sms.textHash(items.getValue(it).capture.text)); items.remove(it) }
     return expired.size
   }
 

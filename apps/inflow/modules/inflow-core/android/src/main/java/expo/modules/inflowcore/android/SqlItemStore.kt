@@ -10,6 +10,7 @@ import expo.modules.inflowcore.core.ItemStore
 import expo.modules.inflowcore.core.KEY_LOST_MESSAGE
 import expo.modules.inflowcore.core.OpenPlan
 import expo.modules.inflowcore.core.SearchText
+import expo.modules.inflowcore.core.Sms
 import expo.modules.inflowcore.core.openPlan
 import net.zetetic.database.DatabaseErrorHandler
 import net.zetetic.database.sqlcipher.SQLiteConnection
@@ -29,14 +30,39 @@ class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemSto
     )
   }
 
-  override fun insert(c: Capture, search: String, otpExpiresAt: Long?): Boolean {
-    if (query("SELECT 1 FROM tombstones WHERE hash = ?", c.hash).use { it.moveToFirst() }) return false
-    return run(
+  override fun insert(c: Capture, search: String, otpExpiresAt: Long?, smsHash: String?): Long? {
+    if (isTombstoned(c.hash)) return null
+    if (smsHash != null && hasSmsHash(smsHash)) return null
+    val added = run(
       "INSERT OR IGNORE INTO items(hash, pkg, app_label, sender, sender_key, conversation, conversation_key, title, text, " +
-        "posted_at, captured_at, otp_expires_at, deleted_by_sender, search) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)",
+        "posted_at, captured_at, otp_expires_at, deleted_by_sender, search, sms_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
       c.hash, c.pkg, c.appLabel, c.sender, c.senderKey, c.conversation, c.conversationKey, c.title, c.text,
-      c.postedAt, System.currentTimeMillis(), otpExpiresAt, search,
-    ) > 0
+      c.postedAt, System.currentTimeMillis(), otpExpiresAt, search, smsHash,
+    )
+    if (added == 0) return null
+    return query("SELECT id FROM items WHERE hash = ?", c.hash).use { if (it.moveToFirst()) it.getLong(0) else null }
+  }
+
+  override fun isTombstoned(hash: String): Boolean = query("SELECT 1 FROM tombstones WHERE hash = ?", hash).use { it.moveToFirst() }
+
+  override fun hasSmsHash(smsHash: String): Boolean = query("SELECT 1 FROM items WHERE sms_hash = ?", smsHash).use { it.moveToFirst() }
+
+  override fun smsItemNear(text: String, at: Long, windowMs: Long): Boolean =
+    query("SELECT 1 FROM items WHERE sms_hash IS NOT NULL AND posted_at BETWEEN ? AND ? AND text = ? LIMIT 1", at - windowMs, at + windowMs, text)
+      .use { it.moveToFirst() }
+
+  override fun notificationTwin(text: String, at: Long, windowMs: Long, pkgs: Set<String>): Long? {
+    if (pkgs.isEmpty()) return null
+    val marks = pkgs.joinToString(",") { "?" }
+    return query(
+      "SELECT id FROM items WHERE sms_hash IS NULL AND posted_at BETWEEN ? AND ? AND text = ? AND pkg IN ($marks) " +
+        "ORDER BY posted_at DESC, id DESC LIMIT 1",
+      at - windowMs, at + windowMs, text, *pkgs.toTypedArray(),
+    ).use { if (it.moveToFirst()) it.getLong(0) else null }
+  }
+
+  override fun setSmsHash(itemId: Long, smsHash: String) {
+    run("UPDATE OR IGNORE items SET sms_hash = ? WHERE id = ?", smsHash, itemId)
   }
 
   override fun markDeletedBySender(pkg: String, conversationKey: String?, sender: String?, postedAt: Long): Boolean =
@@ -46,7 +72,13 @@ class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemSto
     ) > 0
 
   override fun purgeExpiredOtps(now: Long): Int = transaction {
-    run("INSERT OR IGNORE INTO tombstones(hash, at) SELECT hash, ? FROM items WHERE otp_expires_at IS NOT NULL AND otp_expires_at <= ?", now, now)
+    val expired = query("SELECT hash, text FROM items WHERE otp_expires_at IS NOT NULL AND otp_expires_at <= ?", now).use { c ->
+      buildList { while (c.moveToNext()) add(c.getString(0) to c.getString(1)) }
+    }
+    for ((hash, text) in expired) {
+      run("INSERT OR IGNORE INTO tombstones(hash, at) VALUES (?, ?)", hash, now)
+      run("INSERT OR IGNORE INTO tombstones(hash, at) VALUES (?, ?)", Sms.textHash(text), now)
+    }
     run("DELETE FROM items WHERE otp_expires_at IS NOT NULL AND otp_expires_at <= ?", now)
   }
 
@@ -196,7 +228,7 @@ class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemSto
 
   companion object {
     private const val DB_NAME = "inflow.db"
-    private const val SCHEMA_VERSION = 1
+    private const val SCHEMA_VERSION = 2
     private const val GENERIC_FAILURE =
       "Inflow can't open your saved history. The history file is kept, not deleted. Restart the phone and try again."
     private const val VISIBLE_I = "(i.otp_expires_at IS NULL OR i.otp_expires_at > ?)"
@@ -204,7 +236,7 @@ class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemSto
     private const val VISIBLE_T = "(t.otp_expires_at IS NULL OR t.otp_expires_at > ?)"
     private val lock = Any()
 
-    private val SCHEMA = listOf(
+    private val SCHEMA_V1 = listOf(
       "CREATE TABLE IF NOT EXISTS items(id INTEGER PRIMARY KEY, hash TEXT NOT NULL UNIQUE, pkg TEXT NOT NULL, app_label TEXT NOT NULL, " +
         "sender TEXT, sender_key TEXT, conversation TEXT, conversation_key TEXT, title TEXT, text TEXT NOT NULL, " +
         "posted_at INTEGER NOT NULL, captured_at INTEGER NOT NULL, otp_expires_at INTEGER, " +
@@ -217,6 +249,20 @@ class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemSto
       "CREATE TABLE IF NOT EXISTS sender_names(sender_key TEXT PRIMARY KEY, sender TEXT NOT NULL, name TEXT NOT NULL)",
       "CREATE TABLE IF NOT EXISTS tombstones(hash TEXT PRIMARY KEY, at INTEGER NOT NULL)",
       "CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT NOT NULL)",
+    )
+
+    // Not idempotent (ALTER TABLE): ensureSchema runs it once, in the same transaction as the version bump.
+    private val SCHEMA_V2 = listOf(
+      "ALTER TABLE items ADD COLUMN sms_hash TEXT",
+      "CREATE UNIQUE INDEX items_sms ON items(sms_hash) WHERE sms_hash IS NOT NULL",
+      "CREATE TABLE txns(id INTEGER PRIMARY KEY, direction TEXT NOT NULL, amount_minor INTEGER NOT NULL, currency TEXT NOT NULL, " +
+        "account TEXT NOT NULL, counterparty TEXT, tx_id TEXT, at INTEGER NOT NULL, " +
+        "own INTEGER NOT NULL DEFAULT 0, own_set INTEGER NOT NULL DEFAULT 0, pair_id INTEGER)",
+      "CREATE INDEX txns_at ON txns(at DESC, id DESC)",
+      "CREATE INDEX txns_match ON txns(amount_minor, at)",
+      "CREATE INDEX txns_txid ON txns(tx_id) WHERE tx_id IS NOT NULL",
+      "CREATE TABLE txn_sources(txn_id INTEGER NOT NULL, item_id INTEGER NOT NULL UNIQUE, channel TEXT NOT NULL, tx_id TEXT, at INTEGER NOT NULL)",
+      "CREATE INDEX txn_sources_txn ON txn_sources(txn_id)",
     )
 
     private val neverDeleteOnCorruption = object : DatabaseErrorHandler {
@@ -259,7 +305,8 @@ class SqlItemStore private constructor(private val db: SQLiteDatabase) : ItemSto
         if (db.version >= SCHEMA_VERSION) return
         db.beginTransaction()
         try {
-          SCHEMA.forEach(db::execSQL)
+          if (db.version < 1) SCHEMA_V1.forEach(db::execSQL)
+          SCHEMA_V2.forEach(db::execSQL)
           db.version = SCHEMA_VERSION
           db.setTransactionSuccessful()
         } finally {

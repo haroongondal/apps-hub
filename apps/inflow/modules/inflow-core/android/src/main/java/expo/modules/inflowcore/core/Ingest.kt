@@ -5,6 +5,8 @@ class Ingest(
   private val ownPkg: String,
   private val now: () -> Long,
   private val onOtpSaved: (expiresAt: Long) -> Unit = {},
+  private val ledger: Ledger? = null,
+  private val smsPackages: Set<String> = Sms.KNOWN_APPS,
 ) {
   fun onNotification(raw: RawNotification): Int {
     if (raw.pkg == ownPkg) return 0
@@ -18,16 +20,49 @@ class Ingest(
         store.markDeletedBySender(c.pkg, c.conversationKey, c.sender, c.postedAt)
         continue
       }
-      val search = SearchText.normalize(listOfNotNull(c.sender, c.conversation, c.title, c.text).joinToString(" "))
+      val fromSmsApp = c.pkg in smsPackages
+      // The SMS path owns this message; a purged OTP's text stays tombstoned against a re-posted notification.
+      if (fromSmsApp && (store.smsItemNear(c.text, c.postedAt, Dedup.MERGE_WINDOW_MS) || store.isTombstoned(Sms.textHash(c.text)))) continue
+      val search = searchOf(c)
       val otpExpiresAt = if (OtpDetector.isOtp(c.pkg, c.text)) now() + OTP_TTL_MS else null
-      if (store.insert(c, search, otpExpiresAt)) {
-        saved++
-        otpExpiresAt?.let(onOtpSaved)
+      val id = store.insert(c, search, otpExpiresAt) ?: continue
+      saved++
+      otpExpiresAt?.let(onOtpSaved)
+      if (otpExpiresAt == null) {
+        val channel = when {
+          fromSmsApp -> Channel.SMS_NOTIFICATION
+          c.pkg == GMAIL -> Channel.EMAIL_NOTIFICATION
+          else -> Channel.NOTIFICATION
+        }
+        ledger?.onItem(id, c.text, channel, c.postedAt)
       }
     }
     housekeeping()
     return saved
   }
+
+  fun onSms(sms: RawSms, smsPkg: String, smsLabel: String): Int {
+    val setting = store.appSetting(smsPkg) ?: Retention.default(smsPkg, smsLabel).also { store.putAppSetting(it) }
+    if (!setting.record) return 0
+    val c = Sms.capture(sms, smsPkg, smsLabel)
+    if (store.hasSmsHash(c.hash) || store.isTombstoned(c.hash) || store.isTombstoned(Sms.textHash(sms.body))) return 0
+    val isOtp = OtpDetector.isOtp(smsPkg, sms.body)
+    if (isOtp && c.postedAt + OTP_TTL_MS <= now()) return 0
+    val twin = store.notificationTwin(sms.body, c.postedAt, Dedup.MERGE_WINDOW_MS, smsPackages)
+    if (twin != null) {
+      store.setSmsHash(twin, c.hash)
+      return 0
+    }
+    // An OTP from the inbox lives only what is left of its 5 minutes.
+    val otpExpiresAt = if (isOtp) minOf(c.postedAt, now()) + OTP_TTL_MS else null
+    val id = store.insert(c, searchOf(c), otpExpiresAt, c.hash) ?: return 0
+    otpExpiresAt?.let(onOtpSaved)
+    if (!isOtp) ledger?.onItem(id, sms.body, Channel.SMS, c.postedAt)
+    housekeeping()
+    return 1
+  }
+
+  private fun searchOf(c: Capture) = SearchText.normalize(listOfNotNull(c.sender, c.conversation, c.title, c.text).joinToString(" "))
 
   fun housekeeping() {
     val t = now()
@@ -45,5 +80,6 @@ class Ingest(
     const val OTP_TTL_MS = 5 * 60_000L
     const val DAY_MS = 86_400_000L
     private const val LAST_RETENTION = "lastRetentionAt"
+    private const val GMAIL = "com.google.android.gm"
   }
 }
