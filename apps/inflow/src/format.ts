@@ -19,3 +19,8 @@ export function keepLabel(days: number | null): string {
   if (days === 365) return '1 year';
   return `${days} days`;
 }
+
+export function exactTime(at: number): string {
+  const d = new Date(at);
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`;
+}

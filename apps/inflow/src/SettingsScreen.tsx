@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Group, Header, Notice, Row, Screen, Segmented, Sheet, Text } from '@apps-hub/ui';
+import { Button, Field, Group, Header, Notice, Row, Screen, Segmented, Sheet, Text } from '@apps-hub/ui';
 import InflowCore, { type AppSetting, type SenderName, type Status } from 'inflow-core';
 import { keepLabel } from './format.ts';
 import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
@@ -22,12 +22,14 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
   const [error, setError] = useState<string | null>(null);
   const [stopping, setStopping] = useState<AppSetting | null>(null);
   const [renaming, setRenaming] = useState<RenameTarget | null>(null);
+  const [ownerName, setOwnerName] = useState('');
   const { run, notice } = useSetupAction(refreshStatus);
 
   const load = useCallback(() => {
     try {
       setApps(InflowCore.listApps());
       setNames(InflowCore.listSenderNames());
+      setOwnerName(InflowCore.getOwnerName() ?? '');
       setError(null);
     } catch {
       setError(LOAD_ERROR);
@@ -44,6 +46,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
     }
     load();
   };
+  const saveOwnerName = () => change(() => InflowCore.setOwnerName(ownerName.trim() === '' ? null : ownerName.trim()));
   const stop = (deleteSaved: boolean) => {
     const app = stopping;
     setStopping(null);
@@ -75,6 +78,15 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
           </Row>
         ))}
       </Group>
+      <Field
+        label="Your name"
+        hint="Inflow uses it to spot transfers between your own accounts."
+        value={ownerName}
+        onChangeText={setOwnerName}
+        onEndEditing={saveOwnerName}
+        returnKeyType="done"
+        autoCapitalize="words"
+      />
       <Group title="Renamed senders">
         {names.length === 0 ? (
           <Row title={<Text tone="muted">No renamed senders yet</Text>} />

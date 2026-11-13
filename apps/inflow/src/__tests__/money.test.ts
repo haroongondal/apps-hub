@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formatAmount, monthLabel, monthRange, shiftMonth } from '../money.ts';
+import type { Txn } from 'inflow-core';
+import { formatAmount, monthLabel, monthRange, shiftMonth, signedAmount, withinMonth } from '../money.ts';
 
 test('formatAmount groups thousands and keeps two decimals from integers', () => {
   assert.equal(formatAmount(150000, 'PKR'), 'PKR 1,500.00');
@@ -34,4 +35,20 @@ test('monthLabel and shiftMonth', () => {
   assert.deepEqual(shiftMonth(2026, 0, -1), { year: 2025, month: 11 });
   assert.deepEqual(shiftMonth(2026, 11, 1), { year: 2027, month: 0 });
   assert.deepEqual(shiftMonth(2026, 5, 7), { year: 2027, month: 0 });
+});
+
+const txn = (id: number, at: number): Txn => ({ id, direction: 'out', amount: 100, currency: 'PKR', account: 'UBL 1733', counterparty: null, txId: null, at, own: false, paired: false, itemIds: [] });
+
+test('withinMonth drops rows after the month and stops at the first row before it', () => {
+  const { from, to } = monthRange(2026, 10);
+  const page = [txn(4, to), txn(3, to - 1), txn(2, from), txn(1, from - 1)];
+  const r = withinMonth(page, from, to);
+  assert.deepEqual(r.rows.map((t) => t.id), [3, 2]);
+  assert.equal(r.done, true);
+  assert.equal(withinMonth([txn(3, to - 1), txn(2, from)], from, to).done, false);
+});
+
+test('signedAmount shows the direction', () => {
+  assert.equal(signedAmount({ direction: 'in', amount: 150000, currency: 'PKR' }), '+PKR 1,500.00');
+  assert.equal(signedAmount({ direction: 'out', amount: 150000, currency: 'PKR' }), '-PKR 1,500.00');
 });

@@ -5,12 +5,13 @@ import InflowCore, { type ItemFilter, type Status } from 'inflow-core';
 import { HomeScreen } from './src/HomeScreen.tsx';
 import { ListScreen } from './src/ListScreen.tsx';
 import { LockScreen } from './src/LockScreen.tsx';
+import { MoneyScreen } from './src/MoneyScreen.tsx';
 import { LOAD_ERROR } from './src/messages.ts';
 import { SettingsScreen } from './src/SettingsScreen.tsx';
 import { SetupScreen } from './src/SetupScreen.tsx';
 import { setupComplete, setupRows } from './src/setup.ts';
 
-type Tab = 'home' | 'settings';
+type Tab = 'home' | 'money' | 'settings';
 interface Route {
   filter: ItemFilter;
   title: string;
@@ -18,6 +19,7 @@ interface Route {
 
 const TABS: ReadonlyArray<{ key: Tab; label: string }> = [
   { key: 'home', label: 'Home' },
+  { key: 'money', label: 'Money' },
   { key: 'settings', label: 'Settings' },
 ];
 
@@ -98,7 +100,13 @@ function Root() {
   return (
     <>
       <View style={{ flex: 1 }}>
-        {tab === 'home' ? <HomeScreen status={status} refreshStatus={refresh} onOpen={open} /> : <SettingsScreen status={status} refreshStatus={refresh} />}
+        {tab === 'home' ? (
+          <HomeScreen status={status} refreshStatus={refresh} onOpen={open} onOpenMoney={() => setTab('money')} />
+        ) : tab === 'money' ? (
+          <MoneyScreen status={status} />
+        ) : (
+          <SettingsScreen status={status} refreshStatus={refresh} />
+        )}
       </View>
       <TabBar tabs={TABS} value={tab} onChange={setTab} />
     </>

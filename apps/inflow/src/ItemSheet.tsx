@@ -2,14 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { Button, Group, Row, Sheet, Text, space } from '@apps-hub/ui';
 import type { Item } from 'inflow-core';
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const two = (n: number) => (n < 10 ? `0${n}` : String(n));
-
-function exactTime(at: number): string {
-  const d = new Date(at);
-  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`;
-}
+import { exactTime } from './format.ts';
 
 export function ItemSheet({ item, onClose, onRename, onShowSender }: { item: Item | null; onClose: () => void; onRename: (item: Item) => void; onShowSender: (name: string) => void }) {
   const who = item ? (item.displayName ?? item.sender) : null;

@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Button, Empty, Field, Group, Header, Notice, Row, Screen, Text } from '@apps-hub/ui';
-import InflowCore, { addCapturedListener, type HomeSummary, type ItemFilter, type Status } from 'inflow-core';
+import InflowCore, { addCapturedListener, type HomeSummary, type ItemFilter, type MoneySummary, type Status } from 'inflow-core';
 import { whenLabel } from './format.ts';
 import { healthNotice } from './health.ts';
 import { LOAD_ERROR } from './messages.ts';
+import { formatAmount, monthRange } from './money.ts';
 
 const EMPTY_TEXT = "New notifications will appear here as they arrive. Inflow can't read ones that came before it was set up.";
 
@@ -12,8 +13,19 @@ function startOfToday(): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 
-export function HomeScreen({ status, refreshStatus, onOpen }: { status: Status; refreshStatus: () => void; onOpen: (filter: ItemFilter, title: string) => void }) {
+export function HomeScreen({
+  status,
+  refreshStatus,
+  onOpen,
+  onOpenMoney,
+}: {
+  status: Status;
+  refreshStatus: () => void;
+  onOpen: (filter: ItemFilter, title: string) => void;
+  onOpenMoney: () => void;
+}) {
   const [summary, setSummary] = useState<HomeSummary | null>(null);
+  const [money, setMoney] = useState<MoneySummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
@@ -21,22 +33,35 @@ export function HomeScreen({ status, refreshStatus, onOpen }: { status: Status; 
   const load = useCallback(() => {
     try {
       setSummary(InflowCore.home(startOfToday()));
+      const now = new Date();
+      const { from, to } = monthRange(now.getFullYear(), now.getMonth());
+      setMoney(InflowCore.money(from, to));
       setError(null);
     } catch {
       setError(LOAD_ERROR);
     }
   }, []);
 
+  // A failed import is not worth a message: the next open or pull tries again.
+  const importSms = useCallback(() => {
+    if (!status.smsGranted) return;
+    InflowCore.importSms()
+      .then((r) => r.imported > 0 && load())
+      .catch(() => {});
+  }, [status.smsGranted, load]);
+
   useEffect(() => {
     load();
+    importSms();
     const sub = addCapturedListener(load);
     return () => sub.remove();
-  }, [load]);
+  }, [load, importSms]);
 
   const pull = () => {
     setRefreshing(true);
     refreshStatus();
     load();
+    importSms();
     setRefreshing(false);
   };
 
@@ -76,7 +101,20 @@ export function HomeScreen({ status, refreshStatus, onOpen }: { status: Status; 
       )}
       <Field label="Search" placeholder="Search everything you saved" value={query} onChangeText={setQuery} onSubmitEditing={search} returnKeyType="search" />
       <Group title="Money">
-        <Row title={<Text tone="muted">Bank SMS and spending arrive in the next update</Text>} />
+        {!status.smsGranted ? (
+          <Row title={<Text tone="muted">Allow SMS in Settings to see your spending.</Text>} onPress={onOpenMoney} />
+        ) : money === null || money.accounts.length === 0 ? (
+          <Row title={<Text tone="muted">No bank messages this month.</Text>} onPress={onOpenMoney} />
+        ) : (
+          money.accounts.map((a) => (
+            <Row
+              key={`${a.account}|${a.currency}`}
+              title={a.account}
+              subtitle={`In ${formatAmount(a.moneyIn, a.currency)} · out ${formatAmount(a.moneyOut, a.currency)}`}
+              onPress={onOpenMoney}
+            />
+          ))
+        )}
       </Group>
       {empty && <Empty title="Nothing saved yet" body={EMPTY_TEXT} />}
       {summary !== null && !empty && (
