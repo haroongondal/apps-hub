@@ -22,6 +22,7 @@ class InflowListener : NotificationListenerService() {
   override fun onListenerConnected() {
     connected.set(true)
     GmailSync.startPeriodic(applicationContext)
+    AiRunner.startPeriodic(applicationContext)
   }
 
   override fun onListenerDisconnected() {

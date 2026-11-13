@@ -11,6 +11,8 @@ import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.inflowcore.android.AiConfig
+import expo.modules.inflowcore.android.AiRunner
 import expo.modules.inflowcore.android.Lock
 import expo.modules.inflowcore.android.GmailClient
 import expo.modules.inflowcore.android.GmailSync
@@ -19,8 +21,10 @@ import expo.modules.inflowcore.android.SmsImporter
 import expo.modules.inflowcore.android.SqlItemStore
 import expo.modules.inflowcore.android.SqlLedgerStore
 import expo.modules.inflowcore.android.StoreHolder
+import expo.modules.inflowcore.core.AiModels
 import expo.modules.inflowcore.core.AppSetting
 import expo.modules.inflowcore.core.GmailPolicy
+import expo.modules.inflowcore.core.Prices
 import expo.modules.inflowcore.core.Retention
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -92,6 +96,7 @@ class InflowCoreModule : Module() {
     Function("home") { startOfDay: Long ->
       val store = store()
       StoreHolder.ingest(context, store).housekeeping()
+      AiRunner.runIfDue(context)   // in the background: Home never waits for the model
       store.home(startOfDay, System.currentTimeMillis())
     }
 
@@ -221,5 +226,69 @@ class InflowCoreModule : Module() {
       if (imported > 0) StoreHolder.onCaptured?.invoke(imported)
       mapOf("imported" to imported)
     }
+
+    Function("aiStatus") { ->
+      AiConfig(store()).status()
+    }
+
+    Function("knownModels") { ->
+      AiModels.KNOWN.map { mapOf("name" to it.name, "baseUrl" to it.baseUrl, "model" to it.model) }
+    }
+
+    // `prices` is null for a model Inflow knows; the validation copy is Deputy's.
+    Function("setAiModel") { baseUrl: String, model: String, prices: Map<String, Any?>? ->
+      val custom = prices?.let { Prices(price(it, "inputPerM"), price(it, "cachedPerM"), price(it, "outputPerM")) }
+      AiModels.validate(baseUrl, model, custom)?.let { throw CodedException("AI_MODEL_INVALID", it, null) }
+      AiConfig(store()).setModel(baseUrl, model, custom)
+    }
+
+    // Returns the error copy, or null once the key is saved. It is never returned to JS again except its last four characters.
+    Function("addAiKey") { apiKey: String ->
+      val key = apiKey.trim()
+      when {
+        key.isEmpty() -> "Paste your API key first."
+        key.length > 300 || key.any(Char::isWhitespace) -> "That doesn't look like an API key. Copy it again, without spaces."
+        else -> {
+          AiConfig(store()).addKey(key)
+          null
+        }
+      }
+    }
+
+    Function("removeAiKey") { id: Long ->
+      AiConfig(store()).removeKey(id)
+    }
+
+    AsyncFunction("testAiKey") Coroutine { id: Long ->
+      withContext(Dispatchers.IO) { AiRunner.test(context, id) }
+    }
+
+    Function("setAiCap") { usd: Double? ->
+      if (usd != null && !(usd.isFinite() && usd in 0.01..100.0)) throw CodedException("AI_CAP_INVALID", "The daily limit must be a number from 0.01 to 100.", null)
+      AiConfig(store()).setCap(usd)
+    }
+
+    AsyncFunction("sendAiNow") Coroutine { ->
+      val r = withContext(Dispatchers.IO) { AiRunner.runNow(context) }
+      mapOf("sent" to r.sent, "saved" to r.saved, "stoppedByCap" to r.stoppedByCap, "error" to r.error)
+    }
+
+    Function("setAiBlocked") { blockKey: String, blocked: Boolean ->
+      if (blockKey.startsWith("app:") || blockKey.startsWith("sender:")) AiConfig(store()).setBlocked(blockKey, blocked)
+    }
+
+    Function("listAiBlocks") { ->
+      AiConfig(store()).blocks()
+    }
+
+    Function("setTodoDone") { id: Long, done: Boolean ->
+      store().setTodoDone(id, done)
+    }
+
+    AsyncFunction("ask") Coroutine { question: String ->
+      withContext(Dispatchers.IO) { AiRunner.ask(context, question) }
+    }
   }
 }
+
+private fun price(m: Map<String, Any?>, key: String): Double = (m[key] as? Number)?.toDouble() ?: Double.NaN

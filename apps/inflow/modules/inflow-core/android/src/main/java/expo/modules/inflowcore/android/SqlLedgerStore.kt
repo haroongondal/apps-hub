@@ -63,6 +63,17 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
     run("UPDATE txns SET category = ?, label = COALESCE(?, label) WHERE id = ?", category, label, id)
   }
 
+  /**
+   * Ask AI: the newest `limit` non-own transactions in the range. One whose source belongs to an app, sender or recording the owner
+   * kept from the AI is left out; sources retention already deleted do not hold it back, so the totals match the Money tab.
+   */
+  fun askTxns(from: Long, to: Long, limit: Int): List<Txn> =
+    txns(
+      "t.own = 0 AND t.at BETWEEN ? AND ? AND NOT EXISTS (SELECT 1 FROM txn_sources s JOIN items i ON i.id = s.item_id " +
+        "WHERE s.txn_id = t.id AND NOT (${SqlItemStore.SENDABLE})) ORDER BY t.at DESC, t.id DESC LIMIT ?",
+      from, to, limit.toLong(),
+    )
+
   override fun undecided(): List<Txn> = txns("t.own_set = 0 AND t.pair_id IS NULL")
 
   /** Own transfers left out; per account and currency, never converted. */

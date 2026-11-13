@@ -9,6 +9,8 @@ import expo.modules.inflowcore.core.AiMeta
 import expo.modules.inflowcore.core.AiResult
 import expo.modules.inflowcore.core.AiStore
 import expo.modules.inflowcore.core.AppSetting
+import expo.modules.inflowcore.core.AskItem
+import expo.modules.inflowcore.core.Channel
 import expo.modules.inflowcore.core.Capture
 import expo.modules.inflowcore.core.Email
 import expo.modules.inflowcore.core.ItemStore
@@ -137,6 +139,35 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
 
   override fun addSpend(day: String, usd: Double) {
     run("INSERT INTO ai_spend(day, usd) VALUES (?, ?) ON CONFLICT(day) DO UPDATE SET usd = usd + excluded.usd", day, usd.toString())
+  }
+
+  /** The channel this item's money came in on, as Ingest chose it when the item was saved. */
+  fun channelOf(itemId: Long, smsPackages: Set<String>): Channel =
+    query("SELECT pkg, sms_hash IS NOT NULL, email_hash IS NOT NULL, email_text IS NOT NULL FROM items WHERE id = ?", itemId).use { c ->
+      if (!c.moveToFirst()) return@use Channel.NOTIFICATION
+      val pkg = c.getString(0)
+      when {
+        pkg == Email.GMAIL -> if (c.getInt(2) != 0 || c.getInt(3) != 0) Channel.EMAIL else Channel.EMAIL_NOTIFICATION
+        pkg in smsPackages -> if (c.getInt(1) != 0) Channel.SMS else Channel.SMS_NOTIFICATION
+        else -> Channel.NOTIFICATION
+      }
+    }
+
+  /** Ask AI: the newest `limit` items in the range that pass the never-send filter and were posted after the first key. `pkgs` empty = every app. */
+  fun askItems(from: Long, to: Long, pkgs: List<String>, since: Long, limit: Int): List<AskItem> {
+    val where = StringBuilder("i.posted_at BETWEEN ? AND ? AND i.posted_at >= ? AND $NEVER_SEND_FILTER")
+    val args = mutableListOf<Any?>(from, to, since)
+    if (pkgs.isNotEmpty()) {
+      where.append(" AND i.pkg IN (${pkgs.joinToString(",") { "?" }})")
+      args.addAll(pkgs)
+    }
+    args += limit.toLong()
+    return query(
+      "SELECT i.app_label, COALESCE(n.name, i.sender), i.posted_at, r.summary, COALESCE(i.email_text, i.text) " +
+        "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.sender_key LEFT JOIN ai_results r ON r.item_id = i.id " +
+        "WHERE $where ORDER BY i.posted_at DESC, i.id DESC LIMIT ?",
+      *args.toTypedArray(),
+    ).use { c -> buildList { while (c.moveToNext()) add(AskItem(c.getString(0), c.str(1), c.getLong(2), c.str(3), c.getString(4))) } }
   }
 
   fun setTodoDone(id: Long, done: Boolean) {
@@ -324,9 +355,9 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
       buildList { while (c.moveToNext()) add(mapOf("senderKey" to c.getString(0), "sender" to c.getString(1), "name" to c.getString(2))) }
     }
 
-  private fun query(sql: String, vararg args: Any?): Cursor = db.rawQuery(sql, *args)
+  internal fun query(sql: String, vararg args: Any?): Cursor = db.rawQuery(sql, *args)
 
-  private fun run(sql: String, vararg args: Any?): Int =
+  internal fun run(sql: String, vararg args: Any?): Int =
     db.compileStatement(sql).use { st ->
       args.forEachIndexed { i, a -> st.bindValue(i + 1, a) }
       st.executeUpdateDelete()
@@ -373,10 +404,13 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
     private const val ITEM_COLUMNS = "i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, " +
       "i.conversation_key, i.title, i.text, i.posted_at, i.deleted_by_sender, i.email_text, r.kind, r.summary, r.importance, r.tags"
     private const val ITEM_FROM = "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.sender_key LEFT JOIN ai_results r ON r.item_id = i.id"
-    private const val QUEUE_FROM = "FROM ai_queue q JOIN items i ON i.id = q.item_id LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
-      "WHERE i.otp_expires_at IS NULL AND i.posted_at >= ? AND COALESCE((SELECT a.record FROM apps a WHERE a.pkg = i.pkg), 1) = 1 " +
+    // What may be sent to the AI (R29 and the global constraint): the app records, and neither the app nor the sender is blocked.
+    internal const val SENDABLE = "COALESCE((SELECT a.record FROM apps a WHERE a.pkg = i.pkg), 1) = 1 " +
       "AND NOT EXISTS (SELECT 1 FROM ai_blocks b WHERE b.block_key = 'app:' || i.pkg) " +
       "AND (i.sender_key IS NULL OR NOT EXISTS (SELECT 1 FROM ai_blocks b WHERE b.block_key = 'sender:' || i.sender_key))"
+    internal const val NEVER_SEND_FILTER = "i.otp_expires_at IS NULL AND $SENDABLE"
+    private const val QUEUE_FROM = "FROM ai_queue q JOIN items i ON i.id = q.item_id LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
+      "WHERE i.posted_at >= ? AND $NEVER_SEND_FILTER"
     private const val DAY_MS = 86_400_000L
     private const val VISIBLE_I = "(i.otp_expires_at IS NULL OR i.otp_expires_at > ?)"
     private const val VISIBLE_J = "(j.otp_expires_at IS NULL OR j.otp_expires_at > ?)"

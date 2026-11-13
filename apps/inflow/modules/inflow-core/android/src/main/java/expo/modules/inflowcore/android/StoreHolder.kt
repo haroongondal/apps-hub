@@ -25,9 +25,8 @@ object StoreHolder {
 
   fun ledger(store: SqlItemStore) = Ledger(SqlLedgerStore(store.db)) { store.meta(OWNER_NAME)?.takeIf { it.isNotBlank() } }
 
+  fun smsPackages(context: Context): Set<String> = Sms.KNOWN_APPS + listOfNotNull(Telephony.Sms.getDefaultSmsPackage(context))
+
   fun ingest(context: Context, store: SqlItemStore, onOtpSaved: (Long) -> Unit = {}) =
-    Ingest(
-      store, context.packageName, System::currentTimeMillis, onOtpSaved, ledger(store),
-      Sms.KNOWN_APPS + listOfNotNull(Telephony.Sms.getDefaultSmsPackage(context)),
-    )
+    Ingest(store, context.packageName, System::currentTimeMillis, onOtpSaved, ledger(store), smsPackages(context)) { AiConfig(store).on() }
 }
