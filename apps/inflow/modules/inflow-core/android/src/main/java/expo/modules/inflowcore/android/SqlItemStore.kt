@@ -4,6 +4,10 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabaseCorruptException
 import android.database.sqlite.SQLiteException
+import expo.modules.inflowcore.core.AiInput
+import expo.modules.inflowcore.core.AiMeta
+import expo.modules.inflowcore.core.AiResult
+import expo.modules.inflowcore.core.AiStore
 import expo.modules.inflowcore.core.AppSetting
 import expo.modules.inflowcore.core.Capture
 import expo.modules.inflowcore.core.Email
@@ -19,7 +23,7 @@ import net.zetetic.database.sqlcipher.SQLiteDatabase
 import net.zetetic.database.sqlcipher.SQLiteDatabaseHook
 import net.zetetic.database.sqlcipher.SQLiteStatement
 
-class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemStore {
+class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemStore, AiStore {
   override fun appSetting(pkg: String): AppSetting? =
     query("SELECT pkg, label, record, keep_days FROM apps WHERE pkg = ?", pkg).use { if (it.moveToFirst()) it.toSetting() else null }
 
@@ -88,6 +92,57 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
     run("UPDATE OR IGNORE items SET sms_hash = ? WHERE id = ?", smsHash, itemId)
   }
 
+  override fun enqueueAi(itemId: Long, at: Long) {
+    run("INSERT OR IGNORE INTO ai_queue(item_id, at) VALUES (?, ?)", itemId, at)
+  }
+
+  override fun enabledSince(): Long? = meta(AiMeta.SINCE)?.toLongOrNull()
+
+  // The send-time filter (also behind queuedCount): the item still exists, is no OTP, was posted after the first key, its app records, and neither app nor sender is blocked.
+  override fun queued(limit: Int): List<AiInput> {
+    val since = enabledSince() ?: return emptyList()
+    return query(
+      "SELECT i.id, i.app_label, COALESCE(n.name, i.sender), i.title, COALESCE(i.email_text, i.text), i.posted_at $QUEUE_FROM ORDER BY q.at, q.item_id LIMIT ?",
+      since, limit.toLong(),
+    ).use { c -> buildList { while (c.moveToNext()) add(AiInput(c.getLong(0), c.getString(1), c.str(2), c.str(3), c.getString(4), c.getLong(5))) } }
+  }
+
+  fun queuedCount(): Int {
+    val since = enabledSince() ?: return 0
+    return query("SELECT COUNT(*) $QUEUE_FROM", since).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+  }
+
+  override fun save(results: List<AiResult>, now: Long) = transaction {
+    for (r in results) {
+      // The item may have been deleted while the request ran: its result would be an orphan.
+      if (query("SELECT 1 FROM items WHERE id = ?", r.itemId).use { !it.moveToFirst() }) continue
+      run(
+        "INSERT OR REPLACE INTO ai_results(item_id, kind, summary, importance, tags, at) VALUES (?, ?, ?, ?, ?, ?)",
+        r.itemId, r.kind.name.lowercase(), r.summary, r.importance.name.lowercase(), r.tags.joinToString(","), now,
+      )
+      run("DELETE FROM todos WHERE item_id = ?", r.itemId)
+      r.todos.forEach { run("INSERT INTO todos(item_id, text, due_at) VALUES (?, ?, ?)", r.itemId, it.text, it.dueAt) }
+    }
+    results.forEach { run("DELETE FROM ai_queue WHERE item_id = ?", it.itemId) }
+  }
+
+  override fun failed(itemIds: List<Long>) = transaction {
+    itemIds.forEach { run("UPDATE ai_queue SET tries = tries + 1 WHERE item_id = ?", it) }
+    run("DELETE FROM ai_queue WHERE tries >= 2")
+    Unit
+  }
+
+  override fun spentToday(day: String): Double =
+    query("SELECT usd FROM ai_spend WHERE day = ?", day).use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
+
+  override fun addSpend(day: String, usd: Double) {
+    run("INSERT INTO ai_spend(day, usd) VALUES (?, ?) ON CONFLICT(day) DO UPDATE SET usd = usd + excluded.usd", day, usd.toString())
+  }
+
+  fun setTodoDone(id: Long, done: Boolean) {
+    run("UPDATE todos SET done = ? WHERE id = ?", if (done) 1L else 0L, id)
+  }
+
   override fun markDeletedBySender(pkg: String, conversationKey: String?, sender: String?, postedAt: Long): Boolean =
     run(
       "UPDATE items SET deleted_by_sender = 1 WHERE pkg = ? AND conversation_key IS ? AND sender IS ? AND posted_at = ?",
@@ -106,13 +161,20 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
   }
 
   override fun purgeOlder(pkg: String, cutoff: Long): Int = transaction {
+    forgetAi("pkg = ? AND posted_at < ?", pkg, cutoff)
     tombstoneEmails("pkg = ? AND posted_at < ?", pkg, cutoff)
     run("DELETE FROM items WHERE pkg = ? AND posted_at < ?", pkg, cutoff)
   }
 
   override fun deleteApp(pkg: String): Int = transaction {
+    forgetAi("pkg = ?", pkg)
     tombstoneEmails("pkg = ?", pkg)
     run("DELETE FROM items WHERE pkg = ?", pkg)
+  }
+
+  // The AI result, queue entry and to-dos go with their item.
+  private fun forgetAi(where: String, vararg args: Any?) {
+    for (table in listOf("ai_results", "ai_queue", "todos")) run("DELETE FROM $table WHERE item_id IN (SELECT id FROM items WHERE $where)", *args)
   }
 
   // Deleted emails would otherwise come back when a reconnect resets the cursors.
@@ -191,7 +253,24 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
         while (c.moveToNext()) add(mapOf("pkg" to c.getString(0), "label" to c.getString(1), "lastAt" to c.getLong(2), "today" to c.getInt(3)))
       }
     }
-    return mapOf("conversations" to conversations, "apps" to apps)
+    val important = query(
+      "SELECT $ITEM_COLUMNS $ITEM_FROM WHERE r.importance = 'high' AND i.posted_at >= ? AND $VISIBLE_I ORDER BY i.posted_at DESC, i.id DESC LIMIT 5",
+      now - 7 * DAY_MS, now,
+    ).use { c -> buildList { while (c.moveToNext()) add(c.toItem()) } }
+    // Not done, due from the start of today (soonest first) or undated and from the last 3 days (after the dated ones).
+    val comingUp = query(
+      "SELECT t.id, t.item_id, t.text, t.due_at, t.done FROM todos t JOIN items i ON i.id = t.item_id " +
+        "WHERE t.done = 0 AND $VISIBLE_I AND ((t.due_at IS NOT NULL AND t.due_at >= ?) OR (t.due_at IS NULL AND i.posted_at >= ?)) " +
+        "ORDER BY t.due_at IS NULL, t.due_at, t.id LIMIT 5",
+      now, startOfDay, now - 3 * DAY_MS,
+    ).use { c ->
+      buildList {
+        while (c.moveToNext()) {
+          add(mapOf("id" to c.getLong(0), "itemId" to c.getLong(1), "text" to c.getString(2), "dueAt" to if (c.isNull(3)) null else c.getLong(3), "done" to (c.getInt(4) != 0)))
+        }
+      }
+    }
+    return mapOf("conversations" to conversations, "apps" to apps, "important" to important, "comingUp" to comingUp)
   }
 
   fun list(filter: Map<String, Any?>, before: Long?, limit: Int, now: Long, beforeId: Long? = null): List<Map<String, Any?>> {
@@ -279,6 +358,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
     "id" to getLong(0), "pkg" to getString(1), "appLabel" to getString(2), "sender" to str(3), "senderKey" to str(4),
     "displayName" to str(5), "conversation" to str(6), "conversationKey" to str(7), "title" to str(8),
     "text" to getString(9), "postedAt" to getLong(10), "deletedBySender" to (getInt(11) != 0), "emailText" to str(12),
+    "ai" to str(13)?.let { mapOf("kind" to it, "summary" to getString(14), "importance" to getString(15), "tags" to (str(16)?.split(',')?.filter(String::isNotEmpty) ?: emptyList())) },
   )
 
   private fun Cursor.str(i: Int): String? = if (isNull(i)) null else getString(i)
@@ -291,8 +371,13 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
     private const val GENERIC_FAILURE =
       "Inflow can't open your saved history. The history file is kept, not deleted. Restart the phone and try again."
     private const val ITEM_COLUMNS = "i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, " +
-      "i.conversation_key, i.title, i.text, i.posted_at, i.deleted_by_sender, i.email_text"
-    private const val ITEM_FROM = "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.sender_key"
+      "i.conversation_key, i.title, i.text, i.posted_at, i.deleted_by_sender, i.email_text, r.kind, r.summary, r.importance, r.tags"
+    private const val ITEM_FROM = "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.sender_key LEFT JOIN ai_results r ON r.item_id = i.id"
+    private const val QUEUE_FROM = "FROM ai_queue q JOIN items i ON i.id = q.item_id LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
+      "WHERE i.otp_expires_at IS NULL AND i.posted_at >= ? AND COALESCE((SELECT a.record FROM apps a WHERE a.pkg = i.pkg), 1) = 1 " +
+      "AND NOT EXISTS (SELECT 1 FROM ai_blocks b WHERE b.block_key = 'app:' || i.pkg) " +
+      "AND (i.sender_key IS NULL OR NOT EXISTS (SELECT 1 FROM ai_blocks b WHERE b.block_key = 'sender:' || i.sender_key))"
+    private const val DAY_MS = 86_400_000L
     private const val VISIBLE_I = "(i.otp_expires_at IS NULL OR i.otp_expires_at > ?)"
     private const val VISIBLE_J = "(j.otp_expires_at IS NULL OR j.otp_expires_at > ?)"
     private const val VISIBLE_T = "(t.otp_expires_at IS NULL OR t.otp_expires_at > ?)"

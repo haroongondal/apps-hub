@@ -5,12 +5,17 @@ class StoredItem(
   var emailHash: String? = null, var emailText: String? = null,
 )
 
-class MemoryItemStore : ItemStore {
+class MemoryItemStore : ItemStore, AiStore {
   val items = LinkedHashMap<String, StoredItem>()
   val tombstones = mutableSetOf<String>()
   private val settings = LinkedHashMap<String, AppSetting>()
   private val meta = HashMap<String, String>()
   private var nextId = 1L
+  val queue = LinkedHashMap<Long, Pair<Long, Int>>()   // itemId -> (at, tries)
+  val aiResults = LinkedHashMap<Long, AiResult>()
+  val todos = mutableListOf<Pair<Long, AiTodo>>()
+  val aiBlocks = mutableSetOf<String>()
+  val spend = HashMap<String, Double>()
 
   override fun appSetting(pkg: String): AppSetting? = settings[pkg]
 
@@ -84,14 +89,23 @@ class MemoryItemStore : ItemStore {
 
   override fun purgeOlder(pkg: String, cutoff: Long): Int {
     val old = items.filterValues { it.capture.pkg == pkg && it.capture.postedAt < cutoff }.keys.toList()
-    old.forEach { items.remove(it)?.emailHash?.let(tombstones::add) }
+    old.forEach { forget(items.remove(it)) }
     return old.size
   }
 
   override fun deleteApp(pkg: String): Int {
     val mine = items.filterValues { it.capture.pkg == pkg }.keys.toList()
-    mine.forEach { items.remove(it)?.emailHash?.let(tombstones::add) }
+    mine.forEach { forget(items.remove(it)) }
     return mine.size
+  }
+
+  // Retention and deleteApp take the item's tombstone, queue entry, result and to-dos with it.
+  private fun forget(item: StoredItem?) {
+    item ?: return
+    item.emailHash?.let(tombstones::add)
+    queue.remove(item.id)
+    aiResults.remove(item.id)
+    todos.removeAll { it.first == item.id }
   }
 
   override fun allAppSettings(): List<AppSetting> = settings.values.toList()
@@ -100,5 +114,46 @@ class MemoryItemStore : ItemStore {
 
   override fun setMeta(key: String, value: String) {
     meta[key] = value
+  }
+
+  override fun enqueueAi(itemId: Long, at: Long) {
+    if (itemId !in queue) queue[itemId] = at to 0
+  }
+
+  override fun enabledSince(): Long? = meta[AiMeta.SINCE]?.toLongOrNull()
+
+  // Mirrors SqlItemStore.queued: the same conditions, evaluated now.
+  override fun queued(limit: Int): List<AiInput> {
+    val since = enabledSince() ?: return emptyList()
+    return queue.entries.sortedWith(compareBy({ it.value.first }, { it.key })).mapNotNull { (id, _) ->
+      val it = items.values.firstOrNull { s -> s.id == id } ?: return@mapNotNull null
+      val c = it.capture
+      val ok = it.otpExpiresAt == null && c.postedAt >= since && (settings[c.pkg]?.record ?: true) &&
+        "app:${c.pkg}" !in aiBlocks && (c.senderKey == null || "sender:${c.senderKey}" !in aiBlocks)
+      if (ok) AiInput(id, c.appLabel, c.sender, c.title, it.emailText ?: c.text, c.postedAt) else null
+    }.take(limit)
+  }
+
+  override fun save(results: List<AiResult>, now: Long) {
+    for (r in results) {
+      if (items.values.none { it.id == r.itemId }) continue
+      aiResults[r.itemId] = r
+      todos.removeAll { it.first == r.itemId }
+      r.todos.forEach { todos += r.itemId to it }
+    }
+    results.forEach { queue.remove(it.itemId) }
+  }
+
+  override fun failed(itemIds: List<Long>) {
+    for (id in itemIds) {
+      val (at, tries) = queue[id] ?: continue
+      if (tries + 1 >= 2) queue.remove(id) else queue[id] = at to tries + 1
+    }
+  }
+
+  override fun spentToday(day: String) = spend[day] ?: 0.0
+
+  override fun addSpend(day: String, usd: Double) {
+    spend[day] = spentToday(day) + usd
   }
 }

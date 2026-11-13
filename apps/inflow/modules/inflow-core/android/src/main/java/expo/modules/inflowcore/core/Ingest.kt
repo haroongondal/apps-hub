@@ -7,6 +7,7 @@ class Ingest(
   private val onOtpSaved: (expiresAt: Long) -> Unit = {},
   private val ledger: Ledger? = null,
   private val smsPackages: Set<String> = Sms.KNOWN_APPS,
+  private val aiOn: () -> Boolean = { false },
 ) {
   fun onNotification(raw: RawNotification): Int {
     if (raw.pkg == ownPkg) return 0
@@ -37,6 +38,7 @@ class Ingest(
           else -> Channel.NOTIFICATION
         }
         ledger?.onItem(id, c.text, channel, c.postedAt)
+        queueForAi(id)
       }
     }
     housekeeping()
@@ -60,7 +62,10 @@ class Ingest(
     val otpExpiresAt = if (isOtp) minOf(c.postedAt, now()) + OTP_TTL_MS else null
     val id = store.insert(c, searchOf(c), otpExpiresAt, c.hash) ?: return 0
     otpExpiresAt?.let(onOtpSaved)
-    if (!isOtp) ledger?.onItem(id, sms.body, Channel.SMS, c.postedAt)
+    if (!isOtp) {
+      ledger?.onItem(id, sms.body, Channel.SMS, c.postedAt)
+      queueForAi(id)
+    }
     housekeeping()
     return 1
   }
@@ -82,8 +87,14 @@ class Ingest(
     val c = Email.capture(e, label)
     val id = store.insert(c, searchOf(c), null, emailHash = h) ?: return 0
     ledger?.onItem(id, e.text, Channel.EMAIL, e.at)
+    queueForAi(id)
     housekeeping()
     return 1
+  }
+
+  // OTPs never get here. Whether the item may really be sent is decided again at send time (AiStore.queued).
+  private fun queueForAi(id: Long) {
+    if (aiOn()) store.enqueueAi(id, now())
   }
 
   // A bank-pattern message is money news, never an OTP, whatever warning text it carries.
