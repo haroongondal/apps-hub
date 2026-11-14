@@ -73,6 +73,13 @@ coverage/
 /apps/strongroom/android/**/.cxx/
 /apps/strongroom/modules/*/android/build/
 /apps/strongroom/.expo/
+/apps/clipboard/android/.gradle/
+/apps/clipboard/android/app/build/
+/apps/clipboard/android/build/
+/apps/clipboard/android/local.properties
+/apps/clipboard/android/**/.cxx/
+/apps/clipboard/modules/*/android/build/
+/apps/clipboard/.expo/
 /tools/store-api/.cloudflare/
 /tools/store-api/.wrangler/
 /tools/store-api/dist/
