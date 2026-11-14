@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect id="plate" width="1024" height="1024" rx="228" fill="#16200B"/>
+  <g id="mark">
+    <rect x="352" y="322" width="400" height="500" rx="56" fill="#4D7C0F"/>
+    <rect x="272" y="262" width="400" height="500" rx="56" fill="#A3E635"/>
+    <rect x="382" y="218" width="180" height="96" rx="32" fill="#ECFCCB"/>
+    <rect x="432" y="246" width="80" height="24" rx="12" fill="#16200B"/>
+    <rect x="332" y="402" width="280" height="40" rx="20" fill="#16200B"/>
+    <rect x="332" y="492" width="280" height="40" rx="20" fill="#16200B"/>
+    <rect x="332" y="582" width="180" height="40" rx="20" fill="#16200B"/>
+  </g>
+</svg>

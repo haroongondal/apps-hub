@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Clipboard",
+    "slug": "clipboard",
+    "version": "0.2.2",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": [
+      "android"
+    ],
+    "android": {
+      "package": "com.haroon.clipboard",
+      "allowBackup": false,
+      "edgeToEdgeEnabled": true,
+      "permissions": [],
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#16200B",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      }
+    },
+    "icon": "./assets/icon.png"
+  }
+}
