@@ -95,7 +95,15 @@ Claude's calls are marked *(My call.)* in DESIGN.md.
   publish would have been uninstallable on any device already on 0.2.1 (6).
   Re-ran the release, which built and **published Clipboard 0.2.2 (7)**
   (verified in the live manifest: versionName 0.2.2, versionCode 7, sha256
-  5d78134227a595fb…). Still nothing committed.
+  5d78134227a595fb…). Still nothing committed. Owner asked for the PR
+  ("create the PR"): committed in two commits (app + docs + brand + lock;
+  release-tool registration), rebased onto `origin/main` (conflicts resolved:
+  strongroom brand coexists in tokens.ts, clipboard section added to the
+  root .gitignore, apps.ts entry rebuilt on #32's `ANDROID_PACKAGES.clipboard`,
+  the old Store-installer `<queries>` hunk dropped — main's #32 replaced it
+  with `QUERY_ALL_PACKAGES`), re-verified (`pnpm test` 19 packages all
+  `fail 0`, typecheck exit 0, ui tokens/contrast suite green) and opened
+  **PR #34 → main: https://github.com/haroongondal/apps-hub/pull/34**.
 
 - 2026-10-31: phone diagnosis, system auto-clear override, brainstorm, design
   written, worktree created.
@@ -174,12 +182,13 @@ Claude's calls are marked *(My call.)* in DESIGN.md.
 
 ## Current state + exact next step
 
-Clipboard 0.2.2 (7) is in the Store (draggable bubble release, 2026-11-13);
-the phone may still have 0.2.0 (5) or 0.2.1 (6) — both update to 7 through
-the Store's Install button. Next: drag the bubble on the phone, then
-WhatsApp copy button (S3), S5 after a full day, then write the Phase 1 plan
-(expiry, images stored, pin, drop INTERNET, remove spike logging, setup
-copy).
+**PR #34 open (https://github.com/haroongondal/apps-hub/pull/34)**: Clipboard
+0.2.2 (7) — draggable bubble — against main, rebased onto #32. Clipboard
+0.2.2 (7) is in the Store; the phone may still have 0.2.0 (5) or 0.2.1 (6) —
+both update to 7 through the Store's Install button. Next: drag the bubble
+on the phone, then WhatsApp copy button (S3), S5 after a full day, then
+write the Phase 1 plan (expiry, images stored, pin, drop INTERNET, remove
+spike logging, setup copy).
 Next:
 1. Remaining phone checks: S3 for WhatsApp's copy button; S5 again after a day
    now that Autostart is on (`dumpsys accessibility`, `dumpsys activity
