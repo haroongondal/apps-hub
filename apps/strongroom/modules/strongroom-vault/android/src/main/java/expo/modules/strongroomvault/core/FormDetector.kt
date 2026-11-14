@@ -20,7 +20,8 @@ data class Origin(val domain: String?, val scheme: String?)
 
 data class CardFields(val number: Int?, val holder: Int?, val expMonth: Int?, val expYear: Int?, val expDate: Int?, val cvc: Int?)
 
-data class DetectedForm(val username: Int?, val password: Int?, val newPassword: Int?, val card: CardFields?)
+/** [confirm] is any further new-password field (the repeat box on a signup form). */
+data class DetectedForm(val username: Int?, val password: Int?, val newPassword: Int?, val card: CardFields?, val confirm: List<Int> = emptyList())
 
 object FormDetector {
   // View.AUTOFILL_HINT_* / androidx HintConstants and android.text.InputType, copied (checked against android-36) so core/ has no Android imports.
@@ -111,7 +112,8 @@ object FormDetector {
     val expDate = best(Role.CC_DATE)?.index
     val cvc = best(Role.CC_CVC)?.index
     val card = if (listOfNotNull(number, expMonth, expYear, expDate, cvc).isEmpty()) null else CardFields(number, best(Role.CC_HOLDER)?.index, expMonth, expYear, expDate, cvc)
-    return DetectedForm(username, password, newPassword, card)
+    val confirm = hits.filter { it.role == Role.NEW_PASSWORD && it.index != newPassword }.map { it.index }
+    return DetectedForm(username, password, newPassword, card, confirm)
   }
 
   fun allTargetsInDomain(nodes: List<FieldNode>, form: DetectedForm, requesterHost: String): Boolean {

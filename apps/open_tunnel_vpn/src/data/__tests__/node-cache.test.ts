@@ -175,3 +175,34 @@ test('getNode resolves null for an unknown id (cache was replaced)', async () =>
   await cache.replaceAllNodes([fixtureNode({ host: 'only', ip: '203.0.113.50', port: 5, fitness: 1 })]);
   assert.equal(await cache.getNode('b'.repeat(64)), null);
 });
+
+test('lastFetchedAtMs resolves null while the cache is empty', async () => {
+  const cache = openCache();
+  assert.equal(await cache.lastFetchedAtMs(), null);
+});
+
+test('lastFetchedAtMs resolves the fetch stamp close to now after a replace', async () => {
+  const cache = openCache();
+  await cache.replaceAllNodes([
+    fixtureNode({ host: 'tokyo', ip: '219.100.37.110', port: 1195, fitness: 8 }),
+  ]);
+  const stamp = await cache.lastFetchedAtMs();
+  assert.ok(stamp !== null, 'a non-empty cache always carries a fetch stamp');
+  assert.ok(Math.abs(stamp - Date.now()) < 5_000, 'the stamp is the fetch time');
+});
+
+test('a second replaceAllNodes advances the fetched stamp', async () => {
+  const cache = openCache();
+  await cache.replaceAllNodes([
+    fixtureNode({ host: 'first', ip: '203.0.113.61', port: 7, fitness: 1 }),
+  ]);
+  const first = await cache.lastFetchedAtMs();
+  assert.ok(first !== null);
+  // The row clock guarantees a strictly later second stamp.
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await cache.replaceAllNodes([
+    fixtureNode({ host: 'second', ip: '203.0.113.62', port: 8, fitness: 2 }),
+  ]);
+  const second = await cache.lastFetchedAtMs();
+  assert.ok(second !== null && second > first, 'the newer fetch wins the MAX()');
+});

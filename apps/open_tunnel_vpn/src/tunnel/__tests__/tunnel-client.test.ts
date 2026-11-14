@@ -22,7 +22,7 @@ import {
   type VpnTunnelConfig,
   type VpnTrafficListener,
 } from 'open-tunnel-native';
-import { createTunnelClient, settled } from '../tunnel-client.ts';
+import { createTunnelClient, settled, type TunnelSnapshot } from '../tunnel-client.ts';
 
 interface StandInState {
   binding: OpenTunnelBinding;
@@ -348,6 +348,122 @@ test('a rejection without a tunnel code keeps the conservative start-failure cod
     snapshot.message,
     `${OPEN_TUNNEL_ERROR_CODES.SERVICE_START_FAILED}: socket exploded`,
   );
+});
+
+test('stopTunnel commits disconnecting synchronously, before the native stop resolves', async () => {
+  const standIn = standInBinding();
+  const client = createTunnelClient(standIn.binding);
+  standIn.statusListener?.({ state: 'connected' });
+  standIn.trafficListener?.({ bytesIn: 900, bytesOut: 100, connectedDurationSec: 3 });
+  const states: TunnelSnapshot['state'][] = [];
+  const handle = client.subscribe(({ state }) => states.push(state));
+  states.length = 0; // the subscription replay is not part of this assertion
+  // The native stop hangs until released, isolating the synchronous window.
+  // The executor runs synchronously, so `releaseStop` is assigned before
+  // any await below.
+  let releaseStop!: () => void;
+  standIn.nativeApi.stopTunnel = () =>
+    new Promise((resolve) => {
+      releaseStop = () => resolve(null);
+    });
+  const stopping = client.stopTunnel();
+  // The commit runs before the first await, so the shield already reads
+  // disconnecting on the first tap — no multi-tap power-off.
+  assert.deepEqual(states, ['disconnecting']);
+  assert.equal(client.getSnapshot().state, 'disconnecting');
+  assert.equal(client.getSnapshot().message, null);
+  assert.deepEqual(client.getSnapshot().traffic, {
+    bytesIn: 900,
+    bytesOut: 100,
+    connectedDurationSec: 3,
+  });
+  releaseStop();
+  await stopping;
+  // Without a native event the state holds; the promise alone changes nothing.
+  assert.equal(client.getSnapshot().state, 'disconnecting');
+  handle.remove();
+  client.dispose();
+});
+
+test('the native DISCONNECTED event lands normally after the optimistic stop', async () => {
+  const standIn = standInBinding();
+  const client = createTunnelClient(standIn.binding);
+  standIn.statusListener?.({ state: 'connecting' });
+  standIn.statusListener?.({ state: 'connected' });
+  standIn.trafficListener?.({ bytesIn: 5, bytesOut: 6, connectedDurationSec: 2 });
+  assert.equal((await client.stopTunnel()).state, 'disconnecting');
+  standIn.statusListener?.({ state: 'disconnected' });
+  const settledSnap = client.getSnapshot();
+  assert.equal(settledSnap.state, 'disconnected');
+  assert.equal(settledSnap.message, null);
+  assert.equal(settledSnap.code, null);
+  assert.deepEqual(settledSnap.traffic, { bytesIn: 5, bytesOut: 6, connectedDurationSec: 2 });
+  client.dispose();
+});
+
+test('stopTunnel from an idle or errored state never fabricates disconnecting, and still calls the binding', async () => {
+  const standIn = standInBinding();
+  const client = createTunnelClient(standIn.binding);
+  // Idle: nothing to power off, so the state stays honest.
+  const idle = await client.stopTunnel();
+  assert.equal(idle.state, 'disconnected');
+  assert.equal(standIn.stopCount, 1, 'the binding call still runs');
+
+  // Errored: the terminal state holds (the terminal rule), and a later
+  // disconnected event cannot silently resurrect it.
+  standIn.statusListener?.({ state: 'connecting' });
+  standIn.statusListener?.({ state: 'error', message: 'engine exploded' });
+  const errored = await client.stopTunnel();
+  assert.equal(errored.state, 'error');
+  assert.equal(errored.message, 'engine exploded');
+  assert.equal(standIn.stopCount, 2);
+  standIn.statusListener?.({ state: 'disconnected' });
+  assert.equal(client.getSnapshot().state, 'error');
+  client.dispose();
+});
+
+test('an error status event carries its typed code; every other commit clears it', async () => {
+  const standIn = standInBinding();
+  const client = createTunnelClient(standIn.binding);
+  standIn.statusListener?.({ state: 'connecting' });
+  standIn.statusListener?.({
+    state: 'error',
+    message: 'auth rejected by the relay',
+    code: OPEN_TUNNEL_ERROR_CODES.AUTH_FAILED,
+  });
+  const errored = client.getSnapshot();
+  assert.equal(errored.state, 'error');
+  assert.equal(errored.code, 'ERR_AUTH_FAILED');
+  assert.equal(errored.message, 'auth rejected by the relay');
+
+  // Traffic ticks ride through the error without inventing or clearing a code.
+  standIn.trafficListener?.({ bytesIn: 10, bytesOut: 20, connectedDurationSec: 1 });
+  assert.equal(client.getSnapshot().code, 'ERR_AUTH_FAILED');
+
+  // The next explicit start clears both the message and the code.
+  await client.startTunnel(validConfig());
+  const restarted = client.getSnapshot();
+  assert.equal(restarted.state, 'connecting');
+  assert.equal(restarted.code, null);
+  assert.equal(restarted.message, null);
+  client.dispose();
+});
+
+test('refresh() restores the native state with a null code (process-restore path)', async () => {
+  const standIn = standInBinding();
+  const client = createTunnelClient(standIn.binding);
+  const idle = await client.refresh();
+  assert.equal(idle.state, 'disconnected');
+  assert.equal(idle.code, null);
+
+  // getState carries only the state string, so a restored error keeps the
+  // fallback wording and no typed code.
+  standIn.binding.getState = async () => 'error';
+  const restored = await client.refresh();
+  assert.equal(restored.state, 'error');
+  assert.equal(restored.code, null);
+  assert.equal(restored.message, 'tunnel error (native wording unavailable)');
+  client.dispose();
 });
 
 /** The PRESENCE contract strings stay coherent with the module name. */
