@@ -1,0 +1,4 @@
+<resources>
+    <string name="clipboard_service_label">Clipboard</string>
+    <string name="clipboard_service_description">Clipboard notices when you tap Copy in any app and saves what you copied to a history on this phone. While you type, it shows a bubble for pasting old clips. It never saves or sends what is on screen.</string>
+</resources>
