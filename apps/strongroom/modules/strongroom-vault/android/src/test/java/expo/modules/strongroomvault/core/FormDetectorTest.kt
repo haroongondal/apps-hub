@@ -51,6 +51,11 @@ class FormDetectorTest {
     assertEquals(form(username = 0, newPassword = 1), FormDetector.detect(nodes))
   }
 
+  @Test fun repeatBoxOnASignupFormIsConfirm() {
+    val nodes = listOf(node(0, hints = listOf("emailAddress")), node(1, hints = listOf("newPassword")), node(2, hints = listOf("newPassword")))
+    assertEquals(DetectedForm(0, null, 1, null, listOf(2)), FormDetector.detect(nodes))
+  }
+
   @Test fun htmlAutocompleteNewPassword() {
     val nodes = listOf(
       node(0, htmlType = "email", htmlAutocomplete = "email"),

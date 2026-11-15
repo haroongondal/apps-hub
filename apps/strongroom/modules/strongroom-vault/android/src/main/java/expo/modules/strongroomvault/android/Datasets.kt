@@ -71,6 +71,13 @@ internal object Datasets {
     return b.build()
   }
 
+  /** Fills a generated password into the new-password field and its repeat box; needs no vault, so it is offered locked or unlocked. */
+  fun suggested(targets: List<AutofillId>, password: String, presentations: Presentations): Dataset {
+    val b = Dataset.Builder(presentations)
+    for (id in targets) b.setField(id, Field.Builder().setValue(AutofillValue.forText(password)).build())
+    return b.build()
+  }
+
   fun locked(targets: Map<String, AutofillId>, presentations: Presentations, auth: IntentSender): Dataset {
     val b = Dataset.Builder(presentations).setAuthentication(auth)
     for (id in targets.values) b.setField(id, Field.Builder().build())
