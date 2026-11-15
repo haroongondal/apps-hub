@@ -25,10 +25,13 @@ cipher or KDF is not.
 
 ## 2. What it does
 
-- Stores **logins** (name, website and/or app, username, password, note), **payment
-  cards** and **secure notes** in an encrypted vault.
+- Stores **logins** (name, website and/or app, username, password, note,
+  authenticator code, §15), **payment cards** and **secure notes** in an
+  encrypted vault.
 - **Fills** logins into Android apps and websites. Fills cards into card fields
-  that are labelled as card fields.
+  that are labelled as card fields. Fills **authenticator codes** (TOTP stored
+  on the login) and **verification codes from text messages** into code
+  fields (§15).
 - **Offers to save** a login when the owner signs up or logs in with a password
   it doesn't know, or **offers to update** one that changed.
 - **Imports** everything from a Google Password Manager export, once.
@@ -66,13 +69,18 @@ Phase 1 is described in the most detail.
   server copy, and the recovery key for a forgotten master password.
 
 **Non-goals for now** (each one is a deliberate cut)
-- 2FA / authenticator codes (owner chose not to include them).
+- Adding a TOTP secret by pasting an `otpauth://` link, and HOTP
+  (counter-based) codes. Offered with §15 and declined (owner,
+  2026-11-15): secrets enter only by scan, and counter-based codes are
+  skipped at import with a report.
 - Passkeys, and the Android 14+ Credential Manager provider API
   (`CredentialProviderService`). Phase 1 uses the autofill framework only.
   Credential Manager is the likely next addition after Phase 4.
 - Password generator, password history, sharing with other people,
   breach checking. *(My calls. The generator is small and the obvious first
-  extra.)* CSV export came later, on the owner's request (§8).
+  extra.)* CSV export came later, on the owner's request (§8); the password
+  generator shipped in 2026-11 (suggesting a strong password on signup
+  forms).
 - Saving cards from forms. Cards are added by hand and only filled. *(My call.)*
 - Filling apps that block autofill by abusing the accessibility service (the
   Deputy technique). It's too easy to get wrong for passwords.
@@ -82,6 +90,8 @@ Phase 1 is described in the most detail.
 - Any path where a password, or the key that unlocks them, reaches Cloudflare or
   any other third party in readable form.
 - A password filled into the wrong app or a lookalike site.
+- A TOTP secret or a verification code shown, filled or stored anywhere it
+  shouldn't be (§15's guardrails).
 - Losing the vault: a sync bug, a bad merge or a failed import that destroys
   entries.
 - Home-made cryptography: our own cipher, our own KDF, or "clever" key handling
@@ -164,6 +174,12 @@ note`, fields, `updatedAt`, …), with **AAD = record id + format version**, so
 neither the server nor a bug can move one record's ciphertext onto another id.
 Deletions are tombstones: the same record id, with a ciphertext that says
 "deleted".
+
+**Optional entry fields.** An entry may gain optional fields after Phase 1
+(§15 adds a `totp` string on a login). Decoders read only the keys they know,
+so an older build ignores a newer field and nothing breaks; a platform may
+only *read or write* such a field after its shared test vector exists (the
+vectors file grows with each addition).
 
 **Header.** Format version, KDF params, salt, `passwordWrap`, `recoveryWrap`, and,
 once sync is on, an optional `"accountKey": true` as the last field (§10). A header
@@ -602,6 +618,11 @@ This is a password manager written from scratch, so the plan includes, as tasks:
 3. On-disk check: after saving a known password and username, neither may
    appear in readable form anywhere in the app's data directory, including the
    match index and any pending save.
+4. A review of the §15 additions (TOTP field and code generation, the QR scan
+   screen, the Google Authenticator import, the SMS receiver and delayed
+   fill) before the feature is called done. The on-disk check extends to the
+   TOTP secret, and the SMS receiver must show no message text or extracted
+   code is ever persisted.
 
 ## 13. Phase 1 done means
 
@@ -637,3 +658,147 @@ Module and file layout inside `apps/strongroom`, screen components, the exact
 SQLite schema, JSON field names inside an entry, Argon2 params after measuring
 (within §6's bounds), the test-vector file location, the rate-limit mechanism,
 the launcher icon and brand colours.
+
+## 15. Authenticator codes and SMS code fill (2026-11-15)
+
+The owner reversed the §4 cut on 2026-11-15 and set the scope: TOTP codes
+stored on logins and autofilled, adding a secret by scanning its QR,
+importing Google Authenticator's export, and filling verification codes that
+arrive by SMS. Work happens on the `strongroom-otp` branch (fresh worktree
+off `main`).
+
+### 15.1 TOTP in the vault
+
+- A login entry gains an optional `totp` field: a string holding the whole
+  `otpauth://` URI the QR encodes, e.g.
+  `otpauth://totp/Example:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example&algorithm=SHA1&digits=6&period=30`.
+  Storing the URI whole keeps re-export trivial and matches every
+  authenticator QR. The field rides inside the record ciphertext, so sync,
+  export, email recovery and re-key need no change.
+- Parsing is strict and happens when a code is added or edited: scheme
+  `otpauth`, type `totp`, base32 secret (RFC 4648, padding optional, decoded
+  length at least 80 bits and at most 512 bits), algorithm `SHA1|SHA256|SHA512`
+  (default `SHA1`), `digits` 6 or 8 (default 6), `period` 15–120 s (default
+  30). Unknown parameters are ignored. A URI that fails is refused with a
+  message naming the problem; nothing partial is stored.
+- Older readers are unaffected: `EntryJson` decodes only the keys it knows,
+  so the extension and pre-OTP builds ignore the field until they adopt it
+  (§6, "Optional entry fields"). The shared vectors grow first: one
+  login-with-totp record in `vault-vectors.json`, the RFC 6238 appendix-B
+  vectors for SHA-1/SHA-256/SHA-512 (8 digits), and 6-digit vectors
+  recomputed with an independent implementation (`hmac` in python3, the
+  argon2-cffi precedent) for the default and edge periods.
+- Code generation is own Kotlin (`Otp.kt` in `core/`): HMAC-SHA-1/256/512
+  through `javax.crypto.Mac`, RFC 4226 dynamic truncation, `T =
+  floor(unixSeconds / period)`. No new crypto dependency. The code crosses to
+  the JS entry screen only when the owner opens that entry (same rule as a
+  shown password) and renders in the native secret-field pattern (P3), so
+  augmented autofill, capture and screenshots see nothing but the owner's
+  screen.
+- The match index (§6) gains nothing: a TOTP secret is vault content and
+  stays sealed until unlock.
+
+### 15.2 Filling a TOTP code
+
+- `FormDetector` gains an otp field role, ranked like the password signals
+  (Task 8): autofill hint `smsOTPCode` (and any hint ending in `otp`) first,
+  then web `autocomplete="one-time-code"` from `HtmlInfo`, then the bounded
+  keyword heuristic — hint/label text names a code (code, otp, verification,
+  2FA, confirmation; English and Roman-Urdu), numeric input type, 4–8 digits,
+  `maxlength` 4–8. A card CVC field and a password field are never otp
+  fields. JVM tests cover the rank order and every exclusion.
+- When the vault is unlocked and a matching login holds a code, the fill
+  response offers one dataset per matching login: the current code fills the
+  otp field(s), the inline strip shows `123456 · entry name`. "Matching"
+  follows §7's rules exactly (registrable domain, or package + certificate;
+  no match, no suggestion — fail closed). No `SaveInfo` for otp fields: a
+  code is never saved from a form.
+- While the vault is locked, no code dataset is offered (owner's decision,
+  2026-11-15): nothing about the secret or the code leaves the vault before
+  unlock. The locked path still offers the matching username from the index,
+  and the fingerprint unlock at the password step normally covers the otp
+  step that follows.
+
+### 15.3 SMS codes
+
+The owner chose reading codes from text messages over the documented
+Play-services path (`SmsCodeAutofillClient`: no SMS permission, but a
+proprietary dependency and Google reading the SMS) and over a notification
+listener. Reliability without either dependency won (owner, 2026-11-15).
+Guardrails:
+
+- The `RECEIVE_SMS` permission is requested only from a Settings toggle
+  ("Fill codes from text messages"), never at setup. The toggle states the
+  reason in place: Strongroom reads incoming text messages only to find
+  verification codes, and keeps nothing. MMS is never read; the inbox is
+  never read (no `READ_SMS`) — only the incoming-message broadcast
+  (`SMS_RECEIVED`) is handled.
+- A manifest receiver on `SMS_RECEIVED` extracts code candidates with a
+  conservative bounded regex (4–8 digits or alphanumerics near
+  code/otp/pin/verification keywords, English and Roman-Urdu fixtures — the
+  Notebox pattern) and keeps at most the last few `{code, sender, receivedAt}`
+  in volatile memory for 2 minutes. Message bodies are never written to
+  disk, never logged, never sent anywhere; the extracted code is the only
+  thing kept. None of this touches the vault, so it works while the vault is
+  locked — a code is not vault content, and the notification shade already
+  shows it (my call; the "nothing while locked" decision is about secrets).
+- Fill: on a detected otp field the response offers the freshest cached code
+  (`Fill 123456 · SMS`) alongside any TOTP datasets. For a code that arrives
+  after the request — the common case, the field focused before the SMS
+  lands — the response uses the API 33 delayed fill
+  (`FillResponse.FLAG_DELAY_FILL` + `FillRequest.getDelayedFillIntentSender()`)
+  and the receiver completes the fill when the code arrives. If delayed fill
+  proves unreliable on the emulator or the phone, the fallback is the
+  2-minute cache plus a refocus. Exact behaviour is verified on the emulator
+  (API 35/36) before the phone.
+- An app that retrieves its own code through the SMS Retriever API doesn't
+  need us, and without Play services we can't ask Google's
+  `hasOngoingSmsRequest` — so the suggestion may appear needlessly there.
+  The owner taps it or not. *(Accepted cost.)*
+- HyperOS, to verify on the phone: the receiver surviving a reboot
+  (Autostart), battery restrictions, and what Play Protect says at Store
+  install of an SMS-permission vault app (the Store's ~17 s answer window).
+- The §12 on-disk check proves no SMS content is persisted: the receiver
+  writes nothing by design, and the code review asserts it.
+
+### 15.4 Adding a secret
+
+- **Scan a QR** (Add or Edit on a login): a native scan screen reads the
+  site's QR, parses the URI (15.1), shows the parsed issuer, account,
+  algorithm, digits and period, and stores it on save. The `CAMERA`
+  permission is requested at scan time only. The scan screen is
+  `FLAG_SECURE`: the QR on the other screen is a secret, and a screenshot of
+  ours would carry it. Library: zxing core + zxing-android-embedded
+  (Apache-2.0) — the feature's only new dependency.
+- **Import Google Authenticator** (Settings, next to the password import):
+  Authenticator's Export accounts shows batch QRs
+  (`otpauth-migration://offline?data=…` — protobuf, up to 10 accounts per
+  batch, several batches). Strongroom scans them in sequence ("3 of 4
+  scanned"), decodes with an own protobuf reader (own-code rule; the format
+  is stable), dedupes, and shows a review list: which login each code
+  attaches to by issuer and account, and which become new logins (name and
+  code, no password). Counter-based (HOTP) entries are skipped and reported:
+  "N counter-based codes skipped." Import is one transaction, like §8.
+  Before writing the decoder, check a real export from the owner's phone.
+- No manual typing or pasting of secrets (owner's decision): a site without
+  a QR can't be added, and Authenticator's export covers migration.
+
+### 15.5 Screens
+
+- Entry (a login with a code): the current code grouped like Authenticator
+  (`123 456`), a 30-second countdown, Copy (sensitive clip, 30 s clear, same
+  as passwords), and Remove code.
+- Add/Edit: an "Authenticator code" section with Scan QR.
+- Settings: "Import from Google Authenticator"; the SMS toggle with its
+  stated reason, off by default.
+- Vault rows and search are unchanged: codes live on logins, and there is no
+  separate authenticator tab (my call, matching the owner's "codes on
+  logins").
+
+### 15.6 Left to the builder
+
+The exact receiver throttling, the scan screen's handling of multiple QRs in
+frame, the migration dedup keys, whether delayed fill needs a fallback path
+on API 35/36, the Urdu keyword list, and the extension's adoption of the
+`totp` field (its next phase; the vectors file makes that mechanical).
+
