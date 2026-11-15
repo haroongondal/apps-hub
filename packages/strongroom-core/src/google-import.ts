@@ -1,5 +1,6 @@
 import { parseCsv } from './csv.ts';
 import type { AppLink, Login } from './entry.ts';
+import { totpRefusal } from './otp.ts';
 import { registrableDomain, siteFromUrl } from './matching.ts';
 
 export type ImportResult = { logins: Login[]; merged: number; flagged: number };
@@ -48,7 +49,7 @@ export function parseGoogleExport(csv: string, now: number): ImportResult {
   const [nameAt, urlAt, userAt, passAt] = ['name', 'url', 'username', 'password'].map((h) => header.indexOf(h));
   if (Math.min(nameAt, urlAt, userAt, passAt) < 0) throw new ImportError(NOT_GOOGLE);
   const noteAt = header.indexOf('note');
-  const [typeAt, appDomainAt] = ['type', 'app_domain'].map((h) => header.indexOf(h));
+  const [typeAt, appDomainAt, totpAt] = ['type', 'app_domain', 'totp'].map((h) => header.indexOf(h));
 
   const parsed = records.slice(1).map((row, n): Row | null => {
     if (row.length > header.length) {
@@ -63,6 +64,12 @@ export function parseGoogleExport(csv: string, now: number): ImportResult {
     const android = androidUrl(url);
     const cert = android && certHex(android[0]);
     const app: AppLink | null = android && cert ? { pkg: android[1], certSha256: cert, domain: cell(appDomainAt).trim() || null } : null;
+    // A Strongroom export carries the whole otpauth URI in its own column; an unreadable one refuses the row.
+    const totp = cell(totpAt).trim();
+    if (totp !== '') {
+      const refusal = totpRefusal(totp);
+      if (refusal !== null) throw new ImportError(`Row ${n + 1} of this file has an authenticator code link we can't read (${refusal}).`);
+    }
     const unlinked = site === null && app === null;
     return {
       place: JSON.stringify(!unlinked ? [site ? [site] : [], app ? [app] : []] : url !== '' ? ['url', url] : ['name', name.trim()]),
@@ -75,6 +82,7 @@ export function parseGoogleExport(csv: string, now: number): ImportResult {
         sites: site ? [site] : [],
         apps: app ? [app] : [],
         note: cell(noteAt),
+        ...(totp !== '' ? { totp } : {}),
         updatedAt: now,
       },
     };

@@ -54,6 +54,21 @@ class VectorGen {
         updatedAt = 1_700_000_000_000,
       ),
     ),
+    Record(
+      id(5),
+      nonce(7),
+      // The §15 login with an authenticator code: the URI is stored whole; secret = RFC 6238's ASCII "12345678901234567890" in base32.
+      Entry.Login(
+        name = "Example 2FA",
+        username = "me@example.com",
+        password = "hunter2",
+        sites = emptyList(),
+        apps = emptyList(),
+        note = "",
+        updatedAt = 1_700_000_004_000,
+        totp = "otpauth://totp/Example:me@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Example",
+      ),
+    ),
     Record(id(2), nonce(4), Entry.Card("Visa", "A. Holder", "4111111111111111", 12, 2030, "123", "test number", 1_700_000_001_000)),
     Record(id(3), nonce(5), Entry.Note("Wi-Fi", "SSID: home\nkey: correct horse", 1_700_000_002_000)),
     Record(id(4), nonce(6), Entry.Deleted(1_700_000_003_000)),

@@ -38,6 +38,21 @@ class EntryJsonTest {
     for (e in entries) assertEquals(e, EntryJson.decode(EntryJson.encode(e)))
   }
 
+  private val code = "otpauth://totp/Example:me@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Example"
+
+  @Test fun aLoginWithCodeRoundTripsAndOlderJsonWithoutOneStaysValid() {
+    val with = login.copy(totp = code)
+    assertEquals(with, EntryJson.decode(EntryJson.encode(with)))
+    assertTrue(EntryJson.encode(with).contains("\"totp\""))
+    // An old record (or a reader before §15) has no totp key at all; it decodes with the field absent.
+    assertEquals(null, EntryJson.decode(EntryJson.encode(login))!!.let { (it as Entry.Login).totp })
+  }
+
+  @Test fun anInvalidCodeNeverConstructsOrDecodes() {
+    assertThrows(IllegalArgumentException::class.java) { login.copy(totp = "not a uri") }
+    assertNull(EntryJson.decode(EntryJson.encode(login).replace("}", ",\"totp\":\"garbage\"}")))
+  }
+
   @Test fun encodingPinsFieldNamesAndOrder() {
     assertEquals(
       """{"type":"login","name":"a","username":"u","password":"p","sites":[{"https":true,"host":"h.com"}],""" +

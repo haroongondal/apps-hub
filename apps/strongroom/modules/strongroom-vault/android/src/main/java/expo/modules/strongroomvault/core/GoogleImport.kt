@@ -54,6 +54,11 @@ object GoogleImport {
       val android = androidUrl(url)
       val app = android?.let { (b64, pkg) -> sha256(b64)?.let { AppLink(AppId(pkg, hex(it)), col("app_domain").trim().ifEmpty { null }) } }
       val unlinked = site == null && app == null
+      val totp = col("totp").trim().ifEmpty { null }?.let { u ->
+        val refusal = Otp.refusal(u)
+        if (refusal != null) throw ImportError("Row ${n + 1} of this file has an authenticator code link we can't read ($refusal).")
+        u
+      }
       Row(
         place = when {
           !unlinked -> listOf(listOfNotNull(site), listOfNotNull(app))
@@ -68,6 +73,7 @@ object GoogleImport {
           sites = listOfNotNull(site),
           apps = listOfNotNull(app),
           note = cell(noteAt),
+          totp = totp,
           updatedAt = now,
         ),
       )

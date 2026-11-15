@@ -1,6 +1,7 @@
 package expo.modules.strongroomvault.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class CsvExportTest {
@@ -38,5 +39,16 @@ class CsvExportTest {
     assertEquals(setOf(card.copy(updatedAt = 9), undated.copy(updatedAt = 9), note.copy(updatedAt = 9)), r.cardsAndNotes.toSet())
     assertEquals(0, r.merged)
     assertEquals(0, r.flagged)
+  }
+
+  @Test fun aCodeRoundTripsThroughTheExportAndImport() {
+    val coded = Entry.Login("Router", "admin", "=1+2", emptyList(), emptyList(), "", 5, "otpauth://totp/Router:admin?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Router")
+    val r = GoogleImport.parse(CsvExport.csv(listOf(coded)), 9)
+    assertEquals(listOf(coded.copy(updatedAt = 9)), r.logins)
+  }
+
+  @Test fun anInvalidCodeRefusesTheImport() {
+    val csv = "name,url,username,password,note,type,totp\nRouter,,admin,=1+2,,login,not a uri\n"
+    assertThrows(ImportError::class.java) { GoogleImport.parse(csv, 9) }
   }
 }

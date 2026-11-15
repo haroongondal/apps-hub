@@ -130,7 +130,24 @@ test('decodeEntry returns null for anything malformed, never a half-built entry'
   assert.equal(decodeEntry(JSON.stringify({ ...login, sites: [{ https: 'yes', host: 'a.com' }] })), null);
   assert.equal(decodeEntry(JSON.stringify({ ...login, apps: [{ pkg: 'a.b', certSha256: 'ABC', domain: null }] })), null);
   assert.equal(decodeEntry(JSON.stringify({ ...login, password: undefined })), null);
+  assert.equal(decodeEntry(JSON.stringify({ ...login, totp: 'garbage' })), null);
+  assert.equal(decodeEntry(JSON.stringify({ ...login, totp: 6 })), null);
   assert.deepEqual(decodeEntry(JSON.stringify(login)), login);
+});
+
+test('a login with an authenticator code round-trips, and JSON without one decodes without the key', () => {
+  const coded: Entry = {
+    type: 'login', name: 'Bank', username: 'me', password: 'p', sites: [], apps: [], note: '',
+    totp: 'otpauth://totp/Example:me@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Example',
+    updatedAt: 5,
+  };
+  assert.ok(encodeEntry(coded).includes('"totp"'));
+  assert.deepEqual(decodeEntry(encodeEntry(coded)), coded);
+  const older = '{"type":"login","name":"n","username":"u","password":"p","sites":[],"apps":[],"note":"","updatedAt":5}';
+  const expected = { type: 'login', name: 'n', username: 'u', password: 'p', sites: [], apps: [], note: '', updatedAt: 5 };
+  // An older record (or an explicit null) has no code at all; the key stays absent, never null.
+  assert.deepEqual(decodeEntry(older), expected);
+  assert.deepEqual(decodeEntry(older.replace('"updatedAt"', '"totp":null,"updatedAt"')), expected);
 });
 
 const password = vectors.password.text;
