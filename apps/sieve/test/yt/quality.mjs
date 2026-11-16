@@ -4,6 +4,9 @@ import { navigate, openYt, sendToTab, setYouTube, until, ytCalls } from './helpe
 
 const SET = 'setPlaybackQualityRange';
 const json = (v) => JSON.stringify(v);
+// A public playlist and its first video (test/yt facts, inspected 2026-11-10).
+const PLAYLIST = 'PL7_R_MUrr1gx09YiXgrxvCKknU7Z1raax';
+const PLAYLIST_FIRST = 'rAgR2rIzCkc';
 const quality = (page) => ytCalls(page, SET).then((calls) => calls.map((c) => c.args[0]));
 const settled = async (page, want, count = 1) => until(async () => (await quality(page)).filter((q) => q === want).length >= count);
 
@@ -37,6 +40,15 @@ export async function local(t) {
     await setYouTube(t, { quality: { videos: 'hd720', playlists: 'large' } });
     page = await openYt(t, '/watch?v=sieveTest01&list=PLsieve&index=1');
     check('quality: a playlist page gets the playlists quality (large), not the videos one', (await settled(page, 'large')) && !(await quality(page)).includes('hd720'), json(await quality(page)));
+    await page.close();
+    // latelist: the player names the list only 2 s after loadstart, as YouTube does on a hard load (see quality-main.ts).
+    page = await openYt(t, '/watch?v=sieveTest01&list=PLsieve&index=1&latelist=1');
+    check('quality: a hard-loaded playlist page gets the playlists quality (large) while the player has not named the list yet', (await settled(page, 'large')) && !(await quality(page)).includes('hd720'), json(await quality(page)));
+    await page.close();
+    page = await openYt(t, '/watch?v=sieveTest01&latelist=1');
+    await settled(page, 'hd720');
+    await navigate(page, 'sieveTest02', { list: 'PLsieve' });
+    check('quality: an in-app move into a playlist gets the playlists quality (large) while the player has not named the list yet', await settled(page, 'large'), json(await quality(page)));
     await page.close();
 
     await setYouTube(t, { quality: { videos: 'auto', playlists: 'auto' } });
@@ -154,7 +166,7 @@ async function codecs(t) {
 // accident at hd720 on a headless run (YouTube picks 720p there), so the quality check uses large (480p) first, then hd720.
 export async function live(t) {
   const { check, page } = t;
-  const state = () => page.evaluate(() => { const p = document.querySelector('#movie_player'); return { quality: p.getPlaybackQuality(), preferred: p.getPreferredQuality?.(), codecs: p.getStatsForNerds?.().codecs ?? null, id: p.getVideoData().video_id, playerState: p.getPlayerState() }; }).catch(() => null);
+  const state = () => page.evaluate(() => { const p = document.querySelector('#movie_player'); return { quality: p.getPlaybackQuality(), preferred: p.getPreferredQuality?.(), codecs: p.getStatsForNerds?.().codecs ?? null, id: p.getVideoData().video_id, list: p.getVideoData().list ?? null, playerState: p.getPlayerState(), sameDocument: window.__sieveQualityMark === true }; }).catch(() => null);
   const ready = () => page.waitForFunction(() => typeof document.querySelector('#movie_player')?.getStatsForNerds === 'function' && document.querySelector('#movie_player video')?.currentTime > 1, null, { timeout: 30_000 }).catch(() => {});
   const gated = () => page.evaluate(() => ({ bot: /confirm you.re not a bot/i.test(document.body?.innerText ?? ''), consent: location.hostname.startsWith('consent.') })).then((g) => (g.bot ? 'bot check' : g.consent ? 'consent page' : null), () => null);
   try {
@@ -166,13 +178,35 @@ export async function live(t) {
     check('live quality: with videos set to 480p getPlaybackQuality is large within 10 s', await until(async () => (await state())?.quality === 'large', 10_000), json(await state()));
     await setYouTube(t, { quality: { videos: 'hd720' } });
     check('live quality: changing the setting to 720p applies it to the playing video', await until(async () => (await state())?.quality === 'hd720', 10_000), json(await state()));
-    await setYouTube(t, { quality: { videos: 'large' } });
+    // A Mix is a playlist page, so the playlists quality is large as well: the check is that every new video gets its own call.
+    await setYouTube(t, { quality: { videos: 'large', playlists: 'large' } });
     await until(async () => (await state())?.quality === 'large', 10_000);
-    // inspected 2026-11-11, signed out, Chrome for Testing 149.0.7827.55: the first related link can be a Mix (`&list=RD…`), a playlist page where the playlists setting applies, and the new video
-    // sat buffering (state 3, `unknown`) for 16 s before it played, so the 10 s start once it plays (state 1).
-    await page.locator('ytd-watch-next-secondary-results-renderer a[href^="/watch"]:not([href*="list="])').first().click({ timeout: 10_000 });
-    await until(async () => { const s = await state(); return s?.id !== t.videoId && s?.playerState === 1; }, 30_000);
-    check('live quality: after an in-app navigation the new video is on large too', await until(async () => (await state())?.quality === 'large', 10_000), json(await state()));
+    // inspected 2026-11-17, signed out, Chrome for Testing 149.0.7827.55: the related column fills to 20 videos (4 first), each with a thumbnail and a
+    // title /watch link, all visible; 12 to 18 were Mixes (`&list=RD…`), and on 1 load of 8 all 20 were, so the plain video this check wanted was not
+    // there (live run 2's failure). It takes a plain video when there is one, else a Mix. 2026-11-11: the new video sat buffering (state 3, `unknown`)
+    // for 16 s before it played, so the quality wait starts once it plays (state 1).
+    const related = 'ytd-watch-next-secondary-results-renderer a[href^="/watch"]';
+    const plain = page.locator(`${related}:not([href*="list="])`);
+    const link = (await until(async () => (await plain.count()) > 0, 10_000)) ? plain.first() : page.locator(related).first();
+    const href = await link.getAttribute('href', { timeout: 5000 }).catch(() => null);
+    if (!href) console.log('SKIP  live quality in-app: the related column showed no /watch link in 10 s');
+    else {
+      await page.evaluate(() => { window.__sieveQualityMark = true; });
+      await link.click({ timeout: 10_000 });
+      const moved = await until(async () => { const s = await state(); return s !== null && s.sameDocument && s.id !== t.videoId; }, 15_000);
+      check(`live quality: clicking a related ${href.includes('list=') ? 'Mix (no plain video was offered)' : 'video'} moves in-app to a new video`, moved, json({ href, state: await state() }));
+      const playing = moved && (await until(async () => (await state())?.playerState === 1, 30_000));
+      if (moved && !playing) console.log(`INCONCLUSIVE  live quality in-app: the new video did not start playing in 30 s, so its quality cannot be read  ${json(await state())}`);
+      if (playing) check('live quality: after an in-app navigation the new video is on large too', await until(async () => { const s = await state(); return s?.quality === 'large' && s.preferred === 'large'; }, 10_000), json(await state()));
+    }
+
+    // inspected 2026-11-17 (see quality-main.ts): on a hard-loaded playlist page the player names the list about 2 s after the video's loadstart.
+    await setYouTube(t, { quality: { videos: 'hd720', playlists: 'large' } });
+    await page.goto(`https://www.youtube.com/watch?v=${PLAYLIST_FIRST}&list=${PLAYLIST}`, { waitUntil: 'domcontentloaded' });
+    await ready();
+    const listGate = await gated();
+    if (listGate) console.log(`SKIP  live quality playlist: ${listGate}`);
+    else check('live quality: a hard-loaded playlist page gets the playlists quality (480p), not the videos one (720p)', await until(async () => { const s = await state(); return s?.quality === 'large' && s.preferred === 'large'; }, 10_000), json(await state()));
 
     await setYouTube(t, { quality: { videos: 'hd720', h264: true } });
     await page.goto(`https://www.youtube.com/watch?v=${t.videoId}`, { waitUntil: 'domcontentloaded' });

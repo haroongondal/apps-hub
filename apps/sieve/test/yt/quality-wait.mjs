@@ -24,12 +24,15 @@ export async function local(t) {
   let page;
   try {
     await setYouTube(t, { quality: { videos: 'hd720', playlists: 'large' } });
-    page = await openYt(t, '/watch?v=sieveTest01');
-    await settled(page, 'hd720');
-    await page.evaluate(() => history.replaceState(history.state, '', `${location.href}&list=PLstale`));
-    await setYouTube(t, { quality: { videos: 'medium' } });
-    await until(async () => (await quality(page)).length > 1);
-    check('quality wait: a list= left in the address after leaving a playlist does not pick the playlists quality; the player says which list plays', json(await quality(page)) === '["hd720","medium"]', json(await quality(page)));
+    page = await openYt(t, '/watch?v=sieveTest01&list=PLsieve&index=1');
+    await settled(page, 'large');
+    // The address catches up only after the next video's loadstart, so Sieve sees the old v= and list= there.
+    await page.evaluate(() => {
+      const push = history.pushState;
+      history.pushState = (...args) => document.querySelector('#movie_player video').addEventListener('loadstart', () => push.apply(history, args), { once: true });
+    });
+    await navigate(page, 'sieveTest02');
+    check('quality wait: leaving a playlist in-app while the address still shows the video before and its list= gets the videos quality', await settled(page, 'hd720'), json(await quality(page)));
     await page.close();
 
     await setYouTube(t, { quality: { videos: 'auto', playlists: 'auto', videosFull: 'same' } });

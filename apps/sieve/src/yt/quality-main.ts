@@ -36,8 +36,13 @@ feature('quality', () => {
   const known = (p: YtPlayer): Quality[] => p.getAvailableQualityLevels().filter(isQuality); // the player's order, highest first
 
   function target(p: YtPlayer): QualityChoice {
-    // Both kinds are fixed per frame except `list`, which only the player knows reliably: the address lags an in-app navigation both ways.
-    return qualityTarget(qualityContext({ ...ytPage(location.href), list: p.getVideoData()?.list ?? null }), document.fullscreenElement !== null, settings!.quality);
+    // Both kinds are fixed per frame except `list`. inspected 2026-11-17, signed out, Chrome for Testing 149.0.7827.55: getVideoData().list is unset
+    // at a video's loadstart on a hard-loaded playlist page (set about 2 s later, after loadedmetadata) and on a move to the playlist's next video
+    // (set 0.15 s later), while the address already shows the new video and its list=. So the address counts, but only when it shows this video:
+    // a list= left from the video before does not.
+    const page = ytPage(location.href);
+    const data = p.getVideoData();
+    return qualityTarget(qualityContext({ ...page, list: data?.list || (page.videoId === data?.video_id ? page.list : null) }), document.fullscreenElement !== null, settings!.quality);
   }
 
   function cancel(): void {

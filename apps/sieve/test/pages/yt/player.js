@@ -13,6 +13,10 @@
   const autoplay = params.get('autoplay') !== '0';
   let videoId = params.get('v') ?? location.pathname.match(/^\/embed\/([^/?]+)/)?.[1] ?? IDS[0];
   let listId = params.get('list');
+  // ?latelist=1: getVideoData() names the list only 2 s after each loadstart, as real YouTube does on a hard load (see quality-main.ts).
+  // A window capture listener runs before Sieve's document one.
+  let listAt = 0;
+  if (params.has('latelist')) window.addEventListener('loadstart', () => { listAt = performance.now() + 2000; }, true);
   let quality = 'hd720';
   let playerState = -1;
   let stopped = false;
@@ -117,7 +121,7 @@
   const api = {
     getPlayerState: () => playerState,
     // Not from YouTube: state -1 and errorCode 'fixture.unplayable' for state=unplayable are this fixture's own choice (no real unplayable page was inspected).
-    getVideoData: () => ({ video_id: videoId, author: 'Sieve fixture', title: videoId, isPlayable: !unplayable, errorCode: unplayable ? 'fixture.unplayable' : null, video_quality: quality, isLive: false, ...(listId ? { list: listId } : {}) }),
+    getVideoData: () => ({ video_id: videoId, author: 'Sieve fixture', title: videoId, isPlayable: !unplayable, errorCode: unplayable ? 'fixture.unplayable' : null, video_quality: quality, isLive: false, ...(listId && performance.now() >= listAt ? { list: listId } : {}) }),
     getPlaybackRate: () => video.playbackRate,
     setPlaybackRate: (r) => { video.playbackRate = r; },
     getAvailablePlaybackRates: () => [...RATES],
