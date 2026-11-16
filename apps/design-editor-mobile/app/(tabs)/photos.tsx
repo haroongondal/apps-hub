@@ -10,16 +10,23 @@ import { askForPhotos, checkPhotos, type Access } from '../../src/photos/access'
 import { PhotoGrid } from '../../src/photos/PhotoGrid';
 import { getSearchTool } from '../../src/photos/search-tool';
 import { realSearchToolDeps } from '../../src/photos/search-tool-deps';
-import { photosView, scanLine, toolResultText, waitingText } from '../../src/photos/view';
+import { noMatches, scanText } from '../../src/photos/screen-text';
+import { photosView, toolResultText, waitingText } from '../../src/photos/view';
 
 type IndexState = Awaited<ReturnType<typeof DesignMedia.photoIndexState>>;
+
+const release = () => { DesignMedia.releasePhotoSearch().catch(() => undefined); };
 
 const say = (e: unknown) => Alert.alert('Something went wrong', plainError(e, 'Try again.'));
 const intro = { title: 'Find photos by describing them', body: 'Type a few words, like dog on the beach, and see matching photos. Everything stays on your phone.' };
 
 export default function PhotosTab() {
   const [access, setAccess] = useState<Access | null>(null);
+  const accessRef = useRef<Access | null>(null);
   const [index, setIndex] = useState<IndexState | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const pendingScan = useRef(false);
+  const inFlight = useRef<Promise<unknown>>(Promise.resolve());
   const [focused, setFocused] = useState(false);
   const focusedRef = useRef(false);
   const [gettingTool, setGettingTool] = useState(false);
@@ -38,14 +45,38 @@ export default function PhotosTab() {
   const running = job?.state === 'running';
   const progress = running ? job.progress : null;
 
-  const refresh = useCallback(async () => {
-    const a = await checkPhotos();
-    const s = await DesignMedia.photoIndexState();
-    setAccess(prev => (a === 'none' && prev === 'blocked' ? 'blocked' : a));
+  const keepAccess = (a: Access) => { accessRef.current = a; setAccess(a); };
+
+  const refresh = useCallback(async (scan = false) => {
+    let a: Access;
+    let s: IndexState;
+    try {
+      a = await checkPhotos();
+      s = await DesignMedia.photoIndexState();
+    } catch {
+      setLoadError(true);
+      return;
+    }
+    setLoadError(false);
+    const before = accessRef.current;
+    keepAccess(a === 'none' && before === 'blocked' ? 'blocked' : a);
     setIndex(s);
-    if (a === 'none' || !s.modelsReady || !(await DesignMedia.photoGalleryChanged())) return;
-    if (focusedRef.current && AppState.currentState === 'active') await DesignMedia.startPhotoIndex();
+    if (a === 'none' || !s.modelsReady || !focusedRef.current) return;
+    // a new grant doesn't change the gallery stamp, so more access always scans
+    if (!scan && (before === null || before === a) && !(await DesignMedia.photoGalleryChanged())) return;
+    if (AppState.currentState === 'active') await DesignMedia.startPhotoIndex();
+    else pendingScan.current = true;
   }, []);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state !== 'active' || !focusedRef.current) return;
+      const scan = pendingScan.current;
+      pendingScan.current = false;
+      refresh(scan).catch(say);
+    });
+    return () => sub.remove();
+  }, [refresh]);
 
   useFocusEffect(
     useCallback(() => {
@@ -55,7 +86,10 @@ export default function PhotosTab() {
       return () => {
         focusedRef.current = false;
         setFocused(false);
-        DesignMedia.releasePhotoSearch().catch(() => undefined);
+        clearTimeout(timer.current);
+        request.current++;
+        // a search still running would load the text model again, so release once it settles
+        void inFlight.current.then(() => { if (!focusedRef.current) release(); });
       };
     }, [refresh]),
   );
@@ -74,7 +108,12 @@ export default function PhotosTab() {
     const n = ++request.current;
     setSearchError(null);
     if (!q.trim()) return setResults(null);
-    DesignMedia.searchPhotos(q.trim()).then(
+    show(n, DesignMedia.searchPhotos(q.trim()));
+  }
+
+  function show(n: number, p: Promise<string[]>) {
+    inFlight.current = Promise.allSettled([inFlight.current, p]);
+    p.then(
       r => { if (n === request.current) setResults(r); },
       e => { if (n === request.current) setSearchError(plainError(e, "The search didn't work. Try again.")); },
     );
@@ -92,10 +131,7 @@ export default function PhotosTab() {
     setSearchError(null);
     clearTimeout(timer.current);
     const n = ++request.current;
-    DesignMedia.similarPhotos(uri).then(
-      r => { if (n === request.current) setResults(r); },
-      e => { if (n === request.current) setSearchError(plainError(e, "The search didn't work. Try again.")); },
-    );
+    show(n, DesignMedia.similarPhotos(uri));
   }
 
   function clearSimilar() {
@@ -103,7 +139,7 @@ export default function PhotosTab() {
     search(query);
   }
 
-  const ask = () => { askForPhotos().then(a => { setAccess(a); return refresh(); }).catch(say); };
+  const ask = () => { askForPhotos().then(a => { keepAccess(a); return refresh(a === 'all' || a === 'some'); }).catch(say); };
 
   async function getTool() {
     setToolError(null);
@@ -119,7 +155,20 @@ export default function PhotosTab() {
     await refresh().catch(say);
   }
 
-  if (!access || !index) return <Screen scroll><Header title="Photos" /></Screen>;
+  if (!access || !index) {
+    return (
+      <Screen scroll>
+        <Header title="Photos" />
+        {loadError ? (
+          <Notice
+            tone="danger"
+            title="Couldn't check your photos"
+            action={<Button label="Try again" variant="secondary" onPress={() => { refresh().catch(say); }} accessibilityHint="Checks your photos again" />}
+          />
+        ) : null}
+      </Screen>
+    );
+  }
 
   const view = photosView({ access, modelsReady: index.modelsReady, gettingTool, indexed: index.indexed, scanning: !!job });
   const waiting = job ? waitingText(index.waiting) : null;
@@ -169,7 +218,7 @@ export default function PhotosTab() {
       <Screen scroll>
         <Header title="Photos" />
         <View style={{ gap: space.sm }}>
-          <Text>{scanLine(index.indexed, progress)}</Text>
+          <Text>{scanText(index.indexed, job?.state, progress)}</Text>
           <Progress value={progress} />
         </View>
         {waitingNotice}
@@ -181,14 +230,16 @@ export default function PhotosTab() {
     <View style={{ paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: space.md, gap: space.xl }}>
       <Header
         title="Photos"
-        trailing={<Button label="Scan now" variant="ghost" onPress={() => { DesignMedia.startPhotoIndex().catch(say); }} accessibilityHint="Looks for new photos to search" />}
+        trailing={job ? undefined : <Button label="Scan now" variant="ghost" onPress={() => { DesignMedia.startPhotoIndex().catch(say); }} accessibilityHint="Looks for new photos to search" />}
       />
       {similar ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
           <Text variant="bodyStrong" style={{ flex: 1 }}>More like this</Text>
           <Button label="Clear" variant="secondary" onPress={clearSimilar} accessibilityHint="Goes back to your search" />
         </View>
-      ) : (
+      ) : null}
+      {similar && searchError ? <Notice tone="danger">{searchError}</Notice> : null}
+      {similar ? null : (
         <Field
           label="Search your photos"
           placeholder="Describe a photo"
@@ -196,7 +247,7 @@ export default function PhotosTab() {
           onChangeText={type}
           onSubmitEditing={() => search(query)}
           returnKeyType="search"
-          hint={job ? scanLine(index.indexed, progress) : undefined}
+          hint={job ? scanText(index.indexed, job.state, progress) : undefined}
           error={searchError}
         />
       )}
@@ -215,7 +266,7 @@ export default function PhotosTab() {
       <PhotoGrid
         uris={results ?? []}
         header={header}
-        empty={results ? <Empty title="No close matches" body="Try other words." /> : null}
+        empty={results ? <Empty {...noMatches(similar)} /> : null}
         onPick={setPicked}
       />
       <Sheet visible={picked !== null} onClose={() => setPicked(null)} title="Photo">
