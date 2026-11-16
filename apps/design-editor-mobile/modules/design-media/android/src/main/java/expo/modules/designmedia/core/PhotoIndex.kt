@@ -75,7 +75,7 @@ fun diff(gallery: List<PhotoKey>, index: List<PhotoRow>): IndexDiff {
   val present = gallery.toSet()
   return IndexDiff(
     toEmbed = gallery.filter { it !in indexed },
-    keep = index.filter { it.key in present },
+    keep = index.filter { it.key in present }.distinctBy { it.key },
   )
 }
 

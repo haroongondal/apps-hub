@@ -104,6 +104,11 @@ fun photoIndexJob(id: String) = Job(id, "gallery", Messages.PHOTOS, PhotoIndexPl
 fun jobToAdd(jobs: List<Job>, id: String): Job? =
   if (jobs.any { it.plan == PhotoIndexPlan && (it.state == JobState.QUEUED || it.state == JobState.RUNNING) }) null else photoIndexJob(id)
 
+fun failureMessage(plan: Plan): String = if (plan is PhotoIndexPlan) Messages.PHOTOS_FAILED else Messages.COULDNT_PROCESS
+
+// The photo scan has no CBR choice of its own, so enqueuing it must not undo the one set for waiting video jobs.
+fun cbrOnlyAfter(current: Boolean, jobs: List<Job>, cbr: Boolean): Boolean = if (jobs.any { it.plan != PhotoIndexPlan }) cbr else current
+
 data class Output(val name: String, val ref: String, val bytes: Long, val note: String? = null)
 data class AttemptLog(val attempt: Int, val plannedBytes: Long, val actualBytes: Long, val seconds: Double, val mode: String)
 
