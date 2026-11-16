@@ -191,4 +191,34 @@ class PhotoIndexTest {
     assertTrue(shouldPause(80, true, 3))
     assertFalse(shouldPause(80, false, 2))
   }
+
+  @Test
+  fun pauseReasonHeatWinsOverBattery() {
+    assertEquals("heat", pauseReason(10, false, 3))
+    assertEquals("battery", pauseReason(10, false, 0))
+    assertEquals(null, pauseReason(10, true, 2))
+    assertEquals("heat", pauseReason(80, false, 4))
+  }
+
+  @Test
+  fun needsScanWhenNothingSavedOrChanged() {
+    assertTrue(needsScan(null, "1:5"))
+    assertFalse(needsScan("1:5", "1:5"))
+    assertTrue(needsScan("1:5", "1:6"))
+  }
+
+  @Test
+  fun aNewScanStopsTheStaleOnes() {
+    val old = listOf(
+      photoIndexJob("i").copy(state = JobState.INTERRUPTED),
+      photoIndexJob("p").copy(state = JobState.PAUSED),
+      photoIndexJob("d").copy(state = JobState.DONE),
+    )
+    val start = planIndexStart(shownQueue(old, serviceAlive = true), "n")
+    assertEquals(photoIndexJob("n"), start.job)
+    assertEquals(listOf("i", "p"), start.stale)
+    val waiting = planIndexStart(shownQueue(old + photoIndexJob("q"), serviceAlive = true), "n")
+    assertEquals(null, waiting.job)
+    assertEquals(emptyList<String>(), waiting.stale)
+  }
 }

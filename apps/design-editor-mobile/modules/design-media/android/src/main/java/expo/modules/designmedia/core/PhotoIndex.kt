@@ -90,5 +90,13 @@ fun rank(rows: List<PhotoRow>, query: FloatArray, limit: Int, floor: Float): Lis
   }.filter { it.second >= floor }.sortedByDescending { it.second }.take(limit).map { it.first }
 }
 
-fun shouldPause(batteryPct: Int, charging: Boolean, thermalStatus: Int): Boolean =
-  (batteryPct < 20 && !charging) || thermalStatus >= THERMAL_SEVERE
+// Heat is checked first: plugging in doesn't fix it.
+fun pauseReason(batteryPct: Int, charging: Boolean, thermalStatus: Int): String? = when {
+  thermalStatus >= THERMAL_SEVERE -> "heat"
+  batteryPct < 20 && !charging -> "battery"
+  else -> null
+}
+
+fun shouldPause(batteryPct: Int, charging: Boolean, thermalStatus: Int): Boolean = pauseReason(batteryPct, charging, thermalStatus) != null
+
+fun needsScan(saved: String?, current: String): Boolean = saved != current

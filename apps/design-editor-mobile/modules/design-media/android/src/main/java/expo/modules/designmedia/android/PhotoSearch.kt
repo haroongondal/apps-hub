@@ -13,6 +13,7 @@ import expo.modules.designmedia.core.QueueStore
 import expo.modules.designmedia.core.SEARCH_FLOOR
 import expo.modules.designmedia.core.SEARCH_LIMIT
 import expo.modules.designmedia.core.encodeJobs
+import expo.modules.designmedia.core.needsScan
 import expo.modules.designmedia.core.planIndexStart
 import expo.modules.designmedia.core.rank
 import expo.modules.designmedia.core.shownQueue
@@ -47,14 +48,18 @@ object PhotoSearch {
   fun startIndex(ctx: Context): String {
     val shown = shownQueue(QueueStore(AtomicFile(File(ctx.filesDir, "media-queue.json"))).load(), MediaJobService.alive)
     val start = planIndexStart(shown, UUID.randomUUID().toString())
+    start.stale.forEach { MediaJobService.cancel(ctx, it) }
     // A waiting scan needs the service running to be picked up; an empty enqueue wakes it without adding a job.
-    MediaJobService.enqueue(ctx, encodeJobs(listOfNotNull(start.job)), false)
+    if (!MediaJobService.alive || start.job != null) MediaJobService.enqueue(ctx, encodeJobs(listOfNotNull(start.job)), false)
     return start.id
   }
 
   fun indexed(ctx: Context): Int = index(ctx).size
 
-  fun state(ctx: Context): Map<String, Any> = mapOf("indexed" to indexed(ctx), "modelsReady" to modelsReady(ctx))
+  fun state(ctx: Context): Map<String, Any?> =
+    mapOf("indexed" to indexed(ctx), "modelsReady" to modelsReady(ctx), "waiting" to PhotoIndexRunner.waitingFor)
+
+  fun galleryChanged(ctx: Context): Boolean = needsScan(AtomicFile(PhotoIndexRunner.stampFile(ctx)).read(), Gallery.stamp(ctx))
 
   fun search(ctx: Context, query: String): List<String> {
     if (!modelsReady(ctx)) throw SearchToolNotReady()

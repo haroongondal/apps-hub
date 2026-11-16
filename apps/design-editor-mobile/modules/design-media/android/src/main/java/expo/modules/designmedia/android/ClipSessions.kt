@@ -10,7 +10,7 @@ import java.io.File
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
 
-// The image session stays open for the process; the text one (127 MB) is opened on the first search and freed when the tab closes.
+// Both sessions open on first use: the image one is released after each scan job, the text one (127 MB) when the tab closes.
 object ClipSessions {
   private val env: OrtEnvironment by lazy { OrtEnvironment.getEnvironment() }
   private var image: OrtSession? = null
