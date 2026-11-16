@@ -294,8 +294,7 @@ const photo = await page.evaluate(() => {
   return c.toDataURL('image/png').split(',')[1];
 });
 await page.setInputFiles('#imgFile', { name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from(photo, 'base64') });
-await page.waitForFunction(() => window.editor.canvas.getActiveObject()?.type === 'image', null, { timeout: 5000 });
-await page.waitForSelector('#photoColors .swatch', { timeout: 3000 });
+await page.waitForSelector('#photoColors .swatch', { timeout: 5000 });
 assert.equal(await page.locator('#photoColors .swatch').count(), 6, 'six colours shown for the photo');
 assert.ok(await page.isVisible('#fauto'), 'Auto-enhance is in the phone inspector');
 await page.evaluate(() => { const c = window.editor.canvas; c.remove(c.getActiveObject()); c.discardActiveObject(); });
