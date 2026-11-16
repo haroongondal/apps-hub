@@ -53,9 +53,11 @@ APK copy: scratchpad only (not committed). Manifest dump via aapt2 `dump xmltree
 - 2026-11-17 (session 2): owner asked for full replica, picked approach A. Design doc written; builder check done and folded in; owner answered release + Muviz questions. Design approved; plan written.
 
 ## Current state + next step (2026-11-17, session 2)
-Owner approved the design. Worktree + branch `halo` created; design, handoff and plan committed there.
-Plan for stages 1-2 written (docs/superpowers/plans/2026-11-17-halo.md), awaiting owner review + execution choice.
-Next: on owner OK, execute Task 1 (scaffold). Task 3 needs the owner's go to `pnpm release store` (Store must learn the `halo` id).
+Executing the plan with cd-engineering-tools:parallel-agents-coord; ledger = docs/handoffs/halo-sdd-ledger.md (read it:
+tasks marked complete are done). Briefs live in .sdd/ (git-excluded). Task 1 done (92a013b). Task 2 and Tasks 5+6 in flight.
+Owner's "go ahead" covers the Store release in Task 3. Phone had dropped off wireless adb at 2026-11-17 (reconnect for Task 3;
+other sessions use adb too, so avoid `adb kill-server` unless the phone is unclaimed).
+Next: review Task 2, then Task 3 (Store release of `store` + `halo`, phone spike run).
 
 ## Previous state (session 1, superseded)
 Owner asked for a new chat to start building. Already told to the owner and accepted without objection:
