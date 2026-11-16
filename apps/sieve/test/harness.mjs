@@ -27,7 +27,7 @@ export function check(name, cond, extra = '') {
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${cond ? '' : `  ${extra}`}`);
 }
 
-const YT_HOSTS = ['www.youtube.com', 'www.youtube-nocookie.com'];
+const YT_HOSTS = ['www.youtube.com', 'www.youtube-nocookie.com', 'm.youtube.com'];
 
 // 5 s, 440 Hz, mono, 16-bit, 8 kHz: 44 + 80,000 bytes.
 const TONE = (() => {

@@ -83,9 +83,9 @@ export async function local(t) {
     } finally {
       await bare.ctx.close().catch(() => {});
     }
-    // The recorder is set only when Sieve answers; YouTube declares ytInitialPlayerResponse itself (the fixture does not).
-    // So does ytcfg, whose hook (Task 2.14) must exist before the page's write: allowed as a non-enumerable own name only, never a new key.
-    const allowed = { keys: ['__lastSieveSettings', 'ytInitialPlayerResponse'], own: ['__lastSieveSettings', 'ytInitialPlayerResponse', 'ytcfg'] };
+    // The recorder is set only when Sieve answers. yt-main.ts's ytInitialPlayerResponse hook is a non-enumerable own name (YouTube declares it itself; the fixture does not).
+    // ytcfg's hook (Task 2.14) must also exist before the page's write: a non-enumerable own name until the page writes it, never a new key here.
+    const allowed = { keys: ['__lastSieveSettings'], own: ['__lastSieveSettings', 'ytInitialPlayerResponse', 'ytcfg'] };
     const added = Object.fromEntries(['keys', 'own'].map((k) => [k, withSieve[k].filter((n) => !clean[k].includes(n) && !allowed[k].includes(n))]));
     check('bridge: Sieve adds no window names (keys or own properties) compared with the same fixture without Sieve', added.keys.length + added.own.length === 0, json(added));
     const sieveNames = withSieve.own.filter((n) => /sieve/i.test(n) && !['__lastSieveSettings', '__sieveDo'].includes(n));
@@ -101,9 +101,9 @@ export async function local(t) {
         document.addEventListener('sieve-yt-settings', () => (replied = true));
         document.dispatchEvent(new CustomEvent('sieve-yt-hello'));
         await new Promise((r) => setTimeout(r, 300));
-        return { marks: performance.getEntriesByName(m).length, replied, recorded: window.__lastSieveSettings ?? null, attr: document.documentElement.hasAttribute('sieve-yt') };
+        return { marks: performance.getEntriesByName(m).length, replied, recorder: Array.isArray(window.__sieveDo), recorded: window.__lastSieveSettings ?? null, attr: document.documentElement.hasAttribute('sieve-yt') };
       }, MARK);
-      check(`bridge: ${new URL(url).hostname} (not www.youtube.com or an embed) gets no YouTube tools: no mark, no settings, a hello unanswered`, got.marks === 0 && !got.replied && got.recorded === null && !got.attr, json(got));
+      check(`bridge: ${new URL(url).hostname} (not www.youtube.com or an embed) gets no YouTube tools: no mark, no settings, a hello unanswered (the fixture's recorder is there)`, got.marks === 0 && !got.replied && got.recorder && got.recorded === null && !got.attr, json(got));
       await p.close();
     }
 
