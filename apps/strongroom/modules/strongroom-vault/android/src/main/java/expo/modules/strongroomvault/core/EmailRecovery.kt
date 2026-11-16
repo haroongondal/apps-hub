@@ -8,6 +8,8 @@ data class RecoveryLocal(
   val confirmed: Boolean = false,
   val lostClaim: String? = null,
   val lostBlob: String? = null,
+  val signinClaim: String? = null, // a new device's email sign-in, kept as lostClaim/lostBlob are
+  val signinBlob: String? = null,
   val keyUnseen: Boolean = false,
 )
 
@@ -40,6 +42,7 @@ data class EmailRecoveryStatus(
 private const val MAX_EMAIL = 320
 private val EMAIL = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$") // the Worker's escrowOf check
 private const val CLAIM_BYTES = 20
+private const val SIGNIN_DEVICE = "Strongroom for Android"
 
 class EmailRecovery(
   private val sync: SyncSession,
@@ -58,7 +61,8 @@ class EmailRecovery(
     try {
       return sync.enrolEscrow(password) { rk ->
         settings.save(before.copy(escrowCodeHash = Crypto.tokenHash(code), confirmed = false, keyUnseen = true))
-        EscrowBody(clean, SyncWire.toBase64(Escrow.seal(code, rk, ak)), RecoveryKey.format(code))
+        // The same emailed code also seals the account key alone, so a new device can sign in by email without the typed account key.
+        EscrowBody(clean, SyncWire.toBase64(Escrow.seal(code, rk, ak)), RecoveryKey.format(code), SigninBody(SyncWire.toBase64(Escrow.sealSignin(code, ak))))
       }.also { if (it == null) settings.save(before) } // a wrong password: nothing rotated
     } catch (e: Exception) {
       settings.save(before) // a refusal left the server's escrow, and so this phone's state, as they were
@@ -180,6 +184,50 @@ class EmailRecovery(
       // Best effort: the used request would otherwise read as pending on this vault's own screen, where the owner can still cancel it.
     }
     clearLost()
+    return true
+  }
+
+  /** A new device asks by email. Network first, as the extension does: a failed request keeps an earlier claim. */
+  @Synchronized fun signinRequest() {
+    val t = transport ?: throw IllegalStateException("sync unavailable")
+    val claim = Crypto.randomBytes(CLAIM_BYTES)
+    try {
+      t.signinRequest(Crypto.tokenHash(claim), SIGNIN_DEVICE)
+      settings.save(settings.load().copy(signinClaim = SyncWire.toBase64(claim), signinBlob = null))
+    } finally {
+      claim.fill(0)
+    }
+  }
+
+  /** Waiting(null) also means a claim the Worker doesn't hold; [signinRequest] asks again. */
+  @Synchronized fun signinCheck(): LostState {
+    val r = settings.load()
+    val claim = r.signinClaim ?: return LostState.None
+    val t = transport ?: throw IllegalStateException("sync unavailable")
+    return when (val s = t.signinRelease(claim)) {
+      is LostRelease.Ready -> LostState.Ready.also { settings.save(r.copy(signinBlob = s.blob)) }
+      is LostRelease.Waiting -> LostState.Waiting(s.releaseAt).also { if (r.signinBlob != null) settings.save(r.copy(signinBlob = null)) }
+    }
+  }
+
+  /** False for a code that doesn't open the blob; the account key then goes through the ordinary password sign-in. */
+  @Synchronized fun signinOpen(codeText: String, password: CharArray): Boolean {
+    val blob = settings.load().signinBlob?.let(SyncWire::fromBase64) ?: throw IllegalStateException("sign-in not ready")
+    val code = RecoveryKey.parse(codeText) ?: return false
+    val accountKey = try {
+      Escrow.openSignin(code, blob)
+    } finally {
+      code.fill(0)
+    } ?: return false
+    try {
+      val held = secrets.get(SyncSecret.ACCOUNT_KEY)
+      if (held != null) check(held.sameAs(accountKey)) { "different account" } // signIn would store the opened key over the Keystore's
+      sync.signIn(password, accountKey)
+    } finally {
+      accountKey.fill(0)
+    }
+    val r = settings.load()
+    settings.save(r.copy(signinClaim = null, signinBlob = null))
     return true
   }
 

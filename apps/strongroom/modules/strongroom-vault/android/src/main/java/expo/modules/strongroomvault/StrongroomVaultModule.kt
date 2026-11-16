@@ -584,6 +584,36 @@ class StrongroomVaultModule : Module() {
       }
     }
 
+    // A new device signs in by email: the first two need no vault or account; open is signInSync with the account key taken from the emailed code.
+    AsyncFunction("emailSignInRequest") Coroutine { ->
+      withContext(Dispatchers.IO) { syncCall { VaultHolder.recovery(context).signinRequest() } }
+    }
+
+    AsyncFunction("emailSignInCheck") Coroutine { ->
+      when (val s = withContext(Dispatchers.IO) { syncCall { VaultHolder.recovery(context).signinCheck() } }) {
+        is LostState.None -> mapOf("state" to "none")
+        is LostState.Waiting -> mapOf("state" to "waiting", "releaseAt" to s.releaseAt)
+        is LostState.Ready -> mapOf("state" to "ready")
+      }
+    }
+
+    AsyncFunction("emailSignInOpen") Coroutine { code: String, password: String ->
+      vault()
+      val pw = password.toCharArray()
+      try {
+        withContext(Dispatchers.IO) {
+          syncCall { VaultHolder.recovery(context).signinOpen(code, pw) }.also {
+            if (it) {
+              SyncJobService.schedule(context)
+              VaultHolder.afterUnlock(context, byPassword = true)
+            }
+          }
+        }
+      } finally {
+        pw.fill('\u0000')
+      }
+    }
+
     AsyncFunction("syncNow") Coroutine { ->
       vault()
       val r = withContext(Dispatchers.IO) { syncCall { VaultHolder.syncNow(context) } }
@@ -681,6 +711,7 @@ internal fun coded(e: IllegalStateException): Exception = when (e.message) {
     "A recovery request is already counting down on this account. Wait for it to finish, or cancel it from a device that is signed in.",
     e,
   )
+  "sign-in not ready" -> CodedException("SIGNIN_NOT_READY", "Approve the sign-in from the email first, then check again.", e)
   "not ready" -> CodedException("LOST_NOT_READY", "The 24-hour wait isn't over yet. Try again once it ends.", e)
   "different account" -> CodedException(
     "LOST_DIFFERENT_ACCOUNT",

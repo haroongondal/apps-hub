@@ -23,6 +23,8 @@ internal class FakeWorker {
   val mails = ArrayList<String>() // the email codes the Worker mailed
   var failMail = false // the mailer is down: an escrow update answers 502 before changing anything
   var lost: FakeLost? = null
+  var signinBlob: String? = null // the sign-in blob the last escrow update carried
+  var signin: FakeLost? = null // the Worker's one live sign-in request, kept as the lost-access row is
   private var created = false
 
   private fun who(token: ByteArray) = Crypto.tokenHash(token).let { h ->
@@ -46,6 +48,11 @@ internal class FakeWorker {
   /** The owner opening the mailed confirm link: starts the wait. Like the Worker, it does nothing for a missing, cancelled or already confirmed request. */
   fun confirmLost(releaseAt: Long = time + DAY_MS) {
     lost = lost?.takeIf { !it.cancelled && it.confirmedReleaseAt == null }?.copy(confirmedReleaseAt = releaseAt) ?: lost
+  }
+
+  /** The owner opening the mailed approve link for the new device. */
+  fun approveSignin(releaseAt: Long = time) {
+    signin = signin?.takeIf { !it.cancelled && it.confirmedReleaseAt == null }?.copy(confirmedReleaseAt = releaseAt) ?: signin
   }
 
   val t: SyncTransport = object : SyncTransport {
@@ -96,6 +103,7 @@ internal class FakeWorker {
       refuse(who, readOk = false)
       if (!listOfNotNull(body.loginHash, body.recoveryHash, body.readHash).all(HASH::matches)) throw SyncHttpError(400)
       val e = body.escrow
+      if (body.signin != null && (e == null || SyncWire.fromBase64(body.signin.blob) == null)) throw SyncHttpError(400) // the Worker takes a sign-in blob only with an escrow
       if (e != null) {
         if (!validEscrow(e)) throw SyncHttpError(400)
         if (body.recoveryHash == null) throw SyncHttpError(400)
@@ -106,8 +114,11 @@ internal class FakeWorker {
       if (body.recoveryHash != null && body.recoveryHash != recoveryHash) {
         escrow = null
         lost = null
+        signinBlob = null
+        signin = null
       }
       e?.let { escrow = FakeEscrow(it.email, it.blob, it.code) }
+      body.signin?.let { signinBlob = it.blob }
       header = body.header
       loginHash = body.loginHash
       readHash = body.readHash
@@ -162,6 +173,37 @@ internal class FakeWorker {
       if (who != "login") throw SyncAuthError()
       escrow = null
       lost = null
+      signinBlob = null
+      signin = null
+    }
+
+    override fun signinRequest(claimHash: String, deviceName: String) {
+      reach()
+      calls += "signinRequest $deviceName"
+      val held = signin
+      if (signinBlob != null && HASH.matches(claimHash) && (held == null || held.cancelled)) signin = FakeLost(claimHash, time)
+    }
+
+    override fun signinRelease(claim: String): LostRelease {
+      reach()
+      calls += "signinRelease"
+      val bytes = if (claim.length in 24..88) SyncWire.fromBase64(claim) else null
+      val held = signin
+      val blob = signinBlob
+      if (bytes != null && bytes.size in 16..64 && held != null && !held.cancelled && held.claimHash == Crypto.tokenHash(bytes)) {
+        val at = held.confirmedReleaseAt
+        if (at != null && time >= at && blob != null) return LostRelease.Ready(blob)
+        return LostRelease.Waiting(at)
+      }
+      return LostRelease.Waiting(null)
+    }
+
+    override fun signinCancel(token: ByteArray) {
+      reach()
+      val who = who(token)
+      calls += "signinCancel $who"
+      refuse(who, readOk = true)
+      signin = signin?.copy(cancelled = true)
     }
   }
 }

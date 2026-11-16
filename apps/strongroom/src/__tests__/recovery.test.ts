@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { EmailRecoveryStatus, LostAccessState } from 'strongroom-vault';
-import { EMAIL_DISCLOSURE, NEW_KEY_ESCROW_WARNING, emailProblem, emailRecoveryView, emailSyncGate, explainLostAccess, explainRecovery, lostAccessView, pendingBanner } from '../recovery-flow.ts';
+import { EMAIL_DISCLOSURE, NEW_KEY_ESCROW_WARNING, emailProblem, emailRecoveryView, emailSyncGate, emailSignInView, explainEmailSignIn, explainLostAccess, explainRecovery, lostAccessView, pendingBanner } from '../recovery-flow.ts';
 
 const NOW = 1_700_000_000_000;
 const HOUR = 3_600_000;
@@ -181,6 +181,11 @@ test('copy has no emoji and no ALL-CAPS words longer than three letters', () => 
     const v = lostAccessView(s, NOW, () => '5 Nov 2026, 3:04 pm');
     all.push(v.title, v.body);
   }
+  for (const s of lost) {
+    const v = emailSignInView(s, () => '5 Nov 2026, 3:04 pm');
+    all.push(v.title, v.body);
+  }
+  all.push(explainEmailSignIn(coded('SYNC_SIGN_IN')), explainEmailSignIn(coded('SIGNIN_NOT_READY')));
   for (const c of ['BAD_EMAIL', 'SYNC_OFF', 'SYNC_FIRST', 'LOST_STILL_ALIVE', 'LOST_NOT_READY', 'LOST_DIFFERENT_ACCOUNT', 'MAIL_FAILED', 'VAULT_MOVED']) all.push(explainRecovery(coded(c)));
   all.push(explainLostAccess(coded('SYNC_SIGN_IN')), emailSyncGate('off') ?? '', emailSyncGate('needsSignIn') ?? '');
   all.push(emailProblem('') ?? '', emailProblem('x') ?? '', emailProblem('a'.repeat(400)) ?? '');
@@ -216,4 +221,23 @@ test('the disclosure says a recovery can be finished, and that a request only em
   const text = EMAIL_DISCLOSURE.join(' ');
   assert.match(text, /finish it after 24 hours unless you cancel/);
   assert.match(text, /only emails a link/);
+});
+
+test('emailSignInView mirrors the extension: ask, then check again or ask again, then the code', () => {
+  const none = emailSignInView({ state: 'none' });
+  assert.deepEqual(none.actions, ['request']);
+  assert.match(none.body, /sign in here without the account key.*approve this phone/);
+  const link = emailSignInView({ state: 'waiting', releaseAt: null });
+  assert.deepEqual(link.actions, ['request']);
+  assert.equal(link.body, 'Open the email Strongroom just sent you and approve this sign-in. Then check again here.');
+  const timed = emailSignInView({ state: 'waiting', releaseAt: NOW }, () => 'CLOCK');
+  assert.deepEqual(timed.actions, []);
+  assert.equal(timed.body, 'Approved. This phone can sign in at CLOCK.');
+  assert.deepEqual(emailSignInView({ state: 'ready' }).actions, ['enterCode']);
+});
+
+test('explainEmailSignIn says the master password was refused, and defers to explainRecovery otherwise', () => {
+  assert.match(explainEmailSignIn(coded('SYNC_SIGN_IN', 'Sign in again.')), /didn't accept that master password/);
+  assert.equal(explainEmailSignIn(coded('LOST_DIFFERENT_ACCOUNT')), explainRecovery(coded('LOST_DIFFERENT_ACCOUNT')));
+  assert.equal(explainEmailSignIn(coded('SIGNIN_NOT_READY')), 'Approve the sign-in from the email first, then check again.');
 });

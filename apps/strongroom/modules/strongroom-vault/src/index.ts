@@ -91,7 +91,7 @@ export interface EmailRecoveryStatus {
   keyUnseen: boolean;
 }
 
-// What a lost-access claim on this phone has reached; releaseAt is null until the owner opens the emailed link.
+// What a lost-access (or email sign-in) claim on this phone has reached; releaseAt is null until the owner opens the emailed link.
 export type LostAccessState = { state: 'none' } | { state: 'waiting'; releaseAt: number | null } | { state: 'ready' };
 
 export interface SyncReport {
@@ -167,6 +167,11 @@ export interface StrongroomVaultApi {
   lostAccessCheck(): Promise<LostAccessState>;
   // False when the code is wrong; LOST_NOT_READY before the wait ends, LOST_DIFFERENT_ACCOUNT on a phone holding another account. True unlocks the vault with the new password and starts sync.
   lostAccessOpen(code: string, newPassword: string): Promise<boolean>;
+  // A new phone signs in by email. Request and check need no vault or account (request needs the server); a request makes a fresh claim and drops an earlier approval.
+  emailSignInRequest(): Promise<void>;
+  emailSignInCheck(): Promise<LostAccessState>;
+  // False when the code is wrong; SIGNIN_NOT_READY before the approval, LOST_DIFFERENT_ACCOUNT on a phone holding another account, SYNC_SIGN_IN for a wrong master password. True signs in, as signInSync does.
+  emailSignInOpen(code: string, password: string): Promise<boolean>;
   addListener(event: 'onLock', listener: () => void): { remove(): void };
   addListener(event: 'onSync', listener: (status: SyncStatus) => void): { remove(): void };
 }

@@ -10,16 +10,20 @@ import expo.modules.strongroomvault.core.PushResponse
 import expo.modules.strongroomvault.core.SyncAuthError
 import expo.modules.strongroomvault.core.SyncHttpError
 import expo.modules.strongroomvault.core.SyncOfflineError
+import expo.modules.strongroomvault.core.SigninBody
 import expo.modules.strongroomvault.core.SyncWire
 import expo.modules.strongroomvault.core.Upsert
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.nio.file.Files
 import java.security.KeyStore
 import javax.net.ssl.HttpsURLConnection
@@ -158,5 +162,123 @@ class HttpSyncTransportTest {
       HttpsURLConnection.setDefaultSSLSocketFactory(previous)
       listener.close()
     }
+  }
+
+  @Test fun httpTransportSpeaksTheSignInCallsAndCarriesTheSignInBlob() {
+    val (serverTls, clientTls) = tls()
+    val listener = serverTls.serverSocketFactory.createServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
+    val replies = listOf(
+      reply("200 OK", """{"ok":true}"""),
+      reply("200 OK", """{"state":"ready","blob":"AAAA"}"""),
+      reply("200 OK", """{"state":"waiting","releaseAt":7}"""),
+      reply("200 OK", """{"ok":true}"""),
+      reply("200 OK", """{"headerRev":5}"""),
+    )
+    val seen = ArrayList<String>()
+    val server = thread(isDaemon = true) { for (r in replies) seen += serve(listener.accept(), r) }
+    val previous = HttpsURLConnection.getDefaultSSLSocketFactory()
+    HttpsURLConnection.setDefaultSSLSocketFactory(clientTls.socketFactory)
+    try {
+      val t = HttpSyncTransport("https://127.0.0.1:${listener.localPort}")
+      t.signinRequest("hash", "Strongroom for Android")
+      assertEquals(LostRelease.Ready("AAAA"), t.signinRelease("claim"))
+      assertEquals(LostRelease.Waiting(7), t.signinRelease("claim"))
+      t.signinCancel(token)
+      val update = AccountUpdate("h", "l", "d", 3, "r", EscrowBody("me@example.com", "AAAA", "CODE"), SigninBody("BBBB"))
+      assertEquals(5L, t.putAccount(token, update))
+      server.join(5_000)
+      val bearer = "Bearer " + SyncWire.toBase64(token)
+      assertEquals(
+        listOf(
+          "POST /v1/signin/request HTTP/1.1 | Strongroom | null | application/json | {\"claimHash\":\"hash\",\"deviceName\":\"Strongroom for Android\"}",
+          "POST /v1/signin/release HTTP/1.1 | Strongroom | null | application/json | {\"claim\":\"claim\"}",
+          "POST /v1/signin/release HTTP/1.1 | Strongroom | null | application/json | {\"claim\":\"claim\"}",
+          "POST /v1/signin/cancel HTTP/1.1 | Strongroom | $bearer | application/json | {}",
+          "PUT /v1/account HTTP/1.1 | Strongroom | $bearer | application/json | ${SyncWire.toJson(update)}",
+        ),
+        seen,
+      )
+      assertTrue(SyncWire.toJson(update).contains(""","signin":{"blob":"BBBB"}"""))
+      assertFalse(SyncWire.toJson(update.copy(signin = null)).contains("signin"))
+    } finally {
+      HttpsURLConnection.setDefaultSSLSocketFactory(previous)
+      listener.close()
+    }
+  }
+
+  // Reads the request, then says nothing until the client gives up and closes.
+  private fun hang(socket: Socket) = socket.use { s ->
+    val input = s.getInputStream()
+    val head = ByteArrayOutputStream()
+    try {
+      while (!head.toString(Charsets.ISO_8859_1).endsWith("\r\n\r\n")) head.write(input.read().also { if (it < 0) return@use })
+      while (input.read() >= 0) Unit
+    } catch (e: java.io.IOException) {
+      // the client's timeout closed the connection
+    }
+  }
+
+  private fun withSlowServer(script: (java.net.ServerSocket) -> Unit, body: (HttpSyncTransport) -> Unit) {
+    val (serverTls, clientTls) = tls()
+    val listener = serverTls.serverSocketFactory.createServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
+    val server = thread(isDaemon = true) { script(listener) }
+    val previous = HttpsURLConnection.getDefaultSSLSocketFactory()
+    HttpsURLConnection.setDefaultSSLSocketFactory(clientTls.socketFactory)
+    try {
+      body(HttpSyncTransport("https://127.0.0.1:${listener.localPort}", readMs = 300, probeMs = 300))
+      server.join(5_000)
+    } finally {
+      HttpsURLConnection.setDefaultSSLSocketFactory(previous)
+      listener.close()
+    }
+  }
+
+  @Test fun aTokenGetWithNoReplyWhilePreloginAnswersIsASignInErrorNotOffline() {
+    val seen = ArrayList<String>()
+    withSlowServer({ l ->
+      hang(l.accept())
+      seen += serve(l.accept(), reply("200 OK", """{"kdf":{}}"""))
+    }) { t ->
+      assertThrows(SyncAuthError::class.java) { t.pull(token, 0) }
+    }
+    assertEquals(listOf("GET /v1/prelogin HTTP/1.1 | Strongroom | null | null | "), seen)
+  }
+
+  @Test fun aNotFoundFromPreloginIsAlsoAnAnswer() {
+    withSlowServer({ l ->
+      hang(l.accept())
+      serve(l.accept(), reply("404 Not Found", """{"error":"no account"}"""))
+    }) { t -> assertThrows(SyncAuthError::class.java) { t.lostStatus(token) } }
+  }
+
+  @Test fun aServerErrorFromPreloginStaysOffline() {
+    withSlowServer({ l ->
+      hang(l.accept())
+      serve(l.accept(), reply("503 Service Unavailable", """{"error":"x"}"""))
+    }) { t -> assertThrows(SyncOfflineError::class.java) { t.lostStatus(token) } }
+  }
+
+  @Test fun aTokenGetWithNoReplyAndNoPreloginAnswerIsOffline() {
+    withSlowServer({ l ->
+      hang(l.accept())
+      hang(l.accept())
+    }) { t -> assertThrows(SyncOfflineError::class.java) { t.pull(token, 0) } }
+  }
+
+  @Test fun aRequestWithABodyThatTimesOutIsOfflineAndNeverProbes() {
+    var probed = false
+    withSlowServer({ l ->
+      hang(l.accept())
+      l.soTimeout = 1_000
+      try {
+        l.accept().close()
+        probed = true
+      } catch (e: SocketTimeoutException) {
+        // nothing else connected
+      }
+    }) { t ->
+      assertThrows(SyncOfflineError::class.java) { t.push(token, PushRequest(listOf(Upsert("a", 0, "AAAA")))) }
+    }
+    assertFalse(probed)
   }
 }
