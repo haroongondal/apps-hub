@@ -216,10 +216,16 @@ most likely to be second-guessed:
   build was ever installed, so no change (wipe such an install if one turns up). Nit left:
   `setOwnerName` re-labels on the JS thread (sync Function); fine at current sizes.
 
+- 2026-11-17 (post-release session): owner list of five items. (1) Unlock spun after minimizing: BiometricPrompt drops a
+  request made after onSaveInstanceState; fixed 335f7e2 (prompt waits for AppState active; native returns at once unless RESUMED).
+  (2) Group by contact, per app (owner: "show only the app's messages"; also "similar case for transactions"): spec dd15112,
+  plan docs/superpowers/plans/2026-11-17-inflow-contacts.md, built 04528e2 (Kotlin) + 3bf8003 (TS). (3)+(4) categories and
+  weekly/monthly reports: owner picked approach A (the AI computes the numbers as JSON; the app validates and draws), accepted
+  the category list and the playback; design docs/superpowers/specs/2026-11-17-inflow-reports-design.md under builder check;
+  one owner question open (send push-sourced transaction fields to the AI?). (5) UI/UX: not started; ask what bothers them.
+
 ## Current state and next step
 
-State (2026-11-17): stages 1-4b are merged to main (PR #35 squash, d1b61ea, [skip ci]) and released: Store manifest has Inflow versionCode 2, 0.1.0, release-key cert, 34 MB APK. Gates at merge: pnpm test 0, typecheck 0 (after merging main with Clipboard), Kotlin 313 tests 0 failures at d999812 (not re-run after the merge; only registration/brand files changed). The phone runs the debug-signed adb build 2b46d9e (d999812 + "full name as your bank writes it" hint; listener bound, Autostart intact). Worktree apps-hub-wt/inflow is on branch inflow/post-release (= main d1b61ea); old branch inflow/stage-4b is merged. Untracked in the worktree: progress.md and the briefs.
+State (2026-11-17, post-release session): branch inflow/post-release = main d1b61ea + ba35577 (handoff) + 335f7e2 (item 1) + dd15112/plan (item 2 spec) + 04528e2, 3bf8003 (item 2). Gates at 3bf8003: Kotlin 316 tests 0 failures + assembleDebug, inflow 48/48, typecheck 0. Nothing pushed; nothing installed on the phone (adb unreachable this session). The phone still runs debug-signed 2b46d9e.
 
-Phone facts (2026-11-16): v4->v5 upgrade on the real SQLCipher database worked; backfill re-read saved SMS (Nov Money after setting Your name = "Haroon Mukhtar", the full name as the bank writes it: in 645,749.01 / out 356,902.20 / 47 txns); Groq GPT-OSS 20B summaries and Ask AI work; HyperOS rejects the listener after an update until Autostart + notification access are re-enabled (did not happen on the last install).
-
-Next step: get the owner's bug and change list, then work it item by item (resume prompt step 2).
+Next step: finish the reports design (builder check + owner answer on push-sourced transactions), get approval, write the plan, build; then item 5 (ask the owner what feels wrong); one code review over all items; install on the phone (rule 4) when the owner turns on wireless debugging.
