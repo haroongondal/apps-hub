@@ -138,6 +138,33 @@ class PhotoIndexTest {
   }
 
   @Test
+  fun aSecondScanIsDroppedWhileOneWaits() {
+    listOf(JobState.QUEUED, JobState.RUNNING).forEach { s ->
+      assertEquals(emptyList<Job>(), withoutDuplicateScans(listOf(photoIndexJob("a").copy(state = s)), listOf(photoIndexJob("b"))))
+    }
+  }
+
+  @Test
+  fun aScanIsKeptWhenTheLastOneFinished() {
+    listOf(JobState.DONE, JobState.FAILED, JobState.CANCELLED).forEach { s ->
+      assertEquals(listOf(photoIndexJob("b")), withoutDuplicateScans(listOf(photoIndexJob("a").copy(state = s)), listOf(photoIndexJob("b"))))
+    }
+  }
+
+  @Test
+  fun twoScansInOneBatchBecomeOne() {
+    assertEquals(listOf(photoIndexJob("a")), withoutDuplicateScans(emptyList(), listOf(photoIndexJob("a"), photoIndexJob("b"))))
+  }
+
+  @Test
+  fun videoJobsAreNeverDropped() {
+    val video = { id: String -> photoIndexJob(id).copy(plan = FramePlan(1.0, "png", "png"), inputId = "content://$id") }
+    val incoming = listOf(video("x"), photoIndexJob("b"), video("y"))
+    assertEquals(incoming, withoutDuplicateScans(listOf(video("w")), incoming))
+    assertEquals(listOf(video("x"), video("y")), withoutDuplicateScans(listOf(photoIndexJob("a")), incoming))
+  }
+
+  @Test
   fun diffDropsDuplicateRows() {
     val first = row(1)
     val d = diff(listOf(first.key, row(2).key), listOf(first, row(1, fill = 9), row(2), row(2)))
