@@ -63,6 +63,19 @@ class JobQueueTest {
   }
 
   @Test
+  fun cancellingOneInterruptedOrPausedRowStopsIt() {
+    val rows = listOf(queued.copy(state = JobState.INTERRUPTED), other.copy(state = JobState.PAUSED))
+    assertEquals(listOf(JobState.CANCELLED, JobState.PAUSED), reduce(rows, QueueEvent.Cancel(queued.id)).map { it.state })
+    assertEquals(listOf(JobState.INTERRUPTED, JobState.CANCELLED), reduce(rows, QueueEvent.Cancel(other.id)).map { it.state })
+  }
+
+  @Test
+  fun cancelAllLeavesInterruptedAndPausedRows() {
+    val rows = listOf(queued.copy(state = JobState.INTERRUPTED), other.copy(state = JobState.PAUSED))
+    assertEquals(rows, reduce(rows, QueueEvent.Cancel("all")))
+  }
+
+  @Test
   fun aJobLeftRunningWhenTheAppWasKilledShowsAsInterruptedSoItCanBeResumed() {
     val running = reduce(listOf(queued), QueueEvent.Start(queued.id, 10))
     assertEquals(JobState.INTERRUPTED, shownQueue(running, serviceAlive = false)[0].state)
