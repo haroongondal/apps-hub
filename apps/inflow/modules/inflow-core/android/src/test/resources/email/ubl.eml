@@ -1,0 +1,20 @@
+From: "UBL Digital" <admin.ebanking@ubl.com.pk>
+To: owner@example.com
+Subject: Raast payment alert
+Message-ID: <ubl-1430551744@mail.ubl.example>
+Date: Fri, 23 Oct 2026 18:53:30 +0500
+MIME-Version: 1.0
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+<html><head><style>p { margin: 0 }</style></head><body>
+<p>Dear HAROON MUKHTAR ,</p>
+<p>You paid PKR. 7,000.00 to JAYISHA NOOR via Raast.</p>
+<p>Here are the details:</p>
+<p>Account Title: HAROON MUKHTAR<br>
+Account Details: Pwd Colony Road Branch, Islamabad - 28*****33<br>
+Date: 23-Oct-2026<br>
+Time: 06:53:20 PM<br>
+Transaction ID: 1430551744<br>
+Transaction Type: Inter Bank Funds Transfer Raast</p>
+</body></html>

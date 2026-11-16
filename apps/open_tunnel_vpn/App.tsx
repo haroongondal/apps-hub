@@ -16,6 +16,7 @@ import { xhrVpnGateFetcher } from './src/data/vpngate-fetcher.ts';
 import { FirewallScreen } from './src/firewall/firewall-screen.tsx';
 import { serverHoldsSlot } from './src/firewall/status.ts';
 import { firewallBinding, openTunnelBinding, nativeTcpProbe } from './src/tunnel/native-tcp-probe.ts';
+import { MAX_ATTEMPTS, isAuthError, pickRelayCandidates } from './src/tunnel/relay-failover.ts';
 import {
   createTunnelClient,
   OpenTunnelError,
@@ -27,9 +28,13 @@ import { countryCode, countryOptions } from './src/ui/format.ts';
 import { HomeScreen } from './src/ui/home-screen.tsx';
 import { ServerSheet } from './src/ui/server-sheet.tsx';
 import { SettingsSheet } from './src/ui/settings-sheet.tsx';
+import { TunnelShield } from './src/ui/tunnel-shield.tsx';
 
 const prober = new LatencyProber(nativeTcpProbe);
-const MAX_ATTEMPTS = 3;
+// VPN Gate relays come and go within hours, so a cache older than this is
+// refetched on open; a fresher cache shows as-is and manual refresh
+// (pull-to-refresh, the Refresh button) stays available.
+const AUTO_REFRESH_AFTER_MS = 60 * 60 * 1000;
 
 type SheetKind = 'none' | 'servers' | 'settings';
 
@@ -59,6 +64,7 @@ function OpenTunnelApp() {
   const [tunnel, setTunnel] = useState<TunnelSnapshot>({
     state: 'disconnected',
     message: null,
+    code: null,
     traffic: null,
   });
   const [sheet, setSheet] = useState<SheetKind>('none');
@@ -124,7 +130,11 @@ function OpenTunnelApp() {
     }
   }, []);
 
-  // Always refetch after showing the cache: VPN Gate relays come and go within hours.
+  // Auto-refresh only a stale cache: VPN Gate relays come and go within
+  // hours, so the app refetches when the cache is an hour old or more,
+  // while a fresh one shows as-is. The cached list still renders first,
+  // before any refetch, and pull-to-refresh plus the Refresh button stay
+  // manual.
   useEffect(() => {
     let cancelled = false;
     openAppDatabase()
@@ -145,7 +155,12 @@ function OpenTunnelApp() {
         const cached = await opened.nodes.loadNodes();
         if (cancelled) return;
         setNodes(cached);
-        await refreshList(opened);
+        const lastFetchedAt = await opened.nodes.lastFetchedAtMs();
+        if (cancelled) return;
+        // An empty cache has never been fetched (stamp null), so it counts as stale.
+        if (lastFetchedAt === null || Date.now() - lastFetchedAt >= AUTO_REFRESH_AFTER_MS) {
+          await refreshList(opened);
+        }
       })
       .catch((error: unknown) => {
         if (!cancelled) setLoadError(String(error));
@@ -165,17 +180,27 @@ function OpenTunnelApp() {
       await requestNotifications();
       try {
         // Connect-time payload fetch by node id (list reads are configless).
-        const loaded = await database.nodes.getNode(node.id, { withConfig: true });
-        if (loaded === null) {
-          setActionError('This relay is no longer in the cache. Pull down to refresh the list.');
-          return;
+        let resolved = await database.nodes.getNode(node.id, { withConfig: true });
+        if (resolved === null) {
+          // A picked relay can vanish between listing and connecting (VPN
+          // Gate churns within hours): refresh the list once, then re-read.
+          setActionError('This relay is no longer in the cache. Refreshing the relay list.');
+          await refreshList(database);
+          resolved = await database.nodes.getNode(node.id, { withConfig: true });
+          if (resolved === null) {
+            // Exactly one retry — no loops; a still-missing relay is gone.
+            setActionError('This relay is gone from the refreshed list. Pick another server.');
+            return;
+          }
+          // The recovery succeeded, so the in-progress wording must not linger.
+          setActionError(null);
         }
-        const config = client.configFromNode(loaded, {
+        const config = client.configFromNode(resolved, {
           enableKillSwitch: settings?.killSwitchEnabled ?? true,
           disallowedApps: Platform.OS === 'android' ? (settings?.disallowedApps ?? []) : [],
         });
         await database.settings.setLastNodeId(node.id);
-        setActiveNode(loaded);
+        setActiveNode(resolved);
         // Switching relays never double-starts: a live tunnel gets an
         // explicit stop before the new start (plan §5).
         const current = client.getSnapshot();
@@ -190,7 +215,7 @@ function OpenTunnelApp() {
         setActionError(describeLocalError(error));
       }
     },
-    [client, database, settings],
+    [client, database, settings, refreshList],
   );
 
   const autoSelect = useCallback(async (refetch = false) => {
@@ -209,7 +234,27 @@ function OpenTunnelApp() {
       const rankedIds = new Set(ranked.map((node) => node.id));
       if (mountedRef.current) setNodes((all) => [...ranked, ...all.filter((node) => !rankedIds.has(node.id))]);
       // VPN Gate lists relays that are down or refuse this client, so a failed start moves on to the next one.
-      const candidates = ranked.filter((node) => !failedIds.current.has(node.id)).slice(0, MAX_ATTEMPTS);
+      let candidates = pickRelayCandidates(ranked, failedIds.current, MAX_ATTEMPTS);
+      // When every candidate already failed, a stale cache is the likely
+      // cause (relays churn within hours): refresh the list once and
+      // re-rank before giving up. `retriedCache` keeps this a single retry,
+      // never a loop.
+      let retriedCache = false;
+      if (candidates.length === 0 && !retriedCache && database !== null) {
+        const lastFetchedAt = await database.nodes.lastFetchedAtMs();
+        if (lastFetchedAt !== null && Date.now() - lastFetchedAt >= AUTO_REFRESH_AFTER_MS) {
+          retriedCache = true;
+          const refreshed = await refreshList(database);
+          if (refreshed !== null) {
+            const reRanked = inCountry(refreshed);
+            const reRankedIds = new Set(reRanked.map((node) => node.id));
+            if (mountedRef.current) {
+              setNodes((all) => [...reRanked, ...all.filter((node) => !reRankedIds.has(node.id))]);
+            }
+            candidates = pickRelayCandidates(reRanked, failedIds.current, MAX_ATTEMPTS);
+          }
+        }
+      }
       if (candidates.length === 0) {
         setActionError('Every relay here has already failed. Pull down to refresh the list, or choose another country.');
       }
@@ -231,9 +276,14 @@ function OpenTunnelApp() {
     if (tunnel.state !== 'error' || was === 'error') return;
     // Auto-select skips relays that already failed this session, whoever picked them.
     if (activeNode !== null) failedIds.current.add(activeNode.id);
-    // A tunnel that was up and dropped (relay or auth error) moves to the best relay of a fresh list.
-    if (was === 'connected' || was === 'reasserting') void autoSelect(true);
-  }, [tunnel.state, activeNode, autoSelect]);
+    // A tunnel that was up and dropped moves to the best relay of a fresh
+    // list; an auth rejection fails over even on a first connect — the
+    // relay refused this client, so retrying it cannot succeed. Failed
+    // relays stay benched across refreshes so a just-failed relay is never
+    // retried in a loop.
+    const auth = tunnel.code !== null && isAuthError(tunnel.code);
+    if (was === 'connected' || was === 'reasserting' || auth) void autoSelect(true);
+  }, [tunnel.state, tunnel.code, activeNode, autoSelect]);
 
   const selectCountry = useCallback(
     (code: string | null) => {
@@ -313,17 +363,26 @@ function OpenTunnelApp() {
             countries={countryOptions(nodes)}
             country={country}
             onSelectCountry={selectCountry}
-            scanning={scanning}
+            refreshing={refreshing}
+            onRefreshList={() => {
+              if (database !== null) void refreshList(database);
+            }}
             loadError={loadError}
             actionError={actionError}
-            onConnect={(node) => void connect(node)}
             onAutoSelect={() => void autoSelect()}
-            onDisconnect={disconnect}
             onOpenServers={() => setSheet('servers')}
             onOpenSettings={() => setSheet('settings')}
             onOpenSystemSettings={openSystemSettings}
           />
         </Screen>
+        <TunnelShield
+          tunnel={tunnel}
+          activeNode={activeNode}
+          scanning={scanning}
+          onConnect={(node) => void connect(node)}
+          onAutoSelect={() => void autoSelect()}
+          onDisconnect={disconnect}
+        />
       </View>
 
       {FIREWALL_TAB && tab === 'firewall' && (

@@ -9,6 +9,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="editor" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="scan/capture" options={{ animation: 'slide_from_bottom' }} />
       </Stack>
     </ThemeProvider>
   );
