@@ -111,7 +111,11 @@ class StrongroomAutofillService : AutofillService() {
     // Settings toggle; a code that lands after this request completes the delayed fill.
     val otpIds = form.otp.map(read.ids::get)
     if (otpIds.isNotEmpty() && SmsToggle.on(this)) {
-      if (SmsFill.arm(request.delayedFillIntentSender, otpIds)) response.setFlags(FillResponse.FLAG_DELAY_FILL)
+      // The response exists to arm the delayed fill even while there is nothing to fill yet.
+      if (SmsFill.arm(request.delayedFillIntentSender, otpIds)) {
+        response.setFlags(FillResponse.FLAG_DELAY_FILL)
+        any = true
+      }
       SmsCodes.freshest(System.currentTimeMillis())?.let { c ->
         response.addDataset(Datasets.code(otpIds, c.code, present.of("Fill ${c.code}", "SMS")))
         any = true
