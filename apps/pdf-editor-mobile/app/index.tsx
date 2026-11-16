@@ -1,6 +1,6 @@
 import type { Folder, Item, ItemKind, Library } from '@apps-hub/library-core';
 import { Button, Empty, Field, Header, Notice, Progress, Screen, Segmented, space } from '@apps-hub/ui';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, FlatList, View } from 'react-native';
@@ -25,6 +25,7 @@ import {
   type ItemAction,
 } from '../src/library/sheets';
 import { errorMessage, useDebounced, useLibraryData } from '../src/library/use-library';
+import { discardSession, loadSession } from '../src/scan/session';
 
 type SheetState =
   | { type: 'add' }
@@ -51,6 +52,7 @@ export default function LibraryScreen() {
   const [sort, setSort] = useState<'recent' | 'title'>('recent');
   const [sheet, setSheet] = useState<SheetState>(null);
   const [busy, setBusy] = useState(false);
+  const [unsavedPages, setUnsavedPages] = useState(0);
   const query = useDebounced(text, 200);
   const data = useLibraryData({ folderId, text: query, kind, tagId, sort });
   const { reload } = data;
@@ -60,6 +62,29 @@ export default function LibraryScreen() {
   useEffect(() => {
     if (tagId !== null && !data.loading && !data.error && !data.tags.some((t) => t.id === tagId)) setTagId(null);
   }, [tagId, data.loading, data.error, data.tags]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setUnsavedPages(loadSession()?.pages.length ?? 0);
+    }, []),
+  );
+
+  const discardScan = () =>
+    Alert.alert(`Discard ${unsavedPages} scanned ${unsavedPages === 1 ? 'page' : 'pages'}?`, "They haven't been saved and can't be brought back.", [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Discard',
+        style: 'destructive',
+        onPress: () => {
+          try {
+            discardSession();
+          } catch (error) {
+            Alert.alert('Could not discard the scan', errorMessage(error));
+          }
+          setUnsavedPages(loadSession()?.pages.length ?? 0);
+        },
+      },
+    ]);
 
   const guard = useCallback(
     async (title: string, work: () => Promise<void>) => {
@@ -141,6 +166,7 @@ export default function LibraryScreen() {
   const filtering = query.trim() !== '' || kind !== null || tagId !== null;
   const shownKinds = KINDS.filter((k) => data.kinds.includes(k) || k === kind);
   const openPdfAction = addActions.find((a) => a.key === 'open-pdf');
+  const scanAction = addActions.find((a) => a.key === 'scan');
 
   const header = (
     <View style={{ gap: space.lg, paddingBottom: space.lg }}>
@@ -154,6 +180,18 @@ export default function LibraryScreen() {
           </View>
         }
       />
+      {unsavedPages > 0 ? (
+        <Notice
+          tone="accent"
+          title={`Unsaved scan with ${unsavedPages} ${unsavedPages === 1 ? 'page' : 'pages'}`}
+          action={
+            <View style={{ flexDirection: 'row', gap: space.sm }}>
+              <Button label="Resume" size="sm" onPress={() => router.push('/scan/capture')} />
+              <Button label="Discard" size="sm" variant="secondary" onPress={discardScan} />
+            </View>
+          }
+        />
+      ) : null}
       {data.error ? (
         <Notice
           tone="danger"
@@ -204,11 +242,11 @@ export default function LibraryScreen() {
     ) : (
       <Empty
         title="Your library is empty"
-        body="Open a PDF to start. Everything stays on this device."
+        body="Scan a document or open a PDF. Everything stays on this device."
         action={
           <View style={{ gap: space.md }}>
-            {openPdfAction ? <Button label="Open a PDF" onPress={() => void runAdd(openPdfAction)} /> : null}
-            <Button label="New folder" variant="secondary" onPress={() => setSheet({ type: 'newFolder' })} />
+            {scanAction ? <Button label="Scan a document" onPress={() => void runAdd(scanAction)} /> : null}
+            {openPdfAction ? <Button label="Open a PDF" variant="secondary" onPress={() => void runAdd(openPdfAction)} /> : null}
           </View>
         }
       />

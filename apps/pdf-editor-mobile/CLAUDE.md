@@ -20,7 +20,7 @@ pnpm --filter pdf-editor-mobile typecheck
 pnpm --filter pdf-editor-desktop test:e2e   # includes mobile.mjs, see below
 ```
 
-This app's `test` script only checks the patched `decode-uri-component` it ships (`patches/`, a DoS fix the ESM-only upstream release can't give query-string 7). `mobile.mjs` smoke-tests `mobile.html` in system Chrome with a fake `ReactNativeWebView` bridge and skips when Chrome isn't installed, so it covers the page but not this shell.
+This app's `test` script checks the patched `decode-uri-component` it ships (`patches/`, a DoS fix the ESM-only upstream release can't give query-string 7) and the scan session's restore rules (`session-data.test.ts`). `mobile.mjs` smoke-tests `mobile.html` in system Chrome with a fake `ReactNativeWebView` bridge and skips when Chrome isn't installed, so it covers the page but not this shell.
 
 ## This app is a shell
 
@@ -39,3 +39,12 @@ The home screen (`app/index.tsx`) is the Library. Its logic is `packages/library
 - Files live in `library/<id>/` (`paths.ts`). Create the files first, then the row; delete the row, then the directory. Write the row only through `Library`, never `items`, `folders`, `tags` or `items_fts` directly.
 - New "+" sheet entries go in `add-actions.ts`; opening an item by kind goes in `open-item.ts`.
 - The editor reports page text and a cover through the `docInfo` bridge event; `app/editor.tsx` indexes the item from it and, on save, adds the edited PDF as a new "(edited)" item before sharing.
+
+## Scan (the `pdf-scan` module)
+
+Native scanning lives in the Expo local module `modules/pdf-scan` (Android only until Scan Phase 6). Its contract is `docs/pdf-editor/scan/SPEC.md` §6 and grows by phase; declare nothing in `src/index.ts` before it is built.
+
+- `core/` is pure Kotlin (no `android.*`): `QuadDetector` (page edges, constants in `DetectorConfig`) and `QuadStabilizer` (auto-capture, clock injected, constants in `StabilizerConfig`). Test them on the JVM: `cd android && ./gradlew :pdf-scan:testDebugUnitTest`.
+- `android/ScanCameraView.kt` runs CameraX (preview, 640×480 analysis, full-size capture) and draws the outline natively; JS only gets hints, the count and the captured file. Its `Log` lines tagged `PdfScan` carry the S1/S2 spike numbers (`adb logcat -s PdfScan`).
+- The unsaved capture session is `scan-session/session.json` (`src/scan/session.ts`); its pure restore rules are in `session-data.ts` and tested by this app's `test` script.
+- The app ships arm64-v8a only (`reactNativeArchitectures` in `android/gradle.properties`) and has Android backup off (owner, 2026-10-31).

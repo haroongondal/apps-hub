@@ -2,7 +2,7 @@
 
 ## Resume prompt
 
-Dated 2026-11-01. Read `docs/handoffs/pdf-editor-scan.md` completely first, then
+Dated 2026-11-17. Read `docs/handoffs/pdf-editor-scan.md` completely first, then
 `docs/pdf-editor/scan/PRD.md` and `docs/pdf-editor/scan/SPEC.md`; use
 `docs/pdf-editor/scan/RESEARCH.md` for facts. Trust the decisions and the verified facts
 below and don't re-derive them. Follow the handoff contract in `~/.claude/CLAUDE.md`: keep
@@ -136,6 +136,36 @@ by the owner on 2026-10-31 (above).
 - AC-4 is judged on the phone (20 real pages), not against hand-marked fixtures, which a
   session can't mark precisely; JVM tests use synthetic pages.
 
+**Session A2 (2026-11-17), Scan Phase 2.** Where SPEC §7 left room, or where building it showed
+a better choice (the contract in §6 is unchanged):
+
+- **Edge support is checked per side, not overall** (`DetectorConfig.minSupport` = 0.6 on each
+  side). Why: a page running out of the frame keeps three strong sides, so an overall 75% passed;
+  per side, the side across the cut has no edge under it and the quad is rejected.
+- **Each side is refined by a line fit before the checks** (`QuadDetector.refine`, two passes,
+  bands 4 px then 2 px at the 320 px scale). Why: Douglas–Peucker always keeps hull vertex 0
+  (leftmost, then topmost), which on a tilted page sits up a side, not on the corner; the JVM
+  test caught corners 7 px off. Fitting each side to its edge pixels and intersecting the lines
+  puts the corners back within 2%.
+- **Corners are ordered by angle around the centre**, not min/max of x±y, which tie for a page
+  turned 45°.
+- **Focus gate:** only the two AF *scanning* states (`ACTIVE_SCAN`, `PASSIVE_SCAN`) pause the
+  hold; every other state passes and the sharpness gate decides. Why: a strict "must be
+  PASSIVE_FOCUSED or FOCUSED_LOCKED" can block forever on `PASSIVE_UNFOCUSED` or
+  `NOT_FOCUSED_LOCKED`. Spike S1 on the phone confirms which states arrive.
+- **The session is restored from the files, not only the JSON** (`src/scan/session-data.ts`):
+  pages whose file is gone are dropped, and a `cap-*.jpg` the camera wrote but the JSON doesn't
+  list (the app died between the two writes) is added at the end. A crash between deleting
+  `session.json` and moving the temp file over it is read from `session.json.tmp`.
+- **Closing the camera with no pages deletes `scan-session/`**; with pages it stays and the
+  Library shows "Unsaved scan with N pages" [Resume] [Discard]. Discard asks first (it can't be
+  undone). "Done" also returns to the Library until Phase 3 adds review.
+- **Empty Library:** the two buttons are now "Scan a document" and "Open a PDF" (SPEC §11);
+  "New folder" stays in the + sheet.
+- **The camera letterbox uses the theme background** (`c.bg`), so the top and bottom controls
+  sit on the theme colour, not on black. The preview is FIT_CENTER, so the native outline maps
+  1:1 to the frame.
+
 ## Evidence / facts already verified
 
 In this repo or SDK (2026-10-30):
@@ -210,6 +240,33 @@ External (full list with URLs in RESEARCH):
 - Competitors: CamScanner $9.99/month, Adobe Scan Premium $9.99/month, SwiftScan VIP
   $5.99/month; Microsoft Lens retired 2026-03-09.
 
+Session A2 (2026-11-17), measured here:
+- Step 0 baseline, before adding anything: `./gradlew :app:dependencies --configuration
+  releaseRuntimeClasspath | grep -E 'mlkit|play-services|firebase|litert'` printed nothing.
+  After CameraX was added: still nothing.
+- CameraX 1.6.2 compiles against the installed toolchain (AGP of Expo SDK 54, Kotlin 2.1.20,
+  compileSdk 36); `Camera2Interop`, `Camera2CameraInfo`, `ResolutionSelector` and view-bound
+  `AsyncFunction` all work.
+- The debug APK has only `lib/arm64-v8a/` (63.1 MB debug; the release size is measured at
+  release).
+- Emulator (`apps-hub-test`, Android arm64 image, emulated back camera), not the phone: hardware
+  level 3 (FULL), preview 1024×768, analysis 640×480, capture 1856×1392, both crop rects the
+  full frame (same field of view), AF state 2 (PASSIVE_FOCUSED), rotation 90, detector 5.5–11
+  ms a frame on the Mac's CPU. Captures land upright as 1392×1856 JPEGs in about 0.2–0.7 s.
+- CameraX on the emulator sometimes logs `CameraIdListIncorrectException: Expected camera
+  missing from device` after a reinstall, retries, and binds a few seconds later.
+- Emulator pitfalls for the next session: React Native on an emulator loads JS from
+  `10.0.2.2:8081`, which is the Mac's port 8081, where another session's Metro may run (it
+  served Strongroom's bundle). Set the app's `debug_http_host` (in
+  `shared_prefs/com.haroon.pdfeditor_preferences.xml`, via `run-as`) to `10.0.2.2:<your port>`;
+  the `apps-hub-test` copy had `10.0.2.2:8082` and was put back. `expo start` with `CI=1`
+  doesn't watch files. The `strongroom-task12` emulator had Halo crash-looping (its
+  `EdgeOverlay.kt:82`, `radii[] needs 8 values`) and was unusable for this.
+- `pnpm --filter pdf-editor-mobile run doctor` now fails 2 of 18: the pre-existing app-config
+  check, and a false positive: its glob `modules/**/android/build.gradle` matches
+  `modules/pdf-scan/node_modules/expo-modules-core/android/build.gradle`, a symlink inside
+  ignored `node_modules`. The module's own `android/` is tracked (`git check-ignore` says no).
+
 ## File map
 
 - `docs/pdf-editor/scan/RESEARCH.md`: findings, verdicts, sources.
@@ -225,6 +282,13 @@ External (full list with URLs in RESEARCH):
 - Patterns to copy: `apps/open_tunnel_vpn/src/data/sqlite-driver.ts` (SQL driver over
   expo-sqlite and node:sqlite), `apps/deputy/modules/deputy-agent` (module layout, Gradle
   JVM tests), `packages/core` (package setup).
+
+- Phase 2 code: `apps/pdf-editor-mobile/modules/pdf-scan/` (`src/index.ts` contract;
+  `android/.../core/` `Luma`, `Quads`, `QuadDetector` + `DetectorConfig`, `QuadStabilizer` +
+  `StabilizerConfig`; `android/.../android/ScanCameraView.kt`; `PdfScanModule.kt`; JVM tests in
+  `android/src/test/.../core/`), `app/scan/capture.tsx`, `src/scan/session.ts` and
+  `session-data.ts` (+ `src/__tests__/session-data.test.ts`), the "Scan a document" entry in
+  `src/library/add-actions.ts`, the unsaved-scan notice in `app/index.tsx`.
 
 ## Session log
 
@@ -274,6 +338,30 @@ External (full list with URLs in RESEARCH):
   These fixes are not on the phone yet. Left open: a failed "Open" inside the editor unlinks the
   open item even though the old PDF can stay on screen, so its Save adds no copy; keeping the
   link safely needs `loadPdf` in core.js to keep its old pages until the new file has loaded.
+
+- 2026-11-17 (session A2, Scan Phase 2, worktree `.claude/worktrees/scan-phase-2`, branch
+  `scan-phase-2` from `origin/main` d1b61ea): built the `pdf-scan` module (CameraX 1.6.2), the
+  detector and stabiliser in pure Kotlin with 18 JVM tests (9 + 9), the camera view, the capture
+  screen, the session file and its restore rules (5 tests), the + sheet entry, the Library's
+  unsaved-scan notice; backup off, arm64-v8a only, version 1.2.0; docs (app CLAUDE.md, AGENTS.md
+  gate). Smoke-tested on the `apps-hub-test` emulator with a debug build: the permission prompt
+  comes only on "Scan a document", "Don't allow" shows the notice with "Allow camera", granting
+  starts the camera, the shutter writes upright captures and the session file, the Library offers
+  Resume / Discard after a restart, Discard deletes the session, closing with no pages leaves
+  nothing. Fixed on the way: a double camera bind, the "Done" button wrapping, controls lost on
+  the black letterbox. Verification: see "Current state". Nothing committed or released.
+
+- 2026-11-17 (A2, review round): an independent review found, and this session fixed: corners
+  from the line fit could fall just outside 0..1 when a page corner is past the frame edge (now
+  clamped; a JVM test fails without the clamp); an empty session left by the system back gesture
+  kept its old folder (`openSession` now replaces a session with no pages, and the capture screen
+  reads the session once); the "page list couldn't be saved" error was cleared in the same render;
+  a failed JPEG write (full disk) could be renamed into place (`compress()`'s result is checked);
+  a failed capture left auto-capture cooling down (it now re-arms) and the hint said "Captured
+  page 0" while saving (now "Taking the photo"); `onQuad` could exceed 10 a second; the camera's
+  save thread is now one per process, so a save still in flight after the screen closes can't be
+  rejected. Also: the last-capture thumbnail shows after Resume, a 270° rotation test, the app
+  CLAUDE.md test line. These JS changes were not re-run on the emulator.
 
 ## Phone test results (2026-11-01, PDF Editor 1.1.0 versionCode 7, Redmi Note 14 Pro, Store install)
 
@@ -338,24 +426,35 @@ Test notes for the next session that drives the phone:
 
 ## Current state + exact next step
 
-Phase 1 (session A1) is built, released as 1.1.1 (versionCode 8) and phone-tested on branch
-`scan-phase-1`, worktree `/Users/outsentia/Documents/apps-hub/.claude/worktrees/scan-phase-1`.
-It is committed there, rebased onto `origin/main` 7d5c039, with the ship review's fixes (session
-log, 2026-11-01), and goes to `main` through one PR. AC-1, AC-2, AC-3 and AC-14 pass; findings 1
-to 3 are fixed and verified; finding 4 (a copy made by the editor shows a placeholder icon, and
-now no page count, until it is opened once) is open and cosmetic.
+Scan Phase 2 (session A2) is built and verified on the Mac and the emulator, committed and open
+as a PR into `main` (`gh pr list --head scan-phase-2`), not merged or released, from the worktree `/Users/outsentia/Documents/apps-hub/.claude/worktrees/scan-phase-2` (branch
+`scan-phase-2`, from `origin/main` d1b61ea). Phase 1 is merged (PR #6).
 
-Merging releases six apps, not one: `packages/ui` changed (the `Sheet` keyboard lift), so CI
-publishes netlens, open-tunnel, pdf-editor, store, deputy and strongroom
-(`node tools/release/src/changed.ts 7d5c039`).
+Verification (2026-11-17, actual output):
+- `pnpm test`: exit 0, 1,089 passed, 0 failed (PDF Editor app: 7 of 7, with the new session
+  tests).
+- `pnpm typecheck`: exit 0. `pnpm --filter pdf-editor-mobile lint` and `typecheck`: exit 0.
+- `pnpm --filter pdf-editor-mobile run doctor`: 16 of 18; both failures explained in the
+  evidence section (one pre-existing, one a symlink false positive).
+- `./gradlew :pdf-scan:testDebugUnitTest :app:assembleDebug`: BUILD SUCCESSFUL; 20 of 20 JVM
+  tests pass (after the review round).
+- Proprietary-dependency grep: nothing, same as the step 0 baseline.
 
-Not measured: the 300 ms search bound on a large library and the scan-text half of AC-1 (Phase 4;
-Phase 5 measures NFR-1). Not tried on the phone: the 28 MB guard and a PDF PDF.js can't open.
+Not done yet, and why:
+- **Spikes S1–S4 and AC-4, AC-5, AC-12, AC-13 on the phone** need a Store release (step 10),
+  which needs the owner's go and the Cloudflare account confirmed. The emulator's camera can't
+  show a real page, so detection, auto-capture timing and the sharpness threshold (60) are
+  untested on real frames; `DetectorConfig` and `StabilizerConfig` keep the SPEC starting values.
+- Release APK checks (zipalign 16 KB, `aapt dump permissions`, ABI list, size) run on the
+  release build.
 
-Left on the phone: the Library holds "Sub", the three "A1 ..." PDFs and "A1 Council letter
-(edited)"; the PDFs are in `Download/apps-hub-a1-test/`. The `apps-hub-test` emulator holds the
-debug build in place of the Store's 1.0.0 (owner approved).
-
-Next step: the owner reviews and merges the PR (merging makes CI publish the six builds above).
-Then the next session is A2 (Scan Phase 2, camera and detection) on `scan-phase-2`, new from
-`main` once this PR is merged.
+Exact next step: the owner chooses how 1.2.0 reaches the phone. (a) As in Phase 1: release from
+this branch, test on the phone, tune, then commit, open the PR and merge with `[skip ci]`. (b) The
+rule since 2026-11-04: commit, PR, squash-merge with `[skip ci]`, then `pnpm release pdf-editor
+-m "Scan: camera with automatic page capture"` from a clean checkout of merged `main`. Either
+way only on the owner's go; `pnpm release` talks to the Store Worker with `RELEASE_TOKEN`, so no
+`cf` login is involved. Run the step 10 APK checks and record them. The owner installs from the
+Store and runs AC-4, AC-5, AC-12; read the spike numbers with `adb logcat -s PdfScan` (S1 line at
+camera start, S2 line once a second, "capture import" per capture; reading logcat is fine,
+installing on the phone is not), then tune `DetectorConfig` / `StabilizerConfig` and record the
+results here.
