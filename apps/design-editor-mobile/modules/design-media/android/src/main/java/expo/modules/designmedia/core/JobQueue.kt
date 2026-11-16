@@ -16,7 +16,7 @@ sealed interface QueueEvent {
 }
 
 fun reduce(jobs: List<Job>, e: QueueEvent): List<Job> = when (e) {
-  is QueueEvent.Enqueue -> jobs + e.jobs
+  is QueueEvent.Enqueue -> (if (e.jobs.any { it.plan == PhotoIndexPlan }) jobs.filterNot { it.plan == PhotoIndexPlan && it.isFinished() } else jobs) + e.jobs
   is QueueEvent.Start -> update(jobs, e.id) { it.copy(state = JobState.RUNNING, attempt = 1, progress = 0.0, startedAt = e.at) }
   is QueueEvent.Progress -> update(jobs, e.id) { if (it.state == JobState.RUNNING) it.copy(progress = e.fraction) else it }
   is QueueEvent.Retry -> update(jobs, e.id) { it.copy(plan = e.plan, attempt = it.attempt + 1, progress = 0.0) }
@@ -37,6 +37,9 @@ fun reduce(jobs: List<Job>, e: QueueEvent): List<Job> = when (e) {
     if (it.state == JobState.PAUSED || it.state == JobState.INTERRUPTED) it.copy(state = JobState.QUEUED, error = null) else it
   }
 }
+
+// A new scan replaces the older finished scan rows, so the Queue does not fill with identical ones.
+private fun Job.isFinished() = state == JobState.DONE || state == JobState.FAILED || state == JobState.CANCELLED
 
 // The service marks running jobs interrupted only when it starts again, so after the app is killed the
 // screen would show "Working" forever with nothing running; shown as interrupted, they offer Resume.

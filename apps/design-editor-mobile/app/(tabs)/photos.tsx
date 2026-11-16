@@ -62,7 +62,9 @@ export default function PhotosTab() {
     keepAccess(a === 'none' && before === 'blocked' ? 'blocked' : a);
     setIndex(s);
     if (a === 'none' || !s.modelsReady || !focusedRef.current) return;
-    const galleryChanged = await DesignMedia.photoGalleryChanged();
+    // asked only when nothing else already decides; if it can't be read, scan rather than lose the scan
+    const decided = scan || (before !== null && before !== a);
+    const galleryChanged = decided || (await DesignMedia.photoGalleryChanged().catch(() => true));
     const todo = scanDecision({ before, access: a, force: scan, modelsReady: s.modelsReady, galleryChanged, active: AppState.currentState === 'active' });
     if (todo === 'scan') await DesignMedia.startPhotoIndex();
     else if (todo === 'pending') pendingScan.current = true;
@@ -71,7 +73,7 @@ export default function PhotosTab() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', state => {
       if (state !== 'active' || !focusedRef.current) return;
-      const scan = pendingScan.current || accessRef.current === 'some';
+      const scan = pendingScan.current;
       pendingScan.current = false;
       refresh(scan).catch(say);
     });
