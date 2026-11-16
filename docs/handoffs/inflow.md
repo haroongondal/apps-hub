@@ -1,34 +1,53 @@
 # Inflow handoff (formerly Notebox)
 
-## Resume prompt (2026-11-14, stages 1-4 built, reviewed and fixed; release on hold)
+## Resume prompt (2026-11-16, stage 4b installed and tested on the phone; next build pending)
 
 ```
-Continue the Inflow work (formerly Notebox), resume prompt dated 2026-11-14. Work only in the
-worktree /Users/outsentia/Documents/apps-hub-wt/inflow (branch inflow/stage-4, which holds stages
-1-4), never in the main checkout /Users/outsentia/Documents/apps-hub (branch model-host, unrelated
-uncommitted work; its untracked docs/handoffs/notebox.md and Notebox design copy are stale
-leftovers, delete only after the merge and with the owner's OK). Claim the worktree folder with
-coord before you start (~/.claude/plugins/cache/claude-agent-workflow/coord/1.0.0/bin/coord claim
-<folder>) and release it when you stop.
+Continue the Inflow work (formerly Notebox), resume prompt dated 2026-11-16. Work only in the
+worktree /Users/outsentia/Documents/apps-hub-wt/inflow (branch inflow/stage-4b, which holds stages
+1-4 and 4b), never in the main checkout /Users/outsentia/Documents/apps-hub (branch model-host,
+unrelated uncommitted work; its untracked docs/handoffs/notebox.md and Notebox design copy are
+stale leftovers, delete only after the merge and with the owner's OK). Claim the worktree folder
+with coord before you start (~/.claude/plugins/cache/claude-agent-workflow/coord/1.0.0/bin/coord
+claim <folder>) and release it when you stop. Use cd-engineering-tools:parallel-agents-coord
+(never superpowers:subagent-driven-development) for any agent work.
 
-1. Read docs/handoffs/inflow.md completely first (especially "Current state and next step"),
-   then progress.md (stage 4 ledger, untracked: rulings R23-R34, reviews, fix waves;
-   progress-stage-{1,2,3}.md hold the earlier stages). Design:
-   docs/superpowers/specs/2026-11-13-inflow-design.md; plans: docs/superpowers/plans/
-   2026-11-13-inflow-stage-{1,2,3}.md and 2026-11-14-inflow-stage-4.md. Trust the decisions,
-   rulings and verified facts; do not re-ask the owner what they settled; do not re-run reviews
-   or fix waves.
-2. Release waits for the owner's word (last answer: "Fix both, hold release"). When they say go:
-   push, PR, squash-merge with [skip ci], then pnpm release inflow locally from a clean checkout
-   of merged main. Install only from the Store; never adb-install on the owner's phone; claim
-   device:<ro.serialno> with coord first. Run the phone checks of stages 1-4 (each plan's
-   "Controller: close" and Task 9 step 3 of stage 1, plus the extra checks below) and record
-   actual observations. No Claude attribution lines.
-3. Stage 5 (rules: tags, hide, important, sender and word matching, apply to saved items) is the
-   last stage. It inherits: suggested AI tags are stored but inert until rules/tags exist (R26);
-   the owner's rules override AI importance (design).
-4. Keep this handoff current as milestones land; at ~85% context stop, rewrite this prompt
-   with the date and print it for a new chat.
+1. Read docs/handoffs/inflow.md completely first (especially "Current state and next step"), then
+   progress.md (untracked ledger of stage 4b: rulings R35-R46, reviews, fix waves, the 2026-11-16
+   phone results; progress-stage-{1..4}.md hold earlier stages). Plans: docs/superpowers/plans/
+   2026-11-13-inflow-stage-{1,2,3}.md, 2026-11-14-inflow-stage-4.md, 2026-11-16-inflow-stage-4b.md;
+   briefs fix-4b/4c/4d-brief.md. Trust the decisions, rulings and verified facts; do not re-ask what
+   the owner settled; do not re-run reviews or fix waves already done.
+2. PHONE RULES: the owner's phone is reached ONLY with `adb -s adb-49kjmnuwonkffqzh-zHnffO._adb-tls-connect._tcp`
+   (an emulator, emulator-5556, belongs to ANOTHER session: never use it, never `adb kill-server`).
+   Claim `device:49kjmnuwonkffqzh` with coord first and release it when done. Inflow is adb-installed
+   (installer null, debug-signed, same cert fac61745...3b9c, versionCode 1): `adb install -r` of the
+   new APK keeps data. Never uninstall. The owner unlocks Inflow, ticks HyperOS risk boxes, enables
+   Autostart/notification access, and types settings themselves; never enter their PIN or credentials.
+   Screenshots of lock/secure screens are black (Android). Describe the owner's messages by structure only.
+3. State: installed on the phone = c74d2f1. Newer commit d999812 (AI-filter gaps L1-L5: Ask txns of
+   notification-only sources, default SMS app eligible, accounts list, versioned backfill cursor,
+   AI-made txns re-read) is committed and gated (313 Kotlin tests, pnpm 46/46) but NOT installed.
+   Build the next release APK from HEAD (`NODE_ENV=production ./gradlew :app:assembleRelease` in
+   apps/inflow/android, JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home,
+   ANDROID_HOME=/opt/homebrew/share/android-commandlinetools), check cert/badging, `adb -s <phone> install -r`.
+   After an update check `adb logcat | grep AutoStartManagerService`: HyperOS may reject binding the
+   notification listener (Autostart reset): the owner then enables Inflow in Security > Background
+   autostart (open with `am start -n com.miui.securitycenter/com.miui.permcenter.autostart.AutoStartManagementActivity`)
+   and toggles notification access off/on.
+4. Remaining TODO, in order: (a) T copy: hint under Settings > Your name must say "your full name as
+   your bank writes it" (owner typed first name, then a name with a surname the bank omits; the matcher is
+   exact + at most one bank tag by design). (b) Build/install d999812 + (a). (c) Phone checks still open:
+   Ask AI money answer on the corrected ledger; WhatsApp MEDIA test (ask the owner's friend to send a photo,
+   video, voice note, document, sticker, GIF, location, contact; read Settings > Saved media counters and the
+   item sheets; unknown whether WhatsApp notifications expose any media the listener can read); Gmail (owner
+   enters their own app password) ; a live bank SMS gives one item + one txn; AI summaries only for SMS/email
+   now (R44). (d) Parked minors R43/R46: media read holds the DB write lock; legacy "You" copy with a twin and a
+   todo stays; empty-text unreadable media row shows nothing; mixed-source (SMS + push) txn is excluded from
+   Ask money (relax if totals look low). (e) Owner decisions pending: release of stages 1-4b (owner said
+   "hold release"); never merge/push/release without their go. Stage 5 (rules/tags) is the last stage.
+5. Keep docs/handoffs/inflow.md and progress.md current; at ~85% context stop, rewrite this prompt.
+   No Claude attribution lines in commits or PRs. Never adb-install a Store-installed app.
 ```
 
 ## Goal and fixed constraints
@@ -178,16 +197,10 @@ most likely to be second-guessed:
 
 ## Current state and next step
 
-State (2026-11-16 14:40): stages 1-4 plus stage 4b built, reviewed and fixed on `inflow/stage-4b` (code HEAD 9649278, plan docs/superpowers/plans/2026-11-16-inflow-stage-4b.md, ledger progress.md, fix brief fix-4b-brief.md; earlier ledgers progress-stage-{1..4}.md). Gates at 9649278: Kotlin 298 tests 0 failures, assembleDebug, processReleaseMainManifest (no new permission), pnpm test 0, typecheck 0 (inflow 46/46). Release APK built (versionCode 1, CN=Android Debug cert SHA-256 fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c) at apps/inflow/android/app/build/outputs/apk/release/app-release.apk.
+State (2026-11-16 16:00): stages 1-4 and 4b built, reviewed, fixed and installed on the owner's phone (adb install -r, build c74d2f1). HEAD d999812 (not installed). Gates at d999812: Kotlin 313 tests 0 failures, assembleDebug, processReleaseMainManifest (no new permission), pnpm test 0, typecheck 0 (inflow 46/46). Nothing pushed, merged or released (owner: "hold release").
 
-Phone: Inflow stage 4 (634148a build, debug-signed, installer null) was adb-installed on the owner's phone on 2026-11-16 (owner asked) and tested: install, setup, notification access (owner ticked the HyperOS Danger box), SMS import, Money, live capture, AI (Groq key, Send now ok), Ask AI. Phone fell off Wi-Fi at ~14:30 (no ping, no mdns); adb listed only emulator-5556 belonging to ANOTHER session (do not use it, do not adb kill-server). Next: owner reconnects wireless debugging; compare installed cert with the new APK (pull base.apk, apksigner verify --print-certs); `adb install -r` over the existing install (same versionCode 1 is fine with -r; keeps data = the v4->v5 upgrade test). Never uninstall.
+Phone results 2026-11-16 (details in progress.md): v4->v5 upgrade on the real SQLCipher database worked (WhatsApp "You" duplicates repaired into one thread); LedgerBackfill re-read the saved SMS: November Money now in 840,749.01 / out 381,902.20 / 49 txns (was 20 txns, out 58,090.20), and after Settings > Your name = "Haroon Mukhtar" own transfers drop out: in 645,749.01 / out 356,902.20 / 47 txns; AI (Groq, GPT-OSS 20B) summaries and Ask AI work; Settings order, "Never sent to AI" labels ok; HyperOS rejected the listener after the first update until Autostart + notification access were re-enabled.
 
-Owner decisions this round: WhatsApp text kept forever; group WhatsApp by sender; store all media the notifications expose; fix money out; fix all found bugs; Ask AI uses transactions of any age (R35/R41, documented in AGENTS.md and the spec; owner may revert).
+Decisions this round: WhatsApp text kept forever; WhatsApp grouped by contact; all media WhatsApp notifications expose stored encrypted (untested: owner skipped the media test); AI sees only SMS and email (R44; WhatsApp summaries from 14:06-14:07 were sent by the old build before R44); Ask AI uses transactions of any age (R35/R41); bank fees not added (R37).
 
-Bugs found and fixed in 4b: money out (9 Alfalah formats; QR/RAAST share one Tx ID; own wallet by name+tag), WhatsApp chat split/duplicates (title becomes "You" after a reply; now keyed by contact, repair step in v5), Ask AI money answer, AI summary quality, spend display, Settings order, media storage (encrypted, per-item, lazy read).
-
-Parked minors (R43): media read holds the DB write lock; an in-use legacy "You" copy with a twin stays in the "You" thread; empty-text unreadable media row shows nothing. Unproven until the phone: v5 upgrade on the real SQLCipher database, whether 1:1 sender name equals the chat title for unsaved numbers/business (thread could split once), whether WhatsApp notifications carry any media the listener can read (Settings > Saved media counters show it), Gmail (needs the owner's app password), a live bank SMS, Store install.
-
-Phone checks after the install: old "You" duplicates repaired; reply keeps one thread; November money out (card 58,090.20 + new formats, QR/RAAST once); Ask AI money answer; media test (friend sends photo, video, voice note, document, sticker, GIF, location, contact; read Settings > Saved media and the item sheets).
-
-Next step: resume when the owner says the phone is back.
+Next step: resume prompt step 4 (copy fix, next build, install -r, phone checks).
