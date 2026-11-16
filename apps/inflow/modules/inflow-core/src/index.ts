@@ -35,6 +35,22 @@ export interface Item {
   emailText: string | null;
   // What the AI made of it; null until it has been read. The original text is never changed.
   ai: AiInfo | null;
+  mediaCount: number;
+}
+
+export interface MediaInfo {
+  id: number;
+  kind: 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'other';
+  mime: string;
+  size: number;
+}
+
+export interface MediaStats {
+  saved: number;
+  bytes: number;
+  unreadable: number;
+  tooBig: number;
+  lastMime: string | null;
 }
 
 export interface Todo {
@@ -221,6 +237,12 @@ export interface InflowCoreApi {
   listAiBlocks(): string[];
   setTodoDone(id: number, done: boolean): void;
   ask(question: string): Promise<{ answer: string | null; error: string | null; from: number; to: number; items: number; txns: number }>;
+  mediaFor(itemId: number): MediaInfo[];
+  // Base64 of the decrypted bytes; only for images and stickers up to 8 MB, otherwise it throws.
+  readMedia(mediaId: number): string;
+  // Decrypts to a temporary file and opens it in another app.
+  openMedia(mediaId: number): void;
+  mediaStats(): MediaStats;
   addListener(event: 'onCaptured', listener: (e: { count: number }) => void): { remove(): void };
 }
 

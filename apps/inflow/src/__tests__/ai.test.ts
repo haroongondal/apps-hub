@@ -17,6 +17,9 @@ test('capLabel shows the limit or says there is none', () => {
   assert.equal(capLabel(0.5, 0.12), '$0.12 of $0.50 today');
   assert.equal(capLabel(null, 0.12), '$0.12 today, no limit');
   assert.equal(capLabel(0.5, 0), '$0.00 of $0.50 today');
+  assert.equal(capLabel(0.5, 0.0004), '$0.0004 of $0.50 today');
+  assert.equal(capLabel(null, 0.0004), '$0.0004 today, no limit');
+  assert.equal(capLabel(0.5, 0.01), '$0.01 of $0.50 today');
 });
 
 test('dueLabel names today, tomorrow, a weekday, then a date', () => {

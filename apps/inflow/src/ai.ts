@@ -12,7 +12,7 @@ const KINDS: Record<AiKind, string> = {
 };
 export const kindLabel = (kind: AiKind): string => KINDS[kind] ?? 'Other';
 
-const usd = (n: number): string => `$${n.toFixed(2)}`;
+const usd = (n: number): string => `$${n.toFixed(n > 0 && n < 0.01 ? 4 : 2)}`;
 export const capLabel = (capUsd: number | null, spentUsd: number): string =>
   capUsd === null ? `${usd(spentUsd)} today, no limit` : `${usd(spentUsd)} of ${usd(capUsd)} today`;
 
