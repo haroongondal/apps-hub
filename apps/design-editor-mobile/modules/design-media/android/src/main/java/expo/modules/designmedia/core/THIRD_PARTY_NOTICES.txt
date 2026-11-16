@@ -41,3 +41,9 @@ FFmpegKit (dependency, not source)
 ----------------------------------
 dev.ffmpegkit-maintained:ffmpeg-kit-min 8.1.7 (FFmpeg n8.1.2, LGPL-3.0, no GPL libraries) is used unmodified through
 Gradle, only by FfmpegRunner.kt for volume, reverse and stabilize. Its licence text ships inside the AAR (res/raw/license.txt).
+
+CLIP tokenizer vocabulary (data, not source)
+--------------------------------------------
+../../../../../assets/clip/tokenizer.json is the CLIP BPE vocabulary and merge list (OpenAI CLIP, MIT licence, Copyright (c)
+2021 OpenAI, https://github.com/openai/CLIP) in the Hugging Face tokenizers format, taken unmodified from
+Xenova/clip-vit-base-patch32 at revision 6b7c523703ae26e39be4b03774966f8571c7f523. ClipTokenizer.kt reads it at runtime.
