@@ -112,6 +112,8 @@ class PatternsTest {
     assertEquals("ids unique", ids.size, ids.toSet().size)
     assertTrue(ids.containsAll(listOf("pulse-ring", "corner-bloom", "spectrum-rim", "comet", "ember-drift", "ripple")))
     assertEquals(Family.values().toSet(), Patterns.all.map { it().family }.toSet())
+    assertEquals("24 patterns", 24, ids.size)
+    Family.values().forEach { f -> assertEquals("six in $f", 6, Patterns.all.count { it().family == f }) }
     assertEquals("pulse-ring", Patterns.create("no-such-pattern").id)
     assertEquals("comet", Patterns.create("comet").id)
     assertNotSame(Patterns.create("ember-drift"), Patterns.create("ember-drift"))
