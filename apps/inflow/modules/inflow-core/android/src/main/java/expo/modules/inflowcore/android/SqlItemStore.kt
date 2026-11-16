@@ -12,6 +12,7 @@ import expo.modules.inflowcore.core.AppSetting
 import expo.modules.inflowcore.core.AskItem
 import expo.modules.inflowcore.core.Channel
 import expo.modules.inflowcore.core.Capture
+import expo.modules.inflowcore.core.DeferredDeletes
 import expo.modules.inflowcore.core.Email
 import expo.modules.inflowcore.core.ItemStore
 import expo.modules.inflowcore.core.LegacyAction
@@ -29,7 +30,7 @@ import net.zetetic.database.sqlcipher.SQLiteDatabaseHook
 import net.zetetic.database.sqlcipher.SQLiteStatement
 import java.io.File
 
-class SqlItemStore private constructor(internal val db: SQLiteDatabase, private val mediaDir: File) : ItemStore, AiStore {
+class SqlItemStore private constructor(internal val db: SQLiteDatabase, private val mediaDir: File, private val openDir: File) : ItemStore, AiStore {
   override fun nameFor(tag: String): String? =
     query("SELECT name FROM chat_map WHERE tag = ?", tag).use { if (it.moveToFirst()) it.getString(0) else null }
 
@@ -225,7 +226,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
   }
 
   // The media rows go with their items now; their files are deleted once the outermost transaction has committed (see transaction()).
-  private val doomedFiles = ThreadLocal.withInitial { mutableListOf<String>() }
+  private val doomedFiles = ThreadLocal.withInitial { DeferredDeletes() }
 
   private fun forgetMedia(where: String, vararg args: Any?) {
     val items = "SELECT id FROM items WHERE $where"
@@ -411,11 +412,14 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       committed = true
       return result
     } finally {
-      db.endTransaction()
-      if (!db.inTransaction()) {
-        val files = doomedFiles.get()!!.toList()
-        doomedFiles.get()!!.clear()
-        if (committed) MediaStore.deleteFiles(mediaDir, files)
+      var ended = false
+      try {
+        db.endTransaction()
+        ended = true
+      } finally {
+        // A failed end counts as a rollback and is always the last one: nothing queued may be deleted.
+        val files = doomedFiles.get()!!.ended(committed && ended, outermost = !ended || !db.inTransaction())
+        MediaStore.deleteFiles(mediaDir, files, openDir)
       }
     }
   }
@@ -526,11 +530,11 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       "ALTER TABLE txns ADD COLUMN by_ai INTEGER NOT NULL DEFAULT 0",
     )
 
-    // Not idempotent, like the others. chat_map: chat id -> contact name (R36). media: one row per stored file, its bytes live encrypted in filesDir/media (K4).
+    // Not idempotent, like the others. chat_map: chat id -> contact name (R36). media: one row per stored file (the same bytes under two items are two files), its bytes live encrypted in filesDir/media (K4).
     private val SCHEMA_V5 = listOf(
       "CREATE TABLE chat_map(tag TEXT PRIMARY KEY, name TEXT NOT NULL)",
       "CREATE TABLE media(id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, kind TEXT NOT NULL, mime TEXT NOT NULL, " +
-        "size INTEGER NOT NULL, file TEXT NOT NULL, sha TEXT NOT NULL UNIQUE, at INTEGER NOT NULL)",
+        "size INTEGER NOT NULL, file TEXT NOT NULL, sha TEXT NOT NULL, at INTEGER NOT NULL, UNIQUE(item_id, sha))",
       "CREATE INDEX media_item ON media(item_id)",
     )
 
@@ -559,7 +563,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
         key.fill(0)
         // raw is not zeroed: SQLCipher's connection config keeps this array and re-reads it if a connection is reopened.
         val db = SQLiteDatabase.openOrCreateDatabase(file, raw, null, neverDeleteOnCorruption, secureDelete).also { ensureSchema(it) }
-        Result.success(SqlItemStore(db, File(context.filesDir, "media")))
+        Result.success(SqlItemStore(db, File(context.filesDir, "media"), File(context.cacheDir, "open")))
       } catch (e: SQLiteDatabaseCorruptException) {
         Result.failure(IllegalStateException(KEY_LOST_MESSAGE, e))
       } catch (e: Exception) {
@@ -570,17 +574,20 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     }
 
     // Carries out LegacyRepair.plan inside the v5 transaction. A delete only ever follows a plan that names an identical twin;
-    // an item that is a ledger source is never deleted, and a move whose new hash is taken is skipped (UPDATE OR IGNORE).
+    // an item that is a ledger source or has to-dos is never deleted (the plan knows via LegacyRow.inUse), and a move whose new hash is taken is skipped (UPDATE OR IGNORE).
     private fun repairLegacyWhatsapp(db: SQLiteDatabase) {
       val rows = db.rawQuery(
-        "SELECT id, pkg, sender, conversation_key, conversation, title, text, posted_at, captured_at FROM items WHERE pkg = ?", LegacyRepair.PKG,
+        "SELECT id, pkg, sender, conversation_key, conversation, title, text, posted_at, captured_at, " +
+          "EXISTS(SELECT 1 FROM txn_sources s WHERE s.item_id = items.id) OR EXISTS(SELECT 1 FROM todos t WHERE t.item_id = items.id) " +
+          "FROM items WHERE pkg = ?",
+        LegacyRepair.PKG,
       ).use { c ->
         buildList {
           while (c.moveToNext()) {
             add(
               LegacyRow(
                 c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5), c.getString(6),
-                c.getLong(7), c.getLong(8),
+                c.getLong(7), c.getLong(8), c.getInt(9) != 0,
               ),
             )
           }
@@ -593,8 +600,6 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
             arrayOf<Any?>(a.conversation, a.conversationKey, a.hash, a.search, a.id),
           )
           is LegacyAction.Delete -> {
-            val isSource = db.rawQuery("SELECT 1 FROM txn_sources WHERE item_id = ?", a.id).use { it.moveToFirst() }
-            if (isSource) continue
             for (table in listOf("ai_results", "ai_queue", "todos")) db.execSQL("DELETE FROM $table WHERE item_id = ?", arrayOf<Any?>(a.id))
             db.execSQL("DELETE FROM items WHERE id = ?", arrayOf<Any?>(a.id))
           }

@@ -141,6 +141,24 @@ class BankParserTest {
     )
   }
 
+  private val sent = "PKR 300 sent to Some Person from your BAF A/C *2310 on 5-Nov-26 09:10 "
+
+  // "Txn ID FT..." is not the plan's "Tx ID": the money still parses, the id is null (never "n").
+  @Test fun txnIdWordingGivesNoIdRatherThanTheLetterN() {
+    val p = BankParser.parse(sent + "Txn ID FT26315ABCDEFGH1")!!
+    assertEquals(30000, p.amountMinor)
+    assertNull(p.txId)
+  }
+
+  @Test fun txnWithoutAnIdReturnsNull() {
+    assertNull(BankParser.parse(sent + "via Tx ID")!!.txId)
+    assertNull(BankParser.parse(sent + "via Txn")!!.txId)
+  }
+
+  @Test fun alfalahOtpTextIsNotMoney() {
+    assertNull(BankParser.parse("Your OTP for transferring PKR 5,000.00 to Some Person from your BAF A/C **2310 is 123456"))
+  }
+
   @Test fun alfalahOffersAreNotMoney() {
     assertNull(BankParser.parse("Dear Customer, PKR 500 has been transferred to your wallet as cashback. Offer valid till 30-Nov-26"))
   }

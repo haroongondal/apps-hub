@@ -41,5 +41,8 @@ object StoreHolder {
   }
 
   fun ingest(context: Context, store: SqlItemStore, onOtpSaved: (Long) -> Unit = {}) =
-    Ingest(store, context.packageName, System::currentTimeMillis, onOtpSaved, ledger(store), smsPackages(context), media(context, store)) { AiConfig(store).on() }
+    Ingest(
+      store, context.packageName, System::currentTimeMillis, onOtpSaved, ledger(store), smsPackages(context), media(context, store),
+      aiOn = { AiConfig(store).on() }, bump = store::bump,
+    )
 }

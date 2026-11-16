@@ -12,13 +12,14 @@ import android.os.Build
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
 import androidx.core.os.BundleCompat
+import expo.modules.inflowcore.core.MediaSupplier
 import expo.modules.inflowcore.core.RawMedia
 import expo.modules.inflowcore.core.RawMessage
 import expo.modules.inflowcore.core.RawNotification
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 
-/** Reads the files a WhatsApp notification exposes. Every failure is counted, never logged or thrown: the message text must still be saved. */
+/** Reads the files a WhatsApp notification exposes, only when Ingest calls it (see MediaSupplier). Every failure is counted, never logged or thrown: the message text must still be saved. */
 class MediaReader(private val context: Context, private val bump: (String, Long) -> Unit, private val lastMime: (String) -> Unit) {
   fun fromUri(uri: Uri, mime: String): RawMedia? {
     lastMime(mime)
@@ -89,6 +90,9 @@ object RawFromSbn {
   // The owner's override stores media for WhatsApp only; other apps' pictures are not saved.
   private val MEDIA_PKGS = setOf("com.whatsapp", "com.whatsapp.w4b")
 
+  private fun hasPicture(extras: android.os.Bundle) =
+    extras.containsKey(Notification.EXTRA_PICTURE) || (Build.VERSION.SDK_INT >= 31 && extras.containsKey(Notification.EXTRA_PICTURE_ICON))
+
   fun from(sbn: StatusBarNotification, appLabel: String, media: MediaReader? = null): RawNotification {
     val n = sbn.notification
     val extras = n.extras
@@ -101,7 +105,7 @@ object RawFromSbn {
       val own = p != null && user != null && (if (p.key != null && user.key != null) p.key == user.key else p.name?.toString() == user.name?.toString())
       val uri = m.dataUri
       val mime = m.dataMimeType
-      val file = if (wantMedia && uri != null && mime != null) media?.fromUri(uri, mime) else null
+      val file: MediaSupplier? = if (wantMedia && uri != null && mime != null) ({ media?.fromUri(uri, mime) }) else null
       RawMessage(p?.name?.toString(), m.text?.toString().orEmpty(), m.timestamp, own, file)
     }
     return RawNotification(
@@ -121,7 +125,7 @@ object RawFromSbn {
       textLines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.map { it.toString() }.orEmpty(),
       chatTag = sbn.tag,
       shortcutId = NotificationCompat.getShortcutId(n),
-      picture = if (wantMedia) media?.fromPicture(extras) else null,
+      picture = if (wantMedia && hasPicture(extras)) ({ media?.fromPicture(extras) }) else null,
     )
   }
 }

@@ -4,6 +4,8 @@ package expo.modules.inflowcore.core
 data class LegacyRow(
   val id: Long, val pkg: String, val sender: String?, val conversationKey: String?, val conversation: String?,
   val title: String?, val text: String, val postedAt: Long, val capturedAt: Long,
+  /** A ledger source or an item with to-dos: it is moved, never deleted, even with an identical twin. */
+  val inUse: Boolean = false,
 )
 
 sealed class LegacyAction {
@@ -15,7 +17,7 @@ sealed class LegacyAction {
 /**
  * Stage 4 filed a WhatsApp chat under the conversation "You" once the owner had replied (the notification title turned into "You"),
  * and saved the contact's messages a second time there. This decides, as a pure function, what the v5 migration does about it.
- * It only ever deletes a row whose identical twin stays; SQL just carries the plan out.
+ * It only ever deletes a row whose identical twin stays and that nothing else points at; SQL just carries the plan out.
  */
 object LegacyRepair {
   const val PKG = "com.whatsapp"
@@ -44,7 +46,7 @@ object LegacyRepair {
       } else {
         wa.any { it.id != r.id && it.sender == r.sender && it.postedAt == r.postedAt && it.text == r.text && (it.conversationKey == key || (it.id in strayIds && it.id < r.id)) }
       }
-      if (twin) return@mapNotNull LegacyAction.Delete(r.id)
+      if (twin && !r.inUse) return@mapNotNull LegacyAction.Delete(r.id)
       val sender = r.sender!!
       LegacyAction.Move(
         r.id, conversation, key, NotificationParser.messageHash(PKG, key, sender, r.postedAt, r.text),

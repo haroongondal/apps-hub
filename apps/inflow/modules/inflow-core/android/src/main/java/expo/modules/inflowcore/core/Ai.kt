@@ -137,7 +137,11 @@ Rules:
     }
     // A model that gives different texts the same summary is describing one item for all of them: only the first keeps it, the rest are retried.
     val firstText = HashMap<String, String>()
-    return parsed.filter { r -> firstText.getOrPut(r.summary.lowercase(Locale.ROOT)) { texts.getValue(r.itemId) } == texts.getValue(r.itemId) }
+    // An item with money is real news of its own (two payments can read alike), so it is never dropped here.
+    return parsed.filter { r ->
+      val first = firstText.getOrPut(r.summary.lowercase(Locale.ROOT)) { texts.getValue(r.itemId) } == texts.getValue(r.itemId)
+      first || r.money != null
+    }
   }
 
   private fun result(id: Long, o: JsonObject, text: String, zone: ZoneId): AiResult? {

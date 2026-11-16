@@ -12,13 +12,21 @@ class LegacyRepairTest {
 
   private fun thread(name: String) = name to senderKey(wa, name)
 
-  private fun row(sender: String, text: String, at: Long, inThread: String, captured: Long = at, pkg: String = wa) =
-    LegacyRow(nextId++, pkg, sender, senderKey(pkg, inThread), inThread, inThread, text, at, captured)
+  private fun row(sender: String, text: String, at: Long, inThread: String, captured: Long = at, pkg: String = wa, inUse: Boolean = false) =
+    LegacyRow(nextId++, pkg, sender, senderKey(pkg, inThread), inThread, inThread, text, at, captured, inUse)
 
   @Test fun youThreadCopyWithATwinIsDeleted() {
     val good = row("Sunflower", "Call me", t0, "Sunflower")
     val copy = row("Sunflower", "Call me", t0, "You")
     assertEquals(listOf(LegacyAction.Delete(copy.id)), LegacyRepair.plan(listOf(good, copy)))
+  }
+
+  @Test fun aCopyThatALedgerSourceOrTodoPointsAtIsMovedNeverDeleted() {
+    val good = row("Sunflower", "Call me", t0, "Sunflower")
+    val copy = row("Sunflower", "Call me", t0, "You", inUse = true)
+    val plan = LegacyRepair.plan(listOf(good, copy))
+    assertTrue(plan.none { it is LegacyAction.Delete })
+    assertEquals(copy.id, (plan.single() as LegacyAction.Move).id)
   }
 
   @Test fun copyWithoutATwinIsMovedWithARecomputedHash() {

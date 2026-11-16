@@ -234,5 +234,22 @@ class NotificationParserTest {
     assertEquals("p:bank alfalah", senderKey("p", "Bank Alfalah"))
   }
 
+  @Test fun aBlankMessageWithMediaIsKeptWithAnEmptyTextAndItsOwnHash() {
+    val file: MediaSupplier = { RawMedia("image/jpeg", byteArrayOf(1)) }
+    val out = NotificationParser.parse(
+      raw(
+        pkg = "com.whatsapp", title = "Sunflower",
+        messages = listOf(RawMessage("Sunflower", "", 1_000L, media = file), RawMessage("Sunflower", "", 2_000L, media = file), RawMessage("Sunflower", " ", 3_000L)),
+      ),
+      own,
+    )
+    assertEquals(listOf(1_000L, 2_000L), out.map { it.postedAt })
+    assertEquals(listOf("", ""), out.map { it.text })
+    assertEquals(2, out.map { it.hash }.toSet().size)
+    assertTrue(out.all { it.media === file && !it.deletedPlaceholder })
+    assertFalse(OtpDetector.isOtp("com.whatsapp", ""))
+    assertNull(BankParser.parse(""))
+  }
+
   private fun assertNotEquals(a: Any?, b: Any?) = org.junit.Assert.assertNotEquals(a, b)
 }

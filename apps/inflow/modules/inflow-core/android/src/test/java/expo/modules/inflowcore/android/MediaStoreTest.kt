@@ -16,15 +16,14 @@ class MediaStoreTest {
   private class FakeIndex : MediaIndex {
     val rows = mutableListOf<MediaRow>()
     private var next = 1L
-    override fun has(sha: String) = rows.any { it.sha == sha }
+    override fun has(itemId: Long, sha: String) = rows.any { it.itemId == itemId && it.sha == sha }
     override fun insert(itemId: Long, kind: String, mime: String, size: Long, file: String, sha: String, at: Long): Boolean {
-      if (has(sha)) return false
+      if (has(itemId, sha)) return false
       rows += MediaRow(next++, itemId, kind, mime, size, file, sha)
       return true
     }
     override fun get(mediaId: Long) = rows.firstOrNull { it.id == mediaId }
     override fun forItem(itemId: Long) = rows.filter { it.itemId == itemId }
-    override fun removeForItem(itemId: Long): List<String> = rows.filter { it.itemId == itemId }.also { rows.removeAll(it) }.map { it.file }
   }
 
   private lateinit var dir: File
@@ -63,11 +62,30 @@ class MediaStoreTest {
     assertNull(other.read(index.rows.single().id))
   }
 
-  @Test fun sameBytesAreStoredOnce() {
+  @Test fun sameBytesTwiceForOneItemAreStoredOnce() {
     assertTrue(store.save(1, RawMedia("image/jpeg", photo), 1L))
-    assertFalse(store.save(2, RawMedia("image/jpeg", photo), 2L))
+    assertFalse(store.save(1, RawMedia("image/jpeg", photo), 2L))
     assertEquals(1, index.rows.size)
     assertEquals(1, File(dir, "media").list()!!.size)
+  }
+
+  @Test fun sameBytesForTwoItemsGiveTwoRowsAndTwoFiles() {
+    assertTrue(store.save(1, RawMedia("image/jpeg", photo), 1L))
+    assertTrue(store.save(2, RawMedia("image/jpeg", photo), 2L))
+    assertEquals(listOf(1L, 2L), index.rows.map { it.itemId })
+    assertEquals(2, index.rows.map { it.file }.toSet().size)
+    assertEquals(2, File(dir, "media").list()!!.size)
+    assertArrayEquals(photo, store.read(index.forItem(2).single().id))
+  }
+
+  @Test fun forgettingOneItemsFilesLeavesTheOthers() {
+    store.save(1, RawMedia("image/jpeg", photo), 1L)
+    store.save(2, RawMedia("image/jpeg", photo), 2L)
+    val gone = index.forItem(1).map { it.file }
+    index.rows.removeAll { it.itemId == 1L }
+    MediaStore.deleteFiles(File(dir, "media"), gone)
+    assertEquals(listOf(index.rows.single().file), File(dir, "media").list()!!.toList())
+    assertArrayEquals(photo, store.read(index.rows.single().id))
   }
 
   @Test fun tooBigIsRefusedAndCounted() {
@@ -77,12 +95,26 @@ class MediaStoreTest {
     assertTrue(store.save(2, RawMedia("video/mp4", ByteArray(MediaStore.MAX_BYTES)), 1L))
   }
 
-  @Test fun fileIsRemovedWithItsItem() {
-    store.save(1, RawMedia("image/jpeg", photo), 1L)
-    store.save(2, RawMedia("audio/ogg", "voice".toByteArray()), 2L)
-    store.removeItem(1)
-    assertEquals(listOf(2L), index.rows.map { it.itemId })
-    assertEquals(listOf(index.rows.single().file), File(dir, "media").list()!!.toList())
+  @Test fun forgettingMediaAlsoDeletesItsDecryptedCopy() {
+    val open = File(dir, "open").apply { mkdirs() }
+    val copy = File(open, "abc123.jpg").apply { writeBytes(byteArrayOf(1)) }
+    val other = File(open, "abc1234.jpg").apply { writeBytes(byteArrayOf(1)) }   // another file whose name merely starts the same
+    File(File(dir, "media").apply { mkdirs() }, "abc123").writeBytes(byteArrayOf(2))
+    MediaStore.deleteFiles(File(dir, "media"), listOf("abc123"), open)
+    assertFalse(copy.exists())
+    assertTrue(other.exists())
+    assertFalse(File(File(dir, "media"), "abc123").exists())
+  }
+
+  @Test fun clearOpenedRemovesCopiesOlderThanTheGrace() {
+    val open = File(dir, "open").apply { mkdirs() }
+    val old = File(open, "old.jpg").apply { writeBytes(byteArrayOf(1)); setLastModified(System.currentTimeMillis() - 120_000) }
+    val fresh = File(open, "fresh.jpg").apply { writeBytes(byteArrayOf(1)) }
+    MediaStore.clearOpened(open, olderThanMs = 30_000)
+    assertFalse(old.exists())
+    assertTrue(fresh.exists())
+    MediaStore.clearOpened(open)
+    assertFalse(fresh.exists())
   }
 
   @Test fun orphanFilesAreSwept() {

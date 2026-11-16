@@ -38,6 +38,7 @@ import kotlinx.coroutines.withContext
 private const val CAPTURED_EVENT = "onCaptured"
 private const val MEDIA_AUTHORITY = "com.haroon.inflow.media"
 private const val MAX_INLINE_BYTES = 8L * 1024 * 1024
+private const val OPEN_GRACE_MS = 30_000L
 private val ADDRESS_QUERY = Regex("[^@\\s]*@[^@\\s.]+\\.[^@\\s]+")
 
 class InflowCoreModule : Module() {
@@ -46,6 +47,8 @@ class InflowCoreModule : Module() {
 
   private fun store(): SqlItemStore =
     StoreHolder.get(context).getOrElse { throw CodedException("STORE_UNAVAILABLE", it.message, it) }
+
+  private fun clearOpened(olderThanMs: Long = 0L) = MediaStore.clearOpened(File(context.cacheDir, "open"), olderThanMs)
 
   private fun open(intent: Intent) {
     context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -63,7 +66,7 @@ class InflowCoreModule : Module() {
       // Decrypted copies handed to a viewer live only until the next start; files no row names are swept (rolled-back saves).
       InflowListener.executor.execute {
         runCatching {
-          File(context.cacheDir, "open").deleteRecursively()
+          clearOpened()
           StoreHolder.get(context).getOrNull()?.let { MediaStore.sweep(File(context.filesDir, "media"), it.mediaFiles()) }
         }
       }
@@ -71,6 +74,13 @@ class InflowCoreModule : Module() {
 
     OnDestroy {
       StoreHolder.onCaptured = null
+      runCatching { clearOpened() }
+    }
+
+    // The app locks when it goes to the background, so the decrypted copies go too; a copy younger than the grace stays
+    // because that move may be the hand-over to the viewer that has not opened it yet (it goes at the next background or start).
+    OnActivityEntersBackground {
+      runCatching { clearOpened(OPEN_GRACE_MS) }
     }
 
     Function("getStatus") { ->
@@ -159,13 +169,13 @@ class InflowCoreModule : Module() {
       Base64.encodeToString(bytes, Base64.NO_WRAP)
     }
 
-    // Decrypts into cache/open and hands it to a viewer through the not-exported FileProvider; the folder is cleared at the next start.
+    // Decrypts into cache/open and hands it to a viewer through the not-exported FileProvider; the folder is cleared at the next start, when the app goes to the background and when it closes (a deleted item takes its copy with it).
     Function("openMedia") { mediaId: Long ->
       val store = store()
       val row = SqlMediaIndex(store).get(mediaId) ?: throw CodedException("MEDIA_MISSING", "That file is no longer saved.", null)
       val bytes = StoreHolder.media(context, store)?.read(mediaId) ?: throw CodedException("MEDIA_UNREADABLE", "That file could not be read.", null)
       val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(row.mime) ?: "bin"
-      val file = File(File(context.cacheDir, "open").apply { mkdirs() }, "${row.id}.$ext")
+      val file = File(File(context.cacheDir, "open").apply { mkdirs() }, "${row.file}.$ext")
       file.writeBytes(bytes)
       val uri = FileProvider.getUriForFile(context, MEDIA_AUTHORITY, file)
       try {

@@ -15,13 +15,12 @@ data class MediaRow(val id: Long, val itemId: Long, val kind: String, val mime: 
 
 /** The `media` table, behind an interface so MediaStore runs in JVM tests. */
 interface MediaIndex {
-  fun has(sha: String): Boolean
-  /** False when the sha is already there. */
+  /** Whether this item already has a file with these bytes (another item may hold the same bytes: each item keeps its own file). */
+  fun has(itemId: Long, sha: String): Boolean
+  /** False when this item already has the sha. */
   fun insert(itemId: Long, kind: String, mime: String, size: Long, file: String, sha: String, at: Long): Boolean
   fun get(mediaId: Long): MediaRow?
   fun forItem(itemId: Long): List<MediaRow>
-  /** Removes the rows; returns their file names so the caller can delete the files. */
-  fun removeForItem(itemId: Long): List<String>
 }
 
 /**
@@ -44,7 +43,7 @@ class MediaStore(
       return false
     }
     val sha = MessageDigest.getInstance("SHA-256").digest(m.bytes).joinToString("") { "%02x".format(it) }
-    if (index.has(sha)) return false
+    if (index.has(itemId, sha)) return false
     dir.mkdirs()
     val name = ByteArray(16).also(random::nextBytes).joinToString("") { "%02x".format(it) }
     val file = File(dir, name)
@@ -77,9 +76,6 @@ class MediaStore(
     }
   }
 
-  /** The item's rows and files. SqlItemStore's own deletes (retention, OTP purge, "Stop and delete") use deleteFiles after they commit. */
-  fun removeItem(itemId: Long) = deleteFiles(dir, index.removeForItem(itemId))
-
   companion object {
     const val MAX_BYTES = 20 * 1024 * 1024
 
@@ -87,8 +83,18 @@ class MediaStore(
     fun keyFor(dbKey: ByteArray): ByteArray =
       Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(dbKey, "HmacSHA256")) }.doFinal("inflow-media".toByteArray(Charsets.US_ASCII))
 
-    fun deleteFiles(dir: File, names: List<String>) {
-      names.forEach { File(dir, it).delete() }
+    /** Deletes the stored files and, when `openDir` is given, the decrypted copies made from them (named "<file>.<ext>", see openMedia). */
+    fun deleteFiles(dir: File, names: List<String>, openDir: File? = null) {
+      names.forEach { name ->
+        File(dir, name).delete()
+        openDir?.listFiles { f -> f.name.startsWith("$name.") }?.forEach { it.delete() }
+      }
+    }
+
+    /** Decrypted copies handed to a viewer, older than `olderThanMs` (0 = all). */
+    fun clearOpened(openDir: File, olderThanMs: Long = 0L) {
+      val now = System.currentTimeMillis()
+      openDir.listFiles()?.forEach { if (now - it.lastModified() >= olderThanMs) it.delete() }
     }
 
     /** Files no row names (left by a rolled-back transaction or a crash) and older than `olderThanMs`. */
@@ -100,7 +106,7 @@ class MediaStore(
 }
 
 class SqlMediaIndex(private val s: SqlItemStore) : MediaIndex {
-  override fun has(sha: String) = s.query("SELECT 1 FROM media WHERE sha = ?", sha).use { it.moveToFirst() }
+  override fun has(itemId: Long, sha: String) = s.query("SELECT 1 FROM media WHERE item_id = ? AND sha = ?", itemId, sha).use { it.moveToFirst() }
 
   override fun insert(itemId: Long, kind: String, mime: String, size: Long, file: String, sha: String, at: Long) =
     s.run("INSERT OR IGNORE INTO media(item_id, kind, mime, size, file, sha, at) VALUES (?, ?, ?, ?, ?, ?, ?)", itemId, kind, mime, size, file, sha, at) > 0
@@ -108,12 +114,6 @@ class SqlMediaIndex(private val s: SqlItemStore) : MediaIndex {
   override fun get(mediaId: Long) = rows("WHERE id = ?", mediaId).firstOrNull()
 
   override fun forItem(itemId: Long) = rows("WHERE item_id = ? ORDER BY id", itemId)
-
-  override fun removeForItem(itemId: Long): List<String> = s.inTransaction {
-    val files = forItem(itemId).map { it.file }
-    s.run("DELETE FROM media WHERE item_id = ?", itemId)
-    files
-  }
 
   private fun rows(tail: String, vararg args: Any?): List<MediaRow> =
     s.query("SELECT id, item_id, kind, mime, size, file, sha FROM media $tail", *args).use { c ->

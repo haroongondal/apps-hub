@@ -9,6 +9,7 @@ class Ingest(
   private val smsPackages: Set<String> = Sms.KNOWN_APPS,
   private val media: MediaSink? = null,
   private val aiOn: () -> Boolean = { false },
+  private val bump: (name: String, by: Long) -> Unit = { _, _ -> },
 ) {
   fun onNotification(raw: RawNotification): Int {
     if (raw.pkg == ownPkg) return 0
@@ -31,8 +32,7 @@ class Ingest(
       val otpExpiresAt = if (isOtp(c.pkg, c.text)) now() + OTP_TTL_MS else null
       val id = store.insert(c, search, otpExpiresAt) ?: continue
       saved++
-      // The text is already saved; a file that cannot be stored never takes it back (the sink counts its own failures, nothing is logged here).
-      c.media?.let { m -> try { media?.save(id, m, c.postedAt) } catch (e: Exception) { /* kept: the item is saved */ } }
+      saveMedia(id, c)
       otpExpiresAt?.let(onOtpSaved)
       if (otpExpiresAt == null) {
         val channel = when {
@@ -40,12 +40,25 @@ class Ingest(
           c.pkg == Email.GMAIL -> Channel.EMAIL_NOTIFICATION
           else -> Channel.NOTIFICATION
         }
-        ledger?.onItem(id, c.text, channel, c.postedAt)
-        queueForAi(id)
+        if (c.text.isNotBlank()) {
+          ledger?.onItem(id, c.text, channel, c.postedAt)
+          queueForAi(id)
+        }
       }
     }
     housekeeping()
     return saved
+  }
+
+  // Only for a new item. The text is already saved; whatever goes wrong here (even out of memory) is counted and never takes it back.
+  private fun saveMedia(id: Long, c: Capture) {
+    val read = c.media ?: return
+    val sink = media ?: return
+    try {
+      read()?.let { sink.save(id, it, c.postedAt) }
+    } catch (e: Throwable) {
+      bump("mediaUnreadable", 1)
+    }
   }
 
   fun onSms(sms: RawSms, smsPkg: String, smsLabel: String): Int {

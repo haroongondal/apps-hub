@@ -54,7 +54,7 @@ object BankParser {
     "$AMT\\s+(?:has\\s+been\\s+)?(?:transferred|paid|sent)\\s+to\\s+(.+?)\\s+from\\s+your\\s+$FROM_ACCT(.*)", FLAGS,
   )
   private val ALFALAH_IN = Regex("$AMT\\s+received\\s+from\\s+(.+?)\\s+in\\s+your\\s+$FROM_ACCT(.*)", FLAGS)
-  private val TX_ID = Regex("\\bTx(?:\\s+ID)?\\s*:?\\s*([A-Za-z0-9]+)", RegexOption.IGNORE_CASE)
+  private val TX_ID = Regex("\\bTx\\b(?:\\s+ID\\b)?\\s*:?\\s*([A-Za-z0-9]{6,})", RegexOption.IGNORE_CASE)
   private val MASKED_IBAN = Regex("\\s*PK\\*+\\d+$", RegexOption.IGNORE_CASE)
   private val CONSUMER_ID = Regex("\\s+Consumer\\s+ID\\b.*$", FLAGS)
   private val ALFALAH_REF = Regex("Ref#\\s*([A-Za-z0-9]+)")

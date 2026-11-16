@@ -3,6 +3,9 @@ package expo.modules.inflowcore.core
 /** A file a notification carried, already read: never logged, stored only encrypted. */
 data class RawMedia(val mime: String, val bytes: ByteArray)
 
+/** Reads a file only when asked: Ingest calls it once an item is really new, so a repost or an app set to not record never reads anything. */
+typealias MediaSupplier = () -> RawMedia?
+
 object MediaKind {
   /** image, video, audio, document, sticker (image/webp) or other. */
   fun of(mime: String): String {

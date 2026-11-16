@@ -37,7 +37,8 @@ object NotificationParser {
         ?: raw.title
     }
     val conversationKey = conversation?.let { senderKey(raw.pkg, it) }
-    val shown = raw.messages.filter { it.text.isNotBlank() }
+    // A photo sent without a caption has no text: it is kept for its file, with an empty text.
+    val shown = raw.messages.filter { it.text.isNotBlank() || it.media != null }
     // A BigPicture belongs to the newest message that has no file of its own.
     val pictureOn = shown.lastOrNull { it.media == null }.takeIf { raw.picture != null }
     return shown.map { m ->
@@ -60,7 +61,7 @@ object NotificationParser {
 
   private fun fromSingle(raw: RawNotification): List<Capture> {
     val text = raw.bigText ?: raw.text ?: raw.textLines.joinToString("\n")
-    if (text.isBlank()) return emptyList()
+    if (text.isBlank() && raw.picture == null) return emptyList()
     val sender = raw.title
     return listOf(
       Capture(
