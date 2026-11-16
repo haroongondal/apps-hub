@@ -37,6 +37,7 @@ internal object StructureReader {
           hintText = node.hint,
           webDomain = domain,
           webScheme = scheme,
+          maxLength = html["maxlength"]?.trim()?.toIntOrNull()?.takeIf { it > 0 } ?: node.maxTextLength.takeIf { it > 0 },
         )
         ids += id
         values += node.autofillValue?.takeIf { it.isText }?.textValue?.toString()

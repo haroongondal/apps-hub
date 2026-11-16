@@ -15,6 +15,7 @@ class FormDetectorTest {
   private val textEmail = 1 or 32
   private val textWebEmail = 1 or 208
   private val textUri = 1 or 16
+  private val number = 2
   private val numberPassword = 2 or 16
 
   private fun node(
@@ -27,10 +28,11 @@ class FormDetectorTest {
     idEntry: String? = null,
     hintText: String? = null,
     webDomain: String? = null,
-  ) = FieldNode(index, hints, inputType, htmlType, htmlAutocomplete, htmlName, idEntry, hintText, webDomain)
+    maxLength: Int? = null,
+  ) = FieldNode(index, hints, inputType, htmlType, htmlAutocomplete, htmlName, idEntry, hintText, webDomain, null, maxLength)
 
-  private fun form(username: Int? = null, password: Int? = null, newPassword: Int? = null, card: CardFields? = null) =
-    DetectedForm(username, password, newPassword, card)
+  private fun form(username: Int? = null, password: Int? = null, newPassword: Int? = null, card: CardFields? = null, otp: List<Int> = emptyList()) =
+    DetectedForm(username, password, newPassword, card, otp)
 
   private fun card(number: Int? = null, holder: Int? = null, expMonth: Int? = null, expYear: Int? = null, expDate: Int? = null, cvc: Int? = null) =
     CardFields(number, holder, expMonth, expYear, expDate, cvc)
@@ -53,7 +55,7 @@ class FormDetectorTest {
 
   @Test fun repeatBoxOnASignupFormIsConfirm() {
     val nodes = listOf(node(0, hints = listOf("emailAddress")), node(1, hints = listOf("newPassword")), node(2, hints = listOf("newPassword")))
-    assertEquals(DetectedForm(0, null, 1, null, listOf(2)), FormDetector.detect(nodes))
+    assertEquals(DetectedForm(0, null, 1, null, confirm = listOf(2)), FormDetector.detect(nodes))
   }
 
   @Test fun htmlAutocompleteNewPassword() {
@@ -282,7 +284,7 @@ class FormDetectorTest {
     assertEquals(form(), FormDetector.detect(listOf(node(0, htmlAutocomplete = "cc-type", inputType = textPassword))))
     assertEquals(form(card = card(cvc = 0)), FormDetector.detect(listOf(node(0, hints = listOf("creditCardSecurityCode"), inputType = numberPassword))))
     assertEquals(form(card = card(cvc = 0)), FormDetector.detect(listOf(node(0, htmlAutocomplete = "cc-csc", inputType = textPassword))))
-    assertEquals(form(username = 0, password = 2), FormDetector.detect(listOf(node(0, inputType = textEmail), node(1, hints = listOf("smsOTPCode")), node(2, inputType = textPassword))))
+    assertEquals(form(username = 0, password = 2, otp = listOf(1)), FormDetector.detect(listOf(node(0, inputType = textEmail), node(1, hints = listOf("smsOTPCode")), node(2, inputType = textPassword))))
   }
 
   @Test fun fieldsOfNonTextHtmlTypesAreIgnored() {
@@ -322,5 +324,78 @@ class FormDetectorTest {
     val schemes = listOf(FieldNode(0, emptyList(), text, null, null, null, null, null, "bank.com", "http"), FieldNode(1, emptyList(), text, null, null, null, null, null, "bank.com", "https"))
     assertNull(FormDetector.origin(schemes, form(username = 0, password = 1)))
     assertNull(FormDetector.origin(mixed, form(card = card(number = 0, cvc = 1))))
+  }
+
+  @Test fun otpHintsAndAutocompleteMarkCodeFields() {
+    for (h in listOf("smsOTPCode", "emailOTPCode", "2faAppOTPCode", "oneTimeCode", "one-time-code", "MyBankOTP")) {
+      assertEquals(h, form(otp = listOf(0)), FormDetector.detect(listOf(node(0, hints = listOf(h)))))
+    }
+    assertEquals(form(otp = listOf(0)), FormDetector.detect(listOf(node(0, hints = listOf("smsOTPCode"), inputType = number))))
+    assertEquals(form(otp = listOf(0)), FormDetector.detect(listOf(node(0, htmlAutocomplete = "one-time-code"))))
+    assertEquals(form(otp = listOf(0)), FormDetector.detect(listOf(node(0, htmlAutocomplete = "section-b one-time-code"))))
+  }
+
+  @Test fun otpKeywordsNeedANumericShortBox() {
+    for (s in listOf("otp", "code", "verificationCode", "2faCode", "confirmationCode", "enterOtp", "smsCode", "tasdeeqCode")) {
+      assertEquals(s, form(otp = listOf(0)), FormDetector.detect(listOf(node(0, idEntry = s, inputType = number))))
+    }
+    assertEquals(form(otp = listOf(0)), FormDetector.detect(listOf(node(0, htmlName = "code", htmlType = "tel"))))
+    assertEquals(form(otp = listOf(0)), FormDetector.detect(listOf(node(0, htmlName = "code", htmlType = "number"))))
+    // A text box named "code" is a promo or country code, not a verification code.
+    assertEquals(form(), FormDetector.detect(listOf(node(0, idEntry = "code"))))
+    assertEquals(form(), FormDetector.detect(listOf(node(0, idEntry = "otp"))))
+  }
+
+  @Test fun otpBoxesAreFourToEightDigitsLong() {
+    assertEquals(form(otp = listOf(0)), FormDetector.detect(listOf(node(0, idEntry = "otp", inputType = number, maxLength = 4))))
+    assertEquals(form(otp = listOf(0)), FormDetector.detect(listOf(node(0, idEntry = "otp", inputType = number, maxLength = 8))))
+    assertEquals(form(otp = listOf(0)), FormDetector.detect(listOf(node(0, idEntry = "otp", inputType = number))))
+    assertEquals(form(), FormDetector.detect(listOf(node(0, idEntry = "otp", inputType = number, maxLength = 3))))
+    assertEquals(form(), FormDetector.detect(listOf(node(0, idEntry = "otp", inputType = number, maxLength = 12))))
+    // The length bounds only bind the keyword heuristic: an explicit hint is a code field whatever its length filter.
+    assertEquals(form(otp = listOf(0)), FormDetector.detect(listOf(node(0, hints = listOf("oneTimeCode"), inputType = number, maxLength = 12))))
+  }
+
+  @Test fun otherKindsOfCodeAreNeverOtp() {
+    for (s in listOf("cvc", "cvv", "csc", "cardCvc", "securityCode", "cardCode", "pin", "pincode", "zipCode", "postalCode", "postCode", "countryCode", "areaCode", "Pass ID", "barcode")) {
+      assertEquals(s, form(), FormDetector.detect(listOf(node(0, idEntry = s, inputType = number))))
+      assertEquals(s, form(), FormDetector.detect(listOf(node(0, hintText = s, inputType = number))))
+    }
+  }
+
+  @Test fun aCardCheckoutHasNoOtpField() {
+    val nodes = listOf(
+      node(0, htmlAutocomplete = "cc-number", htmlType = "text"),
+      node(1, htmlName = "securityCode", inputType = number, maxLength = 4),
+      node(2, htmlAutocomplete = "cc-exp-month", htmlType = "text"),
+      node(3, htmlAutocomplete = "cc-exp-year", htmlType = "text"),
+    )
+    assertEquals(form(card = card(number = 0, expMonth = 2, expYear = 3)), FormDetector.detect(nodes))
+  }
+
+  @Test fun anOtpFieldDoesNotDisturbLoginOrSignupForms() {
+    assertEquals(
+      form(username = 0, password = 2, otp = listOf(1)),
+      FormDetector.detect(listOf(node(0, inputType = textEmail), node(1, idEntry = "otp", inputType = number), node(2, inputType = textPassword))),
+    )
+    assertEquals(
+      DetectedForm(0, null, 1, null, otp = listOf(3), confirm = listOf(2)),
+      FormDetector.detect(listOf(node(0, hints = listOf("emailAddress")), node(1, hints = listOf("newPassword")), node(2, hints = listOf("newPassword")), node(3, idEntry = "code", inputType = number, maxLength = 6))),
+    )
+  }
+
+  @Test fun aLoneOtpFieldIsStillDetected() {
+    assertEquals(form(otp = listOf(0)), FormDetector.detect(listOf(node(0, idEntry = "otp", inputType = number))))
+    assertEquals(form(otp = listOf(0)), FormDetector.detect(listOf(node(0, hints = listOf("smsOTPCode")))))
+  }
+
+  @Test fun otpFieldsCountAsTargetsForOriginAndDomain() {
+    val good = listOf(node(0, webDomain = "bank.com", inputType = textEmail), node(1, webDomain = "bank.com", idEntry = "otp", inputType = number))
+    val evil = listOf(node(0, webDomain = "bank.com", inputType = textEmail), node(1, webDomain = "evil.example", idEntry = "otp", inputType = number))
+    val f = form(username = 0, otp = listOf(1))
+    assertTrue(FormDetector.allTargetsInDomain(good, f, "bank.com"))
+    assertFalse(FormDetector.allTargetsInDomain(evil, f, "bank.com"))
+    assertEquals(Origin("bank.com", null), FormDetector.origin(good, f))
+    assertNull(FormDetector.origin(evil, f))
   }
 }

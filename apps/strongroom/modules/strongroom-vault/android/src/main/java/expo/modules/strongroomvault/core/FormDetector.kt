@@ -13,6 +13,8 @@ data class FieldNode(
   val hintText: String?,
   val webDomain: String?,
   val webScheme: String? = null,
+  /** The web `maxlength` attribute or the view's length filter; null when the field sets none. */
+  val maxLength: Int? = null,
 )
 
 /** The web domain and scheme a form's target fields report; both null for a native form. */
@@ -20,8 +22,15 @@ data class Origin(val domain: String?, val scheme: String?)
 
 data class CardFields(val number: Int?, val holder: Int?, val expMonth: Int?, val expYear: Int?, val expDate: Int?, val cvc: Int?)
 
-/** [confirm] is any further new-password field (the repeat box on a signup form). */
-data class DetectedForm(val username: Int?, val password: Int?, val newPassword: Int?, val card: CardFields?, val confirm: List<Int> = emptyList())
+/** [otp] lists every code field in the form, in field order (§15.2); [confirm] is any further new-password field (the repeat box on a signup form). */
+data class DetectedForm(
+  val username: Int?,
+  val password: Int?,
+  val newPassword: Int?,
+  val card: CardFields?,
+  val otp: List<Int> = emptyList(),
+  val confirm: List<Int> = emptyList(),
+)
 
 object FormDetector {
   // View.AUTOFILL_HINT_* / androidx HintConstants and android.text.InputType, copied (checked against android-36) so core/ has no Android imports.
@@ -38,10 +47,12 @@ object FormDetector {
     "creditCardExpirationYear" to Role.CC_YEAR,
     "personName" to Role.CC_HOLDER,
     "creditCardExpirationDay" to Role.OTHER,
-    "smsOTPCode" to Role.OTHER,
-    "emailOTPCode" to Role.OTHER,
-    "2faAppOTPCode" to Role.OTHER,
-    "oneTimeCode" to Role.OTHER,
+    "smsOTPCode" to Role.OTP,
+    "emailOTPCode" to Role.OTP,
+    "2faAppOTPCode" to Role.OTP,
+    "oneTimeCode" to Role.OTP,
+    // Chrome and WebView pass a page's autocomplete tokens as hints, including the web-standard "one-time-code".
+    "one-time-code" to Role.OTP,
     "name" to Role.OTHER,
     "phone" to Role.OTHER,
     "postalAddress" to Role.OTHER,
@@ -58,7 +69,7 @@ object FormDetector {
     "cc-exp-month" to Role.CC_MONTH,
     "cc-exp-year" to Role.CC_YEAR,
     "cc-name" to Role.CC_HOLDER,
-    "one-time-code" to Role.OTHER,
+    "one-time-code" to Role.OTP,
   )
   private const val CLASS_MASK = 0xf
   private const val VARIATION_MASK = 0xff0
@@ -77,10 +88,13 @@ object FormDetector {
   private val SPACE = Regex("\\s+")
   private val CAMEL_HUMP = Regex("([a-z0-9])([A-Z])")
   private val PASSWORD_WORD = Regex("(?<![a-z])(pass(word|wd|code|phrase)(?![a-z])|pass$)")
+  private val OTP_WORD = Regex("(?<![a-z0-9])(code|otp|verification|2\\s?fa|confirmation|tasdeeq|tasdiq|tasdeek)(?![a-z0-9])")
+  private val OTP_NOT = Regex("(?<![a-z0-9])(cvc|cvv|csc|pin|security|card|postal|post|zip|country|area|pass(word|wd|code|phrase)?)(?![a-z0-9])")
+  private val NUMERIC_HTML = setOf("number", "tel")
   private val USER_WORD = Regex("user|email|login")
   private val HTML_TYPES = setOf("text", "email", "password", "tel", "number")
 
-  private enum class Role { USERNAME, USERNAME_CANDIDATE, PASSWORD, NEW_PASSWORD, CC_NUMBER, CC_HOLDER, CC_MONTH, CC_YEAR, CC_DATE, CC_CVC, OTHER }
+  private enum class Role { USERNAME, USERNAME_CANDIDATE, PASSWORD, NEW_PASSWORD, OTP, CC_NUMBER, CC_HOLDER, CC_MONTH, CC_YEAR, CC_DATE, CC_CVC, OTHER }
 
   private class Hit(val index: Int, val role: Role, val rank: Int)
 
@@ -113,7 +127,8 @@ object FormDetector {
     val cvc = best(Role.CC_CVC)?.index
     val card = if (listOfNotNull(number, expMonth, expYear, expDate, cvc).isEmpty()) null else CardFields(number, best(Role.CC_HOLDER)?.index, expMonth, expYear, expDate, cvc)
     val confirm = hits.filter { it.role == Role.NEW_PASSWORD && it.index != newPassword }.map { it.index }
-    return DetectedForm(username, password, newPassword, card, confirm)
+    val otp = hits.filter { it.role == Role.OTP }.map { it.index }
+    return DetectedForm(username, password, newPassword, card, otp, confirm)
   }
 
   fun allTargetsInDomain(nodes: List<FieldNode>, form: DetectedForm, requesterHost: String): Boolean {
@@ -133,19 +148,21 @@ object FormDetector {
 
   private fun targets(form: DetectedForm): List<Int> {
     val c = form.card
-    return listOfNotNull(form.username, form.password, form.newPassword, c?.number, c?.holder, c?.expMonth, c?.expYear, c?.expDate, c?.cvc)
+    return listOfNotNull(form.username, form.password, form.newPassword, c?.number, c?.holder, c?.expMonth, c?.expYear, c?.expDate, c?.cvc) + form.otp
   }
 
   private fun classify(n: FieldNode): Pair<Role, Int>? {
-    n.hints.firstNotNullOfOrNull { hintRole(it.lowercase(Locale.ROOT)) }?.let { return it to RANK_HINT }
-    n.htmlAutocomplete?.lowercase(Locale.ROOT)?.split(SPACE)?.firstNotNullOfOrNull { autocompleteRole(it) }?.let { return it to RANK_AUTOCOMPLETE }
-    inputTypeSignal(n)?.let { return it }
-    return keywordRole(n)?.let { it to RANK_KEYWORD }
+    val hit = n.hints.firstNotNullOfOrNull { hintRole(it.lowercase(Locale.ROOT)) }?.let { it to RANK_HINT }
+      ?: n.htmlAutocomplete?.lowercase(Locale.ROOT)?.split(SPACE)?.firstNotNullOfOrNull { autocompleteRole(it) }?.let { it to RANK_AUTOCOMPLETE }
+      ?: inputTypeSignal(n)
+      ?: keywordRole(n)?.let { it to RANK_KEYWORD }
+    // A password box is never a code box, whatever a page calls it: banks label password inputs "OTP".
+    return if (hit?.first == Role.OTP && isPasswordBox(n)) Role.OTHER to hit.second else hit
   }
 
   // Chrome and WebView pass a page's autocomplete tokens (cc-number, cc-exp…) as the hints, never as an "autocomplete" HtmlInfo attribute.
   private fun hintRole(hint: String): Role? =
-    HINT_ROLES[hint] ?: (if (hint.startsWith("cc-")) autocompleteRole(hint) else null) ?: Role.OTHER.takeIf { hint.startsWith("smsotpcode") }
+    HINT_ROLES[hint] ?: (if (hint.startsWith("cc-")) autocompleteRole(hint) else null) ?: Role.OTP.takeIf { "otp" in hint }
 
   private fun autocompleteRole(token: String): Role? = AUTOCOMPLETE_ROLES[token] ?: Role.OTHER.takeIf { token.startsWith("cc-") }
 
@@ -163,16 +180,31 @@ object FormDetector {
     }
   }
 
+  // The same boxes inputTypeSignal calls passwords, spelled out so a hint or a name can never make one a code field.
+  private fun isPasswordBox(n: FieldNode): Boolean {
+    val cls = n.inputType and CLASS_MASK
+    val variation = n.inputType and VARIATION_MASK
+    return n.htmlType.equals("password", ignoreCase = true) ||
+      (cls == CLASS_TEXT && variation in TEXT_PASSWORDS) ||
+      (cls == CLASS_TEXT && variation == TEXT_VISIBLE_PASSWORD) ||
+      (cls == CLASS_NUMBER && variation == NUMBER_PASSWORD)
+  }
+
   private fun keywordRole(n: FieldNode): Role? {
     val cls = n.inputType and CLASS_MASK
     if (isSearch(n) || (cls != CLASS_TEXT && cls != CLASS_NUMBER && n.htmlType?.lowercase(Locale.ROOT) !in HTML_TYPES)) return null
     val names = listOfNotNull(n.idEntry, n.htmlName, n.hintText)
-    return when {
-      names.any { PASSWORD_WORD.containsMatchIn(CAMEL_HUMP.replace(it, "$1 $2").lowercase(Locale.ROOT).trim()) } -> Role.PASSWORD
-      names.any { USER_WORD.containsMatchIn(it.lowercase(Locale.ROOT)) } -> Role.USERNAME_CANDIDATE
-      else -> null
-    }
+    if (names.any { PASSWORD_WORD.containsMatchIn(camelLower(it)) }) return Role.PASSWORD
+    if (names.any { USER_WORD.containsMatchIn(it.lowercase(Locale.ROOT)) }) return Role.USERNAME_CANDIDATE
+    // A verification-code box (§15.2): numeric, short, named like a code — and not some other kind of code (cvc, zip, country…).
+    if (cls != CLASS_NUMBER && n.htmlType?.lowercase(Locale.ROOT) !in NUMERIC_HTML) return null
+    if (n.maxLength != null && n.maxLength !in 4..8) return null
+    if (names.none { OTP_WORD.containsMatchIn(camelLower(it)) }) return null
+    if (names.any { OTP_NOT.containsMatchIn(camelLower(it)) }) return null
+    return Role.OTP
   }
+
+  private fun camelLower(s: String): String = CAMEL_HUMP.replace(s, "$1 $2").lowercase(Locale.ROOT).trim()
 
   private fun isIgnored(n: FieldNode): Boolean {
     val type = n.htmlType?.trim()?.lowercase(Locale.ROOT)
