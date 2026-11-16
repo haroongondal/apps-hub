@@ -64,6 +64,7 @@ class InflowCoreModule : Module() {
 
     OnCreate {
       StoreHolder.onCaptured = { count -> sendEvent(CAPTURED_EVENT, mapOf("count" to count)) }
+      StoreHolder.backfill(context)
       // Decrypted copies handed to a viewer live only until the next start; files no row names are swept (rolled-back saves).
       InflowListener.executor.execute {
         runCatching {

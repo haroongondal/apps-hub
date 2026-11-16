@@ -5,7 +5,7 @@ class StoredItem(
   var emailHash: String? = null, var emailText: String? = null,
 )
 
-class MemoryItemStore : ItemStore, AiStore {
+class MemoryItemStore : ItemStore, AiStore, BackfillStore {
   val items = LinkedHashMap<String, StoredItem>()
   val tombstones = mutableSetOf<String>()
   private val settings = LinkedHashMap<String, AppSetting>()
@@ -166,4 +166,20 @@ class MemoryItemStore : ItemStore, AiStore {
   override fun addSpend(day: String, usd: Double) {
     spend[day] = spentToday(day) + usd
   }
+
+  // BackfillStore: the ledger keeps the sources, so a test says which items have one.
+  var hasSource: (Long) -> Boolean = { false }
+  var smsPackages: Set<String> = Sms.KNOWN_APPS
+
+  override fun <T> inTransaction(block: () -> T): T = block()
+
+  override fun unparsed(afterPostedAt: Long, afterId: Long, limit: Int): List<BackfillItem> =
+    items.values
+      .filter { (it.capture.postedAt > afterPostedAt || (it.capture.postedAt == afterPostedAt && it.id > afterId)) }
+      .filter { it.otpExpiresAt == null && !hasSource(it.id) && (it.emailText ?: it.capture.text).isNotBlank() }
+      .sortedWith(compareBy({ it.capture.postedAt }, { it.id }))
+      .take(limit)
+      .map {
+        BackfillItem(it.id, it.capture.postedAt, it.emailText ?: it.capture.text, LedgerBackfill.channelOf(it.capture.pkg, it.smsHash != null, it.emailHash != null, smsPackages))
+      }
 }
