@@ -11,7 +11,7 @@ import { PhotoGrid } from '../../src/photos/PhotoGrid';
 import { getSearchTool } from '../../src/photos/search-tool';
 import { realSearchToolDeps } from '../../src/photos/search-tool-deps';
 import { noMatches, scanText } from '../../src/photos/screen-text';
-import { photosView, toolResultText, waitingText } from '../../src/photos/view';
+import { photosView, scanDecision, toolResultText, waitingText } from '../../src/photos/view';
 
 type IndexState = Awaited<ReturnType<typeof DesignMedia.photoIndexState>>;
 
@@ -62,16 +62,16 @@ export default function PhotosTab() {
     keepAccess(a === 'none' && before === 'blocked' ? 'blocked' : a);
     setIndex(s);
     if (a === 'none' || !s.modelsReady || !focusedRef.current) return;
-    // a new grant doesn't change the gallery stamp, so more access always scans
-    if (!scan && (before === null || before === a) && !(await DesignMedia.photoGalleryChanged())) return;
-    if (AppState.currentState === 'active') await DesignMedia.startPhotoIndex();
-    else pendingScan.current = true;
+    const galleryChanged = await DesignMedia.photoGalleryChanged();
+    const todo = scanDecision({ before, access: a, force: scan, modelsReady: s.modelsReady, galleryChanged, active: AppState.currentState === 'active' });
+    if (todo === 'scan') await DesignMedia.startPhotoIndex();
+    else if (todo === 'pending') pendingScan.current = true;
   }, []);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', state => {
       if (state !== 'active' || !focusedRef.current) return;
-      const scan = pendingScan.current;
+      const scan = pendingScan.current || accessRef.current === 'some';
       pendingScan.current = false;
       refresh(scan).catch(say);
     });
@@ -112,7 +112,7 @@ export default function PhotosTab() {
   }
 
   function show(n: number, p: Promise<string[]>) {
-    inFlight.current = Promise.allSettled([inFlight.current, p]);
+    inFlight.current = Promise.allSettled([inFlight.current, p]).then(() => undefined);
     p.then(
       r => { if (n === request.current) setResults(r); },
       e => { if (n === request.current) setSearchError(plainError(e, "The search didn't work. Try again.")); },
@@ -129,6 +129,7 @@ export default function PhotosTab() {
     setPicked(null);
     setSimilar(true);
     setSearchError(null);
+    setResults(null);
     clearTimeout(timer.current);
     const n = ++request.current;
     show(n, DesignMedia.similarPhotos(uri));

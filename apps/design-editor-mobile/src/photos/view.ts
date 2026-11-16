@@ -10,6 +10,16 @@ export function photosView(s: { access: Access; modelsReady: boolean; gettingToo
   return s.indexed === 0 && s.scanning ? 'preparing' : 'search';
 }
 
+export type ScanDecision = 'scan' | 'pending' | 'none';
+
+// a new grant doesn't change the gallery stamp, so changed access always scans
+export function scanDecision(s: { before: Access | null; access: Access; force: boolean; modelsReady: boolean; galleryChanged: boolean; active: boolean }): ScanDecision {
+  if (s.access === 'none' || s.access === 'blocked' || !s.modelsReady) return 'none';
+  const accessChanged = s.before !== null && s.before !== s.access;
+  if (!s.force && !accessChanged && !s.galleryChanged) return 'none';
+  return s.active ? 'scan' : 'pending';
+}
+
 export function toolResultText(r: SearchToolResult): string | null {
   switch (r) {
     case 'no-room': return 'Not enough space. Free up about 300 MB and try again.';
