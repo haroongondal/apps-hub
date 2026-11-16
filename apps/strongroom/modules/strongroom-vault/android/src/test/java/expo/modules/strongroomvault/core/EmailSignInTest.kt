@@ -55,10 +55,11 @@ class EmailSignInTest {
   @Test fun enrolSendsTheSignInBlobInTheSamePutAndItOpensToTheAccountKeyUnderTheCode() {
     val e = enrolled()
     val sent = lastUpdate!!
-    assertNotNull(sent.escrow)
-    assertEquals(w.signinBlob, sent.signin!!.blob)
-    assertArrayEquals(e.ak, Escrow.openSignin(RecoveryKey.parse(e.code)!!, SyncWire.fromBase64(sent.signin!!.blob)!!))
-    assertNull(Escrow.open(RecoveryKey.parse(e.code)!!, SyncWire.fromBase64(sent.signin!!.blob)!!)) // not an escrow
+    val blob = SyncWire.fromBase64(sent.escrow!!.signin!!.blob)!!
+    assertEquals(w.signinBlob, sent.escrow!!.signin!!.blob)
+    assertTrue(SyncWire.toJson(sent).contains(""","signin":{"blob":"${w.signinBlob}"}}"""))
+    assertArrayEquals(e.ak, Escrow.openSignin(RecoveryKey.parse(e.code)!!, blob))
+    assertNull(Escrow.open(RecoveryKey.parse(e.code)!!, blob)) // not an escrow
   }
 
   @Test fun requestCheckAndOpenSignTheNewPhoneIn() {
@@ -90,9 +91,9 @@ class EmailSignInTest {
     val q = TestPhone(net)
     q.recovery.signinRequest()
     val first = q.recoverySettings.state
-    w.offline = true
+    w.failSigninRequest = true // the held claim still answers Waiting(null), so only the request itself fails
     assertThrows(SyncOfflineError::class.java) { q.recovery.signinRequest() }
-    w.offline = false
+    w.failSigninRequest = false
     assertEquals(first, q.recoverySettings.state)
     q.recovery.signinRequest() // a new request makes a new claim and drops any blob
     assertTrue(first.signinClaim != q.recoverySettings.state.signinClaim)

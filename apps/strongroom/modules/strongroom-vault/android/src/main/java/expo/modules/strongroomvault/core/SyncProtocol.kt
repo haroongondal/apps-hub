@@ -56,7 +56,6 @@ data class AccountUpdate(
   val ifRev: Long,
   val recoveryHash: String? = null,
   val escrow: EscrowBody? = null,
-  val signin: SigninBody? = null,
 )
 
 /** What the server holds: whether an escrow exists, and whether a lost-access request is pending (releaseAt is null until the owner confirms it by mail). */
@@ -130,7 +129,7 @@ object SyncWire {
     put("readHash", a.readHash)
     put("ifRev", a.ifRev)
     a.escrow?.let { e -> putJsonObject("escrow") { put("email", e.email); put("blob", e.blob); put("code", e.code) } }
-    a.signin?.let { s -> putJsonObject("signin") { put("blob", s.blob) } }
+    a.escrow?.signin?.let { s -> putJsonObject("signin") { put("blob", s.blob) } } // top level, and only with an escrow, as the Worker takes it
   }.toString()
 
   fun lostRequestBody(claimHash: String): String = buildJsonObject { put("claimHash", claimHash) }.toString()

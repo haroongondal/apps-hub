@@ -184,7 +184,7 @@ class HttpSyncTransportTest {
       assertEquals(LostRelease.Ready("AAAA"), t.signinRelease("claim"))
       assertEquals(LostRelease.Waiting(7), t.signinRelease("claim"))
       t.signinCancel(token)
-      val update = AccountUpdate("h", "l", "d", 3, "r", EscrowBody("me@example.com", "AAAA", "CODE"), SigninBody("BBBB"))
+      val update = AccountUpdate("h", "l", "d", 3, "r", EscrowBody("me@example.com", "AAAA", "CODE", SigninBody("BBBB")))
       assertEquals(5L, t.putAccount(token, update))
       server.join(5_000)
       val bearer = "Bearer " + SyncWire.toBase64(token)
@@ -199,7 +199,7 @@ class HttpSyncTransportTest {
         seen,
       )
       assertTrue(SyncWire.toJson(update).contains(""","signin":{"blob":"BBBB"}"""))
-      assertFalse(SyncWire.toJson(update.copy(signin = null)).contains("signin"))
+      assertFalse(SyncWire.toJson(AccountUpdate("h", "l", "d", 3, "r", EscrowBody("me@example.com", "AAAA", "CODE"))).contains("signin"))
     } finally {
       HttpsURLConnection.setDefaultSSLSocketFactory(previous)
       listener.close()
@@ -263,6 +263,31 @@ class HttpSyncTransportTest {
       hang(l.accept())
       hang(l.accept())
     }) { t -> assertThrows(SyncOfflineError::class.java) { t.pull(token, 0) } }
+  }
+
+  @Test fun aReplyThatStartsAndStallsIsOfflineAndNeverProbes() {
+    var probed = false
+    withSlowServer({ l ->
+      l.accept().use { s ->
+        val input = s.getInputStream()
+        val head = ByteArrayOutputStream()
+        while (!head.toString(Charsets.ISO_8859_1).endsWith("\r\n\r\n")) head.write(input.read())
+        s.getOutputStream().apply { write("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n{".toByteArray()) }.flush() // headers arrived, the body never finishes
+        try {
+          while (input.read() >= 0) Unit
+        } catch (e: java.io.IOException) {
+          // the client's timeout closed the connection
+        }
+      }
+      l.soTimeout = 1_000
+      try {
+        l.accept().close()
+        probed = true
+      } catch (e: SocketTimeoutException) {
+        // nothing else connected
+      }
+    }) { t -> assertThrows(SyncOfflineError::class.java) { t.pull(token, 0) } }
+    assertFalse(probed)
   }
 
   @Test fun aRequestWithABodyThatTimesOutIsOfflineAndNeverProbes() {

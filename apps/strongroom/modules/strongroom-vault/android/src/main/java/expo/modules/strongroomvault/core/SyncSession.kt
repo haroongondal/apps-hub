@@ -364,7 +364,7 @@ class SyncSession(
     val read = secrets.get(SyncSecret.NEXT_READ) ?: secrets.get(SyncSecret.READ_TOKEN)
     try {
       if (read == null) throw SyncAuthError()
-      val body = AccountUpdate(local, Crypto.tokenHash(login), Crypto.tokenHash(read), store.syncMeta().headerRev, settings.load().recoveryHash, escrow, escrow?.signin)
+      val body = AccountUpdate(local, Crypto.tokenHash(login), Crypto.tokenHash(read), store.syncMeta().headerRev, settings.load().recoveryHash, escrow)
       putting()
       val rev = try {
         t.putAccount(auth, body)

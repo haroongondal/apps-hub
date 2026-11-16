@@ -21,6 +21,7 @@ internal class FakeWorker {
   var time = 1_800_000_000_000L // the Worker's clock, for lost-access cooldowns and releases
   var escrow: FakeEscrow? = null
   val mails = ArrayList<String>() // the email codes the Worker mailed
+  var failSigninRequest = false // only the sign-in request fails, as a lost connection would
   var failMail = false // the mailer is down: an escrow update answers 502 before changing anything
   var lost: FakeLost? = null
   var signinBlob: String? = null // the sign-in blob the last escrow update carried
@@ -103,7 +104,7 @@ internal class FakeWorker {
       refuse(who, readOk = false)
       if (!listOfNotNull(body.loginHash, body.recoveryHash, body.readHash).all(HASH::matches)) throw SyncHttpError(400)
       val e = body.escrow
-      if (body.signin != null && (e == null || SyncWire.fromBase64(body.signin.blob) == null)) throw SyncHttpError(400) // the Worker takes a sign-in blob only with an escrow
+      if (e?.signin != null && SyncWire.fromBase64(e.signin.blob) == null) throw SyncHttpError(400)
       if (e != null) {
         if (!validEscrow(e)) throw SyncHttpError(400)
         if (body.recoveryHash == null) throw SyncHttpError(400)
@@ -118,7 +119,7 @@ internal class FakeWorker {
         signin = null
       }
       e?.let { escrow = FakeEscrow(it.email, it.blob, it.code) }
-      body.signin?.let { signinBlob = it.blob }
+      e?.signin?.let { signinBlob = it.blob }
       header = body.header
       loginHash = body.loginHash
       readHash = body.readHash
@@ -180,6 +181,7 @@ internal class FakeWorker {
     override fun signinRequest(claimHash: String, deviceName: String) {
       reach()
       calls += "signinRequest $deviceName"
+      if (failSigninRequest) throw SyncOfflineError()
       val held = signin
       if (signinBlob != null && HASH.matches(claimHash) && (held == null || held.cancelled)) signin = FakeLost(claimHash, time)
     }
