@@ -59,7 +59,7 @@ object PhotoSearch {
     if (!modelsReady(ctx)) throw SearchToolNotReady()
     if (query.isBlank()) return emptyList()
     val ids = synchronized(tokenizerLock) { tokenizer(ctx).encode(query) }
-    val vector = ClipSessions.embedText(ClipSessions.text(ctx), ids)
+    val vector = ClipSessions.embedQuery(ctx, ids)
     return rank(index(ctx), vector, SEARCH_LIMIT, SEARCH_FLOOR).map(::uriOf)
   }
 
