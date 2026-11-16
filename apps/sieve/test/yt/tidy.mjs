@@ -52,12 +52,14 @@ export async function local(t) {
     await (await browse(t)).close();
     // As in theme.mjs: a load whose first frame beat the settings (applied null) is loaded again, up to 3 loads; one that had them is judged as it is.
     let first;
-    for (let load = 0; load < 3 && first?.applied == null; load++) {
+    let load = 0;
+    for (; load < 3 && first?.applied == null; load++) {
       await page?.close();
       page = await browse(t);
       first = await until(() => page.evaluate(() => window.__shelf));
     }
-    check('tidy: with Hide Shorts stored, the shelf is display none in the first animation frame', first?.display === 'none' && first.applied !== null, `${json(first)} (applied is the sieve-yt-applied mark time; null means no settings had arrived by the first frame)`);
+    if (load > 1) console.log(`NOTE  tidy: the first-frame check took ${load} loads (a load whose first frame beat the settings is loaded again)`);
+    check('tidy: with Hide Shorts stored, the shelf is display none in the first animation frame', first?.display === 'none' && first.applied !== null, `${json(first)} (applied is the sieve-yt-applied mark time; null means no settings had arrived by the first frame); loads: ${load} of 3`);
     await page.close();
     await reset(t);
 

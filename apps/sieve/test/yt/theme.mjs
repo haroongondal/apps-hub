@@ -25,12 +25,14 @@ export async function local(t) {
     // Measured 2026-11-11: the settings land about 1 ms before this tiny fixture's first frame, so a busy machine loses the race on about 1 load in 6.
     // A load with no settings by its first frame (applied null) is loaded again, up to 3 loads; a load that had them is judged as it is.
     let first;
-    for (let load = 0; load < 3 && first?.applied == null; load++) {
+    let load = 0;
+    for (; load < 3 && first?.applied == null; load++) {
       await page?.close();
       page = await open(t);
       first = await until(() => page.evaluate(() => window.__first));
     }
-    check('theme: with "Dark theme" stored, <html> has the dark attribute in the first animation frame', first?.dark === true, `${json(first)} (applied is the sieve-yt-applied mark time in ms; null means no settings had arrived by the first frame)`);
+    if (load > 1) console.log(`NOTE  theme: the first-frame check took ${load} loads (a load whose first frame beat the settings is loaded again)`);
+    check('theme: with "Dark theme" stored, <html> has the dark attribute in the first animation frame', first?.dark === true, `${json(first)} (applied is the sieve-yt-applied mark time in ms; null means no settings had arrived by the first frame); loads: ${load} of 3`);
     check('theme: the page is dark (background rgb(15, 15, 15))', (await style(page, 'backgroundColor', 'html')) === 'rgb(15, 15, 15)');
     await setYouTube(t, { theme: { dark: false } });
     check('theme: turning it off removes the attribute it added', await until(async () => !(await isDark(page))));

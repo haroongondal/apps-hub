@@ -34,7 +34,7 @@ const inRowOrder = (ids) => ids.every((id, i) => i === 0 || ROW_ORDER.indexOf(id
 
 // The open popover's box against the viewport (below the fixed masthead when there is one), and whether its first control is the topmost element at its centre.
 const popBox = (page) =>
-  page.evaluate(() => {
+  page.evaluate((masthead) => {
     const shadow = document.querySelector('sieve-yt-row').shadowRoot;
     const pop = shadow.querySelector('.pop');
     if (!pop) return null;
@@ -42,9 +42,9 @@ const popBox = (page) =>
     const first = pop.querySelector('button:not([hidden]), input');
     const f = first.getBoundingClientRect();
     const hit = shadow.elementFromPoint(f.x + f.width / 2, f.y + f.height / 2);
-    const top = document.querySelector('#masthead-container')?.getBoundingClientRect().bottom ?? 0;
+    const top = document.querySelector(masthead)?.getBoundingClientRect().bottom ?? 0;
     return { x: r.x, y: r.y, right: r.right, bottom: r.bottom, top, vw: document.documentElement.clientWidth, vh: document.documentElement.clientHeight, firstVisible: !!hit && (hit === first || first.contains(hit) || hit.contains(first)), scrolls: pop.scrollHeight > pop.clientHeight };
-  });
+  }, SEL.masthead);
 const inside = (b) => !!b && b.x >= 0 && b.right <= b.vw && b.y >= b.top && b.bottom <= b.vh && b.firstVisible;
 
 // row.ts bundled on its own into a blank page with a stub `chrome`, to register buttons in an order the extension's imports never use.
@@ -127,6 +127,12 @@ export async function local(t) {
     await page.keyboard.press('Escape');
     const escaped = await page.evaluate((name) => document.querySelector('sieve-yt-row').shadowRoot.activeElement?.getAttribute('aria-label') === name, COG);
     check('row: Esc closes the menu and focus returns to the cog', !(await menuOpen(page)) && escaped);
+    const vt = () => page.evaluate(() => { const b = document.querySelector('#below'); return { inline: b.style.getPropertyValue('view-transition-name'), computed: getComputedStyle(b).viewTransitionName }; });
+    await rowButton(page, COG).click();
+    const vtOpen = await vt();
+    await page.keyboard.press('Escape');
+    const vtClosed = await vt();
+    check('row: #below loses its view-transition-name while a popover is open and gets it back when it closes', json({ vtOpen, vtClosed }) === json({ vtOpen: { inline: 'none', computed: 'none' }, vtClosed: { inline: '', computed: 'metadata' } }), json({ vtOpen, vtClosed }));
     await rowButton(page, COG).click();
     await page.mouse.click(5, 300);
     check('row: a click outside closes the menu', !(await menuOpen(page)));
@@ -152,10 +158,15 @@ export async function local(t) {
     await row(page).getByRole('button', { name: 'Filter options' }).click();
     const short = await popBox(page);
     await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 300, height: 720 });
+    await row(page).getByRole('button', { name: 'Filter options' }).click();
+    const thin = await popBox(page);
+    await page.keyboard.press('Escape');
     await page.setViewportSize({ width: 1280, height: 720 });
     check('row: in a 700 px wide window the cog menu is inside the viewport with its first item visible', inside(narrow), json(narrow));
     check('row: Filters options opened at the bottom of the window stays inside the viewport', inside(low), json(low));
     check('row: in a 400 px tall window Filters options stays inside the viewport and scrolls inside', inside(short) && short.scrolls, json(short));
+    check('row: in a 300 px wide window Filters options (300 px wide) narrows to stay inside the viewport', inside(thin), json(thin));
 
     const theme = () => page.evaluate(() => document.querySelector('sieve-yt-row').shadowRoot.querySelector('[data-brand="sieve"]')?.dataset.theme);
     const light = await theme();

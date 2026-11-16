@@ -140,12 +140,14 @@ function toggle(opener: HTMLButtonElement, build: () => HTMLElement): void {
 }
 
 // Below its button and from its left edge when it fits; else on the side with more room, scrolling inside, and moved left to stay in the window.
-// shortcut: placed once on open, not again on scroll or resize; a scroll moves it with the row.
+// shortcut: placed once on open, not again on scroll or resize (a scroll moves it with the row), re-place on resize if a resized window leaves it cut off.
 function place(pop: HTMLElement, at: HTMLElement): void {
   pop.classList.remove('up');
-  pop.style.left = pop.style.maxHeight = '';
+  pop.style.left = pop.style.maxHeight = pop.style.minWidth = pop.style.maxWidth = '';
   const a = at.getBoundingClientRect();
   const { clientWidth: vw, clientHeight: vh } = document.documentElement;
+  const room = Math.max(0, vw - 2 * EDGE);
+  if (pop.offsetWidth > room) pop.style.minWidth = pop.style.maxWidth = `${room}px`; // both, as a popover's own min-width would win; before the height and width below are read
   // Under YouTube's fixed masthead (z-index 2020 > the popover's 2000) nothing shows.
   const top = document.querySelector(SEL.masthead)?.getBoundingClientRect().bottom ?? 0;
   const below = vh - a.bottom - GAP - EDGE;
@@ -198,7 +200,7 @@ function build(): HTMLElement {
   wrap = h('div', { class: 'row', 'data-brand': 'sieve' }, bar, status);
   shadow.append(wrap);
   // inspected 2026-11-10, signed out, Chrome for Testing 149.0.7827.55: `k` on the focused cog reached only YouTube's document capture
-  // listener and did not toggle the video (on <body> it did); playback keys act in bubble-phase listeners, so a bubble stop suffices.
+  // listener and did not toggle the video (on <body> it did); only `k` was tried, other playback keys are assumed to act in bubble-phase listeners too.
   for (const type of ['keydown', 'keypress', 'keyup'] as const) {
     shadow.addEventListener(type, (e) => {
       e.stopPropagation();
