@@ -104,6 +104,12 @@ fun photoIndexJob(id: String) = Job(id, "gallery", Messages.PHOTOS, PhotoIndexPl
 fun jobToAdd(jobs: List<Job>, id: String): Job? =
   if (jobs.any { it.plan == PhotoIndexPlan && (it.state == JobState.QUEUED || it.state == JobState.RUNNING) }) null else photoIndexJob(id)
 
+// Two enqueues sent close together both pass the caller's check, so the service drops the later scan here.
+fun withoutDuplicateScans(existing: List<Job>, incoming: List<Job>): List<Job> =
+  incoming.fold(emptyList()) { kept, job ->
+    if (job.plan == PhotoIndexPlan && jobToAdd(existing + kept, job.id) == null) kept else kept + job
+  }
+
 // job is null when a scan is already waiting or running; id is then that scan's id. stale are the old scans a new job replaces.
 data class IndexStart(val job: Job?, val id: String, val stale: List<String> = emptyList())
 
