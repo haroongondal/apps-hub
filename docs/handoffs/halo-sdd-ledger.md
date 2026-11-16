@@ -31,3 +31,7 @@ Task 2: reviewed by controller (overlay flags, manifest, lock-screen: no request
 - Ruling: edge overlay window alpha capped at 0.8 (platform rule for touch pass-through) — lights are slightly dimmer than full opacity — if wrong, nothing: it is required.
 Task 9 step 1 (Quantize core): complete (2a1442c, controller-checked: stat, 6/6). Android wiring of Task 9 still to do (after Task 8).
 Task 2: complete (233805c..ec44238, controller review + 1 fix round: touch pass-through alpha 0.8 proven on emulator, full-display overlay, boot action check).
+- 2026-11-17: local main was 7 behind origin/main (Store build 18 already knows Clipboard + Inflow). Rebased `halo` onto origin/main d1b61ea; conflicts were additive (store-manifest, apps.ts, tokens, AGENTS, .gitignore); tokens.css regenerated; gates green after rebase.
+- Ruling: Halo keeps hue 190 although Inflow's provisional brand also uses 190 (accents differ: Halo #22D3EE, Inflow #5EEAD4) — cost if wrong: two apps with near-identical backgrounds; change Halo's hue later.
+- `pnpm release store` was DENIED by the permission classifier (Store release not explicitly authorised). Asked the owner. Halo release alone is useless until the Store knows the `halo` id.
+Task 4: dispatched (general-purpose, sonnet) while waiting on the owner.

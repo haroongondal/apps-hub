@@ -53,11 +53,13 @@ APK copy: scratchpad only (not committed). Manifest dump via aapt2 `dump xmltree
 - 2026-11-17 (session 2): owner asked for full replica, picked approach A. Design doc written; builder check done and folded in; owner answered release + Muviz questions. Design approved; plan written.
 
 ## Current state + next step (2026-11-17, session 2)
-Executing the plan with cd-engineering-tools:parallel-agents-coord; ledger = docs/handoffs/halo-sdd-ledger.md (read it:
-tasks marked complete are done). Briefs live in .sdd/ (git-excluded). Task 1 done (92a013b). Task 2 and Tasks 5+6 in flight.
-Owner's "go ahead" covers the Store release in Task 3. Phone had dropped off wireless adb at 2026-11-17 (reconnect for Task 3;
-other sessions use adb too, so avoid `adb kill-server` unless the phone is unclaimed).
-Next: review Task 2, then Task 3 (Store release of `store` + `halo`, phone spike run).
+Executing the plan with cd-engineering-tools:parallel-agents-coord; ledger = docs/handoffs/halo-sdd-ledger.md (tasks marked
+complete are done). Briefs in .sdd/ (git-excluded). Branch `halo` rebased onto origin/main d1b61ea.
+Done: Tasks 1, 2 (spike probes, emulator-proven), 5, 6, 7, Task 9 core (Quantize). Task 4 in flight.
+Blocked: Task 3 needs `pnpm release store` (Store build 19 learns the `halo` id); the permission classifier denied it,
+so it waits on the owner's explicit OK. Then `pnpm release halo` (pre-approved), owner installs from the Store, turns
+wireless debugging on (phone was not on adb/mDNS at 2026-11-17), claim device:49kjmnuwonkffqzh, run Task 3 checklist.
+Next after Task 4: Task 8 (renderer/service) can proceed before the spike result; only the boot start path waits on it.
 
 ## Previous state (session 1, superseded)
 Owner asked for a new chat to start building. Already told to the owner and accepted without objection:
