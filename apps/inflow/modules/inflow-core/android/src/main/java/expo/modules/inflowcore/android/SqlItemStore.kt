@@ -4,6 +4,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabaseCorruptException
 import android.database.sqlite.SQLiteException
+import expo.modules.inflowcore.core.AiChannels
 import expo.modules.inflowcore.core.AiInput
 import expo.modules.inflowcore.core.AiMeta
 import expo.modules.inflowcore.core.AiResult
@@ -112,7 +113,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
 
   override fun enabledSince(): Long? = meta(AiMeta.SINCE)?.toLongOrNull()
 
-  // The send-time filter (also behind queuedCount): the item still exists, is no OTP, was posted after the first key, its app records, and neither app nor sender is blocked.
+  // The send-time filter (also behind queuedCount): the item still exists, is no OTP, is SMS or email (R44), was posted after the first key, its app records, and neither app nor sender is blocked.
   // A row that fails it is deleted first, so an item blocked or left out at send time can never go out later (unblocking does not bring it back).
   override fun queued(limit: Int): List<AiInput> {
     val since = enabledSince() ?: return emptyList()
@@ -457,8 +458,10 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     internal const val SENDABLE = "COALESCE((SELECT a.record FROM apps a WHERE a.pkg = i.pkg), 1) = 1 " +
       "AND NOT EXISTS (SELECT 1 FROM ai_blocks b WHERE b.block_key = 'app:' || i.pkg) " +
       "AND (i.sender_key IS NULL OR NOT EXISTS (SELECT 1 FROM ai_blocks b WHERE b.block_key = 'sender:' || i.sender_key))"
-    internal const val NEVER_SEND_FILTER = "i.otp_expires_at IS NULL AND $SENDABLE"
-    private const val QUEUE_FROM = "FROM ai_queue q JOIN items i ON i.id = q.item_id LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
+    // R44: only SMS and email go to the AI. sms_hash/email_hash cover the default SMS app and Gmail whatever the package; the package list is AiChannels.PKGS.
+    private val SMS_OR_EMAIL = "(i.sms_hash IS NOT NULL OR i.email_hash IS NOT NULL OR i.pkg IN (${AiChannels.SQL_LIST}))"
+    internal val NEVER_SEND_FILTER = "i.otp_expires_at IS NULL AND $SMS_OR_EMAIL AND $SENDABLE"
+    private val QUEUE_FROM = "FROM ai_queue q JOIN items i ON i.id = q.item_id LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
       "WHERE i.posted_at >= ? AND $NEVER_SEND_FILTER"
     private const val DAY_MS = 86_400_000L
     private const val VISIBLE_I = "(i.otp_expires_at IS NULL OR i.otp_expires_at > ?)"

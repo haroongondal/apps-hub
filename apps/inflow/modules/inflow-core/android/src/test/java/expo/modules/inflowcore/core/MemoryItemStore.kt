@@ -136,7 +136,7 @@ class MemoryItemStore : ItemStore, AiStore {
     val sendable = queue.entries.sortedWith(compareBy({ it.value.first }, { it.key })).mapNotNull { (id, _) ->
       val it = items.values.firstOrNull { s -> s.id == id }
       val c = it?.capture
-      val ok = it != null && c != null && it.otpExpiresAt == null && c.postedAt >= since && (settings[c.pkg]?.record ?: true) &&
+      val ok = it != null && c != null && it.otpExpiresAt == null && (it.smsHash != null || it.emailHash != null || c.pkg in AiChannels.PKGS) && c.postedAt >= since && (settings[c.pkg]?.record ?: true) &&
         "app:${c.pkg}" !in aiBlocks && (c.senderKey == null || "sender:${c.senderKey}" !in aiBlocks)
       if (ok) AiInput(id, c!!.appLabel, c.sender, c.title, it!!.emailText ?: c.text, c.postedAt, c.conversation, c.sender.equals("You", ignoreCase = true)) else null
     }

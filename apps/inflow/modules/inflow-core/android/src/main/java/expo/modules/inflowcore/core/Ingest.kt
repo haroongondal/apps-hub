@@ -42,7 +42,8 @@ class Ingest(
         }
         if (c.text.isNotBlank()) {
           ledger?.onItem(id, c.text, channel, c.postedAt)
-          queueForAi(id)
+          // R44: of the notifications only an SMS app's and Gmail's reach the AI.
+          if (fromSmsApp || c.pkg == Email.GMAIL) queueForAi(id)
         }
       }
     }
@@ -108,7 +109,7 @@ class Ingest(
     return 1
   }
 
-  // OTPs never get here. Whether the item may really be sent is decided again at send time (AiStore.queued).
+  // OTPs and anything that is not SMS or email never get here (R44). Whether the item may really be sent is decided again at send time (AiStore.queued).
   private fun queueForAi(id: Long) {
     if (aiOn()) store.enqueueAi(id, now())
   }

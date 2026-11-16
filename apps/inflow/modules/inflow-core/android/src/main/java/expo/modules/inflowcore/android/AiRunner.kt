@@ -2,6 +2,7 @@ package expo.modules.inflowcore.android
 
 import android.content.Context
 import android.util.Log
+import expo.modules.inflowcore.core.AiChannels
 import expo.modules.inflowcore.core.AiError
 import expo.modules.inflowcore.core.AiMeta
 import expo.modules.inflowcore.core.AiRun
@@ -103,7 +104,9 @@ object AiRunner {
     return try {
       if (capReached()) return reply(null, AiRun.CAP_REACHED)
       val blocks = cfg.blocks()
-      val apps = store.allAppSettings().filter { it.record && "app:${it.pkg}" !in blocks }.map { it.pkg to it.label }
+      // R44: only SMS and email apps are offered to the plan, so WhatsApp and the rest never even appear in a request.
+      val eligible = StoreHolder.smsPackages(ctx) + AiChannels.PKGS
+      val apps = store.allAppSettings().filter { it.record && it.pkg in eligible && "app:${it.pkg}" !in blocks }.map { it.pkg to it.label }
       val planReply = provider.complete(Ask.planSystem(), Ask.planUser(q, apps, now, zone))
       cfg.spend(planReply)
       val plan = Ask.parsePlan(planReply.text, now, zone)

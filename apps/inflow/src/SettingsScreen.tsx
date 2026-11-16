@@ -122,12 +122,18 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
                 else if (k === 'off' && a.record) setStopping(a);
               }}
             />
-            <Segmented
-              accessibilityLabel={`Send ${a.label} to AI`}
-              options={AI_OPTIONS}
-              value={blocks.includes(`app:${a.pkg}`) ? 'off' : 'on'}
-              onChange={(k) => change(() => InflowCore.setAiBlocked(`app:${a.pkg}`, k === 'off'))}
-            />
+            {a.aiEligible ? (
+              <Segmented
+                accessibilityLabel={`Send ${a.label} to AI`}
+                options={AI_OPTIONS}
+                value={blocks.includes(`app:${a.pkg}`) ? 'off' : 'on'}
+                onChange={(k) => change(() => InflowCore.setAiBlocked(`app:${a.pkg}`, k === 'off'))}
+              />
+            ) : (
+              <Text variant="caption" tone="muted">
+                Never sent to AI
+              </Text>
+            )}
             <Segmented
               accessibilityLabel={`Keep ${a.label} notifications for`}
               options={KEEP_OPTIONS}

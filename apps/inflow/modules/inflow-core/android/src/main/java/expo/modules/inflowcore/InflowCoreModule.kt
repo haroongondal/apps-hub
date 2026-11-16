@@ -26,6 +26,7 @@ import expo.modules.inflowcore.android.SmsImporter
 import expo.modules.inflowcore.android.SqlItemStore
 import expo.modules.inflowcore.android.SqlLedgerStore
 import expo.modules.inflowcore.android.StoreHolder
+import expo.modules.inflowcore.core.AiChannels
 import expo.modules.inflowcore.core.AiModels
 import expo.modules.inflowcore.core.AppSetting
 import expo.modules.inflowcore.core.GmailPolicy
@@ -130,7 +131,7 @@ class InflowCoreModule : Module() {
     }
 
     Function("listApps") { ->
-      store().allAppSettings().map { mapOf("pkg" to it.pkg, "label" to it.label, "record" to it.record, "keepDays" to it.keepDays) }
+      store().allAppSettings().map { mapOf("pkg" to it.pkg, "label" to it.label, "record" to it.record, "keepDays" to it.keepDays, "aiEligible" to (it.pkg in AiChannels.PKGS)) }
     }
 
     AsyncFunction("importSms") { ->

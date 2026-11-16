@@ -99,6 +99,8 @@ export interface AppSetting {
   label: string;
   record: boolean;
   keepDays: number | null;
+  // Only SMS and email apps are ever sent to the AI.
+  aiEligible: boolean;
 }
 
 export interface SenderName {

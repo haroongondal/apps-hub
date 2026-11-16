@@ -55,7 +55,10 @@ class AiRunTest {
 
   private fun keyAdded(at: Long = t0 - 60_000) = store.setMeta(AiMeta.SINCE, at.toString())
 
-  private fun raw(text: String, pkg: String = "com.example.app", at: Long = clock, title: String? = "Title") = RawNotification(
+  private val sms = "com.google.android.apps.messaging"   // an eligible app: R44 sends only SMS and email
+  private val gmail = Email.GMAIL
+
+  private fun raw(text: String, pkg: String = sms, at: Long = clock, title: String? = "Title") = RawNotification(
     pkg = pkg, appLabel = "App", key = "0|$pkg|1|null|${text.hashCode()}", postTime = at,
     ongoing = false, groupSummary = false,
     title = title, text = text, bigText = null, subText = null,
@@ -63,7 +66,7 @@ class AiRunTest {
     messages = emptyList(), textLines = emptyList(),
   )
 
-  private fun save(text: String, pkg: String = "com.example.app", at: Long = clock) {
+  private fun save(text: String, pkg: String = sms, at: Long = clock) {
     assertEquals(1, ingest.onNotification(raw(text, pkg, at)))
   }
 
@@ -103,7 +106,7 @@ class AiRunTest {
 
   @Test fun otpRowThatIsInTheQueueIsStillLeftOutAtSendTime() {
     keyAdded()
-    val id = store.insert(capture("com.example.app", "code 4821"), "s", clock + 5 * 60_000)!!
+    val id = store.insert(capture(sms, "code 4821"), "s", clock + 5 * 60_000)!!
     store.enqueueAi(id, clock)
     runner().run()
     assertTrue(prompts.isEmpty())
@@ -111,12 +114,12 @@ class AiRunTest {
 
   @Test fun blockedAppOrSenderLeftOutAtSendTime() {
     keyAdded()
-    val a = store.insert(capture("com.blocked.app", "from blocked app"), "s", null)!!
-    val b = store.insert(capture("com.chat", "from blocked sender", senderKey = "com.chat:spam"), "s", null)!!
-    val c = store.insert(capture("com.chat", "from a friend", senderKey = "com.chat:ali"), "s", null)!!
+    val a = store.insert(capture("com.android.mms", "from blocked app"), "s", null)!!
+    val b = store.insert(capture(gmail, "from blocked sender", senderKey = "$gmail:spam"), "s", null)!!
+    val c = store.insert(capture(gmail, "from a friend", senderKey = "$gmail:ali"), "s", null)!!
     listOf(a, b, c).forEach { store.enqueueAi(it, clock) }
-    store.aiBlocks += "app:com.blocked.app"
-    store.aiBlocks += "sender:com.chat:spam"
+    store.aiBlocks += "app:com.android.mms"
+    store.aiBlocks += "sender:$gmail:spam"
     runner().run()
     val prompt = prompts.single()
     assertTrue(prompt.contains("from a friend"))
@@ -125,12 +128,55 @@ class AiRunTest {
 
   @Test fun appWithRecordingOffLeftOutAtSendTime() {
     keyAdded()
-    save("quiet text", pkg = "com.quiet")
-    save("loud text", pkg = "com.loud")
-    store.putAppSetting(AppSetting("com.quiet", "Quiet", false, null))
+    save("quiet text", pkg = "com.android.mms")
+    save("loud text", pkg = gmail)
+    store.putAppSetting(AppSetting("com.android.mms", "Quiet", false, null))
     runner().run()
     assertFalse(prompts.single().contains("quiet text"))
     assertTrue(prompts.single().contains("loud text"))
+  }
+
+  @Test fun ingestQueuesOnlySmsAndEmail() {
+    keyAdded()
+    save("whatsapp hello", pkg = "com.whatsapp")
+    save("telegram hello", pkg = "org.telegram.messenger")
+    save("bank push PKR 10", pkg = "com.bank.app")
+    assertTrue(store.queue.isEmpty())
+    assertEquals(1, ingest.onSms(RawSms("Bank", "sms body", clock, clock), sms, "Messages"))
+    assertEquals(1, ingest.onEmail(RawEmail("<m1>", "Bank", "b@bank.example", "Subject", "email body", clock), "Gmail"))
+    save("sms app notification", pkg = "com.android.mms")
+    save("gmail notification", pkg = gmail)
+    assertEquals(setOf("sms body", "email body", "sms app notification", "gmail notification"), store.queue.keys.map { id -> store.items.values.single { it.id == id }.let { it.emailText ?: it.capture.text } }.toSet())
+  }
+
+  @Test fun queuedLeavesOutLegacyNonSmsEmailRows() {
+    keyAdded()
+    val id = store.insert(capture("com.whatsapp", "legacy whatsapp"), "s", null)!!
+    val sent = store.insert(capture(sms, "legacy sms notification"), "s", null)!!
+    store.enqueueAi(id, clock)
+    store.enqueueAi(sent, clock)
+    assertEquals(listOf(sent), store.queued(10).map { it.itemId })
+    assertEquals(setOf(sent), store.queue.keys)   // the legacy row is deleted, not just skipped
+  }
+
+  @Test fun aSmsOrEmailItemIsEligibleWhateverItsPackage() {
+    keyAdded()
+    val a = store.insert(capture("com.oem.messages", "sms from an unknown default app"), "s", null, smsHash = "h1")!!
+    val b = store.insert(capture("com.other.mail", "mail"), "s", null, emailHash = "h2")!!
+    listOf(a, b).forEach { store.enqueueAi(it, clock) }
+    assertEquals(listOf(a, b), store.queued(10).map { it.itemId })
+  }
+
+  @Test fun aiPromptNeverContainsWhatsapp() {
+    keyAdded()
+    val w = store.insert(capture("com.whatsapp", "whatsapp secret"), "s", null)!!
+    store.enqueueAi(w, clock)   // as a row left from before the update
+    ingest.onSms(RawSms("Daraz", "sms order shipped", clock, clock), sms, "Messages")
+    val r = runner().run()
+    assertEquals(1, r.sent)
+    assertTrue(prompts.single().contains("sms order shipped"))
+    assertFalse(prompts.single().contains("whatsapp secret"))
+    assertTrue(store.queue.isEmpty())
   }
 
   @Test fun oneRequestForWholeQueue() {
@@ -255,7 +301,7 @@ class AiRunTest {
 
   @Test fun savedResultsFeedLedger() {
     keyAdded()
-    save("PKR 500 sent to Daraz", pkg = "com.bank.app")
+    save("PKR 500 sent to Daraz", pkg = gmail)
     val id = idOf("PKR 500 sent to Daraz")
     answer = { ids ->
       reply(ids) { """{"direction":"out","own":false,"amount":500,"currency":"PKR","account":null,"counterparty":"Daraz","category":"Shopping"}""" }
@@ -292,10 +338,10 @@ class AiRunTest {
 
   @Test fun retentionTakesTheAiRowsWithTheItem() {
     keyAdded()
-    save("hello", pkg = "com.gone")
+    save("hello", pkg = "com.samsung.android.messaging")
     runner().run()
     assertEquals(1, store.aiResults.size)
-    store.deleteApp("com.gone")
+    store.deleteApp("com.samsung.android.messaging")
     assertTrue(store.aiResults.isEmpty() && store.queue.isEmpty())
   }
 
@@ -354,12 +400,12 @@ class AiRunTest {
 
   @Test fun anItemBlockedDuringARunIsNeverSentAfterItIsUnblocked() {
     keyAdded()
-    save("secret plan", pkg = "com.blocked.app")
+    save("secret plan", pkg = "com.android.mms")
     save("fine plan")
-    store.aiBlocks += "app:com.blocked.app"
+    store.aiBlocks += "app:com.android.mms"
     runner().run()
     assertFalse(prompts.single().contains("secret plan"))
-    store.aiBlocks -= "app:com.blocked.app"
+    store.aiBlocks -= "app:com.android.mms"
     runner().run()
     assertEquals(1, prompts.size)
   }
