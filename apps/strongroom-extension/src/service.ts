@@ -1,8 +1,8 @@
 import {
   AccountKeyRequired, FLAG_PREFIX, ImportError, KdfOutOfRange, SyncAuthError, SyncHttpError, SyncOfflineError, SyncRollbackError, adoptHeader,
   equalBytes, exportForChrome, formatEmailCode, fromBase64, formatRecoveryKey, generateEmailCode, headerFromJson, headerToJson, kdfWeaker, matches,
-  newId, open, openEntry, openEscrow, openWithPassword, parseAccountKey, parseEmailCode, parseGoogleExport, parseRecoveryKey, randomBytes, readEntries,
-  recoveryKeyGroup, recoveryLoginToken, recover, registrableDomain, rotateRecoveryKey, seal, sealEscrow, setupVault, signInWithPassword,
+  newId, open, openEntry, openEscrow, openSignin, openWithPassword, parseAccountKey, parseEmailCode, parseGoogleExport, parseRecoveryKey, randomBytes, readEntries,
+  recoveryKeyGroup, recoveryLoginToken, recover, registrableDomain, rotateRecoveryKey, seal, sealEscrow, sealSignin, setupVault, signInWithPassword,
   signInWithRecovery, siteFromUrl, syncOnce, toBase64, tokenHash, unlockWithRecovery, utf8, withNewPassword, writeEntries,
 } from 'strongroom-core';
 import type { Entry, Header, KdfParams, Login, RecordStore, Site, SignedIn, SyncReport, SyncStore, Transport } from 'strongroom-core';
@@ -59,7 +59,10 @@ export type Request =
   | { type: 'emailRecovery'; action: 'cancelRecovery' }
   | { type: 'lostAccess'; action: 'request' }
   | { type: 'lostAccess'; action: 'check' }
-  | { type: 'lostAccess'; action: 'open'; code: string; newPassword: string; replace?: boolean };
+  | { type: 'lostAccess'; action: 'open'; code: string; newPassword: string; replace?: boolean }
+  | { type: 'emailSignIn'; action: 'request' }
+  | { type: 'emailSignIn'; action: 'check' }
+  | { type: 'emailSignIn'; action: 'open'; code: string; password: string; replace?: boolean };
 
 export type Status = { state: 'no-vault' | 'locked' | 'unlocked'; recoveryKey: string | null };
 export type Row = { id: string; name: string; username: string; sites: string[]; apps: number; flagged: boolean };
@@ -104,6 +107,10 @@ const LOST_CLAIM = 'lostClaim';
 const LOST_BLOB = 'lostBlob';
 const CLAIM_BYTES = 20;
 const NOT_READY = 'Wait for the 24-hour release, then come back and try again.';
+const SIGNIN_CLAIM = 'signinClaim';
+const SIGNIN_BLOB = 'signinBlob';
+const SIGNIN_DEVICE = 'Strongroom for Chrome';
+const SIGNIN_NOT_READY = 'Approve the sign-in from the email first, then check again.';
 const LOST_STILL_ALIVE = 'A lost-access request is already confirmed, or ready to open. Check again instead of starting a new one.';
 const noop = () => {};
 
@@ -396,11 +403,12 @@ export function createService(deps: Deps) {
       if (!opened || !equalBytes(opened.vaultKey, vaultKey)) throw new UserError("That master password isn't right.");
       const code = generateEmailCode();
       const blob = await sealEscrow(code, { recoveryKey: rotated.recoveryKey, accountKey });
+      const signin = { blob: toBase64(await sealSignin(code, accountKey)) };
       const { headerRev } = await port.getSyncMeta();
       try {
         const put = await transport.putAccount(token, {
           header: headerToJson(rotated.header), loginHash: tokenHash(opened.loginToken), readHash: tokenHash(opened.readToken),
-          recoveryHash: rotated.recoveryHash, ifRev: headerRev, escrow: { email: clean, blob: toBase64(blob), code: formatEmailCode(code) },
+          recoveryHash: rotated.recoveryHash, ifRev: headerRev, escrow: { email: clean, blob: toBase64(blob), code: formatEmailCode(code) }, signin,
         });
         await store.commit({ header: rotated.header });
         await port.setSyncLocal({ headerRev: put.headerRev });
@@ -507,6 +515,55 @@ export function createService(deps: Deps) {
     return result;
   }
 
+  // Shared by signIn (account key typed in) and emailSignInOpen (account key from the opened sign-in blob).
+  async function signInWithKey(password: string, accountKey: Uint8Array, replace: boolean): Promise<{ needsConfirm: true; entries: number } | null> {
+    const port = unavailable();
+    return exclusive(async () => {
+      const signed = await signInErrors(() => signInWithPassword(port.transport, password, accountKey), PASSWORD_REFUSED);
+      const how = await plan(signed, replace);
+      if (typeof how === 'object') return how;
+      await takeAccount(signed, how, { header: signed.header, accountKey, loginToken: signed.loginToken, pending: null });
+      return null;
+    });
+  }
+
+  // A new device asks by email; the owner approves from the mail, and the Worker then hands over the account key sealed under the enrolment code.
+  async function emailSignInRequest(): Promise<null> {
+    const { transport } = unavailable();
+    const claim = randomBytes(CLAIM_BYTES);
+    // Network first, as lostAccessRequest: a failed request leaves an earlier claim intact.
+    await transport.signinRequest(tokenHash(claim), SIGNIN_DEVICE);
+    await deps.settings.set(SIGNIN_CLAIM, toBase64(claim));
+    await deps.settings.remove(SIGNIN_BLOB);
+    return null;
+  }
+
+  async function emailSignInCheck(): Promise<LostAccessState> {
+    const { transport } = unavailable();
+    const claim = await deps.settings.get(SIGNIN_CLAIM);
+    if (!claim) return { state: 'none' };
+    const released = await transport.signinRelease(claim);
+    if (released.state === 'waiting') return released;
+    await deps.settings.set(SIGNIN_BLOB, released.blob);
+    return { state: 'ready' };
+  }
+
+  async function emailSignInOpen(code: string, password: string, replace: boolean): Promise<{ needsConfirm: true; entries: number } | null> {
+    const blobB64 = await deps.settings.get(SIGNIN_BLOB);
+    if (!blobB64) throw new UserError(SIGNIN_NOT_READY);
+    const parsed = parseEmailCode(String(code));
+    const accountKey = parsed && (await openSignin(parsed, fromBase64(blobB64)));
+    if (!accountKey) throw new UserError("That code isn't right. Check it and try again.");
+    const held = await accountKeyOf();
+    if (held && !equalBytes(held, accountKey)) throw new UserError(KEY_DIFFERENT);
+    const result = await signInWithKey(String(password), accountKey, replace);
+    if (result === null) {
+      await deps.settings.remove(SIGNIN_CLAIM);
+      await deps.settings.remove(SIGNIN_BLOB);
+    }
+    return result;
+  }
+
   async function handle(req: Request, ctx?: Ctx): Promise<unknown> {
     const type = (req as { type?: unknown })?.type;
     const fromPage = ctx !== undefined;
@@ -587,16 +644,18 @@ export function createService(deps: Deps) {
           }
         }
         case 'signIn': {
-          const port = unavailable();
+          unavailable();
           const accountKey = parseAccountKey(String(req.accountKey));
           if (!accountKey) throw new UserError(BAD_ACCOUNT_KEY);
-          return await exclusive(async () => {
-            const signed = await signInErrors(() => signInWithPassword(port.transport, String(req.password), accountKey), PASSWORD_REFUSED);
-            const how = await plan(signed, req.replace === true);
-            if (typeof how === 'object') return how;
-            await takeAccount(signed, how, { header: signed.header, accountKey, loginToken: signed.loginToken, pending: null });
-            return null;
-          });
+          return await signInWithKey(String(req.password), accountKey, req.replace === true);
+        }
+        case 'emailSignIn': {
+          switch (req.action) {
+            case 'request': return await emailSignInRequest();
+            case 'check': return await emailSignInCheck();
+            case 'open': return await emailSignInOpen(req.code, req.password, req.replace === true);
+            default: throw new UserError(NOT_ALLOWED);
+          }
         }
         case 'signInRecovery': {
           unavailable();

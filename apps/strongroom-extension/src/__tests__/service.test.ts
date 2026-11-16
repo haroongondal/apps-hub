@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
-  createVault, formatAccountKey, fromBase64, headerToJson, KDF_FLOOR, loadPublicSuffixList, openEscrow, parseEmailCode, parseRecoveryKey, randomBytes,
+  createVault, formatAccountKey, fromBase64, headerToJson, KDF_FLOOR, loadPublicSuffixList, openEscrow, openSignin, parseEmailCode, parseRecoveryKey, randomBytes,
   recoveryLoginToken, rotateRecoveryKey, signInWithPassword, signInWithRecovery, SyncAuthError, toBase64, tokenHash, unlockWithRecovery,
 } from 'strongroom-core';
 import type { Header, RecordStore, StoredRecord, SyncReport } from 'strongroom-core';
@@ -1181,4 +1181,56 @@ test('after open the old recovery key is the rotated one (the pasted blob key wo
   const opened = await openEscrow(parseEmailCode(code)!, fromBase64(blob));
   assert.ok(await unlockWithRecovery(header, opened!.recoveryKey));
   assert.equal(await unlockWithRecovery(header, world.recoveryKey), null);
+});
+
+type EmailSignInState = { state: 'none' } | { state: 'waiting'; releaseAt: number | null } | { state: 'ready' };
+const emailSignIn = <T = unknown>(x: Ext, action: string, over: object = {}) => x.call<T>({ type: 'emailSignIn', action, ...over });
+// The owner opening the approve link from the newest sign-in mail and submitting its form.
+async function approveByEmail(world: World) {
+  const token = decodeURIComponent(/\/v1\/signin\/approve\?t=([^&\s]+)/.exec(world.mail.sent.at(-1)!.text)![1]);
+  await world.serve(new Request('https://vault.example/v1/signin/approve', {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `t=${encodeURIComponent(token)}`,
+  }));
+}
+
+test('enrolling email recovery also uploads a sign-in blob that opens to the account key alone under the mailed code', async () => {
+  const { world, code } = await emailEnrolled();
+  const row = world.sqlite.prepare('SELECT blob FROM signin').get() as { blob: string };
+  assert.deepEqual(await openSignin(parseEmailCode(code)!, fromBase64(row.blob)), world.accountKey);
+});
+
+test('a fresh device signs in with the email code and master password once the owner approves, and never types the account key', async () => {
+  const { world, code } = await emailEnrolled();
+  const fresh = extension(world);
+  assert.deepEqual(await emailSignIn(fresh, 'check'), { state: 'none' });
+  await emailSignIn(fresh, 'request');
+  assert.match(world.mail.sent.at(-1)!.subject, /wants to sign in/);
+  assert.deepEqual(await emailSignIn(fresh, 'check'), { state: 'waiting', releaseAt: null });
+  await assert.rejects(emailSignIn(fresh, 'open', { code, password: PHONE_PASSWORD }), /approve/i);
+  await approveByEmail(world);
+  assert.deepEqual(await emailSignIn(fresh, 'check'), { state: 'ready' });
+  assert.equal(await emailSignIn(fresh, 'open', { code, password: PHONE_PASSWORD }), null);
+  assert.equal((await fresh.call<Status>({ type: 'status' })).state, 'unlocked');
+  assert.deepEqual((await fresh.store.getSyncLocal()).accountKey, world.accountKey);
+  assert.ok(!fresh.local.data.has('signinClaim'));
+  assert.ok(!fresh.local.data.has('signinBlob'));
+});
+
+test('a wrong code or password leaves the released blob in place so the device can try again', async () => {
+  const { world, code } = await emailEnrolled();
+  const fresh = extension(world);
+  await emailSignIn(fresh, 'request');
+  await approveByEmail(world);
+  await emailSignIn(fresh, 'check');
+  await assert.rejects(emailSignIn(fresh, 'open', { code: 'AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA', password: PHONE_PASSWORD }), /code isn't right/);
+  await assert.rejects(emailSignIn(fresh, 'open', { code, password: 'not the master password' }), /did not accept/);
+  assert.ok(fresh.local.data.has('signinBlob'));
+  assert.equal(await emailSignIn(fresh, 'open', { code, password: PHONE_PASSWORD }), null);
+});
+
+test('emailSignIn is refused from a page', async () => {
+  const { call } = await unlocked();
+  for (const action of ['request', 'check', 'open']) {
+    await assert.rejects(call({ type: 'emailSignIn', action, code: 'x', password: PASSWORD }, page('https://example.com')), /isn't allowed/);
+  }
 });
