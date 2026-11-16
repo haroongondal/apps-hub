@@ -61,10 +61,10 @@ Read docs/handoffs/email-login.md completely first. Trust the verified facts in 
 - 2026-11-17: closing gates on a clean tree at 492499e: root `pnpm test` exit 0, `pnpm typecheck` exit 0, `:strongroom-vault:testDebugUnitTest :app:assembleDebug` exit 0 (506 JVM tests, 0 fail).
 
 ## Current state and exact next step
-- Done (branch `extension-email-login`, HEAD 492499e, NOT pushed, nothing deployed): Worker per-claim requests, core seal + transport, extension email sign-in, phone email sign-in, decision-2 fix on both clients, two independent reviews with every finding fixed. Branch is based on origin/main d1b61ea; rebase again if main has moved.
+- Done (branch `extension-email-login`, pushed, PR #36 open, nothing deployed): Worker per-claim requests, core seal + transport, extension email sign-in, phone email sign-in, decision-2 fix on both clients, two independent reviews with every finding fixed. Branch is based on origin/main d1b61ea; rebase again if main has moved.
 - Owner action before it can work live: re-enrol email recovery once (turn it on again) from a signed-in device after the update; an account enrolled before this has no sign-in blob, and a sign-in request then mails nothing.
 - Next, in order, each only with the owner's go-ahead in that conversation:
-  1. Push the branch and open one PR into main (no attribution lines; explicit pathspecs were used for every commit).
+  1. DONE 2026-11-17: branch pushed, PR #36 opened (https://github.com/haroongondal/apps-hub/pull/36). Merging is the owner's call.
   2. Live Worker: apply migration 0003 to the live D1 (`cf d1 migrations apply <id> --profile personal` from tools/vault-api; check the exact command with `cf cli search` first), then the owner verifies `haroonmukhtar4@gmail.com` as an Email Routing destination and the sender domain in the Cloudflare dashboard, then deploy the Worker with a separate go-ahead.
   3. Phone release through the Store only (never adb install on the owner's phone); extension release through the Chrome Web Store flow in tools/webstore.
   4. Device check of the flow on the phone and in Chrome (qa-engineer), after the Worker is live: enrol -> new device request -> approve mail -> code + master password -> signed in; "Ask again" after approval refused; deny link stops it.
