@@ -1,10 +1,70 @@
 import React, { useEffect, useState } from 'react';
-import { View } from 'react-native';
-import { Button, Group, Notice, Row, Sheet, Text, space } from '@apps-hub/ui';
-import InflowCore, { type Item } from 'inflow-core';
+import { Image, View } from 'react-native';
+import { Button, Group, Notice, Row, Sheet, Text, radius, space } from '@apps-hub/ui';
+import InflowCore, { type Item, type MediaInfo } from 'inflow-core';
 import { importanceLabel, kindLabel } from './ai.ts';
 import { exactTime } from './format.ts';
+import { mediaKindLabel, sizeLabel } from './media.ts';
 import { SAVE_ERROR } from './messages.ts';
+
+const OPEN_ERROR = 'This file could not be opened.';
+const INLINE_MAX = 8_000_000;
+const inline = (m: MediaInfo) => (m.kind === 'image' || m.kind === 'sticker') && m.size <= INLINE_MAX;
+
+function MediaGroup({ itemId }: { itemId: number }) {
+  const [files, setFiles] = useState<MediaInfo[]>([]);
+  const [pictures, setPictures] = useState<Record<number, string>>({});
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setPictures({});
+    setError(null);
+    let list: MediaInfo[] = [];
+    try {
+      list = InflowCore.mediaFor(itemId);
+    } catch {
+      setError(OPEN_ERROR);
+    }
+    setFiles(list);
+    const next: Record<number, string> = {};
+    for (const m of list.filter(inline)) {
+      try {
+        next[m.id] = `data:${m.mime};base64,${InflowCore.readMedia(m.id)}`;
+      } catch {
+        setError(OPEN_ERROR);
+      }
+    }
+    setPictures(next);
+  }, [itemId]);
+  const open = (id: number) => {
+    try {
+      InflowCore.openMedia(id);
+      setError(null);
+    } catch {
+      setError(OPEN_ERROR);
+    }
+  };
+  return (
+    <>
+      <Group title="Media">
+        {files.map((m) =>
+          pictures[m.id] !== undefined ? (
+            <View key={m.id} style={{ padding: space.md }}>
+              <Image
+                accessibilityLabel={mediaKindLabel(m.kind)}
+                source={{ uri: pictures[m.id] }}
+                resizeMode="contain"
+                style={{ width: '100%', aspectRatio: 4 / 3, borderRadius: radius.control }}
+              />
+            </View>
+          ) : (
+            <Row key={m.id} title={mediaKindLabel(m.kind)} subtitle={sizeLabel(m.size)} trailing={<Button label="Open" variant="secondary" size="sm" onPress={() => open(m.id)} />} />
+          ),
+        )}
+      </Group>
+      {error !== null && <Notice tone="danger">{error}</Notice>}
+    </>
+  );
+}
 
 export function ItemSheet({ item, onClose, onRename, onShowSender }: { item: Item | null; onClose: () => void; onRename: (item: Item) => void; onShowSender: (name: string) => void }) {
   const who = item ? (item.displayName ?? item.sender) : null;
@@ -36,6 +96,7 @@ export function ItemSheet({ item, onClose, onRename, onShowSender }: { item: Ite
           <View style={{ gap: space.sm }}>
             <Text selectable>{item.text}</Text>
           </View>
+          {item.mediaCount > 0 && <MediaGroup itemId={item.id} />}
           {item.emailText !== null && (
             <Group title="Full email">
               <Row title={<Text selectable>{item.emailText}</Text>} />
