@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { AppState, PermissionsAndroid, Share } from 'react-native';
 import { Button, Group, Header, Notice, Row, Screen, Text } from '@apps-hub/ui';
 import HaloEngine, { type PermissionKind, type Status } from 'halo-engine';
+import { BackButton } from './Stepper.tsx';
 
 const AUDIO_COPY: Record<Status['audio'], string> = {
   ok: 'Sound is reaching Halo.',
@@ -14,7 +15,7 @@ const SYSTEM_ROWS: { kind: PermissionKind; title: string; key: 'overlayAllowed' 
   { kind: 'listener', title: 'Notification access', key: 'listenerAllowed', hint: 'Lets Halo see which app is playing.' },
 ];
 
-export default function DiagnosticsScreen() {
+export default function DiagnosticsScreen({ onBack }: { onBack: () => void }) {
   const [status, setStatus] = useState<Status>(() => HaloEngine.getStatus());
   const [log, setLog] = useState(() => HaloEngine.probeLog());
 
@@ -48,7 +49,8 @@ export default function DiagnosticsScreen() {
 
   return (
     <Screen scroll>
-      <Header title="Halo" subtitle="Setup check" />
+      <BackButton onPress={onBack} />
+      <Header title="Diagnostics" subtitle="Setup check" />
       {status.audio === 'blocked' && <Notice tone="warn" title="Audio is blocked">{AUDIO_COPY.blocked}</Notice>}
       <Group title="Permissions">
         <Row

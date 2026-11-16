@@ -19,5 +19,7 @@ object SettingsStore {
     val s = SettingsCodec.decode(json)
     ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putString(KEY, SettingsCodec.encode(s)).apply()
     HaloService.applySettings(s)
+    // Switching the lights on from the app starts the service; switching off is handled by the service itself.
+    if (s.enabled && !HaloService.running) HaloService.start(ctx, HaloService.MEDIA_PLAYBACK, "settings")
   }
 }

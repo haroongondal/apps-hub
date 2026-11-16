@@ -91,13 +91,14 @@ class HaloService : Service() {
 
   private fun apply(s: Settings) {
     if (!running) return
-    if (!s.enabled) {
+    if (!s.enabled && !preview) {
       lightsOff()
-      ProbeLog.log(this, "service", "lights disabled preview=$preview")
-      if (!preview) stopSelf()
+      ProbeLog.log(this, "service", "lights disabled")
+      stopSelf()
       check()
       return
     }
+    watch.onPreview(preview)
     if (s.pattern != patternId) {
       pattern = Patterns.create(s.pattern)
       patternId = s.pattern
@@ -106,6 +107,7 @@ class HaloService : Service() {
     if (first) lightsOn()
     overlay?.apply(s, pattern, currentColors(s))
     if (first || s.colors.source != derivedFor) recomputeColors()
+    if (watch.animate(now())) overlay?.kick()
   }
 
   private fun currentColors(s: Settings): IntArray =
@@ -284,7 +286,15 @@ class HaloService : Service() {
       onSettings?.invoke(s)
     }
 
+    /** True while a settings screen is open: the lights show even when switched off, with random motion if nothing plays. */
     @Volatile var preview = false
+      private set
+
+    fun setPreview(ctx: Context, on: Boolean) {
+      preview = on
+      if (running) applySettings(settings) else if (on) start(ctx, MEDIA_PLAYBACK, "preview")
+    }
+
     @Volatile var onListener: (() -> Unit)? = null
 
     /** "ok", "blocked" or "idle"; idle whenever the service is not running. */

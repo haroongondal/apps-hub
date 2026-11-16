@@ -6,6 +6,7 @@ enum class AudioState { OK, BLOCKED, IDLE }
 class AudioWatch {
   private var blocked = false
   private var playing = false
+  private var preview = false
   // Last non-zero FFT, or the last successful init when none came since: silence is measured from there.
   private var lastSoundMs = Long.MIN_VALUE / 2
   private var heardSinceInit = false
@@ -28,6 +29,11 @@ class AudioWatch {
     this.playing = playing
   }
 
+  /** The settings screens are showing the lights: move them even with nothing playing. */
+  fun onPreview(on: Boolean) {
+    preview = on
+  }
+
   private fun sounding(nowMs: Long) = heardSinceInit && nowMs - lastSoundMs < ACTIVE_MS
 
   fun state(nowMs: Long): AudioState = when {
@@ -36,7 +42,8 @@ class AudioWatch {
     else -> AudioState.IDLE
   }
 
-  fun useRandom(nowMs: Long): Boolean = playing && nowMs - lastSoundMs >= RANDOM_AFTER_MS
+  fun useRandom(nowMs: Long): Boolean =
+    (playing && nowMs - lastSoundMs >= RANDOM_AFTER_MS) || (preview && (blocked || !sounding(nowMs)))
 
   fun animate(nowMs: Long): Boolean = (!blocked && sounding(nowMs)) || useRandom(nowMs)
 

@@ -79,6 +79,24 @@ class AudioWatchTest {
   }
 
   @Test
+  fun previewMovesWithoutSound() {
+    val w = AudioWatch()
+    w.onInit(true, 0)
+    assertFalse(w.useRandom(0))
+    w.onPreview(true)
+    assertTrue(w.useRandom(0))
+    assertTrue(w.animate(0))
+    w.onFft(true, 100)
+    assertFalse(w.useRandom(100))
+    assertTrue(w.useRandom(600))
+    w.onInit(false, 700)
+    assertTrue(w.useRandom(700))
+    w.onPreview(false)
+    assertFalse(w.useRandom(700))
+    assertFalse(w.animate(700))
+  }
+
+  @Test
   fun retryBacksOffAndCaps() {
     val w = AudioWatch()
     assertEquals(1_000L, w.retryDelayMs(0))

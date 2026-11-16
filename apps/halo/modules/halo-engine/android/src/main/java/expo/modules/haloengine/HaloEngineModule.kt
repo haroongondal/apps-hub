@@ -7,11 +7,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.PowerManager
 import android.provider.Settings
 import expo.modules.haloengine.android.HaloListener
 import expo.modules.haloengine.android.HaloService
 import expo.modules.haloengine.android.ProbeLog
 import expo.modules.haloengine.android.SettingsStore
+import expo.modules.haloengine.core.Patterns
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
@@ -30,6 +32,7 @@ class HaloEngineModule : Module() {
       .isNotificationListenerAccessGranted(ComponentName(context, HaloListener::class.java)),
     "audioAllowed" to (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED),
     "notificationsAllowed" to context.getSystemService(NotificationManager::class.java).areNotificationsEnabled(),
+    "batteryUnrestricted" to context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName),
     "audio" to HaloService.audio,
     "playingApp" to HaloService.playingApp,
     "frameP95Ms" to HaloService.frameP95Ms,
@@ -70,5 +73,15 @@ class HaloEngineModule : Module() {
     Function("getSettings") { SettingsStore.read(context) }
 
     Function("setSettings") { json: String -> SettingsStore.write(context, json) }
+
+    Function("setPreview") { on: Boolean -> HaloService.setPreview(context, on) }
+
+    // Names are the ids in plain words ("pulse-ring" -> "Pulse ring"), so the app never hard-codes ids.
+    Function("listPatterns") {
+      Patterns.all.map { make ->
+        val p = make()
+        mapOf("id" to p.id, "family" to p.family.name.lowercase(), "name" to p.id.replace('-', ' ').replaceFirstChar { it.uppercase() })
+      }
+    }
   }
 }

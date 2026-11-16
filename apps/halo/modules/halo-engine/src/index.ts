@@ -11,10 +11,20 @@ export interface Status {
   listenerAllowed: boolean;
   audioAllowed: boolean;
   notificationsAllowed: boolean;
+  /** Battery optimisation is off for Halo, so the system does not stop it in the background. */
+  batteryUnrestricted: boolean;
   /** "blocked" means another app holds the audio effect; "idle" means no sound has arrived yet. */
   audio: 'ok' | 'blocked' | 'idle';
   playingApp: string | null;
   frameP95Ms: number | null;
+}
+
+export type PatternFamily = 'lights' | 'lines' | 'particles' | 'waves';
+
+export interface PatternInfo {
+  id: string;
+  family: PatternFamily;
+  name: string;
 }
 
 export interface Subscription {
@@ -30,6 +40,8 @@ interface NativeApi {
   clearProbeLog(): void;
   getSettings(): string;
   setSettings(json: string): void;
+  setPreview(on: boolean): void;
+  listPatterns(): PatternInfo[];
   addListener(event: 'onStatus', listener: (s: Status) => void): Subscription;
 }
 
@@ -44,6 +56,9 @@ export interface HaloEngineApi {
   clearProbeLog(): void;
   getSettings(): Settings;
   setSettings(s: Settings): void;
+  /** On while a settings screen is open: the lights show even when switched off, moving by themselves if nothing plays. */
+  setPreview(on: boolean): void;
+  listPatterns(): PatternInfo[];
   addStatusListener(cb: (s: Status) => void): Subscription;
 }
 
@@ -56,6 +71,8 @@ const HaloEngine: HaloEngineApi = {
   clearProbeLog: () => native.clearProbeLog(),
   getSettings: () => normalize(JSON.parse(native.getSettings())),
   setSettings: (s) => native.setSettings(JSON.stringify(s)),
+  setPreview: (on) => native.setPreview(on),
+  listPatterns: () => native.listPatterns(),
   addStatusListener: (cb) => native.addListener('onStatus', cb),
 };
 
