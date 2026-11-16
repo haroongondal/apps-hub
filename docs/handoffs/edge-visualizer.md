@@ -55,11 +55,11 @@ APK copy: scratchpad only (not committed). Manifest dump via aapt2 `dump xmltree
 ## Current state + next step (2026-11-17, session 2)
 Executing the plan with cd-engineering-tools:parallel-agents-coord; ledger = docs/handoffs/halo-sdd-ledger.md (tasks marked
 complete are done). Briefs in .sdd/ (git-excluded). Branch `halo` rebased onto origin/main d1b61ea.
-Done: Tasks 1, 2 (spike probes, emulator-proven), 5, 6, 7, Task 9 core (Quantize). Task 4 in flight.
-Blocked: Task 3 needs `pnpm release store` (Store build 19 learns the `halo` id); the permission classifier denied it,
-so it waits on the owner's explicit OK. Then `pnpm release halo` (pre-approved), owner installs from the Store, turns
-wireless debugging on (phone was not on adb/mDNS at 2026-11-17), claim device:49kjmnuwonkffqzh, run Task 3 checklist.
-Next after Task 4: Task 8 (renderer/service) can proceed before the spike result; only the boot start path waits on it.
+Done: Tasks 1, 2, 4, 5, 6, 7, Task 9 core (Quantize). Task 8 in flight (agent resumed twice after restarts; WIP uncommitted).
+Released (owner's go "release the app"): Store 19 (knows halo) and Halo 2 (spike build at 9f40f56), built from the clean
+detached worktree ~/Documents/apps-hub-wt/halo-release (use it for releases while agents have WIP in the main worktree).
+Phone serial for adb: adb-49kjmnuwonkffqzh-zHnffO._adb-tls-connect._tcp (drops off Wi-Fi often). Device claim released while waiting on the owner; re-claim device:49kjmnuwonkffqzh before driving it.
+Waiting on owner: update Store to 19, install Halo from it, grant permissions. Then run Task 3 Steps 3-6 and record results.
 
 ## Previous state (session 1, superseded)
 Owner asked for a new chat to start building. Already told to the owner and accepted without objection:
