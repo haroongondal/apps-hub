@@ -19,6 +19,16 @@
         <action android:name="android.service.notification.NotificationListenerService" />
       </intent-filter>
     </service>
+    <!-- Hands one decrypted media file to a viewer app for as long as the viewer needs it. Not exported; the file lives in cache/open and is cleared at the next start. -->
+    <provider
+      android:name="expo.modules.inflowcore.android.InflowMediaProvider"
+      android:authorities="com.haroon.inflow.media"
+      android:exported="false"
+      android:grantUriPermissions="true">
+      <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/inflow_media_paths" />
+    </provider>
     <receiver
       android:name="expo.modules.inflowcore.android.SmsReceiver"
       android:exported="true"

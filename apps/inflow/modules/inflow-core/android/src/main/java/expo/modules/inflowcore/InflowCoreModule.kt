@@ -5,7 +5,10 @@ import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Base64
+import android.webkit.MimeTypeMap
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.FileProvider
 import androidx.fragment.app.FragmentActivity
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.functions.Coroutine
@@ -17,6 +20,8 @@ import expo.modules.inflowcore.android.Lock
 import expo.modules.inflowcore.android.GmailClient
 import expo.modules.inflowcore.android.GmailSync
 import expo.modules.inflowcore.android.InflowListener
+import expo.modules.inflowcore.android.MediaStore
+import expo.modules.inflowcore.android.SqlMediaIndex
 import expo.modules.inflowcore.android.SmsImporter
 import expo.modules.inflowcore.android.SqlItemStore
 import expo.modules.inflowcore.android.SqlLedgerStore
@@ -27,9 +32,12 @@ import expo.modules.inflowcore.core.GmailPolicy
 import expo.modules.inflowcore.core.Prices
 import expo.modules.inflowcore.core.Retention
 import kotlinx.coroutines.Dispatchers
+import java.io.File
 import kotlinx.coroutines.withContext
 
 private const val CAPTURED_EVENT = "onCaptured"
+private const val MEDIA_AUTHORITY = "com.haroon.inflow.media"
+private const val MAX_INLINE_BYTES = 8L * 1024 * 1024
 private val ADDRESS_QUERY = Regex("[^@\\s]*@[^@\\s.]+\\.[^@\\s]+")
 
 class InflowCoreModule : Module() {
@@ -52,6 +60,13 @@ class InflowCoreModule : Module() {
 
     OnCreate {
       StoreHolder.onCaptured = { count -> sendEvent(CAPTURED_EVENT, mapOf("count" to count)) }
+      // Decrypted copies handed to a viewer live only until the next start; files no row names are swept (rolled-back saves).
+      InflowListener.executor.execute {
+        runCatching {
+          File(context.cacheDir, "open").deleteRecursively()
+          StoreHolder.get(context).getOrNull()?.let { MediaStore.sweep(File(context.filesDir, "media"), it.mediaFiles()) }
+        }
+      }
     }
 
     OnDestroy {
@@ -129,6 +144,45 @@ class InflowCoreModule : Module() {
 
     Function("getItem") { id: Long ->
       store().item(id, System.currentTimeMillis())
+    }
+
+    Function("mediaFor") { itemId: Long ->
+      SqlMediaIndex(store()).forItem(itemId).map { mapOf("id" to it.id, "kind" to it.kind, "mime" to it.mime, "size" to it.size) }
+    }
+
+    // Base64 of the decrypted bytes, only for a photo or sticker of at most 8 MB; anything else is opened with openMedia.
+    Function("readMedia") { mediaId: Long ->
+      val store = store()
+      val row = SqlMediaIndex(store).get(mediaId) ?: throw CodedException("MEDIA_MISSING", "That file is no longer saved.", null)
+      if (row.kind != "image" && row.kind != "sticker" || row.size > MAX_INLINE_BYTES) throw CodedException("MEDIA_TOO_BIG", "Open this file instead.", null)
+      val bytes = StoreHolder.media(context, store)?.read(mediaId) ?: throw CodedException("MEDIA_UNREADABLE", "That file could not be read.", null)
+      Base64.encodeToString(bytes, Base64.NO_WRAP)
+    }
+
+    // Decrypts into cache/open and hands it to a viewer through the not-exported FileProvider; the folder is cleared at the next start.
+    Function("openMedia") { mediaId: Long ->
+      val store = store()
+      val row = SqlMediaIndex(store).get(mediaId) ?: throw CodedException("MEDIA_MISSING", "That file is no longer saved.", null)
+      val bytes = StoreHolder.media(context, store)?.read(mediaId) ?: throw CodedException("MEDIA_UNREADABLE", "That file could not be read.", null)
+      val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(row.mime) ?: "bin"
+      val file = File(File(context.cacheDir, "open").apply { mkdirs() }, "${row.id}.$ext")
+      file.writeBytes(bytes)
+      val uri = FileProvider.getUriForFile(context, MEDIA_AUTHORITY, file)
+      try {
+        open(Intent(Intent.ACTION_VIEW).setDataAndType(uri, row.mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+      } catch (e: android.content.ActivityNotFoundException) {
+        file.delete()
+        throw CodedException("MEDIA_NO_VIEWER", "No app can open this file.", null)
+      }
+    }
+
+    Function("mediaStats") { ->
+      val store = store()
+      fun n(key: String) = store.meta(key)?.toLongOrNull() ?: 0L
+      mapOf(
+        "saved" to n("mediaSaved"), "bytes" to n("mediaBytes"), "unreadable" to n("mediaUnreadable"), "tooBig" to n("mediaTooBig"),
+        "lastMime" to store.meta("mediaLastMime")?.takeIf { it.isNotBlank() },
+      )
     }
 
     Function("getOwnerName") { ->

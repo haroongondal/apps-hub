@@ -27,8 +27,9 @@ import net.zetetic.database.sqlcipher.SQLiteConnection
 import net.zetetic.database.sqlcipher.SQLiteDatabase
 import net.zetetic.database.sqlcipher.SQLiteDatabaseHook
 import net.zetetic.database.sqlcipher.SQLiteStatement
+import java.io.File
 
-class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemStore, AiStore {
+class SqlItemStore private constructor(internal val db: SQLiteDatabase, private val mediaDir: File) : ItemStore, AiStore {
   override fun nameFor(tag: String): String? =
     query("SELECT name FROM chat_map WHERE tag = ?", tag).use { if (it.moveToFirst()) it.getString(0) else null }
 
@@ -193,6 +194,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
     ) > 0
 
   override fun purgeExpiredOtps(now: Long): Int = transaction {
+    forgetMedia("otp_expires_at IS NOT NULL AND otp_expires_at <= ?", now)
     val expired = query("SELECT hash, text FROM items WHERE otp_expires_at IS NOT NULL AND otp_expires_at <= ?", now).use { c ->
       buildList { while (c.moveToNext()) add(c.getString(0) to c.getString(1)) }
     }
@@ -205,12 +207,14 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
 
   override fun purgeOlder(pkg: String, cutoff: Long): Int = transaction {
     forgetAi("pkg = ? AND posted_at < ?", pkg, cutoff)
+    forgetMedia("pkg = ? AND posted_at < ?", pkg, cutoff)
     tombstoneEmails("pkg = ? AND posted_at < ?", pkg, cutoff)
     run("DELETE FROM items WHERE pkg = ? AND posted_at < ?", pkg, cutoff)
   }
 
   override fun deleteApp(pkg: String): Int = transaction {
     forgetAi("pkg = ?", pkg)
+    forgetMedia("pkg = ?", pkg)
     tombstoneEmails("pkg = ?", pkg)
     run("DELETE FROM items WHERE pkg = ?", pkg)
   }
@@ -219,6 +223,26 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
   private fun forgetAi(where: String, vararg args: Any?) {
     for (table in listOf("ai_results", "ai_queue", "todos")) run("DELETE FROM $table WHERE item_id IN (SELECT id FROM items WHERE $where)", *args)
   }
+
+  // The media rows go with their items now; their files are deleted once the outermost transaction has committed (see transaction()).
+  private val doomedFiles = ThreadLocal.withInitial { mutableListOf<String>() }
+
+  private fun forgetMedia(where: String, vararg args: Any?) {
+    val items = "SELECT id FROM items WHERE $where"
+    query("SELECT file FROM media WHERE item_id IN ($items)", *args).use { c -> while (c.moveToNext()) doomedFiles.get()!!.add(c.getString(0)) }
+    run("DELETE FROM media WHERE item_id IN ($items)", *args)
+  }
+
+  /** Adds `by` to a numeric meta counter (media counters). */
+  fun bump(key: String, by: Long) {
+    run(
+      "INSERT INTO meta(k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = CAST(CAST(v AS INTEGER) + ? AS TEXT)",
+      key, by.toString(), by,
+    )
+  }
+
+  /** Every media file name the database knows, for the orphan sweep. */
+  fun mediaFiles(): Set<String> = query("SELECT file FROM media").use { c -> buildSet { while (c.moveToNext()) add(c.getString(0)) } }
 
   // Deleted emails would otherwise come back when a reconnect resets the cursors.
   private fun tombstoneEmails(where: String, vararg args: Any?) {
@@ -380,12 +404,19 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
 
   private fun <T> transaction(block: () -> T): T {
     db.beginTransaction()
+    var committed = false
     try {
       val result = block()
       db.setTransactionSuccessful()
+      committed = true
       return result
     } finally {
       db.endTransaction()
+      if (!db.inTransaction()) {
+        val files = doomedFiles.get()!!.toList()
+        doomedFiles.get()!!.clear()
+        if (committed) MediaStore.deleteFiles(mediaDir, files)
+      }
     }
   }
 
@@ -402,6 +433,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
     "displayName" to str(5), "conversation" to str(6), "conversationKey" to str(7), "title" to str(8),
     "text" to getString(9), "postedAt" to getLong(10), "deletedBySender" to (getInt(11) != 0), "emailText" to str(12),
     "ai" to str(13)?.let { mapOf("kind" to it, "summary" to getString(14), "importance" to getString(15), "tags" to (str(16)?.split(',')?.filter(String::isNotEmpty) ?: emptyList())) },
+    "mediaCount" to getInt(17),
   )
 
   private fun Cursor.str(i: Int): String? = if (isNull(i)) null else getString(i)
@@ -414,7 +446,8 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
     private const val GENERIC_FAILURE =
       "Inflow can't open your saved history. The history file is kept, not deleted. Restart the phone and try again."
     private const val ITEM_COLUMNS = "i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, " +
-      "i.conversation_key, i.title, i.text, i.posted_at, i.deleted_by_sender, i.email_text, r.kind, r.summary, r.importance, r.tags"
+      "i.conversation_key, i.title, i.text, i.posted_at, i.deleted_by_sender, i.email_text, r.kind, r.summary, r.importance, r.tags, " +
+      "(SELECT COUNT(*) FROM media m WHERE m.item_id = i.id)"
     private const val ITEM_FROM = "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.sender_key LEFT JOIN ai_results r ON r.item_id = i.id"
     // What may be sent to the AI (R29 and the global constraint): the app records, and neither the app nor the sender is blocked.
     internal const val SENDABLE = "COALESCE((SELECT a.record FROM apps a WHERE a.pkg = i.pkg), 1) = 1 " +
@@ -526,7 +559,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
         key.fill(0)
         // raw is not zeroed: SQLCipher's connection config keeps this array and re-reads it if a connection is reopened.
         val db = SQLiteDatabase.openOrCreateDatabase(file, raw, null, neverDeleteOnCorruption, secureDelete).also { ensureSchema(it) }
-        Result.success(SqlItemStore(db))
+        Result.success(SqlItemStore(db, File(context.filesDir, "media")))
       } catch (e: SQLiteDatabaseCorruptException) {
         Result.failure(IllegalStateException(KEY_LOST_MESSAGE, e))
       } catch (e: Exception) {

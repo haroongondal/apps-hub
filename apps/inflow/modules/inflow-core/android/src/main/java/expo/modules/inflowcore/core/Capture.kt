@@ -1,7 +1,7 @@
 package expo.modules.inflowcore.core
 
 /** own = the owner wrote it (sender null, "You", or the platform said so). */
-data class RawMessage(val sender: String?, val text: String, val time: Long, val own: Boolean = false)
+data class RawMessage(val sender: String?, val text: String, val time: Long, val own: Boolean = false, val media: RawMedia? = null)
 
 data class RawNotification(
   val pkg: String, val appLabel: String, val key: String, val postTime: Long,
@@ -10,6 +10,7 @@ data class RawNotification(
   val conversationTitle: String?, val isGroupConversation: Boolean,
   val messages: List<RawMessage>, val textLines: List<String>,
   val chatTag: String? = null, val shortcutId: String? = null,   // stable per-chat ids (WhatsApp: sbn tag, shortcut like "<digits>@lid")
+  val picture: RawMedia? = null,   // a BigPicture bitmap, already encoded
 )
 
 /** Remembers which contact a chat id belongs to, so a reply-only notification still lands in the contact's thread. */
@@ -24,4 +25,5 @@ data class Capture(
   val conversation: String?, val conversationKey: String?,
   val title: String?, val text: String, val postedAt: Long,
   val hash: String, val deletedPlaceholder: Boolean,
+  val media: RawMedia? = null,
 )

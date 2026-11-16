@@ -38,7 +38,8 @@ class InflowListener : NotificationListenerService() {
         return
       }
       val ingest = StoreHolder.ingest(applicationContext, store) { schedulePurge(applicationContext, it) }
-      val raw = RawFromSbn.from(sbn, label(applicationContext, sbn.packageName))
+      val reader = MediaReader(applicationContext, store::bump) { store.setMeta("mediaLastMime", it) }
+      val raw = RawFromSbn.from(sbn, label(applicationContext, sbn.packageName), reader)
       val saved = store.inTransaction { ingest.onNotification(raw) }
       store.setMeta(LAST_CAPTURE_AT, System.currentTimeMillis().toString())
       if (saved > 0) StoreHolder.onCaptured?.invoke(saved)

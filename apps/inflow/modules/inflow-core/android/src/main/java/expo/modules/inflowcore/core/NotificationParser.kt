@@ -37,7 +37,10 @@ object NotificationParser {
         ?: raw.title
     }
     val conversationKey = conversation?.let { senderKey(raw.pkg, it) }
-    return raw.messages.filter { it.text.isNotBlank() }.map { m ->
+    val shown = raw.messages.filter { it.text.isNotBlank() }
+    // A BigPicture belongs to the newest message that has no file of its own.
+    val pictureOn = shown.lastOrNull { it.media == null }.takeIf { raw.picture != null }
+    return shown.map { m ->
       val sender = if (isOwn(m)) YOU else m.sender!!
       Capture(
         pkg = raw.pkg, appLabel = raw.appLabel,
@@ -46,6 +49,7 @@ object NotificationParser {
         title = raw.title, text = m.text, postedAt = m.time,
         hash = messageHash(raw.pkg, conversationKey, sender, m.time, m.text),
         deletedPlaceholder = isDeletedPlaceholder(m.text),
+        media = m.media ?: raw.picture.takeIf { m === pictureOn },
       )
     }
   }
@@ -66,6 +70,7 @@ object NotificationParser {
         title = raw.title, text = text, postedAt = raw.postTime,
         hash = sha256Hex(listOf(raw.pkg, raw.key, raw.title ?: "", text)),
         deletedPlaceholder = isDeletedPlaceholder(text),
+        media = raw.picture,
       ),
     )
   }

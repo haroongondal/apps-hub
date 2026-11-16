@@ -7,6 +7,7 @@ class Ingest(
   private val onOtpSaved: (expiresAt: Long) -> Unit = {},
   private val ledger: Ledger? = null,
   private val smsPackages: Set<String> = Sms.KNOWN_APPS,
+  private val media: MediaSink? = null,
   private val aiOn: () -> Boolean = { false },
 ) {
   fun onNotification(raw: RawNotification): Int {
@@ -30,6 +31,8 @@ class Ingest(
       val otpExpiresAt = if (isOtp(c.pkg, c.text)) now() + OTP_TTL_MS else null
       val id = store.insert(c, search, otpExpiresAt) ?: continue
       saved++
+      // The text is already saved; a file that cannot be stored never takes it back (the sink counts its own failures, nothing is logged here).
+      c.media?.let { m -> try { media?.save(id, m, c.postedAt) } catch (e: Exception) { /* kept: the item is saved */ } }
       otpExpiresAt?.let(onOtpSaved)
       if (otpExpiresAt == null) {
         val channel = when {
