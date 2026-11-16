@@ -67,6 +67,12 @@ class PlanJsonTest {
   }
 
   @Test
+  fun photoIndexRoundTrips() {
+    assertEquals("""{"tool":"photo-index"}""", encodePlan(PhotoIndexPlan).toString())
+    assertEquals(PhotoIndexPlan, decodePlan(encodePlan(PhotoIndexPlan)))
+  }
+
+  @Test
   fun theStatusMapCarriesWhatTheQueueScreenDraws() {
     val job = Job("j", "content://x", "Clip.mp4", FramePlan(1.0, "png", "png"), JobState.DONE, 1.0, 1, emptyList(), null, 5L, 9L)
     val map = job.toStatusMap()

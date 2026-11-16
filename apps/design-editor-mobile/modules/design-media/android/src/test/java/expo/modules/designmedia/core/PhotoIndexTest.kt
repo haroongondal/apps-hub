@@ -123,6 +123,21 @@ class PhotoIndexTest {
   }
 
   @Test
+  fun jobToAddSkipsWhenOneIsWaiting() {
+    val other = photoIndexJob("v").copy(plan = FramePlan(1.0, "png", "png"), inputId = "content://v")
+    listOf(JobState.QUEUED, JobState.RUNNING).forEach { s ->
+      assertEquals(null, jobToAdd(listOf(other, photoIndexJob("a").copy(state = s)), "b"))
+    }
+    val ended = listOf(JobState.DONE, JobState.FAILED).map { photoIndexJob(it.name).copy(state = it) }
+    val added = jobToAdd(ended + other.copy(state = JobState.QUEUED), "b")
+    assertEquals(photoIndexJob("b"), added)
+    assertEquals(PhotoIndexPlan, added?.plan)
+    assertEquals("gallery", added?.inputId)
+    assertEquals(Messages.PHOTOS, added?.inputName)
+    assertEquals(JobState.QUEUED, added?.state)
+  }
+
+  @Test
   fun backOffRule() {
     assertTrue(shouldPause(19, false, 0))
     assertFalse(shouldPause(19, true, 0))

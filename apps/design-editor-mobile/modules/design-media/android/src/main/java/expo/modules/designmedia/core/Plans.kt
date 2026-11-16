@@ -94,6 +94,16 @@ data class ComposePlan(
   override val tool get() = "compose"
 }
 
+data object PhotoIndexPlan : Plan {
+  override val tool get() = "photo-index"
+}
+
+fun photoIndexJob(id: String) = Job(id, "gallery", Messages.PHOTOS, PhotoIndexPlan, JobState.QUEUED, 0.0, 1, emptyList())
+
+// One scan covers the whole gallery, so a second one waiting behind it would only redo the same work.
+fun jobToAdd(jobs: List<Job>, id: String): Job? =
+  if (jobs.any { it.plan == PhotoIndexPlan && (it.state == JobState.QUEUED || it.state == JobState.RUNNING) }) null else photoIndexJob(id)
+
 data class Output(val name: String, val ref: String, val bytes: Long, val note: String? = null)
 data class AttemptLog(val attempt: Int, val plannedBytes: Long, val actualBytes: Long, val seconds: Double, val mode: String)
 
@@ -159,6 +169,7 @@ fun decodePlan(o: JsonObject): Plan = when (val tool = textOf(o, "tool")) {
   "reverse" -> ReversePlan(o.getValue("sound").jsonPrimitive.boolean, doubleOf(o, "quality"), textOf(o, "ext"))
   "stabilize" -> StabilizePlan(textOf(o, "level"), intOf(o, "search"), doubleOf(o, "quality"), textOf(o, "ext"))
   "compose" -> decodeComposePlan(o)
+  "photo-index" -> PhotoIndexPlan
   else -> throw IllegalArgumentException("Unknown tool: $tool")
 }
 
@@ -241,6 +252,7 @@ fun encodePlan(p: Plan): JsonObject = when (p) {
     put("quality", p.quality)
     put("ext", p.ext)
   }
+  PhotoIndexPlan -> buildJsonObject { put("tool", "photo-index") }
   is ComposePlan -> buildJsonObject {
     put("tool", "compose")
     put("clips", JsonArray(p.clips.map { c ->
