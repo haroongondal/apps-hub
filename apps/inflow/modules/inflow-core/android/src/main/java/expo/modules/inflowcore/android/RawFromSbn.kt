@@ -10,8 +10,13 @@ object RawFromSbn {
   fun from(sbn: StatusBarNotification, appLabel: String): RawNotification {
     val n = sbn.notification
     val extras = n.extras
-    val messages = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)?.messages.orEmpty().map { m ->
-      RawMessage(m.person?.name?.toString(), m.text?.toString().orEmpty(), m.timestamp)
+    val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)
+    val user = style?.user
+    val messages = style?.messages.orEmpty().map { m ->
+      val p = m.person
+      // The owner's own messages: same person key as MessagingStyle.user, else the same name.
+      val own = p != null && user != null && (if (p.key != null && user.key != null) p.key == user.key else p.name?.toString() == user.name?.toString())
+      RawMessage(p?.name?.toString(), m.text?.toString().orEmpty(), m.timestamp, own)
     }
     return RawNotification(
       pkg = sbn.packageName,
@@ -28,6 +33,8 @@ object RawFromSbn {
       isGroupConversation = extras.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION),
       messages = messages,
       textLines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.map { it.toString() }.orEmpty(),
+      chatTag = sbn.tag,
+      shortcutId = NotificationCompat.getShortcutId(n),
     )
   }
 }

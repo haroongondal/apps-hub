@@ -3,36 +3,56 @@ package expo.modules.inflowcore.core
 import java.security.MessageDigest
 
 object NotificationParser {
+  const val YOU = "You"
+
   private val DELETED = listOf(
     "This message was deleted",
     "You deleted this message",
     "یہ پیغام حذف کر دیا گیا تھا",
   )
 
-  fun parse(raw: RawNotification, ownPkg: String): List<Capture> {
+  fun parse(raw: RawNotification, ownPkg: String, chats: ChatDirectory? = null): List<Capture> {
     if (raw.pkg == ownPkg || raw.ongoing || raw.groupSummary) return emptyList()
     if (raw.messages.isEmpty() && raw.title.isNullOrBlank() && raw.text.isNullOrBlank() &&
       raw.bigText.isNullOrBlank() && raw.textLines.all { it.isBlank() }
     ) return emptyList()
 
-    return if (raw.messages.isNotEmpty()) fromMessages(raw) else fromSingle(raw)
+    return if (raw.messages.isNotEmpty()) fromMessages(raw, chats) else fromSingle(raw)
   }
 
-  private fun fromMessages(raw: RawNotification): List<Capture> {
-    val conversation = raw.conversationTitle?.takeIf { it.isNotBlank() } ?: raw.title
+  private fun isOwn(m: RawMessage) = m.own || m.sender == null || m.sender.equals(YOU, ignoreCase = true)
+
+  // R36: a group is keyed by its title, a 1:1 chat by the contact's name. The title cannot be trusted for 1:1: WhatsApp shows "You" after a reply.
+  private fun fromMessages(raw: RawNotification, chats: ChatDirectory?): List<Capture> {
+    val groupTitle = raw.conversationTitle?.takeIf { it.isNotBlank() }
+    val tag = (raw.chatTag ?: raw.shortcutId)?.let { "${raw.pkg}|$it" }   // a tag is only unique within one app
+    val conversation = if (raw.isGroupConversation || groupTitle != null) {
+      groupTitle ?: raw.title
+    } else {
+      val contact = raw.messages.firstOrNull { !isOwn(it) }?.sender?.takeIf { it.isNotBlank() }
+      if (contact != null && tag != null) chats?.learn(tag, contact)
+      contact
+        ?: raw.title?.takeIf { it.isNotBlank() && !it.equals(YOU, ignoreCase = true) }
+        ?: tag?.let { chats?.nameFor(it) }
+        ?: raw.title
+    }
     val conversationKey = conversation?.let { senderKey(raw.pkg, it) }
     return raw.messages.filter { it.text.isNotBlank() }.map { m ->
-      val sender = m.sender ?: "You"
+      val sender = if (isOwn(m)) YOU else m.sender!!
       Capture(
         pkg = raw.pkg, appLabel = raw.appLabel,
         sender = sender, senderKey = senderKey(raw.pkg, sender),
         conversation = conversation, conversationKey = conversationKey,
         title = raw.title, text = m.text, postedAt = m.time,
-        hash = sha256Hex(listOf(raw.pkg, conversationKey ?: "", sender, m.time.toString(), m.text)),
+        hash = messageHash(raw.pkg, conversationKey, sender, m.time, m.text),
         deletedPlaceholder = isDeletedPlaceholder(m.text),
       )
     }
   }
+
+  /** The item hash of a message; LegacyRepair recomputes it with the same formula. */
+  fun messageHash(pkg: String, conversationKey: String?, sender: String, time: Long, text: String): String =
+    sha256Hex(listOf(pkg, conversationKey ?: "", sender, time.toString(), text))
 
   private fun fromSingle(raw: RawNotification): List<Capture> {
     val text = raw.bigText ?: raw.text ?: raw.textLines.joinToString("\n")

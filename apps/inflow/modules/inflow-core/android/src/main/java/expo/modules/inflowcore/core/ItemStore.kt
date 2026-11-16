@@ -2,7 +2,7 @@ package expo.modules.inflowcore.core
 
 data class AppSetting(val pkg: String, val label: String, val record: Boolean, val keepDays: Int?)   // keepDays null = forever
 
-interface ItemStore {
+interface ItemStore : ChatDirectory {
   fun appSetting(pkg: String): AppSetting?
   fun putAppSetting(s: AppSetting)
 

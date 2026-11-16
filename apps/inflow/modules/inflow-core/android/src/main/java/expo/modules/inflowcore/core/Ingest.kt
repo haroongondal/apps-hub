@@ -16,7 +16,7 @@ class Ingest(
     if (!setting.record) return 0
 
     var saved = 0
-    for (c in NotificationParser.parse(raw, ownPkg)) {
+    for (c in NotificationParser.parse(raw, ownPkg, store)) {
       if (c.deletedPlaceholder) {
         store.markDeletedBySender(c.pkg, c.conversationKey, c.sender, c.postedAt)
         continue

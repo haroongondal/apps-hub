@@ -47,6 +47,41 @@ class IngestTest {
     assertEquals(4, store.items.size)
   }
 
+  @Test fun replyRetitlesNotificationButStaysOneThread() {
+    val m1 = RawMessage("Sunflower", "Are you free?", clock + 1)
+    val m2 = RawMessage("Sunflower", "Call me", clock + 2)
+    val reply = RawMessage("You", "On my way", clock + 3, own = true)
+    assertEquals(2, ingest.onNotification(chat(m1, m2).copy(title = "Sunflower", chatTag = "t1")))
+    assertEquals(1, ingest.onNotification(chat(m1, m2, reply).copy(title = "You", chatTag = "t1")))
+    assertEquals(3, store.items.size)
+    assertEquals(setOf("Sunflower"), store.items.values.map { it.capture.conversation }.toSet())
+  }
+
+  // The retention pins: WhatsApp text is kept forever and never mistaken for a code.
+  @Test fun whatsappIsKeptForever() {
+    assertNull(Retention.default("com.whatsapp", "WhatsApp").keepDays)
+    assertNull(Retention.default("com.whatsapp.w4b", "WhatsApp Business").keepDays)
+  }
+
+  @Test fun whatsappCodeLikeTextIsNeverAnOtp() {
+    assertEquals(1, ingest.onNotification(chat(RawMessage("Ammi", "Your code is 482913, pin 1234, do not share", clock + 1))))
+    assertNull(store.items.values.single().otpExpiresAt)
+    assertTrue(otpExpiries.isEmpty())
+  }
+
+  @Test fun purgeNeverTouchesWhatsappWithoutAnExplicitChoice() {
+    ingest.onNotification(chat(RawMessage("Ammi", "old news", clock - 400 * day)))
+    ingest.onNotification(raw(pkg = "com.daraz.android", title = "Daraz", text = "old sale").let { it.copy(postTime = clock - 400 * day) })
+    clock += 2 * day
+    ingest.housekeeping()
+    assertEquals(1, store.items.values.count { it.capture.pkg == "com.whatsapp" })
+    assertEquals(0, store.items.values.count { it.capture.pkg == "com.daraz.android" })   // the 90-day default does purge other apps
+    store.putAppSetting(AppSetting("com.whatsapp", "WhatsApp", true, 90))   // only the owner's explicit choice deletes
+    clock += 2 * day
+    ingest.housekeeping()
+    assertEquals(0, store.items.values.count { it.capture.pkg == "com.whatsapp" })
+  }
+
   @Test fun sameKeySameTextIsOneItem() {
     val n = raw(title = "Bank", text = "Hello")
     assertEquals(1, ingest.onNotification(n))

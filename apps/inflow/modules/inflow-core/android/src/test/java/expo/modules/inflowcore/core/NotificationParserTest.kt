@@ -22,13 +22,73 @@ class NotificationParserTest {
     isGroupConversation: Boolean = false,
     messages: List<RawMessage> = emptyList(),
     textLines: List<String> = emptyList(),
+    chatTag: String? = null,
+    shortcutId: String? = null,
   ) = RawNotification(
     pkg = pkg, appLabel = "App", key = key, postTime = postTime,
     ongoing = ongoing, groupSummary = groupSummary,
     title = title, text = text, bigText = bigText, subText = null,
     conversationTitle = conversationTitle, isGroupConversation = isGroupConversation,
-    messages = messages, textLines = textLines,
+    messages = messages, textLines = textLines, chatTag = chatTag, shortcutId = shortcutId,
   )
+
+  private class Chats : ChatDirectory {
+    val map = HashMap<String, String>()
+    override fun nameFor(tag: String) = map[tag]
+    override fun learn(tag: String, name: String) { map[tag] = name }
+  }
+
+  private val wa = "com.whatsapp"
+  private val sunflower = listOf(RawMessage("Sunflower", "Are you free?", 10L), RawMessage("Sunflower", "Call me", 20L))
+  private val reply = RawMessage("You", "On my way", 30L, own = true)
+
+  @Test fun replyRetitlesNotificationButStaysOneThread() {
+    val chats = Chats()
+    val a = NotificationParser.parse(raw(pkg = wa, title = "Sunflower", messages = sunflower, chatTag = "t1"), own, chats)
+    val b = NotificationParser.parse(raw(pkg = wa, title = "You", messages = sunflower + reply, chatTag = "t1"), own, chats)
+    assertTrue((a + b).all { it.conversation == "Sunflower" && it.conversationKey == "com.whatsapp:sunflower" })
+    assertEquals(a.map { it.hash }, b.take(2).map { it.hash })   // the contact's messages are not saved a second time
+    assertEquals("You", b[2].sender)
+  }
+
+  @Test fun replyOnlyNotificationUsesLearnedName() {
+    val chats = Chats()
+    NotificationParser.parse(raw(pkg = wa, title = "Sunflower", messages = sunflower, shortcutId = "123@lid"), own, chats)
+    val only = NotificationParser.parse(raw(pkg = wa, title = "You", messages = listOf(reply), shortcutId = "123@lid"), own, chats).single()
+    assertEquals("Sunflower", only.conversation)
+    assertEquals("com.whatsapp:sunflower", only.conversationKey)
+    // Without a learned name the title is all there is.
+    assertEquals("You", NotificationParser.parse(raw(pkg = wa, title = "You", messages = listOf(reply), shortcutId = "other@lid"), own, chats).single().conversation)
+  }
+
+  @Test fun groupStaysGroup() {
+    val out = NotificationParser.parse(
+      raw(pkg = wa, title = "Family", conversationTitle = "Family", isGroupConversation = true, chatTag = "g1",
+        messages = listOf(RawMessage("Ammi", "Dinner", 1L), reply)),
+      own, Chats(),
+    )
+    assertTrue(out.all { it.conversation == "Family" && it.conversationKey == "com.whatsapp:family" })
+    assertEquals(listOf("Ammi", "You"), out.map { it.sender })
+  }
+
+  @Test fun ownMessageSenderIsYou() {
+    val out = NotificationParser.parse(
+      raw(pkg = wa, title = "Ammi", messages = listOf(RawMessage("Ammi", "Hi", 1L), RawMessage("Haroon", "Hello", 2L, own = true), RawMessage("you", "Again", 3L), RawMessage(null, "Third", 4L))),
+      own,
+    )
+    assertEquals(listOf("Ammi", "You", "You", "You"), out.map { it.sender })
+    assertEquals(setOf("Ammi"), out.map { it.conversation }.toSet())
+  }
+
+  @Test fun twoContactsStayTwoThreads() {
+    val chats = Chats()
+    val a = NotificationParser.parse(raw(pkg = wa, title = "Sunflower", messages = sunflower, chatTag = "t1"), own, chats)
+    val b = NotificationParser.parse(raw(pkg = wa, title = "Moon", messages = listOf(RawMessage("Moon", "Hi", 10L)), chatTag = "t2"), own, chats)
+    assertEquals(setOf("com.whatsapp:sunflower"), a.map { it.conversationKey }.toSet())
+    assertEquals(setOf("com.whatsapp:moon"), b.map { it.conversationKey }.toSet())
+    assertEquals("Moon", chats.nameFor("com.whatsapp|t2"))
+    assertEquals("Sunflower", chats.nameFor("com.whatsapp|t1"))
+  }
 
   @Test fun skipsOwnOngoingAndSummary() {
     val base = raw(title = "Hi", text = "There")

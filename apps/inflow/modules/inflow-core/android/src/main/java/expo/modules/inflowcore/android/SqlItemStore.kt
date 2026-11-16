@@ -14,6 +14,9 @@ import expo.modules.inflowcore.core.Channel
 import expo.modules.inflowcore.core.Capture
 import expo.modules.inflowcore.core.Email
 import expo.modules.inflowcore.core.ItemStore
+import expo.modules.inflowcore.core.LegacyAction
+import expo.modules.inflowcore.core.LegacyRepair
+import expo.modules.inflowcore.core.LegacyRow
 import expo.modules.inflowcore.core.KEY_LOST_MESSAGE
 import expo.modules.inflowcore.core.OpenPlan
 import expo.modules.inflowcore.core.SearchText
@@ -26,6 +29,13 @@ import net.zetetic.database.sqlcipher.SQLiteDatabaseHook
 import net.zetetic.database.sqlcipher.SQLiteStatement
 
 class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemStore, AiStore {
+  override fun nameFor(tag: String): String? =
+    query("SELECT name FROM chat_map WHERE tag = ?", tag).use { if (it.moveToFirst()) it.getString(0) else null }
+
+  override fun learn(tag: String, name: String) {
+    run("INSERT INTO chat_map(tag, name) VALUES (?, ?) ON CONFLICT(tag) DO UPDATE SET name = excluded.name", tag, name)
+  }
+
   override fun appSetting(pkg: String): AppSetting? =
     query("SELECT pkg, label, record, keep_days FROM apps WHERE pkg = ?", pkg).use { if (it.moveToFirst()) it.toSetting() else null }
 
@@ -400,7 +410,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
 
   companion object {
     private const val DB_NAME = "inflow.db"
-    private const val SCHEMA_VERSION = 4
+    private const val SCHEMA_VERSION = 5
     private const val GENERIC_FAILURE =
       "Inflow can't open your saved history. The history file is kept, not deleted. Restart the phone and try again."
     private const val ITEM_COLUMNS = "i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, " +
@@ -483,6 +493,14 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
       "ALTER TABLE txns ADD COLUMN by_ai INTEGER NOT NULL DEFAULT 0",
     )
 
+    // Not idempotent, like the others. chat_map: chat id -> contact name (R36). media: one row per stored file, its bytes live encrypted in filesDir/media (K4).
+    private val SCHEMA_V5 = listOf(
+      "CREATE TABLE chat_map(tag TEXT PRIMARY KEY, name TEXT NOT NULL)",
+      "CREATE TABLE media(id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, kind TEXT NOT NULL, mime TEXT NOT NULL, " +
+        "size INTEGER NOT NULL, file TEXT NOT NULL, sha TEXT NOT NULL UNIQUE, at INTEGER NOT NULL)",
+      "CREATE INDEX media_item ON media(item_id)",
+    )
+
     private val neverDeleteOnCorruption = object : DatabaseErrorHandler {
       override fun onCorruption(db: SQLiteDatabase, e: SQLiteException) {}
     }
@@ -518,6 +536,39 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
       }
     }
 
+    // Carries out LegacyRepair.plan inside the v5 transaction. A delete only ever follows a plan that names an identical twin;
+    // an item that is a ledger source is never deleted, and a move whose new hash is taken is skipped (UPDATE OR IGNORE).
+    private fun repairLegacyWhatsapp(db: SQLiteDatabase) {
+      val rows = db.rawQuery(
+        "SELECT id, pkg, sender, conversation_key, conversation, title, text, posted_at, captured_at FROM items WHERE pkg = ?", LegacyRepair.PKG,
+      ).use { c ->
+        buildList {
+          while (c.moveToNext()) {
+            add(
+              LegacyRow(
+                c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5), c.getString(6),
+                c.getLong(7), c.getLong(8),
+              ),
+            )
+          }
+        }
+      }
+      for (a in LegacyRepair.plan(rows)) {
+        when (a) {
+          is LegacyAction.Move -> db.execSQL(
+            "UPDATE OR IGNORE items SET conversation = ?, conversation_key = ?, hash = ?, search = ? WHERE id = ?",
+            arrayOf<Any?>(a.conversation, a.conversationKey, a.hash, a.search, a.id),
+          )
+          is LegacyAction.Delete -> {
+            val isSource = db.rawQuery("SELECT 1 FROM txn_sources WHERE item_id = ?", a.id).use { it.moveToFirst() }
+            if (isSource) continue
+            for (table in listOf("ai_results", "ai_queue", "todos")) db.execSQL("DELETE FROM $table WHERE item_id = ?", arrayOf<Any?>(a.id))
+            db.execSQL("DELETE FROM items WHERE id = ?", arrayOf<Any?>(a.id))
+          }
+        }
+      }
+    }
+
     private fun ensureSchema(db: SQLiteDatabase) {
       try {
         if (db.version >= SCHEMA_VERSION) return
@@ -526,7 +577,11 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
           if (db.version < 1) SCHEMA_V1.forEach(db::execSQL)
           if (db.version < 2) SCHEMA_V2.forEach(db::execSQL)
           if (db.version < 3) SCHEMA_V3.forEach(db::execSQL)
-          SCHEMA_V4.forEach(db::execSQL)
+          if (db.version < 4) SCHEMA_V4.forEach(db::execSQL)
+          if (db.version < 5) {
+            SCHEMA_V5.forEach(db::execSQL)
+            repairLegacyWhatsapp(db)
+          }
           db.version = SCHEMA_VERSION
           db.setTransactionSuccessful()
         } finally {

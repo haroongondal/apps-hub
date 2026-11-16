@@ -17,6 +17,14 @@ class MemoryItemStore : ItemStore, AiStore {
   val aiBlocks = mutableSetOf<String>()
   val spend = HashMap<String, Double>()
 
+  val chats = HashMap<String, String>()   // chat_map: tag -> name
+
+  override fun nameFor(tag: String): String? = chats[tag]
+
+  override fun learn(tag: String, name: String) {
+    chats[tag] = name
+  }
+
   override fun appSetting(pkg: String): AppSetting? = settings[pkg]
 
   override fun putAppSetting(s: AppSetting) {
