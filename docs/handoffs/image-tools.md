@@ -81,9 +81,17 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
   swatch on an image sets the page background; brand kit exists (brand.colors); auto-enhance
   sets Brightness and Contrast only (no white-balance or saturation control exists; gap for
   the owner). Phone was off adb. Both phase agents resumed from their ledgers.
+- 2026-11-17: 3.1 DONE (commits cae845f, e694a5f, 8b6b813, 90c9bd4, e1b5005; ledger
+  `.superpowers/sdd/2026-11-17-image-tools-3.1/progress.md`). Palette "Colours in this photo"
+  (k-means, fixed seed, distinct = RGB distance >= 16; swatch = page background; "Add to brand
+  kit" appends missing ones) and "Auto-enhance" (Brightness + Contrast only, one undo exact) in
+  `packages/design-editor-engine/image-maths.js` + `app.js`. Gates: phase agent ran e2e 3/3 green;
+  main session's clean export of e1b5005: pnpm test exit 0 (engine 15/15), typecheck exit 0.
+  Open: AC-1 not yet timed on the phone (Mac 9-37 ms); owner to confirm swatch = page background
+  and the missing white-balance/saturation controls.
 
 ## Current state + exact next step
 
-3.0 (phone spike) and 3.1 (palette + auto-enhance) running as phase agents. Next: read their
-reports; if 3.0 passes, start 3.2 (cut-out and upscale); if it misses a bar, stop and report to
+3.1 done. 3.0 (phone spike) running as a phase agent (phone back on Wi-Fi adb). Next: read its
+report; if 3.0 passes, start 3.2 (cut-out and upscale); if it misses a bar, stop and report to
 the owner. Feature 2 waits for `photo-search` Phase 2.
