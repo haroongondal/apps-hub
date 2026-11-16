@@ -185,7 +185,7 @@ test('copy has no emoji and no ALL-CAPS words longer than three letters', () => 
     const v = emailSignInView(s, () => '5 Nov 2026, 3:04 pm');
     all.push(v.title, v.body);
   }
-  all.push(explainEmailSignIn(coded('SYNC_SIGN_IN')), explainEmailSignIn(coded('SIGNIN_NOT_READY')));
+  all.push(explainEmailSignIn(coded('SYNC_SIGN_IN')), explainEmailSignIn(coded('SIGNIN_NOT_READY')), explainEmailSignIn(coded('SIGNIN_APPROVED')));
   for (const c of ['BAD_EMAIL', 'SYNC_OFF', 'SYNC_FIRST', 'LOST_STILL_ALIVE', 'LOST_NOT_READY', 'LOST_DIFFERENT_ACCOUNT', 'MAIL_FAILED', 'VAULT_MOVED']) all.push(explainRecovery(coded(c)));
   all.push(explainLostAccess(coded('SYNC_SIGN_IN')), emailSyncGate('off') ?? '', emailSyncGate('needsSignIn') ?? '');
   all.push(emailProblem('') ?? '', emailProblem('x') ?? '', emailProblem('a'.repeat(400)) ?? '');

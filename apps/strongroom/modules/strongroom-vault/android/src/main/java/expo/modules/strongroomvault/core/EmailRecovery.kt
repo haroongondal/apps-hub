@@ -187,9 +187,16 @@ class EmailRecovery(
     return true
   }
 
-  /** A new device asks by email. Network first, as the extension does: a failed request keeps an earlier claim. */
+  /** A new device asks by email. Never drops an approved claim (a stale "Ask again"); network first, so a failed request keeps an earlier claim. */
   @Synchronized fun signinRequest() {
     val t = transport ?: throw IllegalStateException("sync unavailable")
+    settings.load().signinClaim?.let { held ->
+      val approved = when (val s = t.signinRelease(held)) {
+        is LostRelease.Ready -> true
+        is LostRelease.Waiting -> s.releaseAt != null
+      }
+      if (approved) throw IllegalStateException("sign-in approved")
+    }
     val claim = Crypto.randomBytes(CLAIM_BYTES)
     try {
       t.signinRequest(Crypto.tokenHash(claim), SIGNIN_DEVICE)
@@ -203,10 +210,11 @@ class EmailRecovery(
   @Synchronized fun signinCheck(): LostState {
     val r = settings.load()
     val claim = r.signinClaim ?: return LostState.None
+    if (r.signinBlob != null) return LostState.Ready // the Worker forgets a release an hour on, but this phone can still use it
     val t = transport ?: throw IllegalStateException("sync unavailable")
     return when (val s = t.signinRelease(claim)) {
       is LostRelease.Ready -> LostState.Ready.also { settings.save(r.copy(signinBlob = s.blob)) }
-      is LostRelease.Waiting -> LostState.Waiting(s.releaseAt).also { if (r.signinBlob != null) settings.save(r.copy(signinBlob = null)) }
+      is LostRelease.Waiting -> LostState.Waiting(s.releaseAt)
     }
   }
 

@@ -98,6 +98,34 @@ class EmailSignInTest {
     assertTrue(first.signinClaim != q.recoverySettings.state.signinClaim)
   }
 
+  @Test fun askingAgainNeverDropsAnApprovedClaim() {
+    enrolled()
+    val q = TestPhone(net)
+    q.recovery.signinRequest()
+    w.approveSignin(w.time + 5)
+    val before = q.recoverySettings.state
+    w.calls.clear()
+    refused("sign-in approved") { q.recovery.signinRequest() } // approved, not yet released
+    assertEquals(before, q.recoverySettings.state)
+    assertEquals(listOf("signinRelease"), w.calls)
+    w.time += 5
+    refused("sign-in approved") { q.recovery.signinRequest() } // released
+    assertEquals(before, q.recoverySettings.state)
+    assertEquals(LostState.Ready, q.recovery.signinCheck())
+  }
+
+  @Test fun aReleasedBlobStaysReadyAfterTheWorkerForgetsTheRequest() {
+    val e = enrolled()
+    val q = TestPhone(net)
+    q.approved()
+    w.signin = null // the Worker drops an approved request an hour after release
+    w.calls.clear()
+    assertEquals(LostState.Ready, q.recovery.signinCheck())
+    assertTrue(w.calls.isEmpty())
+    assertNotNull(q.recoverySettings.state.signinBlob)
+    assertTrue(q.recovery.signinOpen(e.code, password))
+  }
+
   @Test fun aWrongOrMalformedCodeOpensNothingAndChangesNothing() {
     enrolled()
     val q = TestPhone(net)

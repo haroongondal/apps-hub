@@ -167,7 +167,7 @@ export interface StrongroomVaultApi {
   lostAccessCheck(): Promise<LostAccessState>;
   // False when the code is wrong; LOST_NOT_READY before the wait ends, LOST_DIFFERENT_ACCOUNT on a phone holding another account. True unlocks the vault with the new password and starts sync.
   lostAccessOpen(code: string, newPassword: string): Promise<boolean>;
-  // A new phone signs in by email. Request and check need no vault or account (request needs the server); a request makes a fresh claim and drops an earlier approval.
+  // A new phone signs in by email. Request and check need no vault or account (request needs the server); a request makes a fresh claim, and rejects with SIGNIN_APPROVED when the earlier one is already approved.
   emailSignInRequest(): Promise<void>;
   emailSignInCheck(): Promise<LostAccessState>;
   // False when the code is wrong; SIGNIN_NOT_READY before the approval, LOST_DIFFERENT_ACCOUNT on a phone holding another account, SYNC_SIGN_IN for a wrong master password. True signs in, as signInSync does.

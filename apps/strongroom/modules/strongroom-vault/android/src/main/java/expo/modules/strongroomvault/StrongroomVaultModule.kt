@@ -711,6 +711,7 @@ internal fun coded(e: IllegalStateException): Exception = when (e.message) {
     "A recovery request is already counting down on this account. Wait for it to finish, or cancel it from a device that is signed in.",
     e,
   )
+  "sign-in approved" -> CodedException("SIGNIN_APPROVED", "This sign-in is already approved. Check again instead of asking again.", e)
   "sign-in not ready" -> CodedException("SIGNIN_NOT_READY", "Approve the sign-in from the email first, then check again.", e)
   "not ready" -> CodedException("LOST_NOT_READY", "The 24-hour wait isn't over yet. Try again once it ends.", e)
   "different account" -> CodedException(
