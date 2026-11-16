@@ -178,32 +178,16 @@ most likely to be second-guessed:
 
 ## Current state and next step
 
-State (2026-11-14): stages 1-4 built, reviewed and fixed on `inflow/stage-4` (code HEAD 2ed42e5).
-Nothing pushed, merged, released or installed; release waits for the owner's word. Gates at
-2ed42e5: Kotlin 228 tests 0 failures, assembleDebug, pnpm test 0, pnpm typecheck 0 (inflow 41/41).
+State (2026-11-16 14:40): stages 1-4 plus stage 4b built, reviewed and fixed on `inflow/stage-4b` (code HEAD 9649278, plan docs/superpowers/plans/2026-11-16-inflow-stage-4b.md, ledger progress.md, fix brief fix-4b-brief.md; earlier ledgers progress-stage-{1..4}.md). Gates at 9649278: Kotlin 298 tests 0 failures, assembleDebug, processReleaseMainManifest (no new permission), pnpm test 0, typecheck 0 (inflow 46/46). Release APK built (versionCode 1, CN=Android Debug cert SHA-256 fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c) at apps/inflow/android/app/build/outputs/apk/release/app-release.apk.
 
-Stage 3 facts: INTERNET in the module manifest; Gmail only to `imap.gmail.com:993` (TLS, identity
-checked); Angus Mail 2.0.3 (EPL/GPL+CE/EDL), licence files merged into the APK (R19); exact From
-address match, "@domain" for a whole domain (R20).
+Phone: Inflow stage 4 (634148a build, debug-signed, installer null) was adb-installed on the owner's phone on 2026-11-16 (owner asked) and tested: install, setup, notification access (owner ticked the HyperOS Danger box), SMS import, Money, live capture, AI (Groq key, Send now ok), Ask AI. Phone fell off Wi-Fi at ~14:30 (no ping, no mdns); adb listed only emulator-5556 belonging to ANOTHER session (do not use it, do not adb kill-server). Next: owner reconnects wireless debugging; compare installed cert with the new APK (pull base.apk, apksigner verify --print-certs); `adb install -r` over the existing install (same versionCode 1 is fine with -r; keeps data = the v4->v5 upgrade test). Never uninstall.
 
-Stage 4 facts: AI through the owner's OpenAI-compatible https address (Deputy's provider copied
-into `core/AiProvider.kt`; kotlinx-serialization-json 1.8.1, Apache-2.0; HttpURLConnection, no
-redirects). Keys in SQLCipher `ai_keys`, only the last four reach JS. Only items saved after the
-first key are sent (meta `aiSince`); Ask AI money follows the same rule (R31). Daily cap $0.50
-default. Batches: at most 40 items and 60,000 characters, `max_tokens` 8,000. AI amounts must
-appear in the item text (R27); duplicate ids dropped; AI-only txns count straight away, never pair,
-and yield to a later bank pattern on the same item (keeping category and own mark). A refused
-batch is dropped only after one retry and only when another batch in the run worked (R34); two
-refusals in a row stop the run and keep the queue. Items blocked mid-queue are dropped for good.
-Tabs: Home, Money, Ask AI, Settings.
+Owner decisions this round: WhatsApp text kept forever; group WhatsApp by sender; store all media the notifications expose; fix money out; fix all found bugs; Ask AI uses transactions of any age (R35/R41, documented in AGENTS.md and the spec; owner may revert).
 
-Unproven until the phone check: all SQL under SQLCipher (v2 rebuild, v3, v4, email and AI queries,
-tombstones, Ask filters; proven only in desktop sqlite3, no store-level harness, R32), SMS provider
-queries and permission grant under a Store install, real IMAP, real model replies (JSON shape,
-token usage, timeouts), the 30-minute runners on HyperOS, every screen.
+Bugs found and fixed in 4b: money out (9 Alfalah formats; QR/RAAST share one Tx ID; own wallet by name+tag), WhatsApp chat split/duplicates (title becomes "You" after a reply; now keyed by contact, repair step in v5), Ask AI money answer, AI summary quality, spend display, Settings order, media storage (encrypted, per-item, lazy read).
 
-Extra phone checks: a new SMS appears within ~30 s with the app closed; first open imports the
-inbox once; stage 3 and stage 4 plans' "Controller: close" lists; a wrong model name shows the
-refusal in Settings and keeps the queue.
+Parked minors (R43): media read holds the DB write lock; an in-use legacy "You" copy with a twin stays in the "You" thread; empty-text unreadable media row shows nothing. Unproven until the phone: v5 upgrade on the real SQLCipher database, whether 1:1 sender name equals the chat title for unsaved numbers/business (thread could split once), whether WhatsApp notifications carry any media the listener can read (Settings > Saved media counters show it), Gmail (needs the owner's app password), a live bank SMS, Store install.
 
-Next step: resume prompt step 2 (or stage 5 planning if the owner asks for it first).
+Phone checks after the install: old "You" duplicates repaired; reply keeps one thread; November money out (card 58,090.20 + new formats, QR/RAAST once); Ask AI money answer; media test (friend sends photo, video, voice note, document, sticker, GIF, location, contact; read Settings > Saved media and the item sheets).
+
+Next step: resume when the owner says the phone is back.
