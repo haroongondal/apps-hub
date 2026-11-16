@@ -16,8 +16,15 @@ const KINDS: Record<MediaInfo['kind'], string> = {
 };
 export const mediaKindLabel = (kind: MediaInfo['kind']): string => KINDS[kind] ?? 'File';
 
+/** What the list row shows for an item's files: from the count alone, so no row asks the database. */
+export const mediaCountLabel = (count: number): string => (count === 1 ? 'Media' : `${count} media files`);
+
 export function mediaStatsLabel(s: MediaStats): string {
-  if (s.saved === 0 && s.unreadable === 0) return 'No media saved yet';
+  if (s.saved === 0 && s.unreadable === 0) {
+    if (s.tooBig === 0) return 'No media saved yet';
+    return `No media saved yet. ${s.tooBig === 1 ? '1 file was' : `${s.tooBig} files were`} too big.`;
+  }
   const saved = `${s.saved} ${s.saved === 1 ? 'file' : 'files'} saved (${sizeLabel(s.bytes)}).`;
-  return s.unreadable > 0 ? `${saved} ${s.unreadable} could not be read.` : saved;
+  const problems = [s.unreadable > 0 && `${s.unreadable} could not be read`, s.tooBig > 0 && `${s.tooBig} too big`].filter(Boolean);
+  return problems.length > 0 ? `${saved} ${problems.join(', ')}.` : saved;
 }

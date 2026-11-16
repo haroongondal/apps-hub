@@ -4,21 +4,11 @@ import { Button, Empty, Group, Header, Notice, Pill, Row, Screen, Text, space, u
 import InflowCore, { type Item, type ItemFilter } from 'inflow-core';
 import { whenLabel } from './format.ts';
 import { ItemSheet } from './ItemSheet.tsx';
-import { mediaKindLabel } from './media.ts';
+import { mediaCountLabel } from './media.ts';
 import { LOAD_ERROR } from './messages.ts';
 import { RenameSheet, type RenameTarget } from './RenameSheet.tsx';
 
 const PAGE = 50;
-
-function mediaLabel(item: Item): string {
-  try {
-    const files = InflowCore.mediaFor(item.id);
-    if (files.length === 0) return 'File';
-    return files.length === 1 ? mediaKindLabel(files[0].kind) : `${mediaKindLabel(files[0].kind)} and ${files.length - 1} more`;
-  } catch {
-    return 'File';
-  }
-}
 
 function ItemRow({ item, now, onPress }: { item: Item; now: number; onPress: () => void }) {
   const name = item.displayName ?? item.sender ?? item.appLabel;
@@ -44,7 +34,7 @@ function ItemRow({ item, now, onPress }: { item: Item; now: number; onPress: () 
           ) : (
             <Text numberOfLines={3}>{item.text}</Text>
           )}
-          {item.mediaCount > 0 && <Pill label={mediaLabel(item)} />}
+          {item.mediaCount > 0 && <Pill label={mediaCountLabel(item.mediaCount)} />}
           <Text variant="caption" tone="muted">{`${item.appLabel} · ${whenLabel(item.postedAt, now)}`}</Text>
           {item.deletedBySender && <Pill label="Deleted by sender" tone="warn" />}
         </View>

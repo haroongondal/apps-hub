@@ -8,7 +8,7 @@ import { mediaKindLabel, sizeLabel } from './media.ts';
 import { SAVE_ERROR } from './messages.ts';
 
 const OPEN_ERROR = 'This file could not be opened.';
-const INLINE_MAX = 8_000_000;
+const INLINE_MAX = 8 * 1024 * 1024;   // as readMedia allows in Kotlin
 const inline = (m: MediaInfo) => (m.kind === 'image' || m.kind === 'sticker') && m.size <= INLINE_MAX;
 
 function MediaGroup({ itemId }: { itemId: number }) {
