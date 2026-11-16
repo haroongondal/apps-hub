@@ -8,7 +8,7 @@ const listen = EventTarget.prototype.addEventListener;
 const query = Document.prototype.querySelector;
 const Custom = CustomEvent;
 const later = setTimeout;
-const now = performance.now.bind(performance);
+export const now = performance.now.bind(performance);
 const warn = console.warn;
 const fail = console.error;
 

@@ -36,9 +36,8 @@ feature('quality', () => {
   const known = (p: YtPlayer): Quality[] => p.getAvailableQualityLevels().filter(isQuality); // the player's order, highest first
 
   function target(p: YtPlayer): QualityChoice {
-    // Both kinds are fixed per frame except `list`, which the player knows before the address changes (an in-app navigation).
-    const page = ytPage(location.href);
-    return qualityTarget(qualityContext({ ...page, list: p.getVideoData()?.list || page.list }), document.fullscreenElement !== null, settings!.quality);
+    // Both kinds are fixed per frame except `list`, which only the player knows reliably: the address lags an in-app navigation both ways.
+    return qualityTarget(qualityContext({ ...ytPage(location.href), list: p.getVideoData()?.list ?? null }), document.fullscreenElement !== null, settings!.quality);
   }
 
   function cancel(): void {
@@ -54,7 +53,7 @@ feature('quality', () => {
     const mine = ticket;
     const started = now();
     const tick = (): void => {
-      if (mine !== ticket) return;
+      if (mine !== ticket || !settings?.on) return;
       waiting = false;
       try {
         const p = player();
@@ -69,7 +68,6 @@ feature('quality', () => {
       } catch (e) {
         if (!warned) console.warn('Sieve: quality could not be read', e);
         warned = true;
-        return;
       }
       if (now() - started < SETTLE_MS) {
         waiting = true;

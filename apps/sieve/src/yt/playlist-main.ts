@@ -1,5 +1,5 @@
 import { ytPage } from '@apps-hub/sieve-core/src/yt-bridge.ts';
-import { feature, onCommand, onSettings, onVideo, player, sendState } from './bridge-main.ts';
+import { feature, now, onCommand, onSettings, onVideo, player, sendState } from './bridge-main.ts';
 import { NAV } from './selectors.ts';
 
 // inspected 2026-11-10, signed out, Chrome for Testing 149.0.7827.55 (26-item public playlist): getPlaylistIndex() is 0-based (the address's index= is 1-based); playVideoAt(i) moves to item i as an in-app navigation; stopVideo() leaves state 5, #movie_player.unstarted-mode, a black player with no src, and playVideo() restarts at 0:00.
@@ -65,11 +65,11 @@ feature('stop and reversed playlist', () => {
       const index = p.getPlaylistIndex();
       if (index <= 0) return;
       advanced = true;
-      movedAt = performance.now();
+      movedAt = now();
       p.playVideoAt(index - 1);
     }),
     true,
   ]);
   // Assumed (fixture model), not measured on the real page: the video can end before the move has loaded, and YouTube's own advance would then undo it.
-  apply(listen, document, ['ended', safe((e) => advanced && performance.now() - movedAt < SWALLOW_MS && !(e.target as HTMLVideoElement).loop && inPlayer(e.target) && e.stopImmediatePropagation()), true]);
+  apply(listen, document, ['ended', safe((e) => advanced && now() - movedAt < SWALLOW_MS && !(e.target as HTMLVideoElement).loop && inPlayer(e.target) && e.stopImmediatePropagation()), true]);
 });
