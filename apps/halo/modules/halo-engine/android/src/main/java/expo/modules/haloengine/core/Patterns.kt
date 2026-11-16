@@ -1,17 +1,22 @@
 package expo.modules.haloengine.core
 
 import expo.modules.haloengine.core.patterns.Breath
+import expo.modules.haloengine.core.patterns.Bubbles
 import expo.modules.haloengine.core.patterns.Comet
 import expo.modules.haloengine.core.patterns.CornerBloom
 import expo.modules.haloengine.core.patterns.DashRun
 import expo.modules.haloengine.core.patterns.EmberDrift
+import expo.modules.haloengine.core.patterns.Fireflies
 import expo.modules.haloengine.core.patterns.Lantern
 import expo.modules.haloengine.core.patterns.MirrorBars
 import expo.modules.haloengine.core.patterns.NeonTube
 import expo.modules.haloengine.core.patterns.Prism
 import expo.modules.haloengine.core.patterns.PulseRing
+import expo.modules.haloengine.core.patterns.Rain
 import expo.modules.haloengine.core.patterns.Ripple
+import expo.modules.haloengine.core.patterns.RimSnow
 import expo.modules.haloengine.core.patterns.Scanner
+import expo.modules.haloengine.core.patterns.Sparks
 import expo.modules.haloengine.core.patterns.SpectrumRim
 import expo.modules.haloengine.core.patterns.TwinFlare
 
@@ -31,6 +36,11 @@ object Patterns {
     ::NeonTube,
     ::Scanner,
     ::EmberDrift,
+    ::RimSnow,
+    ::Sparks,
+    ::Fireflies,
+    ::Rain,
+    ::Bubbles,
     ::Ripple,
   )
 
