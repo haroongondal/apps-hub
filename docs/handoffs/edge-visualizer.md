@@ -54,14 +54,14 @@ APK copy: scratchpad only (not committed). Manifest dump via aapt2 `dump xmltree
 
 ## Current state + next step (2026-11-17, session 2)
 Executing the plan with cd-engineering-tools:parallel-agents-coord; ledger = docs/handoffs/halo-sdd-ledger.md (read it).
-Briefs in .sdd/ (git-excluded). Branch `halo` (rebased on origin/main d1b61ea). Done: Tasks 1, 2, 4-10. Task 12 wave in flight.
-Store manifest now: store 19 (knows halo), halo 2 = Halo 0.2.0 (946518f: real lights + 6 patterns + screens + spike probes),
+Briefs in .sdd/ (git-excluded). Branch `halo` (rebased on origin/main d1b61ea). Done: Tasks 1, 2, 4-10, 12 (all 24 patterns). Whole-branch review in flight.
+Store manifest now: store 19 (knows halo), halo 3 = Halo 0.3.0 (3ce1532: real lights, all 24 patterns, screens, spike probes),
 built from the clean detached worktree ~/Documents/apps-hub-wt/halo-release. Releases from other sessions can clobber the
 manifest: re-fetch and check after each release.
 Phone: queued in coord for device:49kjmnuwonkffqzh behind apps-hub-9a (image-tools benchmark); phone keeps dropping off Wi-Fi adb.
 Next: when the phone is mine and the owner has installed Halo 0.2.0 + granted permissions: Task 3 checks (background FFT,
 reboot start path, lock screen overlay, AOD launch) + Task 11 checks (each pattern, colours, edges, tap-through, idle,
-`dumpsys gfxinfo com.haroon.halo` frame time). Record results in spec §9 + here. Then Task 12 release (0.3.0) and the stages 3-5 plan.
+`dumpsys gfxinfo com.haroon.halo` frame time). Record results in spec §9 + here. Then fix review findings, and write the stages 3-5 plan (needs spike results).
 
 ## Previous state (session 1, superseded)
 Owner asked for a new chat to start building. Already told to the owner and accepted without objection:
