@@ -50,6 +50,7 @@ The build prints one row per feature: rules, regex rules, generic selectors, hos
 pnpm --filter sieve typecheck
 pnpm --filter sieve test         # the counting code, the pick handler, the My filters save, the shared menu and settings switches, the per-page injection and the DevTools panel's ports and rows against an in-memory `chrome`
 pnpm --filter sieve test:e2e     # headless Chromium in a fresh temporary profile; build first
+pnpm --filter sieve test:yt      # the YouTube tools against local fixture pages; build first
 pnpm --filter sieve test:e2e -- --live   # only the YouTube smoke test, against real youtube.com
 ```
 
@@ -166,6 +167,95 @@ The lists' own YouTube rules still run through `inject.ts`. The anti-adblock lis
 `test:e2e` checks this on a stand-in watch page (`www.youtube.com` mapped to the local server, serving the spike's saved player response, `spike/fixtures/player-response.json`): the four ways in (the global, `JSON.parse`, `Response.json`, and a `[{page}, {playerResponse}]` array) stay free of ad fields, with the anti-adblock list off the wrappers match the browser's own `name`, `length`, `toString`, `prototype` and `new` behaviour, with it on (the test waits for its scriptlet to wrap them too) the ad fields still go and bad JSON, a wrong `this` and a reviver behave as the browser's own, the channel switch saves and survives a worker stop, an allowed channel keeps its ads, Sieve off, paused, allowlisted or the Ads list off leave the response untouched, an embed on an allowlisted site keeps its ads while a page entry for that site's root does not reach it, and malformed page events and a later preview of another video do not change the channel the menu names.
 
 `test:e2e -- --live` runs only a smoke test against real youtube.com, signed out, in fresh profiles. It first plays three public videos for 30 seconds each with no extension at all, as the control, then the same videos with Sieve, where `#movie_player.ad-showing` must never appear and the video must keep up with the control: where the video is when the 30 seconds end must be at least 60% of the furthest point the control reached. It prints both numbers and the ratio, so a video that stalls early fails even if it got past a few seconds, and says `INCONCLUSIVE` when the control itself did not get past 5 s. Where the control served no ad, it prints `INCONCLUSIVE  <id>: no ad was served, so removal cannot be shown` instead of a pass. If no video showed an ad, or every video was skipped, it exits with status 2 (0 means every check passed, 1 that one failed): it prints `NO EVIDENCE about ad removal (no ad was served); the playback checks above still stand.` when playback checks ran and passed, and `NO EVIDENCE` with what to try next when none ran. Last, it turns Sieve off, waits for the worker to apply that, and plays one video for information only. YouTube may answer a headless browser with "Sign in to confirm you're not a bot"; that video is then reported as skipped, not failed.
+
+## YouTube tools
+
+Sieve puts a row of buttons under the player on `www.youtube.com` watch pages and adds the YouTube options Enhancer for YouTube had. It is all Sieve's own code. It runs in the page, saves to this browser and sends nothing anywhere. `m.youtube.com` and `music.youtube.com` get ad removal only. Every option starts at YouTube's own behaviour, so installing Sieve changes nothing on YouTube except the row until you turn an option on. There is no row in embeds, live chat or the Shorts player. Embeds still get speed, quality, volume, the codec limits, the mouse wheel and shortcuts, and live chat gets the theme.
+
+YouTube tools have their own switch, "YouTube tools", on the menu's YouTube tab and at the top of the YouTube section in Settings. It does not follow the header's "Sieve on" switch, which still means blocking only, and "Pause everywhere" and the allowlist do not affect it. Turning it off removes the row and stops the shortcuts.
+
+### What each tool does
+
+- **The row.** Loop (a split button: the arrow sets a part to repeat), Slower, the speed, Faster, Boost volume, Cinema, Expand, Filters (the arrow opens the sliders), Flip (the arrow picks horizontal or vertical), Screenshot, Picture-in-picture, and a cog menu with Stop, Reverse playlist (only in a playlist) and Sieve settings.
+- **Speed.** A default speed for every new video, any speed from 0.1 to 16 times, the size of each step, and the mouse wheel over the speed in the row or over the video while you hold the right button.
+- **Volume.** A default volume, a boost up to 10 times (high values distort the sound), the wheel over the video, and "Reverse the wheel" for speed and volume.
+- **Quality.** One choice each for videos, playlists and videos on other sites, and another for full screen. If a video does not offer the quality, Sieve picks the closest one below it. "Play H.264 only" and "Play at most 30 frames per second" hide the other versions from the player.
+- **Player.** Open videos in theater mode, Expand (the player fills the window), Cinema (dims the page around the player; click the dimmed part to turn it off) with its colour and opacity, video filters (blur, brightness, contrast, grayscale, hue, invert, saturation, sepia) and flips.
+- **Autoplay.** Stop videos starting by themselves: never, in tabs opened in the background, or in every tab. Playlists can keep playing, and one video can pause the others.
+- **Page.** Hide Shorts, open Shorts as normal videos, hide related videos, comments or live chat, show the newest comments first, expand descriptions, hide info cards and end screens, and set videos per row on Home, channel pages, Shorts and posts.
+- **Theme.** Dark theme, an accent colour (twelve colours and YouTube red; it leaves the logo and the Subscribe button alone), and My CSS, added to every YouTube page after the accent.
+- **Experiments.** Three presets that undo YouTube's modern player, its icons and its horizontal volume slider (all off), and a "Flag overrides" box, one `name=value` per line. A change made there applies from the next page load. Changing these can break YouTube; clear them to undo.
+- **Screenshots.** A PNG of the frame on screen, with your filters and flips, saved as `Downloads/Sieve/<title> <time>.png`.
+- **Backup.** Settings has a Backup and import section: one file with `settings` (blocking) and `youtube`. Importing rebuilds My filters' compiled data. Counts, build data and the session are not in it.
+
+### Where the settings live
+
+In `chrome.storage.local`, under the key `youtube`, apart from blocking's `settings`: a speed button then does not make the worker re-apply blocking or rewrite My filters. Content scripts never write storage themselves; they send `{ type: 'yt-set', patch }` to the worker, which writes under the same lock as the settings page. Settings reach a page with one storage read at `document_start`, then a hello handshake with the main world. The `sieve-yt-applied` mark in the page's performance entries shows when they arrived (it comes before first paint on a hard load).
+
+### What YouTube can see
+
+Sieve's two worlds talk through `CustomEvent`s on `document`, which YouTube's own scripts can read and send too. So the settings sent to the main world are only `MainSettings`: `on`, `speed`, the volume's `setDefault`, `level` and `step` (not the boost), `quality` and `experiments` (the presets and the override text). The theme, My CSS, filters, autoplay, page tidying, shortcuts and blocking settings never go there. The page also sees the player state Sieve reads back: video id, title, speed, quality and the qualities offered, volume, muted, live, and playlist position. Sieve checks every event it receives, its row and popovers act only on real clicks (`event.isTrusted`), and a page event never makes it write storage, download a file or open a tab.
+
+### The `downloads` permission
+
+Screenshots save through `chrome.downloads`, so the manifest asks for `downloads`. Chrome makes the `Sieve` folder inside Downloads and does not ask. The permission is the only one the YouTube tools added; Phase 3's downloads use it too. Sieve cuts a screenshot's file name to what Chrome accepts (no `/ \ : * ? " < > |`, no `~`, no control or format characters, at most 200 bytes of title).
+
+### Shortcuts
+
+Thirty shortcuts are on `chrome://extensions/shortcuts`, none with a default key: one for each of the 29 actions (loop, stop, reverse the playlist, slower, faster, default speed, normal speed, boost, cinema, expand, filters, flip horizontally, flip vertically, screenshot, picture-in-picture, show or hide comments, related videos, and cards, and one for auto, 144p, 240p, 360p, 480p, 720p, 1080p, 1440p, 2160p, 2880p and 4320p) and one that opens Sieve's settings. Bind the ones you want. A shortcut acts on the active tab: the top frame on YouTube pages, an embed only while its video plays. Settings has a Shortcuts section that lists them and opens Chrome's page.
+
+### Known limits
+
+- **H.264 only.** YouTube offers H.264 up to 1080p, so higher qualities disappear, and a video with no H.264 version can be unplayable. The first codec checks YouTube makes before the settings arrive get the browser's own answer.
+- **Picture-in-picture needs a click on the page.** Chrome refuses it from a shortcut or the toolbar menu; Sieve then says to use the button under the video. Headless Chrome never refuses, so the refusal is untested.
+- **A reversed playlist reverses only the automatic advance** when a video ends. YouTube's panel order and its Next button still go forward. The move at the end of a video was checked on the fixture, not against YouTube's own advance on a real page.
+- **Default speed** goes on at the video's first load event, and again at the first frame when something changed it in the first 2 seconds. A video you resume on a signed-in profile may keep its remembered speed. A live stream is left at its own speed.
+- **Volume boost** starts only after a click or key press (an autoplaying video is never silenced), only for videos that play from a `blob:` source, and Off sets the gain back to 1 but leaves the video routed.
+- **Quality** waits up to 10 seconds for the player to list its qualities. A quality you pick by hand is kept when a setting or a full-screen change leaves Sieve's own target as it was.
+- **Flag overrides** cannot hold `&`, `=`, `+` or `%` in a value, and YouTube renames flags, so a preset can stop working. Patching has to happen within about a second of the page loading. The presets were found signed out; a signed-in profile may see other experiments.
+- **Dark theme** sets YouTube's own `dark` attribute. Whether YouTube's Appearance switch overrides it, and how live chat looks, are unchecked (signed out has no Appearance item and the chat frame cannot be inspected). My CSS goes at the end of `<html>`, so it wins against a page rule of equal weight.
+- **Screenshots.** A blur radius is measured in video pixels, so on a video shown smaller than its size it looks softer than on screen. The title is the tab's title. A video that blocks reading its pixels gives "Sieve can't take a screenshot of this video."
+- **Popovers** are placed once, when they open: a window resized while one is open can cut it off, and a window under about 120 pixels tall cannot show them.
+- **A right click over the video** with a right-button wheel option on opens YouTube's own menu.
+- **Page tidying** depends on YouTube's markup. A step whose selector finds nothing turns itself off on that page and the rest still run. "Newest comments first" waits for the comments, which come with the first scroll. "Posts per row" was never seen on a page, so it is untested.
+- **Autoplay.** Space or K with nothing focused counts as you pressing play. A play button inside another site's player (a facade), media keys and an address that lags YouTube's in-page navigation were not tested on live pages.
+- **Pause other videos** covers YouTube tabs, and YouTube videos on other sites once they have played.
+- **Settings reach the page after a short delay**, so on a hard load the first player response and the first codec checks can come before them (the ad-stripping note under "YouTube ads" has the same limit).
+
+### Owner checklist: YouTube tools
+
+Automated tests run signed out in a fresh profile, so these need your account and a real Chrome:
+
+1. With your account, the row appears under the player, and Speed, Loop, Boost volume, Cinema, Expand, Filters, Flip and Screenshot (saved in `Downloads/Sieve`) work. After 5 clicks on related videos the row never blinks.
+2. With Premium, picking 1080p causes no error and the row is unaffected.
+3. A members-only video you can watch, and an age-restricted video, play as before, with no errors in the console from Sieve.
+4. With "Boost volume" on, open a video in a new tab without clicking: it plays with sound. Click the page: the boost starts.
+5. With "Play H.264 only", "Stats for nerds" shows `avc1`. With "Play at most 30 frames per second", it shows 30 fps or fewer.
+6. Picture-in-picture from its button in the row.
+7. Bind one shortcut in `chrome://extensions/shortcuts` and use it on a video.
+8. Save a backup, change a setting, import the backup: the setting is back.
+9. Turn "YouTube tools" off: the row disappears and the shortcuts stop. The header "Sieve on" (blocking) is unaffected.
+10. With your real Enhancer settings re-entered in Sieve, uninstall Enhancer and use YouTube for a day.
+11. Play a real playlist to the end of a video with "Reverse playlist" on and with Loop on: the previous video plays next, not YouTube's own next one, and a looping video repeats.
+12. Set a default speed, then open a video you had watched halfway: it starts at that speed, not at a speed YouTube remembered.
+13. Set a default speed and open a live stream: it plays at normal speed.
+14. Turn on "Dark theme", then switch YouTube's own Appearance to Light: check which one wins. Signed out has no Appearance item.
+15. Open a live stream with chat: check that "Hide live chat" and the dark theme reach the chat frame.
+16. Use "Allow ads on <channel>" on a channel that serves a pre-roll ad, with a quality set and Loop on: after the ad the video plays at that quality and Loop repeats the video, not the ad.
+17. Pick a quality, then go to full screen and back on real YouTube: each keeps the quality you set for it ("Videos in full screen").
+18. With Picture-in-picture bound to a shortcut, press it on a video you have not clicked: the toast says to use the button. Headless Chrome opens it anyway.
+19. Take a screenshot and look in your real `Downloads/Sieve/` folder (the tests save to a temporary folder).
+20. With autoplay stopped in every tab, check three cases on live pages: an embedded video on another site behind its own play button, a keyboard media key, and moving between videos in the same tab. Nothing starts by itself, and your own play works.
+
+### Watch-page performance run
+
+`node apps/sieve/test/yt-perf.mjs` (build first; `--local` or `--live` runs half of it; `LIVE_RUNS` sets the number of live loads, 7 by default; `--self-check` runs the verdict logic on made-up numbers and starts no browser). It needs the machine to itself and takes about 10 minutes. It has three parts, all in fresh temporary profiles:
+
+- **Leaks**, on the local fixture with every option on (every switch on, every choice off its default, the filters on): 25 in-app navigations, then `JSEventListeners`, `Nodes` and `JSHeapUsedSize` after a garbage collection at navigation 5 and at 25. It passes when listeners grew by at most 5, nodes by at most 20 and the heap by at most 1 MB.
+- **Settings read cost**, on the local fixture: the `sieve-yt-applied` mark time with 2 MB of My filters stored, against none, the median of 10 loads each. It passes when it is at most 20 ms later.
+- **Watch-page load**, on real YouTube, signed out: `dQw4w9WgXcQ`, 7 cold loads with Sieve and 7 without, alternating, once with the default options and once with every option on. It prints the median DCL, load time and heap 10 seconds after load, and passes when the load with Sieve is at most 1.10 times the one without and the heap is at most 5 MB more. A side that got a bot check or consent page is excluded, not passed, and the run then exits with status 2 (no evidence); a failure exits with 1.
+
+The flicker check (the row never removed, never 0 px tall in a frame) is not repeated there: `test:yt` checks it on the fixture and `test:e2e -- --live` on real YouTube.
 
 ## Known limits
 
