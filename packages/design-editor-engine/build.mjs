@@ -1,4 +1,5 @@
-// Inlines the three vendor scripts plus shell-mobile.js, app.js and touch.js of the mobile
+// Inlines the vendor scripts and the page scripts, in the order of the `scripts` array below
+// (fabric, pdf-lib, fontkit, shell-mobile.js, copy.js, image-maths.js, app.js, touch.js) of the mobile
 // page, and the design-system stylesheet (fonts as data: URLs) into one self-contained file
 // for the Expo WebView asset. Pure Node, no dependencies. Also publishes window.__fontsData —
 // the page's fonts resolve from that table in the WebView, because the asset alone ships no

@@ -88,7 +88,7 @@ function enhanceValues(px) {
   if (hi - lo < 8) return none;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const F = clamp(223 / (hi - lo), 1, 1.6);
-  const brightness = clamp((128 - (lo + hi) / 2) / 255, -0.25, 0.25);
+  const brightness = clamp((128 - (lo + hi) / 2) / 255, -0.24, 0.24); // 0.24 both ways: rounding 12.5 steps would give +0.26 but -0.24
   // inverse of Fabric's contrast factor F = 1.015(c+1)/(1.015-c)
   const contrast = Math.min((1.015 * (F - 1)) / (F + 1.015), 0.3);
   const step = (v) => Math.round(v * 50) / 50 || 0; // "|| 0" turns -0 into 0

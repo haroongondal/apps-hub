@@ -91,6 +91,7 @@ const alpha = await page.evaluate(() => {
   return [x.getImageData(5, 5, 1, 1).data[3], x.getImageData(100, 100, 1, 1).data[3]];
 });
 assert.deepEqual(alpha, [0, 255], 'corner cleared, subject kept');
+assert.ok(!(await page.locator('#photoColors .swatch').evaluateAll(l => l.map(b => b.title))).includes('#ffffff'), 'the cut-out photo no longer offers its removed white backdrop');
 
 // photo colours and Auto-enhance on a dull 1600 x 1200 photo-like image; the image and the page colour are put back afterwards
 {
@@ -148,6 +149,28 @@ assert.deepEqual(alpha, [0, 255], 'corner cleared, subject kept');
   assert.notEqual((await snap()).hash, pre.hash, 'the photo changed');
   await menu('undo'); await settle(page);
   assert.deepEqual(await snap(), pre, 'one undo puts back the filters and the pixels');
+
+  // a balanced photo: nothing to change, and the person's own Brightness is cleared with a plain message
+  await page.evaluate(() => editor.canvas.remove(editor.canvas.getObjects().at(-1)));
+  const ramp = await page.evaluate(() => {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+    const x = c.getContext('2d'), g = x.createLinearGradient(0, 0, 512, 0); g.addColorStop(0, '#000'); g.addColorStop(1, '#fff');
+    x.fillStyle = g; x.fillRect(0, 0, 512, 256);
+    return c.toDataURL('image/png').split(',')[1];
+  });
+  await page.setInputFiles('#imgFile', { name: 'ramp.png', mimeType: 'image/png', buffer: Buffer.from(ramp, 'base64') });
+  await until(() => editor.canvas.getActiveObject()?.type === 'image' && editor.canvas.getActiveObject().width === 512);
+  await settle(page);
+  await page.evaluate(() => { editor.canvas.getActiveObject().filters.marker = true; });
+  await page.click('#fauto');
+  assert.equal(await page.textContent('#toast'), 'This photo already looks balanced');
+  assert.ok(await page.evaluate(() => editor.canvas.getActiveObject().filters.marker), 'a balanced photo is left as it is');
+  await page.evaluate(() => { const e = document.querySelector('#fbr'); e.value = 0.2; e.dispatchEvent(new Event('input')); });
+  assert.equal(await page.evaluate(() => editor.canvas.getActiveObject().filters.length), 1);
+  await page.click('#fauto');
+  assert.equal(await page.textContent('#toast'), 'This photo already looks balanced, so Brightness and Contrast are back to 0');
+  assert.equal(await page.evaluate(() => editor.canvas.getActiveObject().filters.length), 0);
+  assert.equal(await page.inputValue('#fbr'), '0');
 
   await page.evaluate(bg => { editor.canvas.backgroundColor = bg; editor.canvas.remove(editor.canvas.getObjects().at(-1)); editor.canvas.discardActiveObject(); editor.canvas.requestRenderAll(); }, bg0);
   await settle(page);

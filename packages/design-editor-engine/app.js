@@ -486,6 +486,7 @@ async function removeBg(img, tol) {
   ctx.putImageData(d, 0, 0);
   await img.setSrc(c.toDataURL('image/png'));
   canvas.requestRenderAll(); record();
+  inspect(); // the colours panel must read the cut-out, not the old backdrop
   toast(removed ? 'Background removed' : 'No plain background found at the edges');
 }
 
@@ -673,9 +674,11 @@ function inspect() {
       toast(added.length ? `Added ${added.length} ${added.length === 1 ? 'colour' : 'colours'} to the brand kit` : 'These colours are already in the brand kit');
     });
     on('fauto', 'onclick', () => {
-      const v = enhanceValues(smallPixels(o));
+      const v = enhanceValues(smallPixels(o)), balanced = !v.brightness && !v.contrast;
+      // a balanced photo with no Brightness or Contrast of the person's own is left untouched
+      if (balanced && !imgFilter(o, 'Brightness') && !imgFilter(o, 'Contrast')) return toast('This photo already looks balanced');
       $('#fbr').value = v.brightness; $('#fco').value = v.contrast; apply();
-      if (!v.brightness && !v.contrast) toast('This photo already looks balanced');
+      if (balanced) toast('This photo already looks balanced, so Brightness and Contrast are back to 0');
     });
     on('fgr', 'onchange', apply);
   }

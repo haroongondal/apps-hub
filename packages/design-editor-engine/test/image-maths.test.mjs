@@ -94,12 +94,39 @@ test('enhance: dark image gets brighter', () => {
   assert.ok(enhanceValues(cases.dark).brightness > 0);
 });
 
+const onStep = (v) => Math.abs(v * 50 - Math.round(v * 50)) < 1e-9;
+
 test('enhance: values sit on the slider steps', () => {
-  for (const px of Object.values(cases)) {
+  const twoTone = make(1000, (i) => grey(i < 500 ? 100 : 157)); // brightness rounds to -0.0 before the fix-up
+  for (const px of [...Object.values(cases), twoTone]) {
     for (const v of Object.values(enhanceValues(px))) {
-      assert.equal(Math.round(v * 50), v * 50);
+      assert.ok(onStep(v), `${v} is a multiple of 0.02`);
       assert.ok(!Object.is(v, -0));
     }
   }
+  assert.ok(!Object.is(enhanceValues(twoTone).brightness, -0));
   assert.deepEqual(enhanceValues(make(10, () => [1, 2, 3, 0])), { brightness: 0, contrast: 0 });
+});
+
+test('enhance: brightness is capped at the same size both ways', () => {
+  assert.equal(enhanceValues(ramp(0, 40)).brightness, 0.24);
+  assert.equal(enhanceValues(ramp(215, 255)).brightness, -0.24);
+});
+
+test('enhance: a dull ramp gets the capped contrast', () => {
+  assert.equal(enhanceValues(cases.dull).contrast, 0.24);
+});
+
+test('palette: a noisy three-colour image comes back in order of weight', () => {
+  let s = 4242;
+  const noise = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) % 9) - 4;
+  const base = [rgb('#c03020'), rgb('#2060c0'), rgb('#30a050')];
+  const px = make(1000, (i) => base[i < 500 ? 0 : i < 800 ? 1 : 2].map((v) => v + noise()));
+  const p = paletteFromPixels(px);
+  base.forEach((c, i) => assert.ok(dist(p[i], '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('')) <= 12, `swatch ${i} is ${p[i]}`));
+});
+
+test('palette: alpha 128 is visible, alpha 127 is not', () => {
+  assert.deepEqual(paletteFromPixels(make(100, () => [200, 10, 10, 127])), []);
+  assert.equal(paletteFromPixels(make(100, () => [200, 10, 10, 128])).length, 6);
 });
