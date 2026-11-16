@@ -122,10 +122,10 @@ export function youtubeSection(): HTMLElement {
   const section = h('section', { id: 'youtube', inert: true }, h('h2', { class: 'ui-heading' }, 'YouTube'), tools, stack);
   const ready = () => (section.inert = false);
   apply(current, true);
-  void read().then(
-    (y) => (apply(y, true), ready()),
-    (e) => (console.error('Sieve could not read the YouTube settings', e), ready()),
-  );
+  void read()
+    .then((y) => apply(y, true))
+    .catch((e) => console.error('Sieve could not read or show the YouTube settings', e))
+    .finally(ready);
   chrome.storage.onChanged.addListener((changes, where) => {
     if (where === 'local' && YOUTUBE_KEY in changes) apply(validateYouTube(changes[YOUTUBE_KEY].newValue));
   });
