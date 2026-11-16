@@ -31,8 +31,8 @@ class HaloEngineModule : Module() {
     "audioAllowed" to (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED),
     "notificationsAllowed" to context.getSystemService(NotificationManager::class.java).areNotificationsEnabled(),
     "audio" to HaloService.audio,
-    "playingApp" to null,
-    "frameP95Ms" to null,
+    "playingApp" to HaloService.playingApp,
+    "frameP95Ms" to HaloService.frameP95Ms,
   )
 
   override fun definition() = ModuleDefinition {

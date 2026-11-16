@@ -1,5 +1,6 @@
 package expo.modules.haloengine.android
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
@@ -8,17 +9,42 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.graphics.Color
 import android.graphics.drawable.Icon
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
-import android.app.Notification
+import android.os.Looper
+import android.os.SystemClock
+import expo.modules.haloengine.core.AudioState
+import expo.modules.haloengine.core.AudioWatch
+import expo.modules.haloengine.core.Pattern
+import expo.modules.haloengine.core.Patterns
+import expo.modules.haloengine.core.RandomMotion
 import expo.modules.haloengine.core.Settings
+import expo.modules.haloengine.core.Spectrum
+import expo.modules.haloengine.core.SpectrumFrame
 
 /** Foreground service for the stage 1 spike. Which FGS type survives which start path is what the probes measure. */
 class HaloService : Service() {
+  private val main = Handler(Looper.getMainLooper())
   private var tap: AudioTap? = null
   private var overlay: EdgeOverlay? = null
+  private var media: MediaWatch? = null
   private var screenOff: BroadcastReceiver? = null
+
+  private val spectrum = Spectrum(BANDS)
+  private var frame = SpectrumFrame(FloatArray(BANDS), 0f, false)
+  private val randomFrame = SpectrumFrame(FloatArray(BANDS), 0f, false)
+  private val watch = AudioWatch()
+  private var state: AudioState? = null
+  private var attempt = 0
+  private var patternId = ""
+  private var pattern: Pattern = Patterns.create("")
+
+  private val retry = Runnable { startTap() }
+  // Blocked audio sends no FFT to kick the frame loop, so random motion needs its own wake-up.
+  private val randomCheck = Runnable { if (watch.animate(now())) overlay?.kick() }
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -36,17 +62,111 @@ class HaloService : Service() {
     }
     if (running) return START_NOT_STICKY
     running = true
-    applySettings(SettingsStore.load(this))
     ProbeLog.log(this, "service", "notificationsEnabled=${getSystemService(NotificationManager::class.java).areNotificationsEnabled()}")
-    overlay = EdgeOverlay(this).also { it.add() }
-    tap = AudioTap(this, { overlay?.setLevel(it) }, ::publish).also { it.start() }
     registerScreenOff()
-    publish()
+    onSettings = { s -> main.post { apply(s) } }
+    onListener = { main.post { media?.start() } }
+    applySettings(SettingsStore.load(this))
     return START_NOT_STICKY
   }
 
+  private fun now() = SystemClock.uptimeMillis()
+
+  private fun apply(s: Settings) {
+    if (!running) return
+    if (!s.enabled) {
+      lightsOff()
+      ProbeLog.log(this, "service", "lights disabled preview=$preview")
+      if (!preview) stopSelf()
+      check()
+      return
+    }
+    if (s.pattern != patternId) {
+      pattern = Patterns.create(s.pattern)
+      patternId = s.pattern
+    }
+    if (overlay == null) lightsOn()
+    overlay?.apply(s, pattern, currentColors(s))
+  }
+
+  private fun currentColors(s: Settings): IntArray = s.colors.palette.map { Color.parseColor(it) }.toIntArray()
+
+  private fun lightsOn() {
+    overlay = EdgeOverlay(this, watch::animate, ::frameAt).also { it.add() }
+    media = MediaWatch(this, ::onMedia).also { it.start() }
+    startTap()
+  }
+
+  private fun lightsOff() {
+    main.removeCallbacks(retry)
+    main.removeCallbacks(randomCheck)
+    tap?.stop()
+    tap = null
+    media?.stop()
+    media = null
+    playingApp = null
+    watch.onPlaying(false)
+    overlay?.remove()
+    overlay = null
+    attempt = 0
+  }
+
+  private fun startTap() {
+    tap?.stop()
+    tap = AudioTap(this, ::onFft, ::onInit).also { it.start() }
+  }
+
+  private fun onInit(ok: Boolean) {
+    watch.onInit(ok, now())
+    if (ok) {
+      attempt = 0
+    } else {
+      val delay = watch.retryDelayMs(attempt++)
+      ProbeLog.log(this, "audio", "retry in ${delay}ms attempt=$attempt")
+      main.postDelayed(retry, delay)
+      main.postDelayed(randomCheck, RANDOM_CHECK_MS)
+    }
+    check()
+  }
+
+  private fun onFft(fft: ByteArray, nonZero: Boolean) {
+    val t = now()
+    frame = spectrum.update(fft, t)
+    watch.onFft(nonZero, t)
+    check()
+    if (watch.animate(t)) overlay?.kick()
+  }
+
+  // shortcut: without listener access playing stays false, so no random motion (FFT frames arrive even in silence and would keep it animating); fine until a playing signal without the listener exists.
+  private fun onMedia() {
+    playingApp = media?.playingApp
+    watch.onPlaying(playingApp != null)
+    main.removeCallbacks(randomCheck)
+    if (playingApp != null) main.postDelayed(randomCheck, RANDOM_CHECK_MS)
+    publish()
+  }
+
+  private fun frameAt(t: Long): SpectrumFrame {
+    if (!watch.useRandom(t)) return frame
+    RandomMotion.fill(randomFrame.bands, t, RANDOM_SEED)
+    randomFrame.level = randomFrame.bands.average().toFloat()
+    return randomFrame
+  }
+
+  private fun check() {
+    val s = if (overlay == null) null else watch.state(now())
+    if (s == state) return
+    state = s
+    ProbeLog.log(this, "audio", "state=${s?.name ?: "off"}")
+    publish()
+  }
+
   private fun publish() {
-    audio = tap?.status ?: "idle"
+    audio = when (state) {
+      AudioState.OK -> "ok"
+      AudioState.BLOCKED -> "blocked"
+      else -> "idle"
+    }
     onChange?.invoke()
   }
 
@@ -77,13 +197,14 @@ class HaloService : Service() {
   }
 
   override fun onDestroy() {
+    onSettings = null
+    onListener = null
     screenOff?.let { runCatching { unregisterReceiver(it) } }
     screenOff = null
-    tap?.stop()
-    tap = null
-    overlay?.remove()
-    overlay = null
+    lightsOff()
     running = false
+    state = null
+    frameP95Ms = null
     ProbeLog.log(this, "service", "destroyed")
     publish()
   }
@@ -95,6 +216,9 @@ class HaloService : Service() {
     private const val EXTRA_PATH = "path"
     private const val CHANNEL = "halo_running"
     private const val NOTIFICATION_ID = 7001
+    private const val BANDS = 32
+    private const val RANDOM_SEED = 0x4A10
+    private const val RANDOM_CHECK_MS = 3_050L
 
     @Volatile var running = false
       private set
@@ -110,9 +234,15 @@ class HaloService : Service() {
       onSettings?.invoke(s)
     }
 
+    @Volatile var preview = false
+    @Volatile var onListener: (() -> Unit)? = null
+
     /** "ok", "blocked" or "idle"; idle whenever the service is not running. */
     @Volatile var audio = "idle"
       private set
+    @Volatile var playingApp: String? = null
+      private set
+    @Volatile var frameP95Ms: Double? = null
 
     fun typeName(type: Int) = when (type) {
       MEDIA_PLAYBACK -> "mediaPlayback"

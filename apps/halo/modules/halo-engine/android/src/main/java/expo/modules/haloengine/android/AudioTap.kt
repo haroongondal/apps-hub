@@ -7,20 +7,28 @@ import android.os.Handler
 import android.os.Looper
 import expo.modules.haloengine.core.Probe
 
-/** Spike: Visualizer(0) FFT tap. Create and release on the main thread; callbacks then arrive on it too. */
-class AudioTap(private val ctx: Context, private val onLevel: (Float) -> Unit, private val onChange: () -> Unit) {
+/** Visualizer(0) FFT tap. Create and release on the main thread; callbacks then arrive on it too. One instance per attempt. */
+class AudioTap(
+  private val ctx: Context,
+  private val onFft: (fft: ByteArray, nonZero: Boolean) -> Unit,
+  private val onInit: (ok: Boolean) -> Unit,
+) {
   private val main = Handler(Looper.getMainLooper())
   private var vis: Visualizer? = null
   private var frames = 0L
   private var nonZero = 0L
-  @Volatile var initFailed = false
-    private set
-
-  val status: String get() = Probe.audioStatus(initFailed, nonZero)
 
   private val tick = object : Runnable {
     override fun run() {
       ProbeLog.log(ctx, "audio", "fft frames=$frames nonzero=$nonZero")
+      val v = vis ?: return
+      // Another app taking over the audio effect leaves ours created but disabled.
+      if (!runCatching { v.enabled }.getOrDefault(false)) {
+        ProbeLog.log(ctx, "audio", "Visualizer disabled by the system or another app")
+        stop()
+        onInit(false)
+        return
+      }
       main.postDelayed(this, 5_000)
     }
   }
@@ -31,15 +39,9 @@ class AudioTap(private val ctx: Context, private val onLevel: (Float) -> Unit, p
     override fun onFftDataCapture(v: Visualizer?, fft: ByteArray?, samplingRate: Int) {
       if (fft == null) return
       frames++
-      if (Probe.anyNonZero(fft)) {
-        if (nonZero++ == 0L) {
-          ProbeLog.log(ctx, "audio", "first non-zero fft frame after frames=$frames rate=$samplingRate")
-          onChange()
-        }
-        onLevel(Probe.level(fft))
-      } else {
-        onLevel(0f)
-      }
+      val sound = Probe.anyNonZero(fft)
+      if (sound && nonZero++ == 0L) ProbeLog.log(ctx, "audio", "first non-zero fft frame after frames=$frames rate=$samplingRate")
+      onFft(fft, sound)
     }
   }
 
@@ -47,7 +49,7 @@ class AudioTap(private val ctx: Context, private val onLevel: (Float) -> Unit, p
     val granted = ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     ProbeLog.log(ctx, "audio", "RECORD_AUDIO granted=$granted")
     var v: Visualizer? = null
-    try {
+    val ok = try {
       v = Visualizer(0)
       val size = v.setCaptureSize(Visualizer.getCaptureSizeRange()[1])
       val rate = Visualizer.getMaxCaptureRate()
@@ -57,12 +59,13 @@ class AudioTap(private val ctx: Context, private val onLevel: (Float) -> Unit, p
       if (enabled != Visualizer.SUCCESS || set != Visualizer.SUCCESS) throw IllegalStateException("Visualizer refused to start (setListener=$set setEnabled=$enabled)")
       vis = v
       main.postDelayed(tick, 5_000)
+      true
     } catch (e: Exception) {
-      initFailed = true
       ProbeLog.log(ctx, "audio", "Visualizer init FAILED ${e.javaClass.name}: ${e.message}")
       runCatching { v?.release() }
+      false
     }
-    onChange()
+    onInit(ok)
   }
 
   fun stop() {

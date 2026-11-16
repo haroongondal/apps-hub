@@ -1,36 +1,28 @@
 package expo.modules.haloengine.android
 
 import android.content.Context
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.PixelFormat
-import android.graphics.RectF
-import android.hardware.display.DisplayManager
 import android.hardware.input.InputManager
 import android.provider.Settings
-import android.view.Display
-import android.view.RoundedCorner
-import android.view.View
 import android.view.WindowManager
+import expo.modules.haloengine.core.Pattern
+import expo.modules.haloengine.core.SpectrumFrame
+import expo.modules.haloengine.core.Settings as HaloSettings
 
-/** Spike: one full-screen overlay window drawing a 3 dp ring whose alpha follows the FFT level. */
-class EdgeOverlay(private val ctx: Context) {
+/** One full-screen, touch-through overlay window hosting the [EdgeView]. */
+class EdgeOverlay(
+  private val ctx: Context,
+  private val animate: (Long) -> Boolean,
+  private val spectrum: (Long) -> SpectrumFrame,
+) {
   private val wm = ctx.getSystemService(WindowManager::class.java)
-  private var view: RingView? = null
-
-  private fun radii(): FloatArray {
-    val d = ctx.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
-    fun r(pos: Int) = (d?.getRoundedCorner(pos)?.radius ?: 0).toFloat()
-    return floatArrayOf(r(RoundedCorner.POSITION_TOP_LEFT), r(RoundedCorner.POSITION_TOP_RIGHT), r(RoundedCorner.POSITION_BOTTOM_RIGHT), r(RoundedCorner.POSITION_BOTTOM_LEFT))
-  }
+  private var view: EdgeView? = null
 
   fun add() {
     ProbeLog.log(ctx, "overlay", "canDrawOverlays=${Settings.canDrawOverlays(ctx)}")
     try {
-      val corners = radii()
       val maxOpacity = ctx.getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch
-      val v = RingView(ctx, corners)
+      val v = EdgeView(ctx, animate, spectrum)
       val lp = WindowManager.LayoutParams(
         WindowManager.LayoutParams.MATCH_PARENT,
         WindowManager.LayoutParams.MATCH_PARENT,
@@ -49,51 +41,26 @@ class EdgeOverlay(private val ctx: Context) {
       wm.addView(v, lp)
       view = v
       val max = wm.maximumWindowMetrics.bounds
-      ProbeLog.log(ctx, "overlay", "window added corners(tl,tr,br,bl)=${corners.joinToString(",") { it.toInt().toString() }} screen=${max.width()}x${max.height()}")
+      ProbeLog.log(ctx, "overlay", "window added screen=${max.width()}x${max.height()}")
     } catch (e: Exception) {
       ProbeLog.log(ctx, "overlay", "window add FAILED ${e.javaClass.name}: ${e.message}")
     }
   }
 
-  fun setLevel(level: Float) {
-    view?.setLevel(level)
+  fun apply(s: HaloSettings, pattern: Pattern, colors: IntArray) {
+    view?.apply(s, pattern, colors)
+  }
+
+  fun kick() {
+    view?.kick()
   }
 
   fun remove() {
-    view?.let { v -> runCatching { wm.removeView(v) }.onFailure { ProbeLog.log(ctx, "overlay", "remove FAILED ${it.javaClass.name}: ${it.message}") } }
+    view?.let { v ->
+      v.stop()
+      runCatching { wm.removeView(v) }.onFailure { ProbeLog.log(ctx, "overlay", "remove FAILED ${it.javaClass.name}: ${it.message}") }
+    }
     view = null
     ProbeLog.log(ctx, "overlay", "window removed")
-  }
-
-  private class RingView(private val c: Context, private val radii: FloatArray) : View(c) {
-    private val dp = resources.displayMetrics.density
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      style = Paint.Style.STROKE
-      strokeWidth = 3 * dp
-      color = 0xFF4DD0E1.toInt()
-    }
-    private val path = Path()
-    private var alpha255 = 40
-
-    fun setLevel(level: Float) {
-      val a = 40 + (215 * level).toInt()
-      if (a != alpha255) {
-        alpha255 = a
-        invalidate()
-      }
-    }
-
-    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
-      val half = paint.strokeWidth / 2
-      path.reset()
-      // addRoundRect wants x and y radii per corner (8 values), in the order tl, tr, br, bl.
-      path.addRoundRect(RectF(half, half, w - half, h - half), FloatArray(8) { radii[it / 2] }, Path.Direction.CW)
-      ProbeLog.log(c, "overlay", "view size=${w}x$h")
-    }
-
-    override fun onDraw(canvas: Canvas) {
-      paint.alpha = alpha255
-      canvas.drawPath(path, paint)
-    }
   }
 }
