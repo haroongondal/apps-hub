@@ -2,6 +2,7 @@ package expo.modules.haloengine.android
 
 import android.content.ComponentName
 import android.content.Context
+import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -9,7 +10,7 @@ import android.os.Handler
 import android.os.Looper
 
 /** Which app (if any) is playing, from the active media sessions; needs notification-listener access to HaloListener. */
-class MediaWatch(private val ctx: Context, private val onChange: () -> Unit) {
+class MediaWatch(private val ctx: Context, private val onChange: () -> Unit, private val onMetadata: () -> Unit) {
   private val msm = ctx.getSystemService(MediaSessionManager::class.java)
   private val main = Handler(Looper.getMainLooper())
   private var controllers: List<MediaController> = emptyList()
@@ -18,10 +19,14 @@ class MediaWatch(private val ctx: Context, private val onChange: () -> Unit) {
     private set
   var playingApp: String? = null
     private set
+  var playing: MediaController? = null
+    private set
 
   private val callback = object : MediaController.Callback() {
     override fun onPlaybackStateChanged(state: PlaybackState?) = refresh()
     override fun onSessionDestroyed() = refresh()
+    // No controller argument, so a non-playing session's change costs one redundant recompute.
+    override fun onMetadataChanged(metadata: MediaMetadata?) = onMetadata()
   }
 
   private val sessions = MediaSessionManager.OnActiveSessionsChangedListener { track(it.orEmpty()) }
@@ -43,6 +48,7 @@ class MediaWatch(private val ctx: Context, private val onChange: () -> Unit) {
     if (available) runCatching { msm.removeOnActiveSessionsChangedListener(sessions) }
     controllers.forEach { it.unregisterCallback(callback) }
     controllers = emptyList()
+    playing = null
     available = false
   }
 
@@ -54,8 +60,11 @@ class MediaWatch(private val ctx: Context, private val onChange: () -> Unit) {
   }
 
   private fun refresh() {
-    val app = controllers.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }?.packageName
-    if (app == playingApp) return
+    val c = controllers.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+    val app = c?.packageName
+    if (app == playingApp && c?.sessionToken == playing?.sessionToken) return
+    playing = c
+    if (app == playingApp) return onChange()
     playingApp = app
     ProbeLog.log(ctx, "media", "playing=${app ?: "none"}")
     onChange()

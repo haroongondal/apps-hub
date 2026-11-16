@@ -78,6 +78,12 @@ class EdgeView(
     invalidate()
   }
 
+  /** Colour-only swap (art or wallpaper changed): no relayout. */
+  fun setColors(colors: IntArray) {
+    this.colors = colors
+    invalidate()
+  }
+
   fun kick() {
     if (looping || path == null) return
     looping = true

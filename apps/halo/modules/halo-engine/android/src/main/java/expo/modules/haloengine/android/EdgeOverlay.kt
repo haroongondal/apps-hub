@@ -51,6 +51,10 @@ class EdgeOverlay(
     view?.apply(s, pattern, colors)
   }
 
+  fun setColors(colors: IntArray) {
+    view?.setColors(colors)
+  }
+
   fun kick() {
     view?.kick()
   }

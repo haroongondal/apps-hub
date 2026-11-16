@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.app.WallpaperManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -18,12 +19,14 @@ import android.os.Looper
 import android.os.SystemClock
 import expo.modules.haloengine.core.AudioState
 import expo.modules.haloengine.core.AudioWatch
+import expo.modules.haloengine.core.ColorSource
 import expo.modules.haloengine.core.Pattern
 import expo.modules.haloengine.core.Patterns
 import expo.modules.haloengine.core.RandomMotion
 import expo.modules.haloengine.core.Settings
 import expo.modules.haloengine.core.Spectrum
 import expo.modules.haloengine.core.SpectrumFrame
+import java.util.concurrent.Executors
 
 /** Foreground service for the stage 1 spike. Which FGS type survives which start path is what the probes measure. */
 class HaloService : Service() {
@@ -32,6 +35,15 @@ class HaloService : Service() {
   private var overlay: EdgeOverlay? = null
   private var media: MediaWatch? = null
   private var screenOff: BroadcastReceiver? = null
+
+  // Art or wallpaper colours for `derivedFor`; null derived means the source gave nothing, so the palette is used.
+  private val worker = Executors.newSingleThreadExecutor()
+  private var derived: IntArray? = null
+  private var derivedFor: ColorSource? = null
+  private var colourGen = 0
+  private val wallpaperListener = WallpaperManager.OnColorsChangedListener { _, which ->
+    if (which and WallpaperManager.FLAG_SYSTEM != 0) recomputeColors()
+  }
 
   private val spectrum = Spectrum(BANDS)
   private var frame = SpectrumFrame(FloatArray(BANDS), 0f, false)
@@ -85,15 +97,42 @@ class HaloService : Service() {
       pattern = Patterns.create(s.pattern)
       patternId = s.pattern
     }
-    if (overlay == null) lightsOn()
+    val first = overlay == null
+    if (first) lightsOn()
     overlay?.apply(s, pattern, currentColors(s))
+    if (first || s.colors.source != derivedFor) recomputeColors()
   }
 
-  private fun currentColors(s: Settings): IntArray = s.colors.palette.map { Color.parseColor(it) }.toIntArray()
+  private fun currentColors(s: Settings): IntArray =
+    derived?.takeIf { s.colors.source == derivedFor } ?: s.colors.palette.map { Color.parseColor(it) }.toIntArray()
+
+  /** Re-derives the colours for the current source; bitmap work runs on `worker`, the result swaps in on main. */
+  private fun recomputeColors() {
+    val source = settings.colors.source
+    val controller = media?.playing
+    val gen = ++colourGen
+    worker.execute {
+      val out = when (source) {
+        ColorSource.ALBUM_ART -> Colours.albumArt(this, controller)
+        ColorSource.WALLPAPER -> Colours.wallpaper(this)
+        ColorSource.PALETTE -> null
+      }
+      main.post {
+        if (gen != colourGen || !running) return@post
+        derived = out
+        derivedFor = source
+        val colours = currentColors(settings)
+        overlay?.setColors(colours)
+        val used = if (out != null) source.key else ColorSource.PALETTE.key
+        ProbeLog.log(this, "colours", "colours source=$used n=${colours.size} ${colours.joinToString(",") { "#%06X".format(it and 0xFFFFFF) }}")
+      }
+    }
+  }
 
   private fun lightsOn() {
     overlay = EdgeOverlay(this, watch::animate, ::frameAt).also { it.add() }
-    media = MediaWatch(this, ::onMedia).also { it.start() }
+    media = MediaWatch(this, ::onMedia, ::recomputeColors).also { it.start() }
+    runCatching { getSystemService(WallpaperManager::class.java).addOnColorsChangedListener(wallpaperListener, main) }
     startTap()
   }
 
@@ -104,6 +143,8 @@ class HaloService : Service() {
     tap = null
     media?.stop()
     media = null
+    runCatching { getSystemService(WallpaperManager::class.java).removeOnColorsChangedListener(wallpaperListener) }
+    colourGen++
     playingApp = null
     watch.onPlaying(false)
     overlay?.remove()
@@ -144,6 +185,7 @@ class HaloService : Service() {
     main.removeCallbacks(randomCheck)
     if (playingApp != null) main.postDelayed(randomCheck, RANDOM_CHECK_MS)
     publish()
+    recomputeColors()
   }
 
   private fun frameAt(t: Long): SpectrumFrame {
@@ -202,6 +244,7 @@ class HaloService : Service() {
     screenOff?.let { runCatching { unregisterReceiver(it) } }
     screenOff = null
     lightsOff()
+    worker.shutdownNow()
     running = false
     state = null
     frameP95Ms = null
