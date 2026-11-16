@@ -1,11 +1,11 @@
 package expo.modules.inflowcore.android
 
 import expo.modules.inflowcore.core.AiMeta
+import expo.modules.inflowcore.core.AiReply
 import expo.modules.inflowcore.core.AiModels
 import expo.modules.inflowcore.core.HttpReply
 import expo.modules.inflowcore.core.OpenAiCompatProvider
 import expo.modules.inflowcore.core.Prices
-import expo.modules.inflowcore.core.Usage
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
@@ -92,7 +92,7 @@ class AiConfig(private val store: SqlItemStore) {
 
   fun today(): String = LocalDate.ofInstant(Instant.now(), ZoneId.systemDefault()).toString()
 
-  fun spend(usage: Usage) = store.addSpend(today(), prices().cost(usage))
+  fun spend(reply: AiReply) = store.addSpend(today(), prices().cost(reply))
 
   fun status(): Map<String, Any?> = mapOf(
     "baseUrl" to baseUrl(), "model" to model(), "knownModel" to known()?.name,

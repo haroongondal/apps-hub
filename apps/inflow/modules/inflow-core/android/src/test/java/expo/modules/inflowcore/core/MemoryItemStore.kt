@@ -138,7 +138,7 @@ class MemoryItemStore : ItemStore, AiStore {
       val c = it?.capture
       val ok = it != null && c != null && it.otpExpiresAt == null && c.postedAt >= since && (settings[c.pkg]?.record ?: true) &&
         "app:${c.pkg}" !in aiBlocks && (c.senderKey == null || "sender:${c.senderKey}" !in aiBlocks)
-      if (ok) AiInput(id, c!!.appLabel, c.sender, c.title, it!!.emailText ?: c.text, c.postedAt) else null
+      if (ok) AiInput(id, c!!.appLabel, c.sender, c.title, it!!.emailText ?: c.text, c.postedAt, c.conversation, c.sender.equals("You", ignoreCase = true)) else null
     }
     queue.keys.retainAll(sendable.map { it.itemId }.toSet())
     return sendable.take(limit)

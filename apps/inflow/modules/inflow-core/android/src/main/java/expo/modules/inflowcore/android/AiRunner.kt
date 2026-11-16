@@ -78,7 +78,7 @@ object AiRunner {
     val cfg = AiConfig(store)
     val provider = cfg.provider(keyId) ?: return NO_KEY
     return try {
-      cfg.spend(provider.complete("Reply with the single word OK.", "Test.").usage)
+      cfg.spend(provider.complete("Reply with the single word OK.", "Test."))
       null
     } catch (e: AiError) {
       e.message
@@ -105,16 +105,16 @@ object AiRunner {
       val blocks = cfg.blocks()
       val apps = store.allAppSettings().filter { it.record && "app:${it.pkg}" !in blocks }.map { it.pkg to it.label }
       val planReply = provider.complete(Ask.planSystem(), Ask.planUser(q, apps, now, zone))
-      cfg.spend(planReply.usage)
+      cfg.spend(planReply)
       val plan = Ask.parsePlan(planReply.text, now, zone)
       if (capReached()) return reply(null, AiRun.CAP_REACHED)
       // A package the plan made up is not an app of ours; if none is left, the whole range is searched.
       val pkgs = plan.pkgs.filter { p -> apps.any { it.first == p } }
       val since = store.enabledSince() ?: Long.MAX_VALUE
       val items = store.askItems(plan.from, plan.to, pkgs, since, Ask.MAX_ITEMS)
-      val txns = if (plan.money) SqlLedgerStore(store.db).askTxns(plan.from, plan.to, since, Ask.MAX_TXNS) else emptyList()
+      val txns = if (plan.money) SqlLedgerStore(store.db).askTxns(plan.from, plan.to, Ask.MAX_TXNS) else emptyList()
       val answer = provider.complete(Ask.answerSystem(), Ask.answerUser(q, items, txns, now, zone))
-      cfg.spend(answer.usage)
+      cfg.spend(answer)
       reply(answer.text.trim(), null, plan.from, plan.to, items.size, txns.size)
     } catch (e: AiError) {
       reply(null, e.message)

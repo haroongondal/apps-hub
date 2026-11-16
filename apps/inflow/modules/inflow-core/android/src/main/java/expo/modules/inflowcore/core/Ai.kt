@@ -24,7 +24,11 @@ enum class Kind { MONEY, MESSAGE, DELIVERY, BILL, REMINDER, PROMOTION, ACCOUNT_A
 enum class Importance { HIGH, NORMAL, LOW }
 
 /** `text` is the email text when the item has one, else the notification or SMS text. */
-data class AiInput(val itemId: Long, val app: String, val sender: String?, val title: String?, val text: String, val at: Long)
+/** `conversation` is the chat or thread the item belongs to; `own` is true when the owner wrote it (sender "You"). */
+data class AiInput(
+  val itemId: Long, val app: String, val sender: String?, val title: String?, val text: String, val at: Long,
+  val conversation: String? = null, val own: Boolean = false,
+)
 
 data class AiMoney(
   val direction: Direction, val own: Boolean, val amountMinor: Long, val currency: String,
@@ -83,6 +87,7 @@ Reply with one JSON object and nothing else:
 Rules:
 - Answer once for every item you were given, using only its id. Never invent an id.
 - summary: one plain English sentence of at most 200 characters, even when the item is in Urdu or Roman Urdu. It must not repeat codes, passwords or links.
+  Each summary describes only that item's own text, never a neighbouring item, and different items get different summaries. An item with "own": true was written by the owner; "you" means the owner.
 - importance: high only for something the owner should act on soon (a payment due, a delivery arriving, a deadline, a security alert); low for promotions and noise.
 - money: null unless that item reports a real transaction that already happened (money received, paid or charged). Never for offers, balances, reminders or promotions. Otherwise
   {"direction":"in|out","own":false,"amount":<the amount exactly as written in the item, in main units, for example 1500.50>,"currency":"PKR","account":"...","counterparty":"...","category":"..."}
@@ -104,6 +109,8 @@ Rules:
           put("app", it.app)
           it.sender?.let { s -> put("sender", s) }
           it.title?.let { t -> put("title", t) }
+          it.conversation?.let { c -> put("conversation", c) }
+          put("own", it.own)
           put("time", DUE.format(Instant.ofEpochMilli(it.at).atZone(zone)))
           put("text", it.text.take(MAX_ITEM_CHARS))
         }
@@ -123,11 +130,14 @@ Rules:
     val texts = batch.associate { it.itemId to it.text.take(MAX_ITEM_CHARS) }
     // An id answered twice is dropped whole: which of the two is the model's own answer cannot be told, so that item is retried.
     val twice = entries.mapNotNull { (it as? JsonObject)?.long("id") }.groupingBy { it }.eachCount().filterValues { it > 1 }.keys
-    return entries.mapNotNull { e ->
+    val parsed = entries.mapNotNull { e ->
       val o = e as? JsonObject ?: return@mapNotNull null
       val id = o.long("id")?.takeIf { it in texts && it !in twice } ?: return@mapNotNull null
       result(id, o, texts.getValue(id), zone)
     }
+    // A model that gives different texts the same summary is describing one item for all of them: only the first keeps it, the rest are retried.
+    val firstText = HashMap<String, String>()
+    return parsed.filter { r -> firstText.getOrPut(r.summary.lowercase(Locale.ROOT)) { texts.getValue(r.itemId) } == texts.getValue(r.itemId) }
   }
 
   private fun result(id: Long, o: JsonObject, text: String, zone: ZoneId): AiResult? {

@@ -43,4 +43,12 @@ class AmountsTest {
   @Test fun cachedAboveInputNeverGoesNegative() {
     assertEquals(0.03, Prices(0.30, 0.03, 2.50).cost(Usage(500_000, 1_000_000, 0)), 1e-9)
   }
+
+  @Test fun missingUsageIsEstimated() {
+    val prices = Prices(0.30, 0.03, 2.50)
+    // 4,000 input characters and 400 output characters: 1,000 and 100 tokens.
+    assertEquals(1_000 * 0.30 / 1e6 + 100 * 2.50 / 1e6, prices.cost(Usage(0, 0, 0), inputChars = 4_000, outputChars = 400), 1e-12)
+    // Usage the model did report is never replaced by the estimate.
+    assertEquals(Prices(0.30, 0.03, 2.50).cost(Usage(10, 0, 0)), prices.cost(Usage(10, 0, 0), inputChars = 4_000, outputChars = 400), 1e-12)
+  }
 }

@@ -6,6 +6,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Test
 
 class AiBatchTest {
@@ -53,6 +58,34 @@ class AiBatchTest {
     assertTrue(prompt.contains("Alfalah 2310") && prompt.contains("UBL 1733"))
     assertTrue(prompt, prompt.contains("2026-11-14T10:30") && prompt.contains("Saturday") && prompt.contains("Asia/Karachi"))
     assertTrue(prompt.contains("PKR 500 sent") && prompt.contains("Alert"))
+  }
+
+  @Test fun userPromptCarriesConversationAndOwnPerItem() {
+    val prompt = AiBatch.user(
+      listOf(input(1, "On my way").copy(sender = "You", conversation = "Sunflower", own = true), input(2, "Call me")),
+      emptyList(), now, karachi,
+    )
+    val items = Json.parseToJsonElement(prompt.substringAfter("Items:\n")).jsonArray.map { it.jsonObject }
+    assertEquals("Sunflower", items[0]["conversation"]!!.jsonPrimitive.content)
+    assertEquals(true, items[0]["own"]!!.jsonPrimitive.boolean)
+    assertNull(items[1]["conversation"])
+    assertEquals(false, items[1]["own"]!!.jsonPrimitive.boolean)
+  }
+
+  @Test fun systemPromptTiesEachSummaryToItsOwnTextAndYouToTheOwner() {
+    val system = AiBatch.system()
+    assertTrue(system.contains("only that item's own text"))
+    assertTrue(system.contains("\"you\" means the owner"))
+  }
+
+  @Test fun identicalSummariesForDifferentTextsAreDropped() {
+    val batch = listOf(input(1, "Lunch at 2?"), input(2, "Parcel delivered"), input(3, "Lunch at 2?"), input(4, "Other"))
+    val out = AiBatch.parse(
+      reply(item(1, summary = "A short note."), item(2, summary = "a short note. "), item(3, summary = "A short note."), item(4, summary = "Something else.")),
+      batch, karachi,
+    )
+    // Item 2 repeats item 1's summary for a different text: dropped. Item 3 has item 1's own text: kept.
+    assertEquals(listOf(1L, 3L, 4L), out.map { it.itemId })
   }
 
   @Test fun userPromptKeepsInjectedLinesInsideTheirOwnItem() {

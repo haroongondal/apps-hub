@@ -65,7 +65,7 @@ class AiRun(
       }
       refused?.let(store::failed)
       refused = null
-      store.addSpend(day, prices().cost(reply.usage))
+      store.addSpend(day, prices().cost(reply))
       val results = AiBatch.parse(reply.text, batch, zone)
       // Ledger first: a crash between the two leaves the items queued, and onAi on an item it already handled only sets details.
       atomic {

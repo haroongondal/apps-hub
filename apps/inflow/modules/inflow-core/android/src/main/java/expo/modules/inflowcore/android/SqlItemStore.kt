@@ -116,9 +116,9 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase) : ItemSt
     val since = enabledSince() ?: return emptyList()
     run("DELETE FROM ai_queue WHERE item_id NOT IN (SELECT i.id FROM items i WHERE i.posted_at >= ? AND $NEVER_SEND_FILTER)", since)
     return query(
-      "SELECT i.id, i.app_label, COALESCE(n.name, i.sender), i.title, COALESCE(i.email_text, i.text), i.posted_at $QUEUE_FROM ORDER BY q.at, q.item_id LIMIT ?",
+      "SELECT i.id, i.app_label, COALESCE(n.name, i.sender), i.title, COALESCE(i.email_text, i.text), i.posted_at, i.conversation, lower(i.sender) = 'you' $QUEUE_FROM ORDER BY q.at, q.item_id LIMIT ?",
       since, limit.toLong(),
-    ).use { c -> buildList { while (c.moveToNext()) add(AiInput(c.getLong(0), c.getString(1), c.str(2), c.str(3), c.getString(4), c.getLong(5))) } }
+    ).use { c -> buildList { while (c.moveToNext()) add(AiInput(c.getLong(0), c.getString(1), c.str(2), c.str(3), c.getString(4), c.getLong(5), c.str(6), c.getInt(7) != 0)) } }
   }
 
   fun queuedCount(): Int {

@@ -33,7 +33,7 @@ class AiRunTest {
   private val prices = Prices(1.0, 0.0, 1.0)
 
   private fun reply(ids: List<Long>, extra: (Long) -> String = { "null" }) =
-    """{"items":[${ids.joinToString(",") { """{"id":$it,"kind":"message","summary":"A note.","importance":"normal","money":${extra(it)},"todos":[],"tags":[]}""" }}]}"""
+    """{"items":[${ids.joinToString(",") { """{"id":$it,"kind":"message","summary":"Note $it.","importance":"normal","money":${extra(it)},"todos":[],"tags":[]}""" }}]}"""
 
   private fun post(url: String, headers: Map<String, String>, body: String): HttpReply {
     if (offline) throw IOException("down")
@@ -243,6 +243,14 @@ class AiRunTest {
     usage = Usage(400_000, 0, 100_000)
     runner().run()
     assertEquals(0.5, store.spentToday("2026-11-14"), 1e-9)
+  }
+
+  @Test fun spendIsEstimatedWhenTheModelSendsNoUsage() {
+    keyAdded()
+    save("hello")
+    usage = Usage(0, 0, 0)
+    runner().run()
+    assertTrue(store.spentToday("2026-11-14") > 0.0)   // prices are 1.0 per million: the prompt and the reply are counted by length
   }
 
   @Test fun savedResultsFeedLedger() {

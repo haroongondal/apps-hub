@@ -25,7 +25,8 @@ class AiError(val kind: Kind, message: String) : Exception(message) {
   enum class Kind { AUTH, BAD_REQUEST, SERVER, OFFLINE }
 }
 
-data class AiReply(val text: String, val usage: Usage)
+/** `inputChars` is the length of the request, so a reply without `usage` can still be counted. */
+data class AiReply(val text: String, val usage: Usage, val inputChars: Int = 0)
 
 /** `post` is the transport (it throws IOException when the network fails), so request shape and retries run in JVM tests. `keys` are the owner's for this address. */
 class OpenAiCompatProvider(
@@ -55,7 +56,7 @@ class OpenAiCompatProvider(
       }
       when {
         reply == null -> Unit
-        reply.code in 200..299 -> return parse(reply.body)
+        reply.code in 200..299 -> return parse(reply.body).copy(inputChars = system.length + user.length)
         reply.code == 401 || reply.code == 403 -> throw AiError(
           AiError.Kind.AUTH,
           "The model refused ${if (keys.size > 1) "API key ${current + 1} of ${keys.size}" else "the API key"} (HTTP ${reply.code}). Check your API key in Settings.",
@@ -116,8 +117,13 @@ class OpenAiCompatProvider(
 }
 
 data class Prices(val inputPerM: Double, val cachedPerM: Double, val outputPerM: Double) {
-  fun cost(u: Usage): Double =
-    ((u.inputTokens - u.cachedTokens).coerceAtLeast(0) * inputPerM + u.cachedTokens * cachedPerM + u.outputTokens * outputPerM) / 1_000_000
+  /** A provider that sends no usage (all zeros) is counted at about 4 characters per token, so the daily cap still holds. */
+  fun cost(u: Usage, inputChars: Int = 0, outputChars: Int = 0): Double {
+    val used = if (u.inputTokens == 0L && u.cachedTokens == 0L && u.outputTokens == 0L) Usage(inputChars / 4L, 0, outputChars / 4L) else u
+    return ((used.inputTokens - used.cachedTokens).coerceAtLeast(0) * inputPerM + used.cachedTokens * cachedPerM + used.outputTokens * outputPerM) / 1_000_000
+  }
+
+  fun cost(r: AiReply): Double = cost(r.usage, r.inputChars, r.text.length)
 }
 
 /** A model Inflow knows: its prices and the thinking level that keeps a batch fast. */
