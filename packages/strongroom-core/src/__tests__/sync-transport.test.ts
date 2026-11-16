@@ -133,6 +133,8 @@ test('fetchTransportGivesUpAfter30Seconds', async () => {
     await Promise.resolve();
     assert.equal(settled, false);
     mock.timers.tick(1);
+    await new Promise<void>((r) => setImmediate(r));
+    mock.timers.tick(5_000); // the prelogin probe hangs too, so this is offline
     await assert.rejects(pending, SyncOfflineError);
   } finally {
     mock.timers.reset();
@@ -153,4 +155,41 @@ test('signinRequestReleaseAndCancelUseTheirRoutes', async () => {
   for (const body of [{}, { state: 'waiting' }, { state: 'ready', blob: 3 }]) {
     await assert.rejects(fetchTransport('https://vault.example', fakeFetch(() => ({ status: 200, body })).fn).signinRelease('c'), SyncHttpError);
   }
+});
+
+// Waits until the request is aborted (the transport's own timeout), like a Worker holding a refused token in its queue.
+const held = (init?: RequestInit) => new Promise<Response>((_, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))));
+const flush = () => new Promise<void>((r) => setImmediate(r));
+
+test('aTokenGetHeldPastTheTimeoutWhilePreloginAnswersIsARefusalNotOffline', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const fn = (async (input: string | URL | Request, init?: RequestInit) =>
+    String(input).endsWith('/v1/prelogin') ? new Response('{}', { status: 200 }) : held(init)) as typeof fetch;
+  const pull = fetchTransport('https://vault.example', fn).pull(TOKEN, 0);
+  await flush();
+  t.mock.timers.tick(30_000);
+  await assert.rejects(pull, SyncAuthError);
+});
+
+test('aTimeoutIsOfflineWhenPreloginDoesNotAnswerEither', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const fn = (async (_: string | URL | Request, init?: RequestInit) => held(init)) as typeof fetch;
+  const pull = fetchTransport('https://vault.example', fn).pull(TOKEN, 0);
+  await flush();
+  t.mock.timers.tick(30_000);
+  await flush();
+  t.mock.timers.tick(5_000);
+  await assert.rejects(pull, SyncOfflineError);
+});
+
+test('aTimedOutPushOrANetworkErrorIsStillOffline', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const fn = (async (input: string | URL | Request, init?: RequestInit) =>
+    String(input).endsWith('/v1/prelogin') ? new Response('{}', { status: 200 }) : held(init)) as typeof fetch;
+  const push = fetchTransport('https://vault.example', fn).push(TOKEN, { upserts: [] });
+  await flush();
+  t.mock.timers.tick(30_000);
+  await assert.rejects(push, SyncOfflineError);
+  const down = fetchTransport('https://vault.example', (async () => { throw new TypeError('offline'); }) as typeof fetch);
+  await assert.rejects(down.pull(TOKEN, 0), SyncOfflineError);
 });

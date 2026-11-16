@@ -45,6 +45,7 @@ export interface Transport {
 }
 
 const TIMEOUT_MS = 30_000;
+const PROBE_MS = 5_000;
 const PAGE = 100; // as the phone asks: about 9 MB at most per reply
 
 export function fetchTransport(baseUrl: string, fetchFn: typeof fetch = fetch): Transport {
@@ -53,13 +54,15 @@ export function fetchTransport(baseUrl: string, fetchFn: typeof fetch = fetch): 
     if (auth !== undefined) headers.authorization = `Bearer ${typeof auth === 'string' ? auth : toBase64(auth)}`;
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), TIMEOUT_MS);
-    let status: number;
+    let status: number | undefined;
     let text: string;
     try {
       const res = await fetchFn(new URL(path, baseUrl), { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: abort.signal });
       status = res.status;
       text = await res.text();
     } catch {
+      // The Worker holds refused tokens in a queue and answers right ones at once, so a token GET with no reply while the public prelogin answers is a refusal.
+      if (abort.signal.aborted && status === undefined && auth instanceof Uint8Array && body === undefined && (await answers('/v1/prelogin'))) throw new SyncAuthError();
       throw new SyncOfflineError();
     } finally {
       clearTimeout(timer);
@@ -69,6 +72,18 @@ export function fetchTransport(baseUrl: string, fetchFn: typeof fetch = fetch): 
       return { status, data: JSON.parse(text) };
     } catch {
       throw new SyncHttpError(status, UNREADABLE);
+    }
+  }
+  async function answers(path: string): Promise<boolean> {
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), PROBE_MS);
+    try {
+      await fetchFn(new URL(path, baseUrl), { signal: abort.signal });
+      return true;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
     }
   }
   // The shape is checked here, so a wrong body is an error the caller can report, never a TypeError deep inside sync.
