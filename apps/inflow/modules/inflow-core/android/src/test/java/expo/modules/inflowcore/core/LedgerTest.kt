@@ -417,4 +417,54 @@ class LedgerTest {
     assertEquals(aiTxn, item(debit("1,500.00"), Channel.SMS, t0 + min))
     assertFalse(store.get(aiTxn)!!.byAi)
   }
+
+  // --- Alfalah formats (stage 4b K1)
+  private val qr = "PKR 2490 has been transferred to Test Shop from your BAFL A/C *2310 on 11-Nov-2026 at 12:30 via QR Tx ID FT26315ABCDEFGH1"
+  private val raast = "PKR 2,490.00 paid to Test Shop from your BAFL A/C *2310 on 11-Nov-2026 12:32 via RAAST Tx FT26315ABCDEFGH1"
+  private fun debited(amount: String = "5,000.00") =
+    "Dear Customer,\nPKR $amount Debited from your A/C: 0847-1***2310 on 2-Nov-26 at 18:45:48 Bal: Reply with AB 021111225111"
+
+  @Test fun qrAndRaastOfOnePaymentAreOneTxn() {
+    val a = item(qr, Channel.SMS, t0)
+    val b = item(raast, Channel.SMS, t0 + 2 * min)
+    assertEquals(a, b)
+    assertEquals(1, store.txns.size)
+    // Two real payments of the same amount with different Tx IDs stay two.
+    item(qr.replace("FT26315ABCDEFGH1", "FT26315ZZZZZZZZ2"), Channel.SMS, t0 + 3 * min)
+    assertEquals(2, store.txns.size)
+  }
+
+  @Test fun sentToOwnNayaPayIsOwn() {
+    owner = "Haroon Mukhtar"
+    val id = item("PKR 1,000.00 sent to Haroon Mukhtar NayaPay from your BAF A/C *2310 on 3-Nov-26 10:15:22 via FT Tx ID FT26307AAAAAAAAA", Channel.SMS, t0)!!
+    assertTrue(store.get(id)!!.own)
+  }
+
+  @Test fun receivedFromOwnUblBicIsOwn() {
+    owner = "Haroon Mukhtar"
+    val id = item("PKR 1000 received from Haroon Mukhtar UNILPKKARTG in your BAF A/C *2310 via your Raast ID on 08-11-26 at 12:00 Tx ID FT26312BBBBBBBBB", Channel.SMS, t0)!!
+    assertTrue(store.get(id)!!.own)
+  }
+
+  @Test fun sameNameWithSurnameIsNotOwn() {
+    owner = "Haroon Mukhtar"
+    val id = item("PKR 1,000.00 sent to Haroon Mukhtar Khan from your BAF A/C *2310 on 3-Nov-26 10:15:22 via FT Tx ID FT26307CCCCCCCCC", Channel.SMS, t0)!!
+    assertFalse(store.get(id)!!.own)
+  }
+
+  @Test fun fourDebitsSecondsApartStayFour() {
+    repeat(4) { item(debited(), Channel.SMS, t0 + it * 20_000L) }
+    assertEquals(4, store.txns.size)
+  }
+
+  @Test fun moneyOutSumsEveryFormat() {
+    val texts = listOf(
+      debited(), qr, raast,
+      "PKR 1,500.00 sent to Some Person TMB from your BAF A/C **2310 on 3-Nov-26 10:15:22 with Fee PKR 5.00 via FT Tx ID FT26307ZZZZZZZZZ",
+      "PKR 300 sent to Some Person PK***1234 from your BAF A/C *2310 on 5-Nov-26 09:10 Tx ID FT26309YYYYYYYYY",
+      "PKR 3,897.00 Paid to NTEL Consumer ID 123456 from your BAF A/C **2310 on 4-Nov-26 11:11:11 via UBPS Tx ID FT26308XXXXXXXX1",
+    )
+    texts.forEachIndexed { i, text -> item(text, Channel.SMS, t0 + i * 60 * min) }
+    assertEquals(500000L + 249000 + 150000 + 30000 + 389700, store.txns.values.filter { it.direction == Direction.OUT }.sumOf { it.amountMinor })
+  }
 }

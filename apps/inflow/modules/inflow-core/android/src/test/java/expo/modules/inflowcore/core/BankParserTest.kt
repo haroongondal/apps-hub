@@ -80,4 +80,68 @@ class BankParserTest {
     assertEquals("UBL 33", BankParser.parse(text)?.account)
     assertEquals(true, BankParser.parse(text)?.accountPartial)
   }
+
+  // Alfalah SMS formats (stage 4b K1): the real wording with the owner's numbers and names replaced.
+  private fun alfalah(direction: Direction, minor: Long, counterparty: String?, txId: String?) =
+    Parsed(direction, minor, "PKR", "Alfalah 2310", counterparty, txId)
+
+  @Test fun alfalahDebitedFromYourAccount() {
+    assertEquals(
+      alfalah(Direction.OUT, 500000, null, null),
+      BankParser.parse("Dear Customer,\nPKR 5,000.00 Debited from your A/C: 0847-1***2310 on 2-Nov-26 at 18:45:48 Bal: Reply with AB 021111225111"),
+    )
+  }
+
+  @Test fun alfalahQrTransfer() {
+    assertEquals(
+      alfalah(Direction.OUT, 249000, "Test Shop", "FT26315ABCDEFGH1"),
+      BankParser.parse("PKR 2490 has been transferred to Test Shop from your BAFL A/C *2310 on 11-Nov-2026 at 12:30 via QR Tx ID FT26315ABCDEFGH1"),
+    )
+  }
+
+  @Test fun alfalahRaastPaid() {
+    assertEquals(
+      alfalah(Direction.OUT, 249000, "Test Shop", "FT26315ABCDEFGH1"),
+      BankParser.parse("PKR 2,490.00 paid to Test Shop from your BAFL A/C *2310 on 11-Nov-2026 12:32 via RAAST Tx FT26315ABCDEFGH1"),
+    )
+  }
+
+  @Test fun alfalahSentWithFeeKeepsTheBankTagAndSkipsTheFee() {
+    assertEquals(
+      alfalah(Direction.OUT, 150000, "Some Person TMB", "FT26307ZZZZZZZZZ"),
+      BankParser.parse("PKR 1,500.00 sent to Some Person TMB from your BAF A/C **2310 on 3-Nov-26 10:15:22 with Fee PKR 5.00 via FT Tx ID FT26307ZZZZZZZZZ"),
+    )
+  }
+
+  @Test fun alfalahSentDropsTheMaskedIban() {
+    assertEquals(
+      alfalah(Direction.OUT, 30000, "Some Person", "FT26309YYYYYYYYY"),
+      BankParser.parse("PKR 300 sent to Some Person PK***1234 from your BAF A/C *2310 on 5-Nov-26 09:10 Tx ID FT26309YYYYYYYYY"),
+    )
+  }
+
+  @Test fun alfalahBillPaymentDropsTheConsumerId() {
+    assertEquals(
+      alfalah(Direction.OUT, 389700, "NTEL", "FT26308XXXXXXXX1"),
+      BankParser.parse("PKR 3,897.00 Paid to NTEL Consumer ID 123456 from your BAF A/C **2310 on 4-Nov-26 11:11:11 via UBPS Tx ID FT26308XXXXXXXX1"),
+    )
+  }
+
+  @Test fun alfalahReceivedFromAccount() {
+    assertEquals(
+      alfalah(Direction.IN, 5000000, "Some Person BAF", "FT26310WWWWWWWWW"),
+      BankParser.parse("PKR 50,000.00 received from Some Person BAF in your BAF A/C **2310 on 6-Nov-26 14:00:00 via FT Tx ID FT26310WWWWWWWWW"),
+    )
+  }
+
+  @Test fun alfalahReceivedViaRaastId() {
+    assertEquals(
+      alfalah(Direction.IN, 100000, "Some Person MUCBPKKKRTG", "FT26312VVVVVVVVV"),
+      BankParser.parse("PKR 1000 received from Some Person MUCBPKKKRTG in your BAF A/C *2310 via your Raast ID on 08-11-26 at 12:00 Tx ID FT26312VVVVVVVVV"),
+    )
+  }
+
+  @Test fun alfalahOffersAreNotMoney() {
+    assertNull(BankParser.parse("Dear Customer, PKR 500 has been transferred to your wallet as cashback. Offer valid till 30-Nov-26"))
+  }
 }

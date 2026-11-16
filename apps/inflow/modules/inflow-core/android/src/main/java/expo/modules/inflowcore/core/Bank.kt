@@ -47,6 +47,16 @@ object BankParser {
     "Account/IBAN\\s+[\\d*]*?(\\d{4})(?![\\d*]).*?Transaction\\s+Type\\s+POS\\b.*?\\bAmount\\s+$EMAIL_AMT\\s*/-",
     FLAGS,
   )
+  // Alfalah SMS (stage 4b): "BAF"/"BAFL" before A/C is optional; UBL stays with UBL_RAAST.
+  private const val FROM_ACCT = "(?:BAFL?\\s+)?$ACCT"
+  private val ALFALAH_DEBITED = Regex("$AMT\\s+Debited\\s+from\\s+your\\s+$FROM_ACCT", FLAGS)
+  private val ALFALAH_OUT = Regex(
+    "$AMT\\s+(?:has\\s+been\\s+)?(?:transferred|paid|sent)\\s+to\\s+(.+?)\\s+from\\s+your\\s+$FROM_ACCT(.*)", FLAGS,
+  )
+  private val ALFALAH_IN = Regex("$AMT\\s+received\\s+from\\s+(.+?)\\s+in\\s+your\\s+$FROM_ACCT(.*)", FLAGS)
+  private val TX_ID = Regex("\\bTx(?:\\s+ID)?\\s*:?\\s*([A-Za-z0-9]+)", RegexOption.IGNORE_CASE)
+  private val MASKED_IBAN = Regex("\\s*PK\\*+\\d+$", RegexOption.IGNORE_CASE)
+  private val CONSUMER_ID = Regex("\\s+Consumer\\s+ID\\b.*$", FLAGS)
   private val ALFALAH_REF = Regex("Ref#\\s*([A-Za-z0-9]+)")
   private val SPACES = Regex("\\s+")
 
@@ -70,8 +80,18 @@ object BankParser {
     ALFALAH_POS.find(text)?.let { m ->
       return parsed(Direction.OUT, m.groupValues[2], "Alfalah ${m.groupValues[1]}", null, ALFALAH_REF.find(text)?.groupValues?.get(1))
     }
+    ALFALAH_DEBITED.find(text)?.let { m ->
+      return parsed(Direction.OUT, m.groupValues[1], "Alfalah ${m.groupValues[2]}", null, null)
+    }
+    for ((re, direction) in listOf(ALFALAH_OUT to Direction.OUT, ALFALAH_IN to Direction.IN)) {
+      val m = re.find(text) ?: continue
+      return parsed(direction, m.groupValues[1], "Alfalah ${m.groupValues[3]}", cleanName(m.groupValues[2]), TX_ID.find(m.groupValues[4])?.groupValues?.get(1))
+    }
     return null
   }
+
+  private fun cleanName(raw: String): String? =
+    raw.replace(SPACES, " ").trim().replace(CONSUMER_ID, "").replace(MASKED_IBAN, "").trim().ifEmpty { null }
 
   private fun parsed(
     d: Direction, amount: String, account: String, counterparty: String?, txId: String?, partial: Boolean = false,

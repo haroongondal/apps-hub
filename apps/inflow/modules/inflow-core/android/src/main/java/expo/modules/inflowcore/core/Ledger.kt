@@ -65,9 +65,18 @@ object OwnTransfer {
   private val NOT_LETTER = Regex("[^\\p{L} ]")
   private val SPACES = Regex("\\s+")
 
+  /** R38: equal after normalising, or owner name followed by exactly one bank tag token. */
+  val BANK_TAGS = setOf("NAYAPAY", "SADAPAY", "JAZZCASH", "EASYPAISA", "UPAISA", "TMB", "MMBL", "BAF", "BAFL")
+  private val BIC = Regex("^[A-Z]{4,}PK[A-Z0-9]{2,}$")
+
   fun nameMatches(counterparty: String?, ownerName: String?): Boolean {
     val a = normalize(counterparty)
-    return a.isNotBlank() && a == normalize(ownerName)
+    val owner = normalize(ownerName)
+    if (a.isBlank() || owner.isBlank()) return false
+    if (a == owner) return true
+    if (!a.startsWith("$owner ")) return false
+    val tag = a.removePrefix("$owner ")
+    return ' ' !in tag && (tag in BANK_TAGS || BIC.matches(counterparty!!.trim().substringAfterLast(' ').uppercase(Locale.ROOT)))
   }
 
   private fun normalize(s: String?): String =
