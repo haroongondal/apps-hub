@@ -17,6 +17,7 @@ const nativeParse = JSON.parse;
 const nativeJson = Response.prototype.json;
 const dispatch = EventTarget.prototype.dispatchEvent;
 const Custom = CustomEvent;
+const define = Object.defineProperty;
 const KEYS = [...AD_KEYS, 'playerResponse', 'videoDetails'];
 
 type Details = { channelId?: unknown; author?: unknown; videoId?: unknown };
@@ -72,10 +73,13 @@ Response.prototype.json = asNative(
 );
 
 // The inline `var ytInitialPlayerResponse = …` runs before the settings arrive, so a value set then is checked when first read.
+// Non-enumerable until the page's first write, which makes it enumerable as the page's own `var` would (as experiments-main.ts's ytcfg).
 let initial: unknown;
 let unchecked = false;
-Object.defineProperty(window, 'ytInitialPlayerResponse', {
+const hook = {
+  __proto__: null,
   configurable: true,
+  enumerable: false,
   get() {
     if (unchecked) {
       unchecked = false;
@@ -87,8 +91,14 @@ Object.defineProperty(window, 'ytInitialPlayerResponse', {
     initial = value;
     unchecked = !told;
     if (told) clean(value);
+    if (hook.enumerable) return;
+    hook.enumerable = true;
+    try {
+      define(window, 'ytInitialPlayerResponse', hook);
+    } catch {}
   },
-});
+};
+define(window, 'ytInitialPlayerResponse', hook);
 
 document.addEventListener('sieve-yt-allow', (e) => {
   const detail = (e as CustomEvent<{ on?: unknown; ids?: unknown }>).detail;

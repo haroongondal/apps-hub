@@ -52,7 +52,7 @@ feature('experiments', () => {
   // The hook has to be there before the page's own write, so the name exists from document_start; non-enumerable, as yt-main.ts's
   // ytInitialPlayerResponse, so a page that never sets ytcfg sees no new key (YouTube's own pages define it themselves).
   // After the page's first write it turns enumerable, as a plain assignment would make it; it stays an accessor so the second ytcfg object is wrapped too.
-  const hook = { configurable: true, enumerable: false, get: () => current, set(value: unknown) {
+  const hook = { __proto__: null, configurable: true, enumerable: false, get: () => current, set(value: unknown) {
     current = value;
     wrap(value);
     if (hook.enumerable) return;

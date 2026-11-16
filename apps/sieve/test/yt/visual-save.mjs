@@ -17,8 +17,15 @@ export async function local(t) {
       chrome.storage.local.set = () => Promise.reject(new Error('test: storage refused'));
     });
     await row(page).getByRole('slider', { name: 'Blur', exact: true }).focus();
+    // Sampled in the page every frame: the failed save comes back within a few hundred ms, faster than polling from here sees.
+    await page.evaluate((s) => {
+      window.__filters = [];
+      const v = document.querySelector(s);
+      const sample = () => (window.__filters.push(getComputedStyle(v).filter), window.__filters.length < 600 && requestAnimationFrame(sample));
+      requestAnimationFrame(sample);
+    }, SEL.video);
     await page.keyboard.press('ArrowRight');
-    const shownAtOnce = await until(async () => (await filter(page)) === 'blur(1px)', 1000);
+    const shownAtOnce = await until(() => page.evaluate(() => window.__filters.includes('blur(1px)')), 1000);
     const back = await until(async () => (await filter(page)) === 'none', 3000);
     const toast = await row(page).locator('p.toast').innerText();
     check('visual save: a filter change the worker cannot save shows at once, then goes back to the stored filter, and the toast says why', shownAtOnce && back && toast === MESSAGE && (await storedYouTube(t)).player.filters.blur === 0, JSON.stringify({ shownAtOnce, back, toast, filter: await filter(page) }));

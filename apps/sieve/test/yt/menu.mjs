@@ -134,6 +134,7 @@ export async function local(t) {
     await m.pop.close();
     await other.close();
 
+    // The harness serves m.youtube.com from the yt/watch.html fixture (YT_HOSTS), so this page has the fixture player too.
     const mobile = await t.ctx.newPage();
     await mobile.goto(`https://m.youtube.com:${t.servers.httpsPort}/watch?v=sieveTest01&fixture=watch`, { waitUntil: 'load' });
     m = await openMenu(t, await tabIdOf(t, mobile));

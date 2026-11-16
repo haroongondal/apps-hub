@@ -91,6 +91,14 @@ export async function local(t) {
     const sieveNames = withSieve.own.filter((n) => /sieve/i.test(n) && !['__lastSieveSettings', '__sieveDo'].includes(n));
     check('bridge: the page has no sieve-named globals beyond the fixture recorders', sieveNames.length === 0, json(sieveNames));
 
+    // test/pages/yt-watch.html (no fixture=) declares `var ytInitialPlayerResponse = …` as YouTube does: without Sieve that is an enumerable key.
+    const declared = await t.ctx.newPage();
+    declared.on('pageerror', (e) => t.errors.push(e.message));
+    await declared.goto(`${t.base}/watch?v=sieveTest05`, { waitUntil: 'load' });
+    const ipr = await declared.evaluate(() => ({ key: Object.keys(window).includes('ytInitialPlayerResponse'), ads: 'adPlacements' in (window.ytInitialPlayerResponse ?? {}) }));
+    check('bridge: a page that declares ytInitialPlayerResponse sees it as an enumerable window key, still cleaned of ads', ipr.key && !ipr.ads, json(ipr));
+    await declared.close();
+
     for (const url of [`https://m.youtube.com:${t.servers.httpsPort}/yt/watch.html`, `https://www.youtube-nocookie.com:${t.servers.httpsPort}/yt/watch.html`]) {
       const p = await t.ctx.newPage();
       p.on('pageerror', (e) => t.errors.push(e.message));

@@ -53,14 +53,17 @@ feature('quality', () => {
     const mine = ticket;
     const started = now();
     const tick = (): void => {
-      if (mine !== ticket || !settings?.on) return;
+      if (mine !== ticket) return;
       waiting = false;
+      if (!settings?.on) return;
+      let done = false;
       try {
         const p = player();
         const levels = p ? known(p) : [];
         if (p && levels.length) {
           const level = want === null ? null : want === 'auto' ? 'auto' : pickQuality(levels, want);
           if (level) p.setPlaybackQualityRange(level, level);
+          done = true; // set: a throw while reporting must not set it again
           watch(p);
           sendState({ quality: p.getPlaybackQuality(), qualities: levels });
           return;
@@ -68,6 +71,7 @@ feature('quality', () => {
       } catch (e) {
         if (!warned) console.warn('Sieve: quality could not be read', e);
         warned = true;
+        if (done) return;
       }
       if (now() - started < SETTLE_MS) {
         waiting = true;

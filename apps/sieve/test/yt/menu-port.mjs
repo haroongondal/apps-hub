@@ -28,9 +28,13 @@ export async function local(t) {
     page = await openYt(t, '/watch?v=sieveTest01');
     await until(() => page.evaluate(() => window.__lastSieveSettings ?? null));
     const errors = t.errors.length;
-
+    // The port listener runs in the isolated world: its throws reach the page console, not pageerror.
+    const consoleErrors = [];
+    const onConsole = (m) => m.type() === 'error' && consoleErrors.push(m.text());
+    page.on('console', onConsole);
     const first = await post(t, page, [{ type: 'do', action: 'nope' }, { type: 'do', action: 42 }, { type: 'run', action: 'stop' }, null, 'stop']);
-    check('menu port: forged messages (an unknown action, a number, another type, null, a bare string) run nothing and raise no page error', first === 'state' && (await stops(page)) === 0 && t.errors.length === errors, json({ first, stops: await stops(page), errors: t.errors.slice(errors) }));
+    page.off('console', onConsole);
+    check('menu port: forged messages (an unknown action, a number, another type, null, a bare string) run nothing and raise no page or console error', first === 'state' && (await stops(page)) === 0 && t.errors.length === errors && consoleErrors.length === 0, json({ first, stops: await stops(page), errors: t.errors.slice(errors), consoleErrors }));
 
     await post(t, page, [{ type: 'do', action: 'stop' }]);
     check('menu port: a real "do stop" runs Stop (the control for the checks around it)', await until(async () => (await stops(page)) === 1, 2000), String(await stops(page)));
@@ -41,8 +45,8 @@ export async function local(t) {
     await sleep(300);
     check('menu port: with YouTube tools off a "do stop" sent anyway runs nothing', (await stops(page)) === 1, String(await stops(page)));
 
-    await setYouTube(t, { on: true });
     await setSettings(t, { enabled: false });
+    await setYouTube(t, { on: true });
     await until(async () => (await page.evaluate(() => window.__lastSieveSettings?.on)) === true);
     await post(t, page, [{ type: 'do', action: 'stop' }]);
     check('menu port: with the header "Sieve on" (blocking) off and YouTube tools on, "do stop" still runs', await until(async () => (await stops(page)) === 2, 2000), String(await stops(page)));

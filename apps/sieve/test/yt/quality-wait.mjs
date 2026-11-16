@@ -49,7 +49,9 @@ export async function local(t) {
     await holdLevels(page, 'ok');
     await sleep(800);
     check('quality wait: switching YouTube tools off stops a quality still waiting to be set', !(await quality(page)).includes('medium'), json(await quality(page)));
+    const reads = (await ytCalls(page, 'getPlaybackQuality')).length;
     await setYouTube(t, { on: true });
+    check('quality wait: switching YouTube tools on again reads and reports the quality (the stopped wait is not left pending)', await until(async () => (await ytCalls(page, 'getPlaybackQuality')).length > reads, 2000), String((await ytCalls(page, 'getPlaybackQuality')).length - reads));
 
     await holdLevels(page, 'empty');
     await sendToTab(t, page, { type: 'yt-command', action: 'quality-small' });
@@ -59,6 +61,13 @@ export async function local(t) {
     await holdLevels(page, 'ok');
     await sleep(800);
     check('quality wait: a new video cancels a quality still waiting from the one before', !(await quality(page)).includes('small'), json(await quality(page)));
+    await page.evaluate(() => {
+      const p = document.querySelector('#movie_player');
+      p.getPlaybackQuality = () => { throw new Error('test: report failed'); };
+    });
+    await sendToTab(t, page, { type: 'yt-command', action: 'quality-tiny' });
+    await sleep(1200);
+    check('quality wait: a throw while reporting, after the quality was set, does not set it again every 250 ms', (await quality(page)).filter((q) => q === 'tiny').length === 1, json(await quality(page)));
     await page.close();
 
     await setYouTube(t, { quality: { videos: 'hd720', videosFull: 'same' } });

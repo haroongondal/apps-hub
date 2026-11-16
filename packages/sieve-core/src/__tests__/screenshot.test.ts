@@ -38,6 +38,7 @@ test('screenshotName: characters Chrome refuses in a download name are gone (~, 
   assert.equal(screenshotName('~~hidden', 5), 'hidden 0-05.png');
   assert.equal(screenshotName('a\ud800b\udfffc', 5), 'a b c 0-05.png', 'lone surrogates');
   assert.equal(screenshotName('a\ue000b', 5), 'a b 0-05.png', 'a private-use character');
+  assert.equal(screenshotName('a\uffffb\ufdd0c', 5), 'a b c 0-05.png', 'noncharacters');
 });
 
 test('isPngDataUrl', () => {

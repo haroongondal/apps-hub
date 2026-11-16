@@ -8,7 +8,7 @@ const names = read('../yt/tidy-selectors.ts');
 const tidy = read('../yt/tidy.ts');
 
 // A whole token, so a name that is only part of a recorded one (ytd-comment in ytd-comments) does not count.
-const recorded = (t: string): boolean => new RegExp(`${/^[a-z]/.test(t) ? '(^|[^\\w-])' : ''}${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`).test(names);
+const recorded = (t: string): boolean => new RegExp(`${/^[a-z]/.test(t) ? '(^|[^\\w.#-])' : ''}${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`).test(names);
 const rules = css.split('}').flatMap((block) => (block.includes('{') ? [block.slice(0, block.indexOf('{'))] : []));
 const selectors = rules.flatMap((head) => head.split(',').map((s) => s.trim()).filter(Boolean));
 

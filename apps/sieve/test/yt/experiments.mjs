@@ -19,7 +19,7 @@ export async function local(t) {
     const other = await page.evaluate(() => ({ other: ytcfg.get('EXPERIMENT_FLAGS').other, type: typeof ytcfg.get, same: ytcfg.get('EXPERIMENT_FLAGS') === ytcfg.d().EXPERIMENT_FLAGS }));
     check('experiments: other flags are untouched, and the replaced ytcfg object still works', json(other) === '{"other":1,"type":"function","same":true}', json(other));
     const listed = await page.evaluate(() => ({ key: Object.keys(window).includes('ytcfg'), enumerable: Object.prototype.propertyIsEnumerable.call(window, 'ytcfg') }));
-    check('experiments: once the page has written ytcfg it is an ordinary enumerable window key, as without Sieve', listed.key && listed.enumerable, json(listed));
+    check('experiments: once the page has written ytcfg it is an enumerable window key (Object.keys, for...in), as without Sieve', listed.key && listed.enumerable, json(listed));
 
     await page.evaluate(() => window.__write());
     check('experiments: a later config write is patched too', json(await page.evaluate(READ)) === json({ flag: false, serialized: 'sieve_test_flag=false&other=1' }), json(await page.evaluate(READ)));

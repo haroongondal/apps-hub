@@ -7,9 +7,9 @@ const PREFIX = 'data:image/png;base64,';
 
 // `<title> <h-mm-ss or m-ss>.png`. The title is page text: `/` and `\` are replaced, so it cannot change the folder, and `..` cannot start a name.
 // Chrome also refuses `~`, control characters and format characters (joiners, direction marks): the first two become a space, the last are dropped so joined text stays joined.
-// Lone surrogates and private-use characters become a space too.
+// Lone surrogates, private-use characters and noncharacters become a space too.
 export function screenshotName(title: string, seconds: number): string {
-  const clean = title.replace(/\p{Cf}+/gu, '').replace(/[\\/:*?"<>|~\p{Cc}\p{Cs}\p{Co}]+/gu, ' ').replace(/\s+/g, ' ').replace(/^[. ]+/, '');
+  const clean = title.replace(/\p{Cf}+/gu, '').replace(/[\\/:*?"<>|~\p{Cc}\p{Cs}\p{Co}\p{Noncharacter_Code_Point}]+/gu, ' ').replace(/\s+/g, ' ').replace(/^[. ]+/, '');
   let cut = '';
   let bytes = 0;
   for (const ch of [...clean].slice(0, MAX_TITLE)) {
