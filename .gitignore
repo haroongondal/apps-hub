@@ -80,6 +80,13 @@ coverage/
 /apps/inflow/android/**/.cxx/
 /apps/inflow/modules/*/android/build/
 /apps/inflow/.expo/
+/apps/clipboard/android/.gradle/
+/apps/clipboard/android/app/build/
+/apps/clipboard/android/build/
+/apps/clipboard/android/local.properties
+/apps/clipboard/android/**/.cxx/
+/apps/clipboard/modules/*/android/build/
+/apps/clipboard/.expo/
 /tools/store-api/.cloudflare/
 /tools/store-api/.wrangler/
 /tools/store-api/dist/

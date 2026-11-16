@@ -35,6 +35,7 @@ import expo.modules.strongroomvault.core.KEY_LOST
 import expo.modules.strongroomvault.core.ImportError
 import expo.modules.strongroomvault.core.ImportResult
 import expo.modules.strongroomvault.core.KdfOutOfRange
+import expo.modules.strongroomvault.core.LostState
 import expo.modules.strongroomvault.core.RecoveryKey
 import expo.modules.strongroomvault.core.SyncAuthError
 import expo.modules.strongroomvault.core.SyncHttpError
@@ -510,6 +511,79 @@ class StrongroomVaultModule : Module() {
       }
     }
 
+    // Not vault(): the status holds a lock across a network call and a screen reads it while locked.
+    AsyncFunction("emailRecoveryStatus") Coroutine { ->
+      val r = withContext(Dispatchers.IO) { VaultHolder.recovery(context).status() }
+      mapOf(
+        "available" to r.available, "checked" to r.checked, "enrolled" to r.enrolled, "waitingForCode" to r.waitingForCode,
+        "pendingRecovery" to r.pendingRecovery?.let { mapOf("releaseAt" to it.releaseAt) },
+        "wasTurnedOff" to r.wasTurnedOff, "keyUnseen" to r.keyUnseen,
+      )
+    }
+
+    AsyncFunction("enableEmailRecovery") Coroutine { email: String, password: String ->
+      vault()
+      val pw = password.toCharArray()
+      try {
+        withContext(Dispatchers.IO) { syncCall { VaultHolder.recovery(context).enrol(email, pw) }?.also { VaultHolder.syncSoon(context, 0) } }?.let { e ->
+          try {
+            mapOf("recoveryKey" to RecoveryKey.format(e.recoveryKey), "sent" to e.sent)
+          } finally {
+            e.recoveryKey.fill(0)
+          }
+        }
+      } finally {
+        pw.fill('\u0000')
+      }
+    }
+
+    AsyncFunction("confirmEmailRecovery") Coroutine { code: String ->
+      vault()
+      withContext(Dispatchers.IO) { syncCall { VaultHolder.recovery(context).confirm(code) } }
+    }
+
+    AsyncFunction("turnOffEmailRecovery") Coroutine { ->
+      vault()
+      withContext(Dispatchers.IO) { syncCall { VaultHolder.recovery(context).turnOff() } }
+    }
+
+    // Not vault() from here on in this group: Unlock reaches them with the vault locked, and the sign-in token lives in the Keystore, not the vault.
+    AsyncFunction("cancelLostRequest") Coroutine { ->
+      withContext(Dispatchers.IO) { syncCall { VaultHolder.recovery(context).cancelLost() } }
+    }
+
+    AsyncFunction("markRecoveryKeyShown") Coroutine { ->
+      withContext(Dispatchers.IO) { syncCall { VaultHolder.recovery(context).keyShown() } }
+    }
+
+    AsyncFunction("lostAccessRequest") Coroutine { ->
+      withContext(Dispatchers.IO) { syncCall { VaultHolder.recovery(context).lostRequest() } }
+    }
+
+    AsyncFunction("lostAccessCheck") Coroutine { ->
+      when (val s = withContext(Dispatchers.IO) { syncCall { VaultHolder.recovery(context).lostCheck() } }) {
+        is LostState.None -> mapOf("state" to "none")
+        is LostState.Waiting -> mapOf("state" to "waiting", "releaseAt" to s.releaseAt)
+        is LostState.Ready -> mapOf("state" to "ready")
+      }
+    }
+
+    AsyncFunction("lostAccessOpen") Coroutine { code: String, newPassword: String ->
+      val pw = newPassword.toCharArray()
+      try {
+        withContext(Dispatchers.IO) {
+          syncCall { VaultHolder.recovery(context).lostOpen(code, pw) }.also {
+            if (it) {
+              SyncJobService.schedule(context)
+              VaultHolder.afterUnlock(context, byPassword = true)
+            }
+          }
+        }
+      } finally {
+        pw.fill('\u0000')
+      }
+    }
+
     AsyncFunction("syncNow") Coroutine { ->
       vault()
       val r = withContext(Dispatchers.IO) { syncCall { VaultHolder.syncNow(context) } }
@@ -594,6 +668,25 @@ internal fun coded(e: IllegalStateException): Exception = when (e.message) {
     "This phone's secure storage lost the key that protects your sync sign-in, so sync stopped. Sign in to sync again with your master password and account key.",
     e,
   )
+  "sync first" -> CodedException("SYNC_FIRST", "This phone has changes it hasn't synced yet. Choose Sync now, then try again.", e)
+  "mail failed" -> CodedException("MAIL_FAILED", "We couldn't send the email, so nothing changed and your old recovery key still works. Try again later.", e)
+  "vault moved" -> CodedException(
+    "VAULT_MOVED",
+    "Your vault changed on another device, so nothing changed and your old recovery key still works. If an email with a code arrived, ignore it. Choose Sync now, then try again.",
+    e,
+  )
+  "not waiting" -> CodedException("NOT_WAITING_FOR_CODE", "There is no email code to enter. Turn on email recovery first.", e)
+  "request alive" -> CodedException(
+    "LOST_STILL_ALIVE",
+    "A recovery request is already counting down on this account. Wait for it to finish, or cancel it from a device that is signed in.",
+    e,
+  )
+  "not ready" -> CodedException("LOST_NOT_READY", "The 24-hour wait isn't over yet. Try again once it ends.", e)
+  "different account" -> CodedException(
+    "LOST_DIFFERENT_ACCOUNT",
+    "This phone is already set up with another Strongroom account, so it can't open this vault. Use a phone or a fresh install that has no Strongroom account.",
+    e,
+  )
   "different vault" -> CodedException(
     "DIFFERENT_VAULT",
     "This phone holds a different vault from the one on the vault server, so Strongroom changed nothing. Sign in on a phone that has no vault yet.",
@@ -630,6 +723,8 @@ internal inline fun <T> syncCall(block: () -> T): T = try {
   throw CodedException("SYNC_OFFLINE", e.message, e)
 } catch (e: SyncRollbackError) {
   throw CodedException("SYNC_ROLLBACK", e.message, e)
+} catch (e: IllegalArgumentException) {
+  throw if (e.message == "bad email") CodedException("BAD_EMAIL", "That email address isn't valid. Check it and try again.", e) else e
 }
 
 private fun SyncStatus.toMap() =

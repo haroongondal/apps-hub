@@ -15,6 +15,7 @@ export const ANDROID_PACKAGES = {
   deputy: 'com.haroon.deputy',
   strongroom: 'com.haroon.strongroom',
   inflow: 'com.haroon.inflow',
+  clipboard: 'com.haroon.clipboard',
 } as const;
 
 export function androidPackageFor(id: string): string | undefined {

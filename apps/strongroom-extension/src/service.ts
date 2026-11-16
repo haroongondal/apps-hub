@@ -1,12 +1,13 @@
 import {
   AccountKeyRequired, FLAG_PREFIX, ImportError, KdfOutOfRange, SyncAuthError, SyncHttpError, SyncOfflineError, SyncRollbackError, adoptHeader,
-  equalBytes, fromBase64, formatRecoveryKey, headerFromJson, headerToJson, kdfWeaker, matches, newId, open, openEntry, openWithPassword,
-  parseAccountKey, parseGoogleExport, parseRecoveryKey, readEntries, recoveryKeyGroup, recoveryLoginToken, recover, registrableDomain, seal,
-  setupVault, signInWithPassword, signInWithRecovery, siteFromUrl, syncOnce, toBase64, tokenHash, unlockWithRecovery, utf8, withNewPassword,
-  writeEntries,
+  equalBytes, exportForChrome, formatEmailCode, fromBase64, formatRecoveryKey, generateEmailCode, headerFromJson, headerToJson, kdfWeaker, matches,
+  newId, open, openEntry, openEscrow, openWithPassword, parseAccountKey, parseEmailCode, parseGoogleExport, parseRecoveryKey, randomBytes, readEntries,
+  recoveryKeyGroup, recoveryLoginToken, recover, registrableDomain, rotateRecoveryKey, seal, sealEscrow, setupVault, signInWithPassword,
+  signInWithRecovery, siteFromUrl, syncOnce, toBase64, tokenHash, unlockWithRecovery, utf8, withNewPassword, writeEntries,
 } from 'strongroom-core';
 import type { Entry, Header, KdfParams, Login, RecordStore, Site, SignedIn, SyncReport, SyncStore, Transport } from 'strongroom-core';
 import { COMMON_PASSWORDS } from './common-passwords.ts';
+import type { DeviceVault } from './device-vault.ts';
 
 export type KV = { get(key: string): Promise<string | undefined>; set(key: string, value: string): Promise<void>; remove(key: string): Promise<void> };
 export type SyncInfo = { lastSyncAt: number | null; blocked: number; needsSignIn: boolean };
@@ -20,7 +21,10 @@ export interface SyncPort extends SyncStore {
   setAccount(a: { header: Header; headerRev: number; accountKey: Uint8Array; info: SyncInfo; pending: PendingUpdate | null; replace: { records: SyncRow[]; quarantine: SyncRow[]; lastRev: number } | null }): Promise<void>;
 }
 export type SyncDeps = { store: SyncPort; transport: Transport };
-export type Deps = { store: RecordStore; session: KV; now(): number; resetAutoLock(): void; syncAlarm?(on: boolean): void; sync?: SyncDeps; kdf?: KdfParams; floor?: KdfParams };
+export type Deps = {
+  store: RecordStore; session: KV; settings: KV; now(): number; resetAutoLock(): void; syncAlarm?(on: boolean): void; sync?: SyncDeps; kdf?: KdfParams;
+  floor?: KdfParams; device?: DeviceVault;
+};
 export type PageRef = { url: string; tabId: number };
 export type Ctx = PageRef;
 export type LoginInput = { name: string; username: string; password: string; websites: string; note: string };
@@ -31,12 +35,13 @@ export type Request =
   | { type: 'confirmRecovery'; group: string }
   | { type: 'unlock'; password: string }
   | { type: 'recover'; recoveryKey: string; password: string }
-  | { type: 'lock' }
+  | { type: 'lock'; manual?: boolean }
   | { type: 'list' }
   | { type: 'get'; id: string }
   | { type: 'save'; id: string | null; login: LoginInput }
   | { type: 'remove'; id: string }
   | { type: 'import'; csv: string; commit: boolean }
+  | { type: 'export'; password: string }
   | { type: 'candidates'; page?: PageRef }
   | { type: 'fill'; id: string }
   | { type: 'capture'; username: string; password: string }
@@ -45,7 +50,16 @@ export type Request =
   | { type: 'syncStatus' }
   | { type: 'signIn'; password: string; accountKey: string; replace?: boolean }
   | { type: 'signInRecovery'; recoveryKey: string; newPassword: string; accountKey: string; replace?: boolean }
-  | { type: 'syncNow' };
+  | { type: 'syncNow' }
+  | { type: 'emailRecovery'; action: 'status' }
+  // password (not in the brief's sketch): enrol must resend the current loginHash/readHash, derivable only from it.
+  | { type: 'emailRecovery'; action: 'enrol'; email: string; password: string }
+  | { type: 'emailRecovery'; action: 'confirm'; code: string }
+  | { type: 'emailRecovery'; action: 'off' }
+  | { type: 'emailRecovery'; action: 'cancelRecovery' }
+  | { type: 'lostAccess'; action: 'request' }
+  | { type: 'lostAccess'; action: 'check' }
+  | { type: 'lostAccess'; action: 'open'; code: string; newPassword: string; replace?: boolean };
 
 export type Status = { state: 'no-vault' | 'locked' | 'unlocked'; recoveryKey: string | null };
 export type Row = { id: string; name: string; username: string; sites: string[]; apps: number; flagged: boolean };
@@ -56,6 +70,10 @@ export type SyncStatus = {
   pendingUpdate: boolean; error: string | null; keyLost: boolean;
 };
 export type Pending = { intent: 'new' | 'update' | null; host: string; username: string; name: string | null; locked: boolean };
+export type EmailRecoveryStatus = {
+  available: boolean; enrolled: boolean; waitingForCode: boolean; pendingRecovery: { releaseAt: number | null } | null; wasTurnedOff: boolean;
+};
+export type LostAccessState = { state: 'none' } | { state: 'waiting'; releaseAt: number | null } | { state: 'ready' };
 
 export class UserError extends Error {}
 
@@ -77,7 +95,16 @@ const BAD_ACCOUNT_KEY = "That account key isn't complete. Check it and try again
 const KEY_LOST = 'This computer no longer holds your account key. Sign in with your account, using your master password and account key.';
 const KEY_DIFFERENT = "That account key doesn't match the one this computer uses. Check it and try again.";
 const WEAKER = "The vault server's key settings are weaker than the ones on this computer, so nothing was changed.";
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const BAD_EMAIL = "That doesn't look like an email address.";
 const PENDING_AAD = utf8('strongroom/v1/pending-account-update');
+const ESCROW_BLOB = 'escrowBlob';
+const ESCROW_CONFIRMED = 'escrowConfirmed';
+const LOST_CLAIM = 'lostClaim';
+const LOST_BLOB = 'lostBlob';
+const CLAIM_BYTES = 20;
+const NOT_READY = 'Wait for the 24-hour release, then come back and try again.';
+const LOST_STILL_ALIVE = 'A lost-access request is already confirmed, or ready to open. Check again instead of starting a new one.';
 const noop = () => {};
 
 // A word from the common-password list, one repeated character, or a straight run such as abcdefghijkl.
@@ -111,6 +138,10 @@ export function createService(deps: Deps) {
     return stored ? fromBase64(stored) : null;
   };
   const requireKey = async (): Promise<Uint8Array> => (await keyOrNull()) ?? Promise.reject(new UserError(LOCKED));
+  // Autofill and sync fall back to the vault key the device holds on disk once the session copy is gone, so they keep working without an unlock.
+  const fillKey = async (): Promise<Uint8Array | null> => (await keyOrNull()) ?? (await deps.device?.loadKeys())?.vaultKey ?? null;
+  const requireFillKey = async (): Promise<Uint8Array> => (await fillKey()) ?? Promise.reject(new UserError(LOCKED));
+  const fillToken = async (): Promise<Uint8Array | null> => (await tokenOrNull()) ?? (await deps.device?.loadKeys())?.loginToken ?? null;
   // The login token lives only in session storage (memory) while unlocked; lock clears it.
   const opened = async (key: Uint8Array, loginToken?: Uint8Array) => {
     await session.set('vaultKey', toBase64(key));
@@ -119,6 +150,11 @@ export function createService(deps: Deps) {
       deps.syncAlarm?.(true);
     }
     deps.resetAutoLock();
+    try {
+      await deps.device?.saveKeys({ vaultKey: key, ...(loginToken && { loginToken }) });
+    } catch {
+      // The session key above is already set: the unlock is genuinely usable even if device-level persistence (for lock-free autofill) failed.
+    }
   };
   const tokenOrNull = async () => {
     const stored = await session.get('loginToken');
@@ -210,8 +246,13 @@ export function createService(deps: Deps) {
     const { accountKey, info, pending } = await port.getSyncLocal();
     if (!accountKey) return null;
     if (info.needsSignIn) throw new UserError(new SyncAuthError().message);
-    const vaultKey = await keyOrNull();
-    const token = await tokenOrNull();
+    let vaultKey = await keyOrNull();
+    let token = await tokenOrNull();
+    if (!vaultKey || !token) {
+      const fromDevice = await deps.device?.loadKeys();
+      vaultKey ??= fromDevice?.vaultKey ?? null;
+      token ??= fromDevice?.loginToken ?? null;
+    }
     if (!vaultKey || !token) throw new UserError(LOCKED);
     syncing++;
     try {
@@ -321,6 +362,151 @@ export function createService(deps: Deps) {
     return null;
   }
 
+  async function emailRecoveryStatus(): Promise<EmailRecoveryStatus> {
+    const available = deps.sync !== undefined;
+    const blob = await deps.settings.get(ESCROW_BLOB);
+    const confirmedLocally = (await deps.settings.get(ESCROW_CONFIRMED)) === 'true';
+    const waitingForCode = blob !== undefined && !confirmedLocally;
+    // Same as doSync: a device that needs to sign in again must not keep hitting the Worker with a token the server
+    // already refused, or it self-inflicts the Worker's own auth-failure backoff against its own future requests.
+    const needsSignIn = deps.sync ? (await deps.sync.store.getSyncLocal()).info.needsSignIn : false;
+    const token = available && !needsSignIn ? await fillToken() : null;
+    if (!token || !deps.sync) return { available, enrolled: confirmedLocally, waitingForCode, pendingRecovery: null, wasTurnedOff: false };
+    const remote = await deps.sync.transport.lostStatus(token);
+    // enrolled reflects the account (the server), not just this device: a device that never did its own enrolling
+    // (e.g. one that just finished lostAccessOpen) must still see email recovery as on when the account has it.
+    return { available, enrolled: remote.escrow && !waitingForCode, waitingForCode, pendingRecovery: remote.pending, wasTurnedOff: confirmedLocally && !remote.escrow };
+  }
+
+  // Rotates the recovery key (Task 11) and mails a fresh code sealed around it and the account key (Task 11's sealEscrow); the put
+  // is immediate, not queued like pendingUpdate, so enrol can answer with the new recovery key or a clear "try again" right away.
+  async function emailRecoveryEnrol(email: string, password: string): Promise<{ recoveryKey: string }> {
+    const { transport, store: port } = unavailable();
+    const clean = String(email).trim();
+    if (!EMAIL_RE.test(clean) || clean.length > 320) throw new UserError(BAD_EMAIL);
+    const vaultKey = await requireKey();
+    const token = await tokenOrNull();
+    const accountKey = await accountKeyOf();
+    if (!token || !accountKey) throw new UserError(SYNC_OFF);
+    const header = await store.getHeader();
+    if (!header) throw new Error('No vault is set up yet');
+    return exclusive(async () => {
+      const rotated = await rotateRecoveryKey(header, vaultKey);
+      const opened = await openWithPassword(rotated.header, password, deps.floor, accountKey);
+      if (!opened || !equalBytes(opened.vaultKey, vaultKey)) throw new UserError("That master password isn't right.");
+      const code = generateEmailCode();
+      const blob = await sealEscrow(code, { recoveryKey: rotated.recoveryKey, accountKey });
+      const { headerRev } = await port.getSyncMeta();
+      try {
+        const put = await transport.putAccount(token, {
+          header: headerToJson(rotated.header), loginHash: tokenHash(opened.loginToken), readHash: tokenHash(opened.readToken),
+          recoveryHash: rotated.recoveryHash, ifRev: headerRev, escrow: { email: clean, blob: toBase64(blob), code: formatEmailCode(code) },
+        });
+        await store.commit({ header: rotated.header });
+        await port.setSyncLocal({ headerRev: put.headerRev });
+      } catch (e) {
+        if (!(e instanceof SyncHttpError) || e.status !== 409) throw e;
+        await doSync(password).catch(noop);
+        throw new UserError('The vault changed on another device. Sync it and try again.');
+      }
+      await deps.settings.set(ESCROW_BLOB, toBase64(blob));
+      await deps.settings.remove(ESCROW_CONFIRMED);
+      await session.set('recovery', formatRecoveryKey(rotated.recoveryKey));
+      return { recoveryKey: formatRecoveryKey(rotated.recoveryKey) };
+    });
+  }
+
+  async function emailRecoveryConfirm(code: string): Promise<null> {
+    const blobB64 = await deps.settings.get(ESCROW_BLOB);
+    if (!blobB64) throw new UserError('Turn on email recovery first.');
+    const parsed = parseEmailCode(String(code));
+    const opened = parsed && (await openEscrow(parsed, fromBase64(blobB64)));
+    if (!opened) throw new UserError("That code isn't right. Check it and try again.");
+    await deps.settings.set(ESCROW_CONFIRMED, 'true');
+    // storage.local plus the mailed code must not be enough on their own to open the vault: only the flag survives confirm.
+    await deps.settings.remove(ESCROW_BLOB);
+    return null;
+  }
+
+  async function emailRecoveryOff(): Promise<null> {
+    const { transport } = unavailable();
+    const token = await tokenOrNull();
+    if (!token) throw new UserError(SYNC_OFF);
+    await transport.deleteEscrow(token);
+    await deps.settings.remove(ESCROW_BLOB);
+    await deps.settings.remove(ESCROW_CONFIRMED);
+    return null;
+  }
+
+  async function emailRecoveryCancel(): Promise<null> {
+    const { transport } = unavailable();
+    const token = await fillToken();
+    if (!token) throw new UserError(SYNC_OFF);
+    await transport.lostCancel(token);
+    return null;
+  }
+
+  // Shared by signInRecovery (keys typed in by hand) and lostAccessOpen (keys taken straight out of the opened escrow blob).
+  async function recoverWithKeys(recoveryKey: Uint8Array, accountKey: Uint8Array, newPassword: string, replace: boolean): Promise<{ needsConfirm: true; entries: number } | null> {
+    const port = unavailable();
+    const held = await accountKeyOf();
+    if (held && !equalBytes(held, accountKey)) throw new UserError(KEY_DIFFERENT);
+    strong(newPassword);
+    return await exclusive(async () => {
+      const signed = await signInErrors(async () => {
+        const s = await signInWithRecovery(port.transport, recoveryKey);
+        if (!s.header.accountKey) throw new SyncAuthError();
+        return s;
+      }, RECOVERY_REFUSED);
+      const how = await plan(signed, replace);
+      if (typeof how === 'object') return how;
+      const header = await withNewPassword(signed.header, signed.vaultKey, newPassword, { floor: deps.floor, accountKey });
+      const queued = await pendingUpdate(header, newPassword, accountKey, recoveryKey, signed.vaultKey, signed.headerRev);
+      await takeAccount(signed, how, { header, accountKey, loginToken: queued.loginToken, pending: queued.pending });
+      return null;
+    });
+  }
+
+  async function lostAccessRequest(): Promise<null> {
+    const { transport } = unavailable();
+    const existing = await deps.settings.get(LOST_CLAIM);
+    // Ground truth from the server, checked again right here: a stale screen, a double-click or any future UI bug can never overwrite a request the server still calls alive.
+    if (existing) {
+      const released = await transport.lostRelease(existing);
+      if (released.state === 'ready' || released.releaseAt !== null) throw new UserError(LOST_STILL_ALIVE);
+    }
+    const claim = randomBytes(CLAIM_BYTES);
+    // The network call runs before any stored claim/blob is touched, so a failed or offline request leaves an existing one intact.
+    await transport.lostRequest(tokenHash(claim));
+    await deps.settings.set(LOST_CLAIM, toBase64(claim));
+    await deps.settings.remove(LOST_BLOB);
+    return null;
+  }
+
+  async function lostAccessCheck(): Promise<LostAccessState> {
+    const { transport } = unavailable();
+    const claim = await deps.settings.get(LOST_CLAIM);
+    if (!claim) return { state: 'none' };
+    const released = await transport.lostRelease(claim);
+    if (released.state === 'waiting') return released;
+    await deps.settings.set(LOST_BLOB, released.blob);
+    return { state: 'ready' };
+  }
+
+  async function lostAccessOpen(code: string, newPassword: string, replace: boolean): Promise<{ needsConfirm: true; entries: number } | null> {
+    const blobB64 = await deps.settings.get(LOST_BLOB);
+    if (!blobB64) throw new UserError(NOT_READY);
+    const parsed = parseEmailCode(String(code));
+    const opened = parsed && (await openEscrow(parsed, fromBase64(blobB64)));
+    if (!opened) throw new UserError("That code isn't right. Check it and try again.");
+    const result = await recoverWithKeys(opened.recoveryKey, opened.accountKey, newPassword, replace);
+    if (result === null) {
+      await deps.settings.remove(LOST_CLAIM);
+      await deps.settings.remove(LOST_BLOB);
+    }
+    return result;
+  }
+
   async function handle(req: Request, ctx?: Ctx): Promise<unknown> {
     const type = (req as { type?: unknown })?.type;
     const fromPage = ctx !== undefined;
@@ -372,13 +558,34 @@ export function createService(deps: Deps) {
           await session.remove('vaultKey');
           await session.remove('pending');
           await session.remove('loginToken');
-          deps.syncAlarm?.(false);
+          // A non-manual lock (auto-lock) leaves the device-held keys in place, so background sync keeps answering from them; only stop the alarm when it won't.
+          if (req.manual || !deps.device) deps.syncAlarm?.(false);
+          if (req.manual) await deps.device?.clearKeys();
           return null;
         case 'syncStatus':
           return await syncStatus();
         case 'syncNow':
           unavailable();
           return await exclusive(async () => (await doSync()) ?? Promise.reject(new UserError(SYNC_OFF)));
+        case 'emailRecovery':
+          switch (req.action) {
+            case 'status': return await emailRecoveryStatus();
+            case 'enrol': return await emailRecoveryEnrol(req.email, req.password);
+            case 'confirm': return await emailRecoveryConfirm(req.code);
+            case 'off': return await emailRecoveryOff();
+            case 'cancelRecovery': return await emailRecoveryCancel();
+            default: throw new UserError(NOT_ALLOWED);
+          }
+        case 'lostAccess': {
+          unavailable();
+          if (await keyOrNull()) throw new UserError('Strongroom is already unlocked. Lock it first.');
+          switch (req.action) {
+            case 'request': return await lostAccessRequest();
+            case 'check': return await lostAccessCheck();
+            case 'open': return await lostAccessOpen(req.code, req.newPassword, req.replace === true);
+            default: throw new UserError(NOT_ALLOWED);
+          }
+        }
         case 'signIn': {
           const port = unavailable();
           const accountKey = parseAccountKey(String(req.accountKey));
@@ -392,27 +599,12 @@ export function createService(deps: Deps) {
           });
         }
         case 'signInRecovery': {
-          const port = unavailable();
+          unavailable();
           const recoveryKey = parseRecoveryKey(String(req.recoveryKey));
           const accountKey = parseAccountKey(String(req.accountKey));
           if (!recoveryKey) throw new UserError(RECOVERY_REFUSED);
           if (!accountKey) throw new UserError(BAD_ACCOUNT_KEY);
-          const held = await accountKeyOf();
-          if (held && !equalBytes(held, accountKey)) throw new UserError(KEY_DIFFERENT);
-          strong(req.newPassword);
-          return await exclusive(async () => {
-            const signed = await signInErrors(async () => {
-              const s = await signInWithRecovery(port.transport, recoveryKey);
-              if (!s.header.accountKey) throw new SyncAuthError();
-              return s;
-            }, RECOVERY_REFUSED);
-            const how = await plan(signed, req.replace === true);
-            if (typeof how === 'object') return how;
-            const header = await withNewPassword(signed.header, signed.vaultKey, req.newPassword, { floor: deps.floor, accountKey });
-            const queued = await pendingUpdate(header, req.newPassword, accountKey, recoveryKey, signed.vaultKey, signed.headerRev);
-            await takeAccount(signed, how, { header, accountKey, loginToken: queued.loginToken, pending: queued.pending });
-            return null;
-          });
+          return await recoverWithKeys(recoveryKey, accountKey, req.newPassword, req.replace === true);
         }
         case 'list': {
           const { found, unreadable } = await logins(await requireKey());
@@ -444,9 +636,18 @@ export function createService(deps: Deps) {
           if (req.commit) syncSoon();
           return { added: result.logins.length, merged: result.merged, flagged: result.flagged } satisfies ImportPreview;
         }
+        case 'export': {
+          const key = await requireKey();
+          // Re-checking the password stops someone at an unlocked, unattended browser from taking every password in plain text.
+          const header = await store.getHeader();
+          const keys = header && (await openWithPassword(header, String(req.password), deps.floor, keyedFor(header, await accountKeyOf())));
+          if (!keys || !equalBytes(keys.vaultKey, key)) throw new UserError("That master password isn't right.");
+          deps.resetAutoLock();
+          return exportForChrome((await logins(key)).found.map((f) => f.login));
+        }
         case 'candidates': {
           const site = where && siteFromUrl(where.url);
-          const key = await keyOrNull();
+          const key = await fillKey();
           if (!key) return { locked: true, rows: [] };
           const { found } = await logins(key);
           return { locked: false, rows: site ? found.filter((f) => matches(f.login.sites, site)).map(row).sort(byName) : [] };
@@ -454,7 +655,7 @@ export function createService(deps: Deps) {
         case 'fill': {
           const site = where && siteFromUrl(where.url);
           if (!site) throw new UserError(NOT_ALLOWED);
-          const target = (await logins(await requireKey())).found.find((f) => f.id === req.id);
+          const target = (await logins(await requireFillKey())).found.find((f) => f.id === req.id);
           if (!target || !matches(target.login.sites, site)) throw new UserError("That login isn't saved for this website.");
           deps.resetAutoLock();
           return { username: target.login.username, password: target.login.password };

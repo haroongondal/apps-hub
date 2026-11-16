@@ -13,10 +13,13 @@ object TunnelEventBus {
 
   /**
    * Payload keys are part of the JS contract (plan §4.1):
-   * `{state, message?}` and `{bytesIn, bytesOut, connectedDurationSec}`.
+   * `{state, message?, code?}` and `{bytesIn, bytesOut, connectedDurationSec}`.
+   * `code` carries the typed failure code (e.g. `ERR_AUTH_FAILED`) only when
+   * the engine failure has one; it is null otherwise and the emitted event
+   * omits the key.
    */
   interface Listener {
-    fun onStatus(state: String, message: String?)
+    fun onStatus(state: String, message: String?, code: String?)
     fun onTraffic(bytesIn: Long, bytesOut: Long, connectedDurationSec: Long)
   }
 
@@ -30,8 +33,8 @@ object TunnelEventBus {
     listeners.remove(listener)
   }
 
-  fun postStatus(state: String, message: String?) {
-    for (listener in listeners) listener.onStatus(state, message)
+  fun postStatus(state: String, message: String?, code: String? = null) {
+    for (listener in listeners) listener.onStatus(state, message, code)
   }
 
   fun postTraffic(bytesIn: Long, bytesOut: Long, connectedDurationSec: Long) {

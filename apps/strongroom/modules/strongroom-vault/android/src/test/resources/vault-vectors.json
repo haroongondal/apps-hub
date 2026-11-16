@@ -154,5 +154,14 @@
             "recoveryWrap": "AgICAgICAgICAgIC34MDF7G4gyrMLLJSEk5oVCRhnyK6kFHMQxtJHPwi1rAwVdxZApS3wylBdk9KxC0M",
             "accountKey": true
         }
+    },
+    "escrow": {
+        "note": "A 20-byte email code, recovery key and account key, and a fixed 12-byte nonce. blob = nonce || AES-256-GCM(key = HKDF-SHA-256(ikm = code, no salt, info = UTF-8 label, 32 bytes), plaintext = recoveryKey || accountKey (40 bytes), aad = UTF-8 label) with its 16-byte tag appended. Computed by apps/strongroom/tools/vectors/escrow_vectors.py (own HKDF, cryptography AES-GCM), not by Strongroom's code.",
+        "label": "strongroom/v1/escrow",
+        "code": "505152535455565758595a5b5c5d5e5f60616263",
+        "recoveryKey": "707172737475767778797a7b7c7d7e7f80818283",
+        "accountKey": "909192939495969798999a9b9c9d9e9fa0a1a2a3",
+        "nonce": "b0b1b2b3b4b5b6b7b8b9babb",
+        "blob": "b0b1b2b3b4b5b6b7b8b9babba1c3650e9d4bf3f92b2692e29b390d039c33ad36b78568518a21e7e7cca9a7a7cefd3b07184f8894caa6a2e2628d7078475afe1e34346561"
     }
 }

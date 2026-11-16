@@ -4,6 +4,7 @@ import { Button, Header, Notice, Screen, TabBar, ThemeProvider, palette } from '
 import Vault, { addLockListener, type Status } from 'strongroom-vault';
 import { deriving, messageOf } from './src/call.ts';
 import { DeleteAllScreen, ExportScreen, ImportsScreen } from './src/DataScreens.tsx';
+import { EmailRecoveryScreen } from './src/EmailRecoveryScreen.tsx';
 import { EditScreen } from './src/EditScreen.tsx';
 import { EntryScreen } from './src/EntryScreen.tsx';
 import { ImportScreen } from './src/ImportScreen.tsx';
@@ -23,6 +24,7 @@ type Route =
   | { name: 'password' }
   | { name: 'fingerprint' }
   | { name: 'sync' }
+  | { name: 'emailRecovery' }
   | { name: 'export' }
   | { name: 'imports' }
   | { name: 'deleteAll' }
@@ -40,6 +42,7 @@ const FLOW_ROUTES: Record<SettingsFlow, Route> = {
   newKey: { name: 'newKey', key: null },
   import: { name: 'import' },
   sync: { name: 'sync' },
+  emailRecovery: { name: 'emailRecovery' },
   export: { name: 'export' },
   imports: { name: 'imports' },
   deleteAll: { name: 'deleteAll' },
@@ -120,7 +123,7 @@ function Home() {
       if (deriving() || settingUp) return true;
       if (!unlocked || route.name === 'tabs') return false;
       if (route.name === 'newKey' && route.key !== null) return true;
-      if (route.name === 'sync' && holdingKey) return true;
+      if ((route.name === 'sync' || route.name === 'emailRecovery') && holdingKey) return true;
       setRoute(route.name === 'edit' && route.id !== null ? { name: 'entry', id: route.id } : TABS_ROUTE);
       return true;
     });
@@ -178,6 +181,9 @@ function Home() {
   if (route.name === 'password') return <ChangePasswordScreen onBack={home} onDone={finishFlow} onLocked={refresh} />;
   if (route.name === 'fingerprint') return <FingerprintScreen onBack={home} onDone={finishFlow} onLocked={refresh} />;
   if (route.name === 'sync') return <SyncScreen start="home" onBack={home} onDone={finishFlow} onLocked={refresh} onHold={setHoldingKey} />;
+  if (route.name === 'emailRecovery') {
+    return <EmailRecoveryScreen onBack={home} onDone={finishFlow} onLocked={refresh} onNewKey={() => openFlow('newKey')} onHold={setHoldingKey} />;
+  }
   if (route.name === 'newKey') {
     return <NewRecoveryKeyScreen shown={route.key} onKey={(key) => setRoute({ name: 'newKey', key })} onBack={home} onDone={finishFlow} onLocked={refresh} />;
   }

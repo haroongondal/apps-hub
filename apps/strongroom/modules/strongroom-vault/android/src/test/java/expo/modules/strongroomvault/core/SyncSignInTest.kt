@@ -52,6 +52,16 @@ class SyncSignInTest {
       override fun putAccount(setupToken: String, body: AccountCreate): Long = error("sign-in never writes the account")
 
       override fun putAccount(token: ByteArray, body: AccountUpdate): Long = error("sign-in never writes the account")
+
+      override fun lostRequest(claimHash: String) = error("not used")
+
+      override fun lostRelease(claim: String): LostRelease = error("not used")
+
+      override fun lostStatus(token: ByteArray): LostStatus = error("not used")
+
+      override fun lostCancel(token: ByteArray) = error("not used")
+
+      override fun deleteEscrow(token: ByteArray) = error("not used")
     }
 
     fun withPrelogin(kdf: KdfParams) = object : SyncTransport by t {

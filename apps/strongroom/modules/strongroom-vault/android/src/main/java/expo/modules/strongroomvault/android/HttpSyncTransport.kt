@@ -38,6 +38,22 @@ internal class HttpSyncTransport(baseUrl: String) : SyncTransport {
   override fun putAccount(token: ByteArray, body: AccountUpdate) =
     call("PUT", "/v1/account", bearer(token), SyncWire.toJson(body)).let { (s, b) -> SyncWire.account(s, b) }
 
+  override fun lostRequest(claimHash: String) =
+    call("POST", "/v1/lost/request", null, SyncWire.lostRequestBody(claimHash)).let { (s, b) -> SyncWire.ok(s, b) }
+
+  override fun lostRelease(claim: String) =
+    call("POST", "/v1/lost/release", null, SyncWire.lostReleaseBody(claim)).let { (s, b) -> SyncWire.lostRelease(s, b) }
+
+  override fun lostStatus(token: ByteArray) =
+    call("GET", "/v1/lost/status", bearer(token), null).let { (s, b) -> SyncWire.lostStatus(s, b) }
+
+  // The Worker ignores the cancel body; it is sent so no proxy refuses a POST without a length.
+  override fun lostCancel(token: ByteArray) =
+    call("POST", "/v1/lost/cancel", bearer(token), "{}").let { (s, b) -> SyncWire.ok(s, b) }
+
+  override fun deleteEscrow(token: ByteArray) =
+    call("DELETE", "/v1/escrow", bearer(token), null).let { (s, b) -> SyncWire.ok(s, b) }
+
   private fun bearer(token: ByteArray) = "Bearer " + SyncWire.toBase64(token)
 
   // No redirects: one could carry the bearer token to another host or to plain http.

@@ -34,6 +34,11 @@ export interface Transport {
   push(token: Uint8Array, req: PushRequest): Promise<PushResponse | PushConflict>;
   putAccount(auth: { setupToken: string }, body: AccountCreate): Promise<{ headerRev: number }>;
   putAccount(auth: Uint8Array, body: AccountUpdate): Promise<{ headerRev: number }>;
+  lostRequest(claimHash: string): Promise<void>;
+  lostRelease(claim: string): Promise<{ state: 'waiting'; releaseAt: number | null } | { state: 'ready'; blob: string }>;
+  lostStatus(token: Uint8Array): Promise<{ escrow: boolean; pending: { releaseAt: number | null } | null }>;
+  lostCancel(token: Uint8Array): Promise<void>;
+  deleteEscrow(token: Uint8Array): Promise<void>;
 }
 
 const TIMEOUT_MS = 30_000;
@@ -87,6 +92,22 @@ export function fetchTransport(baseUrl: string, fetchFn: typeof fetch = fetch): 
     },
     putAccount: async (auth: Uint8Array | { setupToken: string }, body: AccountCreate | AccountUpdate) =>
       ok(await call('PUT', '/v1/account', auth instanceof Uint8Array ? auth : auth.setupToken, body), (d) => int(d.headerRev)),
+    async lostRequest(claimHash) {
+      ok(await call('POST', '/v1/lost/request', undefined, { claimHash }), (d) => d.ok === true);
+    },
+    lostRelease: async (claim) =>
+      ok(
+        await call('POST', '/v1/lost/release', undefined, { claim }),
+        (d) => (d.state === 'waiting' && (d.releaseAt === null || int(d.releaseAt))) || (d.state === 'ready' && typeof d.blob === 'string'),
+      ),
+    lostStatus: async (token) =>
+      ok(await call('GET', '/v1/lost/status', token), (d) => typeof d.escrow === 'boolean' && (d.pending === null || (isObj(d.pending) && (d.pending.releaseAt === null || int(d.pending.releaseAt))))),
+    async lostCancel(token) {
+      ok(await call('POST', '/v1/lost/cancel', token), (d) => d.ok === true);
+    },
+    async deleteEscrow(token) {
+      ok(await call('DELETE', '/v1/escrow', token), (d) => d.ok === true);
+    },
   };
 }
 

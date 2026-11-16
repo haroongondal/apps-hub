@@ -21,6 +21,7 @@ import de.blinkt.openvpn.core.VPNLaunchHelper
 import de.blinkt.openvpn.core.VpnStatus
 import expo.modules.opentunnelnative.ServiceContracts
 import expo.modules.opentunnelnative.TrafficTicker
+import expo.modules.opentunnelnative.TunnelErrorCode
 import expo.modules.opentunnelnative.TunnelEventBus
 import expo.modules.opentunnelnative.TunnelStateRegistry
 import expo.modules.opentunnelnative.TunnelStatus
@@ -74,11 +75,12 @@ class OpenVpnEngine(context: Context) : TunnelEngine {
           }
         }
         // Posted: fail() unregisters this listener, and VpnStatus iterates a fail-fast Vector.
+        // Both levels are typed ERR_AUTH_FAILED so the app auto-jumps to another relay.
         ConnectionStatus.LEVEL_AUTH_FAILED -> main.post {
-          fail("The server rejected the connection (authentication failed). Pick another server.")
+          fail("The server rejected the connection (authentication failed). Pick another server.", TunnelErrorCode.AUTH_FAILED)
         }
         ConnectionStatus.LEVEL_WAITING_FOR_USER_INPUT -> main.post {
-          fail("This server asks for a username and password, which TunnelWall does not support. Pick another server.")
+          fail("This server asks for a username and password, which TunnelWall does not support. Pick another server.", TunnelErrorCode.AUTH_FAILED)
         }
         ConnectionStatus.LEVEL_NOTCONNECTED -> {
           ended?.countDown()
@@ -165,13 +167,13 @@ class OpenVpnEngine(context: Context) : TunnelEngine {
 
   override fun trafficCounters(): Pair<Long, Long>? = totals
 
-  private fun fail(message: String) {
+  private fun fail(message: String, code: String? = null) {
     if (!started) return
     val wasUp = TunnelStateRegistry.statusState.let { it == TunnelStatus.CONNECTED || it == TunnelStatus.REASSERTING }
     stop()
     TrafficTicker.stop()
-    TunnelStateRegistry.setStatus(TunnelStatus.ERROR, message)
-    TunnelEventBus.postStatus(TunnelStatus.ERROR, message)
+    TunnelStateRegistry.setStatus(TunnelStatus.ERROR, message, code)
+    TunnelEventBus.postStatus(TunnelStatus.ERROR, message, code)
     // The app answers a dropped tunnel by moving to another relay (App.tsx), which needs the foreground service held.
     release(hold = wasUp)
   }
