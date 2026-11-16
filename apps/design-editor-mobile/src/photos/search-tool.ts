@@ -22,7 +22,7 @@ export async function getSearchTool(deps: SearchToolDeps, onProgress: (fraction:
     try {
       await deps.download(m.url, part, n => onProgress(Math.min(1, (done + n) / total)));
     } catch {
-      await deps.remove(part);
+      await deps.remove(part).catch(() => {});
       return 'offline';
     }
     if (!(await deps.install(m.name))) return 'bad-download';

@@ -60,3 +60,9 @@ test('reportsInterruptedDownload: a download that fails midway gives offline and
   assert.deepEqual(calls.removed, ['models/vision.onnx.part']);
   assert.deepEqual(calls.installed, []);
 });
+
+test('removeFailureStillReportsOffline: a failed clean-up does not hide the offline result', async () => {
+  const { deps } = fakes([vision, text], undefined, true, true);
+  deps.remove = async () => { throw new Error('No such file'); };
+  assert.equal(await getSearchTool(deps, () => {}), 'offline');
+});
