@@ -19,6 +19,8 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.strongroomvault.android.BiometricKey
 import expo.modules.strongroomvault.android.EntryInput
 import expo.modules.strongroomvault.android.KeepAliveService
+import expo.modules.strongroomvault.android.SCAN_TOTP_EXTRA
+import expo.modules.strongroomvault.android.ScanActivity
 import expo.modules.strongroomvault.android.SecretFieldView
 import expo.modules.strongroomvault.android.SensitiveClipboard
 import expo.modules.strongroomvault.android.SyncJobService
@@ -35,6 +37,7 @@ import expo.modules.strongroomvault.core.KEY_LOST
 import expo.modules.strongroomvault.core.ImportError
 import expo.modules.strongroomvault.core.ImportResult
 import expo.modules.strongroomvault.core.KdfOutOfRange
+import expo.modules.strongroomvault.core.Otp
 import expo.modules.strongroomvault.core.RecoveryKey
 import expo.modules.strongroomvault.core.SmsCodes
 import expo.modules.strongroomvault.core.SyncAuthError
@@ -58,6 +61,7 @@ private const val LOCK_EVENT = "onLock"
 private const val SYNC_EVENT = "onSync"
 private const val PICK_CSV = 7401
 private const val SAVE_CSV = 7402
+private const val SCAN_QR = 7403
 private const val MAX_CSV_BYTES = 5 * 1024 * 1024
 internal const val KDF_REFUSED =
   "Strongroom won't open this vault: its security settings are weaker than it allows. The vault file may have been changed."
@@ -69,6 +73,7 @@ class StrongroomVaultModule : Module() {
     get() = requireNotNull(appContext.reactContext) { "React context unavailable" }
 
   private var pendingPick: CancellableContinuation<Uri?>? = null
+  private var pendingScan: CancellableContinuation<String?>? = null
 
   // Vault.touch() runs the expiry check before it refreshes, so a session that has run out is locked, not revived.
   private fun vault(): Vault = VaultHolder.get(context).also { VaultHolder.touch() }
@@ -249,7 +254,22 @@ class StrongroomVaultModule : Module() {
       }
     }
 
+    // §15.4: the scan screen owns the camera and the parsed confirmation; this only ferries the scanned URI,
+    // which is stored by Add/Edit's save. Null when the scan is cancelled.
+    AsyncFunction("scanQr") Coroutine { ->
+      val raw = awaitScan() ?: return@Coroutine null
+      val totp = Otp.parse(raw) ?: throw CodedException("SCAN_BAD_URI", "That QR is not an authenticator code.", null)
+      mapOf("raw" to raw, "issuer" to totp.issuer, "account" to totp.account, "algorithm" to totp.algorithm.name, "digits" to totp.digits, "period" to totp.period)
+    }
+
     OnActivityResult { _, result ->
+      if (result.requestCode == SCAN_QR) {
+        val cont = pendingScan ?: return@OnActivityResult
+        pendingScan = null
+        // Null on cancel: the code isn't stored until the Add/Edit save puts it in the vault.
+        if (cont.isActive) cont.resume(result.data?.getStringExtra(SCAN_TOTP_EXTRA)?.takeIf { result.resultCode == Activity.RESULT_OK })
+        return@OnActivityResult
+      }
       if (result.requestCode != PICK_CSV && result.requestCode != SAVE_CSV) return@OnActivityResult
       val cont = pendingPick ?: return@OnActivityResult
       pendingPick = null
@@ -549,6 +569,14 @@ class StrongroomVaultModule : Module() {
     }
   }
 
+  private suspend fun awaitScan(): String? = withContext(Dispatchers.Main) {
+    suspendCancellableCoroutine { cont ->
+      appContext.throwingActivity.startActivityForResult(Intent(context, ScanActivity::class.java), SCAN_QR)
+      pendingScan?.let { if (it.isActive) it.resume(null) }
+      pendingScan = cont
+    }
+  }
+
   private suspend fun passwordOk(v: Vault, password: String): Boolean {
     val pw = password.toCharArray()
     return try {
@@ -660,12 +688,18 @@ private fun secret(v: Vault, id: String, field: String): String {
 }
 
 private fun view(id: String, e: Entry): Map<String, Any?>? = when (e) {
-  is Entry.Login -> mapOf(
-    "id" to id, "type" to "login", "name" to e.name, "username" to e.username,
-    "sites" to e.sites.map { (if (it.https) "https://" else "http://") + it.host },
-    "apps" to e.apps.map { a -> a.domain?.let { "${a.app.pkg} ($it)" } ?: a.app.pkg },
-    "note" to e.note,
-  )
+  is Entry.Login -> {
+    val base = mapOf(
+      "id" to id, "type" to "login", "name" to e.name, "username" to e.username,
+      "sites" to e.sites.map { (if (it.https) "https://" else "http://") + it.host },
+      "apps" to e.apps.map { a -> a.domain?.let { "${a.app.pkg} ($it)" } ?: a.app.pkg },
+      "note" to e.note,
+    )
+    // The code's shape, never its secret — the raw URI only travels through reveal and the scanner.
+    e.totp?.let(Otp::parse)?.let { info ->
+      base + ("totp" to mapOf("issuer" to info.issuer, "account" to info.account, "algorithm" to info.algorithm.name, "digits" to info.digits, "period" to info.period))
+    } ?: base
+  }
   is Entry.Card -> mapOf(
     "id" to id, "type" to "card", "name" to e.name, "holder" to e.holder,
     "last4" to e.number.filter(Char::isDigit).takeLast(4), "expMonth" to e.expMonth, "expYear" to e.expYear, "note" to e.note,

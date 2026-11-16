@@ -31,6 +31,7 @@ test('the release build refuses cleartext traffic', () => {
 
 test('the vault module keeps services private plus the keep-alive foreground service', () => {
   // RECEIVE_SMS (DESIGN 15.3): requested from the Settings toggle only, and the receiver handles only the incoming-message broadcast.
+  // CAMERA (DESIGN 15.4): requested by the scan screen at scan time only.
   assert.deepEqual(permissions(vaultModule), [
     'android.permission.HIDE_OVERLAY_WINDOWS',
     'android.permission.QUERY_ALL_PACKAGES',
@@ -38,6 +39,7 @@ test('the vault module keeps services private plus the keep-alive foreground ser
     'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
     'android.permission.POST_NOTIFICATIONS',
     'android.permission.RECEIVE_SMS',
+    'android.permission.CAMERA',
   ]);
   const [autofill, syncJob, clipboardJob, keepAlive] = services(vaultModule);
   assert.equal(attr(autofill, 'android:name'), 'expo.modules.strongroomvault.android.StrongroomAutofillService');

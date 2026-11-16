@@ -20,10 +20,20 @@ export interface Row {
   subtitle: string;
 }
 
+// A login's totp: omit the key to keep a stored code as is, '' to remove it, a raw otpauth URI (from scanQr) to set it.
 export type EntryInput =
-  | { type: 'login'; name: string; username: string; password: string; sites: string[]; note: string }
+  | { type: 'login'; name: string; username: string; password: string; sites: string[]; note: string; totp?: string }
   | { type: 'card'; name: string; holder: string; number: string; expMonth: number | null; expYear: number | null; cvc: string; note: string }
   | { type: 'note'; name: string; text: string };
+
+// A login's authenticator code, without its secret: the raw otpauth URI never leaves the vault except through the scanner.
+export interface TotpInfo {
+  issuer: string | null;
+  account: string | null;
+  algorithm: string;
+  digits: number;
+  period: number;
+}
 
 export interface EntryView {
   id: string;
@@ -38,6 +48,7 @@ export interface EntryView {
   expYear?: number | null;
   note: string;
   text?: string;
+  totp?: TotpInfo;
 }
 
 export interface ImportPreview {
@@ -106,6 +117,9 @@ export interface StrongroomVaultApi {
   copy(id: string, field: 'username' | 'password' | 'number' | 'cvc'): void;
   save(id: string | null, e: EntryInput): string;
   remove(id: string): void;
+  // Opens the camera and shows the parsed code for confirmation; null when the scan is cancelled.
+  // The raw URI is stored by the following save. It carries the secret, so nothing but save holds it.
+  scanQr(): Promise<(TotpInfo & { raw: string }) | null>;
   pickGoogleCsv(): Promise<ImportPreview | null>;
   commitImport(): number;
   imports(): ImportBatch[];

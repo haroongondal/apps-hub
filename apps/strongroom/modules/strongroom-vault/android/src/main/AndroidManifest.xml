@@ -9,6 +9,9 @@
   <!-- §15.3: fill codes from text messages. The permission is requested from the Settings toggle only, never at setup;
        only the incoming-message broadcast is handled, never MMS and never the inbox. -->
   <uses-permission android:name="android.permission.RECEIVE_SMS" />
+  <!-- §15.4: scan a site's QR. Requested by the scan screen at scan time only. A phone without a camera still installs. -->
+  <uses-permission android:name="android.permission.CAMERA" />
+  <uses-feature android:name="android.hardware.camera" android:required="false" />
   <application>
     <service
       android:name="expo.modules.strongroomvault.android.StrongroomAutofillService"
@@ -43,6 +46,12 @@
       android:excludeFromRecents="true"
       android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize"
       android:windowSoftInputMode="adjustResize"
+      android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
+    <activity
+      android:name="expo.modules.strongroomvault.android.ScanActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize"
       android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
     <service
       android:name="expo.modules.strongroomvault.android.KeepAliveService"
