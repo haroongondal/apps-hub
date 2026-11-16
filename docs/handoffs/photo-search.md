@@ -152,24 +152,20 @@ session runs" in `docs/build-sessions.md`. Continue from "Current state + exact 
 
 ## Current state + exact next step
 
-Phase 2 (Photos tab) is built and committed on `photo-search` (local, not pushed; 88b0e24..b7b4040
-on top of the plan 2e68638). Run with the parallel-agents-coord skill; ledger with every ruling:
-`.superpowers/sdd/2026-11-17-photo-search-phase-2/progress.md`. Gates green from a clean export
-(app TS 36/0 after the fix pass, typecheck, `expo export --platform android` bundles the screen,
-Kotlin 175/0, assembleDebug). expo-doctor's one failure ("app config fields in a non-CNG
-project") is pre-existing on main. Nothing has run on a phone.
+Find a photo (Phases 0-2) is merged and released. PR #38 squash-merged as 4247eed
+(`[skip ci]`); `pnpm release design-editor` from a clean worktree of 4247eed published
+**Design Editor build 10** (APK 99.1 MB) on 2026-11-17. Owner-approved second and third fix
+passes ran before the merge (service drops a second scan; a new scan replaces finished scan rows;
+the gallery stamp includes the visible photo count so Selected-photos changes rescan without a
+forced scan). Ledger: `.superpowers/sdd/2026-11-17-photo-search-phase-2/progress.md`.
+Pre-existing timing flakes on main (not this work): pdf-editor-mobile "decodes in linear time"
+(2 s) and library-core "answers in under 300 ms" fail under load and pass alone.
 
-Open, waiting for the owner:
-1. Residual review findings (no second fix wave was run): Important — after "Change" → allow all,
-   two scan rows can appear (the app-return listener and the permission answer both start one;
-   the service does not dedupe). Root fix: drop a photo scan in `MediaJobService.enqueue` / the
-   `Enqueue` reducer when one is QUEUED or RUNNING (reuse `jobToAdd`); it also closes the double
-   tap on Scan now / Try again. Minors: `inFlight` chain keeps old results; 'some' access with
-   photos added in Settings isn't rescanned; a failed More like this shows the old grid; the
-   scan decision in photos.tsx:64-68 has no test.
-2. Release go: merge with `[skip ci]`, then `pnpm release` locally (memory), Store release id
-   `design-editor`.
-3. AC-2 on the phone needs the 195 COCO photos copied into the gallery and removed afterwards;
-   ask before doing it.
-Next step after the owner answers: one small fix pass for item 1 if they say so, then Task 5 of
-the Phase 2 plan (install from the Store, walk the tab, AC-1..AC-6).
+Next step: Task 5 of the Phase 2 plan, on the phone, after the owner installs build 10 from the
+Store (never adb-install): claim `device:49kjmnuwonkffqzh`, walk the Photos tab (allow access,
+get the search tool, scan, search, More like this, Open), then AC-1 (airplane mode), AC-3 (1,000
+photos ≤ 5 min plugged in), AC-4 (≤ 1 s per search), AC-5 (no network in search, gallery
+unchanged), AC-6 (waiting notice when hot or < 20%). AC-2 on the COCO set only if the owner
+agrees to copying the 195 photos into the gallery and removing them afterwards (asked, not yet
+answered). Still unverified in-app: ORT input/output names, the fp16 text output, phone
+thumbnails. After that: feature 2, Clean up the gallery (design approved).
