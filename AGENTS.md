@@ -53,7 +53,7 @@ Current apps:
   blocked apps or senders, apps not recorded, items saved before the first key).
   Android only, private Store only (`com.haroon.inflow`; READ_SMS, RECEIVE_SMS,
   INTERNET for `imap.gmail.com` and the owner's chosen AI address). Kotlin owns
-  capture, storage, parsing, Gmail and AI; RN only renders. Spec:
+  capture, storage, parsing, Gmail and AI; RN only renders. WhatsApp chats are grouped by contact, WhatsApp text is kept forever, and the media WhatsApp notifications expose is stored encrypted in the app's private files (never sent to the AI). Spec:
   `docs/superpowers/specs/2026-11-13-inflow-design.md`; plans:
   `docs/superpowers/plans/2026-11-13-inflow-stage-*.md`; progress:
   `docs/handoffs/inflow.md`.
