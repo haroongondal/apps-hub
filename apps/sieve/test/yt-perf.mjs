@@ -209,10 +209,12 @@ const within = (p, ms) => {
   return Promise.race([p, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`no answer after ${Math.round(ms / 1000)} s`)), ms); })]).finally(() => clearTimeout(timer));
 };
 
+// One stuck step (a navigation, evaluate or CDP call) must be reported as a failed load, not hang the run, so the whole load has a limit.
+const LOAD_LIMIT_MS = 120_000;
 async function loadOnce(ctx) {
   let page;
-  try {
-    page = await within(ctx.newPage(), 15_000);
+  const body = async () => {
+    page = await ctx.newPage();
     const cdp = await ctx.newCDPSession(page);
     await cdp.send('Network.enable');
     await cdp.send('Network.clearBrowserCache');
@@ -234,6 +236,9 @@ async function loadOnce(ctx) {
       heapMb = (await cdp.send('Performance.getMetrics')).metrics.find((m) => m.name === 'JSHeapUsedSize').value / 1048576;
     } catch {}
     return { ok: true, ...t, heapMb };
+  };
+  try {
+    return await within(body(), LOAD_LIMIT_MS);
   } catch (e) {
     return { ok: false, gated: false, why: String(e.message).split('\n')[0].slice(0, 90) };
   } finally {
@@ -242,13 +247,13 @@ async function loadOnce(ctx) {
 }
 
 async function livePart(core, helpers, harness, runs) {
-  const a = await harness.launch({ mapHosts: false, extraArgs: ARGS });
-  const b = await harness.launch({ mapHosts: false, extension: false, extraArgs: ARGS });
   const results = [];
-  try {
-    await sleep(1000);
-    for (const [name, patch] of [['default options', null], ['every option on', everyOption(core)]]) {
-      await a.sw.evaluate(() => chrome.storage.local.remove('youtube'));
+  for (const [name, patch] of [['default options', null], ['every option on', everyOption(core)]]) {
+    // Fresh browsers per pass: Chrome stops an idle extension worker after a few minutes, and Playwright's handle to it then fails.
+    const a = await harness.launch({ mapHosts: false, extraArgs: ARGS });
+    const b = await harness.launch({ mapHosts: false, extension: false, extraArgs: ARGS });
+    try {
+      await sleep(1000);
       if (patch) await helpers.setYouTube({ sw: a.sw }, patch);
       await sleep(500);
       const w = [];
@@ -260,9 +265,9 @@ async function livePart(core, helpers, harness, runs) {
         if (i === 1 && (!w.some((r) => r.ok) || !wo.some((r) => r.ok))) break;
       }
       results.push({ name, w, wo, ...judgeLive(w, wo, runs) });
+    } finally {
+      await within(Promise.all([a.ctx.close(), b.ctx.close()]), 15_000).catch(() => {});
     }
-  } finally {
-    await Promise.all([a.ctx.close(), b.ctx.close()]).catch(() => {});
   }
   console.log(`\n### Watch page, live, signed out (${LIVE_URL}; ${runs} cold loads per side, alternating; medians of the loads that worked)\n`);
   console.log('| options | side | loads ok | median DCL ms | median load ms | median heap MB 10 s after load |\n| --- | --- | --- | --- | --- | --- |');
