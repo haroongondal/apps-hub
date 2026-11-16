@@ -45,8 +45,8 @@ rulings: `docs/handoffs/photo-search.md`.
 - Files go in the existing `core/` (pure) and `android/` (platform) packages with `Clip`/`Photo`
   prefixes, not new `photos/`/`vision/` packages: that is the module's layer convention.
 - The index is a binary file, not SQLite: JVM-testable, loaded whole for search anyway, and a
-  version bump in the header triggers the re-scan the design asks for. Append-only during a job,
-  compacted once at the end; a torn last record is ignored on load.
+  version bump in the header triggers the re-scan the design asks for. Each job first rewrites
+  the file with the rows it keeps, then appends; a torn last record is ignored on load.
 - The model download is a step the app runs before the first index job ("Getting the search
   tool"), in JS, because media jobs must never touch the network (data-safety rule 6). Kotlin
   holds the model list (one source of truth), hands it to JS, and verifies each `.part` file

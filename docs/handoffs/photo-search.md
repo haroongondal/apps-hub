@@ -128,11 +128,34 @@ session runs" in `docs/build-sessions.md`. Continue from "Current state + exact 
   numbers closed (see evidence). Phone cleaned, claim released. Wrote the Phase 1 plan
   `docs/superpowers/plans/2026-11-17-photo-search-phase-1.md` (8 tasks). Nothing committed.
 
+- 2026-11-17: owner said go, with the cd-engineering-tools parallel-agents-coord skill. Phase 0
+  committed as base c7adcb5 (local only). Phase 1 run with parallel subagents (filelock run key
+  `gradle`, pathspec commits): Tasks 1-8 done, 14 commits up to 7137cd3; Task 6 reviewed + one
+  fix round; final whole-branch review + one fix pass (7137cd3) + scoped re-review. Ledger with
+  every ruling: `.superpowers/sdd/2026-11-17-photo-search-phase-1/progress.md` (git-ignored).
+  Gates from a clean export: pnpm test, typecheck, Kotlin 170/0, assembleDebug, APK has
+  libonnxruntime.so 16 KB aligned + clip/tokenizer.json, expo-doctor OK. Nothing on a device.
+
+## Phase 1 facts for Phase 2 (verified in code/tests)
+
+- JS API (`modules/design-media/src/index.ts`): `photoModels`, `installPhotoModel`,
+  `startPhotoIndex`, `photoIndexState`, `searchPhotos`, `similarPhotos`, `releasePhotoSearch`;
+  download step `getSearchTool` in `apps/design-editor-mobile/src/photos/search-tool.ts` returns
+  'ready' | 'no-room' | 'bad-download' | 'offline' (plain-word messages belong to the screen).
+- Deferred to Phase 2 (from reviews): the Queue row for a photo-index job says "Saved" and its
+  "Try again" is broken (`src/media/status.ts`, `JobRow.tsx`); `jobToAdd` ignores PAUSED and
+  INTERRUPTED photo jobs (second row after Resume); two quick `startPhotoIndex` calls can add two
+  rows; back-off keeps the job RUNNING (blocks the queue, counts toward the 6 h mediaProcessing
+  limit) so the screen must say why it is paused; stale comment `ClipSessions.kt:13`.
+- Not verified anywhere yet: ORT input/output names against the real model files in-app, the
+  fp16 text output read through `floatBuffer`, `loadThumbnail` pixels on the phone.
+
 ## Current state + exact next step
 
-Phase 0 is complete. The Phase 1 plan is written and not yet started. Uncommitted: designs,
-both plans, this handoff, `tools/photo-bench/`. Next: run the Phase 1 plan from Task 1
-(superpowers:executing-plans), after the owner's go and their answer on committing Phase 0. Uncommitted in the worktree: five designs, the Phase 0 plan, this
+Phase 1 is built and committed on `photo-search` (local, not pushed), waiting for the scoped
+re-review of 7137cd3 to come back clean. Next: write the Phase 2 plan (permission flow, Photos
+tab with "Get the search tool", scan progress, search box, grid, More like this, open; fix the
+deferred items above; release through the Store, then the on-phone checks AC-1..AC-6). Uncommitted in the worktree: five designs, the Phase 0 plan, this
 handoff, `tools/photo-bench/`. Waiting for the owner to say whether to commit them.
 Next: write the Phase 1 plan (engine: CLIP tokenizer, preprocessing, int8 index and ranking in
 Kotlin under `modules/design-media`, JVM tests against `ref.py` output; the index job in the
