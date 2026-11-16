@@ -80,7 +80,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
       {notice}
       <Field
         label="Your name"
-        hint="Inflow uses it to spot transfers between your own accounts."
+        hint="Your full name as your bank writes it. Inflow uses it to spot transfers between your own accounts."
         value={ownerName}
         onChangeText={setOwnerName}
         onEndEditing={saveOwnerName}
