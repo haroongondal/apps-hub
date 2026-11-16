@@ -27,7 +27,9 @@ fun reduce(jobs: List<Job>, e: QueueEvent): List<Job> = when (e) {
   is QueueEvent.Fail -> update(jobs, e.id) { it.copy(state = JobState.FAILED, error = e.error, finishedAt = e.at) }
   is QueueEvent.Cancel -> jobs.map {
     val matches = e.id == "all" || it.id == e.id
-    if (matches && (it.state == JobState.QUEUED || it.state == JobState.RUNNING)) it.copy(state = JobState.CANCELLED) else it
+    val cancellable = it.state == JobState.QUEUED || it.state == JobState.RUNNING ||
+      (e.id != "all" && (it.state == JobState.INTERRUPTED || it.state == JobState.PAUSED))
+    if (matches && cancellable) it.copy(state = JobState.CANCELLED) else it
   }
   QueueEvent.Interrupt -> jobs.map { if (it.state == JobState.RUNNING) it.copy(state = JobState.INTERRUPTED) else it }
   QueueEvent.Pause -> jobs.map { if (it.state == JobState.RUNNING) it.copy(state = JobState.PAUSED) else it }
