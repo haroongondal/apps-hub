@@ -21,11 +21,13 @@ export function HomeScreen({
   status,
   refreshStatus,
   onOpen,
+  onOpenContacts,
   onOpenMoney,
 }: {
   status: Status;
   refreshStatus: () => void;
   onOpen: (filter: ItemFilter, title: string) => void;
+  onOpenContacts: (pkg: string, title: string) => void;
   onOpenMoney: () => void;
 }) {
   const [summary, setSummary] = useState<HomeSummary | null>(null);
@@ -212,7 +214,7 @@ export function HomeScreen({
               key={a.pkg}
               title={a.label}
               subtitle={`${a.today > 0 ? `${a.today} today · ` : ''}${whenLabel(a.lastAt, now)}`}
-              onPress={() => onOpen({ kind: 'app', pkg: a.pkg }, a.label)}
+              onPress={() => (a.byContact ? onOpenContacts(a.pkg, a.label) : onOpen({ kind: 'app', pkg: a.pkg }, a.label))}
             />
           ))}
         </Group>

@@ -1,15 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, View } from 'react-native';
 import { Button, Empty, Group, Header, Notice, Pill, Row, Screen, Text, space, useTheme } from '@apps-hub/ui';
-import InflowCore, { addCapturedListener, type MoneySummary, type Status, type Txn } from 'inflow-core';
+import InflowCore, { addCapturedListener, type MoneySummary, type PartyTotal, type Status, type Txn } from 'inflow-core';
 import { whenLabel } from './format.ts';
 import { LOAD_ERROR } from './messages.ts';
-import { formatAmount, monthLabel, monthRange, shiftMonth, signedAmount, withinMonth } from './money.ts';
+import { formatAmount, monthLabel, monthRange, partySubtitle, partyTitle, shiftMonth, signedAmount, withinMonth } from './money.ts';
 import { TxnSheet } from './TxnSheet.tsx';
 
 const PAGE = 50;
 
-function TxnRow({ txn, now, onPress }: { txn: Txn; now: number; onPress: () => void }) {
+export function TxnRow({ txn, now, onPress }: { txn: Txn; now: number; onPress: () => void }) {
   return (
     <Row
       onPress={onPress}
@@ -30,7 +30,7 @@ function TxnRow({ txn, now, onPress }: { txn: Txn; now: number; onPress: () => v
   );
 }
 
-export function MoneyScreen({ status }: { status: Status }) {
+export function MoneyScreen({ status, onOpenParty }: { status: Status; onOpenParty: (p: PartyTotal) => void }) {
   const { c } = useTheme();
   const today = new Date();
   const [ym, setYm] = useState({ year: today.getFullYear(), month: today.getMonth() });
@@ -113,15 +113,10 @@ export function MoneyScreen({ status }: { status: Status }) {
           ))}
         </Group>
       )}
-      {summary !== null && summary.merchants.length > 0 && (
-        <Group title="Where it went">
-          {summary.merchants.map((m) => (
-            <Row
-              key={`${m.counterparty}|${m.currency}`}
-              title={m.counterparty}
-              subtitle={`${m.count} ${m.count === 1 ? 'payment' : 'payments'}`}
-              trailing={<Text variant="data">{formatAmount(m.total, m.currency)}</Text>}
-            />
+      {summary !== null && summary.parties.length > 0 && (
+        <Group title="People and shops">
+          {summary.parties.map((p) => (
+            <Row key={`${p.own}|${p.name ?? ''}|${p.currency}`} title={partyTitle(p)} subtitle={partySubtitle(p)} onPress={() => onOpenParty(p)} />
           ))}
         </Group>
       )}

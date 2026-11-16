@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Txn } from 'inflow-core';
-import { formatAmount, monthLabel, monthRange, shiftMonth, signedAmount, withinMonth } from '../money.ts';
+import { formatAmount, monthLabel, monthRange, partySubtitle, partyTitle, shiftMonth, signedAmount, withinMonth } from '../money.ts';
 
 test('formatAmount groups thousands and keeps two decimals from integers', () => {
   assert.equal(formatAmount(150000, 'PKR'), 'PKR 1,500.00');
@@ -51,4 +51,16 @@ test('withinMonth drops rows after the month and stops at the first row before i
 test('signedAmount shows the direction', () => {
   assert.equal(signedAmount({ direction: 'in', amount: 150000, currency: 'PKR' }), '+PKR 1,500.00');
   assert.equal(signedAmount({ direction: 'out', amount: 150000, currency: 'PKR' }), '-PKR 1,500.00');
+});
+
+test('partyTitle names own transfers and unknown parties', () => {
+  assert.equal(partyTitle({ name: null, own: true }), 'Between your accounts');
+  assert.equal(partyTitle({ name: null, own: false }), 'Unknown');
+  assert.equal(partyTitle({ name: 'KFC', own: false }), 'KFC');
+});
+
+test('partySubtitle leaves out a side with no money', () => {
+  assert.equal(partySubtitle({ currency: 'PKR', moneyIn: 0, moneyOut: 180000, count: 3 }), 'Out PKR 1,800.00 · 3 transactions');
+  assert.equal(partySubtitle({ currency: 'PKR', moneyIn: 2000000, moneyOut: 0, count: 1 }), 'In PKR 20,000.00 · 1 transaction');
+  assert.equal(partySubtitle({ currency: 'PKR', moneyIn: 2500000, moneyOut: 2500000, count: 2 }), 'In PKR 25,000.00 · out PKR 25,000.00 · 2 transactions');
 });

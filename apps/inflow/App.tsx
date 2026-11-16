@@ -1,22 +1,25 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AppState, BackHandler, View } from 'react-native';
 import { Button, Header, Notice, Screen, TabBar, ThemeProvider } from '@apps-hub/ui';
-import InflowCore, { type ItemFilter, type Status } from 'inflow-core';
+import InflowCore, { type ItemFilter, type PartyTotal, type Status } from 'inflow-core';
 import { AskScreen } from './src/AskScreen.tsx';
+import { ContactsScreen } from './src/ContactsScreen.tsx';
 import { HomeScreen } from './src/HomeScreen.tsx';
 import { ListScreen } from './src/ListScreen.tsx';
 import { LockScreen } from './src/LockScreen.tsx';
 import { MoneyScreen } from './src/MoneyScreen.tsx';
+import { partyTitle } from './src/money.ts';
+import { PartyScreen } from './src/PartyScreen.tsx';
 import { LOAD_ERROR } from './src/messages.ts';
 import { SettingsScreen } from './src/SettingsScreen.tsx';
 import { SetupScreen } from './src/SetupScreen.tsx';
 import { setupComplete, setupRows } from './src/setup.ts';
 
 type Tab = 'home' | 'money' | 'ask' | 'settings';
-interface Route {
-  filter: ItemFilter;
-  title: string;
-}
+type Route =
+  | { kind: 'items'; filter: ItemFilter; title: string }
+  | { kind: 'contacts'; pkg: string; title: string }
+  | { kind: 'party'; name: string | null; own: boolean; title: string };
 
 const TABS: ReadonlyArray<{ key: Tab; label: string }> = [
   { key: 'home', label: 'Home' },
@@ -73,7 +76,11 @@ function Root() {
     return () => sub.remove();
   }, [locked, stack.length]);
 
-  const open = (filter: ItemFilter, title: string) => setStack((s) => [...s, { filter, title }]);
+  const push = (r: Route) => setStack((s) => [...s, r]);
+  const open = (filter: ItemFilter, title: string) => push({ kind: 'items', filter, title });
+  const openContacts = (pkg: string, title: string) => push({ kind: 'contacts', pkg, title });
+  const openParty = (p: PartyTotal) => push({ kind: 'party', name: p.name, own: p.own, title: partyTitle(p) });
+  const back = () => setStack((s) => s.slice(0, -1));
 
   if (locked) {
     return (
@@ -97,15 +104,17 @@ function Root() {
   if (inSetup || !complete) return <SetupScreen status={status} onAction={refresh} onFinished={() => setInSetup(false)} />;
 
   const top = stack.length > 0 ? stack[stack.length - 1] : null;
-  if (top) return <ListScreen key={stack.length} title={top.title} filter={top.filter} onBack={() => setStack((s) => s.slice(0, -1))} onOpen={open} />;
+  if (top?.kind === 'items') return <ListScreen key={stack.length} title={top.title} filter={top.filter} onBack={back} onOpen={open} />;
+  if (top?.kind === 'contacts') return <ContactsScreen key={stack.length} title={top.title} pkg={top.pkg} onBack={back} onOpen={open} />;
+  if (top?.kind === 'party') return <PartyScreen key={stack.length} title={top.title} name={top.name} own={top.own} onBack={back} />;
 
   return (
     <>
       <View style={{ flex: 1 }}>
         {tab === 'home' ? (
-          <HomeScreen status={status} refreshStatus={refresh} onOpen={open} onOpenMoney={() => setTab('money')} />
+          <HomeScreen status={status} refreshStatus={refresh} onOpen={open} onOpenContacts={openContacts} onOpenMoney={() => setTab('money')} />
         ) : tab === 'money' ? (
-          <MoneyScreen status={status} />
+          <MoneyScreen status={status} onOpenParty={openParty} />
         ) : tab === 'ask' ? (
           <AskScreen />
         ) : (

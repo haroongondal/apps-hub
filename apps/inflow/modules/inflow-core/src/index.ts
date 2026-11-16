@@ -65,6 +65,8 @@ export type ItemFilter =
   | { kind: 'all' }
   | { kind: 'app'; pkg: string }
   | { kind: 'conversation'; key: string }
+  // One contact of one app: its chat, else its sender (the key a ContactRow carries).
+  | { kind: 'contact'; pkg: string; key: string }
   | { kind: 'sender'; name: string }
   | { kind: 'search'; query: string };
 
@@ -81,6 +83,17 @@ export interface ConversationRow {
 export interface AppRow {
   pkg: string;
   label: string;
+  lastAt: number;
+  today: number;
+  // SMS, Gmail, Teams and chat apps open a contact list; the rest open one list.
+  byContact: boolean;
+}
+
+// One contact of one app, newest first.
+export interface ContactRow {
+  key: string;
+  name: string;
+  lastText: string;
   lastAt: number;
   today: number;
 }
@@ -149,6 +162,17 @@ export interface MoneySummary {
   accounts: AccountTotal[];
   merchants: MerchantTotal[];
   categories: CategoryTotal[];
+  // Every person or shop, money in and out; own transfers are one row (own true, name null). name null otherwise = Unknown.
+  parties: PartyTotal[];
+}
+
+export interface PartyTotal {
+  name: string | null;
+  own: boolean;
+  currency: string;
+  moneyIn: number;
+  moneyOut: number;
+  count: number;
 }
 
 // Money out only; own transfers are left out.
@@ -209,6 +233,12 @@ export interface InflowCoreApi {
   // Newest first, paged like listItems.
   listTxns(account: string | null, before: number | null, limit: number, beforeId: number | null): Txn[];
   setOwnTransfer(txnId: number, own: boolean): void;
+  // Paged on the lastAt and key of the last row shown, null for the first page.
+  contacts(pkg: string, startOfDay: number, before: number | null, beforeKey: string | null, limit: number): ContactRow[];
+  // All time, per currency. own true = transfers between the owner's accounts (name ignored).
+  partyTotals(name: string | null, own: boolean): { currency: string; moneyIn: number; moneyOut: number; count: number }[];
+  // Newest first, paged like listTxns.
+  listPartyTxns(name: string | null, own: boolean, before: number | null, limit: number, beforeId: number | null): Txn[];
   // null when the keep-for period removed the item.
   getItem(id: number): Item | null;
   getOwnerName(): string | null;

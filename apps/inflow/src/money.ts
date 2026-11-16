@@ -28,3 +28,11 @@ export function withinMonth(page: Txn[], from: number, to: number): { rows: Txn[
 }
 
 export const signedAmount = (t: Pick<Txn, 'direction' | 'amount' | 'currency'>): string => `${t.direction === 'in' ? '+' : '-'}${formatAmount(t.amount, t.currency)}`;
+
+export const partyTitle = (p: { name: string | null; own: boolean }): string => (p.own ? 'Between your accounts' : (p.name ?? 'Unknown'));
+
+export function partySubtitle(p: { currency: string; moneyIn: number; moneyOut: number; count: number }): string {
+  const sides = [p.moneyIn > 0 ? `in ${formatAmount(p.moneyIn, p.currency)}` : null, p.moneyOut > 0 ? `out ${formatAmount(p.moneyOut, p.currency)}` : null].filter((s) => s !== null);
+  const text = [...sides, `${p.count} ${p.count === 1 ? 'transaction' : 'transactions'}`].join(' · ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
