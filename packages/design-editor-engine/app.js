@@ -426,6 +426,25 @@ function applyColor(c) {
   canvas.requestRenderAll(); record(); inspect();
 }
 
+// a 128 px RGBA copy of the unfiltered source: enough for colours and levels, fast on a 4000 px photo
+function smallPixels(img) {
+  const src = img._originalElement || img.getElement();
+  const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
+  const k = Math.min(1, 128 / Math.max(sw, sh));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(sw * k)); c.height = Math.max(1, Math.round(sh * k));
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(src, 0, 0, c.width, c.height);
+  return ctx.getImageData(0, 0, c.width, c.height).data;
+}
+// keyed by the source element: Remove background sets a new one, so it gets a fresh palette
+const paletteCache = new WeakMap();
+function paletteOf(img) {
+  const src = img._originalElement || img.getElement();
+  if (!paletteCache.has(src)) paletteCache.set(src, paletteFromPixels(smallPixels(img)));
+  return paletteCache.get(src);
+}
+
 // shortcut: flood fill of the edge colour, not an AI model; fine on plain backgrounds, swap in an on-device segmentation model for busy photos.
 function removeBackground(px, w, h, tol) {
   const bucket = i => ((px[i * 4] >> 4) << 8) | ((px[i * 4 + 1] >> 4) << 4) | (px[i * 4 + 2] >> 4);
@@ -562,6 +581,7 @@ function inspect() {
   }
   const multi = o.type === 'activeselection', isText = o instanceof Textbox, isImg = o instanceof FabricImage, isLine = o.type === 'line', isGroup = o.type === 'group';
   const locked = !!o.lockMovementX;
+  const palette = isImg ? paletteOf(o) : [];
   const hasFill = !multi && !isImg && !isGroup && !isLine;
   const range = (id, label, min, max, step, value) => `<div class="row"><label for="${id}">${label}</label><input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}" style="width:110px"></div>`;
   box.replaceChildren(el(`
@@ -581,11 +601,16 @@ function inspect() {
       <div class="row" style="margin-top:6px"><label for="lh">Line spacing</label><input type="number" id="lh" min="0.5" max="4" step="0.05" value="${+o.lineHeight}" style="width:72px"></div>
       <div class="row"><label for="cs">Letter spacing</label><input type="number" id="cs" min="-200" max="2000" step="10" value="${+o.charSpacing}" style="width:72px"></div>` : ''}
     ${isImg ? `
+      <h3>Colours in this photo</h3>
+      ${palette.length ? `<div class="swatches" id="photoColors">${palette.map(c => `<button class="swatch" style="background:${c}" title="${c}" aria-label="Use ${c} as the page background"></button>`).join('')}</div>
+      <button id="paletteToKit" style="width:100%;margin-top:6px">Add to brand kit</button>
+      <p class="hint">Pick a colour to use it as the page background.</p>` : '<p class="hint">This image has no visible colours.</p>'}
       <h3>Remove background</h3>
       ${range('tol', 'Tolerance', 5, 160, 1, 48)}
       <button id="rbg" style="width:100%">Remove background</button>
       <p class="hint">Best on plain or studio backgrounds.</p>
       <h3>Adjust</h3>
+      <button id="fauto" style="width:100%">Auto-enhance</button>
       ${range('fbr', 'Brightness', -1, 1, 0.02, +(imgFilter(o, 'Brightness')?.brightness ?? 0))}
       ${range('fco', 'Contrast', -1, 1, 0.02, +(imgFilter(o, 'Contrast')?.contrast ?? 0))}
       ${range('fbl', 'Blur', 0, 1, 0.02, +(imgFilter(o, 'Blur')?.blur ?? 0))}
@@ -641,6 +666,17 @@ function inspect() {
       o.filters = f; o.applyFilters(); canvas.requestRenderAll(); record();
     };
     ['fbr', 'fco', 'fbl'].forEach(id => on(id, 'oninput', apply));
+    $$('#photoColors .swatch').forEach(b => b.onclick = () => { canvas.backgroundColor = b.title; canvas.requestRenderAll(); record(); });
+    on('paletteToKit', 'onclick', () => {
+      const added = palette.filter(c => !brand.colors.includes(c));
+      brand.colors.push(...added); saveBrand(); renderBrand();
+      toast(added.length ? `Added ${added.length} ${added.length === 1 ? 'colour' : 'colours'} to the brand kit` : 'These colours are already in the brand kit');
+    });
+    on('fauto', 'onclick', () => {
+      const v = enhanceValues(smallPixels(o));
+      $('#fbr').value = v.brightness; $('#fco').value = v.contrast; apply();
+      if (!v.brightness && !v.contrast) toast('This photo already looks balanced');
+    });
     on('fgr', 'onchange', apply);
   }
 }
@@ -845,4 +881,4 @@ $('#openMedia').onclick = () => native.media.openWindow();
 })();
 // setZoom exports for touch.js: pinch zoom and pan stay in sync with app.js's zoom variable,
 // the element size and the zoom label through the same function the buttons use
-window.editor = { get selectMany() { return selectMany; }, canvas, MENU, removeBackground, resizePage, exportAs, applyTemplate, pickFace, TEMPLATES, setZoom, get size() { return [W, H]; }, get page() { return [cur, pages.length]; } };
+window.editor = { paletteOf, get selectMany() { return selectMany; }, canvas, MENU, removeBackground, resizePage, exportAs, applyTemplate, pickFace, TEMPLATES, setZoom, get size() { return [W, H]; }, get page() { return [cur, pages.length]; } };

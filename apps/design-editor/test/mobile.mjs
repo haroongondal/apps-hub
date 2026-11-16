@@ -286,6 +286,20 @@ await page.setViewportSize({ width: 360, height: 844 });
 await page.waitForTimeout(250);
 assert.notEqual(await page.evaluate(() => document.querySelector('#zoomLabel').textContent), zoomBefore, 'a width change refits');
 
+// a photo picked from the phone shows its colours and Auto-enhance in the inspector
+const photo = await page.evaluate(() => {
+  const c = document.createElement('canvas'); c.width = 120; c.height = 80;
+  const x = c.getContext('2d');
+  ['#c03020', '#2060c0', '#30a050'].forEach((col, i) => { x.fillStyle = col; x.fillRect(i * 40, 0, 40, 80); });
+  return c.toDataURL('image/png').split(',')[1];
+});
+await page.setInputFiles('#imgFile', { name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from(photo, 'base64') });
+await page.waitForFunction(() => window.editor.canvas.getActiveObject()?.type === 'image', null, { timeout: 5000 });
+await page.waitForSelector('#photoColors .swatch', { timeout: 3000 });
+assert.equal(await page.locator('#photoColors .swatch').count(), 6, 'six colours shown for the photo');
+assert.ok(await page.isVisible('#fauto'), 'Auto-enhance is in the phone inspector');
+await page.evaluate(() => { const c = window.editor.canvas; c.remove(c.getActiveObject()); c.discardActiveObject(); });
+
 // a hostile design can't make the phone fetch anything: the CSP blocks an image src and a
 // pattern source that point at a web host, and nothing a normal session does trips it
 assert.deepEqual(await page.evaluate(() => window.__csp), [], 'the CSP blocked nothing in a normal session');

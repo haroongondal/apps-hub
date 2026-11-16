@@ -92,6 +92,67 @@ const alpha = await page.evaluate(() => {
 });
 assert.deepEqual(alpha, [0, 255], 'corner cleared, subject kept');
 
+// photo colours and Auto-enhance on a dull 1600 x 1200 photo-like image; the image and the page colour are put back afterwards
+{
+  const bg0 = await page.evaluate(() => editor.canvas.backgroundColor);
+  const jpg = await page.evaluate(() => {
+    const W = 1600, H = 1200, c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d'), d = x.createImageData(W, H);
+    let seed = 7; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+    for (let i = 0; i < W * H; i++) {
+      const px = i % W, py = (i / W) | 0;
+      const v = (base) => Math.max(90, Math.min(170, Math.round(base + (rnd() - 0.5) * 16)));
+      d.data[i * 4] = v(90 + 80 * px / W); d.data[i * 4 + 1] = v(90 + 80 * py / H); d.data[i * 4 + 2] = v(90 + 80 * (px + py) / (W + H)); d.data[i * 4 + 3] = 255;
+    }
+    x.putImageData(d, 0, 0);
+    return c.toDataURL('image/jpeg', 0.9).split(',')[1];
+  });
+  await page.setInputFiles('#imgFile', { name: 'dull.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(jpg, 'base64') });
+  await until(() => editor.canvas.getActiveObject()?.type === 'image' && editor.canvas.getActiveObject().width === 1600);
+  await settle(page);
+
+  // inspect() has already read this image's palette, so time a fresh copy of the same pixels
+  const palette = await page.evaluate(() => {
+    const src = editor.canvas.getActiveObject()._originalElement, c = document.createElement('canvas');
+    c.width = src.naturalWidth; c.height = src.naturalHeight; c.getContext('2d').drawImage(src, 0, 0);
+    const t0 = performance.now(), colours = editor.paletteOf({ _originalElement: c }), ms = performance.now() - t0;
+    return { colours, ms };
+  });
+  console.log(`palette: ${palette.ms.toFixed(1)} ms`);
+  assert.ok(palette.ms <= 200, 'palette of a 1600 x 1200 photo takes at most 200 ms');
+  assert.equal(new Set(palette.colours).size, 6);
+  assert.ok(palette.colours.every(c => /^#[0-9a-f]{6}$/.test(c)));
+
+  assert.equal(await page.locator('#photoColors .swatch').count(), 6, 'six colours shown for the photo');
+  const third = await page.locator('#photoColors .swatch').nth(2).getAttribute('title');
+  await page.locator('#photoColors .swatch').nth(2).click();
+  assert.equal(await page.evaluate(() => editor.canvas.backgroundColor), third, 'a photo colour sets the page background');
+
+  await page.click('#paletteToKit');
+  const titles = await page.evaluate(() => [...document.querySelectorAll('#brandColors .swatch')].map(b => b.title));
+  for (const c of await page.locator('#photoColors .swatch').evaluateAll(l => l.map(b => b.title))) assert.ok(titles.includes(c), `${c} is in the brand kit`);
+
+  const snap = () => page.evaluate(() => {
+    const o = editor.canvas.getObjects().at(-1), el = o.getElement(), c = document.createElement('canvas');
+    c.width = el.width; c.height = el.height; const x = c.getContext('2d'); x.drawImage(el, 0, 0);
+    const d = x.getImageData(0, 0, c.width, c.height).data;
+    let h = 2166136261; for (let i = 0; i < d.length; i++) h = Math.imul(h ^ d[i], 16777619);
+    return { filters: JSON.stringify(o.filters.map(f => f.toObject())), size: [c.width, c.height], hash: h >>> 0 };
+  });
+  await settle(page);
+  const pre = await snap();
+  assert.equal(pre.filters, '[]');
+  await page.click('#fauto'); await settle(page);
+  assert.ok(+(await page.inputValue('#fco')) > 0, 'a dull photo gets more contrast');
+  assert.ok(await page.evaluate(() => editor.canvas.getObjects().at(-1).filters.some(f => f.type === 'Contrast')));
+  assert.notEqual((await snap()).hash, pre.hash, 'the photo changed');
+  await menu('undo'); await settle(page);
+  assert.deepEqual(await snap(), pre, 'one undo puts back the filters and the pixels');
+
+  await page.evaluate(bg => { editor.canvas.backgroundColor = bg; editor.canvas.remove(editor.canvas.getObjects().at(-1)); editor.canvas.discardActiveObject(); editor.canvas.requestRenderAll(); }, bg0);
+  await settle(page);
+}
+
 const before = await page.evaluate(() => editor.canvas.getObjects()[1].getScaledWidth());
 await page.click('[data-tab="resize"]');
 await page.fill('#cw', '540'); await page.fill('#ch', '1920');
