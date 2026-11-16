@@ -22,11 +22,13 @@ import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 /** Canvas renderer of a pattern's DrawList. Frames run only between [kick] and the fade-out after `animate` turns false. */
-class EdgeView(
-  ctx: Context,
-  private val animate: (Long) -> Boolean,
-  private val spectrum: (Long) -> SpectrumFrame,
-) : View(ctx) {
+class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
+  interface Source {
+    fun animate(nowMs: Long): Boolean
+    fun spectrum(nowMs: Long): SpectrumFrame
+  }
+
+  private var input: FrameInput? = null
   private var settings = Settings()
   private var pattern: Pattern? = null
   private var colors = IntArray(0)
@@ -58,7 +60,7 @@ class EdgeView(
   private val tick = object : Choreographer.FrameCallback {
     override fun doFrame(frameTimeNanos: Long) {
       val now = SystemClock.uptimeMillis()
-      if (animate(now)) fadeStartMs = -1 else if (fadeStartMs < 0) fadeStartMs = now
+      if (source.animate(now)) fadeStartMs = -1 else if (fadeStartMs < 0) fadeStartMs = now
       fade = if (fadeStartMs < 0) 1f else 1f - (now - fadeStartMs).toFloat() / FADE_MS
       invalidate()
       if (fade > 0f) {
@@ -145,9 +147,12 @@ class EdgeView(
     val now = SystemClock.uptimeMillis()
     val dt = if (lastDrawMs < 0) 16L else now - lastDrawMs
     lastDrawMs = now
-    val s = spectrum(now)
+    val s = source.spectrum(now)
+    val input = input?.also {
+      it.path = path; it.spectrum = s; it.timeMs = now; it.dtMs = dt; it.params = params; it.colors = colors
+    } ?: FrameInput(path, s, now, dt, params, colors).also { input = it }
     list.clear()
-    pattern.draw(FrameInput(path, s, now, dt, params, colors), list)
+    pattern.draw(input, list)
     // A beat belongs to one FFT frame, but several draw frames fall between FFT frames: patterns see it once.
     s.beat = false
     render(canvas)

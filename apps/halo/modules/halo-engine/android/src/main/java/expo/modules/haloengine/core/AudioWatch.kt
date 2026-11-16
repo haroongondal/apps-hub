@@ -6,12 +6,14 @@ enum class AudioState { OK, BLOCKED, IDLE }
 class AudioWatch {
   private var blocked = false
   private var playing = false
-  // Last non-zero FFT, or the last init when none came since: silence is measured from there.
+  // Last non-zero FFT, or the last successful init when none came since: silence is measured from there.
   private var lastSoundMs = Long.MIN_VALUE / 2
   private var heardSinceInit = false
 
   fun onInit(ok: Boolean, nowMs: Long) {
     blocked = !ok
+    // A failed retry hears nothing new, so it must not restart the silence clock that random motion waits on.
+    if (!ok) return
     lastSoundMs = nowMs
     heardSinceInit = false
   }

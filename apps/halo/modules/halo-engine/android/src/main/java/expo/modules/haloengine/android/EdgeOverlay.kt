@@ -6,14 +6,12 @@ import android.hardware.input.InputManager
 import android.provider.Settings
 import android.view.WindowManager
 import expo.modules.haloengine.core.Pattern
-import expo.modules.haloengine.core.SpectrumFrame
 import expo.modules.haloengine.core.Settings as HaloSettings
 
 /** One full-screen, touch-through overlay window hosting the [EdgeView]. */
 class EdgeOverlay(
   private val ctx: Context,
-  private val animate: (Long) -> Boolean,
-  private val spectrum: (Long) -> SpectrumFrame,
+  private val source: EdgeView.Source,
 ) {
   private val wm = ctx.getSystemService(WindowManager::class.java)
   private var view: EdgeView? = null
@@ -22,7 +20,7 @@ class EdgeOverlay(
     ProbeLog.log(ctx, "overlay", "canDrawOverlays=${Settings.canDrawOverlays(ctx)}")
     try {
       val maxOpacity = ctx.getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch
-      val v = EdgeView(ctx, animate, spectrum)
+      val v = EdgeView(ctx, source)
       val lp = WindowManager.LayoutParams(
         WindowManager.LayoutParams.MATCH_PARENT,
         WindowManager.LayoutParams.MATCH_PARENT,

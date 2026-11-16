@@ -28,7 +28,7 @@ import expo.modules.haloengine.core.Spectrum
 import expo.modules.haloengine.core.SpectrumFrame
 import java.util.concurrent.Executors
 
-/** Foreground service for the stage 1 spike. Which FGS type survives which start path is what the probes measure. */
+/** Foreground service that owns the audio tap, the playing state, the colours and the edge overlay; start paths still log to probe.log. */
 class HaloService : Service() {
   private val main = Handler(Looper.getMainLooper())
   private var tap: AudioTap? = null
@@ -55,6 +55,10 @@ class HaloService : Service() {
   private var pattern: Pattern = Patterns.create("")
 
   private val retry = Runnable { startTap() }
+  private val source = object : EdgeView.Source {
+    override fun animate(nowMs: Long) = watch.animate(nowMs)
+    override fun spectrum(nowMs: Long) = frameAt(nowMs)
+  }
   // Blocked audio sends no FFT to kick the frame loop, so random motion needs its own wake-up.
   private val randomCheck = Runnable { if (watch.animate(now())) overlay?.kick() }
 
@@ -77,7 +81,8 @@ class HaloService : Service() {
     ProbeLog.log(this, "service", "notificationsEnabled=${getSystemService(NotificationManager::class.java).areNotificationsEnabled()}")
     registerScreenOff()
     onSettings = { s -> main.post { apply(s) } }
-    onListener = { main.post { media?.start() } }
+    // A listener reconnect leaves the old session watch empty, so it is rebuilt.
+    onListener = { main.post { media?.run { stop(); start() } } }
     applySettings(SettingsStore.load(this))
     return START_NOT_STICKY
   }
@@ -130,8 +135,10 @@ class HaloService : Service() {
   }
 
   private fun lightsOn() {
-    overlay = EdgeOverlay(this, watch::animate, ::frameAt).also { it.add() }
-    media = MediaWatch(this, ::onMedia, ::recomputeColors).also { it.start() }
+    overlay = EdgeOverlay(this, source).also { it.add() }
+    // Assigned before start(): start() reports an already-playing session through onMedia, which reads `media`.
+    media = MediaWatch(this, ::onMedia, ::recomputeColors)
+    media?.start()
     runCatching { getSystemService(WallpaperManager::class.java).addOnColorsChangedListener(wallpaperListener, main) }
     startTap()
   }

@@ -18,12 +18,12 @@ class PatternParams(
 )
 
 class FrameInput(
-  val path: EdgePath,
-  val spectrum: SpectrumFrame,
-  val timeMs: Long,
-  val dtMs: Long,
-  val params: PatternParams,
-  val colors: IntArray,
+  var path: EdgePath,
+  var spectrum: SpectrumFrame,
+  var timeMs: Long,
+  var dtMs: Long,
+  var params: PatternParams,
+  var colors: IntArray,
 )
 
 interface Pattern {

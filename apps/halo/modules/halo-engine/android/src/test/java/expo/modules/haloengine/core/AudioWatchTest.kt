@@ -66,6 +66,19 @@ class AudioWatchTest {
   }
 
   @Test
+  fun blockedRetriesKeepRandomMotion() {
+    val w = AudioWatch()
+    w.onPlaying(true)
+    w.onInit(false, 0)
+    for (retryAt in listOf(1_000L, 3_000L, 7_000L)) {
+      for (t in 3_000L until retryAt step 100) assertTrue("useRandom at $t", w.useRandom(t))
+      w.onInit(false, retryAt)
+    }
+    for (t in 3_000L..15_000L step 100) assertTrue("useRandom at $t", w.useRandom(t))
+    assertTrue(w.animate(15_000))
+  }
+
+  @Test
   fun retryBacksOffAndCaps() {
     val w = AudioWatch()
     assertEquals(1_000L, w.retryDelayMs(0))
