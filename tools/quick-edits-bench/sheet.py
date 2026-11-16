@@ -1,7 +1,8 @@
 """Edge-quality contact sheet: each photo beside its U2-Netp cut-out on a checkerboard.
 
-usage: sheet.py <photos_dir> <photos.json> <u2netp.onnx> <out.png>
-Photos are read from <photos_dir>/<id>/<id>.jpg. Rows hold two photo pairs each.
+usage: sheet.py <photos_dir> <photos.json> <u2netp.onnx> <out.png> [<modnet.onnx>]
+Photos are read from <photos_dir>/<id>/<id>.jpg. Rows hold two photos each. With a
+MODNet model (Xenova/modnet onnx/model.onnx), people photos get a third panel.
 """
 import json
 import os
@@ -34,25 +35,46 @@ def u2_cutout(sess, img):
     return ref.cutout(img, ref.u2_mask(pred, img.width, img.height))
 
 
-def pair(img, cut, label):
-    a = scaled(img.convert("RGB"))
+def modnet_cutout(sess, img):
+    """MODNet pre/post per its preprocessor_config: shortest edge 512, sides to multiples of 32, (x/255-0.5)/0.5."""
+    w, h = img.size
+    s = 512 / min(w, h)
+    rw, rh = max(32, round(w * s / 32) * 32), max(32, round(h * s / 32) * 32)
+    a = np.asarray(img.convert("RGB").resize((rw, rh), Image.Resampling.BILINEAR), np.float32) / 127.5 - 1
+    m = sess.run(None, {sess.get_inputs()[0].name: a.transpose(2, 0, 1)[None]})[0].reshape(rh, rw)
+    m = np.asarray(Image.fromarray(m.astype(np.float32), "F").resize((w, h), Image.Resampling.BILINEAR))
+    return ref.cutout(img, ref._q8(m))
+
+
+def on_checker(cut):
     c = scaled(cut)
     bg = checker(c.width, c.height)
     bg.paste(c, mask=c.getchannel("A"))
-    p = Image.new("RGB", (a.width + c.width + GAP, H + LABEL), "white")
-    p.paste(a, (0, LABEL))
-    p.paste(bg, (a.width + GAP, LABEL))
+    return bg
+
+
+def pair(img, cuts, label):
+    panels = [scaled(img.convert("RGB"))] + [on_checker(c) for c in cuts]
+    p = Image.new("RGB", (sum(x.width for x in panels) + GAP * (len(panels) - 1), H + LABEL), "white")
+    x = 0
+    for q in panels:
+        p.paste(q, (x, LABEL))
+        x += q.width + GAP
     ImageDraw.Draw(p).text((2, 2), label, fill="black")
     return p
 
 
-def main(photos_dir, photos_json, model, out):
+def main(photos_dir, photos_json, model, out, modnet=None):
     sess = ort.InferenceSession(model, sess_options=_opts(), providers=["CPUExecutionProvider"])
+    msess = modnet and ort.InferenceSession(modnet, sess_options=_opts(), providers=["CPUExecutionProvider"])
     pairs = []
     for r in json.load(open(photos_json)):
         img = Image.open(os.path.join(photos_dir, r["id"], r["id"] + ".jpg"))
         img.load()
-        pairs.append(pair(img, u2_cutout(sess, img), f"{r['id']} {r['kind']}"))
+        cuts = [u2_cutout(sess, img)]
+        if msess and r["kind"] == "people":
+            cuts.append(modnet_cutout(msess, img))
+        pairs.append(pair(img, cuts, f"{r['id']} {r['kind']}" + (" (U2-Netp | MODNet)" if len(cuts) > 1 else " (U2-Netp)")))
     rows = [pairs[i:i + PER_ROW] for i in range(0, len(pairs), PER_ROW)]
     W = max(sum(p.width for p in row) + GAP * (len(row) - 1) for row in rows)
     sheet = Image.new("RGB", (W, len(rows) * (H + LABEL + GAP)), "white")
@@ -72,6 +94,6 @@ def _opts():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 5:
+    if len(sys.argv) not in (5, 6):
         sys.exit(__doc__)
     main(*sys.argv[1:])
