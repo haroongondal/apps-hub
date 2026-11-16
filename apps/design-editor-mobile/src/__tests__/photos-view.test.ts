@@ -30,6 +30,7 @@ const scan = { before: 'all' as const, access: 'all' as const, force: false, mod
 
 test('scanDecision scans on a changed gallery, more access or a forced scan', () => {
   assert.equal(scanDecision({ ...scan, before: null }), 'none');
+  assert.equal(scanDecision({ ...scan, before: null, galleryChanged: true }), 'scan');
   assert.equal(scanDecision(scan), 'none');
   assert.equal(scanDecision({ ...scan, galleryChanged: true }), 'scan');
   assert.equal(scanDecision({ ...scan, before: 'none', access: 'all' }), 'scan');
