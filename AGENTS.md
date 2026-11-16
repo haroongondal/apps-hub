@@ -38,6 +38,10 @@ Current apps:
   (Kotlin owns the vault; RN only renders). Android only, private Store only
   (`com.haroon.strongroom`). Design: `docs/strongroom/DESIGN.md`; phases:
   `docs/strongroom/PHASE-1-PLAN.md` and `docs/handoffs/strongroom.md`.
+- **halo** (`apps/halo`) — edge visualizer: audio-reactive lights around the screen edge and
+  an always-on display. Android only, private Store only (`com.haroon.halo`); Kotlin module
+  `halo-engine`, RN renders settings. Spec: `docs/superpowers/specs/2026-11-17-edge-visualizer-design.md`;
+  plan: `docs/superpowers/plans/2026-11-17-halo.md`; handoff: `docs/handoffs/halo.md`.
 - **strongroom-extension** (`apps/strongroom-extension`) — Strongroom for Chrome
   (Manifest V3, Mac and Windows, loaded unpacked). Its own local vault in the
   Android vault format (`packages/strongroom-core`, checked against the shared
@@ -73,7 +77,7 @@ Planned (do not scaffold yet):
 - Tokens live in `src/tokens.ts` only. After changing them run
   `pnpm --filter @apps-hub/ui build:css`; the test fails if `web/tokens.css` is
   stale, and it enforces WCAG AA contrast for every brand in light and dark.
-- Brands: netlens, opentunnel, store, pdf, design, deputy, strongroom, inflow (hue + accent from each
+- Brands: netlens, opentunnel, store, pdf, design, deputy, strongroom, inflow, clipboard, halo (hue + accent from each
   launcher icon). Light and dark follow the system.
 - Copy is sentence case, active voice; errors say what happened and how to fix
   it. No emoji icons, no ALL-CAPS labels.
@@ -155,6 +159,9 @@ cd apps/strongroom/android && JAVA_HOME=$JAVA_HOME ./gradlew \
 # Native compile gate (Inflow):
 cd apps/inflow/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :inflow-core:testDebugUnitTest :app:assembleDebug
+# Native compile gate (Halo):
+cd apps/halo/android && JAVA_HOME=$JAVA_HOME ./gradlew \
+  :halo-engine:testDebugUnitTest :app:assembleDebug
 # Native compile gate (Design Editor mobile):
 cd apps/design-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :design-media:testDebugUnitTest :app:assembleDebug
