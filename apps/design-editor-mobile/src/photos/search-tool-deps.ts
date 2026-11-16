@@ -1,4 +1,4 @@
-import { createDownloadResumable, documentDirectory, getFreeDiskStorageAsync, makeDirectoryAsync } from 'expo-file-system/legacy';
+import { createDownloadResumable, deleteAsync, documentDirectory, getFreeDiskStorageAsync, makeDirectoryAsync } from 'expo-file-system/legacy';
 import DesignMedia from 'design-media';
 import type { SearchToolDeps } from './search-tool.ts';
 
@@ -7,6 +7,7 @@ export function realSearchToolDeps(): SearchToolDeps {
     models: () => DesignMedia.photoModels(),
     install: name => DesignMedia.installPhotoModel(name),
     freeBytes: () => getFreeDiskStorageAsync(),
+    remove: path => deleteAsync(`${documentDirectory}${path}`, { idempotent: true }),
     async download(url, to, onBytes) {
       await makeDirectoryAsync(`${documentDirectory}models/`, { intermediates: true });
       const job = createDownloadResumable(url, `${documentDirectory}${to}`, {}, p => onBytes(p.totalBytesWritten));

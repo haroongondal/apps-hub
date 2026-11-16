@@ -104,6 +104,13 @@ fun photoIndexJob(id: String) = Job(id, "gallery", Messages.PHOTOS, PhotoIndexPl
 fun jobToAdd(jobs: List<Job>, id: String): Job? =
   if (jobs.any { it.plan == PhotoIndexPlan && (it.state == JobState.QUEUED || it.state == JobState.RUNNING) }) null else photoIndexJob(id)
 
+// job is null when a scan is already waiting or running; id is then that scan's id.
+data class IndexStart(val job: Job?, val id: String)
+
+fun planIndexStart(shown: List<Job>, id: String): IndexStart =
+  jobToAdd(shown, id)?.let { IndexStart(it, it.id) }
+    ?: IndexStart(null, shown.first { it.plan == PhotoIndexPlan && (it.state == JobState.QUEUED || it.state == JobState.RUNNING) }.id)
+
 fun failureMessage(plan: Plan): String = if (plan is PhotoIndexPlan) Messages.PHOTOS_FAILED else Messages.COULDNT_PROCESS
 
 // The photo scan has no CBR choice of its own, so enqueuing it must not undo the one set for waiting video jobs.
