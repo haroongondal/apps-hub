@@ -138,3 +138,19 @@ test('fetchTransportGivesUpAfter30Seconds', async () => {
     mock.timers.reset();
   }
 });
+
+test('signinRequestReleaseAndCancelUseTheirRoutes', async () => {
+  const f = fakeFetch((s) => (s.url.endsWith('/release') ? { status: 200, body: { state: 'ready', blob: 'AA==' } } : { status: 200, body: { ok: true } }));
+  const t = fetchTransport('https://vault.example', f.fn);
+  await t.signinRequest('a'.repeat(43) + '=', 'Chrome on Mac');
+  assert.deepEqual(await t.signinRelease('the-claim'), { state: 'ready', blob: 'AA==' });
+  await t.signinCancel(TOKEN);
+  assert.deepEqual(f.sent, [
+    { url: 'https://vault.example/v1/signin/request', method: 'POST', auth: null, body: { claimHash: 'a'.repeat(43) + '=', deviceName: 'Chrome on Mac' } },
+    { url: 'https://vault.example/v1/signin/release', method: 'POST', auth: null, body: { claim: 'the-claim' } },
+    { url: 'https://vault.example/v1/signin/cancel', method: 'POST', auth: BEARER, body: undefined },
+  ]);
+  for (const body of [{}, { state: 'waiting' }, { state: 'ready', blob: 3 }]) {
+    await assert.rejects(fetchTransport('https://vault.example', fakeFetch(() => ({ status: 200, body })).fn).signinRelease('c'), SyncHttpError);
+  }
+});

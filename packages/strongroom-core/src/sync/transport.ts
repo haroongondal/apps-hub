@@ -39,6 +39,9 @@ export interface Transport {
   lostStatus(token: Uint8Array): Promise<{ escrow: boolean; pending: { releaseAt: number | null } | null }>;
   lostCancel(token: Uint8Array): Promise<void>;
   deleteEscrow(token: Uint8Array): Promise<void>;
+  signinRequest(claimHash: string, deviceName: string): Promise<void>;
+  signinRelease(claim: string): Promise<{ state: 'waiting'; releaseAt: number | null } | { state: 'ready'; blob: string }>;
+  signinCancel(token: Uint8Array): Promise<void>;
 }
 
 const TIMEOUT_MS = 30_000;
@@ -95,11 +98,7 @@ export function fetchTransport(baseUrl: string, fetchFn: typeof fetch = fetch): 
     async lostRequest(claimHash) {
       ok(await call('POST', '/v1/lost/request', undefined, { claimHash }), (d) => d.ok === true);
     },
-    lostRelease: async (claim) =>
-      ok(
-        await call('POST', '/v1/lost/release', undefined, { claim }),
-        (d) => (d.state === 'waiting' && (d.releaseAt === null || int(d.releaseAt))) || (d.state === 'ready' && typeof d.blob === 'string'),
-      ),
+    lostRelease: async (claim) => ok(await call('POST', '/v1/lost/release', undefined, { claim }), releaseShaped),
     lostStatus: async (token) =>
       ok(await call('GET', '/v1/lost/status', token), (d) => typeof d.escrow === 'boolean' && (d.pending === null || (isObj(d.pending) && (d.pending.releaseAt === null || int(d.pending.releaseAt))))),
     async lostCancel(token) {
@@ -108,9 +107,17 @@ export function fetchTransport(baseUrl: string, fetchFn: typeof fetch = fetch): 
     async deleteEscrow(token) {
       ok(await call('DELETE', '/v1/escrow', token), (d) => d.ok === true);
     },
+    async signinRequest(claimHash, deviceName) {
+      ok(await call('POST', '/v1/signin/request', undefined, { claimHash, deviceName }), (d) => d.ok === true);
+    },
+    signinRelease: async (claim) => ok(await call('POST', '/v1/signin/release', undefined, { claim }), releaseShaped),
+    async signinCancel(token) {
+      ok(await call('POST', '/v1/signin/cancel', token), (d) => d.ok === true);
+    },
   };
 }
 
+const releaseShaped = (d: any) => (d.state === 'waiting' && (d.releaseAt === null || int(d.releaseAt))) || (d.state === 'ready' && typeof d.blob === 'string');
 const UNREADABLE = 'The vault server sent a reply this device could not read. Try again later.';
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const int = (v: unknown) => Number.isSafeInteger(v);
