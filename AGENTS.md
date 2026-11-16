@@ -41,7 +41,7 @@ Current apps:
 - **halo** (`apps/halo`) — edge visualizer: audio-reactive lights around the screen edge and
   an always-on display. Android only, private Store only (`com.haroon.halo`); Kotlin module
   `halo-engine`, RN renders settings. Spec: `docs/superpowers/specs/2026-11-17-edge-visualizer-design.md`;
-  plan: `docs/superpowers/plans/2026-11-17-halo.md`; handoff: `docs/handoffs/halo.md`.
+  plan: `docs/superpowers/plans/2026-11-17-halo.md`; handoff: `docs/handoffs/edge-visualizer.md`.
 - **strongroom-extension** (`apps/strongroom-extension`) — Strongroom for Chrome
   (Manifest V3, Mac and Windows, loaded unpacked). Its own local vault in the
   Android vault format (`packages/strongroom-core`, checked against the shared
