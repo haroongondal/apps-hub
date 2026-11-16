@@ -117,6 +117,8 @@ class DesignMediaModule : Module() {
 
     AsyncFunction("photoIndexState") { PhotoSearch.state(context) }.runOnQueue(readScope)
 
+    AsyncFunction("photoGalleryChanged") { PhotoSearch.galleryChanged(context) }.runOnQueue(readScope)
+
     AsyncFunction("searchPhotos") { query: String -> PhotoSearch.search(context, query) }.runOnQueue(readScope)
 
     AsyncFunction("similarPhotos") { uri: String -> PhotoSearch.similar(context, uri) }.runOnQueue(readScope)

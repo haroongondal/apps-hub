@@ -10,6 +10,10 @@ import expo.modules.designmedia.core.clipTensor
 object Gallery {
   private val IMAGES = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
 
+  // Changes whenever a photo is added, edited or removed, so a scan can tell whether it has anything to do.
+  fun stamp(ctx: Context): String =
+    "${MediaStore.getVersion(ctx)}:${MediaStore.getGeneration(ctx, MediaStore.VOLUME_EXTERNAL_PRIMARY)}"
+
   // Newest first, so recent photos become searchable first.
   fun list(ctx: Context): List<PhotoKey> {
     val cols = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_MODIFIED, MediaStore.Images.Media.SIZE)
