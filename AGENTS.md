@@ -44,6 +44,19 @@ Current apps:
   `vault-vectors.json`); fills and saves logins; signs in to sync with the phone
   through the vault server (`tools/vault-api`, Phase 2, not deployed yet). Handoffs:
   `docs/handoffs/strongroom-extension.md`, `docs/handoffs/strongroom-sync.md`.
+- **inflow** (`apps/inflow`, formerly Notebox) — personal notification, SMS and
+  money archive: saves every notification, the SMS inbox and marked Gmail senders'
+  emails (IMAP with an app password) into an encrypted on-phone store (SQLCipher),
+  reads bank SMS and emails into a spending ledger, and shows it behind a fingerprint
+  lock, with AI summaries, importance, to-dos, money categories and an Ask AI tab
+  through the owner's OpenAI-compatible API key (https only; never sent: OTPs,
+  blocked apps or senders, apps not recorded, items saved before the first key; Ask AI also sends ledger transactions of any age, with chat titles and a you/not-you flag per item).
+  Android only, private Store only (`com.haroon.inflow`; READ_SMS, RECEIVE_SMS,
+  INTERNET for `imap.gmail.com` and the owner's chosen AI address). Kotlin owns
+  capture, storage, parsing, Gmail and AI; RN only renders. WhatsApp chats are grouped by contact, WhatsApp text is kept forever, and the media WhatsApp notifications expose is stored encrypted in the app's private files (never sent to the AI). Spec:
+  `docs/superpowers/specs/2026-11-13-inflow-design.md`; plans:
+  `docs/superpowers/plans/2026-11-13-inflow-stage-*.md`; progress:
+  `docs/handoffs/inflow.md`.
 
 Not here on purpose: `~/Documents/browser-automation` (stays standalone) and
 `~/Documents/agent-harness` (deferred until its phase branches are merged).
@@ -60,7 +73,7 @@ Planned (do not scaffold yet):
 - Tokens live in `src/tokens.ts` only. After changing them run
   `pnpm --filter @apps-hub/ui build:css`; the test fails if `web/tokens.css` is
   stale, and it enforces WCAG AA contrast for every brand in light and dark.
-- Brands: netlens, opentunnel, store, pdf, design, deputy, strongroom (hue + accent from each
+- Brands: netlens, opentunnel, store, pdf, design, deputy, strongroom, inflow (hue + accent from each
   launcher icon). Light and dark follow the system.
 - Copy is sentence case, active voice; errors say what happened and how to fix
   it. No emoji icons, no ALL-CAPS labels.
@@ -139,6 +152,9 @@ cd apps/deputy/android && JAVA_HOME=$JAVA_HOME ./gradlew \
 # Native compile gate (Strongroom):
 cd apps/strongroom/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :strongroom-vault:testDebugUnitTest :app:assembleDebug
+# Native compile gate (Inflow):
+cd apps/inflow/android && JAVA_HOME=$JAVA_HOME ./gradlew \
+  :inflow-core:testDebugUnitTest :app:assembleDebug
 # Native compile gate (Design Editor mobile):
 cd apps/design-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :design-media:testDebugUnitTest :app:assembleDebug

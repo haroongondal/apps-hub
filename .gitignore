@@ -73,6 +73,13 @@ coverage/
 /apps/strongroom/android/**/.cxx/
 /apps/strongroom/modules/*/android/build/
 /apps/strongroom/.expo/
+/apps/inflow/android/.gradle/
+/apps/inflow/android/app/build/
+/apps/inflow/android/build/
+/apps/inflow/android/local.properties
+/apps/inflow/android/**/.cxx/
+/apps/inflow/modules/*/android/build/
+/apps/inflow/.expo/
 /apps/clipboard/android/.gradle/
 /apps/clipboard/android/app/build/
 /apps/clipboard/android/build/

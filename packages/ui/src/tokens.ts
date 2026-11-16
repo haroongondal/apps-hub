@@ -1,7 +1,7 @@
 // Pure TS so the RN theme and the generated web/tokens.css share one source of truth.
 
 export type Scheme = 'light' | 'dark';
-export type BrandKey = 'netlens' | 'opentunnel' | 'store' | 'pdf' | 'design' | 'deputy' | 'strongroom' | 'clipboard';
+export type BrandKey = 'netlens' | 'opentunnel' | 'store' | 'pdf' | 'design' | 'deputy' | 'strongroom' | 'inflow' | 'clipboard';
 export type Tone = 'neutral' | 'accent' | 'ok' | 'warn' | 'danger';
 
 export interface Palette {
@@ -39,6 +39,8 @@ export const brands: Record<BrandKey, Brand> = {
   // Provisional hue and accent until the launcher icon is chosen (docs/deputy/PRD.md Q4).
   deputy: { name: 'Deputy', hue: 30, accent: { dark: '#FB923C', light: '#B43C0A' }, onAccent: { dark: '#2A1000', light: '#FFFFFF' } },
   strongroom: { name: 'Strongroom', hue: 300, accent: { dark: '#E879F9', light: '#A21CAF' }, onAccent: { dark: '#2A0530', light: '#FFFFFF' } },
+  // Provisional hue and accent until there is a launcher icon.
+  inflow: { name: 'Inflow', hue: 190, accent: { dark: '#5EEAD4', light: '#0F766E' }, onAccent: { dark: '#042F2C', light: '#FFFFFF' } },
   clipboard: { name: 'Clipboard', hue: 95, accent: { dark: '#A3E635', light: '#4D7C0F' }, onAccent: { dark: '#1A2E05', light: '#FFFFFF' } },
 };
 

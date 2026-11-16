@@ -1,0 +1,27 @@
+{
+  "name": "inflow",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "prebuild": "expo prebuild --platform android",
+    "test": "TZ=Asia/Karachi node --test tools/__tests__/backup-rules.test.mjs tools/__tests__/gmail-network.test.mjs tools/__tests__/ai-network.test.mjs src/__tests__/setup.test.ts src/__tests__/health.test.ts src/__tests__/format.test.ts src/__tests__/money.test.ts src/__tests__/gmail.test.ts src/__tests__/ai.test.ts src/__tests__/media.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@apps-hub/ui": "workspace:*",
+    "expo": "~54.0.36",
+    "expo-font": "~14.0.12",
+    "inflow-core": "workspace:*",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-safe-area-context": "~5.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "~19.1.0",
+    "typescript": "~5.9.2"
+  }
+}
