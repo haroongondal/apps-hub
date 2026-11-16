@@ -5,9 +5,10 @@ export interface SearchToolDeps {
   download(url: string, to: string, onBytes: (n: number) => void): Promise<void>;
   install(name: string): Promise<boolean>;
   freeBytes(): Promise<number>;
+  remove(path: string): Promise<void>;
 }
 
-export type SearchToolResult = 'ready' | 'no-room' | 'bad-download';
+export type SearchToolResult = 'ready' | 'no-room' | 'bad-download' | 'offline';
 
 const SPARE_BYTES = 50 * 1024 * 1024;
 
@@ -17,7 +18,13 @@ export async function getSearchTool(deps: SearchToolDeps, onProgress: (fraction:
   if (total > 0 && (await deps.freeBytes()) < total + SPARE_BYTES) return 'no-room';
   let done = 0;
   for (const m of missing) {
-    await deps.download(m.url, `models/${m.name}.part`, n => onProgress(Math.min(1, (done + n) / total)));
+    const part = `models/${m.name}.part`;
+    try {
+      await deps.download(m.url, part, n => onProgress(Math.min(1, (done + n) / total)));
+    } catch {
+      await deps.remove(part);
+      return 'offline';
+    }
     if (!(await deps.install(m.name))) return 'bad-download';
     done += m.bytes;
   }

@@ -162,6 +162,28 @@ class PhotoIndexTest {
   }
 
   @Test
+  fun aScanLeftRunningByAKilledAppIsStartedAgain() {
+    val stale = listOf(photoIndexJob("a").copy(state = JobState.RUNNING))
+    val start = planIndexStart(shownQueue(stale, serviceAlive = false), "b")
+    assertEquals(photoIndexJob("b"), start.job)
+    assertEquals("b", start.id)
+  }
+
+  @Test
+  fun aScanThatIsReallyRunningIsNotAddedTwice() {
+    val live = listOf(photoIndexJob("a").copy(state = JobState.RUNNING))
+    val start = planIndexStart(shownQueue(live, serviceAlive = true), "b")
+    assertEquals(null, start.job)
+    assertEquals("a", start.id)
+  }
+
+  @Test
+  fun anEmptyEnqueueLeavesTheCbrChoiceAlone() {
+    assertTrue(cbrOnlyAfter(true, emptyList(), false))
+    assertFalse(cbrOnlyAfter(false, emptyList(), true))
+  }
+
+  @Test
   fun backOffRule() {
     assertTrue(shouldPause(19, false, 0))
     assertFalse(shouldPause(19, true, 0))

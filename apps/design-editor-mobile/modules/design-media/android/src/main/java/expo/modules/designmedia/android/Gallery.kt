@@ -14,7 +14,10 @@ object Gallery {
   fun list(ctx: Context): List<PhotoKey> {
     val cols = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_MODIFIED, MediaStore.Images.Media.SIZE)
     val keys = ArrayList<PhotoKey>()
-    ctx.contentResolver.query(IMAGES, cols, null, null, "${MediaStore.Images.Media.DATE_ADDED} DESC")?.use { c ->
+    // A null cursor means the query failed; an empty list would make the scan treat every photo as gone.
+    val cursor = ctx.contentResolver.query(IMAGES, cols, null, null, "${MediaStore.Images.Media.DATE_ADDED} DESC")
+      ?: throw IllegalStateException("gallery query failed")
+    cursor.use { c ->
       while (c.moveToNext()) keys.add(PhotoKey(c.getLong(0), c.getLong(1), c.getLong(2)))
     }
     return keys

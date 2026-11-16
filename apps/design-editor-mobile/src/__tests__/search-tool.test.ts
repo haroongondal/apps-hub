@@ -6,14 +6,16 @@ const MB = 1024 * 1024;
 const vision: PhotoModel = { name: 'vision.onnx', url: 'https://x/vision', bytes: 100 * MB, ready: false };
 const text: PhotoModel = { name: 'text.onnx', url: 'https://x/text', bytes: 100 * MB, ready: false };
 
-function fakes(models: PhotoModel[], free = 10_000 * MB, installOk = true) {
-  const calls = { downloaded: [] as string[], installed: [] as string[] };
+function fakes(models: PhotoModel[], free = 10_000 * MB, installOk = true, downloadFails = false) {
+  const calls = { downloaded: [] as string[], installed: [] as string[], removed: [] as string[] };
   const deps = {
     models: async () => models,
     freeBytes: async () => free,
+    remove: async (path: string) => { calls.removed.push(path); },
     install: async (name: string) => { calls.installed.push(name); return installOk; },
     async download(url: string, to: string, onBytes: (n: number) => void) {
       calls.downloaded.push(to);
+      if (downloadFails) throw new Error('Network request failed');
       const m = models.find(x => x.url === url)!;
       onBytes(m.bytes / 2);
       onBytes(m.bytes);
@@ -50,4 +52,11 @@ test('progressReachesOne: progress only rises and ends at 1', async () => {
   assert.equal(seen.at(-1), 1);
   assert.deepEqual(seen, [...seen].sort((a, b) => a - b));
   assert.ok(seen.every(f => f >= 0 && f <= 1));
+});
+
+test('reportsInterruptedDownload: a download that fails midway gives offline and clears the partial file', async () => {
+  const { deps, calls } = fakes([vision, text], undefined, true, true);
+  assert.equal(await getSearchTool(deps, () => {}), 'offline');
+  assert.deepEqual(calls.removed, ['models/vision.onnx.part']);
+  assert.deepEqual(calls.installed, []);
 });

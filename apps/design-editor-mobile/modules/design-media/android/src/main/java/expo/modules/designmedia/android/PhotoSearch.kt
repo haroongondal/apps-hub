@@ -13,8 +13,9 @@ import expo.modules.designmedia.core.QueueStore
 import expo.modules.designmedia.core.SEARCH_FLOOR
 import expo.modules.designmedia.core.SEARCH_LIMIT
 import expo.modules.designmedia.core.encodeJobs
-import expo.modules.designmedia.core.jobToAdd
+import expo.modules.designmedia.core.planIndexStart
 import expo.modules.designmedia.core.rank
+import expo.modules.designmedia.core.shownQueue
 import expo.modules.kotlin.exception.CodedException
 import java.io.File
 import java.util.UUID
@@ -44,11 +45,11 @@ object PhotoSearch {
   }
 
   fun startIndex(ctx: Context): String {
-    val jobs = QueueStore(AtomicFile(File(ctx.filesDir, "media-queue.json"))).load()
-    val job = jobToAdd(jobs, UUID.randomUUID().toString())
-      ?: return jobs.first { it.plan.tool == "photo-index" && (it.state.wire == "queued" || it.state.wire == "running") }.id
-    MediaJobService.enqueue(ctx, encodeJobs(listOf(job)), false)
-    return job.id
+    val shown = shownQueue(QueueStore(AtomicFile(File(ctx.filesDir, "media-queue.json"))).load(), MediaJobService.alive)
+    val start = planIndexStart(shown, UUID.randomUUID().toString())
+    // A waiting scan needs the service running to be picked up; an empty enqueue wakes it without adding a job.
+    MediaJobService.enqueue(ctx, encodeJobs(listOfNotNull(start.job)), false)
+    return start.id
   }
 
   fun indexed(ctx: Context): Int = index(ctx).size
