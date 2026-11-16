@@ -6,7 +6,7 @@ interface BackfillStore {
   fun meta(key: String): String?
   fun setMeta(key: String, value: String)
   fun <T> inTransaction(block: () -> T): T
-  /** Items with no ledger source, no OTP expiry and non-blank text (email text first), ordered by (postedAt, id), strictly after the cursor. */
+  /** Items with no pattern (non-AI) ledger source, no OTP expiry and non-blank text (email text first), ordered by (postedAt, id), strictly after the cursor. */
   fun unparsed(afterPostedAt: Long, afterId: Long, limit: Int): List<BackfillItem>
 }
 
@@ -23,12 +23,13 @@ class LedgerBackfill(private val store: BackfillStore, private val ledger: Ledge
   /** One batch in one transaction; true when more remain. */
   fun runBatch(limit: Int = 100): Boolean {
     if (store.meta(VERSION_KEY) == VERSION.toString()) return false
-    val (afterAt, afterId) = store.meta(CURSOR_KEY)?.split(':')?.takeIf { it.size == 2 }
-      ?.let { (a, i) -> (a.toLongOrNull() ?: 0L) to (i.toLongOrNull() ?: 0L) } ?: (Long.MIN_VALUE to 0L)
+    // A cursor left by another pattern set (or the old two-part format) is ignored: that run starts over.
+    val (afterAt, afterId) = store.meta(CURSOR_KEY)?.split(':')?.takeIf { it.size == 3 && it[0] == VERSION.toString() }
+      ?.let { (_, a, i) -> (a.toLongOrNull() ?: 0L) to (i.toLongOrNull() ?: 0L) } ?: (Long.MIN_VALUE to 0L)
     val batch = store.inTransaction {
       val items = store.unparsed(afterAt, afterId, limit)
       for (it in items) if (ledger.onItem(it.id, it.text, it.channel, it.postedAt) != null) linked++
-      items.lastOrNull()?.let { store.setMeta(CURSOR_KEY, "${it.postedAt}:${it.id}") }
+      items.lastOrNull()?.let { store.setMeta(CURSOR_KEY, "$VERSION:${it.postedAt}:${it.id}") }
       items
     }
     if (batch.size == limit) return true

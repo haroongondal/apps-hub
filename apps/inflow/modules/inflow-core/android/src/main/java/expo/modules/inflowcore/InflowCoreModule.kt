@@ -132,7 +132,8 @@ class InflowCoreModule : Module() {
     }
 
     Function("listApps") { ->
-      store().allAppSettings().map { mapOf("pkg" to it.pkg, "label" to it.label, "record" to it.record, "keepDays" to it.keepDays, "aiEligible" to (it.pkg in AiChannels.PKGS)) }
+      val sms = StoreHolder.smsPackages(context)   // the default SMS app is eligible too
+      store().allAppSettings().map { mapOf("pkg" to it.pkg, "label" to it.label, "record" to it.record, "keepDays" to it.keepDays, "aiEligible" to (it.pkg in sms + AiChannels.PKGS)) }
     }
 
     AsyncFunction("importSms") { ->

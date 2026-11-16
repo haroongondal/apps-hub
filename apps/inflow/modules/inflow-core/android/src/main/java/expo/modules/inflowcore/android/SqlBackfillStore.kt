@@ -22,11 +22,11 @@ class SqlBackfillStore(private val store: SqlItemStore, private val smsPackages:
     }
 
   companion object {
-    // An OTP row, a row already tied to a transaction and a blank one are never read. Rows that do not parse stay sourceless; the cursor moves past them.
+    // An OTP row, a row already tied to a pattern transaction (an AI-made one does not count: the pattern replaces it) and a blank one are never read. Rows that do not parse stay sourceless; the cursor moves past them.
     internal const val UNPARSED_SQL =
       "SELECT i.id, i.posted_at, COALESCE(i.email_text, i.text), i.pkg, i.sms_hash IS NOT NULL, i.email_hash IS NOT NULL FROM items i " +
         "WHERE (i.posted_at > ? OR (i.posted_at = ? AND i.id > ?)) AND i.otp_expires_at IS NULL " +
-        "AND NOT EXISTS (SELECT 1 FROM txn_sources s WHERE s.item_id = i.id) AND trim(COALESCE(i.email_text, i.text)) <> '' " +
+        "AND NOT EXISTS (SELECT 1 FROM txn_sources s JOIN txns t ON t.id = s.txn_id WHERE s.item_id = i.id AND t.by_ai = 0) AND trim(COALESCE(i.email_text, i.text)) <> '' " +
         "ORDER BY i.posted_at, i.id LIMIT ?"
   }
 }

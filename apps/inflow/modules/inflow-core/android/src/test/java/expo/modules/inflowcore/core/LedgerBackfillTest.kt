@@ -17,7 +17,7 @@ class LedgerBackfillTest {
   private var n = 0
 
   init {
-    items.hasSource = { ledgerStore.txnOfItem(it) != null }
+    items.hasSource = { id -> ledgerStore.txnOfItem(id)?.let { ledgerStore.get(it)?.byAi == false } == true }   // an AI-made transaction does not count
   }
 
   private fun backfill() = LedgerBackfill(items, Ledger(ledgerStore, { owner }), { t0 })
@@ -98,13 +98,37 @@ class LedgerBackfillTest {
     val first = backfill()
     assertTrue(first.runBatch(2))
     assertEquals(2, ledgerStore.txns.size)
-    assertEquals("${t0 + hour}:2", items.meta("backfillCursor"))
+    assertEquals("${LedgerBackfill.VERSION}:${t0 + hour}:2", items.meta("backfillCursor"))
     assertNull(items.meta("ledgerPatternsVersion"))
     val second = backfill()   // a new instance (the process died) finishes
     while (second.runBatch(2)) Unit
     assertEquals(5, ledgerStore.txns.size)
     assertEquals(3, second.linked)
     assertEquals(LedgerBackfill.VERSION.toString(), items.meta("ledgerPatternsVersion"))
+  }
+
+  @Test fun aCursorFromAnotherVersionIsIgnored() {
+    repeat(3) { save(card.replace("1,500.00", "${it + 1},000.00"), t0 + it * hour) }
+    items.setMeta("ledgerPatternsVersion", "1")
+    items.setMeta("backfillCursor", "${LedgerBackfill.VERSION - 1}:${t0 + 10 * hour}:99")   // past every item, but left by the older pattern set
+    assertEquals(3, runAll().linked)
+    save(card.replace("1,500.00", "9,000.00"), t0 - hour)   // before the stale cursors below
+    items.setMeta("ledgerPatternsVersion", "1")
+    items.setMeta("backfillCursor", "${t0 + 10 * hour}:99")   // the old two-part format
+    assertEquals(1, runAll().linked)
+    assertEquals(4, ledgerStore.txns.size)
+  }
+
+  @Test fun anItemWhoseOnlyTransactionIsAiMadeIsReadAgainAndReplacesIt() {
+    val id = save(card, t0)
+    Ledger(ledgerStore, { null }).onAi(id, AiMoney(Direction.OUT, false, 150_000, "PKR", null, "Shaafi", "Health"), Channel.SMS_NOTIFICATION, t0)
+    assertTrue(ledgerStore.txns.values.single().byAi)
+    assertEquals(1, items.unparsed(Long.MIN_VALUE, 0, 10).size)
+    assertEquals(1, runAll().linked)
+    val t = ledgerStore.txns.values.single()   // one transaction, not two: the pattern replaced the AI row
+    assertFalse(t.byAi)
+    assertEquals("Health", t.category)
+    assertEquals(1, ledgerStore.sourceCount(t.id))
   }
 
   @Test fun backfillMapsChannels() {

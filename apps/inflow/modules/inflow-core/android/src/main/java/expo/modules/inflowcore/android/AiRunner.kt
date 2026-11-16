@@ -60,7 +60,7 @@ object AiRunner {
     val result = try {
       AiRun(
         store, StoreHolder.ledger(store), { cfg.provider() }, { cfg.prices() }, { cfg.capUsd() },
-        { SqlLedgerStore(store.db).accounts() }, { store.channelOf(it, sms) }, System::currentTimeMillis, ZoneId.systemDefault(),
+        { SqlLedgerStore(store.db).aiAccounts() }, { store.channelOf(it, sms) }, System::currentTimeMillis, ZoneId.systemDefault(),
         atomic = { block -> store.inTransaction { block() } },
       ).run()
     } catch (e: Exception) {

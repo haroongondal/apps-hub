@@ -54,6 +54,12 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
   override fun accounts(): List<String> =
     db.rawQuery("SELECT DISTINCT account FROM txns").use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
 
+  /** The accounts the AI prompt may list (R44): only those of a transaction with a source that is not a bare push, so WhatsApp or bank-app accounts never leave the phone. */
+  fun aiAccounts(): List<String> =
+    db.rawQuery(
+      "SELECT DISTINCT account FROM txns t WHERE EXISTS (SELECT 1 FROM txn_sources p WHERE p.txn_id = t.id AND NOT ($PUSH_SOURCE))",
+    ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
+
   override fun setCounterpartyIfNull(id: Long, counterparty: String) {
     run("UPDATE txns SET counterparty = ? WHERE id = ? AND counterparty IS NULL", counterparty, id)
   }
@@ -76,13 +82,14 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
 
   /**
    * Ask AI (R35): the newest `limit` non-own transactions in the range, of any age (not only since the first key). One with a
-   * source that is an OTP, or belongs to an app, sender or recording the owner kept from the AI, is left out; sources retention already
-   * deleted do not hold it back, so a purged-source transaction still counts.
+   * source that is an OTP, or belongs to an app, sender or recording the owner kept from the AI, is left out. R44 also reads the source's
+   * stored channel, which outlives a deleted item: a transaction with a push (NOTIFICATION) source is never sent, even once that item is gone.
    */
   fun askTxns(from: Long, to: Long, limit: Int): List<Txn> =
     txns(
       "t.own = 0 AND t.at BETWEEN ? AND ? AND NOT EXISTS (SELECT 1 FROM txn_sources s JOIN items i ON i.id = s.item_id " +
-        "WHERE s.txn_id = t.id AND NOT (${SqlItemStore.NEVER_SEND_FILTER})) ORDER BY t.at DESC, t.id DESC LIMIT ?",
+        "WHERE s.txn_id = t.id AND NOT (${SqlItemStore.NEVER_SEND_FILTER})) AND NOT EXISTS (SELECT 1 FROM txn_sources p WHERE p.txn_id = t.id AND $PUSH_SOURCE) " +
+        "ORDER BY t.at DESC, t.id DESC LIMIT ?",
       from, to, limit.toLong(),
     )
 
@@ -198,4 +205,9 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
   }
 
   private fun Cursor.str(i: Int): String? = if (isNull(i)) null else getString(i)
+
+  private companion object {
+    // The channel column is a comma list; ',NOTIFICATION,' is a source that was a bare push (WhatsApp, a bank app), whatever became of its item.
+    const val PUSH_SOURCE = "instr(',' || p.channel || ',', ',NOTIFICATION,') > 0"
+  }
 }

@@ -167,7 +167,7 @@ class MemoryItemStore : ItemStore, AiStore, BackfillStore {
     spend[day] = spentToday(day) + usd
   }
 
-  // BackfillStore: the ledger keeps the sources, so a test says which items have one.
+  // BackfillStore: the ledger keeps the sources, so a test says which items have a pattern (non-AI) one.
   var hasSource: (Long) -> Boolean = { false }
   var smsPackages: Set<String> = Sms.KNOWN_APPS
 
