@@ -6,6 +6,7 @@ import { claimBytesOf, link, type Mailer } from './lost-access.ts';
 
 const HOUR_MS = 60 * 60 * 1000;
 const RELEASE_GRACE_MS = HOUR_MS;
+const LIVE_CAP = 5;
 
 // Throws on a value that isn't 0 or more hours, so a typo like "24h" fails loudly instead of silently turning the wait off.
 export function signinWaitMs(hours: string | number | undefined): number {
@@ -26,7 +27,7 @@ export async function requestSignin(db: Db, claimHash: string, deviceName: unkno
   if (!escrow) return;
   const approve = randomBytes(32);
   const deny = randomBytes(32);
-  if (!(await claimSigninRequest(db, { claim: claimHash, approve: tokenHash(approve), deny: tokenHash(deny) }, now, HOUR_MS, waitMs, RELEASE_GRACE_MS))) return;
+  if (!(await claimSigninRequest(db, { claim: claimHash, approve: tokenHash(approve), deny: tokenHash(deny) }, now, HOUR_MS, waitMs + RELEASE_GRACE_MS, LIVE_CAP))) return;
   const text = [
     'A device asked to sign in to your Strongroom vault with your email code.',
     '',
@@ -46,7 +47,7 @@ export async function requestSignin(db: Db, claimHash: string, deviceName: unkno
 
 export async function approveSignin(db: Db, token: string, now: number): Promise<'approved' | 'already' | 'invalid'> {
   if (!BASE64_32_BYTES.test(token)) return 'invalid';
-  return approveSigninRequest(db, tokenHash(fromBase64(token)), now);
+  return approveSigninRequest(db, tokenHash(fromBase64(token)), now, HOUR_MS);
 }
 
 export async function denySignin(db: Db, token: string): Promise<void> {
@@ -56,9 +57,10 @@ export async function denySignin(db: Db, token: string): Promise<void> {
 export async function releaseSignin(db: Db, claim: string, now: number, waitMs: number): Promise<{ state: 'ready'; blob: string } | { state: 'waiting'; releaseAt: number | null }> {
   const claimBytes = claimBytesOf(claim);
   if (claimBytes) {
-    const req = await getSigninRequest(db);
-    if (req && !req.cancelled && req.claimHash === tokenHash(claimBytes)) {
-      const releaseAt = req.approvedAt === null ? null : req.approvedAt + waitMs;
+    const req = await getSigninRequest(db, tokenHash(claimBytes));
+    const releaseAt = req && !req.cancelled && req.approvedAt !== null ? req.approvedAt + waitMs : null;
+    // Past its grace hour an approved request is spent, and looks like no request.
+    if (req && !req.cancelled && (releaseAt === null || now < releaseAt + RELEASE_GRACE_MS)) {
       if (releaseAt !== null && now >= releaseAt) {
         const blob = await getSigninBlob(db);
         if (blob !== null) return { state: 'ready', blob };

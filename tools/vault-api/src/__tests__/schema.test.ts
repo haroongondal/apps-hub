@@ -61,16 +61,24 @@ test('escrowMigrationAddsEscrowAndLostRequestHoldingOneRowEach', () => {
   assert.deepEqual(plain(db.prepare('SELECT release_at AS releaseAt, cancelled FROM lost_request').all()), [{ releaseAt: null, cancelled: 0 }]);
 });
 
-test('signinMigrationOnlyAddsSigninAndSigninRequestHoldingOneRowEach', () => {
+test('signinMigrationOnlyAddsSigninWithOneRowAndSigninRequestWithOneRowPerClaim', () => {
   const db = freshWithEscrow();
   const before = plain(db.prepare("SELECT name, sql FROM sqlite_master ORDER BY name").all());
   db.exec(readFileSync(new URL('../../migrations/0003_signin.sql', import.meta.url), 'utf8'));
   const after = plain(db.prepare("SELECT name, sql FROM sqlite_master ORDER BY name").all());
-  assert.deepEqual(after.filter((t) => !before.some((b) => JSON.stringify(b) === JSON.stringify(t))).map((t: any) => t.name), ['signin', 'signin_request']);
+  assert.deepEqual(after.filter((t) => !before.some((b) => JSON.stringify(b) === JSON.stringify(t))).map((t: any) => t.name), [
+    'signin',
+    'signin_request',
+    'sqlite_autoindex_signin_request_1',
+    'sqlite_autoindex_signin_request_2',
+    'sqlite_autoindex_signin_request_3',
+  ]);
 
   db.exec("INSERT INTO signin (id, blob, created_at) VALUES (1, 'blob', 1)");
   assert.throws(() => db.exec("INSERT INTO signin (id, blob, created_at) VALUES (2, 'blob', 1)"), /CHECK constraint failed/);
   db.exec("INSERT INTO signin_request (id, claim_hash, approve_hash, deny_hash, requested_at) VALUES (1, 'c', 'a', 'd', 1)");
-  assert.throws(() => db.exec("INSERT INTO signin_request (id, claim_hash, approve_hash, deny_hash, requested_at) VALUES (2, 'c', 'a', 'd', 1)"), /CHECK constraint failed/);
-  assert.deepEqual(plain(db.prepare('SELECT approved_at AS approvedAt, cancelled FROM signin_request').all()), [{ approvedAt: null, cancelled: 0 }]);
+  for (const dup of ["'c', 'a2', 'd2'", "'c2', 'a', 'd2'", "'c2', 'a2', 'd'"])
+    assert.throws(() => db.exec(`INSERT INTO signin_request (claim_hash, approve_hash, deny_hash, requested_at) VALUES (${dup}, 1)`), /UNIQUE constraint failed/);
+  db.exec("INSERT INTO signin_request (claim_hash, approve_hash, deny_hash, requested_at) VALUES ('c2', 'a2', 'd2', 1)");
+  assert.deepEqual(plain(db.prepare('SELECT approved_at AS approvedAt, cancelled FROM signin_request').all()), [{ approvedAt: null, cancelled: 0 }, { approvedAt: null, cancelled: 0 }]);
 });

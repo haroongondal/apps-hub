@@ -200,30 +200,46 @@ test('the device name is cut to 60 characters of plain words, so it cannot carry
   assert.equal(w.mails[0].text.match(/https:\/\//g)?.length, 2);
 });
 
-test('one request at a time: a new claim within an hour is ignored, after an hour it replaces the old one', async () => {
+test('one row per claim: a stranger cannot replace the owner request; at most 5 in an hour, then old ones expire', async () => {
   const w = world();
   await setUp(w);
   await enrol(w);
-  const first = await requested(w);
+  const owner = await requested(w);
+  for (let i = 0; i < 4; i++) await requested(w);
   w.setClock(NOW + HOUR - 1000);
   assert.deepEqual(await w.request(randomBytes(32)), { status: 200, body: { ok: true } });
-  assert.equal(w.mails.length, 1);
-  assert.equal(w.rows('signin_request')[0].claim_hash, tokenHash(first.claim));
+  assert.equal(w.mails.length, 5);
+  assert.equal(w.rows('signin_request').length, 5);
+  assert.equal(String((await w.postForm('/v1/signin/approve', owner.approve)).body).includes('no longer valid'), false);
+  assert.deepEqual(await w.release(owner.claim), { status: 200, body: { state: 'ready', blob: SIGNIN_BLOB } });
 
   w.setClock(NOW + HOUR);
-  const second = await requested(w);
-  assert.equal(w.mails.length, 2);
-  assert.equal(w.rows('signin_request')[0].claim_hash, tokenHash(second.claim));
-  assert.match((await w.postForm('/v1/signin/approve', first.approve)).body as unknown as string, /no longer valid/);
+  const later = await requested(w);
+  assert.equal(w.mails.length, 6);
+  assert.deepEqual(await w.release(owner.claim), { status: 200, body: { state: 'ready', blob: SIGNIN_BLOB } });
+  w.setClock(NOW + 2 * HOUR);
+  assert.match(String((await w.postForm('/v1/signin/approve', later.approve)).body), /no longer valid/);
+  assert.deepEqual(await w.release(owner.claim), { status: 200, body: { state: 'waiting', releaseAt: null } });
 });
 
-test('parallel requests claim the one slot atomically; only one mail is sent', async () => {
+test('the same claim twice is one request and one mail', async () => {
+  const w = world();
+  await setUp(w);
+  await enrol(w);
+  const { claim } = await requested(w);
+  await w.request(claim);
+  assert.equal(w.mails.length, 1);
+  assert.equal(w.rows('signin_request').length, 1);
+});
+
+test('parallel requests never pass the cap of 5; one mail per stored request', async () => {
   const w = world();
   await setUp(w);
   await enrol(w);
   const all = await Promise.all(Array.from({ length: 10 }, () => w.request(randomBytes(32))));
   for (const r of all) assert.deepEqual(r, { status: 200, body: { ok: true } });
-  assert.equal(w.mails.length, 1);
+  assert.equal(w.mails.length, 5);
+  assert.equal(w.rows('signin_request').length, 5);
 });
 
 test('the GET links only render a form; nothing changes until the form is posted, and a bad token is never rendered', async () => {
@@ -319,15 +335,18 @@ test('deny by the mailed link stops the request, even after approval, and the de
   assert.match(String((await w.postForm('/v1/signin/approve', approve)).body), /no longer valid/);
 });
 
-test('a denied request frees the slot for the next request at once', async () => {
+test('a denied request ends at once, and the next request gets its own row', async () => {
   const w = world();
   await setUp(w);
   await enrol(w);
-  const { deny } = await requested(w);
-  await w.postForm('/v1/signin/deny', deny);
+  const first = await requested(w);
+  await w.postForm('/v1/signin/deny', first.deny);
   const next = await requested(w);
   assert.equal(w.mails.length, 2);
-  assert.equal(w.rows('signin_request')[0].claim_hash, tokenHash(next.claim));
+  assert.match(String((await w.postForm('/v1/signin/approve', first.approve)).body), /no longer valid/);
+  await w.postForm('/v1/signin/approve', next.approve);
+  assert.deepEqual(await w.release(next.claim), { status: 200, body: { state: 'ready', blob: SIGNIN_BLOB } });
+  assert.deepEqual(await w.release(first.claim), { status: 200, body: { state: 'waiting', releaseAt: null } });
 });
 
 test('a signed-in device cancels by Bearer token (the read token is enough); a stranger gets 401', async () => {
@@ -356,7 +375,7 @@ test('a wrong or malformed claim looks the same as no request', async () => {
   assert.deepEqual(await w.call('POST', '/v1/signin/release', undefined, undefined), none);
 });
 
-test('a stranger cannot replace an approved request until an hour after its release time', async () => {
+test('an approved request still counts toward the cap and is ready until an hour after its release time', async () => {
   const w = world('24');
   await setUp(w);
   await enrol(w);
@@ -364,12 +383,10 @@ test('a stranger cannot replace an approved request until an hour after its rele
   await w.postForm('/v1/signin/approve', approve);
   const releaseAt = NOW + 24 * HOUR;
   w.setClock(releaseAt + HOUR - 1000);
-  await w.request(randomBytes(32));
-  assert.equal(w.mails.length, 1);
+  for (let i = 0; i < 5; i++) await w.request(randomBytes(32));
+  assert.equal(w.mails.length, 5);
   assert.deepEqual(await w.release(claim), { status: 200, body: { state: 'ready', blob: SIGNIN_BLOB } });
   w.setClock(releaseAt + HOUR);
-  await requested(w);
-  assert.equal(w.mails.length, 2);
   assert.deepEqual(await w.release(claim), { status: 200, body: { state: 'waiting', releaseAt: null } });
 });
 

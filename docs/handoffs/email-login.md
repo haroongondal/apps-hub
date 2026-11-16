@@ -53,12 +53,12 @@ Read docs/handoffs/email-login.md completely first. Trust the verified facts in 
 - 2026-11-11: Worker sign-in build committed (989fe50); decision-based changes; Semgrep bidi fix; handoff updated (b991fcf, 20f5df9).
 - 2026-11-16: owner asked for a new-chat prompt to implement the middle path. Verified facts above; PR #31 found merged by the owner (2026-11-15); migration 0003 still pending on live D1; extension patch file missing (recreate).
 
+- 2026-11-17: owner answered the four decisions (above). Rebased onto origin/main d1b61ea (config conflict: kept PUBLIC_URL + LOGIN_GATE + SIGNIN_WAIT_HOURS). Extension test loader now loads 0003 (128/128); root `pnpm test` exit 0. Worker sign-in requests are now one row per claim (UNIQUE claim/approve/deny hashes), at most 5 counted in an hour (made in the last hour, even if denied, or approved and within wait + 1 h grace); an unapproved request can be approved only within 1 h; an approved one releases until 1 h after its release time. vault-api 88/88. Residual: a stranger sending 5 requests an hour still fills the cap (owner chose the cap).
+
 ## Current state and exact next step
 - Done: Worker sign-in server side, on branch `extension-email-login` (989fe50 + handoffs). Nothing deployed. Nothing pushed.
 - Next, in order:
-  1. Ask the owner the four open decisions above (they can answer in one message). Do not guess them.
-  2. Rebase `extension-email-login` onto origin/main (5 commits behind). Re-run `pnpm --filter @apps-hub/vault-api test`.
-  3. Fix the extension test loader (add 0003) and run the extension suite; root `pnpm test` must exit 0.
-  4. Build the extension sign-in (email + password -> request -> owner approves by email -> code + master password -> sign in), and the enrol upload of the sign-in blob; tests first.
+  1-3. DONE 2026-11-17 (decisions answered, rebased, loader fixed, per-claim Worker change).
+  4. Core: `sealSignin`/`openSignin` in packages/strongroom-core (label "strongroom/v1/signin", open returns null unless 20 bytes) + transport calls + vectors. Then build the extension sign-in (email + password -> request -> owner approves by email -> code + master password -> sign in), and the enrol upload of the sign-in blob; tests first. Include the decision-2 fix: a refusal after a long wait shows "sign in again", only a network failure shows "offline".
   5. Build the phone's enrol upload of the sign-in blob (the phone changes little; the new-device sign-in screen is the change). Gradle gate, and phone release only via the Store after the owner's go-ahead.
   6. Deploy the Worker only after: migration 0003 applied to the live D1, the owner verified the Gmail destination, and the owner's explicit go-ahead.
