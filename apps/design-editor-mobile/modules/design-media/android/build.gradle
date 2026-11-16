@@ -33,6 +33,7 @@ dependencies {
 tasks.withType(Test).configureEach {
   systemProperty 'fixtures.dir', file('../../../../../packages/media-core/fixtures').absolutePath
   systemProperty 'module.src', file('src/main/java').absolutePath
+  systemProperty 'module.assets', file('src/main/assets').absolutePath
 }
 
 // The owner approved this AAR by hash (SPEC §3). Fail the build if Gradle resolves different bytes (a comment alone checks nothing).
