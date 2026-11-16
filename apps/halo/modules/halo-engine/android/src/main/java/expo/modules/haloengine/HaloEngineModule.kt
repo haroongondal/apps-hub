@@ -11,6 +11,7 @@ import android.provider.Settings
 import expo.modules.haloengine.android.HaloListener
 import expo.modules.haloengine.android.HaloService
 import expo.modules.haloengine.android.ProbeLog
+import expo.modules.haloengine.android.SettingsStore
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
@@ -65,5 +66,9 @@ class HaloEngineModule : Module() {
     Function("probeLog") { ProbeLog.read(context) }
 
     Function("clearProbeLog") { ProbeLog.clear(context) }
+
+    Function("getSettings") { SettingsStore.read(context) }
+
+    Function("setSettings") { json: String -> SettingsStore.write(context, json) }
   }
 }

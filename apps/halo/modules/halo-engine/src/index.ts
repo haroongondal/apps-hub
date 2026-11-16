@@ -1,4 +1,7 @@
 import { requireNativeModule } from 'expo';
+import { normalize, type Settings } from './settings.ts';
+
+export * from './settings.ts';
 
 export type PermissionKind = 'overlay' | 'listener' | 'battery' | 'appDetails';
 
@@ -25,6 +28,8 @@ interface NativeApi {
   openPermission(kind: PermissionKind): void;
   probeLog(): string;
   clearProbeLog(): void;
+  getSettings(): string;
+  setSettings(json: string): void;
   addListener(event: 'onStatus', listener: (s: Status) => void): Subscription;
 }
 
@@ -37,6 +42,8 @@ export interface HaloEngineApi {
   openPermission(kind: PermissionKind): void;
   probeLog(): string;
   clearProbeLog(): void;
+  getSettings(): Settings;
+  setSettings(s: Settings): void;
   addStatusListener(cb: (s: Status) => void): Subscription;
 }
 
@@ -47,6 +54,8 @@ const HaloEngine: HaloEngineApi = {
   openPermission: (kind) => native.openPermission(kind),
   probeLog: () => native.probeLog(),
   clearProbeLog: () => native.clearProbeLog(),
+  getSettings: () => normalize(JSON.parse(native.getSettings())),
+  setSettings: (s) => native.setSettings(JSON.stringify(s)),
   addStatusListener: (cb) => native.addListener('onStatus', cb),
 };
 

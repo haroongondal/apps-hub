@@ -12,6 +12,7 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.IBinder
 import android.app.Notification
+import expo.modules.haloengine.core.Settings
 
 /** Foreground service for the stage 1 spike. Which FGS type survives which start path is what the probes measure. */
 class HaloService : Service() {
@@ -35,6 +36,7 @@ class HaloService : Service() {
     }
     if (running) return START_NOT_STICKY
     running = true
+    applySettings(SettingsStore.load(this))
     ProbeLog.log(this, "service", "notificationsEnabled=${getSystemService(NotificationManager::class.java).areNotificationsEnabled()}")
     overlay = EdgeOverlay(this).also { it.add() }
     tap = AudioTap(this, { overlay?.setLevel(it) }, ::publish).also { it.start() }
@@ -97,6 +99,16 @@ class HaloService : Service() {
     @Volatile var running = false
       private set
     @Volatile var onChange: (() -> Unit)? = null
+
+    /** Latest settings; the overlay reads this each frame and `onSettings` fires when it changes. */
+    @Volatile var settings = Settings()
+      private set
+    @Volatile var onSettings: ((Settings) -> Unit)? = null
+
+    fun applySettings(s: Settings) {
+      settings = s
+      onSettings?.invoke(s)
+    }
 
     /** "ok", "blocked" or "idle"; idle whenever the service is not running. */
     @Volatile var audio = "idle"
