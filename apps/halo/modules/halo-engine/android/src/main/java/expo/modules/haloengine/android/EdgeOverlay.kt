@@ -7,6 +7,7 @@ import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.hardware.display.DisplayManager
+import android.hardware.input.InputManager
 import android.provider.Settings
 import android.view.Display
 import android.view.RoundedCorner
@@ -28,14 +29,23 @@ class EdgeOverlay(private val ctx: Context) {
     ProbeLog.log(ctx, "overlay", "canDrawOverlays=${Settings.canDrawOverlays(ctx)}")
     try {
       val corners = radii()
+      val maxOpacity = ctx.getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch
       val v = RingView(ctx, corners)
       val lp = WindowManager.LayoutParams(
         WindowManager.LayoutParams.MATCH_PARENT,
         WindowManager.LayoutParams.MATCH_PARENT,
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
         PixelFormat.TRANSLUCENT,
-      ).apply { layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS }
+      ).apply {
+        layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        // Cover the whole display, including under the status and navigation bars.
+        fitInsetsTypes = 0
+        fitInsetsSides = 0
+        // Android 12+ drops touches that pass through another app's overlay above this opacity, so a full-screen overlay at alpha 1.0 blocks every tap.
+        alpha = minOf(0.8f, maxOpacity)
+      }
+      ProbeLog.log(ctx, "overlay", "window alpha=${lp.alpha} maxObscuringOpacityForTouch=$maxOpacity")
       wm.addView(v, lp)
       view = v
       val max = wm.maximumWindowMetrics.bounds
