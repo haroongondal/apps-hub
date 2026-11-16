@@ -25,7 +25,7 @@ export function healthNotice(s: Status, now: number): HealthNotice | null {
     return {
       tone: 'warn',
       title: 'Inflow lost its connection to your notifications',
-      body: 'The phone stopped the listener, so new notifications may be missed. Tap Reconnect to start it again.',
+      body: 'The phone stopped the listener, so new notifications may be missed. On Xiaomi phones an update can turn Autostart off: open Settings, Apps, Permissions, Autostart and switch Inflow on, then tap Reconnect.',
       action: 'reconnect',
     };
   }

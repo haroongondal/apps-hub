@@ -35,6 +35,10 @@ test('access on but listener disconnected is a warning that offers reconnect', (
   assert.ok(n);
   assert.equal(n.tone, 'warn');
   assert.equal(n.action, 'reconnect');
+  assert.equal(
+    n.body,
+    'The phone stopped the listener, so new notifications may be missed. On Xiaomi phones an update can turn Autostart off: open Settings, Apps, Permissions, Autostart and switch Inflow on, then tap Reconnect.',
+  );
 });
 
 test('everything fine gives no notice', () => {
