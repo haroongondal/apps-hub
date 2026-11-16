@@ -5,6 +5,7 @@ import { AiSettings } from './AiSettings.tsx';
 import { keepLabel } from './format.ts';
 import { GmailSettings } from './GmailSettings.tsx';
 import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
+import { mediaStatsLabel } from './media.ts';
 import { RenameSheet, type RenameTarget } from './RenameSheet.tsx';
 import { setupRowElements, useSetupAction } from './SetupScreen.tsx';
 import { setupRows } from './setup.ts';
@@ -36,6 +37,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
   const [renaming, setRenaming] = useState<RenameTarget | null>(null);
   const [ownerName, setOwnerName] = useState('');
   const [blocks, setBlocks] = useState<string[]>([]);
+  const [mediaLine, setMediaLine] = useState('');
   const { run, notice } = useSetupAction(refreshStatus);
 
   const load = useCallback(() => {
@@ -44,6 +46,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
       setNames(InflowCore.listSenderNames());
       setOwnerName(InflowCore.getOwnerName() ?? '');
       setBlocks(InflowCore.listAiBlocks());
+      setMediaLine(mediaStatsLabel(InflowCore.mediaStats()));
       setError(null);
     } catch {
       setError(LOAD_ERROR);
@@ -71,33 +74,10 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
     <Screen scroll>
       <Header title="Settings" />
       {error !== null && <Notice tone="danger">{error}</Notice>}
-      <Group title="Apps" footer="Choose which apps Inflow saves from and how long it keeps their notifications.">
-        {apps.map((a) => (
-          <Row key={a.pkg} title={a.label}>
-            <Segmented
-              accessibilityLabel={`Save notifications from ${a.label}`}
-              options={RECORD_OPTIONS}
-              value={a.record ? 'on' : 'off'}
-              onChange={(k) => {
-                if (k === 'on' && !a.record) change(() => InflowCore.setRecord(a.pkg, true, false));
-                else if (k === 'off' && a.record) setStopping(a);
-              }}
-            />
-            <Segmented
-              accessibilityLabel={`Send ${a.label} to AI`}
-              options={AI_OPTIONS}
-              value={blocks.includes(`app:${a.pkg}`) ? 'off' : 'on'}
-              onChange={(k) => change(() => InflowCore.setAiBlocked(`app:${a.pkg}`, k === 'off'))}
-            />
-            <Segmented
-              accessibilityLabel={`Keep ${a.label} notifications for`}
-              options={KEEP_OPTIONS}
-              value={keepKey(a.keepDays)}
-              onChange={(k) => change(() => InflowCore.setKeep(a.pkg, k === 'forever' ? null : Number(k)))}
-            />
-          </Row>
-        ))}
+      <Group title="Setup">
+        {setupRowElements(setupRows(status), run)}
       </Group>
+      {notice}
       <Field
         label="Your name"
         hint="Inflow uses it to spot transfers between your own accounts."
@@ -130,10 +110,36 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
           names.map((n) => <Row key={n.senderKey} title={n.name} subtitle={n.sender} onPress={() => setRenaming({ senderKey: n.senderKey, sender: n.sender, name: n.name })} />)
         )}
       </Group>
-      <Group title="Setup">
-        {setupRowElements(setupRows(status), run)}
+      <Group title="Apps" footer="Choose which apps Inflow saves from and how long it keeps their notifications.">
+        {apps.map((a) => (
+          <Row key={a.pkg} title={a.label}>
+            <Segmented
+              accessibilityLabel={`Save notifications from ${a.label}`}
+              options={RECORD_OPTIONS}
+              value={a.record ? 'on' : 'off'}
+              onChange={(k) => {
+                if (k === 'on' && !a.record) change(() => InflowCore.setRecord(a.pkg, true, false));
+                else if (k === 'off' && a.record) setStopping(a);
+              }}
+            />
+            <Segmented
+              accessibilityLabel={`Send ${a.label} to AI`}
+              options={AI_OPTIONS}
+              value={blocks.includes(`app:${a.pkg}`) ? 'off' : 'on'}
+              onChange={(k) => change(() => InflowCore.setAiBlocked(`app:${a.pkg}`, k === 'off'))}
+            />
+            <Segmented
+              accessibilityLabel={`Keep ${a.label} notifications for`}
+              options={KEEP_OPTIONS}
+              value={keepKey(a.keepDays)}
+              onChange={(k) => change(() => InflowCore.setKeep(a.pkg, k === 'forever' ? null : Number(k)))}
+            />
+          </Row>
+        ))}
       </Group>
-      {notice}
+      <Group title="Saved media" footer="Photos, videos and files that WhatsApp shows in its notifications are saved here, encrypted, and kept as long as the message.">
+        <Row title={mediaLine} />
+      </Group>
       <Notice>{LOCK_NOTE}</Notice>
       <Sheet visible={stopping !== null} onClose={() => setStopping(null)} title="Stop saving?" doneLabel="Cancel">
         <Text>{`Stop saving ${stopping?.label ?? 'this app'}? Also delete the items already saved from it?`}</Text>

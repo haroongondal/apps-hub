@@ -55,6 +55,9 @@ export function AskScreen() {
         returnKeyType="send"
       />
       <Button label="Ask" busy={busy} disabled={on !== true || question.trim() === ''} onPress={ask} block />
+      <Text variant="caption" tone="muted">
+        Questions about money use all your saved transactions.
+      </Text>
       {error !== null && <Notice tone="danger">{error}</Notice>}
       {answer !== null && (
         <>
