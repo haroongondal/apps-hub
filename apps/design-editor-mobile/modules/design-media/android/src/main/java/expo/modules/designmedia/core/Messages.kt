@@ -11,6 +11,9 @@ object Messages {
   const val WENT_WRONG = "Something went wrong. Try again."
   const val TOO_SMALL = "This video can't get that small. Pick a bigger size."
   const val COULDNT_OPEN = "Couldn't open that file. Pick it again."
+  const val PHOTOS = "Photos"
+  const val PHOTOS_FAILED = "Couldn't get your photos ready for search. Try again."
+  const val TOOL_MISSING = "Get the search tool first, then try again."
   const val NO_APP = "No app on this phone can open that file."
 
   fun working(n: Int, of: Int) = "Working on $n of $of"

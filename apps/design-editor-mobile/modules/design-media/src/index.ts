@@ -37,6 +37,15 @@ export interface DesignMediaModule {
   clearQueue(): Promise<void>; // stops the running job, drops waiting ones, empties the list; outputs stay
   share(outputUri: string): Promise<void>; // ACTION_SEND with a read grant
   open(outputUri: string): Promise<void>; // ACTION_VIEW
+  // Photo search: the pinned model files, the index job and the search itself. Nothing here uses the network.
+  photoModels(): Promise<{ name: string; url: string; bytes: number; ready: boolean }[]>;
+  installPhotoModel(name: string): Promise<boolean>; // checks a finished download, then keeps it; false when it is damaged
+  startPhotoIndex(): Promise<string>; // the job id; the one already waiting when there is one
+  photoIndexState(): Promise<{ indexed: number; modelsReady: boolean; waiting: 'heat' | 'battery' | null }>; // waiting: why a running scan is holding back
+  photoGalleryChanged(): Promise<boolean>; // true when photos changed since the last finished scan, or none has finished
+  searchPhotos(query: string): Promise<string[]>; // content URIs, best first, at most 60
+  similarPhotos(uri: string): Promise<string[]>; // photos that look like this one, not including it
+  releasePhotoSearch(): Promise<void>; // frees the text model's memory
   saveJson(name: string, text: string, filePath: string | null): Promise<string>;
   saveExport(name: string, ext: string, base64: string): Promise<string>;
   addListener(name: 'onJobProgress', fn: (e: JobProgressEvent) => void): { remove(): void };

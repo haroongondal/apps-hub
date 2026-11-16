@@ -20,6 +20,9 @@ test('a finished job shows its size in MB; a failure carries its reason; nothing
   }
 });
 
+test('a finished photo scan says Ready, never Saved', () => {
+  assert.equal(jobText(job({ state: 'done', tool: 'photo-index' as never, outputs: [] })).line, 'Get photos ready for search · Ready');
+});
 
 test('a wrapped native error shows only the sentence a person can read', () => {
   const wrapped = new Error("Call to function 'DesignMedia.open' has been rejected.\n→ Caused by: java.lang.IllegalStateException: No app on this phone can open that file.");

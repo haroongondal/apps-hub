@@ -51,7 +51,8 @@ export interface ComposeClip { uri: string; name: string; inS: number; outS: num
 // startS is the place on the video's timeline; inS and outS are times in the audio file, already cut to the video's end.
 export interface ComposeMusic { uri: string; name: string; inS: number; outS: number; startS: number; volume: number }
 export interface ComposePlan { tool: 'compose'; clips: ComposeClip[]; music: ComposeMusic[]; width: number; height: number; fps: number; videoBps: number; plannedBytes: number; ext: 'mp4' }
-export type Plan = SizePlan | QualityPlan | ClipPlan | AudioPlan | GifPlan | ConvertPlan | FramePlan | VolumePlan | ReversePlan | StabilizePlan | ComposePlan;
+export interface PhotoIndexPlan { tool: 'photo-index' }
+export type Plan = SizePlan | QualityPlan | ClipPlan | AudioPlan | GifPlan | ConvertPlan | FramePlan | VolumePlan | ReversePlan | StabilizePlan | ComposePlan | PhotoIndexPlan;
 
 export type JobState = 'queued' | 'running' | 'done' | 'failed' | 'cancelled' | 'interrupted' | 'paused';
 export interface Output { name: string; ref: string /* Mac path or Android content URI */; bytes: number; note?: string /* "converted to AAC" */ }
