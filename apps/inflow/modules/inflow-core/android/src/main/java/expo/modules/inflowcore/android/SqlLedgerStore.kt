@@ -130,14 +130,57 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
         while (c.moveToNext()) add(mapOf("category" to c.getString(0), "currency" to c.getString(1), "total" to c.getLong(2), "count" to c.getInt(3)))
       }
     }
-    return mapOf("accounts" to accounts, "merchants" to merchants, "categories" to categories)
+    // Every person or shop, both directions; own transfers are one row with no name. A blank name is "Unknown" on screen.
+    val parties = db.rawQuery(
+      "SELECT CASE WHEN own = 1 THEN NULL ELSE $PARTY END, own, currency, " +
+        "SUM(CASE direction WHEN 'IN' THEN amount_minor ELSE 0 END), SUM(CASE direction WHEN 'OUT' THEN amount_minor ELSE 0 END), COUNT(*) " +
+        "FROM txns WHERE at >= ? AND at < ? GROUP BY own, CASE WHEN own = 1 THEN '' ELSE $PARTY END, currency " +
+        "ORDER BY SUM(amount_minor) DESC, 1",
+      from, to,
+    ).use { c ->
+      buildList {
+        while (c.moveToNext()) {
+          add(
+            mapOf(
+              "name" to c.str(0)?.ifEmpty { null }, "own" to (c.getInt(1) != 0), "currency" to c.getString(2),
+              "moneyIn" to c.getLong(3), "moneyOut" to c.getLong(4), "count" to c.getInt(5),
+            ),
+          )
+        }
+      }
+    }
+    return mapOf("accounts" to accounts, "merchants" to merchants, "categories" to categories, "parties" to parties)
   }
 
+  /** All-time totals with one person or shop (null name = Unknown), or of own transfers when own. */
+  fun partyTotals(name: String?, own: Boolean): List<Map<String, Any>> {
+    val (clause, args) = partyClause(name, own)
+    return db.rawQuery(
+      "SELECT t.currency, SUM(CASE t.direction WHEN 'IN' THEN t.amount_minor ELSE 0 END), " +
+        "SUM(CASE t.direction WHEN 'OUT' THEN t.amount_minor ELSE 0 END), COUNT(*) FROM txns t WHERE $clause GROUP BY t.currency ORDER BY t.currency",
+      *args,
+    ).use { c ->
+      buildList {
+        while (c.moveToNext()) add(mapOf("currency" to c.getString(0), "moneyIn" to c.getLong(1), "moneyOut" to c.getLong(2), "count" to c.getInt(3)))
+      }
+    }
+  }
+
+  fun listPartyTxns(name: String?, own: Boolean, before: Long?, limit: Int, beforeId: Long?): List<Map<String, Any?>> {
+    val (clause, args) = partyClause(name, own)
+    return pageTxns(clause, args.toList(), before, limit, beforeId)
+  }
+
+  private fun partyClause(name: String?, own: Boolean): Pair<String, Array<Any?>> =
+    if (own) "t.own = 1" to emptyArray() else "t.own = 0 AND COALESCE(t.label, t.counterparty, '') = ?" to arrayOf(name ?: "")
+
   /** Newest first; paging matches SqlItemStore.list. */
-  fun listTxns(account: String?, before: Long?, limit: Int, beforeId: Long?): List<Map<String, Any?>> {
-    val where = mutableListOf("1 = 1")
-    val args = mutableListOf<Any?>()
-    if (account != null) { where += "t.account = ?"; args += account }
+  fun listTxns(account: String?, before: Long?, limit: Int, beforeId: Long?): List<Map<String, Any?>> =
+    if (account != null) pageTxns("t.account = ?", listOf(account), before, limit, beforeId) else pageTxns("1 = 1", emptyList(), before, limit, beforeId)
+
+  private fun pageTxns(clause: String, clauseArgs: List<Any?>, before: Long?, limit: Int, beforeId: Long?): List<Map<String, Any?>> {
+    val where = mutableListOf(clause)
+    val args = clauseArgs.toMutableList()
     if (before != null) {
       if (beforeId != null) {
         where += "(t.at < ? OR (t.at = ? AND t.id < ?))"
@@ -207,6 +250,8 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
   private fun Cursor.str(i: Int): String? = if (isNull(i)) null else getString(i)
 
   private companion object {
+    // The name a person or shop is grouped under: the AI's clean name, else the bank's text.
+    const val PARTY = "COALESCE(label, counterparty, '')"
     // The channel column is a comma list; ',NOTIFICATION,' is a source that was a bare push (WhatsApp, a bank app), whatever became of its item.
     const val PUSH_SOURCE = "instr(',' || p.channel || ',', ',NOTIFICATION,') > 0"
   }

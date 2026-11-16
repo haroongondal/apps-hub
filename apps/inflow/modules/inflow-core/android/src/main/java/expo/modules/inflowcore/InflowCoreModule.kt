@@ -124,11 +124,15 @@ class InflowCoreModule : Module() {
       val store = store()
       StoreHolder.ingest(context, store).housekeeping()
       AiRunner.runIfDue(context)   // in the background: Home never waits for the model
-      store.home(startOfDay, System.currentTimeMillis())
+      store.home(startOfDay, System.currentTimeMillis(), StoreHolder.smsPackages(context))
     }
 
     Function("listItems") { filter: Map<String, Any?>, before: Long?, limit: Int, beforeId: Long? ->
       store().list(filter, before, limit, System.currentTimeMillis(), beforeId)
+    }
+
+    Function("contacts") { pkg: String, startOfDay: Long, before: Long?, beforeKey: String?, limit: Int ->
+      store().contacts(pkg, startOfDay, System.currentTimeMillis(), before, beforeKey, limit)
     }
 
     Function("listApps") { ->
@@ -148,6 +152,14 @@ class InflowCoreModule : Module() {
 
     Function("listTxns") { account: String?, before: Long?, limit: Int, beforeId: Long? ->
       SqlLedgerStore(store().db).listTxns(account, before, limit, beforeId)
+    }
+
+    Function("partyTotals") { name: String?, own: Boolean ->
+      SqlLedgerStore(store().db).partyTotals(name, own)
+    }
+
+    Function("listPartyTxns") { name: String?, own: Boolean, before: Long?, limit: Int, beforeId: Long? ->
+      SqlLedgerStore(store().db).listPartyTxns(name, own, before, limit, beforeId)
     }
 
     Function("setOwnTransfer") { txnId: Long, own: Boolean ->

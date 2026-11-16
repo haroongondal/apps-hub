@@ -12,6 +12,7 @@ import expo.modules.inflowcore.core.AiStore
 import expo.modules.inflowcore.core.AppSetting
 import expo.modules.inflowcore.core.AskItem
 import expo.modules.inflowcore.core.Channel
+import expo.modules.inflowcore.core.ContactApps
 import expo.modules.inflowcore.core.Capture
 import expo.modules.inflowcore.core.DeferredDeletes
 import expo.modules.inflowcore.core.Email
@@ -290,7 +291,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     run("UPDATE gmail_senders SET uid_validity = NULL, last_uid = 0")
   }
 
-  fun home(startOfDay: Long, now: Long): Map<String, Any> {
+  fun home(startOfDay: Long, now: Long, sms: Set<String>): Map<String, Any> {
     val conversations = query(
       "SELECT i.conversation_key, i.pkg, i.app_label, COALESCE(n.name, i.conversation, i.conversation_key), i.text, i.posted_at, " +
         "(SELECT COUNT(*) FROM items t WHERE t.conversation_key = i.conversation_key AND t.posted_at >= ? AND $VISIBLE_T) " +
@@ -313,13 +314,21 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       }
     }
     val apps = query(
-      "SELECT i.pkg, COALESCE(a.label, MAX(i.app_label)), MAX(i.posted_at), SUM(CASE WHEN i.posted_at >= ? THEN 1 ELSE 0 END) " +
-        "FROM items i LEFT JOIN apps a ON a.pkg = i.pkg WHERE $VISIBLE_I " +
+      "SELECT i.pkg, COALESCE(a.label, MAX(i.app_label)), MAX(i.posted_at), SUM(CASE WHEN i.posted_at >= ? THEN 1 ELSE 0 END), " +
+        "MAX(i.conversation_key IS NOT NULL) FROM items i LEFT JOIN apps a ON a.pkg = i.pkg WHERE $VISIBLE_I " +
         "GROUP BY i.pkg ORDER BY MAX(i.posted_at) DESC LIMIT 8",
       startOfDay, now,
     ).use { c ->
       buildList {
-        while (c.moveToNext()) add(mapOf("pkg" to c.getString(0), "label" to c.getString(1), "lastAt" to c.getLong(2), "today" to c.getInt(3)))
+        while (c.moveToNext()) {
+          val pkg = c.getString(0)
+          add(
+            mapOf(
+              "pkg" to pkg, "label" to c.getString(1), "lastAt" to c.getLong(2), "today" to c.getInt(3),
+              "byContact" to ContactApps.byContact(pkg, sms, hasChats = c.getInt(4) != 0),
+            ),
+          )
+        }
       }
     }
     val important = query(
@@ -342,12 +351,41 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     return mapOf("conversations" to conversations, "apps" to apps, "important" to important, "comingUp" to comingUp)
   }
 
+  /**
+   * One row per contact of one app, newest first: a chat (with the owner's own replies), else the sender. SQLite takes the bare
+   * columns from the row that holds MAX(posted_at), so the name and last text come from the newest visible item.
+   */
+  fun contacts(pkg: String, startOfDay: Long, now: Long, before: Long?, beforeKey: String?, limit: Int): List<Map<String, Any?>> {
+    val page = if (before != null) "WHERE (g.last < ? OR (g.last = ? AND g.k < ?)) " else ""
+    val args = mutableListOf<Any?>(startOfDay, pkg, now)
+    if (before != null) { args += before; args += before; args += beforeKey ?: "" }
+    args += limit.toLong()
+    return query(
+      "SELECT g.k, COALESCE(n.name, g.conversation, g.sender, g.k), g.text, g.last, g.today FROM (" +
+        "SELECT COALESCE(i.conversation_key, i.sender_key) AS k, i.conversation AS conversation, i.sender AS sender, i.text AS text, " +
+        "MAX(i.posted_at) AS last, SUM(CASE WHEN i.posted_at >= ? THEN 1 ELSE 0 END) AS today FROM items i " +
+        "WHERE i.pkg = ? AND $VISIBLE_I AND COALESCE(i.conversation_key, i.sender_key) IS NOT NULL GROUP BY k) g " +
+        "LEFT JOIN sender_names n ON n.sender_key = g.k ${page}ORDER BY g.last DESC, g.k DESC LIMIT ?",
+      *args.toTypedArray(),
+    ).use { c ->
+      buildList {
+        while (c.moveToNext()) {
+          add(mapOf("key" to c.getString(0), "name" to c.getString(1), "lastText" to c.getString(2), "lastAt" to c.getLong(3), "today" to c.getInt(4)))
+        }
+      }
+    }
+  }
+
   fun list(filter: Map<String, Any?>, before: Long?, limit: Int, now: Long, beforeId: Long? = null): List<Map<String, Any?>> {
     val where = mutableListOf(VISIBLE_I)
     val args = mutableListOf<Any?>(now)
     when (filter["kind"] as? String) {
       "app" -> { where += "i.pkg = ?"; args += filter["pkg"] as? String }
       "conversation" -> { where += "i.conversation_key = ?"; args += filter["key"] as? String }
+      "contact" -> {
+        where += "i.pkg = ? AND COALESCE(i.conversation_key, i.sender_key) = ?"
+        args += filter["pkg"] as? String; args += filter["key"] as? String
+      }
       "sender" -> { where += "COALESCE(n.name, i.sender) = ?"; args += filter["name"] as? String }
       "search" -> {
         // shortcut: LIKE scans every row; switch to FTS5 if search passes ~300 ms on the phone.
