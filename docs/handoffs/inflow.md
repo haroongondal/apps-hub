@@ -25,7 +25,7 @@ claim <folder>) and release it when you stop. Use cd-engineering-tools:parallel-
    new APK keeps data. Never uninstall. The owner unlocks Inflow, ticks HyperOS risk boxes, enables
    Autostart/notification access, and types settings themselves; never enter their PIN or credentials.
    Screenshots of lock/secure screens are black (Android). Describe the owner's messages by structure only.
-3. State: installed on the phone = c74d2f1. Newer commit d999812 (AI-filter gaps L1-L5: Ask txns of
+3. State (updated 16:05): installed on the phone = 2b46d9e (d999812 + name hint, step 4a/4b DONE). Older note: c74d2f1 was installed, then d999812 (AI-filter gaps L1-L5: Ask txns of
    notification-only sources, default SMS app eligible, accounts list, versioned backfill cursor,
    AI-made txns re-read) is committed and gated (313 Kotlin tests, pnpm 46/46) but NOT installed.
    Build the next release APK from HEAD (`NODE_ENV=production ./gradlew :app:assembleRelease` in
@@ -197,10 +197,10 @@ most likely to be second-guessed:
 
 ## Current state and next step
 
-State (2026-11-16 16:00): stages 1-4 and 4b built, reviewed, fixed and installed on the owner's phone (adb install -r, build c74d2f1). HEAD d999812 (not installed). Gates at d999812: Kotlin 313 tests 0 failures, assembleDebug, processReleaseMainManifest (no new permission), pnpm test 0, typecheck 0 (inflow 46/46). Nothing pushed, merged or released (owner: "hold release").
+State (2026-11-16 16:05): stages 1-4 and 4b built, reviewed, fixed and installed on the owner's phone (adb install -r, build 2b46d9e = d999812 AI-filter gaps + the 'full name as your bank writes it' hint). Listener bound, no Autostart reject. Gates at d999812: Kotlin 313 tests 0 failures, assembleDebug, processReleaseMainManifest (no new permission), pnpm test 0, typecheck 0 (inflow 46/46). Nothing pushed, merged or released (owner: "hold release").
 
 Phone results 2026-11-16 (details in progress.md): v4->v5 upgrade on the real SQLCipher database worked (WhatsApp "You" duplicates repaired into one thread); LedgerBackfill re-read the saved SMS: November Money now in 840,749.01 / out 381,902.20 / 49 txns (was 20 txns, out 58,090.20), and after Settings > Your name = "Haroon Mukhtar" own transfers drop out: in 645,749.01 / out 356,902.20 / 47 txns; AI (Groq, GPT-OSS 20B) summaries and Ask AI work; Settings order, "Never sent to AI" labels ok; HyperOS rejected the listener after the first update until Autostart + notification access were re-enabled.
 
 Decisions this round: WhatsApp text kept forever; WhatsApp grouped by contact; all media WhatsApp notifications expose stored encrypted (untested: owner skipped the media test); AI sees only SMS and email (R44; WhatsApp summaries from 14:06-14:07 were sent by the old build before R44); Ask AI uses transactions of any age (R35/R41); bank fees not added (R37).
 
-Next step: resume prompt step 4 (copy fix, next build, install -r, phone checks).
+Next step: phone checks that need the owner: Ask AI money answer, WhatsApp media test (friend), Gmail (owner's app password), a live bank SMS (resume prompt step 4c). Then owner decision on release; never merge, push or release without their go.
