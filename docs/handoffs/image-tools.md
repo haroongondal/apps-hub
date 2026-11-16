@@ -59,6 +59,17 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
 - `packages/design-editor-engine` has no `test` script; engine behaviour is covered by
   `pnpm --filter design-editor test:e2e`.
 
+- Model sources (3.0): U2-Netp `https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx`
+  sha256 309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8, 4,574,861 B, Apache-2.0.
+  MODNet fp32 `https://huggingface.co/Xenova/modnet/resolve/fa2fa546052fba4c08921230a26cc69a333fca12/onnx/model.onnx`
+  sha256 07c308cf0fc7e6e8b2065a12ed7fc07e1de8febb7dc7839d7b7f15dd66584df9, 25,888,640 B, Apache-2.0.
+  Real-ESRGAN source .pth `https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth`
+  sha256 8dc7edb9...96292, BSD-3; our ONNX export (T=176) sha256
+  1c1bda585a8b044760e807d4e454b0a2f4bf0c0f0096ff4d8046c422e54f5ce0, 4,866,394 B, not hosted yet.
+- Kotlin reference for 3.2: `tools/quick-edits-bench/{ref.py,fixtures.py,export_esrgan.py}`,
+  fixtures `packages/media-core/fixtures/quick-edits/` (byte-identical across runs). Compare
+  exactly or within +-1 level. Open for 3.2: a downscale-to-320 fixture; how alpha is upscaled.
+
 ## File map
 
 - Designs: see above. Session rules: `docs/build-sessions.md` "How every session runs".
@@ -89,9 +100,23 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
   main session's clean export of e1b5005: pnpm test exit 0 (engine 15/15), typecheck exit 0.
   Open: AC-1 not yet timed on the phone (Mac 9-37 ms); owner to confirm swatch = page background
   and the missing white-balance/saturation controls.
+- 2026-11-17: 3.0 PARTIAL (commits f50b7ae, 5be0796, abaae1d, 5ba74fb, 1710cc3, de96f3e, eac988a,
+  5b8ca47; results note `docs/superpowers/plans/2026-11-17-quick-edits-phase-0-results.md`;
+  ledger `.superpowers/sdd/2026-11-17-image-tools-3.0/progress.md`). Mac side done; phone timings
+  NOT run (phone off wireless adb 02:08-02:48, claim released to Halo session apps-hub-96).
+  Edge verdict (main session checked the contact sheet): U2-Netp good for pets/products (clock
+  keeps a shadow crescent, plush ghost patches); fails people (fades hand on 544519, keeps the
+  sign on 488710, keeps crowd on 459272). MODNet fp32 fixes every people case; MODNet 8-bit
+  (both Xenova files) deletes most of the person on 2/5, unusable. No pinnable Real-ESRGAN
+  x4v3 ONNX exists: exported ourselves (matches PyTorch to 5.4e-6, deterministic bytes).
+  Ruling: upscale tile input 176 px, overlap 24 (seam error 0.8 vs 10 levels at 16).
 
 ## Current state + exact next step
 
-3.1 done. 3.0 (phone spike) running as a phase agent (phone back on Wi-Fi adb). Next: read its
-report; if 3.0 passes, start 3.2 (cut-out and upscale); if it misses a bar, stop and report to
+3.1 done. 3.0 Mac side done, phone timings pending: queued for device:49kjmnuwonkffqzh behind
+apps-hub-96 (Halo). When the phone is ours and on adb: run
+`ANDROID_SERIAL=<adb serial> <session scratchpad>/qe-in/stageb.sh` (if the scratchpad is gone,
+rebuild inputs per the Phase 0 plan's Task 3), fill the results note, release the claim and send
+apps-hub-96 "phone free". Owner questions open: Real-ESRGAN hosting, people cut-out model. Then
+read the numbers; if 3.0 passes, start 3.2 (cut-out and upscale); if it misses a bar, stop and report to
 the owner. Feature 2 waits for `photo-search` Phase 2.
