@@ -76,6 +76,11 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
 - 2026-11-17: feature 1 Phase 2 not finished (another session). Owner said go with feature 3.
   Worktree created from `9e13c3d`, `pnpm install` done. Handoff written. Phase agents for 3.0
   and 3.1 started.
+- 2026-11-17 (later): the session ended mid-run. Landed: 3.0 plan f50b7ae + phone bench
+  5be0796; 3.1 plan cae845f + palette/enhance maths e694a5f (11/11 node tests). 3.1 rulings:
+  swatch on an image sets the page background; brand kit exists (brand.colors); auto-enhance
+  sets Brightness and Contrast only (no white-balance or saturation control exists; gap for
+  the owner). Phone was off adb. Both phase agents resumed from their ledgers.
 
 ## Current state + exact next step
 
