@@ -1,29 +1,52 @@
 """Mac reference maths for Quick edits Phase 0: U2-Netp cut-out and Real-ESRGAN tiled 4x.
 
 usage: ref.py <realesr-general-x4v3-dyn.onnx>
-  Overlap check on a seeded 256x192 image (needs the dynamic-shape export): for each overlap,
-  max and p99 abs difference in 0..255 steps between the tiled 4x and (a) a plain whole-image
-  run, all pixels; (b) the same, only pixels >= 32 input px from the border; (c) a whole-image
-  run on the image reflect-padded by the overlap (same border context as the tiles, so only
-  seams differ). (a) is dominated by the border: the whole run zero-pads inside the network
-  where the tiles see mirrored pixels, which no overlap changes. OVERLAP is the smallest whose
-  p99 is <= 1 step in both (b) and (c).
+  Overlap check on a seeded 256x192 image (needs the dynamic-shape export). For each overlap it
+  prints max and p99 abs difference (per pixel, largest of R, G, B; in 0..255 steps) between
+  the tiled 4x and:
+  (a) a plain whole-image run, all pixels. Dominated by the border: the whole run zero-pads
+      inside the network where the tiles see mirrored pixels; no overlap changes that.
+  (b) the same run, only pixels >= 40 input px from the border (the receptive field is 34 px:
+      34 3x3 convolutions), so the border term is gone and only seams remain.
+  (c) a whole-image run on the image reflect-padded by the overlap. Not seams only: border
+      tiles with a partial core mirror more than `overlap` px (up to T - core), so the bottom
+      and right edges keep a small border term.
+  (s) the seam band: pixels within 8 input px of an interior seam and >= 40 px from the border,
+      against (a)'s run. The rule: OVERLAP is the smallest overlap whose seam-band max is
+      <= 1 step (p99 over all pixels is not enough: at 16 the band's max is 10.4 steps).
 Importable: u2_prep, u2_norm, u2_mask, cutout, tiles, upscale, synth.
 
 U2-Netp (u2netp.onnx, input "input.1" 1x3x320x320, first of 7 outputs "1959" 1x1x320x320), as rembg does it:
-  RGB -> 320x320 Pillow LANCZOS -> divide by the largest channel value in the image (not 255)
-  -> (x - ImageNet mean) / std -> NCHW float32. Output: first output, min-max normalised to 0..1.
-  Mask: bilinear (half-pixel centres, edge clamp, no antialias) to the photo's own w x h, then a
-  separable Gaussian with sigma = feather_px (radius ceil(3 sigma), edge clamp), then
-  floor(255 * clip(m, 0, 1) + 0.5) as uint8. Maths in float64 (a float32 port may differ by 1).
+  u2_prep: RGB uint8 -> 320x320 with Pillow's LANCZOS -> divide by the largest value (any
+  channel) of that resized 320x320 uint8 image, not by 255 -> (x - ImageNet mean) / std in
+  float64 -> NCHW float32.
+  A port must either reproduce Pillow 13's 8-bit LANCZOS exactly or accept the tolerance below.
+  Exact recipe (Resample.c; a numpy port of it matched Pillow bit for bit on 6 sizes, both
+  pass orders): per axis, scale = in/out, fs = max(scale, 1), support = 3*fs; for output i,
+  centre = (i + 0.5)*scale, taps j from max(int(centre - support + 0.5), 0) to
+  min(int(centre + support + 0.5), in) exclusive (int() truncates), weight
+  lanczos3((j - centre + 0.5)/fs) with lanczos3(x) = sinc(x) sinc(x/3) on -3 <= x < 3,
+  normalised to sum 1, then int(w * 2^22 +- 0.5) (away from zero). Each output value =
+  clamp((2^21 + sum(w_int * v)) >> 22, 0, 255): two separate passes with uint8 rounding and
+  clipping in between. Horizontal pass first, unless (inH - 320) > 0 and
+  (inH - 320) > 2 * (inW - 320), then vertical first. An axis already 320 long is skipped.
+  Tolerance if a port runs the same Lanczos-3 kernel in float, without the 8-bit rounding (check
+  on the fixture): 0.116 max on the input tensor, up to 3 steps on the final mask (p99 1). A
+  different kernel is not close: bilinear gives 0.98 on the tensor and 98 steps on the mask.
+  u2_norm: first output min-max normalised to 0..1 in float32 (idempotent).
+  u2_mask: in float64, bilinear (half-pixel centres, edge clamp, no antialias) to the photo's own
+  w x h, then a separable Gaussian, sigma = feather_px photo px (radius ceil(3 sigma), edge
+  clamp), then floor(255 * clip(m, 0, 1) + 0.5) as uint8; a float32 port may differ by 1.
   rembg instead quantises at 320 and resizes the uint8 mask with LANCZOS; we keep floats so the
   mask can be scaled to any photo size in one step.
 Real-ESRGAN general-x4v3 (input "input" 1x3xTxT, output "output" 1x3x4Tx4T, T = tile + 2*overlap):
-  RGB float32 0..1 in, RGB float 0..1 out (unclamped; clip, then floor(255 x + 0.5)).
+  RGB float32 0..1 in, RGB float 0..1 out (unclamped; clip, then floor(255 x + 0.5)). Alpha is
+  not upscaled by the reference (the input is converted to RGB); Phase 3.2 decides.
   Tiles: 128 px cores in row-major order; each input is the TxT window starting overlap px
   above-left of its core, with coordinates outside the image mirrored (numpy "reflect", edge
-  pixel not repeated), so border tiles keep the one fixed shape. The 4x core is cropped out of
-  each output and written in place.
+  pixel not repeated, bouncing as often as needed), so border tiles keep the one fixed shape:
+  for size n, p = 2(n - 1), i = |i| mod p, then p - i if i >= n; 0 when n = 1.
+  The 4x core is cropped out of each output and written in place.
 """
 import math
 import sys
@@ -36,7 +59,7 @@ U2 = 320
 TILE = 128
 SCALE = 4
 OVERLAPS = (8, 16, 24, 32)
-OVERLAP = 16  # smallest of OVERLAPS within 1/255 at p99 (see main)
+OVERLAP = 24  # smallest of OVERLAPS with seam-band max <= 1 step (see main)
 FEATHER = 2
 
 
@@ -154,16 +177,28 @@ def main(dyn_model):
     import onnxruntime as ort
     assert (_reflect(np.arange(-40, 50), 7) == np.pad(np.arange(7), 43, mode="reflect")[3:93]).all()
     sess = ort.InferenceSession(dyn_model, providers=["CPUExecutionProvider"])
-    a = np.asarray(synth(256, 192, 3), np.float32) / 255
+    w, h, edge, band = 256, 192, 40, 8
+    a = np.asarray(synth(w, h, 3), np.float32) / 255
     up = lambda x: np.clip(_run(sess, x.transpose(2, 0, 1)).transpose(1, 2, 0), 0, 1)
-    whole, b = up(a), SCALE * 32
+    whole, S = up(a), SCALE
+    inner = np.zeros((S * h, S * w), bool)
+    inner[S * edge:-S * edge, S * edge:-S * edge] = True
+    seams = np.zeros_like(inner)
+    for x in range(TILE, w, TILE):
+        seams[:, S * (x - band):S * (x + band)] = True
+    for y in range(TILE, h, TILE):
+        seams[S * (y - band):S * (y + band), :] = True
     st = lambda d: f"max={d.max():7.3f} p99={np.percentile(d, 99):6.3f}"
+    pick = None
     for ov in OVERLAPS:
         t = np.clip(_upscale_f(sess, a, TILE, ov), 0, 1)
-        d = np.abs(t - whole) * 255
-        o = SCALE * ov
-        seam = np.abs(t - up(np.pad(a, ((ov, ov), (ov, ov), (0, 0)), mode="reflect"))[o:-o, o:-o]) * 255
-        print(f"overlap={ov:2d} T={TILE + 2 * ov} | (a) {st(d)} | (b) {st(d[b:-b, b:-b])} | (c) {st(seam)}")
+        d = np.abs(t - whole).max(2) * 255
+        o = S * ov
+        c = np.abs(t - up(np.pad(a, ((ov, ov), (ov, ov), (0, 0)), mode="reflect"))[o:-o, o:-o]).max(2) * 255
+        sb = d[inner & seams]
+        pick = pick or (ov if sb.max() <= 1 else None)
+        print(f"overlap={ov:2d} T={TILE + 2 * ov} | (a) {st(d)} | (b) {st(d[inner])} | (c) {st(c)} | (s) {st(sb)}")
+    print(f"smallest overlap with seam-band max <= 1 step: {pick if pick else 'none of ' + str(OVERLAPS)}")
 
 
 if __name__ == "__main__":
