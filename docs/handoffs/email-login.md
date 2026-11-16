@@ -36,11 +36,11 @@ Read docs/handoffs/email-login.md completely first. Trust the verified facts in 
 - Extension suite: a 2-line test change is needed because apps/strongroom-extension/src/__tests__/sync-world.ts loads migrations 0001-0002 by name; 20 of 128 tests then get 500 once the Worker expects 0003. The earlier patch file was NOT saved (not found on 2026-11-16); recreate it: add the 0003_signin.sql migration to that loader, then run the extension suite.
 - Semgrep: no literal bidi characters in tools/vault-api (fixed; the test uses an escape sequence).
 
-## Open decisions for the owner (not decided; ask before building on them)
-1. Parallel guessing: close it (token check waits its turn, which can delay the owner's own sign-in, against the no-lockout rule) or accept the gap.
-2. A refused device on a slow or attacked network can wait over 30 s and show "offline" instead of "sign in again". Fix in the client, or accept.
-3. Each successful owner sync resets the failure count, giving an attacker 5 more free guesses. Keep or change.
-4. One pending sign-in row: a stranger can take the slot every hour and block the owner's email sign-in. The draft recommended one row per claim. Decide.
+## Owner answers to the open decisions (2026-11-16, binding)
+1. Parallel guessing: ACCEPT the gap for now (testing). Revisit when SIGNIN_WAIT_HOURS goes to 24.
+2. Refused device shown as "offline" after a long wait: FIX in the clients (extension and phone): a refusal shows "sign in again"; only a real network failure shows "offline".
+3. Owner sync resets the failure count: KEEP.
+4. Sign-in request slot: ONE ROW PER CLAIM, at most 5 live requests and at most 5 approval mails an hour (Worker change to the built single-row table; migration 0003 is not applied anywhere live, so it can still be edited).
 
 ## File map
 - Worker (done): tools/vault-api/src/{index.ts,auth.ts,db.ts,lost-access.ts,login-gate.ts (or as named in 989fe50)}, migrations/0003_signin.sql, cloudflare.config.ts, package.json (test list), src/__tests__/{signin.test.ts,login-gate.test.ts}.
