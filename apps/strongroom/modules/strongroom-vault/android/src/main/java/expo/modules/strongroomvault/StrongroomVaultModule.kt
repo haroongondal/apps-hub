@@ -36,6 +36,7 @@ import expo.modules.strongroomvault.core.ImportError
 import expo.modules.strongroomvault.core.ImportResult
 import expo.modules.strongroomvault.core.KdfOutOfRange
 import expo.modules.strongroomvault.core.RecoveryKey
+import expo.modules.strongroomvault.core.SmsCodes
 import expo.modules.strongroomvault.core.SyncAuthError
 import expo.modules.strongroomvault.core.SyncHttpError
 import expo.modules.strongroomvault.core.SyncOfflineError
@@ -122,6 +123,7 @@ class StrongroomVaultModule : Module() {
         "unreadable" to v.unreadable,
         "lostSaves" to VaultHolder.lostSaves,
         "keepAliveEnabled" to VaultHolder.prefs(context).getBoolean(VaultHolder.KEEP_ALIVE, true),
+        "smsFillEnabled" to VaultHolder.prefs(context).getBoolean(VaultHolder.SMS_FILL, false),
       )
     }
 
@@ -373,6 +375,11 @@ class StrongroomVaultModule : Module() {
     Function("setKeepAlive") { enable: Boolean ->
       VaultHolder.prefs(context).edit().putBoolean(VaultHolder.KEEP_ALIVE, enable).apply()
       if (enable) KeepAliveService.start(context) else KeepAliveService.stop(context)
+    }
+
+    Function("setSmsFill") { enable: Boolean ->
+      VaultHolder.prefs(context).edit().putBoolean(VaultHolder.SMS_FILL, enable).apply()
+      if (!enable) SmsCodes.clear() // nothing lingers behind a turned-off toggle
     }
 
     AsyncFunction("changePassword") Coroutine { oldPw: String, newPw: String ->

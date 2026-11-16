@@ -76,6 +76,20 @@ export function SettingsScreen({ status, refresh, notice, onOpen }: Props) {
     }
   };
 
+  const toggleSmsFill = async (on: boolean) => {
+    try {
+      // Without the permission the phone never delivers the message, so a denied request leaves the toggle off.
+      if (on) {
+        const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECEIVE_SMS);
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
+      }
+      Vault.setSmsFill(on);
+      refresh();
+    } catch (e) {
+      fail(e);
+    }
+  };
+
   const toggleFingerprint = async (on: boolean) => {
     if (on) return onOpen('fingerprint');
     try {
@@ -119,6 +133,21 @@ export function SettingsScreen({ status, refresh, notice, onOpen }: Props) {
               value={status.keepAliveEnabled}
               onValueChange={toggleKeepAlive}
               accessibilityLabel="Keep autofill ready"
+              trackColor={{ false: c.line, true: c.accent }}
+              thumbColor={c.surface}
+            />
+          }
+        />
+      </Group>
+      <Group title="Text messages" footer="Strongroom reads incoming text messages only to find verification codes, and keeps nothing.">
+        <Row
+          title="Fill codes from text messages"
+          subtitle="A code that arrives shows as a suggestion in the verification field."
+          trailing={
+            <Switch
+              value={status.smsFillEnabled}
+              onValueChange={toggleSmsFill}
+              accessibilityLabel="Fill codes from text messages"
               trackColor={{ false: c.line, true: c.accent }}
               thumbColor={c.surface}
             />

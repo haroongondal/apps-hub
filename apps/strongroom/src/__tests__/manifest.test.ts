@@ -30,12 +30,14 @@ test('the release build refuses cleartext traffic', () => {
 });
 
 test('the vault module keeps services private plus the keep-alive foreground service', () => {
+  // RECEIVE_SMS (DESIGN 15.3): requested from the Settings toggle only, and the receiver handles only the incoming-message broadcast.
   assert.deepEqual(permissions(vaultModule), [
     'android.permission.HIDE_OVERLAY_WINDOWS',
     'android.permission.QUERY_ALL_PACKAGES',
     'android.permission.FOREGROUND_SERVICE',
     'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
     'android.permission.POST_NOTIFICATIONS',
+    'android.permission.RECEIVE_SMS',
   ]);
   const [autofill, syncJob, clipboardJob, keepAlive] = services(vaultModule);
   assert.equal(attr(autofill, 'android:name'), 'expo.modules.strongroomvault.android.StrongroomAutofillService');
@@ -60,6 +62,16 @@ test('the vault module keeps services private plus the keep-alive foreground ser
 
 test('backup stays off', () => {
   assert.match(main, /android:allowBackup="false"/);
+});
+
+// DESIGN 15.3: only the incoming-message broadcast; MMS and the inbox are never read (no READ_SMS, no SMS_DELIVER, no WAP push).
+test('the SMS receiver listens to the incoming-message broadcast only', () => {
+  const receiverBlock =
+    vaultModule.match(/<receiver\b[^>]*android:name="expo\.modules\.strongroomvault\.android\.SmsReceiver"[\s\S]*?<\/receiver>/)?.[0] ?? '';
+  assert.ok(receiverBlock, 'the SMS receiver is declared');
+  assert.equal(attr(receiverBlock, 'android:exported'), 'true');
+  assert.match(receiverBlock, /android\.provider\.Telephony\.SMS_RECEIVED/);
+  assert.doesNotMatch(vaultModule, /SMS_RETRIEVED|SMS_DELIVER|READ_SMS|WAP_PUSH_RECEIVED|RECEIVE_MMS/);
 });
 
 // Phone proof builds (Task 6c) switch on with -P properties in debug only; a plain build and every release build stay as reviewed.

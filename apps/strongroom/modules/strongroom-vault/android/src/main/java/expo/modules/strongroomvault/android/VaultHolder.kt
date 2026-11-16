@@ -43,6 +43,7 @@ object VaultHolder {
   internal const val LAST_UNLOCK_MS = "lastUnlockMs"
   internal const val LOST_SAVES = "lostSaves"
   internal const val KEEP_ALIVE = "keepAliveEnabled"
+  internal const val SMS_FILL = "smsFillEnabled"
   internal const val IMPORTS = "imports"
   private const val INDEX_FILE = "index.bin"
   private const val PENDING_FILE = "pending.bin"

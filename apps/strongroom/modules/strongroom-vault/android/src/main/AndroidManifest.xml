@@ -6,6 +6,9 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- §15.3: fill codes from text messages. The permission is requested from the Settings toggle only, never at setup;
+       only the incoming-message broadcast is handled, never MMS and never the inbox. -->
+  <uses-permission android:name="android.permission.RECEIVE_SMS" />
   <application>
     <service
       android:name="expo.modules.strongroomvault.android.StrongroomAutofillService"
@@ -26,6 +29,14 @@
       android:name="expo.modules.strongroomvault.android.ClipboardClearJob"
       android:exported="false"
       android:permission="android.permission.BIND_JOB_SERVICE" />
+    <!-- §15.3: the code extractor. A protected system broadcast, so only the platform can send it. -->
+    <receiver
+      android:name="expo.modules.strongroomvault.android.SmsReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+      </intent-filter>
+    </receiver>
     <activity
       android:name="expo.modules.strongroomvault.android.UnlockActivity"
       android:exported="false"

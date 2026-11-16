@@ -10,6 +10,7 @@ export interface Status {
   unreadable: number;
   lostSaves: number;
   keepAliveEnabled: boolean;
+  smsFillEnabled: boolean;
 }
 
 export interface Row {
@@ -118,6 +119,8 @@ export interface StrongroomVaultApi {
   setAutoLockMinutes(m: 1 | 5 | 15): void;
   // Keeps the process unfrozen so autofill requests are delivered (see KeepAliveService).
   setKeepAlive(enable: boolean): void;
+  // The RECEIVE_SMS permission is requested from the Settings toggle only, never at setup.
+  setSmsFill(enable: boolean): void;
   changePassword(oldPw: string, newPw: string): Promise<boolean>;
   newRecoveryKey(password: string): Promise<string | null>;
   clearLostSaves(): void;
