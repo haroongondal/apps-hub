@@ -22,6 +22,7 @@ import expo.modules.strongroomvault.core.PasswordGenerator
 import expo.modules.strongroomvault.core.PendingSave
 import expo.modules.strongroomvault.core.Requester
 import expo.modules.strongroomvault.core.Saves
+import expo.modules.strongroomvault.core.TotpFill
 import expo.modules.strongroomvault.core.answerOnce
 import expo.modules.strongroomvault.core.shouldServe
 import expo.modules.strongroomvault.signerSha256
@@ -63,7 +64,7 @@ class StrongroomAutofillService : AutofillService() {
 
   private fun respond(request: FillRequest, read: ReadStructure): FillResponse? {
     val form = FormDetector.detect(read.nodes)
-    if (form.password == null && form.newPassword == null && form.card == null) return null
+    if (form.password == null && form.newPassword == null && form.card == null && form.otp.isEmpty()) return null
     val requester = requester(read, form) ?: return null
     val vault = VaultHolder.get(this)
     if (!vault.isSetUp) return null
@@ -102,6 +103,15 @@ class StrongroomAutofillService : AutofillService() {
       val auth = Datasets.authIntent(this, AuthRequest("pick", null, requester, OTHER_LOGINS), logins)
       response.addDataset(Datasets.locked(logins, present.of(OTHER_LOGINS, null, reserved = true), auth))
       any = true
+    }
+
+    // §15.2: a matching login holding a code offers one dataset that fills every code field; a locked vault offers nothing about its secrets.
+    val otpIds = form.otp.map(read.ids::get)
+    if (otpIds.isNotEmpty() && entries != null) {
+      for ((login, code) in TotpFill.logins(entries.values, requester, System.currentTimeMillis() / 1000)) {
+        response.addDataset(Datasets.code(otpIds, code, present.of(code, login.name)))
+        any = true
+      }
     }
 
     val cards = FillValues.cardRoles(form).mapValues { read.ids[it.value] }

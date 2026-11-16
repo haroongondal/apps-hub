@@ -71,12 +71,18 @@ internal object Datasets {
     return b.build()
   }
 
-  /** Fills a generated password into the new-password field and its repeat box; needs no vault, so it is offered locked or unlocked. */
-  fun suggested(targets: List<AutofillId>, password: String, presentations: Presentations): Dataset {
+  /** Fills one text value into every field of a list: a generated password into new-password boxes, a code into every code field. */
+  private fun same(targets: List<AutofillId>, value: String, presentations: Presentations): Dataset {
     val b = Dataset.Builder(presentations)
-    for (id in targets) b.setField(id, Field.Builder().setValue(AutofillValue.forText(password)).build())
+    for (id in targets) b.setField(id, Field.Builder().setValue(AutofillValue.forText(value)).build())
     return b.build()
   }
+
+  /** Fills a generated password into the new-password field and its repeat box; needs no vault, so it is offered locked or unlocked. */
+  fun suggested(targets: List<AutofillId>, password: String, presentations: Presentations): Dataset = same(targets, password, presentations)
+
+  /** Fills the current authenticator code into every code field on the form (§15.2: unlocked only, and a code is never saved). */
+  fun code(targets: List<AutofillId>, code: String, presentations: Presentations): Dataset = same(targets, code, presentations)
 
   fun locked(targets: Map<String, AutofillId>, presentations: Presentations, auth: IntentSender): Dataset {
     val b = Dataset.Builder(presentations).setAuthentication(auth)
