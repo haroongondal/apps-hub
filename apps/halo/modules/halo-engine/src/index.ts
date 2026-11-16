@@ -41,6 +41,8 @@ interface NativeApi {
   getSettings(): string;
   setSettings(json: string): void;
   setPreview(on: boolean): void;
+  getAodSpike(): boolean;
+  setAodSpike(on: boolean): void;
   listPatterns(): PatternInfo[];
   addListener(event: 'onStatus', listener: (s: Status) => void): Subscription;
 }
@@ -58,6 +60,9 @@ export interface HaloEngineApi {
   setSettings(s: Settings): void;
   /** On while a settings screen is open: the lights show even when switched off, moving by themselves if nothing plays. */
   setPreview(on: boolean): void;
+  /** Diagnostics switch "Test the always-on screen": shows a clock when a locked phone's screen goes off. Off by default. */
+  getAodSpike(): boolean;
+  setAodSpike(on: boolean): void;
   listPatterns(): PatternInfo[];
   addStatusListener(cb: (s: Status) => void): Subscription;
 }
@@ -72,6 +77,8 @@ const HaloEngine: HaloEngineApi = {
   getSettings: () => normalize(JSON.parse(native.getSettings())),
   setSettings: (s) => native.setSettings(JSON.stringify(s)),
   setPreview: (on) => native.setPreview(on),
+  getAodSpike: () => native.getAodSpike() === true,
+  setAodSpike: (on) => native.setAodSpike(on),
   listPatterns: () => native.listPatterns(),
   addStatusListener: (cb) => native.addListener('onStatus', cb),
 };

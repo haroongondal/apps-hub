@@ -16,9 +16,15 @@ class EdgeOverlay(
   private val wm = ctx.getSystemService(WindowManager::class.java)
   private var view: EdgeView? = null
 
-  fun add() {
-    ProbeLog.log(ctx, "overlay", "canDrawOverlays=${Settings.canDrawOverlays(ctx)}")
-    try {
+  val attached get() = view != null
+
+  /** Adds the window; false when it could not (no overlay access yet, or a bad token), so the caller can retry later. */
+  fun add(): Boolean {
+    if (!Settings.canDrawOverlays(ctx)) {
+      ProbeLog.log(ctx, "overlay", "window add skipped: no overlay access")
+      return false
+    }
+    return try {
       val maxOpacity = ctx.getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch
       val v = EdgeView(ctx, source)
       val lp = WindowManager.LayoutParams(
@@ -40,8 +46,10 @@ class EdgeOverlay(
       view = v
       val max = wm.maximumWindowMetrics.bounds
       ProbeLog.log(ctx, "overlay", "window added screen=${max.width()}x${max.height()}")
+      true
     } catch (e: Exception) {
       ProbeLog.log(ctx, "overlay", "window add FAILED ${e.javaClass.name}: ${e.message}")
+      false
     }
   }
 

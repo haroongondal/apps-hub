@@ -9,6 +9,10 @@ class BootReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     ProbeLog.log(context, "boot", "received action=${intent.action}")
     if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+    if (!SettingsStore.serviceWanted(context)) {
+      ProbeLog.log(context, "boot", "not starting: lights off")
+      return
+    }
     try {
       HaloService.start(context, HaloService.SPECIAL_USE, "boot")
     } catch (e: Exception) {

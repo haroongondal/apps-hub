@@ -1,5 +1,6 @@
 package expo.modules.haloengine.android
 
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -17,6 +18,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
+import expo.modules.haloengine.core.Aod
 import expo.modules.haloengine.core.AudioState
 import expo.modules.haloengine.core.AudioWatch
 import expo.modules.haloengine.core.ColorSource
@@ -35,6 +37,7 @@ class HaloService : Service() {
   private var overlay: EdgeOverlay? = null
   private var media: MediaWatch? = null
   private var screenOff: BroadcastReceiver? = null
+  private var aodShownSinceUnlock = false
 
   // Art or wallpaper colours for `derivedFor`; null derived means the source gave nothing, so the palette is used.
   private val worker = Executors.newSingleThreadExecutor()
@@ -76,11 +79,14 @@ class HaloService : Service() {
       stopSelf()
       return START_NOT_STICKY
     }
-    if (running) return START_NOT_STICKY
+    if (running) {
+      attachWindow()
+      return START_NOT_STICKY
+    }
     running = true
     ProbeLog.log(this, "service", "notificationsEnabled=${getSystemService(NotificationManager::class.java).areNotificationsEnabled()}")
-    registerScreenOff()
     onSettings = { s -> main.post { apply(s) } }
+    onRetryWindow = { main.post { attachWindow() } }
     // A listener reconnect leaves the old session watch empty, so it is rebuilt.
     onListener = { main.post { media?.run { stop(); start() } } }
     applySettings(SettingsStore.load(this))
@@ -91,10 +97,13 @@ class HaloService : Service() {
 
   private fun apply(s: Settings) {
     if (!running) return
+    val spike = SettingsStore.aodSpike(this)
+    syncScreenOff(spike)
     if (!s.enabled && !preview) {
       lightsOff()
       ProbeLog.log(this, "service", "lights disabled")
-      stopSelf()
+      // The always-on spike needs the screen-off receiver, which lives as long as this service.
+      if (!spike) stopSelf()
       check()
       return
     }
@@ -104,7 +113,7 @@ class HaloService : Service() {
       patternId = s.pattern
     }
     val first = overlay == null
-    if (first) lightsOn()
+    if (first) lightsOn() else if (overlay?.attached == false) overlay?.add()
     overlay?.apply(s, pattern, currentColors(s))
     if (first || s.colors.source != derivedFor) recomputeColors()
     if (watch.animate(now())) overlay?.kick()
@@ -143,6 +152,14 @@ class HaloService : Service() {
     media?.start()
     runCatching { getSystemService(WallpaperManager::class.java).addOnColorsChangedListener(wallpaperListener, main) }
     startTap()
+  }
+
+  /** Retries only the window add while the lights are on but the window is missing (overlay access granted later). */
+  private fun attachWindow() {
+    val o = overlay ?: return
+    if (o.attached || !o.add()) return
+    o.apply(settings, pattern, currentColors(settings))
+    if (watch.animate(now())) o.kick()
   }
 
   private fun lightsOff() {
@@ -221,10 +238,45 @@ class HaloService : Service() {
     onChange?.invoke()
   }
 
+  /** The screen-off receiver exists only while the Diagnostics switch "Test the always-on screen" is on. */
+  private fun syncScreenOff(spike: Boolean) {
+    if (spike && screenOff == null) {
+      registerScreenOff()
+      ProbeLog.log(this, "aod", "screen-off receiver registered")
+    } else if (!spike && screenOff != null) {
+      unregisterScreenOff()
+      ProbeLog.log(this, "aod", "screen-off receiver removed")
+    }
+  }
+
+  private fun unregisterScreenOff() {
+    screenOff?.let { runCatching { unregisterReceiver(it) } }
+    screenOff = null
+  }
+
   private fun registerScreenOff() {
+    aodShownSinceUnlock = false
     val r = object : BroadcastReceiver() {
       override fun onReceive(context: Context, i: Intent) {
-        ProbeLog.log(context, "aod", "SCREEN_OFF received, launching AodActivity")
+        if (i.action == Intent.ACTION_USER_PRESENT) {
+          aodShownSinceUnlock = false
+          ProbeLog.log(context, "aod", "phone unlocked, the clock may show again")
+          return
+        }
+        val spike = SettingsStore.aodSpike(context)
+        val locked = context.getSystemService(KeyguardManager::class.java).isKeyguardLocked
+        // Launching over an unlocked phone would cancel its pending lock, so the clock only covers a locked one.
+        if (!Aod.shouldLaunch(spike, locked, aodShownSinceUnlock)) {
+          val why = when {
+            !spike -> "switch off"
+            !locked -> "keyguard not locked"
+            else -> "already shown since the last unlock"
+          }
+          ProbeLog.log(context, "aod", "aod skipped: $why")
+          return
+        }
+        aodShownSinceUnlock = true
+        ProbeLog.log(context, "aod", "SCREEN_OFF received, keyguard locked, launching AodActivity")
         try {
           context.startActivity(Intent(context, AodActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
           ProbeLog.log(context, "aod", "startActivity returned without exception")
@@ -233,7 +285,9 @@ class HaloService : Service() {
         }
       }
     }
-    registerReceiver(r, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
+    val filter = IntentFilter(Intent.ACTION_SCREEN_OFF).apply { addAction(Intent.ACTION_USER_PRESENT) }
+    // SystemUI, not the system uid, sends USER_PRESENT, so a not-exported receiver never gets it; both actions are protected broadcasts, so no app can fake them.
+    registerReceiver(r, filter, Context.RECEIVER_EXPORTED)
     screenOff = r
   }
 
@@ -250,8 +304,8 @@ class HaloService : Service() {
   override fun onDestroy() {
     onSettings = null
     onListener = null
-    screenOff?.let { runCatching { unregisterReceiver(it) } }
-    screenOff = null
+    onRetryWindow = null
+    unregisterScreenOff()
     lightsOff()
     worker.shutdownNow()
     running = false
@@ -296,6 +350,13 @@ class HaloService : Service() {
     }
 
     @Volatile var onListener: (() -> Unit)? = null
+
+    @Volatile private var onRetryWindow: (() -> Unit)? = null
+
+    /** Called when the app comes to the front: adds the lights window if an earlier add failed. */
+    fun retryWindow() {
+      onRetryWindow?.invoke()
+    }
 
     /** "ok", "blocked" or "idle"; idle whenever the service is not running. */
     @Volatile var audio = "idle"

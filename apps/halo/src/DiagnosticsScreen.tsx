@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { AppState, PermissionsAndroid, Share } from 'react-native';
 import { Button, Group, Header, Notice, Row, Screen, Text } from '@apps-hub/ui';
 import HaloEngine, { type PermissionKind, type Status } from 'halo-engine';
-import { BackButton } from './Stepper.tsx';
+import { BackButton, SwitchRow } from './Stepper.tsx';
 
 const AUDIO_COPY: Record<Status['audio'], string> = {
   ok: 'Sound is reaching Halo.',
@@ -18,11 +18,19 @@ const SYSTEM_ROWS: { kind: PermissionKind; title: string; key: 'overlayAllowed' 
 export default function DiagnosticsScreen({ onBack }: { onBack: () => void }) {
   const [status, setStatus] = useState<Status>(() => HaloEngine.getStatus());
   const [log, setLog] = useState(() => HaloEngine.probeLog());
+  const [lightsOn, setLightsOn] = useState(() => HaloEngine.getSettings().enabled);
+  const [aodSpike, setAodSpike] = useState(() => HaloEngine.getAodSpike());
 
   const refresh = useCallback(() => {
     setStatus(HaloEngine.getStatus());
     setLog(HaloEngine.probeLog());
+    setLightsOn(HaloEngine.getSettings().enabled);
   }, []);
+
+  const toggleAod = (on: boolean) => {
+    HaloEngine.setAodSpike(on);
+    setAodSpike(on);
+  };
 
   useEffect(() => {
     const sub = HaloEngine.addStatusListener((s) => {
@@ -73,7 +81,20 @@ export default function DiagnosticsScreen({ onBack }: { onBack: () => void }) {
       </Group>
       <Group title="Lights">
         <Row title={status.running ? 'Halo is running' : 'Halo is stopped'} subtitle={AUDIO_COPY[status.audio]} />
-        <Row title={<Button label={status.running ? 'Stop' : 'Start'} variant={status.running ? 'secondary' : 'primary'} block onPress={() => (status.running ? HaloEngine.stop() : HaloEngine.start())} />} />
+        {(status.running || lightsOn) && (
+          <Row title={<Button label={status.running ? 'Stop' : 'Start'} variant={status.running ? 'secondary' : 'primary'} block onPress={() => (status.running ? HaloEngine.stop() : HaloEngine.start())} />} />
+        )}
+      </Group>
+      {!status.running && !lightsOn && (
+        <Notice title="Turn on the lights first">Switch on Edge lights on the home screen, then come back here to start Halo.</Notice>
+      )}
+      <Group title="Test">
+        <SwitchRow
+          title="Test the always-on screen"
+          subtitle="When a locked phone's screen goes off, show the time for 10 seconds."
+          value={aodSpike}
+          onChange={toggleAod}
+        />
       </Group>
       <Group title="Probe log">
         <Row title={<Text variant="data" selectable>{tail || 'The log is empty.'}</Text>} />

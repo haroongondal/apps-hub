@@ -52,7 +52,11 @@ class HaloEngineModule : Module() {
 
     Function("stop") { HaloService.stop(context) }
 
-    Function("getStatus") { status() }
+    // The app calls this when it comes to the front, which is when overlay access may have just been granted.
+    Function("getStatus") {
+      HaloService.retryWindow()
+      status()
+    }
 
     Function("openPermission") { kind: String ->
       open(
@@ -75,6 +79,10 @@ class HaloEngineModule : Module() {
     Function("setSettings") { json: String -> SettingsStore.write(context, json) }
 
     Function("setPreview") { on: Boolean -> HaloService.setPreview(context, on) }
+
+    Function("getAodSpike") { SettingsStore.aodSpike(context) }
+
+    Function("setAodSpike") { on: Boolean -> SettingsStore.setAodSpike(context, on) }
 
     // Names are the ids in plain words ("pulse-ring" -> "Pulse ring"), so the app never hard-codes ids.
     Function("listPatterns") {

@@ -6,7 +6,11 @@ import android.service.notification.NotificationListenerService
 class HaloListener : NotificationListenerService() {
   override fun onListenerConnected() {
     ProbeLog.log(this, "listener", "onListenerConnected serviceRunning=${HaloService.running}")
-    if (!HaloService.running) HaloService.start(this, HaloService.MEDIA_PLAYBACK, "listener") else HaloService.onListener?.invoke()
+    when {
+      HaloService.running -> HaloService.onListener?.invoke()
+      SettingsStore.serviceWanted(this) -> HaloService.start(this, HaloService.MEDIA_PLAYBACK, "listener")
+      else -> ProbeLog.log(this, "listener", "not starting: lights off")
+    }
   }
 
   override fun onListenerDisconnected() {
