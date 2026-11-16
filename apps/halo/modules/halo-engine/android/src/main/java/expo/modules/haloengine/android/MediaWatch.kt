@@ -30,6 +30,8 @@ class MediaWatch(private val ctx: Context, private val onChange: () -> Unit, pri
   }
 
   private val sessions = MediaSessionManager.OnActiveSessionsChangedListener { track(it.orEmpty()) }
+  private var retries = 0
+  private val retry = Runnable { start() }
 
   fun start() {
     if (available) return
@@ -38,13 +40,21 @@ class MediaWatch(private val ctx: Context, private val onChange: () -> Unit, pri
       msm.addOnActiveSessionsChangedListener(sessions, component, main)
       available = true
       track(msm.getActiveSessions(component))
+      retries = 0
       ProbeLog.log(ctx, "media", "watching sessions=${controllers.size}")
     } catch (e: SecurityException) {
-      ProbeLog.log(ctx, "media", "no listener access, playing state unknown: ${e.message}")
+      // Right after listener access is granted the first call can still be refused, so try again a few times.
+      if (available) runCatching { msm.removeOnActiveSessionsChangedListener(sessions) }
+      available = false
+      val delay = RETRY_MS.getOrNull(retries++)
+      ProbeLog.log(ctx, "media", "no listener access attempt=$retries ${if (delay != null) "retry in ${delay}ms" else "giving up until the listener reconnects"}: ${e.message}")
+      if (delay != null) main.postDelayed(retry, delay)
     }
   }
 
   fun stop() {
+    main.removeCallbacks(retry)
+    retries = 0
     if (available) runCatching { msm.removeOnActiveSessionsChangedListener(sessions) }
     controllers.forEach { it.unregisterCallback(callback) }
     controllers = emptyList()
@@ -68,5 +78,9 @@ class MediaWatch(private val ctx: Context, private val onChange: () -> Unit, pri
     playingApp = app
     ProbeLog.log(ctx, "media", "playing=${app ?: "none"}")
     onChange()
+  }
+
+  private companion object {
+    val RETRY_MS = longArrayOf(1_000L, 2_000L, 4_000L)
   }
 }
