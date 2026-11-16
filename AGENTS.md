@@ -155,6 +155,9 @@ cd apps/strongroom/android && JAVA_HOME=$JAVA_HOME ./gradlew \
 # Native compile gate (Inflow):
 cd apps/inflow/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :inflow-core:testDebugUnitTest :app:assembleDebug
+# Native compile gate (PDF Editor mobile; the Scan module's JVM tests):
+cd apps/pdf-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
+  :pdf-scan:testDebugUnitTest :app:assembleDebug
 # Native compile gate (Design Editor mobile):
 cd apps/design-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :design-media:testDebugUnitTest :app:assembleDebug

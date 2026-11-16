@@ -1,0 +1,28 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.pdfscan'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.pdfscan"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // CameraX, Apache-2.0, no Play Services (SPEC §2, approved 2026-10-31).
+  def camerax = "1.6.2"
+  implementation("androidx.camera:camera-core:$camerax")
+  implementation("androidx.camera:camera-camera2:$camerax")
+  implementation("androidx.camera:camera-lifecycle:$camerax")
+  implementation("androidx.camera:camera-view:$camerax")
+  testImplementation("junit:junit:4.13.2")
+}

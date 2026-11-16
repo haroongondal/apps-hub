@@ -72,6 +72,7 @@ coverage/
 /apps/strongroom/android/local.properties
 /apps/strongroom/android/**/.cxx/
 /apps/strongroom/modules/*/android/build/
+/apps/pdf-editor-mobile/modules/*/android/build/
 /apps/strongroom/.expo/
 /apps/inflow/android/.gradle/
 /apps/inflow/android/app/build/
