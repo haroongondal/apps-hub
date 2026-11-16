@@ -20,7 +20,9 @@ test('screenshotName: path characters, controls, dots and length cannot change t
   assert.equal(screenshotName('a'.repeat(119) + ' b', 5), 'a'.repeat(119) + ' 0-05.png', 'a cut that ends in a space leaves one space');
   assert.equal(screenshotName('\u0000ctrl', 1), 'ctrl 0-01.png');
   assert.equal(screenshotName('a\tb\nc', 1), 'a b c 0-01.png');
-  assert.equal(screenshotName('😀'.repeat(200), 1), '😀'.repeat(120) + ' 0-01.png', 'a cut never splits a character');
+  assert.equal(screenshotName('😀'.repeat(200), 1), '😀'.repeat(50) + ' 0-01.png', 'a cut never splits a character, and stops at 200 UTF-8 bytes');
+  assert.equal(screenshotName('é'.repeat(150), 1), 'é'.repeat(100) + ' 0-01.png', '2-byte characters stop at 200 bytes too');
+  assert.ok(new TextEncoder().encode(screenshotName('😀'.repeat(200), 3723)).length <= 255, 'the whole name fits a 255-byte file name');
 });
 
 test('screenshotName: characters Chrome refuses in a download name are gone (~, control and format characters)', () => {
@@ -34,6 +36,8 @@ test('screenshotName: characters Chrome refuses in a download name are gone (~, 
   assert.equal(screenshotName('a\u{e0067}b', 5), 'ab 0-05.png', 'a tag character');
   assert.equal(screenshotName('\u200f\u200f', 5), 'YouTube video 0-05.png', 'only format characters is an empty title');
   assert.equal(screenshotName('~~hidden', 5), 'hidden 0-05.png');
+  assert.equal(screenshotName('a\ud800b\udfffc', 5), 'a b c 0-05.png', 'lone surrogates');
+  assert.equal(screenshotName('a\ue000b', 5), 'a b 0-05.png', 'a private-use character');
 });
 
 test('isPngDataUrl', () => {

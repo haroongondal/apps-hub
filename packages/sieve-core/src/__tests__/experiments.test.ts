@@ -13,8 +13,17 @@ test('parseFlagOverrides: names, types, comments and blanks', () => {
 test('parseFlagOverrides: errors carry the line number', () => {
   assert.deepEqual(parseFlagOverrides('novalue').errors, [{ line: 1, reason: 'Write it as name=value.' }]);
   assert.deepEqual(parseFlagOverrides('ok=1\nbad name!=1').errors, [{ line: 2, reason: 'Flag names use letters, digits and underscores.' }]);
-  assert.deepEqual(parseFlagOverrides('a=\n=1\na=x&b=true').errors.map((e) => e.line), [1, 2, 3]);
+  assert.deepEqual(parseFlagOverrides('=1\na=x&b=true').errors.map((e) => e.line), [1, 2]);
   assert.deepEqual(parseFlagOverrides('a=x&b=true').flags, {});
+});
+
+test('parseFlagOverrides: an empty value is the empty string, as many real flags are; =, + and % in a value are refused', () => {
+  assert.deepEqual(parseFlagOverrides('a=\nb = ').flags, { a: '', b: '' });
+  assert.deepEqual(parseFlagOverrides('a=\nb = ').errors, []);
+  assert.equal(patchSerialized('x=1', parseFlagOverrides('a=').flags), 'x=1&a=');
+  const odd = parseFlagOverrides('a=b=c\nd=1+2\ne=50%');
+  assert.deepEqual(odd.flags, {});
+  assert.deepEqual(odd.errors, [1, 2, 3].map((line) => ({ line, reason: 'Values cannot contain &, =, + or %.' })));
 });
 
 test('parseFlagOverrides: __proto__ is an own property, not a prototype change', () => {

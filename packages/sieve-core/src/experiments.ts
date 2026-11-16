@@ -25,9 +25,10 @@ export function parseFlagOverrides(text: string): { flags: Record<string, FlagVa
     const eq = line.indexOf('=');
     const name = eq < 0 ? '' : line.slice(0, eq).trim();
     const value = eq < 0 ? '' : line.slice(eq + 1).trim();
-    if (eq < 0 || value === '') errors.push({ line: i + 1, reason: 'Write it as name=value.' });
+    // An empty value stays '' (many real flags are empty); = + % are refused because how the player decodes them is not inspected.
+    if (eq < 0) errors.push({ line: i + 1, reason: 'Write it as name=value.' });
     else if (!NAME.test(name)) errors.push({ line: i + 1, reason: 'Flag names use letters, digits and underscores.' });
-    else if (value.includes('&')) errors.push({ line: i + 1, reason: 'Values cannot contain &.' });
+    else if (/[&=+%]/.test(value)) errors.push({ line: i + 1, reason: 'Values cannot contain &, =, + or %.' });
     else put(flags, name, value === 'true' ? true : value === 'false' ? false : NUMBER.test(value) && Number.isFinite(Number(value)) ? Number(value) : value);
   });
   return { flags, errors };
