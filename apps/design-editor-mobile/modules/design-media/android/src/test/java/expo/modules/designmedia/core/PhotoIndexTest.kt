@@ -138,6 +138,30 @@ class PhotoIndexTest {
   }
 
   @Test
+  fun diffDropsDuplicateRows() {
+    val first = row(1)
+    val d = diff(listOf(first.key, row(2).key), listOf(first, row(1, fill = 9), row(2), row(2)))
+    assertEquals(listOf(1L, 2L), d.keep.map { it.key.id })
+    assertTrue(d.keep[0] === first)
+    assertEquals(emptyList<PhotoKey>(), d.toEmbed)
+  }
+
+  @Test
+  fun aPhotoScanFailureTalksAboutPhotos() {
+    assertEquals(Messages.PHOTOS_FAILED, failureMessage(PhotoIndexPlan))
+    assertEquals(Messages.COULDNT_PROCESS, failureMessage(FramePlan(1.0, "png", "png")))
+  }
+
+  @Test
+  fun aPhotoScanLeavesTheCbrChoiceAlone() {
+    val video = photoIndexJob("v").copy(plan = FramePlan(1.0, "png", "png"))
+    assertTrue(cbrOnlyAfter(true, listOf(photoIndexJob("p")), false))
+    assertFalse(cbrOnlyAfter(false, listOf(photoIndexJob("p")), true))
+    assertFalse(cbrOnlyAfter(true, listOf(photoIndexJob("p"), video), false))
+    assertTrue(cbrOnlyAfter(false, listOf(video), true))
+  }
+
+  @Test
   fun backOffRule() {
     assertTrue(shouldPause(19, false, 0))
     assertFalse(shouldPause(19, true, 0))

@@ -29,6 +29,8 @@ import expo.modules.designmedia.core.QueueStore
 import expo.modules.designmedia.core.SizePlan
 import expo.modules.designmedia.core.VBR
 import expo.modules.designmedia.core.decodeJobs
+import expo.modules.designmedia.core.cbrOnlyAfter
+import expo.modules.designmedia.core.failureMessage
 import expo.modules.designmedia.core.firstMode
 import expo.modules.designmedia.core.neededBytes
 import expo.modules.designmedia.core.nextGifAttempt
@@ -124,10 +126,10 @@ class MediaJobService : Service() {
   }
 
   private fun enqueue(json: String, cbr: Boolean) {
-    cbrOnly = cbr
     val jobs = decodeJobs(json).map {
       it.copy(state = JobState.QUEUED, progress = 0.0, attempt = 1, outputs = emptyList(), error = null)
     }
+    cbrOnly = cbrOnlyAfter(cbrOnly, jobs, cbr)
     record(QueueEvent.Enqueue(jobs))
   }
 
@@ -183,7 +185,7 @@ class MediaJobService : Service() {
       r.runner = Runners.start(request) { outcome -> finishedWith(r, out, outcome) }
     } catch (e: Exception) {
       Log.w(TAG, "${r.plan.tool} did not start", e)
-      fail(r.job.id, Messages.COULDNT_PROCESS)
+      fail(r.job.id, failureMessage(r.plan))
       pump()
       return
     }
@@ -198,7 +200,7 @@ class MediaJobService : Service() {
     when (outcome) {
       is Outcome.Failed -> {
         Log.w(TAG, "${r.plan.tool} failed: ${outcome.detail}")
-        if (outcome.detail == PhotoIndexRunner.MODELS_MISSING) giveUp(r, Messages.TOOL_MISSING) else encoderFailed(r, Messages.COULDNT_PROCESS)
+        if (outcome.detail == PhotoIndexRunner.MODELS_MISSING) giveUp(r, Messages.TOOL_MISSING) else encoderFailed(r, failureMessage(r.plan))
       }
       is Outcome.Written -> {
         r.label = outcome.label
