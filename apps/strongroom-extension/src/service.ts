@@ -110,6 +110,7 @@ const NOT_READY = 'Wait for the 24-hour release, then come back and try again.';
 const SIGNIN_CLAIM = 'signinClaim';
 const SIGNIN_BLOB = 'signinBlob';
 const SIGNIN_DEVICE = 'Strongroom for Chrome';
+const SIGNIN_APPROVED = 'This sign-in is already approved. Check again instead of asking again.';
 const SIGNIN_NOT_READY = 'Approve the sign-in from the email first, then check again.';
 const LOST_STILL_ALIVE = 'A lost-access request is already confirmed, or ready to open. Check again instead of starting a new one.';
 const noop = () => {};
@@ -530,6 +531,12 @@ export function createService(deps: Deps) {
   // A new device asks by email; the owner approves from the mail, and the Worker then hands over the account key sealed under the enrolment code.
   async function emailSignInRequest(): Promise<null> {
     const { transport } = unavailable();
+    // As lostAccessRequest: never drop a claim the server has approved (a stale "Ask again" click).
+    const existing = await deps.settings.get(SIGNIN_CLAIM);
+    if (existing) {
+      const released = await transport.signinRelease(existing);
+      if (released.state === 'ready' || released.releaseAt !== null) throw new UserError(SIGNIN_APPROVED);
+    }
     const claim = randomBytes(CLAIM_BYTES);
     // Network first, as lostAccessRequest: a failed request leaves an earlier claim intact.
     await transport.signinRequest(tokenHash(claim), SIGNIN_DEVICE);
@@ -542,6 +549,8 @@ export function createService(deps: Deps) {
     const { transport } = unavailable();
     const claim = await deps.settings.get(SIGNIN_CLAIM);
     if (!claim) return { state: 'none' };
+    // Already released here: the server forgets it an hour later, but this device can still use it.
+    if (await deps.settings.get(SIGNIN_BLOB)) return { state: 'ready' };
     const released = await transport.signinRelease(claim);
     if (released.state === 'waiting') return released;
     await deps.settings.set(SIGNIN_BLOB, released.blob);

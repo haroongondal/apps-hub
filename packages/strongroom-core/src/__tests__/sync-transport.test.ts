@@ -182,6 +182,16 @@ test('aTimeoutIsOfflineWhenPreloginDoesNotAnswerEither', async (t) => {
   await assert.rejects(pull, SyncOfflineError);
 });
 
+test('aTimeoutIsOfflineWhenPreloginAnswersWithAServerError', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const fn = (async (input: string | URL | Request, init?: RequestInit) =>
+    String(input).endsWith('/v1/prelogin') ? new Response('{}', { status: 500 }) : held(init)) as typeof fetch;
+  const pull = fetchTransport('https://vault.example', fn).pull(TOKEN, 0);
+  await flush();
+  t.mock.timers.tick(30_000);
+  await assert.rejects(pull, SyncOfflineError);
+});
+
 test('aTimedOutPushOrANetworkErrorIsStillOffline', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const fn = (async (input: string | URL | Request, init?: RequestInit) =>

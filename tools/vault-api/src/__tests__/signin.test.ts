@@ -227,7 +227,7 @@ test('the same claim twice is one request and one mail', async () => {
   await setUp(w);
   await enrol(w);
   const { claim } = await requested(w);
-  await w.request(claim);
+  assert.deepEqual(await w.request(claim), { status: 200, body: { ok: true } });
   assert.equal(w.mails.length, 1);
   assert.equal(w.rows('signin_request').length, 1);
 });

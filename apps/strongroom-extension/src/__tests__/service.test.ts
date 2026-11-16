@@ -1228,6 +1228,18 @@ test('a wrong code or password leaves the released blob in place so the device c
   assert.equal(await emailSignIn(fresh, 'open', { code, password: PHONE_PASSWORD }), null);
 });
 
+test('asking again never drops an approved sign-in, and a released blob stays usable after the server forgets it', async () => {
+  const { world, code } = await emailEnrolled();
+  const fresh = extension(world);
+  await emailSignIn(fresh, 'request');
+  await approveByEmail(world);
+  await assert.rejects(emailSignIn(fresh, 'request'), /already approved/);
+  assert.deepEqual(await emailSignIn(fresh, 'check'), { state: 'ready' });
+  world.sqlite.exec('DELETE FROM signin_request');
+  assert.deepEqual(await emailSignIn(fresh, 'check'), { state: 'ready' });
+  assert.equal(await emailSignIn(fresh, 'open', { code, password: PHONE_PASSWORD }), null);
+});
+
 test('emailSignIn is refused from a page', async () => {
   const { call } = await unlocked();
   for (const action of ['request', 'check', 'open']) {

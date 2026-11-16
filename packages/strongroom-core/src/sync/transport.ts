@@ -62,7 +62,7 @@ export function fetchTransport(baseUrl: string, fetchFn: typeof fetch = fetch): 
       text = await res.text();
     } catch {
       // The Worker holds refused tokens in a queue and answers right ones at once, so a token GET with no reply while the public prelogin answers is a refusal.
-      if (abort.signal.aborted && status === undefined && auth instanceof Uint8Array && body === undefined && (await answers('/v1/prelogin'))) throw new SyncAuthError();
+      if (abort.signal.aborted && status === undefined && method === 'GET' && auth instanceof Uint8Array && (await answers('/v1/prelogin'))) throw new SyncAuthError();
       throw new SyncOfflineError();
     } finally {
       clearTimeout(timer);
@@ -78,8 +78,9 @@ export function fetchTransport(baseUrl: string, fetchFn: typeof fetch = fetch): 
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), PROBE_MS);
     try {
-      await fetchFn(new URL(path, baseUrl), { signal: abort.signal });
-      return true;
+      // 200 and 404 are prelogin's only real answers; a 5xx means the server is unwell, so the caller stays offline.
+      const { status } = await fetchFn(new URL(path, baseUrl), { signal: abort.signal });
+      return status === 200 || status === 404;
     } catch {
       return false;
     } finally {
