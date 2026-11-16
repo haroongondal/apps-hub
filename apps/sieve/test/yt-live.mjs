@@ -11,11 +11,19 @@ const ARGS = ['--autoplay-policy=no-user-gesture-required'];
 const MIN_RATIO = 0.6;
 const MIN_CONTROL_S = 5;
 
-// control.playedTo is the furthest the control got (an ad's own clock can reset it); sieve.endedAt is where the video was when the window closed.
+// The window opens at domcontentloaded, so it also holds the wait for the first frame, and that wait swung from 0 to 20 s
+// without Sieve and with it (30 live runs, 2026-11-17); once a video had started it never stalled in either browser.
+// So the check measures playback from the video's own first frame (`sieve.content`: window second and video time of the
+// first and last frame sampled without an ad) and reports when each browser started. control.playedTo, the furthest the
+// control got (an ad's clock counts), only shows that YouTube served this address a video.
 export function judgePlayback(control, sieve) {
   if (!(control.playedTo > MIN_CONTROL_S)) return { verdict: 'inconclusive', ratio: null, text: `the control only reached ${control.playedTo} s, so playback cannot be compared` };
-  const ratio = sieve.endedAt / control.playedTo;
-  return { verdict: ratio >= MIN_RATIO ? 'pass' : 'fail', ratio, text: `with Sieve ${sieve.endedAt} s at the end of the window, the control ${control.playedTo} s, ratio ${ratio.toFixed(2)} (needs ${MIN_RATIO})` };
+  const c = sieve.content;
+  const span = c ? c.lastAt - c.at : 0;
+  const starts = control.content ? `the control's video started at ${control.content.at} s` : 'the control showed only an ad';
+  if (!c || span < MIN_CONTROL_S) return { verdict: 'fail', ratio: null, text: `with Sieve the video ${c ? `only started at ${c.at} s` : 'never started'} in the ${SECONDS} s window, ${starts}` };
+  const ratio = (c.to - c.from) / span;
+  return { verdict: ratio >= MIN_RATIO ? 'pass' : 'fail', ratio, text: `with Sieve it started at ${c.at} s and played ${(c.to - c.from).toFixed(1)} s of video in the next ${span.toFixed(1)} s, ratio ${ratio.toFixed(2)} (needs ${MIN_RATIO}); ${starts}` };
 }
 
 // Exit status: 1 when a check failed, 2 when no video gave evidence (every one skipped or inconclusive), else 0.
@@ -26,15 +34,20 @@ export function exitCode({ failed, videos, skipped, inconclusive }) {
 
 if (process.argv.includes('--self-check')) {
   const assert = (await import('node:assert/strict')).default;
-  assert.equal(judgePlayback({ playedTo: 28 }, { endedAt: 27 }).verdict, 'pass');
-  assert.equal(judgePlayback({ playedTo: 28 }, { endedAt: 17 }).verdict, 'pass', '17/28 = 0.61');
-  assert.equal(judgePlayback({ playedTo: 28 }, { endedAt: 16 }).verdict, 'fail', '16/28 = 0.57');
-  assert.equal(judgePlayback({ playedTo: 28 }, { endedAt: 6 }).verdict, 'fail', 'a stall past 5 s no longer passes');
-  assert.equal(judgePlayback({ playedTo: 4 }, { endedAt: 28 }).verdict, 'inconclusive', 'a control that did not play cannot be compared');
-  assert.equal(judgePlayback({ playedTo: 0 }, { endedAt: 0 }).verdict, 'inconclusive');
-  assert.equal(judgePlayback({ playedTo: 10 }, { endedAt: 6 }).verdict, 'pass', 'a ratio of exactly 0.6 passes');
-  assert.equal(judgePlayback({ playedTo: 5 }, { endedAt: 5 }).verdict, 'inconclusive', 'a control of exactly 5 s cannot be compared');
-  assert.equal(judgePlayback({ playedTo: 28 }, { endedAt: null }).verdict, 'fail', 'no end time with Sieve is a failure');
+  const played = (at, from, lastAt, to) => ({ endedAt: Math.round(to), content: { at, from, lastAt, to } }); // endedAt: what the window-end measure saw
+  assert.equal(judgePlayback({ playedTo: 28 }, played(1, 0.5, 30, 29.5)).verdict, 'pass');
+  assert.equal(judgePlayback({ playedTo: 29 }, played(17, 0.6, 29.5, 13.1)).verdict, 'pass', 'run 2: a first frame at 17 s, then steady playback (was 13/29 = 0.45)');
+  assert.equal(judgePlayback({ playedTo: 29 }, played(20.6, 0.9, 30, 10.2)).verdict, 'pass', 'a first frame at 20.6 s (seen 2026-11-17), then steady playback');
+  assert.equal(judgePlayback({ playedTo: 28 }, played(1, 0.5, 30, 18.3)).verdict, 'pass', '17.8/29 = 0.61');
+  assert.equal(judgePlayback({ playedTo: 28 }, played(1, 0.5, 30, 17.3)).verdict, 'fail', '16.8/29 = 0.58');
+  assert.equal(judgePlayback({ playedTo: 28 }, played(1, 0.5, 30, 6)).verdict, 'fail', 'a stall after the first frame fails');
+  assert.equal(judgePlayback({ playedTo: 10 }, played(1, 0, 11, 6)).verdict, 'pass', 'a ratio of exactly 0.6 passes');
+  assert.equal(judgePlayback({ playedTo: 28 }, { content: null }).verdict, 'fail', 'a video that never started with Sieve fails');
+  assert.equal(judgePlayback({ playedTo: 28 }, played(26, 0.5, 30, 4.5)).verdict, 'fail', 'a first frame under 5 s before the end shows no playback: a failure');
+  assert.equal(judgePlayback({ playedTo: 17, content: null }, played(5.5, 0.4, 30, 24.9)).verdict, 'pass', 'a control that showed only an ad still lets the check run');
+  assert.equal(judgePlayback({ playedTo: 4 }, played(1, 0.5, 30, 29.5)).verdict, 'inconclusive', 'a control that did not play cannot be compared');
+  assert.equal(judgePlayback({ playedTo: 0 }, { content: null }).verdict, 'inconclusive');
+  assert.equal(judgePlayback({ playedTo: 5 }, played(1, 0.5, 30, 29.5)).verdict, 'inconclusive', 'a control of exactly 5 s cannot be compared');
   assert.equal(exitCode({ failed: 0, videos: 3, skipped: 3, inconclusive: 0 }), 2, 'all skipped is no evidence');
   assert.equal(exitCode({ failed: 0, videos: 3, skipped: 1, inconclusive: 2 }), 2, 'skipped plus inconclusive is no evidence');
   assert.equal(exitCode({ failed: 0, videos: 3, skipped: 1, inconclusive: 1 }), 0);
@@ -45,7 +58,7 @@ if (process.argv.includes('--self-check')) {
 
 async function watch(ctx, id) {
   const page = await ctx.newPage();
-  const row = { id, seconds: 0, adShowing: false, botCheck: false, consent: false, playedTo: 0, endedAt: 0 };
+  const row = { id, seconds: 0, adShowing: false, botCheck: false, consent: false, playedTo: 0, endedAt: 0, content: null };
   try {
     await page.goto(`https://www.youtube.com/watch?v=${id}`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     const start = Date.now();
@@ -62,6 +75,10 @@ async function watch(ctx, id) {
         row.botCheck ||= s.bot;
         row.playedTo = Math.max(row.playedTo, Math.round(s.time));
         row.endedAt = Math.round(s.time);
+        const at = Math.round((Date.now() - start) / 100) / 10;
+        const time = Math.round(s.time * 10) / 10;
+        // The video's own first frame: an ad's clock (ad-showing) and the 0 s of the load are not playback.
+        if (!s.ad && s.time > 0.5) row.content = row.content ? { ...row.content, lastAt: at, to: time } : { at, from: time, lastAt: at, to: time };
       }
       await sleep(500);
     }
