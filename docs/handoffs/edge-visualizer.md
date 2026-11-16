@@ -41,18 +41,21 @@ APK copy: scratchpad only (not committed). Manifest dump via aapt2 `dump xmltree
 
 ## File map
 - docs/handoffs/edge-visualizer.md (this file)
-- docs/superpowers/specs/2026-11-17-edge-visualizer-design.md (design, draft, awaiting owner approval)
+- docs/superpowers/specs/2026-11-17-edge-visualizer-design.md (design, APPROVED 2026-11-17)
+- docs/superpowers/plans/2026-11-17-halo.md (plan for stages 1-2; stages 3-5 get a plan after the spike)
+- Worktree: ~/Documents/apps-hub-wt/halo, branch `halo` (off main 226a947)
 - Phone serial for coord: run `adb shell getprop ro.serialno` (phone runs Android 16).
 
 ## Session log
 - 2026-11-17: pulled APK, mapped mechanisms and features (above). Owner chose v1 scope and apps-hub. Brainstorming started; owner asked for a new-chat prompt to start building.
 
 ## Session log (cont.)
-- 2026-11-17 (session 2): owner asked for full replica, picked approach A. Design doc written; builder check done and folded in; owner answered release + Muviz questions.
+- 2026-11-17 (session 2): owner asked for full replica, picked approach A. Design doc written; builder check done and folded in; owner answered release + Muviz questions. Design approved; plan written.
 
 ## Current state + next step (2026-11-17, session 2)
-Design doc drafted at docs/superpowers/specs/2026-11-17-edge-visualizer-design.md. Next: get owner approval of the design doc, then superpowers:writing-plans (plan at docs/superpowers/plans/2026-11-17-halo.md), then stage 1 spike.
-Work goes on a new branch/worktree off main (the main checkout is shared and on another session's branch).
+Owner approved the design. Worktree + branch `halo` created; design, handoff and plan committed there.
+Plan for stages 1-2 written (docs/superpowers/plans/2026-11-17-halo.md), awaiting owner review + execution choice.
+Next: on owner OK, execute Task 1 (scaffold). Task 3 needs the owner's go to `pnpm release store` (Store must learn the `halo` id).
 
 ## Previous state (session 1, superseded)
 Owner asked for a new chat to start building. Already told to the owner and accepted without objection:
