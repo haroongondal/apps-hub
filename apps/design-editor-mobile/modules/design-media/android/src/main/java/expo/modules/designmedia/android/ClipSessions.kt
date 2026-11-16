@@ -25,6 +25,14 @@ object ClipSessions {
     text = null
   }
 
+  @Synchronized fun releaseImage() {
+    image?.close()
+    image = null
+  }
+
+  // Shares the lock with releaseText, so the session can't be closed while a search is using it.
+  @Synchronized fun embedQuery(ctx: Context, ids: IntArray): FloatArray = embedText(text(ctx), ids)
+
   fun embedImage(s: OrtSession, tensor: FloatArray): FloatArray =
     OnnxTensor.createTensor(env, FloatBuffer.wrap(tensor), longArrayOf(1, 3, 224, 224)).use { input ->
       s.run(mapOf("pixel_values" to input)).use { embeds(it, "image_embeds") }
