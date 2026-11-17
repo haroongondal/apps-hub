@@ -52,12 +52,22 @@ class HaloEngineModule : Module() {
     // The service outlives React on purpose (it is the product); only the event hook is dropped.
     OnDestroy { HaloService.onChange = null }
 
-    Function("start") { HaloService.start(context, HaloService.MEDIA_PLAYBACK, "button") }
+    Function("start") {
+      HaloService.stoppedByUser = false
+      HaloService.start(context, HaloService.MEDIA_PLAYBACK, "button")
+    }
 
-    Function("stop") { HaloService.stop(context) }
+    Function("stop") {
+      HaloService.stoppedByUser = true
+      HaloService.stop(context)
+    }
 
     // The app calls this when it comes to the front, which is when overlay access may have just been granted.
+    // It also brings a killed service back (phone bug 2026-11-18), unless the owner pressed Stop in this process.
     Function("getStatus") {
+      if (!HaloService.running && !HaloService.stoppedByUser && SettingsStore.serviceWanted(context)) {
+        HaloService.start(context, HaloService.MEDIA_PLAYBACK, "app")
+      }
       HaloService.retryWindow()
       status()
     }
@@ -84,10 +94,6 @@ class HaloEngineModule : Module() {
     Function("setSettings") { json: String -> SettingsStore.write(context, json) }
 
     Function("setPreview") { on: Boolean -> HaloService.setPreview(context, on) }
-
-    Function("getAodSpike") { SettingsStore.aodSpike(context) }
-
-    Function("setAodSpike") { on: Boolean -> SettingsStore.setAodSpike(context, on) }
 
     // Launchable apps for the per-app lists: apps that have notified first, then by label.
     AsyncFunction("listApps") {

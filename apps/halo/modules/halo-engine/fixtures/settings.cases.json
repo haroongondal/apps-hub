@@ -60,7 +60,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -162,7 +286,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -249,7 +497,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -336,7 +708,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -415,7 +911,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -511,7 +1131,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -579,7 +1323,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -655,7 +1523,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -726,7 +1718,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -794,7 +1910,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -870,7 +2110,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -939,7 +2303,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -1005,7 +2493,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -1071,7 +2683,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -1137,7 +2873,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -1203,7 +3063,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -1271,7 +3255,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -1350,7 +3458,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -1429,7 +3661,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -1495,7 +3851,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -1572,7 +4052,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -1691,7 +4295,131 @@
     "calls": false,
     "batterySaver": false,
     "pocket": true
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -1763,7 +4491,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -1834,7 +4686,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -1936,7 +4912,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -2004,7 +5104,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -2072,7 +5296,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -2140,7 +5488,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -2209,7 +5681,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -2278,7 +5874,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -2347,7 +6067,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -2415,7 +6259,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -2483,7 +6451,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -2577,7 +6669,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -2657,7 +6873,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -8232,7 +12572,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -8299,7 +12763,131 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
-   }
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
   }
  },
  {
@@ -8376,7 +12964,5668 @@
     "calls": true,
     "batterySaver": true,
     "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "aod and themes missing give defaults and the four starter themes",
+  "input": {
+   "version": 1,
+   "enabled": true
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "aod full valid is kept",
+  "input": {
+   "aod": {
+    "enabled": true,
+    "timeoutSec": 900,
+    "trigger": "charging",
+    "schedule": {
+     "on": true,
+     "start": "23:30",
+     "end": "06:15"
+    },
+    "themeId": "pulse",
+    "slots": [
+     {
+      "start": "06:00",
+      "themeId": "mono"
+     },
+     {
+      "start": "18:00",
+      "themeId": "night"
+     }
+    ]
    }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": true,
+    "timeoutSec": 900,
+    "trigger": "charging",
+    "schedule": {
+     "on": true,
+     "start": "23:30",
+     "end": "06:15"
+    },
+    "themeId": "pulse",
+    "slots": [
+     {
+      "start": "06:00",
+      "themeId": "mono"
+     },
+     {
+      "start": "18:00",
+      "themeId": "night"
+     }
+    ]
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "timeout null means never stop",
+  "input": {
+   "aod": {
+    "timeoutSec": null
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": null,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "timeout 10 is kept",
+  "input": {
+   "aod": {
+    "timeoutSec": 10
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 10,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "timeout 1800 is kept",
+  "input": {
+   "aod": {
+    "timeoutSec": 1800
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 1800,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "timeout 45 becomes 30",
+  "input": {
+   "aod": {
+    "timeoutSec": 45
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "timeout of the wrong type becomes 30",
+  "input": {
+   "aod": {
+    "timeoutSec": "60"
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "aod of the wrong type gives defaults",
+  "input": {
+   "aod": "on"
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "unknown trigger becomes always",
+  "input": {
+   "aod": {
+    "trigger": "plugged"
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "music trigger is kept",
+  "input": {
+   "aod": {
+    "trigger": "music"
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "music",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "bad schedule times fall back and a non-boolean switch is off",
+  "input": {
+   "aod": {
+    "schedule": {
+     "on": 1,
+     "start": "24:00",
+     "end": "7:5"
+    }
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "aod theme id with bad characters becomes night",
+  "input": {
+   "aod": {
+    "themeId": "Night!"
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "slots beyond four are cut",
+  "input": {
+   "aod": {
+    "slots": [
+     {
+      "start": "01:00",
+      "themeId": "mono"
+     },
+     {
+      "start": "02:00",
+      "themeId": "mono"
+     },
+     {
+      "start": "03:00",
+      "themeId": "mono"
+     },
+     {
+      "start": "04:00",
+      "themeId": "mono"
+     },
+     {
+      "start": "05:00",
+      "themeId": "mono"
+     },
+     {
+      "start": "06:00",
+      "themeId": "mono"
+     }
+    ]
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": [
+     {
+      "start": "01:00",
+      "themeId": "mono"
+     },
+     {
+      "start": "02:00",
+      "themeId": "mono"
+     },
+     {
+      "start": "03:00",
+      "themeId": "mono"
+     },
+     {
+      "start": "04:00",
+      "themeId": "mono"
+     }
+    ]
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "bad slots are dropped",
+  "input": {
+   "aod": {
+    "slots": [
+     {
+      "start": "25:00",
+      "themeId": "night"
+     },
+     {
+      "start": "08:00",
+      "themeId": "mono"
+     },
+     {
+      "start": "09:00"
+     },
+     {
+      "start": "10:00",
+      "themeId": "BAD ID"
+     },
+     "x",
+     null
+    ]
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": [
+     {
+      "start": "08:00",
+      "themeId": "mono"
+     }
+    ]
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "slots of the wrong type become empty",
+  "input": {
+   "aod": {
+    "slots": "all day"
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "empty themes list gives the starter themes",
+  "input": {
+   "themes": []
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "themes of the wrong type give the starter themes",
+  "input": {
+   "themes": {
+    "id": "night"
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "themes that are all invalid give the starter themes",
+  "input": {
+   "themes": [
+    {
+     "id": "Bad Id",
+     "name": "x",
+     "face": "big-digits"
+    },
+    5,
+    null
+   ]
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "25 themes keep the first 20",
+  "input": {
+   "themes": [
+    {
+     "id": "t1",
+     "name": "Theme 1",
+     "face": "big-digits"
+    },
+    {
+     "id": "t2",
+     "name": "Theme 2",
+     "face": "big-digits"
+    },
+    {
+     "id": "t3",
+     "name": "Theme 3",
+     "face": "big-digits"
+    },
+    {
+     "id": "t4",
+     "name": "Theme 4",
+     "face": "big-digits"
+    },
+    {
+     "id": "t5",
+     "name": "Theme 5",
+     "face": "big-digits"
+    },
+    {
+     "id": "t6",
+     "name": "Theme 6",
+     "face": "big-digits"
+    },
+    {
+     "id": "t7",
+     "name": "Theme 7",
+     "face": "big-digits"
+    },
+    {
+     "id": "t8",
+     "name": "Theme 8",
+     "face": "big-digits"
+    },
+    {
+     "id": "t9",
+     "name": "Theme 9",
+     "face": "big-digits"
+    },
+    {
+     "id": "t10",
+     "name": "Theme 10",
+     "face": "big-digits"
+    },
+    {
+     "id": "t11",
+     "name": "Theme 11",
+     "face": "big-digits"
+    },
+    {
+     "id": "t12",
+     "name": "Theme 12",
+     "face": "big-digits"
+    },
+    {
+     "id": "t13",
+     "name": "Theme 13",
+     "face": "big-digits"
+    },
+    {
+     "id": "t14",
+     "name": "Theme 14",
+     "face": "big-digits"
+    },
+    {
+     "id": "t15",
+     "name": "Theme 15",
+     "face": "big-digits"
+    },
+    {
+     "id": "t16",
+     "name": "Theme 16",
+     "face": "big-digits"
+    },
+    {
+     "id": "t17",
+     "name": "Theme 17",
+     "face": "big-digits"
+    },
+    {
+     "id": "t18",
+     "name": "Theme 18",
+     "face": "big-digits"
+    },
+    {
+     "id": "t19",
+     "name": "Theme 19",
+     "face": "big-digits"
+    },
+    {
+     "id": "t20",
+     "name": "Theme 20",
+     "face": "big-digits"
+    },
+    {
+     "id": "t21",
+     "name": "Theme 21",
+     "face": "big-digits"
+    },
+    {
+     "id": "t22",
+     "name": "Theme 22",
+     "face": "big-digits"
+    },
+    {
+     "id": "t23",
+     "name": "Theme 23",
+     "face": "big-digits"
+    },
+    {
+     "id": "t24",
+     "name": "Theme 24",
+     "face": "big-digits"
+    },
+    {
+     "id": "t25",
+     "name": "Theme 25",
+     "face": "big-digits"
+    }
+   ]
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t1",
+     "name": "Theme 1",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t2",
+     "name": "Theme 2",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t3",
+     "name": "Theme 3",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t4",
+     "name": "Theme 4",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t5",
+     "name": "Theme 5",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t6",
+     "name": "Theme 6",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t7",
+     "name": "Theme 7",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t8",
+     "name": "Theme 8",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t9",
+     "name": "Theme 9",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t10",
+     "name": "Theme 10",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t11",
+     "name": "Theme 11",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t12",
+     "name": "Theme 12",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t13",
+     "name": "Theme 13",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t14",
+     "name": "Theme 14",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t15",
+     "name": "Theme 15",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t16",
+     "name": "Theme 16",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t17",
+     "name": "Theme 17",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t18",
+     "name": "Theme 18",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t19",
+     "name": "Theme 19",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "t20",
+     "name": "Theme 20",
+     "face": "big-digits"
+    }
+   ]
+  }
+ },
+ {
+  "name": "a theme with a bad id is dropped",
+  "input": {
+   "themes": [
+    {
+     "id": "Bad Id",
+     "name": "A",
+     "face": "big-digits"
+    },
+    {
+     "id": "ok-one",
+     "name": "B",
+     "face": "stacked"
+    },
+    {
+     "name": "no id",
+     "face": "stacked"
+    }
+   ]
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "ok-one",
+     "name": "B",
+     "face": "stacked"
+    }
+   ]
+  }
+ },
+ {
+  "name": "a repeated theme id keeps the first",
+  "input": {
+   "themes": [
+    {
+     "id": "a",
+     "name": "First",
+     "face": "stacked"
+    },
+    {
+     "id": "a",
+     "name": "Second",
+     "face": "big-digits"
+    }
+   ]
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "a",
+     "name": "First",
+     "face": "stacked"
+    }
+   ]
+  }
+ },
+ {
+  "name": "theme dim and brightness clamp",
+  "input": {
+   "themes": [
+    {
+     "id": "hi",
+     "name": "Hi",
+     "face": "stacked",
+     "dim": 5,
+     "brightness": 1
+    },
+    {
+     "id": "lo",
+     "name": "Lo",
+     "face": "stacked",
+     "dim": -1,
+     "brightness": 0
+    },
+    {
+     "id": "bad",
+     "name": "Bad",
+     "face": "stacked",
+     "dim": "x",
+     "brightness": null
+    }
+   ]
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.9,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.3,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "hi",
+     "name": "Hi",
+     "face": "stacked"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.005,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "lo",
+     "name": "Lo",
+     "face": "stacked"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "bad",
+     "name": "Bad",
+     "face": "stacked"
+    }
+   ]
+  }
+ },
+ {
+  "name": "theme with a bad face id or edge pattern falls back",
+  "input": {
+   "themes": [
+    {
+     "id": "a",
+     "name": "A",
+     "face": "Big Digits",
+     "edge": {
+      "on": false,
+      "pattern": "No Such!"
+     }
+    },
+    {
+     "id": "b",
+     "name": "B"
+    }
+   ]
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "a",
+     "name": "A",
+     "face": "big-digits"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "b",
+     "name": "B",
+     "face": "big-digits"
+    }
+   ]
+  }
+ },
+ {
+  "name": "theme name falls back to the id or is cut to 40 characters",
+  "input": {
+   "themes": [
+    {
+     "id": "plain",
+     "face": "stacked"
+    },
+    {
+     "id": "empty",
+     "name": "",
+     "face": "stacked"
+    },
+    {
+     "id": "long",
+     "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "face": "stacked"
+    }
+   ]
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "plain",
+     "name": "plain",
+     "face": "stacked"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "empty",
+     "name": "empty",
+     "face": "stacked"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "long",
+     "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "face": "stacked"
+    }
+   ]
+  }
+ },
+ {
+  "name": "theme face options: bad values fall back, valid ones are kept",
+  "input": {
+   "themes": [
+    {
+     "id": "a",
+     "name": "A",
+     "face": "stacked",
+     "faceOptions": {
+      "size": "xl",
+      "position": "left",
+      "h24": "yes",
+      "date": false,
+      "battery": 0,
+      "alarm": true,
+      "seconds": true
+     }
+    },
+    {
+     "id": "b",
+     "name": "B",
+     "face": "stacked",
+     "faceOptions": {
+      "size": "l",
+      "position": "bottom"
+     }
+    }
+   ]
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": false,
+      "battery": true,
+      "alarm": true,
+      "seconds": true
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "a",
+     "name": "A",
+     "face": "stacked"
+    },
+    {
+     "faceOptions": {
+      "size": "l",
+      "position": "bottom",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "b",
+     "name": "B",
+     "face": "stacked"
+    }
+   ]
+  }
+ },
+ {
+  "name": "theme colours: source, palette cut to four, bad hex dropped, empty falls back",
+  "input": {
+   "themes": [
+    {
+     "id": "a",
+     "name": "A",
+     "face": "stacked",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#aabbcc",
+       "red",
+       "#112233",
+       "#445566",
+       "#778899",
+       "#000000"
+      ]
+     }
+    },
+    {
+     "id": "b",
+     "name": "B",
+     "face": "stacked",
+     "colours": {
+      "source": "sun",
+      "palette": [
+       "nope"
+      ]
+     }
+    },
+    {
+     "id": "c",
+     "name": "C",
+     "face": "stacked",
+     "colours": "blue"
+    }
+   ]
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#AABBCC",
+       "#112233",
+       "#445566",
+       "#778899"
+      ]
+     },
+     "id": "a",
+     "name": "A",
+     "face": "stacked"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "b",
+     "name": "B",
+     "face": "stacked"
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "id": "c",
+     "name": "C",
+     "face": "stacked"
+    }
+   ]
+  }
+ },
+ {
+  "name": "theme full valid is kept",
+  "input": {
+   "themes": [
+    {
+     "id": "my-theme",
+     "name": "My theme",
+     "face": "ring-analog",
+     "faceOptions": {
+      "size": "s",
+      "position": "top",
+      "h24": false,
+      "date": false,
+      "battery": false,
+      "alarm": true,
+      "seconds": true
+     },
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#010203"
+      ]
+     },
+     "photo": true,
+     "dim": 0.75,
+     "edge": {
+      "on": false,
+      "pattern": "spectrum-bars"
+     },
+     "brightness": 0.1
+    }
+   ]
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "s",
+      "position": "top",
+      "h24": false,
+      "date": false,
+      "battery": false,
+      "alarm": true,
+      "seconds": true
+     },
+     "photo": true,
+     "dim": 0.75,
+     "edge": {
+      "on": false,
+      "pattern": "spectrum-bars"
+     },
+     "brightness": 0.1,
+     "id": "my-theme",
+     "name": "My theme",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#010203"
+      ]
+     }
+    }
+   ]
   }
  }
 ]

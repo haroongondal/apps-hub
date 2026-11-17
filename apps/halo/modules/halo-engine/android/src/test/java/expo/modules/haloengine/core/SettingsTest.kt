@@ -20,7 +20,7 @@ class SettingsTest {
     Json.parseToJsonElement(File("../fixtures/settings.cases.json").readText()) as JsonArray
 
   @Test
-  fun fixtureHasCases() = assertTrue(cases.size >= 30)
+  fun fixtureHasCases() = assertTrue(cases.size >= 60)
 
   // Checks Kotlin against the fixture's literal values, so a default or clamp that drifts from TypeScript fails here.
   @Test
@@ -30,9 +30,6 @@ class SettingsTest {
       val name = o["name"]!!.jsonPrimitive.content
       val s = SettingsCodec.decode(o["input"].toString())
       val e = o["expected"]!!.jsonObject
-      fun JsonObject.b(k: String) = this[k]!!.jsonPrimitive.boolean
-      fun JsonObject.d(k: String) = this[k]!!.jsonPrimitive.double
-      fun JsonObject.str(k: String) = this[k]!!.jsonPrimitive.content
       fun JsonObject.nums(k: String) = this[k]!!.jsonArray.map { it.jsonPrimitive.double }
       assertEquals("$name enabled", e.b("enabled"), s.enabled)
       assertEquals("$name pattern", e.str("pattern"), s.pattern)
@@ -79,6 +76,52 @@ class SettingsTest {
       assertEquals("$name rules.calls", r.b("calls"), sr.calls)
       assertEquals("$name rules.batterySaver", r.b("batterySaver"), sr.batterySaver)
       assertEquals("$name rules.pocket", r.b("pocket"), sr.pocket)
+      checkAod(name, e["aod"]!!.jsonObject, s.aod)
+      checkThemes(name, e["themes"]!!.jsonArray, s.themes)
+    }
+  }
+
+  private fun JsonObject.b(k: String) = this[k]!!.jsonPrimitive.boolean
+  private fun JsonObject.d(k: String) = this[k]!!.jsonPrimitive.double
+  private fun JsonObject.str(k: String) = this[k]!!.jsonPrimitive.content
+
+  private fun checkAod(name: String, a: JsonObject, s: SettingsAod) {
+    assertEquals("$name aod.enabled", a.b("enabled"), s.enabled)
+    assertEquals("$name aod.timeoutSec", a["timeoutSec"]!!.let { if (it is JsonNull) null else it.jsonPrimitive.double }, s.timeoutSec?.toDouble())
+    assertEquals("$name aod.trigger", a.str("trigger"), s.trigger.key)
+    val sc = a["schedule"]!!.jsonObject
+    assertEquals("$name aod.schedule.on", sc.b("on"), s.schedule.on)
+    assertEquals("$name aod.schedule.start", sc.str("start"), s.schedule.start)
+    assertEquals("$name aod.schedule.end", sc.str("end"), s.schedule.end)
+    assertEquals("$name aod.themeId", a.str("themeId"), s.themeId)
+    assertEquals("$name aod.slots", a["slots"]!!.jsonArray.map { it.jsonObject.str("start") to it.jsonObject.str("themeId") }, s.slots.map { it.start to it.themeId })
+  }
+
+  private fun checkThemes(name: String, expected: JsonArray, themes: List<Theme>) {
+    assertEquals("$name themes ids", expected.map { it.jsonObject.str("id") }, themes.map { it.id })
+    for ((i, te) in expected.withIndex()) {
+      val t = te.jsonObject
+      val s = themes[i]
+      val w = "$name theme ${s.id}"
+      assertEquals("$w name", t.str("name"), s.name)
+      assertEquals("$w face", t.str("face"), s.face)
+      val f = t["faceOptions"]!!.jsonObject
+      assertEquals("$w faceOptions.size", f.str("size"), s.faceOptions.size)
+      assertEquals("$w faceOptions.position", f.str("position"), s.faceOptions.position)
+      assertEquals("$w faceOptions.h24", f.b("h24"), s.faceOptions.h24)
+      assertEquals("$w faceOptions.date", f.b("date"), s.faceOptions.date)
+      assertEquals("$w faceOptions.battery", f.b("battery"), s.faceOptions.battery)
+      assertEquals("$w faceOptions.alarm", f.b("alarm"), s.faceOptions.alarm)
+      assertEquals("$w faceOptions.seconds", f.b("seconds"), s.faceOptions.seconds)
+      val c = t["colours"]!!.jsonObject
+      assertEquals("$w colours.source", c.str("source"), s.colours.source.key)
+      assertEquals("$w colours.palette", c["palette"]!!.jsonArray.map { it.jsonPrimitive.content }, s.colours.palette)
+      assertEquals("$w photo", t.b("photo"), s.photo)
+      assertEquals("$w dim", t.d("dim"), s.dim, 0.0)
+      val e = t["edge"]!!.jsonObject
+      assertEquals("$w edge.on", e.b("on"), s.edge.on)
+      assertEquals("$w edge.pattern", e.str("pattern"), s.edge.pattern)
+      assertEquals("$w brightness", t.d("brightness"), s.brightness, 0.0)
     }
   }
 
@@ -93,6 +136,15 @@ class SettingsTest {
   @Test
   fun garbageGivesDefaultsWithoutThrowing() {
     for (x in listOf("", "not json", "null", "[]", "5", "\"x\"", "{")) assertEquals(x, Settings(), SettingsCodec.decode(x))
+  }
+
+  @Test
+  fun serviceWantedIfLightsAodOrNotificationsAreOn() {
+    val off = Settings(enabled = false, notify = SettingsNotify(enabled = false))
+    assertTrue(!off.serviceWanted)
+    assertTrue(off.copy(enabled = true).serviceWanted)
+    assertTrue(off.copy(aod = SettingsAod(enabled = true)).serviceWanted)
+    assertTrue(off.copy(notify = SettingsNotify(enabled = true)).serviceWanted)
   }
 
   @Test

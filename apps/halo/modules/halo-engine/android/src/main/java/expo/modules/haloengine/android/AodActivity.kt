@@ -9,11 +9,13 @@ import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.TextClock
 
-/** Spike: black screen with the time, over a locked keyguard only. Never dismisses the keyguard and never holds the screen on; finishes after 10 s or on tap. */
+/** Spike clock (rewritten in a later task): black screen with the time, over a locked keyguard only. Never dismisses the keyguard and never holds the screen on; finishes after the theme timeout (never, if "Never stop") or on tap. */
 class AodActivity : Activity() {
   private val main = Handler(Looper.getMainLooper())
   private val timeout = Runnable {
     ProbeLog.log(this, "aod", "AodActivity timeout, finishing")
+    // Timed out by itself: the screen stays off until the next unlock.
+    HaloService.aodPolicy.onTimedOut()
     finish()
   }
 
@@ -37,7 +39,9 @@ class AodActivity : Activity() {
         setOnClickListener { finish() }
       },
     )
-    main.postDelayed(timeout, SHOW_MS)
+    val ms = HaloService.aodPolicy.timeoutMs(HaloService.settings.aod)
+    ProbeLog.log(this, "aod", "AodActivity timeout=${ms ?: "never"}")
+    if (ms != null) main.postDelayed(timeout, ms)
   }
 
   override fun onResume() {
@@ -49,9 +53,5 @@ class AodActivity : Activity() {
     main.removeCallbacks(timeout)
     super.onDestroy()
     ProbeLog.log(this, "aod", "AodActivity onDestroy")
-  }
-
-  private companion object {
-    const val SHOW_MS = 10_000L
   }
 }

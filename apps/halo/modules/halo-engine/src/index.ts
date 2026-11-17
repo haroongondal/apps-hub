@@ -50,8 +50,6 @@ interface NativeApi {
   getSettings(): string;
   setSettings(json: string): void;
   setPreview(on: boolean): void;
-  getAodSpike(): boolean;
-  setAodSpike(on: boolean): void;
   listPatterns(): PatternInfo[];
   listApps(): Promise<AppInfo[]>;
   appIconUri(pkg: string): Promise<string | null>;
@@ -63,6 +61,7 @@ const native = requireNativeModule<NativeApi>('HaloEngine');
 export interface HaloEngineApi {
   start(): void;
   stop(): void;
+  /** Also restarts a killed service when something needs it, unless Stop was pressed since the app opened. */
   getStatus(): Status;
   openPermission(kind: PermissionKind): void;
   probeLog(): string;
@@ -71,9 +70,6 @@ export interface HaloEngineApi {
   setSettings(s: Settings): void;
   /** On while a settings screen is open: the lights show even when switched off, moving by themselves if nothing plays. */
   setPreview(on: boolean): void;
-  /** Diagnostics switch "Test the always-on screen": shows a clock when a locked phone's screen goes off. Off by default. */
-  getAodSpike(): boolean;
-  setAodSpike(on: boolean): void;
   listPatterns(): PatternInfo[];
   /** Launchable apps, those that have notified first, then by label. */
   listApps(): Promise<AppInfo[]>;
@@ -92,8 +88,6 @@ const HaloEngine: HaloEngineApi = {
   getSettings: () => normalize(JSON.parse(native.getSettings())),
   setSettings: (s) => native.setSettings(JSON.stringify(s)),
   setPreview: (on) => native.setPreview(on),
-  getAodSpike: () => native.getAodSpike() === true,
-  setAodSpike: (on) => native.setAodSpike(on),
   listPatterns: () => native.listPatterns(),
   listApps: async () =>
     (await native.listApps()).map((a) => ({ pkg: String(a.pkg), label: String(a.label), notified: a.notified === true })),

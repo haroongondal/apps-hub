@@ -10,7 +10,7 @@ class BootReceiver : BroadcastReceiver() {
     ProbeLog.log(context, "boot", "received action=${intent.action}")
     if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
     if (!SettingsStore.serviceWanted(context)) {
-      ProbeLog.log(context, "boot", "not starting: lights off")
+      ProbeLog.log(context, "boot", "not starting: lights, always-on screen and notifications are all off")
       return
     }
     try {

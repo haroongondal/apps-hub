@@ -13,12 +13,14 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.drawable.Icon
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
-import expo.modules.haloengine.core.Aod
+import expo.modules.haloengine.core.AodPolicy
+import expo.modules.haloengine.core.AodState
 import expo.modules.haloengine.core.AudioState
 import expo.modules.haloengine.core.AudioWatch
 import expo.modules.haloengine.core.ColorSource
@@ -28,8 +30,10 @@ import expo.modules.haloengine.core.Patterns
 import expo.modules.haloengine.core.RandomMotion
 import expo.modules.haloengine.core.Rules
 import expo.modules.haloengine.core.Settings
+import expo.modules.haloengine.core.serviceWanted
 import expo.modules.haloengine.core.Spectrum
 import expo.modules.haloengine.core.SpectrumFrame
+import java.time.LocalTime
 import java.util.concurrent.Executors
 
 /** Foreground service that owns the audio tap, the playing state, the colours and the edge overlay; start paths still log to probe.log. */
@@ -41,7 +45,6 @@ class HaloService : Service() {
   private var rules: RuleInputs? = null
   private var hidden = false
   private var screenOff: BroadcastReceiver? = null
-  private var aodShownSinceUnlock = false
 
   // Art or wallpaper colours for `derivedFor`; null derived means the source gave nothing, so the palette is used.
   private val worker = Executors.newSingleThreadExecutor()
@@ -102,13 +105,12 @@ class HaloService : Service() {
 
   private fun apply(s: Settings) {
     if (!running) return
-    val spike = SettingsStore.aodSpike(this)
-    syncScreenOff(spike)
+    syncScreenOff(s.aod.enabled)
     if (!s.enabled && !preview) {
       lightsOff()
       ProbeLog.log(this, "service", "lights disabled")
-      // The always-on spike needs the screen-off receiver, which lives as long as this service.
-      if (!spike) stopSelf()
+      // The always-on screen needs the screen-off receiver, and notification wakes need the policy, which live as long as this service.
+      if (!s.serviceWanted) stopSelf()
       check()
       return
     }
@@ -262,12 +264,12 @@ class HaloService : Service() {
     onChange?.invoke()
   }
 
-  /** The screen-off receiver exists only while the Diagnostics switch "Test the always-on screen" is on. */
-  private fun syncScreenOff(spike: Boolean) {
-    if (spike && screenOff == null) {
+  /** The screen-off receiver exists only while the always-on screen is enabled. */
+  private fun syncScreenOff(enabled: Boolean) {
+    if (enabled && screenOff == null) {
       registerScreenOff()
       ProbeLog.log(this, "aod", "screen-off receiver registered")
-    } else if (!spike && screenOff != null) {
+    } else if (!enabled && screenOff != null) {
       unregisterScreenOff()
       ProbeLog.log(this, "aod", "screen-off receiver removed")
     }
@@ -279,27 +281,26 @@ class HaloService : Service() {
   }
 
   private fun registerScreenOff() {
-    aodShownSinceUnlock = false
+    aodPolicy.onUnlocked()
     val r = object : BroadcastReceiver() {
       override fun onReceive(context: Context, i: Intent) {
         if (i.action == Intent.ACTION_USER_PRESENT) {
-          aodShownSinceUnlock = false
-          ProbeLog.log(context, "aod", "phone unlocked, the clock may show again")
+          aodPolicy.onUnlocked()
+          ProbeLog.log(context, "aod", "phone unlocked, the always-on screen may show again")
           return
         }
-        val spike = SettingsStore.aodSpike(context)
-        val locked = context.getSystemService(KeyguardManager::class.java).isKeyguardLocked
-        // Launching over an unlocked phone would cancel its pending lock, so the clock only covers a locked one.
-        if (!Aod.shouldLaunch(spike, locked, aodShownSinceUnlock)) {
-          val why = when {
-            !spike -> "switch off"
-            !locked -> "keyguard not locked"
-            else -> "already shown since the last unlock"
-          }
-          ProbeLog.log(context, "aod", "aod skipped: $why")
+        val now = LocalTime.now()
+        // Launching over an unlocked phone would cancel its pending lock, so AodPolicy only allows a locked one.
+        val st = AodState(
+          keyguardLocked = context.getSystemService(KeyguardManager::class.java).isKeyguardLocked,
+          charging = context.getSystemService(BatteryManager::class.java).isCharging,
+          musicPlaying = playingApp != null,
+          minuteOfDay = now.hour * 60 + now.minute,
+        )
+        if (!aodPolicy.onScreenOff(settings.aod, st)) {
+          ProbeLog.log(context, "aod", "aod skipped: enabled=${settings.aod.enabled} locked=${st.keyguardLocked} charging=${st.charging} music=${st.musicPlaying} trigger=${settings.aod.trigger.key} minute=${st.minuteOfDay}")
           return
         }
-        aodShownSinceUnlock = true
         ProbeLog.log(context, "aod", "SCREEN_OFF received, keyguard locked, launching AodActivity")
         try {
           context.startActivity(Intent(context, AodActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -353,6 +354,12 @@ class HaloService : Service() {
 
     @Volatile var running = false
       private set
+
+    /** Set when the owner presses Stop, so the app-open restart does not undo it; a new process starts false. */
+    @Volatile var stoppedByUser = false
+
+    /** Main thread only: the screen-off receiver and AodActivity both run there. */
+    val aodPolicy = AodPolicy()
     @Volatile var onChange: (() -> Unit)? = null
 
     /** Latest settings; the overlay reads this each frame and `onSettings` fires when it changes. */
