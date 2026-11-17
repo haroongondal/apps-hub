@@ -215,3 +215,12 @@ access, mic, notifications; Halo is battery-unrestricted (deviceidle whitelist).
   is **acceptable**; the earlier "over budget" reading used the legacy jank metric.
 - Bug found: after a Store update the service does not restart ("Halo is not running"). Fix in 0.4.0:
   `MY_PACKAGE_REPLACED` receiver → start if `serviceWanted`.
+- 2026-11-18, Halo 0.4.0 (installed via the Store app on the phone): **(d) always-on screen PASSES** — with the
+  Diagnostics test switch on, a power-button lock logged "SCREEN_OFF received, keyguard locked, launching
+  AodActivity", the black clock screen showed over the keyguard (`mCurrentFocus=AodActivity`, `isKeyguardShowing=true`),
+  finished itself after 10 s, keyguard still showing. Stage 4 gate passed.
+- After the 0.4.0 update the service was NOT restarted on HyperOS (no MY_PACKAGE_REPLACED handling logged; process
+  later started only by opening the app; Home said "not running" until Diagnostics → Start). Needs a fix (likely
+  HyperOS blocks the broadcast without Autostart, or the receiver must also start from the listener rebind / app
+  open). Opening the app also did not auto-start it — the Home "not running" hint asks for an off/on toggle.
+- "Alerts" tab label fits at 1080 px.
