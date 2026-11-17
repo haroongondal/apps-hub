@@ -117,6 +117,24 @@ class PhotoIndexTest {
   }
 
   @Test
+  fun marginKeepsOnlyScoresNearTheBest() {
+    // Scores 0.9, 0.86, 0.8, 0.3 against axis 0.
+    val rows = listOf(0.9f, 0.86f, 0.8f, 0.3f).mapIndexed { i, c ->
+      PhotoRow(PhotoKey(i.toLong(), 0, 0), quantize(FloatArray(512).also { it[0] = c; it[1] = sqrt(1 - c * c) }))
+    }
+    assertEquals(listOf(0L, 1L), rank(rows, unitAxis(0), 10, 0.2f, 0.05f))
+    assertEquals(listOf(0L, 1L, 2L, 3L), rank(rows, unitAxis(0), 10, 0.2f))
+    assertTrue(rank(rows, unitAxis(0), 10, 0.95f, 0.05f).isEmpty())
+  }
+
+  @Test
+  fun shortQueriesAreWordedAsCaptions() {
+    assertEquals("a photo of sky", searchText(" sky "))
+    assertEquals("a photo of red car at", searchText("red car at"))
+    assertEquals("dog on the beach", searchText("dog on the beach"))
+  }
+
+  @Test
   fun tiesKeepIndexOrder() {
     val rows = (5L..7L).map { PhotoRow(PhotoKey(it, 0, 0), quantize(unitAxis(0))) }
     assertEquals(listOf(5L, 6L, 7L), rank(rows, unitAxis(0), 10, 0f))
