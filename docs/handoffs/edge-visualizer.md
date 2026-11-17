@@ -36,6 +36,7 @@ APK copy: scratchpad only (not committed). Manifest dump via aapt2 `dump xmltree
   calls detected via AudioManager mode listener (no READ_PHONE_STATE).
 - 2026-11-17 owner: may `pnpm release halo` without asking each time (tell owner each time; Halo only).
 - 2026-11-17 owner: may force-stop Muviz (data kept) before audio tests while holding the device claim.
+- 2026-11-17 owner: wants stages 3-5 widened (AOD with any timeout incl. never, faces + themes, notification customisation, extras); kept every proposed item; picked approach A (native Kotlin AOD) and order notifications → AOD → extras. Design: docs/superpowers/specs/2026-11-17-halo-stages-3-5-design.md (awaiting approval).
 - Builder calls after builder check: spike failure = stop and ask owner; stage 2 and 4 ship in two batches;
   emulator for fast rounds, phone only via Store; `halo` joins apps.ts at stage 1.
 
@@ -64,7 +65,8 @@ Phone: queued in coord for device:49kjmnuwonkffqzh (2 ahead: image-tools, photo-
 Next: owner installs Store 19 + Halo 0.3.1 and grants permissions; then with the claim: force-stop Muviz, run Task 3 checks
 (background FFT, reboot start path, overlay over lock screen with tap-through, always-on test via Diagnostics switch +
 power-button lock) and Task 11/12 checks (each pattern, album-art colours, edges, idle, `dumpsys gfxinfo com.haroon.halo`).
-Record in spec §9 + this file. Then write the stages 3-5 plan from the spike results.
+Record in spec §9 + this file.
+In parallel: stages 3-5 design written (builder check running) → owner approval → plan docs/superpowers/plans/2026-11-17-halo-stages-3-5.md → build stage 3 (notifications) first; stage 4 gated on the AOD screen-off launch working on the phone.
 
 ## Previous state (session 1, superseded)
 Owner asked for a new chat to start building. Already told to the owner and accepted without objection:
