@@ -18,6 +18,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import expo.modules.haloengine.core.AodPolicy
 import expo.modules.haloengine.core.AodState
@@ -302,12 +303,7 @@ class HaloService : Service() {
           return
         }
         ProbeLog.log(context, "aod", "SCREEN_OFF received, keyguard locked, launching AodActivity")
-        try {
-          context.startActivity(Intent(context, AodActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-          ProbeLog.log(context, "aod", "startActivity returned without exception")
-        } catch (e: Exception) {
-          ProbeLog.log(context, "aod", "launch FAILED ${e.javaClass.name}: ${e.message}")
-        }
+        launchAod(context, wake = false)
       }
     }
     val filter = IntentFilter(Intent.ACTION_SCREEN_OFF).apply { addAction(Intent.ACTION_USER_PRESENT) }
@@ -351,6 +347,7 @@ class HaloService : Service() {
     private const val BANDS = 32
     private const val RANDOM_SEED = 0x4A10
     private const val RANDOM_CHECK_MS = 3_050L
+    private const val WAKE_FLASH_MS = 5_000L
 
     @Volatile var running = false
       private set
@@ -402,12 +399,54 @@ class HaloService : Service() {
       override fun spectrum(nowMs: Long) = silent
     }
 
+    /** Settings for code that may run without the service (listener, activities). */
+    fun current(ctx: Context): Settings = if (running) settings else SettingsStore.load(ctx.applicationContext)
+
+    /** Set while AodActivity shows: the system hides the overlay over the keyguard, so flashes go to its own edge. Main thread. */
+    var aodFlash: ((FlashDecision, Int) -> Unit)? = null
+    private var wakeFlash: Triple<FlashDecision, Int, Long>? = null
+
+    fun launchAod(ctx: Context, wake: Boolean) {
+      try {
+        ctx.startActivity(Intent(ctx, AodActivity::class.java).putExtra(AodActivity.EXTRA_WAKE, wake).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        ProbeLog.log(ctx, "aod", "startActivity returned without exception wake=$wake")
+      } catch (e: Exception) {
+        ProbeLog.log(ctx, "aod", "launch FAILED ${e.javaClass.name}: ${e.message}")
+      }
+    }
+
+    /** A notification or reminder wakes the always-on screen for 10 s (design §2.3, §10.3), only over a locked, dark screen. Main thread. */
+    fun wake(ctx: Context, d: FlashDecision, colour: Int, why: String) {
+      val app = ctx.applicationContext
+      val s = current(app)
+      if (!s.notify.wakeScreen || !s.aod.enabled) return
+      // Screen on (the always-on screen itself, or the lock screen in use): the flash already shows there.
+      if (app.getSystemService(PowerManager::class.java).isInteractive) return
+      val locked = app.getSystemService(KeyguardManager::class.java).isKeyguardLocked
+      if (!aodPolicy.onNotificationWake(s.aod, AodState(locked, charging = false, musicPlaying = false, minuteOfDay = 0), s.notify.wakeScreen)) {
+        ProbeLog.log(app, "aod", "$why wake skipped: locked=$locked")
+        return
+      }
+      wakeFlash = Triple(d, colour, SystemClock.uptimeMillis())
+      ProbeLog.log(app, "aod", "$why wake pkg=${d.pkg}")
+      launchAod(app, wake = true)
+    }
+
+    /** The flash that woke the screen, replayed once the always-on edge exists. */
+    fun takeWakeFlash(): Pair<FlashDecision, Int>? {
+      val w = wakeFlash ?: return null
+      wakeFlash = null
+      return if (SystemClock.uptimeMillis() - w.third < WAKE_FLASH_MS) w.first to w.second else null
+    }
+
     /** Flashes over the lights; when they are not shown, in a window of its own for the flash's duration. */
     fun flash(ctx: Context, d: FlashDecision, colour: Int) {
       val app = ctx.applicationContext
       flashMain.post {
-        val s = if (running) settings else SettingsStore.load(app)
-        if (!s.notify.enabled || onFlash?.invoke(d, colour) == true) return@post
+        val s = current(app)
+        if (!s.notify.enabled) return@post
+        aodFlash?.let { it(d, colour); return@post }
+        if (onFlash?.invoke(d, colour) == true) return@post
         val st = RuleInputs.snapshot(app)
         if (Rules.hidden(s.rules, st)) {
           ProbeLog.log(app, "rules", "flash skipped pkg=${d.pkg} call=${st.inCall} saver=${st.batterySaver} landscape=${st.landscape}")

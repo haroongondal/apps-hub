@@ -11,6 +11,8 @@ import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import expo.modules.haloengine.core.FlashDecision
+import expo.modules.haloengine.core.IconCount
+import expo.modules.haloengine.core.NoteIcons
 import expo.modules.haloengine.core.Notified
 import expo.modules.haloengine.core.NotifyRules
 import expo.modules.haloengine.core.PostedNote
@@ -25,6 +27,10 @@ object NotifyFlash {
   private val main = Handler(Looper.getMainLooper())
   private var app: Context? = null
   private var rules: NotifyRules? = null
+  private var icons: NoteIcons? = null
+
+  /** The always-on icon row redraws when the showing notifications change. Main thread. */
+  var onIcons: (() -> Unit)? = null
   private var unlock: BroadcastReceiver? = null
   private val ranking = NotificationListenerService.Ranking()
   private val remind = Runnable { remind() }
@@ -59,14 +65,16 @@ object NotifyFlash {
     // Never flash, so skip the settings decode.
     if (sbn.isOngoing || pkg == c.packageName) return
     remember(c, pkg)
+    val n = note(sbn, map)
+    if (icons(c).posted(n)) onIcons?.invoke()
     val s = SettingsStore.load(c).notify
     val minute = minuteOfDay()
-    val d = rules(c).onPosted(note(sbn, map), s, minute, System.currentTimeMillis())
+    val d = rules(c).onPosted(n, s, minute, System.currentTimeMillis())
     if (d == null) {
       if (QuietHours.active(s.quiet.on, s.quiet.start, s.quiet.end, minute)) ProbeLog.log(c, "notify", "quiet hours, no flash pkg=$pkg")
       return
     }
-    flash(c, d, "flash")
+    HaloService.wake(c, d, flash(c, d, "flash"), "notification")
     schedule(c)
   }
 
@@ -76,7 +84,10 @@ object NotifyFlash {
     // No unlock recorded yet (first run): nothing showing is treated as unseen.
     val lastUnlock = c.getSharedPreferences(FILE, Context.MODE_PRIVATE).getLong(LAST_UNLOCK, System.currentTimeMillis())
     val r = rules(c)
-    r.restore(active.map { note(it, map) }, lastUnlock, SettingsStore.load(c).notify, ::minuteOfDay)
+    val notes = active.map { note(it, map) }
+    icons(c).reset(notes)
+    onIcons?.invoke()
+    r.restore(notes, lastUnlock, SettingsStore.load(c).notify, ::minuteOfDay)
     ProbeLog.log(c, "notify", "restored active=${active.size} tracked=${r.trackedCount()}")
     schedule(c)
   }
@@ -97,6 +108,7 @@ object NotifyFlash {
 
   fun removed(key: String) {
     rules?.onRemoved(key)
+    if (icons?.removed(key) == true) onIcons?.invoke()
     app?.let(::schedule)
   }
 
@@ -110,10 +122,15 @@ object NotifyFlash {
 
   private fun rules(ctx: Context) = rules ?: NotifyRules(ctx.packageName).also { rules = it }
 
-  private fun flash(ctx: Context, d: FlashDecision, why: String) {
+  private fun icons(ctx: Context) = icons ?: NoteIcons(ctx.packageName).also { icons = it }
+
+  fun icons(): List<IconCount> = icons?.top() ?: emptyList()
+
+  private fun flash(ctx: Context, d: FlashDecision, why: String): Int {
     val colour = d.colour ?: AppIcons.colour(ctx, d.pkg)
     ProbeLog.log(ctx, "notify", "$why pkg=${d.pkg} colour=${"#%06X".format(colour and 0xFFFFFF)} style=${d.style}")
     HaloService.flash(ctx, d, colour)
+    return colour
   }
 
   private fun schedule(ctx: Context) {
@@ -126,8 +143,9 @@ object NotifyFlash {
     val c = app ?: return
     val due = rules?.dueReminders(SettingsStore.load(c).notify, minuteOfDay(), System.currentTimeMillis()) ?: return
     // Reminders are for a phone nobody is using; while unlocked the clock still advances, as in quiet hours.
-    if (c.getSystemService(KeyguardManager::class.java).isKeyguardLocked) due.forEach { flash(c, it, "reminder") }
-    else if (due.isNotEmpty()) ProbeLog.log(c, "notify", "reminder skipped: unlocked n=${due.size}")
+    if (c.getSystemService(KeyguardManager::class.java).isKeyguardLocked) {
+      due.forEachIndexed { i, d -> flash(c, d, "reminder").let { if (i == 0) HaloService.wake(c, d, it, "reminder") } }
+    } else if (due.isNotEmpty()) ProbeLog.log(c, "notify", "reminder skipped: unlocked n=${due.size}")
     schedule(c)
   }
 
