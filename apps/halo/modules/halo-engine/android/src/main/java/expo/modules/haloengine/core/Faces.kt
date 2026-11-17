@@ -1,8 +1,11 @@
 package expo.modules.haloengine.core
 
+import expo.modules.haloengine.core.faces.ArcProgress
 import expo.modules.haloengine.core.faces.BigDigits
 import expo.modules.haloengine.core.faces.BigHour
+import expo.modules.haloengine.core.faces.BinaryDots
 import expo.modules.haloengine.core.faces.MinimalLine
+import expo.modules.haloengine.core.faces.Orbit
 import expo.modules.haloengine.core.faces.RingAnalog
 import expo.modules.haloengine.core.faces.Stacked
 import expo.modules.haloengine.core.faces.Vertical
@@ -16,6 +19,9 @@ object Faces {
     ::MinimalLine,
     ::BigHour,
     ::Vertical,
+    ::BinaryDots,
+    ::Orbit,
+    ::ArcProgress,
   )
 
   private val byId: Map<String, () -> Face> by lazy { all.associateBy { it().id } }
