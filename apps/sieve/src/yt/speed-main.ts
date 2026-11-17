@@ -1,6 +1,6 @@
 import { MAX_RATE, MIN_RATE, nextSpeed, snapSpeed } from '@apps-hub/sieve-core/src/playback.ts';
 import { ytPage, type MainSettings } from '@apps-hub/sieve-core/src/yt-bridge.ts';
-import { feature, onCommand, onSettings, onVideo, player, sendState, type YtPlayer } from './bridge-main.ts';
+import { feature, onCommand, onSameVideoSource, onSettings, onVideo, player, sendState, type YtPlayer } from './bridge-main.ts';
 import { SEL } from './selectors.ts';
 
 // Speed facts, inspected 2026-11-10, signed out, Chrome for Testing 149.0.7827.55, no extension (dQw4w9WgXcQ, then related videos; Playwright addInitScript probes):
@@ -27,6 +27,8 @@ feature('speed', () => {
   let seen = false; // a video has started on this page
   let wanted: number | null = null; // the default applied to the current video, until its first `playing`, a speed command or a key or pointer press
   let armed = 0; // when `wanted` was set
+  let rate = 1; // the video's rate as its last ratechange left it
+  let kept = 1; // `rate` when the current source was emptied: Chrome may queue a ratechange to 1 between `emptied` and `loadstart`
   const video = (): HTMLVideoElement | null => apply(query, document, [SEL.video]) as HTMLVideoElement | null;
 
   function setRate(rate: number): number | null {
@@ -67,12 +69,22 @@ feature('speed', () => {
     seen = true;
     applyDefault();
     // A new video starts at 1 without a ratechange (inspected), so the row learns the rate here even when no default went on.
-    sendState({ rate: video()?.playbackRate ?? 1 });
+    sendState({ rate: (rate = video()?.playbackRate ?? 1) });
   });
   apply(listen, document, ['ratechange', (e: Event) => {
     const v = video();
-    if (v && e.target === v) sendState({ rate: v.playbackRate });
+    if (v && e.target === v) sendState({ rate: (rate = v.playbackRate) });
   }, true]);
+  apply(listen, document, ['emptied', (e: Event) => {
+    if (e.target === video()) kept = rate;
+  }, true]);
+  // inspected 2026-11-17, signed out, Chrome for Testing 149.0.7827.55: a start that stalled at 0 s got a new source for the same video about
+  // 20 s later (emptied, loadstart) at rate 1 with no ratechange, so the default 1.5 was lost; the miniplayer (key i) did the same to a 1.75.
+  // The same video keeps the speed it had.
+  onSameVideoSource(() => {
+    const v = video();
+    if (settings?.on && v && !near(v.playbackRate, kept)) v.playbackRate = kept;
+  });
   // Only a video that has just started: later (a seek, a key press, a pointer press) a different rate is the owner's choice or the page's own.
   apply(listen, document, ['playing', (e: Event) => {
     const v = video();

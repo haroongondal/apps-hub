@@ -76,13 +76,18 @@
     if (autoplay) video.play().catch(() => {});
   };
 
-  const go = async (id, { list = null, index = null } = {}) => {
+  // keep: a navigation that leaves the playing video on its source, as a `&t=` link to it might (the review's case, not inspected live).
+  const go = async (id, { list = null, index = null, keep = false } = {}) => {
     const app = $('ytd-app') ?? document.documentElement;
     const manager = $('ytd-page-manager') ?? app;
     const fire = (el, type) => el.dispatchEvent(new CustomEvent(type, { bubbles: true, composed: true, detail: { pageType: id === 'home' ? 'browse' : 'watch', fromHistory: false } }));
     fire(app, EV.start);
     const next = new URLSearchParams(location.search);
     if (id === 'home') {
+      // YouTube stops the video on home (inspected 2026-11-17: see the NAV.start listener in src/yt/bridge-main.ts).
+      stopped = true;
+      video.pause();
+      setState(5);
       history.pushState(null, '', `/?fixture=${next.get('fixture') ?? 'watch'}`);
       document.title = 'YouTube';
       flexy?.setAttribute('hidden', '');
@@ -103,8 +108,10 @@
       $('ytd-browse')?.setAttribute('hidden', '');
       const h1 = $('ytd-watch-metadata h1');
       if (h1) h1.textContent = id;
-      setState(-1);
-      await setSource();
+      if (!keep) {
+        setState(-1);
+        await setSource();
+      }
     }
     fire(app, EV.finish);
     fire(manager, EV.data);
@@ -160,6 +167,11 @@
   const mountMetadata = () => template && $('#limited-state')?.after(template.content.cloneNode(true));
   if (!params.has('noanchor')) mountMetadata();
   window.__navigate = go;
+  // A new source for the same video, as YouTube's ad/content swap and its mid-video re-source do; resolves after its loadstart.
+  window.__swap = () => new Promise((resolve) => {
+    video.addEventListener('loadstart', () => setTimeout(resolve, 100), { once: true });
+    setSource();
+  });
   // __rerenderBelow('parent') replaces the anchor's parent itself (a fresh copy, without Sieve's row); with no argument, each of its children.
   window.__rerenderBelow = (what) => {
     const parent = $('ytd-watch-metadata')?.parentElement;

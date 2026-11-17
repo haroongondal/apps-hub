@@ -42,6 +42,7 @@ const off = new Set<string>();
 const settingsCbs: ((s: MainSettings) => void)[] = [];
 const commands = new Map<string, ((value?: number | string) => void)[]>();
 const videoCbs: ((videoId: string) => void)[] = [];
+const sourceCbs: (() => void)[] = [];
 let settings: MainSettings | null = null;
 let state: MainState = { videoId: null, title: '', rate: 1, quality: 'auto', qualities: [], volume: 100, muted: false, live: false, playlist: null };
 let sentAt = -Infinity;
@@ -97,6 +98,12 @@ export function onVideo(cb: (videoId: string) => void): void {
   videoCbs.push(cb);
 }
 
+// A new source for the video already playing: the ad/content swap, or YouTube re-creating the source mid-video. Chrome's load resets the
+// rate to 1 with it (without a ratechange on youtube.com).
+export function onSameVideoSource(cb: () => void): void {
+  sourceCbs.push(cb);
+}
+
 const on = (type: string, fn: (e: Event) => void, capture = false): void => apply(listen, document, [type, fn, capture]);
 on(EVENTS.settings, (e) => {
   const s = readMainSettings((e as CustomEvent).detail);
@@ -110,18 +117,29 @@ on(EVENTS.do, (e) => {
 });
 on(
   'loadstart',
-  () => {
+  (e: Event) => {
+    if (!e.isTrusted) return; // a page script's forged loadstart is not a new video
     let id: unknown;
     try {
       id = player()?.getVideoData()?.video_id;
     } catch {}
-    if (typeof id !== 'string' || id === lastVideo) return;
+    if (typeof id !== 'string') return;
+    if (id === lastVideo) {
+      for (const cb of sourceCbs) safely(cb);
+      return;
+    }
     lastVideo = id;
     sendState({ videoId: id });
     for (const cb of videoCbs) safely(cb, id);
   },
   true,
 );
-// The dedupe above is for the ad/content source swap within one navigation: a new navigation to the same video (watch A, home, A) starts it afresh.
-apply(listen, NAV.target === 'window' ? window : document, [NAV.start, () => (lastVideo = null)]);
+// The dedupe above keeps the video that plays on across a navigation; one that YouTube stopped starts afresh (watch A, home, A).
+// inspected 2026-11-17, signed out, Chrome for Testing 149.0.7827.55, no extension: at yt-navigate-start from watch to home (the logo) the
+// video was playing; at the yt-navigate-finish on home YouTube had stopped it (state 5, paused, at 0 s), so the way back to it (back, same
+// id, a new source) began paused. The miniplayer (key i) and its expand fired yt-navigate-finish only, with no yt-navigate-start.
+apply(listen, NAV.target === 'window' ? window : document, [NAV.start, () => {
+  const v = apply(query, document, [SEL.video]) as HTMLVideoElement | null;
+  if (!v || v.paused || v.ended) lastVideo = null;
+}]);
 apply(dispatch, document, [new Custom(EVENTS.hello)]);

@@ -29,6 +29,8 @@ const pageState = (s) => {
   const html = document.documentElement;
   return {
     row: document.querySelector('sieve-yt-row').shadowRoot.querySelector('.row').outerHTML,
+    // A property, not an attribute, so the row's HTML does not show it: a click() a switch did not cancel flips it.
+    switches: [...document.querySelector('sieve-yt-row').shadowRoot.querySelectorAll('[role="switch"]')].map((i) => i.checked),
     calls: window.__ytCalls.filter((c) => !/^(get|is)/.test(c.name) && c.name !== 'addEventListener').map((c) => c.name),
     sent: window.__sieveDo.length,
     video: [v.loop, v.playbackRate, v.volume, v.muted],

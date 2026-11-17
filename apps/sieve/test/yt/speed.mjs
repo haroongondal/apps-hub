@@ -38,16 +38,31 @@ export async function local(t) {
     await navigate(page, 'sieveTest02');
     await sleep(500);
     check('speed: after an in-app navigation the new video plays at 1.5 and the button still reads "1.5×"', (await rate(page)) === 1.5 && (await labelIs(page, '1.5×')), String(await rate(page)));
-    // Watch A, home, A again: the same video id twice in a row is still a new start (the dedupe is for the ad/content swap within one navigation).
+    // Watch A, home, A again: YouTube stops the video on home, so the same video id is a new start and gets the default, not the speed it had.
+    await page.evaluate(() => { document.querySelector('#movie_player video').playbackRate = 1.25; });
     await navigate(page, 'home');
     await navigate(page, 'sieveTest02');
     check('speed: watch, home, then the same video again plays at the default 1.5', await rateIs(page, 1.5), String(await rate(page)));
+    // The live failure of 2026-11-17: YouTube gave the playing video a new source and Chrome's load put the rate back to 1.
+    await page.evaluate(() => window.__swap());
+    await sleep(300);
+    check('speed: a new source for the same video keeps the default 1.5', (await rate(page)) === 1.5, String(await rate(page)));
 
     await rowButton(page, 'Faster').click();
     check('speed: Faster gives 1.75 and "1.75×"', (await rateIs(page, 1.75)) && (await labelIs(page, '1.75×')), `${await rate(page)} ${await label(page)}`);
     await sleep(300);
     check('speed: a row click shows no toast (the button shows the speed)', (await toastText(page)) === '', await toastText(page));
     check('speed: the speed button names the current speed and what a click does', (await row(page).locator('[data-id="speed"] button').getAttribute('aria-label')) === 'Speed 1.75×. Click for your default speed.');
+    // A navigation that leaves the video playing (a `&t=` link to it, say), then a new source for it: the owner's choice stays.
+    await navigate(page, 'sieveTest02', { keep: true });
+    await page.evaluate(() => window.__swap());
+    await sleep(300);
+    check("speed: the owner's 1.75 stays across a navigation that keeps the video and a new source for it", (await rate(page)) === 1.75, String(await rate(page)));
+    // The fixture now names another video with no new source, so only a forged loadstart could make it look like a new one.
+    await navigate(page, 'sieveTest03', { keep: true });
+    await page.evaluate(() => document.querySelector('#movie_player video').dispatchEvent(new Event('loadstart')));
+    await sleep(300);
+    check('speed: a forged loadstart from the page does not put the default on again', (await rate(page)) === 1.75, String(await rate(page)));
 
     await setYouTube(t, { speed: { anySpeed: false } });
     await settled(page, 'anySpeed', false);
