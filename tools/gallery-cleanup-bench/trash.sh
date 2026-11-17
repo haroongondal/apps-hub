@@ -34,8 +34,13 @@ folder_rows() { rows --uri $files --projection $proj --where "\"relative_path='$
 id_row() { rows --uri $images/$1 --projection $proj "${@:2}"; }
 ls_folder() { say "ls -la $dir"; sh "ls -la $dir 2>&1" >&2 || true; }
 
-folder_rows $match_trashed > /dev/null \
-  || { echo "trash.sh: content query refused --extra; trashed rows are found by saved id only" >&2; match_trashed=; }
+if ! probe=$(folder_rows $match_trashed 2>&1 > /dev/null); then
+  echo "$probe" >&2
+  echo "$probe" | grep -qiE 'unsupported argument|unknown (option|argument)' \
+    || { echo "trash.sh: MediaStore query failed; stopping before any change" >&2; exit 1; }
+  echo "trash.sh: content query refused --extra; trashed rows are found by saved id only" >&2; match_trashed=
+fi
+mut() { local out; out=$(raw "$@" $match_trashed); ! grep -qi 'unsupported argument' <<< "$out" || raw "$@" > /dev/null; }
 
 precheck() {
   local n
@@ -100,9 +105,11 @@ trash_a() {
 }
 
 clean() {
-  local ids id row name tr foreign=0 left
-  ids=$({ [ -f "$state" ] && awk '{ print $1 }' "$state"; folder_rows $match_trashed | cut -d'|' -f1; folder_rows | cut -d'|' -f1; } | sort -un)
+  local ids id row name tr foreign=0 left gone bad=0
+  ids=$({ [ -f "$state" ] && awk '{ print $1 }' "$state"; folder_rows $match_trashed | cut -d'|' -f1; folder_rows | cut -d'|' -f1; } | sort -un) \
+    || { echo "trash.sh: MediaStore query failed; using saved ids only" >&2; bad=1; }
   for id in $ids; do
+    case $id in ''|*[!0-9]*) echo "trash.sh: bad id '$id'; skipped" >&2; bad=1; continue ;; esac
     row=$(id_row "$id" $match_trashed || true)
     [ -n "$row" ] || row=$(id_row "$id" || true)
     if [ -n "$row" ]; then
@@ -116,21 +123,24 @@ clean() {
       continue
     fi
     echo "== remove row $id ($row)"
-    [ "$tr" = 0 ] || raw update --uri $images/$id --bind is_trashed:i:0 > /dev/null
-    raw delete --uri $images/$id > /dev/null
+    [ "$tr" = 0 ] || mut update --uri $images/$id --bind is_trashed:i:0
+    mut delete --uri $images/$id
   done
   for name in $(sh "ls -a $dir 2>/dev/null" || true); do
     case $name in .|..) continue ;; esac
-    if echo "$name" | grep -qE "$ours"; then say "rm $dir/$name"; sh "rm -f '$dir/$name'"
+    if echo "$name" | grep -qE "$ours"; then say "rm $dir/$name"; sh "rm -f '$dir/$name'" || bad=1
     else echo "trash.sh: $dir/$name is not ours; left alone" >&2; foreign=1; fi
   done
   [ "$foreign" = 1 ] || sh "rmdir $dir 2>/dev/null" || true
   echo "== proof"
-  left=$({ folder_rows $match_trashed; folder_rows; } | sort -u | wc -l | tr -d ' ')
+  left=$({ folder_rows $match_trashed; folder_rows; } | sort -u | wc -l | tr -d ' ') || left=unknown
   echo "rows in $rel (with and without trashed): $left"
-  [ -n "$match_trashed" ] || echo "note: content has no --extra here, so this count cannot see trashed rows"
-  sh "[ -e $dir ] && echo 'folder $dir STILL THERE' || echo 'folder $dir is gone'"
-  if [ "$left" = 0 ]; then rm -f "$state" "$work"/imagetoolsspike-*.jpg; else echo "trash.sh: $left rows left" >&2; return 1; fi
+  [ -n "$match_trashed" ] || { echo "note: content has no --extra here, so this count cannot see trashed rows"; bad=1; }
+  gone=$(sh "[ -e $dir ] && echo there || echo gone") || gone=unknown
+  echo "folder $dir: $gone"
+  if [ "$left" = 0 ] && [ "$gone" = gone ] && [ "$bad" = 0 ]; then rm -f "$state" "$work"/imagetoolsspike-*.jpg; return 0; fi
+  echo "trash.sh: cleanup incomplete; run: ANDROID_SERIAL=$ANDROID_SERIAL $0 clean $work" >&2
+  return 1
 }
 
 case $mode in

@@ -20,7 +20,11 @@ detach() {
     [ -n "$code" ] && break
     sleep 2
   done
-  [ -n "$code" ] || { echo "phone.sh: $tag did not finish in 20 min; log stays at $dir/log-$tag.txt" >&2; return 1; }
+  if [ -z "$code" ]; then
+    echo "phone.sh: $tag did not finish in 20 min; its log so far:" >&2
+    sh "cat $dir/log-$tag.txt; pkill -f 'app_process $dir'" >&2 || true
+    return 1
+  fi
   echo "== $tag (taskset $mask): $*"
   sh "cat $dir/log-$tag.txt"
   [ "$code" = 0 ] || { echo "phone.sh: $tag exited with $code" >&2; return 1; }
