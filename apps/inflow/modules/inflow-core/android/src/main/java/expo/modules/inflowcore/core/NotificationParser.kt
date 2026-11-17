@@ -27,14 +27,14 @@ object NotificationParser {
     val groupTitle = raw.conversationTitle?.takeIf { it.isNotBlank() }
     val tag = (raw.chatTag ?: raw.shortcutId)?.let { "${raw.pkg}|$it" }   // a tag is only unique within one app
     val conversation = if (raw.isGroupConversation || groupTitle != null) {
-      groupTitle ?: raw.title
+      groupTitle ?: raw.title?.takeUnless(GenericTitle::isGeneric)
     } else {
       val contact = raw.messages.firstOrNull { !isOwn(it) }?.sender?.takeIf { it.isNotBlank() }
       if (contact != null && tag != null) chats?.learn(tag, contact)
       contact
-        ?: raw.title?.takeIf { it.isNotBlank() && !it.equals(YOU, ignoreCase = true) }
+        ?: raw.title?.takeIf { it.isNotBlank() && !it.equals(YOU, ignoreCase = true) && !GenericTitle.isGeneric(it) }
         ?: tag?.let { chats?.nameFor(it) }
-        ?: raw.title
+        ?: raw.title?.takeUnless(GenericTitle::isGeneric)
     }
     val conversationKey = conversation?.let { senderKey(raw.pkg, it) }
     // A photo sent without a caption has no text: it is kept for its file, with an empty text.
