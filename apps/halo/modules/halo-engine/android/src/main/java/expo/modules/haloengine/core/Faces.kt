@@ -12,6 +12,9 @@ import expo.modules.haloengine.core.faces.Vertical
 import expo.modules.haloengine.core.faces.CalendarStrip
 import expo.modules.haloengine.core.faces.Typewriter
 import expo.modules.haloengine.core.faces.WordClock
+import expo.modules.haloengine.core.faces.DualTime
+import expo.modules.haloengine.core.faces.NeonOutline
+import expo.modules.haloengine.core.faces.SplitFlap
 
 object Faces {
   /** Factories, one line per face. */
@@ -28,6 +31,9 @@ object Faces {
     ::WordClock,
     ::Typewriter,
     ::CalendarStrip,
+    ::SplitFlap,
+    ::DualTime,
+    ::NeonOutline,
   )
 
   private val byId: Map<String, () -> Face> by lazy { all.associateBy { it().id } }
