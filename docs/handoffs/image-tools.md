@@ -174,4 +174,6 @@ ship (PR into main) so main has the Worker /models/ route.
 Feature 2: 2.0 DONE (results `docs/superpowers/plans/2026-11-18-gallery-cleanup-phase-0-results.md`).
 Phone: scores 9.6 ms/photo on A55, but the 512 px decode is 143 ms/photo on A55 (decode once at 512,
 derive the 256 CLIP input from it). Trash visibility moved to 2.2 (shell can't pass the
-match-trashed extra; nothing was created). Next: 2.1 engine phase agent.
+match-trashed extra; nothing was created). 2.1 engine phase agent (ledger `.superpowers/sdd/2026-11-18-image-tools-2.1/progress.md`): tasks 1-5 built and reviewed
+(4e6630b..8076e283, module 262/0 at T3); resumed for the T5 fix check, final review and gates.
+Feature 3 phone check: the owner hasn't tried build 12's tools yet (logcat 00:54-01:33 shows no model download).
