@@ -195,3 +195,17 @@ Pattern and clock-face designs and names; launcher icon and final accent; screen
 band count and smoothing constants; colour quantiser algorithm (own small median cut in `core/`, no new
 dependency); music overlay layout and drag behaviour; notification-flash default filters (skip ongoing, silent
 and Halo's own notifications).
+
+## 13. Spike results (phone, Halo 0.3.1, 2026-11-17)
+
+Xiaomi 24116RACCG, HyperOS, Android 16. Owner installed Store 19 + Halo 0.3.1 and granted overlay, notification
+access, mic, notifications; Halo is battery-unrestricted (deviceidle whitelist).
+- (a) Visualizer session 0 from the foreground service (type mediaPlayback, 0x2): **works** — 34k FFT frames, 3.8k
+  with real sound, while the phone was used normally and then locked.
+- (c) Overlay over the lock screen: **no** — WindowManager sets `mForceHideNonSystemOverlayWindow=true` on Halo's
+  overlay while the keyguard shows (non-system overlays are hidden on the lock screen). Consequence: the always-on
+  screen draws its own edge lights (stage 4 design already assumes this).
+- Frame time (gfxinfo, whole run): 50th 24 ms, 90th 57 ms, 95th 109 ms, GPU 50th 7 ms — **over budget** (16.7 ms at
+  60 fps; target < 4 ms draw). Suspect per-op `BlurMaskFilter` (CPU mask rasterisation on a full-screen window).
+  Fix: one GPU blur for the glow layer (RenderEffect on a glow-only layer) instead of per-op mask filters.
+- (b) boot start path and (d) always-on launch after screen-off: **not yet run** (need the owner present to unlock).

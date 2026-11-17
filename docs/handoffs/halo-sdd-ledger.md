@@ -64,3 +64,4 @@ Review fixes: b079db4 (SettingsTest literal compare, mutation-proven), f239c9c (
 - Ruling: release 0.3.1 before the scoped security re-review returns — fix is strictly safer than 0.3.0 and the owner may install soon — cost if wrong: a 0.3.2.
 Scoped security re-review (invariant-reviewer, opus) of f239c9c: all ADDRESSED (no launch while unlocked, no keep-screen-on, single overlay window, no receiver leak, exported receiver sound). Minor (deferred): (a) Diagnostics: aodSpike switch on + lights off + Stop → switch reads on but service/receiver dead; (b) no test for the USER_PRESENT re-arm (state lives in the receiver).
 - 2026-11-17: first 0.3.1 release attempt failed (exit 1, cause not captured; session restarted); re-run succeeded: halo 4 = 0.3.1 (0a6f780). Manifest re-checked.
+Phone check 1 (0.3.1): FFT works in background; overlay hidden over keyguard by the system; frame time p50 24 ms / p95 109 ms → perf fix needed (blur). (b)/(d) pending owner.
