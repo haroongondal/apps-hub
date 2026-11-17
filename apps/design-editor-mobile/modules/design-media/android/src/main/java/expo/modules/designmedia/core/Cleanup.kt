@@ -33,9 +33,12 @@ fun cleanupGroups(photos: List<CleanupPhoto>, dismissed: Set<Pair<CleanupKind, L
   fun of(kind: CleanupKind) = photos.filter { (kind to it.id) !in dismissed }
   val blur = opts.blurThreshold.coerceIn(BLUR_MIN, BLUR_MAX)
   val copies = similarGroups(CleanupKind.COPIES, of(CleanupKind.COPIES), ::linkCopies)
-  val inCopies = copies.flatMapTo(HashSet()) { g -> g.members.map { it.id } }
-  val lookalikes = similarGroups(CleanupKind.LOOKALIKES, of(CleanupKind.LOOKALIKES).filter { it.id !in inCopies }) { ps, uf ->
-    linkLookalikes(ps, uf, opts.lookalikeCosine)
+  val cosine = if (opts.lookalikeCosine.isNaN()) LOOKALIKE_DEFAULT else opts.lookalikeCosine.coerceIn(LOOKALIKE_DEFAULT, LOOKALIKE_STRICT)
+  // A copy the user dismissed has cosine ~1 with its twin; it must not come back pre-ticked as a look-alike.
+  val notLookalike = copies.flatMapTo(HashSet()) { g -> g.members.map { it.id } } +
+    dismissed.filter { it.first == CleanupKind.COPIES }.map { it.second }
+  val lookalikes = similarGroups(CleanupKind.LOOKALIKES, of(CleanupKind.LOOKALIKES).filter { it.id !in notLookalike }) { ps, uf ->
+    linkLookalikes(ps, uf, cosine)
   }
   return listOfNotNull(
     single(CleanupKind.BLURRY, of(CleanupKind.BLURRY).filter { it.scores.laplacian < blur }.sortedWith(compareBy({ it.scores.laplacian }, { it.id }))),

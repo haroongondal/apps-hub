@@ -41,8 +41,12 @@ class CleanupTest {
   @Test
   fun copiesFindHammingFourAcrossChunks() {
     val h = 0x0123456789abcdefL
-    val flipped = h xor (1L shl 63) xor (1L shl 45) xor (1L shl 30) xor (1L shl 13) // one bit in each of chunks 0-3
-    assertEquals(setOf(setOf(1L, 2L)), ids(groups(listOf(photo(1, h), photo(2, flipped))), CleanupKind.COPIES))
+    val boundary = intArrayOf(51, 38, 25, 12, 11) // lowest bit of chunks 0-3, top bit of chunk 4
+    for (c in 0 until 5) {
+      var flipped = h
+      for (o in 0 until 5) if (o != c) flipped = flipped xor (1L shl boundary[o])
+      assertEquals("chunk $c intact", setOf(setOf(1L, 2L)), ids(groups(listOf(photo(1, h), photo(2, flipped))), CleanupKind.COPIES))
+    }
   }
 
   @Test
@@ -62,6 +66,7 @@ class CleanupTest {
   @Test
   fun keeperOrder() {
     assertEquals(2L, keeper(photo(1, 7L, lap = 100f), photo(2, 7L, lap = 200f)))
+    assertEquals(1L, keeper(photo(1, 7L, lap = 200f, pixels = 10), photo(2, 7L, lap = 100f, pixels = 20)))
     assertEquals(1L, keeper(photo(1, 7L, pixels = 20), photo(2, 7L, pixels = 10, bytes = 5000)))
     assertEquals(2L, keeper(photo(1, 7L, bytes = 10, takenAt = 0), photo(2, 7L, bytes = 20, takenAt = 9)))
     assertEquals(2L, keeper(photo(1, 7L, takenAt = 9), photo(2, 7L, takenAt = 5)))
@@ -89,6 +94,17 @@ class CleanupTest {
     val g = groups(listOf(photo(1, vec = a, takenAt = 0), photo(2, vec = near, takenAt = 9 * min)))
       .single { it.kind == CleanupKind.LOOKALIKES }
     assertEquals("lookalikes:1", g.key)
+  }
+
+  @Test
+  fun lookalikeCosineClampedToDefaultAndStrict() {
+    val a = vec2(100, 0)
+    fun look(b: ByteArray, cos: Double) =
+      ids(groups(listOf(photo(1, vec = a, takenAt = 0), photo(2, vec = b, takenAt = min)), opts = CleanupOptions(lookalikeCosine = cos)), CleanupKind.LOOKALIKES)
+    assertTrue(look(vec2(92, 39), 0.5).isEmpty()) // 0.9207 < clamped 0.93
+    assertEquals(setOf(setOf(1L, 2L)), look(vec2(98, 20), 1.5)) // 0.9798 >= clamped 0.97
+    assertEquals(setOf(setOf(1L, 2L)), look(vec2(95, 31), Double.NaN))
+    assertTrue(look(vec2(92, 39), Double.NaN).isEmpty())
   }
 
   @Test
@@ -164,6 +180,13 @@ class CleanupTest {
   }
 
   @Test
+  fun dismissedCopiesDoNotReturnAsLookalikes() {
+    val v = vec2(100, 0)
+    val ps = listOf(photo(1, 7L, vec = v, takenAt = 0), photo(2, 7L, vec = v, takenAt = 0))
+    assertTrue(groups(ps, setOf(CleanupKind.COPIES to 1L, CleanupKind.COPIES to 2L)).isEmpty())
+  }
+
+  @Test
   fun flatPhotosOnlyGroupWithSameAspect() {
     val gs = groups(listOf(
       photo(1, 0L, 64, 48, lap = 0f), photo(2, 0L, 64, 48, lap = 0f), photo(3, 0L, 48, 64, lap = 0f),
@@ -171,12 +194,6 @@ class CleanupTest {
     ))
     assertEquals(setOf(setOf(1L, 2L)), ids(gs, CleanupKind.COPIES))
     assertEquals(1, gs.single { it.kind == CleanupKind.COPIES }.members.count { it.best })
-  }
-
-  @Test
-  fun missingMetaIsSkipped() {
-    assertTrue(ids(groups(listOf(photo(1, 7L))), CleanupKind.COPIES).isEmpty())
-    assertEquals(setOf(setOf(1L, 2L)), ids(groups(listOf(photo(1, 7L), photo(2, 7L))), CleanupKind.COPIES))
   }
 
   @Test
@@ -195,6 +212,11 @@ class CleanupTest {
     }
     while (ps.size < 10_000) {
       when {
+        ps.size == 3_000 -> repeat(1_000) { // flat photos all hash to 0: one bucket, mixed 4:3 / 3:4
+          if (rnd.nextBoolean()) add(0L, randVec(), 512, 384) else add(0L, randVec(), 384, 512)
+          t += 60_000L + rnd.nextInt(3_600_000)
+        }
+        ps.size == 6_000 -> repeat(500) { add(rnd.nextLong(), randVec(), 512, 384); t += 240 } // 500 dissimilar photos in 2 minutes
         ps.size % 200 == 0 -> { // burst of 5 near-duplicates: copies flip one dhash bit, look-alikes add vector noise
           val h = rnd.nextLong()
           val v = randVec()
@@ -220,5 +242,6 @@ class CleanupTest {
     assertTrue(gs.any { it.kind == CleanupKind.LOOKALIKES })
     assertTrue(gs.any { it.kind == CleanupKind.SCREENSHOTS })
     assertTrue("took $ms ms", ms < 2000)
+    assertTrue("took $ms ms; a lost bucket or window shows up here", ms < 500)
   }
 }

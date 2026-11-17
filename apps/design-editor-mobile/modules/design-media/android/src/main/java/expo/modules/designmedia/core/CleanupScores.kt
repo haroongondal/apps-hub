@@ -44,6 +44,7 @@ fun brightness(g: ByteArray): DoubleArray {
 }
 
 // 3x3 Laplacian, valid region only, population variance on the 0..255 scale; 0 below 3x3.
+// Exact for the 512 px score thumbnail; Long sums can overflow near 3 MP.
 fun laplacianVar(g: ByteArray, w: Int, h: Int): Double {
   if (w < 3 || h < 3) return 0.0
   var t1 = 0L
