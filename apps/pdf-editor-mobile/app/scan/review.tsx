@@ -5,7 +5,7 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { PdfScan, type Quad } from 'pdf-scan';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image as RNImage, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Image as RNImage, Keyboard, Pressable, ScrollView, View } from 'react-native';
 
 import { errorMessage } from '../../src/library/use-library';
 import { IconButton } from '../../src/library/icon-button';
@@ -57,6 +57,8 @@ export default function ReviewScreen() {
   const [note, setNote] = useState<string | null>(
     params.failed ? `Couldn't import ${params.failed} of ${params.total ?? params.failed} photos. The rest are below.` : null,
   );
+  const scroller = useRef<ScrollView>(null);
+  const [keyboard, setKeyboard] = useState(0);
   const tried = useRef(new Set<string>());
   const counter = useRef(0);
 
@@ -88,6 +90,21 @@ export default function ReviewScreen() {
   };
 
   useEffect(() => cleanPreviews, []);
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (e) => setKeyboard(e.endCoordinates.height));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboard(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (keyboard === 0) return;
+    const t = setTimeout(() => scroller.current?.scrollToEnd({ animated: true }), 60);
+    return () => clearTimeout(t);
+  }, [keyboard]);
 
   const file = page?.file;
   useEffect(() => {
@@ -196,7 +213,7 @@ export default function ReviewScreen() {
   const dim = dims[page.file];
 
   return (
-    <Screen scroll>
+    <Screen scroll scrollRef={scroller} style={keyboard > 0 ? { paddingBottom: keyboard + space.xl } : undefined}>
       <Header
         title="Review"
         subtitle={plural(pages.length, card ? 'photo' : 'page')}
