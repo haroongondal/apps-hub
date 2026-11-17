@@ -43,3 +43,16 @@ used. Within a stream one agent runs its tasks in order.
 - Ruling: Minor 8 (card-shaped detection for imported photos) is fixed in the app by re-running `detectQuad(dest, true)` after `importImage` in a card session, not by a contract change.
 - Ruling: Minor 9 (unlinked free xref entries) deferred: pdf.js and PDFKit open it.
 - Fix wave BASE: ba46955c.
+- Fix wave: complete (commits ad456930, aa77f5d2, ad569795, 940acc62, a3282da8; the agent's first run was cut off by a session end after finding 1, then resumed). All eight review findings addressed; controller read the scan-service diff and re-ran: scan-core test 34 pass, app test 20 pass, `pnpm typecheck` exit 0, app lint exit 0. Findings 2, 3, 4 and 1 each have a test that failed before the fix. Findings 5, 7 and the import path of 8 are UI-only and unproven until the phone.
+- `expo-doctor`: 16 of 18 pass. Failing: (a) the known app-config sync check, which predates this work; (b) "common project setup issues", saying a local module's android/ios folder is gitignored. All 27 tracked files under `modules/pdf-scan/android` are tracked and not ignored; the likely trigger is the local `android/build/` Gradle output. Not confirmed against a clean main.
+- Deferred minors: free xref entries are unlinked when no words exist (opens in PDFKit and pdf.js); item-row-then-page-rows gap on a hard kill; "Open in editor" re-indexes the scan through the editor (decide before Phase 4); a failed `refreshThumb` after `deletePage` leaves the page deleted but the thumbnail stale.
+- Not done, needs the owner: Store release (`pnpm release pdf-editor`, owner's go plus Cloudflare account confirmation), phone test of the plan's Task I1 step 5, PR into main.
+
+## Rulings I made (cost if wrong)
+
+1. No filelock or coord for the three streams (directories were disjoint). Wrong: a commit conflict, none occurred.
+2. One batched review plus controller checks instead of a reviewer per task. Wrong: a defect surfaces one review later; the one review did find one Important bug.
+3. `cardMode` optional on the camera view. Wrong: none.
+4. Imported-photo card detection fixed in the app, not by a native contract change. Wrong: a card photo imported into a document-mode session still gets document-shaped detection.
+5. Free xref entries left unlinked. Wrong: a strict PDF validator might warn.
+6. Gradle and unit tests run once by me at integration, so most tasks were up to date. Wrong: none; test results files showed 54 tests, 0 failures.
