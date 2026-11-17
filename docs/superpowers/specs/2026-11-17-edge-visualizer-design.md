@@ -224,3 +224,5 @@ access, mic, notifications; Halo is battery-unrestricted (deviceidle whitelist).
   HyperOS blocks the broadcast without Autostart, or the receiver must also start from the listener rebind / app
   open). Opening the app also did not auto-start it — the Home "not running" hint asks for an off/on toggle.
 - "Alerts" tab label fits at 1080 px.
+- 2026-11-18: **(b) start after reboot PASSES** — after `adb reboot` and the owner's unlock, Halo's Home showed
+  "Halo is running" (BootReceiver path; Autostart on). All four spike questions answered.

@@ -91,3 +91,5 @@ Stage 3 fix wave: cc36c2f (all 8 + nits; NotifyRulesTest 15/15 with 4 new red→
 Task 3.7: releasing 0.4.0.
 - Halo 0.4.0 released (versionCode 6); manifest verified (store=19, halo=6). Next: phone check of 0.4.0 + pending (b) reboot and (d) always-on (owner present) → then stage 4 detailed plan if (d) passes.
 Phone check 3 (0.4.0): (d) always-on PASSES on HyperOS (gate for stage 4). Bug: no service restart after Store update on HyperOS, and opening the app doesn't start it either → fix in stage 4 Task 4.1 (start from app open when serviceWanted; investigate MY_PACKAGE_REPLACED on HyperOS).
+- Released device claim to image-tools (apps-hub-4d) after the reboot; reboot result to come from the owner reading Halo's Home line.
+Phone check 3 cont.: (b) reboot PASSES (owner read 'Halo is running' after unlock).
