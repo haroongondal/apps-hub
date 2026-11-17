@@ -22,11 +22,12 @@ class ProcessRequest : Record {
   @Field val rotation: Int = 0
   @Field val filter: String = "auto"
   @Field val out: String = ""
-  @Field val maxLongSide: Int = 2339
+  @Field val maxLongSide: Int? = null
 }
 
 // SPEC §7.5.
 object PageProcessor {
+  private const val DEFAULT_LONG_SIDE = 2339
   private const val BITS_LONG_SIDE = 3508
   private const val BITS_MAX_SCALE = 1.5
   private val FILTERS = setOf("original", "auto", "gray", "bw")
@@ -36,7 +37,8 @@ object PageProcessor {
     if (!PageGeometry.validateQuad(quad)) throw CodedException("invalid_quad", "The page corners must be 8 numbers from 0 to 1 that form a convex shape.", null)
     require(req.rotation in setOf(0, 90, 180, 270)) { "rotation must be 0, 90, 180 or 270, not ${req.rotation}" }
     require(req.filter in FILTERS) { "unknown filter ${req.filter}" }
-    require(req.out.isNotBlank() && req.maxLongSide > 0) { "out and maxLongSide are required" }
+    val maxLongSide = req.maxLongSide ?: DEFAULT_LONG_SIDE
+    require(req.out.isNotBlank() && maxLongSide > 0) { "out is required and maxLongSide must be positive" }
     val src = existingFile(req.src)
     val out = asFile(req.out)
     val bw = req.filter == "bw"
@@ -48,7 +50,7 @@ object PageProcessor {
         ?: throw CodedException("decode_failed", "${src.name} isn't an image this phone can read.", null)
       source = decoded
       val px = DoubleArray(8) { i -> quad[i] * if (i % 2 == 0) decoded.width else decoded.height }
-      val (jw, jh) = PageGeometry.outputSize(px, req.rotation, req.maxLongSide)
+      val (jw, jh) = PageGeometry.outputSize(px, req.rotation, maxLongSide)
       val (w, h) = if (bw) PageGeometry.outputSize(px, req.rotation, BITS_LONG_SIDE, BITS_MAX_SCALE) else jw to jh
       page = warp(decoded, px, req.rotation, w, h)
       decoded.recycle()
