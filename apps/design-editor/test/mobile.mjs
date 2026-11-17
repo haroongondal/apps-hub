@@ -301,6 +301,7 @@ await page.waitForFunction(() => window.editor.size[0] === 100, null, { timeout:
 assert.deepEqual(outside, [], 'no request reached a web host');
 assert.deepEqual(await page.evaluate(() => window.__csp.sort()), ['img-src https://evil.example/p.gif', 'img-src https://evil.example/q.png'], 'the CSP blocked both');
 
+await (await import('./vision-bridge.mjs')).run({ page, assert });
 await browser.close();
 assert.deepEqual(errors, [], 'no JS dialogs or errors');
 console.log('mobile bridge ok —', doc.pages[0].objects.length, 'template items, png 2×, refuse path, long-press, pinch', pinch.label);
