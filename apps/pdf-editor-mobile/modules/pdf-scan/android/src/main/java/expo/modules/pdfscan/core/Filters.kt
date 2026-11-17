@@ -9,7 +9,8 @@ import kotlin.math.sqrt
 // SPEC §7.5 step 5 and design 2026-11-18 §3. In place on opaque ARGB pixels; no Android classes.
 object Filters {
   private const val SCALE = 8
-  private const val SATURATION = 1.15
+  private const val SATURATION = 1.05
+  private const val GREY_SPREAD = 24 // below this channel spread the lift fades out, so near-grey pixels get no cast
   private const val SHARPEN = 0.6
   private const val SHARPEN_RADIUS = 2
   private const val MIN_SPAN = 128 // stretch gain at most 2, so a page with almost no ink keeps its paper white
@@ -34,8 +35,7 @@ object Filters {
       val r = lut[(c shr 16) and 0xFF]
       val g = lut[(c shr 8) and 0xFF]
       val b = lut[c and 0xFF]
-      val l = luma(r, g, b)
-      argb[i] = rgb(lift(l, r), lift(l, g), lift(l, b))
+      argb[i] = saturate(r, g, b)
     }
   }
 
@@ -207,7 +207,13 @@ object Filters {
     }
   }
 
-  private fun lift(l: Int, c: Int) = (l + (c - l) * SATURATION).roundToInt().coerceIn(0, 255)
+  internal fun saturate(r: Int, g: Int, b: Int): Int {
+    val l = luma(r, g, b)
+    val gain = 1 + (SATURATION - 1) * min(1.0, (max(r, max(g, b)) - min(r, min(g, b))).toDouble() / GREY_SPREAD)
+    fun lift(c: Int) = (l + (c - l) * gain).roundToInt().coerceIn(0, 255)
+    return rgb(lift(r), lift(g), lift(b))
+  }
+
   private fun luma(r: Int, g: Int, b: Int) = (r * 77 + g * 150 + b * 29) shr 8
   private fun luma(c: Int) = luma((c shr 16) and 0xFF, (c shr 8) and 0xFF, c and 0xFF)
   private fun rgb(r: Int, g: Int, b: Int) = (0xFF shl 24) or (r shl 16) or (g shl 8) or b

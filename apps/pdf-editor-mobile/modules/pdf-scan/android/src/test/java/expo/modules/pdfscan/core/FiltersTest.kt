@@ -65,6 +65,28 @@ class FiltersTest {
     assertTrue("red ink stayed red: ${r(c)},${g(c)},${b(c)}", r(c) - g(c) >= 100 && r(c) - b(c) >= 100)
   }
 
+  @Test fun magicKeepsMidGreyGrey() {
+    val px = page()
+    for (y in 100 until 110) for (x in 100 until 140) px[y * w + x] = argb(128, 128, 128)
+    Filters.magic(px, w, h)
+    val c = px[105 * w + 120]
+    assertTrue("grey stayed grey: ${r(c)},${g(c)},${b(c)}", r(c) == g(c) && g(c) == b(c))
+    for (v in 0..255) {
+      val s = Filters.saturate(v, v, v)
+      assertTrue("grey $v became ${r(s)},${g(s)},${b(s)}", r(s) == v && g(s) == v && b(s) == v)
+    }
+  }
+
+  @Test fun saturationLiftIsGentleOnVividColours() {
+    for ((cr, cg, cb) in listOf(Triple(250, 220, 20), Triple(255, 140, 30), Triple(20, 200, 255), Triple(255, 255, 0))) {
+      val s = Filters.saturate(cr, cg, cb)
+      val before = maxOf(cr, cg, cb) - minOf(cr, cg, cb)
+      val after = maxOf(r(s), g(s), b(s)) - minOf(r(s), g(s), b(s))
+      assertTrue("spread $before -> $after for $cr,$cg,$cb", after <= before * 1.1)
+      for (v in intArrayOf(r(s), g(s), b(s))) assertTrue("channel $v", v in 0..255)
+    }
+  }
+
   @Test fun grayIsGrayAndSharperThanPlainLuma() {
     val src = page()
     val px = src.copyOf()
