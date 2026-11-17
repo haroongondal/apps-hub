@@ -8,10 +8,12 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.pdfscan.android.CardSheet
 import expo.modules.pdfscan.android.ImageImport
 import expo.modules.pdfscan.android.PageProcessor
 import expo.modules.pdfscan.android.ProcessRequest
 import expo.modules.pdfscan.android.ScanCameraView
+import expo.modules.pdfscan.android.SheetRequest
 import expo.modules.pdfscan.android.asFile
 import expo.modules.pdfscan.android.existingFile
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +42,9 @@ class PdfScanModule : Module() {
     }
     AsyncFunction("processPage") Coroutine { req: ProcessRequest ->
       withContext(Dispatchers.Default) { PageProcessor.process(req) }
+    }
+    AsyncFunction("composeCardSheet") Coroutine { req: SheetRequest ->
+      withContext(Dispatchers.Default) { CardSheet.compose(req) }
     }
 
     View(ScanCameraView::class) {
