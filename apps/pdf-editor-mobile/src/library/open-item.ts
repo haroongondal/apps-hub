@@ -6,7 +6,7 @@ import { itemFile } from './paths';
 
 const MAX_EDITOR_BYTES = 28 * 1024 * 1024; // the base64 bridge stalls near 40 MB
 
-function confirmLarge(sizeBytes: number): Promise<boolean> {
+export function confirmLarge(sizeBytes: number): Promise<boolean> {
   if (sizeBytes <= MAX_EDITOR_BYTES) return Promise.resolve(true);
   return new Promise((resolve) => {
     Alert.alert(
@@ -28,6 +28,9 @@ export const itemOpeners: Partial<Record<ItemKind, (item: Item) => Promise<void>
       pathname: '/editor',
       params: { uri: itemFile(item.id, 'document.pdf').uri, name: `${item.title}.pdf`, itemId: item.id },
     });
+  },
+  scan: async (item) => {
+    router.push({ pathname: '/scan/[id]', params: { id: item.id } });
   },
 };
 
