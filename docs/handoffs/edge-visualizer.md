@@ -55,11 +55,11 @@ APK copy: scratchpad only (not committed). Manifest dump via aapt2 `dump xmltree
 
 ## Current state + next step (2026-11-17, session 2)
 Executing with cd-engineering-tools:parallel-agents-coord; ledger = docs/handoffs/halo-sdd-ledger.md (read it). Briefs in .sdd/.
-Branch `halo` (on origin/main d1b61ea). Store: store=19, halo=4 (0.3.1). Owner HAS installed Store 19 + Halo 0.3.1 and
+Branch `halo` (on origin/main d1b61ea). Store: store=19, halo=5 (0.3.2, GPU glow perf fix 125c207; phone has 0.3.1 — owner must update). Owner HAS installed Store 19 + Halo 0.3.1 and
 granted everything. Releases come from ~/Documents/apps-hub-wt/halo-release (detached; checkout the sha, `pnpm release halo`,
 then re-fetch manifest.json to check nothing clobbered it).
 Phone results so far are in the base spec §13: audio capture works; overlay is hidden by the system on the lock screen;
-frame time over budget (p50 24 ms, p95 109 ms) → perf-fix agent in flight (GPU RenderEffect glow instead of BlurMaskFilter).
+frame time over budget on 0.3.1 (p50 24 ms, p95 109 ms) → 0.3.2 has the GPU-glow fix; measure on phone with gfxinfo + framestats (render thread vs GPU) — if still slow, suspect full-screen overlay composition at alpha 0.8 / 120 Hz.
 Pending phone checks (need owner to unlock): (b) start after reboot, (d) always-on screen after screen-off (Diagnostics
 switch "Test the always-on screen", lock with power button), and frame time after the perf fix (`dumpsys gfxinfo com.haroon.halo reset`).
 Phone: queued in coord behind apps-hub-af (photo-search); background coord wait running.
