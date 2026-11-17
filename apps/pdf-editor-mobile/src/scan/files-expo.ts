@@ -1,8 +1,8 @@
 import type { ByteSink, ScanFiles } from '@apps-hub/scan-core';
 import { Directory, File } from 'expo-file-system';
 
-export const pathToUri = (path: string) => `file://${encodeURI(path)}`;
-export const uriToPath = (uri: string) => decodeURI(uri.replace(/^file:\/\//, '')).replace(/(.)\/+$/, '$1');
+export const pathToUri = (path: string) => `file://${path.split('/').map(encodeURIComponent).join('/')}`;
+export const uriToPath = (uri: string) => decodeURIComponent(uri.replace(/^file:\/\//, '')).replace(/(.)\/+$/, '$1');
 
 const dirAt = (path: string) => new Directory(pathToUri(path));
 const fileAt = (path: string) => new File(pathToUri(path));

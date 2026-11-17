@@ -191,11 +191,12 @@ test('imagePaths lists processed JPEGs in page order', async () => {
 
 test('buildPdf writes a valid PDF with one page per scan page, bw pages as bits', async () => {
   const s = await setup();
-  const item = await s.service.saveSession(await s.session(2), { title: 'A/B: "x"' });
+  const item = await s.service.saveSession(await s.session(2), { title: 'A/B: "x" #42 100%' });
   const [, second] = await s.service.pages(item.id);
   await s.service.editPage(item.id, second.pageId, { filter: 'bw' });
   const { path, bytes } = await s.service.buildPdf(item.id);
-  assert.ok(path.endsWith('/A-B- -x-.pdf'), path);
+  assert.ok(path.endsWith('/A-B- -x- -42 100-.pdf'), path);
+  assert.ok(!/[#%?]/.test(path), path);
   const pdf = latin1(await s.files.read(path));
   assert.equal(pdf.length, bytes);
   assert.equal(checkXref(pdf), 10 + 3 * 2);

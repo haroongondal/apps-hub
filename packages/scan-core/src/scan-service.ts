@@ -36,7 +36,7 @@ const FULL: Quad = [0, 0, 1, 0, 1, 1, 0, 1];
 const CARD_LONG_SIDE = 1600;
 const THUMB_LONG_SIDE = 320;
 const MAX_FILE_TITLE = 80;
-const UNSAFE = /[/\\:*?"<>|\u0000-\u001F\u007F-\u009F]/g;
+const UNSAFE = /[/\\:*?"<>|#%\u0000-\u001F\u007F-\u009F]/g;
 
 const safeFileTitle = (title: string): string => {
   const cut = Array.from(title.replace(UNSAFE, '-')).slice(0, MAX_FILE_TITLE).join('').trim();
