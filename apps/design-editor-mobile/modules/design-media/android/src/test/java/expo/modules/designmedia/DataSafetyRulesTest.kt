@@ -100,4 +100,14 @@ class DataSafetyRulesTest {
     val manifests = listOf(moduleSrc.resolve("../AndroidManifest.xml"), moduleSrc.resolve("../../../../../../android/app/src/main/AndroidManifest.xml"))
     manifests.forEach { m -> listOf("MANAGE_MEDIA", "MANAGE_EXTERNAL_STORAGE").forEach { assertFalse("${m.path} asks for $it", m.readText().contains(it)) } }
   }
+
+  @Test
+  fun rule8NoTelemetryFromOnnxRuntime() {
+    // ONNX Runtime 1.32's AAR ships a 1DS sender (mobile.events.data.microsoft.com) started by a manifest provider
+    val manifest = moduleSrc.resolve("../AndroidManifest.xml").readText()
+    assertTrue(Regex("""android:name="ai\.onnxruntime\.TelemetryInitializer"[^>]*tools:node="remove"""").containsMatchIn(manifest))
+    val calls = sources.flatMap { f -> Regex("OrtEnvironment\\.getEnvironment\\([^)]*\\)[^\\n]*").findAll(f.readText()).map { f.name to it.value }.toList() }
+    assertTrue(calls.isNotEmpty())
+    calls.forEach { (name, line) -> assertTrue("$name: $line", line.contains("setTelemetry(false)")) }
+  }
 }

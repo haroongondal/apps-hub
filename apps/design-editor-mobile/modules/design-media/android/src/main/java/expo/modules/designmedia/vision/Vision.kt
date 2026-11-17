@@ -33,7 +33,7 @@ object Vision {
   // One process-wide thread: one full-size image at a time, whatever the number of module instances.
   val queue = CoroutineScope(Executors.newSingleThreadExecutor().asCoroutineDispatcher() + SupervisorJob())
 
-  private val env: OrtEnvironment by lazy { OrtEnvironment.getEnvironment() }
+  private val env: OrtEnvironment by lazy { OrtEnvironment.getEnvironment().apply { setTelemetry(false) } }
 
   // getOrPut on both sides: a cancel that lands before its run starts still stops it.
   private val flags = ConcurrentHashMap<String, AtomicBoolean>()
