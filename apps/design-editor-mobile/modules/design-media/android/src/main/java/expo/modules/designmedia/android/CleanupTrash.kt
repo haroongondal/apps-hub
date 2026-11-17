@@ -21,10 +21,14 @@ class TrashNotNoted(cause: Throwable) :
   CodedException("The photos went to Android's trash, but Clean up couldn't note them. Find them in your Gallery app's trash.", cause)
 
 // The only way a gallery photo leaves: Android's own trash dialog, confirmed by the owner (AC-1). Never a delete.
-class CleanupTrash {
+// Process-wide, so a confirmed result still gets recorded after a JS reload made a new module instance.
+object CleanupTrash {
   private class Held(val promise: Promise, val entries: List<TrashEntry>)
 
   private val flow = TrashFlow<Held>()
+
+  // The promise may belong to a JS runtime that has since reloaded.
+  private fun settle(promise: Promise, block: Promise.() -> Unit) { runCatching { promise.block() } }
 
   fun start(ctx: Context, activity: Activity?, action: TrashAction, uris: List<String>, promise: Promise) {
     val wanted = uris.distinct()
@@ -40,8 +44,9 @@ class CleanupTrash {
       try {
         val request = MediaStore.createTrashRequest(ctx.contentResolver, entries.map { Uri.parse(it.uri) }, action == TrashAction.TRASH)
         activity.startIntentSenderForResult(request.intentSender, action.requestCode, null, 0, 0, 0)
+        flow.launched()
       } catch (e: Exception) {
-        flow.abort()?.promise?.promise?.reject(DialogFailed(e))
+        flow.abort()?.let { settle(it.promise.promise) { reject(DialogFailed(e)) } }
       }
     }
   }
@@ -49,19 +54,26 @@ class CleanupTrash {
   fun onResult(ctx: Context, requestCode: Int, resultCode: Int) {
     val (pending, ok) = flow.finish(requestCode, resultCode == Activity.RESULT_OK) ?: return
     val held = pending.promise
-    if (!ok) return held.promise.resolve(answer(pending.action, 0))
-    try {
-      val record = CleanupTool.record(ctx)
-      if (pending.action == TrashAction.TRASH) {
-        val now = System.currentTimeMillis()
-        record.add(held.entries.map { it.copy(trashedAt = now) })
-      } else {
-        record.remove(pending.uris.toSet())
+    if (!ok) return settle(held.promise) { resolve(answer(pending.action, 0)) }
+    if (pending.action == TrashAction.TRASH) {
+      val now = System.currentTimeMillis()
+      try {
+        CleanupTool.record(ctx).add(held.entries.map { it.copy(trashedAt = now) })
+      } catch (e: Exception) {
+        return settle(held.promise) { reject(TrashNotNoted(e)) }
       }
-    } catch (e: Exception) {
-      return held.promise.reject(if (pending.action == TrashAction.TRASH) TrashNotNoted(e) else DialogFailed(e))
+    } else {
+      // Restored either way; a stale entry drops on the next recentlyRemoved.
+      runCatching { CleanupTool.record(ctx).remove(pending.uris.toSet()) }
     }
-    held.promise.resolve(answer(pending.action, pending.uris.size))
+    settle(held.promise) { resolve(answer(pending.action, pending.uris.size)) }
+  }
+
+  // Back in the app with a launched dialog unanswered (blocked launch, finished Activity): free the flow. Expo runs
+  // onActivityResult before onResume under one mutex, so a real answer is always handled first.
+  fun onForeground() {
+    val pending = flow.resumed() ?: return
+    settle(pending.promise.promise) { resolve(answer(pending.action, 0)) }
   }
 
   private fun answer(action: TrashAction, n: Int) = mapOf((if (action == TrashAction.TRASH) "moved" else "restored") to n)

@@ -18,7 +18,7 @@ export interface VisionToolEntry { tool: 'person' | 'object' | 'upscale'; name: 
 export interface VisionProgressEvent { id: string; fraction: number }
 export type CleanupKind = 'blurry' | 'copies' | 'lookalikes' | 'screenshots' | 'dark';
 export interface CleanupPhoto { uri: string; name: string; bytes: number; takenAt: number; ticked: boolean; best: boolean }
-export interface CleanupGroup { kind: CleanupKind; key: string; photos: CleanupPhoto[]; bytes: number } // bytes freed by the ticked photos
+export interface CleanupGroup { kind: CleanupKind; key: string; photos: CleanupPhoto[]; bytes: number } // bytes of the photos suggested for removal (all of them, or all but the keeper)
 export interface CleanupResult {
   groups: CleanupGroup[]; blur: { min: number; max: number; default: number }; lookalike: { default: number; strict: number }; indexed: number;
 }

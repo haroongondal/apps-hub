@@ -143,6 +143,13 @@ class CleanupTest {
   }
 
   @Test
+  fun nanBlurThresholdMeansDefault() {
+    val ps = listOf(photo(1, lap = 200f), photo(2, lap = 100f))
+    val g = groups(ps, opts = CleanupOptions(blurThreshold = Double.NaN)).single { it.kind == CleanupKind.BLURRY }
+    assertEquals(listOf(2L), g.members.map { it.id })
+  }
+
+  @Test
   fun screenshotsByRelativePath() {
     val gs = groups(listOf(
       photo(1, path = "Pictures/Screenshots/", takenAt = 1), photo(2, path = "DCIM/Camera/"), photo(3, path = null),

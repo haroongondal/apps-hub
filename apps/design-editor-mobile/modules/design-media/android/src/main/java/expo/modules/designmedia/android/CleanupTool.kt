@@ -1,25 +1,26 @@
 package expo.modules.designmedia.android
 
+import android.Manifest
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.MediaStore
-import expo.modules.designmedia.core.AtomicFile
 import expo.modules.designmedia.core.BLUR_DEFAULT
 import expo.modules.designmedia.core.BLUR_MAX
 import expo.modules.designmedia.core.BLUR_MIN
 import expo.modules.designmedia.core.CleanupKind
 import expo.modules.designmedia.core.CleanupOptions
 import expo.modules.designmedia.core.CleanupPhoto
-import expo.modules.designmedia.core.Dismissals
+import expo.modules.designmedia.core.CleanupStores
 import expo.modules.designmedia.core.LOOKALIKE_DEFAULT
 import expo.modules.designmedia.core.LOOKALIKE_STRICT
 import expo.modules.designmedia.core.PhotoIndexFile
 import expo.modules.designmedia.core.TRASH_KEEP_MS
-import expo.modules.designmedia.core.TrashRecord
 import expo.modules.designmedia.core.cleanupGroups
 import expo.modules.designmedia.core.galleryImageId
+import expo.modules.designmedia.core.recentEntries
 import expo.modules.kotlin.exception.CodedException
 import java.io.File
 
@@ -34,9 +35,9 @@ object CleanupTool {
 
   private class Meta(val name: String, val bytes: Long, val takenAt: Long, val pixels: Long, val path: String?)
 
-  fun record(ctx: Context) = TrashRecord(AtomicFile(File(ctx.filesDir, "cleanup-trash.json")))
+  fun record(ctx: Context) = CleanupStores.record(File(ctx.filesDir, "cleanup-trash.json"))
 
-  private fun dismissals(ctx: Context) = Dismissals(AtomicFile(File(ctx.filesDir, "cleanup-dismissed.json")))
+  private fun dismissals(ctx: Context) = CleanupStores.dismissals(File(ctx.filesDir, "cleanup-dismissed.json"))
 
   fun uriOf(id: Long): String = ContentUris.withAppendedId(IMAGES, id).toString()
 
@@ -73,9 +74,9 @@ object CleanupTool {
     val all = record.all()
     if (all.isEmpty()) return emptyList()
     val now = System.currentTimeMillis()
-    val expires = stillTrashed(ctx, all.mapNotNull { idOf(it.uri) })
-    // A failed query keeps every entry: dropping one would hide a photo the owner can still restore.
-    val kept = if (expires == null) all.filter { now - it.trashedAt <= TRASH_KEEP_MS } else record.recent(now, expires.keys)
+    val full = ctx.checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+    val expires = if (full) stillTrashed(ctx, all.mapNotNull { idOf(it.uri) }) else null
+    val kept = recentEntries(record, now, full, expires?.keys)
     return kept.map {
       val at = expires?.get(it.uri)?.takeIf { s -> s > 0 }?.times(1000) ?: (it.trashedAt + TRASH_KEEP_MS)
       mapOf("uri" to it.uri, "name" to it.name, "bytes" to it.bytes, "trashedAt" to it.trashedAt, "expiresAt" to at)

@@ -34,8 +34,6 @@ import kotlinx.coroutines.SupervisorJob
 class DesignMediaModule : Module() {
   private val readScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-  private val trash = CleanupTrash()
-
   private val context
     get() = requireNotNull(appContext.reactContext) { "React context unavailable" }
 
@@ -63,7 +61,9 @@ class DesignMediaModule : Module() {
 
     OnActivityEntersBackground { CompositionView.pauseAll() }
 
-    OnActivityResult { _, result -> trash.onResult(context, result.requestCode, result.resultCode) }
+    OnActivityResult { _, result -> CleanupTrash.onResult(context, result.requestCode, result.resultCode) }
+
+    OnActivityEntersForeground { CleanupTrash.onForeground() }
 
     AsyncFunction("probe") { uri: String -> Probe.read(context, Uri.parse(uri)) }
 
@@ -137,13 +137,13 @@ class DesignMediaModule : Module() {
     AsyncFunction("cleanupGroups") { options: Map<String, Any?>? -> CleanupTool.groups(context, options) }.runOnQueue(readScope)
 
     AsyncFunction("trashPhotos") { uris: List<String>, promise: Promise ->
-      trash.start(context, appContext.currentActivity, TrashAction.TRASH, uris, promise)
+      CleanupTrash.start(context, appContext.currentActivity, TrashAction.TRASH, uris, promise)
     }.runOnQueue(readScope)
 
     AsyncFunction("recentlyRemoved") { CleanupTool.recentlyRemoved(context) }.runOnQueue(readScope)
 
     AsyncFunction("restorePhotos") { uris: List<String>, promise: Promise ->
-      trash.start(context, appContext.currentActivity, TrashAction.RESTORE, uris, promise)
+      CleanupTrash.start(context, appContext.currentActivity, TrashAction.RESTORE, uris, promise)
     }.runOnQueue(readScope)
 
     AsyncFunction("dismissCleanup") { kind: String, uris: List<String> -> CleanupTool.dismiss(context, kind, uris) }.runOnQueue(readScope)

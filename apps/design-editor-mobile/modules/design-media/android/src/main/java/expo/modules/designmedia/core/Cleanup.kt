@@ -31,7 +31,7 @@ private val NEWEST = compareByDescending<CleanupPhoto> { it.takenAt }.thenBy { i
 
 fun cleanupGroups(photos: List<CleanupPhoto>, dismissed: Set<Pair<CleanupKind, Long>>, opts: CleanupOptions): List<CleanupGroup> {
   fun of(kind: CleanupKind) = photos.filter { (kind to it.id) !in dismissed }
-  val blur = opts.blurThreshold.coerceIn(BLUR_MIN, BLUR_MAX)
+  val blur = if (opts.blurThreshold.isNaN()) BLUR_DEFAULT else opts.blurThreshold.coerceIn(BLUR_MIN, BLUR_MAX)
   val copies = similarGroups(CleanupKind.COPIES, of(CleanupKind.COPIES), ::linkCopies)
   val cosine = if (opts.lookalikeCosine.isNaN()) LOOKALIKE_DEFAULT else opts.lookalikeCosine.coerceIn(LOOKALIKE_DEFAULT, LOOKALIKE_STRICT)
   // A copy the user dismissed has cosine ~1 with its twin; it must not come back pre-ticked as a look-alike.

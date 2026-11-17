@@ -8,10 +8,12 @@ class TrashPending<P>(val action: TrashAction, val uris: List<String>, val promi
 // One open Android dialog at a time; P is the module's Promise, generic so this stays JVM-testable.
 class TrashFlow<P> {
   private var pending: TrashPending<P>? = null
+  private var launched = false
 
   @Synchronized fun begin(action: TrashAction, uris: List<String>, promise: P): Boolean {
     if (pending != null) return false
     pending = TrashPending(action, uris, promise)
+    launched = false
     return true
   }
 
@@ -22,6 +24,11 @@ class TrashFlow<P> {
   }
 
   @Synchronized fun abort(): TrashPending<P>? = pending.also { pending = null }
+
+  @Synchronized fun launched() { launched = pending != null }
+
+  // Only a launched request is given up on resume: one still waiting for its posted launch must survive it.
+  @Synchronized fun resumed(): TrashPending<P>? = if (launched) abort() else null
 }
 
 fun galleryImageId(uri: String, base: String): Long? {

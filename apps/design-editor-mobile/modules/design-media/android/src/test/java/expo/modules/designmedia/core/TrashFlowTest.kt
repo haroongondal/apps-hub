@@ -76,4 +76,27 @@ class TrashFlowTest {
       "content://com.other/images/media/42", "${base}42", "", "content://media/external/file/42",
     ).forEach { assertNull(it, galleryImageId(it, base)) }
   }
+
+  @Test
+  fun resumeAfterLaunchFreesTheFlowAndGivesThePendingBack() {
+    val flow = TrashFlow<String>()
+    flow.begin(TrashAction.TRASH, a, "p")
+    flow.launched()
+    assertEquals("p", flow.resumed()?.promise)
+    assertNull(flow.finish(TrashAction.TRASH.requestCode, ok = true))
+    assertTrue(flow.begin(TrashAction.TRASH, a, "p2"))
+    assertNull(flow.resumed()) // the new request is not launched yet
+  }
+
+  @Test
+  fun resumeBeforeLaunchDoesNot() {
+    val flow = TrashFlow<String>()
+    assertNull(flow.resumed())
+    flow.begin(TrashAction.TRASH, a, "p")
+    assertNull(flow.resumed())
+    assertFalse(flow.begin(TrashAction.TRASH, a, "p2"))
+    flow.launched()
+    assertEquals("p", flow.finish(TrashAction.TRASH.requestCode, ok = true)?.first?.promise)
+    assertNull(flow.resumed())
+  }
 }
