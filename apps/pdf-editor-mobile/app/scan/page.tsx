@@ -121,6 +121,7 @@ export default function PageScreen() {
         )
       ) : (
         <Image
+          key={`${pageId}-${page.rotation}-${page.filter}-${page.width}x${page.height}-${page.quad.join(',')}`}
           source={{ uri: itemFile(id, `pages/${pageId}.jpg`).uri }}
           style={{ width: '100%', aspectRatio: page.width / Math.max(1, page.height) }}
           contentFit="contain"

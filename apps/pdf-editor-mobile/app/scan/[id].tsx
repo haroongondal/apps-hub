@@ -89,7 +89,7 @@ export default function ScanScreen() {
             accessibilityLabel={`Page ${i + 1} of ${pages.length}`}
             style={{ width: `${100 / COLUMNS - 2}%`, aspectRatio: 0.72, borderRadius: radius.control, overflow: 'hidden', borderWidth: 1, borderColor: c.line, backgroundColor: c.raised }}
           >
-            <Image source={{ uri: itemFile(id, `pages/${p.pageId}.jpg`).uri }} style={{ flex: 1 }} contentFit="cover" cachePolicy="none" />
+            <Image key={`${p.pageId}-${p.rotation}-${p.filter}-${p.width}x${p.height}-${p.quad.join(',')}`} source={{ uri: itemFile(id, `pages/${p.pageId}.jpg`).uri }} style={{ flex: 1 }} contentFit="cover" cachePolicy="none" />
           </Pressable>
         ))}
       </View>
