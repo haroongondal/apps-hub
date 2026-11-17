@@ -208,7 +208,7 @@ export function HomeScreen({
         </Group>
       )}
       {empty && <Empty title="Nothing saved yet" body={EMPTY_TEXT} />}
-      {summary !== null && summary.conversations.length > 0 && (
+      {summary !== null && summary.hasItems && (
         <Group title="Recent chats">
           {summary.conversations.map((r) => (
             <Row
