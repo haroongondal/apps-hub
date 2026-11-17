@@ -1,6 +1,7 @@
 package expo.modules.inflowcore.core
 
 import java.io.IOException
+import java.net.SocketTimeoutException
 import java.net.URI
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -22,7 +23,7 @@ data class Usage(val inputTokens: Long, val cachedTokens: Long, val outputTokens
 data class HttpReply(val code: Int, val body: String, val retryAfterMs: Long? = null)
 
 class AiError(val kind: Kind, message: String) : Exception(message) {
-  enum class Kind { AUTH, BAD_REQUEST, SERVER, OFFLINE }
+  enum class Kind { AUTH, BAD_REQUEST, SERVER, OFFLINE, TIMEOUT }
 }
 
 /** `inputChars` is the length of the request, so a reply without `usage` can still be counted. */
@@ -50,6 +51,9 @@ class OpenAiCompatProvider(
       val headers = mapOf("Authorization" to "Bearer ${keys[current]}", "Content-Type" to "application/json")
       val reply = try {
         post(url, headers, body)
+      } catch (e: SocketTimeoutException) {
+        // The post turns a connect timeout into a plain IOException, so this one is a read timeout: the model has the request and bills it, so never send it again.
+        throw AiError(AiError.Kind.TIMEOUT, "The AI took too long to answer. Inflow will try again later.")
       } catch (e: IOException) {
         if (last) throw AiError(AiError.Kind.OFFLINE, "Inflow couldn't reach the model. Check the phone's connection and try again.")
         null

@@ -6,7 +6,9 @@ import expo.modules.inflowcore.core.AiModels
 import expo.modules.inflowcore.core.HttpReply
 import expo.modules.inflowcore.core.OpenAiCompatProvider
 import expo.modules.inflowcore.core.Prices
+import java.net.ConnectException
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 import java.time.Instant
 import java.time.LocalDate
@@ -82,12 +84,12 @@ class AiConfig(private val store: SqlItemStore) {
   }
 
   /** Null when there is no key for the saved address, or the address is not https (the key would travel unencrypted). */
-  fun provider(onlyKeyId: Long? = null): OpenAiCompatProvider? {
+  fun provider(onlyKeyId: Long? = null, readMs: Int = AiHttp.READ_MS): OpenAiCompatProvider? {
     val url = baseUrl()
     if (!url.startsWith("https://")) return null
     val keys = keys(url).filter { onlyKeyId == null || it.first == onlyKeyId }.map { it.second }
     if (keys.isEmpty()) return null
-    return OpenAiCompatProvider(url, model(), keys, known()?.effort, AiHttp::post)
+    return OpenAiCompatProvider(url, model(), keys, known()?.effort, { u, h, b -> AiHttp.post(u, h, b, readMs) })
   }
 
   fun today(): String = LocalDate.ofInstant(Instant.now(), ZoneId.systemDefault()).toString()
@@ -109,18 +111,25 @@ class AiConfig(private val store: SqlItemStore) {
   }
 }
 
-/** The one place a request leaves the phone: a POST to an https address (never redirected), 20 s to connect, 60 s to read. IOException means the network failed. */
+/** The one place a request leaves the phone: a POST to an https address (never redirected), 20 s to connect, 60 s to read (more for a report). IOException means the network failed; SocketTimeoutException means the request was sent and the model did not answer in time. */
 object AiHttp {
-  fun post(url: String, headers: Map<String, String>, body: String): HttpReply {
+  const val READ_MS = 60_000
+  const val REPORT_READ_MS = 180_000   // a month's report is long: the model may think for minutes
+
+  fun post(url: String, headers: Map<String, String>, body: String, readMs: Int = READ_MS): HttpReply {
     val c = URL(url).openConnection() as HttpURLConnection
     try {
       c.requestMethod = "POST"
       c.instanceFollowRedirects = false   // a 3xx is a refused request: the key must never follow a redirect to another address
       c.connectTimeout = 20_000
-      c.readTimeout = 60_000
+      c.readTimeout = readMs
       c.doOutput = true
       headers.forEach { (k, v) -> c.setRequestProperty(k, v) }
-      c.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+      try {
+        c.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+      } catch (e: SocketTimeoutException) {
+        throw ConnectException("connect timed out")   // the request never reached the model: the provider retries this like any lost network
+      }
       val code = c.responseCode
       val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
       val retryAfterMs = c.getHeaderField("retry-after")?.trim()?.toLongOrNull()?.times(1_000)

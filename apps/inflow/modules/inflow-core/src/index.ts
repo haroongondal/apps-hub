@@ -151,18 +151,9 @@ export interface AccountTotal {
   count: number;
 }
 
-// Money out only, top 10.
-export interface MerchantTotal {
-  counterparty: string;
-  currency: string;
-  total: number;
-  count: number;
-}
-
 // Own transfers are left out.
 export interface MoneySummary {
   accounts: AccountTotal[];
-  merchants: MerchantTotal[];
   categories: CategoryTotal[];
   // Every person or shop, money in and out; own transfers are one row (own true, name null). name null otherwise = Unknown.
   parties: PartyTotal[];

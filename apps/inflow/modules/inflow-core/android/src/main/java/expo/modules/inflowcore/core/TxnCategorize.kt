@@ -59,8 +59,7 @@ class TxnCategorize(
       val reply = try {
         provider.complete(Prompt.system(), Prompt.user(batch, zone))
       } catch (e: AiError) {
-        // A refused request counts as a try (it may be this batch's fault); an outage or a bad key does not.
-        if (e.kind == AiError.Kind.BAD_REQUEST) store.categoryTried(ids)
+        // No try for any error: a refused request (wrong model name, too large) is not billed and says nothing about these txns, so the settings must be fixed, not the txns dropped.
         return done
       }
       spend(reply)
@@ -96,7 +95,7 @@ Rules:
     fun user(txns: List<Txn>, zone: ZoneId): String =
       "Transactions (${txns.size}), one JSON object per line, amounts in main units:\n${TxnFields.lines(txns, zone, withCategory = false)}"
 
-    /** Id to (category, clean name) for sent ids only. A category outside the txn's direction list becomes that direction's fallback; an id answered twice is dropped (retried). */
+    /** Id to (category, clean name) for sent ids only. An id whose category is outside the txn's direction list is dropped (retried), and so is an id answered twice is dropped (retried). */
     fun parse(reply: String, sent: List<Txn>): Map<Long, Pair<String, String?>> {
       val from = reply.indexOf('{')
       val to = reply.lastIndexOf('}')
@@ -108,7 +107,7 @@ Rules:
       val out = LinkedHashMap<Long, Pair<String, String?>>()
       for (o in objects) {
         val id = (o["id"] as? JsonPrimitive)?.longOrNull?.takeIf { it in byId && it !in twice } ?: continue
-        val category = Categories.match((o["category"] as? JsonPrimitive)?.takeIf { it !is JsonNull && it.isString }?.contentOrNull, byId.getValue(id).direction)
+        val category = Categories.canonical((o["category"] as? JsonPrimitive)?.takeIf { it !is JsonNull && it.isString }?.contentOrNull, byId.getValue(id).direction) ?: continue
         val name = (o["name"] as? JsonPrimitive)?.takeIf { it !is JsonNull && it.isString }?.contentOrNull
           ?.replace(Regex("\\s+"), " ")?.trim()?.take(MAX_NAME)?.ifEmpty { null }
         out[id] = category to name

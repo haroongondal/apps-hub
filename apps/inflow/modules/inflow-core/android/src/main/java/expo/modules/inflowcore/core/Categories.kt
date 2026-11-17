@@ -21,7 +21,10 @@ object Categories {
     return name?.takeIf { it in forDirection(d) }
   }
 
-  /** The model's word (any case) as one of the direction's names, else the direction's fallback. */
-  fun match(name: String?, d: Direction): String =
-    forDirection(d).firstOrNull { it.equals(name?.trim(), ignoreCase = true) } ?: fallback(d)
+  /** The model's word (any case) as one of the direction's names, else null. */
+  fun canonical(name: String?, d: Direction): String? =
+    forDirection(d).firstOrNull { it.equals(name?.trim(), ignoreCase = true) }
+
+  /** `canonical`, else the direction's fallback. */
+  fun match(name: String?, d: Direction): String = canonical(name, d) ?: fallback(d)
 }

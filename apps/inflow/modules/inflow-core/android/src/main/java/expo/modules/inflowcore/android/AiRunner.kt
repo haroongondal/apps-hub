@@ -90,7 +90,7 @@ object AiRunner {
   }
 
   private fun reportRun(ctx: Context, store: SqlItemStore, cfg: AiConfig) = ReportRun(
-    SqlReportStore(store.db), { cfg.provider() }, cfg::spend, cfg::capReached,
+    SqlReportStore(store.db), { cfg.provider(readMs = AiHttp.REPORT_READ_MS) }, cfg::spend, cfg::capReached,
     { store.meta(StoreHolder.OWNER_NAME)?.takeIf { it.isNotBlank() } }, { SqlLedgerStore(store.db).accounts() },
     System::currentTimeMillis, ZoneId.systemDefault(),
   ) { id, headline -> SqlReportStore(store.db).get(id)?.let { ReportNotifier.notify(ctx, id, headline, it.kind) } }

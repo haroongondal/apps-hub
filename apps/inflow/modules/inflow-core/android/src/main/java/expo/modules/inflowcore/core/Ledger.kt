@@ -117,9 +117,9 @@ class Ledger(private val store: LedgerStore, private val ownerName: () -> String
     }
     replaced?.let { r ->
       val target = store.get(id) ?: return id
-      if (target.category == null && r.category != null) {
-        store.setAiDetails(id, r.category, r.label)
-        if (r.categorySet) store.setCategory(id, r.category)
+      if (r.category != null) {
+        if (target.category == null) store.setAiDetails(id, r.category, r.label)
+        if (r.categorySet) store.setCategory(id, r.category)   // the owner's choice wins over a category the target already has
       }
       if (r.own && !target.own && !target.ownSet) store.setOwn(id, true, false, target.pairId)
     }

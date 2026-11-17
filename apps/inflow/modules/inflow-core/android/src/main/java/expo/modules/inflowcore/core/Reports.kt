@@ -77,7 +77,7 @@ object ReportSchedule {
 /** The AI's reply is untrusted: it is stored only when it is exactly this shape, converted to minor units. Anything else is rejected whole. */
 object ReportJson {
   const val MAX_TXNS = 1000
-  const val MAX_TOKENS = 16_000
+  const val MAX_TOKENS = 8_000   // the item batches use the same: a 16,000 max_tokens may be refused as too large on a free tier
   private const val MAX_NAME = 100
   private const val MAX_INSIGHT = 200
   private const val MAX_CURRENCIES = 5
@@ -215,10 +215,10 @@ Rules:
               val c = it.jsonObject
               val direction = (c["direction"] as? JsonPrimitive)?.takeIf { d -> d.isString }?.content?.trim()?.lowercase(Locale.ROOT)
               need(direction == "in" || direction == "out")
-              val name = text(c["name"], MAX_NAME)
-              need(name in Categories.forDirection(if (direction == "in") Direction.IN else Direction.OUT))
+              val name = Categories.canonical(text(c["name"], MAX_NAME), if (direction == "in") Direction.IN else Direction.OUT)
+              need(name != null)
               buildJsonObject {
-                put("name", name); put("direction", direction!!); put("amount", minor(c, "amount", false)); put("count", count(c, "count"))
+                put("name", name!!); put("direction", direction!!); put("amount", minor(c, "amount", false)); put("count", count(c, "count"))
                 put("share", percent(c["share"], 0.0, 100.0)); put("change", if (c["change"].let { x -> x == null || x is JsonNull }) JsonNull else percent(c["change"], -100_000.0, 100_000.0))
               }
             },
@@ -233,9 +233,9 @@ Rules:
           JsonArray(
             o.arr("largest", 0, MAX_LARGEST).map {
               val l = it.jsonObject
-              val category = text(l["category"], MAX_NAME)
-              need(category in Categories.OUT)
-              buildJsonObject { put("date", date(l, "date")); put("name", name(l, "name")); put("amount", minor(l, "amount", false)); put("category", category) }
+              val category = Categories.canonical(text(l["category"], MAX_NAME), Direction.OUT)
+              need(category != null)
+              buildJsonObject { put("date", date(l, "date")); put("name", name(l, "name")); put("amount", minor(l, "amount", false)); put("category", category!!) }
             },
           ),
         )
@@ -346,6 +346,7 @@ class ReportRun(
     val provider = provider() ?: return false to NO_KEY
     val t = now()
     var tries = if (manual) 0 else store.row(p)?.tries ?: 0
+    if (p.partial) store.deletePartial(ReportKind.WEEKLY)   // older "so far" rows would pile up; this one is saved below
     val txns = store.txns(p.start, p.end)
     if (txns.isEmpty()) return ready(p, ReportJson.emptyReport(), tries, manual, t)
     if (txns.size > ReportJson.MAX_TXNS) {
@@ -360,9 +361,9 @@ class ReportRun(
         ReportJson.MAX_TOKENS,
       )
     } catch (e: AiError) {
-      // A bad key or a network or server outage says nothing about this report: no try is used.
-      if (e.kind != AiError.Kind.BAD_REQUEST) return waiting(p, e.message ?: RETRY, tries, t)
-      return badReply(p, ++tries, t)
+      // A bad key or a network or server outage says nothing about this report: no try is used. A refusal or a timeout was billed or may be this report's fault: it counts.
+      if (e.kind != AiError.Kind.BAD_REQUEST && e.kind != AiError.Kind.TIMEOUT) return waiting(p, e.message ?: RETRY, tries, t)
+      return badReply(p, ++tries, t, e.message.takeIf { e.kind == AiError.Kind.TIMEOUT })
     }
     spend(reply)
     val json = ReportJson.parse(reply.text, p, zone) ?: return badReply(p, ++tries, t)
@@ -383,9 +384,9 @@ class ReportRun(
     return false to message
   }
 
-  private fun badReply(p: Period, tries: Int, t: Long): Pair<Boolean, String?> {
+  private fun badReply(p: Period, tries: Int, t: Long, waitMessage: String? = null): Pair<Boolean, String?> {
     val failed = tries >= MAX_TRIES
-    val message = if (failed) FAILED_COPY else RETRY
+    val message = if (failed) FAILED_COPY else waitMessage ?: RETRY
     store.save(p, if (failed) FAILED else WAITING, message, tries, null, null, t)
     return false to message
   }

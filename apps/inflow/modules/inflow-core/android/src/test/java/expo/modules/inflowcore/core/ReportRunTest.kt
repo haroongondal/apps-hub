@@ -1,6 +1,7 @@
 package expo.modules.inflowcore.core
 
 import java.io.IOException
+import java.net.SocketTimeoutException
 import java.time.Instant
 import java.time.ZoneId
 import kotlinx.serialization.json.Json
@@ -23,6 +24,8 @@ class ReportRunTest {
   private var cap = false
   private var aiOn = true
   private var offline = false
+  private var slow = false
+  private val bodies = mutableListOf<String>()
   private var code = 200
   private val prompts = mutableListOf<String>()
   private var spent = 0
@@ -45,6 +48,8 @@ class ReportRunTest {
 
   private fun post(url: String, headers: Map<String, String>, body: String): HttpReply {
     if (offline) throw IOException("down")
+    bodies += body
+    if (slow) throw SocketTimeoutException("Read timed out")
     prompts += Json.parseToJsonElement(body).jsonObject["messages"]!!.jsonArray[1].jsonObject["content"]!!.jsonPrimitive.content
     if (code != 200) return HttpReply(code, "no")
     val content = Json.encodeToString(kotlinx.serialization.serializer<String>(), answer(prompts.last()))
@@ -143,6 +148,40 @@ class ReportRunTest {
     offline = false
     run().runDue()
     assertEquals("ready", store.rows.single { it.kind == ReportKind.WEEKLY }.status)
+  }
+
+  @Test fun aTimeoutCountsATryAndThreeOfThemFail() {
+    addTxn("2025-11-10T12:00:00")
+    slow = true
+    val r = run()
+    r.runDue()
+    var row = store.rows.single { it.kind == ReportKind.WEEKLY }
+    assertEquals("waiting", row.status)
+    assertEquals(1, row.tries)
+    assertEquals("The AI took too long to answer. Inflow will try again later.", row.message)
+    repeat(2) { r.runDue() }
+    row = store.rows.single { it.kind == ReportKind.WEEKLY }
+    assertEquals("failed", row.status)
+    assertEquals(3, row.tries)
+    assertEquals(3, bodies.size)
+  }
+
+  @Test fun reportsAskForAtMost8000Tokens() {
+    addTxn("2025-11-10T12:00:00")
+    run().runDue()
+    assertTrue(bodies.first().contains("\"max_tokens\":8000"))
+  }
+
+  @Test fun makingAPartialDeletesTheOlderPartials() {
+    addTxn("2025-11-10T12:00:00")
+    addTxn("2025-11-17T12:00:00")
+    clock = at("2025-11-12T12:00:00")
+    assertTrue(run().make(ReportSchedule.weekSoFar(clock, karachi), manual = true).first)
+    clock = at("2025-11-19T12:00:00")
+    assertTrue(run().make(ReportSchedule.weekSoFar(clock, karachi), manual = true).first)
+    val partials = store.rows.filter { it.partial }
+    assertEquals(1, partials.size)
+    assertEquals(ReportSchedule.weekSoFar(clock, karachi).start, partials.single().periodStart)
   }
 
   @Test fun threeBadRepliesFailAndAFourthTickMakesNoCall() {

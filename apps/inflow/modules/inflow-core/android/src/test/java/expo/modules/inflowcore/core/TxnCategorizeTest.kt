@@ -33,7 +33,7 @@ class TxnCategorizeTest {
     assertEquals(mapOf(a to ("Groceries" to "Imtiaz")), r)
   }
 
-  @Test fun parseMapsUnknownOrWrongDirectionToFallback() {
+  @Test fun parseDropsUnknownOrWrongDirectionCategories() {
     val out = add(Direction.OUT)
     val inn = add(Direction.IN, 200_000)
     val sent = listOf(txn(out), txn(inn))
@@ -41,8 +41,7 @@ class TxnCategorizeTest {
       reply("""{"id":$out,"category":"Salary","name":null}""", """{"id":$inn,"category":"Rent"}"""),
       sent,
     )
-    assertEquals("Other" to null, r.getValue(out))
-    assertEquals("Other income" to null, r.getValue(inn))
+    assertTrue(r.isEmpty())
     val ok = TxnCategorize.Prompt.parse(reply("""{"id":$out,"category":"mobile & internet"}""", """{"id":$inn,"category":"SALARY"}"""), sent)
     assertEquals("Mobile & internet", ok.getValue(out).first)
     assertEquals("Salary", ok.getValue(inn).first)
@@ -189,6 +188,29 @@ class TxnCategorizeTest {
     assertEquals(0, run())
     assertEquals(0, calls)
     assertEquals("Rent", txn(a).category)
+  }
+
+  @Test fun anInvalidCategoryIsDroppedAndCountsATry() {
+    val a = add()
+    answer = { _ -> reply("""{"id":$a,"category":"Gambling","name":"X"}""") }
+    assertEquals(0, run())
+    assertNull(txn(a).category)
+    assertEquals(1, store.tries[a])
+  }
+
+  @Test fun aRefusedRequestStopsTheRunWithoutCountingATry() {
+    val a = add()
+    val refusing = OpenAiCompatProvider("https://x.example/v1", "m", listOf("k"), null, { _, _, _ -> HttpReply(400, "bad model") }, {})
+    assertEquals(0, TxnCategorize(store, { refusing }, { spent++ }, { false }, karachi).run())
+    assertNull(store.tries[a])
+    assertNull(txn(a).category)
+  }
+
+  @Test fun aTimeoutKeepsTheTxnsForLater() {
+    val a = add()
+    val slow = OpenAiCompatProvider("https://x.example/v1", "m", listOf("k"), null, { _, _, _ -> throw java.net.SocketTimeoutException("Read timed out") }, {})
+    assertEquals(0, TxnCategorize(store, { slow }, { spent++ }, { false }, karachi).run())
+    assertNull(store.tries[a])
   }
 
   @Test fun anApiErrorKeepsTheTxnsForLater() {

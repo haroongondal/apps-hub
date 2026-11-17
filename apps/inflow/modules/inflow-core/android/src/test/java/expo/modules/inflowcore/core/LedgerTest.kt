@@ -352,6 +352,19 @@ class LedgerTest {
     assertEquals("Rent", store.get(id)!!.category)
   }
 
+  @Test fun ownerCategoryOfAReplacedAiTxnSurvivesDedupOntoACategorisedTxn() {
+    item(debit("999.00"), Channel.SMS, t0 - 180 * min)   // makes "Alfalah 2310" a known account
+    val aiTxn = ai(aiMoney(amount = 150_000, account = "Alfalah 2310", category = "Other"), Channel.NOTIFICATION, t0)!!
+    val source = nextItem - 1
+    store.setCategory(aiTxn, "Rent")
+    val pattern = item(debit("1,500.00"), Channel.SMS, t0 + 30 * min)!!   // outside the merge window: its own txn
+    store.setAiDetails(pattern, "Health", null)
+    assertEquals(pattern, ledger.onItem(source, debit("1,500.00"), Channel.NOTIFICATION, t0 + 31 * min))
+    assertNull(store.get(aiTxn))
+    assertEquals("Rent", store.get(pattern)!!.category)
+    assertTrue(store.get(pattern)!!.categorySet)
+  }
+
   @Test fun clearingOwnerCategoryLetsAiFillItAgain() {
     val id = ai(aiMoney(amount = 700, category = "Other"), Channel.NOTIFICATION, t0)!!
     store.setCategory(id, "Rent")

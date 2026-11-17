@@ -125,16 +125,6 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
         }
       }
     }
-    val merchants = db.rawQuery(
-      "SELECT counterparty, currency, SUM(amount_minor), COUNT(*) FROM txns " +
-        "WHERE own = 0 AND direction = 'OUT' AND counterparty IS NOT NULL AND at >= ? AND at < ? " +
-        "GROUP BY counterparty, currency ORDER BY SUM(amount_minor) DESC, counterparty LIMIT 10",
-      from, to,
-    ).use { c ->
-      buildList {
-        while (c.moveToNext()) add(mapOf("counterparty" to c.getString(0), "currency" to c.getString(1), "total" to c.getLong(2), "count" to c.getInt(3)))
-      }
-    }
     // Money out only. A transaction nobody has sorted yet (no AI result) is not in any category.
     val categories = db.rawQuery(
       "SELECT category, currency, SUM(amount_minor), COUNT(*) FROM txns " +
@@ -165,7 +155,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
         }
       }
     }
-    return mapOf("accounts" to accounts, "merchants" to merchants, "categories" to categories, "parties" to parties)
+    return mapOf("accounts" to accounts, "categories" to categories, "parties" to parties)
   }
 
   /** All-time totals with one person or shop (null name = Unknown), or of own transfers when own. */

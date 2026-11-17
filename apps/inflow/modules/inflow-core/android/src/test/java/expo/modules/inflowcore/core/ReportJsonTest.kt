@@ -99,6 +99,13 @@ class ReportJsonTest {
     rejects("array", "[1,2]")
   }
 
+  @Test fun categoryNamesMatchIgnoringCaseAndAreStoredCanonical() {
+    val stored = parse(valid.replace("Food & dining", "FOOD & Dining").replace("\"category\":\"Rent\"", "\"category\":\"rent\""))!!
+    val c = Json.parseToJsonElement(stored).jsonObject["currencies"]!!.jsonArray[0].jsonObject
+    assertEquals("Food & dining", c["categories"]!!.jsonArray[0].jsonObject["name"]!!.jsonPrimitive.content)
+    assertEquals("Rent", c["largest"]!!.jsonArray[0].jsonObject["category"]!!.jsonPrimitive.content)
+  }
+
   @Test fun rejectsBadCategories() {
     rejects("unknown", valid.replace("Food & dining", "Gambling"))
     rejects("in category as out", valid.replace("\"name\":\"Salary\",\"direction\":\"in\"", "\"name\":\"Salary\",\"direction\":\"out\""))
