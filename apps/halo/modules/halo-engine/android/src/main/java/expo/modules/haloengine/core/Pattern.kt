@@ -34,7 +34,9 @@ interface Pattern {
 
 val FrameInput.dt: Float get() = dtMs.coerceIn(0L, 100L) / 1000f
 
-val FrameInput.glowPx: Float get() = params.glow * 2.5f * params.thicknessPx
+val PatternParams.glowPx: Float get() = glow * 2.5f * thicknessPx
+
+val FrameInput.glowPx: Float get() = params.glowPx
 
 // Mirrored patterns draw u 0..1 over half the edge (t 0..0.5), then call mirror(); anticlockwise runs t backwards.
 fun FrameInput.t(u: Float): Float {

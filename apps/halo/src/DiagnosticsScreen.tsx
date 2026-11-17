@@ -81,6 +81,13 @@ export default function DiagnosticsScreen({ onBack }: { onBack: () => void }) {
       </Group>
       <Group title="Lights">
         <Row title={status.running ? 'Halo is running' : 'Halo is stopped'} subtitle={AUDIO_COPY[status.audio]} />
+        {status.frameP95Ms != null && (
+          <Row
+            title="Draw time"
+            subtitle="The slowest 1 in 20 recent frames. Tap Refresh to update."
+            trailing={<Text tone="muted">{`${status.frameP95Ms.toFixed(2)} ms`}</Text>}
+          />
+        )}
         {(status.running || lightsOn) && (
           <Row title={<Button label={status.running ? 'Stop' : 'Start'} variant={status.running ? 'secondary' : 'primary'} block onPress={() => (status.running ? HaloEngine.stop() : HaloEngine.start())} />} />
         )}

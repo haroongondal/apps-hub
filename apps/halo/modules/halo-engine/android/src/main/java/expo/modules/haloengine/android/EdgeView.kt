@@ -2,12 +2,13 @@ package expo.modules.haloengine.android
 
 import android.content.Context
 import android.content.res.Configuration
-import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RenderEffect
+import android.graphics.RenderNode
+import android.graphics.Shader
 import android.os.SystemClock
-import android.util.SparseArray
 import android.view.Choreographer
 import android.view.RoundedCorner
 import android.view.View
@@ -18,6 +19,7 @@ import expo.modules.haloengine.core.Pattern
 import expo.modules.haloengine.core.PatternParams
 import expo.modules.haloengine.core.Settings
 import expo.modules.haloengine.core.SpectrumFrame
+import expo.modules.haloengine.core.glowPx
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -42,7 +44,10 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
   }
   private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
   private val line = Path()
-  private val blurs = SparseArray<BlurMaskFilter>()
+  // Glow ops are recorded unblurred into one node that the GPU blurs in a single pass; the sharp node draws over it.
+  private val glowNode = RenderNode("glow")
+  private val sharpNode = RenderNode("sharp")
+  private var glowing = false
 
   private val choreographer = Choreographer.getInstance()
   private var looping = false
@@ -136,6 +141,18 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
       mirrored = p.mirrored,
       clockwise = p.clockwise,
     )
+    // One blur radius per settings change, not per op or per frame: per-op glow keeps its alpha, the spread is shared.
+    val r = params.glowPx
+    glowing = r >= 1f
+    val b = r / GLOW_SCALE
+    glowNode.setRenderEffect(if (glowing) RenderEffect.createBlurEffect(b, b, Shader.TileMode.DECAL) else null)
+    // The glow is blurred anyway, so it is recorded and blurred at 1/GLOW_SCALE size and scaled up when drawn.
+    glowNode.setPosition(0, 0, ceil(width / GLOW_SCALE).toInt(), ceil(height / GLOW_SCALE).toInt())
+    glowNode.setPivotX(0f)
+    glowNode.setPivotY(0f)
+    glowNode.setScaleX(GLOW_SCALE)
+    glowNode.setScaleY(GLOW_SCALE)
+    sharpNode.setPosition(0, 0, width, height)
     ProbeLog.log(context, "overlay", "path ${width}x$height auto=${e.auto} corners=${corners.joinToString(",") { it.roundToInt().toString() }} insets=${insets.joinToString(",") { it.roundToInt().toString() }} pattern=${pattern?.id}")
   }
 
@@ -160,6 +177,10 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
   }
 
   private fun render(canvas: Canvas) {
+    // RenderNodes need a hardware canvas; a software one gets the sharp pass only.
+    val hw = canvas.isHardwareAccelerated
+    val glowCanvas = if (hw && glowing) glowNode.beginRecording().apply { scale(1f / GLOW_SCALE, 1f / GLOW_SCALE) } else null
+    val sharpCanvas = if (hw) sharpNode.beginRecording() else canvas
     val pts = list.points
     for (i in 0 until list.opCount) {
       val dot = list.kind[i] == DrawList.DOT
@@ -175,24 +196,20 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
         if (list.closed[i]) line.close()
       }
       // A blurred pass alone washes the line out to a faint haze, so the sharp shape is drawn over its glow.
-      val glow = blur(list.glow[i])
-      if (glow != null) {
-        paint.maskFilter = glow
-        draw(canvas, dot, paint, pts[at], pts[at + 1], list.size[i])
-        paint.maskFilter = null
-      }
-      draw(canvas, dot, paint, pts[at], pts[at + 1], list.size[i])
+      if (glowCanvas != null && list.glow[i] >= 0.5f) draw(glowCanvas, dot, paint, pts[at], pts[at + 1], list.size[i])
+      draw(sharpCanvas, dot, paint, pts[at], pts[at + 1], list.size[i])
     }
+    if (!hw) return
+    if (glowCanvas != null) {
+      glowNode.endRecording()
+      canvas.drawRenderNode(glowNode)
+    }
+    sharpNode.endRecording()
+    canvas.drawRenderNode(sharpNode)
   }
 
   private fun draw(canvas: Canvas, dot: Boolean, paint: Paint, x: Float, y: Float, radius: Float) {
     if (dot) canvas.drawCircle(x, y, radius, paint) else canvas.drawPath(line, paint)
-  }
-
-  private fun blur(glowPx: Float): BlurMaskFilter? {
-    val r = glowPx.roundToInt()
-    if (r < 1) return null
-    return blurs.get(r) ?: BlurMaskFilter(r.toFloat(), BlurMaskFilter.Blur.NORMAL).also { blurs.put(r, it) }
   }
 
   private fun record(ms: Float, now: Long) {
@@ -219,6 +236,7 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
   private companion object {
     const val WINDOW = 120
     const val FADE_MS = 600L
+    const val GLOW_SCALE = 4f
     val CORNERS = intArrayOf(
       RoundedCorner.POSITION_TOP_LEFT,
       RoundedCorner.POSITION_TOP_RIGHT,
