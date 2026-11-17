@@ -1,8 +1,10 @@
 // Task 2.19: leaks and settings read cost on the local fixture, then live watch-page load. `node test/yt-perf.mjs [--local|--live|--self-check]`, build first, machine to itself.
 // Flicker (row never removed, never 0 px tall) is not repeated: row.mjs checks it locally and live. A bot-check or consent page excludes a side, it never passes it.
 import assert from 'node:assert/strict';
+import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { fileURLToPath } from 'node:url';
 
 export const LIMIT = { listeners: 5, nodes: 20, heapBytes: 1048576, readMs: 20, loadRatio: 1.1, liveHeapMb: 5 };
 const EPS = 1e-9;
@@ -30,20 +32,26 @@ export function judgeLeaks(before, after) {
   return { pass: rows.every((r) => r.pass), rows };
 }
 
+// Every one of the READ_RUNS loads on both sides must have the mark: `median` skips NaN, so a side with 1 of 10 marks would otherwise pass.
+const full = (a) => a.length === READ_RUNS && a.every(Number.isFinite);
 export function judgeRead(none, big) {
   const diff = median(big) - median(none);
-  return { pass: Number.isFinite(diff) && diff <= LIMIT.readMs + EPS, diff, none: median(none), big: median(big) };
+  return { pass: full(none) && full(big) && Number.isFinite(diff) && diff <= LIMIT.readMs + EPS, diff, none: median(none), big: median(big), missing: !full(none) || !full(big) };
 }
 
 export function judgeLive(withSieve, without, planned) {
   const good = (r) => r.filter((x) => x.ok);
+  const hard = (r) => r.filter((x) => !x.ok && !x.gated).length;
+  if (hard(withSieve) > hard(without)) {
+    const first = withSieve.find((x) => !x.ok && !x.gated);
+    return { status: 'fail', why: `${hard(withSieve)} loads with Sieve failed against ${hard(without)} without (${first.why})` };
+  }
   const min = Math.max(1, Math.ceil(Math.min(planned, withSieve.length, without.length) / 2));
   const usable = [good(withSieve).length >= min, good(without).length >= min];
   if (!usable[0] || !usable[1]) {
-    const lost = !usable[0] && usable[1] && withSieve.some((x) => !x.ok && !x.gated);
     const side = (name, r, u) => (u ? null : `${name}: ${good(r).length} of ${r.length} loads worked${r.find((x) => !x.ok)?.why ? `, ${r.find((x) => !x.ok).why}` : ''}`);
     const why = [side('with Sieve', withSieve, usable[0]), side('without', without, usable[1])].filter(Boolean).join('; ');
-    return lost ? { status: 'fail', why: `Sieve's side lost loads the other side kept (${why})` } : { status: 'excluded', why };
+    return { status: 'excluded', why };
   }
   const ratio = median(good(withSieve).map((r) => r.load)) / median(good(without).map((r) => r.load));
   const heapDiff = median(good(withSieve).map((r) => r.heapMb)) - median(good(without).map((r) => r.heapMb));
@@ -70,11 +78,15 @@ function selfCheck() {
   assert.equal(judgeLeaks(m(100, 1000, 5e6), { JSEventListeners: 100, Nodes: 1000 }).pass, false, 'leaks: a missing metric is not a pass');
   assert.equal(judgeLeaks(null, null).pass, false, 'leaks: no readings is not a pass');
 
-  assert.equal(judgeRead([10, 12, 11], [30, 32, 31]).pass, true, 'read: medians 11 and 31, exactly +20, pass');
-  assert.equal(judgeRead([10, 12, 11], [31, 33, 32]).pass, false, 'read: +21 fails');
-  assert.equal(judgeRead([], [30]).pass, false, 'read: no reading without My filters is not a pass');
-  assert.equal(judgeRead([10], [NaN]).pass, false, 'read: no usable reading with My filters is not a pass');
-  assert.equal(judgeRead([10, 12, 11, 13], [31, 33, 34, 32]).diff, 21, 'read: an even count takes the middle two');
+  const ten = (...v) => Array.from({ length: 10 }, (_, i) => v[i % v.length]);
+  assert.equal(judgeRead(ten(10, 12, 11), ten(30, 32, 31)).pass, true, 'read: equal medians 11 and 31, exactly +20, pass');
+  assert.equal(judgeRead(ten(10, 12, 11), ten(31, 33, 32)).pass, false, 'read: +21 fails');
+  assert.equal(judgeRead([], ten(30)).pass, false, 'read: no reading without My filters is not a pass');
+  assert.equal(judgeRead(ten(10), [NaN, ...ten(30).slice(1)]).pass, false, 'read: a missing mark with My filters is not a pass');
+  assert.equal(judgeRead(ten(10), [30, ...Array(9).fill(NaN)]).pass, false, 'read: 1 of 10 marks with My filters is not a pass');
+  assert.equal(judgeRead([10, ...Array(9).fill(NaN)], ten(30)).pass, false, 'read: 1 of 10 marks without My filters is not a pass');
+  assert.equal(judgeRead(ten(10), ten(30).slice(1)).pass, false, 'read: 9 loads is not a pass');
+  assert.equal(judgeRead([10, 10, 10, 10, 10, 12, 12, 12, 12, 12], [30, 30, 30, 30, 30, 36, 36, 36, 36, 36]).diff, 22, 'read: an even count takes the middle two (11 and 33)');
 
   const run = (load, heapMb = 100) => ({ ok: true, dcl: 100, load, heapMb });
   const runs = (n, load, heapMb) => Array.from({ length: n }, () => run(load, heapMb));
@@ -94,6 +106,9 @@ function selfCheck() {
   assert.equal(judgeLive(runs(7, 100), [], 0).status, 'excluded', 'live: a missing control is not a pass');
   assert.equal(judgeLive([], [], 7).status, 'excluded', 'live: no runs at all is not a pass');
   assert.equal(judgeLive(timeout(7), runs(7, 100), 7).status, 'fail', 'live: timeouts with Sieve where the control loaded are a failure');
+  assert.equal(judgeLive([...runs(4, 100), ...timeout(3)], runs(7, 100), 7).status, 'fail', 'live: 4 good loads and 3 timeouts with Sieve against 7 good is a failure, not a pass');
+  assert.equal(judgeLive([...runs(4, 100), ...timeout(3)], [...runs(4, 100), ...timeout(3)], 7).status, 'pass', 'live: the same timeouts on both sides are not blamed on Sieve');
+  assert.equal(judgeLive([...runs(6, 100), ...timeout(1)], runs(7, 100), 7).status, 'fail', 'live: one lost load with Sieve that the control kept is a failure');
   assert.equal(judgeLive(timeout(7), timeout(7), 7).status, 'excluded', 'live: timeouts on both sides say nothing about Sieve');
   assert.equal(judgeLive(runs(7, 100, NaN), runs(7, 100, 100), 7).status, 'excluded', 'live: a missing heap reading is not a pass');
 
@@ -122,6 +137,8 @@ function everyOption(core) {
       if (f.kind === 'select') put(f.path, [...f.options].reverse().find((o) => o.value !== at(f.path)).value);
     }
   }
+  put('theme.css', 'ytd-masthead{opacity:.99}');
+  put('experiments.overrides', 'sieve_perf_flag=true');
   put('volume.wheel', 'over-video'); // both wheels on the right button would clash, and validation would reset one
   for (const [k, v] of Object.entries({ blur: 1, brightness: 110, contrast: 110, grayscale: 10, hue: 10, invert: 10, saturate: 110, sepia: 10 })) put(`player.filters.${k}`, v);
   return patch;
@@ -164,6 +181,10 @@ async function localParts(core, helpers, harness) {
     console.log('| metric | at 5 | at 25 | grew | limit | result |\n| --- | --- | --- | --- | --- | --- |');
     for (const r of out.leaks.rows) console.log(`| ${r.metric} | ${fmt(r.before, 0)} | ${fmt(r.after, 0)} | ${sign(r.grew, 0)} | ${r.metric === 'JSHeapUsedSize' ? '1 MB (1048576)' : `+${r.limit}`} | ${r.pass ? 'PASS' : 'FAIL'} |`);
     if (!rowThere) console.log('FAIL: the row never appeared, so the options were not measured');
+    if (t.errors.length) {
+      out.leaks.pass = false;
+      console.log(`FAIL: ${t.errors.length} page errors on the fixture: ${[...new Set(t.errors)].slice(0, 5).join(' | ')}`);
+    }
 
     const filters = [];
     for (let n = 0, bytes = 0; bytes < MY_FILTERS_BYTES; n++) {
@@ -195,7 +216,7 @@ async function localParts(core, helpers, harness) {
     console.log(`\n### Settings read cost (local fixture, default options, ${READ_RUNS} loads each after 2 warm-up loads; ${(stored / 1048576).toFixed(2)} MB of My filters stored)\n`);
     console.log('| My filters | median mark ms | min | max |\n| --- | --- | --- | --- |');
     for (const [name, r] of [['none', none], ['2 MB', big]]) console.log(`| ${name} | ${fmt(median(r), 1)} | ${fmt(Math.min(...r), 1)} | ${fmt(Math.max(...r), 1)} |`);
-    console.log(`\nSettings read: the mark is ${sign(out.read.diff)} ms later with 2 MB of My filters (limit +${LIMIT.readMs} ms): ${out.read.pass ? 'PASS' : 'FAIL'}`);
+    console.log(`\nSettings read: the mark is ${sign(out.read.diff)} ms later with 2 MB of My filters (limit +${LIMIT.readMs} ms): ${out.read.pass ? 'PASS' : out.read.missing ? 'FAIL (a load had no sieve-yt-applied mark)' : 'FAIL'}`);
   } finally {
     await ctx.close().catch(() => {});
     servers.http.close();
@@ -211,7 +232,7 @@ const within = (p, ms) => {
 
 // One stuck step (a navigation, evaluate or CDP call) must be reported as a failed load, not hang the run, so the whole load has a limit.
 const LOAD_LIMIT_MS = 120_000;
-async function loadOnce(ctx) {
+async function loadOnce(ctx, sieve) {
   let page;
   const body = async () => {
     page = await ctx.newPage();
@@ -219,6 +240,7 @@ async function loadOnce(ctx) {
     await cdp.send('Network.enable');
     await cdp.send('Network.clearBrowserCache');
     await cdp.send('Network.clearBrowserCookies');
+    await cdp.send('Storage.clearDataForOrigin', { origin: 'https://www.youtube.com', storageTypes: 'all' });
     await page.goto(LIVE_URL, { waitUntil: 'load', timeout: 60_000 });
     await page.waitForFunction(() => /confirm you.re not a bot/i.test(document.body?.innerText ?? '') || document.querySelector('#movie_player video'), null, { timeout: 15_000 }).catch(() => {});
     const gate = await page.evaluate(() => ({ bot: /confirm you.re not a bot/i.test(document.body?.innerText ?? ''), consent: location.hostname.startsWith('consent.') }));
@@ -229,12 +251,18 @@ async function loadOnce(ctx) {
     });
     if (!(t.load > 0)) throw new Error('no load event time');
     await sleep(HEAP_WAIT_MS);
+    // A with-Sieve load only counts when Sieve ran in it: the mark once, and the row.
+    if (sieve) {
+      const ran = await page.evaluate(() => ({ marks: performance.getEntriesByName('sieve-yt-applied').length, row: !!document.querySelector('sieve-yt-row') }));
+      if (ran.marks !== 1 || !ran.row) return { ok: false, gated: false, why: `Sieve did not run (${ran.marks} sieve-yt-applied marks, row ${ran.row ? 'there' : 'missing'})` };
+    }
     let heapMb = NaN;
     try {
       await cdp.send('HeapProfiler.collectGarbage');
       await cdp.send('Performance.enable');
       heapMb = (await cdp.send('Performance.getMetrics')).metrics.find((m) => m.name === 'JSHeapUsedSize').value / 1048576;
     } catch {}
+    if (!Number.isFinite(heapMb)) return { ok: false, gated: false, why: 'no heap reading' };
     return { ok: true, ...t, heapMb };
   };
   try {
@@ -259,7 +287,7 @@ async function livePart(core, helpers, harness, runs) {
       const w = [];
       const wo = [];
       for (let i = 0; i < runs; i++) {
-        for (const [side, list] of i % 2 ? [[b, wo], [a, w]] : [[a, w], [b, wo]]) list.push(await loadOnce(side.ctx));
+        for (const [side, list] of i % 2 ? [[b, wo], [a, w]] : [[a, w], [b, wo]]) list.push(await loadOnce(side.ctx, side === a));
         const show = (r) => (r.ok ? `${r.load.toFixed(0)} ms, ${r.heapMb.toFixed(1)} MB` : r.why);
         console.error(`${name} ${i + 1}/${runs}: with Sieve ${show(w.at(-1))}, without ${show(wo.at(-1))}`);
         if (i === 1 && (!w.some((r) => r.ok) || !wo.some((r) => r.ok))) break;
@@ -270,7 +298,7 @@ async function livePart(core, helpers, harness, runs) {
     }
   }
   console.log(`\n### Watch page, live, signed out (${LIVE_URL}; ${runs} cold loads per side, alternating; medians of the loads that worked)\n`);
-  console.log('| options | side | loads ok | median DCL ms | median load ms | median heap MB 10 s after load |\n| --- | --- | --- | --- | --- | --- |');
+  console.log('| options | side | loads ok | median DCL ms | median load ms | median heap MB 10 s after load, after a GC |\n| --- | --- | --- | --- | --- | --- |');
   const cell = (r) => {
     const g = r.filter((x) => x.ok);
     return `${g.length}/${r.length} | ${fmt(median(g.map((x) => x.dcl)), 0)} | ${fmt(median(g.map((x) => x.load)), 0)} | ${fmt(median(g.map((x) => x.heapMb)))}`;
@@ -310,4 +338,4 @@ async function main() {
 }
 
 if (process.argv.includes('--self-check')) selfCheck();
-else if (process.argv[1] && new URL(`file://${process.argv[1]}`).pathname === new URL(import.meta.url).pathname) await main();
+else if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) await main();
