@@ -401,6 +401,11 @@ class HaloService : Service() {
       flashMain.post {
         val s = if (running) settings else SettingsStore.load(app)
         if (!s.notify.enabled || onFlash?.invoke(d, colour) == true) return@post
+        val st = RuleInputs.snapshot(app)
+        if (Rules.hidden(s.rules, st)) {
+          ProbeLog.log(app, "rules", "flash skipped pkg=${d.pkg} call=${st.inCall} saver=${st.batterySaver} landscape=${st.landscape}")
+          return@post
+        }
         val o = flashOnly ?: EdgeOverlay(app, flashSource).takeIf { it.add() }?.also {
           it.apply(s, Patterns.create(s.pattern), IntArray(0))
           flashOnly = it

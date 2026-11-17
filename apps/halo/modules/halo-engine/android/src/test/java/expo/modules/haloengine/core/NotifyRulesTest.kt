@@ -11,8 +11,8 @@ class NotifyRulesTest {
   private val noon = 12 * 60
   private fun note(
     key: String = "k1", pkg: String = "com.chat", ongoing: Boolean = false, importance: Int = 3,
-    summary: Boolean = false, category: String? = null, at: Long = 0,
-  ) = PostedNote(key, pkg, ongoing, importance, summary, category, at)
+    summary: Boolean = false, category: String? = null, at: Long = 0, once: Boolean = false,
+  ) = PostedNote(key, pkg, ongoing, importance, summary, category, at, once)
 
   @Test
   fun skipsOwnOngoingSilentSummary() {
@@ -65,7 +65,7 @@ class NotifyRulesTest {
     val s = SettingsNotify(reminderMin = 1, quiet = SettingsQuiet(on = true, start = "22:00", end = "07:00"))
     assertNull(r.onPosted(note(), s, 23 * 60, 0))
     assertEquals(0, r.trackedCount())
-    assertNotNull(r.onPosted(note(), s, noon, 0))
+    assertNotNull(r.onPosted(note(key = "k2"), s, noon, 0))
     // A reminder that falls due inside quiet hours stays silent and is not retried every tick.
     assertTrue(r.dueReminders(s, 23 * 60, 60_000).isEmpty())
     assertEquals(120_000L, r.nextReminderAtMs(s))
@@ -145,5 +145,70 @@ class NotifyRulesTest {
     r.onPosted(note(at = 0), SettingsNotify(reminderMin = 1), noon, 0)
     val off = SettingsNotify(reminderMin = 1, apps = mapOf("com.chat" to AppNotify(on = false)))
     assertTrue(r.dueReminders(off, noon, 60_000).isEmpty())
+  }
+
+  @Test
+  fun onlyAlertOnceUpdateIsSilent() {
+    val r = NotifyRules(own)
+    val s = SettingsNotify(reminderMin = 1)
+    assertNotNull(r.onPosted(note(at = 0, once = true), s, noon, 0))
+    // An update that asked not to alert again neither flashes nor restarts the reminder clock.
+    assertNull(r.onPosted(note(at = 30_000, once = true), s, noon, 30_000))
+    assertEquals(60_000L, r.nextReminderAtMs(s))
+    // An update without the flag alerts, as the system does.
+    assertNotNull(r.onPosted(note(at = 40_000), s, noon, 40_000))
+  }
+
+  @Test
+  fun onlyAlertOnceAfterUnlockDoesNotRearm() {
+    val r = NotifyRules(own)
+    val s = SettingsNotify(reminderMin = 1)
+    r.onPosted(note(at = 0, once = true), s, noon, 0)
+    r.onUnlocked(10_000)
+    assertNull(r.onPosted(note(at = 20_000, once = true), s, noon, 20_000))
+    assertEquals(0, r.trackedCount())
+    assertNull(r.nextReminderAtMs(s))
+  }
+
+  @Test
+  fun repostSamePostTimeIsSilent() {
+    val r = NotifyRules(own)
+    val s = SettingsNotify(reminderMin = 1)
+    assertNotNull(r.onPosted(note(at = 5_000), s, noon, 5_000))
+    r.onUnlocked(6_000)
+    // The system re-posts an auto-grouped notification with its old postTime: no flash, no tracking.
+    assertNull(r.onPosted(note(at = 5_000), s, noon, 7_000))
+    assertEquals(0, r.trackedCount())
+    // Removed, then posted again (a new postTime): it alerts.
+    r.onRemoved("k1")
+    assertNotNull(r.onPosted(note(at = 8_000), s, noon, 8_000))
+  }
+
+  @Test
+  fun restoreTracksWhatArrivedSinceTheLastUnlock() {
+    val r = NotifyRules(own)
+    val s = SettingsNotify(
+      reminderMin = 1,
+      apps = mapOf("com.off" to AppNotify(on = false)),
+      quiet = SettingsQuiet(on = true, start = "22:00", end = "07:00"),
+    )
+    val quietAt = 9_000L
+    val notes = listOf(
+      note(key = "late", at = 7_000),
+      note(key = "seen", at = 1_000),
+      note(key = "ongoing", ongoing = true, at = 7_000),
+      note(key = "own", pkg = own, at = 7_000),
+      note(key = "off", pkg = "com.off", at = 7_000),
+      note(key = "quiet", at = quietAt),
+      note(key = "early", pkg = "com.mail", at = 6_000),
+    )
+    r.restore(notes, lastUnlockMs = 5_000, s = s) { if (it == quietAt) 23 * 60 else noon }
+    assertEquals(2, r.trackedCount())
+    // Tracked from postTime, so the eldest is due first.
+    assertEquals(66_000L, r.nextReminderAtMs(s))
+    assertEquals(listOf("com.mail", "com.chat"), r.dueReminders(s, noon, 67_000).map { it.pkg })
+    // What was already showing stays silent when the system re-posts it.
+    assertNull(r.onPosted(note(key = "seen", at = 1_000), s, noon, 70_000))
+    assertNull(r.onPosted(note(key = "late", at = 7_000, once = true), s, noon, 70_000))
   }
 }

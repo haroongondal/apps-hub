@@ -19,7 +19,7 @@ const TABS: ReadonlyArray<{ key: Tab; label: string }> = [
   { key: 'home', label: 'Home' },
   { key: 'lights', label: 'Lights' },
   { key: 'colours', label: 'Colours' },
-  { key: 'notifications', label: 'Notifications' },
+  { key: 'notifications', label: 'Alerts' },
 ];
 
 export default function App() {

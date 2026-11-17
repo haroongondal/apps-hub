@@ -1,6 +1,7 @@
 package expo.modules.haloengine.android
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.util.LruCache
@@ -34,8 +35,15 @@ object AppIcons {
   /** A file:// URI of a 96 px PNG in the cache dir, or null when the package is not installed. Blocking I/O. */
   fun iconUri(ctx: Context, pkg: String): String? {
     require(PKG.matches(pkg)) { "Bad package name" }
+    // The file name carries the install time, so an updated app gets its new icon; an uninstalled one gets null, not a stale file.
+    val updated = try {
+      ctx.packageManager.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0)).lastUpdateTime
+    } catch (e: PackageManager.NameNotFoundException) {
+      return null
+    }
     val dir = File(ctx.cacheDir, "app-icons").apply { mkdirs() }
-    val f = File(dir, "$pkg.png")
+    val name = "$pkg-$updated.png"
+    val f = File(dir, name)
     if (!f.exists()) {
       val bmp = runCatching { render(ctx, pkg, PNG) }.getOrNull() ?: return null
       try {
@@ -45,6 +53,8 @@ object AppIcons {
       } finally {
         bmp.recycle()
       }
+      // Package names have no '-', so "$pkg-" matches only this package's older files; "$pkg.png" is the pre-0.4 name.
+      dir.listFiles { _, n -> n != name && (n == "$pkg.png" || (n.startsWith("$pkg-") && n.endsWith(".png"))) }?.forEach { it.delete() }
     }
     return "file://${f.absolutePath}"
   }

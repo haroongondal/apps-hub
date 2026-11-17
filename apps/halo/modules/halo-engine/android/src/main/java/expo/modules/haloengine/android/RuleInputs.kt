@@ -43,8 +43,19 @@ class RuleInputs(private val ctx: Context, private val onChange: () -> Unit) {
     @Deprecated("Required by the interface") override fun onLowMemory() = Unit
   }
   private val mode = AudioManager.OnModeChangedListener { m -> set { state.inCall = inCall(m) } }
-  private val saver = object : BroadcastReceiver() {
-    override fun onReceive(c: Context, i: Intent) = set { state.batterySaver = power.isPowerSaveMode }
+  private var rules: SettingsRules? = null
+  private var screenOn = true
+  private val receiver = object : BroadcastReceiver() {
+    override fun onReceive(c: Context, i: Intent) {
+      when (i.action) {
+        PowerManager.ACTION_POWER_SAVE_MODE_CHANGED -> set { state.batterySaver = power.isPowerSaveMode }
+        // Nothing to hide on a dark screen, so the usage poll and the proximity sensor rest until it is back.
+        Intent.ACTION_SCREEN_OFF, Intent.ACTION_SCREEN_ON -> {
+          screenOn = i.action == Intent.ACTION_SCREEN_ON
+          rules?.let(::sync)
+        }
+      }
+    }
   }
 
   private var probe: View? = null
@@ -76,16 +87,23 @@ class RuleInputs(private val ctx: Context, private val onChange: () -> Unit) {
     state.landscape = ctx.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     state.inCall = inCall(audio.mode)
     state.batterySaver = power.isPowerSaveMode
+    screenOn = power.isInteractive
     ctx.registerComponentCallbacks(config)
     audio.addOnModeChangedListener(ctx.mainExecutor, mode)
-    ctx.registerReceiver(saver, IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED), Context.RECEIVER_NOT_EXPORTED)
+    val filter = IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED).apply {
+      addAction(Intent.ACTION_SCREEN_OFF)
+      addAction(Intent.ACTION_SCREEN_ON)
+    }
+    // All three come from the system uid, which reaches a not-exported receiver.
+    ctx.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
   }
 
   fun sync(r: SettingsRules) {
     if (!started) return
+    rules = r
     if (probe == null) addProbe()
-    if (r.apps.isNotEmpty() && usageAllowed(ctx)) startPolling() else stopPolling()
-    if (r.pocket) startProximity() else stopProximity()
+    if (screenOn && r.apps.isNotEmpty() && usageAllowed(ctx)) startPolling() else stopPolling()
+    if (screenOn && r.pocket) startProximity() else stopProximity()
   }
 
   fun stop() {
@@ -95,7 +113,8 @@ class RuleInputs(private val ctx: Context, private val onChange: () -> Unit) {
     stopProximity()
     runCatching { ctx.unregisterComponentCallbacks(config) }
     runCatching { audio.removeOnModeChangedListener(mode) }
-    runCatching { ctx.unregisterReceiver(saver) }
+    runCatching { ctx.unregisterReceiver(receiver) }
+    rules = null
     probe?.let { v -> runCatching { wm.removeView(v) } }
     probe = null
   }
@@ -161,6 +180,16 @@ class RuleInputs(private val ctx: Context, private val onChange: () -> Unit) {
   companion object {
     private const val POLL_MS = 1_000L
     private const val LOOKBACK_MS = 60 * 60_000L
+
+    /** The rule inputs that need no listener, read once; for a flash shown while the lights (and their RuleInputs) are off. */
+    fun snapshot(ctx: Context) = RuleState(
+      null,
+      fullscreen = false,
+      landscape = ctx.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE,
+      inCall = inCall(ctx.getSystemService(AudioManager::class.java).mode),
+      batterySaver = ctx.getSystemService(PowerManager::class.java).isPowerSaveMode,
+      pocket = false,
+    )
 
     fun inCall(mode: Int) = mode == AudioManager.MODE_IN_CALL || mode == AudioManager.MODE_IN_COMMUNICATION || mode == AudioManager.MODE_RINGTONE
 

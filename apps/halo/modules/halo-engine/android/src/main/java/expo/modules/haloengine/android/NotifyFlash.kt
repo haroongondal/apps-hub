@@ -1,5 +1,6 @@
 package expo.modules.haloengine.android
 
+import android.app.KeyguardManager
 import android.app.Notification
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -20,6 +21,7 @@ import java.util.Calendar
 object NotifyFlash {
   private const val FILE = "halo"
   private const val NOTIFIED = "notified"
+  private const val LAST_UNLOCK = "lastUnlockMs"
   private val main = Handler(Looper.getMainLooper())
   private var app: Context? = null
   private var rules: NotifyRules? = null
@@ -33,7 +35,9 @@ object NotifyFlash {
     val r = object : BroadcastReceiver() {
       override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_USER_PRESENT) return
-        rules?.onUnlocked(System.currentTimeMillis())
+        val now = System.currentTimeMillis()
+        rules?.onUnlocked(now)
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putLong(LAST_UNLOCK, now).apply()
         main.removeCallbacks(remind)
         ProbeLog.log(context, "notify", "unlocked, reminders cleared")
       }
@@ -52,19 +56,43 @@ object NotifyFlash {
   fun posted(ctx: Context, sbn: StatusBarNotification, map: NotificationListenerService.RankingMap?) {
     val c = ctx.applicationContext
     val pkg = sbn.packageName
-    val n = sbn.notification
-    val importance = if (map?.getRanking(sbn.key, ranking) == true) ranking.importance else 0
-    val note = PostedNote(sbn.key, pkg, sbn.isOngoing, importance, n.flags and Notification.FLAG_GROUP_SUMMARY != 0, n.category, sbn.postTime)
-    if (!note.ongoing && pkg != c.packageName) remember(c, pkg)
+    // Never flash, so skip the settings decode.
+    if (sbn.isOngoing || pkg == c.packageName) return
+    remember(c, pkg)
     val s = SettingsStore.load(c).notify
     val minute = minuteOfDay()
-    val d = rules(c).onPosted(note, s, minute, System.currentTimeMillis())
+    val d = rules(c).onPosted(note(sbn, map), s, minute, System.currentTimeMillis())
     if (d == null) {
-      if (!note.ongoing && QuietHours.active(s.quiet.on, s.quiet.start, s.quiet.end, minute)) ProbeLog.log(c, "notify", "quiet hours, no flash pkg=$pkg")
+      if (QuietHours.active(s.quiet.on, s.quiet.start, s.quiet.end, minute)) ProbeLog.log(c, "notify", "quiet hours, no flash pkg=$pkg")
       return
     }
     flash(c, d, "flash")
     schedule(c)
+  }
+
+  /** On listener connect: rebuilds the reminder state a dead process lost, from what is showing and the last unlock. */
+  fun restore(ctx: Context, active: Array<StatusBarNotification>, map: NotificationListenerService.RankingMap?) {
+    val c = ctx.applicationContext
+    // No unlock recorded yet (first run): nothing showing is treated as unseen.
+    val lastUnlock = c.getSharedPreferences(FILE, Context.MODE_PRIVATE).getLong(LAST_UNLOCK, System.currentTimeMillis())
+    val r = rules(c)
+    r.restore(active.map { note(it, map) }, lastUnlock, SettingsStore.load(c).notify, ::minuteOfDay)
+    ProbeLog.log(c, "notify", "restored active=${active.size} tracked=${r.trackedCount()}")
+    schedule(c)
+  }
+
+  /** Settings changed (reminder period, quiet hours): the next reminder is timed again. Any thread. */
+  fun settingsChanged() {
+    main.post { app?.let(::schedule) }
+  }
+
+  private fun note(sbn: StatusBarNotification, map: NotificationListenerService.RankingMap?): PostedNote {
+    val n = sbn.notification
+    val importance = if (map?.getRanking(sbn.key, ranking) == true) ranking.importance else 0
+    return PostedNote(
+      sbn.key, sbn.packageName, sbn.isOngoing, importance, n.flags and Notification.FLAG_GROUP_SUMMARY != 0, n.category, sbn.postTime,
+      n.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0,
+    )
   }
 
   fun removed(key: String) {
@@ -97,9 +125,13 @@ object NotifyFlash {
   private fun remind() {
     val c = app ?: return
     val due = rules?.dueReminders(SettingsStore.load(c).notify, minuteOfDay(), System.currentTimeMillis()) ?: return
-    due.forEach { flash(c, it, "reminder") }
+    // Reminders are for a phone nobody is using; while unlocked the clock still advances, as in quiet hours.
+    if (c.getSystemService(KeyguardManager::class.java).isKeyguardLocked) due.forEach { flash(c, it, "reminder") }
+    else if (due.isNotEmpty()) ProbeLog.log(c, "notify", "reminder skipped: unlocked n=${due.size}")
     schedule(c)
   }
 
-  private fun minuteOfDay(): Int = Calendar.getInstance().let { it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }
+  private fun minuteOfDay(): Int = minuteOfDay(System.currentTimeMillis())
+
+  private fun minuteOfDay(ms: Long): Int = Calendar.getInstance().apply { timeInMillis = ms }.let { it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }
 }

@@ -8,6 +8,8 @@ class HaloListener : NotificationListenerService() {
   override fun onListenerConnected() {
     ProbeLog.log(this, "listener", "onListenerConnected serviceRunning=${HaloService.running}")
     NotifyFlash.attach(this)
+    runCatching { NotifyFlash.restore(this, activeNotifications ?: emptyArray(), currentRanking) }
+      .onFailure { ProbeLog.log(this, "notify", "restore FAILED ${it.javaClass.name}") }
     when {
       HaloService.running -> HaloService.onListener?.invoke()
       SettingsStore.serviceWanted(this) -> HaloService.start(this, HaloService.MEDIA_PLAYBACK, "listener")
