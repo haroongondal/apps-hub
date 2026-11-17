@@ -3,8 +3,6 @@ package expo.modules.haloengine.android
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.RenderEffect
 import android.graphics.RenderNode
 import android.graphics.Shader
@@ -41,13 +39,7 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
   private val list = DrawList()
   val events = EdgeEvents()
   private var musicOps = 0
-  private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    style = Paint.Style.STROKE
-    strokeCap = Paint.Cap.BUTT
-    strokeJoin = Paint.Join.ROUND
-  }
-  private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-  private val line = Path()
+  private val painter = OpPainter(ctx)
   // Glow ops are recorded unblurred into one node that the GPU blurs in a single pass; the sharp node draws over it.
   private val glowNode = RenderNode("glow")
   private val sharpNode = RenderNode("sharp")
@@ -203,24 +195,7 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
     val hw = canvas.isHardwareAccelerated
     val glowCanvas = if (hw && glowing) glowNode.beginRecording().apply { scale(1f / GLOW_SCALE, 1f / GLOW_SCALE) } else null
     val sharpCanvas = if (hw) sharpNode.beginRecording() else canvas
-    val pts = list.points
-    for (i in 0 until list.opCount) {
-      val dot = list.kind[i] == DrawList.DOT
-      val paint = if (dot) fill else stroke
-      paint.color = list.color[i]
-      if (i < musicOps && fade < 1f) paint.alpha = (paint.alpha * fade).toInt()
-      val at = list.start[i]
-      if (!dot) {
-        paint.strokeWidth = list.size[i]
-        line.rewind()
-        line.moveTo(pts[at], pts[at + 1])
-        for (k in 1 until list.count[i]) line.lineTo(pts[at + 2 * k], pts[at + 2 * k + 1])
-        if (list.closed[i]) line.close()
-      }
-      // A blurred pass alone washes the line out to a faint haze, so the sharp shape is drawn over its glow.
-      if (glowCanvas != null && list.glow[i] >= 0.5f) draw(glowCanvas, dot, paint, pts[at], pts[at + 1], list.size[i])
-      draw(sharpCanvas, dot, paint, pts[at], pts[at + 1], list.size[i])
-    }
+    for (i in 0 until list.opCount) painter.draw(sharpCanvas, glowCanvas, list, i, if (i < musicOps) fade else 1f)
     if (!hw) return
     if (glowCanvas != null) {
       glowNode.endRecording()
@@ -228,10 +203,6 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
     }
     sharpNode.endRecording()
     canvas.drawRenderNode(sharpNode)
-  }
-
-  private fun draw(canvas: Canvas, dot: Boolean, paint: Paint, x: Float, y: Float, radius: Float) {
-    if (dot) canvas.drawCircle(x, y, radius, paint) else canvas.drawPath(line, paint)
   }
 
   private fun record(ms: Float, now: Long) {
