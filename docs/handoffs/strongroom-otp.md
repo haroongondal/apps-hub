@@ -143,12 +143,32 @@ checkout. It landed on `main` as 226a947 before this branch was cut, so Tasks
   invariant. The decode→confirm screen is JVM-proved
   (`QrRoundTripTest`); the real-camera proof stays with the owner's phone.
 - **Task 7 next** (§15.5): `otpauth-migration` protobuf reader, batches ≤ 10, dedup,
-  review list, HOTP skipped with a count, one transaction. **Step 0 needs the
-  owner's real Google Authenticator export — ask the owner before
-  implementing.** Emulator ready for it: fresh 9844f85 build installed with
+  review list, HOTP skipped with a count, one transaction. **Step 0 done**
+  (see below). Emulator ready for it: fresh 9844f85 build installed with
   vault `scan-qr-vault-pass-1` unlocked state above; CAMERA is currently
   **denied** on the emulator (left in that state by the denial-path test —
   grant through the dialog on the next scan).
+- **Task 7 Step 0 — real export checked** (2026-11-17, owner's Authenticator,
+  two batch QRs photographed, decoded on the host with a throwaway macOS
+  Vision script; payloads kept only in the session temp dir, never
+  committed):
+  - Two batches — `batch_size = 2`, indices 0 and 1; 15 accounts total
+    (index 0 carried 10 entries, index 1 carried 5, so the last batch may
+    be short). "N of M scanned" = `batch_index + 1` of `batch_size`.
+  - **Top-level `version` is 2** in the wild (older docs say 1) — the
+    reader must not enforce a version, just read and ignore.
+  - Every entry is TOTP / SHA1 / 6 digits (type 2, algorithm 1, digits 1);
+    **no HOTP, no counter field (7) anywhere** — the HOTP skip path stays
+    a synthetic fixture.
+  - Secrets run 10–40 bytes, all inside our §15.1 bounds; two are exactly
+    the 10-byte floor. Short fields in the batch are account *names*
+    (5–30 chars), not secrets — the wrong turn to avoid: field 2 of
+    `OtpParameters` is the name, field 1 is the secret.
+  - Several entries carry **no issuer** (name only) — the review list and
+    the new-login naming must handle issuer-less entries.
+  - **Every entry has an unknown trailing field 8** (19 bytes, length-
+    delimited) — the reader must skip unknown fields like `Otp.parse`
+    does. No field 7, no groups; pure wire types 0 and 2.
 - **Task 8:** entry screen live code, Settings entries, disk-check totp
   needle, whole-feature review, gates, handoff update.
 
