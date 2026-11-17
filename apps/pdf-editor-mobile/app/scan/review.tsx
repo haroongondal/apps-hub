@@ -2,7 +2,7 @@ import { defaultTitle, type SessionInput } from '@apps-hub/scan-core';
 import { Button, Empty, Field, Header, Notice, Screen, Segmented, Text, radius, space, useTheme } from '@apps-hub/ui';
 import { File } from 'expo-file-system';
 import { Image } from 'expo-image';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { PdfScan, type Quad } from 'pdf-scan';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image as RNImage, Pressable, ScrollView, View } from 'react-native';
@@ -42,6 +42,7 @@ function cleanPreviews() {
 export default function ReviewScreen() {
   const { c } = useTheme();
   const params = useLocalSearchParams<{ failed?: string; total?: string }>();
+  const navigation = useNavigation();
   const [initial] = useState<ScanSession | null>(() => loadSession());
   const [session, setSession] = useState<ScanSession | null>(initial);
   const latest = useRef(initial);
@@ -58,6 +59,13 @@ export default function ReviewScreen() {
   );
   const tried = useRef(new Set<string>());
   const counter = useRef(0);
+
+  const toCamera = (replace: boolean) => {
+    const { routes, index } = navigation.getState() ?? { routes: [], index: 0 };
+    if (routes[index - 1]?.name === 'scan/capture') router.back();
+    else if (replace) router.replace('/scan/capture');
+    else router.push('/scan/capture');
+  };
 
   const base = uriToPath(sessionDir().uri);
   const pages = session?.pages ?? [];
@@ -124,7 +132,7 @@ export default function ReviewScreen() {
         <Empty
           title="No pages to review"
           body="Scan or import some pages first."
-          action={<Button label="Back to camera" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />}
+          action={<Button label="Back to camera" onPress={() => toCamera(true)} />}
         />
       </Screen>
     );
@@ -151,7 +159,7 @@ export default function ReviewScreen() {
 
   const retake = () => {
     removePage(index);
-    router.back();
+    toCamera(true);
   };
 
   const remove = () => {
@@ -172,7 +180,11 @@ export default function ReviewScreen() {
         pages: s.pages.map((p) => ({ file: `${base}/${p.file}`, quad: p.quad, rotation: p.rotation, filter: p.filter, side: p.side })),
       };
       const item = await (await getScanService()).saveSession(input, { title: title.trim() || undefined });
-      discardSession();
+      try {
+        discardSession();
+      } catch (e) {
+        console.warn('The scan session folder could not be cleared', e);
+      }
       router.dismissAll();
       router.push({ pathname: '/scan/[id]', params: { id: item.id } });
     } catch (e) {
@@ -188,7 +200,7 @@ export default function ReviewScreen() {
       <Header
         title="Review"
         subtitle={plural(pages.length, card ? 'photo' : 'page')}
-        trailing={<IconButton icon="camera-outline" label="Back to camera" onPress={() => router.back()} />}
+        trailing={<IconButton icon="camera-outline" label="Back to camera" onPress={() => toCamera(false)} />}
       />
       {note ? <Notice tone="warn" title="Some photos were skipped" action={<Button label="Dismiss" size="sm" variant="secondary" onPress={() => setNote(null)} />}>{note}</Notice> : null}
       {error ? <Notice tone="danger" title="Something went wrong" action={<Button label="Dismiss" size="sm" variant="secondary" onPress={() => setError(null)} />}>{error}</Notice> : null}
