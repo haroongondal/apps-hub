@@ -20,6 +20,7 @@ import expo.modules.haloengine.android.PickBackgroundContract
 import expo.modules.haloengine.android.ProbeLog
 import expo.modules.haloengine.android.RuleInputs
 import expo.modules.haloengine.android.SettingsStore
+import expo.modules.haloengine.core.Faces
 import expo.modules.haloengine.core.Patterns
 import expo.modules.haloengine.core.Themes
 import expo.modules.kotlin.activityresult.AppContextActivityResultLauncher
@@ -154,6 +155,19 @@ class HaloEngineModule : Module() {
     Function("previewAod") { themeId: String ->
       val i = Intent(context, AodPreviewActivity::class.java).putExtra(AodPreviewActivity.EXTRA_THEME, themeId)
       appContext.currentActivity?.startActivity(i) ?: open(i)
+    }
+
+    // Every face, as the face grid shows them; a face added to Faces.all appears here by itself.
+    Function("listFaces") {
+      Faces.all.map { make ->
+        val f = make()
+        mapOf("id" to f.id, "name" to f.name, "supportsSeconds" to f.supportsSeconds)
+      }
+    }
+
+    // One face with these options and colours on black, as a PNG in the cache folder; returns its file:// URI.
+    AsyncFunction("renderFaceThumb") Coroutine { faceId: String, options: Map<String, Any?>, colours: List<String>, width: Int, height: Int ->
+      withContext(Dispatchers.IO) { FacePreview.renderThumb(context, faceId, options, colours, width, height) }
     }
 
     // A PNG of the theme's face on its background, in the cache folder; returns its file:// URI.

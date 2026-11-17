@@ -36,6 +36,13 @@ export interface AppInfo {
   notified: boolean;
 }
 
+export interface FaceInfo {
+  id: string;
+  name: string;
+  /** The face can show seconds, so the Seconds option applies to it. */
+  supportsSeconds: boolean;
+}
+
 export interface Subscription {
   remove(): void;
 }
@@ -57,6 +64,8 @@ interface NativeApi {
   clearBackground(themeId: string): Promise<void>;
   renderFacePreview(themeId: string, width: number, height: number): Promise<string>;
   previewAod(themeId: string): void;
+  listFaces(): FaceInfo[];
+  renderFaceThumb(faceId: string, options: FaceOptions, colours: string[], width: number, height: number): Promise<string>;
   addListener(event: 'onStatus', listener: (s: Status) => void): Subscription;
 }
 
@@ -87,6 +96,10 @@ export interface HaloEngineApi {
   renderFacePreview(themeId: string, width: number, height: number): Promise<string>;
   /** Opens the always-on screen with this theme over the app (not over the lock screen); back or a tap closes it. */
   previewAod(themeId: string): void;
+  /** Every face the always-on screen can draw, in the order the grid shows them. */
+  listFaces(): FaceInfo[];
+  /** A file:// URI of a PNG (width x height px) of one face on black with these options and 1 to 4 '#RRGGBB' colours, drawn now with sample values. An unknown face draws big-digits. */
+  renderFaceThumb(faceId: string, options: FaceOptions, colours: string[], width: number, height: number): Promise<string>;
   addStatusListener(cb: (s: Status) => void): Subscription;
 }
 
@@ -108,6 +121,9 @@ const HaloEngine: HaloEngineApi = {
   clearBackground: (themeId) => native.clearBackground(themeId),
   renderFacePreview: async (themeId, width, height) => String(await native.renderFacePreview(themeId, Math.round(width), Math.round(height))),
   previewAod: (themeId) => native.previewAod(themeId),
+  listFaces: () => native.listFaces().map((f) => ({ id: String(f.id), name: String(f.name), supportsSeconds: f.supportsSeconds === true })),
+  renderFaceThumb: async (faceId, options, colours, width, height) =>
+    String(await native.renderFaceThumb(faceId, options, colours, Math.round(width), Math.round(height))),
   addStatusListener: (cb) => native.addListener('onStatus', cb),
 };
 

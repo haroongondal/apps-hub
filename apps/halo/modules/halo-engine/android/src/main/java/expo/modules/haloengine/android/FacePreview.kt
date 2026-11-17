@@ -9,7 +9,9 @@ import android.net.Uri
 import expo.modules.haloengine.core.ColorSource
 import expo.modules.haloengine.core.DrawList
 import expo.modules.haloengine.core.FaceInput
+import expo.modules.haloengine.core.FaceOptions
 import expo.modules.haloengine.core.Faces
+import expo.modules.haloengine.core.SettingsColors
 import expo.modules.haloengine.core.Theme
 import expo.modules.haloengine.core.Themes
 import java.io.File
@@ -39,6 +41,41 @@ object FacePreview {
     } finally {
       bmp.recycle()
     }
+  }
+
+  private val HEX = Regex("^#[0-9a-fA-F]{6}$")
+
+  /** One face on black with the given options and colours, for the face grid; an unknown face draws big-digits. */
+  fun renderThumb(ctx: Context, faceId: String, options: Map<String, Any?>, colours: List<String>, w: Int, h: Int): String {
+    require(Themes.validId(faceId)) { "Invalid face id" }
+    val width = w.coerceIn(16, MAX)
+    val height = h.coerceIn(16, MAX)
+    val face = Faces.create(faceId)
+    val theme = Theme(
+      id = "thumb", name = "thumb", face = face.id, faceOptions = faceOptions(options),
+      colours = SettingsColors(ColorSource.PALETTE, colours.filter { HEX.matches(it) }.take(4).ifEmpty { listOf("#FFFFFF") }),
+    )
+    val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    try {
+      draw(ctx, theme, Canvas(bmp), width, height)
+      val dir = File(ctx.cacheDir, "thumbs").apply { mkdirs() }
+      dir.listFiles { f -> f.name.startsWith("${face.id}-") }?.forEach { it.delete() } // one thumb per face; a new name each time keeps image caches fresh
+      val out = File(dir, "${face.id}-${System.currentTimeMillis()}.png")
+      out.outputStream().use { check(bmp.compress(Bitmap.CompressFormat.PNG, 100, it)) { "PNG encode failed" } }
+      return Uri.fromFile(out).toString()
+    } finally {
+      bmp.recycle()
+    }
+  }
+
+  private fun faceOptions(m: Map<String, Any?>): FaceOptions {
+    val d = FaceOptions()
+    fun flag(k: String, default: Boolean) = m[k] as? Boolean ?: default
+    return FaceOptions(
+      size = (m["size"] as? String)?.takeIf { it in setOf("s", "m", "l") } ?: d.size,
+      position = (m["position"] as? String)?.takeIf { it in setOf("top", "centre", "bottom") } ?: d.position,
+      h24 = flag("h24", d.h24), date = flag("date", d.date), battery = flag("battery", d.battery), alarm = flag("alarm", d.alarm), seconds = flag("seconds", d.seconds),
+    )
   }
 
   private fun draw(ctx: Context, theme: Theme, canvas: Canvas, w: Int, h: Int) {
