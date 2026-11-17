@@ -9,7 +9,7 @@ import { ActivityIndicator, Image as RNImage, Keyboard, Pressable, ScrollView, V
 
 import { errorMessage } from '../../src/library/use-library';
 import { IconButton } from '../../src/library/icon-button';
-import { sheetChoice } from '../../src/scan/capture-rules';
+import { previewName, sheetChoice } from '../../src/scan/capture-rules';
 import { CropEditor } from '../../src/scan/crop-editor';
 import { FilterPicker } from '../../src/scan/filter-picker';
 import { pathToUri, uriToPath } from '../../src/scan/files-expo';
@@ -132,7 +132,7 @@ export default function ReviewScreen() {
     let alive = true;
     cleanPreviews();
     setPreviewing(true);
-    PdfScan.processPage({ src: `${base}/${page.file}`, quad: page.quad ?? FULL, rotation: page.rotation, filter: page.filter, out: `${base}/prev-${++counter.current}`, maxLongSide: 1200 })
+    PdfScan.processPage({ src: `${base}/${page.file}`, quad: page.quad ?? FULL, rotation: page.rotation, filter: page.filter, out: `${base}/${previewName(Date.now(), ++counter.current)}`, maxLongSide: 1200 })
       .then((r) => alive && setPreview({ uri: pathToUri(r.jpg), w: r.width, h: r.height }))
       .catch((e: unknown) => alive && setError(`The preview couldn't be made: ${errorMessage(e)}`))
       .finally(() => alive && setPreviewing(false));
@@ -255,7 +255,7 @@ export default function ReviewScreen() {
         )
       ) : (
         <View style={{ alignItems: 'center', minHeight: 160, justifyContent: 'center' }}>
-          {preview ? <Image source={{ uri: preview.uri }} style={{ width: '100%', aspectRatio: preview.w / Math.max(1, preview.h) }} contentFit="contain" accessibilityLabel="Preview of the finished page" /> : null}
+          {preview ? <Image source={{ uri: preview.uri }} style={{ width: '100%', aspectRatio: preview.w / Math.max(1, preview.h) }} contentFit="contain" cachePolicy="none" accessibilityLabel="Preview of the finished page" /> : null}
           {previewing ? <ActivityIndicator color={c.accent} accessibilityLabel="Making the preview" style={{ position: 'absolute' }} /> : null}
         </View>
       )}

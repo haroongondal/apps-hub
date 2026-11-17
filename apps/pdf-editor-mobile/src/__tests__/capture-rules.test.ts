@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { canSwitchMode, nextSide, sheetChoice, sortCardPages } from '../scan/capture-rules.ts';
+import { canSwitchMode, nextSide, previewName, sheetChoice, sortCardPages } from '../scan/capture-rules.ts';
 import { newPage, newSession } from '../scan/session-data.ts';
 
 const page = (side: 'front' | 'back' | null = null) => newPage('cap-1.jpg', null, side);
@@ -39,4 +39,12 @@ test('the sheet choice applies to one or two card pages only', () => {
   assert.equal(sheetChoice({ ...s, pages: [page('front'), page('back'), page(null)] }), false);
   assert.equal(sheetChoice({ ...s, mode: 'document', pages: [page(), page()] }), false);
   assert.equal(sheetChoice({ ...s, sheet: false, pages: [page('front')] }), false);
+});
+
+test('preview names differ between sessions that restart the counter and stay cleanable', () => {
+  const a = previewName(1_700_000_000_000, 1);
+  const b = previewName(1_700_000_005_000, 1);
+  assert.notEqual(a, b);
+  assert.notEqual(previewName(1_700_000_000_000, 1), previewName(1_700_000_000_000, 2));
+  for (const n of [a, b]) assert.match(`${n}.jpg`, /^prev-[0-9a-z-]+\.jpg$/);
 });

@@ -18,3 +18,6 @@ export const sortCardPages = (pages: readonly SessionPage[]): SessionPage[] =>
 
 /** A sheet holds one or two cards; anything else saves as separate pages. */
 export const sheetChoice = (s: ScanSession) => s.mode === 'card' && s.sheet && s.pages.length >= 1 && s.pages.length <= 2;
+
+/** Preview file name (processPage adds .jpg). The stamp keeps it unique across review sessions, which restart the counter. */
+export const previewName = (now: number, n: number) => `prev-${now.toString(36)}-${n}`;
