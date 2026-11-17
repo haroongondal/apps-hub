@@ -17,7 +17,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
-// PRD §5, one test per rule. Rules 3 and 4 run code; 1, 2, 5 and 6 are source scans, since they have no runtime seam.
+// PRD §5, one test per rule. Rules 3 and 4 run code; 1, 2, 5, 6 and 7 are source scans, since they have no runtime seam.
 class DataSafetyRulesTest {
   @get:Rule val folder = TemporaryFolder()
 
@@ -84,5 +84,14 @@ class DataSafetyRulesTest {
     sources.forEach { file -> network.forEach { assertFalse("${file.name} uses $it", file.readText().contains(it)) } }
     val gradle = moduleSrc.resolve("../../../build.gradle").readText()
     assertFalse(gradle.contains("okhttp"))
+  }
+
+  @Test
+  fun rule7GalleryPhotosOnlyGoToTheTrash() {
+    assertEquals(emptyList<String>(), sourcesContaining("createDeleteRequest"))
+    assertEquals(listOf("CleanupTrash.kt"), sourcesContaining("createTrashRequest("))
+    // Both only drop their own half-written output rows, never a gallery photo.
+    val deleters = sourcesContaining("resolver.delete(") + sourcesContaining("contentResolver.delete(")
+    assertEquals(setOf("Outputs.kt", "DesignSaves.kt"), deleters.toSet())
   }
 }
