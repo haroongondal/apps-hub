@@ -21,11 +21,11 @@ interface Parts {
 // Shared by the scheduler dialog and the settings page. Every control writes through saveDownloads (which repairs values)
 // and the editor follows storage changes, leaving a focused control alone. Handlers read their control before the write
 // starts: inside the lock a storage change may already have reset the control.
-export function queuesEditor(): HTMLElement {
+export function queuesEditor(save: typeof saveDownloads = saveDownloads): HTMLElement { // the settings page passes a save that reports a failure
   const parts = new Map<string, Parts>();
   let built: string[] = [];
   const list = h('div', { class: 'dl-queues' });
-  const add: HTMLButtonElement = h('button', { type: 'button', class: 'ui-btn', onclick: () => void saveDownloads(addQueue).then(() => sync()) }, T.setAddQueue);
+  const add: HTMLButtonElement = h('button', { type: 'button', class: 'ui-btn', onclick: () => void save(addQueue).then(() => sync()) }, T.setAddQueue);
   const root = h('div', { class: 'dl-queues-editor' }, list, add);
 
   const addQueue = (s: DownloadSettings): DownloadSettings => {
@@ -36,7 +36,7 @@ export function queuesEditor(): HTMLElement {
     const queue: QueueSetting = { id: `q${n}`, name: `Queue ${n}`, maxParallel: 3, schedule: { on: false, days: [0, 1, 2, 3, 4, 5, 6], start: '01:00', stop: '07:00' } };
     return { ...s, queues: [...s.queues, queue] };
   };
-  const edit = (id: string, fn: (q: QueueSetting) => QueueSetting) => saveDownloads((s) => ({ ...s, queues: s.queues.map((q) => (q.id === id ? fn(q) : q)) }));
+  const edit = (id: string, fn: (q: QueueSetting) => QueueSetting) => save((s) => ({ ...s, queues: s.queues.map((q) => (q.id === id ? fn(q) : q)) }));
   // After a write the control shows the stored (repaired) value, even though it still has focus.
   const sync = async (force?: Element) => apply(await readDownloads(), force);
 
@@ -79,7 +79,7 @@ export function queuesEditor(): HTMLElement {
       },
     });
     const removeText = index === 0 ? null : h('span', {}, T.setRemoveQueue(q.name));
-    const remove = removeText && h('button', { type: 'button', class: 'ui-btn', onclick: () => void saveDownloads((s) => ({ ...s, queues: s.queues.filter((x, i) => i === 0 || x.id !== id) })).then(() => sync()) }, removeText);
+    const remove = removeText && h('button', { type: 'button', class: 'ui-btn', onclick: () => void save((s) => ({ ...s, queues: s.queues.filter((x, i) => i === 0 || x.id !== id) })).then(() => sync()) }, removeText);
     const legend = h('legend', { class: 'ui-heading' }, q.name);
     const box = h(
       'fieldset',

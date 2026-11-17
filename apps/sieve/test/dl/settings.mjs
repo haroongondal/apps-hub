@@ -163,12 +163,34 @@ export async function run(t) {
     });
     await setField(by(T.setMinMb), 33);
     const said = await until(async () => (await alert.textContent()) === T.setSaveFailed).catch(() => false);
-    const back = (await by(T.setMinMb).inputValue()) === '5';
+    const back = await until(async () => (await by(T.setMinMb).inputValue()) === '5').catch(() => false);
     await page.evaluate(() => (chrome.storage.local.set = window.__set));
     check('downloads: settings: a setting that cannot be stored says so and the field shows the stored value', said === true && back, json({ alert: await alert.textContent(), value: await by(T.setMinMb).inputValue() }));
+
     await setField(by(T.setMinMb), 34);
     const cleared = await until(async () => (await alert.textContent()) === '' && (await raw(t)).takeOver?.minMb === 34).catch(() => false);
     check('downloads: settings: the next good write clears the message', cleared === true, json(await alert.textContent()));
+    await page.evaluate(() => (chrome.storage.local.set = () => Promise.reject(new Error('QUOTA_BYTES quota exceeded'))));
+    await setField(sec.getByLabel(T.setQueueName).first(), 'Lost');
+    const queueSaid = await until(async () => (await alert.textContent()) === T.setSaveFailed).catch(() => false);
+    await page.evaluate(() => (chrome.storage.local.set = window.__set));
+    check('downloads: settings: a queue change that cannot be stored says so too', queueSaid === true, json(await alert.textContent()));
+  });
+
+  await attempt('focus without a change', async () => {
+    await resetDl(t);
+    const box = by(T.setMinMb);
+    await until(async () => (await box.inputValue()) === '5');
+    await box.focus();
+    await box.fill('7');
+    const s = await stored(t);
+    await setDownloads(t, { takeOver: { ...s.takeOver, minMb: 61 } });
+    await new Promise((r) => setTimeout(r, 400));
+    const held = await box.inputValue();
+    await box.fill('5');
+    await box.blur();
+    const shown = await until(async () => (await box.inputValue()) === '61', 3000).catch(() => false);
+    check('downloads: settings: a change skipped while a field is focused shows once the person leaves it unchanged', held === '7' && shown === true && (await raw(t)).takeOver?.minMb === 61, json({ held, now: await box.inputValue() }));
   });
 
   await attempt('two writers', async () => {

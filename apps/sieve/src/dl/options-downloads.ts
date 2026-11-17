@@ -41,10 +41,18 @@ export function downloadsSection(): HTMLElement {
 
   // `commit` turns the typed text into an edit; afterwards the field shows what was stored (so a clamp is visible).
   const bind = <E extends Field>(el: E, read: (s: DownloadSettings) => string, commit: (v: string) => Edit): E => {
+    let saving = false;
     el.addEventListener('change', async () => {
-      await save(commit(el.value));
-      el.value = read(await readDownloads());
+      saving = true;
+      try {
+        await save(commit(el.value));
+        el.value = read(await readDownloads());
+      } finally {
+        saving = false;
+      }
     });
+    // An update skipped while the person was in the field lands when they leave it without a change (change fires first, so a save is not undone).
+    el.addEventListener('blur', () => !saving && latest && (el.value = read(latest)));
     shows.push(() => latest && el !== document.activeElement && (el.value = read(latest)));
     return el;
   };
@@ -105,7 +113,7 @@ export function downloadsSection(): HTMLElement {
       numberField(T.limitValue, 10, 1_000_000, (s) => s.speedLimit.kbPerSecond, (kbPerSecond) => speed({ kbPerSecond }), 10),
     ),
     group(T.setCategories, categoriesHelp, ...categories),
-    group(T.setQueues, null, queuesEditor()),
+    group(T.setQueues, null, queuesEditor(save)),
   );
   return section;
 }

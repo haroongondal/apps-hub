@@ -11,6 +11,7 @@ type Event = { id: string; kind: 'path'; filename: string; chromeId: number } | 
 const PREFIX = 'dlSave:';
 const INVALID: Reply = { ok: false, message: 'INVALID' };
 const inflight = new Map<string, Promise<Reply>>(); // a replayed message while the first is starting must not start a second download
+const starts = new Map<string, number>(); // saves begun per record: recoverSaves must not act on an entry a newer save replaced
 const text = (e: unknown) => String((e as Error)?.message ?? e);
 
 async function entries(): Promise<[string, SaveEntry][]> {
@@ -33,6 +34,7 @@ export async function onSave(message: unknown, sender: chrome.runtime.MessageSen
   const { id, blobUrl, path, size } = m as { id: string; blobUrl: string; path: string; size: number };
   const running = inflight.get(id);
   if (running) return running;
+  starts.set(id, (starts.get(id) ?? 0) + 1);
   const job = start(id, blobUrl, path, size).finally(() => inflight.delete(id));
   inflight.set(id, job);
   return job;
@@ -104,10 +106,12 @@ async function onChanged(delta: chrome.downloads.DownloadDelta): Promise<void> {
 }
 
 export async function recoverSaves(): Promise<void> {
+  const before = new Map(starts);
   for (const [key, entry] of await entries()) {
-    // onSave is starting this record (checked again before each send: a Resume can start one while this looks)
-    const tell = (events: Event[]) => (inflight.has(entry.id) ? undefined : report(key, events));
-    if (inflight.has(entry.id)) continue;
+    // No save of this record is starting or has started since this began (checked again before each write: a Resume can start one while this looks).
+    const untouched = () => !inflight.has(entry.id) && starts.get(entry.id) === before.get(entry.id);
+    const tell = (events: Event[]) => (untouched() ? report(key, events) : undefined);
+    if (!untouched()) continue;
     try {
       let chromeId = entry.chromeId;
       if (chromeId === null) {
@@ -118,7 +122,7 @@ export async function recoverSaves(): Promise<void> {
           continue;
         }
         chromeId = found.id;
-        if (inflight.has(entry.id)) continue; // a new save may have dropped this dead entry: do not write it back
+        if (!untouched()) continue; // a new save may have dropped this dead entry: do not write it back
         await chrome.storage.session.set({ [key]: { ...entry, chromeId } });
       }
       const [item] = await chrome.downloads.search({ id: chromeId });

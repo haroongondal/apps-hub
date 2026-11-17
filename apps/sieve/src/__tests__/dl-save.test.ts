@@ -281,3 +281,24 @@ test('recoverSaves sends no failure for a dead entry when a new save of that rec
   await saving;
   assert.deepEqual(events(env.calls), [], 'the engine must not fail a record whose new save is running');
 });
+
+test('recoverSaves leaves a record alone when a new save of it started and finished starting while it looked', async () => {
+  const env = setup();
+  const { onSave, recoverSaves } = await load();
+  env.items.set(9, { id: 9, url: BLOB, state: 'interrupted', filename: '', fileSize: 0, error: 'NETWORK_FAILED' });
+  env.session.set(`dlSave:${BLOB}`, entry({ chromeId: 9 }));
+  const downloads = (globalThis as unknown as { chrome: { downloads: { search: (q: object) => Promise<unknown[]> } } }).chrome.downloads;
+  const search = downloads.search;
+  let first = true;
+  downloads.search = async (q) => {
+    if (first) (first = false, await new Promise((r) => setTimeout(r, 30)));
+    return search(q);
+  };
+  const recovering = recoverSaves();
+  await new Promise((r) => setTimeout(r, 2));
+  assert.deepEqual(await onSave(msg(), OFFSCREEN as never), { ok: true, chromeId: 7 }); // the same blob URL, a new Chrome item
+  await recovering;
+  await settle();
+  assert.deepEqual(events(env.calls), [], 'the old item must not fail the new save');
+  assert.deepEqual(env.session.get(`dlSave:${BLOB}`), entry({ chromeId: 7 }), 'the new save keeps its entry');
+});
