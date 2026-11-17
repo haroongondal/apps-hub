@@ -87,6 +87,7 @@
       // YouTube stops the video on home (inspected 2026-11-17: see the NAV.start listener in src/yt/bridge-main.ts).
       stopped = true;
       video.pause();
+      video.currentTime = 0;
       setState(5);
       history.pushState(null, '', `/?fixture=${next.get('fixture') ?? 'watch'}`);
       document.title = 'YouTube';

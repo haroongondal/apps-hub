@@ -58,6 +58,13 @@ export async function local(t) {
     await page.evaluate(() => window.__swap());
     await sleep(300);
     check("speed: the owner's 1.75 stays across a navigation that keeps the video and a new source for it", (await rate(page)) === 1.75, String(await rate(page)));
+    // A video the owner paused mid-way is not one YouTube stopped: the same-video navigation and a new source keep the owner's 1.75.
+    await page.evaluate(() => { const v = document.querySelector('#movie_player video'); v.pause(); v.currentTime = 1; });
+    await navigate(page, 'sieveTest02', { keep: true });
+    await page.evaluate(() => document.querySelector('#movie_player video').play());
+    await page.evaluate(() => window.__swap());
+    await sleep(300);
+    check("speed: a video paused mid-way keeps the owner's 1.75 across a same-video navigation and a new source", (await rate(page)) === 1.75, String(await rate(page)));
     // The fixture now names another video with no new source, so only a forged loadstart could make it look like a new one.
     await navigate(page, 'sieveTest03', { keep: true });
     await page.evaluate(() => document.querySelector('#movie_player video').dispatchEvent(new Event('loadstart')));
@@ -213,6 +220,10 @@ export async function local(t) {
     await until(() => page.evaluate(() => window.__lastSieveSettings?.on === false));
     await sleep(800);
     check('speed: with the YouTube tools off the speed is left alone', (await rate(page)) === 1, String(await rate(page)));
+    await page.evaluate(() => { document.querySelector('#movie_player video').playbackRate = 1.25; });
+    await page.evaluate(() => window.__swap());
+    await sleep(300);
+    check("speed: with the YouTube tools off a new source for the same video keeps Chrome's reset to 1", (await rate(page)) === 1, String(await rate(page)));
     await page.close();
     await setYouTube(t, { on: true });
   } finally {

@@ -28,7 +28,9 @@ feature('speed', () => {
   let wanted: number | null = null; // the default applied to the current video, until its first `playing`, a speed command or a key or pointer press
   let armed = 0; // when `wanted` was set
   let rate = 1; // the video's rate as its last ratechange left it
-  let kept = 1; // `rate` when the current source was emptied: Chrome may queue a ratechange to 1 between `emptied` and `loadstart`
+  // `rate` when the current source was emptied: the load has already reset playbackRate to 1 by then, so this is the rate the last
+  // ratechange left; a ratechange to 1 that Chrome may queue between `emptied` and `loadstart` does not reach it.
+  let kept = 1;
   const video = (): HTMLVideoElement | null => apply(query, document, [SEL.video]) as HTMLVideoElement | null;
 
   function setRate(rate: number): number | null {

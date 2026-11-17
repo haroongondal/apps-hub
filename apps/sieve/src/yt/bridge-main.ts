@@ -134,12 +134,13 @@ on(
   },
   true,
 );
-// The dedupe above keeps the video that plays on across a navigation; one that YouTube stopped starts afresh (watch A, home, A).
+// The dedupe above keeps the video that plays on, or that the owner paused mid-way, across a navigation; one that YouTube stopped
+// (paused at 0 s, or ended) starts afresh (watch A, home, A).
 // inspected 2026-11-17, signed out, Chrome for Testing 149.0.7827.55, no extension: at yt-navigate-start from watch to home (the logo) the
 // video was playing; at the yt-navigate-finish on home YouTube had stopped it (state 5, paused, at 0 s), so the way back to it (back, same
 // id, a new source) began paused. The miniplayer (key i) and its expand fired yt-navigate-finish only, with no yt-navigate-start.
 apply(listen, NAV.target === 'window' ? window : document, [NAV.start, () => {
   const v = apply(query, document, [SEL.video]) as HTMLVideoElement | null;
-  if (!v || v.paused || v.ended) lastVideo = null;
+  if (!v || v.ended || (v.paused && v.currentTime === 0)) lastVideo = null;
 }]);
 apply(dispatch, document, [new Custom(EVENTS.hello)]);
