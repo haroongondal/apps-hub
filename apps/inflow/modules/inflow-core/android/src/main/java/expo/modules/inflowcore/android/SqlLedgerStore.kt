@@ -114,6 +114,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
     txns(
       "t.own = 0 AND t.at BETWEEN ? AND ? AND NOT EXISTS (SELECT 1 FROM txn_sources s JOIN items i ON i.id = s.item_id " +
         "WHERE s.txn_id = t.id AND NOT (${SqlItemStore.NEVER_SEND_FILTER})) AND NOT EXISTS (SELECT 1 FROM txn_sources p WHERE p.txn_id = t.id AND $PUSH_SOURCE) " +
+        "AND NOT EXISTS (SELECT 1 FROM txn_sources k JOIN tombstones n ON n.hash = '${SqlItemStore.NEVER_SENT_PREFIX}' || k.item_id WHERE k.txn_id = t.id) " +
         "ORDER BY t.at DESC, t.id DESC LIMIT ?",
       from, to, limit.toLong(),
     )

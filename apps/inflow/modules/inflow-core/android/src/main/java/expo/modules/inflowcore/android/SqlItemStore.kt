@@ -233,6 +233,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
   }
 
   override fun purgeOlder(pkg: String, cutoff: Long): Int = transaction {
+    keepNeverSent("pkg = ? AND posted_at < ?", pkg, cutoff)
     forgetAi("pkg = ? AND posted_at < ?", pkg, cutoff)
     forgetMedia("pkg = ? AND posted_at < ?", pkg, cutoff)
     tombstoneEmails("pkg = ? AND posted_at < ?", pkg, cutoff)
@@ -240,6 +241,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
   }
 
   override fun deleteApp(pkg: String): Int = transaction {
+    keepNeverSent("pkg = ?", pkg)
     forgetAi("pkg = ?", pkg)
     forgetMedia("pkg = ?", pkg)
     tombstoneEmails("pkg = ?", pkg)
@@ -253,6 +255,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
   // The owner's deletion: like retention, plus the item's own, SMS and email hashes are tombstoned so an inbox sync or a mailbox re-read cannot bring it back.
   // Not the text hash: a later message with the same words is a new message.
   private fun removeByOwner(where: String, vararg args: Any?): Int {
+    keepNeverSent(where, *args)
     forgetAi(where, *args)
     forgetMedia(where, *args)
     val now = System.currentTimeMillis()
@@ -260,6 +263,17 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     run("INSERT OR IGNORE INTO tombstones(hash, at) SELECT sms_hash, ? FROM items WHERE sms_hash IS NOT NULL AND $where", now, *args)
     tombstoneEmails(where, *args)
     return run("DELETE FROM items WHERE $where", *args)
+  }
+
+  // A transaction's never-send decision is read through its source item, which these deletions remove. Before the item goes, leave a
+  // tombstone for each source the owner kept from the AI (OTP, blocked app, sender or recording), so Ask AI still withholds the transaction.
+  // Keyed by item id: items is AUTOINCREMENT, so the id is never reused.
+  private fun keepNeverSent(where: String, vararg args: Any?) {
+    run(
+      "INSERT OR IGNORE INTO tombstones(hash, at) SELECT '$NEVER_SENT_PREFIX' || i.id, ? FROM items i " +
+        "WHERE i.id IN (SELECT id FROM items WHERE $where) AND i.id IN (SELECT item_id FROM txn_sources) AND NOT ($NEVER_SEND_FILTER)",
+      System.currentTimeMillis(), *args,
+    )
   }
 
   // The AI result, queue entry and to-dos go with their item.
@@ -533,6 +547,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       "AND (i.sender_key IS NULL OR NOT EXISTS (SELECT 1 FROM ai_blocks b WHERE b.block_key = 'sender:' || i.sender_key))"
     // R44: only SMS and email go to the AI. sms_hash/email_hash cover the default SMS app and Gmail whatever the package; the package list is AiChannels.PKGS.
     private val SMS_OR_EMAIL = "(i.sms_hash IS NOT NULL OR i.email_hash IS NOT NULL OR i.pkg IN (${AiChannels.SQL_LIST}))"
+    internal const val NEVER_SENT_PREFIX = "nosend:"
     internal val NEVER_SEND_FILTER = "i.otp_expires_at IS NULL AND $SMS_OR_EMAIL AND $SENDABLE"
     private val QUEUE_FROM = "FROM ai_queue q JOIN items i ON i.id = q.item_id LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
       "WHERE i.posted_at >= ? AND $NEVER_SEND_FILTER"
