@@ -62,4 +62,14 @@ class ThemesTest {
       assertTrue("pattern of ${t.id}", t.edge.pattern in patternIds)
     }
   }
+
+  @Test
+  fun idsAndFit() {
+    assertTrue(Themes.validId("theme-1"))
+    for (bad in listOf("", "../x", "a/b", "A", "a.jpg", "a".repeat(41))) assertFalse(bad, Themes.validId(bad))
+    assertEquals(1440 to 810, Themes.fit(4000, 2250, 1440))
+    assertEquals(810 to 1440, Themes.fit(2250, 4000, 1440))
+    assertEquals(800 to 600, Themes.fit(800, 600, 1440))
+    assertEquals(1440 to 1, Themes.fit(1440 * 10, 5, 1440))
+  }
 }

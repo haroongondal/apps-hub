@@ -2,6 +2,18 @@ package expo.modules.haloengine.core
 
 object Themes {
   private const val FALLBACK_FACE = "big-digits"
+  private val ID = Regex("^[a-z0-9-]{1,40}$")
+
+  /** Theme ids end up in file names, so only this shape may reach a path. */
+  fun validId(id: String): Boolean = ID.matches(id)
+
+  /** Size that fits `maxPx` on the long side, keeping the ratio; never enlarges. */
+  fun fit(w: Int, h: Int, maxPx: Int): Pair<Int, Int> {
+    val long = maxOf(w, h)
+    if (long <= maxPx) return w to h
+    val k = maxPx.toDouble() / long
+    return maxOf(1, Math.round(w * k).toInt()) to maxOf(1, Math.round(h * k).toInt())
+  }
 
   /** The slot with the latest start <= minuteOfDay wins; before the first slot, the last slot of the day before (crosses midnight). */
   fun resolve(aod: SettingsAod, themes: List<Theme>, minuteOfDay: Int): Theme {
