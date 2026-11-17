@@ -21,8 +21,9 @@ export function within(promise, ms, what) {
   return Promise.race([promise, new Promise((_, reject) => (timer = setTimeout(() => reject(new Error(`${what} took over ${ms / 1000} s`)), ms)))]).finally(() => clearTimeout(timer));
 }
 
-// When the video was at 0 s, in window seconds; null when it never played without an ad.
-const startOf = (row) => (row.content ? Math.round((row.content.at - row.content.from) * 10) / 10 : null);
+// When the video was at 0 s, in window seconds; null when it never played without an ad, or when its first frame came more than 5 s
+// into the video (a resumed video shows no start).
+const startOf = (row) => (row.content && row.content.from <= 5 ? Math.round((row.content.at - row.content.from) * 10) / 10 : null);
 
 // The window opens at domcontentloaded, so it also holds the wait for the first frame: up to 9.2 s without Sieve (20 s only after an ad)
 // and up to 20.6 s with it (30 live runs, 2026-11-17), while no video stalled once it had started. So the first frame is judged against
@@ -44,7 +45,25 @@ export function judgePlayback(control, sieve) {
   const span = c ? sieve.windowEnd - c.at : 0;
   if (!c || span < MIN_CONTROL_S) return { verdict: 'fail', ratio: null, text: `with Sieve the video ${c ? `only started at ${c.at} s` : 'never started'} in the ${SECONDS} s window` };
   const ratio = (c.to - c.from) / span;
-  return { verdict: ratio >= MIN_RATIO ? 'pass' : 'fail', ratio, text: `with Sieve it played ${(c.to - c.from).toFixed(1)} s of video in the ${span.toFixed(1)} s from its first frame to the end of the window, ratio ${ratio.toFixed(2)} (needs ${MIN_RATIO})` };
+  return { verdict: ratio >= MIN_RATIO ? 'pass' : 'fail', ratio, text: `with Sieve it played ${(c.to - c.from).toFixed(1)} s of video in the ${span.toFixed(1)} s from its first frame to the end of the window, ratio ${ratio.toFixed(2)} (needs ${MIN_RATIO})${sieve.hung ? `; ${sieve.hung}` : ''}` };
+}
+
+const why = (r) => (r.botCheck ? 'YouTube asked this address to sign in (bot check)' : r.consent ? 'consent page' : r.error);
+
+// Only a late first frame on a video that did start earns a second watch: a video that never started is a failure as it is.
+export const needsRewatch = (control, first) => first.content !== null && judgeStart(control, first).verdict === 'fail';
+
+// The second watch decides the start check alone; playback and the ad check stay with the first watch (an ad on either counts),
+// and a second watch that gave no answer (bot check, consent page, error) leaves the late start a failure.
+export function judgeVideo(control, first, again = null) {
+  let start = judgeStart(control, first);
+  if (again && needsRewatch(control, first)) {
+    const second = judgeStart(control, again);
+    start = why(again)
+      ? { verdict: 'fail', text: `${start.text}; the second watch gave no answer (${why(again)})` }
+      : { verdict: second.verdict, text: `on the first watch ${start.text}; on the second ${second.text}`, recovered: second.verdict === 'pass' };
+  }
+  return { start, play: judgePlayback(control, first), ad: first.adShowing || !!again?.adShowing };
 }
 
 // Exit status: 1 when a check failed, 2 when no video gave evidence (every one skipped or inconclusive), else 0.
@@ -80,6 +99,22 @@ if (process.argv.includes('--self-check')) {
   assert.equal(judgeStart({ playedTo: 3, content: null }, { content: null }).verdict, 'inconclusive', 'a control that did not play cannot be compared');
   await assert.rejects(within(new Promise(() => {}), 20, 'a hung call'), /a hung call took over 0.02 s/);
   assert.equal(await within(Promise.resolve(7), 20, 'a quick call'), 7);
+  assert.equal(judgeStart(control(1.5, 0.5), played(2, 12, 40)).verdict, 'fail', 'a first frame 12 s into the video (resumed) is no start');
+  assert.match(judgePlayback({ playedTo: 28 }, { ...played(1, 0.5, 6.6), hung: 'a page check took over 5 s' }).text, /a page check took over 5 s/);
+  const never = { windowEnd: 30, content: null, adShowing: false };
+  assert.equal(needsRewatch(control(1.5, 0.5), never), false, 'a video that never started is not watched again');
+  const v1 = judgeVideo(control(1.5, 0.5), never, played(2, 0.5, 28));
+  assert.deepEqual([v1.start.verdict, v1.play.verdict], ['fail', 'fail'], 'a first watch that never started fails, whatever a second watch shows');
+  const late = { ...played(21.5, 0.5, 9), adShowing: true };
+  assert.equal(needsRewatch(control(1.5, 0.5), late), true);
+  const v2 = judgeVideo(control(1.5, 0.5), late, played(2, 0.5, 28));
+  assert.deepEqual([v2.start.verdict, v2.start.recovered, v2.play.verdict, v2.ad], ['pass', true, 'pass', true], 'late then on time: the start passes, playback and the ad stay with the first watch');
+  const v3 = judgeVideo(control(1.5, 0.5), late, played(22, 0.5, 8.5));
+  assert.equal(v3.start.verdict, 'fail', 'late twice fails');
+  const v4 = judgeVideo(control(1.5, 0.5), late, { botCheck: true, content: null, adShowing: false });
+  assert.deepEqual([v4.start.verdict, v4.ad], ['fail', true], 'a second watch that hit a bot check keeps the late start and the first ad');
+  const v5 = judgeVideo(control(1.5, 0.5), { ...played(1.5, 0.5, 2), windowEnd: 30 }, null);
+  assert.deepEqual([v5.start.verdict, v5.play.verdict], ['pass', 'fail'], 'a start on time with a stall needs no second watch and fails playback');
   assert.equal(exitCode({ failed: 0, videos: 3, skipped: 3, inconclusive: 0 }), 2, 'all skipped is no evidence');
   assert.equal(exitCode({ failed: 0, videos: 3, skipped: 1, inconclusive: 2 }), 2, 'skipped plus inconclusive is no evidence');
   assert.equal(exitCode({ failed: 0, videos: 3, skipped: 1, inconclusive: 1 }), 0);
@@ -88,11 +123,12 @@ if (process.argv.includes('--self-check')) {
   process.exit(0);
 }
 
-async function watch(ctx, id) {
+async function watch(ctx, id, extra = '') {
   const page = await ctx.newPage();
-  const row = { id, seconds: 0, adShowing: false, botCheck: false, consent: false, playedTo: 0, endedAt: 0, content: null, windowEnd: 0 };
+  // firstAny: the window second of the first frame of anything, ad or video (data only, nothing judges it yet).
+  const row = { id, seconds: 0, adShowing: false, botCheck: false, consent: false, playedTo: 0, endedAt: 0, content: null, firstAny: null, windowEnd: 0 };
   try {
-    await page.goto(`https://www.youtube.com/watch?v=${id}`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await page.goto(`https://www.youtube.com/watch?v=${id}${extra}`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     const start = Date.now();
     while (Date.now() - start < SECONDS * 1000) {
       const s = await within(
@@ -114,6 +150,7 @@ async function watch(ctx, id) {
         row.endedAt = Math.round(s.time);
         const at = Math.round((Date.now() - start) / 100) / 10;
         const time = Math.round(s.time * 10) / 10;
+        if (s.time > 0.5) row.firstAny ??= at;
         // The video's own first frame: an ad's clock (ad-showing) and the 0 s of the load are not playback.
         if (!s.ad && s.time > 0.5) row.content = row.content ? { ...row.content, to: time } : { at, from: time, to: time };
       }
@@ -130,10 +167,10 @@ async function watch(ctx, id) {
   return row;
 }
 
-const why = (r) => (r.botCheck ? 'YouTube asked this address to sign in (bot check)' : r.consent ? 'consent page' : r.error);
 let ctx;
 let skipped = 0;
 let inconclusive = 0;
+let recovered = 0;
 try {
   // The control has no extension at all: only an ad there shows that YouTube served one to this address.
   ({ ctx } = await launch({ mapHosts: false, extension: false, extraArgs: ARGS }));
@@ -149,7 +186,7 @@ try {
   ({ ctx, sw, id } = await launch({ mapHosts: false, extraArgs: ARGS }));
   await sleep(1000); // onInstalled stores the default settings
   for (const id of VIDEOS) {
-    let r = await watch(ctx, id);
+    const r = await watch(ctx, id);
     const c = control[id];
     console.log(`with Sieve     ${JSON.stringify(r)}`);
     if (why(r) || why(c)) {
@@ -157,29 +194,23 @@ try {
       console.log(`SKIP  ${id}: ${why(r) ?? why(c)}`);
       continue;
     }
-    let start = judgeStart(c, r);
-    // A late first frame gets one more watch, in Sieve's browser only: the control's browser is closed by now and its start stays the
-    // baseline. A one-off network wait does not repeat; a player held back by Sieve, or by YouTube's reaction to it, does.
-    if (start.verdict === 'fail') {
-      console.log(`LATE  ${id}: ${start.text}; watching it once more`);
-      const first = r;
-      r = await watch(ctx, id);
-      console.log(`with Sieve, again  ${JSON.stringify(r)}`);
-      if (why(r)) {
-        skipped++;
-        console.log(`SKIP  ${id}: ${why(r)}`);
-        continue;
-      }
-      r.adShowing ||= first.adShowing;
-      start = judgeStart(c, r);
+    // A late first frame gets one more watch from 0 s, in Sieve's browser only: the control's browser is closed by now and its start stays
+    // the baseline. A one-off network wait does not repeat; a player held back by Sieve, or by YouTube's reaction to it, does.
+    let again = null;
+    if (needsRewatch(c, r)) {
+      console.log(`LATE  ${id}: ${judgeStart(c, r).text}; watching it once more`);
+      again = await watch(ctx, id, '&t=0s');
+      console.log(`with Sieve, again  ${JSON.stringify(again)}`);
     }
+    const { start, play, ad } = judgeVideo(c, r, again);
+    if (start.recovered) recovered++;
+    const rows = JSON.stringify({ control: c, sieve: r, again });
     if (start.verdict === 'inconclusive') console.log(`INCONCLUSIVE  ${id}: ${start.text}`);
-    else check(`live ${id}: the first frame with Sieve is not late, ${start.text}`, start.verdict === 'pass', JSON.stringify({ control: c, sieve: r }));
-    const play = judgePlayback(c, r);
+    else check(`live ${id}: the first frame with Sieve is not late, ${start.text}`, start.verdict === 'pass', rows);
     if (play.verdict === 'inconclusive') console.log(`INCONCLUSIVE  ${id}: ${play.text}`);
-    else check(`live ${id}: the video keeps playing with Sieve, ${play.text}`, play.verdict === 'pass', JSON.stringify({ control: c, sieve: r }));
-    if (c.adShowing || r.adShowing) {
-      check(`live ${id}: ${c.adShowing ? 'an ad showed without Sieve' : 'no ad showed without Sieve'}, and none showed with Sieve`, !r.adShowing, JSON.stringify({ control: c, sieve: r }));
+    else check(`live ${id}: the video keeps playing with Sieve, ${play.text}`, play.verdict === 'pass', rows);
+    if (c.adShowing || ad) {
+      check(`live ${id}: ${c.adShowing ? 'an ad showed without Sieve' : 'no ad showed without Sieve'}, and none showed with Sieve`, !ad, rows);
     } else {
       inconclusive++;
       console.log(`INCONCLUSIVE  ${id}: no ad was served, so removal cannot be shown`);
@@ -229,7 +260,7 @@ try {
   await ctx?.close().catch(() => {});
 }
 
-console.log(`\n${results.filter((r) => r.ok).length}/${results.length} live checks passed, ${inconclusive} inconclusive, ${skipped} skipped`);
+console.log(`\n${results.filter((r) => r.ok).length}/${results.length} live checks passed, ${inconclusive} inconclusive, ${skipped} skipped, ${recovered} late on the first watch and on time on the second`);
 const code = exitCode({ failed: results.filter((r) => !r.ok).length, videos: VIDEOS.length, skipped, inconclusive });
 // Exit 2 means no ad was served (or every video was skipped); playback checks that ran (all passed, or the exit would be 1) still count.
 if (code === 2 && results.length > 0) console.log('NO EVIDENCE about ad removal (no ad was served); the playback checks above still stand.');
