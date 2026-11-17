@@ -1,9 +1,11 @@
 package expo.modules.designmedia.core
 
 import java.io.File
+import java.io.IOException
 import kotlin.io.path.createTempDirectory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -143,5 +145,29 @@ class CleanupStoreTest {
     assertEquals(listOf(a, old), TrashRecord(f).all())
     assertEquals(emptyList<TrashEntry>(), recentEntries(TrashRecord(f), now, fullAccess = true, stillTrashed = emptySet()))
     assertEquals(emptyList<TrashEntry>(), TrashRecord(f).all())
+  }
+
+  @Test
+  fun undismissDropsOnlyThosePairs() {
+    val f = file()
+    val d = Dismissals(f)
+    d.add("blurry", listOf(1L, 2L))
+    d.add("copies", listOf(1L))
+    d.remove("blurry", listOf(1L, 9L))
+    assertEquals(setOf("blurry" to 2L, "copies" to 1L), Dismissals(f).all())
+  }
+
+  @Test
+  fun aFailedWriteLeavesTheOldRecord() {
+    val f = file()
+    TrashRecord(f).add(listOf(entry("a")))
+    val old = f.readText()
+    val tmp = File(f.parentFile, "t.json.tmp").apply { mkdir() }
+    assertThrows(IOException::class.java) { TrashRecord(f).add(listOf(entry("b"))) }
+    assertEquals(old, f.readText())
+    tmp.delete()
+    TrashRecord(f).add(listOf(entry("b")))
+    assertEquals(listOf(entry("a"), entry("b")), TrashRecord(f).all())
+    assertFalse(tmp.exists())
   }
 }

@@ -93,5 +93,11 @@ class DataSafetyRulesTest {
     // Both only drop their own half-written output rows, never a gallery photo.
     val deleters = sourcesContaining("resolver.delete(") + sourcesContaining("contentResolver.delete(")
     assertEquals(setOf("Outputs.kt", "DesignSaves.kt"), deleters.toSet())
+    val uriDelete = Regex("\\.delete\\(\\s*(uri|Uri\\.parse|ContentUris|MediaStore|IMAGES)")
+    assertEquals(setOf("Outputs.kt", "DesignSaves.kt"), sources.filter { uriDelete.containsMatchIn(it.readText()) }.map { it.name }.toSet())
+    // Trashed rows are only ever read (MATCH_ONLY), never flagged by hand.
+    assertEquals(emptyList<String>(), sourcesContaining("IS_TRASHED"))
+    val manifests = listOf(moduleSrc.resolve("../AndroidManifest.xml"), moduleSrc.resolve("../../../../../../android/app/src/main/AndroidManifest.xml"))
+    manifests.forEach { m -> listOf("MANAGE_MEDIA", "MANAGE_EXTERNAL_STORAGE").forEach { assertFalse("${m.path} asks for $it", m.readText().contains(it)) } }
   }
 }

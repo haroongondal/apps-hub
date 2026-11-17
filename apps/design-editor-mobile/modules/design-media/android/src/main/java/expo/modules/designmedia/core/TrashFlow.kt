@@ -31,6 +31,10 @@ class TrashFlow<P> {
   @Synchronized fun resumed(): TrashPending<P>? = if (launched) abort() else null
 }
 
+// The URIs actually sent, so an Undo can pass them straight back; none when nothing was sent or the owner said no.
+fun trashAnswer(action: TrashAction, uris: List<String>): Map<String, Any> =
+  mapOf((if (action == TrashAction.TRASH) "moved" else "restored") to uris.size, "uris" to uris)
+
 fun galleryImageId(uri: String, base: String): Long? {
   val rest = uri.removePrefix("$base/").takeIf { it.length < uri.length } ?: return null
   return if (rest.isNotEmpty() && rest.all { it in '0'..'9' }) rest.toLongOrNull() else null

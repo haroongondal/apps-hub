@@ -88,6 +88,11 @@ object CleanupTool {
     dismissals(ctx).add(kind, uris.map { idOf(it) ?: throw NotAGalleryPhoto() })
   }
 
+  fun undismiss(ctx: Context, kind: String, uris: List<String>) {
+    kindOf(kind) ?: throw UnknownCleanupKind(kind)
+    dismissals(ctx).remove(kind, uris.map { idOf(it) ?: throw NotAGalleryPhoto() })
+  }
+
   fun clearDismissals(ctx: Context) = dismissals(ctx).clear()
 
   private fun kindOf(wire: String) = CleanupKind.entries.firstOrNull { it.wire == wire }

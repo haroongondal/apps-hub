@@ -60,7 +60,8 @@ object PhotoSearch {
   fun indexed(ctx: Context): Int = index(ctx).size
 
   fun state(ctx: Context): Map<String, Any?> =
-    mapOf("indexed" to indexed(ctx), "modelsReady" to modelsReady(ctx), "waiting" to PhotoIndexRunner.waitingFor)
+    mapOf("indexed" to indexed(ctx), "modelsReady" to modelsReady(ctx), "waiting" to PhotoIndexRunner.waitingFor,
+      "lastScan" to PhotoIndexRunner.stampFile(ctx).lastModified())
 
   fun galleryChanged(ctx: Context): Boolean = needsScan(AtomicFile(PhotoIndexRunner.stampFile(ctx)).read(), Gallery.stamp(ctx))
 

@@ -148,6 +148,8 @@ class DesignMediaModule : Module() {
 
     AsyncFunction("dismissCleanup") { kind: String, uris: List<String> -> CleanupTool.dismiss(context, kind, uris) }.runOnQueue(readScope)
 
+    AsyncFunction("undismissCleanup") { kind: String, uris: List<String> -> CleanupTool.undismiss(context, kind, uris) }.runOnQueue(readScope)
+
     AsyncFunction("clearCleanupDismissals") { CleanupTool.clearDismissals(context) }.runOnQueue(readScope)
 
     AsyncFunction("visionTools") { Vision.tools(context) }

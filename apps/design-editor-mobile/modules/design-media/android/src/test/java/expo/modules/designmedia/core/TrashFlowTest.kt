@@ -99,4 +99,10 @@ class TrashFlowTest {
     assertEquals("p", flow.finish(TrashAction.TRASH.requestCode, ok = true)?.first?.promise)
     assertNull(flow.resumed())
   }
+
+  @Test
+  fun answerCarriesTheUrisSent() {
+    assertEquals(mapOf("moved" to 2, "uris" to a), trashAnswer(TrashAction.TRASH, a))
+    assertEquals(mapOf("restored" to 0, "uris" to emptyList<String>()), trashAnswer(TrashAction.RESTORE, emptyList()))
+  }
 }

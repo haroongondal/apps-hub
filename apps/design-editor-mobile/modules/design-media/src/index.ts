@@ -50,17 +50,18 @@ export interface DesignMediaModule {
   photoModels(): Promise<{ name: string; url: string; bytes: number; ready: boolean }[]>;
   installPhotoModel(name: string): Promise<boolean>; // checks a finished download, then keeps it; false when it is damaged
   startPhotoIndex(): Promise<string>; // the job id; the one already waiting when there is one
-  photoIndexState(): Promise<{ indexed: number; modelsReady: boolean; waiting: 'heat' | 'battery' | null }>; // waiting: why a running scan is holding back
+  photoIndexState(): Promise<{ indexed: number; modelsReady: boolean; waiting: 'heat' | 'battery' | null; lastScan: number }>; // waiting: why a running scan is holding back; lastScan: ms when the last scan finished, 0 if never
   photoGalleryChanged(): Promise<boolean>; // true when photos changed since the last finished scan, or none has finished
   searchPhotos(query: string): Promise<string[]>; // content URIs, best first, at most 60
   similarPhotos(uri: string): Promise<string[]>; // photos that look like this one, not including it
   releasePhotoSearch(): Promise<void>; // frees the text model's memory
   // Clean up: groups from the photo index. A photo leaves the gallery only through Android's own trash dialog.
   cleanupGroups(options?: { blurThreshold?: number; lookalikeCosine?: number }): Promise<CleanupResult>; // photos still in the gallery only
-  trashPhotos(uris: string[]): Promise<{ moved: number }>; // opens Android's dialog; 0 when the owner says no
+  trashPhotos(uris: string[]): Promise<{ moved: number; uris: string[] }>; // opens Android's dialog; 0 and [] when the owner says no; uris: the ones sent, for Undo
   recentlyRemoved(): Promise<RemovedPhoto[]>; // trashed here in the last 30 days and still in Android's trash
-  restorePhotos(uris: string[]): Promise<{ restored: number }>; // opens Android's dialog; 0 when the owner says no
+  restorePhotos(uris: string[]): Promise<{ restored: number; uris: string[] }>; // opens Android's dialog; 0 and [] when the owner says no
   dismissCleanup(kind: CleanupKind, uris: string[]): Promise<void>; // "Not a mistake": never shown in that kind again
+  undismissCleanup(kind: CleanupKind, uris: string[]): Promise<void>; // undoes dismissCleanup for just these photos
   clearCleanupDismissals(): Promise<void>; // brings every dismissed photo back
   // Quick edits: cut-out and upscale models. Same download-then-install steps as the photo models above.
   visionTools(): Promise<VisionToolEntry[]>;

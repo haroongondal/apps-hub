@@ -1,6 +1,9 @@
 package expo.modules.designmedia.core
 
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -11,7 +14,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 
 // Photos Clean up sent to Android's trash, kept so "Recently removed" can bring them back. Plain DOM JSON like Plans.kt
-// (no serialization plugin). A missing or unreadable file reads as empty; every write goes through AtomicFile.
+// (no serialization plugin). A missing or unreadable file reads as empty.
 data class TrashEntry(val uri: String, val name: String, val bytes: Long, val trashedAt: Long)
 
 const val TRASH_KEEP_MS = 30L * 24 * 60 * 60 * 1000
@@ -28,7 +31,10 @@ private fun <T> readRows(file: File, row: (JsonObject) -> T): List<T> {
 // A file that no longer parses is kept as <name>.bad (the latest only) so its entries can be recovered by hand.
 private fun writeRows(file: File, rows: JsonArray) {
   if (file.exists() && parse(file.readText()) == null) file.renameTo(File(file.parentFile, file.name + ".bad"))
-  AtomicFile(file).write(rows.toString())
+  // Like AtomicFile, but synced: the trash record is the only way back to a trashed photo.
+  val tmp = File(file.parentFile, file.name + ".tmp")
+  FileOutputStream(tmp).use { it.write(rows.toString().toByteArray()); it.fd.sync() }
+  Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
 }
 
 class TrashRecord(private val file: File) {
@@ -64,6 +70,8 @@ class Dismissals(private val file: File) {
     readRows(file) { it.getValue("kind").jsonPrimitive.content to it.getValue("id").jsonPrimitive.long }.toSet()
 
   @Synchronized fun add(kind: String, ids: Collection<Long>) = save(all() + ids.map { kind to it })
+
+  @Synchronized fun remove(kind: String, ids: Collection<Long>) = save(all() - ids.map { kind to it }.toSet())
 
   @Synchronized fun clear() = save(emptySet())
 

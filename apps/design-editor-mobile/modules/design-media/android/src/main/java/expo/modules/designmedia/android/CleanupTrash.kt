@@ -7,6 +7,7 @@ import android.provider.MediaStore
 import expo.modules.designmedia.core.TrashAction
 import expo.modules.designmedia.core.TrashEntry
 import expo.modules.designmedia.core.TrashFlow
+import expo.modules.designmedia.core.trashAnswer
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 
@@ -33,11 +34,11 @@ object CleanupTrash {
   fun start(ctx: Context, activity: Activity?, action: TrashAction, uris: List<String>, promise: Promise) {
     val wanted = uris.distinct()
     val ids = wanted.map { CleanupTool.idOf(it) ?: return promise.reject(NotAGalleryPhoto()) }
-    if (ids.isEmpty()) return promise.resolve(answer(action, 0))
+    if (ids.isEmpty()) return promise.resolve(trashAnswer(action, emptyList()))
     val entries = if (action == TrashAction.TRASH) {
       lookUp(ctx, ids) ?: return promise.reject(GalleryUnreadable())
     } else wanted.map { TrashEntry(it, "", 0, 0) }
-    if (entries.isEmpty()) return promise.resolve(answer(action, 0))
+    if (entries.isEmpty()) return promise.resolve(trashAnswer(action, emptyList()))
     if (activity == null) return promise.reject(NoActivity(action))
     if (!flow.begin(action, entries.map { it.uri }, Held(promise, entries))) return promise.reject(RequestStillOpen())
     activity.runOnUiThread {
@@ -54,7 +55,7 @@ object CleanupTrash {
   fun onResult(ctx: Context, requestCode: Int, resultCode: Int) {
     val (pending, ok) = flow.finish(requestCode, resultCode == Activity.RESULT_OK) ?: return
     val held = pending.promise
-    if (!ok) return settle(held.promise) { resolve(answer(pending.action, 0)) }
+    if (!ok) return settle(held.promise) { resolve(trashAnswer(pending.action, emptyList())) }
     if (pending.action == TrashAction.TRASH) {
       val now = System.currentTimeMillis()
       try {
@@ -66,17 +67,16 @@ object CleanupTrash {
       // Restored either way; a stale entry drops on the next recentlyRemoved.
       runCatching { CleanupTool.record(ctx).remove(pending.uris.toSet()) }
     }
-    settle(held.promise) { resolve(answer(pending.action, pending.uris.size)) }
+    settle(held.promise) { resolve(trashAnswer(pending.action, pending.uris)) }
   }
 
-  // Back in the app with a launched dialog unanswered (blocked launch, finished Activity): free the flow. Expo runs
-  // onActivityResult before onResume under one mutex, so a real answer is always handled first.
+  // Back in the app with a launched dialog unanswered (blocked launch, finished Activity): free the flow. A real answer
+  // is always handled first: Android delivers the result before onResume, and RN and Expo forward both synchronously on
+  // the main thread.
   fun onForeground() {
     val pending = flow.resumed() ?: return
-    settle(pending.promise.promise) { resolve(answer(pending.action, 0)) }
+    settle(pending.promise.promise) { resolve(trashAnswer(pending.action, emptyList())) }
   }
-
-  private fun answer(action: TrashAction, n: Int) = mapOf((if (action == TrashAction.TRASH) "moved" else "restored") to n)
 
   // Rows MediaStore no longer lists (already trashed or gone) are left out of the request.
   private fun lookUp(ctx: Context, ids: List<Long>): List<TrashEntry>? {
