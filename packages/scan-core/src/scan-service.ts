@@ -101,7 +101,7 @@ export class ScanService {
   }
 
   /** Front and back cards go through the native sheet composer and become one 'sheet' page. */
-  private async writeSheet(itemId: string, position: number, cards: SessionPage[]): Promise<ScanPage> {
+  private async writeSheet(itemId: string, position: number, cards: SessionPage[], pageId: string): Promise<ScanPage> {
     const { native, files } = this.d;
     const dir = `${this.d.libraryDir}/${itemId}`;
     const front = cards.find((c) => c.side === 'front') ?? cards[0];
@@ -120,7 +120,6 @@ export class ScanService {
       ).jpg;
     const frontJpg = await processed(front, 'front');
     const backJpg = back ? await processed(back, 'back') : null;
-    const pageId = this.d.newPageId();
     await native.composeCardSheet({ front: frontJpg, back: backJpg, out: `${this.pagesDir(itemId)}/${pageId}.orig` });
     await files.remove(`${dir}/tmp`);
     return this.writePageFrom(itemId, position, pageId);
@@ -152,6 +151,7 @@ export class ScanService {
     const title = opts.title ?? defaultTitle(session.mode, (this.d.now ?? Date.now)());
     const written: string[] = [];
     let created = false;
+    let committed = false;
     try {
       await files.makeDir(dir);
       await files.makeDir(this.pagesDir(itemId));
@@ -159,9 +159,9 @@ export class ScanService {
       const rows: ScanPage[] = [];
       const track = (pageId: string) => written.push(...this.pageFiles(itemId, pageId));
       if (session.mode === 'card' && session.sheet) {
-        const row = await this.writeSheet(itemId, start, session.pages);
-        track(row.pageId);
-        rows.push(row);
+        const pageId = this.d.newPageId();
+        track(pageId);
+        rows.push(await this.writeSheet(itemId, start, session.pages, pageId));
       } else {
         const kind: PageKind = session.mode === 'card' ? 'card' : 'page';
         for (const p of session.pages) {
@@ -188,12 +188,12 @@ export class ScanService {
         await library.db.transaction((tx) => store.insertPages(tx, itemId, rows));
         return item;
       }
+      const sizeBytes = await files.size(dir);
       await library.db.transaction((tx) => store.insertPages(tx, itemId, rows));
-      return await library.updateItem(itemId, {
-        pageCount: start + rows.length,
-        sizeBytes: await files.size(dir),
-      });
+      committed = true;
+      return await library.updateItem(itemId, { pageCount: start + rows.length, sizeBytes });
     } catch (error) {
+      if (existing && committed) throw error;
       if (existing) await Promise.all([...written, `${dir}/tmp`].map((f) => files.remove(f).catch(() => {})));
       else {
         if (created) await library.deleteItem(itemId).catch(() => {});
@@ -201,6 +201,18 @@ export class ScanService {
       }
       throw error;
     }
+  }
+
+  private async refreshThumb(itemId: string): Promise<void> {
+    const [first] = await this.d.store.pages(itemId);
+    await this.d.native.processPage({
+      src: this.pageFiles(itemId, first.pageId)[0],
+      quad: first.quad,
+      rotation: first.rotation,
+      filter: 'original',
+      out: `${this.d.libraryDir}/${itemId}/thumb`,
+      maxLongSide: THUMB_LONG_SIDE,
+    });
   }
 
   pages(itemId: string): Promise<ScanPage[]> {
@@ -225,6 +237,7 @@ export class ScanService {
     await store.updatePage(itemId, pageId, {
       ...next, width: out.width, height: out.height, bitsWidth: out.bitsWidth, bitsHeight: out.bitsHeight,
     });
+    if (page.position === 0) await this.refreshThumb(itemId);
     await library.touch(itemId);
     await library.updateItem(itemId, { sizeBytes: await files.size(`${this.d.libraryDir}/${itemId}`) });
     return (await store.page(itemId, pageId))!;
@@ -237,6 +250,7 @@ export class ScanService {
       throw new ScanError('bad_order', 'The new order must list every page exactly once.');
     }
     await this.d.store.setPositions(itemId, pageIds);
+    if (pageIds[0] !== current[0]) await this.refreshThumb(itemId);
     await this.d.library.touch(itemId);
   }
 
@@ -247,6 +261,7 @@ export class ScanService {
     if (all.length === 1) throw new ScanError('last_page', 'A scan needs at least one page.');
     for (const f of this.pageFiles(itemId, pageId)) await files.remove(f);
     await store.deletePage(itemId, pageId);
+    if (all[0].pageId === pageId) await this.refreshThumb(itemId);
     await library.updateItem(itemId, {
       pageCount: all.length - 1,
       sizeBytes: await files.size(`${this.d.libraryDir}/${itemId}`),

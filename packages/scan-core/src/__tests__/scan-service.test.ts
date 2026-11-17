@@ -7,12 +7,12 @@ import { test } from 'node:test';
 import { ScanService, ScanError } from '../scan-service.ts';
 import { ScanStore } from '../scan-store.ts';
 import { defaultTitle } from '../titles.ts';
-import type { SessionInput } from '../types.ts';
+import type { ScanFiles, SessionInput } from '../types.ts';
 import { TINY_JPEG, checkXref, fakeNative, latin1, nodeFiles, openLibrary } from './helpers.ts';
 
 const FULL = [0, 0, 1, 0, 1, 1, 0, 1];
 
-async function setup(opts: { failOnProcess?: number } = {}) {
+async function setup(opts: { failOnProcess?: number; wrapFiles?: (f: ScanFiles) => ScanFiles } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'scan-core-'));
   const libraryDir = join(root, 'library');
   const exportDir = join(root, 'export');
@@ -23,7 +23,7 @@ async function setup(opts: { failOnProcess?: number } = {}) {
   const { lib, db } = await openLibrary(() => ++tick);
   const store = await ScanStore.open(db);
   const native = fakeNative(opts);
-  const files = nodeFiles(root);
+  const files = opts.wrapFiles ? opts.wrapFiles(nodeFiles(root)) : nodeFiles(root);
   let n = 0;
   const service = new ScanService({
     library: lib, store, native, files, libraryDir, exportDir,
@@ -145,7 +145,7 @@ test('editPage reprocesses from the original and drops a stale .bits', async () 
   const bitsPath = join(s.libraryDir, item.id, 'pages', `${page.pageId}.bits`);
   const calls = s.native.processCalls.length;
   const bw = await s.service.editPage(item.id, page.pageId, { filter: 'bw' });
-  assert.equal(s.native.processCalls.length, calls + 1);
+  assert.equal(s.native.processCalls.length, calls + 2, 'page and thumbnail');
   assert.deepEqual([bw.filter, bw.bitsWidth], ['bw', 2480]);
   assert.ok((await readdir(join(s.libraryDir, item.id, 'pages'))).includes(`${page.pageId}.bits`));
   const before = (await s.lib.getItem(item.id))!.updatedAt;
@@ -204,4 +204,93 @@ test('buildPdf writes a valid PDF with one page per scan page, bw pages as bits'
   assert.match(pdf, /\/DCTDecode/);
   assert.match(pdf, /\/BitsPerComponent 1/);
   assert.ok(!(await readdir(s.exportDir)).some((f) => f.endsWith('.tmp')));
+});
+
+const treeOf = async (s: Awaited<ReturnType<typeof setup>>, id: string) => ({
+  pages: (await s.service.pages(id)).map((p) => p.pageId),
+  files: (await readdir(join(s.libraryDir, id, 'pages'))).sort(),
+  count: (await s.lib.getItem(id))!.pageCount,
+});
+
+test('a failed append leaves the existing pages, files and count as they were', async () => {
+  const s = await setup({ failOnProcess: 5 });
+  const item = await s.service.saveSession(await s.session(2));
+  const before = await treeOf(s, item.id);
+  await assert.rejects(s.service.saveSession(await s.session(2, { appendTo: item.id })), /decode_failed/);
+  assert.deepEqual(await treeOf(s, item.id), before);
+});
+
+test('an append whose size check fails before saving rows leaves rows and files consistent', async () => {
+  let failSize = false;
+  const s = await setup({ wrapFiles: (f) => ({ ...f, size: (p) => (failSize ? Promise.reject(new Error('size_failed')) : f.size(p)) }) });
+  const item = await s.service.saveSession(await s.session(2));
+  const before = await treeOf(s, item.id);
+  failSize = true;
+  await assert.rejects(s.service.saveSession(await s.session(2, { appendTo: item.id })), /size_failed/);
+  assert.deepEqual(await treeOf(s, item.id), before);
+});
+
+test('an append whose item update fails after the rows are saved keeps files for every row', async () => {
+  const s = await setup();
+  const item = await s.service.saveSession(await s.session(2));
+  s.lib.updateItem = () => Promise.reject(new Error('update_failed'));
+  await assert.rejects(s.service.saveSession(await s.session(2, { appendTo: item.id })), /update_failed/);
+  const pages = await s.service.pages(item.id);
+  const names = await readdir(join(s.libraryDir, item.id, 'pages'));
+  for (const p of pages) {
+    assert.ok(names.includes(`${p.pageId}.orig.jpg`) && names.includes(`${p.pageId}.jpg`), p.pageId);
+  }
+});
+
+test('a failed One sheet append leaves no stray files', async () => {
+  const s = await setup();
+  const item = await s.service.saveSession(await s.session(1));
+  const before = await treeOf(s, item.id);
+  s.native.processCalls.length = 0;
+  const failing = { ...s.native, processPage: async (r: Parameters<typeof s.native.processPage>[0]) => {
+    if (r.src.endsWith('.orig.jpg')) throw new Error('decode_failed');
+    return s.native.processPage(r);
+  } };
+  const sheetService = new ScanService({ ...(s.service as unknown as { d: ConstructorParameters<typeof ScanService>[0] }).d, native: failing });
+  const sess = await s.session(2, { appendTo: item.id, mode: 'card', sheet: true });
+  sess.pages[0].side = 'front';
+  sess.pages[1].side = 'back';
+  await assert.rejects(sheetService.saveSession(sess), /decode_failed/);
+  assert.deepEqual(await treeOf(s, item.id), before);
+  assert.equal(s.native.sheetCalls.length, 1);
+});
+
+const thumbCalls = (s: Awaited<ReturnType<typeof setup>>, from: number) =>
+  s.native.processCalls.slice(from).filter((c) => c.out.endsWith('/thumb'));
+
+test('the thumbnail follows the first page', async () => {
+  const s = await setup();
+  const item = await s.service.saveSession(await s.session(3));
+  const [a, b, c] = await s.service.pages(item.id);
+  let mark = s.native.processCalls.length;
+
+  await s.service.editPage(item.id, b.pageId, { rotation: 90 });
+  assert.equal(thumbCalls(s, mark).length, 0, 'editing page 1');
+
+  mark = s.native.processCalls.length;
+  await s.service.editPage(item.id, a.pageId, { rotation: 90 });
+  const [edit] = thumbCalls(s, mark);
+  assert.deepEqual([edit.filter, edit.maxLongSide, edit.rotation], ['original', 320, 90]);
+  assert.ok(edit.src.endsWith(`${a.pageId}.orig.jpg`));
+
+  mark = s.native.processCalls.length;
+  await s.service.reorder(item.id, [a.pageId, c.pageId, b.pageId]);
+  assert.equal(thumbCalls(s, mark).length, 0, 'first page unchanged');
+
+  await s.service.reorder(item.id, [c.pageId, a.pageId, b.pageId]);
+  const [moved] = thumbCalls(s, mark);
+  assert.ok(moved.src.endsWith(`${c.pageId}.orig.jpg`));
+
+  mark = s.native.processCalls.length;
+  await s.service.deletePage(item.id, b.pageId);
+  assert.equal(thumbCalls(s, mark).length, 0, 'deleting a later page');
+
+  await s.service.deletePage(item.id, c.pageId);
+  const [after] = thumbCalls(s, mark);
+  assert.ok(after.src.endsWith(`${a.pageId}.orig.jpg`));
 });
