@@ -54,14 +54,17 @@ APK copy: scratchpad only (not committed). Manifest dump via aapt2 `dump xmltree
 
 ## Current state + next step (2026-11-17, session 2)
 Executing the plan with cd-engineering-tools:parallel-agents-coord; ledger = docs/handoffs/halo-sdd-ledger.md (read it).
-Briefs in .sdd/ (git-excluded). Branch `halo` (rebased on origin/main d1b61ea). Done: Tasks 1, 2, 4-10, 12 (all 24 patterns). Whole-branch review in flight.
-Store manifest now: store 19 (knows halo), halo 3 = Halo 0.3.0 (3ce1532: real lights, all 24 patterns, screens, spike probes),
-built from the clean detached worktree ~/Documents/apps-hub-wt/halo-release. Releases from other sessions can clobber the
-manifest: re-fetch and check after each release.
-Phone: queued in coord for device:49kjmnuwonkffqzh behind apps-hub-9a (image-tools benchmark); phone keeps dropping off Wi-Fi adb.
-Next: when the phone is mine and the owner has installed Halo 0.2.0 + granted permissions: Task 3 checks (background FFT,
-reboot start path, lock screen overlay, AOD launch) + Task 11 checks (each pattern, colours, edges, tap-through, idle,
-`dumpsys gfxinfo com.haroon.halo` frame time). Record results in spec §9 + here. Then fix review findings, and write the stages 3-5 plan (needs spike results).
+Briefs in .sdd/ (git-excluded). Branch `halo` (rebased on origin/main d1b61ea), HEAD 0a6f780.
+Done: Tasks 1, 2, 4-10, 12; whole-branch review + fix wave (security fix re-reviewed: addressed). Two minors deferred (ledger).
+Store manifest: store=19 (knows halo), halo=4 = Halo 0.3.1 (all 24 patterns, screens, colours, spike probes; always-on
+test behind Diagnostics switch, off by default). Builds come from the clean detached worktree ~/Documents/apps-hub-wt/halo-release
+(`git -C ../halo-release checkout --detach <sha>` then `pnpm release halo`). Re-check manifest.json after every release.
+Owner was told NOT to install 0.3.0 (security bug); 0.3.1 is the one to install.
+Phone: queued in coord for device:49kjmnuwonkffqzh (2 ahead: image-tools, photo-search); phone keeps dropping off Wi-Fi adb.
+Next: owner installs Store 19 + Halo 0.3.1 and grants permissions; then with the claim: force-stop Muviz, run Task 3 checks
+(background FFT, reboot start path, overlay over lock screen with tap-through, always-on test via Diagnostics switch +
+power-button lock) and Task 11/12 checks (each pattern, album-art colours, edges, idle, `dumpsys gfxinfo com.haroon.halo`).
+Record in spec §9 + this file. Then write the stages 3-5 plan from the spike results.
 
 ## Previous state (session 1, superseded)
 Owner asked for a new chat to start building. Already told to the owner and accepted without objection:
