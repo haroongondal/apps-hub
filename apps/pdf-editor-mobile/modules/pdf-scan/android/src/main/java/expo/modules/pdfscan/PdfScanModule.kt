@@ -9,10 +9,12 @@ import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.pdfscan.android.CardSheet
+import expo.modules.pdfscan.android.Gallery
 import expo.modules.pdfscan.android.ImageImport
 import expo.modules.pdfscan.android.PageProcessor
 import expo.modules.pdfscan.android.ProcessRequest
 import expo.modules.pdfscan.android.ScanCameraView
+import expo.modules.pdfscan.android.ShareImages
 import expo.modules.pdfscan.android.SheetRequest
 import expo.modules.pdfscan.android.asFile
 import expo.modules.pdfscan.android.existingFile
@@ -45,6 +47,13 @@ class PdfScanModule : Module() {
     }
     AsyncFunction("composeCardSheet") Coroutine { req: SheetRequest ->
       withContext(Dispatchers.Default) { CardSheet.compose(req) }
+    }
+    AsyncFunction("saveImagesToGallery") Coroutine { paths: List<String>, album: String ->
+      val context = appContext.reactContext ?: throw IllegalStateException("the app isn't running")
+      withContext(Dispatchers.IO) { Gallery.save(context, paths, album) }
+    }
+    AsyncFunction("shareImages") { paths: List<String>, chooserTitle: String ->
+      ShareImages.share(appContext, paths, chooserTitle)
     }
 
     View(ScanCameraView::class) {
