@@ -4,17 +4,23 @@ data class AodState(var keyguardLocked: Boolean, var charging: Boolean, var musi
 
 /**
  * Decides when the always-on screen may launch. It only ever covers a locked phone (launching over an unlocked one would
- * cancel its pending lock). A power-button press shows it again every time, except after it timed out by itself:
- * then it stays off until the next unlock.
+ * cancel its pending lock). A power-button press from the lock screen shows it again every time, except after it was
+ * ended (timed out, pocket, or power pressed while it showed): then it stays off until the next unlock or a notification wake.
  */
 class AodPolicy {
   private var timedOutSinceUnlock = false
 
-  fun onScreenOff(s: SettingsAod, st: AodState): Boolean =
-    canShow(s, st) && !timedOutSinceUnlock && triggerMet(s, st) && !QuietHours.active(s.schedule.on, s.schedule.start, s.schedule.end, st.minuteOfDay)
+  /** aodShowing: the always-on screen is in front, so this screen-off is the owner pressing power on it. */
+  fun onScreenOff(s: SettingsAod, st: AodState, aodShowing: Boolean = false): Boolean {
+    if (aodShowing) {
+      timedOutSinceUnlock = true
+      return false
+    }
+    return canShow(s, st) && !timedOutSinceUnlock && allowed(s, st)
+  }
 
-  /** A new notification wakes the screen even after a timeout; it still needs a locked phone and the owner's wakeScreen switch. */
-  fun onNotificationWake(s: SettingsAod, st: AodState, wakeScreen: Boolean): Boolean = wakeScreen && canShow(s, st)
+  /** A new notification wakes the screen even after it was ended; everything else (lock, trigger, off hours, wakeScreen) still applies. */
+  fun onNotificationWake(s: SettingsAod, st: AodState, wakeScreen: Boolean): Boolean = wakeScreen && canShow(s, st) && allowed(s, st)
 
   fun onTimedOut() {
     timedOutSinceUnlock = true
@@ -28,6 +34,9 @@ class AodPolicy {
   fun timeoutMs(s: SettingsAod): Long? = s.timeoutSec?.let { it * 1000L }
 
   private fun canShow(s: SettingsAod, st: AodState) = s.enabled && st.keyguardLocked
+
+  private fun allowed(s: SettingsAod, st: AodState) =
+    triggerMet(s, st) && !QuietHours.active(s.schedule.on, s.schedule.start, s.schedule.end, st.minuteOfDay)
 
   private fun triggerMet(s: SettingsAod, st: AodState) = when (s.trigger) {
     AodTrigger.ALWAYS -> true

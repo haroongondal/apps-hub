@@ -14,6 +14,7 @@ import android.media.session.MediaController
 import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.TextUtils
 import android.view.GestureDetector
 import android.view.Gravity
@@ -34,6 +35,7 @@ import expo.modules.haloengine.core.BurnIn
 import expo.modules.haloengine.core.ColorSource
 import expo.modules.haloengine.core.FlashDecision
 import expo.modules.haloengine.core.Patterns
+import expo.modules.haloengine.core.PocketTimer
 import expo.modules.haloengine.core.RandomMotion
 import expo.modules.haloengine.core.Settings
 import expo.modules.haloengine.core.SpectrumFrame
@@ -46,6 +48,7 @@ class AodContent(
   private val settings: Settings,
   private val preview: Boolean,
   private val onLeave: () -> Unit,
+  private val onPocket: () -> Unit = {},
 ) : FrameLayout(ctx) {
   private val main = Handler(Looper.getMainLooper())
   private val dp = resources.displayMetrics.density
@@ -100,6 +103,8 @@ class AodContent(
 
   private val sensors = ctx.getSystemService(SensorManager::class.java)
   private var pocket = false
+  private val pocketTimer = PocketTimer()
+  private val pocketEnd = Runnable { if (pocketTimer.ended(SystemClock.uptimeMillis())) onPocket() }
   private val proximity = object : SensorEventListener {
     override fun onSensorChanged(e: SensorEvent) = setPocket(AodScreen.near(e.values[0], e.sensor.maximumRange))
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
@@ -173,6 +178,7 @@ class AodContent(
 
   override fun onDetachedFromWindow() {
     main.removeCallbacks(burnIn)
+    main.removeCallbacks(pocketEnd)
     if (NotifyFlash.onIcons === iconsHook) NotifyFlash.onIcons = null
     sensors?.unregisterListener(proximity)
     setController(null)
@@ -215,6 +221,9 @@ class AodContent(
   private fun setPocket(near: Boolean) {
     if (near == pocket) return
     pocket = near
+    pocketTimer.update(near, SystemClock.uptimeMillis())
+    main.removeCallbacks(pocketEnd)
+    if (near) main.postDelayed(pocketEnd, AodScreen.POCKET_END_MS)
     content.visibility = if (near) GONE else VISIBLE
     if (near) edge.stop() else if (theme.edge.on) edge.kick()
   }

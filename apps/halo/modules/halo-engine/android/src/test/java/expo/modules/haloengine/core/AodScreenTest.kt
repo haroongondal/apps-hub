@@ -7,8 +7,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AodScreenTest {
-  private fun note(key: String, pkg: String, at: Long, ongoing: Boolean = false, importance: Int = 3, summary: Boolean = false) =
-    PostedNote(key, pkg, ongoing, importance, summary, null, at)
+  private fun note(key: String, pkg: String, at: Long, ongoing: Boolean = false, importance: Int = 3, summary: Boolean = false, secret: Boolean = false) =
+    PostedNote(key, pkg, ongoing, importance, summary, null, at, secret = secret)
 
   @Test fun swipeLeftIsNextRightIsPrevious() {
     assertEquals(AodAction.NEXT, AodGestures.fling(onCard = true, pocket = false, dx = -200f, dy = 20f, minPx = 100f))
@@ -84,5 +84,38 @@ class AodScreenTest {
     // A re-post of the same key is one notification, moved to the front.
     icons.posted(note("k3", "p3", 9))
     assertEquals(listOf(IconCount("p3", 1), IconCount("p5", 1), IconCount("p4", 1)), icons.top())
+  }
+
+  @Test fun iconRowSkipsSecretNotes() {
+    val icons = NoteIcons("own.app")
+    assertFalse(icons.posted(note("s", "bank", 1, secret = true)))
+    assertTrue(icons.posted(note("p", "chat", 2)))
+    assertEquals(listOf(IconCount("chat", 1)), icons.top())
+  }
+
+  @Test fun pocketEndsAfterThreeSeconds() {
+    val p = PocketTimer()
+    p.update(near = true, nowMs = 1_000)
+    p.update(near = true, nowMs = 2_500) // a repeated near report does not restart the clock
+    assertFalse(p.ended(3_999))
+    assertTrue(p.ended(4_000))
+  }
+
+  @Test fun shortCoverDoesNotEnd() {
+    val p = PocketTimer()
+    p.update(near = true, nowMs = 0)
+    p.update(near = false, nowMs = 2_000)
+    assertFalse(p.ended(3_500))
+    p.update(near = true, nowMs = 4_000)
+    assertFalse(p.ended(6_999))
+    assertTrue(p.ended(7_000))
+  }
+
+  @Test fun themeSwitchesOnlyWhenTheSlotChanges() {
+    val themes = listOf(Theme("a", "A", "big-digits"), Theme("b", "B", "stacked"))
+    val aod = SettingsAod(themeId = "a", slots = listOf(AodSlot("07:00", "a"), AodSlot("22:00", "b")))
+    assertNull(AodScreen.switchTheme(aod, themes, 21 * 60 + 59, "a"))
+    assertEquals("b", AodScreen.switchTheme(aod, themes, 22 * 60, "a")?.id)
+    assertNull(AodScreen.switchTheme(aod, themes, 22 * 60 + 1, "b"))
   }
 }

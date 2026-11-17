@@ -99,10 +99,13 @@ object NotifyFlash {
 
   private fun note(sbn: StatusBarNotification, map: NotificationListenerService.RankingMap?): PostedNote {
     val n = sbn.notification
-    val importance = if (map?.getRanking(sbn.key, ranking) == true) ranking.importance else 0
+    val ranked = map?.getRanking(sbn.key, ranking) == true
+    val importance = if (ranked) ranking.importance else 0
+    // shortcut: the system-wide "no notifications on the lock screen" switch has no public API (Settings.Secure.LOCK_SCREEN_SHOW_NOTIFICATIONS is hidden), so only the app's and the channel's SECRET hide an icon; read it if an API appears.
+    val secret = n.visibility == Notification.VISIBILITY_SECRET || (ranked && ranking.lockscreenVisibilityOverride == Notification.VISIBILITY_SECRET)
     return PostedNote(
       sbn.key, sbn.packageName, sbn.isOngoing, importance, n.flags and Notification.FLAG_GROUP_SUMMARY != 0, n.category, sbn.postTime,
-      n.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0,
+      n.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0, secret,
     )
   }
 

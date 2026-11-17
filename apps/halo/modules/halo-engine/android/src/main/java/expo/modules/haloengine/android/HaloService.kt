@@ -290,15 +290,15 @@ class HaloService : Service() {
           ProbeLog.log(context, "aod", "phone unlocked, the always-on screen may show again")
           return
         }
-        val now = LocalTime.now()
         // Launching over an unlocked phone would cancel its pending lock, so AodPolicy only allows a locked one.
-        val st = AodState(
-          keyguardLocked = context.getSystemService(KeyguardManager::class.java).isKeyguardLocked,
-          charging = context.getSystemService(BatteryManager::class.java).isCharging,
-          musicPlaying = playingApp != null,
-          minuteOfDay = now.hour * 60 + now.minute,
-        )
-        if (!aodPolicy.onScreenOff(settings.aod, st)) {
+        val st = aodState(context)
+        val showing = aodShowing
+        if (!aodPolicy.onScreenOff(settings.aod, st, showing)) {
+          if (showing) {
+            ProbeLog.log(context, "aod", "power pressed on the always-on screen, off until unlock")
+            aodClose?.invoke()
+            return
+          }
           ProbeLog.log(context, "aod", "aod skipped: enabled=${settings.aod.enabled} locked=${st.keyguardLocked} charging=${st.charging} music=${st.musicPlaying} trigger=${settings.aod.trigger.key} minute=${st.minuteOfDay}")
           return
         }
@@ -402,6 +402,21 @@ class HaloService : Service() {
     /** Settings for code that may run without the service (listener, activities). */
     fun current(ctx: Context): Settings = if (running) settings else SettingsStore.load(ctx.applicationContext)
 
+    /** Set while AodActivity is in front; a screen-off then is the power button, and this ends it. Main thread. */
+    var aodClose: (() -> Unit)? = null
+    val aodShowing: Boolean get() = aodClose != null
+
+    /** Live inputs of the always-on decisions: lock, charger, music (read directly, so it works with the lights off) and the clock. */
+    fun aodState(ctx: Context): AodState {
+      val now = LocalTime.now()
+      return AodState(
+        keyguardLocked = ctx.getSystemService(KeyguardManager::class.java).isKeyguardLocked,
+        charging = ctx.getSystemService(BatteryManager::class.java).isCharging,
+        musicPlaying = MediaWatch.isPlaying(ctx),
+        minuteOfDay = now.hour * 60 + now.minute,
+      )
+    }
+
     /** Set while AodActivity shows: the system hides the overlay over the keyguard, so flashes go to its own edge. Main thread. */
     var aodFlash: ((FlashDecision, Int) -> Unit)? = null
     private var wakeFlash: Triple<FlashDecision, Int, Long>? = null
@@ -415,16 +430,16 @@ class HaloService : Service() {
       }
     }
 
-    /** A notification or reminder wakes the always-on screen for 10 s (design §2.3, §10.3), only over a locked, dark screen. Main thread. */
+    /** A notification or reminder wakes the always-on screen for 10 s (design §2.3, §10.3), only over a locked, dark screen, inside its trigger and outside off hours. Main thread. */
     fun wake(ctx: Context, d: FlashDecision, colour: Int, why: String) {
       val app = ctx.applicationContext
       val s = current(app)
       if (!s.notify.wakeScreen || !s.aod.enabled) return
       // Screen on (the always-on screen itself, or the lock screen in use): the flash already shows there.
       if (app.getSystemService(PowerManager::class.java).isInteractive) return
-      val locked = app.getSystemService(KeyguardManager::class.java).isKeyguardLocked
-      if (!aodPolicy.onNotificationWake(s.aod, AodState(locked, charging = false, musicPlaying = false, minuteOfDay = 0), s.notify.wakeScreen)) {
-        ProbeLog.log(app, "aod", "$why wake skipped: locked=$locked")
+      val st = aodState(app)
+      if (!aodPolicy.onNotificationWake(s.aod, st, s.notify.wakeScreen)) {
+        ProbeLog.log(app, "aod", "$why wake skipped: locked=${st.keyguardLocked} charging=${st.charging} music=${st.musicPlaying} trigger=${s.aod.trigger.key} minute=${st.minuteOfDay}")
         return
       }
       wakeFlash = Triple(d, colour, SystemClock.uptimeMillis())

@@ -80,7 +80,15 @@ class MediaWatch(private val ctx: Context, private val onChange: () -> Unit, pri
     onChange()
   }
 
-  private companion object {
-    val RETRY_MS = longArrayOf(1_000L, 2_000L, 4_000L)
+  companion object {
+    private val RETRY_MS = longArrayOf(1_000L, 2_000L, 4_000L)
+
+    /** One read for the always-on decisions, so the music trigger works while the lights (and their watch) are off; false without listener access. */
+    fun isPlaying(ctx: Context): Boolean = try {
+      ctx.getSystemService(MediaSessionManager::class.java).getActiveSessions(ComponentName(ctx, HaloListener::class.java))
+        .any { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+    } catch (e: SecurityException) {
+      false
+    }
   }
 }

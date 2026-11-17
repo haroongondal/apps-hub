@@ -101,4 +101,50 @@ class AodPolicyTest {
     assertFalse(p.onNotificationWake(on, locked, false))
     assertFalse(p.onNotificationWake(on.copy(enabled = false), locked, true))
   }
+
+  // A screen-off while the always-on screen is in front is the power button: it stays off until unlock, for any timeout.
+  @Test
+  fun powerOnAodDismissesUntilUnlock() {
+    for (s in listOf(on, on.copy(timeoutSec = null))) {
+      val p = AodPolicy()
+      assertFalse(p.onScreenOff(s, locked, aodShowing = true))
+      assertFalse(p.onScreenOff(s, locked))
+      p.onUnlocked()
+      assertTrue(p.onScreenOff(s, locked))
+    }
+  }
+
+  @Test
+  fun powerFromKeyguardStillShows() {
+    val p = AodPolicy()
+    repeat(3) { assertTrue(p.onScreenOff(on, locked, aodShowing = false)) }
+  }
+
+  @Test
+  fun offHoursBlockWake() {
+    val s = on.copy(schedule = AodSchedule(on = true, start = "22:00", end = "07:00"))
+    val p = AodPolicy()
+    assertFalse(p.onNotificationWake(s, locked.copy(minuteOfDay = 23 * 60), true))
+    assertTrue(p.onNotificationWake(s, locked.copy(minuteOfDay = 12 * 60), true))
+  }
+
+  @Test
+  fun triggerChargingBlocksWakeWhenUnplugged() {
+    val p = AodPolicy()
+    val charging = on.copy(trigger = AodTrigger.CHARGING)
+    assertFalse(p.onNotificationWake(charging, locked, true))
+    assertTrue(p.onNotificationWake(charging, locked.copy(charging = true), true))
+    val music = on.copy(trigger = AodTrigger.MUSIC)
+    assertFalse(p.onNotificationWake(music, locked, true))
+    assertTrue(p.onNotificationWake(music, locked.copy(musicPlaying = true), true))
+  }
+
+  @Test
+  fun wakeStillIgnoresTimedOut() {
+    val p = AodPolicy()
+    p.onScreenOff(on, locked, aodShowing = true)
+    assertTrue(p.onNotificationWake(on, locked, true))
+    p.onTimedOut()
+    assertTrue(p.onNotificationWake(on.copy(trigger = AodTrigger.CHARGING), locked.copy(charging = true), true))
+  }
 }

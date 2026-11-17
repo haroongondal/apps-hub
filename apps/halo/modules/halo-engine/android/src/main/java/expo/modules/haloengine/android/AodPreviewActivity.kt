@@ -15,7 +15,7 @@ class AodPreviewActivity : Activity() {
     val now = LocalTime.now()
     val base = s.themes.firstOrNull { it.id == id } ?: Themes.resolve(s.aod, s.themes, now.hour * 60 + now.minute)
     val theme = Themes.usable(base, Faces.all.map { it().id }.toSet(), Backgrounds.exists(this, base.id))
-    setContentView(AodContent(this, theme, s, preview = true) { finish() })
+    setContentView(AodContent(this, theme, s, preview = true, onLeave = { finish() }))
     AodContent.fullScreen(window)
   }
 

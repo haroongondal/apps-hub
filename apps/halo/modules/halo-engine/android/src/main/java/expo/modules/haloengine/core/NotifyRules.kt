@@ -10,6 +10,8 @@ class PostedNote(
   val category: String?,
   val postedAtMs: Long,
   val onlyAlertOnce: Boolean = false,
+  // Hidden on the lock screen (the app's VISIBILITY_SECRET or the owner's channel override), so it shows no icon there.
+  val secret: Boolean = false,
 )
 
 /** colour is ARGB, or null to take it from the app icon. */
@@ -29,7 +31,7 @@ class NotifyRules(private val ownPkg: String) {
 
   /** Null when the note must stay silent. Silenced notes are not tracked, so they never remind later. */
   fun onPosted(n: PostedNote, s: SettingsNotify, minuteOfDay: Int, nowMs: Long): FlashDecision? {
-    if (!eligible(n)) return null
+    if (!eligible(n, ownPkg)) return null
     val prev = see(n)
     if (prev == n.postedAtMs || (prev != null && n.onlyAlertOnce)) return null
     val d = decide(n.pkg, s, minuteOfDay) ?: return null
@@ -39,7 +41,7 @@ class NotifyRules(private val ownPkg: String) {
 
   /** After a process restart: everything showing counts as seen, and what arrived since the last unlock reminds again, timed from its postTime. */
   fun restore(notes: List<PostedNote>, lastUnlockMs: Long, s: SettingsNotify, minuteAt: (Long) -> Int) {
-    for (n in notes.filter(::eligible).sortedBy { it.postedAtMs }) {
+    for (n in notes.filter { eligible(it, ownPkg) }.sortedBy { it.postedAtMs }) {
       see(n)
       if (n.postedAtMs > lastUnlockMs && n.key !in tracked && decide(n.pkg, s, minuteAt(n.postedAtMs)) != null) track(n.key, n.pkg, n.postedAtMs)
     }
@@ -70,8 +72,6 @@ class NotifyRules(private val ownPkg: String) {
     return tracked.values.minOfOrNull { it.lastMs }?.plus(period)
   }
 
-  private fun eligible(n: PostedNote) = n.pkg != ownPkg && !n.ongoing && n.importance >= IMPORTANCE_DEFAULT && !n.groupSummary
-
   private fun see(n: PostedNote): Long? {
     val prev = seen.remove(n.key)
     seen[n.key] = n.postedAtMs
@@ -96,8 +96,10 @@ class NotifyRules(private val ownPkg: String) {
 
   private fun argb(hex: String): Int? = if (hex.length == 7 && hex[0] == '#') hex.substring(1).toIntOrNull(16)?.or(0xFF000000.toInt()) else null
 
-  private companion object {
-    const val IMPORTANCE_DEFAULT = 3
-    const val MAX_TRACKED = 200
+  companion object {
+    private const val IMPORTANCE_DEFAULT = 3
+    private const val MAX_TRACKED = 200
+
+    fun eligible(n: PostedNote, ownPkg: String) = n.pkg != ownPkg && !n.ongoing && n.importance >= IMPORTANCE_DEFAULT && !n.groupSummary
   }
 }
