@@ -259,6 +259,63 @@ Task 1.11 fix round 1 (`5f2cabd`), same setup with an extension-free control fir
 - **Measured afterwards** (`docs/handoffs/sieve-yt-measurement.md`: 24 fresh-profile runs on that video, with no extension, Sieve on, stripping only and network rules only (23 usable), plus 25 follow-up runs: 49 in all, 48 usable): Sieve does not hold back playback. Medians of `currentTime` at 30 s were 26.5, 26.0, 26.0 and 26.05 s, every difference under 1 s and inside the noise; neither component alone shows a cost. The earlier 6 s has two candidate explanations the data cannot separate: a network drop (one run window was a network outage) or a self-pause of the player (one unexplained self-pause at 5.5 s in a network-rules-only run, which `yt-live.mjs` would report as exactly "6 s").
 - **YouTube served no ad in any of the 15 no-extension measurement runs** (although every response contained `adPlacements`), so the measurement says nothing about the cost or the success of removing an ad. Removal was seen working once (the `kJQP7kiw5Fk` row above).
 
+## Phase 2 close (2026-11-17, branch `sieve-phase-2`)
+
+This section supersedes "Current state and next step" below for Phase 2. Phase 1 text stays as the record of Phase 1.
+
+### State and next step
+
+- **State:** Phase 2 close, gate pending. Branch `sieve-phase-2`, base `86a6ee4`. Version is 0.2.0 (`src/manifest.json` and `package.json`, in step since Phase 1). The README has the YouTube tools section and the owner checklist (20 items). The controller runs the clean-export gate and the whole-branch reviews; this section does not claim a gate result.
+- **Owner concern (not a Phase 2 defect, cause unverified):** Sieve's first frame is late (3 s or more) more often than without it: 4 of 10 against 1 of 10 on no-ad videos; 5.2 to 9.1 s on the `kJQP` video, where the control had an ad. The player sends no media request for 4 to 8 s in those loads. It was seen once on the Phase 1 build too. One unverified guess: YouTube delays playback when ads are stripped. Ask the owner whether they see it in real use.
+- **Next step:** owner: merge decision for `sieve-phase-2` (nothing is pushed), and the signed-in checklist in `apps/sieve/README.md` (YouTube tools, items 1 to 20). Then Phase 3 close (`docs/handoffs/sieve-run-2-close.md` section 4 has its verified facts; that file is the other session's and is not edited here).
+
+### Verified facts (Phase 2)
+
+From `docs/handoffs/sieve-run-2-close.md` section 4, `.superpowers/phase-2/step1-facts.md` and the run-3 ledger. YouTube facts were inspected signed out in Chrome for Testing 149.0.7827.55 (2026-11-10), not taken from memory.
+
+- **Page facts (Task 2.2, step 1):**
+  - Navigation events fire on `ytd-app` (`yt-navigate-start`, `yt-page-data-fetched`, `yt-navigate-finish`) and `ytd-page-manager` (`yt-page-data-updated`); they bubble and reach `document`. `location.href` is old at start and new at finish. `performance.getEntriesByType('navigation').length` stays 1 across in-app moves.
+  - `#movie_player` has all 23 candidate methods. `setPlaybackQualityRange(q, q)` changes quality; `setPlaybackQuality(q)` did nothing in 3 tries (do not use). `getPlaylist()` is an array or null; `getPlaylistIndex()` is 0-based, the URL `index=` is 1-based.
+  - The video is `#movie_player video` (the only `<video>`), `blob:` source, the same element across navigations. The row anchor is `ytd-watch-metadata`. Dark theme is a bare `dark` attribute on `<html>`, server-rendered, present at first paint.
+- **Experiments and timing (ledger):** `ytcfg.set` runs once at about 0.7 s, before `#movie_player` exists, and the player reads `serializedExperimentFlags` 0.1 to 1 s later; patching later than about 1 s is too late. Setting `delhi_modern_web_player`, `_icons` and `_horizontal_volume_controls` to false removes the modern look.
+- **Autoplay and volume:** on a hard load the video fires `emptied`, `play`, `loadstart` at about 1.5 s; YouTube calls `play()` again about 1.5 s after a pause. A default volume of 30 set at the first `loadstart` still reads 30 four seconds later. A synthetic `contextmenu` opens YouTube's own menu.
+- **Untestable headless:** headless Chrome opens picture-in-picture without a click, so the PiP refusal toast is untested. Downloads land in a temp folder in tests, so the real `Downloads/Sieve/` path is unverified. Both are owner checklist items (18 and 19).
+- **Gate-fix root causes (earlier gate on `64ce4c6`):** a `__plays` init script leaked onto the whole browser context; the `ytcfg` experiments accessor was enumerable; the row jumped 40 to 48 px when the speed label changed (one CSS rule); the related column painted over the row popover because `#below` has `view-transition-name: metadata` (set inline to `none` while a popover is open); first-frame theme and tidy checks were flaky under load.
+- **Run 3 (close) findings:**
+  - Live playback check on `9bZkp7q19f0` (ratio 0.45): the check measured from `domcontentloaded`, so the wait for the first frame (which varies in both browsers) counted as a stall; `control.playedTo` could also be an ad's clock. Over 30 navigations there was no stall after the first frame (ratio 0.99 to 1.01). The check now judges from the first non-ad frame, with a separate start check (fails if Sieve's first frame is more than 10 s after the control's, with one re-watch) and a span measured to the window end. Commits `2c8040e`, `2fb773f`.
+  - Live quality check failure (no related link without `list=`): not Sieve. One of about 16 loads had all 20 related videos as `list=RD` Mixes; the locator that skips them had nothing to click. The check now falls back to a Mix link and says so. Commit `124e1ba`.
+  - Quality in a playlist on a hard load (Task 2.7): live, `getVideoData().list` is null at `loadstart` and at `loadedmetadata`, and set about 1 s after playback starts; the address is already current at `loadstart`. The unfixed build chose `hd720` instead of the playlist's `large`. Fix: `target()` trusts the address when its `v=` is the playing video's id. Via `nextVideo()` the list is null at `loadstart` and set 144 ms later; after a Mix click it is set at `loadstart`. Not observed, so unhandled: an in-app move into a non-Mix playlist while the address lags.
+  - Close-batch minors (commits `57efa68`, `686f90d`, `7e94a89`, `22c205f`, `4da2efc`, `b951764`): the `ytcfg` accessor stays an accessor but becomes enumerable after YouTube's first write; `ytInitialPlayerResponse` is only Sieve's own non-enumerable accessor and is gone from the bridge's allowed keys; `m.youtube.com` is in the test hosts. Rulings that stand: popovers have a max-height floor, so they are unusable in windows under about 120 px tall; "Values cannot contain &, =, + or %." is an implementer-written string.
+- **Perf (this commit's `yt-perf.mjs`, run from a clean export of `c41e882` under `chrome-live`, 2026-11-17):**
+
+| Leaks, every option on, 25 navigations | at 5 | at 25 | grew | limit | result |
+|---|---|---|---|---|---|
+| JSEventListeners | 86 | 86 | +0 | +5 | PASS |
+| Nodes | 399 | 399 | +0 | +20 | PASS |
+| JSHeapUsedSize | 2133404 | 2213712 | +80308 | 1 MB | PASS |
+
+| Settings read cost, median `sieve-yt-applied` mark, 10 loads each | ms |
+|---|---|
+| no My filters | 25.3 (23.0 to 36.9) |
+| 2 MB My filters | 39.5 (35.7 to 49.0) |
+| difference | +14.3, limit +20: PASS |
+
+| Live watch page, signed out, `dQw4w9WgXcQ`, 7 cold loads per side | median DCL ms | median load ms | median heap MB, 10 s after load, after a GC |
+|---|---|---|---|
+| default options, with Sieve | 4475 | 5474 | 50.0 |
+| default options, without | 4508 | 5399 | 49.6 |
+| every option on, with Sieve | 3898 | 5367 | 50.0 |
+| every option on, without | 4793 | 5566 | 48.8 |
+
+  - Default options: load 1.01x (limit 1.10x), heap +0.4 MB (limit +5): PASS. Every option on: load 0.96x, heap +1.2 MB: PASS. All 7 of 7 loads worked on every side; no bot check or consent page.
+  - Earlier runs of the same script (7 loads, same machine, different times): every option on gave 1.03x, then 1.18x (FAIL), and with 13 loads 1.02x; default options 1.02x, 0.96x, 0.97x. The 1.18x run had single loads of 29.8 s and 11.0 s with Sieve and 15.0 s without. Heap was within +1.2 MB in every run. Conclusion: a median of 7 live loads can cross 1.10x on network noise alone; use `LIVE_RUNS=13` when a single run fails. The thresholds and the default of 7 are unchanged.
+  - "Every option on" is 40 of 56 stored values off their defaults: every switch, every choice off its default, the video filters, My CSS (`ytd-masthead{opacity:.99}`) and a flag override (`sieve_perf_flag=true`). The with-Sieve side must show one `sieve-yt-applied` mark and the row, or the load is a failure.
+- **Script facts worth keeping:** a live load is bounded at 120 s; the live part launches fresh browsers per pass because Chrome stops an idle extension worker after a few minutes and Playwright's handle then fails (`worker.evaluate: Target page, context or browser has been closed`); started through a symlink the script now still runs (it used to exit 0 silently).
+
+### Session log (Phase 2 close)
+
+- **2026-11-17 (run 3):** Phase 2 close. Live check fixes (`2c8040e`, `2fb773f`), minors batch and its review fixes (`57efa68` to `b951764`), quality fix (`124e1ba`). Task 2.19: `yt-perf.mjs` (`3b9e076`, fixes `989c753` and `c41e882`), README YouTube section and checklist, version 0.2.0 (`1aefe09`, README review fixes `9f0f329`), this section (`Sieve: phase 2 checks and hand-off`).
+
 ## File map
 
 - `docs/superpowers/specs/2026-11-06-sieve-design.md`: the design
@@ -272,7 +329,8 @@ Task 1.11 fix round 1 (`5f2cabd`), same setup with an extension-free control fir
 - `docs/handoffs/sieve-gate-run-1.md`: the first clean-export gate run (failed on sites and one flaky check; fixed)
 - `docs/handoffs/sieve-final-review-1-core.md`, `-2-worker.md`, `-3-ui.md`: the whole-branch review findings
 - `docs/handoffs/sieve-task-1.6-fix-findings.md`: historical (the Task 1.6 fix round is done)
-- `docs/superpowers/plans/2026-11-08-sieve-phase-2.md`: the Phase 2 plan (draft, needs the owner's approval)
+- `docs/superpowers/plans/2026-11-08-sieve-phase-2.md`: the Phase 2 plan (implemented on branch `sieve-phase-2`)
+- `apps/sieve/test/yt-perf.mjs`: Phase 2 watch-page perf, leaks and settings read cost (`--self-check`, `--local`, `--live`, `LIVE_RUNS`)
 - `sieve-extension-dist/` and `strongroom-extension-dist/` in the main checkout root: built installable copies (untracked there)
 - `.superpowers/brainstorm/87424-1793907956/content/` in the main checkout: the mockups (gitignored)
 
@@ -363,6 +421,8 @@ Task 1.11 fix round 1 (`5f2cabd`), same setup with an extension-free control fir
   - Install folders built at the repo root (`sieve-extension-dist`, `strongroom-extension-dist`).
 
 ## Current state and next step
+
+(Phase 1 state, 2026-11-08. For Phase 2 see "Phase 2 close" above.)
 
 - **State (2026-11-08, end of session 4):** branch `sieve`. Phase 1 is implemented, reviewed (every task, then a four-part whole-branch review, then re-reviews of every fix round) and gated. Commits after `b9bac0b` are docs only (this file, the ledger snapshot, the metrics).
   - **Final gate, clean export of HEAD `b9bac0b`** (no dist, no filter cache, no node_modules before install): `pnpm install` 29 projects; `pnpm test` 667/667 (sieve-core 139, apps/sieve 43); `pnpm typecheck` clean; `pnpm --filter sieve build` with freshly downloaded lists (116,095 default rules: ads 50,847, trackers 56,427, distraction 2,037, cookies 2,111, antiadblock 4,673, ai 0 with 4 hosts); e2e 172/172 on the first run; `yt-live` and `perf` self-checks ok; the dist is complete (every manifest-referenced file exists, 37 MB, `listsAt` present, no source maps, spike or test files). Perf, on the same product build (HEAD `299dc39`, product code unchanged since): local page +6.5 ms against the 20 ms limit; five real sites (guardian, bbc.com/news, npr, nbcnews, wired) every median load with Sieve 0.27x to 0.85x of without, 5 of 5 (need 4); no load failed on either side. The first gate (`docs/handoffs/sieve-gate-run-1.md`) failed on the plan's original sites (dawn.com 403 headless; cnn.com and weather.com did not finish loading without an ad blocker) and one intermittent e2e check; both were fixed (ruling R30; deterministic e2e).
