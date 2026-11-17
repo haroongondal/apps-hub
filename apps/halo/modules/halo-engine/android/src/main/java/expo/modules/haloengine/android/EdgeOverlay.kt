@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.PixelFormat
 import android.hardware.input.InputManager
 import android.provider.Settings
+import android.view.View
 import android.view.WindowManager
 import expo.modules.haloengine.core.FlashDecision
 import expo.modules.haloengine.core.Pattern
@@ -16,6 +17,7 @@ class EdgeOverlay(
 ) {
   private val wm = ctx.getSystemService(WindowManager::class.java)
   private var view: EdgeView? = null
+  private var hidden = false
 
   val attached get() = view != null
 
@@ -28,6 +30,7 @@ class EdgeOverlay(
     return try {
       val maxOpacity = ctx.getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch
       val v = EdgeView(ctx, source)
+      if (hidden) v.visibility = View.GONE
       val lp = WindowManager.LayoutParams(
         WindowManager.LayoutParams.MATCH_PARENT,
         WindowManager.LayoutParams.MATCH_PARENT,
@@ -64,6 +67,15 @@ class EdgeOverlay(
 
   fun kick() {
     view?.kick()
+  }
+
+  /** A hide rule matched: the view goes GONE and its frame loop stops; the window and the audio tap stay. */
+  fun setHidden(h: Boolean) {
+    hidden = h
+    view?.let { v ->
+      v.visibility = if (h) View.GONE else View.VISIBLE
+      if (h) v.stop()
+    }
   }
 
   fun flash(d: FlashDecision, colour: Int) {

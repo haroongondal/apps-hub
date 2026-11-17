@@ -26,6 +26,7 @@ import expo.modules.haloengine.core.FlashDecision
 import expo.modules.haloengine.core.Pattern
 import expo.modules.haloengine.core.Patterns
 import expo.modules.haloengine.core.RandomMotion
+import expo.modules.haloengine.core.Rules
 import expo.modules.haloengine.core.Settings
 import expo.modules.haloengine.core.Spectrum
 import expo.modules.haloengine.core.SpectrumFrame
@@ -37,6 +38,8 @@ class HaloService : Service() {
   private var tap: AudioTap? = null
   private var overlay: EdgeOverlay? = null
   private var media: MediaWatch? = null
+  private var rules: RuleInputs? = null
+  private var hidden = false
   private var screenOff: BroadcastReceiver? = null
   private var aodShownSinceUnlock = false
 
@@ -117,6 +120,8 @@ class HaloService : Service() {
     val first = overlay == null
     if (first) lightsOn() else if (overlay?.attached == false) overlay?.add()
     overlay?.apply(s, pattern, currentColors(s))
+    rules?.sync(s.rules)
+    onRules()
     if (first || s.colors.source != derivedFor) recomputeColors()
     if (watch.animate(now())) overlay?.kick()
   }
@@ -149,6 +154,7 @@ class HaloService : Service() {
 
   private fun lightsOn() {
     overlay = EdgeOverlay(this, source).also { it.add() }
+    rules = RuleInputs(this, ::onRules).also { it.start() }
     // Assigned before start(): start() reports an already-playing session through onMedia, which reads `media`.
     media = MediaWatch(this, ::onMedia, ::recomputeColors)
     media?.start()
@@ -159,6 +165,7 @@ class HaloService : Service() {
   /** Retries only the window add while the lights are on but the window is missing (overlay access granted later). */
   private fun attachWindow() {
     val o = overlay ?: return
+    rules?.sync(settings.rules)
     if (o.attached || !o.add()) return
     o.apply(settings, pattern, currentColors(settings))
     if (watch.animate(now())) o.kick()
@@ -175,9 +182,24 @@ class HaloService : Service() {
     colourGen++
     playingApp = null
     watch.onPlaying(false)
+    rules?.stop()
+    rules = null
+    hidden = false
     overlay?.remove()
     overlay = null
     attempt = 0
+  }
+
+  // A settings screen is open in preview, so the lights show whatever the rules say.
+  private fun onRules() {
+    val st = rules?.state ?: return
+    val h = !preview && Rules.hidden(settings.rules, st)
+    if (h == hidden) return
+    hidden = h
+    ProbeLog.log(this, "rules", "lights ${if (h) "hidden" else "shown"} app=${st.foregroundPkg} fullscreen=${st.fullscreen} landscape=${st.landscape} call=${st.inCall} saver=${st.batterySaver} pocket=${st.pocket}")
+    overlay?.setHidden(h)
+    // A kick after showing either resumes the music or fades out the frame left over from before the hide.
+    if (!h) overlay?.kick()
   }
 
   private fun startTap() {

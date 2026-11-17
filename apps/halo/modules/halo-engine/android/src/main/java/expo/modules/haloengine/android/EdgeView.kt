@@ -96,7 +96,7 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
   }
 
   fun kick() {
-    if (looping || path == null) return
+    if (looping || path == null || visibility != VISIBLE) return
     looping = true
     fadeStartMs = -1
     lastDrawMs = -1
