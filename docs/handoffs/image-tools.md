@@ -188,7 +188,8 @@ listed in the 2.1 report (ledger).
 `docs/superpowers/plans/2026-11-18-gallery-cleanup-phase-2.md`): Photos tab Search | Clean up, group
 review, Delete via Android's dialog + Undo, Recently removed, Not a mistake. Kotlin 277/0, expo export
 bundles; main session's clean export of 93b7c297: test 0, typecheck 0. Open: M1 two 'Undo' buttons for
-screen readers, M2 repeated hint, P1 Clean up needs the search tool first. Next: owner's release go
-(Design Editor 13 from image-tools; Store is on 12, main has no newer app changes), then the 2.2
-phone checks in the ledger report.
+screen readers, M2 repeated hint, P1 Clean up needs the search tool first. Owner said release (2026-11-18):
+Design Editor 13 published from image-tools 32b6d715 (99.3 MB); manifest re-fetched, other entries intact.
+Owner: Clean up needing the search tool first is fine for now. Next: owner installs 13, then the 2.2
+phone checks in the ledger report (claim the phone, capture logcat, owner drives the screen).
 Feature 3 phone check: the owner hasn't tried build 12's tools yet (logcat 00:54-01:33 shows no model download).
