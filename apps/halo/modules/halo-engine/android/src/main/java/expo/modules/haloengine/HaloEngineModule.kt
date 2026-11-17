@@ -12,6 +12,7 @@ import android.provider.Settings
 import expo.modules.haloengine.android.HaloListener
 import expo.modules.haloengine.android.HaloService
 import expo.modules.haloengine.android.ProbeLog
+import expo.modules.haloengine.android.RuleInputs
 import expo.modules.haloengine.android.SettingsStore
 import expo.modules.haloengine.core.Patterns
 import expo.modules.kotlin.modules.Module
@@ -33,6 +34,7 @@ class HaloEngineModule : Module() {
     "audioAllowed" to (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED),
     "notificationsAllowed" to context.getSystemService(NotificationManager::class.java).areNotificationsEnabled(),
     "batteryUnrestricted" to context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName),
+    "usageAllowed" to RuleInputs.usageAllowed(context),
     "audio" to HaloService.audio,
     "playingApp" to HaloService.playingApp,
     "frameP95Ms" to HaloService.frameP95Ms,
@@ -65,6 +67,7 @@ class HaloEngineModule : Module() {
           "listener" -> Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
           "battery" -> Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
           "appDetails" -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+          "usage" -> Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
           else -> throw IllegalArgumentException("Unknown permission kind: $kind")
         },
       )

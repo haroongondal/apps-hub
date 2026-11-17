@@ -3,7 +3,7 @@ import { normalize, type Settings } from './settings.ts';
 
 export * from './settings.ts';
 
-export type PermissionKind = 'overlay' | 'listener' | 'battery' | 'appDetails';
+export type PermissionKind = 'overlay' | 'listener' | 'battery' | 'appDetails' | 'usage';
 
 export interface Status {
   running: boolean;
@@ -13,6 +13,8 @@ export interface Status {
   notificationsAllowed: boolean;
   /** Battery optimisation is off for Halo, so the system does not stop it in the background. */
   batteryUnrestricted: boolean;
+  /** Usage access, needed only to hide the lights while chosen apps are open. */
+  usageAllowed: boolean;
   /** "blocked" means another app holds the audio effect; "idle" means no sound has arrived yet. */
   audio: 'ok' | 'blocked' | 'idle';
   playingApp: string | null;
