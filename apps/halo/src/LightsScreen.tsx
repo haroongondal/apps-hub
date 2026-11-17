@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Group, Header, Pill, Row, Screen } from '@apps-hub/ui';
+import { Button, Group, Header, Pill, Row, Screen } from '@apps-hub/ui';
 import HaloEngine, { type PatternFamily, type PatternInfo, type Settings } from 'halo-engine';
 import { Stepper, SwitchRow } from './Stepper.tsx';
 import type { UpdateSettings } from './useSettings.ts';
@@ -8,7 +8,7 @@ const tenths = (v: number) => String(Math.round(v * 10));
 const percent = (v: number) => `${Math.round(v * 100)}%`;
 const familyTitle = (f: PatternFamily) => f[0].toUpperCase() + f.slice(1);
 
-export default function LightsScreen({ settings, update }: { settings: Settings; update: UpdateSettings }) {
+export default function LightsScreen({ settings, update, onColours }: { settings: Settings; update: UpdateSettings; onColours: () => void }) {
   const families = useMemo(() => {
     const out = new Map<PatternFamily, PatternInfo[]>();
     for (const p of HaloEngine.listPatterns()) out.set(p.family, [...(out.get(p.family) ?? []), p]);
@@ -19,7 +19,7 @@ export default function LightsScreen({ settings, update }: { settings: Settings;
 
   return (
     <Screen scroll>
-      <Header title="Lights" subtitle="Changes show on the screen edges while you are here." />
+      <Header title="Lights" subtitle="Changes show on the screen edges while you are here." trailing={<Button label="Colours" variant="secondary" size="sm" onPress={onColours} accessibilityHint="Choose the light colours" />} />
       {families.map(([family, patterns]) => (
         <Group key={family} title={familyTitle(family)}>
           {patterns.map((pt) => (

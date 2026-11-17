@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import HaloEngine, { type Settings } from 'halo-engine';
+import HaloEngine, { type Aod, type Settings } from 'halo-engine';
 
 export type SettingsPatch = Partial<Pick<Settings, 'enabled' | 'pattern'>> & {
   params?: Partial<Settings['params']>;
@@ -7,6 +7,8 @@ export type SettingsPatch = Partial<Pick<Settings, 'enabled' | 'pattern'>> & {
   edges?: Partial<Settings['edges']>;
   notify?: Partial<Settings['notify']>;
   rules?: Partial<Settings['rules']>;
+  aod?: Partial<Aod>;
+  themes?: Settings['themes'];
 };
 export type UpdateSettings = (patch: SettingsPatch) => void;
 
@@ -45,6 +47,8 @@ export function useSettings(): [Settings, UpdateSettings] {
         edges: { ...s.edges, ...patch.edges },
         notify: { ...s.notify, ...patch.notify },
         rules: { ...s.rules, ...patch.rules },
+        aod: { ...s.aod, ...patch.aod },
+        themes: patch.themes ?? s.themes,
       };
       latest.current = next;
       setSettings(next);
