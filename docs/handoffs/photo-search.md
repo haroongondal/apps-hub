@@ -149,6 +149,13 @@ session runs" in `docs/build-sessions.md`. Continue from "Current state + exact 
   limit) so the screen must say why it is paused; stale comment `ClipSessions.kt:13`.
 - Not verified anywhere yet: ORT input/output names against the real model files in-app, the
   fp16 text output read through `floatBuffer`, `loadThumbnail` pixels on the phone.
+- 2026-11-17 Task 5 on the phone (build 10 from the Store, ~545 photos): the first scan ran on
+  its own and finished ("Get photos ready for search · Ready"). Search works in-app (so ORT names,
+  fp16 output and phone thumbnails are fine): "a screenshot of a phone screen" fills the grid in
+  under 1.5 s including typing. Photo sheet, Open button and More like this work. **Defect: the
+  fixed 0.25 floor hides real matches for short queries** ("sky", "food" give "No close matches";
+  "a photo of the sky" gives one photo). A Mac measurement (rebuilt COCO set, ~1,000 photos, in
+  scratchpad `floor/`) is choosing a new rule (prompt template and/or relative margin).
 
 ## Current state + exact next step
 
@@ -161,11 +168,11 @@ forced scan). Ledger: `.superpowers/sdd/2026-11-17-photo-search-phase-2/progress
 Pre-existing timing flakes on main (not this work): pdf-editor-mobile "decodes in linear time"
 (2 s) and library-core "answers in under 300 ms" fail under load and pass alone.
 
-Next step: Task 5 of the Phase 2 plan, on the phone, after the owner installs build 10 from the
-Store (never adb-install): claim `device:49kjmnuwonkffqzh`, walk the Photos tab (allow access,
-get the search tool, scan, search, More like this, Open), then AC-1 (airplane mode), AC-3 (1,000
-photos ≤ 5 min plugged in), AC-4 (≤ 1 s per search), AC-5 (no network in search, gallery
-unchanged), AC-6 (waiting notice when hot or < 20%). AC-2 on the COCO set only if the owner
-agrees to copying the 195 photos into the gallery and removing them afterwards (asked, not yet
-answered). Still unverified in-app: ORT input/output names, the fp16 text output, phone
-thumbnails. After that: feature 2, Clean up the gallery (design approved).
+Next step: fix the search floor from the Mac measurement (`SEARCH_FLOOR` in
+`core/PhotoIndex.kt`, `rank()`, plus a "a photo of" template in `PhotoSearch.search` if the data
+backs it), JVM test it, then (owner's go) release build 11. Then finish Task 5 on the phone: AC-1
+(airplane mode: owner toggles it, since adb is over Wi-Fi), AC-3 (1,000 photos ≤ 5 min plugged
+in; the gallery has ~545), AC-6 (waiting notice when hot or < 20%). Done on the phone: walk-through,
+AC-4 (≤ 1 s), AC-5 by code (no network in `design-media`). AC-2 on the COCO set only if the owner
+agrees to copying the photos into the gallery and removing them afterwards (not yet answered).
+After that: feature 2, Clean up the gallery (design approved).
