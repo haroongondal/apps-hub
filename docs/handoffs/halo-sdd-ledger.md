@@ -73,3 +73,5 @@ Base before Task 3.1: HEAD at dispatch (see below).
 - Ruling: Tasks 3.1+3.2 to one agent (3.2's NotifyRules consumes 3.1's SettingsNotify) — cost if wrong: a bit less parallelism.
 - Ruling: Task 3.4 also adds the MY_PACKAGE_REPLACED receiver (phone bug: service not restarted after update).
 Stage 3 base: e4bc721
+Tasks 3.1+3.2: complete (8d32327, 9566607; TS 46/46, JVM 62/62, red→green shown; controller-checked). Implementer calls accepted (incl. reminder clock advances when skipped, tracking cap 200).
+Tasks 3.3 + 3.5: dispatched in parallel (OWNERs t33, t35); shared files .sdd/shared-files.txt (EdgeOverlay, EdgeView, HaloService) under filelock; gradle-halo run key.

@@ -1,8 +1,17 @@
 # Edge visualizer (own Muviz Edge equivalent) — handoff
 
 ## Resume prompt
-Read this file completely first. Trust the verified facts below; do not re-pull or re-dump the APK.
-Follow the handoff contract in ~/.claude/CLAUDE.md. Continue from "Current state + next step".
+(2026-11-17) Work only in the worktree ~/Documents/apps-hub-wt/halo (branch `halo`). Read this file completely first,
+then docs/handoffs/halo-sdd-ledger.md (task-by-task log; tasks marked complete are done), the approved designs
+docs/superpowers/specs/2026-11-17-edge-visualizer-design.md (§13 = phone results) and
+docs/superpowers/specs/2026-11-17-halo-stages-3-5-design.md, and the approved plan
+docs/superpowers/plans/2026-11-17-halo-stages-3-5.md. Trust the verified facts; do not redo them. Follow the handoff
+contract in ~/.claude/CLAUDE.md and execute with cd-engineering-tools:parallel-agents-coord (agent per task, briefs in
+.sdd/, filelock for shared files, reviews). Releases: `pnpm release halo` is pre-approved — run it from the detached
+worktree ~/Documents/apps-hub-wt/halo-release after `git -C ../halo-release checkout --detach <sha>`, then re-fetch
+manifest.json and check nothing clobbered it. Store releases need the owner's go. Phone: claim
+device:49kjmnuwonkffqzh with coord, install only through the Store app on the phone. Continue from
+"Current state + next step".
 
 ## Goal and fixed constraints
 - The owner wants their own Android app that does what Muviz Edge (com.sparkine.muvizedge 2.1.5.1) does, for personal use, with no third-party app.
@@ -54,19 +63,14 @@ APK copy: scratchpad only (not committed). Manifest dump via aapt2 `dump xmltree
 - 2026-11-17 (session 2): owner asked for full replica, picked approach A. Design doc written; builder check done and folded in; owner answered release + Muviz questions. Design approved; plan written.
 
 ## Current state + next step (2026-11-17, session 2)
-Executing with cd-engineering-tools:parallel-agents-coord; ledger = docs/handoffs/halo-sdd-ledger.md (read it). Briefs in .sdd/.
-Branch `halo` (on origin/main d1b61ea). Store: store=19, halo=5 (0.3.2, GPU glow perf fix 125c207; phone has 0.3.1 — owner must update). Owner HAS installed Store 19 + Halo 0.3.1 and
-granted everything. Releases come from ~/Documents/apps-hub-wt/halo-release (detached; checkout the sha, `pnpm release halo`,
-then re-fetch manifest.json to check nothing clobbered it).
-Phone results so far are in the base spec §13: audio capture works; overlay is hidden by the system on the lock screen;
-frame time over budget on 0.3.1 (p50 24 ms, p95 109 ms) → 0.3.2 has the GPU-glow fix; measure on phone with gfxinfo + framestats (render thread vs GPU) — if still slow, suspect full-screen overlay composition at alpha 0.8 / 120 Hz.
-Pending phone checks (need owner to unlock): (b) start after reboot, (d) always-on screen after screen-off (Diagnostics
-switch "Test the always-on screen", lock with power button), and frame time after the perf fix (`dumpsys gfxinfo com.haroon.halo reset`).
-Phone: queued in coord behind apps-hub-af (photo-search); background coord wait running.
-Stages 3-5 design written + builder-checked: docs/superpowers/specs/2026-11-17-halo-stages-3-5-design.md — APPROVED 2026-11-17.
-Plan written: docs/superpowers/plans/2026-11-17-halo-stages-3-5.md (stage 3 full: Tasks 3.1-3.7; stages 4-5 outline,
-stage 4 gated on the phone always-on check). Plan APPROVED 2026-11-17. Building: Tasks 3.1+3.2 by one agent (3.2 consumes 3.1 types),
-then 3.3 → 3.4, 3.5 in parallel with 3.4 (both touch HaloService: sequence their HaloService edits), 3.6, 3.7.
+Store: store=19, halo=5 (0.3.2) — installed on the owner's phone. Phone results in base spec §13: audio works; overlay
+hidden on lock screen (system); frame time fine on 0.3.2; bug: service not restarted after app update (fix in Task 3.4).
+Pending phone checks needing the owner present: (b) restart after reboot, (d) always-on screen after screen-off
+(Diagnostics switch "Test the always-on screen" + power-button lock). Stage 4 is gated on (d).
+Stage 3 (0.4.0) in progress: 3.1 + 3.2 complete; 3.3 (edge events, OWNER t33) and 3.5 (hide rules, OWNER t35)
+running in parallel with filelock on .sdd/shared-files.txt. Next: 3.4 (NotifyFlash, AppIcons, app list,
+QUERY_ALL_PACKAGES, MY_PACKAGE_REPLACED receiver), then 3.6 (screens), then 3.7 (stage review, 0.4.0 release, phone check).
+Deferred minors are listed in the ledger.
 
 ## Previous state (session 1, superseded)
 Owner asked for a new chat to start building. Already told to the owner and accepted without objection:
