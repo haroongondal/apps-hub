@@ -48,6 +48,7 @@ test('manifest is readable with either token, not without', async () => {
   const res = await handle(req('GET', '/manifest.json', STORE), e);
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { a: 1 });
+  assert.equal(res.headers.get('cache-control'), 'private, no-store');
 });
 
 test('signed URL downloads until it expires and rejects tampering', async () => {
@@ -61,6 +62,7 @@ test('signed URL downloads until it expires and rejects tampering', async () => 
   const ok = await handle(req('GET', path), e, now + 1000);
   assert.equal(ok.status, 200);
   assert.equal(await ok.text(), 'APK');
+  assert.equal(ok.headers.get('cache-control'), 'private, no-store');
   assert.equal((await handle(req('GET', path), e, now + SIGNED_URL_TTL_S * 1000 + 1)).status, 403);
   assert.equal((await handle(req('GET', path.replace('2.apk', '3.apk')), e, now)).status, 403);
 });
@@ -114,8 +116,6 @@ test('models route refuses anything but 64 lowercase hex', async () => {
     `/models/%61${SHA.slice(1)}`,
     `/models/${SHA}%2F..%2Fmanifest.json`,
     `/models/..%2Fapps%2Fnetlens%2Fandroid%2F2.apk`,
-    `/models/../manifest.json`,
-    `/models/%2e%2e/manifest.json`,
     `/models//${SHA}`,
     `//models/${SHA}`,
     `/Models/${SHA}`,
@@ -123,7 +123,11 @@ test('models route refuses anything but 64 lowercase hex', async () => {
     `/models`,
     `/models/apps/netlens/android/2.apk`,
   ];
-  for (const p of bad) assert.notEqual((await handle(req('GET', p), e)).status, 200, p);
+  for (const p of bad) assert.equal((await handle(req('GET', p), e)).status, 404, p);
+  // the URL parser reroutes these to /manifest.json, which still needs a token
+  for (const p of ['/models/../manifest.json', '/models/%2e%2e/manifest.json']) {
+    assert.equal((await handle(req('GET', p), e)).status, 401, p);
+  }
   // a query string is not part of the key
   assert.equal((await handle(req('GET', `/models/${SHA}?x=../manifest.json`), e)).status, 200);
   assert.deepEqual([...new Set(asked)], [`models/${SHA}`]);
