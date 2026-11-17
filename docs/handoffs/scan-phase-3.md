@@ -77,3 +77,14 @@ Not tested (needs the owner's physical card): live card detection on a real card
 Test data cleaned up: my two test scans deleted through the app (the owner's "Scan 2026-11-18 02:12 #42" kept, it holds their 6 pages), my two pushed photos removed from /sdcard/Download. Left on the phone: the 6 images saved to Pictures/PDF Editor from the owner's scan, and the owner's scan itself.
 
 Left in the session scratchpad (not the repo): two screenshots that show a bank card number, `shots/15-strip-end.png` and `shots/16-page7-actions.png` under the session scratchpad. The permission check blocked my `rm`; delete them by hand if you want them gone.
+
+## Phone test of 1.3.1 (versionCode 15), 2026-11-18
+
+Fix wave 2 (commits d4a35243, 35be1f4d, 06d6c2d2) released as 1.3.1 (15), manifest re-checked (all ten apps present). Store showed the update after a pull to refresh. First install attempt failed: "The install was cancelled" because I launched the app while the Xiaomi security scan was still running (my mistake; do not launch anything during an install). Second attempt succeeded; the owner's Library and 6-page scan survived the update.
+
+- A keyboard: confirmed on the phone. With the keyboard up, the Title field and Save sit above it.
+- B Magic: invoice still excellent after the gain change. Not re-checked on a bright yellow scene (the card photos I had were deleted).
+- C page edges: could not be judged, because of the new bug below (the preview was a stale cached image).
+- New bug E (also in 1.3.0): the review preview is written to `prev-<n>` where n restarts per session, and expo-image caches by URI, so a later session shows an earlier session's preview (seen: card page showing an old black-and-white invoice). Sent to the fixer; fix goes out as 1.3.2.
+- D (Gray ticked on the resumed page) stays unexplained; the code never sets it. Probably saved in the old session file.
+- Cleanup: my unsaved 2-page test session discarded in the app, my test photos removed from /sdcard/Download, logcat stopped by pid. The owner's data is untouched.
