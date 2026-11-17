@@ -81,7 +81,7 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
 - 2026-11-18 (owner): release feature 3 from the branch now (not ship-first). The first release
   run was killed when the session ended (during the Gradle build; nothing uploaded). Meanwhile
   photo-search released build 11 from main (#40 short searches). image-tools merged photo-search
-  (773f3b9) and origin/main (06c003b, docs-only difference) and released build 12 from 06c003b.
+  (773f3b9) and origin/main (06c003b, docs-only difference) and released build 12 from 06c003b: published (99.2 MB), the other nine manifest entries unchanged after re-fetch. Told photo-search (apps-hub-8a) to release only from a branch that contains image-tools.
 
 ## Evidence already verified
 
@@ -156,10 +156,12 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
 
 ## Current state + exact next step
 
-Feature 3 is built: 3.0 done, 3.1 done, 3.2 DONE (57b1f06..c2e8557; ledger
-`.superpowers/sdd/2026-11-17-image-tools-3.2/progress.md`), merged with origin/main (ba3d97f).
-Gates on ba3d97f: pnpm test 0, typecheck 0, Gradle 217/0 + assembleDebug 0; main session's clean
-export of c2e8557: test 0, typecheck 0. Worker deployed, model live. Waiting for the owner's
-release go (Design Editor). Then on-phone checks AC-1..AC-6, the unproven-on-phone items in the
-3.2 ledger, the owner reads the new copy and the 2x estimate ("About 50 seconds").
-Feature 2: next is 2.0 (phone and tuning spike).
+Feature 3 released as Design Editor build 12 (from image-tools 06c003b, not merged to main).
+Next for feature 3: the owner installs build 12 from the Store; then on-phone checks (claim the
+phone): AC-1 palette <= 200 ms, AC-2 one-undo enhance, AC-3 Person cut-out keeps the person
+whole, AC-4 4x upscale completes/cancels/<= 4096 px, AC-5 airplane mode after first download,
+plus the unproven-on-phone items in the 3.2 ledger (ORT names, ImageDecoder, 1 MB injectJavaScript
+reply, expo-file-system base64 reads, Expo error wrapping) and an eye check of an upscaled
+cut-out's edge. The owner reads the new copy and the 2x estimate ("About 50 seconds"). Then
+ship (PR into main) so main has the Worker /models/ route.
+Feature 2: 2.0 spike phase agent running (ledger `.superpowers/sdd/2026-11-18-image-tools-2.0/progress.md`).
