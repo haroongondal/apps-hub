@@ -93,3 +93,4 @@ Task 3.7: releasing 0.4.0.
 Phone check 3 (0.4.0): (d) always-on PASSES on HyperOS (gate for stage 4). Bug: no service restart after Store update on HyperOS, and opening the app doesn't start it either → fix in stage 4 Task 4.1 (start from app open when serviceWanted; investigate MY_PACKAGE_REPLACED on HyperOS).
 - Released device claim to image-tools (apps-hub-4d) after the reboot; reboot result to come from the owner reading Halo's Home line.
 Phone check 3 cont.: (b) reboot PASSES (owner read 'Halo is running' after unlock).
+Stage 4 plan APPROVED by the owner 2026-11-18. Session 2 handed off to a new chat before building stage 4.

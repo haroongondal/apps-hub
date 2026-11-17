@@ -1,7 +1,7 @@
 # Edge visualizer (own Muviz Edge equivalent) — handoff
 
 ## Resume prompt
-(2026-11-17) Work only in the worktree ~/Documents/apps-hub-wt/halo (branch `halo`). Read this file completely first,
+(2026-11-18) Work only in the worktree ~/Documents/apps-hub-wt/halo (branch `halo`). Read this file completely first,
 then docs/handoffs/halo-sdd-ledger.md (task-by-task log; tasks marked complete are done), the approved designs
 docs/superpowers/specs/2026-11-17-edge-visualizer-design.md (§13 = phone results) and
 docs/superpowers/specs/2026-11-17-halo-stages-3-5-design.md, and the approved plan
@@ -60,6 +60,7 @@ APK copy: scratchpad only (not committed). Manifest dump via aapt2 `dump xmltree
 - 2026-11-17: pulled APK, mapped mechanisms and features (above). Owner chose v1 scope and apps-hub. Brainstorming started; owner asked for a new-chat prompt to start building.
 
 ## Session log (cont.)
+- 2026-11-18 (session 2 end): stage 4 approved; handed off to a new chat to build it.
 - 2026-11-17 (session 2): owner asked for full replica, picked approach A. Design doc written; builder check done and folded in; owner answered release + Muviz questions. Design approved; plan written.
 
 ## Current state + next step (2026-11-18, session 2)
@@ -67,8 +68,8 @@ Store: store=19, halo=6 = Halo 0.4.0, installed on the owner's phone. Stages 1-3
 Phone (spec §13): audio works, overlay hidden on lock screen (system), frame time fine (0.3.2), always-on screen launches
 over the keyguard (gate passed), start after reboot works. Open bug: no service restart after a Store update and app open
 does not start it → fixed in Task 4.1.
-Stage 4 is now planned in full in docs/superpowers/plans/2026-11-17-halo-stages-3-5.md (Tasks 4.1-4.7), awaiting the
-owner's OK. On OK: Task 4.1 → 4.2 → (4.3 ∥ 4.5) → 4.4 wave (4 agents × 3 faces) → 4.6 → 4.7 (review, 0.5.0, phone check).
+Stage 4 is planned in full in docs/superpowers/plans/2026-11-17-halo-stages-3-5.md (Tasks 4.1-4.7) and APPROVED by the
+owner 2026-11-18 (incl. tabs Home/Lights/Alerts/Always-on with Colours inside Lights). Nothing of stage 4 is built yet. On OK: Task 4.1 → 4.2 → (4.3 ∥ 4.5) → 4.4 wave (4 agents × 3 faces) → 4.6 → 4.7 (review, 0.5.0, phone check).
 Phone claim released (image-tools had it last).
 
 ## Previous state (session 1, superseded)
