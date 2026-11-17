@@ -88,3 +88,17 @@ Fix wave 2 (commits d4a35243, 35be1f4d, 06d6c2d2) released as 1.3.1 (15), manife
 - New bug E (also in 1.3.0): the review preview is written to `prev-<n>` where n restarts per session, and expo-image caches by URI, so a later session shows an earlier session's preview (seen: card page showing an old black-and-white invoice). Sent to the fixer; fix goes out as 1.3.2.
 - D (Gray ticked on the resumed page) stays unexplained; the code never sets it. Probably saved in the old session file.
 - Cleanup: my unsaved 2-page test session discarded in the app, my test photos removed from /sdcard/Download, logcat stopped by pid. The owner's data is untouched.
+
+## Phone test of 1.3.2 (versionCode 16), 2026-11-18
+
+Release 1.3.2 (commit 40853aa2 plus the version bump) published, manifest re-checked. Install needed a Google Play Protect decision ("App scan recommended"); I stopped and asked the owner, who tapped Scan app and the update installed.
+
+- Preview fix (E): confirmed. A new session with an imported invoice showed a fresh Black and white preview (red ink black, full-width page), not an old cached one.
+- Page edges (C): confirmed. No dotted line along the top or right edge of the Black and white page.
+- Keyboard (A) was confirmed on 1.3.1 and is unchanged.
+- The owner scanned a real card (front and back, saved as two pages: "Card 2026-11-18 02:42", 1.5 MB) before my check. I did not open it, because it is their ID; their feedback on it is still to come. Still not tested by me: One sheet with real card photos, live card detection on a real card.
+- Cleanup: my one-page test session discarded in the app (Library shows no unsaved notice), my test photo removed from /sdcard/Download. Device claim released; a second session (apps-hub-7b) borrowed it for logcat and now has it.
+
+## State at end of run
+
+Branch `scan-phase-3` in `.claude/worktrees/scan-phase-3`, commits from 5a88c82 to the 1.3.2 bump; not pushed, no PR. Released to the private Store as PDF Editor 1.3.2 (16). `packages/ui` has one additive change (`Screen` takes an optional `scrollRef`), so merging the PR will make CI also publish the apps that use `@apps-hub/ui`. Next for the owner: judge the real card scan, then say whether to open the PR (the Store builds are already out).
