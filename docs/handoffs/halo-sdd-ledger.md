@@ -75,3 +75,17 @@ Base before Task 3.1: HEAD at dispatch (see below).
 Stage 3 base: e4bc721
 Tasks 3.1+3.2: complete (8d32327, 9566607; TS 46/46, JVM 62/62, red→green shown; controller-checked). Implementer calls accepted (incl. reminder clock advances when skipped, tracking cap 200).
 Tasks 3.3 + 3.5: dispatched in parallel (OWNERs t33, t35); shared files .sdd/shared-files.txt (EdgeOverlay, EdgeView, HaloService) under filelock; gradle-halo run key.
+Task 3.3: complete (833910b; EdgeEventsTest 6/6 red→green; emulator: flash over lights shown, loop idles after). Not proven: flash-only window (lights off / service stopped) — check in Task 3.4 emulator round + phone.
+Task 3.5: complete (fe02db6, e0009c6; RulesTest 4/4 + setup test red→green; emulator: all six rules hide/show). Moved to Task 3.6: HomeScreen.tsx `setupRows(status, settings)` (+ "Recommended" for usage row). Accepted calls: preview overrides rules; flashes dropped while rules hide the lights; PACKAGE_USAGE_STATS added (spec allowed). Not proven: ringing path, real pocket, real fullscreen video.
+Task 3.4: dispatched.
+- Session restart interrupted Task 3.4 (WIP uncommitted: NotifyFlash, AppIcons, Notified+test, manifest/module/listener/boot edits); resumed the same agent.
+Task 3.4: complete (5a5949a; NotifiedTest 3/3 red→green; JVM 75/75; emulator: two colours, flash-only window with lights off, reminder + unlock clear, quiet hours, no text in logs, MY_PACKAGE_REPLACED restart). Accepted: listApps/appIconUri async (appIconUri may be null); BootReceiver handles MY_PACKAGE_REPLACED.
+For the stage-3 review/fix wave: (a) silent updates of an existing key (FLAG_ONLY_ALERT_ONCE) re-flash — should not; (b) auto-group repost produced 2 flash lines for one post (visible effect is one restart, but coalesce); (c) icon PNG cache never refreshed; (d) reminder state in memory only (acceptable, note).
+Task 3.6: dispatched.
+Task 3.6: complete (8462b58; notifyForm 5/5 red→green; TS 52/52; walk-through light+dark on a temporary emulator because emulator-5556 was in use by another session). Note: 'Notifications' tab label sits at the screen edge on 1080 px.
+Stage 3 review (opus): Important — (1) ONLY_ALERT_ONCE updates re-flash + re-arm reminders; (2) auto-group repost (same postTime) re-tracks old notifications; (3) flash-only window ignores hide rules (call/battery saver/landscape). Minor — (4) icon cache stale + stale URI after uninstall; (5) reminder state lost on process death; (6) reminders fire while unlocked; (7) usage poll + proximity run with screen off; (8) "Notifications" tab label too wide. Nits: reminderMin change not rescheduled; settings decoded before cheap filters.
+- Ruling: reminders only flash while the keyguard is locked (anti-goal "not noisy") — cost if wrong: owner wanted reminders while using the phone; one-line switch.
+- Ruling: tab label "Alerts" instead of changing packages/ui TabBar (a ui change releases every app) — cost if wrong: wording.
+Fix wave: one agent for 1-8 + nits.
+Stage 3 fix wave: cc36c2f (all 8 + nits; NotifyRulesTest 15/15 with 4 new red→green; JVM 79/79; TS 52/52; emulator: call skips flash-only flash, reminder skipped while unlocked then fires when locked, proximity paused on screen off). Accepted: seen-map before quiet/app decision; lastUnlockMs defaults to now. Re-review skipped (logic covered by failing-then-passing tests; no security surface changed) — controller check.
+Task 3.7: releasing 0.4.0.
