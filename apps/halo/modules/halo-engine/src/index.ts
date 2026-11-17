@@ -1,5 +1,5 @@
 import { requireNativeModule } from 'expo';
-import { normalize, type Settings } from './settings.ts';
+import { normalize, type FaceOptions, type Settings } from './settings.ts';
 
 export * from './settings.ts';
 
