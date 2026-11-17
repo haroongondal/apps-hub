@@ -18,6 +18,8 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+fun detectorConfig(card: Boolean) = if (card) DetectorConfig(targetAspect = 85.6 / 53.98) else DetectorConfig()
+
 fun asFile(s: String): File = if (s.startsWith("file:")) File(Uri.parse(s).path ?: s) else File(s)
 
 fun existingFile(s: String): File {

@@ -69,7 +69,7 @@ class ScanCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   }
   private val overlay = Overlay(context)
   private val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor()
-  private val detector = QuadDetector()
+  @Volatile private var detector = QuadDetector()
   private val stabilizer = QuadStabilizer { SystemClock.elapsedRealtime() }
 
   private var provider: ProcessCameraProvider? = null
@@ -83,6 +83,13 @@ class ScanCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private var bound = false
   private var torch = false
   @Volatile var autoCapture = true
+  @Volatile var cardMode = false
+    set(on) {
+      if (on == field) return
+      field = on
+      detector = QuadDetector(detectorConfig(on))
+      rearm()
+    }
   var sessionDir: File? = null
   var outlineColor: Int
     get() = overlay.color
@@ -228,7 +235,8 @@ class ScanCameraView(context: Context, appContext: AppContext) : ExpoView(contex
       buf.rewind()
       buf.get(lumaBuffer, 0, min(need, buf.remaining()))
       val started = SystemClock.elapsedRealtimeNanos()
-      val raw = detector.detect(Luma(lumaBuffer, image.width, image.height, stride))
+      val d = detector
+      val raw = d.detect(Luma(lumaBuffer, image.width, image.height, stride))
       val ms = (SystemClock.elapsedRealtimeNanos() - started) / 1_000_000.0
       val rotation = image.imageInfo.rotationDegrees
       val det = raw?.rotated(rotation)
@@ -239,7 +247,7 @@ class ScanCameraView(context: Context, appContext: AppContext) : ExpoView(contex
       val now = SystemClock.elapsedRealtime()
       if (now - lastLoggedAt > 1000) {
         lastLoggedAt = now
-        Log.d(TAG, "S2 detect=${"%.1f".format(ms)}ms high=${detector.lastHigh} sharp=${raw?.sharpness?.roundToInt()} af=$af hint=${step.hint} ${image.width}x${image.height} rot=$rotation")
+        Log.d(TAG, "S2 detect=${"%.1f".format(ms)}ms high=${d.lastHigh} sharp=${raw?.sharpness?.roundToInt()} af=$af hint=${step.hint} ${image.width}x${image.height} rot=$rotation")
       }
       if (step.enteredHolding && raw != null && !fixedFocus) focusOn(raw.quad)
       val aspect = if (rotation % 180 == 0) image.width.toDouble() / image.height else image.height.toDouble() / image.width
@@ -282,7 +290,7 @@ class ScanCameraView(context: Context, appContext: AppContext) : ExpoView(contex
           dir.mkdirs()
           val dest = File(dir, "cap-$ms.jpg")
           val started = SystemClock.elapsedRealtime()
-          val (bw, bh, refined) = ImageImport.importUpright(raw, dest)
+          val (bw, bh, refined) = ImageImport.importUpright(raw, dest, detectorConfig(cardMode))
           val quad = pickQuad(refined, det)
           Log.d(TAG, "capture import ${SystemClock.elapsedRealtime() - started}ms ${bw}x$bh refined=${refined != null}")
           onCapture(mapOf("uri" to "file://${dest.absolutePath}", "width" to bw, "height" to bh, "quad" to quad?.toList(), "auto" to auto))

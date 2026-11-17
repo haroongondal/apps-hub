@@ -17,6 +17,7 @@ import expo.modules.pdfscan.android.ScanCameraView
 import expo.modules.pdfscan.android.ShareImages
 import expo.modules.pdfscan.android.SheetRequest
 import expo.modules.pdfscan.android.asFile
+import expo.modules.pdfscan.android.detectorConfig
 import expo.modules.pdfscan.android.existingFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -40,7 +41,7 @@ class PdfScanModule : Module() {
       }
     }
     AsyncFunction("detectQuad") Coroutine { src: String, card: Boolean? ->
-      withContext(Dispatchers.Default) { ImageImport.detectFile(existingFile(src))?.quad?.toList() }
+      withContext(Dispatchers.Default) { ImageImport.detectFile(existingFile(src), detectorConfig(card == true))?.quad?.toList() }
     }
     AsyncFunction("processPage") Coroutine { req: ProcessRequest ->
       withContext(Dispatchers.Default) { PageProcessor.process(req) }
@@ -61,6 +62,7 @@ class PdfScanModule : Module() {
       Prop("active") { view: ScanCameraView, on: Boolean -> view.setActive(on) }
       Prop("autoCapture") { view: ScanCameraView, on: Boolean -> view.autoCapture = on }
       Prop("torch") { view: ScanCameraView, on: Boolean -> view.setTorch(on) }
+      Prop("cardMode") { view: ScanCameraView, on: Boolean? -> view.cardMode = on == true }
       Prop("accentColor") { view: ScanCameraView, hex: String -> view.outlineColor = Color.parseColor(hex) }
       Prop("sessionDir") { view: ScanCameraView, uri: String -> view.sessionDir = Uri.parse(uri).path?.let(::File) }
       AsyncFunction("capture") { view: ScanCameraView -> view.captureManual() }
