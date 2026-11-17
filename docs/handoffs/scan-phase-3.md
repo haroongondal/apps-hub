@@ -56,3 +56,5 @@ used. Within a stream one agent runs its tasks in order.
 4. Imported-photo card detection fixed in the app, not by a native contract change. Wrong: a card photo imported into a document-mode session still gets document-shaped detection.
 5. Free xref entries left unlinked. Wrong: a strict PDF validator might warn.
 6. Gradle and unit tests run once by me at integration, so most tasks were up to date. Wrong: none; test results files showed 54 tests, 0 failures.
+- Release (owner's go: "then test on phone", 2026-11-18): `pnpm release pdf-editor` from this worktree published PDF Editor 1.3.0, versionCode 14, 36.5 MB. Manifest re-fetched afterwards: store 19, netlens 12, open-tunnel 16, deputy 17, clipboard 9, strongroom 18, design-editor 12, inflow 2, halo 6, pdf-editor 14 all present (no clobber). The phone had 1.2.0 (13) from the Store, so versionCode 14 updates it in place.
+- Phone test: queued behind the Inflow session for `device:49kjmnuwonkffqzh`. Owner asked me to do the rest and ping when required. Test photos (invoice with shadow, card) are in the session scratchpad `testimgs/`, not in the repo.
