@@ -374,3 +374,59 @@ test('the offscreen relay takes commands only from the extension, and only real 
   assert.deepEqual(await ask({ type: 'dl-eng-tick' }, 'chrome-extension://other/x.html'), { keepsOpen: false });
   assert.deepEqual(await ask(null, BASE + 'background.js'), { keepsOpen: false });
 });
+
+test('the offscreen save revokes its blob URL when the worker refuses or cannot be reached, and keeps it when the save started', async () => {
+  const replies: unknown[] = [{ ok: false, message: 'INVALID' }, new Error('The message port closed before a response was received.'), { ok: true, chromeId: 3 }];
+  const t = setup({
+    sendMessage: async (m) => {
+      if ((m as { type: string }).type !== 'dl-sw-save') return { settings: DEFAULT_DOWNLOADS };
+      const r = replies.shift();
+      if (r instanceof Error) throw r;
+      return r;
+    },
+  });
+  let w!: { onmessage: ((e: { data: unknown }) => void) | null; posted: unknown[] };
+  class FakeWorker {
+    onmessage: ((e: { data: unknown }) => void) | null = null;
+    onerror: (() => void) | null = null;
+    posted: unknown[] = [];
+    constructor() {
+      w = this;
+    }
+    postMessage(m: { id?: number }) {
+      this.posted.push(m);
+      if (m.id !== undefined) queueMicrotask(() => this.onmessage?.({ data: { reply: m.id, result: { ok: true } } }));
+    }
+    terminate() {}
+  }
+  (globalThis as unknown as Record<string, unknown>).Worker = FakeWorker;
+  const file = { size: 10, slice: () => ({}) };
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { storage: { estimate: async () => ({ quota: 1e9, usage: 0 }), getDirectory: async () => ({ getFileHandle: async () => ({ getFile: async () => file }) }) } },
+  });
+  let made = 0;
+  const revoked: string[] = [];
+  const { createObjectURL, revokeObjectURL } = URL;
+  URL.createObjectURL = () => `blob:${BASE}${++made}`;
+  URL.revokeObjectURL = (u: string) => void revoked.push(u);
+  try {
+    await import(`../offscreen/offscreen.ts?fresh=${++n}`);
+    await sleep(30);
+    const save = async (req: number) => {
+      w.onmessage?.({ data: { push: 'save', req, payload: { id: 'd1', name: 'a.bin', path: 'Other/a.bin', size: 10 } } });
+      await sleep(10);
+      return w.posted.find((p) => (p as { saveReply?: number }).saveReply === req) as { result: { ok: boolean } };
+    };
+    assert.equal((await save(1)).result.ok, false);
+    assert.deepEqual(revoked, [`blob:${BASE}1`], 'a refused save leaves no live blob URL');
+    assert.equal((await save(2)).result.ok, false);
+    assert.deepEqual(revoked, [`blob:${BASE}1`, `blob:${BASE}2`], 'nor does an unanswered one');
+    assert.equal((await save(3)).result.ok, true);
+    assert.equal(revoked.length, 2, 'a started save keeps its URL until its done or failed event');
+    assert.equal(made, 3, 'each attempt after a revoke makes a new URL');
+    assert.equal(t.calls.send.filter((m) => (m as { type: string }).type === 'dl-sw-save').length, 3);
+  } finally {
+    Object.assign(URL, { createObjectURL, revokeObjectURL });
+  }
+});

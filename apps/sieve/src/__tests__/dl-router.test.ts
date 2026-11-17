@@ -38,6 +38,7 @@ async function boot(options: { records?: DlRecord[]; settings?: DownloadSettings
     send: [] as { type?: string }[],
     alarms: new Map<string, { periodInMinutes?: number; when?: number }>(),
     syncs: 0,
+    recovers: 0,
     extras: [] as unknown[],
     drops: [] as unknown[],
     rulesRunning: 0,
@@ -98,6 +99,7 @@ async function boot(options: { records?: DlRecord[]; settings?: DownloadSettings
     }
   };
   router.io.dropRules = (extra) => void t.drops.push(extra);
+  router.io.recoverSaves = async () => void t.recovers++;
   router.initRouter();
   await router.reconcile(); // the start-up reconcile and this one have both finished
   const zero = () => {
@@ -326,6 +328,63 @@ test('dl-add calls reconcile after a successful add and not after a refused one'
   await t.post({ type: 'dl-add', items: [{ url: 'ftp://x/y', source: 'manual' }] });
   await sleep(30);
   assert.equal(t.t.syncs, 0);
+});
+
+test('dl-add reconciles after an add the engine did not confirm: the record may exist and must not wait for the next event', async () => {
+  const t = await boot({ documents: 1 });
+  const runtime = (globalThis as unknown as { chrome: { runtime: { sendMessage: (m: { type?: string }) => Promise<unknown> } } }).chrome.runtime;
+  runtime.sendMessage = async (m) => (t.send.push(m), m.type === 'dl-eng-add' ? undefined : { ok: true });
+  const { reply } = await t.post({ type: 'dl-add', items: [{ url: 'https://example.com/a.zip', source: 'manual' }] });
+  assert.equal((reply as { ok: boolean }).ok, false);
+  await sleep(30);
+  assert.equal(t.t.syncs, 1);
+});
+
+test('dl-sw-idle does not close the document while an add is in flight, and closes it once the add is over', async () => {
+  const t = await boot({ documents: 1 });
+  const runtime = (globalThis as unknown as { chrome: { runtime: { sendMessage: (m: { type?: string }) => Promise<unknown> } } }).chrome.runtime;
+  let answer!: () => void;
+  runtime.sendMessage = async (m) => {
+    t.send.push(m);
+    if (m.type === 'dl-eng-add') await new Promise<void>((r) => (answer = r));
+    return m.type === 'dl-eng-add' ? { ids: ['x'] } : { ok: true };
+  };
+  const adding = t.post({ type: 'dl-add', items: [{ url: 'https://example.com/a.zip', source: 'manual' }] });
+  await sleep(10);
+  assert.deepEqual((await t.post({ type: 'dl-sw-idle' })).reply, { ok: true });
+  assert.equal(t.t.closed, 0, 'the engine is persisting the record the read could not see');
+  answer();
+  assert.deepEqual((await adding).reply, { ok: true, ids: ['x'] });
+  // an idle whose read began before the add finished is just as unsafe
+  t.records = [];
+  await t.post({ type: 'dl-sw-idle' });
+  assert.equal(t.t.closed, 1);
+});
+
+test('dl-sw-idle skips the close when an add starts during its read', async () => {
+  const t = await boot({ documents: 1 });
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  t.router.io.records = async () => (await gate, []);
+  const idle = t.post({ type: 'dl-sw-idle' });
+  await sleep(5);
+  const adding = t.post({ type: 'dl-add', items: [{ url: 'https://example.com/a.zip', source: 'manual' }] });
+  await sleep(5);
+  release();
+  await idle;
+  await adding;
+  assert.equal(t.t.closed, 0);
+});
+
+test('alarm handlers: dl-watchdog also resends finished saves the engine never heard about; dl-schedule does not', async () => {
+  const t = await boot({ documents: 1 });
+  t.t.recovers = 0;
+  t.onAlarm[0]({ name: ALARM_SCHEDULE });
+  await sleep(20);
+  assert.equal(t.t.recovers, 0);
+  t.onAlarm[0]({ name: ALARM_WATCHDOG });
+  await sleep(20);
+  assert.equal(t.t.recovers, 1);
 });
 
 test('serialisation: three overlapping reconcile calls never overlap in the rule sync or in ensureEngine', async () => {

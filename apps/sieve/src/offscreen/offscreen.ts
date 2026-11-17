@@ -67,7 +67,7 @@ function onWorkerMessage(m: WorkerMessage) {
   }
 }
 
-// One blob URL per record while its save runs; revoked when the save is done or failed.
+// One blob URL per record while its save runs; revoked when the save is done or failed, or the worker did not start it.
 const blobUrls = new Map<string, string>();
 
 // The blob's type is set because with none Chrome picked .txt for clip.mp4 (the raw-Chrome e2e); a slice still reads from disk.
@@ -81,8 +81,12 @@ async function prepareSave({ id, path, size }: { id: string; path: string; size:
     if (size !== null && file.size !== size) return { ok: false, message: 'FILE_TOO_SHORT' };
     const blobUrl = blobUrls.get(id) ?? URL.createObjectURL(file.slice(0, file.size, 'application/octet-stream'));
     blobUrls.set(id, blobUrl);
-    const reply = await chrome.runtime.sendMessage({ type: 'dl-sw-save', id, blobUrl, path, size: file.size });
-    return reply?.ok ? { ok: true } : { ok: false, message: String(reply?.message ?? 'NO_REPLY') };
+    const reply = await chrome.runtime.sendMessage({ type: 'dl-sw-save', id, blobUrl, path, size: file.size }).catch((e: unknown) => ({ message: (e as Error)?.message ?? e }));
+    if (reply?.ok) return { ok: true };
+    // No save runs on this URL: an orphan Chrome download from a worker that died before replying must fail, not finish as a second copy.
+    URL.revokeObjectURL(blobUrl);
+    blobUrls.delete(id);
+    return { ok: false, message: String(reply?.message ?? 'NO_REPLY') };
   } catch (e) {
     return { ok: false, message: String((e as Error)?.message ?? e) };
   }

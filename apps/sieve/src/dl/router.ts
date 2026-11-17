@@ -2,13 +2,14 @@ import { CATEGORY_IDS, type DownloadSettings } from '@apps-hub/sieve-core/src/dl
 import type { AddItem, DlRecord } from '@apps-hub/sieve-core/src/dl-record.ts';
 import { T } from '@apps-hub/sieve-core/src/dl-text.ts';
 import { ALARM_SCHEDULE, ALARM_WATCHDOG, runnable, syncAlarms } from './alarms.ts';
-import { addRecords, closeEngine, engineExists, ensureEngine, fromExtensionPage, sendToEngine } from './engine-link.ts';
+import { addRecords, adds, closeEngine, engineExists, ensureEngine, fromExtensionPage, sendToEngine } from './engine-link.ts';
 import { readAllRecords } from './idb-store.ts';
 import { dropPendingRules, syncRecordRules } from './net-rules.ts';
+import { recoverSaves } from './save.ts';
 import { onDownloadsChanged, readDownloads } from './settings-store.ts';
 
 // The router holds no download state it cannot rebuild: every handler re-reads settings and records, so the worker can die between any two events.
-export const io = { records: readAllRecords, syncRules: syncRecordRules, dropRules: dropPendingRules };   // a seam for the unit test
+export const io = { records: readAllRecords, syncRules: syncRecordRules, dropRules: dropPendingRules, recoverSaves };   // a seam for the unit test
 const isHttp = (u: unknown) => {
   try {
     return typeof u === 'string' && /^https?:$/.test(new URL(u).protocol);
@@ -35,9 +36,8 @@ async function add(message: Record<string, unknown>): Promise<unknown> {
   const items = Array.isArray(message.items) && message.items.length >= 1 && message.items.length <= 500 ? message.items.map(cleanItem) : null;
   if (!items || items.includes(null)) return { ok: false, message: T.addFailed };
   const added = await addRecords(items as AddItem[]);
-  if (!added) return { ok: false, message: T.addFailed };
-  void reconcile().catch(logFailure);
-  return { ok: true, ids: added.ids };
+  void reconcile().catch(logFailure); // also after a lost reply: the engine may have stored the records
+  return added ? { ok: true, ids: added.ids } : { ok: false, message: T.addFailed };
 }
 
 async function act(message: Record<string, unknown>): Promise<unknown> {
@@ -52,8 +52,10 @@ async function act(message: Record<string, unknown>): Promise<unknown> {
 }
 
 async function idle(): Promise<unknown> {
+  const before = { ...adds };
   const [settings, records] = await Promise.all([readDownloads(), io.records()]);
-  if (!runnable(records, settings, new Date())) await closeEngine();
+  // An add that ran during the read may hold a record the read missed; closing would also drop its reply.
+  if (before.running === 0 && adds.started === before.started && !runnable(records, settings, new Date())) await closeEngine();
   return { ok: true };
 }
 
@@ -123,6 +125,8 @@ function onMessage(message: unknown, sender: chrome.runtime.MessageSender, sendR
 
 async function onAlarm(alarm: chrome.alarms.Alarm): Promise<void> {
   if (alarm.name !== ALARM_WATCHDOG && alarm.name !== ALARM_SCHEDULE) return;
+  // A save whose terminal event never reached the engine is sent again within a minute, not only at the next worker start.
+  if (alarm.name === ALARM_WATCHDOG) void io.recoverSaves().catch(logFailure);
   await reconcile().catch(logFailure);
   // Windows are re-evaluated within a minute even if a schedule alarm was lost.
   if (await engineExists()) await sendToEngine({ type: 'dl-eng-tick' });

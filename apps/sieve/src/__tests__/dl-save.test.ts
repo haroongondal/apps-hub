@@ -50,7 +50,7 @@ function setup(options: { download?: (o: Record<string, unknown>, session: Map<s
 let n = 0;
 const load = () => import(`../dl/save.ts?fresh=${++n}`) as Promise<typeof import('../dl/save.ts')>;
 const msg = (over: Record<string, unknown> = {}) => ({ type: 'dl-sw-save', id: 'd1', blobUrl: BLOB, path: 'Archives/a.zip', size: 100, ...over });
-const entry = (over: Record<string, unknown> = {}) => ({ id: 'd1', size: 100, path: 'Archives/a.zip', chromeId: null, state: 'pending', filename: null, error: null, ...over });
+const entry = (over: Record<string, unknown> = {}) => ({ id: 'd1', size: 100, path: 'Archives/a.zip', chromeId: null, ...over });
 const settle = () => new Promise((r) => setTimeout(r, 20));
 const events = (c: { sent: Record<string, unknown>[] }) => c.sent.filter((m) => m.type === 'dl-eng-save-event').map(({ type: _t, ...e }) => e);
 
@@ -105,13 +105,35 @@ test('onSave starts no second download for a record whose save is running or com
   const { onSave } = await load();
   const first = await onSave(msg(), OFFSCREEN as never);
   assert.deepEqual(await onSave(msg(), OFFSCREEN as never), first);
-  env.items.get(7)!.state = 'complete';
+  Object.assign(env.items.get(7)!, { state: 'complete', fileSize: 100 });
   assert.deepEqual(await onSave(msg({ blobUrl: `${BLOB}2` }), OFFSCREEN as never), first);
   assert.equal(env.calls.download.length, 1);
   // an interrupted one is replaced, and its stale entry is dropped
   env.items.get(7)!.state = 'interrupted';
   assert.deepEqual(await onSave(msg({ blobUrl: `${BLOB}3` }), OFFSCREEN as never), { ok: true, chromeId: 8 });
   assert.deepEqual([...env.session.keys()], [`dlSave:${BLOB}3`]);
+});
+
+test('onSave for a record whose Chrome save already completed sends done again (the first done never reached the engine)', async () => {
+  const env = setup();
+  const { onSave } = await load();
+  env.items.set(9, { id: 9, url: BLOB, state: 'complete', filename: '/dl/a.zip', fileSize: 100 });
+  env.session.set(`dlSave:${BLOB}`, entry({ chromeId: 9 }));
+  assert.deepEqual(await onSave(msg({ blobUrl: `${BLOB}2` }), OFFSCREEN as never), { ok: true, chromeId: 9 });
+  await settle();
+  assert.deepEqual(events(env.calls), [{ id: 'd1', kind: 'done', filename: '/dl/a.zip', chromeId: 9 }]);
+  assert.equal(env.session.size, 0);
+  assert.equal(env.calls.download.length, 0);
+});
+
+test('onSave replaces a completed Chrome save of the wrong size instead of reporting it forever', async () => {
+  const env = setup();
+  const { onSave } = await load();
+  env.items.set(9, { id: 9, url: BLOB, state: 'complete', filename: '/dl/a.zip', fileSize: 60 });
+  env.session.set(`dlSave:${BLOB}`, entry({ chromeId: 9 }));
+  assert.deepEqual(await onSave(msg({ blobUrl: `${BLOB}2` }), OFFSCREEN as never), { ok: true, chromeId: 7 });
+  assert.equal(env.calls.download.length, 1);
+  assert.deepEqual([...env.session.keys()], [`dlSave:${BLOB}2`]);
 });
 
 test('onSave: two concurrent identical messages make one download', async () => {
@@ -243,4 +265,19 @@ test('initSave sends what Chrome finished while the worker was gone', async () =
   await settle();
   assert.deepEqual(events(env.calls), [{ id: 'i', kind: 'done', filename: '/h', chromeId: 40 }]);
   assert.equal(env.session.size, 0);
+});
+
+test('recoverSaves sends no failure for a dead entry when a new save of that record starts while it looks', async () => {
+  const env = setup({ download: async () => { await settle(); return 5; } });
+  const { onSave, recoverSaves } = await load();
+  env.session.set(`dlSave:${BLOB}old`, entry());
+  const downloads = (globalThis as unknown as { chrome: { downloads: { search: (q: object) => Promise<unknown[]> } } }).chrome.downloads;
+  const search = downloads.search;
+  downloads.search = async (q) => (await new Promise((r) => setTimeout(r, 10)), search(q));
+  const recovering = recoverSaves();
+  await new Promise((r) => setTimeout(r, 2));
+  const saving = onSave(msg(), OFFSCREEN as never); // the Resume that woke the worker
+  await recovering;
+  await saving;
+  assert.deepEqual(events(env.calls), [], 'the engine must not fail a record whose new save is running');
 });

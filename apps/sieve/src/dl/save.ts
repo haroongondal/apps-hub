@@ -4,7 +4,7 @@
 // 2.5 GiB OPFS file with fileSize equal to the file and no memory growth; `onCreated` for it has no byExtensionId (a `search` afterwards does).
 import { sendToEngine, fromExtensionPage } from './engine-link.ts';
 
-export interface SaveEntry { id: string; size: number; path: string; chromeId: number | null; state: 'pending' | 'complete' | 'interrupted'; filename: string | null; error: string | null }
+export interface SaveEntry { id: string; size: number; path: string; chromeId: number | null } // Chrome's item holds the rest
 type Reply = { ok: true; chromeId: number } | { ok: false; message: string };
 type Event = { id: string; kind: 'path'; filename: string; chromeId: number } | { id: string; kind: 'done'; filename: string; chromeId: number } | { id: string; kind: 'failed'; error: string };
 
@@ -46,11 +46,15 @@ async function start(id: string, blobUrl: string, path: string, size: number): P
       if (e.id !== id) continue;
       if (e.chromeId !== null) {
         const [item] = await chrome.downloads.search({ id: e.chromeId });
-        if (item && (item.state === 'in_progress' || item.state === 'complete')) return { ok: true, chromeId: e.chromeId };
+        if (item?.state === 'in_progress') return { ok: true, chromeId: e.chromeId };
+        if (item?.state === 'complete' && item.fileSize === e.size) {
+          void report(k, terminal(e, item)); // the entry is still here, so the engine never heard the done
+          return { ok: true, chromeId: e.chromeId };
+        }
       }
       await chrome.storage.session.remove(k); // a dead earlier attempt must not report a failure for this one
     }
-    const entry: SaveEntry = { id, size, path, chromeId: null, state: 'pending', filename: null, error: null };
+    const entry: SaveEntry = { id, size, path, chromeId: null };
     await chrome.storage.session.set({ [key]: entry });
     let chromeId: number;
     try {
@@ -101,22 +105,25 @@ async function onChanged(delta: chrome.downloads.DownloadDelta): Promise<void> {
 
 export async function recoverSaves(): Promise<void> {
   for (const [key, entry] of await entries()) {
-    if (inflight.has(entry.id)) continue; // onSave is still starting this one
+    // onSave is starting this record (checked again before each send: a Resume can start one while this looks)
+    const tell = (events: Event[]) => (inflight.has(entry.id) ? undefined : report(key, events));
+    if (inflight.has(entry.id)) continue;
     try {
       let chromeId = entry.chromeId;
       if (chromeId === null) {
         // the worker died between writing the entry and the reply to download()
         const [found] = await chrome.downloads.search({ url: key.slice(PREFIX.length) });
         if (!found) {
-          await report(key, [{ id: entry.id, kind: 'failed', error: 'NOT_STARTED' }]);
+          await tell([{ id: entry.id, kind: 'failed', error: 'NOT_STARTED' }]);
           continue;
         }
         chromeId = found.id;
+        if (inflight.has(entry.id)) continue; // a new save may have dropped this dead entry: do not write it back
         await chrome.storage.session.set({ [key]: { ...entry, chromeId } });
       }
       const [item] = await chrome.downloads.search({ id: chromeId });
-      if (!item) await report(key, [{ id: entry.id, kind: 'failed', error: 'INTERRUPTED' }]);
-      else await report(key, terminal(entry, item));
+      if (!item) await tell([{ id: entry.id, kind: 'failed', error: 'INTERRUPTED' }]);
+      else await tell(terminal(entry, item));
     } catch {
       // this entry stays for the next start
     }

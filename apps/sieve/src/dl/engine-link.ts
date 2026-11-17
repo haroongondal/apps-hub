@@ -53,8 +53,13 @@ export async function sendToEngine<T = unknown>(message: { type: `dl-eng-${strin
   }
 }
 
+// Adds begun and still running: the router must not close the document under one (a dl-sw-idle can race a dl-add or a take-over).
+export const adds = { started: 0, running: 0 };
+
 export async function addRecords(items: AddItem[]): Promise<{ ids: string[] } | null> {
   let extras: { url: string; finalUrl?: string; referrer: string }[] = [];
+  adds.started++;
+  adds.running++;
   try {
     extras = items.map((i) => ({ url: i.url, finalUrl: i.probed?.finalUrl, referrer: i.referrer ?? '' }));
     await syncRecordRules(extras);
@@ -63,6 +68,7 @@ export async function addRecords(items: AddItem[]): Promise<{ ids: string[] } | 
   } catch {
     return null;
   } finally {
+    adds.running--;
     dropPendingRules(extras);
   }
 }

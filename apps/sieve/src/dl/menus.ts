@@ -1,4 +1,3 @@
-import type { DownloadSettings } from '@apps-hub/sieve-core/src/dl-settings.ts';
 import { T } from '@apps-hub/sieve-core/src/dl-text.ts';
 import { parseAddInput } from '@apps-hub/sieve-core/src/dl-view.ts';
 import { fromExtensionPage } from './engine-link.ts';
@@ -12,15 +11,18 @@ export const MENU_PAGE = 'dl-page';
 type Info = { menuItemId: string | number; linkUrl?: string; selectionText?: string; pageUrl?: string; frameId?: number };
 type TabLike = { id?: number; url?: string };
 
-// One chain: a rebuild waits for the previous one, so overlapping calls cannot create an item twice.
+// One chain: a rebuild waits for the previous one, so overlapping calls cannot create an item twice,
+// and it reads the settings when its turn comes, so an older read cannot win over a newer change.
 let chain: Promise<void> = Promise.resolve();
-export function rebuildMenus(settings: DownloadSettings): Promise<void> {
+const checked = () => void chrome.runtime.lastError; // a duplicate id would otherwise be an unchecked lastError
+export function rebuildMenus(): Promise<void> {
   const next = chain.then(async () => {
+    const settings = await readDownloads();
     await chrome.contextMenus.removeAll();
     if (!settings.on) return;
-    chrome.contextMenus.create({ id: MENU_LINK, title: T.ctxLink, contexts: ['link'] });
-    chrome.contextMenus.create({ id: MENU_SELECTION, title: T.ctxSelection, contexts: ['selection'] });
-    chrome.contextMenus.create({ id: MENU_PAGE, title: T.ctxPage, contexts: ['page', 'frame'] });
+    chrome.contextMenus.create({ id: MENU_LINK, title: T.ctxLink, contexts: ['link'] }, checked);
+    chrome.contextMenus.create({ id: MENU_SELECTION, title: T.ctxSelection, contexts: ['selection'] }, checked);
+    chrome.contextMenus.create({ id: MENU_PAGE, title: T.ctxPage, contexts: ['page', 'frame'] }, checked);
   });
   chain = next.catch(() => {});
   return next;
@@ -60,18 +62,20 @@ export async function onMenuClicked(info: Info, tab: TabLike | undefined): Promi
 
 export function initMenus(): void {
   chrome.contextMenus.onClicked.addListener((info, tab) => void onMenuClicked(info, tab).catch((e) => console.error('Sieve menu click failed', e)));
-  const rebuild = (s: DownloadSettings) => void rebuildMenus(s).catch((e) => console.error('Sieve could not build the menus', e));
-  chrome.runtime.onInstalled.addListener(() => void readDownloads().then(rebuild));
+  const rebuild = () => void rebuildMenus().catch((e) => console.error('Sieve could not build the menus', e));
+  chrome.runtime.onInstalled.addListener(rebuild);
   onDownloadsChanged(rebuild);
   chrome.runtime.onMessage.addListener((m: unknown, sender, sendResponse) => {
     const msg = m as Record<string, unknown> | null;
     if (msg?.type !== 'dl-menu-click' || !fromExtensionPage(sender)) return false;
-    const info = { menuItemId: msg.menuItemId, linkUrl: msg.linkUrl, selectionText: msg.selectionText, pageUrl: msg.pageUrl, frameId: msg.frameId } as Info;
-    onMenuClicked(info, { id: msg.tabId as number | undefined, url: msg.pageUrl as string | undefined }).then(
+    const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
+    const num = (v: unknown) => (typeof v === 'number' ? v : undefined);
+    const info: Info = { menuItemId: str(msg.menuItemId) ?? '', linkUrl: str(msg.linkUrl), selectionText: str(msg.selectionText), pageUrl: str(msg.pageUrl), frameId: num(msg.frameId) };
+    onMenuClicked(info, { id: num(msg.tabId), url: info.pageUrl }).then(
       () => sendResponse({ ok: true }),
       () => sendResponse({ ok: false }),
     );
     return true;
   });
-  void readDownloads().then(rebuild, (e) => console.error('Sieve could not read the download settings', e));
+  rebuild();
 }

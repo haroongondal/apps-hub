@@ -17,6 +17,7 @@ function setup(options: { on?: boolean; result?: unknown[]; reject?: boolean; ta
   const calls = { reload: [] as unknown[], removeAll: 0, scripts: [] as { target: { tabId: number; frameIds: number[] } }[], created: [] as { url: string }[], updated: [] as unknown[], windows: [] as unknown[] };
   const session = new Map<string, unknown>();
   const messageListeners: Msg[] = [];
+  const state = { on: options.on ?? true, lastError: undefined as unknown };
   (globalThis as unknown as Record<string, unknown>).chrome = {
     contextMenus: {
       removeAll: async () => {
@@ -26,9 +27,10 @@ function setup(options: { on?: boolean; result?: unknown[]; reject?: boolean; ta
         items.length = 0;
         log.push('remove-end');
       },
-      create: (item: { id: string; title: string; contexts: string[] }) => {
-        log.push('create');
+      create: (item: { id: string; title: string; contexts: string[] }, done?: () => void) => {
+        log.push(done ? 'create' : 'create without a callback');
         items.push(item);
+        done?.(); // Chrome reports a duplicate id through runtime.lastError in this callback
       },
       onClicked: { addListener: (cb: unknown) => void onClicked.push(cb) },
     },
@@ -40,7 +42,7 @@ function setup(options: { on?: boolean; result?: unknown[]; reject?: boolean; ta
       },
     },
     storage: {
-      local: { get: async () => ({ downloads: { ...DEFAULT_DOWNLOADS, on: options.on ?? true } }) },
+      local: { get: async () => ({ downloads: { ...DEFAULT_DOWNLOADS, on: state.on } }) },
       session: { set: async (o: Record<string, unknown>) => void Object.entries(o).forEach(([k, v]) => session.set(k, v)) },
       onChanged: { addListener: (cb: (typeof onChanged)[number]) => void onChanged.push(cb) },
     },
@@ -50,9 +52,9 @@ function setup(options: { on?: boolean; result?: unknown[]; reject?: boolean; ta
       reload: async (id: number) => void calls.reload.push(id),
     },
     windows: { update: async (...a: unknown[]) => void calls.windows.push(a) },
-    runtime: { getURL: (p: string) => BASE + p, getContexts: async () => [{ tabId: -1, windowId: -1, documentUrl: `${BASE}offscreen.html` }, ...(options.tabs ?? []).map((x) => ({ tabId: x.id, windowId: x.windowId, documentUrl: `${BASE}downloads.html#add` }))], onInstalled: { addListener: (cb: unknown) => void onInstalled.push(cb) }, onMessage: { addListener: (cb: Msg) => void messageListeners.push(cb) } },
+    runtime: { get lastError() { return state.lastError; }, getURL: (p: string) => BASE + p, getContexts: async () => [{ tabId: -1, windowId: -1, documentUrl: `${BASE}offscreen.html` }, ...(options.tabs ?? []).map((x) => ({ tabId: x.id, windowId: x.windowId, documentUrl: `${BASE}downloads.html#add` }))], onInstalled: { addListener: (cb: unknown) => void onInstalled.push(cb) }, onMessage: { addListener: (cb: Msg) => void messageListeners.push(cb) } },
   };
-  return { items, calls, session, messageListeners, log, onClicked, onInstalled, onChanged };
+  return { items, calls, session, messageListeners, log, onClicked, onInstalled, onChanged, state };
 }
 
 test('normaliseLinks keeps http(s), normalises, deduplicates and caps', () => {
@@ -62,37 +64,84 @@ test('normaliseLinks keeps http(s), normalises, deduplicates and caps', () => {
 });
 
 test('rebuildMenus removes all first, creates three items when on, none when off, and is idempotent', async () => {
-  const { items, calls } = setup();
-  await rebuildMenus({ ...DEFAULT_DOWNLOADS, on: true });
+  const { items, calls, state } = setup();
+  await rebuildMenus();
   assert.equal(calls.removeAll, 1);
   assert.deepEqual(items, [
     { id: 'dl-link', title: T.ctxLink, contexts: ['link'] },
     { id: 'dl-selection', title: T.ctxSelection, contexts: ['selection'] },
     { id: 'dl-page', title: T.ctxPage, contexts: ['page', 'frame'] },
   ]);
-  await Promise.all([rebuildMenus({ ...DEFAULT_DOWNLOADS, on: true }), rebuildMenus({ ...DEFAULT_DOWNLOADS, on: true })]);
+  await Promise.all([rebuildMenus(), rebuildMenus()]);
   assert.equal(items.length, 3);
-  await rebuildMenus({ ...DEFAULT_DOWNLOADS, on: false });
+  state.on = false;
+  await rebuildMenus();
   assert.equal(items.length, 0);
 });
 
 test('overlapping rebuilds run one after the other and leave exactly three items', async () => {
   const { items, log } = setup();
-  const on = { ...DEFAULT_DOWNLOADS, on: true };
-  await Promise.all([rebuildMenus(on), rebuildMenus(on)]);
+  await Promise.all([rebuildMenus(), rebuildMenus()]);
   const one = ['remove-start', 'remove-end', 'create', 'create', 'create'];
   assert.deepEqual(log, [...one, ...one]);
   assert.equal(items.length, 3);
 });
 
+test('a rebuild reads the settings when its turn comes: a rebuild queued before a change cannot win over it', async () => {
+  const { items, state } = setup();
+  const first = rebuildMenus(); // still removing when the setting changes
+  state.on = false;
+  await Promise.all([first, rebuildMenus()]);
+  assert.equal(items.length, 0);
+});
+
+test('every menu item is created with a callback, so a duplicate id is a checked lastError and not an uncaught one', async () => {
+  const { log, state } = setup();
+  state.lastError = { message: 'Cannot create item with duplicate id dl-link' };
+  await rebuildMenus();
+  assert.deepEqual(log.filter((x) => x.startsWith('create')), ['create', 'create', 'create']);
+});
+
+test('the install listener rebuilds and a failing settings read there is caught', async () => {
+  const { items, onInstalled } = setup();
+  initMenus();
+  await new Promise((r) => setTimeout(r, 30));
+  const chromeStorage = (globalThis as unknown as { chrome: { storage: { local: { get: () => Promise<unknown> } } } }).chrome.storage.local;
+  chromeStorage.get = async () => { throw new Error('storage gone'); };
+  const unhandled: unknown[] = [];
+  const onUnhandled = (e: unknown) => void unhandled.push(e);
+  process.on('unhandledRejection', onUnhandled);
+  const errors = console.error;
+  console.error = () => {};
+  try {
+    (onInstalled[0] as () => void)();
+    await new Promise((r) => setTimeout(r, 30));
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+    console.error = errors;
+  }
+  assert.deepEqual(unhandled, []);
+  assert.equal(items.length, 3, 'the menus built at start stay');
+});
+
+test('the dl-menu-click hook ignores fields of the wrong type instead of storing or throwing on them', async () => {
+  const { messageListeners, session } = setup();
+  initMenus();
+  const send = (msg: unknown) => new Promise<unknown>((resolve) => void messageListeners.some((l) => l(msg, { url: `${BASE}options.html` }, resolve)));
+  assert.deepEqual(await send({ type: 'dl-menu-click', menuItemId: 'dl-link', linkUrl: 'https://x.com/a.zip', pageUrl: 5, tabId: 1 }), { ok: true });
+  assert.deepEqual(session.get('dlPrefill'), { urls: ['https://x.com/a.zip'], referrer: '' }, 'a non-string pageUrl is no referrer');
+  assert.deepEqual(await send({ type: 'dl-menu-click', menuItemId: 'dl-selection', selectionText: { toString: 1 }, tabId: 'x' }), { ok: true });
+});
+
 test('initMenus registers the click and install listeners and rebuilds when downloads.on changes', async () => {
-  const { items, calls, onClicked, onInstalled, onChanged } = setup();
+  const { items, calls, onClicked, onInstalled, onChanged, state } = setup();
   initMenus();
   await new Promise((r) => setTimeout(r, 30));
   assert.equal(onClicked.length, 1);
   assert.equal(onInstalled.length, 1);
   assert.equal(items.length, 3); // built once at worker start
   const before = calls.removeAll;
+  state.on = false;
   for (const cb of onChanged) cb({ downloads: { newValue: { ...DEFAULT_DOWNLOADS, on: false } } }, 'local');
   await new Promise((r) => setTimeout(r, 30));
   assert.equal(calls.removeAll, before + 1);
