@@ -1,5 +1,5 @@
 import DesignMedia from 'design-media';
-import { Button, Empty, Field, Header, Notice, Progress, Screen, Sheet, Text, space } from '@apps-hub/ui';
+import { Button, Empty, Field, Header, Notice, Progress, Screen, Segmented, Sheet, Text, space } from '@apps-hub/ui';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Image, Linking, View, useWindowDimensions } from 'react-native';
@@ -7,6 +7,7 @@ import { Alert, AppState, Image, Linking, View, useWindowDimensions } from 'reac
 import { plainError } from '../../src/media/errors';
 import { isBusy, useQueue } from '../../src/media/queue';
 import { askForPhotos, checkPhotos, type Access } from '../../src/photos/access';
+import { CleanupOverview } from '../../src/photos/CleanupOverview';
 import { PhotoGrid } from '../../src/photos/PhotoGrid';
 import { getSearchTool } from '../../src/photos/search-tool';
 import { realSearchToolDeps } from '../../src/photos/search-tool-deps';
@@ -18,6 +19,7 @@ type IndexState = Awaited<ReturnType<typeof DesignMedia.photoIndexState>>;
 const release = () => { DesignMedia.releasePhotoSearch().catch(() => undefined); };
 
 const say = (e: unknown) => Alert.alert('Something went wrong', plainError(e, 'Try again.'));
+const VIEWS = [{ key: 'search', label: 'Search' }, { key: 'cleanup', label: 'Clean up' }] as const;
 const intro = { title: 'Find photos by describing them', body: 'Type a few words, like dog on the beach, and see matching photos. Everything stays on your phone.' };
 
 export default function PhotosTab() {
@@ -37,6 +39,7 @@ export default function PhotosTab() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [similar, setSimilar] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
+  const [mode, setMode] = useState<'search' | 'cleanup'>('search');
   const request = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const preview = useWindowDimensions().width - 2 * space.lg;
@@ -229,12 +232,28 @@ export default function PhotosTab() {
     );
   }
 
-  const header = (
-    <View style={{ paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: space.md, gap: space.xl }}>
+  const top = (
+    <>
       <Header
         title="Photos"
         trailing={job ? undefined : <Button label="Scan now" variant="ghost" onPress={() => { DesignMedia.startPhotoIndex().catch(say); }} accessibilityHint="Looks for new photos to search" />}
       />
+      <Segmented options={VIEWS} value={mode} onChange={setMode} accessibilityLabel="Photos view" />
+    </>
+  );
+
+  if (mode === 'cleanup') {
+    return (
+      <Screen scroll>
+        {top}
+        <CleanupOverview lastScan={index.lastScan} scanning={!!job} access={access} onChangeAccess={ask} />
+      </Screen>
+    );
+  }
+
+  const header = (
+    <View style={{ paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: space.md, gap: space.xl }}>
+      {top}
       {similar ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
           <Text variant="bodyStrong" style={{ flex: 1 }}>More like this</Text>
