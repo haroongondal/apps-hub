@@ -1,3 +1,4 @@
+import { plainError } from '../media/errors.ts';
 import type { SearchToolResult } from '../photos/search-tool.ts';
 import { visionToolMessage, type VisionTool } from '../photos/vision-tool.ts';
 
@@ -26,12 +27,19 @@ export interface VisionHostDeps {
 
 const OPTIONS: Record<VisionOp, string[]> = { cutout: ['person', 'object'], upscale: ['2', '4'] };
 const NOT_STARTED = "This change didn't start properly. Try again.";
+const DID_NOT_WORK = "This tool didn't work on this image. Try again.";
+// plainError keeps a bare file path (FileNotFoundException's message); no sentence of ours has a slash
+const plain = (err: unknown) => {
+  const text = plainError(err, DID_NOT_WORK);
+  return /[/\\]/.test(text) ? DID_NOT_WORK : text;
+};
 
 export function createVisionHost(d: VisionHostDeps) {
   const pieces = new Map<string, string[]>();
   const results = new Map<string, { uri: string; bytes: number }>();
   const running = new Set<string>();
   const cancelled = new Set<string>();
+  const swept = d.remove(d.dir).catch(() => {});
   const src = (id: string) => `${d.dir}${id}.src`;
   const checkId = (id: unknown): string => {
     if (typeof id !== 'string' || !VISION_ID.test(id)) throw new Error(NOT_STARTED);
@@ -84,6 +92,7 @@ export function createVisionHost(d: VisionHostDeps) {
         if (!parts || chunks < 1 || parts.length !== chunks || parts.includes(undefined as unknown as string)) {
           throw new Error("The image didn't arrive in full. Try again.");
         }
+        await swept;
         await d.makeDir();
         await d.writeBase64(src(id), parts.join(''));
         if (cancelled.has(id)) return null;
@@ -113,7 +122,7 @@ export function createVisionHost(d: VisionHostDeps) {
         return { bytes };
       } catch (err) {
         await drop(id);
-        throw err;
+        throw new Error(plain(err));
       } finally {
         sub.remove();
         running.delete(id);
@@ -132,7 +141,7 @@ export function createVisionHost(d: VisionHostDeps) {
         return { data, done };
       } catch (err) {
         await drop(id);
-        throw err;
+        throw new Error(plain(err));
       }
     },
 

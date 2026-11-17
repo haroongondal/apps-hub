@@ -747,7 +747,11 @@ type WebCommand =
   pieces of the result until `done`. Progress comes back as the `visionProgress` command
   (`download` or `run`). Ids are `v` + time + random, `[A-Za-z0-9_-]{1,64}`.
 - Cleanup: the `.src` file is deleted after every run, the result after its last piece is read;
-  `visionCancel`, any error and leaving the editor delete the source, the result and held pieces.
+  `visionCancel`, any error and leaving the editor delete the source, the result and held pieces;
+  a new editor screen sweeps `cacheDirectory/vision/` once, for files left by a killed app. The
+  page refuses a result whose length differs from `bytes`. A model download cannot be stopped
+  midway: a cancel during a first-use download resolves at once, but the next change can start
+  only after that download finishes.
 - This replaces "file path, never base64" (quick-edits design) and "photos never cross the
   bridge" (above) for vision only (owner decision 2026-11-18): the page has no file route and its
   CSP loads images only from `data:` and `blob:`. App side: `src/editor/vision-host.ts`

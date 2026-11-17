@@ -5,22 +5,23 @@ import { createVisionHost, PIECE_BYTES, VISION_ID, type VisionHostDeps, type Vis
 
 const DIR = 'file:///cache/vision/';
 
-function fake(opts: { tool?: SearchToolResult; out?: Buffer; runFails?: Error; readFails?: boolean; onRun?: () => Promise<void>; onTool?: (p: (f: number) => void) => Promise<void> } = {}) {
+function fake(opts: { tool?: SearchToolResult; out?: Buffer; runFails?: Error; readFails?: Error | boolean; onRun?: () => Promise<void>; onTool?: (p: (f: number) => void) => Promise<void> } = {}) {
   const files = new Map<string, Buffer>();
   const sent: VisionProgress[] = [];
-  const calls = { writes: 0, runs: [] as string[][], cancels: [] as string[] };
+  const calls = { writes: 0, runs: [] as string[][], cancels: [] as string[], tools: [] as string[], removes: [] as string[] };
   let progress: ((e: { id: string; fraction: number }) => void) | null = null;
   const deps: VisionHostDeps = {
     dir: DIR,
     makeDir: async () => {},
     async writeBase64(uri, b64) { calls.writes++; files.set(uri, Buffer.from(b64, 'base64')); },
     async readBase64(uri, position, length) {
-      if (opts.readFails) throw new Error('Could not read the file.');
+      if (opts.readFails) throw opts.readFails === true ? new Error('Could not read the file.') : opts.readFails;
       return files.get(uri)!.subarray(position, position + length).toString('base64');
     },
     size: async uri => files.get(uri)!.length,
-    remove: async uri => { files.delete(uri); },
-    async getTool(_tool, onProgress) {
+    remove: async uri => { calls.removes.push(uri); files.delete(uri); },
+    async getTool(tool, onProgress) {
+      calls.tools.push(tool);
       if (opts.onTool) await opts.onTool(onProgress);
       else onProgress(1);
       return opts.tool ?? 'ready';
@@ -67,6 +68,7 @@ test('aRoundTripRebuildsBothFilesByteForByteAndLeavesNothing', async () => {
   assert.deepEqual(await f.host.run('v1', 'cutout', 'person', n), { bytes: out.length });
   assert.equal(f.calls.writes, 1, 'the source is written once');
   assert.deepEqual(f.calls.runs, [['v1', 'cutout', '/cache/vision/v1.src', 'person']]);
+  assert.deepEqual(f.calls.tools, ['person']);
   assert.ok(!f.files.has(`${DIR}v1.src`), 'the source is deleted after the run');
   assert.deepEqual(f.sent, [{ id: 'v1', phase: 'run', fraction: 0.5 }], 'only this run\'s progress is relayed');
   assert.equal(f.listening(), false, 'progress listener removed');
@@ -87,6 +89,8 @@ test('downloadProgressIsRelayedOnlyForARealDownload', async () => {
   const f = fake({ onTool: async p => { p(0.25); p(1); } });
   send(f.host, 'v2', Buffer.from('img'));
   await f.host.run('v2', 'upscale', '4', 1);
+  assert.deepEqual(f.calls.tools, ['upscale']);
+  assert.deepEqual(f.calls.runs, [['v2', 'upscale', '/cache/vision/v2.src', '4']]);
   assert.deepEqual(f.sent.filter(s => s.phase === 'download'), [
     { id: 'v2', phase: 'download', fraction: 0.25 },
     { id: 'v2', phase: 'download', fraction: 1 },
@@ -191,4 +195,32 @@ test('disposeCancelsAndCleansEverythingStillHeld', async () => {
   assert.deepEqual(f.calls.cancels.sort(), ['v14', 'v15']);
   assert.equal(f.files.size, 0);
   assert.equal(await f.host.run('v15', 'cutout', 'person', 1), null);
+});
+
+const wrapped = (cause: string) => new Error(`Call to function 'DesignMedia.runVision' has been rejected.\n→ Caused by: ${cause}`);
+
+test('nativeErrorsReachThePageAsPlainWords', async () => {
+  const f = fake({ runFails: wrapped('This image is already as big as it can be.') });
+  send(f.host, 'v16', Buffer.from('img'));
+  await assert.rejects(f.host.run('v16', 'upscale', '4', 1), { message: 'This image is already as big as it can be.' });
+  const g = fake({ runFails: new Error('java.lang.IllegalArgumentException: x') });
+  send(g.host, 'v17', Buffer.from('img'));
+  await assert.rejects(g.host.run('v17', 'upscale', '4', 1), { message: 'x' }, 'the class name is stripped');
+  const h = fake({ runFails: new Error('Error: java.lang.NullPointerException') });
+  send(h.host, 'v18', Buffer.from('img'));
+  await assert.rejects(h.host.run('v18', 'cutout', 'person', 1), { message: "This tool didn't work on this image. Try again." });
+  const r = fake({ readFails: wrapped('java.io.FileNotFoundException: /data/user/0/x/cache/vision/v19.png') });
+  send(r.host, 'v19', Buffer.from('img'));
+  await r.host.run('v19', 'cutout', 'person', 1);
+  await assert.rejects(r.host.read('v19', 0), { message: "This tool didn't work on this image. Try again." });
+  assert.equal(r.files.size, 0);
+});
+
+test('aNewHostSweepsTheVisionFolderOnce', async () => {
+  const f = fake();
+  send(f.host, 'v20', Buffer.from('img'));
+  await f.host.run('v20', 'cutout', 'person', 1);
+  await f.host.read('v20', 0);
+  assert.equal(f.calls.removes.filter(u => u === DIR).length, 1);
+  assert.equal(f.calls.removes[0], DIR, 'swept before anything else');
 });
