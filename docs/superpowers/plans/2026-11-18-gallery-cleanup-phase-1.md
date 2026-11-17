@@ -96,7 +96,7 @@ MediaStore columns and launches `MediaStore.createTrashRequest` from the current
   (`getRGB`), assert sha256(grey) == `grey_sha256`, `"%016x".format(dhash)` == `dhash`, brightness within 1e-12 relative,
   laplacianVar within 1e-9 relative (the `close` rule in Bench.java). `oddGreyMatchesU8`: grey of odd.png equals the bytes of odd.u8.
   `pairsAndAspect`: hamming for each `pairs` entry equals the stored value; `aspectClose` for each `aspect` entry equals `close`.
-  `thumb512SizeFollowsRef`: (4000,3000)→(512,384), (300,200)→(300,200), (5000,3)→(512,1), (511,1024)→(255,512).
+  `thumb512SizeFollowsRef`: (4000,3000)→(512,384), (300,200)→(300,200), (5000,3)→(512,1), (511,1024)→(256,512).
 - [ ] Step 2: run, see them fail. Step 3: implement. Step 4: run `:design-media:testDebugUnitTest --tests '*CleanupScoresTest'` (under the
   `gradle` filelock), PASS. Step 5: commit (pathspec).
 
