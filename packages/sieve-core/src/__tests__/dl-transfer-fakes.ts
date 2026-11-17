@@ -92,6 +92,7 @@ export class FakeFiles implements Files {
       },
       flush: () => { me.log.push({ op: 'flush', t: me.clock.t }); },
       size: () => me.data.get(name)!.length - me.shortBy,
+      truncate: (n: number) => { const b = me.data.get(name)!; const next = new Uint8Array(n); next.set(b.subarray(0, Math.min(n, b.length))); me.data.set(name, next); },
       close: () => { closed = true; me.log.push({ op: 'close', t: me.clock.t }); },
     };
   }

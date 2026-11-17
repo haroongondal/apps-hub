@@ -97,7 +97,7 @@ export function fakeFiles(names: string[] = []): FakeFiles {
       const cur = had ?? new Uint8Array(0);
       const bytes = length === null ? cur : new Uint8Array(length);
       f.map.set(name, bytes);
-      const h: FileHandle = { existingSize: had?.length ?? null, write() {}, flush() {}, size: () => bytes.length, close() {} };
+      const h: FileHandle = { existingSize: had?.length ?? null, write() {}, flush() {}, size: () => bytes.length, truncate() {}, close() {} };
       return h;
     },
     async exists(name) {

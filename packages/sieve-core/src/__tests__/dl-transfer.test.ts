@@ -421,6 +421,16 @@ test('12b resume with a truncated part file keeps what is below the cut; one tha
   assertFile(ok.s.files, 10 * MiB);
 });
 
+test('unknown size without ranges: a restart that ends shorter than the earlier attempt leaves no stale tail', async () => {
+  const s = setup();
+  s.net.add(U, { size: 4 * MiB, lengthKnown: false, ranges: false });
+  s.files.data.set(PART, new Uint8Array(6 * MiB).fill(7)); // an earlier attempt of a longer answer
+  const res = await s.run(rec(U, { rangeOk: false, parts: [{ start: 0, end: null, done: 6 * MiB }] }));
+  assert.equal(res.kind, 'done');
+  assert.equal(res.record.size, 4 * MiB);
+  assertFile(s.files, 4 * MiB); // the save checks file.size against the size: a 6 MiB file would fail FILE_TOO_SHORT on every Resume
+});
+
 test('12c unknown size: a file shorter than the written bytes resumes at its length, one that holds them resumes there', async () => {
   const requested = async (fileSize: number) => {
     const s = setup();

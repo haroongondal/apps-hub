@@ -46,6 +46,7 @@ export function createOpfsFiles(): Files {
         },
         flush: () => h.flush(),
         size: () => h.getSize(),
+        truncate: (n) => h.truncate(n),
         close: () => h.close(),
       };
     },

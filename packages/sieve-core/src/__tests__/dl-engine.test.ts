@@ -355,25 +355,26 @@ test('transfer failure keeps the error and parts', async () => {
 });
 
 test('start-up: restart, saving, done part, orphan sweep', async () => {
+  // live ids match the part-file pattern, so the sweep must tell them from the orphan by the records
   const records = [
-    rec('r1', { state: 'running', addedAt: 1 }),
+    rec('dr1', { state: 'running', addedAt: 1 }),
     rec('r2', { state: 'running', force: true, addedAt: 2 }),
-    rec('s1', { state: 'saving', saveOnly: true }),
+    rec('ds1', { state: 'saving', saveOnly: true }),
     rec('dn', { state: 'done' }),
   ];
-  const files = ['dn.part', 'dorphan.part', 'notes.txt', 'r1.part', 's1.part'];
+  const files = ['dn.part', 'dorphan.part', 'notes.txt', 'dr1.part', 'ds1.part'];
   const off = await makeRig({ records, files, settings: settingsWith({ on: false }) });
-  assert.equal(off.stored('r1')!.state, 'queued');
+  assert.equal(off.stored('dr1')!.state, 'queued');
   assert.equal(off.stored('r2')!.state, 'running', 'queued by the restart, then started because it is forced');
   assert.equal(off.stored('r2')!.force, true);
   assert.deepEqual(off.transfer.started(), ['r2']);
   assert.equal(off.host.saves.length, 1);
-  assert.equal(off.host.saves[0].id, 's1');
+  assert.equal(off.host.saves[0].id, 'ds1');
   assert.deepEqual(off.files.removed.sort(), ['dn.part', 'dorphan.part']);
-  assert.ok(off.files.map.has('notes.txt') && off.files.map.has('r1.part') && off.files.map.has('s1.part'));
+  assert.ok(off.files.map.has('notes.txt') && off.files.map.has('dr1.part') && off.files.map.has('ds1.part'));
 
   const on = await makeRig({ records, files });
-  assert.deepEqual(on.transfer.started().sort(), ['r1', 'r2']);
+  assert.deepEqual(on.transfer.started().sort(), ['dr1', 'r2']);
 });
 
 test('space: refusal and pass, partly done needs only the rest', async () => {

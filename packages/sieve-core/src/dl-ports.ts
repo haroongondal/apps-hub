@@ -14,6 +14,7 @@ export interface FileHandle {
   write(chunk: Uint8Array, at: number): void;              // throws on failure (disk full)
   flush(): void;
   size(): number;
+  truncate(length: number): void;                          // cuts (or grows) the file to exactly length bytes
   close(): void;
 }
 export interface Files {                                   // OPFS root

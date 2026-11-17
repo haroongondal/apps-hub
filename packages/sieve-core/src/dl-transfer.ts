@@ -357,6 +357,9 @@ export function createTransfer(deps: TransferDeps): Transfer {
         if (h && r.size !== null && h.size() < r.size) {
           r.error = ERRORS.length;
           result = { kind: 'failed', record: r, error: ERRORS.length };
+        } else if (h && r.size !== null && h.size() > r.size) {
+          // a no-range restart of an unknown size can end shorter than an earlier attempt: its tail is not this file
+          try { h.truncate(r.size); } catch { r.error = ERRORS.storage; result = { kind: 'failed', record: r, error: ERRORS.storage }; }
         }
         close();
         await persist();
