@@ -30,6 +30,7 @@ object PageProcessor {
   private const val DEFAULT_LONG_SIDE = 2339
   private const val BITS_LONG_SIDE = 3508
   private const val BITS_MAX_SCALE = 1.5
+  private const val EDGE_INSET = 0.004
   private val FILTERS = setOf("original", "auto", "gray", "bw")
 
   fun process(req: ProcessRequest): Map<String, Any?> {
@@ -98,7 +99,7 @@ object PageProcessor {
   }
 
   private fun warp(source: Bitmap, quadPx: DoubleArray, rotation: Int, w: Int, h: Int): Bitmap {
-    val from = PageGeometry.rotatedQuad(quadPx, rotation).map { it.toFloat() }.toFloatArray()
+    val from = PageGeometry.rotatedQuad(PageGeometry.insetQuad(quadPx, EDGE_INSET), rotation).map { it.toFloat() }.toFloatArray()
     val to = floatArrayOf(0f, 0f, w.toFloat(), 0f, w.toFloat(), h.toFloat(), 0f, h.toFloat())
     val matrix = Matrix()
     if (!matrix.setPolyToPoly(from, 0, to, 0, 4)) throw CodedException("invalid_quad", "These page corners can't be straightened.", null)

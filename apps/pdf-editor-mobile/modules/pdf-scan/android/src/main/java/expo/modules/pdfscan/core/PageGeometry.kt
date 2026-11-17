@@ -12,6 +12,14 @@ object PageGeometry {
     return DoubleArray(8) { i -> quad[((i / 2 - steps + 4) % 4) * 2 + i % 2] }
   }
 
+  /** Shrinks the quad about its centre so each edge moves in by `fraction` of the page, keeping the warp off the dark border. */
+  fun insetQuad(quad: DoubleArray, fraction: Double): DoubleArray {
+    val cx = (quad[0] + quad[2] + quad[4] + quad[6]) / 4
+    val cy = (quad[1] + quad[3] + quad[5] + quad[7]) / 4
+    val k = 1 - 2 * fraction
+    return DoubleArray(8) { i -> (if (i % 2 == 0) cx else cy) + (quad[i] - (if (i % 2 == 0) cx else cy)) * k }
+  }
+
   fun outputSize(quadPx: DoubleArray, rotation: Int, maxLongSide: Int, maxScale: Double = 1.0): Pair<Int, Int> {
     val q = rotatedQuad(quadPx, rotation)
     fun edge(a: Int, b: Int) = hypot(q[b * 2] - q[a * 2], q[b * 2 + 1] - q[a * 2 + 1])

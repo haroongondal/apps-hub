@@ -59,4 +59,30 @@ class PageGeometryTest {
       assertArrayEquals("rotation $r", viaFrame, mapped, 1e-12)
     }
   }
+
+  @Test fun insetMovesEachCornerInwardByTheFraction() {
+    val q = doubleArrayOf(100.0, 200.0, 1100.0, 200.0, 1100.0, 800.0, 100.0, 800.0)
+    val inset = PageGeometry.insetQuad(q, 0.004)
+    assertArrayEquals(doubleArrayOf(104.0, 202.4, 1096.0, 202.4, 1096.0, 797.6, 104.0, 797.6), inset, 1e-9)
+  }
+
+  @Test fun insetKeepsARectangleARectangle() {
+    val q = doubleArrayOf(0.0, 0.0, 3000.0, 0.0, 3000.0, 2000.0, 0.0, 2000.0)
+    val i = PageGeometry.insetQuad(q, 0.004)
+    assertEquals(i[0], i[6], 1e-9)
+    assertEquals(i[2], i[4], 1e-9)
+    assertEquals(i[1], i[3], 1e-9)
+    assertEquals(i[5], i[7], 1e-9)
+  }
+
+  @Test fun insetCommutesWithRotation() {
+    val q = doubleArrayOf(120.0, 80.0, 900.0, 140.0, 880.0, 700.0, 100.0, 650.0)
+    for (rotation in intArrayOf(0, 90, 180, 270)) {
+      assertArrayEquals(
+        PageGeometry.insetQuad(PageGeometry.rotatedQuad(q, rotation), 0.004),
+        PageGeometry.rotatedQuad(PageGeometry.insetQuad(q, 0.004), rotation),
+        1e-9,
+      )
+    }
+  }
 }
