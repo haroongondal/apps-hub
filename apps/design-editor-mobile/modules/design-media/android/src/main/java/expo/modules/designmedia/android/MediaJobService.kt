@@ -89,6 +89,7 @@ class MediaJobService : Service() {
         ACTION_CANCEL -> cancel(id)
         ACTION_CANCEL_ALL -> cancel(ALL)
         ACTION_RESUME -> record(QueueEvent.Resume)
+        ACTION_REMOVE -> record(QueueEvent.Remove(id))
         ACTION_CLEAR -> clear()
       }
       pump()
@@ -383,6 +384,7 @@ class MediaJobService : Service() {
     private const val ACTION_CANCEL_ALL = "expo.modules.designmedia.CANCEL_ALL"
     private const val ACTION_RESUME = "expo.modules.designmedia.RESUME"
     private const val ACTION_CLEAR = "expo.modules.designmedia.CLEAR"
+    private const val ACTION_REMOVE = "expo.modules.designmedia.REMOVE"
     private const val EXTRA_JOBS = "jobs"
     private const val EXTRA_CBR_ONLY = "cbrOnly"
     private const val EXTRA_ID = "id"
@@ -399,6 +401,8 @@ class MediaJobService : Service() {
     fun cancel(context: Context, id: String) = send(context, ACTION_CANCEL) { putExtra(EXTRA_ID, id) }
 
     fun resume(context: Context) = send(context, ACTION_RESUME)
+
+    fun remove(context: Context, id: String) = send(context, ACTION_REMOVE) { putExtra(EXTRA_ID, id) }
 
     fun clearQueue(context: Context) = send(context, ACTION_CLEAR)
 

@@ -99,6 +99,8 @@ class DesignMediaModule : Module() {
 
     AsyncFunction("resume") { MediaJobService.resume(context) }
 
+    AsyncFunction("removeJob") { id: String -> MediaJobService.remove(context, id) }
+
     AsyncFunction("clearQueue") { MediaJobService.clearQueue(context) }
 
     AsyncFunction("share") { uri: String -> Intents.share(context, Uri.parse(uri)) }

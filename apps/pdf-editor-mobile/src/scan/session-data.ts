@@ -31,6 +31,12 @@ export const newSession = (folderId: string | null, now: number): ScanSession =>
 
 export const newPage = (file: string, quad: Quad | null): SessionPage => ({ file, quad, rotation: 0, filter: 'auto' });
 
+/** The session without the page stored in [file]; the same session when there is no such page. */
+export function withoutPage(session: ScanSession, file: string): ScanSession {
+  if (!session.pages.some((p) => p.file === file)) return session;
+  return { ...session, pages: session.pages.filter((p) => p.file !== file) };
+}
+
 export const fileNameOf = (uri: string) => decodeURIComponent(uri.replace(/\/+$/, '').split('/').pop() ?? '');
 
 function parse(json: string | null): ScanSession | null {

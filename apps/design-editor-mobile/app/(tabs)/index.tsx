@@ -1,17 +1,22 @@
-import { Button, Group, Header, Notice, Row, Screen, Sheet } from '@apps-hub/ui';
+import { Button, Group, Header, Notice, Pill, RecordMenu, Row, Screen, Sheet, space } from '@apps-hub/ui';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
+import { View } from 'react-native';
 
 import {
+  clearAutosave,
+  deleteSavedDesign,
   designTitle,
   readAutosave,
   readDesignText,
   readSavedList,
+  renameSavedDesign,
   writeAutosave,
   type SavedDesign,
-} from "../../src/editor/files";
+} from '../../src/editor/files';
+import { RenameSheet } from '../../src/editor/RenameSheet';
 import { PAGE_SIZES, blankDesign } from '../../src/editor/pageSizes';
 import { plainError } from '../../src/media/errors';
 
@@ -22,20 +27,55 @@ export default function DesignsHome() {
   const [designs, setDesigns] = useState<SavedDesign[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [choosing, setChoosing] = useState(false);
+  const [renaming, setRenaming] = useState<SavedDesign | null>(null);
 
-  // Re-read whenever the tab gains focus: a save made in the editor shows up on return.
-  useFocusEffect(
-    useCallback(() => {
-      readAutosave().then(setResumable, e => setError(message(e)));
+  const reloadSaved = useCallback(
+    () =>
       readSavedList().then(
         list => setDesigns(list),
         e => {
           setDesigns([]);
           setError(message(e));
         },
-      );
-    }, []),
+      ),
+    [],
   );
+
+  // Re-read whenever the tab gains focus: a save made in the editor shows up on return.
+  useFocusEffect(
+    useCallback(() => {
+      readAutosave().then(setResumable, e => setError(message(e)));
+      void reloadSaved();
+    }, [reloadSaved]),
+  );
+
+  function discardResumable() {
+    void (async () => {
+      setError(null);
+      try {
+        await clearAutosave();
+        setResumable(null);
+      } catch (e) {
+        setError(message(e));
+      }
+    })();
+  }
+
+  function removeSaved(design: SavedDesign) {
+    void (async () => {
+      setError(null);
+      try {
+        await deleteSavedDesign(design.id);
+      } catch (e) {
+        setError(message(e));
+      } finally {
+        await reloadSaved();
+      }
+    })();
+  }
+
+  // The menu sheet must finish closing before the rename sheet opens, or one of them is dropped.
+  const afterMenu = (run: () => void) => () => void setTimeout(run, 300);
 
   function resume() {
     router.push({ pathname: '/editor', params: { name: designTitle(resumable?.filePath) } });
@@ -86,7 +126,7 @@ export default function DesignsHome() {
         const text = await readDesignText(design);
         if (!text) throw new Error('The design file is no longer on this phone.');
         await writeAutosave({ filePath: design.path, dirty: false, doc: text });
-        router.push({ pathname: '/editor', params: { name: designTitle(design.path) } });
+        router.push({ pathname: '/editor', params: { name: design.name } });
       } catch (e) {
         setError(message(e));
       }
@@ -101,8 +141,28 @@ export default function DesignsHome() {
       {resumable ? (
         <Group title="Continue" footer="Your last edits are always here, even without a save.">
           <Row
-            title={designTitle(resumable.filePath) + (resumable.dirty ? ' — not saved' : '')}
+            title={designTitle(resumable.filePath)}
             subtitle={resumable.dirty ? 'Pick up where you left off.' : 'All changes saved.'}
+            trailing={
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                {resumable.dirty ? <Pill label="Not saved" tone="warn" /> : null}
+                <RecordMenu
+                  title={designTitle(resumable.filePath)}
+                  actions={[
+                    {
+                      label: 'Discard',
+                      destructive: true,
+                      confirmTitle: resumable.dirty ? 'Discard these edits?' : 'Remove this shortcut?',
+                      confirmMessage: resumable.dirty
+                        ? 'Edits that were not saved are lost. Saved designs are not affected.'
+                        : 'The design stays in Saved designs.',
+                      confirmLabel: resumable.dirty ? 'Discard' : 'Remove',
+                      onPress: discardResumable,
+                    },
+                  ]}
+                />
+              </View>
+            }
             onPress={resume}
             accessibilityHint="Opens the editor with this design"
           />
@@ -125,6 +185,22 @@ export default function DesignsHome() {
               key={design.id}
               title={design.name}
               subtitle={new Date(design.added).toLocaleDateString()}
+              trailing={
+                <RecordMenu
+                  title={design.name}
+                  actions={[
+                    { label: 'Open', onPress: () => openSaved(design) },
+                    { label: 'Rename', onPress: afterMenu(() => setRenaming(design)) },
+                    {
+                      label: 'Delete',
+                      destructive: true,
+                      confirmTitle: `Delete \u201c${design.name}\u201d?`,
+                      confirmMessage: 'It leaves this list. The saved file in your Design Editor folder stays on your phone.',
+                      onPress: () => removeSaved(design),
+                    },
+                  ]}
+                />
+              }
               onPress={() => openSaved(design)}
               accessibilityHint="Opens this design in the editor"
             />
@@ -134,6 +210,17 @@ export default function DesignsHome() {
 
       {/* eslint-disable-next-line @typescript-eslint/no-require-imports -- dev-only: a release bundle drops the lab */}
       {__DEV__ ? require('../../src/lab/LabRow').LabRow() : null}
+      {renaming ? (
+        <RenameSheet
+          title="Rename design"
+          initial={renaming.name}
+          onSubmit={async name => {
+            await renameSavedDesign(renaming.id, name);
+            await reloadSaved();
+          }}
+          onClose={() => setRenaming(null)}
+        />
+      ) : null}
       <Sheet visible={choosing} onClose={() => setChoosing(false)} title="Choose a page size" doneLabel="Cancel" onDone={() => setChoosing(false)}>
         {PAGE_SIZES.map(([name, w, h]) => (
           <Row key={name} title={name} subtitle={`${w} × ${h}`} onPress={() => newDesign(w, h)} accessibilityHint="Starts a new design at this size" />

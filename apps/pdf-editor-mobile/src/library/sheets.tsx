@@ -1,5 +1,5 @@
-import type { Item, Tag } from '@apps-hub/library-core';
-import { Button, Field, Group, Notice, Row, Sheet, useTheme } from '@apps-hub/ui';
+import { LibraryError, type Item, type Tag } from '@apps-hub/library-core';
+import { Button, confirmAction, Field, Group, Notice, RecordMenu, Row, Sheet, useTheme } from '@apps-hub/ui';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useState } from 'react';
 
@@ -134,11 +134,13 @@ export function TagFilterSheet({
   tags,
   selected,
   onPick,
+  onManage,
   onClose,
 }: {
   tags: readonly Tag[];
   selected: string | null;
   onPick: (tagId: string | null) => void;
+  onManage: () => void;
   onClose: () => void;
 }) {
   return (
@@ -155,52 +157,89 @@ export function TagFilterSheet({
           />
         ))}
       </Group>
+      <Button label="Manage tags" variant="secondary" block onPress={onManage} />
     </Sheet>
   );
 }
 
-export type ItemAction = 'rename' | 'move' | 'tags' | 'share' | 'delete';
+// Waits for a closing sheet to finish, or one of the two modals is dropped.
+const afterSheet = (run: () => void) => setTimeout(run, 300);
 
-export function ItemSheet({
-  item,
-  onAction,
-  onClose,
-}: {
-  item: Item;
-  onAction: (action: ItemAction) => void;
-  onClose: () => void;
-}) {
-  return (
-    <Sheet visible title={item.title} onClose={onClose}>
-      <Group>
-        <Row title="Rename" leading={<RowIcon name="create-outline" />} onPress={() => onAction('rename')} />
-        <Row title="Move to folder" leading={<RowIcon name="folder-open-outline" />} onPress={() => onAction('move')} />
-        <Row title="Tags" leading={<RowIcon name="pricetag-outline" />} onPress={() => onAction('tags')} />
-        {item.kind === 'pdf' ? (
-          <Row title="Share PDF" leading={<RowIcon name="share-outline" />} onPress={() => onAction('share')} />
-        ) : null}
-      </Group>
-      <Button label="Delete" variant="danger" block onPress={() => onAction('delete')} />
-    </Sheet>
-  );
-}
+export function TagManageSheet({ onChanged, onClose }: { onChanged: () => void; onClose: () => void }) {
+  const [tags, setTags] = useState<Tag[] | null>(null);
+  const [renaming, setRenaming] = useState<Tag | null>(null);
+  const [error, setError] = useState<string | undefined>();
 
-export function FolderSheet({
-  onAction,
-  onClose,
-  name,
-}: {
-  name: string;
-  onAction: (action: 'rename' | 'move' | 'delete') => void;
-  onClose: () => void;
-}) {
+  const refresh = async () => {
+    setTags(await (await openLibrary()).listTags());
+    onChanged();
+  };
+  const run = (work: () => Promise<unknown>) =>
+    work().then(refresh, (err) => setError(errorMessage(err)));
+
+  useEffect(() => {
+    openLibrary()
+      .then((lib) => lib.listTags())
+      .then(setTags, (err) => setError(errorMessage(err)));
+  }, []);
+
+  const merge = (tag: Tag, name: string) =>
+    afterSheet(() =>
+      confirmAction({
+        title: `Merge into \u201c${name}\u201d?`,
+        message: `A tag with that name already exists. Items tagged \u201c${tag.name}\u201d get \u201c${name}\u201d instead, and \u201c${tag.name}\u201d is removed.`,
+        confirmLabel: 'Merge',
+        onConfirm: () => void run(async () => (await openLibrary()).renameTag(tag.id, name, { merge: true })),
+      }),
+    );
+
+  const rename = (tag: Tag) => async (name: string) => {
+    try {
+      await (await openLibrary()).renameTag(tag.id, name);
+      await refresh();
+    } catch (err) {
+      if (!(err instanceof LibraryError && err.code === 'duplicate_name')) throw err;
+      merge(tag, name.trim());
+    }
+  };
+
+  const actions = (tag: Tag) => [
+    { label: 'Rename', onPress: () => afterSheet(() => setRenaming(tag)) },
+    {
+      label: 'Delete',
+      destructive: true,
+      confirmTitle: `Delete the tag \u201c${tag.name}\u201d?`,
+      confirmMessage: `It is taken off ${plural(tag.itemCount, 'item')}. The items stay.`,
+      confirmLabel: 'Delete tag',
+      onPress: () => void run(async () => (await openLibrary()).deleteTag(tag.id)),
+    },
+  ];
+
   return (
-    <Sheet visible title={name} onClose={onClose}>
-      <Group>
-        <Row title="Rename" leading={<RowIcon name="create-outline" />} onPress={() => onAction('rename')} />
-        <Row title="Move to folder" leading={<RowIcon name="folder-open-outline" />} onPress={() => onAction('move')} />
-      </Group>
-      <Button label="Delete folder" variant="danger" block onPress={() => onAction('delete')} />
+    <Sheet visible title="Manage tags" onClose={onClose}>
+      {error ? <Notice tone="danger">{error}</Notice> : null}
+      {tags !== null && tags.length === 0 ? <Notice tone="neutral">No tags yet. Add one from an item&rsquo;s menu.</Notice> : null}
+      {tags !== null && tags.length > 0 ? (
+        <Group footer="Renaming or deleting a tag changes every item that has it.">
+          {tags.map((tag) => (
+            <Row
+              key={tag.id}
+              title={tag.name}
+              subtitle={plural(tag.itemCount, 'item')}
+              trailing={<RecordMenu title={tag.name} actions={actions(tag)} />}
+            />
+          ))}
+        </Group>
+      ) : null}
+      {renaming ? (
+        <NameSheet
+          title="Rename tag"
+          label="Tag name"
+          initial={renaming.name}
+          onSubmit={rename(renaming)}
+          onClose={() => setRenaming(null)}
+        />
+      ) : null}
     </Sheet>
   );
 }
