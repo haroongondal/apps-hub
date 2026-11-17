@@ -62,6 +62,10 @@ export function TxnSheet({ txn, onClose, onChanged }: { txn: Txn | null; onClose
   // null hands the choice back to the AI; the owner's pick is kept and never overwritten.
   const pick = (next: string | null) => {
     if (!txn) return;
+    if (next === null && !categorySet) {   // already the AI's: clearing would drop its category and pay to ask again
+      setChoices(null);
+      return;
+    }
     try {
       InflowCore.setCategory(txn.id, next);
     } catch {

@@ -26,11 +26,11 @@ function Categories({ title, rows, currency }: { title: string; rows: ReportCurr
   const max = Math.max(...rows.map((r) => r.amount));
   return (
     <Group title={title}>
-      {rows.map((r) => {
+      {rows.map((r, i) => {
         const change = changeLabel(r.change);
         return (
           <Row
-            key={r.name}
+            key={`${r.name}|${i}`}
             title={r.name}
             subtitle={[plural(r.count, 'payment', 'payments'), `${Math.round(r.share)}%`, change].filter((s) => s !== null).join(' · ')}
             trailing={<Amount minor={r.amount} currency={currency} />}
@@ -86,9 +86,9 @@ function Currency({ cur }: { cur: ReportCurrency }) {
       <Daily rows={cur.daily} />
       {cur.parties.length > 0 && (
         <Group title="People and shops">
-          {cur.parties.map((p) => (
+          {cur.parties.map((p, i) => (
             <Row
-              key={p.name}
+              key={`${p.name}|${i}`}
               title={p.name}
               subtitle={[p.in > 0 ? `In ${formatAmount(p.in, k)}` : null, p.out > 0 ? `Out ${formatAmount(p.out, k)}` : null, plural(p.count, 'transaction', 'transactions')].filter((s) => s !== null).join(' · ')}
             />
@@ -97,9 +97,9 @@ function Currency({ cur }: { cur: ReportCurrency }) {
       )}
       {cur.accounts.length > 0 && (
         <Group title="Accounts">
-          {cur.accounts.map((a) => (
+          {cur.accounts.map((a, i) => (
             <Row
-              key={a.name}
+              key={`${a.name}|${i}`}
               title={a.name}
               subtitle={[`In ${formatAmount(a.in, k)}`, `Out ${formatAmount(a.out, k)}`, plural(a.count, 'transaction', 'transactions')].join(' · ')}
             />
