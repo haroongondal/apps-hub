@@ -27,12 +27,19 @@ export type PageEvent =
   | { type: 'writeAutosave'; reqId: string; text: string }
   | { type: 'keepAutosave'; reqId: string }
   | { type: 'docState'; title: string; dirty: boolean; filePath: string | null }
-  | { type: 'confirm'; reqId: string; message: string };
+  | { type: 'confirm'; reqId: string; message: string }
+  // window.native.vision (as built 2026-11-18): image and result cross in base64 pieces of <= 1 MB
+  | { type: 'visionTools'; reqId: string }
+  | { type: 'visionChunk'; reqId: string; id: string; index: number; data: string }
+  | { type: 'vision'; reqId: string; id: string; op: 'cutout' | 'upscale'; option: string; chunks: number }
+  | { type: 'visionRead'; reqId: string; id: string; index: number }
+  | { type: 'visionCancel'; reqId: string; id: string };
 // Native -> Web
 export type WebCommand =
   | { type: 'reply'; reqId: string; ok: boolean; value?: unknown; error?: string }
   | { type: 'menu'; cmd: string } // same ids as the Mac menu (new, save, saveAs, export, undo, redo, duplicate, zoomIn, zoomOut, zoomFit)
-  | { type: 'toast'; message: string };
+  | { type: 'toast'; message: string }
+  | { type: 'visionProgress'; id: string; phase: 'download' | 'run'; fraction: number };
 
 // The autosave record app.js stores through native.writeAutosave and restores from
 // native.readAutosave; doc is the design's snapshot text.

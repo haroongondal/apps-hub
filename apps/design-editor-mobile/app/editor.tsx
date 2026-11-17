@@ -4,13 +4,16 @@ import { Asset } from 'expo-asset';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import WebView, { type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 
 import DesignMedia from 'design-media';
 import { injectCommand, parseMessage, replyError, replyOk, type PageEvent } from '../src/editor/bridge';
+import { createVisionHost, type VisionHost } from '../src/editor/vision-host';
+import { getSearchTool } from '../src/photos/search-tool';
+import { realVisionToolDeps } from '../src/photos/vision-tool-deps';
 import {
   designTitle,
   readAutosave,
@@ -34,6 +37,9 @@ export default function EditorScreen() {
   const [dirty, setDirty] = useState(false);
   const webRef = useRef<WebView>(null);
   const docState = useRef({ title: params.name ?? 'Design Editor', dirty: false, filePath: null as string | null });
+  const visionRef = useRef<VisionHost | null>(null);
+  visionRef.current ??= realVisionHost(webRef);
+  useEffect(() => () => void visionRef.current?.dispose(), []);
 
   // The inlined editor page ships as a metro asset; downloadAsync pins localUri (PDF Editor pattern).
   useEffect(() => {
@@ -99,6 +105,27 @@ export default function EditorScreen() {
           case 'openDesign': {
             const design = await pickDesign();
             injectCommand(webRef, replyOk(msg.reqId, design));
+            break;
+          }
+          case 'visionTools': {
+            injectCommand(webRef, replyOk(msg.reqId, await visionRef.current!.tools()));
+            break;
+          }
+          case 'visionChunk': {
+            injectCommand(webRef, replyOk(msg.reqId, visionRef.current!.chunk(msg.id, msg.index, msg.data)));
+            break;
+          }
+          case 'vision': {
+            injectCommand(webRef, replyOk(msg.reqId, await visionRef.current!.run(msg.id, msg.op, msg.option, msg.chunks)));
+            break;
+          }
+          case 'visionRead': {
+            injectCommand(webRef, replyOk(msg.reqId, await visionRef.current!.read(msg.id, msg.index)));
+            break;
+          }
+          case 'visionCancel': {
+            await visionRef.current!.cancel(msg.id);
+            injectCommand(webRef, replyOk(msg.reqId, true));
             break;
           }
           case 'docState': {
@@ -232,6 +259,28 @@ async function saveFileMsg(msg: Extract<PageEvent, { type: 'saveFile' }>): Promi
     await writeDesignMirror(id, msg.text ?? '');
   }
   return path;
+}
+
+function realVisionHost(webRef: RefObject<WebView | null>): VisionHost {
+  const dir = `${FileSystem.cacheDirectory}vision/`;
+  return createVisionHost({
+    dir,
+    makeDir: () => FileSystem.makeDirectoryAsync(dir, { intermediates: true }),
+    writeBase64: (uri, base64) => FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 }),
+    readBase64: (uri, position, length) => FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64, position, length }),
+    async size(uri) {
+      const info = await FileSystem.getInfoAsync(uri);
+      if (!info.exists) throw new Error("The changed image wasn't saved. Try again.");
+      return info.size;
+    },
+    remove: uri => FileSystem.deleteAsync(uri, { idempotent: true }),
+    getTool: (tool, onProgress) => getSearchTool(realVisionToolDeps(tool), onProgress),
+    tools: () => DesignMedia.visionTools(),
+    runVision: (id, op, path, option) => DesignMedia.runVision(id, op, path, option),
+    cancelVision: id => DesignMedia.cancelVision(id),
+    onRunProgress: fn => DesignMedia.addListener('onVisionProgress', fn),
+    send: p => injectCommand(webRef, { type: 'visionProgress', ...p }),
+  });
 }
 
 async function pickDesign(): Promise<{ text: string; filePath: string } | null> {
