@@ -166,6 +166,28 @@ class ReportRunTest {
     assertEquals(3, bodies.size)
   }
 
+  @Test fun aServerErrorCountsATryAndThreeOfThemFail() {
+    addTxn("2025-11-10T12:00:00")
+    code = 503
+    val r = run()
+    repeat(3) { r.runDue() }
+    val row = store.rows.single { it.kind == ReportKind.WEEKLY }
+    assertEquals("failed", row.status)
+    assertEquals(3, row.tries)
+  }
+
+  @Test fun aFailureBeforeTheNewPartialIsSavedKeepsTheOlderPartial() {
+    addTxn("2025-11-10T12:00:00")
+    addTxn("2025-11-17T12:00:00")
+    clock = at("2025-11-12T12:00:00")
+    assertTrue(run().make(ReportSchedule.weekSoFar(clock, karachi), manual = true).first)
+    clock = at("2025-11-19T12:00:00")
+    answer = { _ -> throw IllegalStateException("boom") }
+    try { run().make(ReportSchedule.weekSoFar(clock, karachi), manual = true) } catch (e: IllegalStateException) {}
+    assertEquals(1, store.rows.count { it.partial })
+    assertEquals("ready", store.rows.single { it.partial }.status)
+  }
+
   @Test fun reportsAskForAtMost8000Tokens() {
     addTxn("2025-11-10T12:00:00")
     run().runDue()

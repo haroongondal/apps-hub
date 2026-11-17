@@ -54,6 +54,10 @@ class SqlReportStore(private val db: SQLiteDatabase) : ReportStore {
     run("DELETE FROM reports WHERE kind = ? AND partial = 1", kind.name)
   }
 
+  override fun deletePartialsExcept(kind: ReportKind, keepId: Long) {
+    run("DELETE FROM reports WHERE kind = ? AND partial = 1 AND id != ?", kind.name, keepId)
+  }
+
   fun get(id: Long): ReportRow? = rows("id = ?", id).firstOrNull()
 
   /** Newest period first (a week so far sorts above the week before it). */

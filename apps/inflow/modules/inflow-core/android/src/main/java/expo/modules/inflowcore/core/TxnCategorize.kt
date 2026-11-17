@@ -95,7 +95,7 @@ Rules:
     fun user(txns: List<Txn>, zone: ZoneId): String =
       "Transactions (${txns.size}), one JSON object per line, amounts in main units:\n${TxnFields.lines(txns, zone, withCategory = false)}"
 
-    /** Id to (category, clean name) for sent ids only. An id whose category is outside the txn's direction list is dropped (retried), and so is an id answered twice is dropped (retried). */
+    /** Id to (category, clean name) for sent ids only. An id whose category is outside the txn's direction list is dropped (retried), and so is an id answered twice. */
     fun parse(reply: String, sent: List<Txn>): Map<Long, Pair<String, String?>> {
       val from = reply.indexOf('{')
       val to = reply.lastIndexOf('}')

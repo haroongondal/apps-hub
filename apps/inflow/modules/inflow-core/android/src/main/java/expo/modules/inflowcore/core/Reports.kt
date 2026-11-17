@@ -323,6 +323,8 @@ interface ReportStore {
   /** Keeps the newest 8 weekly and 4 monthly non-partial reports by period start. */
   fun prune()
   fun deletePartial(kind: ReportKind)
+  /** Deletes every partial row of this kind except `keepId`. */
+  fun deletePartialsExcept(kind: ReportKind, keepId: Long)
 }
 
 /** Makes the weekly and monthly reports. `notify` gets the id and headline of a report that just became ready on schedule (never a manual or partial one). */
@@ -343,10 +345,16 @@ class ReportRun(
 
   /** `manual` (the owner asked, or pressed Try again) starts the tries over and never notifies. Returns ok and the message to show when not ok. */
   fun make(p: Period, manual: Boolean): Pair<Boolean, String?> {
+    val result = makeOne(p, manual)
+    // Older "so far" rows would pile up: they go only once this one is saved (an exception before that keeps the old one).
+    if (p.partial) store.row(p)?.let { store.deletePartialsExcept(p.kind, it.id) }
+    return result
+  }
+
+  private fun makeOne(p: Period, manual: Boolean): Pair<Boolean, String?> {
     val provider = provider() ?: return false to NO_KEY
     val t = now()
     var tries = if (manual) 0 else store.row(p)?.tries ?: 0
-    if (p.partial) store.deletePartial(ReportKind.WEEKLY)   // older "so far" rows would pile up; this one is saved below
     val txns = store.txns(p.start, p.end)
     if (txns.isEmpty()) return ready(p, ReportJson.emptyReport(), tries, manual, t)
     if (txns.size > ReportJson.MAX_TXNS) {
@@ -361,9 +369,9 @@ class ReportRun(
         ReportJson.MAX_TOKENS,
       )
     } catch (e: AiError) {
-      // A bad key or a network or server outage says nothing about this report: no try is used. A refusal or a timeout was billed or may be this report's fault: it counts.
-      if (e.kind != AiError.Kind.BAD_REQUEST && e.kind != AiError.Kind.TIMEOUT) return waiting(p, e.message ?: RETRY, tries, t)
-      return badReply(p, ++tries, t, e.message.takeIf { e.kind == AiError.Kind.TIMEOUT })
+      // A bad key or no network says nothing about this report: no try is used. A refusal, a timeout or a server failure may have been billed: it counts, so MAX_TRIES ends any loop.
+      if (e.kind == AiError.Kind.AUTH || e.kind == AiError.Kind.OFFLINE) return waiting(p, e.message ?: RETRY, tries, t)
+      return badReply(p, ++tries, t, e.message.takeIf { e.kind != AiError.Kind.BAD_REQUEST })
     }
     spend(reply)
     val json = ReportJson.parse(reply.text, p, zone) ?: return badReply(p, ++tries, t)

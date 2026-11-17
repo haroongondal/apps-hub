@@ -53,7 +53,7 @@ class OpenAiCompatProvider(
         post(url, headers, body)
       } catch (e: SocketTimeoutException) {
         // The post turns a connect timeout into a plain IOException, so this one is a read timeout: the model has the request and bills it, so never send it again.
-        throw AiError(AiError.Kind.TIMEOUT, "The AI took too long to answer. Inflow will try again later.")
+        throw AiError(AiError.Kind.TIMEOUT, TIMEOUT_COPY)
       } catch (e: IOException) {
         if (last) throw AiError(AiError.Kind.OFFLINE, "Inflow couldn't reach the model. Check the phone's connection and try again.")
         null
@@ -65,6 +65,8 @@ class OpenAiCompatProvider(
           AiError.Kind.AUTH,
           "The model refused ${if (keys.size > 1) "API key ${current + 1} of ${keys.size}" else "the API key"} (HTTP ${reply.code}). Check your API key in Settings.",
         )
+        // A gateway that cuts a slow request (Cloudflare 524, others 504) has the request and may bill it: treated like a read timeout.
+        reply.code == 504 || reply.code == 524 -> throw AiError(AiError.Kind.TIMEOUT, TIMEOUT_COPY)
         // A key at its limit hands over to the next one at once; Inflow only waits once every key is limited.
         reply.code == 429 && ++limited < keys.size -> {
           current = (current + 1) % keys.size
@@ -113,10 +115,11 @@ class OpenAiCompatProvider(
     throw AiError(AiError.Kind.SERVER, "The model sent a reply Inflow couldn't read.")
   }
 
-  private companion object {
-    val RETRY_DELAYS = listOf(1_000L, 2_000L, 4_000L)
-    const val MAX_WAIT_MS = 60_000L
-    const val MAX_TOKENS = 8_000   // a batch of 40 items needs well under this; a runaway reply cannot cost more
+  companion object {
+    const val TIMEOUT_COPY = "The AI took too long to answer. Inflow will try again later."
+    private val RETRY_DELAYS = listOf(1_000L, 2_000L, 4_000L)
+    private const val MAX_WAIT_MS = 60_000L
+    private const val MAX_TOKENS = 8_000   // a batch of 40 items needs well under this; a runaway reply cannot cost more
   }
 }
 

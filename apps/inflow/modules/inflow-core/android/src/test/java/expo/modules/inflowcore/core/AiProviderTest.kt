@@ -110,6 +110,16 @@ class AiProviderTest {
     assertTrue(http.sleeps.isEmpty())
   }
 
+  @Test fun aGatewayTimeoutIsATimeoutAndIsNotRetried() {
+    for (code in listOf(504, 524)) {
+      val http = Fake(HttpReply(code, "gateway timeout"), ok)
+      val e = failure { provider(http).complete("s", "u") }
+      assertEquals(AiError.Kind.TIMEOUT, e.kind)
+      assertEquals(1, http.calls.size)
+      assertTrue(http.sleeps.isEmpty())
+    }
+  }
+
   @Test fun aDroppedConnectionIsRetriedOnce() {
     val http = Fake(IOException("reset"), ok)
     assertEquals("done", provider(http).complete("s", "u").text)

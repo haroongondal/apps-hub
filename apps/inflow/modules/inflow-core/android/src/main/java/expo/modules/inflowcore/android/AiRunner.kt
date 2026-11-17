@@ -132,6 +132,9 @@ object AiRunner {
       }
     }).get()
 
+  /** Nothing retries a key test or a question, so the timeout copy says to try again by hand. */
+  private fun copy(e: AiError): String? = if (e.kind == AiError.Kind.TIMEOUT) "The AI took too long to answer. Try again." else e.message
+
   /** One tiny request with one key. The error copy, or null when the model answered. */
   fun test(ctx: Context, keyId: Long): String? {
     val store = StoreHolder.get(ctx).getOrNull() ?: return FAILED
@@ -141,7 +144,7 @@ object AiRunner {
       cfg.spend(provider.complete("Reply with the single word OK.", "Test."))
       null
     } catch (e: AiError) {
-      e.message
+      copy(e)
     } catch (e: Exception) {
       Log.w(TAG, "key test failed: ${e.javaClass.simpleName}")
       FAILED
@@ -179,7 +182,7 @@ object AiRunner {
       cfg.spend(answer)
       reply(answer.text.trim(), null, plan.from, plan.to, items.size, txns.size)
     } catch (e: AiError) {
-      reply(null, e.message)
+      reply(null, copy(e))
     } catch (e: Exception) {
       Log.w(TAG, "ask failed: ${e.javaClass.simpleName}")
       reply(null, "Inflow couldn't answer that. Try again.")

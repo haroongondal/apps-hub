@@ -32,6 +32,10 @@ class MemoryReportStore : ReportStore {
     }
   }
 
+  override fun deletePartialsExcept(kind: ReportKind, keepId: Long) {
+    stored.removeAll { it.row.kind == kind && it.row.partial && it.row.id != keepId }
+  }
+
   override fun deletePartial(kind: ReportKind) {
     stored.removeAll { it.row.kind == kind && it.row.partial }
   }
