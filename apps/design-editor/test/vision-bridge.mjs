@@ -8,7 +8,7 @@ export async function run({ page, assert }) {
       for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode(...bytes.subarray(i, i + 8192));
       return btoa(s);
     };
-    const fake = window.__vision = { pieces: {}, chunks: [], runs: [], reads: [], cancels: [], result: null, hold: null, fail: null };
+    const fake = window.__vision = { pieces: {}, chunks: [], runs: [], reads: [], cancels: [], result: null, hold: null, fail: null, extra: 0 };
     const answer = (reqId, value) => setTimeout(() => window.__editorCommand('reply', { reqId, ok: true, value }));
     const prev = window.ReactNativeWebView.postMessage;
     window.ReactNativeWebView.postMessage = m => {
@@ -27,7 +27,7 @@ export async function run({ page, assert }) {
           window.__editorCommand('visionProgress', { id: msg.id, phase: 'download', fraction: 0.5 });
           window.__editorCommand('visionProgress', { id: 'someone-else', phase: 'run', fraction: 0.9 });
           window.__editorCommand('visionProgress', { id: msg.id, phase: 'run', fraction: 0.25 });
-          answer(msg.reqId, { bytes: fake.result.length });
+          answer(msg.reqId, { bytes: fake.result.length + fake.extra });
         }
       } else if (msg.type === 'visionRead') {
         fake.reads.push(msg.index);
@@ -98,4 +98,14 @@ export async function run({ page, assert }) {
     return { message, cancelled: fake.cancels.includes(fake.runs.at(-1).id) };
   });
   assert.deepEqual(failed, { message: 'Connect to the internet once to get this tool.', cancelled: true }, 'an app error keeps its message and the app is told to drop the run');
+
+  const short = await page.evaluate(async () => {
+    const fake = window.__vision;
+    fake.extra = 1;
+    const message = await window.native.vision({ op: 'cutout', kind: 'object', image: new Blob([new Uint8Array(3)]) }).then(() => 'ran', e => e.message);
+    fake.extra = 0;
+    await new Promise(r => setTimeout(r, 50));
+    return { message, cancelled: fake.cancels.includes(fake.runs.at(-1).id) };
+  });
+  assert.deepEqual(short, { message: "The changed image wasn't saved. Try again.", cancelled: true }, 'a result shorter than the app said is refused');
 }

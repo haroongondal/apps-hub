@@ -104,10 +104,14 @@
     if (r.stopped) return null;
     const res = await call('vision', { id: r.id, op, option, chunks });
     const parts = [];
+    let got = 0;
     for (let index = 0; res && !r.stopped; index++) {
       const { data, done } = await call('visionRead', { id: r.id, index });
       parts.push(fromB64(data));
-      if (done) return new Blob(parts, { type: 'image/png' });
+      got += parts[index].length;
+      if (!done) continue;
+      if (got !== res.bytes) throw new Error("The changed image wasn't saved. Try again.");
+      return new Blob(parts, { type: 'image/png' });
     }
     return null;
   }
