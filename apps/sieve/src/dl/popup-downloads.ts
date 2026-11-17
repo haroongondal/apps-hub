@@ -13,6 +13,7 @@ const records = new Map<string, DlRecord>();
 const gone = new Set<string>();
 let speeds: Record<string, number> = {};
 let started = false;
+let named = 0; // ids for the row names the buttons point at
 
 const note = h('p', { class: 'ui-meta dl-note', role: 'status' });
 const say = (text: string) => {
@@ -38,8 +39,8 @@ async function command(op: 'pause' | 'resume', id: string): Promise<void> {
 function rowFor(id: string) {
   let row = rows.get(id);
   if (!row) {
-    const name = h('span', { class: 'dl-name' });
-    const btn = h('button', { class: 'ui-btn ui-btn--ghost dl-act', type: 'button' });
+    const name = h('span', { class: 'dl-name', id: `dl-row-name-${++named}` });
+    const btn = h('button', { class: 'ui-btn ui-btn--ghost dl-act', type: 'button', 'aria-describedby': name.id }); // five Pause buttons, each tied to its file
     const bar = h('progress', { class: 'dl-bar', max: 100 });
     const speed = h('span', { class: 'ui-meta dl-speed' });
     btn.addEventListener('click', () => void command(btn.dataset.op as 'pause' | 'resume', id));

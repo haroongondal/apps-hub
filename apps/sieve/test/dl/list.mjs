@@ -315,6 +315,26 @@ export async function run(t) {
     check('downloads: list: deleting 501 rows works in chunks and leaves the status line empty', (await page.locator('#dl-status').textContent()) === '');
   });
 
+  await attempt('unknown size and finished delete', async () => {
+    await fresh();
+    let page = await open();
+    await seed(page, [['nosize.bin', { size: null, rangeOk: false }]]);
+    const det = await page.locator('tbody tr progress').evaluate((el) => el.hasAttribute('value') && el.value === 0);
+    check('downloads: list: a paused row of unknown size shows an empty bar, not the moving one', det);
+
+    await fresh();
+    page = await open();
+    await seed(page, [['kept.zip', { state: 'done', category: 'archives', size: 1000, savedId: null, finishedAt: Date.now() }]]);
+    await page.locator('tbody tr').first().click();
+    await bar(page, 'delete').click();
+    const words = await page.locator('dialog[open] p').textContent();
+    const remove = page.locator(`dialog[open] button:text-is("${T.confirmRemove}")`);
+    check('downloads: list: deleting a finished row asks T.confirmDeleteFinished(1) with T.confirmRemove', words === T.confirmDeleteFinished(1) && (await remove.count()) === 1, json(words));
+    await remove.click();
+    const gone = await until(async () => (await rowsOf(page)).length === 0 && (await readRecords(t)).length === 0, 20000).catch(() => false);
+    check('downloads: list: Remove from list removes the finished row and its record', gone === true, json(await readRecords(t)));
+  });
+
   await attempt('screens', async () => {
     await fresh();
     const page = await open();

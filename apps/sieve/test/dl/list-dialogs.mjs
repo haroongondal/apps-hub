@@ -78,6 +78,30 @@ export async function run(t) {
     check('downloads: dialogs: a 1000 KB/s limit keeps a download under 1.5 MB/s over 3 s', ((b - a) / 100) * 40 < 4.5 && b > a, json({ a, b }));
   });
 
+  await attempt('focus guards', async () => {
+    await fresh();
+    const page = await open();
+    await speedBtn(page).click();
+    const num = limit(page).getByLabel(T.limitValue);
+    await num.waitFor();
+    await num.fill('777');
+    await setDownloads(t, { speedLimit: { on: true, kbPerSecond: 5000 } });
+    await until(async () => await limit(page).getByRole('switch').isChecked());
+    await sleep(300);
+    check('downloads: dialogs: a change from elsewhere does not overwrite the limit being typed', (await num.inputValue()) === '777' && (await num.evaluate((el) => el === document.activeElement)), await num.inputValue());
+    await page.keyboard.press('Escape');
+
+    await page.locator('[role=toolbar] button[data-id=scheduler]').click();
+    const name = box(page, 'main').getByLabel(T.setQueueName);
+    await name.waitFor();
+    await name.fill('Typing');
+    const s = await stored();
+    await setDownloads(t, { queues: [{ ...s.queues[0], name: 'Elsewhere' }] });
+    await until(async () => (await box(page, 'main').locator('legend').textContent()) === 'Elsewhere');
+    check('downloads: dialogs: a change from elsewhere updates the scheduler but not the name being typed', (await name.inputValue()) === 'Typing' && (await name.evaluate((el) => el === document.activeElement)), await name.inputValue());
+    await page.keyboard.press('Escape');
+  });
+
   await attempt('scheduler', async () => {
     await fresh();
     const page = await open();

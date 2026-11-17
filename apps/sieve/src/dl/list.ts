@@ -132,8 +132,9 @@ function updateRow(row: Row, r: DlRecord, now: Date) {
   else row.status.removeAttribute('title');
   setText(row.size, r.size === null ? '' : formatBytes(r.size));
   row.bar.setAttribute('aria-label', T.progressLabel(r.name));
-  if (percent === null) row.bar.removeAttribute('value');
-  else row.bar.value = percent;
+  // Only a running download of unknown size shows the moving bar (as in the popup).
+  if (percent === null && r.state === 'running') row.bar.removeAttribute('value');
+  else row.bar.value = percent ?? 0;
   setText(row.pct, percent === null ? '' : `${percent}%`);
   setText(row.speed, formatSpeed(speeds[r.id] ?? 0));
   setText(row.eta, formatEta(etaSeconds(r, speeds[r.id] ?? 0)));

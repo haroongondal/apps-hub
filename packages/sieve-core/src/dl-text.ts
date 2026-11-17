@@ -84,6 +84,7 @@ export const T = {
   setSpeed: 'Speed limit',
   setCategories: 'Categories',
   setCategoriesHelp: 'Each category is a folder inside your Downloads folder.',
+  setSaveFailed: "Sieve couldn't save that setting. Reload this page, then try again.",
   setFolder: (name: string) => `Folder for ${name}`,
   setCategoryExt: (name: string) => `File types for ${name}`,
   setQueues: 'Queues',

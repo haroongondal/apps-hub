@@ -94,6 +94,8 @@ export async function run(t) {
     await p.locator('.dl-row').nth(2).waitFor();
     const order = await p.locator('.dl-row').evaluateAll((els) => els.map((e) => e.dataset.id));
     check('downloads: popup: three records (running, queued, paused) are listed, running first', JSON.stringify(states) === '["running","queued","paused"]' && JSON.stringify(order) === JSON.stringify([a, b, c]), json({ states, order, ids: [a, b, c] }));
+    const described = await p.locator('.dl-row').evaluateAll((els) => els.map((e) => document.getElementById(e.querySelector('.dl-act').getAttribute('aria-describedby') ?? '')?.textContent ?? null));
+    check('downloads: popup: each row button is described by its own file name', JSON.stringify(described) === '["a1.bin","b1.bin","c1.bin"]', json(described));
     const row = p.locator(`.dl-row[data-id=${a}]`);
     const read = () => row.locator('progress').evaluate((el) => el.value);
     const first = await read();

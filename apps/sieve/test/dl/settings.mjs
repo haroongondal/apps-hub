@@ -153,18 +153,47 @@ export async function run(t) {
     await until(async () => (await stored(t)).on === true);
   });
 
+  await attempt('save failure', async () => {
+    await resetDl(t);
+    await until(async () => (await by(T.setMinMb).inputValue()) === '5');
+    const alert = sec.locator('[role=alert]');
+    await page.evaluate(() => {
+      window.__set = chrome.storage.local.set;
+      chrome.storage.local.set = () => Promise.reject(new Error('QUOTA_BYTES quota exceeded'));
+    });
+    await setField(by(T.setMinMb), 33);
+    const said = await until(async () => (await alert.textContent()) === T.setSaveFailed).catch(() => false);
+    const back = (await by(T.setMinMb).inputValue()) === '5';
+    await page.evaluate(() => (chrome.storage.local.set = window.__set));
+    check('downloads: settings: a setting that cannot be stored says so and the field shows the stored value', said === true && back, json({ alert: await alert.textContent(), value: await by(T.setMinMb).inputValue() }));
+    await setField(by(T.setMinMb), 34);
+    const cleared = await until(async () => (await alert.textContent()) === '' && (await raw(t)).takeOver?.minMb === 34).catch(() => false);
+    check('downloads: settings: the next good write clears the message', cleared === true, json(await alert.textContent()));
+  });
+
   await attempt('two writers', async () => {
     await resetDl(t);
     const other = await extPage(t, 'options.html');
     const osec = other.locator('#downloads');
     await osec.getByLabel(T.setParts, { exact: true }).waitFor();
+    // Ten rounds of simultaneous writes: one round alone rarely hits the race the settings lock closes.
+    const lost = [];
+    for (let i = 0; i < 10; i++) {
+      const [minMb, parts] = [10 + i, (i % 5) + 2];
+      await Promise.all([setField(by(T.setMinMb), minMb), setField(osec.getByLabel(T.setParts, { exact: true }), parts)]);
+      const landed = await until(async () => {
+        const s = await stored(t);
+        return s.takeOver.minMb === minMb && s.parts === parts;
+      }, 3000).catch(() => false);
+      if (!landed) lost.push({ i, minMb, parts, stored: (await stored(t)).takeOver.minMb + '/' + (await stored(t)).parts });
+    }
     await Promise.all([setField(by(T.setMinMb), 9), setField(osec.getByLabel(T.setParts, { exact: true }), 4)]);
-    const both = await until(async () => {
+    const both = lost.length === 0 && (await until(async () => {
       const s = await stored(t);
       return s.takeOver.minMb === 9 && s.parts === 4;
-    }).catch(() => false);
+    }).catch(() => false));
     const seen = await until(async () => (await by(T.setParts).inputValue()) === '4' && (await osec.getByLabel(T.setMinMb, { exact: true }).inputValue()) === '9').catch(() => false);
-    check('downloads: settings: two pages changing different fields at once both land and both pages show both', both === true && seen === true, json(await stored(t)));
+    check('downloads: settings: two pages changing different fields at once, eleven times, both land each time and both pages show both', both === true && seen === true, json({ lost, stored: await stored(t) }));
 
     await by(T.setParts).focus();
     const s = await stored(t);

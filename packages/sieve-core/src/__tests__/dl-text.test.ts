@@ -75,6 +75,7 @@ const PLAIN: Record<string, string> = {
   setSpeed: 'Speed limit',
   setCategories: 'Categories',
   setCategoriesHelp: 'Each category is a folder inside your Downloads folder.',
+  setSaveFailed: "Sieve couldn't save that setting. Reload this page, then try again.",
   setQueues: 'Queues',
   setQueueName: 'Queue name',
   setAddQueue: 'Add a queue',

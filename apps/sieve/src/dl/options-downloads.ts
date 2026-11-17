@@ -24,9 +24,16 @@ export function downloadsSection(): HTMLElement {
   };
   onDownloadsChanged(follow);
   void readDownloads().then(follow);
+  // A write that fails says so; the control then shows the stored value again.
+  const failed = h('p', { class: 'error', role: 'alert' });
+  const save = async (edit: Edit) => {
+    const ok = await saveDownloads(edit);
+    failed.textContent = ok ? '' : T.setSaveFailed;
+    return ok;
+  };
 
   const live = (label: string, read: (s: DownloadSettings) => boolean, edit: (on: boolean) => Edit, props: Record<string, unknown> = {}): HTMLLabelElement => {
-    const row = toggle(label, true, (on) => saveDownloads(edit(on)), props);
+    const row = toggle(label, true, (on) => save(edit(on)), props);
     const input = row.querySelector('input')!;
     shows.push(() => latest && (input.checked = read(latest)));
     return row;
@@ -35,7 +42,7 @@ export function downloadsSection(): HTMLElement {
   // `commit` turns the typed text into an edit; afterwards the field shows what was stored (so a clamp is visible).
   const bind = <E extends Field>(el: E, read: (s: DownloadSettings) => string, commit: (v: string) => Edit): E => {
     el.addEventListener('change', async () => {
-      await saveDownloads(commit(el.value));
+      await save(commit(el.value));
       el.value = read(await readDownloads());
     });
     shows.push(() => latest && el !== document.activeElement && (el.value = read(latest)));
@@ -59,7 +66,7 @@ export function downloadsSection(): HTMLElement {
     h('div', { class: 'dl-group' }, title && h('h3', { class: 'ui-caption' }, title), note, h('div', { class: 'ui-group dl-rows' }, ...kids));
 
   const takeOver = (patch: Partial<DownloadSettings['takeOver']>): Edit => (s) => ({ ...s, takeOver: { ...s.takeOver, ...patch } });
-  const reset = h('button', { class: 'ui-btn', type: 'button', onclick: () => void saveDownloads(takeOver({ extensions: [...DEFAULT_TAKEOVER_EXTENSIONS], mimeTypes: [...DEFAULT_TAKEOVER_MIME_TYPES] })) }, T.setResetTypes);
+  const reset = h('button', { class: 'ui-btn', type: 'button', onclick: () => void save(takeOver({ extensions: [...DEFAULT_TAKEOVER_EXTENSIONS], mimeTypes: [...DEFAULT_TAKEOVER_MIME_TYPES] })) }, T.setResetTypes);
   const speed = (patch: Partial<DownloadSettings['speedLimit']>): Edit => (s) => ({ ...s, speedLimit: { ...s.speedLimit, ...patch } });
 
   const categoriesHelp = help(T.setCategoriesHelp);
@@ -79,6 +86,7 @@ export function downloadsSection(): HTMLElement {
     'section',
     { id: 'downloads' },
     h('h2', { class: 'ui-heading' }, T.sectionTitle),
+    failed,
     group(null, onHelp, live(T.setOn, (s) => s.on, (on) => (s) => ({ ...s, on }), { 'aria-describedby': onHelp.id })),
     group(
       null,

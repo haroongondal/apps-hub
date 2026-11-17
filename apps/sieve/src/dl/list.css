@@ -36,7 +36,7 @@ th[aria-sort='descending'] .dl-sort::after { content: ' \2193'; }
 .dl-cell-progress progress { width: 100%; accent-color: var(--c-accent); }
 .dl-empty { padding: var(--space-xl) var(--space-lg); text-align: center; }
 .dl-dialog { max-width: min(480px, calc(100vw - 2 * var(--space-lg))); color: var(--c-text); padding: var(--space-xl); }
-.dl-dialog::backdrop { background: rgb(0 0 0 / 0.5); }
+.dl-dialog::backdrop { background: color-mix(in srgb, var(--c-bg) 75%, transparent); }
 .dl-form { display: grid; gap: var(--space-md); }
 .dl-textarea { width: 100%; min-height: 120px; padding: var(--space-md); font: var(--type-meta) var(--font-mono); resize: vertical; }
 .dl-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); margin-top: var(--space-md); }

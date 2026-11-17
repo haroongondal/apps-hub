@@ -301,9 +301,12 @@ export async function run(t) {
     const first = ranges(fx.log, path, mark)[0];
     check(name(`${title}: the record was a take-over and it completes`), r.source === 'takeover' && r.state === 'done', json({ source: r.source, state: r.state }));
     check(name(`${title}: it resumed above 0`), first && first.start > 0, json(first));
+    // Chrome's own request has no Range header and the probe asks for bytes=0-0: what is left is what the engine fetched.
+    const engineSent = fx.log.filter((l) => l.path === path && !l.closed && l.range && l.range !== 'bytes=0-0').reduce((n, l) => n + (l.sent ?? 0), 0);
+    check(name(`${title}: the engine fetched at most the size plus 16 MiB across the kill`), engineSent >= 100_000_000 && engineSent <= 100_000_000 + MiB16, `engine ${engineSent}: ${json(fx.log.filter((l) => l.path === path).map((l) => [l.range, l.status, l.sent]))}`);
     await onlyFile(title, c.downloadsDir, 'Archives/t.zip', 100_000_000);
     await nothingLeft(title, raw2);
-    console.log(`torture: ${title}: sent ${sentBytes(fx.log, path) - 100_000_000} bytes beyond the size (this counts Chrome's own cancelled request), relaunch to first request ${first ? first.t - t0 : '?'} ms`);
+    console.log(`torture: ${title}: the engine re-sent ${engineSent - 100_000_000} bytes; ${sentBytes(fx.log, path) - 100_000_000} bytes beyond the size with Chrome's own cancelled request; relaunch to first request ${first ? first.t - t0 : '?'} ms`);
   });
 
   const page = await extPage(t);
