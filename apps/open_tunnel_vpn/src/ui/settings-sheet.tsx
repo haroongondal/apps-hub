@@ -12,6 +12,7 @@ import {
   Field,
   Group,
   Notice,
+  RecordMenu,
   Row,
   Segmented,
   Sheet,
@@ -127,11 +128,10 @@ export function SettingsSheet({
               title={app}
               mono
               trailing={
-                <Button
-                  label="Remove"
-                  variant="danger"
-                  size="sm"
-                  onPress={() => onRemoveDisallowedApp(app)}
+                <RecordMenu
+                  title={app}
+                  accessibilityLabel={`More actions for ${app}`}
+                  actions={[{ label: 'Remove', onPress: () => onRemoveDisallowedApp(app) }]}
                 />
               }
             />

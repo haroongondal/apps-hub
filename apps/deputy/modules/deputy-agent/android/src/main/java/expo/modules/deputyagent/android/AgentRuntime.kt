@@ -152,6 +152,11 @@ object AgentRuntime {
     return store!!.read(runId).map(::toMap)
   }
 
+  fun deleteRun(context: Context, runId: String): Boolean {
+    init(context)
+    return store!!.delete(runId)
+  }
+
   @Synchronized
   fun clearHistory(context: Context) {
     init(context)

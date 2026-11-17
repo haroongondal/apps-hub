@@ -17,6 +17,7 @@ import {
   Readout,
   Row,
   Text,
+  space,
   useTheme,
 } from '@apps-hub/ui';
 
@@ -77,7 +78,7 @@ export function HomeScreen({
   ];
 
   return (
-    <View style={{ gap: 24 }}>
+    <View style={{ gap: space.xl }}>
       {/* The docked `TunnelShield` carries the connection surface now, so
           this group only appears while there is throughput to show — a
           settled tunnel never leaves a dangling header behind. */}
@@ -213,8 +214,8 @@ function ThroughputRow({ ring, traffic }: {
   const bars = sparklineBars(ring.all());
   const { c } = useTheme();
   return (
-    <View style={{ gap: 12, paddingHorizontal: 16, paddingBottom: 16 }}>
-      <View style={{ flexDirection: 'row', gap: 24 }}>
+    <View style={{ gap: space.md, paddingHorizontal: space.lg, paddingBottom: space.lg }}>
+      <View style={{ flexDirection: 'row', gap: space.xl }}>
         <Readout label="Down" value={formatBytes(traffic.bytesIn)} unit="/s" tone="ok" />
         <Readout label="Up" value={formatBytes(traffic.bytesOut)} unit="/s" tone="ok" />
         <Readout label="Connected" value={formatDuration(traffic.connectedDurationSec)} />

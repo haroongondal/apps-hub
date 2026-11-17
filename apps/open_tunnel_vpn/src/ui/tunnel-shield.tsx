@@ -98,9 +98,9 @@ export function TunnelShield({ tunnel, activeNode, scanning, onConnect, onAutoSe
         android_ripple={{ color: c.raised }}
         style={({ pressed }) => ({
           alignItems: 'center',
-          gap: 8,
-          paddingVertical: 12,
-          paddingHorizontal: 16,
+          gap: space.sm,
+          paddingVertical: space.md,
+          paddingHorizontal: space.lg,
           opacity: pressed ? 0.85 : 1,
         })}
       >

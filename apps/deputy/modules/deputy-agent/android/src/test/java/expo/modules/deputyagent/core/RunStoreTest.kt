@@ -196,6 +196,25 @@ class RunStoreTest {
     assertEquals(0.0, store().spentToday(), 1e-9)
   }
 
+  @Test fun deletingOneRunKeepsTheOthersAndTheDailyCap() {
+    val s = store()
+    s.fullRun("a", 0.5)
+    clock += 1_000
+    s.fullRun("b", 0.25)
+    assertTrue(s.delete("a"))
+    assertEquals(listOf("b"), s.list(10).map { it.runId })
+    assertEquals(0.75, s.spentToday(), 1e-9)
+    assertFalse("already gone", s.delete("a"))
+  }
+
+  @Test fun deletingARunNeverRemovesTheOneInProgress() {
+    val s = store()
+    s.start("now", "t", "m", "on_demand")
+    assertFalse(s.delete("now"))
+    assertEquals(listOf("now"), s.list(10).map { it.runId })
+    assertTrue(File(tmp.root, "active").exists())
+  }
+
   @Test fun retentionDoesNotResetTheDailyCap() {
     val s = store()
     repeat(201) { i -> clock += 1_000; s.fullRun("r$i", 0.01) }
