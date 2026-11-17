@@ -99,7 +99,7 @@ The button is off where blocking is off for the page (allowlisted site, paused p
 
 ## Settings page
 
-`options.html` (the manifest's `options_page`, so it opens in a tab) has four sections. It needs one more permission, `unlimitedStorage`: without it `chrome.storage.local` holds 10 MB, and about 29,000 My filters lines with typical options take some 16 MB once compiled.
+`options.html` (the manifest's `options_page`, so it opens in a tab) has seven sections: the four below for blocking, then YouTube (described under YouTube tools), Shortcuts, and Backup and import. It needs one more permission, `unlimitedStorage`: without it `chrome.storage.local` holds 10 MB, and about 29,000 My filters lines with typical options take some 16 MB once compiled.
 
 - **Blocking:** the menu's four switches, plus Ad blocker warnings and Trackers.
 - **Filter lists:** each list with its rule count from `dist/meta.json` and a switch (the same setting as the Blocking switch of that name), and, under them, "Lists from <date>.", the date of the oldest cached list (not of the build), with the command that updates them: `pnpm --filter sieve build -- --refresh`, then reload Sieve. A plain rebuild reuses the cached lists.
@@ -198,7 +198,7 @@ Sieve's two worlds talk through `CustomEvent`s on `document`, which YouTube's ow
 
 ### The `downloads` permission
 
-Screenshots save through `chrome.downloads`, so the manifest asks for `downloads`. Chrome makes the `Sieve` folder inside Downloads and does not ask. The permission is the only one the YouTube tools added; Phase 3's downloads use it too. Sieve cuts a screenshot's file name to what Chrome accepts (no `/ \ : * ? " < > |`, no `~`, no control or format characters, at most 200 bytes of title).
+Screenshots save through `chrome.downloads`, so the manifest asks for `downloads`. Chrome makes the `Sieve` folder inside Downloads and does not ask. The permission is the only one the YouTube tools added. Sieve cuts a screenshot's file name to what Chrome accepts (no `/ \ : * ? " < > |`, no `~`, no control or format characters, at most 200 bytes of title).
 
 ### Shortcuts
 
@@ -207,9 +207,9 @@ Thirty shortcuts are on `chrome://extensions/shortcuts`, none with a default key
 ### Known limits
 
 - **H.264 only.** YouTube offers H.264 up to 1080p, so higher qualities disappear, and a video with no H.264 version can be unplayable. The first codec checks YouTube makes before the settings arrive get the browser's own answer.
-- **Picture-in-picture needs a click on the page.** Chrome refuses it from a shortcut or the toolbar menu; Sieve then says to use the button under the video. Headless Chrome never refuses, so the refusal is untested.
+- **Picture-in-picture needs a click on the page.** Chrome may refuse it from a shortcut or the toolbar menu; Sieve then says to use the button under the video. Headless Chrome never refuses, so the refusal is untested.
 - **A reversed playlist reverses only the automatic advance** when a video ends. YouTube's panel order and its Next button still go forward. The move at the end of a video was checked on the fixture, not against YouTube's own advance on a real page.
-- **Default speed** goes on at the video's first load event, and again at the first frame when something changed it in the first 2 seconds. A video you resume on a signed-in profile may keep its remembered speed. A live stream is left at its own speed.
+- **Default speed** goes on when the video starts loading (the `loadstart` event), and again at the first frame when something changed it in the first 2 seconds. A video you resume on a signed-in profile may keep its remembered speed. A live stream is left at its own speed.
 - **Volume boost** starts only after a click or key press (an autoplaying video is never silenced), only for videos that play from a `blob:` source, and Off sets the gain back to 1 but leaves the video routed.
 - **Quality** waits up to 10 seconds for the player to list its qualities. A quality you pick by hand is kept when a setting or a full-screen change leaves Sieve's own target as it was.
 - **Flag overrides** cannot hold `&`, `=`, `+` or `%` in a value, and YouTube renames flags, so a preset can stop working. Patching has to happen within about a second of the page loading. The presets were found signed out; a signed-in profile may see other experiments.
