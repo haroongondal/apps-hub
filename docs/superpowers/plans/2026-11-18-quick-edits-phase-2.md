@@ -40,7 +40,10 @@ Worker route.
 - Copy: sentence case, plain words, no emoji. Missing model while offline:
   "Connect to the internet once to get this tool." (AC-5).
 - Mac (no `window.native.vision`): only "Plain background"; no Person, Object or Upscale (AC-6).
-- Images cross the WebView bridge as file paths, never base64 (owner rule; see Task 5).
+- Bridge transport (owner, 2026-11-18, option A): the source image crosses page -> app in base64
+  pieces of <= 1 MB into a cache file; the result PNG comes back in pieces of <= 1 MB into a Blob.
+  Unique run ids; each result file deleted after the page imports it; partial files deleted on
+  cancel or error. Replaces the "file path, never base64" rule for vision only (SPEC §14 note).
 - Commits: pathspec only, no attribution lines, no push. No phone, no install, no Worker deploy,
   no upload.
 
@@ -53,13 +56,19 @@ Worker route.
 - U2 post (as `ref.u2_mask`): min-max, bilinear half-pixel to full size, Gaussian feather sigma
   2 px (radius 6), `floor(255x + 0.5)`; float32 (±1). MODNet post: same bilinear, values clipped
   to 0..1, no min-max, no feather (the matte the owner judged in `sheet.py` was unfeathered).
-- Upscale size rule: L = longest side. If L >= 4096: refuse ("This image is already as big as it
-  can be.") from the header size, before decoding or opening a session. If 4L > 4096, the model
-  input is the photo shrunk so its longest side is 1024 (aspect kept, `round`), done by the
-  decoder (`ImageDecoder.setTargetSize`, its own filter, not LANCZOS: a full-size decode plus a
-  LANCZOS copy does not fit the ~256 MB heap; fix round 1 ruling); else the photo itself. The 4x
-  model result is resized (LANCZOS) to the output size = round(scale x photo size), shrunk to
-  fit 4096 if needed.
+- Upscale size rule (owner, 2026-11-18; replaces the earlier rule): L = longest side. If
+  L >= 4096: refuse ("This image is already as big as it can be.") from the header size. The
+  model input is the photo (4x) or a half-size copy of it (2x: each side rint(side / 2), at least
+  1), shrunk further so its longest side is at most 1024 (aspect kept, rint) when bigger; the
+  decoder makes both copies (`ImageDecoder.setTargetSize`). Output = exactly 4 x the model input,
+  so no resize after the model and never more than 4096. Examples: (1080,1080,2) -> in 540x540,
+  out 2160x2160; (1080,1080,4) -> 1024x1024, 4096x4096; (300,200,2) -> 150x100, 600x400;
+  (300,200,4) -> 300x200, 1200x800; (2000,1000,2) -> 1000x500, 4000x2000; (2000,1000,4) ->
+  1024x512, 4096x2048; (4096,10,2) -> refused.
+- Upscale estimate (owner): tiles = ceil(inW/128) x ceil(inH/128); seconds = tiles x 1.9.
+  Label: under 10 s "A few seconds"; under 60 s "About N seconds" with N rounded to the nearest
+  10; else "About N minutes" with N = round(seconds / 60) ("About 1 minute" for 1). 1080 px:
+  2x 25 tiles "About 50 seconds", 4x 64 tiles "About 2 minutes".
 - Alpha in upscale (fix round 1 ruling): if any pixel's alpha < 255, the model runs on
   premultiplied RGB (Pillow's RGBa, MULDIV255 rounding); the output alpha is the model input's
   alpha resized with LANCZOS straight to the output size, and the output RGB is un-premultiplied
@@ -193,29 +202,57 @@ export function visionToolMessage(r: SearchToolResult): string | null;
 - [ ] **Step 2:** `pnpm --filter design-editor-mobile test` fails. **Step 3:** implement. **Step 4:** test + typecheck pass.
 - [ ] **Step 5: Commit** `Quick edits Phase 2: model download step for cut-out and upscale`.
 
-### Task 5: Bridge and editor UI — BLOCKED on a transport decision
+### Task 5a: Bridge (page <-> app <-> Kotlin), chunked
 
-The brief requires the result to reach Fabric "through the shell's existing file-loading route,
-never a file:// URL and never base64 over the bridge". No such route exists: the page gets images
-only through its own `<input type="file">` (bytes stay in the page as data: URLs), the CSP allows
-images only from data:/blob:, and every native->page path is a string (`injectJavaScript`). The
-source image also lives only in the page, so the page cannot hand Kotlin a file path without
-first sending the bytes. (Images already cross today as data: URLs inside design JSON:
-`writeAutosave`, `openDesign`, `saveFile` json.) Built when the owner picks one:
+Page API, `window.native.vision(req)` in `packages/design-editor-engine/shell-mobile.js` (absent
+on the Mac, so `app.js` tests `window.native.vision`):
+```js
+vision({ op: 'tools' }) -> Promise<string[]>                 // cut-out kinds available, from visionTools(): e.g. ['person','object']
+vision({ op: 'cutout', kind: 'person'|'object', image: Blob, onProgress(phase, fraction) }) -> Promise<Blob|null>
+vision({ op: 'upscale', scale: 2|4, image: Blob, onProgress(phase, fraction) }) -> Promise<Blob|null>
+vision({ op: 'cancel' }) -> Promise<void>                    // cancels the run in flight; its promise resolves null
+// phase: 'download' (first use fetches the model) or 'run'. Rejects with Error(plain-words message).
+```
+Transport: the shell slices `image` into pieces of 786,432 bytes (base64 1,048,576 chars, a
+multiple of 3 so pieces join), `call('visionChunk', { id, index, data })` each; then
+`call('vision', { id, op, option, chunks })`; the app joins the pieces, writes
+`cacheDirectory/vision/<id>.src` (base64), makes sure the tool is installed
+(`getSearchTool(realVisionToolDeps(tool), ...)`, progress as `visionProgress` commands, offline ->
+`visionToolMessage`), calls `runVision(id, op, path, option)` (plain path), relays
+`onVisionProgress` as `{ type: 'visionProgress', id, phase, fraction }`, deletes the .src file in
+`finally`, and replies `{ bytes }`. The shell then pulls the result with
+`call('visionRead', { id, index })` -> `{ data, done }` (read with `readAsStringAsync` base64,
+`position`/`length` 786,432); on `done` the app deletes the result file. `visionCancel` calls
+`cancelVision(id)` and deletes the .src, the result and any held pieces. Ids: `v` + time + random,
+matching `[A-Za-z0-9_-]{1,64}`. `bridge.ts` gains the new PageEvent and WebCommand members.
+Tests: node tests for any pure helper (piece offsets, id format); the Chrome mobile test drives
+the shell with a fake `ReactNativeWebView` that answers the calls (a new test module registered
+by one line). SPEC §14.3 gets an "As built (2026-11-18)" note: vision images cross in pieces
+of <= 1 MB, which replaces the "file path, never base64" rule for vision.
 
-- A (recommended): chunked transfer. `native.vision` sends the selected image in <= 1 MB base64
-  pieces that Kotlin appends to `cacheDir/vision/<id>.in` (a file path from then on); the PNG
-  result comes back in <= 1 MB pieces the page assembles into a Blob -> blob: URL -> `setSrc`.
-  No single message nears the 40 MB stall; this bends the "never base64" rule.
-- B: the page sends a downscaled copy only (cut-out mask computed and applied in the page, upscale
-  result still has to come back) — does not solve upscale.
+### Task 5b: Editor UI (engine)
 
-Contract once decided: `window.native.vision({ op: 'tools' | 'cutout' | 'upscale' | 'cancel', ... })`
-in `shell-mobile.js` <-> `bridge.ts` + `app/editor.tsx`; progress as a `visionProgress` command;
-engine UI in `app.js`: "Remove background" sheet with Person / Object (from `op: 'tools'`) and
-Plain background (today's colour fill); "Upscale 2x / 4x" with a progress bar and Cancel; each
-result one undoable edit; nothing model-based shown when `window.native.vision` is missing; e2e
-in `test/mobile.mjs` with a fake `native.vision`.
+`app.js` (+ `image-maths.js` for the estimate, tested in `test/image-maths.test.mjs`):
+- "Remove background": Person and Object (only the kinds `vision({op:'tools'})` returns) plus
+  "Plain background" (today's colour fill with its tolerance). No `window.native.vision`: only
+  Plain background, exactly as today.
+- "Upscale": 2x and 4x, only with `window.native.vision`. Tapping shows the estimate first
+  (`upscaleEstimate(w, h, scale)` -> `{ inW, inH, outW, outH, tiles, seconds, label } | null`, the
+  rule above, null = refused with "This image is already as big as it can be.") with Start and
+  Cancel; then a progress bar (download phase says "Getting the tool"), and Cancel.
+- Source pixels: the image's original element (as `removeBg`), sent as a PNG Blob. Result: the
+  returned Blob read as a data: URL and set with `setSrc` (designs keep images as data: URLs so
+  save and undo keep working), then `record()`: one undoable edit; undo brings the original back.
+- Errors: the rejection message in the page toast. Cancel: nothing changes.
+- e2e: the Chrome mobile test with a fake `native.vision` (cut-out returns a known PNG, upscale
+  reports progress then returns one; cancel leaves the image unchanged; one undo restores the
+  original); the desktop e2e checks Person, Object and Upscale are absent on the Mac.
+
+### Task 5c: Kotlin upscale rule
+
+`upscalePlan` follows the owner's rule above (Kotlin `UpscaleMaths.kt`, tests with the same
+example table as `image-maths.test.mjs`); `Vision`/`VisionJob` decode straight to the plan's
+`inW x inH` and drop the post-model resize; alpha = model-input alpha LANCZOS-resized to 4x.
 
 ### Task 6: Gates
 
