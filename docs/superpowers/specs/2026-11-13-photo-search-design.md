@@ -133,9 +133,14 @@ page alignment, and no Play artifacts in `releaseRuntimeClasspath`.
 - **Tab layout:** Photos has two segments, Search | Clean up. Clean up arrives in feature 2.
 - **Index row** also gets feature 2's numbers (dHash, brightness, sharpness) once that
   feature lands. The table is versioned so adding columns triggers a one-time re-scan.
-- **Results:** top 60, with no score shown. Below a similarity floor the tab says "No close
-  matches" rather than showing noise. Phase 0 starting value 0.25 (95% of true matches score
-  above it on the COCO set); check it in Phase 2 with queries for things not in the gallery.
+- **Results:** top 60, with no score shown. Phase 2 on the phone (2026-11-17) showed a fixed
+  0.25 floor hides real matches for one-word queries ("sky", "food" found nothing), so: queries of
+  3 words or fewer are worded "a photo of …", and a result shows when its score is at least
+  max(0.20, best match − 0.05). Measured on 1,000 COCO photos: top hit right for 24 of 25 short
+  queries (20 without the wording), no short query left empty, caption search unchanged (true photo
+  in the top 5: 76.2% against 76.8% with no cut-off). A floor can't tell a subject that isn't in
+  the gallery from one that is (scores overlap), so "No close matches" now shows only when nothing
+  clears 0.20. More like this keeps a plain 0.25 floor (photo-to-photo scores run higher).
 - **Copy:** sentence case, plain words, no engineering terms in the UI (memory: plain words
   for users).
 
