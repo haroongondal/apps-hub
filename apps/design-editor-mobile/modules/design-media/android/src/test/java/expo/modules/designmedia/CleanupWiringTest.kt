@@ -17,6 +17,14 @@ class CleanupWiringTest {
     assertTrue(!trash.contains("answer(action, 0)") && !trash.contains("answer(pending.action, 0)"))
   }
 
+  // Dialog said OK but the record write failed: the photos are in Android's trash, so Undo still gets the URIs.
+  @Test
+  fun failedRecordWriteStillResolvesWithTheUris() {
+    val trash = read("android/CleanupTrash.kt")
+    assertTrue(trash.contains("resolve(trashAnswer(pending.action, pending.uris, noted = false))"))
+    assertTrue(!trash.contains("TrashNotNoted"))
+  }
+
   @Test
   fun undismissIsWiredLikeDismiss() {
     assertTrue(read("DesignMediaModule.kt").contains(

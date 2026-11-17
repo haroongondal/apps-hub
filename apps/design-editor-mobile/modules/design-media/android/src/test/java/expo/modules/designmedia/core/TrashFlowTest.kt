@@ -102,7 +102,12 @@ class TrashFlowTest {
 
   @Test
   fun answerCarriesTheUrisSent() {
-    assertEquals(mapOf("moved" to 2, "uris" to a), trashAnswer(TrashAction.TRASH, a))
+    assertEquals(mapOf("moved" to 2, "uris" to a, "noted" to true), trashAnswer(TrashAction.TRASH, a))
     assertEquals(mapOf("restored" to 0, "uris" to emptyList<String>()), trashAnswer(TrashAction.RESTORE, emptyList()))
   }
+
+  // Android's trash took them but the record write failed: Undo still needs the URIs.
+  @Test
+  fun notedFalseStillReturnsUris() =
+    assertEquals(mapOf("moved" to 2, "uris" to a, "noted" to false), trashAnswer(TrashAction.TRASH, a, noted = false))
 }

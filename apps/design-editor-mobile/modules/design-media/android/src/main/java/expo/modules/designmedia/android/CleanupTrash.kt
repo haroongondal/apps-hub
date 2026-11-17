@@ -18,9 +18,6 @@ class RequestStillOpen : CodedException("Another request is still open.")
 
 class DialogFailed(cause: Throwable) : CodedException("Android's dialog didn't open. Try again.", cause)
 
-class TrashNotNoted(cause: Throwable) :
-  CodedException("The photos went to Android's trash, but Clean up couldn't note them. Find them in your Gallery app's trash.", cause)
-
 // The only way a gallery photo leaves: Android's own trash dialog, confirmed by the owner (AC-1). Never a delete.
 // Process-wide, so a confirmed result still gets recorded after a JS reload made a new module instance.
 object CleanupTrash {
@@ -61,7 +58,8 @@ object CleanupTrash {
       try {
         CleanupTool.record(ctx).add(held.entries.map { it.copy(trashedAt = now) })
       } catch (e: Exception) {
-        return settle(held.promise) { reject(TrashNotNoted(e)) }
+        // The photos are already in Android's trash: resolve with the URIs so Undo works, flagged as not recorded.
+        return settle(held.promise) { resolve(trashAnswer(pending.action, pending.uris, noted = false)) }
       }
     } else {
       // Restored either way; a stale entry drops on the next recentlyRemoved.

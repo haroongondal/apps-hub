@@ -57,7 +57,7 @@ export interface DesignMediaModule {
   releasePhotoSearch(): Promise<void>; // frees the text model's memory
   // Clean up: groups from the photo index. A photo leaves the gallery only through Android's own trash dialog.
   cleanupGroups(options?: { blurThreshold?: number; lookalikeCosine?: number }): Promise<CleanupResult>; // photos still in the gallery only
-  trashPhotos(uris: string[]): Promise<{ moved: number; uris: string[] }>; // opens Android's dialog; 0 and [] when the owner says no; uris: the ones sent, for Undo
+  trashPhotos(uris: string[]): Promise<{ moved: number; uris: string[]; noted: boolean }>; // opens Android's dialog; 0 and [] when the owner says no; uris: the ones sent, for Undo; noted false: in Android's trash but not in Recently removed
   recentlyRemoved(): Promise<RemovedPhoto[]>; // trashed here in the last 30 days and still in Android's trash
   restorePhotos(uris: string[]): Promise<{ restored: number; uris: string[] }>; // opens Android's dialog; 0 and [] when the owner says no
   dismissCleanup(kind: CleanupKind, uris: string[]): Promise<void>; // "Not a mistake": never shown in that kind again
