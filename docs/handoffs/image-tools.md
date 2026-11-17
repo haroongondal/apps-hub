@@ -165,3 +165,6 @@ reply, expo-file-system base64 reads, Expo error wrapping) and an eye check of a
 cut-out's edge. The owner reads the new copy and the 2x estimate ("About 50 seconds"). Then
 ship (PR into main) so main has the Worker /models/ route.
 Feature 2: 2.0 spike phase agent running (ledger `.superpowers/sdd/2026-11-18-image-tools-2.0/progress.md`).
+Done so far: refs + fixtures cbb71a5, look-alike cosine tuning a33819d (default 0.93, conservative end
+0.97, Blender open-movie shot series, CC BY), phone bench + trash check scripts 9e36362 (not yet
+run). Open: blur tuning (T2), phone run (T4), results note (T5).
