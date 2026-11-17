@@ -4,11 +4,8 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -17,7 +14,6 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
-import android.media.ExifInterface
 import android.os.SystemClock
 import android.util.Log
 import android.util.Size
@@ -54,10 +50,8 @@ import expo.modules.pdfscan.core.QuadStabilizer
 import expo.modules.pdfscan.core.Quads
 import expo.modules.pdfscan.core.ScanHint
 import java.io.File
-import java.io.FileOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -288,7 +282,7 @@ class ScanCameraView(context: Context, appContext: AppContext) : ExpoView(contex
           dir.mkdirs()
           val dest = File(dir, "cap-$ms.jpg")
           val started = SystemClock.elapsedRealtime()
-          val (bw, bh, refined) = importUpright(raw, dest)
+          val (bw, bh, refined) = ImageImport.importUpright(raw, dest)
           val quad = pickQuad(refined, det)
           Log.d(TAG, "capture import ${SystemClock.elapsedRealtime() - started}ms ${bw}x$bh refined=${refined != null}")
           onCapture(mapOf("uri" to "file://${dest.absolutePath}", "width" to bw, "height" to bh, "quad" to quad?.toList(), "auto" to auto))
@@ -318,53 +312,6 @@ class ScanCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     if (refined == null) return live?.quad
     if (live == null) return refined.quad
     return if (Quads.maxCornerShareOfDiagonal(refined.quad, live.quad, refined.aspect) <= 0.03) refined.quad else live.quad
-  }
-
-  /** Writes [dest] upright at ≤ 3,000 px, quality 90, via a temp file; re-detects on it. */
-  private fun importUpright(src: File, dest: File): Triple<Int, Int, Detection?> {
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(src.absolutePath, bounds)
-    var sample = 1
-    while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= MAX_SIDE) sample *= 2
-    val decoded = BitmapFactory.decodeFile(src.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
-      ?: throw IllegalStateException("decode failed")
-    val matrix = Matrix()
-    when (ExifInterface(src.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
-      ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
-      ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
-      ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
-    }
-    val scale = min(1f, MAX_SIDE.toFloat() / max(decoded.width, decoded.height))
-    if (scale < 1f) matrix.preScale(scale, scale)
-    val upright = if (matrix.isIdentity) decoded else Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
-    if (upright !== decoded) decoded.recycle()
-    val tmp = File(dest.parentFile, dest.name + ".tmp")
-    // compress() reports a failed write (a full disk) only through its return value.
-    val written = FileOutputStream(tmp).use { upright.compress(Bitmap.CompressFormat.JPEG, 90, it) }
-    if (!written || !tmp.renameTo(dest)) {
-      tmp.delete()
-      upright.recycle()
-      throw IllegalStateException("the photo couldn't be written")
-    }
-    val w = upright.width
-    val h = upright.height
-    val detection = detectOn(upright)
-    upright.recycle()
-    return Triple(w, h, detection)
-  }
-
-  private fun detectOn(bitmap: Bitmap): Detection? {
-    val s = min(1f, 640f / max(bitmap.width, bitmap.height))
-    val small = Bitmap.createScaledBitmap(bitmap, max(1, (bitmap.width * s).roundToInt()), max(1, (bitmap.height * s).roundToInt()), true)
-    val px = IntArray(small.width * small.height)
-    small.getPixels(px, 0, small.width, 0, 0, small.width, small.height)
-    val luma = ByteArray(px.size) { i ->
-      val c = px[i]
-      ((Color.red(c) * 77 + Color.green(c) * 150 + Color.blue(c) * 29) shr 8).toByte()
-    }
-    val det = QuadDetector().detect(Luma(luma, small.width, small.height))
-    if (small !== bitmap) small.recycle()
-    return det
   }
 
   fun release() {
@@ -425,7 +372,6 @@ class ScanCameraView(context: Context, appContext: AppContext) : ExpoView(contex
 
   companion object {
     private const val TAG = "PdfScan"
-    private const val MAX_SIDE = 3000
     // One for the process, never shut down: CameraX may still deliver a save after the view is released.
     private val saveExecutor: ExecutorService = Executors.newSingleThreadExecutor()
   }

@@ -21,4 +21,21 @@ object PageGeometry {
     val scale = if (long <= 0) 1.0 else min(maxScale, maxLongSide / long)
     return max(1, (w * scale).roundToInt()) to max(1, (h * scale).roundToInt())
   }
+
+  fun fullFrameQuad() = doubleArrayOf(0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0)
+
+  fun validateQuad(q: DoubleArray): Boolean {
+    if (q.size != 8 || q.any { it.isNaN() || it < 0.0 || it > 1.0 }) return false
+    var sign = 0
+    for (k in 0 until 4) {
+      val ax = q[k * 2]; val ay = q[k * 2 + 1]
+      val bx = q[((k + 1) % 4) * 2]; val by = q[((k + 1) % 4) * 2 + 1]
+      val cx = q[((k + 2) % 4) * 2]; val cy = q[((k + 2) % 4) * 2 + 1]
+      val cross = (bx - ax) * (cy - by) - (by - ay) * (cx - bx)
+      val s = if (cross > 1e-12) 1 else if (cross < -1e-12) -1 else 0
+      if (s == 0 || (sign != 0 && s != sign)) return false
+      sign = s
+    }
+    return true
+  }
 }

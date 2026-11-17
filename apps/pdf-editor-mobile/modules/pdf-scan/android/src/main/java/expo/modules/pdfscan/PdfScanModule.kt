@@ -5,9 +5,17 @@ import android.graphics.Color
 import android.net.Uri
 import expo.modules.interfaces.permissions.Permissions
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.pdfscan.android.ImageImport
+import expo.modules.pdfscan.android.PageProcessor
+import expo.modules.pdfscan.android.ProcessRequest
 import expo.modules.pdfscan.android.ScanCameraView
+import expo.modules.pdfscan.android.asFile
+import expo.modules.pdfscan.android.existingFile
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class PdfScanModule : Module() {
@@ -19,6 +27,19 @@ class PdfScanModule : Module() {
     }
     AsyncFunction("requestCameraPermission") { promise: Promise ->
       Permissions.askForPermissionsWithPermissionsManager(appContext.permissions, promise, Manifest.permission.CAMERA)
+    }
+    AsyncFunction("importImage") Coroutine { src: String, dest: String ->
+      withContext(Dispatchers.Default) {
+        val out = asFile(dest)
+        val (w, h, det) = ImageImport.importUpright(existingFile(src), out)
+        mapOf("uri" to "file://${out.absolutePath}", "width" to w, "height" to h, "quad" to det?.quad?.toList())
+      }
+    }
+    AsyncFunction("detectQuad") Coroutine { src: String, card: Boolean? ->
+      withContext(Dispatchers.Default) { ImageImport.detectFile(existingFile(src))?.quad?.toList() }
+    }
+    AsyncFunction("processPage") Coroutine { req: ProcessRequest ->
+      withContext(Dispatchers.Default) { PageProcessor.process(req) }
     }
 
     View(ScanCameraView::class) {
