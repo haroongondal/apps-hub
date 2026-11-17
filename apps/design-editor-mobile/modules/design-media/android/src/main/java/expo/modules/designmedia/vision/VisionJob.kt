@@ -1,5 +1,6 @@
 package expo.modules.designmedia.vision
 
+import ai.onnxruntime.OrtException
 import expo.modules.designmedia.core.Filter
 import expo.modules.designmedia.core.ModelFile
 import expo.modules.designmedia.core.SCALE
@@ -20,6 +21,7 @@ class VisionToolMissing : CodedException("This tool isn't on the phone yet.")
 class VisionCantOpen : CodedException("This image can't be opened.")
 class VisionTooBig : CodedException("This image is already as big as it can be.")
 class VisionNoMemory : CodedException("This image is too big for this tool.")
+class VisionFailed : CodedException("This tool didn't work on this image. Try again.")
 class VisionCantSave : CodedException("The result couldn't be saved. Free up some space and try again.")
 class VisionCancelled : CodedException("CANCELLED", "Stopped.", null)
 
@@ -43,10 +45,13 @@ object VisionJob {
     return maxOf(1, (w * s).toInt()) to maxOf(1, (h * s).toInt())
   }
 
-  fun <T> plainMemory(block: () -> T): T = try {
+  // Raw Java and ORT messages never reach the page.
+  fun <T> plainWords(block: () -> T): T = try {
     block()
   } catch (e: OutOfMemoryError) {
     throw VisionNoMemory()
+  } catch (e: OrtException) {
+    throw VisionFailed()
   }
 
   // Keeps any transparency the source already had: final alpha = min(source alpha, mask). Writes into image.argb.

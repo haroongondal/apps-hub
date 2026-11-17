@@ -2,6 +2,7 @@ package expo.modules.designmedia.vision
 
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtException
 import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.graphics.Bitmap
@@ -15,8 +16,8 @@ import expo.modules.designmedia.core.modnetInput
 import expo.modules.designmedia.core.modnetSize
 import expo.modules.designmedia.core.u2Input
 import expo.modules.designmedia.core.upscalePlan
+import expo.modules.kotlin.exception.CodedException
 import java.io.File
-import java.io.IOException
 import java.nio.FloatBuffer
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -54,7 +55,7 @@ object Vision {
     try {
       if (!ClipModels.isReady(modelsDir(ctx), model)) throw VisionToolMissing()
       val file = VisionPaths.resolve(ctx.cacheDir, src) ?: throw VisionCantOpen()
-      return VisionJob.plainMemory {
+      return VisionJob.plainWords {
         val result = if (model == VisionModels.ESRGAN) {
           var plan: UpscalePlan? = null
           // Shrinking happens in the decoder (its own filter, not the plan's LANCZOS): a full-size decode of a big photo
@@ -93,10 +94,12 @@ object Vision {
     val bmp = try {
       ImageDecoder.decodeBitmap(ImageDecoder.createSource(file)) { decoder, info, _ ->
         decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-        decoder.isUnpremultipliedRequired = true
-        target(info.size.width, info.size.height)?.let { (w, h) -> decoder.setTargetSize(w, h) }
+        // ImageDecoder refuses to scale unpremultiplied pixels of a non-opaque source; getPixels unpremultiplies anyway.
+        target(info.size.width, info.size.height)?.let { (w, h) -> decoder.setTargetSize(w, h) } ?: run { decoder.isUnpremultipliedRequired = true }
       }
-    } catch (e: IOException) {
+    } catch (e: CodedException) {
+      throw e
+    } catch (e: Exception) {
       throw VisionCantOpen()
     }
     try {
@@ -124,7 +127,14 @@ object Vision {
   private fun session(ctx: Context, m: ModelFile): OrtSession =
     OrtSession.SessionOptions().use { opts ->
       opts.setIntraOpNumThreads(2)
-      env.createSession(File(modelsDir(ctx), m.name).path, opts)
+      val file = File(modelsDir(ctx), m.name)
+      try {
+        env.createSession(file.path, opts)
+      } catch (e: OrtException) {
+        // A model that won't load (right size, bad bytes) is deleted so the next use downloads it again.
+        file.delete()
+        throw e
+      }
     }
 
   // Returns the first output and its shape; names come from the session, not hard-coded.
