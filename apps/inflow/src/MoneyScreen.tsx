@@ -175,7 +175,7 @@ export function MoneyScreen({ status, onOpenParty, onOpenReport }: { status: Sta
   const overview = (
     <>
       {overviews.map((o) => (
-        <Group key={o.currency} title={manyCurrencies ? `This month, ${o.currency}` : 'This month'}>
+        <Group key={o.currency} title={manyCurrencies ? `${monthLabel(ym.year, ym.month)}, ${o.currency}` : monthLabel(ym.year, ym.month)}>
           <Row title="Money out" trailing={<Text variant="data">{formatAmount(o.moneyOut, o.currency)}</Text>} />
           <Row title="Money in" trailing={<Text variant="data">{formatAmount(o.moneyIn, o.currency)}</Text>} />
           <Row title="Net" trailing={<Text variant="data" tone={o.net < 0 ? 'text' : 'ok'}>{formatAmount(o.net, o.currency)}</Text>} />

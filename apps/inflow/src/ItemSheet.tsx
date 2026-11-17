@@ -80,14 +80,15 @@ export function ItemSheet({ item, onClose, onRename, onShowSender }: { item: Ite
     setError(null);
   }, [senderKey]);
   const promoKey = item?.conversationKey ?? item?.senderKey ?? null;
+  const itemId = item?.id ?? null;
   const [promo, setPromo] = useState<boolean | null>(null);
   useEffect(() => {
     try {
-      setPromo(promoKey === null ? null : InflowCore.smsPromotion(promoKey));
+      setPromo(promoKey === null || itemId === null ? null : InflowCore.smsPromotion(itemId));
     } catch {
       setPromo(null);
     }
-  }, [promoKey]);
+  }, [promoKey, itemId]);
   const togglePromo = () => {
     if (promoKey === null || promo === null) return;
     try {

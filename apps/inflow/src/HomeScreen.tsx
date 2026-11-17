@@ -114,7 +114,7 @@ export function HomeScreen({
       setError(LOAD_ERROR);
     }
   };
-  const empty = summary !== null && summary.conversations.length === 0 && summary.inbox.length === 0;
+  const empty = summary !== null && !summary.hasItems;
   // The card shows one currency (PKR is the only one so far).
   const overview = money === null ? null : (monthOverview(money)[0] ?? null);
 
@@ -208,7 +208,7 @@ export function HomeScreen({
         </Group>
       )}
       {empty && <Empty title="Nothing saved yet" body={EMPTY_TEXT} />}
-      {summary !== null && !empty && (
+      {summary !== null && summary.conversations.length > 0 && (
         <Group title="Recent chats">
           {summary.conversations.map((r) => (
             <Row
@@ -230,7 +230,7 @@ export function HomeScreen({
           <Row title="See all" onPress={() => onOpen({ kind: 'all' }, 'Everything')} />
         </Group>
       )}
-      {summary !== null && (
+      {summary !== null && summary.hasItems && (
         <Group title="All apps">
           <Row title="See every app" onPress={onOpenApps} />
         </Group>

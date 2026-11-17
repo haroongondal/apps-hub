@@ -105,6 +105,8 @@ export interface HomeSummary {
   conversations: ConversationRow[];
   // Chat-like apps (byContact) with items of non-promotional contacts only; never capped.
   inbox: AppRow[];
+  // Any visible item exists at all, in any app.
+  hasItems: boolean;
   // High importance, last 7 days, newest first, at most 5.
   important: Item[];
   // Not done, due from the start of today (or undated, from the last 3 days), soonest first, at most 5.
@@ -272,9 +274,9 @@ export interface InflowCoreApi {
   contacts(pkg: string, startOfDay: number, before: number | null, beforeKey: string | null, limit: number, promo: boolean): ContactRow[];
   // The senders of this app that are folded into Promotions.
   promotions(pkg: string): { senders: number; lastAt: number | null };
-  // key = conversationKey ?? senderKey of an item. null = not an SMS sender; otherwise whether it is in Promotions now.
-  smsPromotion(key: string): boolean | null;
-  // The owner's choice for one sender; it wins over the automatic rule.
+  // null = the item is not an SMS item or is gone; otherwise whether its sender is in Promotions now.
+  smsPromotion(itemId: number): boolean | null;
+  // The owner's choice for one sender (key = item.conversationKey ?? item.senderKey); it wins over the automatic rule.
   setPromotion(key: string, promotional: boolean): void;
   // All time, per currency. own true = transfers between the owner's accounts (name ignored).
   partyTotals(name: string | null, own: boolean): { currency: string; moneyIn: number; moneyOut: number; count: number }[];
