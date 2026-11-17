@@ -98,16 +98,19 @@ class VisionJobTest {
 
   @Test
   fun upscaleReportsProgressAndKeepsTransparentBorder() {
+    // 2x of a 40x40 photo: the decoder hands over the 20x20 half-size copy, and the output is exactly 4x that.
     val w = 20
+    val plan = upscalePlan(2 * w, 2 * w, 2)!!
     val src = Image(IntArray(w * w) { i -> if (i / w in 4..15 && i % w in 4..15) -0xcc9967 else 0x00336699 }, w, w)
-    val seen = mutableListOf<Double>()
-    val out = VisionJob.upscale(src, upscalePlan(w, w, 2)!!, ::nearest, { false }) { seen += it }
-    assertEquals(listOf(1.0), seen)
-    assertEquals(40, out.w)
-    assertEquals(40, out.h)
+    val out = VisionJob.upscale(src, plan, ::nearest, { false }) {}
+    assertEquals(80 to 80, out.w to out.h)
+    assertEquals(plan.outW to plan.outH, out.w to out.h)
     assertEquals(0, out.argb[0] ushr 24)
-    assertEquals(255, out.argb[20 * 40 + 20] ushr 24)
-    val opaque = VisionJob.upscale(Image(IntArray(w * w) { -0xcc9967 }, w, w), upscalePlan(w, w, 4)!!, ::nearest, { false }) {}
+    assertEquals(255, out.argb[40 * 80 + 40] ushr 24)
+    val seen = mutableListOf<Double>()
+    val opaque = VisionJob.upscale(Image(IntArray(300 * 200) { -0xcc9967 }, 300, 200), upscalePlan(300, 200, 4)!!, ::nearest, { false }) { seen += it }
+    assertEquals((1..6).map { it / 6.0 }, seen)
+    assertEquals(1200 to 800, opaque.w to opaque.h)
     assertTrue(opaque.argb.all { it ushr 24 == 255 })
   }
 
@@ -116,6 +119,8 @@ class VisionJobTest {
     assertThrows(IllegalArgumentException::class.java) {
       VisionJob.upscale(Image(IntArray(2000 * 10), 2000, 10), upscalePlan(2000, 10, 2)!!, ::nearest, { false }) {}
     }
+    val half = VisionJob.upscale(Image(IntArray(1000 * 5) { -0x1000000 }, 1000, 5), upscalePlan(2000, 10, 2)!!, ::nearest, { false }) {}
+    assertEquals(4000 to 20, half.w to half.h)
   }
 
   @Test

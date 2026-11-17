@@ -67,11 +67,14 @@ private fun fit(w: Int, h: Int, side: Int): Pair<Int, Int> {
 
 fun upscalePlan(w: Int, h: Int, scale: Int): UpscalePlan? {
   require(w > 0 && h > 0 && (scale == 2 || scale == 4)) { "bad upscale request" }
-  val l = maxOf(w, h)
-  if (l >= MAX_SIDE) return null
-  val (inW, inH) = if (SCALE * l > MAX_SIDE) fit(w, h, SHRUNK_SIDE) else w to h
-  val (outW, outH) = if (scale * l > MAX_SIDE) fit(scale * w, scale * h, MAX_SIDE) else scale * w to scale * h
-  return UpscalePlan(inW, inH, outW, outH)
+  if (maxOf(w, h) >= MAX_SIDE) return null
+  // Owner rule 2026-11-18: 2x runs the 4x model on a half-size copy; the output is exactly 4 x the model input.
+  val (bw, bh) = if (scale == 2) maxOf(1, Math.rint(w / 2.0).toInt()) to maxOf(1, Math.rint(h / 2.0).toInt()) else w to h
+  val (inW, inH) = if (maxOf(bw, bh) > SHRUNK_SIDE) fit(bw, bh, SHRUNK_SIDE) else bw to bh
+  return UpscalePlan(inW, inH, SCALE * inW, SCALE * inH)
 }
+
+// The number of model runs for an inW x inH input; the page's time estimate mirrors it.
+fun upscaleTiles(inW: Int, inH: Int): Int = ((inW + TILE - 1) / TILE) * ((inH + TILE - 1) / TILE)
 
 fun hasAlpha(argb: IntArray): Boolean = argb.any { it ushr 24 != 0xFF }
