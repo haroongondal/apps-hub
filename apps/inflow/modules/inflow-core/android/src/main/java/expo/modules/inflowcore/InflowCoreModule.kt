@@ -148,8 +148,24 @@ class InflowCoreModule : Module() {
       store().list(filter, before, limit, System.currentTimeMillis(), beforeId)
     }
 
-    Function("contacts") { pkg: String, startOfDay: Long, before: Long?, beforeKey: String?, limit: Int ->
-      store().contacts(pkg, startOfDay, System.currentTimeMillis(), before, beforeKey, limit)
+    Function("apps") { startOfDay: Long ->
+      store().apps(startOfDay, System.currentTimeMillis(), StoreHolder.smsPackages(context))
+    }
+
+    Function("contacts") { pkg: String, startOfDay: Long, before: Long?, beforeKey: String?, limit: Int, promo: Boolean ->
+      store().contacts(pkg, startOfDay, System.currentTimeMillis(), before, beforeKey, limit, promo)
+    }
+
+    Function("promotions") { pkg: String ->
+      store().promotions(pkg, System.currentTimeMillis())
+    }
+
+    Function("smsPromotion") { key: String ->
+      store().smsPromotion(key)
+    }
+
+    Function("setPromotion") { key: String, promotional: Boolean ->
+      store().setPromotion(key, promotional)
     }
 
     Function("listApps") { ->

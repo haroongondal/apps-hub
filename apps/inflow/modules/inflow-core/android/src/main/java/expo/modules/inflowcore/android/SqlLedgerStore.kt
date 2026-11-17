@@ -137,13 +137,8 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
       }
     }
     // Every person or shop, both directions; own transfers are one row with no name. A blank name is "Unknown" on screen.
-    val parties = db.rawQuery(
-      "SELECT CASE WHEN own = 1 THEN NULL ELSE $PARTY END, own, currency, " +
-        "SUM(CASE direction WHEN 'IN' THEN amount_minor ELSE 0 END), SUM(CASE direction WHEN 'OUT' THEN amount_minor ELSE 0 END), COUNT(*) " +
-        "FROM txns WHERE at >= ? AND at < ? GROUP BY own, CASE WHEN own = 1 THEN '' ELSE $PARTY END, currency " +
-        "ORDER BY SUM(amount_minor) DESC, 1",
-      from, to,
-    ).use { c ->
+    // Grouped ignoring case; the name shown is the spelling of the newest row (SQLite takes the bare columns from the single MAX(at) row).
+    val parties = db.rawQuery(PARTIES_SQL, from, to).use { c ->
       buildList {
         while (c.moveToNext()) {
           add(
@@ -178,7 +173,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
   }
 
   private fun partyClause(name: String?, own: Boolean): Pair<String, Array<Any?>> =
-    if (own) "t.own = 1" to emptyArray() else "t.own = 0 AND COALESCE(t.label, t.counterparty, '') = ?" to arrayOf(name ?: "")
+    if (own) "t.own = 1" to emptyArray() else PARTY_CLAUSE to arrayOf(name ?: "")
 
   /** Newest first; paging matches SqlItemStore.list. */
   fun listTxns(account: String?, before: Long?, limit: Int, beforeId: Long?): List<Map<String, Any?>> =
@@ -255,9 +250,15 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
 
   private fun Cursor.str(i: Int): String? = if (isNull(i)) null else getString(i)
 
-  private companion object {
-    // The name a person or shop is grouped under: the AI's clean name, else the bank's text.
+  internal companion object {
+    // The name a person or shop is shown under: the AI's clean name, else the bank's text. Grouping and matching use its lower() (shortcut: lower() folds ASCII only, which covers the names seen so far).
     const val PARTY = "COALESCE(label, counterparty, '')"
+    const val PARTY_KEY_T = "lower(COALESCE(t.label, t.counterparty, ''))"
+    const val PARTY_CLAUSE = "t.own = 0 AND $PARTY_KEY_T = lower(?)"
+    const val PARTIES_SQL = "SELECT CASE WHEN own = 1 THEN NULL ELSE $PARTY END, own, currency, " +
+      "SUM(CASE direction WHEN 'IN' THEN amount_minor ELSE 0 END), SUM(CASE direction WHEN 'OUT' THEN amount_minor ELSE 0 END), COUNT(*), MAX(at) " +
+      "FROM txns WHERE at >= ? AND at < ? GROUP BY own, CASE WHEN own = 1 THEN '' ELSE lower($PARTY) END, currency " +
+      "ORDER BY SUM(amount_minor) DESC, 1"
     // The channel column is a comma list; ',NOTIFICATION,' is a source that was a bare push (WhatsApp, a bank app), whatever became of its item.
     const val PUSH_SOURCE = "instr(',' || p.channel || ',', ',NOTIFICATION,') > 0"
   }
