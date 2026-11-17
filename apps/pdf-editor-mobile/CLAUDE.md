@@ -20,7 +20,7 @@ pnpm --filter pdf-editor-mobile typecheck
 pnpm --filter pdf-editor-desktop test:e2e   # includes mobile.mjs, see below
 ```
 
-This app's `test` script checks the patched `decode-uri-component` it ships (`patches/`, a DoS fix the ESM-only upstream release can't give query-string 7) and the scan session's restore rules (`session-data.test.ts`). `mobile.mjs` smoke-tests `mobile.html` in system Chrome with a fake `ReactNativeWebView` bridge and skips when Chrome isn't installed, so it covers the page but not this shell.
+This app's `test` script checks the patched `decode-uri-component` it ships (`patches/`, a DoS fix the ESM-only upstream release can't give query-string 7), the scan session's restore rules (`session-data.test.ts`), the crop math and the card-capture rules. `mobile.mjs` smoke-tests `mobile.html` in system Chrome with a fake `ReactNativeWebView` bridge and skips when Chrome isn't installed, so it covers the page but not this shell.
 
 ## This app is a shell
 
@@ -47,4 +47,5 @@ Native scanning lives in the Expo local module `modules/pdf-scan` (Android only 
 - `core/` is pure Kotlin (no `android.*`): `QuadDetector` (page edges, constants in `DetectorConfig`) and `QuadStabilizer` (auto-capture, clock injected, constants in `StabilizerConfig`). Test them on the JVM: `cd android && ./gradlew :pdf-scan:testDebugUnitTest`.
 - `android/ScanCameraView.kt` runs CameraX (preview, 640×480 analysis, full-size capture) and draws the outline natively; JS only gets hints, the count and the captured file. Its `Log` lines tagged `PdfScan` carry the S1/S2 spike numbers (`adb logcat -s PdfScan`).
 - The unsaved capture session is `scan-session/session.json` (`src/scan/session.ts`); its pure restore rules are in `session-data.ts` and tested by this app's `test` script.
+- Phase 3 adds the review, scan and page screens (`app/scan/`), card mode, the filters Magic, Gray and Black and white, and image export. The save, edit and PDF logic is `packages/scan-core` (`pnpm --filter @apps-hub/scan-core test`); `src/scan/service.ts` wires it to the native module and `expo-file-system`.
 - The app ships arm64-v8a only (`reactNativeArchitectures` in `android/gradle.properties`) and has Android backup off (owner, 2026-10-31).
