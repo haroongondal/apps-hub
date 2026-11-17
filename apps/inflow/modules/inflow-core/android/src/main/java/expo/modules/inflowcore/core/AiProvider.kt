@@ -39,10 +39,10 @@ class OpenAiCompatProvider(
 ) {
   private var current = 0 // the key in use; it changes only when that key reaches its limit
 
-  fun complete(system: String, user: String): AiReply {
+  fun complete(system: String, user: String, maxTokens: Int = MAX_TOKENS): AiReply {
     if (keys.isEmpty() || keys.any(String::isBlank)) throw AiError(AiError.Kind.AUTH, "No API key is set. Add your API key in Settings.")
     val url = baseUrl.trimEnd('/') + "/chat/completions"
-    val body = request(system, user)
+    val body = request(system, user, maxTokens)
     var attempt = 0
     var limited = 0 // keys that answered 429 in a row since the last wait
     while (true) {
@@ -81,7 +81,7 @@ class OpenAiCompatProvider(
     }
   }
 
-  private fun request(system: String, user: String): String = buildJsonObject {
+  private fun request(system: String, user: String, maxTokens: Int): String = buildJsonObject {
     put("model", model)
     put(
       "messages",
@@ -92,7 +92,7 @@ class OpenAiCompatProvider(
         ),
       ),
     )
-    put("max_tokens", MAX_TOKENS)
+    put("max_tokens", maxTokens)
     effort?.let { put("reasoning_effort", it) }
   }.toString()
 
