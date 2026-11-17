@@ -30,6 +30,7 @@ import expo.modules.designmedia.core.SizePlan
 import expo.modules.designmedia.core.VBR
 import expo.modules.designmedia.core.decodeJobs
 import expo.modules.designmedia.core.cbrOnlyAfter
+import expo.modules.designmedia.core.withoutDuplicateScans
 import expo.modules.designmedia.core.failureMessage
 import expo.modules.designmedia.core.firstMode
 import expo.modules.designmedia.core.neededBytes
@@ -126,9 +127,9 @@ class MediaJobService : Service() {
   }
 
   private fun enqueue(json: String, cbr: Boolean) {
-    val jobs = decodeJobs(json).map {
+    val jobs = withoutDuplicateScans(store.load(), decodeJobs(json).map {
       it.copy(state = JobState.QUEUED, progress = 0.0, attempt = 1, outputs = emptyList(), error = null)
-    }
+    })
     cbrOnly = cbrOnlyAfter(cbrOnly, jobs, cbr)
     record(QueueEvent.Enqueue(jobs))
   }

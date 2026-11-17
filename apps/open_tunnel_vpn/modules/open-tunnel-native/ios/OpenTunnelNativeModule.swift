@@ -16,6 +16,9 @@ private enum ErrorCode {
   static let serviceStartFailed = "ERR_SERVICE_START_FAILED"
   static let probeFailed = "ERR_PROBE_FAILED"
   static let firewallNotSupported = "ERR_FIREWALL_NOT_SUPPORTED"
+  // Kotlin mirror: TunnelErrorCode.AUTH_FAILED. No iOS engine classifies
+  // auth failures yet; the status payload is able to carry the code.
+  static let authFailed = "ERR_AUTH_FAILED"
 }
 
 private let firewallNotSupportedMessage = "The firewall isn't available on iOS."
@@ -32,11 +35,13 @@ final class TunnelStateRegistry {
   private let queue = DispatchQueue(label: "expo.modules.opentunnelnative.registry")
   private var statusState = TunnelContracts.statusDisconnected
   private var statusMessage: String?
+  private var statusCode: String?
   private var connectedAtNanos: UInt64?
 
   struct Snapshot {
     let state: String
     let message: String?
+    let code: String?
   }
 
   /** Monotonic clock in nanoseconds (Uptime — wall-clock changes cannot
@@ -50,20 +55,22 @@ final class TunnelStateRegistry {
   }
 
   func snapshot() -> Snapshot {
-    queue.sync { Snapshot(state: statusState, message: statusMessage) }
+    queue.sync { Snapshot(state: statusState, message: statusMessage, code: statusCode) }
   }
 
   /** Sets the status; enforces the contract's known-state set. Returns
-   * false and leaves state untouched for unknown strings (defensive). */
+   * false and leaves state untouched for unknown strings (defensive).
+   * `code` carries the typed failure code only when the failure has one. */
   @discardableResult
-  func setStatus(_ state: String, _ message: String?) -> Bool {
+  func setStatus(_ state: String, _ message: String?, _ code: String? = nil) -> Bool {
     guard TunnelContracts.knownStatuses.contains(state) else { return false }
     queue.sync {
       statusState = state
       statusMessage = message
+      statusCode = code
       connectedAtNanos = state == TunnelContracts.statusConnected ? Self.nowNanos() : nil
     }
-    TunnelEventBus.shared.postStatus(state, message)
+    TunnelEventBus.shared.postStatus(state, message, code)
     return true
   }
 
@@ -82,7 +89,7 @@ final class TunnelStateRegistry {
 // MARK: - TunnelEventBus (Kotlin TunnelEventBus mirror)
 
 protocol TunnelEventListener: AnyObject {
-  func onStatus(state: String, message: String?)
+  func onStatus(state: String, message: String?, code: String?)
   func onTraffic(bytesIn: Int64, bytesOut: Int64, connectedDurationSec: Int64)
 }
 
@@ -108,12 +115,12 @@ final class TunnelEventBus {
   /* Posts take a listener snapshot under the lock and deliver outside it so
    * a listener can synchronously call back into the bus without a deadlock. */
 
-  func postStatus(_ state: String, _ message: String?) {
+  func postStatus(_ state: String, _ message: String?, _ code: String? = nil) {
     lock.lock()
     let snapshot = Array(listeners.values)
     lock.unlock()
     for listener in snapshot {
-      listener.onStatus(state: state, message: message)
+      listener.onStatus(state: state, message: message, code: code)
     }
   }
 
@@ -680,14 +687,23 @@ private final class ModuleEventForwarder: TunnelEventListener {
     self.module = module
   }
 
-  func onStatus(state: String, message: String?) {
+  func onStatus(state: String, message: String?, code: String?) {
     let nowConnected = state == TunnelContracts.statusConnected
     if nowConnected && !wasConnected {
       TrafficTicker.shared.reseed()
     }
     wasConnected = nowConnected
     DispatchQueue.main.async {
-      self.module?.sendEvent("onStatusChanged", ["state": state, "message": message])
+      // `code` is in the JS contract only when the failure carries one; the
+      // key is omitted otherwise (VpnStatusPayload).
+      var payload: [String: Any] = [
+        "state": state,
+        "message": message as Any,
+      ]
+      if let code = code {
+        payload["code"] = code
+      }
+      self.module?.sendEvent("onStatusChanged", payload)
     }
   }
 

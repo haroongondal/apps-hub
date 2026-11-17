@@ -20,6 +20,7 @@ const RECOVERY = tok(2);
 const READ = tok(3);
 const migration1 = readFileSync(new URL('../../migrations/0001_init.sql', import.meta.url), 'utf8');
 const migration2 = readFileSync(new URL('../../migrations/0002_escrow.sql', import.meta.url), 'utf8');
+const migration3 = readFileSync(new URL('../../migrations/0003_signin.sql', import.meta.url), 'utf8');
 
 type Body = Record<string, any>;
 const account = (over: object = {}) => ({ header: HEADER, loginHash: tokenHash(LOGIN), recoveryHash: tokenHash(RECOVERY), readHash: tokenHash(READ), ...over });
@@ -29,6 +30,7 @@ function world() {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec(migration1);
   sqlite.exec(migration2);
+  sqlite.exec(migration3);
   const mails: { to: string; subject: string; text: string }[] = [];
   let failMail = false;
   let clock = NOW;

@@ -152,11 +152,24 @@ session runs" in `docs/build-sessions.md`. Continue from "Current state + exact 
 
 ## Current state + exact next step
 
-Phase 1 is built and committed on `photo-search` (local, not pushed), waiting for the scoped
-re-review of 7137cd3 to come back clean. Next: write the Phase 2 plan (permission flow, Photos
-tab with "Get the search tool", scan progress, search box, grid, More like this, open; fix the
-deferred items above; release through the Store, then the on-phone checks AC-1..AC-6). Uncommitted in the worktree: five designs, the Phase 0 plan, this
-handoff, `tools/photo-bench/`. Waiting for the owner to say whether to commit them.
-Next: write the Phase 1 plan (engine: CLIP tokenizer, preprocessing, int8 index and ranking in
-Kotlin under `modules/design-media`, JVM tests against `ref.py` output; the index job in the
-`MediaJobService` queue; ONNX Runtime added after the `releaseRuntimeClasspath` no-Play check).
+Phase 2 (Photos tab) is built and committed on `photo-search` (local, not pushed; 88b0e24..b7b4040
+on top of the plan 2e68638). Run with the parallel-agents-coord skill; ledger with every ruling:
+`.superpowers/sdd/2026-11-17-photo-search-phase-2/progress.md`. Gates green from a clean export
+(app TS 36/0 after the fix pass, typecheck, `expo export --platform android` bundles the screen,
+Kotlin 175/0, assembleDebug). expo-doctor's one failure ("app config fields in a non-CNG
+project") is pre-existing on main. Nothing has run on a phone.
+
+Open, waiting for the owner:
+1. Residual review findings (no second fix wave was run): Important — after "Change" → allow all,
+   two scan rows can appear (the app-return listener and the permission answer both start one;
+   the service does not dedupe). Root fix: drop a photo scan in `MediaJobService.enqueue` / the
+   `Enqueue` reducer when one is QUEUED or RUNNING (reuse `jobToAdd`); it also closes the double
+   tap on Scan now / Try again. Minors: `inFlight` chain keeps old results; 'some' access with
+   photos added in Settings isn't rescanned; a failed More like this shows the old grid; the
+   scan decision in photos.tsx:64-68 has no test.
+2. Release go: merge with `[skip ci]`, then `pnpm release` locally (memory), Store release id
+   `design-editor`.
+3. AC-2 on the phone needs the 195 COCO photos copied into the gallery and removed afterwards;
+   ask before doing it.
+Next step after the owner answers: one small fix pass for item 1 if they say so, then Task 5 of
+the Phase 2 plan (install from the Store, walk the tab, AC-1..AC-6).

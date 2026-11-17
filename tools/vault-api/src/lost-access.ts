@@ -9,10 +9,10 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 // Long enough that a device which only just finished recovering still has time to call /lost/release; short enough that an abandoned or already-used request doesn't block a real future recovery forever.
 const RELEASE_GRACE_MS = 7 * DAY_MS;
-const link = (publicUrl: string | undefined, path: string, token: Uint8Array) => `${publicUrl ?? ''}${path}?t=${encodeURIComponent(toBase64(token))}`;
+export const link = (publicUrl: string | undefined, path: string, token: Uint8Array) => `${publicUrl ?? ''}${path}?t=${encodeURIComponent(toBase64(token))}`;
 
 // Only the hash is ever compared, so any sane length is fine; Task 15's claim isn't 32 bytes.
-function claimBytesOf(claim: unknown): Uint8Array | null {
+export function claimBytesOf(claim: unknown): Uint8Array | null {
   if (typeof claim !== 'string' || claim.length < 24 || claim.length > 88 || claim.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(claim)) return null;
   try {
     const bytes = fromBase64(claim);

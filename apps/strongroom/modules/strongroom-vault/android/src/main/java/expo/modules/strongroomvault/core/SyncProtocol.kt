@@ -43,8 +43,11 @@ data class PushConflict(val conflicts: List<Pair<String?, Long?>>) : PushResult
 
 data class AccountCreate(val header: String, val loginHash: String, val recoveryHash: String, val readHash: String)
 
-/** The email-recovery escrow an account update may carry: the address, the sealed blob (standard Base64) and the code the Worker mails. */
-data class EscrowBody(val email: String, val blob: String, val code: String)
+/** The sign-in blob (the account key sealed under the same emailed code); the Worker takes it only together with an escrow. */
+data class SigninBody(val blob: String)
+
+/** The email-recovery escrow an account update may carry: the address, the sealed blob (standard Base64) and the code the Worker mails; [signin] rides in the same PUT. */
+data class EscrowBody(val email: String, val blob: String, val code: String, val signin: SigninBody? = null)
 
 data class AccountUpdate(
   val header: String,
@@ -84,6 +87,12 @@ interface SyncTransport {
   fun lostCancel(token: ByteArray)
 
   fun deleteEscrow(token: ByteArray)
+
+  fun signinRequest(claimHash: String, deviceName: String)
+
+  fun signinRelease(claim: String): LostRelease
+
+  fun signinCancel(token: ByteArray)
 }
 
 /** Every reply is checked here, as strongroom-core's fetchTransport does, so a server that lies gives a SyncHttpError, never a crash deep in sync. */
@@ -120,9 +129,13 @@ object SyncWire {
     put("readHash", a.readHash)
     put("ifRev", a.ifRev)
     a.escrow?.let { e -> putJsonObject("escrow") { put("email", e.email); put("blob", e.blob); put("code", e.code) } }
+    a.escrow?.signin?.let { s -> putJsonObject("signin") { put("blob", s.blob) } } // top level, and only with an escrow, as the Worker takes it
   }.toString()
 
   fun lostRequestBody(claimHash: String): String = buildJsonObject { put("claimHash", claimHash) }.toString()
+
+  fun signinRequestBody(claimHash: String, deviceName: String): String =
+    buildJsonObject { put("claimHash", claimHash); put("deviceName", deviceName) }.toString()
 
   fun lostReleaseBody(claim: String): String = buildJsonObject { put("claim", claim) }.toString()
 

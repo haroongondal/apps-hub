@@ -16,7 +16,9 @@ export function jobText(job: Pick<NativeJobStatus, 'state' | 'tool' | 'progress'
   switch (job.state) {
     case 'running': return { label, tone, line: `${what} · ${Math.round(job.progress * 100)}%${job.attempt > 1 ? ' · Trying a smaller size' : ''}` };
     case 'queued': return { label, tone, line: `${what} · Waiting its turn` };
-    case 'done': return { label, tone, line: `${what} · Saved${job.outputs[0] ? ` ${formatMb(job.outputs[0].bytes)}` : ''}` };
+    case 'done':
+      if (job.tool === 'photo-index') return { label, tone, line: `${what} · Ready` };
+      return { label, tone, line: `${what} · Saved${job.outputs[0] ? ` ${formatMb(job.outputs[0].bytes)}` : ''}` };
     case 'failed': return { label, tone, line: `${what} · ${job.error ?? 'Something went wrong. Try again.'}` };
     case 'paused': return { label, tone, line: `${what} · Android paused this after a long run. Tap Resume to carry on.` };
     case 'interrupted': return { label, tone, line: `${what} · The app closed while this was running. Tap Resume to start it again.` };

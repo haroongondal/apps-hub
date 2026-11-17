@@ -29,6 +29,8 @@ import expo.modules.opentunnelnative.firewall.FirewallStartPolicy
 import expo.modules.opentunnelnative.firewall.FirewallStore
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * The app's own VpnService host — package `com.opentunnel.open_tunnel_vpn`,
@@ -58,6 +60,26 @@ class OpenTunnelVpnService : VpnService() {
 
   private var engine: TunnelEngine? = null
   private val main = Handler(Looper.getMainLooper())
+
+  // Engine stop waits up to 3 s for the OpenVPN engine's down-latch; on the
+  // main thread that stall queued a repeated power-off tap behind the latch
+  // (the multiple-taps bug). One executor thread keeps the stop steps in
+  // order, and the main thread returns right after posting `disconnecting`.
+  // The stop tail must also lose to a newer start (the app's relay switch
+  // runs stop and start back to back): each start claims a generation, and
+  // a stop run whose generation a start replaced skips its tail.
+  private val stopExecutor by lazy { Executors.newSingleThreadExecutor() }
+
+  /** Bumped when a start claims the tunnel, before any engine work. */
+  private val startGeneration = AtomicLong(0)
+
+  /** Generation of the stop run in flight; null when none owns the shutdown.
+   * Replaced, never ignored, when a newer start made the in-flight run
+   * stale — so a fresh stop tap always stops the current tunnel. */
+  private var stopRunGeneration: Long? = null
+
+  /** Serializes generation claims: a stop run's tail vs a newer start's claim. */
+  private val stateLock = Any()
 
   // The firewall lives in the :firewall process and shares only this store (plan Task 6).
   private val firewallStore by lazy { FirewallStore(this) }
@@ -92,7 +114,7 @@ class OpenTunnelVpnService : VpnService() {
           startTunnel(config)
         }
       }
-      ServiceContracts.ACTION_STOP -> stopTunnel()
+      ServiceContracts.ACTION_STOP -> stopTunnel(startId)
       // The engine already ended on its own and reported the final state.
       ServiceContracts.ACTION_RELEASE -> {
         engine?.let { runCatching { it.stop() } }
@@ -122,6 +144,10 @@ class OpenTunnelVpnService : VpnService() {
    * callbacks while failures converge on the typed error path. */
   private fun startTunnel(config: EngineConfig) {
     cancelPendingStart()
+    // A start claims the tunnel up front: a stop run still in flight (its
+    // engine stop can wait up to 3 s) must never report `disconnected` over
+    // this start or end the service under the new engine.
+    synchronized(stateLock) { startGeneration.incrementAndGet() }
     val previous = engine
     if (previous != null) {
       engine = null
@@ -231,24 +257,64 @@ class OpenTunnelVpnService : VpnService() {
   }
 
   /** Tidy stop: disconnecting → engine down → disconnected, notification
-   * removed, ticker stopped, service ends itself. */
-  private fun stopTunnel() {
+   * removed, ticker stopped, service ends itself. The engine stop can block
+   * up to 3 s on the OpenVPN engine's down-latch, so it runs on the stop
+   * executor: the main thread only posts `disconnecting` and returns. A
+   * duplicate tap for the same tunnel generation changes nothing
+   * (StopPolicy) — the running run owns the engine stop and the final post —
+   * while a stop for a newer generation (a start claimed the tunnel in
+   * between) replaces the stale run and stops the current tunnel. */
+  private fun stopTunnel(intentStartId: Int) {
     cancelPendingStart()
+    val requestGeneration = startGeneration.get()
+    synchronized(stateLock) {
+      if (!StopPolicy.shouldRunStop(stopRunGeneration, requestGeneration)) {
+        return
+      }
+      stopRunGeneration = requestGeneration
+    }
     TunnelStateRegistry.setStatus(TunnelStatus.DISCONNECTING)
     TunnelEventBus.postStatus(TunnelStatus.DISCONNECTING, null)
 
-    val active = engine
-    engine = null
-    if (active != null) runCatching { active.stop() }
+    stopExecutor.execute {
+      var converged = false
+      try {
+        val active = engine
+        engine = null
+        // A stop that throws (engine still starting) must not skip the final
+        // state: `disconnected` is posted either way.
+        runCatching { active?.stop() }
+          .onFailure {
+            Log.w(TAG, "engine stop failed: ${it.javaClass.simpleName}: ${it.message?.take(200)}")
+          }
 
-    TrafficTicker.stop()
-    TunnelStateRegistry.setStatus(TunnelStatus.DISCONNECTED)
-    TunnelEventBus.postStatus(TunnelStatus.DISCONNECTED, null)
-    setServerActive(false)
-    restoreFirewall()
-
-    stopForegroundCompat()
-    stopSelf()
+        TrafficTicker.stop()
+        synchronized(stateLock) {
+          // A start that raced this stop owns the state machine from here on
+          // (it already posted `connecting` and set the server flag): the
+          // tail must not report `disconnected` over it, clear the flag, or
+          // end the service under the new engine.
+          if (startGeneration.get() != requestGeneration) return@synchronized
+          TunnelStateRegistry.setStatus(TunnelStatus.DISCONNECTED)
+          TunnelEventBus.postStatus(TunnelStatus.DISCONNECTED, null)
+          setServerActive(false)
+          converged = true
+        }
+        if (converged) {
+          restoreFirewall()
+          stopForegroundCompat()
+          // Start-id scoped: honored when this stop was the most recent
+          // intent, a no-op when a newer start keeps the service alive.
+          stopSelf(intentStartId)
+        }
+      } finally {
+        // Cleared only by the run whose claim this still is, so a replaced
+        // (stale) run cannot release a newer run's marker.
+        synchronized(stateLock) {
+          if (stopRunGeneration == requestGeneration) stopRunGeneration = null
+        }
+      }
+    }
   }
 
   /** The system revoked the VPN (another app started one, or the user
@@ -276,12 +342,21 @@ class OpenTunnelVpnService : VpnService() {
     // Revoke and a stale intent end here with the engine stopped but no stopTunnel.
     setServerActive(false)
 
-    // Final convergence: leave the registry only on true terminal states.
+    // Final convergence: leave the registry only on true terminal states. An
+    // accepted stop run posts the final `disconnected` itself (the executor
+    // finishes queued and running tasks after shutdown), so it is not doubled
+    // here — `disconnecting` never stays stuck with no exit path. A
+    // stale-generation run skips its tail only when a newer start claimed
+    // the tunnel, and that start (or its engine) reports the next state.
     val status = TunnelStateRegistry.statusState
-    if (status != TunnelStatus.DISCONNECTED && status != TunnelStatus.ERROR) {
-      TunnelStateRegistry.setStatus(TunnelStatus.DISCONNECTED)
-      TunnelEventBus.postStatus(TunnelStatus.DISCONNECTED, null)
+    synchronized(stateLock) {
+      if (stopRunGeneration == null && status != TunnelStatus.DISCONNECTED && status != TunnelStatus.ERROR) {
+        TunnelStateRegistry.setStatus(TunnelStatus.DISCONNECTED)
+        TunnelEventBus.postStatus(TunnelStatus.DISCONNECTED, null)
+      }
     }
+    // Queued or running stop tasks still complete after shutdown().
+    stopExecutor.shutdown()
     super.onDestroy()
   }
 

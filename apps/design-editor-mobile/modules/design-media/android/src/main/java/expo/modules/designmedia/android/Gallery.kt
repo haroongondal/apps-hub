@@ -10,6 +10,17 @@ import expo.modules.designmedia.core.clipTensor
 object Gallery {
   private val IMAGES = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
 
+  // Changes whenever a photo is added, edited or removed, so a scan can tell whether it has anything to do.
+  // The count is there because changing the Selected-photos choice does not move the generation.
+  fun stamp(ctx: Context): String =
+    "${MediaStore.getVersion(ctx)}:${MediaStore.getGeneration(ctx, MediaStore.VOLUME_EXTERNAL_PRIMARY)}:${visibleCount(ctx)}"
+
+  private fun visibleCount(ctx: Context): Int {
+    val cursor = ctx.contentResolver.query(IMAGES, arrayOf(MediaStore.Images.Media._ID), null, null, null)
+      ?: throw IllegalStateException("gallery query failed")
+    return cursor.use { it.count }
+  }
+
   // Newest first, so recent photos become searchable first.
   fun list(ctx: Context): List<PhotoKey> {
     val cols = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_MODIFIED, MediaStore.Images.Media.SIZE)

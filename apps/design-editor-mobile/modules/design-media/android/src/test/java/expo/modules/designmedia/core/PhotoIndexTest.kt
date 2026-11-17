@@ -138,6 +138,33 @@ class PhotoIndexTest {
   }
 
   @Test
+  fun aSecondScanIsDroppedWhileOneWaits() {
+    listOf(JobState.QUEUED, JobState.RUNNING).forEach { s ->
+      assertEquals(emptyList<Job>(), withoutDuplicateScans(listOf(photoIndexJob("a").copy(state = s)), listOf(photoIndexJob("b"))))
+    }
+  }
+
+  @Test
+  fun aScanIsKeptWhenTheLastOneFinished() {
+    listOf(JobState.DONE, JobState.FAILED, JobState.CANCELLED).forEach { s ->
+      assertEquals(listOf(photoIndexJob("b")), withoutDuplicateScans(listOf(photoIndexJob("a").copy(state = s)), listOf(photoIndexJob("b"))))
+    }
+  }
+
+  @Test
+  fun twoScansInOneBatchBecomeOne() {
+    assertEquals(listOf(photoIndexJob("a")), withoutDuplicateScans(emptyList(), listOf(photoIndexJob("a"), photoIndexJob("b"))))
+  }
+
+  @Test
+  fun videoJobsAreNeverDropped() {
+    val video = { id: String -> photoIndexJob(id).copy(plan = FramePlan(1.0, "png", "png"), inputId = "content://$id") }
+    val incoming = listOf(video("x"), photoIndexJob("b"), video("y"))
+    assertEquals(incoming, withoutDuplicateScans(listOf(video("w")), incoming))
+    assertEquals(listOf(video("x"), video("y")), withoutDuplicateScans(listOf(photoIndexJob("a")), incoming))
+  }
+
+  @Test
   fun diffDropsDuplicateRows() {
     val first = row(1)
     val d = diff(listOf(first.key, row(2).key), listOf(first, row(1, fill = 9), row(2), row(2)))
@@ -190,5 +217,35 @@ class PhotoIndexTest {
     assertFalse(shouldPause(20, false, 0))
     assertTrue(shouldPause(80, true, 3))
     assertFalse(shouldPause(80, false, 2))
+  }
+
+  @Test
+  fun pauseReasonHeatWinsOverBattery() {
+    assertEquals("heat", pauseReason(10, false, 3))
+    assertEquals("battery", pauseReason(10, false, 0))
+    assertEquals(null, pauseReason(10, true, 2))
+    assertEquals("heat", pauseReason(80, false, 4))
+  }
+
+  @Test
+  fun needsScanWhenNothingSavedOrChanged() {
+    assertTrue(needsScan(null, "1:5"))
+    assertFalse(needsScan("1:5", "1:5"))
+    assertTrue(needsScan("1:5", "1:6"))
+  }
+
+  @Test
+  fun aNewScanStopsTheStaleOnes() {
+    val old = listOf(
+      photoIndexJob("i").copy(state = JobState.INTERRUPTED),
+      photoIndexJob("p").copy(state = JobState.PAUSED),
+      photoIndexJob("d").copy(state = JobState.DONE),
+    )
+    val start = planIndexStart(shownQueue(old, serviceAlive = true), "n")
+    assertEquals(photoIndexJob("n"), start.job)
+    assertEquals(listOf("i", "p"), start.stale)
+    val waiting = planIndexStart(shownQueue(old + photoIndexJob("q"), serviceAlive = true), "n")
+    assertEquals(null, waiting.job)
+    assertEquals(emptyList<String>(), waiting.stale)
   }
 }

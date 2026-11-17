@@ -1,0 +1,27 @@
+{
+  "id": "sys.search-and-capture",
+  "name": "Search and Capture",
+  "version": 3,
+  "description": "Runs a search on the target site, extracts the results region, and captures a screenshot.",
+  "definition": {
+    "params": {
+      "url": { "description": "Site to search", "required": true },
+      "query": { "description": "Search phrase", "required": true }
+    },
+    "steps": [
+      { "kind": "navigate", "url": "{{url}}" },
+      { "kind": "wait", "forSelector": "input[type=search], input[name=q], textarea[name=q]" },
+      { "kind": "type", "selector": "input[type=search], input[name=q], textarea[name=q]", "text": "{{query}}", "submit": true },
+      { "kind": "wait", "ms": 1200 },
+      {
+        "kind": "assert",
+        "selector": "main",
+        "containsText": "{{query}}",
+        "message": "the results never mentioned the search phrase",
+        "intent": "prove the search actually ran before anything is extracted"
+      },
+      { "kind": "extract", "selector": "main", "into": "results" },
+      { "kind": "screenshot", "label": "results" }
+    ]
+  }
+}

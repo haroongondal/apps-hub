@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Automation Pause Control",
+  "version": "1.11.0",
+  "description": "Shows when an automation agent is acting on the current tab, and lets you pause it instantly.",
+  "minimum_chrome_version": "116",
+  "permissions": ["activeTab", "scripting", "storage", "nativeMessaging", "alarms", "debugger"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Automation Pause Control"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["page-core.js", "content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+appId: com.cd.browser.autonomousbrowsing
+productName: Autonomous Browsing
+# better-sqlite3 is N-API and ships a prebuild per target, so rebuilding only
+# breaks cross-arch builds — node-gyp cannot cross-compile from source.
+npmRebuild: false
+directories:
+  output: dist
+files:
+  - out/**
+  - '!out/tests/**'
+  - '!**/*.map'
+asarUnpack:
+  - '**/*.node'
+extraResources:
+  - from: updates
+    to: updates
+  - from: .env
+    to: .env
+mac:
+  category: public.app-category.developer-tools
+  # Without this @electron/universal refuses the prebuilds that are byte-identical across arches.
+  x64ArchFiles: '**/prebuilds/*.node'
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  forceCodeSigning: true
+win:
+  forceCodeSigning: true
+  signtoolOptions:
+    signingHashAlgorithms:
+      - sha256
+    rfc3161TimeStampServer: http://timestamp.digicert.com

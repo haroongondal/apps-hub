@@ -1,0 +1,83 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: var(--s-6) var(--s-8) var(--s-5);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.origins {
+  padding: var(--s-6) var(--s-8) var(--s-9);
+  display: grid;
+  gap: var(--s-4);
+}
+
+.origin {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-3);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--machine);
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+  background: var(--surface);
+  padding: var(--s-5) var(--s-6);
+}
+
+.summary {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-4);
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font: var(--t-body);
+  color: var(--text);
+}
+
+.host {
+  font: var(--t-body-strong);
+  overflow-wrap: anywhere;
+}
+
+.count {
+  font: var(--t-code);
+  color: var(--text-3);
+}
+
+.seen {
+  margin-left: auto;
+  font: var(--t-meta);
+  color: var(--text-3);
+}
+
+.landmarks {
+  width: 100%;
+  display: grid;
+  gap: var(--s-3);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line);
+}
+
+.landmark {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-4);
+  font: var(--t-meta);
+}
+
+.label {
+  font: var(--t-body-strong);
+  color: var(--text);
+}
+
+.score {
+  color: var(--text-3);
+}

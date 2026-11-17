@@ -123,10 +123,13 @@ export interface ButtonProps {
   busy?: boolean;
   disabled?: boolean;
   block?: boolean;
+  /** Optional semantic override for the label and border color (tokens;
+   * the background follows the variant). */
+  tone?: Tone;
   accessibilityHint?: string;
 }
 
-export function Button({ label, onPress, variant = 'primary', size = 'md', busy, disabled, block, accessibilityHint }: ButtonProps) {
+export function Button({ label, onPress, variant = 'primary', size = 'md', busy, disabled, block, tone, accessibilityHint }: ButtonProps) {
   const { c } = useTheme();
   const off = disabled || busy;
   const palettes: Record<ButtonVariant, { bg: string; fg: string; border: string }> = {
@@ -136,6 +139,15 @@ export function Button({ label, onPress, variant = 'primary', size = 'md', busy,
     danger: { bg: 'transparent', fg: c.danger, border: c.line },
   };
   const p = palettes[variant];
+  // A semantic tone recolors only the label and border; the background
+  // stays with the variant (e.g. secondary keeps the surface bg). A
+  // transparent border (ghost) has nothing to recolor, so it stays
+  // transparent rather than growing a border it never had.
+  if (tone) {
+    const override = toneColors(c, tone).fg;
+    p.fg = override;
+    if (p.border !== 'transparent') p.border = override;
+  }
   const height = size === 'sm' ? 36 : touch;
   return (
     <Pressable

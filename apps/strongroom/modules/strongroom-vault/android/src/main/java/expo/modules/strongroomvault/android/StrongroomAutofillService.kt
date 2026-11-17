@@ -18,6 +18,7 @@ import expo.modules.strongroomvault.core.Entry
 import expo.modules.strongroomvault.core.FormDetector
 import expo.modules.strongroomvault.core.MatchIndex
 import expo.modules.strongroomvault.core.Matching
+import expo.modules.strongroomvault.core.PasswordGenerator
 import expo.modules.strongroomvault.core.PendingSave
 import expo.modules.strongroomvault.core.Requester
 import expo.modules.strongroomvault.core.Saves
@@ -75,6 +76,12 @@ class StrongroomAutofillService : AutofillService() {
     val present = Datasets.Presenter(this, request.inlineSuggestionsRequest, reservePending = logins.isNotEmpty())
     val response = FillResponse.Builder()
     var any = false
+
+    form.newPassword?.let { first ->
+      val targets = (listOf(first) + form.confirm).map(read.ids::get)
+      response.addDataset(Datasets.suggested(targets, PasswordGenerator.generate(), present.of(SUGGEST, null)))
+      any = true
+    }
 
     if (logins.isNotEmpty()) {
       val index = if (entries == null) VaultHolder.index(this) else emptyList() // before the first PSL use, so a cold start's Keystore read overlaps the list loading
@@ -159,6 +166,7 @@ class StrongroomAutofillService : AutofillService() {
   }
 
   private companion object {
+    const val SUGGEST = "Use a strong password"
     const val OTHER_LOGINS = "Other logins"
     const val UNLOCK_CARD = "Unlock to fill a card"
   }
