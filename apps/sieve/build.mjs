@@ -9,6 +9,7 @@ import { checkRegexesWithRe2 } from '@apps-hub/sieve-core/src/node-regex.ts';
 import { commandsManifest } from '@apps-hub/sieve-core/src/yt-actions.ts';
 import { LISTS } from './src/lists.ts';
 import { COMMON_SUFFIXES, GOOGLE_SUFFIXES } from './src/tlds.ts';
+import { buildDownloads } from './src/dl/build-dl.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = (...p) => join(here, ...p);
@@ -175,6 +176,7 @@ await build({
   loader: { '.css': 'text' },
   logLevel: 'warning',
 });
+await buildDownloads({ out, root, ui: root('../../packages/ui') });
 const ui = root('../../packages/ui');
 for (const f of ['popup.html', 'popup.css', 'options.html', 'options.css', 'switch.css', 'devtools.html', 'panel.html', 'panel.css']) cpSync(root('src', f), join(out, f));
 for (const f of ['tokens.css', 'base.css']) cpSync(join(ui, 'web', f), join(out, 'web', f));

@@ -409,7 +409,7 @@ try {
   let m = await menu(countedId);
   check(`the menu says "${SENTENCE}"`, (await m.countsText()) === SENTENCE, await m.countsText());
   const switchCount = await m.pop.getByRole('switch').count();
-  check('the menu has the header switch, the site switch and four feature switches, and a tab bar with Blocking and YouTube', switchCount === 6 && (await m.pop.getByRole('tab').allInnerTexts()).join() === 'Blocking,YouTube', String(switchCount));
+  check('the menu has the header switch, the site switch and four feature switches, and a tab bar with Blocking, Downloads and YouTube', switchCount === 6 && (await m.pop.locator('[role=tablist] [role=tab]').count()) >= 2 && (await m.pop.getByRole('tab').allInnerTexts()).join() === 'Blocking,Downloads,YouTube', String(switchCount));
   await m.pop.screenshot({ path: join(SHOTS, 'menu.png'), fullPage: true });
   await m.pop.emulateMedia({ colorScheme: 'dark' });
   await sleep(400); // the buttons and switches fade between themes
@@ -936,8 +936,8 @@ try {
   const blockingLabels = (await labelsIn(0)).map((t) => t.trim());
   const rowLabels = (await labelsIn(1)).map((t) => t.trim());
   check(
-    `the settings page has Blocking (the menu's four switches, Ad blocker warnings and Trackers), Filter lists ("${rows[0]}", AI search summaries by name only), My filters, Allowlist, YouTube, Shortcuts and Backup and import, and says how old the lists are and how to refresh them`,
-    same(headings, ['Blocking', 'Filter lists', 'My filters', 'Allowlist', 'YouTube', 'Shortcuts', 'Backup and import']) &&
+    `the settings page has Blocking (the menu's four switches, Ad blocker warnings and Trackers), Filter lists ("${rows[0]}", AI search summaries by name only), My filters, Allowlist, YouTube, Shortcuts, Backup and import and Downloads, and says how old the lists are and how to refresh them`,
+    same(headings, ['Blocking', 'Filter lists', 'My filters', 'Allowlist', 'YouTube', 'Shortcuts', 'Backup and import', 'Downloads']) &&
       same(blockingLabels, ['Distraction control', 'Cookie banners', 'AI search summaries', 'Site notification requests', 'Ad blocker warnings', 'Trackers']) &&
       same(rowLabels, rows) &&
       (await opt.getByText(footer, { exact: true }).isVisible()),
@@ -1593,6 +1593,7 @@ try {
   check('after the extension reloads, "Block it" says why it cannot save and is ready for another try instead of sticking', cutOff === 'Sieve was reloaded or turned off. Reload this page, then try again.' && unstuck, json({ cutOff, unstuck }));
   await ctx.close();
   for (const m of ['./ai-injection.mjs', './my-filters-regex.mjs']) await (await import(m)).run({ servers });
+  await (await import('./dl/e2e.mjs')).run({ servers });
 } catch (e) {
   check('the run finished without an exception', false, String(e?.stack ?? e).split('\n').slice(0, 4).join(' | '));
 } finally {

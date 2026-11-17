@@ -180,7 +180,7 @@ export async function local(t) {
     const links = await nav.getByRole('link').evaluateAll((as) => as.map((a) => [a.textContent, a.getAttribute('href')]));
     check('settings-page: every section has an id, and the nav links to each of them in order', ids.length === (await opt.locator('#app section').count()) && json(links.map((l) => l[1])) === json(ids.map((i) => `#${i}`)), json({ ids, links }));
     check('settings-page: the nav starts with Blocking, Filter lists, My filters, Allowlist and YouTube', json(ids.slice(0, 5)) === '["blocking","lists","my-filters","allowlist","youtube"]' && json(links.slice(0, 5).map((l) => l[0])) === '["Blocking","Filter lists","My filters","Allowlist","YouTube"]', json(links));
-    check('settings-page: the nav ends with Backup and import', links.at(-1)?.[0] === 'Backup and import' && links.at(-1)?.[1] === '#backup', json(links.at(-1)));
+    check('settings-page: the nav ends with Backup and import, then Downloads', links.at(-2)?.[0] === 'Backup and import' && links.at(-2)?.[1] === '#backup' && links.at(-1)?.[1] === '#downloads', json(links.slice(-2)));
     const stacked = await opt.evaluate(() => ({ nav: document.querySelector('nav').getBoundingClientRect(), h2: document.querySelector('#blocking h2').getBoundingClientRect() }));
     check('settings-page: below 900 px the nav stacks above the content', stacked.nav.bottom <= stacked.h2.top, json(stacked));
     await nav.getByRole('link', { name: 'Allowlist', exact: true }).click();

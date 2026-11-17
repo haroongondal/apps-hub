@@ -259,6 +259,15 @@ Task 1.11 fix round 1 (`5f2cabd`), same setup with an extension-free control fir
 - **Measured afterwards** (`docs/handoffs/sieve-yt-measurement.md`: 24 fresh-profile runs on that video, with no extension, Sieve on, stripping only and network rules only (23 usable), plus 25 follow-up runs: 49 in all, 48 usable): Sieve does not hold back playback. Medians of `currentTime` at 30 s were 26.5, 26.0, 26.0 and 26.05 s, every difference under 1 s and inside the noise; neither component alone shows a cost. The earlier 6 s has two candidate explanations the data cannot separate: a network drop (one run window was a network outage) or a self-pause of the player (one unexplained self-pause at 5.5 s in a network-rules-only run, which `yt-live.mjs` would report as exactly "6 s").
 - **YouTube served no ad in any of the 15 no-extension measurement runs** (although every response contained `adPlacements`), so the measurement says nothing about the cost or the success of removing an ad. Removal was seen working once (the `kJQP7kiw5Fk` row above).
 
+## Integration of Phase 2 and Phase 3 (2026-11-18, branch `sieve-integration`)
+
+This section supersedes the "Current state and next step" blocks of Phase 2 and Phase 3 below; their text stays as the record of each phase.
+
+- **State:** Phase 2 (`sieve-phase-2` at `4878e44`) and Phase 3 (`sieve-phase-3` at `2f0b804`) are integrated in one merge commit on branch `sieve-integration` (worktree `.claude/worktrees/sieve-integration`). It is not yet merged into `sieve`, and nothing is pushed. Version 0.3.0 (`src/manifest.json` and `package.json`).
+- **How the shared files were resolved:** both phases' lines kept, as both merge notes list them. Menu tabs: Blocking, Downloads, YouTube (one tab bar; the menu still opens on YouTube on a watch page). Settings page: Blocking, Filter lists, My filters, Allowlist, YouTube, Shortcuts, Backup and import, then Downloads last, with a `#downloads` link in the side navigation. Permissions: the sorted union, 10 entries; `commands` stays a top-level key written by `build.mjs`.
+- **Cross-phase fixes:** `options.css` lets the YouTube section's selects shrink (`.field .inputs { min-width: 0 }`, `.field .ui-select { max-width: 100% }`), so the merged settings page fits a 360 px window. Two checks follow the merged order: `test/dl/popup.mjs` (tabs Blocking, Downloads, YouTube) and `test/yt/settings-page.mjs` (the nav ends with Backup and import, then Downloads). Owner question: the design proposal and the Phase 3 Merge notes put Downloads before YouTube on the settings page; the integration keeps it last, as Task 3.18 and the README say.
+- **Next step:** the main session reviews and gates the merge, then the owner decides on merging `sieve-integration` into `sieve`. After that: the follow-up commit for backup and import of the `downloads` settings ("Resolved merge notes" in the Phase 3 block), then plan Phase 4.
+
 ## Phase 2 close (2026-11-17, branch `sieve-phase-2`)
 
 This section supersedes "Current state and next step" below for Phase 2. Phase 1 text stays as the record of Phase 1.
@@ -417,7 +426,7 @@ From `docs/handoffs/sieve-run-2-close.md` section 4, `.superpowers/phase-2/step1
 
 ## Current state and next step
 
-(Phase 1 state, 2026-11-08. For Phase 2 see "Phase 2 close" above.)
+(Phase 1 state, 2026-11-08. For the integrated Phases 2 and 3 see "Integration of Phase 2 and Phase 3" above; for Phase 2 alone see "Phase 2 close".)
 
 - **State (2026-11-08, end of session 4):** branch `sieve`. Phase 1 is implemented, reviewed (every task, then a four-part whole-branch review, then re-reviews of every fix round) and gated. Commits after `b9bac0b` are docs only (this file, the ledger snapshot, the metrics).
   - **Final gate, clean export of HEAD `b9bac0b`** (no dist, no filter cache, no node_modules before install): `pnpm install` 29 projects; `pnpm test` 667/667 (sieve-core 139, apps/sieve 43); `pnpm typecheck` clean; `pnpm --filter sieve build` with freshly downloaded lists (116,095 default rules: ads 50,847, trackers 56,427, distraction 2,037, cookies 2,111, antiadblock 4,673, ai 0 with 4 hosts); e2e 172/172 on the first run; `yt-live` and `perf` self-checks ok; the dist is complete (every manifest-referenced file exists, 37 MB, `listsAt` present, no source maps, spike or test files). Perf, on the same product build (HEAD `299dc39`, product code unchanged since): local page +6.5 ms against the 20 ms limit; five real sites (guardian, bbc.com/news, npr, nbcnews, wired) every median load with Sieve 0.27x to 0.85x of without, 5 of 5 (need 4); no load failed on either side. The first gate (`docs/handoffs/sieve-gate-run-1.md`) failed on the plan's original sites (dawn.com 403 headless; cnn.com and weather.com did not finish loading without an ad blocker) and one intermittent e2e check; both were fixed (ruling R30; deterministic e2e).
@@ -473,3 +482,235 @@ From `docs/handoffs/sieve-run-2-close.md` section 4, `.superpowers/phase-2/step1
   - Owner-visible results so far, signed out: Q1 passes (full 1080p and audio arrive intact through
     the `visionos` client), Q2 fails on this slow link (0.25 to 0.9 MB/s), Q4 and R10 are
     inconclusive.
+
+## Phase 3: download engine and take-over (branch `sieve-phase-3`)
+
+This block was added by Task 3.20 (run 3 close, 2026-11-17) and holds everything Phase 3 needs; the sections above it are Phase 1's. Phase 2 (YouTube tools) keeps its own state on branch `sieve-phase-2`; when the branches merge, keep both sides of this file.
+
+### Resume prompt (Phase 3)
+
+```
+Date: 2026-11-17. Sieve Phase 3 (download engine and take-over, my private Chrome extension) is built, reviewed
+and gated on branch `sieve-phase-3` in /Users/outsentia/Documents/apps-hub/.claude/worktrees/sieve-phase-3.
+Work only in that worktree. Do not use the main checkout (its branch `model-host` belongs to other work), and do
+not touch the Phase 2 worktree (.claude/worktrees/sieve-phase-2) except to read it.
+
+1. Read docs/handoffs/sieve.md completely first, the section "Phase 3: download engine and take-over" above all
+   (the older sections are Phase 1). Trust the decisions, the inspected facts F1 to F17 and the gate numbers; do
+   not redo reviewed or measured work. The plan is docs/superpowers/plans/2026-11-10-sieve-phase-3.md.
+2. Follow the handoff contract: update the session log and "Current state and next step" as work lands; at about 85%
+   of the context stop starting new work, finalize the handoff, rewrite this prompt with today's date, print it
+   in a fenced block for me, and end the turn. Do not let auto-compaction happen.
+3. Never add Co-Authored-By or "Generated with" lines to a commit. Commit by pathspec; do not push, open a PR
+   or merge unless I ask. Never use my own Chrome profile in automated tests.
+4. Continue from "Current state and next step" below. The merge order is my decision: Phase 2, then Phase 3
+   rebased, then plan Phase 4.
+```
+
+### Goal and fixed constraints (Phase 3)
+
+IDM's job inside Chrome as Sieve's own code (design goal 3, without media detection and YouTube): take over Chrome's large downloads of chosen types, resume them after any restart, split them into parts when asked, queue, limit, schedule, sort into folders of Downloads, add by hand and from the right-click menu, list in an IDM-style page, show in the menu's Downloads tab. A taken-over file never vanishes; a large download never restarts from zero. The plan holds the architecture (engine in an offscreen document's Worker, router service worker, pages), the take-over decision table and the finishing protocol; the README's "Downloads" section holds the user-facing description, the known limits and the owner checklist.
+
+Fixed constraints (full text in the plan's Global Constraints and Review Focus):
+
+- Anti-goal 1: no content script and no registered script added; no offscreen document while no work is runnable; the worker starts fast.
+- Anti-goal 3 (top acceptance criterion): Chrome's download is cancelled only after the engine persisted and acknowledged the record; any doubt resumes Chrome's download untouched; the private copy is deleted only after Chrome reports the save complete with the right size; records are persisted at checkpoints (4 MiB or 2 s); a worker dying while Chrome's download is paused is repaired by the next worker start.
+- Chrome only, Manifest V3, `minimum_chrome_version` 128; no API newer than that (`chrome.offscreen.hasDocument` and `alarms.create({ persistAcrossSessions })` are typed since Chrome 150 and are not used).
+- Erasable TypeScript, `.ts` imports, new `*.test.ts` files listed in their package's `test` script, `sieve-core` modules pure and imported by file path, UI from `packages/ui`, every visible string once in `packages/sieve-core/src/dl-text.ts`, no word that promises a speed-up, no telemetry.
+- Messages, alarm names and storage keys carry the `dl` prefix because Phase 2 shares the worker.
+
+### Current state and next step (Phase 3)
+
+- **State (2026-11-17, run 3 close, first written at HEAD `088c03f`, refreshed at `9f6094d`):** branch `sieve-phase-3`, base `47c7ea4` (the end of Phase 1; Phase 3's own plan is `2589bf5`). Tasks 3.1 to 3.19 are committed and were reviewed (every task commit once, every fix scoped re-reviewed, controller-checked only where the ledger says so). Run 3 (this close) landed: the minors batch (`6c30b58`, `088c03f`, `b2909ec`, `2af2d21`), the plan's as-built deviations (`ae657a3`, `9f6094d`), `apps/sieve/test/dl-perf.mjs` (`bf015b7`, then a fix round after review), the test-list check (`sieve-core` has 20 test files and `apps/sieve` 15, including `dl-css.test.ts` from the minors batch, every one listed), the README's Downloads section with the owner checklist, this block and `manifest.json` version `0.3.0`.
+- **Last full gate (run 2, clean export of `911e72b`):** install ok; build ok; `sieve-core` 336/336; `sieve` 175/175; typecheck ok; `pnpm --filter sieve test:e2e` 455/455 under `chrome-live` (about 7 minutes). Attribution lines in commits: 0. The `--big` run saves 3 GB of real bytes (the 215 MB of browser memory growth is reported by the Task 3.12 run and was not re-measured; run 3's `--big` number goes in the gate subsection); the torture module passes 49/49 (SIGKILL resumes in 0.7 to 1 s and re-sends 1.4 to 18 MB).
+- **Run 3 gate and perf:** see the subsection "Phase 3 gate and perf (run 3)" below (clean export of `9435e0f`).
+- **Waiting on the owner:** the merge decision and order; the eighteen-item owner checklist in the README ("Owner checklist: downloads", it covers what headless Chrome cannot show: the download bubble, a real restart, a file over 5 GB); the five questions below.
+- **Not verified, stated plainly:** alarm persistence and `onStartup` over a real Chrome restart; Chrome's download bubble during a take-over; a real multi-GB file over 3 GB; the real `Downloads/<category>/` folders under Playwright (the harness rewrites the download folder; the raw-CDP Chrome in `test/dl/_raw-chrome.mjs` checks them instead); real-site take-over with the owner's accounts.
+- **Limit of the worker-start measure (`dl-perf.mjs`):** it stops at the first reply to `dl-do`, before the worker's detached start-up work (`reconcile`, `recoverSaves`, `recoverPaused`) has finished, and `resetDl` empties the `dl*` keys first, so slow start-up work cannot fail the measure. So it measures the cost of starting the worker with nothing to recover, not with a busy backlog (the README says the same). The `dl-do` row also includes creating the offscreen document, so it is conservative.
+- **Next step:** merge order is the owner's decision: Phase 2, then Phase 3 rebased onto it (the shared files and the one known conflict are listed under "Resolved merge notes"), then one integration check from a clean export (`pnpm test`, `pnpm typecheck`, `pnpm --filter sieve build`, `pnpm --filter sieve test:e2e`, `node apps/sieve/test/dl/e2e.mjs`), then the follow-up commit for backup and import of the `downloads` settings, then plan Phase 4 (media detection, HLS and DASH, the muxer, the hover icon).
+
+#### Phase 3 gate and perf (run 3)
+
+The final gate of run 3 ran on a clean export of `9435e0f` (`git archive`, in the scratchpad folder `p3gate`, not the worktree). The filter cache was copied into the export, then a filtered frozen `pnpm install` ran there. `chrome-live` was held for every part that starts Chrome (it was free: wait 0 s). Every number below is copied from the logs in `.superpowers/phase-3/` (`gate8-*.log`).
+
+- **Install, build, typecheck:** install exit 0 (2 of 29 workspace projects, 40 packages added, lockfile up to date); build exit 0 (116132 rules in all, 116132 in the lists on by default, 18 scriptlets; it prints the usual warning that this is above the 30,000 Chrome guarantees); typecheck exit 0 (both packages).
+- **Unit tests:** `sieve-core` 338/338, `sieve` 198/198, no failures, cancelled or skipped; the test step exited 0.
+- **`pnpm --filter sieve test:e2e`:** 477/477 checks passed, exit 0.
+- **`node test/dl/e2e.mjs --big`:** 306/306 checks passed, exit 0. Memory line: "big save: resident memory 833 MB before, peak 1208 MB, 442 MB at the end"; the check "a 3 GB file saves with the right size and the browser grows by under 500 MB" passed.
+- **Take-over pause:** "pause was called less than 100 ms after onCreated" passed, and so did "Chrome had received no bytes when the pause settled". The log prints no millisecond number for it, only the two PASS lines (see the residual below about where the clock starts).
+- **Torture (all PASS), the printed lines:**
+  - SIGKILL, one part: killed at 41943040 bytes saved, re-sent 1418353 bytes, relaunch to first request 741 ms.
+  - SIGKILL, three parts: re-sent 750001 bytes, relaunch to first request 719 ms.
+  - Engine closed five times: re-sent 18000001 bytes over five closes.
+  - SIGKILL after a take-over: the engine re-sent 3195569 bytes; 4695571 bytes beyond the size with Chrome's own cancelled request; relaunch to first request 680 ms.
+- **`dl-perf.mjs`:** exit 0, PASS. The table as printed:
+
+| check | measured | limit | result |
+| --- | --- | --- | --- |
+| dist content_scripts equal Phase 1 (47c7ea4) | 2 script(s) | deep-equal to 2 | PASS |
+| registered script ids starting "dl" (of 6) | 0 | <= 0 | PASS |
+| offscreen documents after a browser start, no record | 0 | <= 0 | PASS |
+| offscreen documents 3 s after a worker restart, no record | 0 | <= 0 | PASS |
+| seconds from a finished 5 MB download to no offscreen document | 60 | <= 75 | PASS |
+| worker cold start to first dl-do reply, Phase 3 minus Phase 1 (median ms) | 20.3 | <= 300 | PASS |
+| worker cold start to first pick reply, Phase 3 minus Phase 1 (median ms; same message) | 1.1 | <= 300 | PASS |
+| local page DCL with the extension minus without, 20 loads each (median ms) | 7.3 | <= 20 | PASS |
+
+  Raw cold starts over 5 runs each (one untimed round first): Phase 1 5/4/4/4/4 ms (median 4); Phase 3 `pick` 5/5/5/5/5 (5); Phase 3 `dl-do` 27/24/24/26/25 (25). One record was open when the idle check started.
+- **`perf.mjs`:** printed PASS; the exit code was not recorded (the session ended before the exit line was written). Local page (20 loads per profile): median DCL 23.0 ms with the extension against 16.0 without; summary line "Local page: median DCL +7.0 ms with the extension (limit +20 ms): PASS". Real sites: "4 of 5 within 1.10x load time (need 4); 1 site excluded (an excluded site cannot count as a pass): PASS". Medians as printed (five cold loads per profile):
+
+| site | with: DCL ms | with: load ms | with: heap MB | without: DCL ms | without: load ms | without: heap MB | load ratio | loads ok (with, without) | result |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| www.theguardian.com | 1110 | 2538 | 10.1 | 1084 | 2437 | 10.0 | 1.04x | 5/5, 5/5 | pass |
+| www.bbc.com/news | 2531 | 2932 | 13.3 | 4023 | 4781 | 27.2 | 0.61x | 5/5, 5/5 | pass |
+| www.npr.org | 4728 | 5129 | 13.1 | 5888 | 14761 | 30.7 | 0.35x | 5/5, 5/5 | pass |
+| www.nbcnews.com | 6927 | 18686 | 51.2 | 7554 | 26811 | 79.9 | 0.70x | 5/5, 4/5 | pass |
+| www.wired.com | 10842 | 35341 | 31.7 | 19922 | 34822 | 82.2 |  | 2/5, 1/5 | excluded (timeouts, a closed context and a page crash in both profiles) |
+
+  www.nbcnews.com had one timed-out load without the extension; its medians use the loads that worked.
+
+Residuals found by the whole-branch review and not fixed (the rule is no second fix wave):
+
+- **Pause-latency clock (test only):** `apps/sieve/test/dl/takeover.mjs:114` starts the 100 ms clock at the test's own `onCreated` listener, which runs after Sieve's in the same dispatch, so it can only understate Sieve's path. Sieve's path was shortened, and a `bytesReceived == 0` after pause check was added (the second PASS line above).
+- **Options page, extensions box:** `apps/sieve/src/dl/options-downloads.ts:56-58`, the blur refresh records the value on focus. After a window switch and back, focus fires again and resets that value, so if Chrome sends no change event when the person then leaves the field, the typed text could be replaced by the stored value. Suggested fix: add a `document.hasFocus()` guard. Owner check: type in the extensions box, switch apps, switch back, click elsewhere; the text must stay.
+
+### Session log (Phase 3)
+
+- **2026-11-10:** the plan was written (20 tasks, 3.1 to 3.20, probes F1 to F16 in Chrome for Testing 149.0.7827.55), reviewed in two lanes (0 blocking and 2 blocking, all accepted; F17 found by a reviewer), fixed in two rounds, committed `2589bf5`. First run: Tasks 3.1 to 3.10 dispatched at once, contract-first (every contract commit landed in 2 to 8 minutes, no contract change needed). Per-commit reviews found 0 blocking and about ten Important items (retry loop on a throwing engine, idle after a failed save, unread bodies not aborted, probe `Retry-After`, session-rule sync overlap, vacuous tests), all fixed and re-reviewed. Gate on `62e55a9`: build ok, 323/323 and 85/85 unit tests, typecheck clean, e2e 213/213.
+- **2026-11-11:** run 2: Tasks 3.11 to 3.19 plus O1 (a resumed record whose part file was lost or truncated was zero-filled and could finish as a complete file with holes; fixed in `d24b3ff` with a `fresh` flag on the file handle, then four more fix commits). Reviews: opus for take-over, resume, OPFS and completeness code (Important findings included "Retry in Chrome removed the only complete copy", an id-reuse guard, and incognito), sonnet for the rest. Infrastructure freeze 16:12 to 17:02 (all workers resumed by message, nothing lost). Final gate on `911e72b`: 336/336, 175/175, typecheck ok, e2e 455/455. Task 3.20 not started (the owner's PAUSE order).
+- **2026-11-17 (run 3, close):** the controller split the close into three disjoint owners. `t-minors` (opus) fixed the deferred minors in the engine, router, save and tests (first commit `6c30b58`: strict `Retry-After`, NaN-safe backoff, a second `filename*`, a done after a save timeout finishes the record). `t-plantext` (sonnet) recorded the as-built deviations in the plan (`ae657a3`). `t-320` (sonnet, this block) wrote `dl-perf.mjs` (`bf015b7`), checked the test lists, and wrote the README section, this block and the version line. A first full `dl-perf.mjs` run before the gate (own build of the worktree at that moment, under both locks): Phase 1 worker cold start 4 ms against Phase 3 5 ms (same `pick` message) and 26 ms to a first `dl-do` reply (which also creates the engine document), idle close 60.2 s after a finished 5 MB download, local page DCL +7.1 ms with the extension; all rows PASS. The gate can fail: a tightened start limit, a tightened DCL limit and a missing base build were each run and gave FAIL with exit code 1, and a partial `--only` run exited 3. The authoritative gate numbers are the controller's, in the subsection "Phase 3 gate and perf (run 3)" above.
+
+### Verified facts (Phase 3)
+
+Run on 2026-11-10 in Chrome for Testing 149.0.7827.55 (`~/Library/Caches/ms-playwright/chromium-1228`), headless, a fresh profile per run, against a local fixture server. The probe scripts are in `.superpowers/phase-3/scratch/probes/` of the Phase 3 worktree (gitignored workspace; run with `node <file>` from that folder, they need no build); F17 is in `.superpowers/phase-3/scratch/review-A/gzip-range2.mjs`. A task that depends on a row re-ran its probe first and records the result in code as `// inspected <date>, Chrome for Testing <version>`.
+
+| # | Fact | Evidence | Probe |
+|---|---|---|---|
+| F1 | An offscreen document has `chrome.runtime` only (`id`, `onMessage`, `onConnect`, `connect`, `sendMessage`, `getURL`). `chrome.storage`, `chrome.downloads`, `chrome.alarms` and `chrome.tabs` are undefined there and in its Worker (`chrome` itself is undefined in a Worker). | `Object.keys(chrome)` gave `["loadTimes","csi","runtime"]`; `typeof chrome.storage` was `"undefined"` | `p1.mjs` |
+| F2 | `createDocument({ reasons: ['WORKERS'] })` and `['WORKERS','BLOBS']` are accepted (both are in `@types/chrome` 0.3.7, line 7908 on). A second `createDocument` fails with the text "Only a single offscreen document may be created." | probe output | `p1.mjs`, `p2.mjs` |
+| F3 | A `WORKERS` document stayed alive for 48 s idle (its `performance.now()` advanced 48,031 ms; no close at 30 s). Stopping the service worker with CDP `ServiceWorker.stopAllWorkers` left it running, and a `chrome.runtime.sendMessage` from an extension page woke the stopped worker. | `up` deltas | `p9.mjs` |
+| F4 | `chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] })` lists the document (0 before, 1 after `createDocument`; Chrome 116+). `chrome.offscreen.hasDocument` exists in 149 but is typed "since Chrome 150", so it is not used. | probe output | `p9.mjs` |
+| F5 | A classic and a module Worker can be created from the offscreen document. Inside it: `navigator.storage.getDirectory`, `createSyncAccessHandle`, `createWritable`, `navigator.locks` and IndexedDB all exist; a second sync handle on a file already open fails with `NoModificationAllowedError`; `truncate(2.5 GiB)` took 11 ms (sparse). | probe output | `p1.mjs`, `p13.mjs` |
+| F6 | `navigator.storage.estimate()` in the document and in its Worker reported a quota of about 112 GB with 105 GB free on the disk (the probe manifest has `unlimitedStorage`, as Sieve's does): the quota follows free disk space. | `quota: 112227264257` | `p1.mjs` |
+| F7 | IndexedDB and OPFS are one store for the service worker, the offscreen document, its Worker and extension pages (the worker read a value the document wrote and listed a file the Worker created). Both survived closing the browser and opening it again on the same profile. | `swReadsIdb`, `swOpfs`, restart block | `p1.mjs`, `p9.mjs` |
+| F8 | The service worker has no `URL.createObjectURL`; the offscreen document has it. | `typeof` | `p1.mjs` |
+| F9 | `chrome.downloads.download({ url: 'blob:chrome-extension://<id>/<uuid>', filename: 'SieveProbe/Video/big.bin' })` from the worker saved a 2,684,354,560-byte OPFS file (8 MiB real data, the rest sparse) in 1.7 s with `fileSize` and `totalBytes` equal to the file. The browser's resident memory read 882 MB before and during. `onCreated` for that save had no `byExtensionId`; a `search` afterwards did. | `p2.mjs`, `p4.mjs` output | `p2.mjs`, `p4.mjs` |
+| F10 | Under Playwright, extension downloads land in a temp folder under a GUID name (`playwright-artifacts-*`), so `Downloads/<category>/` cannot be seen; `acceptDownloads: false` makes them `USER_CANCELED`; `downloadsPath` and `connectOverCDP` change nothing. A Chrome started by `child_process` with `--remote-debugging-port=0` and a seeded `<profile>/Default/Preferences` (`{"download":{"default_directory":"<dir>","prompt_for_download":false}}`), driven through raw CDP over Node's `WebSocket`, saved `<dir>/Sieve/Video/own.bin` for `filename: 'Sieve/Video/own.bin'`. That download took 2 to 6 s to reach `complete`. | `p6.mjs`, `p7.mjs`, `p8.mjs` | `p6.mjs`, `p7.mjs`, `p8.mjs` |
+| F11 | For a page navigation that downloads: `onCreated` fires with `filename: ''`, `bytesReceived: 0`, `mime`, `totalBytes`, `referrer` (the page URL) and `url` equal to `finalUrl`. `chrome.downloads.pause(id)` inside the listener settled in 2.0 to 2.5 ms and `bytesReceived` was still 0 two seconds later, for a 300 MB file at 20 MB/s and a 1.5 GB file unthrottled. The paused item had `paused: true`, `canResume: true`, `state: 'in_progress'`; the filename arrived through `onChanged` right after; the server saw its connection stay open (26 MB sent into buffers in 1.5 s). `cancel(id)` took 2 to 4 ms (`interrupted`, `USER_CANCELED`, connection closed); `erase({ id })` removed the item from history; `resume(id)` finished a 60 MB download. After `pause`, `search({ id })` returns Chrome's own `filename` (under Playwright a GUID path with no extension; in real Chrome the name Chrome chose). `onDeterminingFilename` never fired under Playwright, with a listener registered (`p5.mjs det`, which loads `ext-det`) or not, so it is not used. | probe output | `p3.mjs`, `p5.mjs`, `p13.mjs` |
+| F12 | `fetch(url, { credentials: 'include' })` from the worker, from the offscreen document and from its Worker sends every cookie Chrome's own navigation sent, including `SameSite=Lax` and `SameSite=Strict` ones, with only `<all_urls>` host permission (no `cookies` permission). | cookie header `sid=abc; strict=1; plain=2` | `p4.mjs`, `p10.mjs` |
+| F13 | The `referrer` option of `fetch` from the extension origin sends no Referer at all. `chrome.downloads.download({ headers: [{ name: 'Referer' …}] })` and the same for `Cookie` fail with "Unsafe request header name". A `declarativeNetRequest` session rule (`modifyHeaders`, `set` the `referer` header, `condition.initiatorDomains: [<extension id>]`) does set the Referer on fetches from the worker, the offscreen document and the Worker. | probe output | `p4.mjs`, `p10.mjs` |
+| F14 | Sieve's own blocking applies to the extension's own fetches: from the worker of the built extension, `fetch` to `pagead2.googlesyndication.com` and `googletagmanager.com` failed ("Failed to fetch"), while a page navigation to the same host loaded. A session rule `{ action: { type: 'allow' }, condition: { initiatorDomains: [<id>], resourceTypes: ['xmlhttprequest', 'other'] } }` at a priority above `meta.maxPriority` (1,000,301 in the current build) made both succeed. When an `allow` rule and a Referer rule both match, the Referer rule must have the higher priority: allow 2,000,000,000 with Referer 2,000,000,001 set the header; the reverse, and equal priorities, did not. | probe output | `p11.mjs`, `p12.mjs` |
+| F15 | Alarms in an unpacked extension: a 0.05-minute alarm fired 3,009 ms later (8 ms late). `@types/chrome` says a packaged extension is limited to one firing per 30 s (line 463). With `--load-extension` each launch re-installs the extension (`onInstalled` reason `install` twice, no `onStartup`, no alarms left), so alarm persistence across a browser restart and `onStartup` cannot be checked in the harness. | `alarmSoon`, restart block | `p9.mjs` |
+| F16 | A Worker in the offscreen document streamed 1 GB from a local server into an OPFS sync handle in 364 ms (2.7 GB/s) and the browser's resident memory grew 193 MB; `reader.cancel()` after 5 MB aborted cleanly. | `p10.mjs` output | `p10.mjs` |
+| F17 | With a `Range` header Chrome sends `Accept-Encoding: identity`. A server that answers the ranged request with `Content-Encoding: gzip` anyway makes `fetch` throw `TypeError: Failed to fetch` (an unranged request gets the gzip body and `Content-Length` 1004 for a 1,000,000-byte file). So the probe never sees an encoded body: it fails as `probe-failed`. | `err: "TypeError: Failed to fetch"` for `bytes=0-` and `bytes=0-0` | `.superpowers/phase-3/scratch/review-A/gzip-range2.mjs` |
+
+**Not found, and how the plan handles it:**
+- *Alarm persistence over a real restart and `onStartup`* (F15): every worker start runs `reconcile()` (Task 3.11), which re-creates the alarms and re-creates the engine if work is pending, so correctness does not depend on either. The owner checklist (README) restarts Chrome with a download running and with a scheduled queue pending.
+- *How long Chrome lets an idle service worker live:* Playwright keeps it busy, so nobody measured it. No design step depends on it: the worker holds no download state, and the engine document is independent of it (F3).
+- *Chrome's download bubble and shelf during a take-over:* headless Chrome shows none. Owner checklist item.
+- *A real-data multi-GB save:* F9 used a sparse file. The `--big` run of `test/dl/save.mjs` saves 3 GB of real bytes (passes; the 215 MB of browser memory growth was reported by the Task 3.12 run, not re-measured here); a file over 5 GB is an owner checklist item.
+- *`onDeterminingFilename`:* not observable under Playwright (F11); the design needs it only to rename, which this phase does by saving through `chrome.downloads.download` with its own `filename`.
+
+Facts found during implementation (from the controller's ledger; trust them):
+
+- Chrome rejects `chrome.downloads` file names that contain `~` or Cf or Cc characters (Phase 2's sanitiser meets the same class of rule).
+- A blob without a MIME type saved as `clip.txt` in raw Chrome; fixed in `c75288d`.
+- `tabs.query` never matches an extension page, so the list page is found with `runtime.getContexts` instead.
+- The manifest has 10 permissions, sorted and unique; `commands` is a top-level manifest key that only Phase 2 adds (this branch has none until the Phase 2 merge). Runtime message types and alarm names are all `dl`-prefixed; `newId` collisions: none.
+- Every worktree run goes through the shared `apps/sieve/dist`; an e2e run and a build are one holder at a time (the controller's lock key `apps/sieve`), and perf, `--big` and the full e2e also take the machine lock `chrome-live`.
+
+### Phase 3 file map
+
+- Plan: `docs/superpowers/plans/2026-11-10-sieve-phase-3.md` (decisions, questions, merge notes, the as-built deviations recorded in run 3).
+- Core, pure (`packages/sieve-core/src/`): `dl-settings.ts`, `dl-record.ts`, `dl-ports.ts`, `dl-plan.ts`, `dl-bucket.ts`, `dl-queue.ts`, `dl-takeover.ts`, `dl-view.ts`, `dl-text.ts`, `dl-engine.ts`, `dl-transfer.ts`, with tests under `src/__tests__/dl-*`.
+- Engine: `apps/sieve/src/offscreen/` (`offscreen.html`, `offscreen.ts`, `engine-worker.ts`, `opfs-files.ts`), `apps/sieve/src/dl/idb-store.ts`.
+- Service worker: `apps/sieve/src/dl/` (`background-dl.ts`, `engine-link.ts`, `settings-store.ts`, `net-rules.ts`, `router.ts`, `save.ts`, `takeover.ts`, `menus.ts`, `alarms.ts`, `links.ts`).
+- Pages: `apps/sieve/src/dl/` (`list.html`, `list.ts`, `list.css`, `add-dialog.ts`, `limit-dialog.ts`, `scheduler-dialog.ts`, `queues-editor.ts`, `popup-downloads.ts`, `options-downloads.ts`); build hook `src/dl/build-dl.mjs`.
+- Tests: `apps/sieve/test/dl/` (runner `e2e.mjs`, helpers and fixture `_*.mjs`, modules `boot`, `transfer`, `router`, `save`, `takeover`, `menus`, `list`, `list-dialogs`, `popup`, `settings`, `torture`) and `apps/sieve/test/dl-perf.mjs` (the phase gate, standalone). `apps/sieve/src/__tests__/dl-*.test.ts` are the unit tests of the extension side.
+- Ledger and metrics (workspace, gitignored): `.superpowers/phase-3/progress.md`, `merge-notes.md`, `s1-metrics.md`.
+
+### Resolved merge notes (Phase 2 first, then Phase 3 rebased)
+
+- **`manifest.json` permissions:** both phases edit the one line. The resolved line is the sorted union, 10 entries: `alarms`, `contextMenus`, `declarativeNetRequest`, `declarativeNetRequestFeedback`, `downloads`, `offscreen`, `scripting`, `storage`, `unlimitedStorage`, `webNavigation`; `commands` stays a separate top-level key. **`version`: a known conflict.** Phase 2 sets `0.2.0` on its branch and Phase 3's close sets `0.3.0`; after the rebase the resolved value is `0.3.0`.
+- **`background.ts`:** Phase 2 adds `onYouTubeMessage` and `chrome.commands.onCommand` lines; Phase 3 adds one import and `initDownloads();` last. Keep both sets.
+- **`build.mjs`:** Phase 3's two lines (`import { buildDownloads } from './src/dl/build-dl.mjs';` and `await buildDownloads({ out, root, ui: root('../../packages/ui') });` before `const ui = …`) are separate from Phase 2's `manifest.commands = …` line.
+- **`popup.ts`, `popup.css`:** both add a tab; `tabs.splice(1, 0, downloadsTab)` keeps Downloads second (design order: Blocking, Downloads, YouTube). The Phase 1 check text "and no tab bar (one tab)" in `e2e.mjs` is edited by both; the resolved condition is `switchCount === 6 && tab count >= 2`.
+- **`options.ts`, `options.css`:** both append sections. After Phase 2's side navigation lands, add a `Downloads` link (`#downloads`) to its list (one line) and put `downloadsSection()` before the YouTube section if the order matters (the design lists Downloads before YouTube).
+- **`test/e2e.mjs`, both `package.json` files, `README.md`, this file:** keep both sides; the test lines are a union. Phase 3's README block ("Downloads", with its owner checklist) sits just before "Licences"; this block is appended at the end of this file.
+- **`packages/sieve-core/src/index.ts` is not touched** by Phase 3 (deep imports only).
+- **Backup and import (post-merge, owner informed):** Phase 2's Task 2.18 backs up only `settings` and `youtube`. After the merge, add one follow-up commit: `Backup` gets an optional `downloads` (`DownloadSettings`), `makeBackup` writes it, `readBackup` validates it with `validateDownloadSettings` (a missing one gives the defaults), and "Replace my settings" writes the `downloads` key in the same `withSettingsLock` write. Until then a backup does not include Downloads settings; the README says so.
+- After the merge run once: `pnpm test`, `pnpm typecheck`, `pnpm --filter sieve build`, `pnpm --filter sieve test:e2e` and `node apps/sieve/test/dl/e2e.mjs` from a clean export.
+
+### Decisions (Phase 3, copied from the plan)
+
+Each is a choice the design or the owner leaves open, with why and what it costs if wrong.
+
+1. **The owner's answers are decisions here.** Take over files over 5 MB of the types this plan lists; 1 part per host by default, configurable 1 to 6, a 429 or 503 means fewer parts (rule in Task 3.2); categories are subfolders of Downloads; the speed limit is off by default; the Downloads tool has its own switch, `downloads.on`, default true, stored in the new key `downloads` (the header "Sieve on" keeps meaning blocking; Phase 2 adds `youtube.on` the same way and this plan does not touch its files).
+   - Why: the owner's instruction of 2026-11-10. Cost if wrong: none; they are settings.
+2. **The default type list is the five category lists (56 extensions) plus 31 MIME types, and the floor is "greater than 5,000,000 bytes".** This is the "default take-over types and minimum size are decided when this phase is planned" item of the outline plan. `application/octet-stream` is on the MIME list so unnamed binaries over 5 MB are caught; `txt`, `csv`, `html` and source-code extensions are left out.
+   - Why: IDM-style rules need a list, and the owner named archives, disk images, installers and programs, video, audio and documents. Cost if wrong: a type is missed or taken that should not be; both are one edit in settings.
+3. **Take-over requires a 206 answer to the probe.** A server that cannot resume stays with Chrome (`no-range`), although the engine can download such a URL when the owner adds it by hand (in one go, restarting from the start after an interruption, and the list says so).
+   - Why: anti-goal 3; taking over a file the engine cannot resume gains nothing and risks a restart from zero. Cost if wrong: such downloads miss the queue and category features. (Question 1.)
+4. **The probe is `GET` with `Range: bytes=0-0`, 8 s limit, with the page's cookies and, through a session rule, its referrer.** A `HEAD` request lies on many servers; a one-byte range answers size, type and range support together.
+   - Cost if wrong: a few servers answer a one-byte range differently from a download; they fail the comparison and Chrome keeps the download.
+5. **429 and 503: halve the connections for that host (never below 1), remember it 30 minutes, back off 2, 4, 8, 16 s, honour `Retry-After` up to 60 s, fail at the fifth in a row.**
+   - Why: the only firm data (OVH refusing 2 of 6) says refusals appear above some small number; halving converges in two steps without guessing the number. Cost if wrong: a host that would have accepted 5 gets 3.
+6. **Final path is `Downloads/<category>/<name>`, not `Downloads/Sieve/<category>/…`.** The design says `Downloads/<category>/`; Phase 2's screenshots use `Downloads/Sieve/`. Name collisions use Chrome's `uniquify` (`name (1).ext`); file names are sanitised by the exact rule in Task 3.5.
+   - Cost if wrong: files land beside the owner's other downloads of the same kind instead of apart. (Question 2.)
+7. **The engine's state is owned by one writer: the Worker, in IndexedDB.** Pages read IndexedDB for the first paint and use broadcasts for live numbers; the service worker also reads it (for rules, alarms and the decision to create the engine). `chrome.storage` is not available to the offscreen document (inspected F1).
+   - Cost if wrong: a second writer would need a lock; the single writer avoids that.
+8. **The service worker holds no download state and needs no keep-alive.** The engine lives in the offscreen document (inspected F3); every worker handler re-reads session storage or IndexedDB; a watchdog alarm and a start-up `reconcile()` repair a dead engine.
+   - Cost if wrong: if Chrome ever closes the offscreen document on its own, the watchdog brings it back within a minute.
+9. **Referer and the allow rule are declarativeNetRequest session rules,** because `fetch` cannot set Referer and `chrome.downloads` refuses it (inspected F13), and because Sieve's own blocking would otherwise stop the engine's requests (inspected F14). The allow rule is priority 2,000,000,000 and the Referer rules one higher.
+   - Cost if wrong: if Phase 1's rule priorities ever exceed 2e9, downloads from blocked hosts fail with a visible status; the constant is one line.
+10. **Our own saves are recognised by `blob:` URL, by `byExtensionId` and by a remembered retry-URL set,** not by `byExtensionId` alone, because it is absent in `onCreated` (inspected F9).
+    - Cost if wrong: none seen; the three checks overlap.
+11. **The private copy is deleted only after Chrome says `complete` with the right size; after a restart a `saving` record saves again.** A duplicate `name (1).ext` is possible; a loss is not.
+    - Cost if wrong: an occasional duplicate to delete by hand.
+12. **Context menus open the Add dialog with the addresses filled in, instead of adding at once.** There is no content script to show feedback on the page, and "all links" can be hundreds of addresses, so the owner confirms, picks the queue and category, and sees the list. Links for "selected" and "all" are read by `chrome.scripting.executeScript` only when the item is clicked.
+    - Cost if wrong: one extra click per right-click download. (Question 3.)
+13. **`dl-menu-click` is a message only extension pages may send; it exists so the e2e can click native menus.** It does exactly what a menu click does.
+    - Cost if wrong: none; a web page cannot send it.
+14. **Six fixed categories (Video, Music, Programs, Archives, Documents, Other); the owner edits folder names and extension lists, not the set.**
+    - Cost if wrong: adding a category later needs a settings migration.
+15. **Queues: the default is one "Main queue" (3 at once); more can be added (up to 8) with a daily window (start, optional stop, chosen days).** Pressing Resume starts a download now whatever the window or slot count (`force`). A removed queue's records move to the first queue.
+    - Cost if wrong: IDM's separate "stop all" button is not here; Pause covers it.
+16. **The speed limit is one shared token bucket in KB/s (1 KB = 1000 bytes), burst a quarter second (at least 64 KiB).**
+    - Cost if wrong: a few chunks overshoot the limit at the start of a download.
+17. **`downloads.on` false:** no take-over, no menus, nothing starts by itself, running non-forced downloads go back to the queue; records stay and Resume on the list still runs them.
+    - Cost if wrong: one condition in `schedulePlan`.
+18. **The engine document closes itself after 60 s with nothing to do and the worker reopens it for work, so an idle Chrome carries no extra process (anti-goal 1).** A 1-minute watchdog alarm exists only while work is runnable.
+    - Cost if wrong: a one-second delay when work arrives after an idle spell.
+19. **Parts default to 1 and the settings text says plainly that more parts often change nothing.** Re-splitting runs only when parts is above 1; resume across restarts works with one part (ranges), as the owner asked.
+    - Cost if wrong: none; honesty about speed is a requirement.
+20. **The engine core and the transfer are in `sieve-core` behind ports (`dl-ports.ts`), not in the extension.** "Pure" here means no `chrome.*` and no DOM; they use web-standard `fetch` types and streams that Node also has. That makes the anti-goal 3 rules testable with `node --test` and fakes.
+    - Cost if wrong: none.
+21. **The e2e uses Playwright for most checks and a raw-CDP Chrome (Node's `WebSocket`) for real folders and SIGKILL,** because Playwright rewrites the download location and cannot kill the browser (inspected F10). A fixture server (`_fixture.mjs`) provides ranges, 429, redirects, one-time links, throttling and a changing file.
+    - Cost if wrong: about 80 lines of helper.
+22. **No change to `test/harness.mjs` and no change to Phase 2's files.** The dl e2e runner discovers `test/dl/*.mjs`, so later tasks add files, not edits.
+23. **README and handoff are edited once, in Task 3.20.** Each task reports its limits in its hand-back; the controller keeps them in the ledger.
+24. **The menu's Downloads tab has no "media found on this page" section in this phase.** It shows the Downloads switch, active downloads with progress, Add URL and Open download list; the media section arrives with media detection in Phase 4 (design: the menu's Downloads tab).
+25. **Delete on a finished row removes it from the list only; the saved file stays.** Delete on an unfinished row removes the partly downloaded data too.
+    - Cost if wrong: one confirm sentence. (Question 4.)
+
+26. **Connections are budgeted per host, across all downloads, at 6 (`HOST_MAX`),** and a 429 or 503 lowers that host-wide number for 30 minutes. A per-download budget would let `maxParallel` 3 with 6 parts open 18 connections to one server.
+    - Cost if wrong: a few lines in `dl-transfer.ts`; a host that would have accepted more gets 6.
+27. **A transient outage never fails a download.** Only 429 and 503 count toward five failures; every other failure retries with back-off up to 30 s until 15 minutes pass without a byte (a stalled connection is aborted after 30 s without a byte). This covers running downloads only: a manual add whose probe fetch throws (including on a network blip) fails with `ERRORS.probe` after about 6 s (three attempts, sleeps of 2 s and 4 s), and the row offers Retry in Chrome.
+    - Cost if wrong: a broken link retries for 15 minutes before it says so.
+28. **Take-over checks free disk space** (`2 * size + 50 MB`) and leaves Chrome's download alone when the disk cannot hold the private copy and the saved file together.
+    - Cost if wrong: a large download that would just have fitted stays with Chrome.
+29. **Take-over bookkeeping keys are one per entry, and `dlTakeover:<id>` lives in `chrome.storage.local`** (session storage is cleared on extension reload, update or disable, which would orphan a paused Chrome download).
+    - Cost if wrong: a stale key is removed by the next worker start.
+30. **"Retry in Chrome" removes the record only after Chrome's download has received a byte.** If that is not seen within 10 s the record stays, so the partly downloaded data is never deleted before Chrome has the file coming.
+    - Cost if wrong: a leftover failed row to delete by hand.
+31. **Chrome's own file name wins when it has an extension** (it already applies a page's `download` attribute), then Content-Disposition, then the URL. Under Playwright Chrome's name is a GUID without an extension, which falls through, so the harness behaves like the URL rule.
+
+### Questions for the owner (Phase 3)
+
+The owner said to proceed with the stated defaults, so the plan proceeds with everything above. These are confirmations only, not blockers:
+
+1. **Servers that cannot resume:** is it right that Chrome keeps those downloads (decision 3)? The alternative is to take them over and accept a restart from zero after an interruption.
+2. **Folder:** `Downloads/<category>/` as the design says (decision 6), or `Downloads/Sieve/<category>/` like Phase 2's screenshots?
+3. **Right-click downloads open the Add dialog** (decision 12) instead of starting at once. Keep?
+4. **Delete on a finished row leaves the file in Downloads** (decision 25). Keep?
+5. **Backup:** Phase 2's backup file will not include the Downloads settings until a small follow-up after the merge (Merge notes). Is that acceptable meanwhile?

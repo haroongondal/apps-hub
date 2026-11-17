@@ -4,6 +4,7 @@ import type { BuildMeta } from '@apps-hub/sieve-core/src/plan.ts';
 import { FEATURES, validateSettings, type AllowEntry, type FeatureKey, type Settings } from '@apps-hub/sieve-core/src/settings.ts';
 import { NAMES, count, save, setBlocking, setList, toggle } from './controls.ts';
 import { h, type Child } from './dom.ts';
+import { downloadsSection } from './dl/options-downloads.ts';
 import { FILTERS_CHANGED, TOO_MANY_TO_STORE, saveMyFilters, type SaveResult } from './my-filters.ts';
 import { backupSection } from './options-backup.ts';
 import { shortcutsSection } from './options-shortcuts.ts';
@@ -170,7 +171,7 @@ chrome.storage.onChanged.addListener((changes, where) => {
 });
 
 renderAllowlist();
-const sections = [blocking, lists, mine, allow, youtubeSection(), shortcutsSection(), backupSection()];
+const sections = [blocking, lists, mine, allow, youtubeSection(), shortcutsSection(), backupSection(), downloadsSection()];
 const nav = h('nav', { 'aria-label': 'Settings sections' }, ...sections.map((s) => h('a', { href: `#${s.id}` }, s.querySelector('h2')!.textContent)));
 document.getElementById('app')!.replaceChildren(h('header', {}, h('h1', { class: 'ui-title' }, 'Sieve settings')), nav, h('div', { class: 'content' }, ...sections));
 // The sections are drawn after the page loads, so the browser may have missed the address's #section.

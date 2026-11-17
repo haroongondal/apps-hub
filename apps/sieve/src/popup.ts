@@ -6,6 +6,7 @@ import { ytPage } from '@apps-hub/sieve-core/src/yt-bridge.ts';
 import { NAMES, count, errorText, save, setBlocking, setList, toggle } from './controls.ts';
 import { h, type Child } from './dom.ts';
 import { createYoutubeView } from './popup-youtube.ts';
+import { downloadsTab } from './dl/popup-downloads.ts';
 
 interface State {
   settings: Settings;
@@ -130,6 +131,7 @@ const tabs = [
   { id: 'youtube', label: 'YouTube', view: await createYoutubeView(tab) },
 ];
 let current = ytPage(tab?.url ?? '').kind === 'other' ? tabs[0].id : 'youtube';
+tabs.splice(1, 0, downloadsTab);
 
 function view(state: State): Child[] {
   return [
