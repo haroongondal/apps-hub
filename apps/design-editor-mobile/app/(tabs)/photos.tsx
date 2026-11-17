@@ -236,7 +236,7 @@ export default function PhotosTab() {
     <>
       <Header
         title="Photos"
-        trailing={job ? undefined : <Button label="Scan now" variant="ghost" onPress={() => { DesignMedia.startPhotoIndex().catch(say); }} accessibilityHint="Looks for new photos to search" />}
+        trailing={job ? undefined : <Button label="Scan now" variant="ghost" onPress={() => { DesignMedia.startPhotoIndex().catch(say); }} accessibilityHint="Looks for new photos" />}
       />
       <Segmented options={VIEWS} value={mode} onChange={setMode} accessibilityLabel="Photos view" />
     </>
@@ -246,6 +246,7 @@ export default function PhotosTab() {
     return (
       <Screen scroll>
         {top}
+        {waitingNotice}
         <CleanupOverview lastScan={index.lastScan} scanning={!!job} access={access} onChangeAccess={ask} />
       </Screen>
     );

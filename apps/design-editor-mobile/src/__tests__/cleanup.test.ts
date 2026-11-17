@@ -35,6 +35,10 @@ test('sizeTextUnits', () => {
   assert.equal(sizeText(2_100_000), '2.1 MB');
   assert.equal(sizeText(1_250_000_000), '1.3 GB');
   assert.equal(sizeText(1_200_000_000), '1.2 GB');
+  // formatMb rounds >= 100 MB to whole MB, so 999.5 MB and up would print "1000 MB"
+  assert.equal(sizeText(999_400_000), '999 MB');
+  assert.equal(sizeText(999_600_000), '1.0 GB');
+  assert.equal(sizeText(1e9), '1.0 GB');
 });
 
 test('photosTextPlural', () => {
@@ -52,6 +56,8 @@ test('lastScanTextSteps', () => {
   assert.equal(lastScanText(NOW - 3 * HOUR, NOW), 'Checked 3 hours ago');
   assert.equal(lastScanText(NOW - 26 * HOUR, NOW), 'Checked 1 day ago');
   assert.equal(lastScanText(NOW - 3 * DAY, NOW), 'Checked 3 days ago');
+  assert.equal(lastScanText(NaN, NOW), 'Not checked yet');
+  assert.equal(lastScanText(NOW, NaN), 'Checked just now');
 });
 
 test('initialTicksFromEngine', () => {
@@ -109,6 +115,7 @@ test('removedTextDaysLeft', () => {
   assert.equal(removedText(p(NOW + 27.2 * DAY), NOW), '2.1 MB · 27 days left');
   assert.equal(removedText(p(NOW + 0.5 * DAY), NOW), '2.1 MB · Less than a day left');
   assert.equal(removedText(p(NOW - DAY), NOW), '2.1 MB · Less than a day left');
+  assert.equal(removedText(p(NaN), NOW), '2.1 MB · Less than a day left');
 });
 
 test('hiddenTextUsesKindName', () => {

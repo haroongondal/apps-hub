@@ -73,7 +73,7 @@ Kotlin (Expo Modules API) + JUnit 4.
 | Nothing found | Empty title `Nothing to clean up`, body `No blurry photos, copies or look-alikes right now.` |
 | Load failed | Notice danger title `Couldn't load Clean up`, action `Try again` |
 | Overview links | Row `Recently removed`; ghost button `Show hidden photos again`; Alert title `Show hidden photos again?`, body `Photos you marked as not a mistake will be suggested again.`, buttons `Cancel` / `Show them` |
-| Review | `Tick all`, `Untick all`, `Not a mistake`, `Best`, `Back`; slider label `How blurry`, ends `Very blurry only` / `A little blurry too` |
+| Review | `Tick all`, `Untick all`, `Not a mistake`, `Best`, `Back`; slider label `How blurry`, ends `Very blurry only` / `A little blurry too`, spoken value `Very blurry only` / `A little blurry too` / `40 percent toward a little blurry too`; Blurry with nothing found: Empty body `Move the slider to see more.` |
 | Footer | `Delete 37 photos (412 MB)`, `Delete 1 photo (2.1 MB)`, `Delete` (disabled) when none ticked |
 | Whole set ticked | Notice warn `Every photo in a set is ticked. Untick one to keep it.` |
 | Done | `37 photos moved to trash. You can restore them for 30 days.` / `1 photo moved to trash. You can restore it for 30 days.`; action `Undo` |
@@ -82,6 +82,9 @@ Kotlin (Expo Modules API) + JUnit 4.
 | Delete failed (fallback) | `The photos weren't moved. Try again.` |
 | Restore failed (fallback) | `The photos weren't restored. Try again.` |
 | Hidden | `Hidden from Blurry.` (kind name), action `Undo` |
+| Hide failed (fallback) | `Couldn't hide these photos. Try again.` |
+| Show again failed (fallback) | Review: `Couldn't show them again. Try again.`; overview Alert title `Couldn't show them again`, body `Try again.` |
+| Spoken hints | Back `Goes back to Clean up`; Try again `Loads these photos again`; Tick all `Ticks every photo except the best ones`; Untick all `Unticks every photo`; photo tile `Touch and hold for more`, action `More options`; Scan now `Looks for new photos` |
 | Recently removed | Header `Recently removed`; Notice `Your Gallery app may not show photos removed here. To get them back, restore them from this list.`; row subtitle `2.1 MB · 27 days left` / `2.1 MB · Less than a day left`; buttons `Restore`, `Restore all`; Empty title `Nothing removed`, body `Photos you remove in Clean up stay here for 30 days.` |
 | Photo sheet | title `Photo`; buttons `Not a mistake`, `Open` |
 

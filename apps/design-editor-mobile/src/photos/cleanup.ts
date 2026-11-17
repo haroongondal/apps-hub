@@ -8,7 +8,7 @@ const KIND_NAMES: Record<CleanupKind, string> = {
 };
 export const kindName = (kind: CleanupKind): string => KIND_NAMES[kind];
 
-export const sizeText = (bytes: number): string => (bytes < 1e9 ? formatMb(bytes) : `${(bytes / 1e9).toFixed(1)} GB`);
+export const sizeText = (bytes: number): string => (bytes < 999_500_000 ? formatMb(bytes) : `${(bytes / 1e9).toFixed(1)} GB`);
 export const photosText = (n: number): string => `${n.toLocaleString('en-US')} ${n === 1 ? 'photo' : 'photos'}`;
 
 export interface KindRow { kind: CleanupKind; title: string; subtitle: string; label: string; count: number; bytes: number }
@@ -29,9 +29,9 @@ export function kindRows(groups: CleanupGroup[]): KindRow[] {
 const plural = (n: number, one: string): string => `${n} ${one}${n === 1 ? '' : 's'}`;
 
 export function lastScanText(lastScan: number, now: number): string {
-  if (lastScan <= 0) return 'Not checked yet';
+  if (!(lastScan > 0)) return 'Not checked yet';
   const min = Math.floor((now - lastScan) / 60_000);
-  if (min < 1) return 'Checked just now';
+  if (!(min >= 1)) return 'Checked just now'; // also a NaN clock
   if (min < 60) return `Checked ${plural(min, 'minute')} ago`;
   const hours = Math.floor(min / 60);
   if (hours < 24) return `Checked ${plural(hours, 'hour')} ago`;
@@ -69,7 +69,7 @@ export const restoredText = (n: number): string => `${photosText(n)} ${n === 1 ?
 
 export function removedText(p: RemovedPhoto, now: number): string {
   const days = Math.floor((p.expiresAt - now) / 86_400_000);
-  return `${formatMb(p.bytes)} · ${days < 1 ? 'Less than a day left' : `${plural(days, 'day')} left`}`;
+  return `${formatMb(p.bytes)} · ${!(days >= 1) ? 'Less than a day left' : `${plural(days, 'day')} left`}`;
 }
 export const hiddenText = (kind: CleanupKind): string => `Hidden from ${kindName(kind)}.`;
 

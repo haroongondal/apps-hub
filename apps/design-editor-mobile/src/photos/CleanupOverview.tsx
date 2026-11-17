@@ -8,7 +8,7 @@ import { plainError } from '../media/errors';
 import type { Access } from './access';
 import { kindRows, lastScanText } from './cleanup';
 
-const say = (e: unknown) => Alert.alert('Something went wrong', plainError(e, 'Try again.'));
+const say = (e: unknown) => Alert.alert("Couldn't show them again", plainError(e, 'Try again.'));
 
 export function CleanupOverview({ lastScan, scanning, access, onChangeAccess }: {
   lastScan: number; scanning: boolean; access: Access; onChangeAccess: () => void;

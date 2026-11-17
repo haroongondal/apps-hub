@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import DesignMedia, { type CleanupGroup, type CleanupKind, type CleanupPhoto, type CleanupResult } from 'design-media';
-import { Button, Empty, Header, Notice, Pill, Screen, Sheet, Text, alpha, radius, space, useTheme, type Tone } from '@apps-hub/ui';
+import { Button, Empty, Header, Notice, Pill, Progress, Screen, Sheet, Text, alpha, radius, space, useTheme, type Tone } from '@apps-hub/ui';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Image, Pressable, View, useWindowDimensions } from 'react-native';
@@ -21,7 +21,7 @@ export default function CleanupKindRoute() {
   if (known) return <Review key={known} kind={known} />;
   return (
     <Screen scroll>
-      <Button label="Back" variant="ghost" onPress={() => router.back()} />
+      <Button label="Back" variant="ghost" onPress={() => router.back()} accessibilityHint="Goes back to Clean up" />
       <Empty title="Nothing to clean up" />
     </Screen>
   );
@@ -42,7 +42,8 @@ function Review({ kind }: { kind: CleanupKind }) {
   const [threshold, setThreshold] = useState<number | null>(null); // null: the engine's default
   const [ticks, setTicks] = useState<Ticks>({});
   const [loadError, setLoadError] = useState(false);
-  const [message, setMessage] = useState<Message | null>(null);
+  const [message, setMessage] = useState<Message | null>(null); // errors, Hidden + Undo, Restored
+  const [undo, setUndo] = useState<Message | null>(null); // the latest Done + Undo; other messages don't replace it
   const [busy, setBusy] = useState(false);
   const open = useRef(false); // a trash or restore request is open; the ref stops a second tap before busy renders
   const [picked, setPicked] = useState<string | null>(null);
@@ -65,6 +66,8 @@ function Review({ kind }: { kind: CleanupKind }) {
       () => { if (n === request.current) setLoadError(true); },
     );
   }, [kind, threshold]);
+  const loadRef = useRef(load); // Undo closures outlive the render that made them; reload with the current threshold
+  loadRef.current = load;
 
   useFocusEffect(useCallback(() => {
     load();
@@ -88,8 +91,14 @@ function Review({ kind }: { kind: CleanupKind }) {
     try {
       const a = await DesignMedia.trashPhotos(uris);
       if (a.moved === 0) return; // the owner said no in Android's dialog: nothing changes, nothing is said
-      setMessage({ tone: 'ok', text: doneText(a.moved, a.noted), undo: () => { void restore(a.uris); } });
-      load();
+      setUndo({ tone: 'ok', text: doneText(a.moved, a.noted), undo: () => { void restore(a.uris); } });
+      // take the trashed photos off screen and out of the ticks now, before the reload lands
+      const gone = new Set(a.uris);
+      setTicks(t => Object.fromEntries(Object.entries(t).filter(([u]) => !gone.has(u))));
+      setGroups(gs => gs && gs
+        .map(g => ({ ...g, photos: g.photos.filter(p => !gone.has(p.uri)) }))
+        .filter(g => g.photos.length >= (sets ? 2 : 1)));
+      loadRef.current();
     } catch (e) {
       setMessage({ tone: 'danger', text: plainError(e, "The photos weren't moved. Try again.") });
     }
@@ -99,8 +108,9 @@ function Review({ kind }: { kind: CleanupKind }) {
     try {
       const a = await DesignMedia.restorePhotos(uris);
       if (a.restored === 0) return; // said no: the Done notice and its Undo stay
+      setUndo(null);
       setMessage({ tone: 'ok', text: restoredText(a.restored) });
-      load();
+      loadRef.current();
     } catch (e) {
       setMessage({ tone: 'danger', text: plainError(e, "The photos weren't restored. Try again.") });
     }
@@ -111,9 +121,9 @@ function Review({ kind }: { kind: CleanupKind }) {
     try {
       await DesignMedia.dismissCleanup(kind, uris);
       setMessage({ tone: 'neutral', text: hiddenText(kind), undo: () => { void undismiss(uris); } });
-      load();
+      loadRef.current();
     } catch (e) {
-      setMessage({ tone: 'danger', text: plainError(e, 'Try again.') });
+      setMessage({ tone: 'danger', text: plainError(e, "Couldn't hide these photos. Try again.") });
     }
   }
 
@@ -121,9 +131,9 @@ function Review({ kind }: { kind: CleanupKind }) {
     try {
       await DesignMedia.undismissCleanup(kind, uris);
       setMessage(null);
-      load();
+      loadRef.current();
     } catch (e) {
-      setMessage({ tone: 'danger', text: plainError(e, 'Try again.') });
+      setMessage({ tone: 'danger', text: plainError(e, "Couldn't show them again. Try again.") });
     }
   }
 
@@ -142,20 +152,20 @@ function Review({ kind }: { kind: CleanupKind }) {
 
   const header = (
     <View style={{ paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: space.md, gap: space.xl }}>
-      <Button label="Back" variant="ghost" onPress={() => router.back()} />
+      <Button label="Back" variant="ghost" onPress={() => router.back()} accessibilityHint="Goes back to Clean up" />
       <Header title={kindName(kind)} />
       {loadError ? (
         <Notice
           tone="danger"
           title="Couldn't load Clean up"
-          action={<Button label="Try again" variant="secondary" onPress={load} />}
+          action={<Button label="Try again" variant="secondary" onPress={load} accessibilityHint="Loads these photos again" />}
         />
       ) : null}
       {kind === 'blurry' && blur ? <StrictnessSlider value={threshold ?? blur.default} blur={blur} onChange={setThreshold} /> : null}
       {any ? (
         <View style={{ flexDirection: 'row', gap: space.sm }}>
-          <Button label="Tick all" variant="secondary" size="sm" onPress={() => groups && setTicks(tickAll(groups, true))} />
-          <Button label="Untick all" variant="secondary" size="sm" onPress={() => groups && setTicks(tickAll(groups, false))} />
+          <Button label="Tick all" variant="secondary" size="sm" onPress={() => groups && setTicks(tickAll(groups, true))} accessibilityHint="Ticks every photo except the best ones" />
+          <Button label="Untick all" variant="secondary" size="sm" onPress={() => groups && setTicks(tickAll(groups, false))} accessibilityHint="Unticks every photo" />
         </View>
       ) : null}
     </View>
@@ -168,6 +178,9 @@ function Review({ kind }: { kind: CleanupKind }) {
         key={n}
         onPress={() => setTicks(t => ({ ...t, [p.uri]: !t[p.uri] }))}
         onLongPress={() => setPicked(p.uri)}
+        accessibilityHint="Touch and hold for more"
+        accessibilityActions={[{ name: 'longpress', label: 'More options' }]}
+        onAccessibilityAction={e => { if (e.nativeEvent.actionName === 'longpress') setPicked(p.uri); }}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: on }}
         accessibilityLabel={`Photo ${n + 1} of ${total}${p.best ? ', best' : ''}`}
@@ -196,7 +209,10 @@ function Review({ kind }: { kind: CleanupKind }) {
         data={items}
         keyExtractor={i => i.key}
         ListHeaderComponent={header}
-        ListEmptyComponent={groups ? <Empty title="Nothing to clean up" /> : null}
+        ListEmptyComponent={
+          groups ? <Empty title="Nothing to clean up" body={kind === 'blurry' ? 'Move the slider to see more.' : undefined} />
+            : loadError ? null : <View style={{ paddingHorizontal: space.lg }}><Progress value={null} /></View>
+        }
         contentContainerStyle={{ gap: space.xs, paddingBottom: space.xl }}
         renderItem={({ item }) => 'head' in item ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, paddingTop: space.lg, gap: space.md }}>
@@ -210,14 +226,15 @@ function Review({ kind }: { kind: CleanupKind }) {
         )}
       />
       <View style={{ paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: insets.bottom + space.md, gap: space.md, borderTopWidth: 1, borderColor: c.line, backgroundColor: c.bg }}>
-        {message ? (
+        {[undo, message].map((m, i) => m ? (
           <Notice
-            tone={message.tone}
-            action={message.undo ? <Button label="Undo" variant="secondary" size="sm" busy={busy} onPress={message.undo} /> : undefined}
+            key={i}
+            tone={m.tone}
+            action={m.undo ? <Button label="Undo" variant="secondary" size="sm" busy={busy} onPress={m.undo} /> : undefined}
           >
-            {message.text}
+            {m.text}
           </Notice>
-        ) : null}
+        ) : null)}
         {groups && wholeSetTicked(groups, ticks) ? <Notice tone="warn">Every photo in a set is ticked. Untick one to keep it.</Notice> : null}
         {any ? (
           <Button

@@ -47,7 +47,9 @@ export function StrictnessSlider({ value, blur, onChange }: { value: number; blu
         accessible
         accessibilityRole="adjustable"
         accessibilityLabel="How blurry"
-        accessibilityValue={{ text: `${Math.round(fraction * 100)} percent` }}
+        accessibilityValue={{
+          text: fraction <= 0 ? 'Very blurry only' : fraction >= 1 ? 'A little blurry too' : `${Math.round(fraction * 100)} percent toward a little blurry too`,
+        }}
         accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
         onAccessibilityAction={e => step(e.nativeEvent.actionName === 'increment' ? 0.1 : -0.1)}
         style={{ height: touch, justifyContent: 'center' }}
