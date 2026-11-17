@@ -456,18 +456,58 @@ function removeBackground(px, w, h, tol) {
   }
   return tail;
 }
-async function removeBg(img, tol) {
+function originalCanvas(img) {
   const src = img._originalElement || img.getElement();
   const c = document.createElement('canvas');
   c.width = src.naturalWidth || src.width; c.height = src.naturalHeight || src.height;
-  const ctx = c.getContext('2d');
-  ctx.drawImage(src, 0, 0);
+  c.getContext('2d').drawImage(src, 0, 0);
+  return c;
+}
+async function removeBg(img, tol) {
+  const c = originalCanvas(img), ctx = c.getContext('2d');
   const d = ctx.getImageData(0, 0, c.width, c.height);
   const removed = removeBackground(d.data, c.width, c.height, tol);
   ctx.putImageData(d, 0, 0);
   await img.setSrc(c.toDataURL('image/png'));
   canvas.requestRenderAll(); record();
   toast(removed ? 'Background removed' : 'No plain background found at the edges');
+}
+
+// Person / Object cut-out and Upscale: phone only (window.native.vision is absent on the Mac)
+const KINDS = { person: 'Person', object: 'Object' };
+let visionTools = null, visionRun = null;
+function visionKinds() {
+  if (visionTools?.fn !== native.vision) visionTools = { fn: native.vision, kinds: native.vision({ op: 'tools' }).then(k => k.filter(x => KINDS[x])).catch(() => []) };
+  return visionTools.kinds;
+}
+function drawVision(html = '') {
+  const box = $('#vbox'); if (!box) return;
+  if (visionRun) html = `<p class="hint">${visionRun.phase === 'download' ? 'Getting the tool' : visionRun.text}</p>
+    <progress max="1" ${visionRun.fraction == null ? '' : `value="${visionRun.fraction}"`} style="width:100%" aria-label="Progress"></progress>
+    <button id="vstop" style="width:100%;margin-top:6px">Cancel</button>`;
+  box.replaceChildren(el(html));
+  $$('[data-cut], [data-up], #rbg').forEach(b => b.disabled = !!visionRun);
+  const stop = $('#vstop'); if (stop) stop.onclick = () => native.vision({ op: 'cancel' }).catch(() => {});
+}
+const blobURL = b => new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => fail(r.error); r.readAsDataURL(b); });
+async function runVision(img, req, text, done) {
+  if (visionRun) return;
+  visionRun = { text }; drawVision();
+  try {
+    const image = await new Promise(ok => originalCanvas(img).toBlob(ok, 'image/png'));
+    const out = await native.vision({ ...req, image, onProgress: (phase, fraction) => { visionRun = { text, phase, fraction }; drawVision(); } });
+    if (!out) return; // cancelled: nothing changes
+    // data: URL, not blob: (a blob: URL dies with the page and breaks save and undo); same size on the page
+    const w = img.getScaledWidth(), h = img.getScaledHeight();
+    await img.setSrc(await blobURL(out.type ? out : new Blob([out], { type: 'image/png' })));
+    img.set({ scaleX: w / img.width, scaleY: h / img.height }); img.setCoords();
+    canvas.requestRenderAll(); record();
+    toast(done);
+  } catch (e) {
+    toast(e?.message || "This tool didn't work on this image. Try again.", 6000);
+  } finally {
+    visionRun = null; inspect();
+  }
 }
 
 const active = () => canvas.getActiveObject();
@@ -582,9 +622,13 @@ function inspect() {
       <div class="row"><label for="cs">Letter spacing</label><input type="number" id="cs" min="-200" max="2000" step="10" value="${+o.charSpacing}" style="width:72px"></div>` : ''}
     ${isImg ? `
       <h3>Remove background</h3>
+      ${native.vision ? '<div class="grid2" id="cutKinds" style="margin-bottom:6px"></div>' : ''}
       ${range('tol', 'Tolerance', 5, 160, 1, 48)}
-      <button id="rbg" style="width:100%">Remove background</button>
-      <p class="hint">Best on plain or studio backgrounds.</p>
+      <button id="rbg" style="width:100%">${native.vision ? 'Plain background' : 'Remove background'}</button>
+      <p class="hint">${native.vision ? 'Tolerance is for Plain background, best on plain or studio backgrounds.' : 'Best on plain or studio backgrounds.'}</p>
+      ${native.vision ? `<h3>Upscale</h3>
+      <div class="grid2"><button data-up="2">2x</button><button data-up="4">4x</button></div>
+      <div id="vbox"></div>` : ''}
       <h3>Adjust</h3>
       ${range('fbr', 'Brightness', -1, 1, 0.02, +(imgFilter(o, 'Brightness')?.brightness ?? 0))}
       ${range('fco', 'Contrast', -1, 1, 0.02, +(imgFilter(o, 'Contrast')?.contrast ?? 0))}
@@ -642,6 +686,25 @@ function inspect() {
     };
     ['fbr', 'fco', 'fbl'].forEach(id => on(id, 'oninput', apply));
     on('fgr', 'onchange', apply);
+    if (native.vision) {
+      $$('[data-up]').forEach(b => b.onclick = () => {
+        const src = o._originalElement || o.getElement(), scale = +b.dataset.up;
+        const e = upscaleEstimate(src.naturalWidth || src.width, src.naturalHeight || src.height, scale);
+        if (!e) return toast('This image is already as big as it can be.');
+        drawVision(`<p class="hint" id="vest">${e.label} on this phone. The result is ${e.outW} × ${e.outH} px.</p>
+          <div class="grid2"><button id="vgo" class="primary">Start</button><button id="vno">Cancel</button></div>`);
+        $('#vgo').onclick = () => runVision(o, { op: 'upscale', scale }, `Upscaling. ${e.label}.`, 'Image upscaled');
+        $('#vno').onclick = () => drawVision();
+      });
+      visionKinds().then(kinds => {
+        const box = $('#cutKinds');
+        if (!box || active() !== o) return;
+        box.replaceChildren(el(kinds.map(k => `<button data-cut="${k}">${KINDS[k]}</button>`).join('')));
+        $$('[data-cut]').forEach(b => b.onclick = () => runVision(o, { op: 'cutout', kind: b.dataset.cut }, 'Removing the background', 'Background removed'));
+        drawVision();
+      });
+      drawVision();
+    }
   }
 }
 canvas.on('selection:created', inspect);

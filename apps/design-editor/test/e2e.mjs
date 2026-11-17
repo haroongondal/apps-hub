@@ -82,6 +82,7 @@ const png = await page.evaluate(() => {
 await page.click('[data-tab="uploads"]');
 await page.setInputFiles('#imgFile', { name: 'square.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
 await until(() => editor.canvas.getActiveObject()?.type === 'image');
+assert.deepEqual(await page.evaluate(() => [!!document.querySelector('[data-cut], [data-up], #vbox'), document.querySelector('#rbg').textContent]), [false, 'Remove background'], 'the Mac has no Person, Object or Upscale');
 await page.click('#rbg');
 await until(() => document.querySelector('#toast').textContent === 'Background removed');
 const alpha = await page.evaluate(() => {
