@@ -54,19 +54,18 @@ APK copy: scratchpad only (not committed). Manifest dump via aapt2 `dump xmltree
 - 2026-11-17 (session 2): owner asked for full replica, picked approach A. Design doc written; builder check done and folded in; owner answered release + Muviz questions. Design approved; plan written.
 
 ## Current state + next step (2026-11-17, session 2)
-Executing the plan with cd-engineering-tools:parallel-agents-coord; ledger = docs/handoffs/halo-sdd-ledger.md (read it).
-Briefs in .sdd/ (git-excluded). Branch `halo` (rebased on origin/main d1b61ea), HEAD 0a6f780.
-Done: Tasks 1, 2, 4-10, 12; whole-branch review + fix wave (security fix re-reviewed: addressed). Two minors deferred (ledger).
-Store manifest: store=19 (knows halo), halo=4 = Halo 0.3.1 (all 24 patterns, screens, colours, spike probes; always-on
-test behind Diagnostics switch, off by default). Builds come from the clean detached worktree ~/Documents/apps-hub-wt/halo-release
-(`git -C ../halo-release checkout --detach <sha>` then `pnpm release halo`). Re-check manifest.json after every release.
-Owner was told NOT to install 0.3.0 (security bug); 0.3.1 is the one to install.
-Phone: queued in coord for device:49kjmnuwonkffqzh (2 ahead: image-tools, photo-search); phone keeps dropping off Wi-Fi adb.
-Next: owner installs Store 19 + Halo 0.3.1 and grants permissions; then with the claim: force-stop Muviz, run Task 3 checks
-(background FFT, reboot start path, overlay over lock screen with tap-through, always-on test via Diagnostics switch +
-power-button lock) and Task 11/12 checks (each pattern, album-art colours, edges, idle, `dumpsys gfxinfo com.haroon.halo`).
-Record in spec §9 + this file.
-In parallel: stages 3-5 design written (builder check running) → owner approval → plan docs/superpowers/plans/2026-11-17-halo-stages-3-5.md → build stage 3 (notifications) first; stage 4 gated on the AOD screen-off launch working on the phone.
+Executing with cd-engineering-tools:parallel-agents-coord; ledger = docs/handoffs/halo-sdd-ledger.md (read it). Briefs in .sdd/.
+Branch `halo` (on origin/main d1b61ea). Store: store=19, halo=4 (0.3.1). Owner HAS installed Store 19 + Halo 0.3.1 and
+granted everything. Releases come from ~/Documents/apps-hub-wt/halo-release (detached; checkout the sha, `pnpm release halo`,
+then re-fetch manifest.json to check nothing clobbered it).
+Phone results so far are in the base spec §13: audio capture works; overlay is hidden by the system on the lock screen;
+frame time over budget (p50 24 ms, p95 109 ms) → perf-fix agent in flight (GPU RenderEffect glow instead of BlurMaskFilter).
+Pending phone checks (need owner to unlock): (b) start after reboot, (d) always-on screen after screen-off (Diagnostics
+switch "Test the always-on screen", lock with power button), and frame time after the perf fix (`dumpsys gfxinfo com.haroon.halo reset`).
+Phone: queued in coord behind apps-hub-af (photo-search); background coord wait running.
+Stages 3-5 design written + builder-checked: docs/superpowers/specs/2026-11-17-halo-stages-3-5-design.md — AWAITING OWNER APPROVAL.
+After approval: superpowers:writing-plans → docs/superpowers/plans/2026-11-17-halo-stages-3-5.md (stage 3 full, stage 4
+outline until (d) passes), then build 0.4.0 (notifications) with the same per-task loop.
 
 ## Previous state (session 1, superseded)
 Owner asked for a new chat to start building. Already told to the owner and accepted without objection:
