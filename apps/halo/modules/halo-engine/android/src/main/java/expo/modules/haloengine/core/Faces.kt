@@ -9,6 +9,9 @@ import expo.modules.haloengine.core.faces.Orbit
 import expo.modules.haloengine.core.faces.RingAnalog
 import expo.modules.haloengine.core.faces.Stacked
 import expo.modules.haloengine.core.faces.Vertical
+import expo.modules.haloengine.core.faces.CalendarStrip
+import expo.modules.haloengine.core.faces.Typewriter
+import expo.modules.haloengine.core.faces.WordClock
 
 object Faces {
   /** Factories, one line per face. */
@@ -22,6 +25,9 @@ object Faces {
     ::BinaryDots,
     ::Orbit,
     ::ArcProgress,
+    ::WordClock,
+    ::Typewriter,
+    ::CalendarStrip,
   )
 
   private val byId: Map<String, () -> Face> by lazy { all.associateBy { it().id } }
