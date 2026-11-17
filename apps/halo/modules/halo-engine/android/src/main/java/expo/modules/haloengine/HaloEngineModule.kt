@@ -10,15 +10,23 @@ import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
 import expo.modules.haloengine.android.AppIcons
+import expo.modules.haloengine.android.Backgrounds
+import expo.modules.haloengine.android.FacePreview
 import expo.modules.haloengine.android.HaloListener
 import expo.modules.haloengine.android.HaloService
 import expo.modules.haloengine.android.NotifyFlash
+import expo.modules.haloengine.android.PickBackgroundContract
 import expo.modules.haloengine.android.ProbeLog
 import expo.modules.haloengine.android.RuleInputs
 import expo.modules.haloengine.android.SettingsStore
 import expo.modules.haloengine.core.Patterns
+import expo.modules.haloengine.core.Themes
+import expo.modules.kotlin.activityresult.AppContextActivityResultLauncher
+import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private const val STATUS_EVENT = "onStatus"
 
@@ -42,8 +50,12 @@ class HaloEngineModule : Module() {
     "frameP95Ms" to HaloService.frameP95Ms,
   )
 
+  private lateinit var picker: AppContextActivityResultLauncher<String, Uri?>
+
   override fun definition() = ModuleDefinition {
     Name("HaloEngine")
+
+    RegisterActivityContracts { picker = registerForActivityResult(PickBackgroundContract()) }
 
     Events(STATUS_EVENT)
 
@@ -116,6 +128,30 @@ class HaloEngineModule : Module() {
         val p = make()
         mapOf("id" to p.id, "family" to p.family.name.lowercase(), "name" to p.id.replace('-', ' ').replaceFirstChar { it.uppercase() })
       }
+    }
+
+    // Theme photos. false = the owner cancelled the picker. Deleting a theme calls clearBackground first.
+    AsyncFunction("pickBackground") Coroutine { themeId: String ->
+      require(Themes.validId(themeId)) { "Invalid theme id" }
+      require(SettingsStore.load(context).themes.any { it.id == themeId }) { "Unknown theme" }
+      val uri = withContext(Dispatchers.Main) { picker.launch(themeId) } ?: return@Coroutine false
+      withContext(Dispatchers.IO) {
+        Backgrounds.save(context, themeId, uri)
+        Backgrounds.setPhoto(context, themeId, true)
+      }
+    }
+
+    AsyncFunction("clearBackground") Coroutine { themeId: String ->
+      withContext(Dispatchers.IO) {
+        Backgrounds.delete(context, themeId)
+        Backgrounds.setPhoto(context, themeId, false)
+      }
+      Unit
+    }
+
+    // A PNG of the theme's face on its background, in the cache folder; returns its file:// URI.
+    AsyncFunction("renderFacePreview") Coroutine { themeId: String, width: Int, height: Int ->
+      withContext(Dispatchers.IO) { FacePreview.render(context, themeId, width, height) }
     }
   }
 }

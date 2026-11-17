@@ -53,6 +53,9 @@ interface NativeApi {
   listPatterns(): PatternInfo[];
   listApps(): Promise<AppInfo[]>;
   appIconUri(pkg: string): Promise<string | null>;
+  pickBackground(themeId: string): Promise<boolean>;
+  clearBackground(themeId: string): Promise<void>;
+  renderFacePreview(themeId: string, width: number, height: number): Promise<string>;
   addListener(event: 'onStatus', listener: (s: Status) => void): Subscription;
 }
 
@@ -75,6 +78,12 @@ export interface HaloEngineApi {
   listApps(): Promise<AppInfo[]>;
   /** A file:// URI of the app's icon as a 96 px PNG; null when the app is not installed. */
   appIconUri(pkg: string): Promise<string | null>;
+  /** Opens the system photo picker and stores a copy (long side 1440 px) as the theme's background; false when cancelled. The theme must already be saved in settings. */
+  pickBackground(themeId: string): Promise<boolean>;
+  /** Deletes the theme's photo and sets photo=false. Call it before removing a theme from settings so no photo is left behind. */
+  clearBackground(themeId: string): Promise<void>;
+  /** A file:// URI of a PNG (width x height px) of the theme's face on its background, drawn now with sample values. */
+  renderFacePreview(themeId: string, width: number, height: number): Promise<string>;
   addStatusListener(cb: (s: Status) => void): Subscription;
 }
 
@@ -92,6 +101,9 @@ const HaloEngine: HaloEngineApi = {
   listApps: async () =>
     (await native.listApps()).map((a) => ({ pkg: String(a.pkg), label: String(a.label), notified: a.notified === true })),
   appIconUri: async (pkg) => (await native.appIconUri(pkg)) ?? null,
+  pickBackground: async (themeId) => (await native.pickBackground(themeId)) === true,
+  clearBackground: (themeId) => native.clearBackground(themeId),
+  renderFacePreview: async (themeId, width, height) => String(await native.renderFacePreview(themeId, Math.round(width), Math.round(height))),
   addStatusListener: (cb) => native.addListener('onStatus', cb),
 };
 
