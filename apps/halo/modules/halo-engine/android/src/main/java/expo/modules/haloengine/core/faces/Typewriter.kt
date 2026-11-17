@@ -19,6 +19,7 @@ import kotlin.math.min
 
 // Real advance of the bundled mono font per px of text size.
 const val MONO_ADVANCE = 0.63f
+private const val SIDE = 0.06f // share of the width kept free on each side
 
 /** A terminal line `> 14:07` with an outlined cursor cell right after the text, so the cursor moves when the digit count changes; seconds are ignored. */
 class Typewriter : Face {
@@ -30,8 +31,8 @@ class Typewriter : Face {
   override fun draw(input: FaceInput, out: DrawList) = with(input) {
     val time = timeText(hour, minute, options.h24)
     val cols = 2 + time.length + 1
-    val want = min(right - left, bottom - top) * 0.2f * scale
-    var t = fitSize(" ".repeat(cols), want)
+    val want = min(right - left, bottom - top) * 0.15f * scale
+    var t = min(want, (right - left) * (1f - 2 * SIDE) / (cols * MONO_ADVANCE)) // the side margin, so L is stopped by it and not by the edge
     val info = infoLine()
     var s = if (info.isEmpty()) 0f else fitSize(info, t * 0.22f)
     var total = lineHeight(t) + if (s > 0f) 0.3f * t + lineHeight(s) else 0f

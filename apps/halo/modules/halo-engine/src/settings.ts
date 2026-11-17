@@ -212,6 +212,13 @@ function normalizeAod(raw: unknown): Aod {
   };
 }
 
+/** 40 UTF-16 units like Kotlin take(40) and the RN maxLength; a cut that splits an emoji drops the lone high surrogate. Empty gives null. */
+const cutName = (v: unknown): string | null => {
+  if (typeof v !== 'string') return null;
+  const cut = v.slice(0, 40).replace(/[\uD800-\uDBFF]$/, '');
+  return cut === '' ? null : cut;
+};
+
 function normalizeTheme(raw: unknown): Theme | null {
   const t = obj(raw);
   const tid = id(t.id);
@@ -225,7 +232,7 @@ function normalizeTheme(raw: unknown): Theme | null {
     .map((x) => x.toUpperCase());
   return {
     id: tid,
-    name: typeof t.name === 'string' && t.name.length > 0 ? [...t.name].slice(0, 40).join('') : tid,
+    name: cutName(t.name) ?? tid,
     face: id(t.face) ?? 'big-digits',
     faceOptions: {
       size: f.size === 's' || f.size === 'm' || f.size === 'l' ? f.size : FACE_OPTIONS.size,

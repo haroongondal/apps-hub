@@ -139,6 +139,17 @@ class SettingsTest {
   }
 
   @Test
+  fun nanAndInfinityFallBackToTheDefaults() {
+    val s = SettingsCodec.decode("""{"params":{"thickness":NaN,"speed":Infinity,"glow":-Infinity},"themes":[{"id":"x","dim":NaN,"brightness":Infinity}]}""")
+    val d = Settings()
+    assertEquals(d.params.thickness, s.params.thickness, 0.0)
+    assertEquals(d.params.speed, s.params.speed, 0.0)
+    assertEquals(d.params.glow, s.params.glow, 0.0)
+    assertEquals(0.5, s.themes[0].dim, 0.0)
+    assertEquals(0.02, s.themes[0].brightness, 0.0)
+  }
+
+  @Test
   fun serviceWantedIfLightsAodOrNotificationsAreOn() {
     val off = Settings(enabled = false, notify = SettingsNotify(enabled = false))
     assertTrue(!off.serviceWanted)

@@ -52,15 +52,26 @@ class ThemesTest {
 
   @Test
   fun starterThemesValid() {
-    val starter = Themes.starter()
-    assertTrue(starter.isNotEmpty())
-    assertEquals(starter.size, starter.map { it.id }.toSet().size)
+    // The constant itself, not Themes.starter(): nothing may repair a typo before this check sees it.
+    assertTrue(STARTER_THEMES.isNotEmpty())
+    assertEquals(STARTER_THEMES.size, STARTER_THEMES.map { it.id }.toSet().size)
     val faceIds = Faces.all.map { it().id }.toSet()
     val patternIds = Patterns.all.map { it().id }.toSet()
-    for (t in starter) {
+    for (t in STARTER_THEMES) {
       assertTrue("face of ${t.id}", t.face in faceIds)
       assertTrue("pattern of ${t.id}", t.edge.pattern in patternIds)
     }
+  }
+
+  @Test
+  fun previewFilesBelongToTheirOwnThemeOnly() {
+    assertTrue(Themes.isPreviewOf("theme-1", "theme-1-1731900000000.png"))
+    assertFalse(Themes.isPreviewOf("theme-1", "theme-10-1731900000000.png"))
+    assertFalse(Themes.isPreviewOf("theme-1", "theme-19-1.png"))
+    assertFalse(Themes.isPreviewOf("theme-1", "theme-1-abc.png"))
+    assertFalse(Themes.isPreviewOf("theme-1", "theme-1-5.png.tmp"))
+    assertTrue(Themes.isPreviewOf("theme-10", "theme-10-7.png"))
+    assertFalse(Themes.isPreviewOf("theme-10", "theme-1-7.png"))
   }
 
   @Test

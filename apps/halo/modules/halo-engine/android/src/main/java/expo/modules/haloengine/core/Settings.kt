@@ -120,7 +120,6 @@ data class Settings(
 /** The foreground service is needed for the lights, the always-on screen (its screen-off receiver) or notification wakes. */
 val Settings.serviceWanted: Boolean get() = enabled || aod.enabled || notify.enabled
 
-// Face ids are only checked for format here; the faces themselves arrive with the face API.
 val STARTER_THEMES: List<Theme> = listOf(
   Theme("night", "Night", "big-digits", colours = SettingsColors(ColorSource.WALLPAPER, listOf("#FFFFFF")), edge = ThemeEdge(on = false)),
   Theme("pulse", "Pulse", "ring-analog", colours = SettingsColors(ColorSource.ALBUM_ART, listOf("#22D3EE", "#A78BFA")), edge = ThemeEdge(on = true, pattern = "pulse-wave")),
@@ -218,6 +217,9 @@ object SettingsCodec {
     return out.ifEmpty { STARTER_THEMES }
   }
 
+  /** 40 UTF-16 units; a cut that splits an emoji drops the lone high surrogate (settings.ts cutName does the same). Empty gives null. */
+  private fun cutName(s: String): String? = s.take(40).let { if (it.lastOrNull()?.isHighSurrogate() == true) it.dropLast(1) else it }.takeIf { it.isNotEmpty() }
+
   private fun decodeTheme(t: JsonObject): Theme? {
     val id = t.str("id")?.takeIf { ID.matches(it) } ?: return null
     val d = Theme(id, id, "big-digits")
@@ -231,7 +233,7 @@ object SettingsCodec {
       .map { it.uppercase() }
     return Theme(
       id = id,
-      name = t.str("name")?.takeIf { it.isNotEmpty() }?.take(40) ?: id,
+      name = t.str("name")?.let(::cutName) ?: id,
       face = t.str("face")?.takeIf { ID.matches(it) } ?: d.face,
       faceOptions = FaceOptions(
         size = f.str("size")?.takeIf { it in SIZES } ?: d.faceOptions.size,
@@ -402,7 +404,8 @@ object SettingsCodec {
   private fun JsonObject.bool(k: String, d: Boolean): Boolean =
     this[k].prim()?.takeIf { !it.isString }?.booleanOrNull ?: d
 
-  private fun JsonElement?.number(): Double? = prim()?.takeIf { !it.isString }?.doubleOrNull
+  // The lenient parser reads bare NaN and Infinity as numbers; they fall back like any other bad value (settings.ts does the same).
+  private fun JsonElement?.number(): Double? = prim()?.takeIf { !it.isString }?.doubleOrNull?.takeIf { it.isFinite() }
 
   private fun JsonObject.num(k: String, d: Double, min: Double, max: Double): Double =
     this[k].number()?.coerceIn(min, max) ?: d

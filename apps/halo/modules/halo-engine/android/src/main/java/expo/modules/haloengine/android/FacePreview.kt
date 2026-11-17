@@ -27,14 +27,14 @@ object FacePreview {
     val height = h.coerceIn(16, MAX)
     val settings = SettingsStore.load(ctx)
     val faceIds = Faces.all.map { it().id }.toSet()
-    // Unknown id -> first theme, like the always-on screen.
+    // An unknown id draws the first theme (the always-on screen picks its theme with Themes.resolve).
     val base = settings.themes.firstOrNull { it.id == themeId } ?: settings.themes.first()
     val theme = Themes.usable(base, faceIds, Backgrounds.exists(ctx, base.id))
     val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     try {
       draw(ctx, theme, Canvas(bmp), width, height)
       val dir = File(ctx.cacheDir, "preview").apply { mkdirs() }
-      dir.listFiles { f -> f.name.startsWith("$themeId-") }?.forEach { it.delete() } // a new name each time keeps image caches fresh
+      dir.listFiles { f -> Themes.isPreviewOf(themeId, f.name) }?.forEach { it.delete() } // a new name each time keeps image caches fresh
       val out = File(dir, "$themeId-${System.currentTimeMillis()}.png")
       out.outputStream().use { check(bmp.compress(Bitmap.CompressFormat.PNG, 100, it)) { "PNG encode failed" } }
       return Uri.fromFile(out).toString()
@@ -59,7 +59,7 @@ object FacePreview {
     try {
       draw(ctx, theme, Canvas(bmp), width, height)
       val dir = File(ctx.cacheDir, "thumbs").apply { mkdirs() }
-      dir.listFiles { f -> f.name.startsWith("${face.id}-") }?.forEach { it.delete() } // one thumb per face; a new name each time keeps image caches fresh
+      dir.listFiles { f -> Themes.isPreviewOf(face.id, f.name) }?.forEach { it.delete() } // one thumb per face; a new name each time keeps image caches fresh
       val out = File(dir, "${face.id}-${System.currentTimeMillis()}.png")
       out.outputStream().use { check(bmp.compress(Bitmap.CompressFormat.PNG, 100, it)) { "PNG encode failed" } }
       return Uri.fromFile(out).toString()

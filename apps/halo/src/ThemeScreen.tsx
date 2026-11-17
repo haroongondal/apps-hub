@@ -4,7 +4,7 @@ import { Button, Field, Group, Header, Notice, Pill, Row, Screen, Segmented, She
 import HaloEngine, { type ColorSource, type FaceOptions, type Settings, type Theme } from 'halo-engine';
 import { removeTheme } from './aodForm.ts';
 import { FacePicker, ThemePicture } from './FacePicker.tsx';
-import { PaletteEditor } from './ColoursScreen.tsx';
+import { PaletteEditor, SOURCES } from './ColoursScreen.tsx';
 import { BackButton, Stepper, SwitchRow } from './Stepper.tsx';
 import type { UpdateSettings } from './useSettings.ts';
 
@@ -19,12 +19,6 @@ const POSITIONS = [
   { key: 'centre', label: 'Centre' },
   { key: 'bottom', label: 'Bottom' },
 ] as const satisfies ReadonlyArray<{ key: FaceOptions['position']; label: string }>;
-
-const SOURCES = [
-  { key: 'albumArt', label: 'Album art' },
-  { key: 'wallpaper', label: 'Wallpaper' },
-  { key: 'palette', label: 'My colours' },
-] as const satisfies ReadonlyArray<{ key: ColorSource; label: string }>;
 
 const SOURCE_NOTE: Record<ColorSource, string> = {
   albumArt: 'Colours come from the cover of what is playing. With no cover, your colours below are used.',
@@ -44,6 +38,7 @@ export default function ThemeScreen({ settings, update, themeId, onBack }: { set
   const [error, setError] = useState<string | null>(null);
   const [choosingPattern, setChoosingPattern] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [photoVersion, setPhotoVersion] = useState(0);
 
   if (!theme) return null;
   const set = (patch: Partial<Theme>) => update({ themes: settings.themes.map((t) => (t.id === themeId ? { ...t, ...patch } : t)) });
@@ -61,7 +56,10 @@ export default function ThemeScreen({ settings, update, themeId, onBack }: { set
     setBusy(true);
     setError(null);
     try {
-      if (await HaloEngine.pickBackground(themeId)) set({ photo: true });
+      if (await HaloEngine.pickBackground(themeId)) {
+        set({ photo: true });
+        setPhotoVersion((v) => v + 1);
+      }
     } catch {
       setError('Halo could not use that photo. Pick a different one.');
     } finally {
@@ -100,7 +98,7 @@ export default function ThemeScreen({ settings, update, themeId, onBack }: { set
       <BackButton onPress={onBack} />
       <Header title="Theme" subtitle="Changes save as you make them." />
       <View style={{ alignItems: 'center', gap: space.md }}>
-        <ThemePicture theme={theme} width={140} />
+        <ThemePicture theme={theme} width={140} photoVersion={photoVersion} />
         <Button label="Preview" variant="secondary" block onPress={() => HaloEngine.previewAod(themeId)} accessibilityHint="Opens the always-on screen with this theme" />
       </View>
       <Group>

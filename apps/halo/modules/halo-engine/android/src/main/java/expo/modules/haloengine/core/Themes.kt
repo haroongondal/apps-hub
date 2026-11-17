@@ -7,6 +7,9 @@ object Themes {
   /** Theme ids end up in file names, so only this shape may reach a path. */
   fun validId(id: String): Boolean = ID.matches(id)
 
+  /** True for a preview PNG named `<id>-<millis>.png`; theme-1 must not match theme-10's files. */
+  fun isPreviewOf(id: String, fileName: String): Boolean = Regex("^${Regex.escape(id)}-\\d+\\.png$").matches(fileName)
+
   /** Size that fits `maxPx` on the long side, keeping the ratio; never enlarges. */
   fun fit(w: Int, h: Int, maxPx: Int): Pair<Int, Int> {
     val long = maxOf(w, h)
@@ -23,11 +26,7 @@ object Themes {
     return pool.firstOrNull { it.id == slotId } ?: pool.firstOrNull { it.id == aod.themeId } ?: pool.first()
   }
 
-  /** The starter themes with faces that exist (the stored "mono" names a face that is not built). */
-  fun starter(): List<Theme> {
-    val ids = Faces.all.map { it().id }.toSet()
-    return STARTER_THEMES.map { usable(it, ids, photoExists = false) }
-  }
+  fun starter(): List<Theme> = STARTER_THEMES
 
   /** An unknown face becomes big-digits and a photo whose file is gone is switched off. */
   fun usable(theme: Theme, faceIds: Set<String>, photoExists: Boolean): Theme =

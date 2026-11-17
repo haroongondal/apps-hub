@@ -34,9 +34,9 @@ function Picture({ uri, width, height, label }: { uri: string | null; width: num
   );
 }
 
-/** The theme as the always-on screen shows it: face, photo and dim. */
-export function ThemePicture({ theme, width }: { theme: Theme; width: number }) {
-  const uri = useRendered(() => HaloEngine.renderFacePreview(theme.id, 240, 480), JSON.stringify(theme));
+/** The theme as the always-on screen shows it: face, photo and dim. `photoVersion` changes when the photo file is replaced (the theme JSON stays the same then). */
+export function ThemePicture({ theme, width, photoVersion = 0 }: { theme: Theme; width: number; photoVersion?: number }) {
+  const uri = useRendered(() => HaloEngine.renderFacePreview(theme.id, 240, 480), `${photoVersion}${JSON.stringify(theme)}`);
   return <Picture uri={uri} width={width} height={width * 2} label={`${theme.name} preview`} />;
 }
 

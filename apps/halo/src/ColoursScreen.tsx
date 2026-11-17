@@ -11,7 +11,7 @@ export const SOURCES = [
   { key: 'palette', label: 'My colours' },
 ] as const satisfies ReadonlyArray<{ key: ColorSource; label: string }>;
 
-export const SOURCE_NOTE: Record<ColorSource, string> = {
+const SOURCE_NOTE: Record<ColorSource, string> = {
   albumArt: 'Colours come from the cover of what is playing. With no cover, your colours below are used.',
   wallpaper: 'Colours come from your wallpaper. If it gives none, your colours below are used.',
   palette: 'The lights use your colours below.',

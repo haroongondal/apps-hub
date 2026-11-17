@@ -18627,5 +18627,229 @@
     }
    ]
   }
+ },
+ {
+  "name": "theme name of 41 emoji is cut to 40 UTF-16 units (20 emoji)",
+  "input": {
+   "themes": [
+    {
+     "id": "emoji",
+     "name": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+    }
+   ]
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "id": "emoji",
+     "name": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+     "face": "big-digits",
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02
+    }
+   ]
+  }
+ },
+ {
+  "name": "theme name cut inside an emoji drops the lone high surrogate",
+  "input": {
+   "themes": [
+    {
+     "id": "emoji",
+     "name": "a😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+    }
+   ]
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": []
+   },
+   "themes": [
+    {
+     "id": "emoji",
+     "name": "a😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+     "face": "big-digits",
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02
+    }
+   ]
+  }
  }
 ]

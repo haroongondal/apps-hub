@@ -31,7 +31,8 @@ class BigHour : Face {
     val info = infoLine()
     // Group width in em of the hour size: hour digits, gap, minutes at MIN em.
     val em = h.length * TEXT_ADVANCE + GAP + m.length * TEXT_ADVANCE * MIN
-    var s = min(min(right - left, bottom - top) * 0.55f * scale, (right - left) / em)
+    // Size M is a size, not the width limit, so L is stopped by the side margin and shows as larger than M.
+    var s = min(min(right - left, bottom - top) * 0.4f * scale, (right - left) * (1f - 2 * SIDE) / em)
     var ms = s * MIN
     var gap = s * GAP
     var infoS = if (info.isEmpty()) 0f else fitSize(info, s * 0.11f)
@@ -53,5 +54,6 @@ class BigHour : Face {
   private companion object {
     const val MIN = 0.3f
     const val GAP = 0.1f
+    const val SIDE = 0.06f // share of the width kept free on each side
   }
 }
