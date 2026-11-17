@@ -35,6 +35,10 @@ export async function local(t) {
     check('quality: the command quality-large sets 480p', await settled(page, 'large'), json(await quality(page)));
     await sendToTab(t, page, { type: 'yt-command', action: 'quality-hd2880' });
     check('quality: a command above what is offered picks the highest offered (hd2160)', await settled(page, 'hd2160'), json(await quality(page)));
+    for (const id of ['sieveTest03', 'sieveTest04', 'sieveTest05', 'sieveTest01', 'sieveTest02']) await navigate(page, id);
+    await sleep(500);
+    const watchers = (await ytCalls(page, 'addEventListener')).filter((c) => c.args[0] === 'onPlaybackQualityChange').length;
+    check('quality: after 5 more navigations the player has one onPlaybackQualityChange listener from Sieve', watchers === 1, String(watchers));
     await page.close();
 
     await setYouTube(t, { quality: { videos: 'hd720', playlists: 'large' } });
@@ -182,7 +186,7 @@ export async function live(t) {
     await setYouTube(t, { quality: { videos: 'large', playlists: 'large' } });
     await until(async () => (await state())?.quality === 'large', 10_000);
     // inspected 2026-11-17, signed out, Chrome for Testing 149.0.7827.55: the related column fills to 20 videos (4 first), each with a thumbnail and a
-    // title /watch link, all visible; 12 to 18 were Mixes (`&list=RD…`), and on 1 load of 8 all 20 were, so the plain video this check wanted was not
+    // title /watch link, all visible; 7 to 18 were Mixes (`&list=RD…`), and on 1 load of 8 all 20 were, so the plain video this check wanted was not
     // there (live run 2's failure). It takes a plain video when there is one, else a Mix. 2026-11-11: the new video sat buffering (state 3, `unknown`)
     // for 16 s before it played, so the quality wait starts once it plays (state 1).
     const related = 'ytd-watch-next-secondary-results-renderer a[href^="/watch"]';

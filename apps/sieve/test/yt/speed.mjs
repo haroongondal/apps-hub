@@ -38,6 +38,10 @@ export async function local(t) {
     await navigate(page, 'sieveTest02');
     await sleep(500);
     check('speed: after an in-app navigation the new video plays at 1.5 and the button still reads "1.5×"', (await rate(page)) === 1.5 && (await labelIs(page, '1.5×')), String(await rate(page)));
+    // Watch A, home, A again: the same video id twice in a row is still a new start (the dedupe is for the ad/content swap within one navigation).
+    await navigate(page, 'home');
+    await navigate(page, 'sieveTest02');
+    check('speed: watch, home, then the same video again plays at the default 1.5', await rateIs(page, 1.5), String(await rate(page)));
 
     await rowButton(page, 'Faster').click();
     check('speed: Faster gives 1.75 and "1.75×"', (await rateIs(page, 1.75)) && (await labelIs(page, '1.75×')), `${await rate(page)} ${await label(page)}`);

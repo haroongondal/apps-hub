@@ -25,6 +25,7 @@ let refuse = { h264: false, max30fps: false };
 
 // Method shorthand, as the natives are: the wrapper keeps `this` (through `apply`), the native's name and its length of 1.
 feature('codecs', () => {
+  if (ytPage(location.href).kind === 'other') return;
   const isTypeSupported = MediaSource.isTypeSupported;
   MediaSource.isTypeSupported = {
     isTypeSupported(_type: string) {

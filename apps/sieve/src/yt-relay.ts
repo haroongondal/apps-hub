@@ -37,10 +37,13 @@ chrome.runtime.onMessage.addListener((message: { type?: unknown } | null, _sende
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && 'settings' in changes) tell(changes.settings.newValue);
 });
-chrome.storage.local.get(['settings', 'youtube']).then(
-  ({ settings, youtube }) => {
-    tell(settings);
-    startBridge(youtube);
-  },
+// Two reads, not one: the YouTube tools start as soon as `youtube` arrives, without waiting for `settings` (it holds the My filters text,
+// which can be megabytes), and a throw in tell() cannot keep them off.
+chrome.storage.local.get('youtube').then(
+  ({ youtube }) => startBridge(youtube),
+  (e) => console.error('Sieve could not read its YouTube settings', e),
+);
+chrome.storage.local.get('settings').then(
+  ({ settings }) => tell(settings),
   (e) => console.error('Sieve could not read its settings on YouTube', e),
 );

@@ -40,6 +40,7 @@ feature('quality', () => {
     // at a video's loadstart on a hard-loaded playlist page (set about 2 s later, after loadedmetadata) and on a move to the playlist's next video
     // (set 0.15 s later), while the address already shows the new video and its list=. So the address counts, but only when it shows this video:
     // a list= left from the video before does not.
+    // Not measured: an in-app click into a non-Mix playlist; if the address lagged there and the player had no list, it would get the Videos quality.
     const page = ytPage(location.href);
     const data = p.getVideoData();
     return qualityTarget(qualityContext({ ...page, list: data?.list || (page.videoId === data?.video_id ? page.list : null) }), document.fullscreenElement !== null, settings!.quality);

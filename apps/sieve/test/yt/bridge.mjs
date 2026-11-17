@@ -1,7 +1,7 @@
 // Task 2.3: settings at document_start, the page bridge and the worker's yt-command, on the local fixture; the mark against first-paint live.
 import { setTimeout as sleep } from 'node:timers/promises';
 import { launch } from '../harness.mjs';
-import { openYt, sendToTab, setSettings, setYouTube, storedYouTube, until } from './helpers.mjs';
+import { navigate, openYt, sendToTab, setSettings, setYouTube, storedYouTube, until } from './helpers.mjs';
 
 const MARK = 'sieve-yt-applied';
 const CORE = new URL('../../../../packages/sieve-core/src/', import.meta.url).href;
@@ -29,6 +29,9 @@ export async function local(t) {
     check('bridge: a stored change adds no second mark', (await marks(page)) === 1);
     await page.reload({ waitUntil: 'load' });
     check('bridge: the change is still there after a reload', await until(async () => (await lastSettings(page))?.speed.default === 1.5));
+    await page.evaluate(() => document.addEventListener('sieve-yt-state', (e) => (window.__state = e.detail)));
+    await navigate(page, 'sieveTest02');
+    check('bridge: the player state the page is sent names the new video after a navigation', await until(async () => (await page.evaluate(() => window.__state?.videoId)) === 'sieveTest02', 2000), json(await page.evaluate(() => window.__state ?? null)));
     await page.close();
 
     await setYouTube(t, { on: false });
@@ -64,9 +67,22 @@ export async function local(t) {
     });
     await sleep(300);
     check('bridge: a forged state and 100 hellos give no page errors and leave storage unchanged', t.errors.length === errorsBefore && json(await storedYouTube(t)) === before, t.errors.slice(errorsBefore).join(' | '));
-    await page.evaluate(() => document.dispatchEvent(new CustomEvent('sieve-yt-do', { detail: { action: 'boost' } })));
-    await sleep(300);
-    check('bridge: a forged sieve-yt-do boost leaves storage unchanged', json(await storedYouTube(t)) === before);
+    const effects = async () => ({ stored: await storedYouTube(t), downloads: await t.sw.evaluate(() => chrome.downloads.search({}).then((r) => r.length)), tabs: t.ctx.pages().length });
+    const quiet = json(await effects());
+    const eventNames = ['sieve-yt-hello', 'sieve-yt-settings', 'sieve-yt-do', 'sieve-yt-state', 'sieve-yt-allow', 'sieve-yt-channel'];
+    const forgedCount = await page.evaluate((list) => {
+      const hostile = [
+        null, 7, 'x'.repeat(100_000), [], [{ action: 'screenshot' }],
+        { action: 'screenshot' }, { action: 'pip' }, { action: 'open-settings', section: 'youtube' }, { action: 'cinema' }, { action: 'speed-set', value: 1e9 },
+        { type: 'yt-set', patch: { on: false } }, { type: 'yt-screenshot', dataUrl: 'data:image/png;base64,iVBORw0KGgo=' },
+        { on: 'yes', speed: { default: 'fast' }, quality: null }, { on: false, ids: ['x'.repeat(5000)] }, { videoId: 'x'.repeat(5000), rate: Infinity, qualities: 7 },
+        { channelId: '<img src=x>', videoId: {}, name: 1 }, JSON.parse('{"__proto__": {"on": false, "ok": true}}'),
+      ];
+      for (const name of list) for (const detail of hostile) document.dispatchEvent(new CustomEvent(name, { detail }));
+      return list.length * hostile.length;
+    }, eventNames);
+    await sleep(500);
+    check(`bridge: ${forgedCount} forged events (every sieve-yt-* name, hostile details) give no page error, no stored change, no download and no tab`, t.errors.length === errorsBefore && json(await effects()) === quiet, json({ errors: t.errors.slice(errorsBefore), before: quiet, after: await effects() }));
     await sendToTab(t, page, { type: 'yt-command', action: 'nope' });
     await sleep(300);
     check('bridge: an unknown yt-command causes no page error', t.errors.length === errorsBefore, t.errors.slice(errorsBefore).join(' | '));
@@ -97,6 +113,12 @@ export async function local(t) {
     await declared.goto(`${t.base}/watch?v=sieveTest05`, { waitUntil: 'load' });
     const ipr = await declared.evaluate(() => ({ key: Object.keys(window).includes('ytInitialPlayerResponse'), ads: 'adPlacements' in (window.ytInitialPlayerResponse ?? {}) }));
     check('bridge: a page that declares ytInitialPlayerResponse sees it as an enumerable window key, still cleaned of ads', ipr.key && !ipr.ads, json(ipr));
+    const rewrite = await declared.evaluate(() => {
+      window.ytInitialPlayerResponse = { adPlacements: [{}], playerAds: [{}], videoDetails: { videoId: 'sieveTest05' } };
+      const d = Object.getOwnPropertyDescriptor(window, 'ytInitialPlayerResponse');
+      return { ads: 'adPlacements' in window.ytInitialPlayerResponse, accessor: typeof d?.get === 'function', key: Object.keys(window).includes('ytInitialPlayerResponse') };
+    });
+    check('bridge: a later ytInitialPlayerResponse write (after it turned enumerable) is still cleaned and still an accessor', !rewrite.ads && rewrite.accessor && rewrite.key, json(rewrite));
     await declared.close();
 
     for (const url of [`https://m.youtube.com:${t.servers.httpsPort}/yt/watch.html`, `https://www.youtube-nocookie.com:${t.servers.httpsPort}/yt/watch.html`]) {
@@ -112,6 +134,8 @@ export async function local(t) {
         return { marks: performance.getEntriesByName(m).length, replied, recorder: Array.isArray(window.__sieveDo), recorded: window.__lastSieveSettings ?? null, attr: document.documentElement.hasAttribute('sieve-yt') };
       }, MARK);
       check(`bridge: ${new URL(url).hostname} (not www.youtube.com or an embed) gets no YouTube tools: no mark, no settings, a hello unanswered (the fixture's recorder is there)`, got.marks === 0 && !got.replied && got.recorder && got.recorded === null && !got.attr, json(got));
+      const hooks = await p.evaluate(() => ({ ytcfg: Object.getOwnPropertyNames(window).includes('ytcfg'), isTypeSupported: String(MediaSource.isTypeSupported), decodingInfo: String(MediaCapabilities.prototype.decodingInfo) }));
+      check(`bridge: ${new URL(url).hostname} gets no experiments hook (no ytcfg own property) and the browser's own codec answers`, !hooks.ytcfg && hooks.isTypeSupported.includes('[native code]') && hooks.decodingInfo.includes('[native code]'), json(hooks));
       await p.close();
     }
 

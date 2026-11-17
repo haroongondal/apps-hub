@@ -1,5 +1,5 @@
 import { EVENTS, readMainCommand, readMainSettings, type MainSettings, type MainState } from '@apps-hub/sieve-core/src/yt-bridge.ts';
-import { PLAYER_API, SEL } from './selectors.ts';
+import { NAV, PLAYER_API, SEL } from './selectors.ts';
 
 // Copies taken before any page script runs: the page can replace the originals later.
 const apply = Reflect.apply;
@@ -117,8 +117,11 @@ on(
     } catch {}
     if (typeof id !== 'string' || id === lastVideo) return;
     lastVideo = id;
+    sendState({ videoId: id });
     for (const cb of videoCbs) safely(cb, id);
   },
   true,
 );
+// The dedupe above is for the ad/content source swap within one navigation: a new navigation to the same video (watch A, home, A) starts it afresh.
+apply(listen, NAV.target === 'window' ? window : document, [NAV.start, () => (lastVideo = null)]);
 apply(dispatch, document, [new Custom(EVENTS.hello)]);
