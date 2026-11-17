@@ -174,30 +174,15 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
 
 ## Current state + exact next step
 
-Feature 3 released as Design Editor build 12 (from image-tools 06c003b, not merged to main).
-Next for feature 3: the owner installs build 12 from the Store; then on-phone checks (claim the
-phone): AC-1 palette <= 200 ms, AC-2 one-undo enhance, AC-3 Person cut-out keeps the person
-whole, AC-4 4x upscale completes/cancels/<= 4096 px, AC-5 airplane mode after first download,
-plus the unproven-on-phone items in the 3.2 ledger (ORT names, ImageDecoder, 1 MB injectJavaScript
-reply, expo-file-system base64 reads, Expo error wrapping) and an eye check of an upscaled
-cut-out's edge. The owner reads the new copy and the 2x estimate ("About 50 seconds"). Then
-ship (PR into main) so main has the Worker /models/ route.
-Feature 2: 2.0 DONE (results `docs/superpowers/plans/2026-11-18-gallery-cleanup-phase-0-results.md`).
-Phone: scores 9.6 ms/photo on A55, but the 512 px decode is 143 ms/photo on A55 (decode once at 512,
-derive the 256 CLIP input from it). Trash visibility moved to 2.2 (shell can't pass the
-match-trashed extra; nothing was created). 2.1 DONE (4e6630b..b94f2134; ledger `.superpowers/sdd/2026-11-18-image-tools-2.1/progress.md`;
-plan `docs/superpowers/plans/2026-11-18-gallery-cleanup-phase-1.md`). Kotlin 275/0, assembleDebug,
-no Play deps; main session's clean export of b94f2134: test 0, typecheck 0. Blur default 132.1
-(slider 26.0-298.8, draft+BILINEAR curve, matches loadThumbnail), cosine 0.93/0.97, index v2 forces
-one re-scan. API for 2.2: cleanupGroups, trashPhotos, restorePhotos, recentlyRemoved,
-dismissCleanup/undismissCleanup/clearCleanupDismissals, photoIndexState().lastScan. Phone checks
-listed in the 2.1 report (ledger).
-2.2 DONE (ff2404f2..93b7c297; ledger `.superpowers/sdd/2026-11-18-image-tools-2.2/progress.md`; plan
-`docs/superpowers/plans/2026-11-18-gallery-cleanup-phase-2.md`): Photos tab Search | Clean up, group
-review, Delete via Android's dialog + Undo, Recently removed, Not a mistake. Kotlin 277/0, expo export
-bundles; main session's clean export of 93b7c297: test 0, typecheck 0. Open: M1 two 'Undo' buttons for
-screen readers, M2 repeated hint, P1 Clean up needs the search tool first. Owner said release (2026-11-18):
-Design Editor 13 published from image-tools 32b6d715 (99.3 MB); manifest re-fetched, other entries intact.
-Owner: Clean up needing the search tool first is fine for now. Next: owner installs 13, then the 2.2
-phone checks in the ledger report (claim the phone, capture logcat, owner drives the screen).
-Feature 3 phone check: the owner hasn't tried build 12's tools yet (logcat 00:54-01:33 shows no model download).
+Design Editor build 14 is live (2026-11-18, from image-tools 3de9ec14): quick edits (feature 3), Clean
+up the gallery (feature 2), and the ONNX Runtime telemetry removal. Owner checked Clean up on 13:
+works. image-tools is NOT merged to main: any Design Editor release from main or photo-search would
+drop features 2-3 and bring the telemetry back. Next:
+1. Owner on build 14: Gallery app's recycle bin visibility, the Blurry slider on real photos, the quick
+   edits (Person cut-out, Upscale 2x/4x with Cancel, airplane mode), the new copy.
+2. Ship image-tools to main (pr-shipper, owner's go), so main has the Worker /models/ route and the
+   telemetry fix.
+3. Feature 4 (Heavy edits): 4.0 phone spike (MI-GAN vs LaMa, owner judges; SlimSAM; Depth Anything V2
+   Small; YuNet; GFPGAN licence/size check first).
+Open Minors: 2.2 M1 (two 'Undo' for screen readers), M2 (repeated hint); 3.2 thin rim after upscaling a
+cut-out (check by eye); P3 photos reduced to sRGB.
