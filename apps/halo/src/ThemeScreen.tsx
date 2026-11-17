@@ -101,7 +101,7 @@ export default function ThemeScreen({ settings, update, themeId, onBack }: { set
       <Header title="Theme" subtitle="Changes save as you make them." />
       <View style={{ alignItems: 'center', gap: space.md }}>
         <ThemePicture theme={theme} width={140} />
-        <Button label="Preview" variant="secondary" onPress={() => HaloEngine.previewAod(themeId)} accessibilityHint="Opens the always-on screen with this theme" />
+        <Button label="Preview" variant="secondary" block onPress={() => HaloEngine.previewAod(themeId)} accessibilityHint="Opens the always-on screen with this theme" />
       </View>
       <Group>
         <Row title={<Field label="Name" value={name} onChangeText={editName} maxLength={40} error={name.trim() === '' ? 'Give the theme a name.' : null} />} />
