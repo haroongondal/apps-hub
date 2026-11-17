@@ -6,7 +6,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "test": "node --test src/__tests__/scan-store.test.ts src/__tests__/jpeg.test.ts src/__tests__/paper.test.ts",
+    "test": "node --test src/__tests__/scan-store.test.ts src/__tests__/jpeg.test.ts src/__tests__/paper.test.ts src/__tests__/pdf-writer.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

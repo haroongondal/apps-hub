@@ -1,6 +1,8 @@
 import { mkdir, open, readFile, rename, cp, rm, stat, readdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
+import assert from 'node:assert/strict';
+
 import { Library, serialPort } from '@apps-hub/library-core';
 
 import { nodeRawSql } from '../../../library-core/src/__tests__/node-sql.ts';
@@ -74,3 +76,28 @@ export async function openLibrary(now = () => 1_700_000_000_000) {
   const lib = await Library.open(db, { now, newId: () => (++n).toString(36).padStart(16, '0') });
   return { lib, db };
 }
+
+export const latin1 = (bytes: Uint8Array) => Array.from(bytes, (b) => String.fromCharCode(b)).join('');
+
+export function memorySink() {
+  const chunks: Uint8Array[] = [];
+  return {
+    write: (b: Uint8Array) => void chunks.push(b.slice()),
+    text: () => latin1(Uint8Array.from(chunks.flatMap((c) => Array.from(c)))),
+  };
+}
+
+/** The xref of a PDF this writer made: every in-use entry points at "<n> 0 obj", startxref points at "xref". */
+export function checkXref(pdf: string): number {
+  const start = Number(/startxref\n(\d+)\n%%EOF\n$/.exec(pdf)![1]);
+  assert.equal(pdf.slice(start, start + 4), 'xref');
+  const [, count] = /xref\n0 (\d+)\n/.exec(pdf.slice(start))!;
+  const entries = pdf.slice(start).split('\n').slice(2, 2 + Number(count));
+  assert.equal(entries.length, Number(count));
+  entries.forEach((line, n) => {
+    assert.equal(line.length + 1, 20);
+    if (line.endsWith('n ')) assert.ok(pdf.startsWith(`${n} 0 obj`, Number(line.slice(0, 10))), `object ${n}`);
+  });
+  return Number(count);
+}
+
