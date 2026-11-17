@@ -38,6 +38,10 @@ interface LedgerStore {
   fun setAiDetails(id: Long, category: String, label: String?)
   /** The owner's choice (categorySet = true); null clears both, so the AI fills the category again. */
   fun setCategory(id: Long, category: String?)
+  /** Transactions with no category, not owner-set and tried fewer than 3 times, newest first. */
+  fun uncategorized(limit: Int): List<Txn>
+  /** The categoriser sent these and did not categorise them: one more try each. */
+  fun categoryTried(ids: List<Long>)
   fun sourceCount(txnId: Long): Int
   /** Removes the transaction and its source rows. */
   fun deleteTxn(id: Long)

@@ -92,6 +92,9 @@ class AiConfig(private val store: SqlItemStore) {
 
   fun today(): String = LocalDate.ofInstant(Instant.now(), ZoneId.systemDefault()).toString()
 
+  /** Today's spending has reached the owner's daily limit. */
+  fun capReached(): Boolean = capUsd()?.let { store.spentToday(today()) >= it } == true
+
   fun spend(reply: AiReply) = store.addSpend(today(), prices().cost(reply))
 
   fun status(): Map<String, Any?> = mapOf(

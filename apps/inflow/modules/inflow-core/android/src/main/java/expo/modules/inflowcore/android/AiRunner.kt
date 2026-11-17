@@ -8,6 +8,7 @@ import expo.modules.inflowcore.core.AiMeta
 import expo.modules.inflowcore.core.AiRun
 import expo.modules.inflowcore.core.AiRunResult
 import expo.modules.inflowcore.core.Ask
+import expo.modules.inflowcore.core.TxnCategorize
 import java.time.ZoneId
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
@@ -67,9 +68,19 @@ object AiRunner {
       Log.w(TAG, "run failed: ${e.javaClass.simpleName}")
       AiRunResult(0, 0, false, FAILED)
     }
+    // Every transaction gets a category (a failure here never hides the item run's result).
+    val categorised = try {
+      TxnCategorize(
+        SqlLedgerStore(store.db), { cfg.provider() }, cfg::spend, cfg::capReached, ZoneId.systemDefault(),
+        atomic = { block -> store.inTransaction { block() } },
+      ).run()
+    } catch (e: Exception) {
+      Log.w(TAG, "categorise failed: ${e.javaClass.simpleName}")
+      0
+    }
     store.setMeta(AiMeta.LAST_RUN_AT, System.currentTimeMillis().toString())
     if (result.error != null) store.setMeta(AiMeta.ERROR, result.error) else store.deleteMeta(AiMeta.ERROR)
-    if (result.saved > 0) StoreHolder.onCaptured?.invoke(result.saved)
+    if (result.saved + categorised > 0) StoreHolder.onCaptured?.invoke(result.saved + categorised)
     return result
   }
 

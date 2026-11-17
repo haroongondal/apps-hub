@@ -74,6 +74,13 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
     run("UPDATE txns SET category = ?, category_set = ?, category_tries = CASE WHEN ? = 0 THEN 0 ELSE category_tries END WHERE id = ?", category, set, set, id)
   }
 
+  override fun uncategorized(limit: Int): List<Txn> =
+    txns("t.category IS NULL AND t.category_set = 0 AND t.category_tries < 3 ORDER BY t.at DESC, t.id DESC LIMIT ?", limit.toLong())
+
+  override fun categoryTried(ids: List<Long>) {
+    ids.forEach { run("UPDATE txns SET category_tries = category_tries + 1 WHERE id = ?", it) }
+  }
+
   override fun sourceCount(txnId: Long): Int =
     db.rawQuery("SELECT COUNT(*) FROM txn_sources WHERE txn_id = ?", txnId).use { if (it.moveToFirst()) it.getInt(0) else 0 }
 
