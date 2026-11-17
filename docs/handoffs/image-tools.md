@@ -183,5 +183,12 @@ no Play deps; main session's clean export of b94f2134: test 0, typecheck 0. Blur
 (slider 26.0-298.8, draft+BILINEAR curve, matches loadThumbnail), cosine 0.93/0.97, index v2 forces
 one re-scan. API for 2.2: cleanupGroups, trashPhotos, restorePhotos, recentlyRemoved,
 dismissCleanup/undismissCleanup/clearCleanupDismissals, photoIndexState().lastScan. Phone checks
-listed in the 2.1 report (ledger). Next: 2.2 screens.
+listed in the 2.1 report (ledger).
+2.2 DONE (ff2404f2..93b7c297; ledger `.superpowers/sdd/2026-11-18-image-tools-2.2/progress.md`; plan
+`docs/superpowers/plans/2026-11-18-gallery-cleanup-phase-2.md`): Photos tab Search | Clean up, group
+review, Delete via Android's dialog + Undo, Recently removed, Not a mistake. Kotlin 277/0, expo export
+bundles; main session's clean export of 93b7c297: test 0, typecheck 0. Open: M1 two 'Undo' buttons for
+screen readers, M2 repeated hint, P1 Clean up needs the search tool first. Next: owner's release go
+(Design Editor 13 from image-tools; Store is on 12, main has no newer app changes), then the 2.2
+phone checks in the ledger report.
 Feature 3 phone check: the owner hasn't tried build 12's tools yet (logcat 00:54-01:33 shows no model download).
