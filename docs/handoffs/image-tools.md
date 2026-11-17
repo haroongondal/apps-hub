@@ -78,6 +78,11 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
   Photos tab is on main). photo-search still has later commits not on main (e8d57be short-query
   floor fix): check the Store's current Design Editor build before releasing so we don't drop it.
 
+- 2026-11-18 (owner): release feature 3 from the branch now (not ship-first). The first release
+  run was killed when the session ended (during the Gradle build; nothing uploaded). Meanwhile
+  photo-search released build 11 from main (#40 short searches). image-tools merged photo-search
+  (773f3b9) and origin/main (06c003b, docs-only difference) and released build 12 from 06c003b.
+
 ## Evidence already verified
 
 - From `docs/handoffs/photo-search.md` (don't redo): phone numbers, ORT AAR facts, licences
