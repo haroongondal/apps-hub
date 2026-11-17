@@ -9,8 +9,10 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import expo.modules.haloengine.android.AppIcons
 import expo.modules.haloengine.android.HaloListener
 import expo.modules.haloengine.android.HaloService
+import expo.modules.haloengine.android.NotifyFlash
 import expo.modules.haloengine.android.ProbeLog
 import expo.modules.haloengine.android.RuleInputs
 import expo.modules.haloengine.android.SettingsStore
@@ -86,6 +88,21 @@ class HaloEngineModule : Module() {
     Function("getAodSpike") { SettingsStore.aodSpike(context) }
 
     Function("setAodSpike") { on: Boolean -> SettingsStore.setAodSpike(context, on) }
+
+    // Launchable apps for the per-app lists: apps that have notified first, then by label.
+    AsyncFunction("listApps") {
+      val pm = context.packageManager
+      val notified = NotifyFlash.notified(context)
+      val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+      pm.queryIntentActivities(launcher, PackageManager.ResolveInfoFlags.of(0))
+        .distinctBy { it.activityInfo.packageName }
+        .filter { it.activityInfo.packageName != context.packageName }
+        .map { Triple(it.activityInfo.packageName, it.activityInfo.applicationInfo.loadLabel(pm).toString(), it.activityInfo.packageName in notified) }
+        .sortedWith(compareBy({ !it.third }, { it.second.lowercase() }))
+        .map { (pkg, label, n) -> mapOf("pkg" to pkg, "label" to label, "notified" to n) }
+    }
+
+    AsyncFunction("appIconUri") { pkg: String -> AppIcons.iconUri(context, pkg) }
 
     // Names are the ids in plain words ("pulse-ring" -> "Pulse ring"), so the app never hard-codes ids.
     Function("listPatterns") {

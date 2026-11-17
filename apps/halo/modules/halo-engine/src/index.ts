@@ -29,6 +29,13 @@ export interface PatternInfo {
   name: string;
 }
 
+export interface AppInfo {
+  pkg: string;
+  label: string;
+  /** The app has posted a notification since Halo could see them. */
+  notified: boolean;
+}
+
 export interface Subscription {
   remove(): void;
 }
@@ -46,6 +53,8 @@ interface NativeApi {
   getAodSpike(): boolean;
   setAodSpike(on: boolean): void;
   listPatterns(): PatternInfo[];
+  listApps(): Promise<AppInfo[]>;
+  appIconUri(pkg: string): Promise<string | null>;
   addListener(event: 'onStatus', listener: (s: Status) => void): Subscription;
 }
 
@@ -66,6 +75,10 @@ export interface HaloEngineApi {
   getAodSpike(): boolean;
   setAodSpike(on: boolean): void;
   listPatterns(): PatternInfo[];
+  /** Launchable apps, those that have notified first, then by label. */
+  listApps(): Promise<AppInfo[]>;
+  /** A file:// URI of the app's icon as a 96 px PNG; null when the app is not installed. */
+  appIconUri(pkg: string): Promise<string | null>;
   addStatusListener(cb: (s: Status) => void): Subscription;
 }
 
@@ -82,6 +95,9 @@ const HaloEngine: HaloEngineApi = {
   getAodSpike: () => native.getAodSpike() === true,
   setAodSpike: (on) => native.setAodSpike(on),
   listPatterns: () => native.listPatterns(),
+  listApps: async () =>
+    (await native.listApps()).map((a) => ({ pkg: String(a.pkg), label: String(a.label), notified: a.notified === true })),
+  appIconUri: async (pkg) => (await native.appIconUri(pkg)) ?? null,
   addStatusListener: (cb) => native.addListener('onStatus', cb),
 };
 

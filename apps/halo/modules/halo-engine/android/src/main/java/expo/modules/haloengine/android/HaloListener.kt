@@ -1,11 +1,13 @@
 package expo.modules.haloengine.android
 
 import android.service.notification.NotificationListenerService
+import android.service.notification.StatusBarNotification
 
 /** Spike: start path (c). The system binds the listener after boot too, which may allow a start the boot receiver cannot. */
 class HaloListener : NotificationListenerService() {
   override fun onListenerConnected() {
     ProbeLog.log(this, "listener", "onListenerConnected serviceRunning=${HaloService.running}")
+    NotifyFlash.attach(this)
     when {
       HaloService.running -> HaloService.onListener?.invoke()
       SettingsStore.serviceWanted(this) -> HaloService.start(this, HaloService.MEDIA_PLAYBACK, "listener")
@@ -15,5 +17,15 @@ class HaloListener : NotificationListenerService() {
 
   override fun onListenerDisconnected() {
     ProbeLog.log(this, "listener", "onListenerDisconnected")
+    NotifyFlash.detach(this)
   }
+
+  override fun onDestroy() {
+    NotifyFlash.detach(this)
+    super.onDestroy()
+  }
+
+  override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap?) = NotifyFlash.posted(this, sbn, rankingMap)
+
+  override fun onNotificationRemoved(sbn: StatusBarNotification) = NotifyFlash.removed(sbn.key)
 }
