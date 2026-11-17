@@ -83,6 +83,13 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
   photo-search released build 11 from main (#40 short searches). image-tools merged photo-search
   (773f3b9) and origin/main (06c003b, docs-only difference) and released build 12 from 06c003b: published (99.2 MB), the other nine manifest entries unchanged after re-fetch. Told photo-search (apps-hub-8a) to release only from a branch that contains image-tools.
 
+- 2026-11-18 (owner): Blurry keeps a careful default (at most ~10% of sharp photos flagged,
+  catches about 2 in 3 blurred) plus the strictness slider; AC-4 changes to match ("at the
+  default, at most 10% of sharp flagged; the slider reaches 85% of blurred"). Why: Laplacian alone
+  can't reach 85%/10% on natural blur, and every deletion is ticked and confirmed anyway.
+- 2026-11-18 (owner): CERTH-tuned threshold is fine as is (research benchmarking use; images stay
+  local, only the number ships). Re-check on the phone's own thumbnails in 2.1/2.2.
+
 ## Evidence already verified
 
 - From `docs/handoffs/photo-search.md` (don't redo): phone numbers, ORT AAR facts, licences
@@ -172,7 +179,7 @@ filter shifts scores ~0.47x, so tune on the phone's own thumbnail. Look-alike co
 end 0.97). Phone timings and the trash-visibility check NOT run (phone rebooted by Halo, wireless
 debugging off). T4 fix round (trash.sh set -e cleanup, match-trashed extra) was in flight,
 uncommitted in tools/gallery-cleanup-bench/{phone.sh,trash.sh}. CERTH terms: research
-benchmarking only, images kept local. Waiting on the owner: AC-4 decision, CERTH use, adb back.
+benchmarking only, images kept local. Owner decided AC-4 and CERTH (see decisions). T4 fix committed 9988649 (READY_FOR_PHONE). Waiting: adb back.
 Next: commit T4 fix, then `coord claim device:49kjmnuwonkffqzh`, `ANDROID_SERIAL=<transport>
 tools/gallery-cleanup-bench/phone.sh stage` and `trash.sh run`; owner looks at the Gallery bin
 in a `trash.sh keep` session if shell trashing works; `trash.sh clean`; release; results note.
