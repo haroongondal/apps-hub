@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@apps-hub/library-core": "workspace:*",
+    "@apps-hub/scan-core": "workspace:*",
     "@apps-hub/ui": "workspace:*",
     "@expo/vector-icons": "^15.0.3",
     "@react-navigation/bottom-tabs": "^7.4.0",

@@ -33,3 +33,18 @@ test('an empty saved session stays a session with no pages', () => {
 test('fileNameOf takes the last path segment of a file URI', () => {
   assert.equal(fileNameOf('file:///data/user/0/x/files/scan-session/cap-17.jpg'), 'cap-17.jpg');
 });
+
+test('a session saved before card mode loads with document defaults', () => {
+  const old = { version: 1, startedAt: 5, folderId: null, appendTo: null, pages: [{ file: 'cap-1.jpg', quad: null, rotation: 0, filter: 'auto' }] };
+  const back = restoreSession(JSON.stringify(old), ['cap-1.jpg'], 9);
+  assert.equal(back?.mode, 'document');
+  assert.equal(back?.sheet, false);
+  assert.equal(back?.pages[0]?.side, null);
+});
+
+test('card sessions and page sides are kept', () => {
+  assert.equal(newSession('f', 1, 'card').mode, 'card');
+  assert.equal(newPage('cap-1.jpg', null, 'front').side, 'front');
+  const s = { ...newSession(null, 1, 'card'), sheet: true, pages: [newPage('cap-1.jpg', null, 'front'), newPage('cap-2.jpg', null, 'back')] };
+  assert.deepEqual(restoreSession(JSON.stringify(s), ['cap-1.jpg', 'cap-2.jpg'], 9), s);
+});
