@@ -474,6 +474,11 @@ typed and turn off autocorrect and autocomplete (§7, own screens).
   the Worker URL can claim it first. It works **once, ever**: creating the account
   writes a "created" marker that nothing deletes, so removing the account row
   doesn't reopen setup. *(Reviewer's point, adopted.)*
+- **Deploys** run in GitHub Actions (`.github/workflows/deploy-vault.yml`): on a push
+  to `main` that changes `tools/vault-api` or `packages/strongroom-core`, or by hand
+  with "Run workflow" (needed after a `[skip ci]` merge). The job tests, applies every
+  new D1 migration, deploys, then checks `/v1/prelogin` answers. Its secrets are listed
+  at the top of that file.
 - Count failed auth globally and back off exponentially. No hard lockout, which
   anyone could use to lock the owner out. The mechanism (Workers rate-limiting
   binding or a counter in D1) is the builder's choice. *(Reviewer's point, adopted.)*
