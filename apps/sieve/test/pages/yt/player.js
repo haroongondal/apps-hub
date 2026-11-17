@@ -160,9 +160,16 @@
   const mountMetadata = () => template && $('#limited-state')?.after(template.content.cloneNode(true));
   if (!params.has('noanchor')) mountMetadata();
   window.__navigate = go;
-  window.__rerenderBelow = () => {
+  // __rerenderBelow('parent') replaces the anchor's parent itself (a fresh copy, without Sieve's row); with no argument, each of its children.
+  window.__rerenderBelow = (what) => {
     const parent = $('ytd-watch-metadata')?.parentElement;
     if (!parent) return;
+    if (what === 'parent') {
+      const copy = parent.cloneNode(true);
+      copy.querySelector('sieve-yt-row')?.remove();
+      parent.replaceWith(copy);
+      return;
+    }
     for (const child of [...parent.children]) {
       if (child.localName === 'template') continue;
       if (child.localName === 'sieve-yt-row') child.remove();

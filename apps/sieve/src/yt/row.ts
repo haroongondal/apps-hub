@@ -244,7 +244,11 @@ function ensureMounted(): void {
     if (el.dataset.mounts === '1') performance.mark(ROW_MARK);
   }
   parentWatch.disconnect();
-  parentWatch.observe(anchor.parentElement, { childList: true });
+  // The parent and its ancestors up to the watch root, children only: YouTube may replace the parent itself.
+  for (let el: Element | null = anchor.parentElement; el && el !== document.body; el = el.parentElement) {
+    parentWatch.observe(el, { childList: true });
+    if (el.matches(SEL.watch)) break;
+  }
   themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: [DARK_ATTR] });
   setTheme();
 }

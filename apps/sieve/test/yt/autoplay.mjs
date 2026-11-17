@@ -262,12 +262,22 @@ export async function local(t) {
     check('pause others: when A plays, the embed in another tab pauses within 1 s', await until(async () => !(await framePlaying()), 1500), json(await state(a)));
     await host2.close();
 
-    // A forged `playing` makes up no player: storage keeps what real plays put there.
+    // A forged `playing` on a video that really plays makes up no player and pauses nobody. The video starts with pause others off, so its
+    // real play tells no one and A keeps playing; then pause others goes on and the page forges `playing`.
+    await setYouTube(t, { autoplay: { pauseOthers: false } });
+    await sleep(500); // pauseOthers is read by the isolated world only, so there is no page-visible setting to wait for
+    // Looping, so neither 5 s clip ends (and pauses) before the check.
+    const keepPlaying = (p) => p.evaluate((s) => { const v = document.querySelector(s); v.loop = true; if (v.paused) v.play(); }, SEL.video);
+    await keepPlaying(a);
+    const quiet = await mk('/watch?v=sieveTest03');
+    const quietPlays = await until(() => playing(quiet));
+    await keepPlaying(quiet);
+    await setYouTube(t, { autoplay: { pauseOthers: true } });
+    await sleep(500);
     const before = json(await players(t));
-    const quiet = await mk('/watch?v=sieveTest03&autoplay=0');
     await quiet.evaluate((s) => document.querySelector(s).dispatchEvent(new Event('playing')), SEL.video);
     await sleep(500);
-    check('pause others: a forged playing event writes nothing to session storage and pauses nobody', json(await players(t)) === before && (await playing(a, 0)), `${before} ${json(await players(t))}`);
+    check('pause others: a forged playing event on a playing video writes nothing to session storage and pauses nobody', quietPlays && json(await players(t)) === before && (await playing(a, 0)) && (await playing(quiet, 0)), `${before} ${json(await players(t))} ${json(await state(a))}`);
     await quiet.close();
     await a.close();
     await b.close();

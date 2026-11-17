@@ -100,6 +100,17 @@ export async function local(t) {
     check('row: a re-render below the player puts the row back within 100 ms', back !== null && back <= 100, `${back} ms`);
     check('row: after the re-render it is the same element and shadow root, with data-mounts 2', after.same && after.shadow && after.mounts === '2', json(after));
 
+    // YouTube may replace the anchor's parent itself: the row is then watched through the ancestors up to the watch root.
+    const backParent = await page.evaluate((a) => new Promise((resolve) => {
+      const start = performance.now();
+      window.__rerenderBelow('parent');
+      const poll = () => (document.querySelector(a)?.previousElementSibling === window.__row ? resolve(performance.now() - start) : performance.now() - start > 1000 ? resolve(null) : setTimeout(poll, 5));
+      poll();
+    }), SEL.rowAnchor);
+    const afterParent = await page.evaluate(() => ({ same: window.__row === document.querySelector('sieve-yt-row'), shadow: window.__row.shadowRoot === window.__shadow, mounts: window.__row.dataset.mounts }));
+    check('row: when the anchor\'s parent itself is replaced the row is back within 100 ms', backParent !== null && backParent <= 100, `${backParent} ms`);
+    check('row: after the parent is replaced it is the same element and shadow root, with data-mounts 3', afterParent.same && afterParent.shadow && afterParent.mounts === '3', json(afterParent));
+
     await navigate(page, 'home');
     await navigate(page, 'sieveTest03');
     check('row: watch to home and back shows the row again as the same element', (await until(() => placed(page), 2000)) && (await same(page)) && !(await page.evaluate(() => window.__row.hidden)));
@@ -112,7 +123,7 @@ export async function local(t) {
     check('row: an icon button renders an SVG, has no text label and keeps its aria-label (the cog)', cog?.svg && cog.text === '' && cog.title === COG, json(cog));
     check('row: the cog is the last button', cog?.last === true, json(cog));
 
-    await page.evaluate(() => document.querySelector('sieve-yt-row').shadowRoot.querySelector('button').click());
+    await page.evaluate((name) => document.querySelector('sieve-yt-row').shadowRoot.querySelector(`[aria-label="${name}"]`).click(), COG);
     await sleep(200);
     check('row: a page script calling click() on a row button leaves the cog menu closed', !(await menuOpen(page)));
 

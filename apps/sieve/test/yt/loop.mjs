@@ -82,6 +82,11 @@ export async function local(t) {
     await sendToTab(t, page, { type: 'yt-command', action: 'loop' });
     await sleep(500);
     check('loop: with YouTube tools off the command "loop" leaves video.loop false', !(await looping(page)));
+    // YouTube's own context-menu Loop sets video.loop; with the tools off an in-app move must leave it alone.
+    await page.evaluate((s) => (document.querySelector(s).loop = true), SEL.video);
+    await navigate(page, 'sieveTest02');
+    await sleep(300);
+    check('loop: with YouTube tools off an in-app navigation leaves a video.loop set by YouTube on', await looping(page));
     await page.close();
     await setYouTube(t, { on: true });
 

@@ -132,7 +132,8 @@ function render(): void {
 }
 
 function switchRow(text: string, checked: boolean, change: (on: boolean) => void): HTMLLabelElement {
-  const input: HTMLInputElement = h('input', { type: 'checkbox', role: 'switch', checked, onchange: (e: Event) => e.isTrusted && change(input.checked) });
+  // On the click, not `change`: a script's click() fires a trusted change (see loop.ts); cancelling its click undoes its toggle.
+  const input: HTMLInputElement = h('input', { type: 'checkbox', role: 'switch', checked, onclick: (e: Event) => (e.isTrusted ? change(input.checked) : e.preventDefault()) });
   return h('label', { class: 'switch' }, h('span', {}, text), input);
 }
 

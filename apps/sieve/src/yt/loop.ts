@@ -14,6 +14,9 @@ const CSS = `${SWITCH_CSS}
 const real = <E extends Event>(fn: (e: E) => void) => (e: E) => {
   if (e.isTrusted) fn(e);
 };
+// A script's click() on a checkbox fires a trusted `change` (inspected 2026-11-17, Chrome for Testing 149.0.7827.55), so a switch acts on
+// the click, which is trusted only for a real press, and cancels a script's click, which also undoes its toggle.
+const realToggle = (fn: () => void) => (e: Event) => (e.isTrusted ? fn() : e.preventDefault());
 
 feature('loop', () => {
   let part: LoopPart | null = null;
@@ -78,7 +81,7 @@ feature('loop', () => {
 
   function build(): HTMLElement {
     const v = video();
-    const toggle: HTMLInputElement = h('input', { type: 'checkbox', role: 'switch', checked: v?.loop === true, onchange: real(() => setLoop(toggle.checked)) });
+    const toggle: HTMLInputElement = h('input', { type: 'checkbox', role: 'switch', checked: v?.loop === true, onclick: realToggle(() => setLoop(toggle.checked)) });
     const from = field('from', 'From', '0:00');
     const to = field('to', 'To', v && Number.isFinite(v.duration) ? formatTime(v.duration) : '');
     const clear = h('button', { type: 'button', class: 'ui-btn ui-btn--ghost', onclick: real(() => {
@@ -106,9 +109,10 @@ feature('loop', () => {
     if (on && !isOn) reset();
     on = isOn;
   });
+  // With the tools off a loop set by YouTube's own menu is left alone.
   onNavigate((p) => {
     if (p.videoId === videoId) return;
     videoId = p.videoId;
-    reset();
+    if (on) reset();
   });
 });
