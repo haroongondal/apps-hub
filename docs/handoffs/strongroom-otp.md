@@ -2,16 +2,18 @@
 
 ## Resume prompt
 
-Dated 2026-11-15, last updated 2026-11-17 (Tasks 1–5 done and E2E-verified).
+Dated 2026-11-15, last updated 2026-11-17 (Tasks 1–6 done and E2E-verified).
 Implements `docs/strongroom/DESIGN.md` §15 per `docs/strongroom/OTP-PLAN.md`. Work happens
 in a worktree off `main` (226a947) on branch `strongroom-otp` — this run used
 `/Users/outsentia/.local/share/opencode/worktree/044235/strongroom-otp`; any
-fresh worktree off the same branch is equivalent. The branch has eight commits:
+fresh worktree off the same branch is equivalent. The branch has nine commits:
 f2d7684 (DESIGN §15 + OTP plan), fb3a7fd (Task 1, `Otp.kt` + vectors), 7e1a1c0
 (Task 2, the vault field, both languages), 565066c (Task 3, code-field
 detection), eb473da (Task 4, TOTP fill datasets), 72d6bec (Task 5, SMS fill),
-ba36251 (Task 5 fix, an armed delayed fill is a response). Tasks 1–5 are done
-and Task 5's emulator E2E is verified (2026-11-17, see the section below).
+ba36251 (Task 5 fix, an armed delayed fill is a response), 2c202a4 (Task 5
+handoff), 9844f85 (Task 6, the QR scan screen). Tasks 1–5 are done and E2E
+verified (see the Task 5 section); Task 6 is implemented, gated and its
+emulator E2E is verified (see the Task 6 section).
 No upstream, never push, merge or release without the owner's word.
 
 Read first: `docs/strongroom/OTP-PLAN.md` (the task list — one task at a time,
@@ -96,14 +98,57 @@ checkout. It landed on `main` as 226a947 before this branch was cut, so Tasks
 - **Task 5 E2E verified on the emulator** (2026-11-17 — details in the next
   section): delayed fill and cache path both fill a Firefox field; the
   disk and logcat nothing-persisted gates pass.
-- **Task 6 next:** zxing scan screen (§15.4) — zxing core +
-  zxing-android-embedded (Apache-2.0; run the upgrading-dependencies check);
-  native scan screen with `FLAG_SECURE`, `CAMERA` at scan time,
-  parsed-URI confirmation, wired into Add/Edit login.
-- **Task 7** (§15.5): `otpauth-migration` protobuf reader, batches ≤ 10, dedup,
+- **Task 6 done** (9844f85): the §15.4 scan screen, native end to end.
+  - `android/ScanActivity.kt` (new): `DecoratedBarcodeView` restricted to
+    `BarcodeFormat.QR_CODE`; `FLAG_SECURE` + `hideOverlayWindows` +
+    `NO_EXCLUDE_DESCENDANTS` + `accessibilityDataSensitive` (API 34+);
+    CAMERA requested at scan time via `registerForActivityResult`;
+    decode → `Otp.parse` → confirm screen (parsed issuer · account,
+    algorithm/digits/period, "Add this code" / "Scan again" / persistent
+    Cancel) or refusal (message from `Otp.refusal`, "Try again" resumes
+    the paused camera); permission-denied screen ("Open settings" into App
+    info); result `putExtra(SCAN_TOTP_EXTRA, totp.raw)` with
+    `filterTouchesWhenObscured` on every button. Own palette() from prefs
+    (bg/text/muted/accent/onAccent/danger), like UnlockActivity.
+  - Module: `AsyncFunction("scanQr")` — launches `ScanActivity`
+    (`startActivityForResult`, code 7403), resolves via `OnActivityResult`
+    → `{raw, issuer, account, algorithm, digits, period}`, `null` on
+    cancel; re-parses the returned URI (defence in depth). `pendingScan`
+    parallels `pendingPick`; a second scan resumes the first with null.
+  - Save plumbing tri-state in `EntryInput.toEntry`: absent key keeps the
+    stored code, `""` removes it, a URI replaces it; invalid URI → coded
+    `BAD_TOTP`. `view()` exposes `totp` display info only (issuer, account,
+    algorithm, digits, period — never the raw URI/secret).
+  - TS surface: `TotpInfo`, `EntryInput.totp?` (tri-state comment),
+    `EntryView.totp?`, `scanQr(): Promise<(TotpInfo & { raw: string }) | null>`.
+  - RN: `EditScreen.tsx` login section gains an "Authenticator code" row —
+    disabled Field showing `issuer · account · N digits, every N s`, hint
+    when unset, ghost buttons "Scan QR code"/"Replace QR code"/"Remove
+    code"; `draft.totp` null (keep) / `''` (remove) / raw URI (set), so the
+    scanner result is stored only by the Add/Edit save.
+  - Manifest: `CAMERA`, `uses-feature` required=false (cameraless phones
+    install), `ScanActivity` exported=false excludeFromRecents;
+    `build.gradle`: `com.journeyapps:zxing-android-embedded:4.3.0` (the
+    feature's only new dependency, Apache-2.0, pre-approved by name in
+    DESIGN §15.4 — brings zxing core 3.4.1 transitively).
+  - Tests: `QrRoundTripTest` (zxing encode→decode→`Otp.parse` pipeline,
+    including a foreign QR refused), `EntryInputTotpTest` (the tri-state);
+    the app manifest invariant test pins `CAMERA` with its rationale.
+  - Gates at commit: Gradle module suite 436 tests / 35 suites / 0 failures
+    (431 + the 5 plumbing tests); workspace `pnpm test` and
+    `pnpm typecheck` exit 0.
+- **Task 6 E2E verified on the emulator** (2026-11-17 — see the section
+  below): permission dialog both ways, scan screen, Cancel-null, the
+  denied screen with Open settings, and the `FLAG_SECURE` black-screencap
+  invariant. The decode→confirm screen is JVM-proved
+  (`QrRoundTripTest`); the real-camera proof stays with the owner's phone.
+- **Task 7 next** (§15.5): `otpauth-migration` protobuf reader, batches ≤ 10, dedup,
   review list, HOTP skipped with a count, one transaction. **Step 0 needs the
   owner's real Google Authenticator export — ask the owner before
-  implementing.**
+  implementing.** Emulator ready for it: fresh 9844f85 build installed with
+  vault `scan-qr-vault-pass-1` unlocked state above; CAMERA is currently
+  **denied** on the emulator (left in that state by the denial-path test —
+  grant through the dialog on the next scan).
 - **Task 8:** entry screen live code, Settings entries, disk-check totp
   needle, whole-feature review, gates, handoff update.
 
@@ -194,8 +239,76 @@ code field labelled "Verification code" — see the browser findings for why):
 - `otp.html` and `login.html` live in the host test-page dir next to
   `otp2.html`, with all E2E screenshots.
 
+## Task 6 E2E on the emulator (verified 2026-11-17)
+
+Setup: a server restart mid-run killed the emulator, Metro and the test-page
+server, so the AVD came back as a **fresh state** — app and Firefox gone.
+Rebuilt: installed the 9844f85 debug APK, granted `RECEIVE_SMS` via adb
+(app stopped), set `settings put secure autofill_service
+com.haroon.strongroom/…StrongroomAutofillService`, and created a fresh vault
+(master password `scan-qr-vault-pass-1`, recovery key
+`GEB3-FOXU-C6EK-PWKB` / `2K7K-ITA3-MEUU-CNN7` — group 5 is `2K7K`;
+fingerprint, Chrome autofill and Google import skipped). Firefox is absent,
+so this E2E is app-only; the browser flows from Task 5 remain the recorded
+evidence.
+
+Verified flows:
+
+1. **Add screen.** The login section renders "Authenticator code" with the
+   hint and the "Scan QR code" ghost button (after a swipe-up — it sits
+   near the dev banner).
+2. **Grant path.** Scan → system dialog "Allow Strongroom to take pictures
+   and record video?" → "While using the app" → the scan screen opens:
+   heading, live virtualscene camera preview filling the screen, persistent
+   Cancel. (Camera granted only through the dialog — see the `pm` gotcha.)
+3. **FLAG_SECURE.** `screencap` while the scan screen is open: a 23 KB PNG
+   whose pixels are pure black except the status bar band (y 0–199) —
+   decoded by hand (no PIL) since the camera preview would make it hundreds
+   of KB. Matches the app-wide invariant.
+4. **Cancel = null.** Cancel from the scanning state returns to Add with
+   the field still showing the hint — no code set, draft untouched.
+5. **Denied path.** CAMERA revoked via adb while the app was stopped; Scan
+   → dialog → "Don't allow" → the denied screen: "Strongroom can't scan
+   without the camera. Allow the camera permission for Strongroom in the
+   phone's settings." + "Open settings" (primary) + Cancel. "Open settings"
+   lands on the App info page; going back preserves the denied screen
+   (`onResume` doesn't re-request); Cancel returns to Add, nothing set.
+6. **Not verifiable on the emulator:** the decode→confirm screen and the
+   refusal/"Try again" resume. The virtualscene camera can't be fed a QR
+   (and the emulator console auth refused scripted sessions), so those
+   screens are exercised by `QrRoundTripTest` (zxing encode→decode→
+   `Otp.parse`, including a foreign QR's refusal) and stay for the owner's
+   phone as the real-camera proof.
+
 ## Gotchas learned the hard way
 
+- **`pm grant`/`pm revoke` on a running app kills its process.** Bit once
+  during the Task 6 E2E: revoking CAMERA while the scan flow was open tore
+  down the app mid-permission and left a dev error screen. Grant through
+  the dialog UI; revoke only while the app is stopped.
+- **Cold emulator boot breaks the first Metro connect.** First launch fails
+  with `failed to connect to /10.0.2.2 (port 8081) … after 5000ms` → RN
+  falls back to assets → fatal red screen `loadJSBundleFromAssets` that
+  RELOAD does not fix. Verify the network first —
+  `printf 'GET /status HTTP/1.0\r\n\r\n' | toybox nc 10.0.2.2 8081` must
+  answer `HTTP/1.1 200` — then force-stop + `am start`. Even then one
+  launch rendered an empty skeleton for ~40 s; a second force-stop +
+  start rendered immediately. (`10.0.2.2` pings even when TCP fails, so
+  ping proves nothing.)
+- **Metro serves from the workspace root:** the bundle URL is
+  `apps/strongroom/index.ts.bundle?platform=android&…` — `/index.bundle`
+  404s. `curl http://localhost:8081/apps/strongroom/index.ts.bundle?…`
+  returning 200 (~5.1 MB) is the "Metro is healthy" check.
+- **`expo start` rewrites `apps/strongroom/tsconfig.json` include**
+  ("The tsconfig.json#include property has been updated") —
+  `git checkout -- apps/strongroom/tsconfig.json` before committing.
+- **`FLAG_SECURE` proof without PIL:** a secure window screencaps as a
+  tiny PNG (23 KB at 1080×2400); decode IDAT by hand with
+  `zlib.decompress` + unfiltering to confirm pure-black pixels except the
+  status bar band. Camera preview would be hundreds of KB.
+- **Emulator console auth from a piped session is refused** (token file
+  read, but the console never accepted it) — no scripted `virtualscene`
+  poking; left alone.
 - Kotlin `optString` throws on an absent key; `absentOrNull` (Entry.kt) is
   the reader for fields that may be missing entirely.
 - TypeScript never-return narrowing does **not** fire after
