@@ -31,6 +31,11 @@ import org.json.JSONObject
 /** The raw URI a confirmed scan returns to the module, which hands it to Add/Edit's save. */
 internal const val SCAN_TOTP_EXTRA = "expo.modules.strongroomvault.totp"
 
+/** What the scan screen looks for: a site's code (the default) or an Authenticator export batch. */
+internal const val SCAN_MODE = "expo.modules.strongroomvault.mode"
+internal const val MODE_TOTP = "totp"
+internal const val MODE_MIGRATION = "migration"
+
 /**
  * The §15.4 scan screen: the camera reads the site's QR, Otp parses it, and the parsed
  * issuer, account, algorithm, digits and period are shown before the URI is handed over —
@@ -70,7 +75,13 @@ class ScanActivity : AppCompatActivity() {
     if (Build.VERSION.SDK_INT >= 34) window.decorView.setAccessibilityDataSensitive(View.ACCESSIBILITY_DATA_SENSITIVE_YES)
 
     title = "Scan QR code"
-    heading("Point the camera at the QR code the site shows for its authenticator app.", colors["muted"])
+    heading(
+      when (mode()) {
+        MODE_MIGRATION -> "Point the camera at each QR of the Authenticator export, one after another."
+        else -> "Point the camera at the QR code the site shows for its authenticator app."
+      },
+      colors["muted"],
+    )
     barcode = DecoratedBarcodeView(this).apply {
       // Only QR: a site's two-step page shows its code as a QR, and a stray barcode should not be read as one.
       decoderFactory = DefaultDecoderFactory(listOf(BarcodeFormat.QR_CODE))
@@ -115,14 +126,23 @@ class ScanActivity : AppCompatActivity() {
   private fun decoded(result: BarcodeResult) {
     if (state != State.SCANNING) return
     val uri = result.text.trim()
+    if (mode() == MODE_MIGRATION) {
+      // An export batch needs no per-QR confirmation — the review list after the last
+      // batch is the confirmation. What is not an export batch is refused.
+      if (uri.startsWith("otpauth-migration://", ignoreCase = true)) {
+        barcode.pause()
+        state = State.CONFIRMING
+        panel.removeAllViews()
+        line("Batch scanned.", colors["text"], bold = true)
+        add(button("Next QR", primary = true) { finishWith(uri) })
+        return
+      }
+      refuse(uri, "This QR is not an Authenticator export code.")
+      return
+    }
     val totp = Otp.parse(uri)
     if (totp == null) {
-      // Keep the camera paused so the same code doesn't immediately re-trigger; the button resumes.
-      barcode.pause()
-      state = State.WAITING
-      panel.removeAllViews()
-      line(Otp.refusal(uri) ?: "This QR is not an authenticator code.", colors["danger"])
-      add(button("Try again", primary = true) { startScanning() })
+      refuse(uri)
       return
     }
     barcode.pause()
@@ -132,11 +152,26 @@ class ScanActivity : AppCompatActivity() {
     line(listOfNotNull(totp.issuer, totp.account).joinToString(" · ").ifEmpty { "Authenticator code" }, colors["text"], bold = true)
     line("${totp.algorithm.name}, ${totp.digits} digits, every ${totp.period} s", colors["muted"])
     add(button("Add this code", primary = true) {
-      setResult(RESULT_OK, Intent().putExtra(SCAN_TOTP_EXTRA, totp.raw))
-      finish()
+      finishWith(totp.raw)
     })
     add(button("Scan again") { startScanning() })
   }
+
+  /** Pause the camera so the same code doesn't immediately re-trigger, and show the refusal. */
+  private fun refuse(uri: String, why: String? = null) {
+    barcode.pause()
+    state = State.WAITING
+    panel.removeAllViews()
+    line(why ?: Otp.refusal(uri) ?: "This QR is not an authenticator code.", colors["danger"])
+    add(button("Try again", primary = true) { startScanning() })
+  }
+
+  private fun finishWith(raw: String) {
+    setResult(RESULT_OK, Intent().putExtra(SCAN_TOTP_EXTRA, raw))
+    finish()
+  }
+
+  private fun mode(): String = intent.getStringExtra(SCAN_MODE) ?: MODE_TOTP
 
   private fun line(text: CharSequence, color: Int?, bold: Boolean = false) {
     panel.addView(AppCompatTextView(this).apply {

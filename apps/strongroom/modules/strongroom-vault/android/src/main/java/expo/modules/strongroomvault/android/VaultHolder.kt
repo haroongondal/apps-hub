@@ -12,6 +12,7 @@ import android.util.AtomicFile
 import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.FragmentActivity
 import expo.modules.strongroomvault.core.ImportResult
+import expo.modules.strongroomvault.core.MigrationImport
 import expo.modules.strongroomvault.core.IndexItem
 import expo.modules.strongroomvault.core.LockPolicy
 import expo.modules.strongroomvault.core.MatchIndex
@@ -57,6 +58,11 @@ object VaultHolder {
 
   @Volatile internal var pendingImport: ImportResult? = null
   @Volatile internal var pendingImportName: String? = null
+
+  /** The Authenticator export (§15.5): raw batch URIs by batch index, the export's batch size, and the review. */
+  @Volatile internal var pendingMigration: MutableMap<Int, String>? = null
+  @Volatile internal var pendingMigrationSize: Int? = null
+  @Volatile internal var pendingMigrationReview: MigrationImport.Review? = null
 
   /** Set by the module while JS is listening; runs on the main thread, never inside the vault's monitor. */
   @Volatile internal var lockListener: (() -> Unit)? = null
@@ -327,7 +333,12 @@ object VaultHolder {
     synchronized(timer) {
       expiry?.cancel(false)
       val live = v.isUnlocked
-      if (!live) pendingImport = null
+      if (!live) {
+        pendingImport = null
+        pendingMigration = null
+        pendingMigrationSize = null
+        pendingMigrationReview = null
+      }
       expiry = if (live) timer.schedule(Runnable { scheduleLock() }, v.autoLockMinutes * 60_000L, TimeUnit.MILLISECONDS) else null
     }
   }

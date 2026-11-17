@@ -3,6 +3,7 @@ package expo.modules.strongroomvault
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.strongroomvault.core.AccountKey
 import expo.modules.strongroomvault.core.AccountKeyRequired
+import expo.modules.strongroomvault.core.Entry
 import expo.modules.strongroomvault.core.Header
 import expo.modules.strongroomvault.core.KdfOutOfRange
 import expo.modules.strongroomvault.core.KdfParams
@@ -47,7 +48,7 @@ class ModuleErrorsTest {
     assertEquals("ALREADY_SET_UP", guarded { v.setUp(password, recoveryKey, fast) }.code)
     v.lock()
     assertEquals("LOCKED", guarded { v.rows() }.code)
-    assertEquals("LOCKED", guarded { v.putMany(emptyList()) }.code)
+    assertEquals("LOCKED", guarded { v.putMany(emptyList<Entry>()) }.code)
     store.headerJson = "{\"version\":1}"
     assertEquals("HEADER_UNREADABLE", guarded { vault(store).unlock(password) }.code)
   }

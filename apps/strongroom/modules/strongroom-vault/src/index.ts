@@ -59,6 +59,35 @@ export interface ImportPreview {
   others: number;
 }
 
+// Progress after one scanned Authenticator export batch (§15.5): scanned of total batches.
+export interface AuthenticatorProgress {
+  scanned: number;
+  total: number;
+  entries: number;
+  hotp: number;
+}
+
+// One line of the Authenticator review: a code that attaches to an existing login (login = its name)
+// or becomes a new login (name). The code itself is never shown here.
+export type AuthenticatorItem =
+  | { kind: 'attach'; login: string; issuer: string | null; account: string | null }
+  | { kind: 'create'; name: string; issuer: string | null; account: string | null };
+
+export interface AuthenticatorReview {
+  items: AuthenticatorItem[];
+  created: number;
+  attached: number;
+  duplicates: number;
+  // Counter-based (HOTP) codes, and codes refused by the same bounds as a scanned QR.
+  hotp: number;
+  bad: number;
+}
+
+export interface AuthenticatorCommit {
+  created: number;
+  attached: number;
+}
+
 // One import: the entries still exactly as imported. name and imported are null for an import made before this phone kept a log of them.
 export interface ImportBatch {
   at: number;
@@ -122,6 +151,11 @@ export interface StrongroomVaultApi {
   scanQr(): Promise<(TotpInfo & { raw: string }) | null>;
   pickGoogleCsv(): Promise<ImportPreview | null>;
   commitImport(): number;
+  // §15.5: scan the Authenticator export's batch QRs one by one, then review and commit once.
+  scanAuthenticatorBatch(): Promise<AuthenticatorProgress | null>;
+  authenticatorReview(): AuthenticatorReview;
+  commitAuthenticatorImport(): AuthenticatorCommit;
+  cancelAuthenticatorImport(): void;
   imports(): ImportBatch[];
   deleteImport(at: number): number;
   // Null when the password is wrong; rejects with EXPORT_CANCELLED when no file was picked.

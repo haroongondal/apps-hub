@@ -19,6 +19,9 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.strongroomvault.android.BiometricKey
 import expo.modules.strongroomvault.android.EntryInput
 import expo.modules.strongroomvault.android.KeepAliveService
+import expo.modules.strongroomvault.android.MODE_MIGRATION
+import expo.modules.strongroomvault.android.MODE_TOTP
+import expo.modules.strongroomvault.android.SCAN_MODE
 import expo.modules.strongroomvault.android.SCAN_TOTP_EXTRA
 import expo.modules.strongroomvault.android.ScanActivity
 import expo.modules.strongroomvault.android.SecretFieldView
@@ -37,6 +40,7 @@ import expo.modules.strongroomvault.core.KEY_LOST
 import expo.modules.strongroomvault.core.ImportError
 import expo.modules.strongroomvault.core.ImportResult
 import expo.modules.strongroomvault.core.KdfOutOfRange
+import expo.modules.strongroomvault.core.MigrationImport
 import expo.modules.strongroomvault.core.Otp
 import expo.modules.strongroomvault.core.RecoveryKey
 import expo.modules.strongroomvault.core.SmsCodes
@@ -257,9 +261,113 @@ class StrongroomVaultModule : Module() {
     // §15.4: the scan screen owns the camera and the parsed confirmation; this only ferries the scanned URI,
     // which is stored by Add/Edit's save. Null when the scan is cancelled.
     AsyncFunction("scanQr") Coroutine { ->
-      val raw = awaitScan() ?: return@Coroutine null
+      val raw = awaitScan(MODE_TOTP) ?: return@Coroutine null
       val totp = Otp.parse(raw) ?: throw CodedException("SCAN_BAD_URI", "That QR is not an authenticator code.", null)
       mapOf("raw" to raw, "issuer" to totp.issuer, "account" to totp.account, "algorithm" to totp.algorithm.name, "digits" to totp.digits, "period" to totp.period)
+    }
+
+    // §15.5: one Authenticator export batch. Each call scans, decodes and accumulates one batch;
+    // the returned progress says where the sequence stands. Null when the scan is cancelled.
+    AsyncFunction("scanAuthenticatorBatch") Coroutine { ->
+      val raw = awaitScan(MODE_MIGRATION) ?: return@Coroutine null
+      val batch = withContext(Dispatchers.IO) {
+        try {
+          MigrationImport.parse(raw)
+        } catch (e: MigrationImport.ImportError) {
+          throw CodedException("MIGRATION_BAD", e.message ?: "That QR is not an Authenticator export code.", e)
+        }
+      }
+      val known = VaultHolder.pendingMigrationSize
+      if (known != null && known != batch.batchSize) {
+        throw CodedException("MIGRATION_STATE", "This export's batch count changed between QRs. Start the export again.", null)
+      }
+      // A re-scanned index replaces its batch — the natural fix for a mis-scanned QR.
+      val batches = VaultHolder.pendingMigration ?: HashMap<Int, String>().also { VaultHolder.pendingMigration = it }
+      batches[batch.batchIndex] = raw
+      if (known == null) VaultHolder.pendingMigrationSize = batch.batchSize
+      val parsed = batches.values.map { MigrationImport.parse(it) }
+      mapOf(
+        "scanned" to batches.size,
+        "total" to batch.batchSize,
+        "entries" to parsed.sumOf { it.entries.size },
+        "hotp" to parsed.sumOf { p -> p.entries.count { q -> q.type == 1L } },
+      )
+    }
+
+    // §15.5: the review list, once every batch is scanned — which logins the codes attach to,
+    // which become new logins, and the dropped counts. The commit writes exactly this.
+    Function("authenticatorReview") {
+      guard {
+        val v = vault()
+        check(v.isUnlocked) { "locked" }
+        val pending = VaultHolder.pendingMigration
+        val size = VaultHolder.pendingMigrationSize
+        if (size == null || pending == null || pending.size != size) {
+          throw CodedException("MIGRATION_INCOMPLETE", "Scan every QR of the export first.", null)
+        }
+        val batches = pending.values.map { MigrationImport.parse(it) }
+        val existing = v.all().mapNotNull { (id, e) -> (e as? Entry.Login)?.let { MigrationImport.Existing(id, it.name, it.username, it.totp) } }
+        val review = MigrationImport.review(batches, existing)
+        VaultHolder.pendingMigrationReview = review
+        mapOf(
+          "items" to review.items.map { item ->
+            when (item) {
+              is MigrationImport.Item.Attach -> mapOf("kind" to "attach", "login" to item.loginName, "issuer" to item.issuer, "account" to item.account)
+              is MigrationImport.Item.Create -> mapOf("kind" to "create", "name" to item.loginName, "issuer" to item.issuer, "account" to item.account)
+            }
+          },
+          "created" to review.created,
+          "attached" to review.attached,
+          "duplicates" to review.duplicates,
+          "hotp" to review.hotp,
+          "bad" to review.bad,
+        )
+      }
+    }
+
+    // §15.5: one transaction — the new logins and the attach-edits are sealed and written in one
+    // store write; the import log counts the new logins (an attach is an edit, not an import).
+    Function("commitAuthenticatorImport") {
+      guard {
+        val v = vault()
+        check(v.isUnlocked) { "locked" }
+        val review = VaultHolder.pendingMigrationReview ?: throw CodedException("NO_MIGRATION", "Scan the export's QRs first.", null)
+        val all = v.all()
+        val writes = ArrayList<Pair<String?, Entry>>()
+        var created = 0
+        var attached = 0
+        for (item in review.items) {
+          when (item) {
+            is MigrationImport.Item.Create -> {
+              writes += null to Entry.Login(name = item.loginName, username = item.username, password = "", sites = emptyList(), apps = emptyList(), note = "", updatedAt = 0, totp = item.totp)
+              created++
+            }
+            is MigrationImport.Item.Attach -> {
+              val stored = all[item.loginId] as? Entry.Login
+              if (stored != null && stored.totp == null) {
+                writes += item.loginId to stored.copy(totp = item.totp)
+                attached++
+              }
+            }
+          }
+        }
+        if (writes.isEmpty()) throw CodedException("MIGRATION_EMPTY", "There is nothing left to import. Scan the export again.", null)
+        val at = v.putMany(writes)
+        if (created > 0) {
+          saveImportLog(importLog().put(at.toString(), JSONObject().put("name", "Google Authenticator").put("count", created)))
+        }
+        VaultHolder.refreshIndex(context)
+        VaultHolder.pendingMigration = null
+        VaultHolder.pendingMigrationSize = null
+        VaultHolder.pendingMigrationReview = null
+        mapOf("created" to created, "attached" to attached)
+      }
+    }
+
+    Function("cancelAuthenticatorImport") {
+      VaultHolder.pendingMigration = null
+      VaultHolder.pendingMigrationSize = null
+      VaultHolder.pendingMigrationReview = null
     }
 
     OnActivityResult { _, result ->
@@ -569,9 +677,12 @@ class StrongroomVaultModule : Module() {
     }
   }
 
-  private suspend fun awaitScan(): String? = withContext(Dispatchers.Main) {
+  private suspend fun awaitScan(mode: String): String? = withContext(Dispatchers.Main) {
     suspendCancellableCoroutine { cont ->
-      appContext.throwingActivity.startActivityForResult(Intent(context, ScanActivity::class.java), SCAN_QR)
+      appContext.throwingActivity.startActivityForResult(
+        Intent(context, ScanActivity::class.java).putExtra(SCAN_MODE, mode),
+        SCAN_QR,
+      )
       pendingScan?.let { if (it.isActive) it.resume(null) }
       pendingScan = cont
     }
