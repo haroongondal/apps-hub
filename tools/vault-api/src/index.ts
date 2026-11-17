@@ -1,15 +1,18 @@
 import { LIMITS } from 'strongroom-core/src/sync/protocol.ts';
 import type { AccountUpdate, Prelogin, Upsert } from 'strongroom-core/src/sync/protocol.ts';
 import { authorize, BASE64_32_BYTES } from './auth.ts';
-import { cancelLostRequest, clearEscrow, createAccount, getAccount, pull, push, updateAccount, type Db } from './db.ts';
+import { cancelLostRequest, cancelSigninRequest, clearEscrow, createAccount, getAccount, pull, push, updateAccount, type Db } from './db.ts';
+import { durableGate, type Gate, type GateNamespace } from './login-gate.ts';
 import { cancelLostAccessByToken, confirmLostAccess, lostAccessStatus, releaseLostAccess, requestLostAccess, type Mailer } from './lost-access.ts';
 import { createCloudflareMailer, type SendEmailBinding } from './mailer.ts';
+import { approveSignin, denySignin, releaseSignin, requestSignin, signinWaitMs } from './signin.ts';
 
 export type { Db } from './db.ts';
 export type { Mailer } from './lost-access.ts';
-export interface Env { DB: Db; SETUP_TOKEN: string; MAIL?: Mailer; PUBLIC_URL?: string }
-// The real Worker env: MAIL is the native send_email binding, wrapped into a Mailer only at the fetch entry point below (keeps route()/handle() testable with plain fakes).
-interface WorkerEnv extends Omit<Env, 'MAIL'> { MAIL?: SendEmailBinding }
+export { LoginGate } from './login-gate.ts';
+export interface Env { DB: Db; SETUP_TOKEN: string; MAIL?: Mailer; PUBLIC_URL?: string; LOGIN_GATE?: Gate; SIGNIN_WAIT_HOURS?: string | number }
+// The real Worker env: MAIL and LOGIN_GATE are native bindings, wrapped only at the fetch entry point below (keeps route()/handle() testable with plain fakes).
+interface WorkerEnv extends Omit<Env, 'MAIL' | 'LOGIN_GATE'> { MAIL?: SendEmailBinding; LOGIN_GATE?: GateNamespace }
 const MAIL_FROM = 'strongroom@haroongondal.com'; // any address on haroongondal.com; only the destination is binding-restricted
 type Deps = { now?: () => number; sleep?: (ms: number) => Promise<void>; mail?: Mailer };
 
@@ -44,6 +47,11 @@ function escrowOf(o: any): { email: string; blob: string; code: string } | null 
   const emailOk = typeof email === 'string' && email.length > 0 && email.length <= 320 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const codeOk = typeof code === 'string' && code.length > 0 && code.length <= 64;
   return emailOk && isBase64(blob) && codeOk ? { email, blob, code } : null;
+}
+
+function signinOf(o: any): { blob: string } | null | undefined {
+  if (o?.signin === undefined) return undefined;
+  return isBase64(o.signin?.blob) ? { blob: o.signin.blob } : null;
 }
 
 export function preloginOf(header: string): Prelogin | null {
@@ -101,23 +109,27 @@ async function route(req: Request, env: Env, now: () => number, sleep: (ms: numb
     if (!body || (role === 'setup' && body.recoveryHash === undefined)) return fail(400, 'The account needs a valid header and three token hashes.');
     const escrow = escrowOf(raw);
     if (escrow === null) return fail(400, 'Escrow needs an email, a blob and a code.');
+    const signin = signinOf(raw);
+    if (signin === null || (signin && !escrow)) return fail(400, 'A sign-in blob must be base64 and come with escrow.');
     if (escrow && body.recoveryHash === undefined) return fail(400, 'Enrolling escrow needs a new recoveryHash.');
     if (escrow) {
+      const use = signin ? 'Use it to recover your vault or to sign in on a new device. Keep this email; ' : 'Keep it safe; ';
       try {
-        await mail!.send(escrow.email, 'Your Strongroom email code', `Your email code is ${escrow.code}. Keep it safe; Strongroom never stores it.`);
+        await mail!.send(escrow.email, 'Your Strongroom email code', `Your email code is ${escrow.code}. ${use}Strongroom never stores it.`);
       } catch {
         return fail(502, 'Could not send the recovery email. Try again later.');
       }
     }
+    const set = escrow ? { email: escrow.email, blob: escrow.blob, now: now(), signinBlob: signin?.blob } : null;
     if (role === 'setup') {
-      const created = await createAccount(db, { ...body, recoveryHash: body.recoveryHash! }, escrow ? { email: escrow.email, blob: escrow.blob, now: now() } : undefined);
+      const created = await createAccount(db, { ...body, recoveryHash: body.recoveryHash! }, set ?? undefined);
       if (!created) return fail(403, 'The account already exists. Sign in instead.');
       return json({ headerRev: 1 });
     }
     if (body.ifRev === undefined) return fail(400, 'Send ifRev, the header revision this change is based on.');
     const stored = body.recoveryHash !== undefined ? await getAccount(db) : null;
     const clear = !!(stored && stored.recoveryHash !== body.recoveryHash);
-    const headerRev = await updateAccount(db, body, body.ifRev, { clear, set: escrow ? { email: escrow.email, blob: escrow.blob, now: now() } : null });
+    const headerRev = await updateAccount(db, body, body.ifRev, { clear, set });
     if (headerRev === null) return fail(409, 'The account changed on another device. Pull and try again.');
     return json({ headerRev });
   }
@@ -169,6 +181,45 @@ async function route(req: Request, env: Env, now: () => number, sleep: (ms: numb
     return json(await releaseLostAccess(db, typeof raw?.claim === 'string' ? raw.claim : '', now()));
   }
 
+  if (req.method === 'POST' && url.pathname === '/v1/signin/request') {
+    const raw = await req.json().catch(() => null);
+    await requestSignin(db, typeof raw?.claimHash === 'string' ? raw.claimHash : '', raw?.deviceName, now(), signinWaitMs(env.SIGNIN_WAIT_HOURS), mail, env.PUBLIC_URL);
+    return json({ ok: true });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/v1/signin/approve') {
+    return confirmCancelForm(url.searchParams.get('t') ?? '', '/v1/signin/approve', 'Approve signing in on the new device');
+  }
+
+  if (req.method === 'POST' && url.pathname === '/v1/signin/approve') {
+    const at = now();
+    const waitMs = signinWaitMs(env.SIGNIN_WAIT_HOURS);
+    const result = await approveSignin(db, await formToken(req), at);
+    if (result === 'already') return html('This request is already approved.');
+    if (result === 'invalid') return html('This link is no longer valid.');
+    return html(waitMs > 0 ? `Approved. The device can sign in from ${new Date(at + waitMs).toUTCString()}. Until then you can still deny it from the email.` : 'Approved. The device can sign in now.');
+  }
+
+  if (req.method === 'GET' && url.pathname === '/v1/signin/deny') {
+    return confirmCancelForm(url.searchParams.get('t') ?? '', '/v1/signin/deny', 'Deny signing in on the new device');
+  }
+
+  if (req.method === 'POST' && url.pathname === '/v1/signin/deny') {
+    await denySignin(db, await formToken(req));
+    return html('Denied. If that sign-in request was still open, it has stopped.');
+  }
+
+  if (req.method === 'POST' && url.pathname === '/v1/signin/cancel') {
+    if (!(await authorize(req, db, env.SETUP_TOKEN, ['login', 'recovery', 'read'], sleep))) return unauthorized();
+    await cancelSigninRequest(db);
+    return json({ ok: true });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/v1/signin/release') {
+    const raw = await req.json().catch(() => null);
+    return json(await releaseSignin(db, typeof raw?.claim === 'string' ? raw.claim : '', now(), signinWaitMs(env.SIGNIN_WAIT_HOURS)));
+  }
+
   if (req.method === 'GET' && url.pathname === '/v1/records') {
     if (!(await authorize(req, db, env.SETUP_TOKEN, ['login', 'recovery', 'read'], sleep))) return unauthorized();
     const since = intParam(url.searchParams.get('since'), 0);
@@ -191,13 +242,25 @@ async function route(req: Request, env: Env, now: () => number, sleep: (ms: numb
 
 export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<Response> {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const gate = env.LOGIN_GATE;
+  // A refusal waits for its turn at the gate; if the gate can't answer, it waits only its own delay, so it is never a 500.
+  const refusalWait = !gate
+    ? sleep
+    : async (ms: number) => {
+        let wait = ms;
+        try {
+          wait = await gate.reserve(ms);
+        } catch {}
+        await sleep(wait);
+      };
   try {
-    return await route(req, env, deps.now ?? Date.now, sleep, deps.mail ?? env.MAIL);
+    return await route(req, env, deps.now ?? Date.now, refusalWait, deps.mail ?? env.MAIL);
   } catch {
     return fail(500, 'The vault server failed. Try again later.');
   }
 }
 
 export default {
-  fetch: (req: Request, env: WorkerEnv) => handle(req, { ...env, MAIL: env.MAIL && createCloudflareMailer(env.MAIL, MAIL_FROM) }),
+  fetch: (req: Request, env: WorkerEnv) =>
+    handle(req, { ...env, MAIL: env.MAIL && createCloudflareMailer(env.MAIL, MAIL_FROM), LOGIN_GATE: env.LOGIN_GATE && durableGate(env.LOGIN_GATE) }),
 };

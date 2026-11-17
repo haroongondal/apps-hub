@@ -36,6 +36,35 @@ class EscrowTest {
     assertArrayEquals(hex("recoveryKey") + hex("accountKey"), plain)
   }
 
+  private val signin: JsonObject by lazy {
+    Json.parseToJsonElement(javaClass.classLoader!!.getResource("vault-vectors.json")!!.readText()).jsonObject["signin"]!!.jsonObject
+  }
+  private fun signinHex(key: String) = signin[key]!!.jsonPrimitive.content.fromHex()
+
+  @Test fun openSigninReadsTheIndependentlyComputedBlob() {
+    assertArrayEquals(signinHex("accountKey"), Escrow.openSignin(signinHex("code"), signinHex("blob")))
+  }
+
+  @Test fun sealedSignInBlobHasTheVectorsShape() {
+    val blob = Escrow.sealSignin(signinHex("code"), signinHex("accountKey"))
+    assertEquals(signinHex("blob").size, blob.size)
+    assertArrayEquals(signinHex("accountKey"), Escrow.openSignin(signinHex("code"), blob))
+  }
+
+  @Test fun signInAndEscrowBlobsNeverOpenUnderEachOthersLabel() {
+    assertNull(Escrow.open(code, Escrow.sealSignin(code, accountKey)))
+    assertNull(Escrow.openSignin(code, Escrow.seal(code, recoveryKey, accountKey)))
+    assertNull(Escrow.openSignin(code, ByteArray(0)))
+    assertNull(Escrow.openSignin(code.copyOf().also { it[0] = (it[0].toInt() xor 1).toByte() }, Escrow.sealSignin(code, accountKey)))
+  }
+
+  @Test fun aSignInBlobSealedAroundTheWrongLengthOpensNothing() {
+    val label = "strongroom/v1/signin"
+    val long = Crypto.seal(Crypto.hkdf(code, label), ByteArray(40) { 1 }, label.toByteArray())
+    assertNull(Escrow.openSignin(code, long))
+    assertThrows(IllegalArgumentException::class.java) { Escrow.sealSignin(code, ByteArray(19)) }
+  }
+
   @Test fun sealThenOpenRoundTrips() {
     val keys = Escrow.open(code, Escrow.seal(code, recoveryKey, accountKey))
     assertNotNull(keys)

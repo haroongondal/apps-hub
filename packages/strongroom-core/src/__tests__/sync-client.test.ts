@@ -63,6 +63,15 @@ function server() {
     deleteEscrow: async () => {
       throw new Error('not used');
     },
+    signinRequest: async () => {
+      throw new Error('not used');
+    },
+    signinRelease: async () => {
+      throw new Error('not used');
+    },
+    signinCancel: async () => {
+      throw new Error('not used');
+    },
   };
   const setHeader = (h: string, rev = headerRev) => {
     header = h;

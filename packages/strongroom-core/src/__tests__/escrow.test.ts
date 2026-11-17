@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createVault, recoveryLoginToken, rotateRecoveryKey, tokenHash, unlockWithPassword, unlockWithRecovery } from '../format.ts';
-import { generateEmailCode, openEscrow, sealEscrow } from '../escrow.ts';
+import { generateEmailCode, openEscrow, openSignin, sealEscrow, sealSignin } from '../escrow.ts';
 import { generateRecoveryKey } from '../recovery-key.ts';
 import { LOW_FLOOR, LOW_KDF, hex, vectors } from './vectors.ts';
 
@@ -54,4 +54,25 @@ test('escrow with a flipped byte is null', async () => {
   const blob = await sealEscrow(code, { recoveryKey: generateRecoveryKey(), accountKey: generateRecoveryKey() });
   blob[blob.length - 1] ^= 1;
   assert.equal(await openEscrow(code, blob), null);
+});
+
+test('signin round-trips the account key only', async () => {
+  const code = generateEmailCode();
+  const accountKey = generateRecoveryKey();
+  assert.deepEqual(await openSignin(code, await sealSignin(code, accountKey)), accountKey);
+  assert.equal(await openSignin(generateEmailCode(), await sealSignin(code, accountKey)), null);
+});
+
+test('signin and escrow blobs never open under each other, and a 40-byte plaintext is refused', async () => {
+  const code = generateEmailCode();
+  const accountKey = generateRecoveryKey();
+  const escrow = await sealEscrow(code, { recoveryKey: generateRecoveryKey(), accountKey });
+  assert.equal(await openSignin(code, escrow), null);
+  assert.equal(await openEscrow(code, await sealSignin(code, accountKey)), null);
+  assert.equal(await openSignin(code, await sealSignin(code, Uint8Array.from([...accountKey, ...accountKey]))), null);
+});
+
+test('signin opens the independently computed vector', async () => {
+  const v = (vectors as any).signin;
+  assert.deepEqual(await openSignin(hex(v.code), hex(v.blob)), hex(v.accountKey));
 });

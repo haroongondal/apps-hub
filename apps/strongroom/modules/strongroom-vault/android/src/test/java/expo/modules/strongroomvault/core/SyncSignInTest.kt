@@ -62,6 +62,12 @@ class SyncSignInTest {
       override fun lostCancel(token: ByteArray) = error("not used")
 
       override fun deleteEscrow(token: ByteArray) = error("not used")
+
+      override fun signinRequest(claimHash: String, deviceName: String) = error("not used")
+
+      override fun signinRelease(claim: String): LostRelease = error("not used")
+
+      override fun signinCancel(token: ByteArray) = error("not used")
     }
 
     fun withPrelogin(kdf: KdfParams) = object : SyncTransport by t {

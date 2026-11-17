@@ -1,4 +1,4 @@
-import { bindings, defineConfig } from 'cf/config';
+import { bindings, defineConfig, exports as workerExports } from 'cf/config';
 
 export default defineConfig({
   // Personal account (cf profile "personal"); never the work account.
@@ -12,6 +12,12 @@ export default defineConfig({
       SETUP_TOKEN: bindings.secret(),
       MAIL: bindings.sendEmail({ destinationAddress: 'haroonmukhtar4@gmail.com' }),
       PUBLIC_URL: bindings.text('https://strongroom-vault.haroonmukhtar4.workers.dev'),
+      LOGIN_GATE: bindings.durableObject({ worker: 'strongroom-vault', exportName: 'LoginGate' }),
+      // Hours between approving a new device and it getting the sign-in blob; '24' adds a wait the owner can still deny during.
+      SIGNIN_WAIT_HOURS: bindings.text('0'),
+    },
+    exports: {
+      LoginGate: workerExports.durableObject({ storage: 'sqlite' }),
     },
   },
 });

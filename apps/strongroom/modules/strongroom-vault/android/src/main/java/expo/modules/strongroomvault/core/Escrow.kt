@@ -9,6 +9,7 @@ class EscrowKeys(val recoveryKey: ByteArray, val accountKey: ByteArray)
  */
 object Escrow {
   private const val LABEL = "strongroom/v1/escrow"
+  private const val SIGNIN_LABEL = "strongroom/v1/signin"
   private const val KEY_BYTES = 20
 
   fun seal(code: ByteArray, recoveryKey: ByteArray, accountKey: ByteArray): ByteArray {
@@ -38,5 +39,29 @@ object Escrow {
     } finally {
       plain.fill(0)
     }
+  }
+
+  /** The sign-in blob: the account key alone, sealed under the same emailed code with its own label, so it never opens as an escrow (or the reverse). */
+  fun sealSignin(code: ByteArray, accountKey: ByteArray): ByteArray {
+    require(accountKey.size == KEY_BYTES) { "account key must be 20 bytes" }
+    val key = Crypto.hkdf(code, SIGNIN_LABEL)
+    try {
+      return Crypto.seal(key, accountKey, SIGNIN_LABEL.toByteArray(Charsets.UTF_8))
+    } finally {
+      key.fill(0)
+    }
+  }
+
+  /** Null for a wrong code, a damaged blob, or a plaintext that isn't exactly the 20-byte account key. */
+  fun openSignin(code: ByteArray, blob: ByteArray): ByteArray? {
+    val key = Crypto.hkdf(code, SIGNIN_LABEL)
+    val plain = try {
+      Crypto.open(key, blob, SIGNIN_LABEL.toByteArray(Charsets.UTF_8))
+    } finally {
+      key.fill(0)
+    } ?: return null
+    if (plain.size == KEY_BYTES) return plain
+    plain.fill(0)
+    return null
   }
 }

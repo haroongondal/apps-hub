@@ -124,12 +124,36 @@ export function lostAccessView(s: LostAccessState, now: number, format: (ms: num
   }
 }
 
+// The wording of the extension's email sign-in screen, for this phone.
+export function emailSignInView(s: LostAccessState, format: (ms: number) => string = clock): Notice & { actions: LostAccessAction[] } {
+  switch (s.state) {
+    case 'none':
+      return {
+        title: 'Sign in with your email code',
+        body: 'If you turned on email recovery, you can sign in here without the account key. Strongroom emails you a link to approve this phone, then you type the code from your email recovery email and your master password.',
+        actions: ['request'],
+      };
+    case 'waiting':
+      return {
+        title: 'Sign in with your email code',
+        body: s.releaseAt === null
+          ? 'Open the email Strongroom just sent you and approve this sign-in. Then check again here.'
+          : `Approved. This phone can sign in at ${format(s.releaseAt)}.`,
+        actions: s.releaseAt === null ? ['request'] : [],
+      };
+    default:
+      return { title: 'Sign in with your email code', body: 'Approved. Type the code from the email you got when you turned on email recovery, and your master password.', actions: ['enterCode'] };
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   BAD_EMAIL: "That email address isn't valid. Check it and try again.",
   SYNC_OFF: 'Turn on sync first. Email recovery keeps its copy on your vault server.',
   SYNC_FIRST: "This phone has changes it hasn't synced yet. Choose Sync now, then try again.",
   LOST_STILL_ALIVE: 'A recovery request is already counting down on this account. Wait for it to finish, or cancel it from a device that is signed in.',
   LOST_NOT_READY: "The 24-hour wait isn't over yet. Try again once it ends.",
+  SIGNIN_APPROVED: 'This sign-in is already approved. Check again instead of asking again.',
+  SIGNIN_NOT_READY: 'Approve the sign-in from the email first, then check again.',
   LOST_DIFFERENT_ACCOUNT: "This phone is already set up with another Strongroom account, so it can't open this vault. Remove the Strongroom data from this phone, or use a phone that has none.",
   MAIL_FAILED: "We couldn't send the email, so nothing changed and your old recovery key still works. Try again later.",
   VAULT_MOVED: 'Your vault changed on another device, so nothing changed and your old recovery key still works. If an email with a code arrived, ignore it. Choose Sync now, then try again.',
@@ -144,6 +168,12 @@ const LOST_REFUSED = "The vault server didn't accept this recovery. If you made 
 
 // On the lost-access screen a refused sign-in means the recovery itself was refused, not that the owner should sign in again.
 export const explainLostAccess = (e: unknown): string => (hasCode(e, 'SYNC_SIGN_IN') ? LOST_REFUSED : explainRecovery(e));
+
+export const EMAIL_SIGN_IN_WRONG_CODE = "That code isn't right. Check it and try again.";
+const EMAIL_SIGN_IN_REFUSED = "The vault server didn't accept that master password. Check it and try again.";
+
+// A refused sign-in after the code opened means the master password, not a recovery.
+export const explainEmailSignIn = (e: unknown): string => (hasCode(e, 'SYNC_SIGN_IN') ? EMAIL_SIGN_IN_REFUSED : explainRecovery(e));
 
 const SYNC_FIRST_NOTICE = 'Turn on sync first. Email recovery keeps a sealed copy of your recovery key on your vault server, so it needs sync.';
 const SIGN_IN_FIRST_NOTICE = 'Sign in to sync first. Open Sync in Settings.';

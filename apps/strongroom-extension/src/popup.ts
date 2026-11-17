@@ -115,8 +115,53 @@ async function signInScreen(back: () => unknown) {
   screen('Sign in to sync', back,
     h('p', { class: 'ui-muted' }, 'Use the master password and account key from your phone. Strongroom was set up there first.'),
     label('Master password', pw), label('Account key', key), msg, go,
+    button('No account key? Sign in with your email code', () => emailSignInScreen(back), 'ui-btn--ghost'),
     button('Forgot master password?', () => recoverySignInScreen(back), 'ui-btn--ghost'),
     locked && button('Lost access to your account?', () => lostAccessScreen(back), 'ui-btn--ghost'));
+}
+
+// Email sign-in: ask by email, the owner approves from the mail, then the enrolment code and master password open the account.
+async function emailSignInScreen(back: () => unknown) {
+  const msg = msgBox();
+  const title = 'Sign in with your email code';
+  const state = await call<LostAccessState>({ type: 'emailSignIn', action: 'check' }).catch(() => null);
+  const ask = async () => {
+    await call({ type: 'emailSignIn', action: 'request' });
+    await emailSignInScreen(back);
+  };
+  if (state === null) {
+    const retry = button('Try again', () => guarded(msg, [retry], () => emailSignInScreen(back)), 'ui-btn--primary');
+    screen(title, back, h('p', { class: 'ui-muted' }, "Couldn't check the sign-in just now. Try again."), msg, retry);
+    return;
+  }
+  if (state.state === 'ready') {
+    const code = input({ placeholder: 'ABCD-EFGH-…' });
+    const pw = input({ type: 'password', autocomplete: 'current-password' });
+    const send = (replace: boolean) => async () => {
+      const reply = await call<Confirm>({ type: 'emailSignIn', action: 'open', code: code.value, password: pw.value, replace });
+      if (reply) confirmReplace(reply.entries, () => emailSignInScreen(back), send(true));
+      else await route();
+    };
+    const go = button('Sign in', () => guarded(msg, [go], send(false)), 'ui-btn--primary');
+    pw.addEventListener('keydown', (e) => e.key === 'Enter' && go.click());
+    screen(title, back,
+      h('p', { class: 'ui-muted' }, 'Approved. Type the code from the email you got when you turned on email recovery, and your master password.'),
+      label('Code from the email', code), label('Master password', pw), msg, go);
+    return;
+  }
+  if (state.state === 'waiting') {
+    const again = button('Check again', () => guarded(msg, [again, resend], () => emailSignInScreen(back)), 'ui-btn--primary');
+    const resend = button('Ask again', () => guarded(msg, [again, resend], ask), 'ui-btn--ghost');
+    const text = state.releaseAt === null
+      ? 'Open the email Strongroom just sent you and approve this sign-in. Then check again here.'
+      : `Approved. This computer can sign in at ${new Date(state.releaseAt).toLocaleString()}.`;
+    screen(title, back, h('p', {}, text), msg, again, state.releaseAt === null && resend);
+    return;
+  }
+  const go = button('Email me an approval link', () => guarded(msg, [go], ask), 'ui-btn--primary');
+  screen(title, back,
+    h('p', { class: 'ui-muted' }, "If you turned on email recovery, you can sign in here without the account key. Strongroom emails you a link to approve this computer, then you type the code from your email recovery email and your master password."),
+    msg, go);
 }
 
 async function lostAccessScreen(back: () => unknown) {

@@ -18,6 +18,8 @@ export type AccountUpdate = Omit<AccountCreate, 'recoveryHash'> & {
   recoveryHash?: string;
   ifRev: number;
   escrow?: { email: string; blob: string; code: string };
+  // Only together with escrow: the account key sealed under the same emailed code (sealSignin).
+  signin?: { blob: string };
 };
 export type AccountPutResponse = { headerRev: number };
 
