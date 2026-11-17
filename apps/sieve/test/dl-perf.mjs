@@ -100,16 +100,16 @@ async function partScripts(t) {
   const dl = ids.filter((id) => id.startsWith('dl'));
   return [
     Array.isArray(base) && base.length > 0 && Array.isArray(mine)
-      ? row('dist content_scripts equal Phase 1 (git show of the base)', `${mine.length} script(s)`, `deep-equal to ${base.length}`, isDeepStrictEqual(mine, base))
+      ? row(`dist content_scripts equal Phase 1 (${BASE})`, `${mine.length} script(s)`, `deep-equal to ${base.length}`, isDeepStrictEqual(mine, base))
       : unmeasured('dist content_scripts equal Phase 1', `base has ${JSON.stringify(base)?.slice(0, 40)}, dist has ${JSON.stringify(mine)?.slice(0, 40)}`),
     ids.length > 0 ? atMost(`registered script ids starting "dl" (of ${ids.length})`, dl.length, 0, dl.join(', ')) : unmeasured('registered script ids starting "dl"', 'no registered scripts were listed'),
   ];
 }
 
 async function partRest(t) {
-  await resetDl(t);
   await new Promise((r) => setTimeout(r, 3000));
   const fresh = await engineCount(t);
+  await resetDl(t);
   const status = await stopWorker(t.ctx);
   const first = atMost('offscreen documents after a browser start, no record', fresh, 0);
   if (status !== 'stopped') return [first, unmeasured('offscreen documents 3 s after a worker restart, no record', `the worker did not stop (${status})`)];
@@ -131,6 +131,7 @@ async function partIdle(t, fx) {
     throw new Error(`the 5 MB download did not finish: ${e.message}`);
   });
   const docs = await engineCount(t);
+  if (docs < 1) throw new Error('no offscreen document was open when the record was done, so nothing was shown to close');
   const at = Date.now();
   let gone = NaN;
   while (Date.now() - at < (IDLE_LIMIT_S + 10) * 1000) {
@@ -182,10 +183,12 @@ async function partStart(t, baseDist) {
   ];
 }
 
+let child = null;
+
 function partPages() {
   return new Promise((resolve) => {
     const opts = { cwd: APP, timeout: 10 * 60_000, maxBuffer: 1 << 24, env: { ...process.env, LOCAL_RUNS: String(LOCAL_RUNS), SITE_RUNS: '0' } };
-    execFile('node', ['test/perf.mjs'], opts, (error, stdout, stderr) => {
+    child = execFile('node', ['test/perf.mjs'], opts, (error, stdout, stderr) => {
       const text = `${stdout}\n${stderr}`;
       const m = parseLocalPage(text);
       if (!m) return resolve([unmeasured('local page DCL with the extension minus without (median ms)', `perf.mjs gave no figure (${error ? String(error.message).split('\n')[0] : 'exit 0'}): ${text.trim().slice(-300)}`)]);
@@ -206,6 +209,7 @@ async function main() {
   let fx;
   const hard = setTimeout(() => {
     console.log(`\nFAIL: the run took more than ${TOTAL_MS / 60_000} minutes and was stopped`);
+    child?.kill('SIGKILL');
     process.exit(1);
   }, TOTAL_MS);
   const step = async (part, label, fn) => {
