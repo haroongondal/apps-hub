@@ -1,6 +1,8 @@
 # Quick edits, Phase 0 results
 
-**Phase 0 PARTIAL on 2026-11-17: Mac work done; phone timings not run (phone off wireless adb for the whole window; device claim released).**
+**Phase 0 done 2026-11-18. Cut-out (U2-Netp and MODNet) PASS. 4x upscale MISS (about 156 s against 30 s): owner decision needed.**
+
+Phone run 2026-11-18 (`stageb.sh`, ORT 1.32.0, Wi-Fi adb, on battery 66->64 %, 31.2->33.7 C). Phone outputs match the Mac to max 7.8e-5 (U2), 1.3e-5 (ESRGAN), 9.9e-6 (MODNet). `/data/local/tmp/it` removed, claim released.
 
 Plan: `2026-11-17-quick-edits-phase-0.md`. No app change in this phase.
 
@@ -8,8 +10,9 @@ Plan: `2026-11-17-quick-edits-phase-0.md`. No app change in this phase.
 
 | Bar | Result | What will measure it |
 |---|---|---|
-| Cut-out <= 2 s (U2-Netp 320 px, pre + model + post) | Not measured yet | `stageb.sh` below: U2-Netp 1 and 2 threads x30, plus the `post` mode on cpu6 |
-| 4x upscale of a 1080 px photo <= 30 s (2 threads, A76) | Not measured yet | `stageb.sh`: ESRGAN T=176 and T=160, 2 threads x81 |
+| Cut-out <= 2 s (U2-Netp 320 px, pre + model + post) | **PASS**: 2 threads median 1182 ms (p90 1377) + pre 24 + feather/upscale 128 + write 13 = **about 1.35 s** (p90 about 1.55 s; first use adds 141 ms load). 1 thread: 1894 ms model alone. Model RAM 410 MB | `stageb.sh` |
+| Person cut-out (MODNet fp32 512x672) <= 2 s | **PASS**: 2 threads median 1315 ms (p90 1337) + post about 164 = **about 1.48 s** (load 160 ms). 1 thread 2394 ms. Model RAM 274 MB | `stageb.sh` |
+| 4x upscale of a 1080 px photo <= 30 s (2 threads, A76) | **MISS**: T=176 tile median 1925 ms x 81 tiles = **about 156 s**; T=160 1604 ms x 100 tiles = about 160 s. Overlap 24 stays (T=176 is the faster total). Model RAM 59 MB, no throttling over 81 runs | `stageb.sh` |
 
 Tile counts for the upscale bar (128 px cores): 81 tiles for 1080x1080, 63 for 1080x810, 108 for 1440x1080. Multiply the per-tile median by the tile count.
 
@@ -66,7 +69,11 @@ Bench tools: `tools/quick-edits-bench/{bench.cpp,build.sh,phone.sh}` (commit 5be
 2. Cut-out model for people: MODNet fp32 (25.9 MB, HF-pinned, Apache) next to U2-Netp, given the edge results. Decide after the phone timing.
 3. Licence: the COCO photos are test data only and are not shipped.
 
-## Exact next step (phone still to do)
+## Exact next step
+
+Owner decides what to do about the upscale miss. The phone step below is done; it stays as the re-run recipe.
+
+## Phone re-run recipe
 
 When the phone is back on adb and `device:49kjmnuwonkffqzh` is claimed with coord:
 
