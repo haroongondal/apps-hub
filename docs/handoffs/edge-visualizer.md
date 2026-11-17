@@ -63,17 +63,33 @@ APK copy: scratchpad only (not committed). Manifest dump via aapt2 `dump xmltree
 - 2026-11-18 (session 3): read handoff/ledger/plan; Task 4.1 brief written (.sdd/task-4.1-brief.md), implementer dispatched (sonnet, base 0efbbf9).
 - Task 4.1 complete (1ae0888; app-open restart, aod/themes settings, AodPolicy). Task 4.2 dispatched (opus, brief .sdd/task-4.2-brief.md); session restart interrupted it with WIP uncommitted (DrawList text op, FaceView, BurnIn, Face/Faces, faces/, tests, temporary FaceDebugActivity), resumed the same agent by SendMessage.
 - Task 4.2 complete (1c10ae0: text op, BurnIn, Face API, FaceView, 3 faces). Tasks 4.3 (t43, opus) + 4.5 (t45, sonnet) dispatched in parallel (briefs .sdd/task-4.3-brief.md, .sdd/task-4.5-brief.md; t45 commits core/Themes.kt first; shared files under filelock). Task 4.5 complete (8a4a41b, bbc6fd8, 31833ce). Task 4.4 wave dispatched (f1-f4, sonnet, brief .sdd/task-4.4-brief.md, Faces.kt under filelock, no emulator; afterwards: controller sets FacesTest count to 15 and one visual contact-sheet pass). Task 4.3 complete (fb6719f, 3800370, f48247a: real always-on screen, preview activity, wake). Task 4.6 dispatched (t46, sonnet, brief .sdd/task-4.6-brief.md; adds module listFaces + renderFaceThumb) in parallel with the 4.4 wave. Remaining after those: controller sets FacesTest count 15 + contact-sheet visual pass, then 4.7 (review wave incl. security re-check, 0.5.0 release from halo-release, phone check with owner). Task 4.4 complete (all 15 faces; 9c5a524, f81a1e2, 68748dc, 20eac6d, 3ddb6ce; JVM 123/123). Task 4.6 complete (dd79fe7; TS 87/87; Always-on + Theme screens). Contact sheets viewed: all 15 faces fine; fix-wave items: big-hour/typewriter hug the right edge at M/L, big-hour L = M. Task 4.7 step 1: reviews done over 0efbbf9..dd79fe7 (findings + rulings in the ledger under "Task 4.7"); TWO fix agents running (fixa opus = always-on lifecycle/privacy, fixb sonnet = codec/theme/preview/face margins; briefs .sdd/task-4.7-fixA-brief.md, -fixB-brief.md). If a restart interrupts: git status, `filelock status`, resume each by SendMessage. Next: controller checks, scoped re-review of fixA (lock-screen paths, opus), then controller re-checks, version 0.5.0, release from halo-release, verify manifest, then owner phone check (Step 2). If a session restart interrupts them: check git status for WIP, `filelock status`, resume each agent by SendMessage.
+- 2026-11-18 (session 3 end): Task 4.7 step 1 done: reviews, fix wave (fixB 962d805, fixA e34588a), scoped re-review, version 0.5.0 (f90a5eb), `pnpm release halo` → Halo 7 published, manifest verified. Step 2 (phone check) waits for the owner. Handed off to a new chat.
 - 2026-11-18 (session 2 end): stage 4 approved; handed off to a new chat to build it.
 - 2026-11-17 (session 2): owner asked for full replica, picked approach A. Design doc written; builder check done and folded in; owner answered release + Muviz questions. Design approved; plan written.
 
-## Current state + next step (2026-11-18, session 2)
-Store: store=19, halo=6 = Halo 0.4.0, installed on the owner's phone. Stages 1-3 done and reviewed.
-Phone (spec §13): audio works, overlay hidden on lock screen (system), frame time fine (0.3.2), always-on screen launches
-over the keyguard (gate passed), start after reboot works. Open bug: no service restart after a Store update and app open
-does not start it → fixed in Task 4.1.
-Stage 4 is planned in full in docs/superpowers/plans/2026-11-17-halo-stages-3-5.md (Tasks 4.1-4.7) and APPROVED by the
-owner 2026-11-18 (incl. tabs Home/Lights/Alerts/Always-on with Colours inside Lights). Nothing of stage 4 is built yet. On OK: Task 4.1 → 4.2 → (4.3 ∥ 4.5) → 4.4 wave (4 agents × 3 faces) → 4.6 → 4.7 (review, 0.5.0, phone check).
-Phone claim released (image-tools had it last).
+## Current state + next step (2026-11-18, end of session 3)
+Stage 4 is BUILT, reviewed and RELEASED: Halo 0.5.0 = versionCode 7 (commit f90a5eb on branch `halo`, released from
+halo-release; manifest re-fetched: store 19, netlens 12, open-tunnel 16, pdf-editor 16, deputy 17, clipboard 9, strongroom 18,
+design-editor 13, inflow 2, halo 7 — nothing clobbered). The owner has NOT installed 0.5.0 yet (Store build 7). Gates at HEAD:
+JVM 136/136 (--rerun-tasks), TS 90/90, typecheck clean, assembleDebug OK. Nothing pushed.
+What 0.5.0 contains: aod/themes settings, AodPolicy, restart-on-app-open fix (the 0.4.0 bug), 15 clock faces, themes + time slots,
+background photo, real always-on screen (music card, icon row, edge lights, pocket, double tap, notification wake), Always-on + Theme
+screens, tabs Home/Lights/Alerts/Always-on. Reviews: whole-stage review (opus) + security re-check (opus) + scoped re-review of the
+fix: findings and rulings in docs/handoffs/halo-sdd-ledger.md under "Task 4.7".
+Deferred (0.5.1 candidates, both Minor): (m1) Home gesture on the always-on screen then no unlock → the keyguard's screen-off is read as a
+power press → always-on stays off until next unlock (fix: onStop clears aodClose only while PowerManager.isInteractive; onResume re-sets it);
+(m2) AodActivity.end() calls onTimedOut() without isFinishing/keyguard-locked check (narrow race around unlock).
+Also open: AOSP "Viewing full screen" hint may appear once (check HyperOS); AOD EdgeView also writes HaloService.frameP95Ms; photo refresh on
+ThemeScreen after changing a photo was not checked on a device; reminder wake only compiled.
+NEXT STEP 1 (owner present): phone check of 0.5.0 (Task 4.7 Step 2): claim device:49kjmnuwonkffqzh with coord, owner installs 0.5.0 via the
+Store app; check each starter theme (night, pulse, glass, mono), Never stop for ~1 h (battery % before/after, burn-in movement visible),
+pocket (ends after 3 s), power button on the always-on screen (turns it off), double tap, notification wake (incl. off hours), music card
+controls, music trigger with lights off, time slot switch, Home-gesture case (m1), photo pick/remove. Record results in this file and the
+spec §13; fix what fails (a 0.5.1) via parallel-agents-coord.
+NEXT STEP 2: Stage 5 (extras, 0.6.0): only an outline exists (plan "Stage 5 — extras", 5.1-5.6: charging + low battery events, call glow,
+Quick Settings tiles, music overlay, theme export/import incl. NaN-safe decode, battery-exemption prompt + boot polish). Write its detailed
+plan first (same style as Stage 4 tasks: files, interfaces, tests named, review focus), get the owner's OK on the plan, then execute.
+Phone claim: none held. Briefs live in .sdd/ (uncommitted on purpose).
 
 ## Previous state (session 1, superseded)
 Owner asked for a new chat to start building. Already told to the owner and accepted without objection:
