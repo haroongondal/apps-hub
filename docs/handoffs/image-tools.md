@@ -57,6 +57,19 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
   the colour fill as "Plain background"; Person stays only if MODNet's phone timing passes.
 - 2026-11-18 (owner): start 3.2 now, before the phone timings; stop and report if a timing misses.
 
+- 2026-11-18 (owner): upscale stays although it misses 30 s: show an estimate first ("About 2
+  minutes"), progress and Cancel; 2x = 4x on a half-size copy (about 40 s for 1080 px), 4x about
+  2.5 min. Why: phone timing 1.9 s per 176 px tile, 81 tiles for 1080 px.
+- 2026-11-18 (owner): the editor page holds photos only as data: URLs (SPEC §14: uploads use the
+  page's own file input; exports already cross as base64 under 30 MB), so vision images cross the
+  bridge in chunks of 1 MB or less (source to a cache file, result back into a blob: URL). This
+  replaces "file paths, never base64" for vision.
+- 2026-11-18 (owner yes): Store Worker deployed to the personal account (cf --profile personal,
+  account id matches cloudflare.config.ts) from origin/main + the route commits de7770f, 6e65214
+  (version 85911ebd-3c08-4e1b-9d59-c737ba543dc4). Model uploaded with PUT /admin/models/<sha>.
+  **The live Worker now has a route that origin/main lacks: until image-tools merges, a deploy
+  from main would drop /models/. Merge those two commits first or deploy from a branch that has them.**
+
 ## Evidence already verified
 
 - From `docs/handoffs/photo-search.md` (don't redo): phone numbers, ORT AAR facts, licences
@@ -79,6 +92,13 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
 - Kotlin reference for 3.2: `tools/quick-edits-bench/{ref.py,fixtures.py,export_esrgan.py}`,
   fixtures `packages/media-core/fixtures/quick-edits/` (byte-identical across runs). Compare
   exactly or within +-1 level. Open for 3.2: a downscale-to-320 fixture; how alpha is upscaled.
+
+- Phone timings 2026-11-18 (2 threads A76, Wi-Fi adb, battery): U2-Netp cut-out about 1.35 s total
+  (model 1182 ms median, RAM 410 MB); MODNet fp32 about 1.48 s (1315 ms, RAM 274 MB); Real-ESRGAN
+  T=176 1925 ms per tile (RAM 59 MB, no throttling over 81 runs). Phone outputs match the Mac to
+  <= 7.8e-5. Results note `docs/superpowers/plans/2026-11-17-quick-edits-phase-0-results.md`.
+- Live checks 2026-11-18: GET /models/1c1bda58... returns 200, 4,866,394 B, SHA-256 matches;
+  manifest without token 401, with release token 200; bad model path refused.
 
 ## File map
 
@@ -123,10 +143,11 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
 
 ## Current state + exact next step
 
-3.1 done. 3.0 Mac side done, phone timings pending: queued for device:49kjmnuwonkffqzh behind
-apps-hub-96 (Halo). When the phone is ours and on adb: run
-`ANDROID_SERIAL=<adb serial> <session scratchpad>/qe-in/stageb.sh` (if the scratchpad is gone,
-rebuild inputs per the Phase 0 plan's Task 3), fill the results note, release the claim and send
-apps-hub-96 "phone free". Owner questions open: Real-ESRGAN hosting, people cut-out model. Then
-read the numbers; if 3.0 passes, start 3.2 (cut-out and upscale); if it misses a bar, stop and report to
-the owner. Feature 2 waits for `photo-search` Phase 2.
+Feature 3: 3.0 done (cut-out PASS, upscale MISS accepted by the owner). 3.1 done. 3.2: engine,
+download step, Worker route committed (57b1f06..19021f6, Kotlin 204/0, gates green in worktree);
+Worker deployed and model uploaded. 3.2 phase agent resumed to build Task 5 (chunked bridge,
+Remove background sheet Person/Object/Plain background, upscale flow with estimate) and run the
+gates from a clean export; ledger `.superpowers/sdd/2026-11-17-image-tools-3.2/progress.md`.
+Next: read its report, check the clean-export gate, then stop and ask the owner for the Store
+release go (Design Editor). After release, on-phone checks AC-1..AC-6 (claim the phone first).
+Feature 2 waits for `photo-search` Phase 2.
