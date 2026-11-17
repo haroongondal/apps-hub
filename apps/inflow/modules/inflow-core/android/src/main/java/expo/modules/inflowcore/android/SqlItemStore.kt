@@ -532,7 +532,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     // A short code (num: plus at most 6 digits) is named after its bank: the account text of its newest transaction without the trailing digits ("Alfalah 2310" is "Alfalah").
     private fun bank(k: String) =
       "CASE WHEN $k LIKE 'num:%' AND length($k) <= 10 THEN (SELECT NULLIF(trim(rtrim(t.account, '0123456789')), '') FROM items b " +
-        "JOIN txn_sources s ON s.item_id = b.id JOIN txns t ON t.id = s.txn_id WHERE b.conversation_key = $k AND b.sender_key = $k ORDER BY t.at DESC, t.id DESC LIMIT 1) END"
+        "JOIN txn_sources s ON s.item_id = b.id JOIN txns t ON t.id = s.txn_id WHERE b.sender_key = $k ORDER BY t.at DESC, t.id DESC LIMIT 1) END"
 
     // The owner's rename (n.name) wins, then the bank, then the chat name or sender unless generic or "You", then the app, then the key.
     private fun displayName(conversation: String, sender: String, appLabel: String, k: String) =
@@ -543,7 +543,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
         "(SELECT COUNT(*) FROM items t WHERE t.conversation_key = i.conversation_key AND t.posted_at >= ? AND $VISIBLE_T) " +
         "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.conversation_key " +
         "WHERE i.conversation_key IS NOT NULL AND $VISIBLE_I AND ${notPromo("i")} " +
-        "AND i.id = (SELECT j.id FROM items j WHERE j.conversation_key = i.conversation_key AND $VISIBLE_J " +
+        "AND i.id = (SELECT j.id FROM items j WHERE j.conversation_key = i.conversation_key AND $VISIBLE_J AND ${notPromo("j")} " +
         "ORDER BY j.posted_at DESC, j.id DESC LIMIT 1) " +
         "ORDER BY i.posted_at DESC, i.id DESC LIMIT 5"
 
@@ -660,7 +660,11 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     )
 
     // Not idempotent, like the others. sender_promo: the owner's choice per sender key (1 = Move to Promotions, 0 = Keep in my list); it wins over the AI-based rule.
-    private val SCHEMA_V7 = listOf("CREATE TABLE sender_promo(sender_key TEXT PRIMARY KEY, promo INTEGER NOT NULL)")
+    // items_sender serves the bank-name lookup of a short-code sender (an SMS notification merged by setSmsHash can have no conversation_key).
+    private val SCHEMA_V7 = listOf(
+      "CREATE TABLE sender_promo(sender_key TEXT PRIMARY KEY, promo INTEGER NOT NULL)",
+      "CREATE INDEX items_sender ON items(sender_key)",
+    )
 
     // Runs after SCHEMA_V6, in its transaction: the old names become the new ones (money out), and a money-in txn holding a name that is not a money-in category is cleared to be categorised again.
     internal const val V6_RENAME = "UPDATE txns SET category = ? WHERE category = ? AND direction = 'OUT'"
