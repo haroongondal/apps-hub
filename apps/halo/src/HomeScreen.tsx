@@ -20,7 +20,7 @@ function statusLine(s: Status, enabled: boolean, setupDone: boolean): string {
   return 'Waiting for music.';
 }
 
-export default function HomeScreen({ settings, update, onOpen }: { settings: Settings; update: UpdateSettings; onOpen: (to: 'edges' | 'diagnostics') => void }) {
+export default function HomeScreen({ settings, update, onOpen }: { settings: Settings; update: UpdateSettings; onOpen: (to: 'edges' | 'diagnostics' | 'rules') => void }) {
   const [status, setStatus] = useState<Status>(() => HaloEngine.getStatus());
   const refresh = useCallback(() => setStatus(HaloEngine.getStatus()), []);
 
@@ -44,7 +44,7 @@ export default function HomeScreen({ settings, update, onOpen }: { settings: Set
     }
   };
 
-  const rows = setupRows(status);
+  const rows = setupRows(status, settings);
   const setupDone = ready(rows);
 
   return (
@@ -58,13 +58,14 @@ export default function HomeScreen({ settings, update, onOpen }: { settings: Set
           <Row
             key={r.key}
             title={r.label}
-            trailing={r.done ? <Pill label="Done" tone="ok" /> : <Pill label={r.key === 'battery' ? 'Recommended' : 'Needed'} tone="warn" />}
+            trailing={r.done ? <Pill label="Done" tone="ok" /> : <Pill label={r.key === 'battery' || r.key === 'usage' ? 'Recommended' : 'Needed'} tone="warn" />}
             onPress={() => fix(r.key)}
           />
         ))}
       </Group>
       <Group>
         <Row title="Screen edges" subtitle="Fit the lights to the corners of your screen." onPress={() => onOpen('edges')} />
+        <Row title="When to hide the lights" subtitle="Full screen, calls, battery saver and chosen apps." onPress={() => onOpen('rules')} />
         <Row title="Diagnostics" subtitle="Setup check and the event log." onPress={() => onOpen('diagnostics')} />
       </Group>
     </Screen>

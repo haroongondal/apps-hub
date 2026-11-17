@@ -5,6 +5,8 @@ export type SettingsPatch = Partial<Pick<Settings, 'enabled' | 'pattern'>> & {
   params?: Partial<Settings['params']>;
   colors?: Partial<Settings['colors']>;
   edges?: Partial<Settings['edges']>;
+  notify?: Partial<Settings['notify']>;
+  rules?: Partial<Settings['rules']>;
 };
 export type UpdateSettings = (patch: SettingsPatch) => void;
 
@@ -41,6 +43,8 @@ export function useSettings(): [Settings, UpdateSettings] {
         params: { ...s.params, ...patch.params },
         colors: { ...s.colors, ...patch.colors },
         edges: { ...s.edges, ...patch.edges },
+        notify: { ...s.notify, ...patch.notify },
+        rules: { ...s.rules, ...patch.rules },
       };
       latest.current = next;
       setSettings(next);

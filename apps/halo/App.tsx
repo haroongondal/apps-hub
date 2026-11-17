@@ -7,15 +7,19 @@ import DiagnosticsScreen from './src/DiagnosticsScreen.tsx';
 import EdgesScreen from './src/EdgesScreen.tsx';
 import HomeScreen from './src/HomeScreen.tsx';
 import LightsScreen from './src/LightsScreen.tsx';
+import NotificationsScreen from './src/NotificationsScreen.tsx';
+import AppPicker from './src/AppPicker.tsx';
+import RulesScreen from './src/RulesScreen.tsx';
 import { useSettings } from './src/useSettings.ts';
 
-type Tab = 'home' | 'lights' | 'colours';
-type Route = 'tabs' | 'edges' | 'diagnostics';
+type Tab = 'home' | 'lights' | 'colours' | 'notifications';
+type Route = 'tabs' | 'edges' | 'diagnostics' | 'rules' | 'appPicker';
 
 const TABS: ReadonlyArray<{ key: Tab; label: string }> = [
   { key: 'home', label: 'Home' },
   { key: 'lights', label: 'Lights' },
   { key: 'colours', label: 'Colours' },
+  { key: 'notifications', label: 'Notifications' },
 ];
 
 export default function App() {
@@ -36,23 +40,27 @@ function Main() {
     const sub = AppState.addEventListener('change', (s) => setActive(s === 'active'));
     return () => sub.remove();
   }, []);
+  // The app picker opens from the rules screen, so Back returns there.
+  const back = () => setRoute(route === 'appPicker' ? 'rules' : 'tabs');
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (route === 'tabs') return false;
-      setRoute('tabs');
+      setRoute(route === 'appPicker' ? 'rules' : 'tabs');
       return true;
     });
     return () => sub.remove();
   }, [route]);
 
   // The screens that change the look show it live on the edges, even with the lights switched off.
-  const previewing = active && (route === 'edges' || (route === 'tabs' && tab !== 'home'));
+  // Notifications and rules stay out: a preview would hide the flashes being tried.
+  const previewing = active && (route === 'edges' || (route === 'tabs' && (tab === 'lights' || tab === 'colours')));
   useEffect(() => {
     HaloEngine.setPreview(previewing);
   }, [previewing]);
 
-  const back = () => setRoute('tabs');
   if (route === 'edges') return <EdgesScreen settings={settings} update={update} onBack={back} />;
+  if (route === 'rules') return <RulesScreen settings={settings} update={update} onBack={back} onPickApps={() => setRoute('appPicker')} />;
+  if (route === 'appPicker') return <AppPicker settings={settings} update={update} onBack={back} />;
   if (route === 'diagnostics') return <DiagnosticsScreen onBack={back} />;
 
   return (
@@ -61,6 +69,7 @@ function Main() {
         {tab === 'home' && <HomeScreen settings={settings} update={update} onOpen={setRoute} />}
         {tab === 'lights' && <LightsScreen settings={settings} update={update} />}
         {tab === 'colours' && <ColoursScreen settings={settings} update={update} />}
+        {tab === 'notifications' && <NotificationsScreen settings={settings} update={update} />}
       </View>
       <TabBar tabs={TABS} value={tab} onChange={setTab} />
     </>

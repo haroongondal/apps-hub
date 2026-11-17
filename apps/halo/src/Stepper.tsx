@@ -32,15 +32,13 @@ export function Stepper({ label, value, min, max, step, show = String, onChange 
   );
 }
 
-export function SwitchRow({ title, subtitle, value, onChange }: { title: string; subtitle?: string; value: boolean; onChange: (v: boolean) => void }) {
+export function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   const { c } = useTheme();
-  return (
-    <Row
-      title={title}
-      subtitle={subtitle}
-      trailing={<Switch value={value} onValueChange={onChange} accessibilityLabel={title} trackColor={{ false: c.line, true: c.accent }} thumbColor={value ? c.surface : c.muted} />}
-    />
-  );
+  return <Switch value={value} onValueChange={onChange} accessibilityLabel={label} trackColor={{ false: c.line, true: c.accent }} thumbColor={value ? c.surface : c.muted} />;
+}
+
+export function SwitchRow({ title, subtitle, value, onChange }: { title: string; subtitle?: string; value: boolean; onChange: (v: boolean) => void }) {
+  return <Row title={title} subtitle={subtitle} trailing={<Toggle label={title} value={value} onChange={onChange} />} />;
 }
 
 export const BackButton = ({ onPress }: { onPress: () => void }) => <Button label="Back" variant="ghost" size="sm" onPress={onPress} />;
