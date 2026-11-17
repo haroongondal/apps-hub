@@ -149,27 +149,33 @@ session runs" in `docs/build-sessions.md`. Continue from "Current state + exact 
   limit) so the screen must say why it is paused; stale comment `ClipSessions.kt:13`.
 - Not verified anywhere yet: ORT input/output names against the real model files in-app, the
   fp16 text output read through `floatBuffer`, `loadThumbnail` pixels on the phone.
+- 2026-11-17 Task 5 on the phone (build 10 from the Store, ~545 photos): the first scan ran on
+  its own and finished ("Get photos ready for search · Ready"). Search works in-app (so ORT names,
+  fp16 output and phone thumbnails are fine): "a screenshot of a phone screen" fills the grid in
+  under 1.5 s including typing. Photo sheet, Open button and More like this work. **Defect: the
+  fixed 0.25 floor hides real matches for short queries** ("sky", "food" give "No close matches";
+  "a photo of the sky" gives one photo). A Mac measurement (rebuilt COCO set, ~1,000 photos, in
+  scratchpad `floor/`) is choosing a new rule (prompt template and/or relative margin).
 
 ## Current state + exact next step
 
-Phase 2 (Photos tab) is built and committed on `photo-search` (local, not pushed; 88b0e24..b7b4040
-on top of the plan 2e68638). Run with the parallel-agents-coord skill; ledger with every ruling:
-`.superpowers/sdd/2026-11-17-photo-search-phase-2/progress.md`. Gates green from a clean export
-(app TS 36/0 after the fix pass, typecheck, `expo export --platform android` bundles the screen,
-Kotlin 175/0, assembleDebug). expo-doctor's one failure ("app config fields in a non-CNG
-project") is pre-existing on main. Nothing has run on a phone.
+Find a photo (Phases 0-2) is merged and released. PR #38 squash-merged as 4247eed
+(`[skip ci]`); `pnpm release design-editor` from a clean worktree of 4247eed published
+**Design Editor build 10** (APK 99.1 MB) on 2026-11-17. Owner-approved second and third fix
+passes ran before the merge (service drops a second scan; a new scan replaces finished scan rows;
+the gallery stamp includes the visible photo count so Selected-photos changes rescan without a
+forced scan). Ledger: `.superpowers/sdd/2026-11-17-photo-search-phase-2/progress.md`.
+Pre-existing timing flakes on main (not this work): pdf-editor-mobile "decodes in linear time"
+(2 s) and library-core "answers in under 300 ms" fail under load and pass alone.
 
-Open, waiting for the owner:
-1. Residual review findings (no second fix wave was run): Important — after "Change" → allow all,
-   two scan rows can appear (the app-return listener and the permission answer both start one;
-   the service does not dedupe). Root fix: drop a photo scan in `MediaJobService.enqueue` / the
-   `Enqueue` reducer when one is QUEUED or RUNNING (reuse `jobToAdd`); it also closes the double
-   tap on Scan now / Try again. Minors: `inFlight` chain keeps old results; 'some' access with
-   photos added in Settings isn't rescanned; a failed More like this shows the old grid; the
-   scan decision in photos.tsx:64-68 has no test.
-2. Release go: merge with `[skip ci]`, then `pnpm release` locally (memory), Store release id
-   `design-editor`.
-3. AC-2 on the phone needs the 195 COCO photos copied into the gallery and removed afterwards;
-   ask before doing it.
-Next step after the owner answers: one small fix pass for item 1 if they say so, then Task 5 of
-the Phase 2 plan (install from the Store, walk the tab, AC-1..AC-6).
+Search floor fixed in e8d57be (on branch photo-search, not merged): queries of 3 words or fewer
+become "a photo of …", results show at max(0.20, best − 0.05), More like this keeps 0.25; JVM
+184/184 pass. Measurement: scratchpad `floor/` (1,000 COCO-Karpathy test photos, HF
+yerevann/coco-karpathy; scripts/measure.py, out/summary.txt). Next: PR + merge `[skip ci]` and
+`pnpm release design-editor` (build 11) on the owner's go, owner installs from the Store.
+Then finish Task 5 on the phone: AC-1
+(airplane mode: owner toggles it, since adb is over Wi-Fi), AC-3 (1,000 photos ≤ 5 min plugged
+in; the gallery has ~545), AC-6 (waiting notice when hot or < 20%). Done on the phone: walk-through,
+AC-4 (≤ 1 s), AC-5 by code (no network in `design-media`). AC-2 on the COCO set only if the owner
+agrees to copying the photos into the gallery and removing them afterwards (not yet answered).
+After that: feature 2, Clean up the gallery (design approved).
