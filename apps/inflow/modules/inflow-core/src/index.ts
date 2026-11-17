@@ -135,6 +135,8 @@ export interface Txn {
   paired: boolean;
   itemIds: number[];
   category: string | null;
+  // True when the owner chose the category; no AI path overwrites it.
+  categorySet: boolean;
   // A clean name for the other side, set by the AI.
   label: string | null;
   // Found only by the AI (no bank pattern matched); counted in the totals.
@@ -181,6 +183,42 @@ export interface CategoryTotal {
   currency: string;
   total: number;
   count: number;
+}
+
+export type ReportKind = 'weekly' | 'monthly';
+
+export interface ReportRow {
+  id: number;
+  kind: ReportKind;
+  periodStart: number;
+  periodEnd: number;
+  // The week so far, made by hand; replaced by the real report when due.
+  partial: boolean;
+  createdAt: number;
+  // waiting: held back (daily AI limit); failed: gave up after its tries, Try again remakes it.
+  status: 'ready' | 'waiting' | 'failed';
+  message: string | null;
+  // The notification line; null until ready.
+  headline: string | null;
+}
+
+// Amounts are minor units, dates are YYYY-MM-DD local, share and change are percent numbers (change null = nothing to compare).
+export interface ReportCurrency {
+  currency: string;
+  totals: { in: number; out: number; net: number; count: number };
+  own: { in: number; out: number; transfers: { from: string; to: string; amount: number; date: string }[] };
+  categories: { name: string; direction: 'in' | 'out'; amount: number; count: number; share: number; change: number | null }[];
+  parties: { name: string; in: number; out: number; count: number }[];
+  accounts: { name: string; in: number; out: number; count: number }[];
+  daily: { date: string; out: number }[];
+  largest: { date: string; name: string; amount: number; category: string }[];
+  fees: { amount: number; count: number };
+  cash: { amount: number; count: number };
+}
+
+export interface ReportData {
+  currencies: ReportCurrency[];
+  insights: string[];
 }
 
 export interface AiStatus {
@@ -275,6 +313,19 @@ export interface InflowCoreApi {
   // Decrypts to a temporary file and opens it in another app.
   openMedia(mediaId: number): void;
   mediaStats(): MediaStats;
+  categories(): { out: string[]; in: string[] };
+  // null = back to the AI's choice.
+  setCategory(txnId: number, category: string | null): void;
+  // Newest period first.
+  listReports(): ReportRow[];
+  getReport(id: number): { row: ReportRow; data: ReportData | null } | null;
+  // Weekly, partial, the week so far.
+  makeReportNow(): Promise<{ ok: boolean; message: string | null }>;
+  retryReport(id: number): Promise<{ ok: boolean; message: string | null }>;
+  notificationsAllowed(): boolean;
+  askNotifications(): Promise<boolean>;
+  // The report id from a tapped notification, cleared once read.
+  takeOpenReport(): number | null;
   addListener(event: 'onCaptured', listener: (e: { count: number }) => void): { remove(): void };
 }
 

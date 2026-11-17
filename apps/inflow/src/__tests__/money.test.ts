@@ -37,7 +37,7 @@ test('monthLabel and shiftMonth', () => {
   assert.deepEqual(shiftMonth(2026, 5, 7), { year: 2027, month: 0 });
 });
 
-const txn = (id: number, at: number): Txn => ({ id, direction: 'out', amount: 100, currency: 'PKR', account: 'UBL 1733', counterparty: null, txId: null, at, own: false, paired: false, itemIds: [], category: null, label: null, byAi: false });
+const txn = (id: number, at: number): Txn => ({ id, direction: 'out', amount: 100, currency: 'PKR', account: 'UBL 1733', counterparty: null, txId: null, at, own: false, paired: false, itemIds: [], category: null, categorySet: false, label: null, byAi: false });
 
 test('withinMonth drops rows after the month and stops at the first row before it', () => {
   const { from, to } = monthRange(2026, 10);

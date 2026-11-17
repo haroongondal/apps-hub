@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, View } from 'react-native';
 import { Button, Empty, Group, Header, Notice, Pill, Row, Screen, Text, space, useTheme } from '@apps-hub/ui';
-import InflowCore, { addCapturedListener, type MoneySummary, type PartyTotal, type Status, type Txn } from 'inflow-core';
+import InflowCore, { addCapturedListener, type MoneySummary, type PartyTotal, type ReportRow, type Status, type Txn } from 'inflow-core';
 import { whenLabel } from './format.ts';
-import { LOAD_ERROR } from './messages.ts';
+import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
 import { formatAmount, monthLabel, monthRange, partySubtitle, partyTitle, shiftMonth, signedAmount, withinMonth } from './money.ts';
+import { reportTitle } from './report.ts';
 import { TxnSheet } from './TxnSheet.tsx';
 
 const PAGE = 50;
@@ -30,7 +31,70 @@ export function TxnRow({ txn, now, onPress }: { txn: Txn; now: number; onPress: 
   );
 }
 
-export function MoneyScreen({ status, onOpenParty }: { status: Status; onOpenParty: (p: PartyTotal) => void }) {
+function ReportsGroup({ onOpen }: { onOpen: (r: ReportRow) => void }) {
+  const [reports, setReports] = useState<ReportRow[]>([]);
+  const [allowed, setAllowed] = useState(true);
+  const [working, setWorking] = useState<number | 'now' | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    try {
+      setReports(InflowCore.listReports());
+      setAllowed(InflowCore.notificationsAllowed());
+    } catch {
+      setNotice(LOAD_ERROR);
+    }
+  }, []);
+  useEffect(load, [load]);
+
+  const run = async (key: number | 'now', job: () => Promise<{ ok: boolean; message: string | null }>) => {
+    setWorking(key);
+    try {
+      const r = await job();
+      setNotice(r.ok ? null : (r.message ?? "Inflow couldn't make the report. Try again in a few minutes."));
+    } catch {
+      setNotice("Inflow couldn't make the report. Try again in a few minutes.");
+    }
+    setWorking(null);
+    load();
+  };
+  const ask = async () => {
+    try {
+      await InflowCore.askNotifications();
+    } catch {
+      setNotice(SAVE_ERROR);
+    }
+    load();
+  };
+
+  return (
+    <View style={{ gap: space.md }}>
+      <Group title="Reports">
+        {reports.length === 0 && <Row title="No reports yet" subtitle="Inflow makes one every Sunday night and one at the start of each month." />}
+        {reports.map((r) => (
+          <Row
+            key={r.id}
+            title={reportTitle(r)}
+            subtitle={
+              r.status === 'ready' ? (r.headline ?? undefined) : (
+                <Text variant="meta" tone={r.status === 'failed' ? 'warn' : 'muted'}>
+                  {r.message ?? (r.status === 'waiting' ? "Waiting for tomorrow's AI limit." : "Couldn't make this report.")}
+                </Text>
+              )
+            }
+            onPress={r.status === 'ready' ? () => onOpen(r) : undefined}
+            trailing={r.status === 'failed' ? <Button label="Try again" size="sm" variant="secondary" busy={working === r.id} disabled={working !== null} onPress={() => run(r.id, () => InflowCore.retryReport(r.id))} /> : undefined}
+          />
+        ))}
+        {!allowed && <Row title="Get a notification when a report is ready" onPress={ask} />}
+      </Group>
+      {notice !== null && <Notice tone="danger">{notice}</Notice>}
+      <Button label="Make a report now" variant="secondary" busy={working === 'now'} disabled={working !== null} onPress={() => run('now', () => InflowCore.makeReportNow())} />
+    </View>
+  );
+}
+
+export function MoneyScreen({ status, onOpenParty, onOpenReport }: { status: Status; onOpenParty: (p: PartyTotal) => void; onOpenReport: (r: ReportRow) => void }) {
   const { c } = useTheme();
   const today = new Date();
   const [ym, setYm] = useState({ year: today.getFullYear(), month: today.getMonth() });
@@ -91,6 +155,7 @@ export function MoneyScreen({ status, onOpenParty }: { status: Status; onOpenPar
         <Text variant="bodyStrong">{monthLabel(ym.year, ym.month)}</Text>
         <Button label="Next" variant="ghost" size="sm" onPress={() => move(1)} disabled={isCurrent} />
       </View>
+      <ReportsGroup onOpen={onOpenReport} />
       {!status.smsGranted && <Notice>Allow SMS in Settings to see your spending.</Notice>}
       {error !== null && <Notice tone="danger">{error}</Notice>}
       {summary !== null && summary.accounts.length === 0 && error === null && <Text tone="muted">No bank messages this month.</Text>}

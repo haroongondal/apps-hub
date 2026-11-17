@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, BackHandler, View } from 'react-native';
 import { Button, Header, Notice, Screen, TabBar, ThemeProvider } from '@apps-hub/ui';
-import InflowCore, { type ItemFilter, type PartyTotal, type Status } from 'inflow-core';
+import InflowCore, { type ItemFilter, type PartyTotal, type ReportRow, type Status } from 'inflow-core';
 import { AskScreen } from './src/AskScreen.tsx';
 import { ContactsScreen } from './src/ContactsScreen.tsx';
 import { HomeScreen } from './src/HomeScreen.tsx';
@@ -10,6 +10,8 @@ import { LockScreen } from './src/LockScreen.tsx';
 import { MoneyScreen } from './src/MoneyScreen.tsx';
 import { partyTitle } from './src/money.ts';
 import { PartyScreen } from './src/PartyScreen.tsx';
+import { reportTitle } from './src/report.ts';
+import { ReportScreen } from './src/ReportScreen.tsx';
 import { LOAD_ERROR } from './src/messages.ts';
 import { SettingsScreen } from './src/SettingsScreen.tsx';
 import { SetupScreen } from './src/SetupScreen.tsx';
@@ -19,7 +21,8 @@ type Tab = 'home' | 'money' | 'ask' | 'settings';
 type Route =
   | { kind: 'items'; filter: ItemFilter; title: string }
   | { kind: 'contacts'; pkg: string; title: string }
-  | { kind: 'party'; name: string | null; own: boolean; title: string };
+  | { kind: 'party'; name: string | null; own: boolean; title: string }
+  | { kind: 'report'; id: number; title: string };
 
 const TABS: ReadonlyArray<{ key: Tab; label: string }> = [
   { key: 'home', label: 'Home' },
@@ -51,7 +54,20 @@ function Root() {
   const [tab, setTab] = useState<Tab>('home');
   const [stack, setStack] = useState<Route[]>([]);
 
+  const lockedRef = useRef(true);
+  lockedRef.current = locked;
+
   const refresh = useCallback(() => setStatus(readStatus()), []);
+  // A tapped report notification waits in the native module; it is read only while unlocked, so a locked phone keeps it until the fingerprint.
+  const openTappedReport = useCallback(() => {
+    try {
+      const id = InflowCore.takeOpenReport();
+      const r = id === null ? null : InflowCore.getReport(id);
+      if (r) setStack((s) => [...s, { kind: 'report', id: r.row.id, title: reportTitle(r.row) }]);
+    } catch {
+      // No report to open: stay where we are.
+    }
+  }, []);
   const complete = status !== null && setupComplete(setupRows(status));
 
   useEffect(() => {
@@ -60,10 +76,13 @@ function Root() {
         setLocked(true);
         setStack([]);
         setTab('home');
-      } else if (s === 'active') refresh();
+      } else if (s === 'active') {
+        refresh();
+        if (!lockedRef.current) openTappedReport();
+      }
     });
     return () => sub.remove();
-  }, [refresh]);
+  }, [refresh, openTappedReport]);
   useEffect(() => {
     if (status && !complete) setInSetup(true);
   }, [status, complete]);
@@ -80,6 +99,7 @@ function Root() {
   const open = (filter: ItemFilter, title: string) => push({ kind: 'items', filter, title });
   const openContacts = (pkg: string, title: string) => push({ kind: 'contacts', pkg, title });
   const openParty = (p: PartyTotal) => push({ kind: 'party', name: p.name, own: p.own, title: partyTitle(p) });
+  const openReport = (r: Pick<ReportRow, 'id' | 'kind' | 'periodStart' | 'partial'>) => push({ kind: 'report', id: r.id, title: reportTitle(r) });
   const back = () => setStack((s) => s.slice(0, -1));
 
   if (locked) {
@@ -88,6 +108,7 @@ function Root() {
         onUnlocked={() => {
           refresh();
           setLocked(false);
+          openTappedReport();
         }}
       />
     );
@@ -106,6 +127,7 @@ function Root() {
   const top = stack.length > 0 ? stack[stack.length - 1] : null;
   if (top?.kind === 'items') return <ListScreen key={stack.length} title={top.title} filter={top.filter} onBack={back} onOpen={open} />;
   if (top?.kind === 'contacts') return <ContactsScreen key={stack.length} title={top.title} pkg={top.pkg} onBack={back} onOpen={open} />;
+  if (top?.kind === 'report') return <ReportScreen key={stack.length} id={top.id} title={top.title} onBack={back} />;
   if (top?.kind === 'party') return <PartyScreen key={stack.length} title={top.title} name={top.name} own={top.own} onBack={back} />;
 
   return (
@@ -114,7 +136,7 @@ function Root() {
         {tab === 'home' ? (
           <HomeScreen status={status} refreshStatus={refresh} onOpen={open} onOpenContacts={openContacts} onOpenMoney={() => setTab('money')} />
         ) : tab === 'money' ? (
-          <MoneyScreen status={status} onOpenParty={openParty} />
+          <MoneyScreen status={status} onOpenParty={openParty} onOpenReport={openReport} />
         ) : tab === 'ask' ? (
           <AskScreen />
         ) : (
