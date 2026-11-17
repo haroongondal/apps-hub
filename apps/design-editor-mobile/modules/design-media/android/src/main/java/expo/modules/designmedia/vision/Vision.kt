@@ -5,24 +5,32 @@ import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import expo.modules.designmedia.core.ClipModels
 import expo.modules.designmedia.core.ModelFile
 import expo.modules.designmedia.core.TILE_IN
+import expo.modules.designmedia.core.UpscalePlan
 import expo.modules.designmedia.core.VisionModels
-import expo.modules.designmedia.core.alphaMask
 import expo.modules.designmedia.core.modnetInput
 import expo.modules.designmedia.core.modnetSize
 import expo.modules.designmedia.core.u2Input
-import expo.modules.designmedia.core.withAlpha
+import expo.modules.designmedia.core.upscalePlan
 import java.io.File
+import java.io.IOException
 import java.nio.FloatBuffer
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 
 // Cut-out and upscale on the phone; DesignMediaModule only delegates here. Reads a file in the cache, writes a PNG beside it.
 object Vision {
   const val EVENT_PROGRESS = "onVisionProgress"
+
+  // One process-wide thread: one full-size image at a time, whatever the number of module instances.
+  val queue = CoroutineScope(Executors.newSingleThreadExecutor().asCoroutineDispatcher() + SupervisorJob())
 
   private val env: OrtEnvironment by lazy { OrtEnvironment.getEnvironment() }
 
@@ -41,60 +49,72 @@ object Vision {
 
   fun run(ctx: Context, id: String, op: String, src: String, option: String, progress: (Double) -> Unit): String {
     val out = VisionPaths.output(ctx.cacheDir, id)
-    val tool = when (op) {
-      "cutout" -> option.takeIf { it != "upscale" }
-      "upscale" -> "upscale".takeIf { option == "2" || option == "4" }
-      else -> null
-    }
-    val model = requireNotNull(VisionModels.TOOLS[tool]) { "unknown vision tool $op $option" }
+    val model = requireNotNull(VisionJob.toolFor(op, option)) { "unknown vision tool $op $option" }
     val flag = flags.getOrPut(id) { AtomicBoolean() }
     try {
       if (!ClipModels.isReady(modelsDir(ctx), model)) throw VisionToolMissing()
-      if (!VisionPaths.allowed(ctx.cacheDir, src)) throw VisionCantOpen()
-      val image = decode(src)
-      return VisionJob.publish(out, flag::get) { part ->
-        val result = session(ctx, model).use { s ->
-          when (model) {
-            VisionModels.ESRGAN -> VisionJob.upscale(image, option.toInt(), { infer(s, it, longArrayOf(1, 3, TILE_IN.toLong(), TILE_IN.toLong())).first }, flag::get, progress)
-            VisionModels.U2NETP -> cutout(image, infer(s, u2Input(image.argb, image.w, image.h), longArrayOf(1, 3, 320, 320)), true, 2f)
-            else -> {
+      val file = VisionPaths.resolve(ctx.cacheDir, src) ?: throw VisionCantOpen()
+      return VisionJob.plainMemory {
+        val result = if (model == VisionModels.ESRGAN) {
+          var plan: UpscalePlan? = null
+          // Shrinking happens in the decoder (its own filter, not the plan's LANCZOS): a full-size decode of a big photo
+          // plus a LANCZOS copy would not fit the heap.
+          val image = decode(file) { w, h ->
+            val p = upscalePlan(w, h, option.toInt()) ?: throw VisionTooBig()
+            plan = p
+            (p.inW to p.inH).takeIf { p.inW != w || p.inH != h }
+          }
+          session(ctx, model).use { s ->
+            VisionJob.upscale(image, requireNotNull(plan), { infer(s, it, longArrayOf(1, 3, TILE_IN.toLong(), TILE_IN.toLong())).first }, flag::get, progress)
+          }
+        } else {
+          val image = decode(file, VisionJob::cutoutTarget)
+          val (pred, shape) = session(ctx, model).use { s ->
+            if (model == VisionModels.U2NETP) {
+              infer(s, u2Input(image.argb, image.w, image.h), longArrayOf(1, 3, 320, 320))
+            } else {
               val (mw, mh) = modnetSize(image.w, image.h)
-              cutout(image, infer(s, modnetInput(image.argb, image.w, image.h), longArrayOf(1, 3, mh.toLong(), mw.toLong())), false, 0f)
+              infer(s, modnetInput(image.argb, image.w, image.h), longArrayOf(1, 3, mh.toLong(), mw.toLong()))
             }
           }
+          val u2 = model == VisionModels.U2NETP
+          VisionJob.cutout(image, pred, shape.last().toInt(), shape[shape.size - 2].toInt(), u2, if (u2) 2f else 0f)
         }
         if (flag.get()) throw VisionCancelled()
-        // Unpremultiplied so soft cut-out edges keep their exact colour and alpha in the PNG.
-        val bmp = Bitmap.createBitmap(result.w, result.h, Bitmap.Config.ARGB_8888)
-        try {
-          bmp.isPremultiplied = false
-          bmp.setPixels(result.argb, 0, result.w, 0, 0, result.w, result.h)
-          part.outputStream().use { if (!bmp.compress(Bitmap.CompressFormat.PNG, 100, it)) throw VisionCantOpen() }
-        } finally {
-          bmp.recycle()
-        }
-      }.absolutePath
+        VisionJob.publish(out, flag::get) { part -> writePng(result, part) }.absolutePath
+      }
     } finally {
       flags.remove(id)
     }
   }
 
-  private fun cutout(image: Image, pred: Pair<FloatArray, LongArray>, minMax: Boolean, featherPx: Float): Image {
-    val shape = pred.second
-    val mask = alphaMask(pred.first, shape.last().toInt(), shape[shape.size - 2].toInt(), image.w, image.h, minMax, featherPx)
-    return Image(withAlpha(image.argb, mask), image.w, image.h)
-  }
-
-  private fun decode(src: String): Image {
-    val opts = BitmapFactory.Options().apply {
-      inPreferredConfig = Bitmap.Config.ARGB_8888
-      inPremultiplied = false
+  // ImageDecoder applies the JPEG's EXIF orientation; target sees the header size before any pixel is allocated.
+  private fun decode(file: File, target: (Int, Int) -> Pair<Int, Int>?): Image {
+    val bmp = try {
+      ImageDecoder.decodeBitmap(ImageDecoder.createSource(file)) { decoder, info, _ ->
+        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+        decoder.isUnpremultipliedRequired = true
+        target(info.size.width, info.size.height)?.let { (w, h) -> decoder.setTargetSize(w, h) }
+      }
+    } catch (e: IOException) {
+      throw VisionCantOpen()
     }
-    val bmp = BitmapFactory.decodeFile(src, opts) ?: throw VisionCantOpen()
     try {
       val argb = IntArray(bmp.width * bmp.height)
       bmp.getPixels(argb, 0, bmp.width, 0, 0, bmp.width, bmp.height)
       return Image(argb, bmp.width, bmp.height)
+    } finally {
+      bmp.recycle()
+    }
+  }
+
+  // Unpremultiplied so soft cut-out edges keep their exact colour and alpha in the PNG.
+  private fun writePng(image: Image, part: File) {
+    val bmp = Bitmap.createBitmap(image.w, image.h, Bitmap.Config.ARGB_8888)
+    try {
+      bmp.isPremultiplied = false
+      bmp.setPixels(image.argb, 0, image.w, 0, 0, image.w, image.h)
+      part.outputStream().use { if (!bmp.compress(Bitmap.CompressFormat.PNG, 100, it)) throw VisionCantSave() }
     } finally {
       bmp.recycle()
     }

@@ -20,6 +20,8 @@ class VisionPathsTest {
     File(cache, "vision").mkdir()
     File(files, "models").mkdir()
     assertTrue(VisionPaths.allowed(cache, File(cache, "vision/a.png").path))
+    // The runner opens the resolved canonical file, so a link swapped in after the check is not followed again.
+    assertEquals(File(cache, "vision/a.png").canonicalFile, VisionPaths.resolve(cache, File(cache, "vision/./x/../a.png").path))
     assertFalse(VisionPaths.allowed(cache, File(files, "models/u2netp.onnx").path))
     assertFalse(VisionPaths.allowed(cache, File(cache, "vision/../../files/x").path))
     assertFalse(VisionPaths.allowed(cache, cache.path))

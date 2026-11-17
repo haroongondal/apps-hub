@@ -1,10 +1,16 @@
 package expo.modules.designmedia.vision
 
+import expo.modules.designmedia.core.Filter
 import expo.modules.designmedia.core.SCALE
 import expo.modules.designmedia.core.TILE_IN
+import expo.modules.designmedia.core.VisionModels
+import expo.modules.designmedia.core.resize
+import expo.modules.designmedia.core.upscalePlan
 import java.io.File
+import java.io.IOException
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -25,6 +31,43 @@ class VisionJobTest {
     }
   }
 
+  // A smoothing model (LANCZOS 4x of the tile), like the real one: a hard edge comes out as a ramp.
+  private fun smooth(input: FloatArray): FloatArray {
+    val plane = TILE_IN * TILE_IN
+    val argb = IntArray(plane) { i ->
+      val c = { k: Int -> Math.round(input[k * plane + i] * 255f) }
+      (0xFF shl 24) or (c(0) shl 16) or (c(1) shl 8) or c(2)
+    }
+    val n = SCALE * TILE_IN
+    val big = resize(argb, TILE_IN, TILE_IN, n, n, Filter.LANCZOS)
+    return FloatArray(3 * n * n) { i -> (big[i % (n * n)] shr (16 - 8 * (i / (n * n))) and 0xFF) / 255f }
+  }
+
+  @Test
+  fun upscaleOfAlphaHasNoDarkFringe() {
+    val w = 40
+    val src = Image(IntArray(w * w) { i -> if (i / w in 10..29 && i % w in 10..29) 0xFFFF0000.toInt() else 0 }, w, w)
+    val out = VisionJob.upscale(src, upscalePlan(w, w, 4)!!, ::smooth, { false }) {}
+    var soft = 0
+    for (p in out.argb) {
+      val a = p ushr 24
+      if (a == 0) assertEquals(0, p)
+      if (a >= 32) {
+        assertTrue("%08x".format(p), (p shr 16 and 0xFF) >= 250 && (p shr 8 and 0xFF) <= 5 && (p and 0xFF) <= 5)
+      }
+      if (a in 32..250) soft++
+    }
+    assertTrue("the edge is soft", soft > 0)
+  }
+
+  @Test
+  fun aFailedWriteSaysSoAndLeavesNoFile() {
+    val out = File(folder.root, "vision/job.png")
+    val e = assertThrows(Exception::class.java) { VisionJob.publish(out, { false }) { it.writeText("half"); throw IOException("ENOSPC") } }
+    assertEquals("The result couldn't be saved. Free up some space and try again.", e.message)
+    assertEquals(emptyList<String>(), File(folder.root, "vision").list()!!.toList())
+  }
+
   @Test
   fun cancelLeavesNoFile() {
     val out = File(folder.root, "vision/job.png")
@@ -35,7 +78,7 @@ class VisionJobTest {
     val e = assertThrows(VisionCancelled::class.java) {
       VisionJob.publish(out, { cancelled }) { part ->
         part.writeText("half")
-        VisionJob.upscale(src, 4, model, { cancelled }) {}
+        VisionJob.upscale(src, upscalePlan(300, 200, 4)!!, model, { cancelled }) {}
       }
     }
     assertEquals("CANCELLED", e.code)
@@ -57,19 +100,58 @@ class VisionJobTest {
     val w = 20
     val src = Image(IntArray(w * w) { i -> if (i / w in 4..15 && i % w in 4..15) -0xcc9967 else 0x00336699 }, w, w)
     val seen = mutableListOf<Double>()
-    val out = VisionJob.upscale(src, 2, ::nearest, { false }) { seen += it }
+    val out = VisionJob.upscale(src, upscalePlan(w, w, 2)!!, ::nearest, { false }) { seen += it }
     assertEquals(listOf(1.0), seen)
     assertEquals(40, out.w)
     assertEquals(40, out.h)
     assertEquals(0, out.argb[0] ushr 24)
     assertEquals(255, out.argb[20 * 40 + 20] ushr 24)
-    val opaque = VisionJob.upscale(Image(IntArray(w * w) { -0xcc9967 }, w, w), 4, ::nearest, { false }) {}
+    val opaque = VisionJob.upscale(Image(IntArray(w * w) { -0xcc9967 }, w, w), upscalePlan(w, w, 4)!!, ::nearest, { false }) {}
     assertTrue(opaque.argb.all { it ushr 24 == 255 })
-    assertFalse(opaque.argb.isEmpty())
   }
 
   @Test
-  fun upscaleRefusesTooBig() {
-    assertThrows(VisionTooBig::class.java) { VisionJob.upscale(Image(IntArray(4096), 4096, 1), 2, ::nearest, { false }) {} }
+  fun upscaleInputMustBeThePlansSize() {
+    assertThrows(IllegalArgumentException::class.java) {
+      VisionJob.upscale(Image(IntArray(2000 * 10), 2000, 10), upscalePlan(2000, 10, 2)!!, ::nearest, { false }) {}
+    }
+  }
+
+  @Test
+  fun cutoutKeepsExistingTransparency() {
+    val px = intArrayOf(0x00FF0000, 0xFF00FF00.toInt(), 0x3200FF00, 0xFF0000FF.toInt())
+    val img = VisionJob.cutout(Image(px, 2, 2), floatArrayOf(0.4f), 1, 1, false, 0f)
+    assertEquals(listOf(0, 102, 50, 102), img.argb.map { it ushr 24 })
+    assertEquals(listOf(0xFF0000, 0x00FF00, 0x00FF00, 0x0000FF), img.argb.map { it and 0xFFFFFF })
+    assertSame("written in place", px, img.argb)
+  }
+
+  @Test
+  fun toolForMapsOpAndOption() {
+    assertEquals(VisionModels.MODNET, VisionJob.toolFor("cutout", "person"))
+    assertEquals(VisionModels.U2NETP, VisionJob.toolFor("cutout", "object"))
+    assertEquals(VisionModels.ESRGAN, VisionJob.toolFor("upscale", "2"))
+    assertEquals(VisionModels.ESRGAN, VisionJob.toolFor("upscale", "4"))
+    listOf("cutout" to "upscale", "cutout" to "2", "cutout" to "", "upscale" to "3", "upscale" to "person", "blur" to "2", "" to "object")
+      .forEach { (op, option) -> assertNull("$op $option", VisionJob.toolFor(op, option)) }
+  }
+
+  @Test
+  fun cutoutTargetFitsTheBudget() {
+    assertNull(VisionJob.cutoutTarget(4000, 3000))
+    assertNull(VisionJob.cutoutTarget(4096, 3072))
+    assertEquals(4096 to 3072, VisionJob.cutoutTarget(8192, 6144))
+    for ((w, h) in listOf(8000 to 6000, 40000 to 400, 4097 to 3072, 3072 to 4097)) {
+      val (tw, th) = VisionJob.cutoutTarget(w, h)!!
+      assertTrue("$w x $h -> $tw x $th", tw.toLong() * th <= VisionJob.CUTOUT_MAX_PIXELS && tw >= 1 && th >= 1)
+      assertTrue("aspect $w x $h -> $tw x $th", Math.abs(tw.toLong() * h - th.toLong() * w) <= w + h)
+    }
+  }
+
+  @Test
+  fun outOfMemorySaysSoInPlainWords() {
+    val e = assertThrows(VisionNoMemory::class.java) { VisionJob.plainMemory { throw OutOfMemoryError("Failed to allocate a 64 MB allocation") } }
+    assertEquals("This image is too big for this tool.", e.message)
+    assertEquals(3, VisionJob.plainMemory { 3 })
   }
 }
