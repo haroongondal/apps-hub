@@ -73,9 +73,9 @@ test('a patch is validated before it is stored', async () => {
   assert.deepEqual({ ...youtube(), volume: { ...youtube()!.volume, level: 50 } }, DEFAULT_YOUTUBE);
 });
 
-test('a patch that is not an object leaves storage unchanged and answers ok', async () => {
+test('a patch that is not an object leaves storage unchanged and answers not ok', async () => {
   const { send, store } = setup();
-  assert.deepEqual((await send({ type: 'yt-set', patch: 'x' })).reply, { ok: true });
+  for (const patch of ['x', null, [1], 7, undefined]) assert.deepEqual((await send({ type: 'yt-set', patch })).reply, { ok: false }, String(patch));
   assert.equal(store.has('youtube'), false);
 });
 

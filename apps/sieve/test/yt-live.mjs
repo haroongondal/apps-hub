@@ -21,16 +21,16 @@ export function within(promise, ms, what) {
   return Promise.race([promise, new Promise((_, reject) => (timer = setTimeout(() => reject(new Error(`${what} took over ${ms / 1000} s`)), ms)))]).finally(() => clearTimeout(timer));
 }
 
-// When the video was at 0 s, in window seconds; null when it never played without an ad, or when its first frame came more than 5 s
-// into the video (a resumed video shows no start).
-const startOf = (row) => (row.content && row.content.from <= 5 ? Math.round((row.content.at - row.content.from) * 10) / 10 : null);
+// When the video was at 0 s, in window seconds; null when it never played without an ad. On the re-watch, which runs in the same profile,
+// also null when its first frame came more than 5 s into the video (a resumed video shows no start); a first watch resumes nothing.
+const startOf = (row, again = false) => (row.content && (!again || row.content.from <= 5) ? Math.round((row.content.at - row.content.from) * 10) / 10 : null);
 
 // The window opens at domcontentloaded, so it also holds the wait for the first frame: up to 9.2 s without Sieve (20 s only after an ad)
 // and up to 20.6 s with it (30 live runs, 2026-11-17), while no video stalled once it had started. So the first frame is judged against
 // the control's here, and playback from it in judgePlayback. A control that showed only an ad counts as starting at the window's end.
-export function judgeStart(control, sieve) {
+export function judgeStart(control, sieve, again = false) {
   if (!(control.playedTo > MIN_CONTROL_S)) return { verdict: 'inconclusive', text: `the control only reached ${control.playedTo} s` };
-  const s = startOf(sieve);
+  const s = startOf(sieve, again);
   const c = startOf(control) ?? SECONDS;
   const text = `first frame with Sieve at ${s === null ? 'none' : `${s} s`}, without it at ${startOf(control) === null ? `none (only an ad), counted as ${SECONDS} s` : `${c} s`} (allowed ${START_SLACK_S} s later)`;
   return { verdict: s !== null && s - c <= START_SLACK_S ? 'pass' : 'fail', text };
@@ -48,7 +48,17 @@ export function judgePlayback(control, sieve) {
   return { verdict: ratio >= MIN_RATIO ? 'pass' : 'fail', ratio, text: `with Sieve it played ${(c.to - c.from).toFixed(1)} s of video in the ${span.toFixed(1)} s from its first frame to the end of the window, ratio ${ratio.toFixed(2)} (needs ${MIN_RATIO})${sieve.hung ? `; ${sieve.hung}` : ''}` };
 }
 
-const why = (r) => (r.botCheck ? 'YouTube asked this address to sign in (bot check)' : r.consent ? 'consent page' : r.error);
+const gated = (r) => (r.botCheck ? 'YouTube asked this address to sign in (bot check)' : r.consent ? 'consent page' : null);
+const why = (r) => gated(r) ?? r.error;
+
+// A bot check or consent page on either side is what this address got: a skip. A load error with Sieve alone (a goto timeout, a dead
+// page) is what a document_start hang in Sieve would look like, so it fails; with the control's load failing too it is the network.
+export function loadGate(control, sieve) {
+  const page = gated(sieve) ?? gated(control);
+  if (page) return { skip: page };
+  if (sieve.error) return control.error ? { skip: `the page did not load with Sieve or without Sieve too (${sieve.error})` } : { fail: sieve.error };
+  return control.error ? { skip: `the page did not load without Sieve (${control.error})` } : null;
+}
 
 // Only a late first frame on a video that did start earns a second watch: a video that never started is a failure as it is.
 export const needsRewatch = (control, first) => first.content !== null && judgeStart(control, first).verdict === 'fail';
@@ -58,7 +68,7 @@ export const needsRewatch = (control, first) => first.content !== null && judgeS
 export function judgeVideo(control, first, again = null) {
   let start = judgeStart(control, first);
   if (again && needsRewatch(control, first)) {
-    const second = judgeStart(control, again);
+    const second = judgeStart(control, again, true);
     start = why(again)
       ? { verdict: 'fail', text: `${start.text}; the second watch gave no answer (${why(again)})` }
       : { verdict: second.verdict, text: `on the first watch ${start.text}; on the second ${second.text}`, recovered: second.verdict === 'pass' };
@@ -99,7 +109,9 @@ if (process.argv.includes('--self-check')) {
   assert.equal(judgeStart({ playedTo: 3, content: null }, { content: null }).verdict, 'inconclusive', 'a control that did not play cannot be compared');
   await assert.rejects(within(new Promise(() => {}), 20, 'a hung call'), /a hung call took over 0.02 s/);
   assert.equal(await within(Promise.resolve(7), 20, 'a quick call'), 7);
-  assert.equal(judgeStart(control(1.5, 0.5), played(2, 12, 40)).verdict, 'fail', 'a first frame 12 s into the video (resumed) is no start');
+  assert.equal(judgeStart(control(1.5, 0.5), played(2, 12, 40), true).verdict, 'fail', 'on the re-watch, a first frame 12 s into the video (resumed) is no start');
+  assert.equal(judgeStart(control(1.5, 0.5), played(14, 12, 40)).verdict, 'pass', 'on the first watch (a fresh profile resumes nothing) a first sample 12 s in still dates the start: 14 - 12 = 2 s');
+  assert.equal(judgeStart({ playedTo: 28, content: { at: 14, from: 12, to: 28 } }, played(2, 0.5, 28)).verdict, 'pass', 'the control is dated the same way');
   assert.match(judgePlayback({ playedTo: 28 }, { ...played(1, 0.5, 6.6), hung: 'a page check took over 5 s' }).text, /a page check took over 5 s/);
   const never = { windowEnd: 30, content: null, adShowing: false };
   assert.equal(needsRewatch(control(1.5, 0.5), never), false, 'a video that never started is not watched again');
@@ -111,10 +123,18 @@ if (process.argv.includes('--self-check')) {
   assert.deepEqual([v2.start.verdict, v2.start.recovered, v2.play.verdict, v2.ad], ['pass', true, 'pass', true], 'late then on time: the start passes, playback and the ad stay with the first watch');
   const v3 = judgeVideo(control(1.5, 0.5), late, played(22, 0.5, 8.5));
   assert.equal(v3.start.verdict, 'fail', 'late twice fails');
+  const v6 = judgeVideo(control(1.5, 0.5), late, played(14, 12, 40));
+  assert.equal(v6.start.verdict, 'fail', 'a re-watch that resumed shows no start, so the late start stays');
   const v4 = judgeVideo(control(1.5, 0.5), late, { botCheck: true, content: null, adShowing: false });
   assert.deepEqual([v4.start.verdict, v4.ad], ['fail', true], 'a second watch that hit a bot check keeps the late start and the first ad');
   const v5 = judgeVideo(control(1.5, 0.5), { ...played(1.5, 0.5, 2), windowEnd: 30 }, null);
   assert.deepEqual([v5.start.verdict, v5.play.verdict], ['pass', 'fail'], 'a start on time with a stall needs no second watch and fails playback');
+  assert.deepEqual(loadGate({ playedTo: 28 }, { error: 'page.goto: Timeout 60000ms exceeded' }), { fail: 'page.goto: Timeout 60000ms exceeded' }, 'a load error with Sieve alone is a failure, not a skip');
+  assert.match(loadGate({ error: 'net::ERR_TIMED_OUT' }, { error: 'net::ERR_TIMED_OUT' }).skip, /without Sieve too/, 'a load error on both sides is the network: a skip');
+  assert.match(loadGate({ error: 'net::ERR_TIMED_OUT' }, { playedTo: 28 }).skip, /without Sieve/, 'a control that did not load cannot be compared: a skip');
+  assert.match(loadGate({ playedTo: 28 }, { botCheck: true, error: 'x' }).skip, /bot check/, 'a bot check with Sieve is a skip');
+  assert.match(loadGate({ consent: true }, { playedTo: 28 }).skip, /consent page/, 'a consent page on the control is a skip');
+  assert.equal(loadGate({ playedTo: 28 }, { playedTo: 27 }), null, 'two loaded pages are judged');
   assert.equal(exitCode({ failed: 0, videos: 3, skipped: 3, inconclusive: 0 }), 2, 'all skipped is no evidence');
   assert.equal(exitCode({ failed: 0, videos: 3, skipped: 1, inconclusive: 2 }), 2, 'skipped plus inconclusive is no evidence');
   assert.equal(exitCode({ failed: 0, videos: 3, skipped: 1, inconclusive: 1 }), 0);
@@ -189,9 +209,14 @@ try {
     const r = await watch(ctx, id);
     const c = control[id];
     console.log(`with Sieve     ${JSON.stringify(r)}`);
-    if (why(r) || why(c)) {
+    const g = loadGate(c, r);
+    if (g?.fail) {
+      check(`live ${id}: the page loaded with Sieve`, false, g.fail);
+      continue;
+    }
+    if (g?.skip) {
       skipped++;
-      console.log(`SKIP  ${id}: ${why(r) ?? why(c)}`);
+      console.log(`SKIP  ${id}: ${g.skip}`);
       continue;
     }
     // A late first frame gets one more watch from 0 s, in Sieve's browser only: the control's browser is closed by now and its start stays

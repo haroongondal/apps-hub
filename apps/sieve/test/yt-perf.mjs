@@ -40,6 +40,9 @@ export function judgeRead(none, big) {
 }
 
 export function judgeLive(withSieve, without, planned) {
+  // A load without Sieve in it measures nothing about Sieve, whatever the control lost.
+  const notRun = withSieve.find((x) => x.notRun);
+  if (notRun) return { status: 'fail', why: notRun.why };
   const good = (r) => r.filter((x) => x.ok);
   const hard = (r) => r.filter((x) => !x.ok && !x.gated).length;
   if (hard(withSieve) > hard(without)) {
@@ -111,6 +114,9 @@ function selfCheck() {
   assert.equal(judgeLive([...runs(6, 100), ...timeout(1)], runs(7, 100), 7).status, 'fail', 'live: one lost load with Sieve that the control kept is a failure');
   assert.equal(judgeLive(timeout(7), timeout(7), 7).status, 'excluded', 'live: timeouts on both sides say nothing about Sieve');
   assert.equal(judgeLive(runs(7, 100, NaN), runs(7, 100, 100), 7).status, 'excluded', 'live: a missing heap reading is not a pass');
+  const notRun = (n) => Array.from({ length: n }, () => ({ ok: false, gated: false, notRun: true, why: 'Sieve did not run (0 sieve-yt-applied marks, row missing)' }));
+  assert.equal(judgeLive([...runs(6, 100), ...notRun(1)], [...runs(6, 100), ...timeout(1)], 7).status, 'fail', 'live: a load where Sieve did not run fails, even when the control lost as many loads');
+  assert.match(judgeLive([...runs(6, 100), ...notRun(1)], runs(7, 100), 7).why, /Sieve did not run/, 'live: the failure says Sieve did not run');
 
   const pass = { pass: true };
   assert.equal(verdict({ leaks: pass, read: pass, live: [{ status: 'pass' }, { status: 'pass' }] }), 0, 'verdict: all pass is 0');
@@ -158,6 +164,7 @@ async function localParts(core, helpers, harness) {
     const changed = leaves(set).filter(([p, v]) => JSON.stringify(v) !== JSON.stringify(defaults.get(p)));
     console.log(`\nEvery option on: ${changed.length} of ${defaults.size} stored values differ from the defaults`);
     console.log(changed.map(([p, v]) => `${p}=${JSON.stringify(v)}`).join(', '));
+    assert.ok(changed.length >= 35, `"every option on" changed only ${changed.length} stored values (at least 35 expected): a field list or validation change dropped some`);
 
     const page = await helpers.openYt(t, '/watch?v=sieveTest01');
     const cdp = await ctx.newCDPSession(page);
@@ -235,7 +242,7 @@ const LOAD_LIMIT_MS = 120_000;
 async function loadOnce(ctx, sieve) {
   let page;
   const body = async () => {
-    page = await ctx.newPage();
+    page = await within(ctx.newPage(), 15_000);
     const cdp = await ctx.newCDPSession(page);
     await cdp.send('Network.enable');
     await cdp.send('Network.clearBrowserCache');
@@ -254,7 +261,7 @@ async function loadOnce(ctx, sieve) {
     // A with-Sieve load only counts when Sieve ran in it: the mark once, and the row.
     if (sieve) {
       const ran = await page.evaluate(() => ({ marks: performance.getEntriesByName('sieve-yt-applied').length, row: !!document.querySelector('sieve-yt-row') }));
-      if (ran.marks !== 1 || !ran.row) return { ok: false, gated: false, why: `Sieve did not run (${ran.marks} sieve-yt-applied marks, row ${ran.row ? 'there' : 'missing'})` };
+      if (ran.marks !== 1 || !ran.row) return { ok: false, gated: false, notRun: true, why: `Sieve did not run (${ran.marks} sieve-yt-applied marks, row ${ran.row ? 'there' : 'missing'})` };
     }
     let heapMb = NaN;
     try {

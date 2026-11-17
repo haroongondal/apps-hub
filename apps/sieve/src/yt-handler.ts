@@ -66,7 +66,7 @@ export function onYouTubeMessage(message: unknown, sender: chrome.runtime.Messag
   }
   if (m.type !== 'yt-set') return false;
   if (!isRecord(m.patch)) {
-    respond({ ok: true });
+    respond({ ok: false });
     return false;
   }
   save(m.patch).then(
