@@ -9,6 +9,7 @@ pnpm release <app>                 apps-hub-store Worker (Cloudflare)           
   gradle assembleRelease  ──PUT /admin/*──▶  R2: apps/<id>/android/<vc>.apk  ◀──GET /f/*?exp&sig── PackageInstaller
   verify signer + badging                   R2: manifest.json  ◀──GET /manifest.json (Bearer)──── list + status
   upsert manifest.json                      POST /sign (Bearer) → 10-minute HMAC-signed URL ───▶ download
+  PUT /admin/models/<sha256>                R2: models/<sha256>  ◀──GET /models/<sha256> (public)── apps fetching a model
 ```
 
 | Piece | Path |
@@ -16,7 +17,7 @@ pnpm release <app>                 apps-hub-store Worker (Cloudflare)           
 | Manifest schema, pinned cert (`SIGNING_CERT_SHA256`), app id → package table (`ANDROID_PACKAGES`) | `packages/store-manifest` |
 | Release CLI | `tools/release` (`pnpm release`) |
 | CI/CD (auto-release on push to `main`) | `.github/workflows/ci.yml`, `tools/release/src/changed.ts` |
-| Worker: auth, signed URLs, uploads | `tools/store-api` |
+| Worker: auth, signed URLs, uploads, and a public read-only `GET /models/<sha256>` for model files (the app checks each file's SHA-256; upload needs the release token) | `tools/store-api` |
 | Store app + native module (`store-installer`) | `apps/store`, `apps/store/modules/store-installer` |
 
 **iOS is not set up.** Ad hoc over-the-air installs and TestFlight both need a paid
