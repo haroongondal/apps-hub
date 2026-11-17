@@ -21,7 +21,7 @@ const MIUI = (() => {
   }
 })();
 
-export type SettingsFlow = 'password' | 'fingerprint' | 'newKey' | 'import' | 'sync' | 'export' | 'imports' | 'deleteAll';
+export type SettingsFlow = 'password' | 'fingerprint' | 'newKey' | 'import' | 'authenticator' | 'sync' | 'export' | 'imports' | 'deleteAll';
 
 interface Props {
   status: Status;
@@ -178,6 +178,7 @@ export function SettingsScreen({ status, refresh, notice, onOpen }: Props) {
       </Group>
       <Group title="Your passwords">
         <Row title="Import from Google" subtitle="Move your saved passwords out of Google Password Manager." onPress={() => onOpen('import')} />
+        <Row title="Import from Google Authenticator" subtitle="Move your authenticator codes into Strongroom." onPress={() => onOpen('authenticator')} />
         <Row title="Imported files" subtitle="Delete what one import brought in." onPress={() => onOpen('imports')} />
         <Row title="Export all" subtitle="Save every login, card and note to a file." onPress={() => onOpen('export')} />
         <Row title="Delete all passwords" subtitle="Empty the vault." onPress={() => onOpen('deleteAll')} />
