@@ -37,6 +37,8 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
   `/data/local/tmp` (`tools/photo-bench/phone.sh`). Install apps only through the Store.
   Never run `uiautomator dump`. No Claude attribution lines in commits or PRs.
 - Never edit the `photo-search` worktree (another session owns it).
+- Owner, 2026-11-18: never run desktop-app tests (`pnpm --filter design-editor test:e2e` or any
+  suite that opens Electron windows), even though the original prompt lists it as a gate.
 
 ## Decisions made (with why)
 
@@ -69,6 +71,12 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
   (version 85911ebd-3c08-4e1b-9d59-c737ba543dc4). Model uploaded with PUT /admin/models/<sha>.
   **The live Worker now has a route that origin/main lacks: until image-tools merges, a deploy
   from main would drop /models/. Merge those two commits first or deploy from a branch that has them.**
+
+- 2026-11-18: origin/main (Find a photo #38, squash-merged) merged into image-tools as ba3d97f.
+  Files image-tools never touched took main's side; DesignMediaModule.kt and design-media
+  src/index.ts keep both sides; the app's test list is the union. Feature 2 is unblocked (the
+  Photos tab is on main). photo-search still has later commits not on main (e8d57be short-query
+  floor fix): check the Store's current Design Editor build before releasing so we don't drop it.
 
 ## Evidence already verified
 
@@ -143,11 +151,10 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
 
 ## Current state + exact next step
 
-Feature 3: 3.0 done (cut-out PASS, upscale MISS accepted by the owner). 3.1 done. 3.2: engine,
-download step, Worker route committed (57b1f06..19021f6, Kotlin 204/0, gates green in worktree);
-Worker deployed and model uploaded. 3.2 phase agent resumed to build Task 5 (chunked bridge,
-Remove background sheet Person/Object/Plain background, upscale flow with estimate) and run the
-gates from a clean export; ledger `.superpowers/sdd/2026-11-17-image-tools-3.2/progress.md`.
-Next: read its report, check the clean-export gate, then stop and ask the owner for the Store
-release go (Design Editor). After release, on-phone checks AC-1..AC-6 (claim the phone first).
-Feature 2 waits for `photo-search` Phase 2.
+Feature 3 is built: 3.0 done, 3.1 done, 3.2 DONE (57b1f06..c2e8557; ledger
+`.superpowers/sdd/2026-11-17-image-tools-3.2/progress.md`), merged with origin/main (ba3d97f).
+Gates on ba3d97f: pnpm test 0, typecheck 0, Gradle 217/0 + assembleDebug 0; main session's clean
+export of c2e8557: test 0, typecheck 0. Worker deployed, model live. Waiting for the owner's
+release go (Design Editor). Then on-phone checks AC-1..AC-6, the unproven-on-phone items in the
+3.2 ledger, the owner reads the new copy and the 2x estimate ("About 50 seconds").
+Feature 2: next is 2.0 (phone and tuning spike).
