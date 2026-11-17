@@ -56,6 +56,39 @@ class UpscaleMathsTest {
     }
   }
 
+  private fun q8(v: Float) = kotlin.math.floor(v.coerceIn(0f, 1f) * 255f + 0.5f).toInt()
+
+  private val gain = floatArrayOf(0.5f, 1f, -1f)
+  private val bias = floatArrayOf(0f, 0f, 1f)
+
+  // Channel c of output pixel (X, Y) = gain[c] * in[c] + bias[c] at window pixel (Y / 4 + 1, X / 4 + 1).
+  private fun skewedModel(input: FloatArray): FloatArray {
+    val n = SCALE * TILE_IN
+    val out = FloatArray(3 * n * n)
+    for (c in 0 until 3) for (y in 0 until n) for (x in 0 until n) {
+      val sy = minOf(y / SCALE + 1, TILE_IN - 1)
+      val sx = minOf(x / SCALE + 1, TILE_IN - 1)
+      out[c * n * n + y * n + x] = gain[c] * input[c * TILE_IN * TILE_IN + sy * TILE_IN + sx] + bias[c]
+    }
+    return out
+  }
+
+  @Test
+  fun stitchKeepsChannelOrderAndReflects() {
+    for ((w, h) in listOf(300 to 200, 129 to 20, 1 to 1)) {
+      val argb = IntArray(w * h) { (it * 2654435761L).toInt() or (0xFF shl 24) }
+      val ow = SCALE * w
+      val out = IntArray(ow * SCALE * h)
+      for (t in tiles(w, h)) placeTile(out, ow, skewedModel(tileInput(argb, w, h, t)), t)
+      val want = IntArray(out.size) {
+        val p = argb[reflect(it / ow / SCALE + 1, h) * w + reflect((it % ow) / SCALE + 1, w)]
+        val ch = IntArray(3) { c -> q8(gain[c] * ((p shr (16 - 8 * c) and 0xFF).toFloat() / 255f) + bias[c]) }
+        (0xFF shl 24) or (ch[0] shl 16) or (ch[1] shl 8) or ch[2]
+      }
+      assertArrayEquals("${w}x$h", want, out)
+    }
+  }
+
   @Test
   fun tileInputAlwaysFullShape() {
     assertEquals(3 * TILE_IN * TILE_IN, tileInput(intArrayOf(0xFF336699.toInt()), 1, 1, tiles(1, 1)[0]).size)
