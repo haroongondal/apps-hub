@@ -2,24 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Button, Group, Header, Notice, Row, Screen, Text, space, useTheme } from '@apps-hub/ui';
 import InflowCore, { type ReportCurrency, type ReportData, type ReportRow } from 'inflow-core';
+import { Bar } from './Bar.tsx';
 import { LOAD_ERROR } from './messages.ts';
 import { formatAmount } from './money.ts';
 import { barFraction, changeLabel } from './report.ts';
 
-const BAR = 8;
 const COLUMNS = 96;
 
 const Amount = ({ minor, currency }: { minor: number; currency: string }) => <Text variant="data">{formatAmount(minor, currency)}</Text>;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
-function Bar({ fraction }: { fraction: number }) {
-  const { c } = useTheme();
-  return (
-    <View style={{ height: BAR, borderRadius: BAR / 2, backgroundColor: c.accentSoft, overflow: 'hidden' }}>
-      <View style={{ width: `${Math.round(fraction * 100)}%`, height: BAR, backgroundColor: c.accent }} />
-    </View>
-  );
-}
 
 function Categories({ title, rows, currency }: { title: string; rows: ReportCurrency['categories']; currency: string }) {
   if (rows.length === 0) return null;

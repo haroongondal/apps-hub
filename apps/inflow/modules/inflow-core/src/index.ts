@@ -64,6 +64,8 @@ export interface Todo {
 export type ItemFilter =
   | { kind: 'all' }
   | { kind: 'app'; pkg: string }
+  // Several packages that share one label (the merged rows of All apps).
+  | { kind: 'apps'; pkgs: string[] }
   | { kind: 'conversation'; key: string }
   // One contact of one app: its chat, else its sender (the key a ContactRow carries).
   | { kind: 'contact'; pkg: string; key: string }
@@ -81,8 +83,9 @@ export interface ConversationRow {
 }
 
 export interface AppRow {
-  pkg: string;
   label: string;
+  // Newest first; more than one when same-label apps are merged (never for a contact app).
+  pkgs: string[];
   lastAt: number;
   today: number;
   // SMS, Gmail, Teams and chat apps open a contact list; the rest open one list.
@@ -100,7 +103,8 @@ export interface ContactRow {
 
 export interface HomeSummary {
   conversations: ConversationRow[];
-  apps: AppRow[];
+  // Chat-like apps (byContact) with items of non-promotional contacts only; never capped.
+  inbox: AppRow[];
   // High importance, last 7 days, newest first, at most 5.
   important: Item[];
   // Not done, due from the start of today (or undated, from the last 3 days), soonest first, at most 5.
@@ -248,6 +252,8 @@ export interface InflowCoreApi {
   reconnect(): void;
   authenticate(): Promise<{ ok: boolean; message: string | null }>;
   home(startOfDay: number): HomeSummary;
+  // Every app, newest first; same-label apps that are not contact apps are merged.
+  apps(startOfDay: number): AppRow[];
   // Newest first; before and beforeId are the postedAt and id of the last item shown, null for the first page.
   listItems(filter: ItemFilter, before: number | null, limit: number, beforeId: number | null): Item[];
   listApps(): AppSetting[];
@@ -262,8 +268,14 @@ export interface InflowCoreApi {
   // Newest first, paged like listItems.
   listTxns(account: string | null, before: number | null, limit: number, beforeId: number | null): Txn[];
   setOwnTransfer(txnId: number, own: boolean): void;
-  // Paged on the lastAt and key of the last row shown, null for the first page.
-  contacts(pkg: string, startOfDay: number, before: number | null, beforeKey: string | null, limit: number): ContactRow[];
+  // Paged on the lastAt and key of the last row shown, null for the first page. promo false = the main list, true = the Promotions list only.
+  contacts(pkg: string, startOfDay: number, before: number | null, beforeKey: string | null, limit: number, promo: boolean): ContactRow[];
+  // The senders of this app that are folded into Promotions.
+  promotions(pkg: string): { senders: number; lastAt: number | null };
+  // key = conversationKey ?? senderKey of an item. null = not an SMS sender; otherwise whether it is in Promotions now.
+  smsPromotion(key: string): boolean | null;
+  // The owner's choice for one sender; it wins over the automatic rule.
+  setPromotion(key: string, promotional: boolean): void;
   // All time, per currency. own true = transfers between the owner's accounts (name ignored).
   partyTotals(name: string | null, own: boolean): { currency: string; moneyIn: number; moneyOut: number; count: number }[];
   // Newest first, paged like listTxns.

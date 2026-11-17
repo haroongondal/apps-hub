@@ -2,21 +2,32 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, View } from 'react-native';
 import { Button, Empty, Group, Header, Notice, Row, Screen, Text, space, useTheme } from '@apps-hub/ui';
 import InflowCore, { addCapturedListener, type ContactRow, type ItemFilter } from 'inflow-core';
-import { whenLabel } from './format.ts';
+import { startOfToday, whenLabel } from './format.ts';
 import { LOAD_ERROR } from './messages.ts';
 
 const PAGE = 50;
 
-function startOfToday(): number {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
 // One app's contacts, newest first; a contact opens its own messages in this app only.
-export function ContactsScreen({ title, pkg, onBack, onOpen }: { title: string; pkg: string; onBack: () => void; onOpen: (filter: ItemFilter, title: string) => void }) {
+// promo false is the main list, with a Promotions row at the end; promo true is the Promotions list itself.
+export function ContactsScreen({
+  title,
+  pkg,
+  promo,
+  onBack,
+  onOpen,
+  onOpenPromotions,
+}: {
+  title: string;
+  pkg: string;
+  promo: boolean;
+  onBack: () => void;
+  onOpen: (filter: ItemFilter, title: string) => void;
+  onOpenPromotions: () => void;
+}) {
   const { c } = useTheme();
   const [rows, setRows] = useState<ContactRow[]>([]);
   const [more, setMore] = useState(false);
+  const [promoSenders, setPromoSenders] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const busy = useRef(false);
@@ -29,10 +40,11 @@ export function ContactsScreen({ title, pkg, onBack, onOpen }: { title: string; 
       try {
         const limit = reset ? Math.max(PAGE, count.current) : PAGE;
         const first = reset || last === null;
-        const page = InflowCore.contacts(pkg, startOfToday(), first ? null : last.lastAt, first ? null : last.key, limit);
+        const page = InflowCore.contacts(pkg, startOfToday(), first ? null : last.lastAt, first ? null : last.key, limit, promo);
         setRows((prev) => (reset ? page : [...prev, ...page]));
         count.current = reset ? page.length : count.current + page.length;
         setMore(page.length >= limit);
+        if (!promo) setPromoSenders(InflowCore.promotions(pkg).senders);
         setError(null);
       } catch {
         setError(LOAD_ERROR);
@@ -42,7 +54,7 @@ export function ContactsScreen({ title, pkg, onBack, onOpen }: { title: string; 
         setLoaded(true);
       }
     },
-    [pkg],
+    [pkg, promo],
   );
 
   useEffect(() => {
@@ -70,9 +82,18 @@ export function ContactsScreen({ title, pkg, onBack, onOpen }: { title: string; 
         keyExtractor={(r) => r.key}
         contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxxl, gap: space.md }}
         ListHeaderComponent={
-          <Group>
-            <Row title="All messages" onPress={() => onOpen({ kind: 'app', pkg }, title)} />
-          </Group>
+          promo ? null : (
+            <Group>
+              <Row title="All messages" onPress={() => onOpen({ kind: 'app', pkg }, title)} />
+            </Group>
+          )
+        }
+        ListFooterComponent={
+          promoSenders > 0 ? (
+            <Group>
+              <Row title="Promotions" subtitle={`${promoSenders} ${promoSenders === 1 ? 'sender' : 'senders'}`} onPress={onOpenPromotions} />
+            </Group>
+          ) : null
         }
         renderItem={({ item }) => (
           <Group>

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, BackHandler, View } from 'react-native';
 import { Button, Header, Notice, Screen, TabBar, ThemeProvider } from '@apps-hub/ui';
 import InflowCore, { type ItemFilter, type PartyTotal, type ReportRow, type Status } from 'inflow-core';
+import { AppsScreen } from './src/AppsScreen.tsx';
 import { AskScreen } from './src/AskScreen.tsx';
 import { ContactsScreen } from './src/ContactsScreen.tsx';
 import { HomeScreen } from './src/HomeScreen.tsx';
@@ -20,7 +21,8 @@ import { setupComplete, setupRows } from './src/setup.ts';
 type Tab = 'home' | 'money' | 'ask' | 'settings';
 type Route =
   | { kind: 'items'; filter: ItemFilter; title: string }
-  | { kind: 'contacts'; pkg: string; title: string }
+  | { kind: 'contacts'; pkg: string; title: string; promo: boolean }
+  | { kind: 'apps' }
   | { kind: 'party'; name: string | null; own: boolean; title: string }
   | { kind: 'report'; id: number; title: string };
 
@@ -97,7 +99,7 @@ function Root() {
 
   const push = (r: Route) => setStack((s) => [...s, r]);
   const open = (filter: ItemFilter, title: string) => push({ kind: 'items', filter, title });
-  const openContacts = (pkg: string, title: string) => push({ kind: 'contacts', pkg, title });
+  const openContacts = (pkg: string, title: string, promo = false) => push({ kind: 'contacts', pkg, title, promo });
   const openParty = (p: PartyTotal) => push({ kind: 'party', name: p.name, own: p.own, title: partyTitle(p) });
   const openReport = (r: Pick<ReportRow, 'id' | 'kind' | 'periodStart' | 'partial'>) => push({ kind: 'report', id: r.id, title: reportTitle(r) });
   const back = () => setStack((s) => s.slice(0, -1));
@@ -126,7 +128,11 @@ function Root() {
 
   const top = stack.length > 0 ? stack[stack.length - 1] : null;
   if (top?.kind === 'items') return <ListScreen key={stack.length} title={top.title} filter={top.filter} onBack={back} onOpen={open} />;
-  if (top?.kind === 'contacts') return <ContactsScreen key={stack.length} title={top.title} pkg={top.pkg} onBack={back} onOpen={open} />;
+  if (top?.kind === 'contacts') {
+    const { pkg } = top;
+    return <ContactsScreen key={stack.length} title={top.title} pkg={pkg} promo={top.promo} onBack={back} onOpen={open} onOpenPromotions={() => openContacts(pkg, 'Promotions', true)} />;
+  }
+  if (top?.kind === 'apps') return <AppsScreen key={stack.length} onBack={back} onOpen={open} onOpenContacts={openContacts} />;
   if (top?.kind === 'report') return <ReportScreen key={stack.length} id={top.id} title={top.title} onBack={back} />;
   if (top?.kind === 'party') return <PartyScreen key={stack.length} title={top.title} name={top.name} own={top.own} onBack={back} />;
 
@@ -134,7 +140,7 @@ function Root() {
     <>
       <View style={{ flex: 1 }}>
         {tab === 'home' ? (
-          <HomeScreen status={status} refreshStatus={refresh} onOpen={open} onOpenContacts={openContacts} onOpenMoney={() => setTab('money')} />
+          <HomeScreen status={status} refreshStatus={refresh} onOpen={open} onOpenContacts={openContacts} onOpenMoney={() => setTab('money')} onOpenApps={() => push({ kind: 'apps' })} />
         ) : tab === 'money' ? (
           <MoneyScreen status={status} onOpenParty={openParty} onOpenReport={openReport} />
         ) : tab === 'ask' ? (

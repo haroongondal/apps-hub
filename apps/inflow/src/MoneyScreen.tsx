@@ -1,14 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, View } from 'react-native';
-import { Button, Empty, Group, Header, Notice, Pill, Row, Screen, Text, space, useTheme } from '@apps-hub/ui';
+import { Button, Empty, Group, Header, Notice, Pill, Row, Screen, Segmented, Text, space, useTheme } from '@apps-hub/ui';
 import InflowCore, { addCapturedListener, type MoneySummary, type PartyTotal, type ReportRow, type Status, type Txn } from 'inflow-core';
+import { Bar } from './Bar.tsx';
 import { whenLabel } from './format.ts';
 import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
-import { formatAmount, monthLabel, monthRange, partySubtitle, partyTitle, shiftMonth, signedAmount, withinMonth } from './money.ts';
+import { formatAmount, monthLabel, monthOverview, monthRange, partySubtitle, partyTitle, shiftMonth, signedAmount, withinMonth } from './money.ts';
 import { reportTitle } from './report.ts';
 import { TxnSheet } from './TxnSheet.tsx';
 
 const PAGE = 50;
+const PARTIES_SHOWN = 10;
+const VIEWS = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'reports', label: 'Reports' },
+  { key: 'all', label: 'All' },
+] as const;
+type MoneyView = (typeof VIEWS)[number]['key'];
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 export function TxnRow({ txn, now, onPress }: { txn: Txn; now: number; onPress: () => void }) {
   return (
@@ -104,6 +113,8 @@ export function MoneyScreen({ status, onOpenParty, onOpenReport }: { status: Sta
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Txn | null>(null);
+  const [view, setView] = useState<MoneyView>('overview');
+  const [allParties, setAllParties] = useState(false);
   const busy = useRef(false);
   const raw = useRef(0);
   const range = useMemo(() => monthRange(ym.year, ym.month), [ym]);
@@ -145,47 +156,78 @@ export function MoneyScreen({ status, onOpenParty, onOpenReport }: { status: Sta
 
   const now = Date.now();
   const last = txns.length > 0 ? txns[txns.length - 1] : null;
-  const move = (delta: number) => setYm((p) => shiftMonth(p.year, p.month, delta));
+  const move = (delta: number) => {
+    setAllParties(false);
+    setYm((p) => shiftMonth(p.year, p.month, delta));
+  };
+  const overviews = summary === null ? [] : monthOverview(summary);
+  const manyCurrencies = overviews.length > 1;
+  const parties = summary === null ? [] : allParties ? summary.parties : summary.parties.slice(0, PARTIES_SHOWN);
+
+  const monthSwitcher = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Button label="Previous" variant="ghost" size="sm" onPress={() => move(-1)} />
+      <Text variant="bodyStrong">{monthLabel(ym.year, ym.month)}</Text>
+      <Button label="Next" variant="ghost" size="sm" onPress={() => move(1)} disabled={isCurrent} />
+    </View>
+  );
+
+  const overview = (
+    <>
+      {overviews.map((o) => (
+        <Group key={o.currency} title={manyCurrencies ? `This month, ${o.currency}` : 'This month'}>
+          <Row title="Money out" trailing={<Text variant="data">{formatAmount(o.moneyOut, o.currency)}</Text>} />
+          <Row title="Money in" trailing={<Text variant="data">{formatAmount(o.moneyIn, o.currency)}</Text>} />
+          <Row title="Net" trailing={<Text variant="data" tone={o.net < 0 ? 'text' : 'ok'}>{formatAmount(o.net, o.currency)}</Text>} />
+          <Row title="Transactions" trailing={<Text variant="data">{String(o.count)}</Text>} />
+        </Group>
+      ))}
+      {overviews.map(
+        (o) =>
+          o.categories.length > 0 && (
+            <Group key={o.currency} title={manyCurrencies ? `Where it went, ${o.currency}` : 'Where it went'}>
+              {o.categories.map((cat) => (
+                <Row
+                  key={cat.category}
+                  title={cat.category}
+                  subtitle={`${plural(cat.count, 'payment', 'payments')} · ${Math.round(cat.share)}%`}
+                  trailing={<Text variant="data">{formatAmount(cat.total, o.currency)}</Text>}
+                >
+                  <Bar fraction={cat.share / 100} />
+                </Row>
+              ))}
+            </Group>
+          ),
+      )}
+      {summary !== null && summary.parties.length > 0 && (
+        <Group title="People and shops">
+          {parties.map((p) => (
+            <Row key={`${p.own}|${p.name ?? ''}|${p.currency}`} title={partyTitle(p)} subtitle={partySubtitle(p)} onPress={() => onOpenParty(p)} />
+          ))}
+          {!allParties && summary.parties.length > PARTIES_SHOWN && <Row title="See all" subtitle={`${summary.parties.length - PARTIES_SHOWN} more`} onPress={() => setAllParties(true)} />}
+        </Group>
+      )}
+      {summary !== null && summary.accounts.length > 0 && (
+        <Group title="Accounts">
+          {summary.accounts.map((a) => (
+            <Row key={`${a.account}|${a.currency}`} title={a.account} subtitle={`In ${formatAmount(a.moneyIn, a.currency)} · out ${formatAmount(a.moneyOut, a.currency)}`} />
+          ))}
+        </Group>
+      )}
+    </>
+  );
 
   const header = (
     <View style={{ gap: space.xl, paddingTop: space.lg, paddingBottom: space.lg }}>
       <Header title="Money" />
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Button label="Previous" variant="ghost" size="sm" onPress={() => move(-1)} />
-        <Text variant="bodyStrong">{monthLabel(ym.year, ym.month)}</Text>
-        <Button label="Next" variant="ghost" size="sm" onPress={() => move(1)} disabled={isCurrent} />
-      </View>
-      <ReportsGroup onOpen={onOpenReport} />
-      {!status.smsGranted && <Notice>Allow SMS in Settings to see your spending.</Notice>}
-      {error !== null && <Notice tone="danger">{error}</Notice>}
-      {summary !== null && summary.accounts.length === 0 && error === null && <Text tone="muted">No bank messages this month.</Text>}
-      {summary?.accounts.map((a) => (
-        <Group key={`${a.account}|${a.currency}`} title={a.account}>
-          <Row title="Money in" trailing={<Text variant="data">{formatAmount(a.moneyIn, a.currency)}</Text>} />
-          <Row title="Money out" trailing={<Text variant="data">{formatAmount(a.moneyOut, a.currency)}</Text>} />
-          <Row title="Transactions" trailing={<Text variant="data">{String(a.count)}</Text>} />
-        </Group>
-      ))}
-      {summary !== null && summary.categories.length > 0 && (
-        <Group title="By category">
-          {summary.categories.map((cat) => (
-            <Row
-              key={`${cat.category}|${cat.currency}`}
-              title={cat.category}
-              subtitle={`${cat.count} ${cat.count === 1 ? 'payment' : 'payments'}`}
-              trailing={<Text variant="data">{formatAmount(cat.total, cat.currency)}</Text>}
-            />
-          ))}
-        </Group>
-      )}
-      {summary !== null && summary.parties.length > 0 && (
-        <Group title="People and shops">
-          {summary.parties.map((p) => (
-            <Row key={`${p.own}|${p.name ?? ''}|${p.currency}`} title={partyTitle(p)} subtitle={partySubtitle(p)} onPress={() => onOpenParty(p)} />
-          ))}
-        </Group>
-      )}
-      {txns.length > 0 && <Text variant="caption" tone="muted">Transactions</Text>}
+      <Segmented options={VIEWS} value={view} onChange={setView} accessibilityLabel="Money view" />
+      {view !== 'reports' && monthSwitcher}
+      {view === 'reports' && <ReportsGroup onOpen={onOpenReport} />}
+      {view !== 'reports' && !status.smsGranted && <Notice>Allow SMS in Settings to see your spending.</Notice>}
+      {view !== 'reports' && error !== null && <Notice tone="danger">{error}</Notice>}
+      {view !== 'reports' && summary !== null && summary.accounts.length === 0 && error === null && <Text tone="muted">No bank messages this month.</Text>}
+      {view === 'overview' && overview}
+      {view === 'all' && txns.length > 0 && <Text variant="caption" tone="muted">Transactions</Text>}
     </View>
   );
 
@@ -193,7 +235,7 @@ export function MoneyScreen({ status, onOpenParty, onOpenReport }: { status: Sta
     <Screen>
       <FlatList
         style={{ backgroundColor: c.bg }}
-        data={txns}
+        data={view === 'all' ? txns : []}
         keyExtractor={(t) => String(t.id)}
         contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxxl, gap: space.md }}
         ListHeaderComponent={header}
@@ -204,7 +246,7 @@ export function MoneyScreen({ status, onOpenParty, onOpenReport }: { status: Sta
         )}
         onEndReached={() => more && last !== null && load(false, last)}
         onEndReachedThreshold={0.5}
-        ListEmptyComponent={loaded && error === null && summary !== null && summary.accounts.length > 0 ? <Empty title="No transactions" body="Transactions for this month will appear here." /> : null}
+        ListEmptyComponent={view === 'all' && loaded && error === null && summary !== null && summary.accounts.length > 0 ? <Empty title="No transactions" body="Transactions for this month will appear here." /> : null}
       />
       <TxnSheet txn={selected} onClose={() => setSelected(null)} onChanged={() => load(true, null)} />
     </Screen>
