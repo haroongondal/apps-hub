@@ -1,6 +1,6 @@
 # Halo stages 3–5 — notifications, always-on screen, extras (design)
 
-Date: 2026-11-17. Status: awaiting owner approval (builder check done; answers in §10).
+Date: 2026-11-17. Status: APPROVED by the owner 2026-11-17 (builder check done; answers in §10).
 Extends `2026-11-17-edge-visualizer-design.md` (the base design: identity, constraints, mechanisms, stages 1–2).
 Everything there still holds; this document widens stages 3–5 at the owner's request ("AOD with infinite and
 customizable time with multiple AOD screen customizations and themes, notification customizations and other cool

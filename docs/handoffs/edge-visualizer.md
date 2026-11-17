@@ -63,7 +63,7 @@ frame time over budget on 0.3.1 (p50 24 ms, p95 109 ms) → 0.3.2 has the GPU-gl
 Pending phone checks (need owner to unlock): (b) start after reboot, (d) always-on screen after screen-off (Diagnostics
 switch "Test the always-on screen", lock with power button), and frame time after the perf fix (`dumpsys gfxinfo com.haroon.halo reset`).
 Phone: queued in coord behind apps-hub-af (photo-search); background coord wait running.
-Stages 3-5 design written + builder-checked: docs/superpowers/specs/2026-11-17-halo-stages-3-5-design.md — AWAITING OWNER APPROVAL.
+Stages 3-5 design written + builder-checked: docs/superpowers/specs/2026-11-17-halo-stages-3-5-design.md — APPROVED 2026-11-17.
 After approval: superpowers:writing-plans → docs/superpowers/plans/2026-11-17-halo-stages-3-5.md (stage 3 full, stage 4
 outline until (d) passes), then build 0.4.0 (notifications) with the same per-task loop.
 
