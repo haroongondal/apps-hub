@@ -62,14 +62,15 @@ APK copy: scratchpad only (not committed). Manifest dump via aapt2 `dump xmltree
 ## Session log (cont.)
 - 2026-11-17 (session 2): owner asked for full replica, picked approach A. Design doc written; builder check done and folded in; owner answered release + Muviz questions. Design approved; plan written.
 
-## Current state + next step (2026-11-17, session 2)
-Store: store=19, halo=6 = Halo 0.4.0 (stage 3 done: per-app notification flashes, pulse/sweep/pattern, reminders while
-locked, quiet hours, hide rules, Alerts + Rules screens, restart after update). Owner's phone has 0.3.2; needs to update.
-Stage 3 reviewed + fix wave done (ledger). Phone results so far: base spec §13.
-Next (needs the owner present, phone unlocked): update to 0.4.0 via the Store; check real notifications flash in app colours,
-a reminder while locked, quiet hours, a call hides lights; (b) restart after reboot; (d) always-on screen after screen-off
-(Diagnostics switch + power-button lock). If (d) passes → expand stage 4 in the plan into full tasks (outline is there)
-and build 0.5.x; if it fails → stop and bring the owner options. Stage 5 after stage 4.
+## Current state + next step (2026-11-18, session 2)
+Store: store=19, halo=6 = Halo 0.4.0, installed on the owner's phone. Stage 3 done.
+Phone 2026-11-18: (d) always-on screen WORKS on HyperOS (spec §13) → stage 4 gate passed. Bug: service not restarted after
+the Store update, and opening the app does not start it (Diagnostics → Start needed) → fix first in stage 4.
+(b) reboot check in progress: phone rebooted 00:16; wireless debugging is off after reboot, waiting for the owner to unlock
+and either re-enable wireless debugging or read Halo's Home line ("running" or not). This session holds coord
+device:49kjmnuwonkffqzh — release it when done.
+Next: expand stage 4 in docs/superpowers/plans/2026-11-17-halo-stages-3-5.md into full tasks (outline 4.1-4.7; add the
+restart fixes to 4.1), owner OK, then build 0.5.x with the per-task loop.
 
 ## Previous state (session 1, superseded)
 Owner asked for a new chat to start building. Already told to the owner and accepted without objection:
