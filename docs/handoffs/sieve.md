@@ -459,23 +459,62 @@ Fixed constraints (full text in the plan's Global Constraints and Review Focus):
 
 - **State (2026-11-17, run 3 close, first written at HEAD `088c03f`, refreshed at `9f6094d`):** branch `sieve-phase-3`, base `47c7ea4` (the end of Phase 1; Phase 3's own plan is `2589bf5`). Tasks 3.1 to 3.19 are committed and were reviewed (every task commit once, every fix scoped re-reviewed, controller-checked only where the ledger says so). Run 3 (this close) landed: the minors batch (`6c30b58`, `088c03f`, `b2909ec`, `2af2d21`), the plan's as-built deviations (`ae657a3`, `9f6094d`), `apps/sieve/test/dl-perf.mjs` (`bf015b7`, then a fix round after review), the test-list check (`sieve-core` has 20 test files and `apps/sieve` 15, including `dl-css.test.ts` from the minors batch, every one listed), the README's Downloads section with the owner checklist, this block and `manifest.json` version `0.3.0`.
 - **Last full gate (run 2, clean export of `911e72b`):** install ok; build ok; `sieve-core` 336/336; `sieve` 175/175; typecheck ok; `pnpm --filter sieve test:e2e` 455/455 under `chrome-live` (about 7 minutes). Attribution lines in commits: 0. The `--big` run saves 3 GB of real bytes (the 215 MB of browser memory growth is reported by the Task 3.12 run and was not re-measured; run 3's `--big` number goes in the gate subsection); the torture module passes 49/49 (SIGKILL resumes in 0.7 to 1 s and re-sends 1.4 to 18 MB).
-- **Run 3 gate and perf:** see the placeholder subsection "Phase 3 gate and perf (run 3)" below; the controller fills it with the real numbers.
+- **Run 3 gate and perf:** see the subsection "Phase 3 gate and perf (run 3)" below (clean export of `9435e0f`).
 - **Waiting on the owner:** the merge decision and order; the eighteen-item owner checklist in the README ("Owner checklist: downloads", it covers what headless Chrome cannot show: the download bubble, a real restart, a file over 5 GB); the five questions below.
 - **Not verified, stated plainly:** alarm persistence and `onStartup` over a real Chrome restart; Chrome's download bubble during a take-over; a real multi-GB file over 3 GB; the real `Downloads/<category>/` folders under Playwright (the harness rewrites the download folder; the raw-CDP Chrome in `test/dl/_raw-chrome.mjs` checks them instead); real-site take-over with the owner's accounts.
-- **Limit of the worker-start measure (`dl-perf.mjs`):** it stops at the first reply to `dl-do`, before the worker's detached start-up work (`reconcile`, `recoverSaves`, `recoverPaused`) has finished, and the test empties the `dl*` records and keys first. So it measures the cost of starting the worker with nothing to recover, not with a busy backlog (the README says the same).
+- **Limit of the worker-start measure (`dl-perf.mjs`):** it stops at the first reply to `dl-do`, before the worker's detached start-up work (`reconcile`, `recoverSaves`, `recoverPaused`) has finished, and `resetDl` empties the `dl*` keys first, so slow start-up work cannot fail the measure. So it measures the cost of starting the worker with nothing to recover, not with a busy backlog (the README says the same). The `dl-do` row also includes creating the offscreen document, so it is conservative.
 - **Next step:** merge order is the owner's decision: Phase 2, then Phase 3 rebased onto it (the shared files and the one known conflict are listed under "Resolved merge notes"), then one integration check from a clean export (`pnpm test`, `pnpm typecheck`, `pnpm --filter sieve build`, `pnpm --filter sieve test:e2e`, `node apps/sieve/test/dl/e2e.mjs`), then the follow-up commit for backup and import of the `downloads` settings, then plan Phase 4 (media detection, HLS and DASH, the muxer, the hover icon).
 
 #### Phase 3 gate and perf (run 3)
 
-> PLACEHOLDER: the controller fills this subsection with the real numbers of the final clean-export gate (build, `sieve-core` and `sieve` unit counts, typecheck, `test:e2e`, `dl/e2e.mjs --big`, `dl-perf.mjs`, `perf.mjs`, the take-over pause latency, the `--big` memory numbers and the torture re-send numbers). Nothing below this line is a measured gate result until it is replaced.
+The final gate of run 3 ran on a clean export of `9435e0f` (`git archive`, in the scratchpad folder `p3gate`, not the worktree). The filter cache was copied into the export, then a filtered frozen `pnpm install` ran there. `chrome-live` was held for every part that starts Chrome (it was free: wait 0 s). Every number below is copied from the logs in `.superpowers/phase-3/` (`gate8-*.log`).
 
-(not yet filled)
+- **Install, build, typecheck:** install exit 0 (2 of 29 workspace projects, 40 packages added, lockfile up to date); build exit 0 (116132 rules in all, 116132 in the lists on by default, 18 scriptlets; it prints the usual warning that this is above the 30,000 Chrome guarantees); typecheck exit 0 (both packages).
+- **Unit tests:** `sieve-core` 338/338, `sieve` 198/198, no failures, cancelled or skipped; the test step exited 0.
+- **`pnpm --filter sieve test:e2e`:** 477/477 checks passed, exit 0.
+- **`node test/dl/e2e.mjs --big`:** 306/306 checks passed, exit 0. Memory line: "big save: resident memory 833 MB before, peak 1208 MB, 442 MB at the end"; the check "a 3 GB file saves with the right size and the browser grows by under 500 MB" passed.
+- **Take-over pause:** "pause was called less than 100 ms after onCreated" passed, and so did "Chrome had received no bytes when the pause settled". The log prints no millisecond number for it, only the two PASS lines (see the residual below about where the clock starts).
+- **Torture (all PASS), the printed lines:**
+  - SIGKILL, one part: killed at 41943040 bytes saved, re-sent 1418353 bytes, relaunch to first request 741 ms.
+  - SIGKILL, three parts: re-sent 750001 bytes, relaunch to first request 719 ms.
+  - Engine closed five times: re-sent 18000001 bytes over five closes.
+  - SIGKILL after a take-over: the engine re-sent 3195569 bytes; 4695571 bytes beyond the size with Chrome's own cancelled request; relaunch to first request 680 ms.
+- **`dl-perf.mjs`:** exit 0, PASS. The table as printed:
+
+| check | measured | limit | result |
+| --- | --- | --- | --- |
+| dist content_scripts equal Phase 1 (47c7ea4) | 2 script(s) | deep-equal to 2 | PASS |
+| registered script ids starting "dl" (of 6) | 0 | <= 0 | PASS |
+| offscreen documents after a browser start, no record | 0 | <= 0 | PASS |
+| offscreen documents 3 s after a worker restart, no record | 0 | <= 0 | PASS |
+| seconds from a finished 5 MB download to no offscreen document | 60 | <= 75 | PASS |
+| worker cold start to first dl-do reply, Phase 3 minus Phase 1 (median ms) | 20.3 | <= 300 | PASS |
+| worker cold start to first pick reply, Phase 3 minus Phase 1 (median ms; same message) | 1.1 | <= 300 | PASS |
+| local page DCL with the extension minus without, 20 loads each (median ms) | 7.3 | <= 20 | PASS |
+
+  Raw cold starts over 5 runs each (one untimed round first): Phase 1 5/4/4/4/4 ms (median 4); Phase 3 `pick` 5/5/5/5/5 (5); Phase 3 `dl-do` 27/24/24/26/25 (25). One record was open when the idle check started.
+- **`perf.mjs`:** printed PASS; the exit code was not recorded (the session ended before the exit line was written). Local page (20 loads per profile): median DCL 23.0 ms with the extension against 16.0 without; summary line "Local page: median DCL +7.0 ms with the extension (limit +20 ms): PASS". Real sites: "4 of 5 within 1.10x load time (need 4); 1 site excluded (an excluded site cannot count as a pass): PASS". Medians as printed (five cold loads per profile):
+
+| site | with: DCL ms | with: load ms | with: heap MB | without: DCL ms | without: load ms | without: heap MB | load ratio | loads ok (with, without) | result |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| www.theguardian.com | 1110 | 2538 | 10.1 | 1084 | 2437 | 10.0 | 1.04x | 5/5, 5/5 | pass |
+| www.bbc.com/news | 2531 | 2932 | 13.3 | 4023 | 4781 | 27.2 | 0.61x | 5/5, 5/5 | pass |
+| www.npr.org | 4728 | 5129 | 13.1 | 5888 | 14761 | 30.7 | 0.35x | 5/5, 5/5 | pass |
+| www.nbcnews.com | 6927 | 18686 | 51.2 | 7554 | 26811 | 79.9 | 0.70x | 5/5, 4/5 | pass |
+| www.wired.com | 10842 | 35341 | 31.7 | 19922 | 34822 | 82.2 |  | 2/5, 1/5 | excluded (timeouts, a closed context and a page crash in both profiles) |
+
+  www.nbcnews.com had one timed-out load without the extension; its medians use the loads that worked.
+
+Residuals found by the whole-branch review and not fixed (the rule is no second fix wave):
+
+- **Pause-latency clock (test only):** `apps/sieve/test/dl/takeover.mjs:114` starts the 100 ms clock at the test's own `onCreated` listener, which runs after Sieve's in the same dispatch, so it can only understate Sieve's path. Sieve's path was shortened, and a `bytesReceived == 0` after pause check was added (the second PASS line above).
+- **Options page, extensions box:** `apps/sieve/src/dl/options-downloads.ts:56-58`, the blur refresh records the value on focus. After a window switch and back, focus fires again and resets that value, so if Chrome sends no change event when the person then leaves the field, the typed text could be replaced by the stored value. Suggested fix: add a `document.hasFocus()` guard. Owner check: type in the extensions box, switch apps, switch back, click elsewhere; the text must stay.
 
 ### Session log (Phase 3)
 
 - **2026-11-10:** the plan was written (20 tasks, 3.1 to 3.20, probes F1 to F16 in Chrome for Testing 149.0.7827.55), reviewed in two lanes (0 blocking and 2 blocking, all accepted; F17 found by a reviewer), fixed in two rounds, committed `2589bf5`. First run: Tasks 3.1 to 3.10 dispatched at once, contract-first (every contract commit landed in 2 to 8 minutes, no contract change needed). Per-commit reviews found 0 blocking and about ten Important items (retry loop on a throwing engine, idle after a failed save, unread bodies not aborted, probe `Retry-After`, session-rule sync overlap, vacuous tests), all fixed and re-reviewed. Gate on `62e55a9`: build ok, 323/323 and 85/85 unit tests, typecheck clean, e2e 213/213.
 - **2026-11-11:** run 2: Tasks 3.11 to 3.19 plus O1 (a resumed record whose part file was lost or truncated was zero-filled and could finish as a complete file with holes; fixed in `d24b3ff` with a `fresh` flag on the file handle, then four more fix commits). Reviews: opus for take-over, resume, OPFS and completeness code (Important findings included "Retry in Chrome removed the only complete copy", an id-reuse guard, and incognito), sonnet for the rest. Infrastructure freeze 16:12 to 17:02 (all workers resumed by message, nothing lost). Final gate on `911e72b`: 336/336, 175/175, typecheck ok, e2e 455/455. Task 3.20 not started (the owner's PAUSE order).
-- **2026-11-17 (run 3, close):** the controller split the close into three disjoint owners. `t-minors` (opus) fixed the deferred minors in the engine, router, save and tests (first commit `6c30b58`: strict `Retry-After`, NaN-safe backoff, a second `filename*`, a done after a save timeout finishes the record). `t-plantext` (sonnet) recorded the as-built deviations in the plan (`ae657a3`). `t-320` (sonnet, this block) wrote `dl-perf.mjs` (`bf015b7`), checked the test lists, and wrote the README section, this block and the version line. A first full `dl-perf.mjs` run before the gate (own build of the worktree at that moment, under both locks): Phase 1 worker cold start 4 ms against Phase 3 5 ms (same `pick` message) and 26 ms to a first `dl-do` reply (which also creates the engine document), idle close 60.2 s after a finished 5 MB download, local page DCL +7.1 ms with the extension; all rows PASS. The gate can fail: a tightened start limit, a tightened DCL limit and a missing base build were each run and gave FAIL with exit code 1, and a partial `--only` run exited 3. The authoritative gate numbers are the controller's, in the placeholder above.
+- **2026-11-17 (run 3, close):** the controller split the close into three disjoint owners. `t-minors` (opus) fixed the deferred minors in the engine, router, save and tests (first commit `6c30b58`: strict `Retry-After`, NaN-safe backoff, a second `filename*`, a done after a save timeout finishes the record). `t-plantext` (sonnet) recorded the as-built deviations in the plan (`ae657a3`). `t-320` (sonnet, this block) wrote `dl-perf.mjs` (`bf015b7`), checked the test lists, and wrote the README section, this block and the version line. A first full `dl-perf.mjs` run before the gate (own build of the worktree at that moment, under both locks): Phase 1 worker cold start 4 ms against Phase 3 5 ms (same `pick` message) and 26 ms to a first `dl-do` reply (which also creates the engine document), idle close 60.2 s after a finished 5 MB download, local page DCL +7.1 ms with the extension; all rows PASS. The gate can fail: a tightened start limit, a tightened DCL limit and a missing base build were each run and gave FAIL with exit code 1, and a partial `--only` run exited 3. The authoritative gate numbers are the controller's, in the subsection "Phase 3 gate and perf (run 3)" above.
 
 ### Verified facts (Phase 3)
 
