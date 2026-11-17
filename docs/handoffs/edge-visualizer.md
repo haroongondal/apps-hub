@@ -63,14 +63,13 @@ APK copy: scratchpad only (not committed). Manifest dump via aapt2 `dump xmltree
 - 2026-11-17 (session 2): owner asked for full replica, picked approach A. Design doc written; builder check done and folded in; owner answered release + Muviz questions. Design approved; plan written.
 
 ## Current state + next step (2026-11-17, session 2)
-Store: store=19, halo=5 (0.3.2) — installed on the owner's phone. Phone results in base spec §13: audio works; overlay
-hidden on lock screen (system); frame time fine on 0.3.2; bug: service not restarted after app update (fix in Task 3.4).
-Pending phone checks needing the owner present: (b) restart after reboot, (d) always-on screen after screen-off
-(Diagnostics switch "Test the always-on screen" + power-button lock). Stage 4 is gated on (d).
-Stage 3 (0.4.0) in progress: 3.1 + 3.2 complete; 3.3 (edge events, OWNER t33) and 3.5 (hide rules, OWNER t35)
-running in parallel with filelock on .sdd/shared-files.txt. Next: 3.4 (NotifyFlash, AppIcons, app list,
-QUERY_ALL_PACKAGES, MY_PACKAGE_REPLACED receiver), then 3.6 (screens), then 3.7 (stage review, 0.4.0 release, phone check).
-Deferred minors are listed in the ledger.
+Store: store=19, halo=6 = Halo 0.4.0 (stage 3 done: per-app notification flashes, pulse/sweep/pattern, reminders while
+locked, quiet hours, hide rules, Alerts + Rules screens, restart after update). Owner's phone has 0.3.2; needs to update.
+Stage 3 reviewed + fix wave done (ledger). Phone results so far: base spec §13.
+Next (needs the owner present, phone unlocked): update to 0.4.0 via the Store; check real notifications flash in app colours,
+a reminder while locked, quiet hours, a call hides lights; (b) restart after reboot; (d) always-on screen after screen-off
+(Diagnostics switch + power-button lock). If (d) passes → expand stage 4 in the plan into full tasks (outline is there)
+and build 0.5.x; if it fails → stop and bring the owner options. Stage 5 after stage 4.
 
 ## Previous state (session 1, superseded)
 Owner asked for a new chat to start building. Already told to the owner and accepted without objection:

@@ -89,3 +89,4 @@ Stage 3 review (opus): Important — (1) ONLY_ALERT_ONCE updates re-flash + re-a
 Fix wave: one agent for 1-8 + nits.
 Stage 3 fix wave: cc36c2f (all 8 + nits; NotifyRulesTest 15/15 with 4 new red→green; JVM 79/79; TS 52/52; emulator: call skips flash-only flash, reminder skipped while unlocked then fires when locked, proximity paused on screen off). Accepted: seen-map before quiet/app decision; lastUnlockMs defaults to now. Re-review skipped (logic covered by failing-then-passing tests; no security surface changed) — controller check.
 Task 3.7: releasing 0.4.0.
+- Halo 0.4.0 released (versionCode 6); manifest verified (store=19, halo=6). Next: phone check of 0.4.0 + pending (b) reboot and (d) always-on (owner present) → then stage 4 detailed plan if (d) passes.
