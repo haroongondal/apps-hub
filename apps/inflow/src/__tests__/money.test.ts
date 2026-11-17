@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { Txn } from 'inflow-core';
-import { formatAmount, monthLabel, monthRange, partySubtitle, partyTitle, shiftMonth, signedAmount, withinMonth } from '../money.ts';
+import type { MoneySummary, Txn } from 'inflow-core';
+import { formatAmount, monthLabel, monthOverview, monthRange, partySubtitle, partyTitle, shiftMonth, signedAmount, withinMonth } from '../money.ts';
 
 test('formatAmount groups thousands and keeps two decimals from integers', () => {
   assert.equal(formatAmount(150000, 'PKR'), 'PKR 1,500.00');
@@ -63,4 +63,35 @@ test('partySubtitle leaves out a side with no money', () => {
   assert.equal(partySubtitle({ currency: 'PKR', moneyIn: 0, moneyOut: 180000, count: 3 }), 'Out PKR 1,800.00 · 3 transactions');
   assert.equal(partySubtitle({ currency: 'PKR', moneyIn: 2000000, moneyOut: 0, count: 1 }), 'In PKR 20,000.00 · 1 transaction');
   assert.equal(partySubtitle({ currency: 'PKR', moneyIn: 2500000, moneyOut: 2500000, count: 2 }), 'In PKR 25,000.00 · out PKR 25,000.00 · 2 transactions');
+});
+
+const acct = (account: string, currency: string, moneyIn: number, moneyOut: number, count: number) => ({ account, currency, moneyIn, moneyOut, count });
+const cat = (category: string, currency: string, total: number, count: number) => ({ category, currency, total, count });
+const summary = (accounts: MoneySummary['accounts'], categories: MoneySummary['categories'] = []): MoneySummary => ({ accounts, categories, parties: [] });
+
+test('monthOverview sums the accounts of one currency', () => {
+  const [o, ...rest] = monthOverview(summary([acct('A', 'PKR', 1000, 400, 3), acct('B', 'PKR', 500, 100, 2)]));
+  assert.equal(rest.length, 0);
+  assert.deepEqual({ ...o, categories: [] }, { currency: 'PKR', moneyIn: 1500, moneyOut: 500, net: 1000, count: 5, categories: [] });
+});
+
+test('monthOverview gives each category its percent of money out', () => {
+  const [o] = monthOverview(summary([acct('A', 'PKR', 0, 1000, 10)], [cat('Food', 'PKR', 600, 4), cat('Bills', 'PKR', 300, 2), cat('Other', 'PKR', 100, 1)]));
+  assert.deepEqual(o.categories.map((c) => [c.category, c.share]), [['Food', 60], ['Bills', 30], ['Other', 10]]);
+});
+
+test('monthOverview gives share 0 when nothing went out', () => {
+  const [o] = monthOverview(summary([acct('A', 'PKR', 900, 0, 1)], [cat('Food', 'PKR', 0, 0)]));
+  assert.equal(o.net, 900);
+  assert.equal(o.categories[0].share, 0);
+});
+
+test('monthOverview orders currencies by size and keeps categories apart', () => {
+  const out = monthOverview(summary([acct('A', 'USD', 10, 5, 1), acct('B', 'PKR', 5000, 3000, 4)], [cat('Food', 'USD', 5, 1), cat('Food', 'PKR', 3000, 2)]));
+  assert.deepEqual(out.map((o) => o.currency), ['PKR', 'USD']);
+  assert.deepEqual(out.map((o) => o.categories.map((c) => c.total)), [[3000], [5]]);
+});
+
+test('monthOverview is empty without accounts', () => {
+  assert.deepEqual(monthOverview(summary([])), []);
 });
