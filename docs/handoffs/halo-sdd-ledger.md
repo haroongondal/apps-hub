@@ -67,3 +67,9 @@ Scoped security re-review (invariant-reviewer, opus) of f239c9c: all ADDRESSED (
 Phone check 1 (0.3.1): FFT works in background; overlay hidden over keyguard by the system; frame time p50 24 ms / p95 109 ms → perf fix needed (blur). (b)/(d) pending owner.
 Perf fix 125c207: glow via one RenderEffect blur on a quarter-size RenderNode; BlurMaskFilter removed. Emulator inconclusive (render-thread CPU halved on host GPU; percentiles flat). Releasing 0.3.2 to measure on the phone. Note: all glows now under all sharp shapes; low-glow particles get a fainter, wider halo.
 Phone check 2 (0.3.2, installed via the Store by driving the phone UI; Play Protect scan → safe): frame time OK (0 % janky, p99 30 ms vs 150). Bug: service not restarted after app update → add MY_PACKAGE_REPLACED receiver in stage 3 (Task 3.4). (b) reboot and (d) always-on still pending owner presence.
+
+# Stage 3 (plan docs/superpowers/plans/2026-11-17-halo-stages-3-5.md), approved 2026-11-17
+Base before Task 3.1: HEAD at dispatch (see below).
+- Ruling: Tasks 3.1+3.2 to one agent (3.2's NotifyRules consumes 3.1's SettingsNotify) — cost if wrong: a bit less parallelism.
+- Ruling: Task 3.4 also adds the MY_PACKAGE_REPLACED receiver (phone bug: service not restarted after update).
+Stage 3 base: e4bc721

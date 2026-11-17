@@ -65,7 +65,7 @@ switch "Test the always-on screen", lock with power button), and frame time afte
 Phone: queued in coord behind apps-hub-af (photo-search); background coord wait running.
 Stages 3-5 design written + builder-checked: docs/superpowers/specs/2026-11-17-halo-stages-3-5-design.md — APPROVED 2026-11-17.
 Plan written: docs/superpowers/plans/2026-11-17-halo-stages-3-5.md (stage 3 full: Tasks 3.1-3.7; stages 4-5 outline,
-stage 4 gated on the phone always-on check). Awaiting owner OK of the plan, then build Tasks 3.1+3.2 in parallel (disjoint files),
+stage 4 gated on the phone always-on check). Plan APPROVED 2026-11-17. Building: Tasks 3.1+3.2 by one agent (3.2 consumes 3.1 types),
 then 3.3 → 3.4, 3.5 in parallel with 3.4 (both touch HaloService: sequence their HaloService edits), 3.6, 3.7.
 
 ## Previous state (session 1, superseded)
