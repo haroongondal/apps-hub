@@ -16,6 +16,13 @@ export interface JobProgressEvent { id: string; fraction: number; attempt: numbe
 export interface QueueEvent { jobs: NativeJobStatus[] }
 export interface VisionToolEntry { tool: 'person' | 'object' | 'upscale'; name: string; url: string; bytes: number; ready: boolean }
 export interface VisionProgressEvent { id: string; fraction: number }
+export type CleanupKind = 'blurry' | 'copies' | 'lookalikes' | 'screenshots' | 'dark';
+export interface CleanupPhoto { uri: string; name: string; bytes: number; takenAt: number; ticked: boolean; best: boolean }
+export interface CleanupGroup { kind: CleanupKind; key: string; photos: CleanupPhoto[]; bytes: number } // bytes freed by the ticked photos
+export interface CleanupResult {
+  groups: CleanupGroup[]; blur: { min: number; max: number; default: number }; lookalike: { default: number; strict: number }; indexed: number;
+}
+export interface RemovedPhoto { uri: string; name: string; bytes: number; trashedAt: number; expiresAt: number }
 
 // Phase 3 additions (SPEC §14.3): the page's saveFile for reals — designs written through
 // MediaStore where the Files app shows them. saveJson returns the display path; saveExport the
@@ -48,6 +55,13 @@ export interface DesignMediaModule {
   searchPhotos(query: string): Promise<string[]>; // content URIs, best first, at most 60
   similarPhotos(uri: string): Promise<string[]>; // photos that look like this one, not including it
   releasePhotoSearch(): Promise<void>; // frees the text model's memory
+  // Clean up: groups from the photo index. A photo leaves the gallery only through Android's own trash dialog.
+  cleanupGroups(options?: { blurThreshold?: number; lookalikeCosine?: number }): Promise<CleanupResult>; // photos still in the gallery only
+  trashPhotos(uris: string[]): Promise<{ moved: number }>; // opens Android's dialog; 0 when the owner says no
+  recentlyRemoved(): Promise<RemovedPhoto[]>; // trashed here in the last 30 days and still in Android's trash
+  restorePhotos(uris: string[]): Promise<{ restored: number }>; // opens Android's dialog; 0 when the owner says no
+  dismissCleanup(kind: CleanupKind, uris: string[]): Promise<void>; // "Not a mistake": never shown in that kind again
+  clearCleanupDismissals(): Promise<void>; // brings every dismissed photo back
   // Quick edits: cut-out and upscale models. Same download-then-install steps as the photo models above.
   visionTools(): Promise<VisionToolEntry[]>;
   installVisionModel(name: string): Promise<boolean>; // file name, like installPhotoModel

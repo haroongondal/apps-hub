@@ -2,6 +2,8 @@ package expo.modules.designmedia
 
 import android.net.Uri
 import expo.modules.designmedia.android.Access
+import expo.modules.designmedia.android.CleanupTool
+import expo.modules.designmedia.android.CleanupTrash
 import expo.modules.designmedia.android.CodecReport
 import expo.modules.designmedia.android.CompositionView
 import expo.modules.designmedia.android.DesignSaves
@@ -15,10 +17,12 @@ import expo.modules.designmedia.vision.Vision
 import expo.modules.designmedia.core.AtomicFile
 import expo.modules.designmedia.core.EncoderStatsStore
 import expo.modules.designmedia.core.QueueStore
+import expo.modules.designmedia.core.TrashAction
 import expo.modules.designmedia.core.decodeJobs
 import expo.modules.designmedia.core.shownQueue
 import expo.modules.designmedia.core.thumbFolder
 import expo.modules.designmedia.core.toStatusMap
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -29,6 +33,8 @@ import kotlinx.coroutines.SupervisorJob
 
 class DesignMediaModule : Module() {
   private val readScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+  private val trash = CleanupTrash()
 
   private val context
     get() = requireNotNull(appContext.reactContext) { "React context unavailable" }
@@ -56,6 +62,8 @@ class DesignMediaModule : Module() {
     }
 
     OnActivityEntersBackground { CompositionView.pauseAll() }
+
+    OnActivityResult { _, result -> trash.onResult(context, result.requestCode, result.resultCode) }
 
     AsyncFunction("probe") { uri: String -> Probe.read(context, Uri.parse(uri)) }
 
@@ -125,6 +133,22 @@ class DesignMediaModule : Module() {
     AsyncFunction("similarPhotos") { uri: String -> PhotoSearch.similar(context, uri) }.runOnQueue(readScope)
 
     AsyncFunction("releasePhotoSearch") { PhotoSearch.release() }
+
+    AsyncFunction("cleanupGroups") { options: Map<String, Any?>? -> CleanupTool.groups(context, options) }.runOnQueue(readScope)
+
+    AsyncFunction("trashPhotos") { uris: List<String>, promise: Promise ->
+      trash.start(context, appContext.currentActivity, TrashAction.TRASH, uris, promise)
+    }.runOnQueue(readScope)
+
+    AsyncFunction("recentlyRemoved") { CleanupTool.recentlyRemoved(context) }.runOnQueue(readScope)
+
+    AsyncFunction("restorePhotos") { uris: List<String>, promise: Promise ->
+      trash.start(context, appContext.currentActivity, TrashAction.RESTORE, uris, promise)
+    }.runOnQueue(readScope)
+
+    AsyncFunction("dismissCleanup") { kind: String, uris: List<String> -> CleanupTool.dismiss(context, kind, uris) }.runOnQueue(readScope)
+
+    AsyncFunction("clearCleanupDismissals") { CleanupTool.clearDismissals(context) }.runOnQueue(readScope)
 
     AsyncFunction("visionTools") { Vision.tools(context) }
 
