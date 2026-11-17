@@ -106,6 +106,9 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
       from, to, limit.toLong(),
     )
 
+  /** Every transaction (own ones too) with `from <= at < to`, oldest first: what a report is made from. */
+  fun between(from: Long, to: Long): List<Txn> = txns("t.at >= ? AND t.at < ? ORDER BY t.at, t.id", from, to)
+
   override fun undecided(): List<Txn> = txns("t.own_set = 0 AND t.pair_id IS NULL")
 
   /** Own transfers left out; per account and currency, never converted. */
