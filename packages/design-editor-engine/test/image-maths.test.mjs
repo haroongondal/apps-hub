@@ -150,5 +150,7 @@ test('upscale: the time estimate and its label', () => {
   assert.deepEqual(est(2000, 1000, 4), [32, 'About 1 minute']);
   assert.deepEqual(est(640, 128, 4), [5, 'A few seconds'], '9.5 s is under 10');
   assert.deepEqual(est(768, 128, 4), [6, 'About 10 seconds'], '11.4 s');
+  assert.deepEqual(est(896, 512, 4), [28, 'About 50 seconds'], '53.2 s');
+  assert.deepEqual(est(768, 640, 4), [30, 'About 1 minute'], '57 s rounds to a minute, not "About 60 seconds"');
   assert.equal(upscaleEstimate(1080, 1080, 2).seconds, 25 * 1.9);
 });

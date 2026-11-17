@@ -477,12 +477,12 @@ async function removeBg(img, tol) {
 const KINDS = { person: 'Person', object: 'Object' };
 let visionTools = null, visionRun = null;
 function visionKinds() {
-  if (visionTools?.fn !== native.vision) visionTools = { fn: native.vision, kinds: native.vision({ op: 'tools' }).then(k => k.filter(x => KINDS[x])).catch(() => []) };
+  if (visionTools?.fn !== native.vision) visionTools = { fn: native.vision, kinds: native.vision({ op: 'tools' }).then(k => k.filter(x => KINDS[x])).catch(() => { visionTools = null; return []; }) };
   return visionTools.kinds;
 }
 function drawVision(html = '') {
   const box = $('#vbox'); if (!box) return;
-  if (visionRun) html = `<p class="hint">${visionRun.phase === 'download' ? 'Getting the tool' : visionRun.text}</p>
+  if (visionRun) html = `<p class="hint">${visionRun.phase === 'download' && visionRun.fraction < 1 ? 'Getting the tool' : visionRun.text}</p>
     <progress max="1" ${visionRun.fraction == null ? '' : `value="${visionRun.fraction}"`} style="width:100%" aria-label="Progress"></progress>
     <button id="vstop" style="width:100%;margin-top:6px">Cancel</button>`;
   box.replaceChildren(el(html));
@@ -497,6 +497,7 @@ async function runVision(img, req, text, done) {
     const image = await new Promise(ok => originalCanvas(img).toBlob(ok, 'image/png'));
     const out = await native.vision({ ...req, image, onProgress: (phase, fraction) => { visionRun = { text, phase, fraction }; drawVision(); } });
     if (!out) return; // cancelled: nothing changes
+    if (!canvas.getObjects().includes(img)) return toast('The image changed, so nothing was applied.'); // undo and page switches rebuild every object
     // data: URL, not blob: (a blob: URL dies with the page and breaks save and undo); same size on the page
     const w = img.getScaledWidth(), h = img.getScaledHeight();
     await img.setSrc(await blobURL(out.type ? out : new Blob([out], { type: 'image/png' })));
@@ -699,9 +700,8 @@ function inspect() {
       visionKinds().then(kinds => {
         const box = $('#cutKinds');
         if (!box || active() !== o) return;
-        box.replaceChildren(el(kinds.map(k => `<button data-cut="${k}">${KINDS[k]}</button>`).join('')));
+        box.replaceChildren(el(kinds.map(k => `<button data-cut="${k}" ${visionRun ? 'disabled' : ''}>${KINDS[k]}</button>`).join('')));
         $$('[data-cut]').forEach(b => b.onclick = () => runVision(o, { op: 'cutout', kind: b.dataset.cut }, 'Removing the background', 'Background removed'));
-        drawVision();
       });
       drawVision();
     }

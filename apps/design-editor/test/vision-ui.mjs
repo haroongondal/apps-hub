@@ -10,7 +10,12 @@ export async function run({ page }) {
     const v = window.__vision = { calls: [], png };
     window.native.vision = async req => {
       v.calls.push({ op: req.op, kind: req.kind, scale: req.scale, type: req.image?.type });
-      if (req.op === 'tools') return ['person', 'object', 'sky'];
+      if (req.op === 'tools') {
+        v.tools = (v.tools || 0) + 1;
+        if (v.tools === 1) throw new Error('The phone is busy.');
+        if (v.tools === 2) return new Promise(ok => { v.toolsReply = () => ok(['person', 'object', 'sky']); });
+        return ['person', 'object', 'sky'];
+      }
       if (req.op === 'cancel') { v.req = null; return v.held?.(null); }
       if (req.op === 'cutout') {
         if (req.kind === 'person') throw new Error('Connect to the internet once to get this tool.');
@@ -43,7 +48,16 @@ export async function run({ page }) {
     return c.toDataURL('image/png').split(',')[1];
   });
   await page.setInputFiles('#imgFile', { name: 'red.png', mimeType: 'image/png', buffer: Buffer.from(red, 'base64') });
+  await until(() => window.__vision.tools === 1 && document.querySelector('#cutKinds'));
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('[data-cut]').count(), 0, 'no kinds while the phone cannot list them');
+  await page.evaluate(() => { const c = window.editor.canvas, o = c.getActiveObject(); c.discardActiveObject(); c.setActiveObject(o); });
+  await until(() => window.__vision.tools === 2);
+  await page.click('[data-up="2"]');
+  await page.evaluate(() => window.__vision.toolsReply());
   await page.waitForSelector('[data-cut]', { timeout: 5000 });
+  assert.equal(await page.locator('#vest').count(), 1, 'the late tools reply leaves an open estimate alone');
+  await page.click('#vno');
   const labels = sel => page.locator(sel).evaluateAll(l => l.map(b => b.textContent));
   assert.deepEqual(await labels('[data-cut]'), ['Person', 'Object'], 'only the kinds the phone offers, unknown ones dropped');
   assert.deepEqual(await labels('#rbg'), ['Plain background']);
@@ -75,6 +89,8 @@ export async function run({ page }) {
   await until(() => window.__vision.req && document.querySelector('#vbox progress'));
   const bar = () => page.evaluate(() => [document.querySelector('#vbox .hint').textContent, document.querySelector('#vbox progress').value]);
   assert.deepEqual(await bar(), ['Getting the tool', 0.5]);
+  await page.evaluate(() => window.__vision.req.onProgress('download', 1));
+  assert.deepEqual(await bar(), ['Upscaling. A few seconds.', 1], 'the run text once the tool is in');
   await page.evaluate(() => window.__vision.req.onProgress('run', 0.25));
   assert.deepEqual(await bar(), ['Upscaling. A few seconds.', 0.25]);
   assert.ok(await page.evaluate(() => [...document.querySelectorAll('[data-up], [data-cut], #rbg')].every(b => b.disabled)), 'other tools wait');
@@ -94,8 +110,16 @@ export async function run({ page }) {
   await undo(orig.src);
   assert.equal((await img()).w, 64);
 
-  const calls = await page.evaluate(() => window.__vision.calls.length);
+  await page.click('[data-up="4"]');
+  await page.evaluate(() => { window.__vision.req = null; });
+  await page.click('#vgo');
+  await until(() => window.__vision.req && document.querySelector('#vstop'));
   await page.evaluate(() => { const c = window.editor.canvas; c.remove(c.getActiveObject()); c.discardActiveObject(); });
+  await page.evaluate(() => window.__vision.png(256, 192, '#d00').then(b => window.__vision.held(b)));
+  await toast('The image changed, so nothing was applied.');
+  assert.equal(await page.evaluate(() => window.editor.canvas.getObjects().filter(o => o.getSrc?.() && o._originalElement?.naturalWidth === 256).length), 0);
+
+  const calls = await page.evaluate(() => window.__vision.calls.length);
   const wide = await page.evaluate(() => {
     const c = document.createElement('canvas'); c.width = 4096; c.height = 4;
     return c.toDataURL('image/png').split(',')[1];
