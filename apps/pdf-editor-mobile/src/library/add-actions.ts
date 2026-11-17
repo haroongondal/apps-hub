@@ -48,8 +48,9 @@ async function importPhotos({ folderId }: AddContext) {
     try {
       const name = `cap-${stamp + i}.jpg`;
       const out = await PdfScan.importImage(asset.uri, `${base}/${name}`);
+      const quad = session.mode === 'card' ? await PdfScan.detectQuad(`${base}/${name}`, true).catch(() => out.quad) : out.quad;
       const side = nextSide(session.mode, session.pages);
-      session = { ...session, pages: [...session.pages, newPage(name, out.quad, side === 'full' ? null : side)] };
+      session = { ...session, pages: [...session.pages, newPage(name, quad, side === 'full' ? null : side)] };
       saveSession(session);
     } catch {
       failed++;
