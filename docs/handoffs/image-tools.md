@@ -164,7 +164,15 @@ plus the unproven-on-phone items in the 3.2 ledger (ORT names, ImageDecoder, 1 M
 reply, expo-file-system base64 reads, Expo error wrapping) and an eye check of an upscaled
 cut-out's edge. The owner reads the new copy and the 2x estimate ("About 50 seconds"). Then
 ship (PR into main) so main has the Worker /models/ route.
-Feature 2: 2.0 spike phase agent running (ledger `.superpowers/sdd/2026-11-18-image-tools-2.0/progress.md`).
-Done so far: refs + fixtures cbb71a5, look-alike cosine tuning a33819d (default 0.93, conservative end
-0.97, Blender open-movie shot series, CC BY), phone bench + trash check scripts 9e36362 (not yet
-run). Open: blur tuning (T2), phone run (T4), results note (T5).
+Feature 2: 2.0 PARTIAL (027d6d9, cbb71a5, a33819d, 9e36362, c4a3162; ledger
+`.superpowers/sdd/2026-11-18-image-tools-2.0/progress.md`). Blur (Laplacian variance, 512 px grey)
+MISSES AC-4 on CERTH natural blur: at <= 10% sharp flagged it catches 67% (LANCZOS thumb, t=282.5)
+or 63% (draft+BILINEAR, t=132.1); 85% costs 34% of sharp. Digital blur passes (97%/10%). Thumbnail
+filter shifts scores ~0.47x, so tune on the phone's own thumbnail. Look-alike cosine 0.93 (strict
+end 0.97). Phone timings and the trash-visibility check NOT run (phone rebooted by Halo, wireless
+debugging off). T4 fix round (trash.sh set -e cleanup, match-trashed extra) was in flight,
+uncommitted in tools/gallery-cleanup-bench/{phone.sh,trash.sh}. CERTH terms: research
+benchmarking only, images kept local. Waiting on the owner: AC-4 decision, CERTH use, adb back.
+Next: commit T4 fix, then `coord claim device:49kjmnuwonkffqzh`, `ANDROID_SERIAL=<transport>
+tools/gallery-cleanup-bench/phone.sh stage` and `trash.sh run`; owner looks at the Gallery bin
+in a `trash.sh keep` session if shell trashing works; `trash.sh clean`; release; results note.
