@@ -1,0 +1,83 @@
+/* The spine is the one place colour is spent: a clean run reads as a quiet grey
+   column, and anything that needed a person shows as a break in it. */
+
+.mini {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 4px;
+  border-radius: 1px;
+  overflow: hidden;
+  align-self: stretch;
+  min-height: 26px;
+  flex: none;
+}
+
+.segment {
+  flex: 1;
+  min-height: 1px;
+  background: var(--tone);
+}
+
+.gutter {
+  position: relative;
+  width: var(--spine-gutter);
+  flex: none;
+  align-self: stretch;
+}
+
+.rail {
+  position: absolute;
+  left: calc(50% - 1px);
+  width: 2px;
+  background: var(--line-strong);
+}
+
+.railTop {
+  top: 0;
+  height: 11px;
+}
+
+.railBottom {
+  top: 11px;
+  bottom: 0;
+}
+
+.marker {
+  position: absolute;
+  left: 50%;
+  top: 11px;
+  translate: -50% -50%;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--tone);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.loud {
+  width: 11px;
+  height: 11px;
+}
+
+.active {
+  animation: breathe 1400ms var(--ease) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .active {
+    animation: none;
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+  50% {
+    opacity: 0.55;
+    scale: 0.78;
+  }
+}

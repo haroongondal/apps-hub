@@ -58,8 +58,15 @@ Current apps:
   `docs/superpowers/plans/2026-11-13-inflow-stage-*.md`; progress:
   `docs/handoffs/inflow.md`.
 
-Not here on purpose: `~/Documents/browser-automation` (stays standalone) and
-`~/Documents/agent-harness` (deferred until its phase branches are merged).
+- **autonomous-browsing** (`apps/autonomous-browsing`) — Electron desktop app for
+  chat-authored browser automation routines, copied in from
+  `~/Documents/browser-automation` on 2026-11-17 (tracked files only, no git
+  history; the original stays standalone). A normal pnpm workspace member now;
+  its `CLAUDE.md` and `AI_CONTEXT.md` still say `npm run`, read that as
+  `pnpm --filter autonomous-browsing <script>`.
+
+Not here on purpose: `~/Documents/agent-harness` (deferred until its phase
+branches are merged).
 
 Planned (do not scaffold yet):
 - macOS/Windows targets for NetLens (react-native-macos / Electron) — future scope.
