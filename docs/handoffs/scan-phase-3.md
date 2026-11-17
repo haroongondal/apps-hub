@@ -31,3 +31,9 @@ used. Within a stream one agent runs its tasks in order.
 ## Log
 
 - Task 0: complete (commit 15213cb). session-data tests 9 pass; scan-core test 1 pass; typecheck clean in both.
+- Stream U: complete (commits 0d85367, 9694b3e, b12d45a, 03f980d). Controller checked the diff stats (only owned paths) and re-ran: app test 20 pass, typecheck clean after scan-core landed, lint clean (agent's run). Not run on a device.
+- Stream C: complete (commits 0c28816, 6b7d199, 20e68dd, eadc93bf). Controller re-ran: scan-core test 29 pass, typecheck clean; agent also ran library-core test 95 pass. C1 and C4 tests were written with the code, not seen failing first (agent's disclosure). A PDF from `writeScanPdf` opened in macOS PDFKit in a one-off scratch run.
+- Ruling: `ScanServiceDeps.now?` is an extra optional dep (clock for titles and the PDF date); harmless — cost if wrong: none.
+- Ruling: sheet pages keep the composed sheet as `<pageId>.orig.jpg` and process it with filter `original`, so Rotate works on a sheet; the card photos themselves are not kept.
+- Deferred minor (C): `saveSession` creates the item row, then the page rows in a second transaction (`createItem` cannot join one). A hard kill in that millisecond gap leaves a scan item with no pages that the start-up sweep does not remove. Fix later with a sweep for scan items without `scan_pages`.
+- Deferred decision for Phase 4 (U): "Open in editor" passes `itemId`, so the editor re-indexes the scan item from the PDF text and would overwrite OCR text via `setBody`. Harmless now; decide before Phase 4.
