@@ -340,6 +340,28 @@ class LedgerTest {
     assertEquals("Food", store.get(a!!)!!.category)
   }
 
+  @Test fun ownerCategoryIsNeverOverwrittenByAi() {
+    val id = ai(aiMoney(amount = 700, category = "Other"), Channel.NOTIFICATION, t0)!!
+    store.setCategory(id, "Rent")
+    assertTrue(store.get(id)!!.categorySet)
+    store.setAiDetails(id, "Food & dining", "KFC")
+    assertEquals("Rent", store.get(id)!!.category)
+    assertEquals("KFC", store.get(id)!!.label)
+    // The item AI run reaching the same txn again also leaves the owner's choice alone.
+    ledger.onAi(nextItem - 1, aiMoney(amount = 700, category = "Groceries"), Channel.NOTIFICATION, t0)
+    assertEquals("Rent", store.get(id)!!.category)
+  }
+
+  @Test fun clearingOwnerCategoryLetsAiFillItAgain() {
+    val id = ai(aiMoney(amount = 700, category = "Other"), Channel.NOTIFICATION, t0)!!
+    store.setCategory(id, "Rent")
+    store.setCategory(id, null)
+    assertFalse(store.get(id)!!.categorySet)
+    assertNull(store.get(id)!!.category)
+    store.setAiDetails(id, "Food & dining", null)
+    assertEquals("Food & dining", store.get(id)!!.category)
+  }
+
   @Test fun aiOwnerNameStillMarksAnAiOnlyTxnOwn() {
     owner = "Haroon Mukhtar"
     val id = ai(aiMoney(amount = 700, counterparty = "HAROON MUKHTAR"), Channel.NOTIFICATION, t0)!!

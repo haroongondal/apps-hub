@@ -52,7 +52,11 @@ class MemoryLedgerStore : LedgerStore {
   override fun undecided() = txns.values.filter { !it.ownSet && it.pairId == null }
 
   override fun setAiDetails(id: Long, category: String, label: String?) {
-    txns[id] = txns.getValue(id).let { it.copy(category = category, label = label ?: it.label) }
+    txns[id] = txns.getValue(id).let { it.copy(category = if (it.categorySet) it.category else category, label = label ?: it.label) }
+  }
+
+  override fun setCategory(id: Long, category: String?) {
+    txns[id] = txns.getValue(id).copy(category = category, categorySet = category != null)
   }
 
   override fun sourceCount(txnId: Long) = sources.values.count { it == txnId }

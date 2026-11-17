@@ -29,6 +29,7 @@ import expo.modules.inflowcore.android.StoreHolder
 import expo.modules.inflowcore.core.AiChannels
 import expo.modules.inflowcore.core.AiModels
 import expo.modules.inflowcore.core.AppSetting
+import expo.modules.inflowcore.core.Categories
 import expo.modules.inflowcore.core.GmailPolicy
 import expo.modules.inflowcore.core.Prices
 import expo.modules.inflowcore.core.Retention
@@ -165,6 +166,18 @@ class InflowCoreModule : Module() {
     Function("setOwnTransfer") { txnId: Long, own: Boolean ->
       val store = store()
       store.inTransaction { StoreHolder.ledger(store).setOwnTransfer(txnId, own) }
+    }
+
+    Function("categories") { ->
+      mapOf("out" to Categories.OUT, "in" to Categories.IN)
+    }
+
+    // null = back to the AI's choice. A name that is not in the txn's direction list is refused, never stored.
+    Function("setCategory") { txnId: Long, category: String? ->
+      val ledger = SqlLedgerStore(store().db)
+      val txn = ledger.get(txnId) ?: throw CodedException("TXN_MISSING", "That transaction is gone.", null)
+      if (category != null && category !in Categories.forDirection(txn.direction)) throw CodedException("BAD_CATEGORY", "That category doesn't fit this transaction.", null)
+      ledger.setCategory(txnId, category)
     }
 
     Function("getItem") { id: Long ->

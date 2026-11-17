@@ -65,7 +65,13 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
   }
 
   override fun setAiDetails(id: Long, category: String, label: String?) {
-    run("UPDATE txns SET category = ?, label = COALESCE(?, label) WHERE id = ?", category, label, id)
+    run("UPDATE txns SET category = CASE WHEN category_set = 1 THEN category ELSE ? END, label = COALESCE(?, label) WHERE id = ?", category, label, id)
+  }
+
+  // Clearing also resets the categoriser's tries, so the AI picks the category up again.
+  override fun setCategory(id: Long, category: String?) {
+    val set = if (category != null) 1L else 0L
+    run("UPDATE txns SET category = ?, category_set = ?, category_tries = CASE WHEN ? = 0 THEN 0 ELSE category_tries END WHERE id = ?", category, set, set, id)
   }
 
   override fun sourceCount(txnId: Long): Int =
@@ -192,7 +198,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
     args += limit.toLong()
     return db.rawQuery(
       "SELECT t.id, t.direction, t.amount_minor, t.currency, t.account, t.counterparty, t.tx_id, t.at, t.own, t.pair_id, " +
-        "(SELECT group_concat(item_id) FROM txn_sources s WHERE s.txn_id = t.id), t.category, t.label, t.by_ai " +
+        "(SELECT group_concat(item_id) FROM txn_sources s WHERE s.txn_id = t.id), t.category, t.label, t.by_ai, t.category_set " +
         "FROM txns t WHERE ${where.joinToString(" AND ")} ORDER BY t.at DESC, t.id DESC LIMIT ?",
       *args.toTypedArray(),
     ).use { c ->
@@ -204,7 +210,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
               "account" to c.getString(4), "counterparty" to c.str(5), "txId" to c.str(6), "at" to c.getLong(7),
               "own" to (c.getInt(8) != 0), "paired" to !c.isNull(9),
               "itemIds" to (c.str(10)?.split(',')?.map { it.toLong() } ?: emptyList()),
-              "category" to c.str(11), "label" to c.str(12), "byAi" to (c.getInt(13) != 0),
+              "category" to c.str(11), "label" to c.str(12), "byAi" to (c.getInt(13) != 0), "categorySet" to (c.getInt(14) != 0),
             ),
           )
         }
@@ -215,7 +221,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
   private fun txns(where: String, vararg args: Any?): List<Txn> =
     db.rawQuery(
       "SELECT t.id, t.direction, t.amount_minor, t.currency, t.account, t.counterparty, t.tx_id, t.at, t.own, t.own_set, t.pair_id, " +
-        "(SELECT group_concat(channel) FROM txn_sources s WHERE s.txn_id = t.id), t.category, t.label, t.by_ai FROM txns t WHERE $where",
+        "(SELECT group_concat(channel) FROM txn_sources s WHERE s.txn_id = t.id), t.category, t.label, t.by_ai, t.category_set FROM txns t WHERE $where",
       *args,
     ).use { c ->
       buildList {
@@ -225,7 +231,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
               c.getLong(0), Direction.valueOf(c.getString(1)), c.getLong(2), c.getString(3), c.getString(4), c.str(5), c.str(6), c.getLong(7),
               c.getInt(8) != 0, c.getInt(9) != 0, if (c.isNull(10)) null else c.getLong(10),
               c.str(11)?.split(',')?.map { Channel.valueOf(it) }?.toSet() ?: emptySet(),
-              c.str(12), c.str(13), c.getInt(14) != 0,
+              c.str(12), c.str(13), c.getInt(14) != 0, c.getInt(15) != 0,
             ),
           )
         }

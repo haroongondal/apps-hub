@@ -14,6 +14,7 @@ import expo.modules.inflowcore.core.AskItem
 import expo.modules.inflowcore.core.Channel
 import expo.modules.inflowcore.core.ContactApps
 import expo.modules.inflowcore.core.Capture
+import expo.modules.inflowcore.core.Categories
 import expo.modules.inflowcore.core.DeferredDeletes
 import expo.modules.inflowcore.core.Email
 import expo.modules.inflowcore.core.ItemStore
@@ -485,7 +486,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
 
   companion object {
     private const val DB_NAME = "inflow.db"
-    private const val SCHEMA_VERSION = 5
+    private const val SCHEMA_VERSION = 6
     private const val GENERIC_FAILURE =
       "Inflow can't open your saved history. The history file is kept, not deleted. Restart the phone and try again."
     private const val ITEM_COLUMNS = "i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, " +
@@ -579,6 +580,25 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       "CREATE INDEX media_item ON media(item_id)",
     )
 
+    // Not idempotent, like the others. category_set: the owner chose the category (no AI path changes it). category_tries: how often the categoriser has tried this txn.
+    // reports: one row per period (a "so far" week is partial); json is the validated report, headline the notification line.
+    internal val SCHEMA_V6 = listOf(
+      "ALTER TABLE txns ADD COLUMN category_set INTEGER NOT NULL DEFAULT 0",
+      "ALTER TABLE txns ADD COLUMN category_tries INTEGER NOT NULL DEFAULT 0",
+      "CREATE TABLE reports(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, period_start INTEGER NOT NULL, period_end INTEGER NOT NULL, " +
+        "partial INTEGER NOT NULL, created_at INTEGER NOT NULL, status TEXT NOT NULL, message TEXT, tries INTEGER NOT NULL DEFAULT 0, headline TEXT, json TEXT)",
+      "CREATE UNIQUE INDEX reports_period ON reports(kind, period_start, partial)",
+    )
+
+    // Runs after SCHEMA_V6, in its transaction: the old names become the new ones (money out), and a money-in txn holding a name that is not a money-in category is cleared to be categorised again.
+    internal const val V6_RENAME = "UPDATE txns SET category = ? WHERE category = ? AND direction = 'OUT'"
+    internal val V6_CLEAR_IN = "UPDATE txns SET category = NULL WHERE direction = 'IN' AND category IS NOT NULL AND category NOT IN (${Categories.IN.joinToString { "?" }})"
+
+    private fun migrateCategories(db: SQLiteDatabase) {
+      for ((old, new) in Categories.RENAMED) db.execSQL(V6_RENAME, arrayOf<Any?>(new, old))
+      db.execSQL(V6_CLEAR_IN, Categories.IN.toTypedArray<Any?>())
+    }
+
     private val neverDeleteOnCorruption = object : DatabaseErrorHandler {
       override fun onCorruption(db: SQLiteDatabase, e: SQLiteException) {}
     }
@@ -660,6 +680,10 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
           if (db.version < 5) {
             SCHEMA_V5.forEach(db::execSQL)
             repairLegacyWhatsapp(db)
+          }
+          if (db.version < 6) {
+            SCHEMA_V6.forEach(db::execSQL)
+            migrateCategories(db)
           }
           db.version = SCHEMA_VERSION
           db.setTransactionSuccessful()

@@ -11,6 +11,7 @@ data class Txn(
   val own: Boolean, val ownSet: Boolean,   // ownSet = the owner chose `own` by hand; automation never changes it again
   val pairId: Long?, val channels: Set<Channel>,
   val category: String? = null, val label: String? = null, val byAi: Boolean = false,   // set from an AI result; the numbers above never come from it for a pattern txn
+  val categorySet: Boolean = false,   // the owner chose `category`; no AI path changes it again
 )
 
 interface LedgerStore {
@@ -33,8 +34,10 @@ interface LedgerStore {
   /** Every distinct account string of known transactions, for Accounts.resolve. */
   fun accounts(): List<String>
   fun setCounterpartyIfNull(id: Long, counterparty: String)
-  /** A null label keeps the label already there. */
+  /** A null label keeps the label already there. A category the owner set stays; the label still updates. */
   fun setAiDetails(id: Long, category: String, label: String?)
+  /** The owner's choice (categorySet = true); null clears both, so the AI fills the category again. */
+  fun setCategory(id: Long, category: String?)
   fun sourceCount(txnId: Long): Int
   /** Removes the transaction and its source rows. */
   fun deleteTxn(id: Long)
@@ -110,7 +113,10 @@ class Ledger(private val store: LedgerStore, private val ownerName: () -> String
     }
     replaced?.let { r ->
       val target = store.get(id) ?: return id
-      if (target.category == null && r.category != null) store.setAiDetails(id, r.category, r.label)
+      if (target.category == null && r.category != null) {
+        store.setAiDetails(id, r.category, r.label)
+        if (r.categorySet) store.setCategory(id, r.category)
+      }
       if (r.own && !target.own && !target.ownSet) store.setOwn(id, true, false, target.pairId)
     }
     return id
