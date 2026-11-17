@@ -276,6 +276,14 @@ class PhotoIndexTest {
   }
 
   @Test
+  fun aStampFromAnOlderIndexFormatNeedsAScan() {
+    val gallery = "7:42:300"
+    // v1 builds saved the bare gallery stamp.
+    assertTrue(needsScan(gallery, indexStamp(gallery)))
+    assertFalse(needsScan(indexStamp(gallery), indexStamp(gallery)))
+  }
+
+  @Test
   fun needsScanWhenNothingSavedOrChanged() {
     assertTrue(needsScan(null, "1:5"))
     assertFalse(needsScan("1:5", "1:5"))

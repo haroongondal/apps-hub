@@ -8,6 +8,7 @@ import android.util.Size
 import expo.modules.designmedia.core.PhotoKey
 import expo.modules.designmedia.core.PhotoScores
 import expo.modules.designmedia.core.clipTensor
+import expo.modules.designmedia.core.indexStamp
 import expo.modules.designmedia.core.scoresOf
 import expo.modules.designmedia.core.thumb512Size
 
@@ -17,7 +18,7 @@ object Gallery {
   // Changes whenever a photo is added, edited or removed, so a scan can tell whether it has anything to do.
   // The count is there because changing the Selected-photos choice does not move the generation.
   fun stamp(ctx: Context): String =
-    "${MediaStore.getVersion(ctx)}:${MediaStore.getGeneration(ctx, MediaStore.VOLUME_EXTERNAL_PRIMARY)}:${visibleCount(ctx)}"
+    indexStamp("${MediaStore.getVersion(ctx)}:${MediaStore.getGeneration(ctx, MediaStore.VOLUME_EXTERNAL_PRIMARY)}:${visibleCount(ctx)}")
 
   private fun visibleCount(ctx: Context): Int {
     val cursor = ctx.contentResolver.query(IMAGES, arrayOf(MediaStore.Images.Media._ID), null, null, null)
@@ -51,10 +52,17 @@ object Gallery {
   // Null when the photo is gone or unreadable, like tensor.
   fun scores(ctx: Context, id: Long): PhotoScores? = try {
     val loaded = ctx.contentResolver.loadThumbnail(ContentUris.withAppendedId(IMAGES, id), Size(512, 512), null)
-    val (w, h) = thumb512Size(loaded.width, loaded.height)
-    val bmp = if (w != loaded.width || h != loaded.height) Bitmap.createScaledBitmap(loaded, w, h, true).also { loaded.recycle() } else loaded
-    val argb = IntArray(w * h).also { bmp.getPixels(it, 0, w, 0, 0, w, h) }
-    scoresOf(argb, w, h).also { bmp.recycle() }
+    try {
+      val (w, h) = thumb512Size(loaded.width, loaded.height)
+      val bmp = if (w != loaded.width || h != loaded.height) Bitmap.createScaledBitmap(loaded, w, h, true) else loaded
+      try {
+        scoresOf(IntArray(w * h).also { bmp.getPixels(it, 0, w, 0, 0, w, h) }, w, h)
+      } finally {
+        bmp.recycle()
+      }
+    } finally {
+      loaded.recycle()
+    }
   } catch (e: Exception) {
     null
   }

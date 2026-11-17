@@ -120,4 +120,7 @@ fun pauseReason(batteryPct: Int, charging: Boolean, thermalStatus: Int): String?
 
 fun shouldPause(batteryPct: Int, charging: Boolean, thermalStatus: Int): Boolean = pauseReason(batteryPct, charging, thermalStatus) != null
 
+// The index format is part of the stamp, so a stamp saved by an older build never matches and the next check asks for a scan.
+fun indexStamp(gallery: String): String = "v${PhotoIndexFile.VERSION}:$gallery"
+
 fun needsScan(saved: String?, current: String): Boolean = saved != current
