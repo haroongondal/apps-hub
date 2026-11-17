@@ -1,4 +1,4 @@
-// One lock for every read-modify-write of `settings`, `myRules`, `myRuleSources` and `myCosmetic`. Web Locks are shared by
+// One lock for every read-modify-write of `settings`, `myRules`, `myRuleSources`, `myCosmetic` and `youtube`. Web Locks are shared by
 // the worker, the menu and the settings page; Node (the unit tests) has none, so there it is a promise chain in this process.
 let chain: Promise<unknown> = Promise.resolve();
 
