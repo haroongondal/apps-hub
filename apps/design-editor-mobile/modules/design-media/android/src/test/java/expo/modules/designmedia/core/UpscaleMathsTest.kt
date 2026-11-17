@@ -97,19 +97,32 @@ class UpscaleMathsTest {
 
   @Test
   fun upscalePlanRule() {
+    // Owner rule 2026-11-18: 2x runs 4x on a half-size copy; in <= 1024 longest; out = exactly 4 x in.
+    assertEquals(UpscalePlan(540, 540, 2160, 2160), upscalePlan(1080, 1080, 2))
     assertEquals(UpscalePlan(1024, 1024, 4096, 4096), upscalePlan(1080, 1080, 4))
-    assertEquals(UpscalePlan(1024, 768, 2160, 1620), upscalePlan(1080, 810, 2))
+    assertEquals(UpscalePlan(150, 100, 600, 400), upscalePlan(300, 200, 2))
     assertEquals(UpscalePlan(300, 200, 1200, 800), upscalePlan(300, 200, 4))
-    assertEquals(UpscalePlan(300, 200, 600, 400), upscalePlan(300, 200, 2))
+    assertEquals(UpscalePlan(1000, 500, 4000, 2000), upscalePlan(2000, 1000, 2))
     assertEquals(UpscalePlan(1024, 512, 4096, 2048), upscalePlan(2000, 1000, 4))
+    assertEquals(UpscalePlan(1, 1, 4, 4), upscalePlan(1, 1, 2))
     assertNull(upscalePlan(4096, 10, 2))
     assertNull(upscalePlan(10, 5000, 4))
     for (w in listOf(1, 7, 300, 1023, 1024, 1025, 2047, 2048, 3000, 4095)) for (h in listOf(1, 13, 999, 2500, 4095)) {
       for (s in listOf(2, 4)) {
         val p = upscalePlan(w, h, s)!!
-        assertTrue("$w x $h x $s -> $p", p.outW in 1..MAX_SIDE && p.outH in 1..MAX_SIDE && p.inW >= 1 && p.inH >= 1)
-        assertTrue("$w x $h x $s -> $p", maxOf(p.inW, p.inH) * SCALE <= MAX_SIDE)
+        assertTrue("$w x $h x $s -> $p", p.inW in 1..1024 && p.inH in 1..1024)
+        assertTrue("$w x $h x $s -> $p", p.outW == SCALE * p.inW && p.outH == SCALE * p.inH && maxOf(p.outW, p.outH) <= MAX_SIDE)
       }
     }
   }
+
+  @Test
+  fun upscaleTilesCountsTheModelRuns() {
+    assertEquals(25, upscaleTiles(540, 540))
+    assertEquals(64, upscaleTiles(1024, 1024))
+    assertEquals(1, upscaleTiles(1, 1))
+    assertEquals(2, upscaleTiles(129, 20))
+    for ((w, h) in listOf(540 to 540, 300 to 200, 1024 to 512, 129 to 20)) assertEquals(tiles(w, h).size, upscaleTiles(w, h))
+  }
+
 }

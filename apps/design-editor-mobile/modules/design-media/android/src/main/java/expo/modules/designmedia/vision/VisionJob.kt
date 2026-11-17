@@ -73,19 +73,18 @@ object VisionJob {
     return out
   }
 
-  // input is already plan.inW x plan.inH (the decoder shrinks it). With alpha, the model runs on premultiplied RGB
+  // input is already plan.inW x plan.inH (the decoder makes that copy) and the output is exactly 4x it. With alpha, the model runs on premultiplied RGB
   // (Pillow's RGBa) so transparent pixels can't bleed a dark fringe; the output alpha is the input's alpha resized.
   fun upscale(input: Image, plan: UpscalePlan, model: (FloatArray) -> FloatArray, cancelled: () -> Boolean, progress: (Double) -> Unit): Image {
     require(input.w == plan.inW && input.h == plan.inH) { "input is not the plan's size" }
     val alpha = hasAlpha(input.argb)
     if (alpha) for (i in input.argb.indices) input.argb[i] = premultiply(input.argb[i])
-    val big = stitch(input, model, cancelled, progress)
-    val out = if (big.w == plan.outW && big.h == plan.outH) big.argb else resize(big.argb, big.w, big.h, plan.outW, plan.outH, Filter.LANCZOS)
+    val out = stitch(input, model, cancelled, progress)
     if (alpha) {
-      val a = resize(input.argb, input.w, input.h, plan.outW, plan.outH, Filter.LANCZOS)
-      for (i in out.indices) out[i] = unpremultiply(out[i], a[i] ushr 24)
+      val a = resize(input.argb, input.w, input.h, out.w, out.h, Filter.LANCZOS)
+      for (i in out.argb.indices) out.argb[i] = unpremultiply(out.argb[i], a[i] ushr 24)
     }
-    return Image(out, plan.outW, plan.outH)
+    return out
   }
 
   // Pillow's MULDIV255 rounding.

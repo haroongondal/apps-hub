@@ -58,8 +58,8 @@ object Vision {
       return VisionJob.plainWords {
         val result = if (model == VisionModels.ESRGAN) {
           var plan: UpscalePlan? = null
-          // Shrinking happens in the decoder (its own filter, not the plan's LANCZOS): a full-size decode of a big photo
-          // plus a LANCZOS copy would not fit the heap.
+          // The decoder makes the plan's half-size or shrunk copy (its own filter, not LANCZOS): a full-size decode of a
+          // big photo plus a LANCZOS copy would not fit the heap.
           val image = decode(file) { w, h ->
             val p = upscalePlan(w, h, option.toInt()) ?: throw VisionTooBig()
             plan = p
