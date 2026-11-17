@@ -10,6 +10,8 @@ import { getScanService } from './service';
 
 export const GALLERY_ALBUM = 'PDF Editor';
 
+export const savedMessage = (n: number) => `Saved ${n} ${n === 1 ? 'image' : 'images'} to Photos`;
+
 export async function sharePdf(itemId: string): Promise<void> {
   const { path } = await (await getScanService()).buildPdf(itemId);
   await Sharing.shareAsync(pathToUri(path), { mimeType: 'application/pdf', dialogTitle: 'Share PDF', UTI: 'com.adobe.pdf' });

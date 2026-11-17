@@ -1,6 +1,5 @@
 import { defaultTitle, type SessionInput } from '@apps-hub/scan-core';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { Button, Empty, Field, Group, Header, Notice, Row, Screen, Segmented, Text, radius, space, useTheme } from '@apps-hub/ui';
+import { Button, Empty, Field, Header, Notice, Screen, Segmented, Text, radius, space, useTheme } from '@apps-hub/ui';
 import { File } from 'expo-file-system';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -12,19 +11,13 @@ import { errorMessage } from '../../src/library/use-library';
 import { IconButton } from '../../src/library/icon-button';
 import { sheetChoice } from '../../src/scan/capture-rules';
 import { CropEditor } from '../../src/scan/crop-editor';
+import { FilterPicker } from '../../src/scan/filter-picker';
 import { pathToUri, uriToPath } from '../../src/scan/files-expo';
 import { getScanService } from '../../src/scan/service';
 import { discardSession, loadSession, saveSession, sessionDir } from '../../src/scan/session';
-import type { PageFilter, ScanSession, SessionPage } from '../../src/scan/session-data';
+import type { ScanSession, SessionPage } from '../../src/scan/session-data';
 
 const FULL: Quad = [0, 0, 1, 0, 1, 1, 0, 1];
-const FILTERS: { key: PageFilter; label: string; hint: string }[] = [
-  { key: 'original', label: 'Original', hint: 'The photo as you took it' },
-  { key: 'auto', label: 'Magic', hint: 'Evens out the light and lifts colour' },
-  { key: 'gray', label: 'Gray', hint: 'Clean grayscale, good for books' },
-  { key: 'bw', label: 'Black and white', hint: 'Crisp text, small files' },
-];
-
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 function removeFile(name: string) {
@@ -189,7 +182,6 @@ export default function ReviewScreen() {
   };
 
   const dim = dims[page.file];
-  const filterChoice = page.filter;
 
   return (
     <Screen scroll>
@@ -239,18 +231,7 @@ export default function ReviewScreen() {
         </View>
       )}
 
-      <Group title="Filter">
-        {FILTERS.map((f) => (
-          <Row
-            key={f.key}
-            title={f.label}
-            subtitle={f.hint}
-            accessibilityLabel={`${f.label}. ${f.hint}${filterChoice === f.key ? '. Selected' : ''}`}
-            trailing={filterChoice === f.key ? <Ionicons name="checkmark" size={22} color={c.accent} /> : undefined}
-            onPress={() => patchPage(index, { filter: f.key })}
-          />
-        ))}
-      </Group>
+      <FilterPicker value={page.filter} onChange={(f) => patchPage(index, { filter: f })} />
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
         <Button label="Rotate" size="sm" variant="secondary" onPress={() => patchPage(index, { rotation: ((page.rotation + 90) % 360) as SessionPage['rotation'] })} />
@@ -285,7 +266,7 @@ export default function ReviewScreen() {
             { key: 'sheet', label: 'One sheet' },
           ]}
           value={session.sheet ? 'sheet' : 'two'}
-          onChange={(k) => commit({ ...session, sheet: k === 'sheet' })}
+          onChange={(k) => latest.current && commit({ ...latest.current, sheet: k === 'sheet' })}
         />
       ) : null}
 
