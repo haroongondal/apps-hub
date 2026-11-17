@@ -11,6 +11,7 @@ import expo.modules.designmedia.android.PhotoSearch
 import expo.modules.designmedia.android.Probe
 import expo.modules.designmedia.android.Thumbs
 import expo.modules.designmedia.android.Waveform
+import expo.modules.designmedia.vision.Vision
 import expo.modules.designmedia.core.AtomicFile
 import expo.modules.designmedia.core.EncoderStatsStore
 import expo.modules.designmedia.core.QueueStore
@@ -22,12 +23,17 @@ import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
+import java.util.concurrent.Executors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 
 class DesignMediaModule : Module() {
   private val readScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+  // One cut-out or upscale at a time (each holds a full-size image), off every other call's thread.
+  private val visionScope = CoroutineScope(Executors.newSingleThreadExecutor().asCoroutineDispatcher() + SupervisorJob())
 
   private val context
     get() = requireNotNull(appContext.reactContext) { "React context unavailable" }
@@ -35,7 +41,7 @@ class DesignMediaModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("DesignMedia")
 
-    Events(MediaJobService.EVENT_PROGRESS, MediaJobService.EVENT_QUEUE)
+    Events(MediaJobService.EVENT_PROGRESS, MediaJobService.EVENT_QUEUE, Vision.EVENT_PROGRESS)
 
     View(CompositionView::class) {
       Events("onPosition", "onEnded", "onError")
@@ -122,6 +128,16 @@ class DesignMediaModule : Module() {
     AsyncFunction("similarPhotos") { uri: String -> PhotoSearch.similar(context, uri) }.runOnQueue(readScope)
 
     AsyncFunction("releasePhotoSearch") { PhotoSearch.release() }
+
+    AsyncFunction("visionTools") { Vision.tools(context) }
+
+    AsyncFunction("installVisionModel") { name: String -> Vision.install(context, name) }.runOnQueue(readScope)
+
+    AsyncFunction("runVision") { id: String, op: String, src: String, option: String ->
+      Vision.run(context, id, op, src, option) { sendEvent(Vision.EVENT_PROGRESS, mapOf("id" to id, "fraction" to it)) }
+    }.runOnQueue(visionScope)
+
+    AsyncFunction("cancelVision") { id: String -> Vision.cancel(id) }
 
     // saveFile posts from the editor page: designs cross as text, exports as base64 (SPEC §14.3)
     AsyncFunction("saveJson") { name: String, text: String, filePath: String? ->
