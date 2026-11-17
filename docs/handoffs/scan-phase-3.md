@@ -58,3 +58,22 @@ used. Within a stream one agent runs its tasks in order.
 6. Gradle and unit tests run once by me at integration, so most tasks were up to date. Wrong: none; test results files showed 54 tests, 0 failures.
 - Release (owner's go: "then test on phone", 2026-11-18): `pnpm release pdf-editor` from this worktree published PDF Editor 1.3.0, versionCode 14, 36.5 MB. Manifest re-fetched afterwards: store 19, netlens 12, open-tunnel 16, deputy 17, clipboard 9, strongroom 18, design-editor 12, inflow 2, halo 6, pdf-editor 14 all present (no clobber). The phone had 1.2.0 (13) from the Store, so versionCode 14 updates it in place.
 - Phone test: queued behind the Inflow session for `device:49kjmnuwonkffqzh`. Owner asked me to do the rest and ping when required. Test photos (invoice with shadow, card) are in the session scratchpad `testimgs/`, not in the repo.
+
+## Phone test of 1.3.0 (versionCode 14), 2026-11-18, Redmi Note 14 Pro, Store install
+
+Installed from the Store (1.2.0 (13) to 1.3.0 (14), installer com.haroon.store). Driven by adb taps and screenshots; the owner was physically near the phone. Device claim `device:49kjmnuwonkffqzh` taken behind the Inflow session and released afterwards.
+
+Passed on the phone:
+- Resume of the owner's unsaved 6-page Phase 2 session, Done opens Review (new), strip, Crop/Preview, auto-detected crop proposal, Delete page (7 to 6), filters, title with `#` and `%`, Save (6 pages, 6.9 MB in the Library), scan view.
+- Share PDF with `#` in the title: system chooser opened ("Scan 2026-11-18 02-12 -42.pdf"). Open in editor: PDF.js parsed it, "Page 1 of 6". Save images: "Saved 6 images to Photos", 6 JPEGs (167 to 795 KB) in Pictures/PDF Editor. Share images: chooser with the image strip.
+- Import photos (system photo picker, two files): review opens, the invoice quad was detected on the first try. Magic on a tilted, shadowed invoice: straight, even white, shadow gone, red ink kept. Black and white: crisp, shadow gone, 2 pages = 349 KB. Page view: crop editor, Rotate and Save changes refresh the image immediately (the remount fix works).
+- Card mode: Document/Card switch, card-shaped guide, "Front of the card" hint, third photo refused ("A card has two sides. Tap Done."), review with "Two pages / One sheet", One sheet saved as one A4 page (two card frames stacked and centred, 1,023 KB).
+- Log: no PdfScan or app exceptions. One unrelated crash in `app.revanced.android.gms` (MicroG), not ours.
+
+Findings (fix wave 2): A keyboard hides the Title field on Review; B Magic over-saturates scenes with no white paper (yellow card, orange floor); C faint dotted line on the top and right edges of Black and white pages; D page 1 of the resumed session showed Gray ticked (investigate). Also: the item sheet has no Share PDF row for scans (plan said so; scans have it on their own screen; deferred).
+
+Not tested (needs the owner's physical card): live card detection on a real card with the guide, a real front and back sheet, Magic on real card colours, auto-capture ring on a document.
+
+Test data cleaned up: my two test scans deleted through the app (the owner's "Scan 2026-11-18 02:12 #42" kept, it holds their 6 pages), my two pushed photos removed from /sdcard/Download. Left on the phone: the 6 images saved to Pictures/PDF Editor from the owner's scan, and the owner's scan itself.
+
+Left in the session scratchpad (not the repo): two screenshots that show a bank card number, `shots/15-strip-end.png` and `shots/16-page7-actions.png` under the session scratchpad. The permission check blocked my `rm`; delete them by hand if you want them gone.
