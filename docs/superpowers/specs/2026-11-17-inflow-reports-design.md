@@ -34,13 +34,14 @@ The owner wants any fact about their money to be one tap away. Reports are the m
 - The transaction sheet gets a category picker; an owner-set category is marked (new column) and never overwritten by any AI path.
 
 ### Reports (item 4)
-- Kinds: weekly (Monday 00:00 to the next Monday 00:00, local time) and monthly (calendar month).
-- Schedule: due when the period has ended and no report exists for it; the weekly one becomes due at Sunday 21:00 (covering Monday 00:00 up to that moment, the rest of Sunday is too small to wait for), the monthly one on the 1st at 00:00 for the month before. Checked in the existing AI tick (listener process, every 30 min) and when Home opens. A missed time is made at the next check; only the most recent period of each kind is made (no backlog of old weeks).
+- Kinds: weekly and monthly, local time. A weekly period runs from Sunday 21:00 to the next Sunday 21:00, so every transaction is in exactly one week; it is labelled with its Monday-to-Sunday dates ("Week of 10–16 Nov"). A monthly period is the calendar month. (My call, after the builder check.)
+- Schedule: due when the period has ended and no report exists for it; the weekly one at Sunday 21:00, the monthly one on the 1st at 00:00 for the month before. Checked in the existing AI tick (listener process, every 30 min) and when Home opens. A missed time is made at the next check; only the most recent period of each kind is made (no backlog of old weeks).
 - A "Make a report now" button in Money makes a report for the week so far (kind weekly, marked "so far", replaced by the real one when due).
-- Request: the period's transactions (same fields as categorisation plus category), the owner name and known accounts, and the previous report of the same kind's totals so the AI can compare. Amounts go out in main units.
+- Request: the period's transactions (same fields as categorisation plus category), one compact line each, the owner name and known accounts, and the previous report of the same kind's totals and per-category amounts so the AI can compare (no previous report, or a "so far" one: no comparison, change is null). Amounts go out in main units.
+- Size (my call): one request per report, sized for about 1,000 transactions (the owner had 47 in November 2026), with a larger reply budget than the item batches. A period over the cap fails with a clear message ("Too many transactions for one report"), never a silent cut.
 - Reply: one JSON object, fixed shape, per currency where amounts appear:
-  - `totals`: money in, money out, net, transaction count
-  - `own`: transfers between own accounts, in and out totals, and each transfer (from account, to account, amount, date)
+  - `totals`: money in, money out, net, transaction count; own transfers are left out of these, and of categories, parties and accounts (my call: so spending is not inflated)
+  - `own`: transfers between own accounts, in and out totals, and each transfer (from account, to account, amount, date); an unpaired transfer's other side is "Another of your accounts"
   - `categories`: name, amount out (or in), count, share of money out, change vs previous report (percent or null)
   - `parties`: top people and shops, amount in and out, count
   - `accounts`: per account in, out, count
@@ -48,14 +49,16 @@ The owner wants any fact about their money to be one tap away. Reports are the m
   - `largest`: up to 5 biggest payments (date, name, amount, category)
   - `fees`: total and count; `cash`: withdrawals total and count
   - `insights`: 3 to 5 short plain sentences
-- Validation: the app rejects a reply that is not that shape (missing totals, amounts not positive numbers, unknown categories, dates outside the period, more than the caps on list lengths); a rejected reply is not stored and the report is retried at the next check. Amounts are converted to minor units on parse.
+- Validation: the app rejects a reply that is not that shape (missing totals, amounts not positive numbers, unknown categories, dates outside the period, more than the caps on list lengths); a rejected reply is not stored and the report is retried at the next check, at most 3 tries per period; then Reports shows "Couldn't make this report" with Try again, and no more automatic tries (my call: a reply that keeps failing must not keep spending). Amounts are converted to minor units on parse.
+- Cost cap: when today's AI limit is reached the report waits for the next day and Reports says so (my call).
+- Currencies: every amount section is per currency; the screen shows one section per currency, the notification the currency with the most money out (my call).
 - Storage: table `reports(id, kind, period_start, period_end, partial, created_at, json)`, at most 8 weekly and 4 monthly kept (oldest deleted on insert). Schema v6 (also adds the category-set column).
-- Notification: one line, for example "Week of 10–16 Nov: out PKR 48,300, top Food & dining". Channel "Reports". Tapping opens Inflow; after unlock the report opens. Needs `POST_NOTIFICATIONS` (asked once from Money or Settings on Android 13+); without it reports are still made and listed.
+- Notification: one line, for example "Week of 10–16 Nov: out PKR 48,300, top Food & dining". Channel "Reports". On the lock screen it shows only "Your weekly report is ready" (or monthly); the amounts show once the phone is unlocked (my call). Tapping opens Inflow; after unlock the report opens. Needs `POST_NOTIFICATIONS` (asked once from Money or Settings on Android 13+); without it reports are still made and listed.
 - Screen: Money gets a "Reports" group (newest first, weekly and monthly). A report screen shows the totals, a category bar chart with shares and change arrows, a daily column chart, tables for parties, accounts, own transfers, largest payments, fees and cash, and the insights. Charts are views sized by value; numbers use the existing amount format.
 
 ### What the AI may receive (privacy)
 - Categorisation and reports send transaction fields only, never message text. AGENTS.md and the Inflow spec are amended to say so.
-- Which transactions: see the open question below.
+- Which transactions (owner, 2026-11-17, "Send both"): every transaction, including ones read from bank app notifications (pushes) and ones from apps or senders kept from the AI. "Keep from AI" still keeps the messages themselves from the AI; Ask AI keeps its current rule.
 
 ## Constraints
 - Kotlin owns categorisation, scheduling, the AI calls, validation, storage and the notification; RN renders with `@apps-hub/ui`. No new dependency.
@@ -66,6 +69,3 @@ The owner wants any fact about their money to be one tap away. Reports are the m
 - Batch sizes and request caps for categorisation and reports (a month can hold hundreds of transactions).
 - Exact prompt wording and JSON key names, within the shape above.
 - Chart styling within `@apps-hub/ui` tokens.
-
-## Open question for the owner
-- Transactions read from bank app notifications (pushes) are never sent to the AI today (R44 and Ask AI's rule). With A, leaving them out makes report totals wrong. Send their transaction fields (amount, account, shop, date; never the notification text) for categories and reports?
