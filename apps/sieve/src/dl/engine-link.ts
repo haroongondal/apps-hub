@@ -63,8 +63,8 @@ export async function addRecords(items: AddItem[]): Promise<{ ids: string[] } | 
   try {
     extras = items.map((i) => ({ url: i.url, finalUrl: i.probed?.finalUrl, referrer: i.referrer ?? '' }));
     await syncRecordRules(extras);
-    const reply = await sendToEngine<{ ids?: string[] } | undefined>({ type: 'dl-eng-add', items });
-    return Array.isArray(reply?.ids) ? { ids: reply.ids } : null;
+    const reply = await sendToEngine<{ ids?: string[]; error?: string } | undefined>({ type: 'dl-eng-add', items });
+    return Array.isArray(reply?.ids) && !reply.error ? { ids: reply.ids } : null; // the Worker answers { ids: [], error } when engine.add threw
   } catch {
     return null;
   } finally {

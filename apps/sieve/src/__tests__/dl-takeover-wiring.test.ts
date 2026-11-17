@@ -410,3 +410,14 @@ test('the dl-retry-chrome handler ignores a web page and answers an extension pa
   assert.equal(handler({ type: 'dl-retry-chrome', id: 5 }, { url: 'chrome-extension://ext/list.html' }, (x) => (reply = x)), false);
   assert.deepEqual(reply, { ok: false, message: T.retryGone });
 });
+
+test('the settings and the retry keys are read at the same time, so the pause is not two storage reads late', async () => {
+  const f = fake();
+  const order: string[] = [];
+  const session = f.deps.session;
+  f.deps.session = { ...session, get: async (k: unknown) => (order.push('session-start'), await sleep(15), order.push('session-end'), session.get(k as null)) } as Deps['session'];
+  f.deps.settings = async () => (order.push('settings-start'), await sleep(15), order.push('settings-end'), settings());
+  await mod.onCreated(item(), f.deps);
+  assert.deepEqual(order.slice(0, 2).sort(), ['session-start', 'settings-start'], JSON.stringify(order));
+  assert.ok(f.calls.includes('pause:7'));
+});

@@ -26,7 +26,14 @@ export async function run(t) {
         const original = chrome.downloads[n];
         chrome.downloads[n] = function (...a) {
           self.__log.push({ n, id: typeof a[0] === 'number' ? a[0] : a[0]?.id, t: Date.now() });
-          return original.apply(chrome.downloads, a);
+          const done = original.apply(chrome.downloads, a);
+          if (n === 'pause') {
+            Promise.resolve(done)
+              .then(() => chrome.downloads.search({ id: a[0] }))
+              .then(([i]) => self.__log.push({ n: 'paused-bytes', id: a[0], bytes: i?.bytesReceived }))
+              .catch(() => {});
+          }
+          return done;
         };
       }
       chrome.downloads.onCreated.addListener((i) => self.__log.push({ n: 'created', id: i.id, t: Date.now() }));
@@ -105,6 +112,8 @@ export async function run(t) {
     const created = calls.find((c) => c.n === 'created' && c.id === r.chromeId);
     const paused = calls.find((c) => c.n === 'pause' && c.id === r.chromeId);
     check('downloads: take-over: pause was called less than 100 ms after onCreated', created && paused && paused.t - created.t < 100, json({ created, paused }));
+    const bytes = calls.find((c) => c.n === 'paused-bytes' && c.id === r.chromeId);
+    check('downloads: take-over: Chrome had received no bytes when the pause settled', bytes?.bytes === 0, json(bytes));
   });
 
   await attempt('not taken', async () => {
@@ -137,7 +146,8 @@ export async function run(t) {
   for (const [name, path, post] of matrix) {
     await attempt(`leave: ${name}`, async () => {
       await fresh();
-      await start(path, { post });
+      // Throttled: an unthrottled 20 MB file could finish in Chrome before the pause, and then nothing is left to resume.
+      await start(`${path}${path.includes('?') ? '&' : '?'}rate=10000000`, { post });
       const only = path.split('?')[0];
       const l = await complete(only);
       const calls = await log();

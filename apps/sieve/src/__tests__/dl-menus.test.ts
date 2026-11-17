@@ -199,6 +199,13 @@ test('an existing downloads tab is updated and focused instead of a new one', as
   assert.deepEqual(calls.reload, []);
 });
 
+test('a click in an incognito tab stores nothing and opens nothing (as take-over skips incognito downloads)', async () => {
+  const { session, calls } = setup({ result: ['https://a.com/1'] });
+  for (const menuItemId of ['dl-link', 'dl-selection', 'dl-page']) await onMenuClicked({ menuItemId, linkUrl: 'https://x.com/a.zip', selectionText: 'https://x.com/b.zip', pageUrl: 'https://x.com/p' }, { id: 1, incognito: true });
+  assert.equal(session.size, 0);
+  assert.equal(calls.scripts.length + calls.created.length + calls.updated.length, 0);
+});
+
 test('downloads.on false does nothing at all', async () => {
   const { session, calls } = setup({ on: false, result: ['https://a.com/1'] });
   await onMenuClicked({ menuItemId: 'dl-link', linkUrl: 'https://x.com/a.zip' }, { id: 1 });

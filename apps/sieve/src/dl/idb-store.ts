@@ -58,18 +58,12 @@ export async function openStore(): Promise<Store> {
   };
 }
 
-// Pages and the worker read it: one short connection, closed at once; [] when the database cannot be opened.
+// Pages and the worker read it: one short connection, closed at once. It rejects when the database cannot be read:
+// an empty answer would make the router close the engine and drop rules, and the pages say there are no downloads.
 export async function readAllRecords(): Promise<DlRecord[]> {
-  let db: IDBDatabase;
-  try {
-    db = await openDb();
-  } catch {
-    return [];
-  }
+  const db = await openDb();
   try {
     return await request<DlRecord[]>(db.transaction(RECORDS, 'readonly').objectStore(RECORDS).getAll());
-  } catch {
-    return [];
   } finally {
     db.close();
   }

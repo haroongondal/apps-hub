@@ -9,7 +9,7 @@ export const MENU_SELECTION = 'dl-selection';
 export const MENU_PAGE = 'dl-page';
 
 type Info = { menuItemId: string | number; linkUrl?: string; selectionText?: string; pageUrl?: string; frameId?: number };
-type TabLike = { id?: number; url?: string };
+type TabLike = { id?: number; url?: string; incognito?: boolean };
 
 // One chain: a rebuild waits for the previous one, so overlapping calls cannot create an item twice,
 // and it reads the settings when its turn comes, so an older read cannot win over a newer change.
@@ -39,6 +39,7 @@ async function scan(func: () => string[], tab: TabLike | undefined, frameId: num
 }
 
 export async function onMenuClicked(info: Info, tab: TabLike | undefined): Promise<void> {
+  if (tab?.incognito) return; // the list is stored on disk; as with take-over, a private window's links never go into it
   if (!(await readDownloads()).on) return;
   let urls: string[] = [];
   if (info.menuItemId === MENU_LINK) urls = normaliseLinks([info.linkUrl ?? '']);

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { DEFAULT_DOWNLOADS, validateDownloadSettings, type DownloadSettings } from '@apps-hub/sieve-core/src/dl-settings.ts';
 import { T } from '@apps-hub/sieve-core/src/dl-text.ts';
+import { fakeIndexedDb } from './dl-idb-fakes.ts';
 
 const BASE = 'chrome-extension://sieve/';
 type Listener = (message: unknown, sender: unknown, reply: (r: unknown) => void) => boolean;
@@ -15,6 +16,7 @@ function setup(options: { rules?: (n: number) => Promise<void>; documents?: numb
   const changed: Change[] = [];
   const listeners: Listener[] = [];
   let documents = options.documents ?? 0;
+  fakeIndexedDb();
   (globalThis as unknown as Record<string, unknown>).chrome = {
     storage: {
       local: {
@@ -164,6 +166,8 @@ test('addRecords returns null when sendToEngine rejects, and the ids when the en
   setup({ sendMessage: async () => ({ ids: ['x'] }) });
   assert.deepEqual(await (await fresh<Link>('engine-link.ts')).addRecords([{ url: 'https://x.test/a', source: 'manual' }]), { ids: ['x'] });
   setup({ sendMessage: async () => ({ error: 'TIMEOUT' }) });
+  assert.equal(await (await fresh<Link>('engine-link.ts')).addRecords([{ url: 'https://x.test/a', source: 'manual' }]), null);
+  setup({ sendMessage: async () => ({ ids: [], error: 'QuotaExceededError' }) }); // engine.add threw inside the Worker
   assert.equal(await (await fresh<Link>('engine-link.ts')).addRecords([{ url: 'https://x.test/a', source: 'manual' }]), null);
 });
 

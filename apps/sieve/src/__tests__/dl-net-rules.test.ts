@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ALLOW_PRIORITY, ALLOW_RULE_ID, PROBE_RULE_FIRST, RECORD_RULE_FIRST, RECORD_RULE_LAST, REFERER_PRIORITY, addProbeRule, allowRule, recordRules, refererRule } from '../dl/net-rules.ts';
+import { fakeIndexedDb } from './dl-idb-fakes.ts';
 
 const ID = 'abcdefghijklmnop';
 const rec = (id: string, url: string, referrer = 'https://r.example/', state = 'queued', finalUrl = url) => ({ id, url, finalUrl, referrer, state });
@@ -48,6 +49,7 @@ test('recordRules stops at 1000 rules', () => {
 
 function fakeChrome(onCall?: (n: number) => Promise<void>) {
   const calls: { removeRuleIds?: number[]; addRules?: chrome.declarativeNetRequest.Rule[] }[] = [];
+  fakeIndexedDb();
   (globalThis as unknown as Record<string, unknown>).chrome = {
     runtime: { id: ID },
     declarativeNetRequest: {
@@ -140,4 +142,20 @@ test('syncs run one at a time', async () => {
   assert.equal(most, 1);
   assert.equal(calls.length, 2);
   assert.deepEqual(urls(calls[1]), ['|https://x/a|', '|https://x/b|']);
+});
+
+test('a sync whose records cannot be read rejects and leaves the session rules as they are', async () => {
+  const calls = fakeChrome();
+  fakeIndexedDb(new Error('UnknownError: Internal error opening backing store'));
+  const m = (await import(`../dl/net-rules.ts?fresh=${6}`)) as typeof import('../dl/net-rules.ts');
+  await assert.rejects(m.syncRecordRules([]), /backing store/);
+  assert.equal(calls.length, 0, 'no update that would remove every record rule');
+});
+
+test('readAllRecords rejects when the database cannot be opened, and gives the records when it can', async () => {
+  const { readAllRecords } = (await import(`../dl/idb-store.ts?fresh=${1}`)) as typeof import('../dl/idb-store.ts');
+  fakeIndexedDb(new Error('UnknownError'));
+  await assert.rejects(readAllRecords(), /UnknownError/);
+  fakeIndexedDb([{ id: 'd1' }]);
+  assert.deepEqual(await readAllRecords(), [{ id: 'd1' }]);
 });

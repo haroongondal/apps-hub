@@ -5,6 +5,7 @@ import { newRecord, type DlRecord, type DlState } from '@apps-hub/sieve-core/src
 import { DEFAULT_DOWNLOADS, validateDownloadSettings, type DownloadSettings, type Schedule } from '@apps-hub/sieve-core/src/dl-settings.ts';
 import { nextChange } from '@apps-hub/sieve-core/src/dl-queue.ts';
 import { ALARM_SCHEDULE, ALARM_WATCHDOG, runnable, syncAlarms } from '../dl/alarms.ts';
+import { fakeIndexedDb } from './dl-idb-fakes.ts';
 
 const BASE = 'chrome-extension://sieve/';
 type Listener = (message: unknown, sender: unknown, reply: (r: unknown) => void) => boolean;
@@ -51,6 +52,7 @@ async function boot(options: { records?: DlRecord[]; settings?: DownloadSettings
     onChanged: [] as ((c: Record<string, { newValue?: unknown }>, area: string) => void)[],
   };
   if (options.settings) t.store.set('downloads', options.settings);
+  fakeIndexedDb();
   const g = globalThis as unknown as Record<string, unknown>;
   g.chrome = {
     storage: {
@@ -374,6 +376,21 @@ test('dl-sw-idle skips the close when an add starts during its read', async () =
   await idle;
   await adding;
   assert.equal(t.t.closed, 0);
+});
+
+test('dl-sw-idle checks again after closing: a resume that landed meanwhile gets its engine and watchdog back', async () => {
+  const t = await boot({ documents: 1, records: [rec('paused')] });
+  const offscreen = (globalThis as unknown as { chrome: { offscreen: { closeDocument: () => Promise<void> } } }).chrome.offscreen;
+  const close = offscreen.closeDocument;
+  offscreen.closeDocument = async () => {
+    t.t.records = [rec('queued', { force: true })]; // the engine stored a dl-do resume before the document went
+    await close();
+  };
+  await t.post({ type: 'dl-sw-idle' });
+  await sleep(30);
+  assert.equal(t.t.closed, 1);
+  assert.equal(t.t.documents, 1, 'the engine is back');
+  assert.ok(t.t.alarms.has(ALARM_WATCHDOG));
 });
 
 test('alarm handlers: dl-watchdog also resends finished saves the engine never heard about; dl-schedule does not', async () => {

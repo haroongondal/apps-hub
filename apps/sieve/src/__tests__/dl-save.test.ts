@@ -302,3 +302,43 @@ test('recoverSaves leaves a record alone when a new save of it started and finis
   assert.deepEqual(events(env.calls), [], 'the old item must not fail the new save');
   assert.deepEqual(env.session.get(`dlSave:${BLOB}`), entry({ chromeId: 7 }), 'the new save keeps its entry');
 });
+
+test('a terminal event the engine answers with an error (a TIMEOUT) keeps the entry for recoverSaves', async () => {
+  const env = setup({ send: async (m) => (m.type === 'dl-eng-save-event' ? { error: 'TIMEOUT' } : { ok: true }) });
+  const { onSave, initSave } = await load();
+  initSave();
+  await onSave(msg(), OFFSCREEN as never);
+  Object.assign(env.items.get(7)!, { state: 'complete', fileSize: 100, filename: '/dl/a.zip' });
+  env.fire({ id: 7, state: { current: 'complete' } });
+  await settle();
+  assert.equal(events(env.calls).length, 1);
+  assert.deepEqual(env.session.get(`dlSave:${BLOB}`), entry({ chromeId: 7 }));
+});
+
+test('onSave does not write back an entry that a fast finish already removed', async () => {
+  const env = setup({ download: async (_o, s) => (s.delete(`dlSave:${BLOB}`), 5) }); // done reported and acknowledged before download() returned
+  const { onSave } = await load();
+  assert.deepEqual(await onSave(msg(), OFFSCREEN as never), { ok: true, chromeId: 5 });
+  assert.equal(env.session.size, 0);
+});
+
+test('recoverSaves does not write the old chrome id over the entry of a save that started while it looked', async () => {
+  const env = setup();
+  const { onSave, recoverSaves } = await load();
+  env.items.set(9, { id: 9, url: BLOB, state: 'interrupted', filename: '', fileSize: 0, error: 'NETWORK_FAILED' });
+  env.session.set(`dlSave:${BLOB}`, entry());
+  const downloads = (globalThis as unknown as { chrome: { downloads: { search: (q: object) => Promise<unknown[]> } } }).chrome.downloads;
+  const search = downloads.search;
+  let first = true;
+  downloads.search = async (q) => {
+    if (first) (first = false, await new Promise((r) => setTimeout(r, 30)));
+    return search(q);
+  };
+  const recovering = recoverSaves();
+  await new Promise((r) => setTimeout(r, 2));
+  assert.deepEqual(await onSave(msg(), OFFSCREEN as never), { ok: true, chromeId: 7 });
+  await recovering;
+  await settle();
+  assert.deepEqual(env.session.get(`dlSave:${BLOB}`), entry({ chromeId: 7 }));
+  assert.deepEqual(events(env.calls), []);
+});

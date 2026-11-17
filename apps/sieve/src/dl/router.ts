@@ -55,7 +55,10 @@ async function idle(): Promise<unknown> {
   const before = { ...adds };
   const [settings, records] = await Promise.all([readDownloads(), io.records()]);
   // An add that ran during the read may hold a record the read missed; closing would also drop its reply.
-  if (before.running === 0 && adds.started === before.started && !runnable(records, settings, new Date())) await closeEngine();
+  if (before.running === 0 && adds.started === before.started && !runnable(records, settings, new Date())) {
+    await closeEngine();
+    void reconcile().catch(logFailure); // a command the engine stored between its idle message and the close needs it back
+  }
   return { ok: true };
 }
 

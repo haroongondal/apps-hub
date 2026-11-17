@@ -56,10 +56,11 @@ async function heldByEngine(deps: Pick<TakeoverDeps, 'records'>, id: number, url
 
 export async function onCreated(item: chrome.downloads.DownloadItem, deps: TakeoverDeps = realTakeoverDeps()): Promise<void> {
   if (item.incognito) return;
-  const retryUrls = (await entries(deps.session, RETRY_PREFIX)).filter(([, until]) => typeof until === 'number' && until > deps.now()).map(([k]) => k.slice(RETRY_PREFIX.length));
+  // Both reads at once: every millisecond before the pause is bytes Chrome may write (plan Review Focus 8: pause within 100 ms).
+  const [retry, s] = await Promise.all([entries(deps.session, RETRY_PREFIX), deps.settings()]);
+  const retryUrls = retry.filter(([, until]) => typeof until === 'number' && until > deps.now()).map(([k]) => k.slice(RETRY_PREFIX.length));
   let ci: ChromeItem = { url: item.url, finalUrl: item.finalUrl, referrer: item.referrer, mime: item.mime, totalBytes: item.totalBytes, byExtensionId: item.byExtensionId, filename: item.filename };
   if (isOurs(ci, deps.extensionId, retryUrls)) return;
-  const s = await deps.settings();
   if (!wantsTakeover(ci, s.takeOver, s.on).want) return;
 
   const key = TAKEOVER_PREFIX + item.id;
