@@ -50,5 +50,10 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
             android:turnScreenOn="true" />
+        <activity
+            android:name="expo.modules.haloengine.android.AodPreviewActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
     </application>
 </manifest>

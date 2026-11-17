@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import expo.modules.haloengine.android.AodPreviewActivity
 import expo.modules.haloengine.android.AppIcons
 import expo.modules.haloengine.android.Backgrounds
 import expo.modules.haloengine.android.FacePreview
@@ -147,6 +148,12 @@ class HaloEngineModule : Module() {
         Backgrounds.setPhoto(context, themeId, false)
       }
       Unit
+    }
+
+    // Over the app, never over the keyguard; an unknown id shows the theme the always-on screen would pick now.
+    Function("previewAod") { themeId: String ->
+      val i = Intent(context, AodPreviewActivity::class.java).putExtra(AodPreviewActivity.EXTRA_THEME, themeId)
+      appContext.currentActivity?.startActivity(i) ?: open(i)
     }
 
     // A PNG of the theme's face on its background, in the cache folder; returns its file:// URI.

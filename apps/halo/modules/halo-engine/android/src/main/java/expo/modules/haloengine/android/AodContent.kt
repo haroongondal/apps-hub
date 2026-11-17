@@ -81,7 +81,7 @@ class AodContent(
     background = GradientDrawable().apply { cornerRadius = 20 * dp; setColor(0x26FFFFFF) }
     setPadding((12 * dp).toInt(), (10 * dp).toInt(), (16 * dp).toInt(), (10 * dp).toInt())
   }
-  private val bottom = LinearLayout(ctx).apply {
+  private val lower = LinearLayout(ctx).apply {
     orientation = LinearLayout.VERTICAL
     gravity = Gravity.CENTER_HORIZONTAL
     setPadding((32 * dp).toInt(), 0, (32 * dp).toInt(), (40 * dp).toInt())
@@ -111,8 +111,8 @@ class AodContent(
     override fun run() {
       val now = System.currentTimeMillis()
       BurnIn.offset(now, 12 * dp, shift)
-      bottom.translationX = shift[0]
-      bottom.translationY = shift[1]
+      lower.translationX = shift[0]
+      lower.translationY = shift[1]
       main.postDelayed(this, 60_000L - now % 60_000L)
     }
   }
@@ -138,12 +138,12 @@ class AodContent(
     card.addView(art, LinearLayout.LayoutParams((48 * dp).toInt(), (48 * dp).toInt()).apply { marginEnd = (12 * dp).toInt() })
     card.addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
     art.background = GradientDrawable().apply { cornerRadius = 10 * dp; setColor(0x33FFFFFF) }
-    bottom.addView(icons, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-    bottom.addView(card, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (16 * dp).toInt() })
+    lower.addView(icons, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+    lower.addView(card, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (16 * dp).toInt() })
     val column = LinearLayout(ctx).apply {
       orientation = LinearLayout.VERTICAL
       addView(face, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-      addView(bottom, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+      addView(lower, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
     }
     content.addView(photo, match)
     content.addView(dim, LayoutParams(match))
@@ -320,7 +320,6 @@ class AodContent(
 
     fun fullScreen(w: Window) {
       w.attributes = w.attributes.apply { layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS }
-      w.setDecorFitsSystemWindows(false)
       w.insetsController?.let {
         it.hide(WindowInsets.Type.systemBars())
         it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE

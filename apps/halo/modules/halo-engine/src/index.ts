@@ -56,6 +56,7 @@ interface NativeApi {
   pickBackground(themeId: string): Promise<boolean>;
   clearBackground(themeId: string): Promise<void>;
   renderFacePreview(themeId: string, width: number, height: number): Promise<string>;
+  previewAod(themeId: string): void;
   addListener(event: 'onStatus', listener: (s: Status) => void): Subscription;
 }
 
@@ -84,6 +85,8 @@ export interface HaloEngineApi {
   clearBackground(themeId: string): Promise<void>;
   /** A file:// URI of a PNG (width x height px) of the theme's face on its background, drawn now with sample values. */
   renderFacePreview(themeId: string, width: number, height: number): Promise<string>;
+  /** Opens the always-on screen with this theme over the app (not over the lock screen); back or a tap closes it. */
+  previewAod(themeId: string): void;
   addStatusListener(cb: (s: Status) => void): Subscription;
 }
 
@@ -104,6 +107,7 @@ const HaloEngine: HaloEngineApi = {
   pickBackground: async (themeId) => (await native.pickBackground(themeId)) === true,
   clearBackground: (themeId) => native.clearBackground(themeId),
   renderFacePreview: async (themeId, width, height) => String(await native.renderFacePreview(themeId, Math.round(width), Math.round(height))),
+  previewAod: (themeId) => native.previewAod(themeId),
   addStatusListener: (cb) => native.addListener('onStatus', cb),
 };
 
