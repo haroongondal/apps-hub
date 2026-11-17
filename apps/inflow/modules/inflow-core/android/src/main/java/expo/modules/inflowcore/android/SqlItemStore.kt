@@ -323,7 +323,8 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
         }
       }
     }
-    return mapOf("conversations" to conversations, "inbox" to inbox, "important" to important, "comingUp" to comingUp)
+    val hasItems = query(HAS_ITEMS_SQL, now).use { it.moveToFirst() && it.getInt(0) != 0 }
+    return mapOf("conversations" to conversations, "inbox" to inbox, "important" to important, "comingUp" to comingUp, "hasItems" to hasItems)
   }
 
   /** Every app, newest first; same-label apps that are not contact apps are one row. */
@@ -362,9 +363,9 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       mapOf("senders" to c.getInt(0), "lastAt" to if (c.isNull(1)) null else c.getLong(1))
     }
 
-  /** Null: not an SMS sender, so there is nothing to choose. Else whether the sender is in Promotions now. */
-  fun smsPromotion(key: String): Boolean? =
-    query(SMS_PROMOTION_SQL, key, key).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getInt(0) != 0 else null }
+  /** Null: the item is gone or not an SMS item, so there is nothing to choose. Else whether its sender is in Promotions now. */
+  fun smsPromotion(itemId: Long): Boolean? =
+    query(SMS_PROMOTION_SQL, itemId).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getInt(0) != 0 else null }
 
   fun setPromotion(key: String, promotional: Boolean) {
     run(SET_PROMOTION_SQL, key, if (promotional) 1L else 0L)
@@ -506,18 +507,21 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     private const val VISIBLE_T = "(t.otp_expires_at IS NULL OR t.otp_expires_at > ?)"
 
     // Quieter SMS. An SMS item is one with an sms_hash or from a known SMS app; only these senders can be promotional.
-    internal val SMS_ITEM = "(i.sms_hash IS NOT NULL OR i.pkg IN (${Sms.KNOWN_APPS.joinToString(",") { "'$it'" }}))"
+    internal fun smsItem(a: String) = "($a.sms_hash IS NOT NULL OR $a.pkg IN (${Sms.KNOWN_APPS.joinToString(",") { "'$it'" }}))"
+    internal val SMS_ITEM = smsItem("i")
 
     // The keys (conversation key, else sender key) of promotional SMS senders: the owner's choice (sender_promo) wins; else more than half of the sender's
     // AI-read items are kind 'promotion' and none of its items is a transaction source (a bank stays visible). No parameters.
+    // shortcut: has_txn only sees items still stored; retention (keep-days on SMS) deletes old ones, so a bank whose remaining recent items are mostly promotions could fold. The owner's "Keep in my list" fixes it.
     // shortcut: recomputed per query; switch to a stored flag if Home takes over ~300 ms on the phone.
     internal val PROMO_KEYS = "SELECT s.k FROM (SELECT COALESCE(i.conversation_key, i.sender_key) AS k, COUNT(r.item_id) AS ai_read, SUM(r.kind = 'promotion') AS promo, " +
       "MAX(EXISTS(SELECT 1 FROM txn_sources x WHERE x.item_id = i.id)) AS has_txn FROM items i LEFT JOIN ai_results r ON r.item_id = i.id " +
       "WHERE $SMS_ITEM AND COALESCE(i.conversation_key, i.sender_key) IS NOT NULL GROUP BY k) s LEFT JOIN sender_promo o ON o.sender_key = s.k " +
       "WHERE COALESCE(o.promo, s.ai_read >= 1 AND s.promo * 2 > s.ai_read AND s.has_txn = 0) = 1"
 
-    /** True for an item of any app whose contact key is not promotional (or has none). */
-    internal fun notPromo(a: String) = "(COALESCE($a.conversation_key, $a.sender_key) IS NULL OR COALESCE($a.conversation_key, $a.sender_key) NOT IN ($PROMO_KEYS))"
+    /** False only for an SMS item whose contact key is promotional: other apps sharing a num: key (a WhatsApp chat with an unsaved number) are never folded. */
+    internal fun notPromo(a: String) =
+      "(NOT ${smsItem(a)} OR COALESCE($a.conversation_key, $a.sender_key) IS NULL OR COALESCE($a.conversation_key, $a.sender_key) NOT IN ($PROMO_KEYS))"
 
     /** SQL twin of GenericTitle. shortcut: the GLOB also matches "5x new message"; fine for notification titles seen so far. */
     internal fun GENERIC_SQL(expr: String) =
@@ -528,7 +532,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     // A short code (num: plus at most 6 digits) is named after its bank: the account text of its newest transaction without the trailing digits ("Alfalah 2310" is "Alfalah").
     private fun bank(k: String) =
       "CASE WHEN $k LIKE 'num:%' AND length($k) <= 10 THEN (SELECT NULLIF(trim(rtrim(t.account, '0123456789')), '') FROM items b " +
-        "JOIN txn_sources s ON s.item_id = b.id JOIN txns t ON t.id = s.txn_id WHERE b.sender_key = $k ORDER BY t.at DESC, t.id DESC LIMIT 1) END"
+        "JOIN txn_sources s ON s.item_id = b.id JOIN txns t ON t.id = s.txn_id WHERE b.conversation_key = $k AND b.sender_key = $k ORDER BY t.at DESC, t.id DESC LIMIT 1) END"
 
     // The owner's rename (n.name) wins, then the bank, then the chat name or sender unless generic or "You", then the app, then the key.
     private fun displayName(conversation: String, sender: String, appLabel: String, k: String) =
@@ -564,8 +568,11 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     internal val PROMOTIONS_SQL =
       "SELECT COUNT(DISTINCT COALESCE(i.conversation_key, i.sender_key)), MAX(i.posted_at) FROM items i WHERE i.pkg = ? AND $VISIBLE_I AND NOT ${notPromo("i")}"
 
+    // Null: the item is gone or not an SMS item (or has no key).
     internal val SMS_PROMOTION_SQL =
-      "SELECT CASE WHEN EXISTS (SELECT 1 FROM items i WHERE COALESCE(i.conversation_key, i.sender_key) = ? AND $SMS_ITEM) THEN ? IN ($PROMO_KEYS) END"
+      "SELECT CASE WHEN $SMS_ITEM THEN COALESCE(i.conversation_key, i.sender_key) IN ($PROMO_KEYS) END FROM items i WHERE i.id = ?"
+
+    internal const val HAS_ITEMS_SQL = "SELECT EXISTS(SELECT 1 FROM items i WHERE $VISIBLE_I)"
 
     internal const val SET_PROMOTION_SQL = "INSERT INTO sender_promo(sender_key, promo) VALUES (?, ?) ON CONFLICT(sender_key) DO UPDATE SET promo = excluded.promo"
     private val lock = Any()

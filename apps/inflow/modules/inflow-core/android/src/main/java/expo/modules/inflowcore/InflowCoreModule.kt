@@ -160,8 +160,8 @@ class InflowCoreModule : Module() {
       store().promotions(pkg, System.currentTimeMillis())
     }
 
-    Function("smsPromotion") { key: String ->
-      store().smsPromotion(key)
+    Function("smsPromotion") { itemId: Long ->
+      store().smsPromotion(itemId)
     }
 
     Function("setPromotion") { key: String, promotional: Boolean ->

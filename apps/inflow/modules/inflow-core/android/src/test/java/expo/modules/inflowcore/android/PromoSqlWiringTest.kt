@@ -4,8 +4,9 @@ import expo.modules.inflowcore.core.Sms
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// No store-level SQL harness (R32): the promotional-sender SQL was proven in sqlite3 on fixtures; this pins that it carries the shared SMS package list and is used as one constant.
-class PromoSqlTest {
+// Wiring pin only, NOT a proof of the promotional rule: there is no store-level SQL harness (R32), the rule was proven in sqlite3 on fixtures.
+// This pins that the SQL carries the shared SMS package list and that every query uses the one PROMO_KEYS constant.
+class PromoSqlWiringTest {
   @Test fun smsItemCarriesEveryKnownSmsApp() {
     Sms.KNOWN_APPS.forEach { assertTrue(it, SqlItemStore.SMS_ITEM.contains("'$it'")) }
     assertTrue(SqlItemStore.SMS_ITEM.contains("i.sms_hash IS NOT NULL"))
@@ -18,5 +19,6 @@ class PromoSqlTest {
     }
     assertTrue(!c.statsSql(false).contains(c.PROMO_KEYS))
     assertTrue(c.contactsSql(true, false).contains("NOT " + c.notPromo("i")))
+    assertTrue(c.notPromo("i").contains("NOT ${c.SMS_ITEM}"))   // other apps sharing a num: key are never folded
   }
 }
