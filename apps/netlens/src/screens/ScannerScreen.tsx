@@ -358,11 +358,13 @@ export default function ScannerScreen() {
       const store = storeProxy.current;
       if (!store || device.id === null) return;
       const id = device.id;
-      commitDevices(devicesRef.current.filter((row) => row.id !== id));
+      const before = devicesRef.current;
+      commitDevices(before.filter((row) => row.id !== id));
       setDetail((open) => (open !== null && open.id === id ? null : open));
       try {
         await store.deleteDevice(id);
       } catch (e: unknown) {
+        commitDevices(before);
         setErrorNote(`HomeNet could not forget this device: ${e instanceof Error ? e.message : String(e)}`);
       }
     },

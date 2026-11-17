@@ -620,8 +620,9 @@ export function RecordMenu({ title, actions, accessibilityLabel }: { title: stri
   const [open, setOpen] = useState(false);
   const run = (a: RecordAction) => {
     setOpen(false);
-    if (!a.destructive) return a.onPress();
-    // Let the sheet finish closing before the alert opens, or Android drops one of them.
+    // Let the sheet finish closing first. Android drops an alert opened mid-dismiss, and iOS won't present a Modal while one is closing,
+    // so a sheet opened from an action would never appear.
+    if (!a.destructive) return void setTimeout(a.onPress, 250);
     setTimeout(() => confirmAction({ title: a.confirmTitle ?? `${a.label} this?`, message: a.confirmMessage ?? 'This can\u2019t be undone.', confirmLabel: a.confirmLabel ?? a.label, onConfirm: a.onPress }), 250);
   };
   return (

@@ -199,7 +199,8 @@ export function TagManageSheet({ onChanged, onClose }: { onChanged: () => void; 
       await refresh();
     } catch (err) {
       if (!(err instanceof LibraryError && err.code === 'duplicate_name')) throw err;
-      merge(tag, name.trim());
+      const clean = name.trim();
+      merge(tag, tags?.find((t) => t.name.toLowerCase() === clean.toLowerCase())?.name ?? clean);
     }
   };
 

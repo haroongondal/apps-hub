@@ -75,7 +75,6 @@ export default function DesignsHome() {
   }
 
   // The menu sheet must finish closing before the rename sheet opens, or one of them is dropped.
-  const afterMenu = (run: () => void) => () => void setTimeout(run, 300);
 
   function resume() {
     router.push({ pathname: '/editor', params: { name: designTitle(resumable?.filePath) } });
@@ -190,7 +189,7 @@ export default function DesignsHome() {
                   title={design.name}
                   actions={[
                     { label: 'Open', onPress: () => openSaved(design) },
-                    { label: 'Rename', onPress: afterMenu(() => setRenaming(design)) },
+                    { label: 'Rename', onPress: () => setRenaming(design) },
                     {
                       label: 'Delete',
                       destructive: true,
@@ -215,7 +214,7 @@ export default function DesignsHome() {
           title="Rename design"
           initial={renaming.name}
           onSubmit={async name => {
-            await renameSavedDesign(renaming.id, name);
+            if (!(await renameSavedDesign(renaming.id, name))) throw new Error('This design is no longer in your list.');
             await reloadSaved();
           }}
           onClose={() => setRenaming(null)}

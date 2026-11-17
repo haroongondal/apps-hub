@@ -28,12 +28,3 @@ export function dueInput(dueAt: number | null): string {
   return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`;
 }
 
-// Open ones first (dated soonest first, then undated), done ones after, as listTodos returns them; this keeps a list stable after a local edit.
-export function sortTodos(todos: Todo[]): Todo[] {
-  return [...todos].sort((a, b) => {
-    if (a.done !== b.done) return a.done ? 1 : -1;
-    if ((a.dueAt === null) !== (b.dueAt === null)) return a.dueAt === null ? 1 : -1;
-    if (a.dueAt !== null && b.dueAt !== null && a.dueAt !== b.dueAt) return a.dueAt - b.dueAt;
-    return a.id - b.id;
-  });
-}

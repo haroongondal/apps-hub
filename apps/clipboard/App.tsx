@@ -79,7 +79,10 @@ function Home() {
     setPending(null);
   };
   const clearAll = () => {
-    commit();
+    // Drop the pending delete without committing it: the native clearAll must see that clip as the newest, so it is the one dismissed.
+    if (timer.current) clearTimeout(timer.current);
+    pendingRef.current = null;
+    setPending(null);
     ClipboardCore.clearAll();
     reload();
     setNotice('All clips cleared.');

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Todo } from 'inflow-core';
-import { dueInput, parseDue, sortTodos } from '../todos.ts';
+import { dueInput, parseDue } from '../todos.ts';
 
 // TZ is Asia/Karachi (UTC+5, no daylight saving) in the test script.
 const KARACHI = 5 * 3600 * 1000;
@@ -25,8 +25,3 @@ test('dueInput is the inverse of parseDue', () => {
   assert.equal(parseDue(dueInput(at(2026, 11, 20, 9, 5))), at(2026, 11, 20, 9, 5));
 });
 
-test('sortTodos puts open dated ones first, then undated, then done', () => {
-  const t = (id: number, dueAt: number | null, done = false): Todo => ({ id, itemId: 0, text: `t${id}`, dueAt, done });
-  const sorted = sortTodos([t(1, null), t(2, 500, true), t(3, 900), t(4, 100), t(5, null, true)]);
-  assert.deepEqual(sorted.map((x) => x.id), [4, 3, 1, 2, 5]);
-});

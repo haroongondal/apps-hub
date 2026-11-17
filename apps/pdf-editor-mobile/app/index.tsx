@@ -102,12 +102,11 @@ export default function LibraryScreen() {
   };
 
   // A menu sheet must finish closing before the next sheet opens, or one of them is dropped.
-  const afterMenu = (run: () => void) => () => void setTimeout(run, 300);
 
   const itemActions = (item: Item): RecordAction[] => [
-    { label: 'Rename', onPress: afterMenu(() => setSheet({ type: 'renameItem', item })) },
-    { label: 'Move to folder', onPress: afterMenu(() => setSheet({ type: 'moveItem', item })) },
-    { label: 'Tags', onPress: afterMenu(() => setSheet({ type: 'tags', item })) },
+    { label: 'Rename', onPress: () => setSheet({ type: 'renameItem', item }) },
+    { label: 'Move to folder', onPress: () => setSheet({ type: 'moveItem', item }) },
+    { label: 'Tags', onPress: () => setSheet({ type: 'tags', item }) },
     ...(item.kind === 'pdf'
       ? [
           {
@@ -137,8 +136,8 @@ export default function LibraryScreen() {
   ];
 
   const folderActions = (target: Folder): RecordAction[] => [
-    { label: 'Rename', onPress: afterMenu(() => setSheet({ type: 'renameFolder', folder: target })) },
-    { label: 'Move to folder', onPress: afterMenu(() => setSheet({ type: 'moveFolder', folder: target })) },
+    { label: 'Rename', onPress: () => setSheet({ type: 'renameFolder', folder: target }) },
+    { label: 'Move to folder', onPress: () => setSheet({ type: 'moveFolder', folder: target }) },
     {
       label: 'Delete',
       destructive: true,
