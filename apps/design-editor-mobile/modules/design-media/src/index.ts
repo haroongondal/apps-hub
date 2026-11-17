@@ -14,6 +14,8 @@ export interface NativeJobStatus {
 }
 export interface JobProgressEvent { id: string; fraction: number; attempt: number }
 export interface QueueEvent { jobs: NativeJobStatus[] }
+export interface VisionToolEntry { tool: 'person' | 'object' | 'upscale'; name: string; url: string; bytes: number; ready: boolean }
+export interface VisionProgressEvent { id: string; fraction: number }
 
 // Phase 3 additions (SPEC §14.3): the page's saveFile for reals — designs written through
 // MediaStore where the Files app shows them. saveJson returns the display path; saveExport the
@@ -46,10 +48,16 @@ export interface DesignMediaModule {
   searchPhotos(query: string): Promise<string[]>; // content URIs, best first, at most 60
   similarPhotos(uri: string): Promise<string[]>; // photos that look like this one, not including it
   releasePhotoSearch(): Promise<void>; // frees the text model's memory
+  // Quick edits: cut-out and upscale models. Same download-then-install steps as the photo models above.
+  visionTools(): Promise<VisionToolEntry[]>;
+  installVisionModel(name: string): Promise<boolean>; // file name, like installPhotoModel
+  runVision(id: string, op: 'cutout' | 'upscale', src: string, option: string): Promise<string>; // option 'person'|'object' or '2'|'4'; returns the PNG's absolute path
+  cancelVision(id: string): Promise<void>;
   saveJson(name: string, text: string, filePath: string | null): Promise<string>;
   saveExport(name: string, ext: string, base64: string): Promise<string>;
   addListener(name: 'onJobProgress', fn: (e: JobProgressEvent) => void): { remove(): void };
   addListener(name: 'onQueue', fn: (e: QueueEvent) => void): { remove(): void };
+  addListener(name: 'onVisionProgress', fn: (e: VisionProgressEvent) => void): { remove(): void };
 }
 
 export default requireNativeModule<DesignMediaModule>('DesignMedia');
