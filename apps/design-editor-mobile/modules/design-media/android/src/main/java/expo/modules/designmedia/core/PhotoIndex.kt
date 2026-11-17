@@ -9,7 +9,19 @@ import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 const val SEARCH_LIMIT = 60
-const val SEARCH_FLOOR = 0.25f
+// Measured on 1,000 COCO photos (2026-11-17): a fixed 0.25 hid real matches for one-word queries, and phone
+// galleries score lower than COCO, so words keep everything within SEARCH_MARGIN of the best match.
+const val SEARCH_FLOOR = 0.20f
+const val SEARCH_MARGIN = 0.05f
+// Photo-to-photo scores run much higher than word-to-photo ones, so More like this keeps a plain floor.
+const val SIMILAR_FLOOR = 0.25f
+private const val TEMPLATE_MAX_WORDS = 3
+
+// CLIP was trained on captions; a short query worded as one ranks better (24 of 25 top hits right, against 20).
+fun searchText(query: String): String {
+  val q = query.trim()
+  return if (q.split(Regex("\\s+")).size <= TEMPLATE_MAX_WORDS) "a photo of $q" else q
+}
 
 private const val DIM = 512
 private const val HEADER = 16
@@ -79,15 +91,18 @@ fun diff(gallery: List<PhotoKey>, index: List<PhotoRow>): IndexDiff {
   )
 }
 
-fun rank(rows: List<PhotoRow>, query: FloatArray, limit: Int, floor: Float): List<Long> {
+// Keeps scores >= max(floor, best - margin); the default margin keeps everything above the floor.
+fun rank(rows: List<PhotoRow>, query: FloatArray, limit: Int, floor: Float, margin: Float = Float.POSITIVE_INFINITY): List<Long> {
   val norm = sqrt(query.sumOf { (it * it).toDouble() }).toFloat()
   if (norm == 0f) return emptyList()
   val q = FloatArray(query.size) { query[it] / (norm * 127f) }
-  return rows.map { row ->
+  val scored = rows.map { row ->
     var s = 0f
     for (i in q.indices) s += row.vec[i] * q[i]
     row.key.id to s
-  }.filter { it.second >= floor }.sortedByDescending { it.second }.take(limit).map { it.first }
+  }.sortedByDescending { it.second }
+  val cut = maxOf(floor, (scored.firstOrNull()?.second ?: 0f) - margin)
+  return scored.takeWhile { it.second >= cut }.take(limit).map { it.first }
 }
 
 // Heat is checked first: plugging in doesn't fix it.

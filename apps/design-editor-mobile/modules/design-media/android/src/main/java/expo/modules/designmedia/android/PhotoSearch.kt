@@ -12,10 +12,13 @@ import expo.modules.designmedia.core.PhotoRow
 import expo.modules.designmedia.core.QueueStore
 import expo.modules.designmedia.core.SEARCH_FLOOR
 import expo.modules.designmedia.core.SEARCH_LIMIT
+import expo.modules.designmedia.core.SEARCH_MARGIN
+import expo.modules.designmedia.core.SIMILAR_FLOOR
 import expo.modules.designmedia.core.encodeJobs
 import expo.modules.designmedia.core.needsScan
 import expo.modules.designmedia.core.planIndexStart
 import expo.modules.designmedia.core.rank
+import expo.modules.designmedia.core.searchText
 import expo.modules.designmedia.core.shownQueue
 import expo.modules.kotlin.exception.CodedException
 import java.io.File
@@ -64,9 +67,9 @@ object PhotoSearch {
   fun search(ctx: Context, query: String): List<String> {
     if (!modelsReady(ctx)) throw SearchToolNotReady()
     if (query.isBlank()) return emptyList()
-    val ids = synchronized(tokenizerLock) { tokenizer(ctx).encode(query) }
+    val ids = synchronized(tokenizerLock) { tokenizer(ctx).encode(searchText(query)) }
     val vector = ClipSessions.embedQuery(ctx, ids)
-    return rank(index(ctx), vector, SEARCH_LIMIT, SEARCH_FLOOR).map(::uriOf)
+    return rank(index(ctx), vector, SEARCH_LIMIT, SEARCH_FLOOR, SEARCH_MARGIN).map(::uriOf)
   }
 
   fun similar(ctx: Context, uri: String): List<String> {
@@ -74,7 +77,7 @@ object PhotoSearch {
     val rows = index(ctx)
     val own = rows.firstOrNull { it.key.id == id } ?: return emptyList()
     val vector = FloatArray(own.vec.size) { own.vec[it] / 127f }
-    return rank(rows.filter { it.key.id != id }, vector, SEARCH_LIMIT, SEARCH_FLOOR).map(::uriOf)
+    return rank(rows.filter { it.key.id != id }, vector, SEARCH_LIMIT, SIMILAR_FLOOR).map(::uriOf)
   }
 
   fun release() = ClipSessions.releaseText()
