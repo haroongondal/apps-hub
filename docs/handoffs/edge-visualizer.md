@@ -63,14 +63,13 @@ APK copy: scratchpad only (not committed). Manifest dump via aapt2 `dump xmltree
 - 2026-11-17 (session 2): owner asked for full replica, picked approach A. Design doc written; builder check done and folded in; owner answered release + Muviz questions. Design approved; plan written.
 
 ## Current state + next step (2026-11-18, session 2)
-Store: store=19, halo=6 = Halo 0.4.0, installed on the owner's phone. Stage 3 done.
-Phone 2026-11-18: (d) always-on screen WORKS on HyperOS (spec §13) → stage 4 gate passed. Bug: service not restarted after
-the Store update, and opening the app does not start it (Diagnostics → Start needed) → fix first in stage 4.
-(b) reboot check in progress: phone rebooted 00:16; wireless debugging is off after reboot, waiting for the owner to unlock
-and either re-enable wireless debugging or read Halo's Home line ("running" or not). This session holds coord
-device:49kjmnuwonkffqzh — release it when done.
-Next: expand stage 4 in docs/superpowers/plans/2026-11-17-halo-stages-3-5.md into full tasks (outline 4.1-4.7; add the
-restart fixes to 4.1), owner OK, then build 0.5.x with the per-task loop.
+Store: store=19, halo=6 = Halo 0.4.0, installed on the owner's phone. Stages 1-3 done and reviewed.
+Phone (spec §13): audio works, overlay hidden on lock screen (system), frame time fine (0.3.2), always-on screen launches
+over the keyguard (gate passed), start after reboot works. Open bug: no service restart after a Store update and app open
+does not start it → fixed in Task 4.1.
+Stage 4 is now planned in full in docs/superpowers/plans/2026-11-17-halo-stages-3-5.md (Tasks 4.1-4.7), awaiting the
+owner's OK. On OK: Task 4.1 → 4.2 → (4.3 ∥ 4.5) → 4.4 wave (4 agents × 3 faces) → 4.6 → 4.7 (review, 0.5.0, phone check).
+Phone claim released (image-tools had it last).
 
 ## Previous state (session 1, superseded)
 Owner asked for a new chat to start building. Already told to the owner and accepted without objection:
