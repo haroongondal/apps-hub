@@ -68,6 +68,8 @@ class ClipboardCoreModule : Module() {
 
     Function("remove") { id: Long -> ClipStore.get(context).remove(id) }
 
+    Function("clearAll") { ClipStore.get(context).clearAll() }
+
     Function("setPalettes") { json: String -> Bubble.savePalettes(context, json) }
   }
 
