@@ -168,9 +168,12 @@ forced scan). Ledger: `.superpowers/sdd/2026-11-17-photo-search-phase-2/progress
 Pre-existing timing flakes on main (not this work): pdf-editor-mobile "decodes in linear time"
 (2 s) and library-core "answers in under 300 ms" fail under load and pass alone.
 
-Next step: fix the search floor from the Mac measurement (`SEARCH_FLOOR` in
-`core/PhotoIndex.kt`, `rank()`, plus a "a photo of" template in `PhotoSearch.search` if the data
-backs it), JVM test it, then (owner's go) release build 11. Then finish Task 5 on the phone: AC-1
+Search floor fixed in e8d57be (on branch photo-search, not merged): queries of 3 words or fewer
+become "a photo of …", results show at max(0.20, best − 0.05), More like this keeps 0.25; JVM
+184/184 pass. Measurement: scratchpad `floor/` (1,000 COCO-Karpathy test photos, HF
+yerevann/coco-karpathy; scripts/measure.py, out/summary.txt). Next: PR + merge `[skip ci]` and
+`pnpm release design-editor` (build 11) on the owner's go, owner installs from the Store.
+Then finish Task 5 on the phone: AC-1
 (airplane mode: owner toggles it, since adb is over Wi-Fi), AC-3 (1,000 photos ≤ 5 min plugged
 in; the gallery has ~545), AC-6 (waiting notice when hot or < 20%). Done on the phone: walk-through,
 AC-4 (≤ 1 s), AC-5 by code (no network in `design-media`). AC-2 on the COCO set only if the owner
