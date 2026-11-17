@@ -209,3 +209,9 @@ access, mic, notifications; Halo is battery-unrestricted (deviceidle whitelist).
   60 fps; target < 4 ms draw). Suspect per-op `BlurMaskFilter` (CPU mask rasterisation on a full-screen window).
   Fix: one GPU blur for the glow layer (RenderEffect on a glow-only layer) instead of per-op mask filters.
 - (b) boot start path and (d) always-on launch after screen-off: **not yet run** (need the owner present to unlock).
+- 0.3.2 on the phone (Lights preview, random motion, 20 s, display at 60 Hz): Janky frames (deadline metric) 0.00 %,
+  total frame time 50th 24 / 90th 27 / 95th 29 / 99th 30 ms, GPU 6–7 ms. The 99th percentile fell from 150 ms
+  (0.3.1) to 30 ms; with zero deadline misses the 24 ms median is pipeline latency, not dropped frames. Frame time
+  is **acceptable**; the earlier "over budget" reading used the legacy jank metric.
+- Bug found: after a Store update the service does not restart ("Halo is not running"). Fix in 0.4.0:
+  `MY_PACKAGE_REPLACED` receiver → start if `serviceWanted`.
