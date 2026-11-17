@@ -1,6 +1,6 @@
 # Sieve for Chrome
 
-The owner's private ad blocker (Manifest V3, Chrome 128 or later: some rules in the ads, trackers and anti-adblock lists match on response headers, which Chrome supports from 128). It is never published: you build it on this Mac and load it unpacked. The filter lists are downloaded and compiled at build time; the extension itself makes no requests of its own.
+The owner's private ad blocker (Manifest V3, Chrome 128 or later: some rules in the ads, trackers and anti-adblock lists match on response headers, which Chrome supports from 128). It is never published: you build it on this Mac and load it unpacked. The filter lists are downloaded and compiled at build time; the extension itself makes no requests of its own, except for the files you download with Downloads (see Downloads below).
 
 ## Install and first run
 
@@ -186,6 +186,101 @@ The lists' own YouTube rules still run through `inject.ts`. The anti-adblock lis
 - Pausing a page (Pause on this page) does not reach a YouTube embed on it; allowlisting the site does. An embed only learns the origins of the pages around it.
 - A page allowlist entry on YouTube is checked against the address the tab loaded (and again on a settings change), not after YouTube's in-app navigation, as with `inject.ts`.
 - Player data that YouTube reads with `XMLHttpRequest` as `responseType: 'json'` is not stripped; today it comes through `fetch` and `JSON.parse`.
+
+## Downloads
+
+Sieve takes over Chrome's large downloads of chosen types, resumes them after any restart, splits them into parts when you ask, queues them, limits their speed, schedules them, saves them into folders of Downloads, lets you add links by hand or from the right-click menu, and lists them in one page ("Sieve downloads"). A taken-over file never vanishes, and a large download never restarts from zero. It adds no content script and no registered script: nothing runs on ordinary web pages. The only requests it makes are for the files you download, and a one-byte probe before a take-over.
+
+### Where the pieces live
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| Engine | `engine-worker.js`, a dedicated Worker owned by the offscreen document `offscreen.html` | Fetches ranges, writes them into the Origin Private File System (`<id>.part`), keeps the records in IndexedDB `sieve-dl`, runs queues, the speed limit and re-splitting. The document closes itself after 60 seconds with nothing to do, so an idle Chrome carries no extra process. |
+| Service worker | `background.js` (`src/dl/`) | A router with no download state of its own: creates the engine document on demand, adds the session rules the engine's requests need (Referer, and one allow rule so Sieve's own blocking does not stop them), takes over Chrome's downloads, saves finished files with `chrome.downloads.download` from a blob URL, owns the right-click items and the two alarms (`dl-schedule`, `dl-watchdog`). |
+| Pages | `downloads.html` (the list), the menu's Downloads tab, the Downloads section of the settings page | Read IndexedDB for the first paint, take live numbers from `dl-state` broadcasts, send commands to the service worker. |
+| Settings | `chrome.storage.local` key `downloads` | Written by pages under the same lock as `settings` and `myRules`; the worker and the engine never write it. |
+
+Messages are plain `{ type, … }` objects, all prefixed `dl-`:
+
+| Type | Direction | Meaning |
+| --- | --- | --- |
+| `dl-add`, `dl-do` (`pause`, `resume`, `remove`), `dl-retry-chrome` | page to worker | Add links, act on records, hand a failed download back to Chrome. |
+| `dl-menu-click` | extension page to worker | What a right-click menu item does; exists so the end-to-end test can click native menus. Web pages cannot send it. |
+| `dl-state` | engine to pages | Changed records, removed ids and measured speeds, at most four times a second. |
+| `dl-eng-add`, `dl-eng-do`, `dl-eng-config`, `dl-eng-tick`, `dl-eng-save-event` | worker to engine | The commands above, the settings, a schedule re-check and a save result. |
+| `dl-sw-ready`, `dl-sw-save`, `dl-sw-idle` | engine to worker | Handshake, "save this finished file", "nothing to do, close me". |
+
+The take-over bookkeeping is `dlTakeover:<id>` in `chrome.storage.local` (session storage is cleared when the extension reloads), and `dlSave:<blobUrl>`, `dlRetry:<url>` and `dlPrefill` in `chrome.storage.session`.
+
+### Permissions
+
+Phase 3 adds four: `alarms` (the schedule windows and a one-minute watchdog that exists only while work can run), `contextMenus` (the three right-click items), `downloads` (take over Chrome's downloads and save finished files) and `offscreen` (the engine document). The manifest now has ten permissions: `alarms`, `contextMenus`, `declarativeNetRequest`, `declarativeNetRequestFeedback`, `downloads`, `offscreen`, `scripting`, `storage`, `unlimitedStorage`, `webNavigation`. Host access was already `<all_urls>`. `dist/manifest.json` has exactly Phase 1's two content scripts; `node test/dl-perf.mjs` checks that and that no registered script id starts with `dl`.
+
+### Defaults
+
+- Downloads on, take-over on for files **over 5 MB** (more than 5,000,000 bytes) of the listed types: the 56 extensions of the five category lists plus 31 MIME types (`application/octet-stream` is among them, so unnamed binaries are caught). `txt`, `csv`, `html` and source-code extensions are left out. The lists are editable in Settings.
+- 1 part per file (1 to 6 allowed), speed limit off (1,000 KB/s when you turn it on; 1 KB is 1,000 bytes).
+- Six categories (Video, Music, Programs, Archives, Documents, Other): a finished file goes to `Downloads/<category>/<name>`, and a name that is already there becomes `name (1).ext`. You can rename the folders and edit the extension lists, not add categories.
+- One queue, "Main queue", three downloads at once; more can be added (up to 8) with a daily window (start, optional stop, chosen days). Pressing Resume starts a download now, whatever the window or the slot count.
+
+### How a take-over decides
+
+When Chrome starts a download of a listed type, the worker pauses it within about 100 ms (before any bytes arrive), asks the server for one byte (`GET` with `Range: bytes=0-0`, 8 seconds at most, with your cookies and the page as referrer), and compares the answer with Chrome's own. Sieve takes the download over only if the server answered `206` with a total that matches Chrome's size and a type that matches, the strong ETag or Last-Modified gives it something to check a resume against, and the disk can hold the private copy and the saved file (`2 * size + 50 MB`). The engine then persists the record and acknowledges it, and only then is Chrome's download cancelled and erased. In every other case Chrome's download is simply resumed, untouched: a probe error or timeout, a status other than 206 (200, 401, 403, 404, 410, 429, 5xx), a total that is missing or differs, a different type, a body that is encoded, no range support, not enough free space. If the worker dies while Chrome's download is paused, the next worker start resumes it, or finishes the cancel when the engine already holds the record, so there is never a second copy. Finished files are saved from the private copy; the private copy is deleted only after Chrome reports the save complete with the right size, so a duplicate is possible and a loss is not.
+
+The list says "Retry in Chrome" for a download that failed: it asks Chrome to download the link itself.
+
+### Known limits
+
+- A server that cannot resume is left to Chrome when Chrome starts the download, but downloaded in one go (and restarted from the start after an interruption; the list says so) when you add it by hand.
+- A POST download cannot be recognised and ends in Chrome.
+- Referer is applied by session rules and is missing for a URL that contains `*` or `^`, and for "Retry in Chrome".
+- A one-time link that allows two uses could be taken over (the probe is the first use) and then fail; "Retry in Chrome" cannot help once the link is spent.
+- A scheduled queue with no stop time runs until midnight (the label says so).
+- A file replaced on the server by another of the same size cannot be detected when the server sent neither an ETag nor a Last-Modified.
+- A link whose probe Chrome refuses to read (for example a server that answers a ranged request with a gzip body) is left to Chrome on take-over, and fails with "Retry in Chrome" when added by hand.
+- "Retry in Chrome" keeps the record until Chrome's download has received a byte, and keeps it if that is not seen within 10 seconds.
+- A file too big for the disk twice over is left to Chrome.
+- Daylight-saving days shift scheduler windows by an hour.
+- The finished file briefly needs twice the disk space. Take-over checks this up front and leaves Chrome's download alone when it will not fit; a manual add checks only the first copy, and a save that then runs out of room fails with a plain message and keeps the private copy.
+- After a browser restart a download that was being saved can be saved a second time as `name (1).ext`.
+- Alarms are checked in an unpacked extension only (a packaged extension is limited to one firing per 30 seconds).
+- Chrome's download bubble may flash during a take-over (not verified: headless Chrome shows none).
+- Backup and import does not include Downloads settings until a post-merge follow-up.
+- "Delete" on a finished row removes it from the list only; the saved file stays. On an unfinished row it removes the partly downloaded data too.
+- The list and every screen show only measured speed and time left. More parts often change nothing, and the settings text says so.
+
+### Develop and check
+
+```bash
+pnpm --filter sieve test:dl                          # the downloads end-to-end modules against a local fixture server; build first
+node apps/sieve/test/dl/e2e.mjs --big                # adds a real 3 GB save and its memory reading
+node apps/sieve/test/dl-perf.mjs                     # the phase gate: ordinary pages, idle close, worker start (hold the chrome-live lock)
+```
+
+`dl-perf.mjs` compares each measured value with a limit and exits non-zero on a failure; a part that cannot measure (no data, a timeout, zero samples) is a failure too. It checks that the content scripts are Phase 1's, that no offscreen document exists at rest or after a worker restart, that the document is gone within 75 seconds of a finished 5 MB download, that the worker's cold start to its first reply costs at most 300 ms more than Phase 1's (Phase 1's last commit is exported to a temporary folder and built for the comparison), and, through `perf.mjs` with `SITE_RUNS=0`, that a local page's median DCL is at most 20 ms slower with the extension. `--only scripts,rest,idle,start,pages` runs some parts (exit code 3 on a pass, since a partial run is not the gate), `--self-check` runs its verdict logic on made-up numbers, and `DLPERF_START_LIMIT_MS`, `DLPERF_IDLE_LIMIT_S` and `DLPERF_DCL_LIMIT_MS` tighten a limit to prove the gate fails.
+
+### Owner checklist: downloads
+
+These need your own Chrome, accounts, disk and restarts, so no automated test covers them. Tick each one after you have seen it.
+
+- [ ] **1. The menu.** Reload Sieve. The menu has a Downloads tab, and its switch turns taking over off and on.
+- [ ] **2. A large download.** In your own Chrome, download a file over 5 MB of a listed type from a site you use. It appears in "Sieve downloads" and ends in `Downloads/<category>/`. A file under 5 MB stays Chrome's.
+- [ ] **3. Quit and reopen.** While a large download runs, quit Chrome completely (Cmd+Q) and reopen it: the download continues from where it stopped, not from 0%, and finishes. Repeat with Force Quit. Check the file opens.
+- [ ] **4. A file behind a login.** Download a file that needs your login (an account file). It arrives whole, whether Sieve or Chrome handled it.
+- [ ] **5. A one-time link.** A one-time download link still arrives (Chrome keeps it when Sieve cannot repeat the request).
+- [ ] **6. Parts.** Set parts per file to 3 on a server you use. Nothing on screen promises a speed-up; set it back to 1 if the server complains.
+- [ ] **7. The speed limit.** Set it to 1000 KB/s: the Speed column stays near it. Turn it off.
+- [ ] **8. A scheduled queue.** Make a queue that starts two minutes from now and add a download to it: it waits, then starts by itself.
+- [ ] **9. Right-click.** Right-click a link, a selection of links and an empty part of a page: the three Sieve items open the Add dialog with the right addresses.
+- [ ] **10. A failed download.** Make a download fail (add a link that has expired) and press "Retry in Chrome".
+- [ ] **11. Downloads off.** Turn Downloads off: Chrome handles new downloads itself, the right-click items are gone, and the list still resumes what is in it.
+- [ ] **12. A nearly full disk.** With the disk nearly full, a large add says there is not enough space instead of failing late.
+- [ ] **13. Nothing left running.** Wait a minute after the last download finishes and open Chrome's task manager (Shift+Esc on Windows and Linux; Window menu, Task Manager on Mac): there is no "Offscreen document".
+- [ ] **14. A day of browsing.** Browse as usual for a day: pages load as before, and nothing extra appears on web pages.
+- [ ] **15. A restart with a scheduled queue.** Restart Chrome with a scheduled queue pending and confirm it still starts on time (alarm persistence over a real restart was not verifiable in the harness).
+- [ ] **16. The download bubble.** Watch Chrome's download bubble (the toolbar download icon) when a take-over starts. Headless Chrome shows none, so the harness cannot say whether it flashes or stays; note what you see.
+- [ ] **17. A real restart at rest.** Quit and reopen Chrome with nothing downloading, wait a minute, and open the task manager: there is still no "Offscreen document", and finished rows still show in the list.
+- [ ] **18. A file over 5 GB.** Download a real file over 5 GB (a disk image or a big archive; you need free space for it twice over while it saves). Chrome's memory in the task manager does not grow with the file, the saved file in `Downloads/<category>/` has the server's size, and it opens. The automated big run saves 3 GB of real bytes; nothing larger has been tried.
 
 ## Licences
 
