@@ -90,7 +90,7 @@ Worker route.
 enum class Filter { LANCZOS, BILINEAR }
 fun resize(argb: IntArray, w: Int, h: Int, nw: Int, nh: Int, filter: Filter): IntArray // Pillow 13 8-bit, all 4 channels
 fun u2Input(argb: IntArray, w: Int, h: Int): FloatArray          // 1x3x320x320 NCHW
-fun modnetSize(w: Int, h: Int): Pair<Int, Int>                   // shortest edge 512, each side round(side*s/32)*32 with Python round (half to even: Math.rint), min 32
+fun modnetSize(w: Int, h: Int): Pair<Int, Int>                   // s = min(512/shortest, 1024/longest), each side round(side*s/32)*32 with Python round (half to even: Math.rint), min 32
 fun modnetInput(argb: IntArray, w: Int, h: Int): FloatArray      // 1x3xHxW at modnetSize, x/127.5 - 1
 fun alphaMask(pred: FloatArray, pw: Int, ph: Int, w: Int, h: Int, minMax: Boolean, featherPx: Float): ByteArray // h*w, 0..255
 fun withAlpha(argb: IntArray, alpha: ByteArray): IntArray
@@ -108,7 +108,7 @@ fun hasAlpha(argb: IntArray): Boolean
 - [ ] **Step 1: Fixtures.** Extend `fixtures.py` (no model needed): `u2_down_input.png` = `ref.synth(640, 480, 7)`, `u2_down_input.f32` = `ref.u2_prep` of it; `modnet_input.png` = `ref.synth(700, 500, 9)`, `modnet_input.f32` = the `sheet.modnet_cutout` prep (BILINEAR to modnetSize, /127.5 - 1, NCHW float32, here 1x3x512x704). Existing fixtures must stay byte-identical (check with `git diff --stat`). Python: `.superpowers/sdd/2026-11-17-image-tools-3.0/qe-in/venv/bin/python` read-only if it imports numpy 2.5.4 + Pillow 13.0.0, else a new venv under `.superpowers/sdd/2026-11-17-image-tools-3.2/venv` from `requirements.txt`. README lists the new files.
 - [ ] **Step 2: Failing tests** (read fixtures via `fixtures.dir`, `quick-edits/...`; PNGs decode with `javax.imageio.ImageIO` on the JVM):
   - `u2InputMatchesUpscaleFixture` / `u2InputMatchesDownscaleFixture`: max abs diff vs `u2_input.f32` / `u2_down_input.f32` <= 1e-5.
-  - `modnetSizeRule`: (700,500)->(704,512); (500,700)->(512,704); (10,4000)->(512, round(4000*51.2/32)*32); never below 32.
+  - `modnetSizeRule`: (700,500)->(704,512); (500,700)->(512,704); (4000,3000)->(672,512); (10,4000)->(32,1024); (33,32)->(512,512); never below 32, longest <= 1024.
   - `modnetInputMatchesFixture`: <= 1e-5 vs `modnet_input.f32`.
   - `alphaMaskMatchesU2Fixture`: `alphaMask(u2_pred.f32, 320,320, 300,200, true, 2f)` vs `u2_mask.png`, every pixel within ±1.
   - `alphaMaskHandles12Mp`: 4000x3000 output from a 320x320 pred completes, size 12,000,000.

@@ -60,10 +60,12 @@ class CutoutMathsTest {
   fun modnetSizeRule() {
     assertEquals(704 to 512, modnetSize(700, 500))
     assertEquals(512 to 704, modnetSize(500, 700))
-    assertEquals(512 to Math.rint(4000 * 51.2 / 32).toInt() * 32, modnetSize(10, 4000))
+    assertEquals(672 to 512, modnetSize(4000, 3000))
+    assertEquals(32 to 1024, modnetSize(10, 4000))
+    assertEquals(512 to 512, modnetSize(33, 32))
     for (w in 1..40) for (h in 1..40) {
       val (a, b) = modnetSize(w * 37, h * 53)
-      assertTrue(a >= 32 && b >= 32 && a % 32 == 0 && b % 32 == 0)
+      assertTrue("${w * 37}x${h * 53} -> $a x $b", a >= 32 && b >= 32 && a % 32 == 0 && b % 32 == 0 && maxOf(a, b) <= 1024)
     }
   }
 
@@ -83,6 +85,16 @@ class CutoutMathsTest {
     var max = 0
     for (i in got.indices) max = maxOf(max, abs((got[i].toInt() and 0xFF) - want.rawBand0[i]))
     println("CutoutMathsTest mask max diff $max")
+    assertTrue("max mask diff $max", max <= 1)
+  }
+
+  @Test
+  fun alphaMaskMinMaxNormalisesRawPred() {
+    val want = qePng("u2_mask.png")
+    val raw = qeF32("u2_pred.f32").map { it * 0.6f + 0.1f }.toFloatArray()
+    val got = alphaMask(raw, 320, 320, 300, 200, true, 2f)
+    var max = 0
+    for (i in got.indices) max = maxOf(max, abs((got[i].toInt() and 0xFF) - want.rawBand0[i]))
     assertTrue("max mask diff $max", max <= 1)
   }
 

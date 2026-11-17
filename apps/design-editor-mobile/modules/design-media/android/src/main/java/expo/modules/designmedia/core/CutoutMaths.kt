@@ -22,9 +22,10 @@ fun u2Input(argb: IntArray, w: Int, h: Int): FloatArray {
   return out
 }
 
-// Math.rint: the reference (sheet.modnet_cutout) uses Python's round, which rounds half to even.
+// Shortest edge 512 but longest <= 1024 (a 10x4000 strip would need ~200000 px and runs out of memory);
+// Math.rint because the reference (sheet.modnet_cutout) uses Python's round, half to even.
 fun modnetSize(w: Int, h: Int): Pair<Int, Int> {
-  val s = 512.0 / minOf(w, h)
+  val s = minOf(512.0 / minOf(w, h), 1024.0 / maxOf(w, h))
   return maxOf(32, Math.rint(w * s / 32).toInt() * 32) to maxOf(32, Math.rint(h * s / 32).toInt() * 32)
 }
 
