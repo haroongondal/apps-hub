@@ -35,7 +35,7 @@ Worker route.
 - Person (MODNet) must be removable in one place: the `TOOLS` map in `core/VisionModels.kt`;
   every list of cut-out choices (module, JS, page) is derived from it.
 - ORT sessions: 2 intra-op threads, opened from the installed file per run and closed after it.
-- Upscale: tile core 128, overlap 24, model input 176, scale 4; 2x = the 4x result scaled down;
+- Upscale: tile core 128, overlap 24, model input 176, scale 4; 2x = the 4x model run on a half-size copy (owner, 2026-11-18);
   output longest side <= 4096.
 - Copy: sentence case, plain words, no emoji. Missing model while offline:
   "Connect to the internet once to get this tool." (AC-5).
