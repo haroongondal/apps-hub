@@ -13,7 +13,9 @@ import android.view.Choreographer
 import android.view.RoundedCorner
 import android.view.View
 import expo.modules.haloengine.core.DrawList
+import expo.modules.haloengine.core.EdgeEvents
 import expo.modules.haloengine.core.EdgePath
+import expo.modules.haloengine.core.FlashDecision
 import expo.modules.haloengine.core.FrameInput
 import expo.modules.haloengine.core.Pattern
 import expo.modules.haloengine.core.PatternParams
@@ -37,6 +39,8 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
   private var path: EdgePath? = null
   private var params = PatternParams()
   private val list = DrawList()
+  val events = EdgeEvents()
+  private var musicOps = 0
   private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     style = Paint.Style.STROKE
     strokeCap = Paint.Cap.BUTT
@@ -68,7 +72,7 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
       if (source.animate(now)) fadeStartMs = -1 else if (fadeStartMs < 0) fadeStartMs = now
       fade = if (fadeStartMs < 0) 1f else 1f - (now - fadeStartMs).toFloat() / FADE_MS
       invalidate()
-      if (fade > 0f) {
+      if (fade > 0f || events.active(now)) {
         choreographer.postFrameCallback(this)
       } else {
         looping = false
@@ -100,6 +104,19 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
     choreographer.postFrameCallback(tick)
   }
 
+  fun flash(d: FlashDecision, colour: Int) {
+    events.flash(d, colour, SystemClock.uptimeMillis())
+    kickEvents()
+  }
+
+  // A flash alone must not wake the music pattern, so a loop it starts begins with the music fade already over.
+  private fun kickEvents() {
+    if (looping) return
+    kick()
+    val now = SystemClock.uptimeMillis()
+    if (looping && !source.animate(now)) fadeStartMs = now - FADE_MS
+  }
+
   fun stop() {
     choreographer.removeFrameCallback(tick)
     looping = false
@@ -110,7 +127,10 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
     ProbeLog.log(context, "overlay", "view attached hardwareAccelerated=$isHardwareAccelerated")
   }
 
-  override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) = rebuild()
+  override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+    rebuild()
+    if (events.active(SystemClock.uptimeMillis())) kickEvents()
+  }
 
   override fun onConfigurationChanged(newConfig: Configuration?) {
     super.onConfigurationChanged(newConfig)
@@ -159,7 +179,7 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
   override fun onDraw(canvas: Canvas) {
     val path = path ?: return
     val pattern = pattern ?: return
-    if (!looping || fade <= 0f) return
+    if (!looping) return
     val t0 = System.nanoTime()
     val now = SystemClock.uptimeMillis()
     val dt = if (lastDrawMs < 0) 16L else now - lastDrawMs
@@ -169,9 +189,11 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
       it.path = path; it.spectrum = s; it.timeMs = now; it.dtMs = dt; it.params = params; it.colors = colors
     } ?: FrameInput(path, s, now, dt, params, colors).also { input = it }
     list.clear()
-    pattern.draw(input, list)
+    if (fade > 0f) pattern.draw(input, list)
     // A beat belongs to one FFT frame, but several draw frames fall between FFT frames: patterns see it once.
     s.beat = false
+    musicOps = list.opCount
+    events.draw(path, params, now, list)
     render(canvas)
     record((System.nanoTime() - t0) / 1e6f, now)
   }
@@ -186,7 +208,7 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
       val dot = list.kind[i] == DrawList.DOT
       val paint = if (dot) fill else stroke
       paint.color = list.color[i]
-      if (fade < 1f) paint.alpha = (paint.alpha * fade).toInt()
+      if (i < musicOps && fade < 1f) paint.alpha = (paint.alpha * fade).toInt()
       val at = list.start[i]
       if (!dot) {
         paint.strokeWidth = list.size[i]

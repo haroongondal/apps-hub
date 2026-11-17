@@ -22,6 +22,7 @@ import expo.modules.haloengine.core.Aod
 import expo.modules.haloengine.core.AudioState
 import expo.modules.haloengine.core.AudioWatch
 import expo.modules.haloengine.core.ColorSource
+import expo.modules.haloengine.core.FlashDecision
 import expo.modules.haloengine.core.Pattern
 import expo.modules.haloengine.core.Patterns
 import expo.modules.haloengine.core.RandomMotion
@@ -87,6 +88,7 @@ class HaloService : Service() {
     ProbeLog.log(this, "service", "notificationsEnabled=${getSystemService(NotificationManager::class.java).areNotificationsEnabled()}")
     onSettings = { s -> main.post { apply(s) } }
     onRetryWindow = { main.post { attachWindow() } }
+    onFlash = { d, c -> overlay?.takeIf { it.attached }?.let { it.flash(d, c); true } ?: false }
     // A listener reconnect leaves the old session watch empty, so it is rebuilt.
     onListener = { main.post { media?.run { stop(); start() } } }
     applySettings(SettingsStore.load(this))
@@ -305,6 +307,7 @@ class HaloService : Service() {
     onSettings = null
     onListener = null
     onRetryWindow = null
+    onFlash = null
     unregisterScreenOff()
     lightsOff()
     worker.shutdownNow()
@@ -356,6 +359,35 @@ class HaloService : Service() {
     /** Called when the app comes to the front: adds the lights window if an earlier add failed. */
     fun retryWindow() {
       onRetryWindow?.invoke()
+    }
+
+    // Main thread only, like the overlays.
+    @Volatile private var onFlash: ((FlashDecision, Int) -> Boolean)? = null
+    private val flashMain by lazy { Handler(Looper.getMainLooper()) }
+    private var flashOnly: EdgeOverlay? = null
+    private var flashOnlyUntil = 0L
+    private val flashOnlyEnd = Runnable { flashOnly?.remove(); flashOnly = null }
+    private val silent = SpectrumFrame(FloatArray(BANDS), 0f, false)
+    private val flashSource = object : EdgeView.Source {
+      override fun animate(nowMs: Long) = false
+      override fun spectrum(nowMs: Long) = silent
+    }
+
+    /** Flashes over the lights; when they are not shown, in a window of its own for the flash's duration. */
+    fun flash(ctx: Context, d: FlashDecision, colour: Int) {
+      val app = ctx.applicationContext
+      flashMain.post {
+        val s = if (running) settings else SettingsStore.load(app)
+        if (!s.notify.enabled || onFlash?.invoke(d, colour) == true) return@post
+        val o = flashOnly ?: EdgeOverlay(app, flashSource).takeIf { it.add() }?.also {
+          it.apply(s, Patterns.create(s.pattern), IntArray(0))
+          flashOnly = it
+        } ?: return@post
+        o.flash(d, colour)
+        flashOnlyUntil = maxOf(flashOnlyUntil, SystemClock.uptimeMillis() + d.durationMs)
+        flashMain.removeCallbacks(flashOnlyEnd)
+        flashMain.postAtTime(flashOnlyEnd, flashOnlyUntil + 100)
+      }
     }
 
     /** "ok", "blocked" or "idle"; idle whenever the service is not running. */

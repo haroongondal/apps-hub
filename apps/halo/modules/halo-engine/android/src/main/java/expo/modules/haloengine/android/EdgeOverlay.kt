@@ -5,6 +5,7 @@ import android.graphics.PixelFormat
 import android.hardware.input.InputManager
 import android.provider.Settings
 import android.view.WindowManager
+import expo.modules.haloengine.core.FlashDecision
 import expo.modules.haloengine.core.Pattern
 import expo.modules.haloengine.core.Settings as HaloSettings
 
@@ -63,6 +64,10 @@ class EdgeOverlay(
 
   fun kick() {
     view?.kick()
+  }
+
+  fun flash(d: FlashDecision, colour: Int) {
+    view?.flash(d, colour)
   }
 
   fun remove() {
