@@ -93,6 +93,14 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
 - 2026-11-18 (owner): only copies and look-alikes start ticked (all but the best); Blurry,
   Screenshots and Too dark start unticked. Matches what 2.1 built.
 
+- 2026-11-18: ONNX Runtime 1.32's AAR ships Microsoft 1DS telemetry (provider
+  ai.onnxruntime.TelemetryInitializer builds the Java HTTP transport for the native client;
+  endpoint mobile.events.data.microsoft.com). On the owner's phone the provider failed at start
+  (UnsatisfiedLinkError), so likely nothing was sent. Fixed 826a7bda: provider removed in the
+  design-media manifest (tools:node="remove"), setTelemetry(false) on every OrtEnvironment,
+  DataSafetyRulesTest rule 8. Owner said release build 14 with it.
+- 2026-11-18 (owner): Clean up on build 13 "worked fine" (groups, delete + Undo, Recently removed).
+
 ## Evidence already verified
 
 - From `docs/handoffs/photo-search.md` (don't redo): phone numbers, ORT AAR facts, licences
