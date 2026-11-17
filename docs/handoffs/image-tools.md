@@ -47,6 +47,16 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
 - 2026-11-17: 3.0 (phone spike) and 3.1 (palette + auto-enhance, engine only) run at the same
   time: no shared files, and 3.1 needs no phone. 3.2 waits for 3.0's numbers.
 
+- 2026-11-18 (owner): Real-ESRGAN export is hosted in the Store bucket. The bucket is private
+  (signed /f/ links only), so the Worker gets a read-only, unauthenticated, content-addressed
+  route GET /models/<sha256> (public weights, integrity checked by SHA-256 in the app). URL
+  https://apps-hub-store.haroonmukhtar4.workers.dev/models/<sha256>. Deploy and upload need the
+  owner's yes on the Cloudflare account (cf profile "personal"); upload goes through the existing
+  PUT /admin/models/<sha256> with RELEASE_TOKEN.
+- 2026-11-18 (owner): "Remove background" offers Person (MODNet fp32) and Object (U2-Netp) plus
+  the colour fill as "Plain background"; Person stays only if MODNet's phone timing passes.
+- 2026-11-18 (owner): start 3.2 now, before the phone timings; stop and report if a timing misses.
+
 ## Evidence already verified
 
 - From `docs/handoffs/photo-search.md` (don't redo): phone numbers, ORT AAR facts, licences
