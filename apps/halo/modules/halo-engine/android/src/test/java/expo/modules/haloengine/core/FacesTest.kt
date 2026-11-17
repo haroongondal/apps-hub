@@ -69,7 +69,9 @@ class FacesTest {
   fun registry() {
     val ids = Faces.all.map { it().id }
     assertEquals("ids unique", ids.size, ids.toSet().size)
-    assertTrue(ids.containsAll(listOf("big-digits", "ring-analog", "stacked")))
+    assertEquals("15 faces", 15, ids.size)
+    assertTrue(ids.containsAll(listOf("big-digits", "ring-analog", "stacked", "minimal-line", "word-clock", "binary-dots", "split-flap",
+      "orbit", "big-hour", "dual-time", "arc-progress", "vertical", "typewriter", "neon-outline", "calendar-strip")))
     ids.forEach { assertTrue("id format $it", Regex("^[a-z0-9-]{1,40}$").matches(it)) }
     Faces.all.forEach { assertTrue("name of ${it().id}", it().name.isNotBlank()) }
     assertEquals("big-digits", Faces.create("no-such-face").id)
