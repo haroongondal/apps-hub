@@ -1,16 +1,17 @@
 """Reference fixtures for the Kotlin U2-Netp cut-out and Real-ESRGAN tiling (Phase 3.2 tests).
 
 usage: fixtures.py <u2netp.onnx> <realesr-general-x4v3 fixed-T onnx> <out_dir>
+       fixtures.py --prep <out_dir>
 The Real-ESRGAN model must be the fixed 1x3xTxT export with T = 128 + 2 * ref.OVERLAP.
 Writes u2_input.png/.f32, u2_pred.f32, u2_mask.png, esrgan_input.png, esrgan_out.png,
 esrgan_thin_input.png, esrgan_thin_out.png, esrgan_tiles.json and README.md;
 .f32 files are raw little-endian float32. ORT on 1 thread.
+--prep needs no model: it writes only u2_down_input.png/.f32, modnet_input.png/.f32 and README.md.
 """
 import json
 import os
 import sys
 import numpy as np
-import onnxruntime as ort
 from PIL import Image, ImageDraw
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # python -I drops the script dir
@@ -22,6 +23,7 @@ T = TILE + 2 * OVERLAP
 ESRGAN = [("esrgan", 300, 200, 6), ("esrgan_thin", 129, 20, 8)]
 README = f"""Made by tools/quick-edits-bench/fixtures.py (do not edit by hand).
 Command: fixtures.py <u2netp.onnx> <realesr-general-x4v3 T={T} onnx> packages/media-core/fixtures/quick-edits
+Model-free prep fixtures only: fixtures.py --prep packages/media-core/fixtures/quick-edits
 Maths: tools/quick-edits-bench/ref.py (its docstring has the exact pre/post steps and the reflect formula).
 numpy 2.5.4, onnxruntime 1.32.0 (CPU, 1 thread), Pillow 13.0.0.
 Models (not in git): u2netp.onnx sha256 309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8;
@@ -32,6 +34,10 @@ U2-Netp (non-square on purpose, so a mask left square or stretched fails):
 - u2_input.f32   1x3x320x320, ref.u2_prep(u2_input.png).
 - u2_pred.f32    320x320, first model output after min-max (ref.u2_norm).
 - u2_mask.png    300x200 L, ref.u2_mask(pred, 300, 200, feather_px={FEATHER}).
+- u2_down_input.png / .f32  640x480 RGB ref.synth(640, 480, 7) -> 1x3x320x320 ref.u2_prep (LANCZOS downscale).
+MODNet (prep only, as sheet.modnet_cutout):
+- modnet_input.png / .f32   700x500 RGB ref.synth(700, 500, 9) -> 1x3x512x704: BILINEAR to the
+  shortest edge 512, each side round(side * s / 32) * 32 (Python round), then x / 127.5 - 1, NCHW.
 Real-ESRGAN general-x4v3, tile {TILE}, overlap {OVERLAP}, T {T}, scale {SCALE}:
 - esrgan_input.png / esrgan_out.png            300x200 -> 1200x800, 3x2 tiles, partial cores on both axes.
 - esrgan_thin_input.png / esrgan_thin_out.png  129x20 -> 516x80, 2 tiles, mirroring bounces several times.
@@ -41,6 +47,7 @@ Real-ESRGAN general-x4v3, tile {TILE}, overlap {OVERLAP}, T {T}, scale {SCALE}:
 
 
 def sess(path):
+    import onnxruntime as ort
     o = ort.SessionOptions(); o.intra_op_num_threads = 1; o.inter_op_num_threads = 1
     return ort.InferenceSession(path, o, providers=["CPUExecutionProvider"])
 
@@ -48,6 +55,25 @@ def sess(path):
 def save_png(img, path):
     img.save(path)
     return Image.open(path)  # read back so every later step sees exactly the stored pixels
+
+
+def modnet_prep(img):
+    """The input half of sheet.modnet_cutout: 1x3xHxW float32."""
+    w, h = img.size
+    s = 512 / min(w, h)
+    rw, rh = max(32, round(w * s / 32) * 32), max(32, round(h * s / 32) * 32)
+    a = np.asarray(img.convert("RGB").resize((rw, rh), Image.Resampling.BILINEAR), np.float32) / 127.5 - 1
+    return a.transpose(2, 0, 1)[None]
+
+
+def prep(out):
+    os.makedirs(out, exist_ok=True)
+    p = lambda n: os.path.join(out, n)
+    u2_prep(save_png(synth(640, 480, 7), p("u2_down_input.png"))).astype("<f4").tofile(p("u2_down_input.f32"))
+    m = modnet_prep(save_png(synth(700, 500, 9), p("modnet_input.png")))
+    m.astype("<f4").tofile(p("modnet_input.f32"))
+    open(p("README.md"), "w").write(README)
+    print(f"modnet input shape={m.shape}")
 
 
 def main(u2_model, esrgan_model, out):
@@ -78,6 +104,9 @@ def main(u2_model, esrgan_model, out):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
+    if len(sys.argv) == 3 and sys.argv[1] == "--prep":
+        prep(sys.argv[2])
+    elif len(sys.argv) == 4:
+        main(*sys.argv[1:])
+    else:
         sys.exit(__doc__)
-    main(*sys.argv[1:])
