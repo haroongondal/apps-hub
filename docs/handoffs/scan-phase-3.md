@@ -37,3 +37,9 @@ used. Within a stream one agent runs its tasks in order.
 - Ruling: sheet pages keep the composed sheet as `<pageId>.orig.jpg` and process it with filter `original`, so Rotate works on a sheet; the card photos themselves are not kept.
 - Deferred minor (C): `saveSession` creates the item row, then the page rows in a second transaction (`createItem` cannot join one). A hard kill in that millisecond gap leaves a scan item with no pages that the start-up sweep does not remove. Fix later with a sweep for scan items without `scan_pages`.
 - Deferred decision for Phase 4 (U): "Open in editor" passes `itemId`, so the editor re-indexes the scan item from the PDF text and would overwrite OCR text via `setBody`. Harmless now; decide before Phase 4.
+- Stream N: complete (commits 358a191f, 9f4f8e35, 2a504891, dc764eec, 0f8ddb49, c5eb5453, 3257d645). Controller re-ran Gradle `:pdf-scan:testDebugUnitTest :app:assembleDebug`: BUILD SUCCESSFUL, 54 Kotlin tests, 0 failures (most tasks up to date). Filters passed their first run with untuned constants: phone tuning pending.
+- Integration (commit ba46955c): version 1.3.0, SPEC and PRD and app CLAUDE.md updated. `pnpm test` exit 0, `pnpm typecheck` exit 0, app lint exit 0. expo-doctor not yet run.
+- Batched review (opus, read-only, whole range 5a88c82..ba46955c): approve with comments. Important 1: a title with `#` breaks Share PDF and Open in editor (`encodeURI` keeps `#`, `java.io.File(URI)` rejects a fragment). Minor 2 to 9 listed in the fix brief below. Rollback of a new scan, the PDF writer, and the three-layer contract were checked and found fine.
+- Ruling: Minor 8 (card-shaped detection for imported photos) is fixed in the app by re-running `detectQuad(dest, true)` after `importImage` in a card session, not by a contract change.
+- Ruling: Minor 9 (unlinked free xref entries) deferred: pdf.js and PDFKit open it.
+- Fix wave BASE: ba46955c.
