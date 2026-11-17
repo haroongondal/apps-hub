@@ -25,13 +25,13 @@ fun searchText(query: String): String {
 
 private const val DIM = 512
 private const val HEADER = 16
-private const val RECORD = 24 + DIM
+private const val RECORD = 24 + DIM + 24
 private const val THERMAL_SEVERE = 3
 private val MAGIC = "CLIPIDX\u0000".toByteArray(Charsets.ISO_8859_1)
 
 data class PhotoKey(val id: Long, val modified: Long, val size: Long)
 
-class PhotoRow(val key: PhotoKey, val vec: ByteArray)
+class PhotoRow(val key: PhotoKey, val vec: ByteArray, val scores: PhotoScores)
 
 fun quantize(v: FloatArray): ByteArray {
   val norm = sqrt(v.sumOf { (it * it).toDouble() }).toFloat()
@@ -40,13 +40,18 @@ fun quantize(v: FloatArray): ByteArray {
 }
 
 object PhotoIndexFile {
-  const val VERSION = 1
+  // v2 added the Clean up scores to each record; a v1 file reads as empty, so the job scans again.
+  const val VERSION = 2
 
   private fun header(): ByteArray = ByteBuffer.allocate(HEADER).put(MAGIC).putInt(VERSION).putInt(DIM).array()
 
   private fun encode(rows: List<PhotoRow>): ByteArray {
     val buf = ByteBuffer.allocate(rows.size * RECORD)
-    rows.forEach { buf.putLong(it.key.id).putLong(it.key.modified).putLong(it.key.size).put(it.vec) }
+    rows.forEach {
+      val s = it.scores
+      buf.putLong(it.key.id).putLong(it.key.modified).putLong(it.key.size).put(it.vec)
+        .putLong(s.dhash).putFloat(s.mean).putFloat(s.spread).putFloat(s.laplacian).putShort(s.width.toShort()).putShort(s.height.toShort())
+    }
     return buf.array()
   }
 
@@ -60,7 +65,8 @@ object PhotoIndexFile {
     val rows = ArrayList<PhotoRow>(buf.remaining() / RECORD)
     while (buf.remaining() >= RECORD) {
       val key = PhotoKey(buf.getLong(), buf.getLong(), buf.getLong())
-      rows.add(PhotoRow(key, ByteArray(DIM).also { buf.get(it) }))
+      val vec = ByteArray(DIM).also { buf.get(it) }
+      rows.add(PhotoRow(key, vec, PhotoScores(buf.getLong(), buf.getFloat(), buf.getFloat(), buf.getFloat(), buf.getShort().toInt(), buf.getShort().toInt())))
     }
     return rows
   }

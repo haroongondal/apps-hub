@@ -15,8 +15,13 @@ import org.junit.Test
 class PhotoIndexTest {
   private fun tmp(): File = Files.createTempDirectory("photoindex").toFile().resolve("index.bin")
 
-  private fun row(id: Long, modified: Long = 10, size: Long = 20, fill: Int = id.toInt()) =
-    PhotoRow(PhotoKey(id, modified, size), ByteArray(512) { (fill + it).toByte() })
+  private val someScores = PhotoScores(0x0123456789abcdefL, 0.25f, 0.5f, 132.1f, 512, 384)
+
+  private fun row(id: Long, modified: Long = 10, size: Long = 20, fill: Int = id.toInt(), scores: PhotoScores = someScores) =
+    PhotoRow(PhotoKey(id, modified, size), ByteArray(512) { (fill + it).toByte() }, scores)
+
+  // Search tests only care about the vector.
+  private fun vecRow(id: Long, vec: ByteArray) = PhotoRow(PhotoKey(id, 0, 0), vec, someScores)
 
   private fun unitAxis(i: Int) = FloatArray(512).also { it[i] = 1f }
 
@@ -39,6 +44,31 @@ class PhotoIndexTest {
       assertEquals(a.key, b.key)
       assertArrayEquals(a.vec, b.vec)
     }
+  }
+
+  @Test
+  fun scoresRoundTrip() {
+    val f = tmp()
+    val flat = PhotoScores(Long.MIN_VALUE, 0f, 0f, 0f, 1, 1)
+    val rows = listOf(row(1), row(2, scores = flat), row(3, scores = PhotoScores(-1L, 1f, 0.125f, 9999.5f, 512, 512)))
+    PhotoIndexFile.append(f, rows)
+    PhotoIndexFile.read(f).zip(rows).forEach { (b, a) ->
+      assertEquals(a.key, b.key)
+      assertArrayEquals(a.vec, b.vec)
+      assertEquals(a.scores, b.scores)
+    }
+  }
+
+  @Test
+  fun v1FileMeansEmpty() {
+    val f = tmp()
+    // A v1 file: version 1 header, then 24 + 512 byte records, so the job scans again.
+    val v1 = ByteBuffer.allocate(16 + 2 * (24 + 512))
+    v1.put("CLIPIDX\u0000".toByteArray(Charsets.ISO_8859_1)).putInt(1).putInt(512)
+    repeat(2) { v1.putLong(it.toLong()).putLong(10).putLong(20).put(ByteArray(512)) }
+    FileOutputStream(f).use { it.write(v1.array()) }
+    assertTrue(PhotoIndexFile.read(f).isEmpty())
+    assertEquals(2, PhotoIndexFile.VERSION)
   }
 
   @Test
@@ -92,7 +122,7 @@ class PhotoIndexTest {
   fun int8RankingMatchesFloat() {
     val r = Random(1)
     val vecs = List(2000) { randomUnit(r) }
-    val rows = vecs.mapIndexed { i, v -> PhotoRow(PhotoKey(i.toLong(), 0, 0), quantize(v)) }
+    val rows = vecs.mapIndexed { i, v -> vecRow(i.toLong(), quantize(v)) }
     fun floatTop(q: FloatArray, n: Int) =
       vecs.indices.sortedByDescending { i -> vecs[i].indices.sumOf { (vecs[i][it] * q[it]).toDouble() } }.take(n).map { it.toLong() }
     // Random 512-d vectors are nearly equidistant, so only the set is stable; the intended photo (a noisy copy) must stay first.
@@ -110,7 +140,7 @@ class PhotoIndexTest {
 
   @Test
   fun floorDropsWeakMatchesAndLimitCaps() {
-    val rows = (0..2).map { PhotoRow(PhotoKey(it.toLong(), 0, 0), quantize(unitAxis(it))) }
+    val rows = (0..2).map { vecRow(it.toLong(), quantize(unitAxis(it))) }
     assertTrue(rank(rows, unitAxis(3), 10, 0.25f).isEmpty())
     assertEquals(listOf(1L), rank(rows, unitAxis(1), 10, 0.25f))
     assertEquals(2, rank(rows, FloatArray(512) { 1f }, 2, -1f).size)
@@ -120,7 +150,7 @@ class PhotoIndexTest {
   fun marginKeepsOnlyScoresNearTheBest() {
     // Scores 0.9, 0.86, 0.8, 0.3 against axis 0.
     val rows = listOf(0.9f, 0.86f, 0.8f, 0.3f).mapIndexed { i, c ->
-      PhotoRow(PhotoKey(i.toLong(), 0, 0), quantize(FloatArray(512).also { it[0] = c; it[1] = sqrt(1 - c * c) }))
+      vecRow(i.toLong(), quantize(FloatArray(512).also { it[0] = c; it[1] = sqrt(1 - c * c) }))
     }
     assertEquals(listOf(0L, 1L), rank(rows, unitAxis(0), 10, 0.2f, 0.05f))
     assertEquals(listOf(0L, 1L, 2L, 3L), rank(rows, unitAxis(0), 10, 0.2f))
@@ -136,7 +166,7 @@ class PhotoIndexTest {
 
   @Test
   fun tiesKeepIndexOrder() {
-    val rows = (5L..7L).map { PhotoRow(PhotoKey(it, 0, 0), quantize(unitAxis(0))) }
+    val rows = (5L..7L).map { vecRow(it, quantize(unitAxis(0))) }
     assertEquals(listOf(5L, 6L, 7L), rank(rows, unitAxis(0), 10, 0f))
   }
 

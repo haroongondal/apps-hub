@@ -2,10 +2,14 @@ package expo.modules.designmedia.android
 
 import android.content.ContentUris
 import android.content.Context
+import android.graphics.Bitmap
 import android.provider.MediaStore
 import android.util.Size
 import expo.modules.designmedia.core.PhotoKey
+import expo.modules.designmedia.core.PhotoScores
 import expo.modules.designmedia.core.clipTensor
+import expo.modules.designmedia.core.scoresOf
+import expo.modules.designmedia.core.thumb512Size
 
 object Gallery {
   private val IMAGES = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
@@ -39,6 +43,18 @@ object Gallery {
     val bmp = ctx.contentResolver.loadThumbnail(ContentUris.withAppendedId(IMAGES, id), Size(256, 256), null)
     val argb = IntArray(bmp.width * bmp.height).also { bmp.getPixels(it, 0, bmp.width, 0, 0, bmp.width, bmp.height) }
     clipTensor(argb, bmp.width, bmp.height).also { bmp.recycle() }
+  } catch (e: Exception) {
+    null
+  }
+
+  // R2: a second, 512 px thumbnail for the Clean up scores, resized like the Phase 0 bench; the CLIP tensor above stays on the 256 px one (R1).
+  // Null when the photo is gone or unreadable, like tensor.
+  fun scores(ctx: Context, id: Long): PhotoScores? = try {
+    val loaded = ctx.contentResolver.loadThumbnail(ContentUris.withAppendedId(IMAGES, id), Size(512, 512), null)
+    val (w, h) = thumb512Size(loaded.width, loaded.height)
+    val bmp = if (w != loaded.width || h != loaded.height) Bitmap.createScaledBitmap(loaded, w, h, true).also { loaded.recycle() } else loaded
+    val argb = IntArray(w * h).also { bmp.getPixels(it, 0, w, 0, 0, w, h) }
+    scoresOf(argb, w, h).also { bmp.recycle() }
   } catch (e: Exception) {
     null
   }

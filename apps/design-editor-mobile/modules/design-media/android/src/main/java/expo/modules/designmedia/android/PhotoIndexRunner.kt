@@ -45,7 +45,10 @@ object PhotoIndexRunner {
       d.toEmbed.forEachIndexed { i, key ->
         w.check()
         waitWhileHotOrLow(ctx, w)
-        Gallery.tensor(ctx, key.id)?.let { batch.add(PhotoRow(key, quantize(ClipSessions.embedImage(session, it)))) }
+        // R1: CLIP keeps its own 256 px thumbnail; a photo is indexed only when it also has scores.
+        val tensor = Gallery.tensor(ctx, key.id)
+        val scores = tensor?.let { Gallery.scores(ctx, key.id) }
+        if (tensor != null && scores != null) batch.add(PhotoRow(key, quantize(ClipSessions.embedImage(session, tensor)), scores))
         if (batch.size == BATCH) {
           PhotoIndexFile.append(file, batch)
           batch.clear()
