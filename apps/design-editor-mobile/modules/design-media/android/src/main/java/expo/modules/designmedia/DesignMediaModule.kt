@@ -23,17 +23,12 @@ import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
-import java.util.concurrent.Executors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.asCoroutineDispatcher
 
 class DesignMediaModule : Module() {
   private val readScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
-  // One cut-out or upscale at a time (each holds a full-size image), off every other call's thread.
-  private val visionScope = CoroutineScope(Executors.newSingleThreadExecutor().asCoroutineDispatcher() + SupervisorJob())
 
   private val context
     get() = requireNotNull(appContext.reactContext) { "React context unavailable" }
@@ -133,9 +128,10 @@ class DesignMediaModule : Module() {
 
     AsyncFunction("installVisionModel") { name: String -> Vision.install(context, name) }.runOnQueue(readScope)
 
+    // ids must be unique per run: a cancel sent after a run ends stays set for its id, and the output is <id>.png.
     AsyncFunction("runVision") { id: String, op: String, src: String, option: String ->
       Vision.run(context, id, op, src, option) { sendEvent(Vision.EVENT_PROGRESS, mapOf("id" to id, "fraction" to it)) }
-    }.runOnQueue(visionScope)
+    }.runOnQueue(Vision.queue)
 
     AsyncFunction("cancelVision") { id: String -> Vision.cancel(id) }
 

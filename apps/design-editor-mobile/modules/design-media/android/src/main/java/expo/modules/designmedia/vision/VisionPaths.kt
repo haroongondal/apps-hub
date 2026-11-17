@@ -7,18 +7,20 @@ import java.io.IOException
 object VisionPaths {
   private val ID = Regex("[A-Za-z0-9_-]{1,64}")
 
-  // Absolute only; symlinks and .. are resolved before the folder check.
-  fun allowed(cacheDir: File, path: String): Boolean {
+  // Absolute only; symlinks and .. are resolved before the folder check. The caller opens the returned canonical file,
+  // not the path it was given.
+  fun resolve(cacheDir: File, path: String): File? {
     val f = File(path)
-    if (!f.isAbsolute) return false
+    if (!f.isAbsolute) return null
     return try {
       val root = cacheDir.canonicalFile
-      val real = f.canonicalFile
-      real != root && real.toPath().startsWith(root.toPath())
+      f.canonicalFile.takeIf { it != root && it.toPath().startsWith(root.toPath()) }
     } catch (e: IOException) {
-      false
+      null
     }
   }
+
+  fun allowed(cacheDir: File, path: String): Boolean = resolve(cacheDir, path) != null
 
   fun output(cacheDir: File, id: String): File {
     require(ID.matches(id)) { "bad vision id" }

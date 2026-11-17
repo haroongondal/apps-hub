@@ -54,12 +54,19 @@ Worker route.
   2 px (radius 6), `floor(255x + 0.5)`; float32 (±1). MODNet post: same bilinear, values clipped
   to 0..1, no min-max, no feather (the matte the owner judged in `sheet.py` was unfeathered).
 - Upscale size rule: L = longest side. If L >= 4096: refuse ("This image is already as big as it
-  can be."). If 4L > 4096, the model input is the photo shrunk so its longest side is 1024
-  (aspect kept, `round`); else the photo itself. The 4x model result is resized (LANCZOS) to the
-  output size = round(scale x photo size), shrunk to fit 4096 if needed.
-- Alpha in upscale: if any pixel's alpha < 255, the output alpha is the source alpha resized with
-  LANCZOS straight to the output size (no model run on alpha); otherwise opaque. Simplest
-  correct choice: one resize, no second model pass, edges stay where the RGB edges are.
+  can be.") from the header size, before decoding or opening a session. If 4L > 4096, the model
+  input is the photo shrunk so its longest side is 1024 (aspect kept, `round`), done by the
+  decoder (`ImageDecoder.setTargetSize`, its own filter, not LANCZOS: a full-size decode plus a
+  LANCZOS copy does not fit the ~256 MB heap; fix round 1 ruling); else the photo itself. The 4x
+  model result is resized (LANCZOS) to the output size = round(scale x photo size), shrunk to
+  fit 4096 if needed.
+- Alpha in upscale (fix round 1 ruling): if any pixel's alpha < 255, the model runs on
+  premultiplied RGB (Pillow's RGBa, MULDIV255 rounding); the output alpha is the model input's
+  alpha resized with LANCZOS straight to the output size, and the output RGB is un-premultiplied
+  by it (`min(255, c*255/a)`, a = 0 gives 0x00000000). Otherwise opaque. No dark fringe at soft
+  edges, no second model pass.
+- Cut-out keeps existing transparency: final alpha = min(source alpha, mask). Sources above
+  4096x3072 px are decoded scaled down (aspect kept) to fit that budget.
 - New fixtures (deferred by 3.0): a downscale U2 prep case and a MODNet prep case.
 
 ## Review Focus
