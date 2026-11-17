@@ -312,6 +312,29 @@ test('finishing: a failed host.save ends failed with saveOnly', async () => {
   assert.equal(s.saveOnly, true);
 });
 
+test('finishing: a done that arrives after a save TIMEOUT still finishes the save-only record', async () => {
+  const r = await makeRig({ records: [rec('a', { size: 100 }), rec('b', { size: 100, state: 'failed', error: 'x' })], files: ['a.part', 'b.part'] });
+  r.host.saveAnswer = { ok: false, message: 'TIMEOUT' };
+  r.transfer.of('a').done();
+  await flush();
+  assert.equal(r.stored('a')!.state, 'failed');
+  assert.equal(r.stored('a')!.saveOnly, true);
+  await r.engine.saveEvent({ id: 'a', kind: 'failed', error: 'USER_CANCELED' });
+  assert.equal(r.stored('a')!.error, ERRORS.save('TIMEOUT'), 'a failed event changes nothing on a failed record');
+  // Chrome finished the file the offscreen handed over before the 30 s ran out
+  await r.engine.saveEvent({ id: 'a', kind: 'done', filename: '/dl/Other/a.bin', chromeId: 4 });
+  const done = r.stored('a')!;
+  assert.equal(done.state, 'done');
+  assert.equal(done.savedPath, '/dl/Other/a.bin');
+  assert.equal(done.savedId, 4);
+  assert.equal(done.error, null);
+  assert.equal(r.files.map.has('a.part'), false);
+  // a failed transfer (not save-only) has no whole copy to have saved: a stray done is ignored
+  await r.engine.saveEvent({ id: 'b', kind: 'done', filename: '/dl/Other/b.bin', chromeId: 5 });
+  assert.equal(r.stored('b')!.state, 'failed');
+  assert.equal(r.files.map.has('b.part'), true);
+});
+
 test('completeness: an incomplete done fails with ERRORS.length', async () => {
   const r = await makeRig({ records: [rec('a', { size: 100 })] });
   r.transfer.of('a').done({ parts: [{ start: 0, end: 99, done: 60 }] });

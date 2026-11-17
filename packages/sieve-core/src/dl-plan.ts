@@ -89,16 +89,16 @@ export function onRefused(caps: HostCaps, host: string, activeConnections: numbe
 }
 
 export function backoffMs(attempt: number, retryAfterMs?: number | null): number {
-  const a = Math.max(1, attempt);
+  const a = Number.isFinite(attempt) ? Math.max(1, attempt) : 1;
   const base = Math.min(2000 * 2 ** (a - 1), 30000);
-  return Math.min(60000, Math.max(base, retryAfterMs ?? 0));
+  return Math.min(60000, Math.max(base, Number.isFinite(retryAfterMs) ? (retryAfterMs as number) : 0));
 }
 
 export function parseRetryAfter(value: string | null, now: number): number | null {
   if (value === null) return null;
   const v = value.trim();
   if (/^\d+$/.test(v)) return Number(v) * 1000;
-  if (v === '' || /^-/.test(v)) return null;
+  if (!/^[A-Za-z]{3}/.test(v)) return null; // an HTTP date starts with the day name; Date.parse alone takes '1.5' or '2026-11-10'
   const t = Date.parse(v);
   return Number.isNaN(t) ? null : Math.max(0, t - now);
 }

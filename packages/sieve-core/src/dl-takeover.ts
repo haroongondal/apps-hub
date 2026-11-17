@@ -123,10 +123,10 @@ export function parseDisposition(header: string | null): string | null {
   if (!header) return null;
   // shortcut: only UTF-8 in filename*; other charsets fall back to filename=, upgrade if a server needs it
   const quoted = /(?:^|[;\s])filename\s*=\s*"((?:[^"\\]|\\.)*)"/i.exec(header);
-  const star = /(?:^|[;\s])filename\*\s*=\s*([^;]+)/i.exec(header);
   // a filename* that sits inside a quoted filename="..." value is part of that name, not a parameter
-  const starIsParam = star && !(quoted && star.index > quoted.index && star.index < quoted.index + quoted[0].length);
-  if (star && starIsParam) {
+  const inQuoted = (i: number) => !!quoted && i > quoted.index && i < quoted.index + quoted[0].length;
+  const star = [...header.matchAll(/(?:^|[;\s])filename\*\s*=\s*([^;]+)/gi)].find((m) => !inQuoted(m.index));
+  if (star) {
     const m = /^\s*utf-8'[^']*'(.*?)\s*$/i.exec(star[1]);
     if (m) { try { const v = decodeURIComponent(m[1]); if (v) return v; } catch { /* fall back to filename= */ } }
   }

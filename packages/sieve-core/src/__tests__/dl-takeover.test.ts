@@ -213,6 +213,7 @@ test('parseDisposition', () => {
 test('parseDisposition: a filename* inside a quoted filename value is not a parameter', () => {
   assert.equal(parseDisposition("attachment; filename=\"x; filename*=UTF-8''evil.exe\""), "x; filename*=UTF-8''evil.exe");
   assert.equal(parseDisposition("attachment; filename=\"a.zip\"; filename*=UTF-8''b.zip"), 'b.zip');
+  assert.equal(parseDisposition("attachment; filename=\"x; filename*=UTF-8''evil\"; filename*=UTF-8''real.zip"), 'real.zip', 'the first filename* outside the quotes');
 });
 test('sanitizeFileName: a cut that ends in a space is trimmed before the extension', () => {
   assert.equal(sanitizeFileName('x'.repeat(145) + ' ' + 'y'.repeat(20) + '.mp4'), 'x'.repeat(145) + '.mp4');

@@ -191,6 +191,8 @@ test('backoffMs', () => {
   assert.equal(backoffMs(0), 2000);
   assert.equal(backoffMs(-3), 2000);
   assert.equal(backoffMs(100), 30000);
+  assert.equal(backoffMs(NaN), 2000, 'a NaN attempt counts as the first');
+  assert.equal(backoffMs(1, NaN), 2000, 'a NaN Retry-After is ignored');
 });
 
 test('parseRetryAfter', () => {
@@ -200,4 +202,8 @@ test('parseRetryAfter', () => {
   assert.equal(parseRetryAfter('Wed, 21 Oct 2026 07:28:00 GMT', now), 10000);
   assert.equal(parseRetryAfter('Wed, 21 Oct 2026 07:27:00 GMT', now), 0);
   for (const v of ['-3', 'abc', '', null]) assert.equal(parseRetryAfter(v, 0), null);
+  // only delta-seconds or an HTTP date: Date.parse alone reads these as dates
+  for (const v of ['1.5', '+5', '5s', '1e3', '2026-11-10', '5 seconds']) assert.equal(parseRetryAfter(v, now), null, v);
+  assert.equal(parseRetryAfter('2026', 0), 2026000, 'delta-seconds, not a year');
+  assert.equal(parseRetryAfter('Wednesday, 21-Oct-26 07:28:00 GMT', now), 10000, 'the obsolete RFC 850 form');
 });

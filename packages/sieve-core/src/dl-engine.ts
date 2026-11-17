@@ -419,6 +419,8 @@ export function createEngine(deps: EngineDeps): Engine {
         if (!r) return;
         let next = r;
         if (e.kind === 'path') next = { ...r, savedPath: e.filename, savedId: e.chromeId };
+        // A save that timed out on the engine's side can still finish in Chrome: its done means the file is in Downloads.
+        else if (e.kind === 'done' && r.state === 'failed' && r.saveOnly) next = applyEvent({ ...r, state: 'saving', savedPath: e.filename, savedId: e.chromeId }, 'saved', clock.now());
         else if (r.state !== 'saving') return;
         else if (e.kind === 'done') next = applyEvent({ ...r, savedPath: e.filename, savedId: e.chromeId }, 'saved', clock.now());
         else next = applyEvent(r, 'saveFailed', clock.now(), { error: ERRORS.save(e.error) });
