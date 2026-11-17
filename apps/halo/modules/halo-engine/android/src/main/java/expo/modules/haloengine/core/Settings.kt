@@ -37,18 +37,50 @@ data class SettingsEdges(
   val insets: List<Int> = listOf(0, 0, 0, 0),
 )
 
+/** colour is "#RRGGBB", or null to take it from the app icon. */
+data class AppNotify(val on: Boolean = true, val colour: String? = null)
+
+data class SettingsQuiet(val on: Boolean = false, val start: String = "22:00", val end: String = "07:00")
+
+data class SettingsNotify(
+  val enabled: Boolean = true,
+  val apps: Map<String, AppNotify> = emptyMap(),
+  val defaultOn: Boolean = true,
+  val style: String = "pulse", // "pulse", "sweep" or any edge pattern id
+  val repeat: Int = 2, // 1..5
+  val durationMs: Int = 1500, // 500..5000
+  val reminderMin: Int? = null, // 1, 2, 5, 10, 15 or null
+  val wakeScreen: Boolean = false, // used in stage 4
+  val quiet: SettingsQuiet = SettingsQuiet(),
+)
+
+data class SettingsRules(
+  val apps: List<String> = emptyList(),
+  val fullscreen: Boolean = true,
+  val landscape: Boolean = false,
+  val calls: Boolean = true,
+  val batterySaver: Boolean = true,
+  val pocket: Boolean = false,
+)
+
 data class Settings(
   val enabled: Boolean = true,
   val pattern: String = "pulse-ring",
   val params: SettingsParams = SettingsParams(),
   val colors: SettingsColors = SettingsColors(),
   val edges: SettingsEdges = SettingsEdges(),
+  val notify: SettingsNotify = SettingsNotify(),
+  val rules: SettingsRules = SettingsRules(),
 )
 
 /** Mirrors apps/halo/modules/halo-engine/src/settings.ts; both run fixtures/settings.cases.json. */
 object SettingsCodec {
   private val HEX = Regex("^#[0-9a-fA-F]{6}$")
   private val ID = Regex("^[a-z0-9-]{1,40}$")
+  private val PKG = Regex("^[a-zA-Z0-9_.]{1,200}$")
+  private val TIME = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
+  private const val MAX_APPS = 500
+  private val REMINDERS = listOf(1, 2, 5, 10, 15)
   private val D = Settings()
 
   /** Any input becomes a valid Settings: wrong types fall back, numbers clamp, unknown fields drop. Never throws. */
@@ -85,6 +117,50 @@ object SettingsCodec {
         corners = e.quad("corners", 400.0),
         insets = e.quad("insets", 200.0),
       ),
+      notify = decodeNotify(root.obj("notify")),
+      rules = decodeRules(root.obj("rules")),
+    )
+  }
+
+  private fun decodeNotify(n: JsonObject): SettingsNotify {
+    val d = D.notify
+    val q = n.obj("quiet")
+    val apps = LinkedHashMap<String, AppNotify>()
+    for ((k, v) in n.obj("apps")) {
+      if (apps.size >= MAX_APPS) break
+      val a = v as? JsonObject ?: continue
+      if (!PKG.matches(k)) continue
+      apps[k] = AppNotify(a.bool("on", true), a.str("colour")?.takeIf { HEX.matches(it) }?.uppercase())
+    }
+    return SettingsNotify(
+      enabled = n.bool("enabled", d.enabled),
+      apps = apps,
+      defaultOn = n.bool("defaultOn", d.defaultOn),
+      style = n.str("style")?.takeIf { ID.matches(it) } ?: d.style,
+      repeat = n.num("repeat", d.repeat.toDouble(), 1.0, 5.0).roundToInt(),
+      durationMs = n.num("durationMs", d.durationMs.toDouble(), 500.0, 5000.0).roundToInt(),
+      reminderMin = REMINDERS.firstOrNull { it.toDouble() == n["reminderMin"].number() },
+      wakeScreen = n.bool("wakeScreen", d.wakeScreen),
+      quiet = SettingsQuiet(
+        on = q.bool("on", d.quiet.on),
+        start = q.str("start")?.takeIf { TIME.matches(it) } ?: d.quiet.start,
+        end = q.str("end")?.takeIf { TIME.matches(it) } ?: d.quiet.end,
+      ),
+    )
+  }
+
+  private fun decodeRules(r: JsonObject): SettingsRules {
+    val d = D.rules
+    return SettingsRules(
+      apps = (r["apps"] as? JsonArray).orEmpty()
+        .mapNotNull { (it as? JsonPrimitive)?.takeIf { s -> s.isString }?.content }
+        .filter { PKG.matches(it) }
+        .take(MAX_APPS),
+      fullscreen = r.bool("fullscreen", d.fullscreen),
+      landscape = r.bool("landscape", d.landscape),
+      calls = r.bool("calls", d.calls),
+      batterySaver = r.bool("batterySaver", d.batterySaver),
+      pocket = r.bool("pocket", d.pocket),
     )
   }
 
@@ -110,6 +186,36 @@ object SettingsCodec {
       put("auto", s.edges.auto)
       put("corners", buildJsonArray { s.edges.corners.forEach { add(JsonPrimitive(it)) } })
       put("insets", buildJsonArray { s.edges.insets.forEach { add(JsonPrimitive(it)) } })
+    })
+    put("notify", buildJsonObject {
+      put("enabled", s.notify.enabled)
+      put("apps", buildJsonObject {
+        s.notify.apps.forEach { (k, a) ->
+          put(k, buildJsonObject {
+            put("on", a.on)
+            put("colour", a.colour)
+          })
+        }
+      })
+      put("defaultOn", s.notify.defaultOn)
+      put("style", s.notify.style)
+      put("repeat", s.notify.repeat)
+      put("durationMs", s.notify.durationMs)
+      put("reminderMin", s.notify.reminderMin)
+      put("wakeScreen", s.notify.wakeScreen)
+      put("quiet", buildJsonObject {
+        put("on", s.notify.quiet.on)
+        put("start", s.notify.quiet.start)
+        put("end", s.notify.quiet.end)
+      })
+    })
+    put("rules", buildJsonObject {
+      put("apps", buildJsonArray { s.rules.apps.forEach { add(JsonPrimitive(it)) } })
+      put("fullscreen", s.rules.fullscreen)
+      put("landscape", s.rules.landscape)
+      put("calls", s.rules.calls)
+      put("batterySaver", s.rules.batterySaver)
+      put("pocket", s.rules.pocket)
     })
   }.toString()
 

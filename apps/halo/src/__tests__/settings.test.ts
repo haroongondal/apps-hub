@@ -14,7 +14,7 @@ for (const c of cases) {
   });
 }
 
-test('settings: fixture has at least 8 cases', () => assert.ok(cases.length >= 8));
+test('settings: fixture has at least 30 cases', () => assert.ok(cases.length >= 30));
 
 test('settings: non-object input gives the defaults without throwing', () => {
   for (const x of [null, undefined, 5, 'x', [], true]) assert.deepEqual(normalize(x), DEFAULT_SETTINGS);

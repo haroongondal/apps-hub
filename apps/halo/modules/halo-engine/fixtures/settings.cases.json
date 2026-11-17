@@ -37,6 +37,29 @@
      0,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -116,6 +139,29 @@
      3,
      4
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -180,6 +226,29 @@
      200,
      200
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -244,6 +313,29 @@
      0,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -300,6 +392,29 @@
      200,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -373,6 +488,29 @@
      0,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -418,6 +556,29 @@
      0,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -471,6 +632,29 @@
      0,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -519,6 +703,29 @@
      0,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -564,6 +771,29 @@
      0,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -617,6 +847,29 @@
      0,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -663,6 +916,29 @@
      0,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -706,6 +982,29 @@
      0,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -749,6 +1048,29 @@
      0,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -792,6 +1114,29 @@
      0,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -835,6 +1180,29 @@
      0,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -880,6 +1248,29 @@
      0,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -936,6 +1327,29 @@
      0,
      0
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  },
@@ -992,6 +1406,6976 @@
      3,
      4
     ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "notify and rules missing give defaults",
+  "input": {
+   "enabled": true
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "0.3.x document unchanged",
+  "input": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4
+   },
+   "colors": {
+    "source": "albumArt"
+   },
+   "edges": {
+    "auto": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "full valid notify and rules",
+  "input": {
+   "notify": {
+    "enabled": false,
+    "apps": {
+     "com.whatsapp": {
+      "on": true,
+      "colour": "#25d366"
+     },
+     "com.ex.app": {
+      "on": false,
+      "colour": null
+     },
+     "com.x": {
+      "on": true
+     }
+    },
+    "defaultOn": false,
+    "style": "sweep",
+    "repeat": 4,
+    "durationMs": 3000,
+    "reminderMin": 10,
+    "wakeScreen": true,
+    "quiet": {
+     "on": true,
+     "start": "23:30",
+     "end": "06:15"
+    }
+   },
+   "rules": {
+    "apps": [
+     "com.maps",
+     "com.video"
+    ],
+    "fullscreen": false,
+    "landscape": true,
+    "calls": false,
+    "batterySaver": false,
+    "pocket": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": false,
+    "apps": {
+     "com.whatsapp": {
+      "on": true,
+      "colour": "#25D366"
+     },
+     "com.ex.app": {
+      "on": false,
+      "colour": null
+     },
+     "com.x": {
+      "on": true,
+      "colour": null
+     }
+    },
+    "defaultOn": false,
+    "style": "sweep",
+    "repeat": 4,
+    "durationMs": 3000,
+    "reminderMin": 10,
+    "wakeScreen": true,
+    "quiet": {
+     "on": true,
+     "start": "23:30",
+     "end": "06:15"
+    }
+   },
+   "rules": {
+    "apps": [
+     "com.maps",
+     "com.video"
+    ],
+    "fullscreen": false,
+    "landscape": true,
+    "calls": false,
+    "batterySaver": false,
+    "pocket": true
+   }
+  }
+ },
+ {
+  "name": "bad quiet times fall back",
+  "input": {
+   "notify": {
+    "quiet": {
+     "on": true,
+     "start": "24:00",
+     "end": "7:00"
+    }
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": true,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "quiet times out of range minutes",
+  "input": {
+   "notify": {
+    "quiet": {
+     "start": "12:60",
+     "end": "noon"
+    }
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "bad package keys dropped",
+  "input": {
+   "notify": {
+    "apps": {
+     "com.ok": {
+      "on": false
+     },
+     "bad key": {
+      "on": false
+     },
+     "": {
+      "on": false
+     },
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+      "on": false
+     },
+     "com-dash": {
+      "on": false
+     }
+    }
+   },
+   "rules": {
+    "apps": [
+     "com.ok",
+     "bad key",
+     5,
+     "",
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "also.ok"
+    ]
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {
+     "com.ok": {
+      "on": false,
+      "colour": null
+     }
+    },
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [
+     "com.ok",
+     "also.ok"
+    ],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "reminder 3 minutes becomes null",
+  "input": {
+   "notify": {
+    "reminderMin": 3
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "reminder in the allowed set is kept",
+  "input": {
+   "notify": {
+    "reminderMin": 15
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": 15,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "reminder of the wrong type becomes null",
+  "input": {
+   "notify": {
+    "reminderMin": "5"
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "repeat 9 clamps to 5 and 0 to 1",
+  "input": {
+   "notify": {
+    "repeat": 9,
+    "durationMs": 99999
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 5,
+    "durationMs": 5000,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "repeat below range and duration below range",
+  "input": {
+   "notify": {
+    "repeat": 0,
+    "durationMs": 10
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 1,
+    "durationMs": 500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "repeat and duration round to integers",
+  "input": {
+   "notify": {
+    "repeat": 3.4,
+    "durationMs": 1234.2
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 3,
+    "durationMs": 1234,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "unknown style becomes pulse",
+  "input": {
+   "notify": {
+    "style": "Not A Style!"
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "registered-looking style id is kept",
+  "input": {
+   "notify": {
+    "style": "spectrum-bars"
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "spectrum-bars",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "bad colour becomes null",
+  "input": {
+   "notify": {
+    "apps": {
+     "com.a": {
+      "on": true,
+      "colour": "red"
+     },
+     "com.b": {
+      "on": true,
+      "colour": "#12345"
+     },
+     "com.c": {
+      "on": true,
+      "colour": 5
+     }
+    }
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {
+     "com.a": {
+      "on": true,
+      "colour": null
+     },
+     "com.b": {
+      "on": true,
+      "colour": null
+     },
+     "com.c": {
+      "on": true,
+      "colour": null
+     }
+    },
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "app entries of the wrong type are dropped",
+  "input": {
+   "notify": {
+    "apps": {
+     "com.a": 5,
+     "com.b": "x",
+     "com.c": [],
+     "com.d": {
+      "on": "yes"
+     }
+    }
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {
+     "com.d": {
+      "on": true,
+      "colour": null
+     }
+    },
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "600 app entries keep the first 500",
+  "input": {
+   "notify": {
+    "apps": {
+     "com.app0": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app1": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app2": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app3": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app4": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app5": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app6": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app7": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app8": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app9": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app10": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app11": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app12": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app13": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app14": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app15": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app16": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app17": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app18": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app19": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app20": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app21": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app22": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app23": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app24": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app25": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app26": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app27": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app28": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app29": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app30": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app31": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app32": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app33": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app34": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app35": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app36": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app37": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app38": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app39": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app40": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app41": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app42": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app43": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app44": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app45": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app46": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app47": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app48": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app49": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app50": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app51": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app52": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app53": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app54": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app55": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app56": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app57": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app58": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app59": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app60": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app61": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app62": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app63": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app64": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app65": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app66": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app67": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app68": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app69": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app70": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app71": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app72": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app73": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app74": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app75": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app76": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app77": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app78": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app79": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app80": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app81": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app82": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app83": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app84": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app85": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app86": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app87": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app88": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app89": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app90": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app91": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app92": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app93": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app94": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app95": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app96": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app97": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app98": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app99": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app100": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app101": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app102": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app103": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app104": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app105": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app106": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app107": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app108": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app109": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app110": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app111": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app112": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app113": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app114": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app115": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app116": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app117": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app118": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app119": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app120": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app121": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app122": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app123": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app124": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app125": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app126": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app127": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app128": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app129": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app130": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app131": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app132": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app133": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app134": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app135": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app136": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app137": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app138": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app139": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app140": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app141": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app142": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app143": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app144": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app145": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app146": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app147": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app148": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app149": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app150": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app151": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app152": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app153": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app154": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app155": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app156": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app157": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app158": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app159": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app160": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app161": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app162": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app163": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app164": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app165": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app166": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app167": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app168": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app169": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app170": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app171": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app172": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app173": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app174": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app175": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app176": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app177": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app178": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app179": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app180": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app181": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app182": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app183": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app184": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app185": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app186": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app187": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app188": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app189": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app190": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app191": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app192": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app193": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app194": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app195": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app196": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app197": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app198": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app199": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app200": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app201": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app202": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app203": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app204": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app205": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app206": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app207": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app208": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app209": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app210": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app211": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app212": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app213": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app214": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app215": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app216": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app217": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app218": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app219": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app220": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app221": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app222": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app223": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app224": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app225": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app226": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app227": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app228": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app229": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app230": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app231": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app232": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app233": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app234": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app235": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app236": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app237": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app238": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app239": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app240": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app241": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app242": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app243": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app244": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app245": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app246": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app247": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app248": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app249": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app250": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app251": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app252": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app253": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app254": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app255": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app256": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app257": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app258": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app259": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app260": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app261": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app262": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app263": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app264": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app265": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app266": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app267": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app268": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app269": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app270": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app271": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app272": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app273": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app274": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app275": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app276": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app277": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app278": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app279": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app280": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app281": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app282": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app283": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app284": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app285": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app286": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app287": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app288": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app289": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app290": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app291": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app292": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app293": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app294": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app295": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app296": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app297": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app298": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app299": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app300": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app301": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app302": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app303": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app304": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app305": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app306": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app307": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app308": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app309": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app310": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app311": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app312": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app313": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app314": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app315": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app316": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app317": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app318": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app319": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app320": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app321": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app322": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app323": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app324": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app325": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app326": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app327": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app328": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app329": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app330": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app331": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app332": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app333": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app334": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app335": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app336": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app337": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app338": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app339": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app340": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app341": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app342": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app343": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app344": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app345": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app346": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app347": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app348": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app349": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app350": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app351": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app352": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app353": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app354": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app355": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app356": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app357": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app358": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app359": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app360": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app361": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app362": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app363": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app364": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app365": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app366": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app367": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app368": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app369": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app370": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app371": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app372": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app373": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app374": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app375": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app376": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app377": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app378": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app379": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app380": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app381": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app382": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app383": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app384": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app385": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app386": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app387": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app388": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app389": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app390": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app391": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app392": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app393": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app394": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app395": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app396": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app397": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app398": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app399": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app400": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app401": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app402": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app403": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app404": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app405": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app406": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app407": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app408": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app409": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app410": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app411": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app412": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app413": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app414": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app415": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app416": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app417": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app418": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app419": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app420": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app421": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app422": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app423": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app424": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app425": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app426": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app427": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app428": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app429": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app430": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app431": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app432": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app433": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app434": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app435": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app436": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app437": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app438": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app439": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app440": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app441": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app442": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app443": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app444": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app445": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app446": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app447": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app448": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app449": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app450": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app451": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app452": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app453": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app454": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app455": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app456": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app457": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app458": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app459": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app460": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app461": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app462": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app463": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app464": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app465": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app466": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app467": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app468": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app469": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app470": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app471": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app472": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app473": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app474": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app475": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app476": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app477": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app478": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app479": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app480": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app481": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app482": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app483": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app484": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app485": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app486": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app487": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app488": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app489": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app490": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app491": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app492": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app493": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app494": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app495": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app496": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app497": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app498": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app499": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app500": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app501": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app502": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app503": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app504": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app505": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app506": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app507": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app508": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app509": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app510": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app511": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app512": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app513": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app514": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app515": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app516": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app517": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app518": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app519": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app520": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app521": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app522": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app523": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app524": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app525": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app526": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app527": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app528": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app529": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app530": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app531": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app532": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app533": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app534": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app535": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app536": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app537": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app538": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app539": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app540": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app541": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app542": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app543": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app544": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app545": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app546": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app547": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app548": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app549": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app550": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app551": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app552": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app553": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app554": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app555": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app556": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app557": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app558": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app559": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app560": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app561": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app562": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app563": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app564": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app565": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app566": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app567": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app568": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app569": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app570": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app571": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app572": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app573": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app574": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app575": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app576": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app577": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app578": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app579": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app580": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app581": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app582": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app583": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app584": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app585": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app586": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app587": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app588": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app589": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app590": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app591": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app592": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app593": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app594": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app595": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app596": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app597": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app598": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app599": {
+      "on": false,
+      "colour": "#FFFFFF"
+     }
+    }
+   },
+   "rules": {
+    "apps": [
+     "com.app0",
+     "com.app1",
+     "com.app2",
+     "com.app3",
+     "com.app4",
+     "com.app5",
+     "com.app6",
+     "com.app7",
+     "com.app8",
+     "com.app9",
+     "com.app10",
+     "com.app11",
+     "com.app12",
+     "com.app13",
+     "com.app14",
+     "com.app15",
+     "com.app16",
+     "com.app17",
+     "com.app18",
+     "com.app19",
+     "com.app20",
+     "com.app21",
+     "com.app22",
+     "com.app23",
+     "com.app24",
+     "com.app25",
+     "com.app26",
+     "com.app27",
+     "com.app28",
+     "com.app29",
+     "com.app30",
+     "com.app31",
+     "com.app32",
+     "com.app33",
+     "com.app34",
+     "com.app35",
+     "com.app36",
+     "com.app37",
+     "com.app38",
+     "com.app39",
+     "com.app40",
+     "com.app41",
+     "com.app42",
+     "com.app43",
+     "com.app44",
+     "com.app45",
+     "com.app46",
+     "com.app47",
+     "com.app48",
+     "com.app49",
+     "com.app50",
+     "com.app51",
+     "com.app52",
+     "com.app53",
+     "com.app54",
+     "com.app55",
+     "com.app56",
+     "com.app57",
+     "com.app58",
+     "com.app59",
+     "com.app60",
+     "com.app61",
+     "com.app62",
+     "com.app63",
+     "com.app64",
+     "com.app65",
+     "com.app66",
+     "com.app67",
+     "com.app68",
+     "com.app69",
+     "com.app70",
+     "com.app71",
+     "com.app72",
+     "com.app73",
+     "com.app74",
+     "com.app75",
+     "com.app76",
+     "com.app77",
+     "com.app78",
+     "com.app79",
+     "com.app80",
+     "com.app81",
+     "com.app82",
+     "com.app83",
+     "com.app84",
+     "com.app85",
+     "com.app86",
+     "com.app87",
+     "com.app88",
+     "com.app89",
+     "com.app90",
+     "com.app91",
+     "com.app92",
+     "com.app93",
+     "com.app94",
+     "com.app95",
+     "com.app96",
+     "com.app97",
+     "com.app98",
+     "com.app99",
+     "com.app100",
+     "com.app101",
+     "com.app102",
+     "com.app103",
+     "com.app104",
+     "com.app105",
+     "com.app106",
+     "com.app107",
+     "com.app108",
+     "com.app109",
+     "com.app110",
+     "com.app111",
+     "com.app112",
+     "com.app113",
+     "com.app114",
+     "com.app115",
+     "com.app116",
+     "com.app117",
+     "com.app118",
+     "com.app119",
+     "com.app120",
+     "com.app121",
+     "com.app122",
+     "com.app123",
+     "com.app124",
+     "com.app125",
+     "com.app126",
+     "com.app127",
+     "com.app128",
+     "com.app129",
+     "com.app130",
+     "com.app131",
+     "com.app132",
+     "com.app133",
+     "com.app134",
+     "com.app135",
+     "com.app136",
+     "com.app137",
+     "com.app138",
+     "com.app139",
+     "com.app140",
+     "com.app141",
+     "com.app142",
+     "com.app143",
+     "com.app144",
+     "com.app145",
+     "com.app146",
+     "com.app147",
+     "com.app148",
+     "com.app149",
+     "com.app150",
+     "com.app151",
+     "com.app152",
+     "com.app153",
+     "com.app154",
+     "com.app155",
+     "com.app156",
+     "com.app157",
+     "com.app158",
+     "com.app159",
+     "com.app160",
+     "com.app161",
+     "com.app162",
+     "com.app163",
+     "com.app164",
+     "com.app165",
+     "com.app166",
+     "com.app167",
+     "com.app168",
+     "com.app169",
+     "com.app170",
+     "com.app171",
+     "com.app172",
+     "com.app173",
+     "com.app174",
+     "com.app175",
+     "com.app176",
+     "com.app177",
+     "com.app178",
+     "com.app179",
+     "com.app180",
+     "com.app181",
+     "com.app182",
+     "com.app183",
+     "com.app184",
+     "com.app185",
+     "com.app186",
+     "com.app187",
+     "com.app188",
+     "com.app189",
+     "com.app190",
+     "com.app191",
+     "com.app192",
+     "com.app193",
+     "com.app194",
+     "com.app195",
+     "com.app196",
+     "com.app197",
+     "com.app198",
+     "com.app199",
+     "com.app200",
+     "com.app201",
+     "com.app202",
+     "com.app203",
+     "com.app204",
+     "com.app205",
+     "com.app206",
+     "com.app207",
+     "com.app208",
+     "com.app209",
+     "com.app210",
+     "com.app211",
+     "com.app212",
+     "com.app213",
+     "com.app214",
+     "com.app215",
+     "com.app216",
+     "com.app217",
+     "com.app218",
+     "com.app219",
+     "com.app220",
+     "com.app221",
+     "com.app222",
+     "com.app223",
+     "com.app224",
+     "com.app225",
+     "com.app226",
+     "com.app227",
+     "com.app228",
+     "com.app229",
+     "com.app230",
+     "com.app231",
+     "com.app232",
+     "com.app233",
+     "com.app234",
+     "com.app235",
+     "com.app236",
+     "com.app237",
+     "com.app238",
+     "com.app239",
+     "com.app240",
+     "com.app241",
+     "com.app242",
+     "com.app243",
+     "com.app244",
+     "com.app245",
+     "com.app246",
+     "com.app247",
+     "com.app248",
+     "com.app249",
+     "com.app250",
+     "com.app251",
+     "com.app252",
+     "com.app253",
+     "com.app254",
+     "com.app255",
+     "com.app256",
+     "com.app257",
+     "com.app258",
+     "com.app259",
+     "com.app260",
+     "com.app261",
+     "com.app262",
+     "com.app263",
+     "com.app264",
+     "com.app265",
+     "com.app266",
+     "com.app267",
+     "com.app268",
+     "com.app269",
+     "com.app270",
+     "com.app271",
+     "com.app272",
+     "com.app273",
+     "com.app274",
+     "com.app275",
+     "com.app276",
+     "com.app277",
+     "com.app278",
+     "com.app279",
+     "com.app280",
+     "com.app281",
+     "com.app282",
+     "com.app283",
+     "com.app284",
+     "com.app285",
+     "com.app286",
+     "com.app287",
+     "com.app288",
+     "com.app289",
+     "com.app290",
+     "com.app291",
+     "com.app292",
+     "com.app293",
+     "com.app294",
+     "com.app295",
+     "com.app296",
+     "com.app297",
+     "com.app298",
+     "com.app299",
+     "com.app300",
+     "com.app301",
+     "com.app302",
+     "com.app303",
+     "com.app304",
+     "com.app305",
+     "com.app306",
+     "com.app307",
+     "com.app308",
+     "com.app309",
+     "com.app310",
+     "com.app311",
+     "com.app312",
+     "com.app313",
+     "com.app314",
+     "com.app315",
+     "com.app316",
+     "com.app317",
+     "com.app318",
+     "com.app319",
+     "com.app320",
+     "com.app321",
+     "com.app322",
+     "com.app323",
+     "com.app324",
+     "com.app325",
+     "com.app326",
+     "com.app327",
+     "com.app328",
+     "com.app329",
+     "com.app330",
+     "com.app331",
+     "com.app332",
+     "com.app333",
+     "com.app334",
+     "com.app335",
+     "com.app336",
+     "com.app337",
+     "com.app338",
+     "com.app339",
+     "com.app340",
+     "com.app341",
+     "com.app342",
+     "com.app343",
+     "com.app344",
+     "com.app345",
+     "com.app346",
+     "com.app347",
+     "com.app348",
+     "com.app349",
+     "com.app350",
+     "com.app351",
+     "com.app352",
+     "com.app353",
+     "com.app354",
+     "com.app355",
+     "com.app356",
+     "com.app357",
+     "com.app358",
+     "com.app359",
+     "com.app360",
+     "com.app361",
+     "com.app362",
+     "com.app363",
+     "com.app364",
+     "com.app365",
+     "com.app366",
+     "com.app367",
+     "com.app368",
+     "com.app369",
+     "com.app370",
+     "com.app371",
+     "com.app372",
+     "com.app373",
+     "com.app374",
+     "com.app375",
+     "com.app376",
+     "com.app377",
+     "com.app378",
+     "com.app379",
+     "com.app380",
+     "com.app381",
+     "com.app382",
+     "com.app383",
+     "com.app384",
+     "com.app385",
+     "com.app386",
+     "com.app387",
+     "com.app388",
+     "com.app389",
+     "com.app390",
+     "com.app391",
+     "com.app392",
+     "com.app393",
+     "com.app394",
+     "com.app395",
+     "com.app396",
+     "com.app397",
+     "com.app398",
+     "com.app399",
+     "com.app400",
+     "com.app401",
+     "com.app402",
+     "com.app403",
+     "com.app404",
+     "com.app405",
+     "com.app406",
+     "com.app407",
+     "com.app408",
+     "com.app409",
+     "com.app410",
+     "com.app411",
+     "com.app412",
+     "com.app413",
+     "com.app414",
+     "com.app415",
+     "com.app416",
+     "com.app417",
+     "com.app418",
+     "com.app419",
+     "com.app420",
+     "com.app421",
+     "com.app422",
+     "com.app423",
+     "com.app424",
+     "com.app425",
+     "com.app426",
+     "com.app427",
+     "com.app428",
+     "com.app429",
+     "com.app430",
+     "com.app431",
+     "com.app432",
+     "com.app433",
+     "com.app434",
+     "com.app435",
+     "com.app436",
+     "com.app437",
+     "com.app438",
+     "com.app439",
+     "com.app440",
+     "com.app441",
+     "com.app442",
+     "com.app443",
+     "com.app444",
+     "com.app445",
+     "com.app446",
+     "com.app447",
+     "com.app448",
+     "com.app449",
+     "com.app450",
+     "com.app451",
+     "com.app452",
+     "com.app453",
+     "com.app454",
+     "com.app455",
+     "com.app456",
+     "com.app457",
+     "com.app458",
+     "com.app459",
+     "com.app460",
+     "com.app461",
+     "com.app462",
+     "com.app463",
+     "com.app464",
+     "com.app465",
+     "com.app466",
+     "com.app467",
+     "com.app468",
+     "com.app469",
+     "com.app470",
+     "com.app471",
+     "com.app472",
+     "com.app473",
+     "com.app474",
+     "com.app475",
+     "com.app476",
+     "com.app477",
+     "com.app478",
+     "com.app479",
+     "com.app480",
+     "com.app481",
+     "com.app482",
+     "com.app483",
+     "com.app484",
+     "com.app485",
+     "com.app486",
+     "com.app487",
+     "com.app488",
+     "com.app489",
+     "com.app490",
+     "com.app491",
+     "com.app492",
+     "com.app493",
+     "com.app494",
+     "com.app495",
+     "com.app496",
+     "com.app497",
+     "com.app498",
+     "com.app499",
+     "com.app500",
+     "com.app501",
+     "com.app502",
+     "com.app503",
+     "com.app504",
+     "com.app505",
+     "com.app506",
+     "com.app507",
+     "com.app508",
+     "com.app509",
+     "com.app510",
+     "com.app511",
+     "com.app512",
+     "com.app513",
+     "com.app514",
+     "com.app515",
+     "com.app516",
+     "com.app517",
+     "com.app518",
+     "com.app519",
+     "com.app520",
+     "com.app521",
+     "com.app522",
+     "com.app523",
+     "com.app524",
+     "com.app525",
+     "com.app526",
+     "com.app527",
+     "com.app528",
+     "com.app529",
+     "com.app530",
+     "com.app531",
+     "com.app532",
+     "com.app533",
+     "com.app534",
+     "com.app535",
+     "com.app536",
+     "com.app537",
+     "com.app538",
+     "com.app539",
+     "com.app540",
+     "com.app541",
+     "com.app542",
+     "com.app543",
+     "com.app544",
+     "com.app545",
+     "com.app546",
+     "com.app547",
+     "com.app548",
+     "com.app549",
+     "com.app550",
+     "com.app551",
+     "com.app552",
+     "com.app553",
+     "com.app554",
+     "com.app555",
+     "com.app556",
+     "com.app557",
+     "com.app558",
+     "com.app559",
+     "com.app560",
+     "com.app561",
+     "com.app562",
+     "com.app563",
+     "com.app564",
+     "com.app565",
+     "com.app566",
+     "com.app567",
+     "com.app568",
+     "com.app569",
+     "com.app570",
+     "com.app571",
+     "com.app572",
+     "com.app573",
+     "com.app574",
+     "com.app575",
+     "com.app576",
+     "com.app577",
+     "com.app578",
+     "com.app579",
+     "com.app580",
+     "com.app581",
+     "com.app582",
+     "com.app583",
+     "com.app584",
+     "com.app585",
+     "com.app586",
+     "com.app587",
+     "com.app588",
+     "com.app589",
+     "com.app590",
+     "com.app591",
+     "com.app592",
+     "com.app593",
+     "com.app594",
+     "com.app595",
+     "com.app596",
+     "com.app597",
+     "com.app598",
+     "com.app599"
+    ]
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {
+     "com.app0": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app1": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app2": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app3": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app4": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app5": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app6": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app7": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app8": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app9": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app10": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app11": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app12": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app13": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app14": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app15": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app16": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app17": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app18": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app19": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app20": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app21": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app22": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app23": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app24": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app25": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app26": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app27": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app28": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app29": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app30": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app31": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app32": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app33": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app34": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app35": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app36": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app37": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app38": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app39": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app40": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app41": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app42": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app43": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app44": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app45": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app46": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app47": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app48": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app49": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app50": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app51": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app52": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app53": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app54": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app55": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app56": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app57": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app58": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app59": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app60": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app61": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app62": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app63": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app64": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app65": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app66": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app67": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app68": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app69": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app70": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app71": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app72": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app73": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app74": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app75": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app76": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app77": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app78": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app79": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app80": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app81": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app82": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app83": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app84": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app85": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app86": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app87": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app88": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app89": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app90": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app91": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app92": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app93": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app94": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app95": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app96": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app97": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app98": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app99": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app100": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app101": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app102": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app103": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app104": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app105": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app106": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app107": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app108": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app109": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app110": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app111": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app112": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app113": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app114": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app115": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app116": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app117": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app118": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app119": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app120": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app121": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app122": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app123": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app124": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app125": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app126": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app127": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app128": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app129": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app130": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app131": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app132": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app133": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app134": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app135": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app136": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app137": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app138": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app139": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app140": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app141": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app142": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app143": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app144": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app145": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app146": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app147": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app148": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app149": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app150": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app151": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app152": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app153": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app154": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app155": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app156": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app157": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app158": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app159": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app160": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app161": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app162": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app163": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app164": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app165": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app166": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app167": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app168": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app169": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app170": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app171": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app172": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app173": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app174": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app175": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app176": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app177": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app178": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app179": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app180": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app181": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app182": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app183": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app184": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app185": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app186": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app187": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app188": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app189": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app190": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app191": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app192": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app193": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app194": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app195": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app196": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app197": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app198": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app199": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app200": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app201": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app202": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app203": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app204": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app205": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app206": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app207": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app208": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app209": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app210": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app211": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app212": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app213": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app214": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app215": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app216": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app217": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app218": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app219": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app220": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app221": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app222": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app223": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app224": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app225": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app226": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app227": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app228": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app229": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app230": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app231": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app232": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app233": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app234": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app235": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app236": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app237": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app238": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app239": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app240": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app241": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app242": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app243": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app244": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app245": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app246": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app247": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app248": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app249": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app250": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app251": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app252": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app253": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app254": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app255": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app256": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app257": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app258": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app259": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app260": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app261": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app262": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app263": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app264": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app265": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app266": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app267": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app268": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app269": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app270": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app271": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app272": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app273": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app274": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app275": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app276": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app277": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app278": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app279": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app280": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app281": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app282": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app283": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app284": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app285": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app286": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app287": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app288": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app289": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app290": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app291": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app292": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app293": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app294": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app295": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app296": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app297": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app298": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app299": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app300": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app301": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app302": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app303": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app304": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app305": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app306": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app307": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app308": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app309": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app310": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app311": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app312": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app313": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app314": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app315": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app316": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app317": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app318": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app319": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app320": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app321": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app322": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app323": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app324": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app325": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app326": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app327": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app328": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app329": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app330": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app331": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app332": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app333": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app334": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app335": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app336": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app337": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app338": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app339": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app340": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app341": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app342": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app343": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app344": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app345": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app346": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app347": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app348": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app349": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app350": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app351": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app352": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app353": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app354": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app355": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app356": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app357": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app358": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app359": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app360": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app361": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app362": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app363": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app364": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app365": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app366": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app367": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app368": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app369": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app370": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app371": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app372": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app373": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app374": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app375": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app376": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app377": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app378": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app379": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app380": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app381": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app382": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app383": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app384": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app385": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app386": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app387": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app388": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app389": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app390": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app391": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app392": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app393": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app394": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app395": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app396": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app397": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app398": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app399": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app400": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app401": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app402": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app403": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app404": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app405": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app406": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app407": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app408": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app409": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app410": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app411": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app412": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app413": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app414": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app415": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app416": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app417": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app418": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app419": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app420": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app421": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app422": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app423": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app424": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app425": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app426": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app427": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app428": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app429": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app430": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app431": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app432": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app433": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app434": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app435": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app436": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app437": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app438": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app439": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app440": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app441": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app442": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app443": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app444": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app445": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app446": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app447": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app448": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app449": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app450": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app451": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app452": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app453": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app454": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app455": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app456": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app457": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app458": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app459": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app460": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app461": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app462": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app463": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app464": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app465": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app466": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app467": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app468": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app469": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app470": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app471": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app472": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app473": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app474": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app475": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app476": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app477": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app478": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app479": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app480": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app481": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app482": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app483": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app484": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app485": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app486": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app487": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app488": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app489": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app490": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app491": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app492": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app493": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app494": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app495": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app496": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app497": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app498": {
+      "on": false,
+      "colour": "#FFFFFF"
+     },
+     "com.app499": {
+      "on": false,
+      "colour": "#FFFFFF"
+     }
+    },
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [
+     "com.app0",
+     "com.app1",
+     "com.app2",
+     "com.app3",
+     "com.app4",
+     "com.app5",
+     "com.app6",
+     "com.app7",
+     "com.app8",
+     "com.app9",
+     "com.app10",
+     "com.app11",
+     "com.app12",
+     "com.app13",
+     "com.app14",
+     "com.app15",
+     "com.app16",
+     "com.app17",
+     "com.app18",
+     "com.app19",
+     "com.app20",
+     "com.app21",
+     "com.app22",
+     "com.app23",
+     "com.app24",
+     "com.app25",
+     "com.app26",
+     "com.app27",
+     "com.app28",
+     "com.app29",
+     "com.app30",
+     "com.app31",
+     "com.app32",
+     "com.app33",
+     "com.app34",
+     "com.app35",
+     "com.app36",
+     "com.app37",
+     "com.app38",
+     "com.app39",
+     "com.app40",
+     "com.app41",
+     "com.app42",
+     "com.app43",
+     "com.app44",
+     "com.app45",
+     "com.app46",
+     "com.app47",
+     "com.app48",
+     "com.app49",
+     "com.app50",
+     "com.app51",
+     "com.app52",
+     "com.app53",
+     "com.app54",
+     "com.app55",
+     "com.app56",
+     "com.app57",
+     "com.app58",
+     "com.app59",
+     "com.app60",
+     "com.app61",
+     "com.app62",
+     "com.app63",
+     "com.app64",
+     "com.app65",
+     "com.app66",
+     "com.app67",
+     "com.app68",
+     "com.app69",
+     "com.app70",
+     "com.app71",
+     "com.app72",
+     "com.app73",
+     "com.app74",
+     "com.app75",
+     "com.app76",
+     "com.app77",
+     "com.app78",
+     "com.app79",
+     "com.app80",
+     "com.app81",
+     "com.app82",
+     "com.app83",
+     "com.app84",
+     "com.app85",
+     "com.app86",
+     "com.app87",
+     "com.app88",
+     "com.app89",
+     "com.app90",
+     "com.app91",
+     "com.app92",
+     "com.app93",
+     "com.app94",
+     "com.app95",
+     "com.app96",
+     "com.app97",
+     "com.app98",
+     "com.app99",
+     "com.app100",
+     "com.app101",
+     "com.app102",
+     "com.app103",
+     "com.app104",
+     "com.app105",
+     "com.app106",
+     "com.app107",
+     "com.app108",
+     "com.app109",
+     "com.app110",
+     "com.app111",
+     "com.app112",
+     "com.app113",
+     "com.app114",
+     "com.app115",
+     "com.app116",
+     "com.app117",
+     "com.app118",
+     "com.app119",
+     "com.app120",
+     "com.app121",
+     "com.app122",
+     "com.app123",
+     "com.app124",
+     "com.app125",
+     "com.app126",
+     "com.app127",
+     "com.app128",
+     "com.app129",
+     "com.app130",
+     "com.app131",
+     "com.app132",
+     "com.app133",
+     "com.app134",
+     "com.app135",
+     "com.app136",
+     "com.app137",
+     "com.app138",
+     "com.app139",
+     "com.app140",
+     "com.app141",
+     "com.app142",
+     "com.app143",
+     "com.app144",
+     "com.app145",
+     "com.app146",
+     "com.app147",
+     "com.app148",
+     "com.app149",
+     "com.app150",
+     "com.app151",
+     "com.app152",
+     "com.app153",
+     "com.app154",
+     "com.app155",
+     "com.app156",
+     "com.app157",
+     "com.app158",
+     "com.app159",
+     "com.app160",
+     "com.app161",
+     "com.app162",
+     "com.app163",
+     "com.app164",
+     "com.app165",
+     "com.app166",
+     "com.app167",
+     "com.app168",
+     "com.app169",
+     "com.app170",
+     "com.app171",
+     "com.app172",
+     "com.app173",
+     "com.app174",
+     "com.app175",
+     "com.app176",
+     "com.app177",
+     "com.app178",
+     "com.app179",
+     "com.app180",
+     "com.app181",
+     "com.app182",
+     "com.app183",
+     "com.app184",
+     "com.app185",
+     "com.app186",
+     "com.app187",
+     "com.app188",
+     "com.app189",
+     "com.app190",
+     "com.app191",
+     "com.app192",
+     "com.app193",
+     "com.app194",
+     "com.app195",
+     "com.app196",
+     "com.app197",
+     "com.app198",
+     "com.app199",
+     "com.app200",
+     "com.app201",
+     "com.app202",
+     "com.app203",
+     "com.app204",
+     "com.app205",
+     "com.app206",
+     "com.app207",
+     "com.app208",
+     "com.app209",
+     "com.app210",
+     "com.app211",
+     "com.app212",
+     "com.app213",
+     "com.app214",
+     "com.app215",
+     "com.app216",
+     "com.app217",
+     "com.app218",
+     "com.app219",
+     "com.app220",
+     "com.app221",
+     "com.app222",
+     "com.app223",
+     "com.app224",
+     "com.app225",
+     "com.app226",
+     "com.app227",
+     "com.app228",
+     "com.app229",
+     "com.app230",
+     "com.app231",
+     "com.app232",
+     "com.app233",
+     "com.app234",
+     "com.app235",
+     "com.app236",
+     "com.app237",
+     "com.app238",
+     "com.app239",
+     "com.app240",
+     "com.app241",
+     "com.app242",
+     "com.app243",
+     "com.app244",
+     "com.app245",
+     "com.app246",
+     "com.app247",
+     "com.app248",
+     "com.app249",
+     "com.app250",
+     "com.app251",
+     "com.app252",
+     "com.app253",
+     "com.app254",
+     "com.app255",
+     "com.app256",
+     "com.app257",
+     "com.app258",
+     "com.app259",
+     "com.app260",
+     "com.app261",
+     "com.app262",
+     "com.app263",
+     "com.app264",
+     "com.app265",
+     "com.app266",
+     "com.app267",
+     "com.app268",
+     "com.app269",
+     "com.app270",
+     "com.app271",
+     "com.app272",
+     "com.app273",
+     "com.app274",
+     "com.app275",
+     "com.app276",
+     "com.app277",
+     "com.app278",
+     "com.app279",
+     "com.app280",
+     "com.app281",
+     "com.app282",
+     "com.app283",
+     "com.app284",
+     "com.app285",
+     "com.app286",
+     "com.app287",
+     "com.app288",
+     "com.app289",
+     "com.app290",
+     "com.app291",
+     "com.app292",
+     "com.app293",
+     "com.app294",
+     "com.app295",
+     "com.app296",
+     "com.app297",
+     "com.app298",
+     "com.app299",
+     "com.app300",
+     "com.app301",
+     "com.app302",
+     "com.app303",
+     "com.app304",
+     "com.app305",
+     "com.app306",
+     "com.app307",
+     "com.app308",
+     "com.app309",
+     "com.app310",
+     "com.app311",
+     "com.app312",
+     "com.app313",
+     "com.app314",
+     "com.app315",
+     "com.app316",
+     "com.app317",
+     "com.app318",
+     "com.app319",
+     "com.app320",
+     "com.app321",
+     "com.app322",
+     "com.app323",
+     "com.app324",
+     "com.app325",
+     "com.app326",
+     "com.app327",
+     "com.app328",
+     "com.app329",
+     "com.app330",
+     "com.app331",
+     "com.app332",
+     "com.app333",
+     "com.app334",
+     "com.app335",
+     "com.app336",
+     "com.app337",
+     "com.app338",
+     "com.app339",
+     "com.app340",
+     "com.app341",
+     "com.app342",
+     "com.app343",
+     "com.app344",
+     "com.app345",
+     "com.app346",
+     "com.app347",
+     "com.app348",
+     "com.app349",
+     "com.app350",
+     "com.app351",
+     "com.app352",
+     "com.app353",
+     "com.app354",
+     "com.app355",
+     "com.app356",
+     "com.app357",
+     "com.app358",
+     "com.app359",
+     "com.app360",
+     "com.app361",
+     "com.app362",
+     "com.app363",
+     "com.app364",
+     "com.app365",
+     "com.app366",
+     "com.app367",
+     "com.app368",
+     "com.app369",
+     "com.app370",
+     "com.app371",
+     "com.app372",
+     "com.app373",
+     "com.app374",
+     "com.app375",
+     "com.app376",
+     "com.app377",
+     "com.app378",
+     "com.app379",
+     "com.app380",
+     "com.app381",
+     "com.app382",
+     "com.app383",
+     "com.app384",
+     "com.app385",
+     "com.app386",
+     "com.app387",
+     "com.app388",
+     "com.app389",
+     "com.app390",
+     "com.app391",
+     "com.app392",
+     "com.app393",
+     "com.app394",
+     "com.app395",
+     "com.app396",
+     "com.app397",
+     "com.app398",
+     "com.app399",
+     "com.app400",
+     "com.app401",
+     "com.app402",
+     "com.app403",
+     "com.app404",
+     "com.app405",
+     "com.app406",
+     "com.app407",
+     "com.app408",
+     "com.app409",
+     "com.app410",
+     "com.app411",
+     "com.app412",
+     "com.app413",
+     "com.app414",
+     "com.app415",
+     "com.app416",
+     "com.app417",
+     "com.app418",
+     "com.app419",
+     "com.app420",
+     "com.app421",
+     "com.app422",
+     "com.app423",
+     "com.app424",
+     "com.app425",
+     "com.app426",
+     "com.app427",
+     "com.app428",
+     "com.app429",
+     "com.app430",
+     "com.app431",
+     "com.app432",
+     "com.app433",
+     "com.app434",
+     "com.app435",
+     "com.app436",
+     "com.app437",
+     "com.app438",
+     "com.app439",
+     "com.app440",
+     "com.app441",
+     "com.app442",
+     "com.app443",
+     "com.app444",
+     "com.app445",
+     "com.app446",
+     "com.app447",
+     "com.app448",
+     "com.app449",
+     "com.app450",
+     "com.app451",
+     "com.app452",
+     "com.app453",
+     "com.app454",
+     "com.app455",
+     "com.app456",
+     "com.app457",
+     "com.app458",
+     "com.app459",
+     "com.app460",
+     "com.app461",
+     "com.app462",
+     "com.app463",
+     "com.app464",
+     "com.app465",
+     "com.app466",
+     "com.app467",
+     "com.app468",
+     "com.app469",
+     "com.app470",
+     "com.app471",
+     "com.app472",
+     "com.app473",
+     "com.app474",
+     "com.app475",
+     "com.app476",
+     "com.app477",
+     "com.app478",
+     "com.app479",
+     "com.app480",
+     "com.app481",
+     "com.app482",
+     "com.app483",
+     "com.app484",
+     "com.app485",
+     "com.app486",
+     "com.app487",
+     "com.app488",
+     "com.app489",
+     "com.app490",
+     "com.app491",
+     "com.app492",
+     "com.app493",
+     "com.app494",
+     "com.app495",
+     "com.app496",
+     "com.app497",
+     "com.app498",
+     "com.app499"
+    ],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "notify and rules of the wrong type",
+  "input": {
+   "notify": 5,
+   "rules": []
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   }
+  }
+ },
+ {
+  "name": "wrong field types in notify and rules",
+  "input": {
+   "notify": {
+    "enabled": "no",
+    "defaultOn": 1,
+    "wakeScreen": "x",
+    "apps": [],
+    "quiet": 3
+   },
+   "rules": {
+    "apps": "com.a",
+    "fullscreen": "no",
+    "pocket": 1
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
    }
   }
  }

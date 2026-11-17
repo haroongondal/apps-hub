@@ -3,6 +3,7 @@ package expo.modules.haloengine.core
 import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.double
@@ -19,7 +20,7 @@ class SettingsTest {
     Json.parseToJsonElement(File("../fixtures/settings.cases.json").readText()) as JsonArray
 
   @Test
-  fun fixtureHasCases() = assertTrue(cases.size >= 8)
+  fun fixtureHasCases() = assertTrue(cases.size >= 30)
 
   // Checks Kotlin against the fixture's literal values, so a default or clamp that drifts from TypeScript fails here.
   @Test
@@ -50,6 +51,34 @@ class SettingsTest {
       assertEquals("$name edges.auto", ed.b("auto"), s.edges.auto)
       assertEquals("$name edges.corners", ed.nums("corners"), s.edges.corners.map { it.toDouble() })
       assertEquals("$name edges.insets", ed.nums("insets"), s.edges.insets.map { it.toDouble() })
+      val n = e["notify"]!!.jsonObject
+      val sn = s.notify
+      assertEquals("$name notify.enabled", n.b("enabled"), sn.enabled)
+      assertEquals("$name notify.defaultOn", n.b("defaultOn"), sn.defaultOn)
+      assertEquals("$name notify.style", n.str("style"), sn.style)
+      assertEquals("$name notify.repeat", n.d("repeat"), sn.repeat.toDouble(), 0.0)
+      assertEquals("$name notify.durationMs", n.d("durationMs"), sn.durationMs.toDouble(), 0.0)
+      assertEquals("$name notify.reminderMin", n["reminderMin"]!!.let { if (it is JsonNull) null else it.jsonPrimitive.double }, sn.reminderMin?.toDouble())
+      assertEquals("$name notify.wakeScreen", n.b("wakeScreen"), sn.wakeScreen)
+      val apps = n["apps"]!!.jsonObject
+      assertEquals("$name notify.apps keys", apps.keys.toList(), sn.apps.keys.toList())
+      for ((pkg, v) in apps) {
+        val a = v.jsonObject
+        assertEquals("$name notify.apps.$pkg.on", a.b("on"), sn.apps[pkg]!!.on)
+        assertEquals("$name notify.apps.$pkg.colour", a["colour"]!!.let { if (it is JsonNull) null else it.jsonPrimitive.content }, sn.apps[pkg]!!.colour)
+      }
+      val q = n["quiet"]!!.jsonObject
+      assertEquals("$name notify.quiet.on", q.b("on"), sn.quiet.on)
+      assertEquals("$name notify.quiet.start", q.str("start"), sn.quiet.start)
+      assertEquals("$name notify.quiet.end", q.str("end"), sn.quiet.end)
+      val r = e["rules"]!!.jsonObject
+      val sr = s.rules
+      assertEquals("$name rules.apps", r["apps"]!!.jsonArray.map { it.jsonPrimitive.content }, sr.apps)
+      assertEquals("$name rules.fullscreen", r.b("fullscreen"), sr.fullscreen)
+      assertEquals("$name rules.landscape", r.b("landscape"), sr.landscape)
+      assertEquals("$name rules.calls", r.b("calls"), sr.calls)
+      assertEquals("$name rules.batterySaver", r.b("batterySaver"), sr.batterySaver)
+      assertEquals("$name rules.pocket", r.b("pocket"), sr.pocket)
     }
   }
 
