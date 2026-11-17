@@ -1,6 +1,6 @@
 # Halo stages 3–5 — notifications, always-on screen, extras (design)
 
-Date: 2026-11-17. Status: awaiting owner approval.
+Date: 2026-11-17. Status: awaiting owner approval (builder check done; answers in §10).
 Extends `2026-11-17-edge-visualizer-design.md` (the base design: identity, constraints, mechanisms, stages 1–2).
 Everything there still holds; this document widens stages 3–5 at the owner's request ("AOD with infinite and
 customizable time with multiple AOD screen customizations and themes, notification customizations and other cool
@@ -21,7 +21,7 @@ tune per app, and a set of extras (charging fill, call glow, tiles, music overla
 2. Reminder flash: repeats every N minutes (1, 2, 5, 10, 15) while the notification is still posted and the owner has
    not unlocked the phone since it arrived; stops on unlock or when the notification is removed.
 3. Screen off: a new notification can wake the always-on screen (only while the keyguard is locked) which shows the
-   flash and the icon.
+   flash and the icon. **Built in stage 4** (needs the real always-on screen); stage 3 flashes only while the screen is on.
 4. Quiet hours (start/end time) suppress flashes and reminder flashes.
 5. Filters: skip ongoing, silent (importance < DEFAULT), group-summary, and Halo's own notifications.
 6. Hide/pause rules (base design goal 8): selected apps, fullscreen, landscape, calls, battery saver, pocket.
@@ -122,7 +122,8 @@ android/
 
 ## 6. Permissions
 
-Adds: none mandatory. `READ_PHONE_STATE` stays out (calls via audio mode). Notification access is already needed.
+Adds `QUERY_ALL_PACKAGES` (private Store app, as the Store itself does) so the per-app lists can show every
+launchable app with its icon. Nothing else mandatory. `READ_PHONE_STATE` stays out (calls via audio mode). Notification access is already needed.
 `POST_NOTIFICATIONS` already present. `PACKAGE_USAGE_STATS` only if the per-app hide rule is used (base design).
 
 ## 7. Stages (each ends with a Store build the owner installs; `pnpm release halo` is pre-approved)
@@ -147,3 +148,24 @@ for each new block, RN pure helpers. Emulator rounds per task. Phone: per stage,
 
 Face designs and names (original; nothing from Muviz), theme defaults (ship 4 starter themes), exact flash/sweep
 look, music card and overlay layout, icon-colour cache size, screen layouts within `@apps-hub/ui`.
+
+## 10. Builder-check answers (builder's calls, owner can veto)
+
+1. Stage 3 is planned in full; stage 4 is planned as an outline until the 0.3.1 phone check shows the always-on
+   screen launches after screen-off on HyperOS. Goal 3 (notification wakes the screen) moves to stage 4. If the
+   phone shows the edge overlay already draws over the lock screen, `AodActivity` hides the overlay while it is in
+   front and draws its own `EdgeView` (one drawer at a time).
+2. Relaunch rule (replaces the spike's once-per-lock): on every SCREEN_OFF while the keyguard is locked, the
+   always-on screen shows again (so a power-button press brings it back, like a real always-on display) — except
+   after it has timed out by itself, then it stays off until the next unlock or a new notification wake. "Never stop"
+   never times out, so it always comes back.
+3. Reminder flashes follow `wakeScreen`: if on (and the always-on screen is enabled), each reminder wakes it briefly
+   (its own 10 s, not the theme timeout); if off, reminders show only while the screen is on. Reminders are off by
+   default.
+4. `QUERY_ALL_PACKAGES` is added (see §6); per-app lists show all launchable apps, apps that have notified first.
+5. Call glow colour: the package of the most recent `CATEGORY_CALL` notification (its icon colour); none → the
+   current theme/palette accent.
+6. Two separate windows: `aod.schedule` (when the always-on screen is off) and `notify.quiet` (when flashes are
+   muted). One `QuietHours` type, used twice.
+7. Theme export embeds the background photo as base64 JPEG (scaled to ≤ 1440 px long side, quality 85); import with a
+   name clash keeps both and adds " (2)", " (3)"…
