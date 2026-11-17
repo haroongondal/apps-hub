@@ -7,10 +7,10 @@ import java.io.IOException
 object VisionPaths {
   private val ID = Regex("[A-Za-z0-9_-]{1,64}")
 
-  // Absolute only; symlinks and .. are resolved before the folder check. The caller opens the returned canonical file,
-  // not the path it was given.
+  // Absolute only (a leading file:// as in Expo's cacheDirectory is dropped); symlinks and .. are resolved before the
+  // folder check. The caller opens the returned canonical file, not the path it was given.
   fun resolve(cacheDir: File, path: String): File? {
-    val f = File(path)
+    val f = File(path.removePrefix("file://"))
     if (!f.isAbsolute) return null
     return try {
       val root = cacheDir.canonicalFile

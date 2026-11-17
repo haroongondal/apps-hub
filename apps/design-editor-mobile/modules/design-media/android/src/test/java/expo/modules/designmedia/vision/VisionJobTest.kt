@@ -1,5 +1,6 @@
 package expo.modules.designmedia.vision
 
+import ai.onnxruntime.OrtException
 import expo.modules.designmedia.core.Filter
 import expo.modules.designmedia.core.SCALE
 import expo.modules.designmedia.core.TILE_IN
@@ -150,8 +151,11 @@ class VisionJobTest {
 
   @Test
   fun outOfMemorySaysSoInPlainWords() {
-    val e = assertThrows(VisionNoMemory::class.java) { VisionJob.plainMemory { throw OutOfMemoryError("Failed to allocate a 64 MB allocation") } }
+    val e = assertThrows(VisionNoMemory::class.java) { VisionJob.plainWords { throw OutOfMemoryError("Failed to allocate a 64 MB allocation") } }
     assertEquals("This image is too big for this tool.", e.message)
-    assertEquals(3, VisionJob.plainMemory { 3 })
+    assertEquals(3, VisionJob.plainWords { 3 })
+    val ort = assertThrows(Exception::class.java) { VisionJob.plainWords { throw OrtException("Load model from x failed: Protobuf parsing failed") } }
+    assertEquals("This tool didn't work on this image. Try again.", ort.message)
+    assertThrows(VisionCancelled::class.java) { VisionJob.plainWords { throw VisionCancelled() } }
   }
 }
