@@ -191,13 +191,20 @@ export async function run(t) {
     await box.blur();
     const shown = await until(async () => (await box.inputValue()) === '61', 3000).catch(() => false);
     check('downloads: settings: a change skipped while a field is focused shows once the person leaves it unchanged', held === '7' && shown === true && (await raw(t)).takeOver?.minMb === 61, json({ held, now: await box.inputValue() }));
-    // Switching window blurs the field with no change event: a synthetic blur stands in for it.
+    // Headed Chrome for Testing 149 fires change before the blur of a window switch (probe 2026-11-18); a blur without one is guarded anyway. Synthetic events stand in.
     await box.focus();
     await box.fill('77');
     await box.evaluate((el) => el.dispatchEvent(new FocusEvent('blur')));
     check('downloads: settings: typed text survives a blur that comes without a change (another window took focus)', (await box.inputValue()) === '77', await box.inputValue());
+    // Window switch, return (focus fires again) and leaving the field, none with a change; document.hasFocus is stubbed false for the switch.
+    await box.fill('78');
+    await page.evaluate(() => (document.hasFocus = () => false));
+    await box.evaluate((el) => el.dispatchEvent(new FocusEvent('blur')));
+    await page.evaluate(() => delete document.hasFocus);
+    await box.evaluate((el) => (el.dispatchEvent(new FocusEvent('focus')), el.dispatchEvent(new FocusEvent('blur'))));
+    check('downloads: settings: typed text survives a window switch, the return and leaving the field without a change', (await box.inputValue()) === '78', await box.inputValue());
     await box.blur();
-    await until(async () => (await raw(t)).takeOver?.minMb === 77).catch(() => {});
+    await until(async () => (await raw(t)).takeOver?.minMb === 78).catch(() => {});
   });
 
   await attempt('two writers', async () => {

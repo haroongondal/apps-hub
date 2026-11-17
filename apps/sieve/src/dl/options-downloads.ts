@@ -47,15 +47,24 @@ export function downloadsSection(): HTMLElement {
       try {
         await save(commit(el.value));
         el.value = read(await readDownloads());
+        atFocus = el.value; // Chrome resets its own value-at-focus on change; this follows it.
       } finally {
         saving = false;
       }
     });
     // An update skipped while the person was in the field lands when they leave it without a change (change fires first, so a save is not undone).
-    // Only when the text is what it was at focus: switching window blurs without a change event and must not wipe typed text.
+    // Only when the text is what it was at focus, so typed text is never wiped. Losing the window blurs the field and the return focuses it
+    // again: that focus is not a fresh entry, so it keeps the value-at-focus.
     let atFocus = '';
-    el.addEventListener('focus', () => (atFocus = el.value));
-    el.addEventListener('blur', () => !saving && latest && el.value === atFocus && (el.value = read(latest)));
+    let away = false;
+    el.addEventListener('focus', () => {
+      if (!away) atFocus = el.value;
+      away = false;
+    });
+    el.addEventListener('blur', () => {
+      away = !document.hasFocus();
+      if (!saving && latest && el.value === atFocus) atFocus = el.value = read(latest);
+    });
     shows.push(() => latest && el !== document.activeElement && (el.value = read(latest)));
     return el;
   };
