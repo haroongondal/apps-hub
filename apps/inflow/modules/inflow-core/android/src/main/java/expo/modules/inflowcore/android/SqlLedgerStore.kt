@@ -93,6 +93,18 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
     run("UPDATE txns SET by_ai = 0 WHERE id = ?", id)
   }
 
+  override fun setOwnerLabel(id: Long, label: String?) {
+    run("UPDATE txns SET label = ? WHERE id = ?", label, id)
+  }
+
+  // A tombstone per source item (ids are never reused: items is AUTOINCREMENT). The backfill query and Ledger skip these items.
+  override fun blockSources(txnId: Long) {
+    run("INSERT OR IGNORE INTO tombstones(hash, at) SELECT '$BLOCKED_PREFIX' || item_id, ? FROM txn_sources WHERE txn_id = ?", System.currentTimeMillis(), txnId)
+  }
+
+  override fun sourceBlocked(itemId: Long): Boolean =
+    db.rawQuery("SELECT 1 FROM tombstones WHERE hash = ?", "$BLOCKED_PREFIX$itemId").use { it.moveToFirst() }
+
   /**
    * Ask AI (R35): the newest `limit` non-own transactions in the range, of any age (not only since the first key). One with a
    * source that is an OTP, or belongs to an app, sender or recording the owner kept from the AI, is left out. R44 also reads the source's
@@ -251,6 +263,8 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
   private fun Cursor.str(i: Int): String? = if (isNull(i)) null else getString(i)
 
   internal companion object {
+    /** Tombstone key prefix for an item whose transaction the owner deleted; SqlBackfillStore.UNPARSED_SQL checks it too. */
+    const val BLOCKED_PREFIX = "txnsrc:"
     // The name a person or shop is shown under: the AI's clean name, else the bank's text. Grouping and matching use its lower() (shortcut: lower() folds ASCII only, which covers the names seen so far).
     const val PARTY = "COALESCE(label, counterparty, '')"
     const val PARTY_KEY_T = "lower(COALESCE(t.label, t.counterparty, ''))"
@@ -260,6 +274,6 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
       "FROM txns WHERE at >= ? AND at < ? GROUP BY own, CASE WHEN own = 1 THEN '' ELSE lower($PARTY) END, currency " +
       "ORDER BY SUM(amount_minor) DESC, 1"
     // The channel column is a comma list; ',NOTIFICATION,' is a source that was a bare push (WhatsApp, a bank app), whatever became of its item.
-    const val PUSH_SOURCE = "instr(',' || p.channel || ',', ',NOTIFICATION,') > 0"
+    private const val PUSH_SOURCE = "instr(',' || p.channel || ',', ',NOTIFICATION,') > 0"
   }
 }

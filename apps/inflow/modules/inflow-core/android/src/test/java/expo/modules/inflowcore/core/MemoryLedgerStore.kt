@@ -75,6 +75,18 @@ class MemoryLedgerStore : LedgerStore {
     sources.values.removeAll { it == id }
   }
 
+  val blocked = mutableSetOf<Long>()   // items whose transaction the owner deleted
+
+  override fun setOwnerLabel(id: Long, label: String?) {
+    txns[id] = txns.getValue(id).copy(label = label)
+  }
+
+  override fun blockSources(txnId: Long) {
+    blocked += sources.filterValues { it == txnId }.keys
+  }
+
+  override fun sourceBlocked(itemId: Long) = itemId in blocked
+
   override fun clearByAi(id: Long) {
     txns[id] = txns.getValue(id).copy(byAi = false)
   }

@@ -30,10 +30,12 @@ import expo.modules.inflowcore.android.SmsImporter
 import expo.modules.inflowcore.android.SqlItemStore
 import expo.modules.inflowcore.android.SqlLedgerStore
 import expo.modules.inflowcore.android.StoreHolder
+import expo.modules.inflowcore.core.AiBatch
 import expo.modules.inflowcore.core.AiChannels
 import expo.modules.inflowcore.core.AiModels
 import expo.modules.inflowcore.core.AppSetting
 import expo.modules.inflowcore.core.Categories
+import expo.modules.inflowcore.core.Edits
 import expo.modules.inflowcore.core.GmailPolicy
 import expo.modules.inflowcore.core.Prices
 import expo.modules.inflowcore.core.Retention
@@ -249,8 +251,31 @@ class InflowCoreModule : Module() {
       openReport.also { openReport = null }
     }
 
+    // The owner's edit of a transaction's clean name (blank clears it); the category is set with setCategory. Returns null once saved.
+    Function("setTxnLabel") { txnId: Long, label: String? ->
+      val store = store()
+      val found = store.inTransaction { StoreHolder.ledger(store).editLabel(txnId, Edits.label(label)) }
+      if (found) null else "That transaction is no longer saved."
+    }
+
+    // Removes the transaction and its source links; the messages it came from stay, and are not read into a transaction again.
+    Function("deleteTxn") { txnId: Long ->
+      val store = store()
+      store.inTransaction { StoreHolder.ledger(store).deleteByOwner(txnId) }
+    }
+
     Function("getItem") { id: Long ->
       store().item(id, System.currentTimeMillis())
+    }
+
+    // The owner deleted a saved message: it, its AI result, to-dos and media go, and a re-import does not bring it back. False when it was already gone.
+    Function("deleteItem") { id: Long ->
+      store().deleteItem(id)
+    }
+
+    // Every saved message of one conversation (a key from ConversationRow or Item.conversationKey). Returns how many were deleted.
+    Function("deleteConversation") { key: String ->
+      store().deleteConversation(key)
     }
 
     Function("mediaFor") { itemId: Long ->
@@ -451,6 +476,34 @@ class InflowCoreModule : Module() {
 
     Function("setTodoDone") { id: Long, done: Boolean ->
       store().setTodoDone(id, done)
+    }
+
+    // To-dos: the AI's (itemId of the message) and the owner's own (itemId 0). Done ones last when includeDone.
+    Function("listTodos") { includeDone: Boolean ->
+      store().listTodos(includeDone, System.currentTimeMillis())
+    }
+
+    // Each returns the error copy, or null once saved.
+    Function("addTodo") { text: String, dueAt: Long? ->
+      val clean = Edits.todoText(text)
+      if (clean == null) "Write what needs doing first."
+      else {
+        store().addTodo(clean, dueAt)
+        null
+      }
+    }
+
+    Function("updateTodo") { id: Long, text: String, dueAt: Long? ->
+      val clean = Edits.todoText(text)
+      if (clean == null) "Write what needs doing first."
+      else {
+        store().updateTodo(id, clean, dueAt)
+        null
+      }
+    }
+
+    Function("deleteTodo") { id: Long ->
+      store().deleteTodo(id)
     }
 
     AsyncFunction("ask") Coroutine { question: String ->

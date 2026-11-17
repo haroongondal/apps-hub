@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Field, Group, Notice, Row, Sheet } from '@apps-hub/ui';
+import { Button, Field, Group, Notice, Row, Sheet, confirmAction } from '@apps-hub/ui';
 import InflowCore from 'inflow-core';
 import { SAVE_ERROR } from './messages.ts';
+import { removeNameConfirm } from './records.ts';
 
 export interface RenameTarget {
   senderKey: string;
@@ -38,7 +39,16 @@ export function RenameSheet({ target, onClose, onSaved }: { target: RenameTarget
   };
   const save = () => {
     const trimmed = name.trim();
-    apply(trimmed === '' ? null : trimmed);
+    if (trimmed !== '') return apply(trimmed);
+    // An empty name removes the saved one, so it asks first; with no saved name there is nothing to remove.
+    if (target?.name != null) remove();
+    else apply(null);
+  };
+
+  const remove = () => {
+    if (!target || target.name === null) return;
+    const c = removeNameConfirm(target.name, target.sender);
+    confirmAction({ title: c.title, message: c.message, confirmLabel: c.confirmLabel, onConfirm: () => apply(null) });
   };
 
   return (
@@ -60,7 +70,7 @@ export function RenameSheet({ target, onClose, onSaved }: { target: RenameTarget
           ))}
         </Group>
       )}
-      {target?.name != null && <Button label="Remove name" variant="danger" onPress={() => apply(null)} block />}
+      {target?.name != null && <Button label="Remove name" variant="danger" onPress={remove} block />}
     </Sheet>
   );
 }

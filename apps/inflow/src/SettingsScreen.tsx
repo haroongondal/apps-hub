@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Field, Group, Header, Notice, Row, Screen, Segmented, Sheet, Text } from '@apps-hub/ui';
+import { Button, Field, Group, Header, Notice, RecordMenu, Row, Screen, Segmented, Sheet, Text, confirmAction } from '@apps-hub/ui';
 import InflowCore, { type AppSetting, type SenderName, type Status } from 'inflow-core';
 import { AiSettings } from './AiSettings.tsx';
 import { keepLabel } from './format.ts';
 import { GmailSettings } from './GmailSettings.tsx';
 import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
 import { mediaStatsLabel } from './media.ts';
+import { keepBlockConfirm, removeNameConfirm, type Confirm } from './records.ts';
 import { RenameSheet, type RenameTarget } from './RenameSheet.tsx';
 import { setupRowElements, useSetupAction } from './SetupScreen.tsx';
 import { setupRows } from './setup.ts';
@@ -63,6 +64,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
     }
     load();
   };
+  const ask = (c: Confirm, apply: () => void) => confirmAction({ title: c.title, message: c.message, confirmLabel: c.confirmLabel, onConfirm: () => change(apply) });
   const saveOwnerName = () => change(() => InflowCore.setOwnerName(ownerName.trim() === '' ? null : ownerName.trim()));
   const stop = (deleteSaved: boolean) => {
     const app = stopping;
@@ -98,7 +100,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
               key={b}
               title={blockTitle(b, apps, names)}
               subtitle={b.startsWith('app:') ? 'App' : 'Sender'}
-              trailing={<Button label="Remove" variant="ghost" size="sm" onPress={() => change(() => InflowCore.setAiBlocked(b, false))} />}
+              trailing={<Button label="Remove" variant="ghost" size="sm" onPress={() => ask(keepBlockConfirm(blockTitle(b, apps, names)), () => InflowCore.setAiBlocked(b, false))} />}
             />
           ))
         )}
@@ -107,7 +109,27 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
         {names.length === 0 ? (
           <Row title={<Text tone="muted">No renamed senders yet</Text>} />
         ) : (
-          names.map((n) => <Row key={n.senderKey} title={n.name} subtitle={n.sender} onPress={() => setRenaming({ senderKey: n.senderKey, sender: n.sender, name: n.name })} />)
+          names.map((n) => {
+            const edit = () => setRenaming({ senderKey: n.senderKey, sender: n.sender, name: n.name });
+            const c = removeNameConfirm(n.name, n.sender);
+            return (
+              <Row
+                key={n.senderKey}
+                title={n.name}
+                subtitle={n.sender}
+                onPress={edit}
+                trailing={
+                  <RecordMenu
+                    title={n.name}
+                    actions={[
+                      { label: 'Edit', onPress: edit },
+                      { label: 'Remove name', onPress: () => change(() => InflowCore.renameSender(n.senderKey, null)), destructive: true, confirmTitle: c.title, confirmMessage: c.message, confirmLabel: c.confirmLabel },
+                    ]}
+                  />
+                }
+              />
+            );
+          })
         )}
       </Group>
       <Group title="Apps" footer="Choose which apps Inflow saves from and how long it keeps their notifications.">

@@ -502,4 +502,43 @@ class LedgerTest {
     texts.forEachIndexed { i, text -> item(text, Channel.SMS, t0 + i * 60 * min) }
     assertEquals(500000L + 249000 + 150000 + 30000 + 389700, store.txns.values.filter { it.direction == Direction.OUT }.sumOf { it.amountMinor })
   }
+
+  // The owner's edits and deletes of a transaction.
+
+  @Test fun theOwnerSetsAndClearsTheCleanName() {
+    val id = item(debit(), Channel.SMS, t0)!!
+    assertTrue(ledger.editLabel(id, "Shaafi Hospital"))
+    assertEquals("Shaafi Hospital", store.get(id)!!.label)
+    assertTrue(ledger.editLabel(id, null))   // unlike the AI, an edit can clear it
+    assertNull(store.get(id)!!.label)
+    assertFalse(ledger.editLabel(999, null))
+  }
+
+  @Test fun deletingATransactionRemovesItAndBlocksItsSourceItems() {
+    val first = nextItem
+    val id = item(debit(), Channel.SMS_NOTIFICATION, t0)!!
+    item(debit(), Channel.SMS, t0 + min)   // merges: a second source
+    assertEquals(2, store.sourceCount(id))
+    assertTrue(ledger.deleteByOwner(id))
+    assertTrue(store.txns.isEmpty())
+    assertTrue(store.sourceBlocked(first) && store.sourceBlocked(first + 1))
+    // A blocked item is never read into a transaction again (the backfill or a late AI result).
+    assertNull(ledger.onItem(first, debit(), Channel.SMS, t0))
+    assertNull(ledger.onAi(first, aiMoney(amount = 150_000), Channel.SMS, t0))
+    assertTrue(store.txns.isEmpty())
+    assertFalse(ledger.deleteByOwner(id))
+  }
+
+  @Test fun deletingOneSideOfAnOwnTransferKeepsTheOtherAnUnpairedOwnTransfer() {
+    val out = item(debit("50,000.00"), Channel.SMS, t0)!!
+    val inn = item(ubl("50,000", "1"), Channel.SMS, t0 + 20 * min)!!
+    assertTrue(store.get(out)!!.own && store.get(inn)!!.own)
+    assertEquals(minOf(out, inn), store.get(inn)!!.pairId)
+    assertTrue(ledger.deleteByOwner(out))
+    val left = store.get(inn)!!
+    assertTrue(left.own)
+    assertTrue(left.ownSet)   // a name change can no longer flip it
+    assertNull(left.pairId)
+    assertNull(store.get(out))
+  }
 }

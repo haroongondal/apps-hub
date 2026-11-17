@@ -193,6 +193,27 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     run("UPDATE todos SET done = ? WHERE id = ?", if (done) 1L else 0L, id)
   }
 
+  /** Done ones last. A to-do whose item is gone or is an expired OTP is not listed; one the owner added by hand (item_id 0) always is. */
+  fun listTodos(includeDone: Boolean, now: Long): List<Map<String, Any?>> =
+    query(
+      "SELECT t.id, t.item_id, t.text, t.due_at, t.done FROM todos t LEFT JOIN items i ON i.id = t.item_id " +
+        "WHERE (t.item_id = $MANUAL_TODO OR (i.id IS NOT NULL AND $VISIBLE_I))${if (includeDone) "" else " AND t.done = 0"} " +
+        "ORDER BY t.done, t.due_at IS NULL, t.due_at, t.id",
+      now,
+    ).use { c -> buildList { while (c.moveToNext()) add(c.toTodo()) } }
+
+  fun addTodo(text: String, dueAt: Long?) {
+    run("INSERT INTO todos(item_id, text, due_at) VALUES ($MANUAL_TODO, ?, ?)", text, dueAt)
+  }
+
+  fun updateTodo(id: Long, text: String, dueAt: Long?) {
+    run("UPDATE todos SET text = ?, due_at = ? WHERE id = ?", text, dueAt, id)
+  }
+
+  fun deleteTodo(id: Long) {
+    run("DELETE FROM todos WHERE id = ?", id)
+  }
+
   override fun markDeletedBySender(pkg: String, conversationKey: String?, sender: String?, postedAt: Long): Boolean =
     run(
       "UPDATE items SET deleted_by_sender = 1 WHERE pkg = ? AND conversation_key IS ? AND sender IS ? AND posted_at = ?",
@@ -223,6 +244,22 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     forgetMedia("pkg = ?", pkg)
     tombstoneEmails("pkg = ?", pkg)
     run("DELETE FROM items WHERE pkg = ?", pkg)
+  }
+
+  override fun deleteItem(id: Long): Boolean = transaction { removeByOwner("id = ?", id) > 0 }
+
+  override fun deleteConversation(key: String): Int = transaction { removeByOwner("conversation_key = ?", key) }
+
+  // The owner's deletion: like retention, plus the item's own, SMS and email hashes are tombstoned so an inbox sync or a mailbox re-read cannot bring it back.
+  // Not the text hash: a later message with the same words is a new message.
+  private fun removeByOwner(where: String, vararg args: Any?): Int {
+    forgetAi(where, *args)
+    forgetMedia(where, *args)
+    val now = System.currentTimeMillis()
+    run("INSERT OR IGNORE INTO tombstones(hash, at) SELECT hash, ? FROM items WHERE $where", now, *args)
+    run("INSERT OR IGNORE INTO tombstones(hash, at) SELECT sms_hash, ? FROM items WHERE sms_hash IS NOT NULL AND $where", now, *args)
+    tombstoneEmails(where, *args)
+    return run("DELETE FROM items WHERE $where", *args)
   }
 
   // The AI result, queue entry and to-dos go with their item.
@@ -312,17 +349,12 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     val important = query(HOME_IMPORTANT_SQL, now - 7 * DAY_MS, now).use { c -> buildList { while (c.moveToNext()) add(c.toItem()) } }
     // Not done, due from the start of today (soonest first) or undated and from the last 3 days (after the dated ones).
     val comingUp = query(
-      "SELECT t.id, t.item_id, t.text, t.due_at, t.done FROM todos t JOIN items i ON i.id = t.item_id " +
-        "WHERE t.done = 0 AND $VISIBLE_I AND ((t.due_at IS NOT NULL AND t.due_at >= ?) OR (t.due_at IS NULL AND i.posted_at >= ?)) " +
+      "SELECT t.id, t.item_id, t.text, t.due_at, t.done FROM todos t LEFT JOIN items i ON i.id = t.item_id " +
+        "WHERE t.done = 0 AND (t.item_id = $MANUAL_TODO OR (i.id IS NOT NULL AND $VISIBLE_I)) " +
+        "AND ((t.due_at IS NOT NULL AND t.due_at >= ?) OR (t.due_at IS NULL AND (t.item_id = $MANUAL_TODO OR i.posted_at >= ?))) " +
         "ORDER BY t.due_at IS NULL, t.due_at, t.id LIMIT 5",
       now, startOfDay, now - 3 * DAY_MS,
-    ).use { c ->
-      buildList {
-        while (c.moveToNext()) {
-          add(mapOf("id" to c.getLong(0), "itemId" to c.getLong(1), "text" to c.getString(2), "dueAt" to if (c.isNull(3)) null else c.getLong(3), "done" to (c.getInt(4) != 0)))
-        }
-      }
-    }
+    ).use { c -> buildList { while (c.moveToNext()) add(c.toTodo()) } }
     val hasItems = query(HAS_ITEMS_SQL, now).use { it.moveToFirst() && it.getInt(0) != 0 }
     return mapOf("conversations" to conversations, "inbox" to inbox, "important" to important, "comingUp" to comingUp, "hasItems" to hasItems)
   }
@@ -479,6 +511,9 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     "mediaCount" to getInt(17),
   )
 
+  private fun Cursor.toTodo(): Map<String, Any?> =
+    mapOf("id" to getLong(0), "itemId" to getLong(1), "text" to getString(2), "dueAt" to if (isNull(3)) null else getLong(3), "done" to (getInt(4) != 0))
+
   private fun Cursor.str(i: Int): String? = if (isNull(i)) null else getString(i)
 
   private fun Cursor.toSetting() = AppSetting(getString(0), getString(1), getInt(2) != 0, if (isNull(3)) null else getInt(3))
@@ -502,6 +537,8 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     private val QUEUE_FROM = "FROM ai_queue q JOIN items i ON i.id = q.item_id LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
       "WHERE i.posted_at >= ? AND $NEVER_SEND_FILTER"
     private const val DAY_MS = 86_400_000L
+    // item_id of a to-do the owner added by hand: no item has id 0 (AUTOINCREMENT starts at 1).
+    private const val MANUAL_TODO = 0
     private const val VISIBLE_I = "(i.otp_expires_at IS NULL OR i.otp_expires_at > ?)"
     private const val VISIBLE_J = "(j.otp_expires_at IS NULL OR j.otp_expires_at > ?)"
     private const val VISIBLE_T = "(t.otp_expires_at IS NULL OR t.otp_expires_at > ?)"
