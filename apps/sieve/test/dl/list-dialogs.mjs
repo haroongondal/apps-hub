@@ -186,6 +186,12 @@ export async function run(t) {
     await until(async () => (await stored()).queues.length === 1);
     const after = await until(async () => (await readRecords(t)).find((r) => r.state === 'running'));
     check('downloads: dialogs: removing the queue leaves the record and the first queue runs it', after.id === held.id, json({ id: after?.id, held: held.id }));
+    await page.keyboard.press('Escape');
+    const main = page.locator('[data-filter="queue:main"]');
+    const counted = await until(async () => (await main.locator('.dl-count').textContent()) === '1', 5000).catch(() => false);
+    await main.click();
+    const listed = await page.evaluate(() => [...document.querySelectorAll('tbody tr')].map((tr) => tr.dataset.id));
+    check('downloads: dialogs: the first queue counts and lists the record of the removed queue', counted === true && listed.length === 1 && listed[0] === held.id, json({ count: await main.locator('.dl-count').textContent(), listed }));
   });
 
   await attempt('screens', async () => {

@@ -114,6 +114,19 @@ export async function run(t) {
     await row.getByRole('button', { name: T.resume, exact: true }).click();
     const running = await until(async () => (await stateOf(a)) === 'running', 10000).catch(() => false);
     check('downloads: popup: pressing Resume runs the record again', running, json(await stateOf(a)));
+    const note = p.locator('.dl-note');
+    await pop.evaluate(() => {
+      window.__send = chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage = async (m) => (m?.type === 'dl-do' ? undefined : window.__send.call(chrome.runtime, m));
+    });
+    await row.getByRole('button', { name: T.pause, exact: true }).click();
+    const failedSaid = await until(async () => (await note.textContent()) === T.actionFailed, 5000).catch(() => false);
+    await pop.evaluate(() => (chrome.runtime.sendMessage = window.__send));
+    await row.getByRole('button', { name: T.pause, exact: true }).click();
+    const clearedAfter = await until(async () => (await note.textContent()) === '' && (await stateOf(a)) === 'paused', 10000).catch(() => false);
+    check('downloads: popup: a row action with no answer says so, and the next one that works clears it', failedSaid === true && clearedAfter === true, json({ note: await note.textContent(), state: await stateOf(a) }));
+    await row.getByRole('button', { name: T.resume, exact: true }).click();
+    await until(async () => (await stateOf(a)) === 'running', 10000).catch(() => {});
 
     for (const n of ['d1', 'e1', 'f1']) await add(`/file/40000000/${n}.bin?rate=2000000`);
     await until(async () => (await p.locator('.dl-row').count()) === 5, 8000).catch(() => {});
@@ -147,6 +160,25 @@ export async function run(t) {
     await p.getByRole('button', { name: T.addSubmit, exact: true }).click();
     await p.getByText(T.addTooMany, { exact: true }).waitFor();
     check('downloads: popup: more than 500 lines show the too-many line and add nothing', (await readRecords(t)).length === 1 && (await box.inputValue()) !== '', '');
+    await pop.close();
+  });
+
+  await attempt('read failure', async () => {
+    await fresh();
+    const pop = await t.ctx.newPage();
+    pop.on('pageerror', (e) => problems.push(e.message));
+    await pop.addInitScript(() => {
+      indexedDB.open = () => {
+        const r = {};
+        setTimeout(() => r.onerror?.(), 0);
+        return r;
+      };
+    });
+    await pop.goto(`chrome-extension://${t.id}/popup.html?tab=${tabId}`);
+    await pop.locator('footer').waitFor();
+    await pop.getByRole('tab', { name: T.sectionTitle }).click();
+    const said = await until(async () => (await panel(pop).locator('.dl-none').textContent()) === T.listReadFailed, 10000).catch(() => false);
+    check('downloads: popup: a list that cannot be read says so instead of "No downloads right now"', said === true, json(await panel(pop).locator('.dl-none').textContent()));
     await pop.close();
   });
 

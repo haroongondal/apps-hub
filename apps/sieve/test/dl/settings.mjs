@@ -191,6 +191,13 @@ export async function run(t) {
     await box.blur();
     const shown = await until(async () => (await box.inputValue()) === '61', 3000).catch(() => false);
     check('downloads: settings: a change skipped while a field is focused shows once the person leaves it unchanged', held === '7' && shown === true && (await raw(t)).takeOver?.minMb === 61, json({ held, now: await box.inputValue() }));
+    // Switching window blurs the field with no change event: a synthetic blur stands in for it.
+    await box.focus();
+    await box.fill('77');
+    await box.evaluate((el) => el.dispatchEvent(new FocusEvent('blur')));
+    check('downloads: settings: typed text survives a blur that comes without a change (another window took focus)', (await box.inputValue()) === '77', await box.inputValue());
+    await box.blur();
+    await until(async () => (await raw(t)).takeOver?.minMb === 77).catch(() => {});
   });
 
   await attempt('two writers', async () => {

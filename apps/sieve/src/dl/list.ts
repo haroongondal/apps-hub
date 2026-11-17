@@ -1,6 +1,6 @@
 import type { DlRecord, DlState } from '@apps-hub/sieve-core/src/dl-record.ts';
 import { CATEGORY_IDS, type DownloadSettings, type QueueSetting } from '@apps-hub/sieve-core/src/dl-settings.ts';
-import { isOpen, nextChange } from '@apps-hub/sieve-core/src/dl-queue.ts';
+import { isOpen, nextChange, queueOf } from '@apps-hub/sieve-core/src/dl-queue.ts';
 import { T } from '@apps-hub/sieve-core/src/dl-text.ts';
 import { etaSeconds, filterRecords, formatBytes, formatEta, formatSpeed, progressOf, sortRecords, statusText, type SidebarFilter, type SortKey } from '@apps-hub/sieve-core/src/dl-view.ts';
 import { h } from '../dom.ts';
@@ -23,6 +23,7 @@ let anchor: string | null = null;
 let order: string[] = [];
 let reorderedAt = 0;
 let reorderTimer: ReturnType<typeof setTimeout> | undefined;
+let readFailed = false; // the stored list could not be read: the page must not say there are no downloads
 
 const send = (message: object): Promise<{ ok?: boolean; message?: string } | undefined> => chrome.runtime.sendMessage(message).catch(() => undefined);
 const status = h('p', { id: STATUS_ID, class: 'dl-note', role: 'status' });
@@ -52,7 +53,7 @@ const toolbar = h('div', { class: 'ui-toolbar dl-toolbar', role: 'toolbar' }, ..
 
 const COLUMNS: [SortKey, string][] = [['name', T.colName], ['size', T.colSize], ['progress', T.colProgress], ['speed', T.colSpeed], ['eta', T.colEta]];
 const headers = new Map<SortKey, HTMLElement>();
-const headRow = h('tr', {}, h('th', { class: 'dl-check' }));
+const headRow = h('tr', {}, h('th', { class: 'dl-check', scope: 'col' }, h('span', { class: 'dl-sr' }, T.colSelect)));
 for (const [key, label] of COLUMNS) {
   const th = h('th', { scope: 'col' }, h('button', { class: 'dl-sort', onclick: () => ((sort = sort.key === key ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }), refresh(true)) }, label));
   headers.set(key, th);
@@ -72,6 +73,8 @@ document.getElementById('app')!.append(
 const parseFilter = (f: string): SidebarFilter =>
   f === 'unfinished' || f === 'finished' ? { kind: f } : f.startsWith('cat:') ? { kind: 'category', id: f.slice(4) as (typeof CATEGORY_IDS)[number] } : f.startsWith('queue:') ? { kind: 'queue', id: f.slice(6) } : { kind: 'all' };
 const all = () => [...records.values()];
+// A record whose queue was removed runs under the first queue, so that queue counts and lists it.
+const inFilter = (f: string) => filterRecords(all().map((r) => ({ ...r, queue: queueOf(settings.queues, r.queue).id })), parseFilter(f));
 const navButtons = new Map<string, { button: HTMLElement; count: HTMLElement }>();
 let navSignature = '';
 
@@ -95,21 +98,23 @@ function renderNav() {
   }
   if (!navButtons.has(filter)) filter = 'all';
   for (const [f, { button, count }] of navButtons) {
-    count.textContent = String(filterRecords(all(), parseFilter(f)).length);
+    count.textContent = String(inFilter(f).length);
     if (f === filter) button.setAttribute('aria-current', 'true');
     else button.removeAttribute('aria-current');
   }
 }
 
-interface Row { tr: HTMLTableRowElement; check: HTMLInputElement; name: HTMLElement; status: HTMLElement; actions: HTMLElement; size: HTMLElement; bar: HTMLProgressElement; pct: HTMLElement; speed: HTMLElement; eta: HTMLElement }
+interface Row { tr: HTMLTableRowElement; check: HTMLInputElement; name: HTMLElement; status: HTMLElement; hint: HTMLElement; actions: HTMLElement; size: HTMLElement; bar: HTMLProgressElement; pct: HTMLElement; speed: HTMLElement; eta: HTMLElement }
 const rows = new Map<string, Row>();
 const nextOpenAt = (q: QueueSetting, at: Date) => (isOpen(q.schedule, at) ? null : nextChange(q.schedule, at));
 const setText = (el: Node, text: string) => el.textContent !== text && (el.textContent = text);
+let named = 0; // ids for the row names the row buttons point at
 
 function makeRow(id: string): Row {
   const check = h('input', { type: 'checkbox', class: 'dl-select' });
-  const name = h('div', { class: 'dl-name' });
+  const name = h('div', { class: 'dl-name', id: `dl-row-name-${++named}` });
   const st = h('div', { class: 'dl-status ui-meta' });
+  const hint = h('div', { class: 'dl-hint ui-meta', hidden: true }, T.st.noResume);
   const actions = h('div', { class: 'dl-row-actions' });
   const bar = h('progress', { max: 100 });
   const pct = h('span', { class: 'ui-meta ui-mono' });
@@ -117,8 +122,8 @@ function makeRow(id: string): Row {
   const speed = h('span', { class: 'ui-mono' });
   const eta = h('span', { class: 'ui-mono' });
   const cell = (cls: string, ...kids: Node[]) => h('td', { class: cls }, ...kids);
-  const tr = h('tr', { 'data-id': id }, cell('dl-check', check), cell('dl-cell-name', name, st, actions), cell('dl-num', size), cell('dl-cell-progress', bar, pct), cell('dl-num', speed), cell('dl-num', eta));
-  return { tr, check, name, status: st, actions, size, bar, pct, speed, eta };
+  const tr = h('tr', { 'data-id': id }, cell('dl-check', check), cell('dl-cell-name', name, st, hint, actions), cell('dl-num', size), cell('dl-cell-progress', bar, pct), cell('dl-num', speed), cell('dl-num', eta));
+  return { tr, check, name, status: st, hint, actions, size, bar, pct, speed, eta };
 }
 
 function updateRow(row: Row, r: DlRecord, now: Date) {
@@ -128,8 +133,7 @@ function updateRow(row: Row, r: DlRecord, now: Date) {
   row.check.setAttribute('aria-label', T.selectRow(r.name));
   setText(row.name, r.name);
   setText(row.status, statusText(r, settings.queues, settings.categories, now, nextOpenAt));
-  if (!r.rangeOk && r.size !== null) row.status.title = T.st.noResume;
-  else row.status.removeAttribute('title');
+  row.hint.hidden = r.rangeOk || r.size === null || r.state === 'done'; // shown, not a tooltip: a pause starts it over
   setText(row.size, r.size === null ? '' : formatBytes(r.size));
   row.bar.setAttribute('aria-label', T.progressLabel(r.name));
   // Only a running download of unknown size shows the moving bar (as in the popup).
@@ -142,14 +146,18 @@ function updateRow(row: Row, r: DlRecord, now: Date) {
   if (row.actions.dataset.want !== want) {
     row.actions.dataset.want = want;
     row.actions.replaceChildren(
-      ...(want === 'retry' ? [h('button', { class: 'ui-btn dl-retry', onclick: () => void retry(r.id) }, T.retryInChrome)] : []),
-      ...(want === 'show' ? [h('button', { class: 'ui-btn dl-show', onclick: () => showInFolder(r.id) }, T.showInFolder)] : []),
+      ...(want === 'retry' ? [h('button', { class: 'ui-btn dl-retry', 'aria-describedby': row.name.id, onclick: (e: Event) => void retry(r.id, e.currentTarget as HTMLButtonElement) }, T.retryInChrome)] : []),
+      ...(want === 'show' ? [h('button', { class: 'ui-btn dl-show', 'aria-describedby': row.name.id, onclick: () => showInFolder(r.id) }, T.showInFolder)] : []),
     );
   }
 }
 
-async function retry(id: string) {
+// The call takes up to 10 s; a second press meanwhile would start a second Chrome download.
+async function retry(id: string, button: HTMLButtonElement) {
+  button.disabled = true;
+  say(T.retryRunning);
   const reply = await send({ type: 'dl-retry-chrome', id });
+  button.disabled = false;
   say(reply?.ok ? '' : (reply?.message ?? T.actionFailed));
 }
 
@@ -170,7 +178,7 @@ function refresh(user = false) {
   total$.hidden = !(total > 0);
   total$.textContent = formatSpeed(total);
 
-  const visible = filterRecords(all(), parseFilter(filter));
+  const visible = inFilter(filter);
   const visibleIds = new Set(visible.map((r) => r.id));
   for (const id of [...selected]) if (!visibleIds.has(id)) selected.delete(id);
 
@@ -205,7 +213,7 @@ function refresh(user = false) {
     else th.removeAttribute('aria-sort');
   }
   empty.hidden = order.length > 0;
-  empty.textContent = records.size === 0 ? T.emptyAll : T.emptyFiltered;
+  empty.textContent = records.size === 0 ? (readFailed ? T.listReadFailed : T.emptyAll) : T.emptyFiltered;
 
   const picked = pickRecords();
   const any = (states: DlState[]) => picked.some((r) => states.includes(r.state));
@@ -264,7 +272,10 @@ chrome.runtime.onMessage.addListener((m) => {
 });
 onDownloadsChanged((s) => ((settings = s), refresh()));
 
-for (const r of await readAllRecords()) if (!live.has(r.id) && !gone.has(r.id)) records.set(r.id, r);
+const stored = await readAllRecords().catch(() => null);
+readFailed = stored === null;
+if (readFailed) say(T.listReadFailed);
+for (const r of stored ?? []) if (!live.has(r.id) && !gone.has(r.id)) records.set(r.id, r);
 refresh(true);
 
 if (location.hash === '#add') {

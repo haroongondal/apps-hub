@@ -4,7 +4,7 @@ p { margin: 0; }
 .dl-banner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-md); padding: var(--space-md) var(--space-lg); background: var(--c-warn-soft); }
 .dl-banner[hidden], .dl-total[hidden], .dl-empty[hidden], .dl-table tr[hidden] { display: none; }
 .dl-note { color: var(--c-muted); font: var(--type-meta) var(--font-sans); }
-.dl-note:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.dl-note:empty, .dl-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .dl-error { color: var(--c-danger); font: var(--type-meta) var(--font-sans); }
 .dl-error:empty { display: none; }
 .dl-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: var(--space-lg); align-items: start; }

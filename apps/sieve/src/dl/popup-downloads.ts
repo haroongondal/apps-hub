@@ -30,7 +30,7 @@ const rows = new Map<string, { el: HTMLElement; name: HTMLElement; bar: HTMLProg
 async function command(op: 'pause' | 'resume', id: string): Promise<void> {
   try {
     const reply = await chrome.runtime.sendMessage({ type: 'dl-do', op, ids: [id] });
-    if (reply?.ok === false) say(reply.message ?? T.actionFailed);
+    say(reply?.ok ? '' : (reply?.message ?? T.actionFailed));
   } catch {
     say(T.actionFailed);
   }
@@ -152,10 +152,13 @@ function start(): void {
   onDownloadsChanged((s) => showSettings(s.on));
   void readDownloads().then((s) => showSettings(s.on), () => {});
   // A broadcast that arrived first is newer than the stored copy.
-  void readAllRecords().then((all) => {
-    for (const r of all) if (!records.has(r.id) && !gone.has(r.id)) records.set(r.id, r);
-    update();
-  });
+  void readAllRecords().then(
+    (all) => {
+      for (const r of all) if (!records.has(r.id) && !gone.has(r.id)) records.set(r.id, r);
+      update();
+    },
+    () => ((none.textContent = T.listReadFailed), say(T.listReadFailed)), // not "No downloads right now"
+  );
 }
 
 export const downloadsTab: { id: 'downloads'; label: string; view: (state: unknown) => Child[] } = {

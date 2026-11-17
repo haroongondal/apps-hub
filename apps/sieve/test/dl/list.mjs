@@ -194,7 +194,11 @@ export async function run(t) {
     await seed(page, [['retry.bin', { state: 'failed', error: ERRORS.changed, url: file(3000, 'retry.bin') }]]);
     const r = (await rowsOf(page))[0];
     check('downloads: list: a failed row shows its sentence and T.retryInChrome', r.status === ERRORS.changed && (await page.locator('.dl-retry').textContent()) === T.retryInChrome, json(r));
+    const describedBy = await page.locator('.dl-retry').evaluate((b) => document.getElementById(b.getAttribute('aria-describedby') ?? '')?.textContent ?? null);
+    check('downloads: list: Retry in Chrome is described by the row name', describedBy === 'retry.bin', json(describedBy));
     await page.click('.dl-retry');
+    const busy = await page.evaluate(() => ({ disabled: document.querySelector('.dl-retry')?.disabled, status: document.getElementById('dl-status').textContent }));
+    check('downloads: list: Retry in Chrome is disabled while Chrome is asked, and the status line says so', busy.disabled === true && busy.status === T.retryRunning, json(busy));
     await until(async () => (await rowsOf(page)).length === 0, 20000);
     check('downloads: list: Retry in Chrome makes Chrome fetch the file and removes the row', fx.log.some((l) => l.path.endsWith('/retry.bin') && !l.closed), json(fx.log.slice(-3)));
   });
@@ -208,6 +212,8 @@ export async function run(t) {
     await until(async () => (await rowsOf(page))[0]?.status === T.st.done('Archives'), 40000);
     await until(async () => (await page.locator('.dl-show').count()) === 1);
     check('downloads: list: a finished row shows T.st.done and T.showInFolder', (await page.locator('.dl-show').textContent()) === T.showInFolder);
+    const showFor = await page.locator('.dl-show').evaluate((b) => document.getElementById(b.getAttribute('aria-describedby') ?? '')?.textContent ?? null);
+    check('downloads: list: Show in folder is described by the row name', showFor === 'done.zip', json(showFor));
     const before = t.errors.length;
     await page.click('.dl-show');
     check('downloads: list: Show in folder raises no page error', t.errors.length === before);
@@ -318,9 +324,13 @@ export async function run(t) {
   await attempt('unknown size and finished delete', async () => {
     await fresh();
     let page = await open();
-    await seed(page, [['nosize.bin', { size: null, rangeOk: false }]]);
-    const det = await page.locator('tbody tr progress').evaluate((el) => el.hasAttribute('value') && el.value === 0);
+    await seed(page, [['nosize.bin', { size: null, rangeOk: false }], ['onego.bin', { rangeOk: false }]]);
+    const row = (name) => page.locator('tbody tr', { has: page.locator('.dl-name', { hasText: name }) });
+    const det = await row('nosize.bin').locator('progress').evaluate((el) => el.hasAttribute('value') && el.value === 0);
     check('downloads: list: a paused row of unknown size shows an empty bar, not the moving one', det);
+    const hint = row('onego.bin').locator('.dl-hint');
+    check('downloads: list: a row whose server cannot resume says so in the row, not only in a tooltip', (await hint.isVisible()) && (await hint.textContent()) === T.st.noResume && !(await row('nosize.bin').locator('.dl-hint').isVisible()));
+    check('downloads: list: the checkbox column has a name for screen readers', (await page.locator('thead th').first().textContent()) === T.colSelect);
 
     await fresh();
     page = await open();
@@ -333,6 +343,24 @@ export async function run(t) {
     await remove.click();
     const gone = await until(async () => (await rowsOf(page)).length === 0 && (await readRecords(t)).length === 0, 20000).catch(() => false);
     check('downloads: list: Remove from list removes the finished row and its record', gone === true, json(await readRecords(t)));
+  });
+
+  await attempt('read failure', async () => {
+    await fresh();
+    const page = await t.ctx.newPage();
+    pages.push(page);
+    page.on('pageerror', (e) => t.errors.push(e.message));
+    await page.addInitScript(() => {
+      indexedDB.open = () => {
+        const r = {};
+        setTimeout(() => r.onerror?.(), 0);
+        return r;
+      };
+    });
+    await page.goto(`chrome-extension://${t.id}/downloads.html`);
+    const said = await until(async () => (await page.locator('#dl-status').textContent()) === T.listReadFailed, 10000).catch(() => false);
+    const empty = await page.locator('.dl-empty').textContent();
+    check('downloads: list: a list that cannot be read says so instead of "No downloads yet"', said === true && empty === T.listReadFailed, json({ status: await page.locator('#dl-status').textContent(), empty }));
   });
 
   await attempt('screens', async () => {

@@ -52,7 +52,10 @@ export function downloadsSection(): HTMLElement {
       }
     });
     // An update skipped while the person was in the field lands when they leave it without a change (change fires first, so a save is not undone).
-    el.addEventListener('blur', () => !saving && latest && (el.value = read(latest)));
+    // Only when the text is what it was at focus: switching window blurs without a change event and must not wipe typed text.
+    let atFocus = '';
+    el.addEventListener('focus', () => (atFocus = el.value));
+    el.addEventListener('blur', () => !saving && latest && el.value === atFocus && (el.value = read(latest)));
     shows.push(() => latest && el !== document.activeElement && (el.value = read(latest)));
     return el;
   };
