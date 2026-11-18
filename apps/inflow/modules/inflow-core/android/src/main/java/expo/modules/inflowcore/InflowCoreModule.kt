@@ -29,21 +29,31 @@ import expo.modules.inflowcore.android.SqlMediaIndex
 import expo.modules.inflowcore.android.SmsImporter
 import expo.modules.inflowcore.android.SqlItemStore
 import expo.modules.inflowcore.android.SqlLedgerStore
+import expo.modules.inflowcore.android.SqlSuggestionStore
+import expo.modules.inflowcore.android.SuggestionNotifier
 import expo.modules.inflowcore.android.StoreHolder
 import expo.modules.inflowcore.core.AiBatch
 import expo.modules.inflowcore.core.AiChannels
 import expo.modules.inflowcore.core.AiModels
 import expo.modules.inflowcore.core.AppSetting
+import expo.modules.inflowcore.core.AUTOPILOT_META
+import expo.modules.inflowcore.core.AutopilotSettings
+import expo.modules.inflowcore.core.AutopilotSettingsInput
 import expo.modules.inflowcore.core.Categories
 import expo.modules.inflowcore.core.Edits
 import expo.modules.inflowcore.core.GmailPolicy
 import expo.modules.inflowcore.core.Prices
 import expo.modules.inflowcore.core.Retention
+import expo.modules.inflowcore.core.SuggestionMoves
+import expo.modules.inflowcore.core.SuggestionState
+import expo.modules.inflowcore.core.toMap
+import expo.modules.inflowcore.core.toRow
 import kotlinx.coroutines.Dispatchers
 import java.io.File
 import kotlinx.coroutines.withContext
 
 private const val CAPTURED_EVENT = "onCaptured"
+private const val SUGGESTIONS_EVENT = "onSuggestions"
 private const val MEDIA_AUTHORITY = "com.haroon.inflow.media"
 private const val MAX_INLINE_BYTES = 8L * 1024 * 1024
 private const val OPEN_GRACE_MS = 30_000L
@@ -74,13 +84,22 @@ class InflowCoreModule : Module() {
 
   private fun settingFor(store: SqlItemStore, pkg: String): AppSetting = store.appSetting(pkg) ?: Retention.default(pkg, InflowListener.label(context, pkg))
 
+  /** Tells JS the list may have changed, with the number of waiting suggestions (expired ones are swept first). */
+  private fun sendSuggestions() {
+    val waiting = runCatching { StoreHolder.get(context).getOrNull()?.let { SqlSuggestionStore(it.db).apply { expire(System.currentTimeMillis()) }.waiting().size } }.getOrNull() ?: 0
+    sendEvent(SUGGESTIONS_EVENT, mapOf("count" to waiting))
+  }
+
   override fun definition() = ModuleDefinition {
     Name("InflowCore")
 
-    Events(CAPTURED_EVENT)
+    Events(CAPTURED_EVENT, SUGGESTIONS_EVENT)
 
     OnCreate {
-      StoreHolder.onCaptured = { count -> sendEvent(CAPTURED_EVENT, mapOf("count" to count)) }
+      StoreHolder.onCaptured = { count ->
+        sendEvent(CAPTURED_EVENT, mapOf("count" to count))
+        sendSuggestions()
+      }
       StoreHolder.backfill(context)
       // Decrypted copies handed to a viewer live only until the next start; files no row names are swept (rolled-back saves).
       InflowListener.executor.execute {
@@ -504,6 +523,38 @@ class InflowCoreModule : Module() {
 
     Function("deleteTodo") { id: Long ->
       store().deleteTodo(id)
+    }
+
+    // The suggestions in these states (SuggestionRow keys, lowercase kind and state), newest first. Expired ones are swept first.
+    Function("suggestions") { states: List<String>, limit: Int ->
+      val wanted = states.mapNotNull { n -> SuggestionState.values().firstOrNull { it.name.equals(n, ignoreCase = true) } }.toSet()
+      val suggestions = SqlSuggestionStore(store().db)
+      suggestions.expire(System.currentTimeMillis())
+      suggestions.list(wanted, limit.coerceIn(0, 200)).map { it.toRow() }
+    }
+
+    // The owner's Run: returns what to tell them, or null once it started.
+    Function("runSuggestion") { id: Long ->
+      SuggestionNotifier.run(context, id).also { sendSuggestions() }
+    }
+
+    Function("skipSuggestion") { id: Long ->
+      SuggestionMoves.move(SqlSuggestionStore(store().db), id, SuggestionState.SKIPPED, System.currentTimeMillis())
+      SuggestionNotifier.cancel(context, id)
+      sendSuggestions()
+    }
+
+    Function("autopilotSettings") { ->
+      AutopilotSettings.fromJson(store().meta(AUTOPILOT_META)).toMap()
+    }
+
+    Function("setAutopilotSettings") { settings: Map<String, Any?> ->
+      store().setMeta(AUTOPILOT_META, AutopilotSettingsInput.fromMap(settings).toJson())
+    }
+
+    // Chats the owner may pick (not SMS or email, which already reach the AI); id is "pkg|conversationKey".
+    Function("pickableChats") { ->
+      store().pickableChats()
     }
 
     AsyncFunction("ask") Coroutine { question: String ->

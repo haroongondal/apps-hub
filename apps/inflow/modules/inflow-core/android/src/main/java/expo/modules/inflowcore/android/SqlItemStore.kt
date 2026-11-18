@@ -33,6 +33,7 @@ import expo.modules.inflowcore.core.OpenPlan
 import expo.modules.inflowcore.core.SearchText
 import expo.modules.inflowcore.core.Sms
 import expo.modules.inflowcore.core.openPlan
+import expo.modules.inflowcore.core.pickedChatKey
 import net.zetetic.database.DatabaseErrorHandler
 import net.zetetic.database.sqlcipher.SQLiteConnection
 import net.zetetic.database.sqlcipher.SQLiteDatabase
@@ -429,6 +430,14 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     }
   }
 
+  /** The chats the owner may pick for Autopilot ([pickableChatsSql]): `id` is the [pickedChatKey] form. Newest activity first, at most 200. */
+  fun pickableChats(): List<Map<String, String>> {
+    val never = AutopilotAccess.NEVER_SHARE.toTypedArray()
+    return query(pickableChatsSql(never.size), *never).use { c ->
+      buildList { while (c.moveToNext()) add(mapOf("id" to pickedChatKey(c.getString(0), c.getString(1)), "name" to c.getString(2), "app" to c.getString(3))) }
+    }
+  }
+
   /** The senders of one app that are folded into Promotions, with the newest visible item among them. */
   fun promotions(pkg: String, now: Long): Map<String, Any?> =
     query(PROMOTIONS_SQL, pkg, now).use { c ->
@@ -649,6 +658,15 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
         "MAX(i.posted_at) AS last, SUM(CASE WHEN i.posted_at >= ? THEN 1 ELSE 0 END) AS today FROM items i " +
         "WHERE i.pkg = ? AND $VISIBLE_I AND COALESCE(i.conversation_key, i.sender_key) IS NOT NULL AND ${if (promo) "NOT " else ""}${notPromo("i")} GROUP BY k) g " +
         "LEFT JOIN sender_names n ON n.sender_key = g.k ${if (paged) "WHERE (g.last < ? OR (g.last = ? AND g.k < ?)) " else ""}ORDER BY g.last DESC, g.k DESC LIMIT ?"
+
+    // Conversations of chat apps only: SMS and email already reach the AI, so there is nothing to pick. The app records, is not blocked from the AI, is not in NEVER_SHARE (bound), and a chat is
+    // never listed by an OTP message. The name is the contact list's (contactsSql), from the newest item of the chat.
+    internal fun pickableChatsSql(neverCount: Int) =
+      "SELECT g.pkg, g.k, ${displayName("g.conversation", "g.sender", "g.app_label", "g.k")}, g.app_label FROM (" +
+        "SELECT i.pkg AS pkg, i.conversation_key AS k, i.conversation AS conversation, i.sender AS sender, i.app_label AS app_label, MAX(i.posted_at) AS last FROM items i " +
+        "WHERE i.conversation_key IS NOT NULL AND i.otp_expires_at IS NULL AND NOT $SMS_OR_EMAIL AND $SENDABLE " +
+        "AND i.pkg NOT IN (${List(neverCount) { "?" }.joinToString(",")}) GROUP BY i.pkg, i.conversation_key) g " +
+        "LEFT JOIN sender_names n ON n.sender_key = g.k ORDER BY g.last DESC, g.k DESC LIMIT 200"
 
     internal val PROMOTIONS_SQL =
       "SELECT COUNT(DISTINCT COALESCE(i.conversation_key, i.sender_key)), MAX(i.posted_at) FROM items i WHERE i.pkg = ? AND $VISIBLE_I AND NOT ${notPromo("i")}"

@@ -1,4 +1,5 @@
 import { requireNativeModule } from 'expo';
+import type { Kind, State, SuggestionRow } from '@apps-hub/autopilot-contract';
 
 export interface Status {
   accessGranted: boolean;
@@ -247,6 +248,29 @@ export interface GmailStatus {
   senders: string[];
 }
 
+// What Autopilot may do, as Kotlin stores it (AutopilotSettings.toJson). Amounts are minor units (x100).
+export interface AutopilotSettings {
+  // The kinds of suggestion switched on.
+  kinds: Kind[];
+  // Money surprise: a debit is a surprise at multiple x the category median and at least minMinor, or at least hugeMinor on its own.
+  multiple: number;
+  minMinor: number;
+  hugeMinor: number;
+  // The chats picked for Autopilot, each as "pkg|conversationKey" (PickableChat.id).
+  pickedChats: string[];
+  // The apps Deputy may look in (package names); empty = the phone's contacts, maps, calendar and photos apps.
+  lookIn: string[];
+  bankApp: string | null;
+  alarmBefore: boolean;
+}
+
+export interface PickableChat {
+  // "pkg|conversationKey": the form AutopilotSettings.pickedChats holds.
+  id: string;
+  name: string;
+  app: string;
+}
+
 export interface InflowCoreApi {
   getStatus(): Status;
   openNotificationAccess(): void;
@@ -346,12 +370,25 @@ export interface InflowCoreApi {
   askNotifications(): Promise<boolean>;
   // The report id from a tapped notification, cleared once read.
   takeOpenReport(): number | null;
-  addListener(event: 'onCaptured', listener: (e: { count: number }) => void): { remove(): void };
+  // Newest first, at most limit (200 at most); expired suggestions are swept first.
+  suggestions(states: State[], limit: number): SuggestionRow[];
+  // The owner's Run: the text to tell them when it could not start, null once it did.
+  runSuggestion(id: number): string | null;
+  skipSuggestion(id: number): void;
+  autopilotSettings(): AutopilotSettings;
+  // Bad values fall back to their defaults; a picked chat without a "|" is dropped.
+  setAutopilotSettings(settings: AutopilotSettings): void;
+  // Chats of messaging apps (not SMS or email, which already reach the AI), newest first, at most 200.
+  pickableChats(): PickableChat[];
+  addListener(event: 'onCaptured' | 'onSuggestions', listener: (e: { count: number }) => void): { remove(): void };
 }
 
 const InflowCore = requireNativeModule<InflowCoreApi>('InflowCore');
 
 export const addCapturedListener = (cb: () => void): { remove(): void } => InflowCore.addListener('onCaptured', () => cb());
+
+// count is the number of waiting suggestions.
+export const addSuggestionsListener = (cb: () => void): { remove(): void } => InflowCore.addListener('onSuggestions', () => cb());
 
 export { InflowCore };
 

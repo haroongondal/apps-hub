@@ -421,6 +421,9 @@ importers:
 
   apps/inflow:
     dependencies:
+      '@apps-hub/autopilot-contract':
+        specifier: workspace:*
+        version: link:../../packages/autopilot-contract
       '@apps-hub/ui':
         specifier: workspace:*
         version: link:../../packages/ui
