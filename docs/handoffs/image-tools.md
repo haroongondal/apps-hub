@@ -184,5 +184,13 @@ drop features 2-3 and bring the telemetry back. Next:
    telemetry fix.
 3. Feature 4 (Heavy edits): 4.0 phone spike (MI-GAN vs LaMa, owner judges; SlimSAM; Depth Anything V2
    Small; YuNet; GFPGAN licence/size check first).
+Phone test of 14 over adb (owner asked, 2026-11-18; brief `.superpowers/sdd/2026-11-18-image-tools-2.2/phone-check/qa-brief.md`):
+A1 palette PASS, A2 enhance+Undo PASS; Wi-Fi adb dropped right after tapping Remove background > Person
+and did not return (possible crash/reboot: check uptime and logcat when back). LEFT ON PHONE: test photos
+/sdcard/Pictures/ImageToolsTest/ittest-{dog-a,dog-b,dog-half,girl}.jpg (MediaStore ids 1000086248-51):
+rm -r the folder, scan_file each path, confirm the relative_path query is empty. The agent also edited the
+unsaved 'Continue' draft in Design Editor (was blank; now orange background + girl photo): owner to reset.
+Observations: 'Photo' in the image chooser opens the camera, not the gallery; sheet renders blank for 2-5 s
+after a tap; Undo deselects the image. Remaining checks: A3-A6, C1-C5.
 Open Minors: 2.2 M1 (two 'Undo' for screen readers), M2 (repeated hint); 3.2 thin rim after upscaling a
 cut-out (check by eye); P3 photos reduced to sRGB.
