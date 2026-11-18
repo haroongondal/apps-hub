@@ -64,11 +64,14 @@ class AgentLoop(
   private val made = mutableListOf<String>() // videos make_video saved, named again if the run ends without finishing
 
   /** `memory` is `RunStore.recall`'s record of earlier runs: data, sent after the task in its own message. */
-  suspend fun run(task: String, memory: String? = null): RunResult {
+  suspend fun run(task: String, memory: String? = null, untrusted: List<String> = emptyList()): RunResult {
     history += Msgs.system(systemPrompt)
     history += Msgs.user("The owner's task: $task")
     // Its steps hold labels from other apps' screens, so they never share the message that carries the owner's words.
-    memory?.let { history += Msgs.user(it) }
+    // A suggestion run's task is the same text every time, so recall would hand it another chat's route.
+    memory?.takeIf { untrusted.isEmpty() }?.let { history += Msgs.user(it) }
+    // Other people's words (a message being answered): one message each, `<` escaped so none can close its own wrapper.
+    untrusted.forEach { history += Msgs.user("<notification>${it.replace("<", "&lt;")}</notification>") }
     var backs = 0
     var note = ""
     var prevScreen: String? = null

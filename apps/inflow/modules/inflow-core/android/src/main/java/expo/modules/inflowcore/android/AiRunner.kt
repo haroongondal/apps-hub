@@ -7,11 +7,15 @@ import expo.modules.inflowcore.core.AiError
 import expo.modules.inflowcore.core.AiMeta
 import expo.modules.inflowcore.core.AiRun
 import expo.modules.inflowcore.core.AiRunResult
+import expo.modules.inflowcore.core.AUTOPILOT_META
+import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.Ask
+import expo.modules.inflowcore.core.FastPath
 import expo.modules.inflowcore.core.Period
 import expo.modules.inflowcore.core.ReportRun
 import expo.modules.inflowcore.core.ReportSchedule
 import expo.modules.inflowcore.core.TxnCategorize
+import expo.modules.inflowcore.core.suggestionHook
 import java.time.ZoneId
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
@@ -29,6 +33,9 @@ object AiRunner {
   private val executor = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "inflow-ai").apply { isDaemon = true } }
   private val periodic = AtomicBoolean(false)
   private val waiting = AtomicBoolean(false)
+  @Volatile private var lastFastArrivalAt: Long? = null
+  @Volatile private var lastFastRunAt: Long? = null
+  private val checkPending = AtomicBoolean(false)
 
   /** Every 30 minutes while the process lives; started once from the listener. */
   fun startPeriodic(ctx: Context) {
@@ -45,6 +52,35 @@ object AiRunner {
   /** "Send now": waits for any run in progress, then runs. Call it off the main thread. */
   fun runNow(ctx: Context): AiRunResult = executor.submit(Callable { execute(ctx) }).get()
 
+  /**
+   * Autopilot's fast path: Ingest calls this when it queues a picked-chat or person-SMS item. After the quiet window a check on the AI
+   * executor runs the fast items (one run at a time, since the executor is single-threaded). A check that finds the one-a-minute gap
+   * still open schedules itself again. The timer dies with the process; the rows stay queued and the 30-minute run takes them.
+   */
+  fun onFastArrival(ctx: Context) {
+    lastFastArrivalAt = System.currentTimeMillis()
+    if (checkPending.compareAndSet(false, true)) executor.schedule({ fastCheck(ctx) }, FastPath.QUIET_MS, TimeUnit.MILLISECONDS)   // a burst shares one timer chain
+  }
+
+  private fun fastCheck(ctx: Context) {
+    checkPending.set(false)   // before the decision: an arrival from here on starts a new chain, so none is lost
+    val wait = FastPath.waitMs(lastFastArrivalAt, lastFastRunAt, System.currentTimeMillis()) ?: return
+    if (wait == 0L) {
+      lastFastRunAt = System.currentTimeMillis()
+      runFast(ctx)
+    } else if (checkPending.compareAndSet(false, true)) {   // still inside the quiet window or the one-a-minute gap
+      executor.schedule({ fastCheck(ctx) }, maxOf(wait, 1_000L), TimeUnit.MILLISECONDS)
+    }
+  }
+
+  /** One run over the fast items only, under the same daily cap and spend counting as [execute]. Runs on the AI executor, never the capture thread. */
+  internal fun runFast(ctx: Context): AiRunResult = try {
+    execute(ctx, fastOnly = true)
+  } catch (e: Exception) {
+    Log.w(TAG, "fast run failed: ${e.javaClass.simpleName}")
+    AiRunResult(0, 0, false, FAILED)
+  }
+
   private fun runIfDueNow(ctx: Context) {
     try {
       val store = StoreHolder.get(ctx).getOrNull() ?: return
@@ -57,20 +93,34 @@ object AiRunner {
     }
   }
 
-  private fun execute(ctx: Context): AiRunResult {
+  // fastOnly: the quick run for picked chats. It skips the categoriser and the reports and leaves LAST_RUN_AT alone, so the 30-minute run still takes everything.
+  private fun execute(ctx: Context, fastOnly: Boolean = false): AiRunResult {
     val store = StoreHolder.get(ctx).getOrNull() ?: return AiRunResult(0, 0, false, null)
+    val suggestions = StoreHolder.suggestions(ctx, store)
+    try {
+      suggestions.expire(System.currentTimeMillis())   // first thing in every run, whether or not the AI is on
+    } catch (e: Exception) {
+      Log.w(TAG, "expire failed: ${e.javaClass.simpleName}")
+    }
     val cfg = AiConfig(store)
     if (!cfg.on()) return AiRunResult(0, 0, false, null)
     val sms = StoreHolder.smsPackages(ctx)
     val result = try {
       AiRun(
-        store, StoreHolder.ledger(store), { cfg.provider() }, { cfg.prices() }, { cfg.capUsd() },
+        store, StoreHolder.ledger(store, ctx), { cfg.provider() }, { cfg.prices() }, { cfg.capUsd() },
         { SqlLedgerStore(store.db).aiAccounts() }, { store.channelOf(it, sms) }, System::currentTimeMillis, ZoneId.systemDefault(),
         atomic = { block -> store.inTransaction { block() } },
+        suggestions = suggestionHook(suggestions, { AutopilotSettings.fromJson(store.meta(AUTOPILOT_META)) }, System::currentTimeMillis, ZoneId.systemDefault(), store::hasOwnMessageAfter),
+        fastOnly = fastOnly,
       ).run()
     } catch (e: Exception) {
       Log.w(TAG, "run failed: ${e.javaClass.simpleName}")
       AiRunResult(0, 0, false, FAILED)
+    }
+    if (fastOnly) {
+      AiMeta.errorAfter(true, result, store.meta(AiMeta.ERROR))?.let { store.setMeta(AiMeta.ERROR, it) } ?: store.deleteMeta(AiMeta.ERROR)
+      if (result.saved > 0) StoreHolder.onCaptured?.invoke(result.saved)
+      return result
     }
     // Every transaction gets a category (a failure here never hides the item run's result).
     val categorised = try {

@@ -52,6 +52,10 @@ interface LedgerStore {
   /** Remembers this transaction's source items as deleted by the owner, so neither the backfill nor a late AI result makes the transaction again. Call before deleteTxn. */
   fun blockSources(txnId: Long)
   fun sourceBlocked(itemId: Long): Boolean
+  /** Amounts (minor units) of the owner's own-money-out transactions in this category and currency with at >= from, leaving `excludeId` out. */
+  fun outHistory(category: String, currency: String, from: Long, excludeId: Long): List<Long>
+  /** Every distinct counterparty and clean name of the other transactions: the names already seen. */
+  fun knownCounterparties(excludeId: Long): Set<String>
 }
 
 const val OTHER_ACCOUNT = "Other account"
@@ -95,7 +99,11 @@ object OwnTransfer {
     (s ?: "").uppercase(Locale.ROOT).replace(NOT_LETTER, "").replace(SPACES, " ").trim()
 }
 
-class Ledger(private val store: LedgerStore, private val ownerName: () -> String?) {
+/** `onNewTxn(txnId, itemId)` runs once for each transaction a message made, never for one that only gained a source. It must not throw. */
+class Ledger(
+  private val store: LedgerStore, private val ownerName: () -> String?,
+  private val onNewTxn: (txnId: Long, itemId: Long) -> Unit = { _, _ -> },
+) {
   fun onItem(itemId: Long, text: String, channel: Channel, at: Long): Long? {
     if (store.sourceBlocked(itemId)) return null
     val p = Accounts.resolve(BankParser.parse(text) ?: return null, store.accounts())
@@ -119,6 +127,7 @@ class Ledger(private val store: LedgerStore, private val ownerName: () -> String
       val added = store.add(p, at, OwnTransfer.nameMatches(p.counterparty, ownerName()))
       store.addSource(added, itemId, channel, p.txId, at)
       pair(added, p, at)
+      if (replaced == null) runCatching { onNewTxn(added, itemId) }   // a replaced AI transaction was already checked
       added
     }
     replaced?.let { r ->
@@ -180,6 +189,7 @@ class Ledger(private val store: LedgerStore, private val ownerName: () -> String
     val id = store.add(p, at, money.own || OwnTransfer.nameMatches(money.counterparty, ownerName()), byAi = true)
     store.addSource(id, itemId, channel, null, at)
     store.setAiDetails(id, money.category, money.counterparty)
+    runCatching { onNewTxn(id, itemId) }
     return id
   }
 

@@ -4,6 +4,10 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabaseCorruptException
 import android.database.sqlite.SQLiteException
+import expo.modules.inflowcore.core.AUTOPILOT_META
+import expo.modules.inflowcore.core.AutopilotAccess
+import expo.modules.inflowcore.core.AutopilotItem
+import expo.modules.inflowcore.core.AutopilotItems
 import expo.modules.inflowcore.core.AiChannels
 import expo.modules.inflowcore.core.AiInput
 import expo.modules.inflowcore.core.AiMeta
@@ -14,6 +18,7 @@ import expo.modules.inflowcore.core.AppRows
 import expo.modules.inflowcore.core.AppSetting
 import expo.modules.inflowcore.core.AppStat
 import expo.modules.inflowcore.core.AskItem
+import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.Channel
 import expo.modules.inflowcore.core.Capture
 import expo.modules.inflowcore.core.Categories
@@ -28,6 +33,7 @@ import expo.modules.inflowcore.core.OpenPlan
 import expo.modules.inflowcore.core.SearchText
 import expo.modules.inflowcore.core.Sms
 import expo.modules.inflowcore.core.openPlan
+import expo.modules.inflowcore.core.pickedChatKey
 import net.zetetic.database.DatabaseErrorHandler
 import net.zetetic.database.sqlcipher.SQLiteConnection
 import net.zetetic.database.sqlcipher.SQLiteDatabase
@@ -35,7 +41,7 @@ import net.zetetic.database.sqlcipher.SQLiteDatabaseHook
 import net.zetetic.database.sqlcipher.SQLiteStatement
 import java.io.File
 
-class SqlItemStore private constructor(internal val db: SQLiteDatabase, private val mediaDir: File, private val openDir: File) : ItemStore, AiStore {
+class SqlItemStore private constructor(internal val db: SQLiteDatabase, private val mediaDir: File, private val openDir: File) : ItemStore, AiStore, AutopilotItems {
   override fun nameFor(tag: String): String? =
     query("SELECT name FROM chat_map WHERE tag = ?", tag).use { if (it.moveToFirst()) it.getString(0) else null }
 
@@ -111,26 +117,48 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     run("UPDATE OR IGNORE items SET sms_hash = ? WHERE id = ?", smsHash, itemId)
   }
 
-  override fun enqueueAi(itemId: Long, at: Long) {
-    run("INSERT OR IGNORE INTO ai_queue(item_id, at) VALUES (?, ?)", itemId, at)
+  override fun enqueueAi(itemId: Long, at: Long, fast: Boolean) {
+    run("INSERT OR IGNORE INTO ai_queue(item_id, at, fast) VALUES (?, ?, ?)", itemId, at, if (fast) 1L else 0L)
   }
 
   override fun enabledSince(): Long? = meta(AiMeta.SINCE)?.toLongOrNull()
 
   // The send-time filter (also behind queuedCount): the item still exists, is no OTP, is SMS or email (R44), was posted after the first key, its app records, and neither app nor sender is blocked.
   // A row that fails it is deleted first, so an item blocked or left out at send time can never go out later (unblocking does not bring it back).
-  override fun queued(limit: Int): List<AiInput> {
+  override fun queued(limit: Int, fastOnly: Boolean): List<AiInput> {
     val since = enabledSince() ?: return emptyList()
-    run("DELETE FROM ai_queue WHERE item_id NOT IN (SELECT i.id FROM items i WHERE i.posted_at >= ? AND $NEVER_SEND_FILTER)", since)
+    // R44 exception (owner, 2026-11-18): the conversations picked for Autopilot count as sendable here. askItems and the ledger keep NEVER_SEND_FILTER.
+    val picked = pickedChats().toTypedArray()
+    val filter = queueFilter(picked.size)
+    run("DELETE FROM ai_queue WHERE item_id NOT IN (SELECT i.id FROM items i WHERE i.posted_at >= ? AND $filter)", since, *picked)
     return query(
-      "SELECT i.id, i.app_label, COALESCE(n.name, i.sender), i.title, COALESCE(i.email_text, i.text), i.posted_at, i.conversation, lower(i.sender) = 'you' $QUEUE_FROM ORDER BY q.at, q.item_id LIMIT ?",
-      since, limit.toLong(),
-    ).use { c -> buildList { while (c.moveToNext()) add(AiInput(c.getLong(0), c.getString(1), c.str(2), c.str(3), c.getString(4), c.getLong(5), c.str(6), c.getInt(7) != 0)) } }
+      "SELECT i.id, i.app_label, COALESCE(n.name, i.sender), i.title, COALESCE(i.email_text, i.text), i.posted_at, i.conversation, lower(i.sender) = 'you', i.conversation_key, i.pkg, NOT $SMS_OR_EMAIL " +
+        "${queueFrom(filter)}${if (fastOnly) " AND q.fast = 1" else ""} ORDER BY q.at, q.item_id LIMIT ?",
+      since, *picked, limit.toLong(),
+    ).use { c -> buildList { while (c.moveToNext()) add(AiInput(c.getLong(0), c.getString(1), c.str(2), c.str(3), c.getString(4), c.getLong(5), c.str(6), c.getInt(7) != 0, c.str(8), c.str(9), c.getInt(10) != 0)) } }
   }
+
+  // The provider's one item read: the send queue's filter (which also leaves out NEVER_SHARE), and only while a live REPLY suggestion names the item, so full text never leaves in bulk. Every value is bound.
+  override fun autopilotItem(id: Long, now: Long): AutopilotItem? {
+    val picked = pickedChats().toTypedArray()
+    return query(
+      "SELECT i.id, i.app_label, i.pkg, COALESCE(n.name, i.sender), i.conversation, COALESCE(i.email_text, i.text), i.posted_at " +
+        "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
+        "WHERE i.id = ? AND ${queueFilter(picked.size)} " +
+        "AND EXISTS (SELECT 1 FROM suggestions s WHERE s.item_id = i.id AND s.kind = 'REPLY' AND s.state IN ('WAITING','STARTED') AND s.expires_at > ?)",
+      id, *picked, now,
+    ).use { c -> if (c.moveToFirst()) AutopilotItem(c.getLong(0), c.getString(1), c.getString(2), c.str(3), c.str(4), c.getString(5), c.getLong(6)) else null }
+  }
+
+  override fun hasOwnMessageAfter(pkg: String, conversationKey: String, at: Long): Boolean =
+    query("SELECT 1 FROM items WHERE pkg = ? AND conversation_key = ? AND lower(sender) = 'you' AND posted_at > ? LIMIT 1", pkg, conversationKey, at).use { it.moveToFirst() }
+
+  private fun pickedChats(): Set<String> = AutopilotSettings.fromJson(meta(AUTOPILOT_META)).pickedChats
 
   fun queuedCount(): Int {
     val since = enabledSince() ?: return 0
-    return query("SELECT COUNT(*) $QUEUE_FROM", since).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+    val picked = pickedChats().toTypedArray()
+    return query("SELECT COUNT(*) ${queueFrom(queueFilter(picked.size))}", since, *picked).use { if (it.moveToFirst()) it.getInt(0) else 0 }
   }
 
   override fun save(results: List<AiResult>, now: Long) = transaction {
@@ -402,6 +430,14 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     }
   }
 
+  /** The chats the owner may pick for Autopilot ([pickableChatsSql]): `id` is the [pickedChatKey] form. Newest activity first, at most 200. */
+  fun pickableChats(): List<Map<String, String>> {
+    val never = AutopilotAccess.NEVER_SHARE.toTypedArray()
+    return query(pickableChatsSql(never.size), *never).use { c ->
+      buildList { while (c.moveToNext()) add(mapOf("id" to pickedChatKey(c.getString(0), c.getString(1)), "name" to c.getString(2), "app" to c.getString(3))) }
+    }
+  }
+
   /** The senders of one app that are folded into Promotions, with the newest visible item among them. */
   fun promotions(pkg: String, now: Long): Map<String, Any?> =
     query(PROMOTIONS_SQL, pkg, now).use { c ->
@@ -534,7 +570,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
 
   companion object {
     private const val DB_NAME = "inflow.db"
-    private const val SCHEMA_VERSION = 7
+    private const val SCHEMA_VERSION = 8
     private const val GENERIC_FAILURE =
       "Inflow can't open your saved history. The history file is kept, not deleted. Restart the phone and try again."
     private const val ITEM_COLUMNS = "i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, " +
@@ -546,11 +582,18 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       "AND NOT EXISTS (SELECT 1 FROM ai_blocks b WHERE b.block_key = 'app:' || i.pkg) " +
       "AND (i.sender_key IS NULL OR NOT EXISTS (SELECT 1 FROM ai_blocks b WHERE b.block_key = 'sender:' || i.sender_key))"
     // R44: only SMS and email go to the AI. sms_hash/email_hash cover the default SMS app and Gmail whatever the package; the package list is AiChannels.PKGS.
-    private val SMS_OR_EMAIL = "(i.sms_hash IS NOT NULL OR i.email_hash IS NOT NULL OR i.pkg IN (${AiChannels.SQL_LIST}))"
+    private val SMS_OR_EMAIL_TERMS = "i.sms_hash IS NOT NULL OR i.email_hash IS NOT NULL OR i.pkg IN (${AiChannels.SQL_LIST})"
+    private val SMS_OR_EMAIL = "($SMS_OR_EMAIL_TERMS)"
     internal const val NEVER_SENT_PREFIX = "nosend:"
     internal val NEVER_SEND_FILTER = "i.otp_expires_at IS NULL AND $SMS_OR_EMAIL AND $SENDABLE"
-    private val QUEUE_FROM = "FROM ai_queue q JOIN items i ON i.id = q.item_id LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
-      "WHERE i.posted_at >= ? AND $NEVER_SEND_FILTER"
+    // R44's one exception: NEVER_SEND_FILTER with the owner's picked conversations ("pkg|conversationKey") also eligible, bound as parameters (one ? each, after the posted_at one). Only the queue uses it.
+    internal fun queueFilter(picked: Int): String {
+      val pickedChat = if (picked == 0) "0" else "(i.pkg || '|' || i.conversation_key) IN (${List(picked) { "?" }.joinToString(",")})"
+      // NEVER_SHARE (Strongroom, Inflow) never reaches the AI or Deputy, picked or not; constants, so no bind order changes.
+      return "i.otp_expires_at IS NULL AND ($SMS_OR_EMAIL_TERMS OR $pickedChat) AND i.pkg NOT IN (${AutopilotAccess.SQL_LIST}) AND $SENDABLE"
+    }
+    private fun queueFrom(filter: String) = "FROM ai_queue q JOIN items i ON i.id = q.item_id LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
+      "WHERE i.posted_at >= ? AND $filter"
     private const val DAY_MS = 86_400_000L
     // item_id of a to-do the owner added by hand: no item has id 0 (AUTOINCREMENT starts at 1).
     private const val MANUAL_TODO = 0
@@ -616,6 +659,15 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
         "MAX(i.posted_at) AS last, SUM(CASE WHEN i.posted_at >= ? THEN 1 ELSE 0 END) AS today FROM items i " +
         "WHERE i.pkg = ? AND $VISIBLE_I AND COALESCE(i.conversation_key, i.sender_key) IS NOT NULL AND ${if (promo) "NOT " else ""}${notPromo("i")} GROUP BY k) g " +
         "LEFT JOIN sender_names n ON n.sender_key = g.k ${if (paged) "WHERE (g.last < ? OR (g.last = ? AND g.k < ?)) " else ""}ORDER BY g.last DESC, g.k DESC LIMIT ?"
+
+    // Conversations of chat apps only: SMS and email already reach the AI, so there is nothing to pick. The app records, is not blocked from the AI, is not in NEVER_SHARE (bound), and a chat is
+    // never listed by an OTP message. The name is the contact list's (contactsSql), from the newest item of the chat.
+    internal fun pickableChatsSql(neverCount: Int) =
+      "SELECT g.pkg, g.k, ${displayName("g.conversation", "g.sender", "g.app_label", "g.k")}, g.app_label FROM (" +
+        "SELECT i.pkg AS pkg, i.conversation_key AS k, i.conversation AS conversation, i.sender AS sender, i.app_label AS app_label, MAX(i.posted_at) AS last FROM items i " +
+        "WHERE i.conversation_key IS NOT NULL AND i.otp_expires_at IS NULL AND NOT $SMS_OR_EMAIL AND $SENDABLE " +
+        "AND i.pkg NOT IN (${List(neverCount) { "?" }.joinToString(",")}) GROUP BY i.pkg, i.conversation_key) g " +
+        "LEFT JOIN sender_names n ON n.sender_key = g.k ORDER BY g.last DESC, g.k DESC LIMIT 200"
 
     internal val PROMOTIONS_SQL =
       "SELECT COUNT(DISTINCT COALESCE(i.conversation_key, i.sender_key)), MAX(i.posted_at) FROM items i WHERE i.pkg = ? AND $VISIBLE_I AND NOT ${notPromo("i")}"
@@ -718,6 +770,15 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       "CREATE INDEX items_sender ON items(sender_key)",
     )
 
+    // Not idempotent, like the others. ai_queue.fast: Autopilot's fast path marks a row it wants sent soon (queued(fastOnly) reads it).
+    // suggestions: what Autopilot offers the owner. kind and state are enum names; no foreign key on item_id (retention deletes items, a suggestion outlives them until it expires).
+    internal val SCHEMA_V8 = listOf(
+      "ALTER TABLE ai_queue ADD COLUMN fast INTEGER NOT NULL DEFAULT 0",
+      "CREATE TABLE suggestions(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, title TEXT NOT NULL, item_id INTEGER NOT NULL, due_at INTEGER, " +
+        "dedupe_key TEXT NOT NULL, state TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)",
+      "CREATE INDEX suggestions_state ON suggestions(state)",
+    )
+
     // Runs after SCHEMA_V6, in its transaction: the old names become the new ones (money out), and a money-in txn holding a name that is not a money-in category is cleared to be categorised again.
     internal const val V6_RENAME = "UPDATE txns SET category = ? WHERE category = ? AND direction = 'OUT'"
     internal val V6_CLEAR_IN = "UPDATE txns SET category = NULL WHERE direction = 'IN' AND category IS NOT NULL AND category NOT IN (${Categories.IN.joinToString { "?" }})"
@@ -814,6 +875,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
             migrateCategories(db)
           }
           if (db.version < 7) SCHEMA_V7.forEach(db::execSQL)
+          if (db.version < 8) SCHEMA_V8.forEach(db::execSQL)
           db.version = SCHEMA_VERSION
           db.setTransactionSuccessful()
         } finally {

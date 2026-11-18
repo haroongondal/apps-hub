@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Button, Empty, Field, Group, Header, Notice, Readout, Row, Screen, Text, space } from '@apps-hub/ui';
-import InflowCore, { addCapturedListener, type HomeSummary, type Item, type ItemFilter, type MoneySummary, type Status } from 'inflow-core';
+import type { SuggestionRow } from '@apps-hub/autopilot-contract';
+import InflowCore, { addCapturedListener, addSuggestionsListener, type HomeSummary, type Item, type ItemFilter, type MoneySummary, type Status } from 'inflow-core';
 import { dueLabel } from './ai.ts';
+import { waitingSummary } from './autopilot.ts';
 import { Bar } from './Bar.tsx';
 import { startOfToday, whenLabel } from './format.ts';
 import { ItemRow } from './ItemRow.tsx';
@@ -12,7 +14,9 @@ import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
 import { formatAmount, monthOverview, monthRange } from './money.ts';
 import { ConversationMenu, ItemMenu, itemRenameTarget } from './RecordMenus.tsx';
 import { RenameSheet, type RenameTarget } from './RenameSheet.tsx';
+import { SuggestionRowItem, SuggestionsScreen, useSuggestionActions } from './SuggestionsScreen.tsx';
 
+const WAITING_SHOWN = 3;
 const EMPTY_TEXT = "New notifications will appear here as they arrive. Inflow can't read ones that came before it was set up.";
 
 export function HomeScreen({
@@ -39,6 +43,17 @@ export function HomeScreen({
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Item | null>(null);
   const [renaming, setRenaming] = useState<RenameTarget | null>(null);
+  const [waiting, setWaiting] = useState<SuggestionRow[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const loadWaiting = useCallback(() => {
+    try {
+      setWaiting(InflowCore.suggestions(['waiting'], 50));
+    } catch {
+      setError(LOAD_ERROR);
+    }
+  }, []);
+  const { run, skip, message } = useSuggestionActions(loadWaiting);
 
   const load = useCallback(() => {
     try {
@@ -70,16 +85,22 @@ export function HomeScreen({
 
   useEffect(() => {
     load();
+    loadWaiting();
     importSms();
     syncGmail();
     const sub = addCapturedListener(load);
-    return () => sub.remove();
-  }, [load, importSms, syncGmail]);
+    const waitingSub = addSuggestionsListener(loadWaiting);
+    return () => {
+      sub.remove();
+      waitingSub.remove();
+    };
+  }, [load, loadWaiting, importSms, syncGmail]);
 
   const pull = () => {
     setRefreshing(true);
     refreshStatus();
     load();
+    loadWaiting();
     importSms();
     syncGmail();
     setRefreshing(false);
@@ -119,9 +140,21 @@ export function HomeScreen({
       setError(LOAD_ERROR);
     }
   };
+  const { count, headline } = waitingSummary(waiting);
   const empty = summary !== null && !summary.hasItems;
   // The card shows one currency (PKR is the only one so far).
   const overview = money === null ? null : (monthOverview(money)[0] ?? null);
+
+  if (showSuggestions) {
+    return (
+      <SuggestionsScreen
+        onBack={() => {
+          setShowSuggestions(false);
+          loadWaiting();
+        }}
+      />
+    );
+  }
 
   return (
     <Screen scroll refreshing={refreshing} onRefresh={pull}>
@@ -138,6 +171,15 @@ export function HomeScreen({
           {notice.body}
         </Notice>
       )}
+      {count > 0 && (
+        <Group title="Waiting" footer={headline}>
+          {waiting.slice(0, WAITING_SHOWN).map((r) => (
+            <SuggestionRowItem key={r.id} row={r} now={now} onRun={run} onSkip={skip} />
+          ))}
+          <Row title="See all" onPress={() => setShowSuggestions(true)} />
+        </Group>
+      )}
+      {message !== null && <Notice tone={message.tone}>{message.text}</Notice>}
       <Field label="Search" placeholder="Search everything you saved" value={query} onChangeText={setQuery} onSubmitEditing={search} returnKeyType="search" />
       <Group title="Money">
         {!status.smsGranted ? (

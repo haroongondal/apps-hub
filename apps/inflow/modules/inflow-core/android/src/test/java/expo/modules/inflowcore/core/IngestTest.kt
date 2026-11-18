@@ -57,6 +57,85 @@ class IngestTest {
     assertEquals(setOf("Sunflower"), store.items.values.map { it.capture.conversation }.toSet())
   }
 
+  @Test fun anOwnMessageClosesTheConversationsReplySuggestions() {
+    val closed = mutableListOf<String>()
+    val ing = Ingest(store, own, { clock }, onOwnMessage = { pkg, key -> closed += "$pkg|$key" })
+    val m1 = RawMessage("Sunflower", "Are you free?", clock + 1)
+    val reply = RawMessage("You", "On my way", clock + 3, own = true)
+    ing.onNotification(chat(m1).copy(title = "Sunflower", chatTag = "t1"))
+    assertTrue(closed.isEmpty())
+    ing.onNotification(chat(m1, reply).copy(title = "You", chatTag = "t1"))
+    assertEquals(listOf("com.whatsapp|" + store.items.values.first().capture.conversationKey!!), closed)
+  }
+
+  @Test fun aFailingOwnMessageCallbackNeverLosesTheItem() {
+    val ing = Ingest(store, own, { clock }, onOwnMessage = { _, _ -> error("boom") })
+    assertEquals(1, ing.onNotification(chat(RawMessage("You", "On my way", clock + 3, own = true)).copy(title = "Sunflower", chatTag = "t1")))
+    assertEquals(1, store.items.size)
+  }
+
+  // R44 and its one exception: a picked chat's messages are queued (fast); an unpicked chat's never are.
+  private fun aiIngest(picked: Set<String>, fast: MutableList<Unit> = mutableListOf()) =
+    Ingest(store, own, { clock }, aiOn = { true }, pickedChat = { pkg, key -> key != null && "$pkg|$key" in picked }, onFast = { fast += Unit })
+
+  private val ammiKey = "com.whatsapp|" + senderKey("com.whatsapp", "Ammi")
+
+  @Test fun aPickedWhatsAppChatIsQueuedFast() {
+    val fast = mutableListOf<Unit>()
+    assertEquals(1, aiIngest(setOf(ammiKey), fast).onNotification(chat(RawMessage("Ammi", "dinner at 8?", clock + 1))))
+    assertEquals(setOf(store.items.values.single().id), store.queue.keys)
+    assertEquals(store.queue.keys, store.fastIds)
+    assertEquals(1, fast.size)
+  }
+
+  @Test fun anUnpickedWhatsAppChatIsNotQueued() {
+    val fast = mutableListOf<Unit>()
+    assertEquals(1, aiIngest(setOf("com.whatsapp|whatsapp:someone-else"), fast).onNotification(chat(RawMessage("Ammi", "dinner at 8?", clock + 1))))
+    assertTrue(store.queue.isEmpty())
+    assertTrue(fast.isEmpty())
+  }
+
+  @Test fun anOtpIsNeverQueuedEvenWhenItsChatIsPicked() {
+    val smsPkg = "com.google.android.apps.messaging"
+    val ing = aiIngest(setOf("$smsPkg|" + senderKey(smsPkg, "MCB")))
+    ing.onNotification(raw(pkg = smsPkg, title = "MCB", messages = listOf(RawMessage("MCB", "Your OTP is 482913. Do not share it.", clock + 1))))
+    val otp = store.items.values.single()
+    assertEquals(senderKey(smsPkg, "MCB"), otp.capture.conversationKey)   // a real, picked conversation: only the OTP rule keeps it out
+    assertNotNull(otp.otpExpiresAt)
+    assertTrue(store.queue.isEmpty())
+  }
+
+  @Test fun aPickedNumberChatInAnotherAppIsNotQueued() {
+    // Both apps give an all-digit chat name the same conversation key (num:...), so the pick must carry the package.
+    val fast = mutableListOf<Unit>()
+    val ing = aiIngest(setOf("com.whatsapp|" + senderKey("com.whatsapp", "+92 300 1234567")), fast)
+    ing.onNotification(raw(pkg = "org.thoughtcrime.securesms", title = "+92 300 1234567", messages = listOf(RawMessage("+92 300 1234567", "hi from signal", clock + 1))))
+    assertEquals(senderKey("com.whatsapp", "+92 300 1234567"), store.items.values.single().capture.conversationKey)
+    assertTrue(store.queue.isEmpty())
+    assertTrue(fast.isEmpty())
+    ing.onNotification(chat(RawMessage("+92 300 1234567", "hi from whatsapp", clock + 2)).copy(title = "+92 300 1234567"))
+    assertEquals(1, store.queue.size)
+  }
+
+  @Test fun anOwnMessageInAPickedChatIsContextNotAFastTrigger() {
+    val fast = mutableListOf<Unit>()
+    aiIngest(setOf(ammiKey), fast).onNotification(chat(RawMessage("Ammi", "hi", clock + 1), RawMessage("You", "on my way", clock + 2, own = true)))
+    assertEquals(2, store.queue.size)
+    assertEquals(1, store.fastIds.size)
+    assertEquals(1, fast.size)
+  }
+
+  @Test fun aPersonSmsIsFastAndAShortCodeIsNot() {
+    val fast = mutableListOf<Unit>()
+    val ing = aiIngest(emptySet(), fast)
+    ing.onSms(RawSms("+923001234567", "call me", clock, clock), "com.google.android.apps.messaging", "Messages")
+    ing.onSms(RawSms("8287", "Your balance is low", clock + 1, clock + 1), "com.google.android.apps.messaging", "Messages")
+    assertEquals(2, store.queue.size)   // both SMS are queued as before
+    assertEquals(1, store.fastIds.size)
+    assertEquals(1, fast.size)
+    assertEquals("call me", store.items.values.first { it.id in store.fastIds }.capture.text)
+  }
+
   // The retention pins: WhatsApp text is kept forever and never mistaken for a code.
   @Test fun whatsappIsKeptForever() {
     assertNull(Retention.default("com.whatsapp", "WhatsApp").keepDays)

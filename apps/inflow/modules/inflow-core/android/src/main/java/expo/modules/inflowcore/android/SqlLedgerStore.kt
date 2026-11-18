@@ -102,6 +102,12 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
     run("INSERT OR IGNORE INTO tombstones(hash, at) SELECT '$BLOCKED_PREFIX' || item_id, ? FROM txn_sources WHERE txn_id = ?", System.currentTimeMillis(), txnId)
   }
 
+  override fun outHistory(category: String, currency: String, from: Long, excludeId: Long): List<Long> =
+    db.rawQuery(OUT_HISTORY_SQL, category, currency, from, excludeId).use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } }
+
+  override fun knownCounterparties(excludeId: Long): Set<String> =
+    db.rawQuery(COUNTERPARTIES_SQL, excludeId, excludeId).use { c -> buildSet { while (c.moveToNext()) add(c.getString(0)) } }
+
   override fun sourceBlocked(itemId: Long): Boolean =
     db.rawQuery("SELECT 1 FROM tombstones WHERE hash = ?", "$BLOCKED_PREFIX$itemId").use { it.moveToFirst() }
 
@@ -264,8 +270,11 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
   private fun Cursor.str(i: Int): String? = if (isNull(i)) null else getString(i)
 
   internal companion object {
-    /** Tombstone key prefix for an item whose transaction the owner deleted; SqlBackfillStore.UNPARSED_SQL checks it too. */
+    /** Tombstone key prefix for an item whose transaction the owner deleted; SqlBackfillStore.unparsedSql checks it too. */
     const val BLOCKED_PREFIX = "txnsrc:"
+    // Autopilot's money rule: the owner's own money-out amounts of one category and currency since a time (own transfers left out), and every name seen on another transaction.
+    const val OUT_HISTORY_SQL = "SELECT amount_minor FROM txns WHERE category = ? AND currency = ? AND direction = 'OUT' AND own = 0 AND at >= ? AND id <> ?"
+    const val COUNTERPARTIES_SQL = "SELECT counterparty FROM txns WHERE counterparty IS NOT NULL AND id <> ? UNION SELECT label FROM txns WHERE label IS NOT NULL AND id <> ?"
     // The name a person or shop is shown under: the AI's clean name, else the bank's text. Grouping and matching use its lower() (shortcut: lower() folds ASCII only, which covers the names seen so far).
     const val PARTY = "COALESCE(label, counterparty, '')"
     const val PARTY_KEY_T = "lower(COALESCE(t.label, t.counterparty, ''))"

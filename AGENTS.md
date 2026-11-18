@@ -38,7 +38,9 @@ Current apps:
   operating other apps through an AccessibilityService. Android only, private
   Store only (`com.haroon.deputy`). Kotlin owns the agent loop and the
   confirmation gate; RN only renders. Specs: `docs/deputy/` (PRD, SPEC);
-  phases and spike results: `docs/handoffs/deputy.md`.
+  phases and spike results: `docs/handoffs/deputy.md`. Autopilot (stage 1): starts a
+  reply run only from Inflow's Run tap, through `RunSuggestionActivity`, with the other
+  person's text kept in the untrusted block; design `docs/superpowers/specs/2026-11-18-autopilot-design.md`.
 - **strongroom** (`apps/strongroom`) — personal password manager, all own code
   (Kotlin owns the vault; RN only renders). Android only, private Store only
   (`com.haroon.strongroom`). Design: `docs/strongroom/DESIGN.md`; phases:
@@ -61,7 +63,7 @@ Current apps:
   capture, storage, parsing, Gmail and AI; RN only renders. WhatsApp chats are grouped by contact, WhatsApp text is kept forever, and the media WhatsApp notifications expose is stored encrypted in the app's private files (never sent to the AI). Home is money card, Inbox (one row per chat-like app), Important (no payments), Coming up, Recent chats, All apps; Money has Overview, Reports and All. In an SMS contact list, senders the AI mostly reads as promotions (and no bank) fold into one "Promotions" row (nothing is deleted; the owner can override per sender; schema v7 `sender_promo`). Spec:
   `docs/superpowers/specs/2026-11-13-inflow-design.md`, `docs/superpowers/specs/2026-11-17-inflow-ux-design.md`; plans:
   `docs/superpowers/plans/2026-11-13-inflow-stage-*.md`, `docs/superpowers/plans/2026-11-18-inflow-ux.md`; progress:
-  `docs/handoffs/inflow.md`.
+  `docs/handoffs/inflow.md`. Autopilot (stage 1): turns what arrives into reply, bill, event and money suggestions with Run and Skip, shared with Deputy through a signature-guarded provider; design `docs/superpowers/specs/2026-11-18-autopilot-design.md`, progress `docs/handoffs/autopilot.md`. R44 has one exception: items from conversations the owner picked go to the AI for Autopilot only. Ask AI stays SMS and email only, and the ledger and bank parsing take only SMS and Gmail items, not pushes from chat or other apps.
 
 - **autonomous-browsing** (`apps/autonomous-browsing`) — Electron desktop app for
   chat-authored browser automation routines, copied in from

@@ -87,6 +87,12 @@ class MemoryLedgerStore : LedgerStore {
 
   override fun sourceBlocked(itemId: Long) = itemId in blocked
 
+  override fun outHistory(category: String, currency: String, from: Long, excludeId: Long) =
+    txns.values.filter { it.id != excludeId && !it.own && it.direction == Direction.OUT && it.category == category && it.currency == currency && it.at >= from }.map { it.amountMinor }
+
+  override fun knownCounterparties(excludeId: Long) =
+    txns.values.filter { it.id != excludeId }.flatMap { listOfNotNull(it.counterparty, it.label) }.toSet()
+
   override fun clearByAi(id: Long) {
     txns[id] = txns.getValue(id).copy(byAi = false)
   }

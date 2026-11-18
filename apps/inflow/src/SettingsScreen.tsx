@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Button, Field, Group, Header, Notice, RecordMenu, Row, Screen, Segmented, Sheet, Text, confirmAction } from '@apps-hub/ui';
 import InflowCore, { type AppSetting, type SenderName, type Status } from 'inflow-core';
 import { AiSettings } from './AiSettings.tsx';
+import { AutopilotSettings } from './AutopilotSettings.tsx';
 import { keepLabel } from './format.ts';
 import { GmailSettings } from './GmailSettings.tsx';
 import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
@@ -10,6 +11,7 @@ import { keepBlockConfirm, removeNameConfirm, type Confirm } from './records.ts'
 import { RenameSheet, type RenameTarget } from './RenameSheet.tsx';
 import { setupRowElements, useSetupAction } from './SetupScreen.tsx';
 import { setupRows } from './setup.ts';
+import { SuggestionsScreen } from './SuggestionsScreen.tsx';
 
 const KEEP = [null, 365, 90, 30] as const;
 const keepKey = (days: number | null) => (days === null ? 'forever' : String(days));
@@ -39,6 +41,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
   const [ownerName, setOwnerName] = useState('');
   const [blocks, setBlocks] = useState<string[]>([]);
   const [mediaLine, setMediaLine] = useState('');
+  const [sub, setSub] = useState<'autopilot' | 'suggestions' | null>(null);
   const { run, notice } = useSetupAction(refreshStatus);
 
   const load = useCallback(() => {
@@ -72,6 +75,9 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
     if (app) change(() => InflowCore.setRecord(app.pkg, false, deleteSaved));
   };
 
+  if (sub === 'autopilot') return <AutopilotSettings onBack={() => setSub(null)} />;
+  if (sub === 'suggestions') return <SuggestionsScreen onBack={() => setSub(null)} />;
+
   return (
     <Screen scroll>
       <Header title="Settings" />
@@ -89,6 +95,10 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
         returnKeyType="done"
         autoCapitalize="words"
       />
+      <Group title="Autopilot">
+        <Row title="Autopilot" subtitle="Choose what Inflow suggests and which chats it reads" onPress={() => setSub('autopilot')} />
+        <Row title="Suggestions" subtitle="What is waiting and what you ran or skipped" onPress={() => setSub('suggestions')} />
+      </Group>
       <GmailSettings />
       <AiSettings />
       <Group title="Kept from AI" footer="Inflow never sends these to the AI.">

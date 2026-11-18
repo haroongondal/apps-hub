@@ -71,6 +71,19 @@ class LedgerBackfillTest {
     assertEquals(1, ledgerStore.sourceCount(ledgerStore.txns.keys.single()))
   }
 
+  @Test fun backfillTakesOnlySmsAndGmailItems() {
+    save(card, t0, pkg = "com.whatsapp", sms = false)
+    save(card.replace("1,500.00", "2,500.00"), t0 + hour, pkg = "com.bank.app", sms = false)
+    runAll()
+    assertTrue(ledgerStore.txns.isEmpty())
+    save(card.replace("1,500.00", "3,500.00"), t0 + 2 * hour, pkg = Email.GMAIL, sms = false)
+    save(card.replace("1,500.00", "4,500.00"), t0 + 3 * hour)
+    items.setMeta("ledgerPatternsVersion", "0")
+    items.setMeta("backfillCursor", "")
+    assertEquals(2, runAll().linked)
+    assertEquals(setOf(350_000L, 450_000L), ledgerStore.txns.values.map { it.amountMinor }.toSet())
+  }
+
   @Test fun backfillSkipsOtpAndBlankItems() {
     save(card, t0, otp = t0 + 5 * min)
     save("   ", t0 + hour)
