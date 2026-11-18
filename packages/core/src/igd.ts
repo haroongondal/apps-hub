@@ -30,10 +30,10 @@ const XML_NAMED: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"
 const decodeXml = (s: string): string =>
   s.replace(/&(amp|lt|gt|quot|apos);/g, (_, e: string) => XML_NAMED[e]);
 
-// Linear scan, unlike a lazy regex, which goes quadratic on many unterminated "<!--".
 /** Inner text of each <service> block. The /g regex stays private: a caller's .test() would move its lastIndex. */
 export const serviceBlocks = (xml: string): string[] => Array.from(xml.matchAll(SERVICE_BLOCK), (m) => m[1]);
 
+// Linear scan, unlike a lazy regex, which goes quadratic on many unterminated "<!--".
 export function withoutComments(xml: string): string {
   let out = '';
   let pos = 0;
