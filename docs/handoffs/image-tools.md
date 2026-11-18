@@ -180,6 +180,13 @@ test (plan `docs/superpowers/plans/2026-11-18-image-tools-fixes.md`, ledger
 `.superpowers/sdd/2026-11-18-image-tools-fixes/progress.md`). Item 8 (blank sheet) had no code change: the
 screenshots were broken captures. image-tools is NOT merged to main: a Design Editor release from main or
 photo-search would drop features 2-3 and bring the telemetry back.
+Phone test of 15 over adb (2026-11-18, qa15/ screenshots): PASS picture picker (Android Files picker, no camera
+entry; one photo, two at once, a 4000x3000 photo, Back cancels clean), Undo keeps selection and panel, 4x Upscale
+progress+Cancel stay visible while scrolling and Cancel cancels cleanly, Person cut-out under 3 s. Layout bug still
+there: the dashed 'Choose pictures' box overlaps the 'Uploads' heading. NOT yet run: Object (arm ghost), 2x upscale of
+a cut-out (rim), Clean up (biggest copy Best, 30 days), cleanup of test photos. Wi-Fi adb dropped again at 23:49
+(drops every 10-20 min of use: ask the owner for USB adb). LEFT ON PHONE: /sdcard/Pictures/ImageToolsTest/ with 5
+ittest-*.jpg scanned into MediaStore; an unsaved test design in Continue (the old owner draft was probably replaced).
 Next:
 1. Owner installs build 15 from the Store (never adb-install). Then claim the phone (join the queue if held)
    and check over adb, first item 6 (adding a picture from Uploads: no camera entry, big photo, several
