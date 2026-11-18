@@ -30,4 +30,11 @@ class FormatTest {
     assertEquals("0%", batteryText(-3, false))
     assertEquals("82% charging", batteryText(82, true))
   }
+
+  @Test fun durationText_minutes_and_hours() {
+    assertEquals("00:00", durationText(0))
+    assertEquals("03:12", durationText(192_000))
+    assertEquals("1:02:05", durationText(3_725_000))
+    assertEquals("00:00", durationText(-5))
+  }
 }

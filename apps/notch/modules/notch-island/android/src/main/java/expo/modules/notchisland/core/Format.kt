@@ -21,3 +21,12 @@ fun batteryText(percent: Int, charging: Boolean): String {
   val p = percent.coerceIn(0, 100)
   return if (charging) "$p% charging" else "$p%"
 }
+
+fun durationText(ms: Long): String {
+  val total = maxOf(0L, ms) / 1000
+  val h = total / 3600
+  val m = (total % 3600) / 60
+  val s = total % 60
+  val ss = s.toString().padStart(2, '0')
+  return if (h > 0) "$h:${m.toString().padStart(2, '0')}:$ss" else "${m.toString().padStart(2, '0')}:$ss"
+}
