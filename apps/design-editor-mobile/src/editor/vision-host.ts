@@ -17,7 +17,7 @@ export interface VisionHostDeps {
   readBase64(uri: string, position: number, length: number): Promise<string>;
   size(uri: string): Promise<number>;
   remove(uri: string): Promise<void>;
-  getTool(tool: VisionTool, onProgress: (fraction: number) => void): Promise<SearchToolResult>;
+  getTool(tool: VisionTool, onProgress: (fraction: number) => void, signal: AbortSignal): Promise<SearchToolResult>;
   tools(): Promise<{ tool: string }[]>;
   runVision(id: string, op: VisionOp, path: string, option: string): Promise<string>;
   cancelVision(id: string): Promise<void>;
@@ -39,6 +39,7 @@ export function createVisionHost(d: VisionHostDeps) {
   const results = new Map<string, { uri: string; bytes: number }>();
   const running = new Set<string>();
   const cancelled = new Set<string>();
+  const downloads = new Map<string, AbortController>();
   const swept = d.remove(d.dir).catch(() => {});
   const src = (id: string) => `${d.dir}${id}.src`;
   const checkId = (id: unknown): string => {
@@ -56,6 +57,7 @@ export function createVisionHost(d: VisionHostDeps) {
   async function cancel(rawId: string) {
     const id = checkId(rawId);
     cancelled.add(id);
+    downloads.get(id)?.abort();
     try {
       await d.cancelVision(id);
     } finally {
@@ -97,13 +99,16 @@ export function createVisionHost(d: VisionHostDeps) {
         await d.writeBase64(src(id), parts.join(''));
         if (cancelled.has(id)) return null;
         let downloading = false;
+        const abort = new AbortController();
+        downloads.set(id, abort);
         const got = await d.getTool(op === 'cutout' ? (option as VisionTool) : 'upscale', f => {
           if (f < 1) downloading = true;
           if (downloading && !cancelled.has(id)) d.send({ id, phase: 'download', fraction: f });
-        });
+        }, abort.signal);
+        // Cancel aborts the download, which answers 'offline': settle as cancelled, not as an error.
+        if (cancelled.has(id)) return null;
         const message = visionToolMessage(got);
         if (message) throw new Error(message);
-        if (cancelled.has(id)) return null;
         let out: string;
         try {
           out = await d.runVision(id, op, src(id).replace(/^file:\/\//, ''), option);
@@ -126,6 +131,7 @@ export function createVisionHost(d: VisionHostDeps) {
       } finally {
         sub.remove();
         running.delete(id);
+        downloads.delete(id);
         await d.remove(src(id));
       }
     },

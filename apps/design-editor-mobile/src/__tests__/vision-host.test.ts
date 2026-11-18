@@ -5,7 +5,7 @@ import { createVisionHost, PIECE_BYTES, VISION_ID, type VisionHostDeps, type Vis
 
 const DIR = 'file:///cache/vision/';
 
-function fake(opts: { tool?: SearchToolResult; out?: Buffer; runFails?: Error; readFails?: Error | boolean; onRun?: () => Promise<void>; onTool?: (p: (f: number) => void) => Promise<void> } = {}) {
+function fake(opts: { tool?: SearchToolResult; out?: Buffer; runFails?: Error; readFails?: Error | boolean; onRun?: () => Promise<void>; onTool?: (p: (f: number) => void, signal?: AbortSignal) => Promise<void> } = {}) {
   const files = new Map<string, Buffer>();
   const sent: VisionProgress[] = [];
   const calls = { writes: 0, runs: [] as string[][], cancels: [] as string[], tools: [] as string[], removes: [] as string[] };
@@ -20,9 +20,9 @@ function fake(opts: { tool?: SearchToolResult; out?: Buffer; runFails?: Error; r
     },
     size: async uri => files.get(uri)!.length,
     remove: async uri => { calls.removes.push(uri); files.delete(uri); },
-    async getTool(tool, onProgress) {
+    async getTool(tool, onProgress, signal) {
       calls.tools.push(tool);
-      if (opts.onTool) await opts.onTool(onProgress);
+      if (opts.onTool) await opts.onTool(onProgress, signal);
       else onProgress(1);
       return opts.tool ?? 'ready';
     },
@@ -117,6 +117,32 @@ test('cancelDuringDownloadStopsBeforeTheRunAndResolvesNull', async () => {
   assert.equal(await f.host.run('v5', 'cutout', 'person', 1), null);
   assert.equal(f.calls.runs.length, 0, 'Kotlin never ran');
   assert.deepEqual(f.calls.cancels, ['v5']);
+  assert.equal(f.files.size, 0);
+});
+
+test('cancelDuringDownloadAbortsItAndTheRunSettlesAtOnce', async () => {
+  // like the real download: it never finishes by itself, the abort ends it and getSearchTool answers 'offline'
+  const f = fake({
+    tool: 'offline',
+    onTool: (p, signal) => new Promise<void>(done => { p(0.2); signal?.addEventListener('abort', () => done(), { once: true }); }),
+  });
+  send(f.host, 'v20', Buffer.from('img'));
+  const run = f.host.run('v20', 'cutout', 'person', 1);
+  await new Promise(r => setImmediate(r));
+  await f.host.cancel('v20');
+  const out = await Promise.race([run, new Promise(r => setTimeout(() => r('hung'), 500))]);
+  assert.equal(out, null, 'settles as a cancelled run, not an error');
+  assert.equal(f.calls.runs.length, 0);
+  assert.equal(f.files.size, 0);
+  assert.equal(f.sent.filter(m => m.fraction === 1).length, 0);
+});
+
+test('cancelTwiceOrAfterTheDownloadIsAHarmlessNoOp', async () => {
+  const f = fake();
+  send(f.host, 'v21', Buffer.from('img'));
+  await f.host.run('v21', 'cutout', 'person', 1);
+  await f.host.cancel('v21');
+  await f.host.cancel('v21');
   assert.equal(f.files.size, 0);
 });
 
