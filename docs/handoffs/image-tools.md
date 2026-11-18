@@ -186,9 +186,9 @@ drop features 2-3 and bring the telemetry back. Next:
    Small; YuNet; GFPGAN licence/size check first).
 Phone test of 14 over adb (owner asked, 2026-11-18; brief `.superpowers/sdd/2026-11-18-image-tools-2.2/phone-check/qa-brief.md`):
 A1 palette PASS, A2 enhance+Undo PASS; Wi-Fi adb dropped right after tapping Remove background > Person
-and did not return (possible crash/reboot: check uptime and logcat when back). LEFT ON PHONE: test photos
-/sdcard/Pictures/ImageToolsTest/ittest-{dog-a,dog-b,dog-half,girl}.jpg (MediaStore ids 1000086248-51):
-rm -r the folder, scan_file each path, confirm the relative_path query is empty. The agent also edited the
+and did not return (possible crash/reboot: check uptime and logcat when back). Test photos removed afterwards
+(folder gone, MediaStore query empty). Not a crash: uptime 19 h, app still running, crash buffer has no
+Design Editor entry; wireless debugging had switched itself off. The agent also edited the
 unsaved 'Continue' draft in Design Editor (was blank; now orange background + girl photo): owner to reset.
 Observations: 'Photo' in the image chooser opens the camera, not the gallery; sheet renders blank for 2-5 s
 after a tap; Undo deselects the image. Remaining checks: A3-A6, C1-C5.
