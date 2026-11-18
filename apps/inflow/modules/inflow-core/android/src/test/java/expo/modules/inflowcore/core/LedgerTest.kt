@@ -340,6 +340,41 @@ class LedgerTest {
     assertEquals("Food", store.get(a!!)!!.category)
   }
 
+  @Test fun ownerCategoryIsNeverOverwrittenByAi() {
+    val id = ai(aiMoney(amount = 700, category = "Other"), Channel.NOTIFICATION, t0)!!
+    store.setCategory(id, "Rent")
+    assertTrue(store.get(id)!!.categorySet)
+    store.setAiDetails(id, "Food & dining", "KFC")
+    assertEquals("Rent", store.get(id)!!.category)
+    assertEquals("KFC", store.get(id)!!.label)
+    // The item AI run reaching the same txn again also leaves the owner's choice alone.
+    ledger.onAi(nextItem - 1, aiMoney(amount = 700, category = "Groceries"), Channel.NOTIFICATION, t0)
+    assertEquals("Rent", store.get(id)!!.category)
+  }
+
+  @Test fun ownerCategoryOfAReplacedAiTxnSurvivesDedupOntoACategorisedTxn() {
+    item(debit("999.00"), Channel.SMS, t0 - 180 * min)   // makes "Alfalah 2310" a known account
+    val aiTxn = ai(aiMoney(amount = 150_000, account = "Alfalah 2310", category = "Other"), Channel.NOTIFICATION, t0)!!
+    val source = nextItem - 1
+    store.setCategory(aiTxn, "Rent")
+    val pattern = item(debit("1,500.00"), Channel.SMS, t0 + 30 * min)!!   // outside the merge window: its own txn
+    store.setAiDetails(pattern, "Health", null)
+    assertEquals(pattern, ledger.onItem(source, debit("1,500.00"), Channel.NOTIFICATION, t0 + 31 * min))
+    assertNull(store.get(aiTxn))
+    assertEquals("Rent", store.get(pattern)!!.category)
+    assertTrue(store.get(pattern)!!.categorySet)
+  }
+
+  @Test fun clearingOwnerCategoryLetsAiFillItAgain() {
+    val id = ai(aiMoney(amount = 700, category = "Other"), Channel.NOTIFICATION, t0)!!
+    store.setCategory(id, "Rent")
+    store.setCategory(id, null)
+    assertFalse(store.get(id)!!.categorySet)
+    assertNull(store.get(id)!!.category)
+    store.setAiDetails(id, "Food & dining", null)
+    assertEquals("Food & dining", store.get(id)!!.category)
+  }
+
   @Test fun aiOwnerNameStillMarksAnAiOnlyTxnOwn() {
     owner = "Haroon Mukhtar"
     val id = ai(aiMoney(amount = 700, counterparty = "HAROON MUKHTAR"), Channel.NOTIFICATION, t0)!!
@@ -466,5 +501,44 @@ class LedgerTest {
     )
     texts.forEachIndexed { i, text -> item(text, Channel.SMS, t0 + i * 60 * min) }
     assertEquals(500000L + 249000 + 150000 + 30000 + 389700, store.txns.values.filter { it.direction == Direction.OUT }.sumOf { it.amountMinor })
+  }
+
+  // The owner's edits and deletes of a transaction.
+
+  @Test fun theOwnerSetsAndClearsTheCleanName() {
+    val id = item(debit(), Channel.SMS, t0)!!
+    assertTrue(ledger.editLabel(id, "Shaafi Hospital"))
+    assertEquals("Shaafi Hospital", store.get(id)!!.label)
+    assertTrue(ledger.editLabel(id, null))   // unlike the AI, an edit can clear it
+    assertNull(store.get(id)!!.label)
+    assertFalse(ledger.editLabel(999, null))
+  }
+
+  @Test fun deletingATransactionRemovesItAndBlocksItsSourceItems() {
+    val first = nextItem
+    val id = item(debit(), Channel.SMS_NOTIFICATION, t0)!!
+    item(debit(), Channel.SMS, t0 + min)   // merges: a second source
+    assertEquals(2, store.sourceCount(id))
+    assertTrue(ledger.deleteByOwner(id))
+    assertTrue(store.txns.isEmpty())
+    assertTrue(store.sourceBlocked(first) && store.sourceBlocked(first + 1))
+    // A blocked item is never read into a transaction again (the backfill or a late AI result).
+    assertNull(ledger.onItem(first, debit(), Channel.SMS, t0))
+    assertNull(ledger.onAi(first, aiMoney(amount = 150_000), Channel.SMS, t0))
+    assertTrue(store.txns.isEmpty())
+    assertFalse(ledger.deleteByOwner(id))
+  }
+
+  @Test fun deletingOneSideOfAnOwnTransferKeepsTheOtherAnUnpairedOwnTransfer() {
+    val out = item(debit("50,000.00"), Channel.SMS, t0)!!
+    val inn = item(ubl("50,000", "1"), Channel.SMS, t0 + 20 * min)!!
+    assertTrue(store.get(out)!!.own && store.get(inn)!!.own)
+    assertEquals(minOf(out, inn), store.get(inn)!!.pairId)
+    assertTrue(ledger.deleteByOwner(out))
+    val left = store.get(inn)!!
+    assertTrue(left.own)
+    assertTrue(left.ownSet)   // a name change can no longer flip it
+    assertNull(left.pairId)
+    assertNull(store.get(out))
   }
 }

@@ -110,6 +110,29 @@ class JobQueueTest {
   }
 
   @Test
+  fun removeDropsOnlyThatFinishedRowAndLeavesTheRestInOrder() {
+    val done = queued.copy(state = JobState.DONE, outputs = listOf(Output("a.mp4", "r", 1)))
+    val failed = other.copy(state = JobState.FAILED)
+    val third = other.copy(id = "job-z", state = JobState.CANCELLED)
+    val q = reduce(listOf(done, failed, third), QueueEvent.Remove(failed.id))
+    assertEquals(listOf(done.id, third.id), q.map { it.id })
+    assertEquals(done.outputs, q[0].outputs)
+  }
+
+  @Test
+  fun removeLeavesRunningAndWaitingJobsAloneButTakesPausedAndInterruptedRows() {
+    val rows = listOf(
+      queued.copy(state = JobState.RUNNING), other.copy(id = "w", state = JobState.QUEUED),
+      other.copy(id = "p", state = JobState.PAUSED), other.copy(id = "i", state = JobState.INTERRUPTED),
+    )
+    assertEquals(rows, reduce(rows, QueueEvent.Remove(queued.id)))
+    assertEquals(rows, reduce(rows, QueueEvent.Remove("w")))
+    assertEquals(listOf(queued.id, "w", "i"), reduce(rows, QueueEvent.Remove("p")).map { it.id })
+    assertEquals(listOf(queued.id, "w", "p"), reduce(rows, QueueEvent.Remove("i")).map { it.id })
+    assertEquals(rows, reduce(rows, QueueEvent.Remove("nope")))
+  }
+
+  @Test
   fun reduceDoesNotChangeTheInput() {
     val before = listOf(queued)
     reduce(before, QueueEvent.Cancel("all"))

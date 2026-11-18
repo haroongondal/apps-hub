@@ -1,6 +1,7 @@
 package expo.modules.inflowcore.core
 
 import java.io.IOException
+import java.net.SocketTimeoutException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -98,6 +99,25 @@ class AiProviderTest {
     assertEquals(AiError.Kind.OFFLINE, e.kind)
     assertEquals("Inflow couldn't reach the model. Check the phone's connection and try again.", e.message)
     assertEquals(4, http.calls.size)
+  }
+
+  @Test fun aReadTimeoutAfterTheRequestWasSentIsNotRetried() {
+    val http = Fake(SocketTimeoutException("Read timed out"), ok)
+    val e = failure { provider(http).complete("s", "u") }
+    assertEquals(AiError.Kind.TIMEOUT, e.kind)
+    assertEquals("The AI took too long to answer. Inflow will try again later.", e.message)
+    assertEquals(1, http.calls.size)
+    assertTrue(http.sleeps.isEmpty())
+  }
+
+  @Test fun aGatewayTimeoutIsATimeoutAndIsNotRetried() {
+    for (code in listOf(504, 524)) {
+      val http = Fake(HttpReply(code, "gateway timeout"), ok)
+      val e = failure { provider(http).complete("s", "u") }
+      assertEquals(AiError.Kind.TIMEOUT, e.kind)
+      assertEquals(1, http.calls.size)
+      assertTrue(http.sleeps.isEmpty())
+    }
   }
 
   @Test fun aDroppedConnectionIsRetriedOnce() {

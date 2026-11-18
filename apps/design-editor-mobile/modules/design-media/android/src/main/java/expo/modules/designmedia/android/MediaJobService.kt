@@ -89,6 +89,7 @@ class MediaJobService : Service() {
         ACTION_CANCEL -> cancel(id)
         ACTION_CANCEL_ALL -> cancel(ALL)
         ACTION_RESUME -> record(QueueEvent.Resume)
+        ACTION_REMOVE -> record(QueueEvent.Remove(id))
         ACTION_CLEAR -> clear()
       }
       pump()
@@ -201,7 +202,12 @@ class MediaJobService : Service() {
     when (outcome) {
       is Outcome.Failed -> {
         Log.w(TAG, "${r.plan.tool} failed: ${outcome.detail}")
-        if (outcome.detail == PhotoIndexRunner.MODELS_MISSING) giveUp(r, Messages.TOOL_MISSING) else encoderFailed(r, failureMessage(r.plan))
+        when (outcome.detail) {
+          PhotoIndexRunner.MODELS_MISSING -> giveUp(r, Messages.TOOL_MISSING)
+          ImageRunner.NO_GAIN -> giveUp(r, Messages.IMAGE_NO_GAIN)
+          ImageRunner.LEFT_ALONE -> giveUp(r, Messages.IMAGE_HDR)
+          else -> encoderFailed(r, failureMessage(r.plan))
+        }
       }
       is Outcome.Written -> {
         r.label = outcome.label
@@ -383,6 +389,7 @@ class MediaJobService : Service() {
     private const val ACTION_CANCEL_ALL = "expo.modules.designmedia.CANCEL_ALL"
     private const val ACTION_RESUME = "expo.modules.designmedia.RESUME"
     private const val ACTION_CLEAR = "expo.modules.designmedia.CLEAR"
+    private const val ACTION_REMOVE = "expo.modules.designmedia.REMOVE"
     private const val EXTRA_JOBS = "jobs"
     private const val EXTRA_CBR_ONLY = "cbrOnly"
     private const val EXTRA_ID = "id"
@@ -399,6 +406,8 @@ class MediaJobService : Service() {
     fun cancel(context: Context, id: String) = send(context, ACTION_CANCEL) { putExtra(EXTRA_ID, id) }
 
     fun resume(context: Context) = send(context, ACTION_RESUME)
+
+    fun remove(context: Context, id: String) = send(context, ACTION_REMOVE) { putExtra(EXTRA_ID, id) }
 
     fun clearQueue(context: Context) = send(context, ACTION_CLEAR)
 

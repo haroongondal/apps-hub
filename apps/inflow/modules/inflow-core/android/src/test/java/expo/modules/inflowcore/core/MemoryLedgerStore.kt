@@ -4,6 +4,7 @@ class MemoryLedgerStore : LedgerStore {
   val txns = LinkedHashMap<Long, Txn>()
   private val sources = HashMap<Long, Long>()   // itemId -> txnId
   private var nextId = 1L
+  val tries = HashMap<Long, Int>()   // txnId -> category_tries
 
   override fun near(direction: Direction, amountMinor: Long, currency: String, from: Long, to: Long) =
     txns.values.filter { it.direction == direction && it.amountMinor == amountMinor && it.currency == currency && it.at in from..to }
@@ -52,7 +53,19 @@ class MemoryLedgerStore : LedgerStore {
   override fun undecided() = txns.values.filter { !it.ownSet && it.pairId == null }
 
   override fun setAiDetails(id: Long, category: String, label: String?) {
-    txns[id] = txns.getValue(id).let { it.copy(category = category, label = label ?: it.label) }
+    txns[id] = txns.getValue(id).let { it.copy(category = if (it.categorySet) it.category else category, label = label ?: it.label) }
+  }
+
+  override fun setCategory(id: Long, category: String?) {
+    txns[id] = txns.getValue(id).copy(category = category, categorySet = category != null)
+    if (category == null) tries.remove(id)
+  }
+
+  override fun uncategorized(limit: Int) =
+    txns.values.filter { it.category == null && !it.categorySet && (tries[it.id] ?: 0) < 3 }.sortedWith(compareByDescending<Txn> { it.at }.thenByDescending { it.id }).take(limit)
+
+  override fun categoryTried(ids: List<Long>) {
+    ids.forEach { tries[it] = (tries[it] ?: 0) + 1 }
   }
 
   override fun sourceCount(txnId: Long) = sources.values.count { it == txnId }
@@ -61,6 +74,18 @@ class MemoryLedgerStore : LedgerStore {
     txns.remove(id)
     sources.values.removeAll { it == id }
   }
+
+  val blocked = mutableSetOf<Long>()   // items whose transaction the owner deleted
+
+  override fun setOwnerLabel(id: Long, label: String?) {
+    txns[id] = txns.getValue(id).copy(label = label)
+  }
+
+  override fun blockSources(txnId: Long) {
+    blocked += sources.filterValues { it == txnId }.keys
+  }
+
+  override fun sourceBlocked(itemId: Long) = itemId in blocked
 
   override fun clearByAi(id: Long) {
     txns[id] = txns.getValue(id).copy(byAi = false)

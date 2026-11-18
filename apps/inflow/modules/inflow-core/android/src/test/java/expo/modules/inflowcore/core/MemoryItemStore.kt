@@ -107,6 +107,26 @@ class MemoryItemStore : ItemStore, AiStore, BackfillStore {
     return mine.size
   }
 
+  // Mirrors SqlItemStore.removeByOwner: the item's hash, SMS hash and email hash are tombstoned (not its text hash).
+  override fun deleteItem(id: Long): Boolean {
+    val hash = items.entries.firstOrNull { it.value.id == id }?.key ?: return false
+    removeByOwner(hash)
+    return true
+  }
+
+  override fun deleteConversation(key: String): Int {
+    val hashes = items.filterValues { it.capture.conversationKey == key }.keys.toList()
+    hashes.forEach(::removeByOwner)
+    return hashes.size
+  }
+
+  private fun removeByOwner(hash: String) {
+    val item = items.remove(hash) ?: return
+    tombstones.add(hash)
+    item.smsHash?.let(tombstones::add)
+    forget(item)
+  }
+
   // Retention and deleteApp take the item's tombstone, queue entry, result and to-dos with it.
   private fun forget(item: StoredItem?) {
     item ?: return

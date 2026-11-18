@@ -1,4 +1,4 @@
-import type { Txn } from 'inflow-core';
+import type { MoneySummary, Txn } from 'inflow-core';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -28,3 +28,39 @@ export function withinMonth(page: Txn[], from: number, to: number): { rows: Txn[
 }
 
 export const signedAmount = (t: Pick<Txn, 'direction' | 'amount' | 'currency'>): string => `${t.direction === 'in' ? '+' : '-'}${formatAmount(t.amount, t.currency)}`;
+
+export const partyTitle = (p: { name: string | null; own: boolean }): string => (p.own ? 'Between your accounts' : (p.name ?? 'Unknown'));
+
+export function partySubtitle(p: { currency: string; moneyIn: number; moneyOut: number; count: number }): string {
+  const sides = [p.moneyIn > 0 ? `in ${formatAmount(p.moneyIn, p.currency)}` : null, p.moneyOut > 0 ? `out ${formatAmount(p.moneyOut, p.currency)}` : null].filter((s) => s !== null);
+  const text = [...sides, `${p.count} ${p.count === 1 ? 'transaction' : 'transactions'}`].join(' · ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+export interface MonthOverview {
+  currency: string;
+  moneyIn: number;
+  moneyOut: number;
+  net: number;
+  count: number;
+  categories: { category: string; total: number; count: number; share: number }[];
+}
+
+// One entry per currency, biggest first. Category share is a percent of that currency's money out.
+export function monthOverview(s: MoneySummary): MonthOverview[] {
+  const byCurrency = new Map<string, MonthOverview>();
+  for (const a of s.accounts) {
+    const o = byCurrency.get(a.currency) ?? { currency: a.currency, moneyIn: 0, moneyOut: 0, net: 0, count: 0, categories: [] };
+    o.moneyIn += a.moneyIn;
+    o.moneyOut += a.moneyOut;
+    o.count += a.count;
+    byCurrency.set(a.currency, o);
+  }
+  for (const o of byCurrency.values()) {
+    o.net = o.moneyIn - o.moneyOut;
+    o.categories = s.categories
+      .filter((c) => c.currency === o.currency)
+      .map((c) => ({ category: c.category, total: c.total, count: c.count, share: o.moneyOut > 0 ? (c.total / o.moneyOut) * 100 : 0 }));
+  }
+  return [...byCurrency.values()].sort((x, y) => y.moneyIn + y.moneyOut - (x.moneyIn + x.moneyOut));
+}

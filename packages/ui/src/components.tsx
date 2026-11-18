@@ -1,6 +1,7 @@
-import React, { Children, Fragment, isValidElement, useEffect, useRef, useState, type ReactNode } from 'react';
+import React, { Children, Fragment, isValidElement, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Keyboard,
   Modal,
@@ -67,9 +68,10 @@ export interface ScreenProps {
   refreshing?: boolean;
   onRefresh?: () => void;
   style?: StyleProp<ViewStyle>;
+  scrollRef?: Ref<ScrollView>;
 }
 
-export function Screen({ children, scroll, refreshing, onRefresh, style }: ScreenProps) {
+export function Screen({ children, scroll, refreshing, onRefresh, style, scrollRef }: ScreenProps) {
   const { c, scheme } = useTheme();
   const insets = useSafeAreaInsets();
   const bar = <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />;
@@ -78,6 +80,7 @@ export function Screen({ children, scroll, refreshing, onRefresh, style }: Scree
       <View style={{ flex: 1, backgroundColor: c.bg }}>
         {bar}
         <ScrollView
+          ref={scrollRef}
           keyboardShouldPersistTaps="handled"
           refreshControl={
             onRefresh && (
@@ -590,4 +593,90 @@ export function Sheet({ visible, onClose, title, doneLabel = 'Done', onDone, chi
       </View>
     </Modal>
   );
+}
+
+export interface RecordAction {
+  label: string;
+  onPress: () => void;
+  /** Styles the action as destructive and asks for confirmation before running it. */
+  destructive?: boolean;
+  /** Confirmation copy for a destructive action; defaults to a generic prompt. */
+  confirmTitle?: string;
+  confirmMessage?: string;
+  confirmLabel?: string;
+}
+
+/** Runs `onConfirm` only after the person agrees. Wraps the native alert so every app words it the same way. */
+export function confirmAction({ title, message, confirmLabel = 'Delete', onConfirm }: { title: string; message?: string; confirmLabel?: string; onConfirm: () => void }) {
+  Alert.alert(title, message, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: confirmLabel, style: 'destructive', onPress: onConfirm },
+  ]);
+}
+
+/**
+ * Three-dot trigger for a record row. Opens a sheet listing the record's actions
+ * (typically Edit and Delete). Destructive actions confirm before they run.
+ * Put it in a Row's `trailing` slot.
+ */
+export function RecordMenu({ title, actions, accessibilityLabel }: { title: string; actions: RecordAction[]; accessibilityLabel?: string }) {
+  const { c } = useTheme();
+  const [open, setOpen] = useState(false);
+  const run = (a: RecordAction) => {
+    setOpen(false);
+    // Let the sheet finish closing first. Android drops an alert opened mid-dismiss, and iOS won't present a Modal while one is closing,
+    // so a sheet opened from an action would never appear.
+    if (!a.destructive) return void setTimeout(a.onPress, 250);
+    setTimeout(() => confirmAction({ title: a.confirmTitle ?? `${a.label} this?`, message: a.confirmMessage ?? 'This can\u2019t be undone.', confirmLabel: a.confirmLabel ?? a.label, onConfirm: a.onPress }), 250);
+  };
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel ?? `More actions for ${title}`}
+        hitSlop={space.xs}
+        android_ripple={{ color: c.raised, radius: 22, borderless: true }}
+        style={({ pressed }) => ({ width: touch, height: touch, alignItems: 'center', justifyContent: 'center', gap: 3, borderRadius: touch / 2, backgroundColor: pressed ? c.raised : 'transparent' })}
+      >
+        {[0, 1, 2].map((i) => (
+          <View key={i} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: c.muted }} />
+        ))}
+      </Pressable>
+      <Sheet visible={open} onClose={() => setOpen(false)} title={title} doneLabel="Cancel">
+        <Group>
+          {actions.map((a) => (
+            <Pressable
+              key={a.label}
+              onPress={() => run(a)}
+              accessibilityRole="button"
+              accessibilityLabel={a.label}
+              android_ripple={{ color: c.raised }}
+              style={({ pressed }) => ({ paddingHorizontal: space.lg, minHeight: touch + 8, justifyContent: 'center', backgroundColor: pressed ? c.raised : 'transparent' })}
+            >
+              <Text variant="bodyStrong" tone={a.destructive ? 'danger' : 'text'}>
+                {a.label}
+              </Text>
+            </Pressable>
+          ))}
+        </Group>
+      </Sheet>
+    </>
+  );
+}
+
+/** Convenience: the standard Edit + Delete pair, in that order, either optional. */
+export function editDeleteActions({ onEdit, onDelete, noun = 'item', name }: { onEdit?: () => void; onDelete?: () => void; noun?: string; name?: string }): RecordAction[] {
+  const out: RecordAction[] = [];
+  if (onEdit) out.push({ label: 'Edit', onPress: onEdit });
+  if (onDelete) {
+    out.push({
+      label: 'Delete',
+      onPress: onDelete,
+      destructive: true,
+      confirmTitle: name ? `Delete \u201c${name}\u201d?` : `Delete this ${noun}?`,
+      confirmMessage: 'This can\u2019t be undone.',
+    });
+  }
+  return out;
 }

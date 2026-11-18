@@ -20,6 +20,6 @@ function ago(at: number, now: number): string {
 export function clipSubtitle(clip: Clip, now: number): string {
   const parts = [ago(clip.at, now)];
   if (clip.source) parts.push(clip.source);
-  parts.push(clip.via === 'app' ? 'saved on open' : `noticed in ${clip.grabMs ?? '?'} ms`);
+  if (clip.via === 'app') parts.push('saved when you opened Clipboard');
   return parts.join(' · ');
 }

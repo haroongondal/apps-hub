@@ -94,6 +94,11 @@ data class ComposePlan(
   override val tool get() = "compose"
 }
 
+// Lossless: PNG is re-packed, JPEG loses its metadata (packages/media-core/src/image.ts).
+data class ImagePlan(val format: String, val ext: String) : Plan {
+  override val tool get() = "image"
+}
+
 data object PhotoIndexPlan : Plan {
   override val tool get() = "photo-index"
 }
@@ -119,7 +124,11 @@ fun planIndexStart(shown: List<Job>, id: String): IndexStart =
     IndexStart(job, job.id, old.map { it.id })
   } ?: IndexStart(null, shown.first { it.plan == PhotoIndexPlan && (it.state == JobState.QUEUED || it.state == JobState.RUNNING) }.id)
 
-fun failureMessage(plan: Plan): String = if (plan is PhotoIndexPlan) Messages.PHOTOS_FAILED else Messages.COULDNT_PROCESS
+fun failureMessage(plan: Plan): String = when (plan) {
+  is PhotoIndexPlan -> Messages.PHOTOS_FAILED
+  is ImagePlan -> Messages.IMAGE_FAILED
+  else -> Messages.COULDNT_PROCESS
+}
 
 // The photo scan has no CBR choice of its own, so enqueuing it must not undo the one set for waiting video jobs.
 fun cbrOnlyAfter(current: Boolean, jobs: List<Job>, cbr: Boolean): Boolean = if (jobs.any { it.plan != PhotoIndexPlan }) cbr else current
@@ -189,6 +198,9 @@ fun decodePlan(o: JsonObject): Plan = when (val tool = textOf(o, "tool")) {
   "reverse" -> ReversePlan(o.getValue("sound").jsonPrimitive.boolean, doubleOf(o, "quality"), textOf(o, "ext"))
   "stabilize" -> StabilizePlan(textOf(o, "level"), intOf(o, "search"), doubleOf(o, "quality"), textOf(o, "ext"))
   "compose" -> decodeComposePlan(o)
+  "image" -> ImagePlan(textOf(o, "format"), textOf(o, "ext")).also {
+    require(it.format in setOf("png", "jpg") && it.ext == it.format) { "Pick a PNG or JPEG image." }
+  }
   "photo-index" -> PhotoIndexPlan
   else -> throw IllegalArgumentException("Unknown tool: $tool")
 }
@@ -239,6 +251,11 @@ fun encodePlan(p: Plan): JsonObject = when (p) {
     p.audio?.let { a ->
       put("audio", buildJsonObject { put("codec", a.codec); a.bps?.let { put("bps", it) }; put("copy", a.copy) })
     }
+  }
+  is ImagePlan -> buildJsonObject {
+    put("tool", "image")
+    put("format", p.format)
+    put("ext", p.ext)
   }
   is FramePlan -> buildJsonObject {
     put("tool", "frame")

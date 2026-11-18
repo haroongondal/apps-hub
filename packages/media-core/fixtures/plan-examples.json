@@ -232,6 +232,16 @@
    "videoBps": 6220800,
    "plannedBytes": 11222400,
    "ext": "mp4"
+  },
+  "imagePng": {
+   "tool": "image",
+   "format": "png",
+   "ext": "png"
+  },
+  "imageJpg": {
+   "tool": "image",
+   "format": "jpg",
+   "ext": "jpg"
   }
  }
 }

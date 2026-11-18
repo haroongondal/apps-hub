@@ -1,32 +1,36 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { Button, Empty, Field, Group, Header, Notice, Row, Screen, Text } from '@apps-hub/ui';
+import { Button, Empty, Field, Group, Header, Notice, Readout, Row, Screen, Text, space } from '@apps-hub/ui';
 import InflowCore, { addCapturedListener, type HomeSummary, type Item, type ItemFilter, type MoneySummary, type Status } from 'inflow-core';
 import { dueLabel } from './ai.ts';
-import { whenLabel } from './format.ts';
+import { Bar } from './Bar.tsx';
+import { startOfToday, whenLabel } from './format.ts';
+import { ItemRow } from './ItemRow.tsx';
 import { ItemSheet } from './ItemSheet.tsx';
 import { healthNotice } from './health.ts';
 import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
-import { formatAmount, monthRange } from './money.ts';
+import { formatAmount, monthOverview, monthRange } from './money.ts';
+import { ConversationMenu, ItemMenu, itemRenameTarget } from './RecordMenus.tsx';
 import { RenameSheet, type RenameTarget } from './RenameSheet.tsx';
 
 const EMPTY_TEXT = "New notifications will appear here as they arrive. Inflow can't read ones that came before it was set up.";
-
-function startOfToday(): number {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
 
 export function HomeScreen({
   status,
   refreshStatus,
   onOpen,
+  onOpenContacts,
   onOpenMoney,
+  onOpenApps,
+  onOpenTodos,
 }: {
   status: Status;
   refreshStatus: () => void;
   onOpen: (filter: ItemFilter, title: string) => void;
+  onOpenContacts: (pkg: string, title: string) => void;
   onOpenMoney: () => void;
+  onOpenApps: () => void;
+  onOpenTodos: () => void;
 }) {
   const [summary, setSummary] = useState<HomeSummary | null>(null);
   const [money, setMoney] = useState<MoneySummary | null>(null);
@@ -108,13 +112,16 @@ export function HomeScreen({
     load();
   };
   const openTodoItem = (itemId: number) => {
+    if (itemId === 0) return;   // a to-do the owner added has no message to open
     try {
       setSelected(InflowCore.getItem(itemId));
     } catch {
       setError(LOAD_ERROR);
     }
   };
-  const empty = summary !== null && summary.conversations.length === 0 && summary.apps.length === 0;
+  const empty = summary !== null && !summary.hasItems;
+  // The card shows one currency (PKR is the only one so far).
+  const overview = money === null ? null : (monthOverview(money)[0] ?? null);
 
   return (
     <Screen scroll refreshing={refreshing} onRefresh={pull}>
@@ -135,32 +142,51 @@ export function HomeScreen({
       <Group title="Money">
         {!status.smsGranted ? (
           <Row title={<Text tone="muted">Allow SMS in Settings to see your spending.</Text>} onPress={onOpenMoney} />
-        ) : money === null || money.accounts.length === 0 ? (
+        ) : overview === null ? (
           <Row title={<Text tone="muted">No bank messages this month.</Text>} onPress={onOpenMoney} />
         ) : (
-          money.accounts.map((a) => (
-            <Row
-              key={`${a.account}|${a.currency}`}
-              title={a.account}
-              subtitle={`In ${formatAmount(a.moneyIn, a.currency)} · out ${formatAmount(a.moneyOut, a.currency)}`}
-              onPress={onOpenMoney}
-            />
-          ))
+          <Row
+            title={
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xl }}>
+                <Readout label="Out this month" value={formatAmount(overview.moneyOut, overview.currency)} />
+                <Readout label="In this month" value={formatAmount(overview.moneyIn, overview.currency)} tone="ok" />
+              </View>
+            }
+            onPress={onOpenMoney}
+          >
+            {overview.categories.slice(0, 3).map((cat) => (
+              <View key={cat.category} style={{ gap: space.xs }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text variant="meta">{cat.category}</Text>
+                  <Text variant="meta" tone="muted">{`${Math.round(cat.share)}%`}</Text>
+                </View>
+                <Bar fraction={cat.share / 100} />
+              </View>
+            ))}
+          </Row>
         )}
       </Group>
+      {summary !== null && summary.inbox.length > 0 && (
+        <Group title="Inbox">
+          {summary.inbox.map((a) => (
+            <Row
+              key={a.pkgs[0]}
+              title={a.label}
+              subtitle={a.today > 0 ? `${a.today} today` : whenLabel(a.lastAt, now)}
+              onPress={() => onOpenContacts(a.pkgs[0], a.label)}
+            />
+          ))}
+        </Group>
+      )}
       {summary !== null && summary.important.length > 0 && (
         <Group title="Important">
           {summary.important.map((i) => (
-            <Row
+            <ItemRow
               key={i.id}
-              title={i.displayName ?? i.sender ?? i.appLabel}
-              subtitle={
-                <View style={{ gap: 2 }}>
-                  <Text numberOfLines={2}>{i.ai?.summary ?? i.text}</Text>
-                  <Text variant="caption" tone="muted">{`${i.appLabel} · ${whenLabel(i.postedAt, now)}`}</Text>
-                </View>
-              }
+              item={i}
+              now={now}
               onPress={() => setSelected(i)}
+              menu={<ItemMenu item={i} onRename={setRenaming} onChanged={load} onError={setError} />}
             />
           ))}
         </Group>
@@ -180,11 +206,12 @@ export function HomeScreen({
               />
             ))
           )}
+          <Row title="See all" onPress={onOpenTodos} />
         </Group>
       )}
       {empty && <Empty title="Nothing saved yet" body={EMPTY_TEXT} />}
-      {summary !== null && !empty && (
-        <Group title="Messages">
+      {summary !== null && summary.hasItems && (
+        <Group title="Recent chats">
           {summary.conversations.map((r) => (
             <Row
               key={r.key}
@@ -196,25 +223,21 @@ export function HomeScreen({
               }
               onPress={() => onOpen({ kind: 'conversation', key: r.key }, r.name)}
               trailing={
-                <Text variant="caption" tone="muted" align="right">
-                  {r.today > 0 ? `${whenLabel(r.lastAt, now)}\n${r.today} today` : whenLabel(r.lastAt, now)}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                  <Text variant="caption" tone="muted" align="right">
+                    {r.today > 0 ? `${whenLabel(r.lastAt, now)}\n${r.today} today` : whenLabel(r.lastAt, now)}
+                  </Text>
+                  <ConversationMenu conversationKey={r.key} name={r.name} onRename={setRenaming} onChanged={load} onError={setError} />
+                </View>
               }
             />
           ))}
           <Row title="See all" onPress={() => onOpen({ kind: 'all' }, 'Everything')} />
         </Group>
       )}
-      {summary !== null && summary.apps.length > 0 && (
-        <Group title="Apps">
-          {summary.apps.map((a) => (
-            <Row
-              key={a.pkg}
-              title={a.label}
-              subtitle={`${a.today > 0 ? `${a.today} today · ` : ''}${whenLabel(a.lastAt, now)}`}
-              onPress={() => onOpen({ kind: 'app', pkg: a.pkg }, a.label)}
-            />
-          ))}
+      {summary !== null && summary.hasItems && (
+        <Group title="All apps">
+          <Row title="See every app" onPress={onOpenApps} />
         </Group>
       )}
       <ItemSheet
@@ -222,7 +245,11 @@ export function HomeScreen({
         onClose={() => setSelected(null)}
         onRename={(item) => {
           setSelected(null);
-          if (item.senderKey !== null) setRenaming({ senderKey: item.senderKey, sender: item.sender ?? item.appLabel, name: item.displayName });
+          setRenaming(itemRenameTarget(item));
+        }}
+        onDeleted={() => {
+          setSelected(null);
+          load();
         }}
         onShowSender={(name) => {
           setSelected(null);

@@ -22,3 +22,4 @@ export * from './plan-for.ts';
 export * from './timeline.ts';
 export * from './project.ts';
 export * from './compose.ts';
+export * from './image.ts';

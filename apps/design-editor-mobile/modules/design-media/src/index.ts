@@ -44,6 +44,7 @@ export interface DesignMediaModule {
   previewFrame(uri: string, timeS: number, width: number): Promise<string>; // one file:// JPEG, replaced by the next call
   resume(): Promise<void>; // re-queues paused and interrupted jobs
   clearQueue(): Promise<void>; // stops the running job, drops waiting ones, empties the list; outputs stay
+  removeJob(id: string): Promise<void>; // drops one finished, stopped, paused or interrupted row from the list; a running or waiting job stays, and outputs stay
   share(outputUri: string): Promise<void>; // ACTION_SEND with a read grant
   open(outputUri: string): Promise<void>; // ACTION_VIEW
   // Photo search: the pinned model files, the index job and the search itself. Nothing here uses the network.

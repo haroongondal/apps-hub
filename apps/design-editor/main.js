@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, Menu, dialog, ipcMain, net, safeStorage } from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { openMediaWindow, registerMedia } from './media.js';
@@ -104,6 +104,50 @@ ipcMain.handle('autosave-write', (_, saved) => {
     await fs.rename(autosavePath() + '.tmp', autosavePath());
   });
   return autosaving;
+});
+// Design with AI: the key is encrypted at rest and never leaves this process; the page only sends the request body
+const aiKeyPath = () => path.join(app.getPath('userData'), 'ai-key.bin');
+const readAiKey = async () => {
+  try { return safeStorage.decryptString(await fs.readFile(aiKeyPath())); } catch { return null; }
+};
+ipcMain.handle('ai-has-key', async () => !!(await readAiKey()));
+ipcMain.handle('ai-set-key', async (_, key) => {
+  key = typeof key === 'string' ? key.trim() : '';
+  if (!key) return { ok: false, error: 'bad' };
+  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'nosecure' };
+  await fs.writeFile(aiKeyPath(), safeStorage.encryptString(key));
+  return { ok: true };
+});
+const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+// The page picks the prompt and the tool, not the model, the spend or a server tool. Keep this in step with aiSanitise in apps/design-editor-mobile/src/editor/ai.ts.
+const AI_MODEL = 'claude-sonnet-5-5'; // keep in step with MODEL in packages/design-editor-engine/ai-layout.js
+function aiSanitise(body) {
+  if (!isObj(body) || !Array.isArray(body.messages)) return null;
+  if (body.tools !== undefined && (!Array.isArray(body.tools) || body.tools.some(t => !isObj(t) || 'type' in t))) return null;
+  const clean = { ...body, model: AI_MODEL, max_tokens: Math.min(Number(body.max_tokens) || 8000, 8000) };
+  delete clean.stream;
+  return clean;
+}
+ipcMain.handle('ai-request', async (_, page) => {
+  const body = aiSanitise(page);
+  if (!body) return { ok: false, status: 0, error: 'bad' };
+  const key = await readAiKey();
+  if (!key) return { ok: false, status: 0, error: 'nokey' };
+  try {
+    const res = await net.fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(60000),
+    });
+    const text = await res.text();
+    let json;
+    try { const parsed = JSON.parse(text); if (isObj(parsed)) json = parsed; } catch { /* an HTTP error page without JSON keeps its status */ }
+    if (res.ok && !json) return { ok: false, status: res.status, error: 'bad' };
+    return json ? { ok: res.ok, status: res.status, json } : { ok: res.ok, status: res.status };
+  } catch (e) {
+    return { ok: false, status: 0, error: e?.name === 'TimeoutError' ? 'timeout' : 'offline' };
+  }
 });
 registerMedia();
 ipcMain.on('doc-state', (_, { title, dirty, filePath }) => {

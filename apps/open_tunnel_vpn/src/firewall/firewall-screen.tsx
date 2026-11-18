@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { FlatList, RefreshControl, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Button,
   Dot,
@@ -12,10 +13,13 @@ import {
   Segmented,
   Sheet,
   Text,
+  confirmAction,
+  radius,
   space,
+  useTheme,
   type Tone,
 } from '@apps-hub/ui';
-import type { FirewallApi, FirewallRuleKind, FirewallStatus } from 'open-tunnel-native';
+import type { ActivityEntry, FirewallApi, FirewallRuleKind, FirewallStatus } from 'open-tunnel-native';
 
 import { formatBytes } from '../ui/format.ts';
 import { activityRow } from './activity.ts';
@@ -68,9 +72,27 @@ export function FirewallScreen({ api, serverConnected, consented, onConsent }: F
   const [consentOpen, setConsentOpen] = useState(false);
   const fw = useFirewall(api, view, period);
   const { status, apps } = fw;
+  const { c } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const names = useMemo(() => new Map((apps ?? []).map((app) => [app.uid, app.label])), [apps]);
   const showActivityFor = useCallback((uid: number) => setView((v) => ({ ...v, uid })), []);
+
+  const confirmClearLog = () =>
+    confirmAction({
+      title: 'Clear the log?',
+      message: 'This deletes every logged connection on this phone. It can\u2019t be undone.',
+      confirmLabel: 'Clear log',
+      onConfirm: () => void fw.clearLog(),
+    });
+
+  const confirmTurnOff = () =>
+    confirmAction({
+      title: 'Turn off the firewall?',
+      message: 'Apps connect without your rules until you turn it on again. Your app rules are kept.',
+      confirmLabel: 'Turn off',
+      onConfirm: () => void fw.disable(),
+    });
 
   const confirmConsent = () => {
     setConsentOpen(false);
@@ -78,142 +100,196 @@ export function FirewallScreen({ api, serverConnected, consented, onConsent }: F
     void fw.enable();
   };
 
-  return (
-    <>
-      <Screen scroll refreshing={fw.refreshing} onRefresh={() => void fw.reload()}>
-        <Header title="Firewall" subtitle="See which apps connect, and block the ones you choose." />
+  const entries = fw.activity;
+  const last = entries.length - 1;
 
-        {fw.readError !== null && (
-          <Notice
-            tone="danger"
-            title="Couldn't read the firewall"
-            action={<Button label="Try again" variant="secondary" size="sm" onPress={() => void fw.reload()} />}
-          >
-            {fw.readError}
-          </Notice>
-        )}
-        {fw.actionError !== null && (
-          <Notice
-            tone="danger"
-            title="Couldn't change the firewall"
-            action={<Button label="Dismiss" variant="secondary" size="sm" onPress={fw.dismissActionError} />}
-          >
-            {fw.actionError}
-          </Notice>
-        )}
+  const header = (
+    <View style={{ gap: space.xl, paddingBottom: entries.length > 0 ? space.md : 0 }}>
+      <Header title="Firewall" subtitle="See which apps connect, and block the ones you choose." />
 
-        {status === null ? (
-          fw.readError === null && <Text tone="muted">Checking the firewall.</Text>
-        ) : (
-          <>
-            <StatusGroup
-              status={status}
-              serverConnected={serverConnected}
-              busy={fw.busy}
-              onTurnOn={() => (consented ? void fw.enable() : setConsentOpen(true))}
-              onRestart={() => void fw.enable()}
-              onTurnOff={() => void fw.disable()}
-              onPause={() => void fw.setPaused(true)}
-              onResume={() => void fw.setPaused(false)}
-            />
+      {fw.readError !== null && (
+        <Notice
+          tone="danger"
+          title="Couldn't read the firewall"
+          action={<Button label="Try again" variant="secondary" size="sm" onPress={() => void fw.reload()} />}
+        >
+          {fw.readError}
+        </Notice>
+      )}
+      {fw.actionError !== null && (
+        <Notice
+          tone="danger"
+          title="Couldn't change the firewall"
+          action={<Button label="Dismiss" variant="secondary" size="sm" onPress={fw.dismissActionError} />}
+        >
+          {fw.actionError}
+        </Notice>
+      )}
 
-            {status.privateDns.mode === 'strict' && (
-              <Notice tone="neutral">
-                {privateDnsMessage(status.privateDns.provider ?? 'your Private DNS provider')}
-              </Notice>
-            )}
+      {status === null ? (
+        fw.readError === null && <Text tone="muted">Checking the firewall.</Text>
+      ) : (
+        <>
+          <StatusGroup
+            status={status}
+            serverConnected={serverConnected}
+            busy={fw.busy}
+            onTurnOn={() => (consented ? void fw.enable() : setConsentOpen(true))}
+            onRestart={() => void fw.enable()}
+            onTurnOff={confirmTurnOff}
+            onPause={() => void fw.setPaused(true)}
+            onResume={() => void fw.setPaused(false)}
+          />
 
-            {!status.usageAccess && (
-              <Notice
-                tone="neutral"
-                title="Data use is empty"
-                action={
-                  <Button
-                    label="Allow usage access"
-                    variant="secondary"
-                    size="sm"
-                    disabled={fw.busy}
-                    onPress={() => void fw.openUsageAccess()}
-                  />
-                }
-              >
-                Android shares each app's data use only when you allow usage access, so the amounts stay empty until
-                then. This is optional, and the firewall works without it.
-              </Notice>
-            )}
+          {status.privateDns.mode === 'strict' && (
+            <Notice tone="neutral">
+              {privateDnsMessage(status.privateDns.provider ?? 'your Private DNS provider')}
+            </Notice>
+          )}
 
-            <AppsGroup
-              apps={apps}
-              error={fw.appsError}
-              onRetry={fw.reloadApps}
-              usageAccess={status.usageAccess}
-              period={period}
-              onPeriod={setPeriod}
-              onSetRule={fw.setRule}
-              onShowActivity={showActivityFor}
-            />
-
-            <Group title="Activity" footer={`The latest ${ACTIVITY_LIMIT} connections, newest first.`}>
-              <View style={{ padding: space.lg }}>
-                <Segmented
-                  options={FILTER_OPTIONS}
-                  value={view.blockedOnly ? 'blocked' : 'all'}
-                  onChange={(key) => setView((v) => ({ ...v, blockedOnly: key === 'blocked' }))}
-                  accessibilityLabel="Activity filter"
+          {!status.usageAccess && (
+            <Notice
+              tone="neutral"
+              title="Data use is empty"
+              action={
+                <Button
+                  label="Allow usage access"
+                  variant="secondary"
+                  size="sm"
+                  disabled={fw.busy}
+                  onPress={() => void fw.openUsageAccess()}
                 />
-              </View>
+              }
+            >
+              Android shares each app's data use only when you allow usage access, so the amounts stay empty until
+              then. This is optional, and the firewall works without it.
+            </Notice>
+          )}
+
+          <AppsGroup
+            apps={apps}
+            error={fw.appsError}
+            onRetry={fw.reloadApps}
+            usageAccess={status.usageAccess}
+            period={period}
+            onPeriod={setPeriod}
+            onSetRule={fw.setRule}
+            onShowActivity={showActivityFor}
+          />
+
+          <Group title="Activity">
+            <View style={{ padding: space.lg }}>
+              <Segmented
+                options={FILTER_OPTIONS}
+                value={view.blockedOnly ? 'blocked' : 'all'}
+                onChange={(key) => setView((v) => ({ ...v, blockedOnly: key === 'blocked' }))}
+                accessibilityLabel="Activity filter"
+              />
+            </View>
+            <Row
+              title="Clear the log"
+              subtitle="Deletes every logged connection on this phone."
+              trailing={
+                <Button
+                  label="Clear log"
+                  variant="secondary"
+                  size="sm"
+                  disabled={fw.busy}
+                  onPress={confirmClearLog}
+                />
+              }
+            />
+            {view.uid !== undefined && (
               <Row
-                title="Clear the log"
-                subtitle="Deletes every logged connection on this phone."
+                title={`Only ${names.get(view.uid) ?? 'one app'}`}
                 trailing={
                   <Button
-                    label="Clear log"
+                    label="Show all apps"
                     variant="secondary"
                     size="sm"
-                    disabled={fw.busy}
-                    onPress={() => void fw.clearLog()}
+                    onPress={() => setView((v) => ({ blockedOnly: v.blockedOnly }))}
                   />
                 }
               />
-              {view.uid !== undefined && (
-                <Row
-                  title={`Only ${names.get(view.uid) ?? 'one app'}`}
-                  trailing={
-                    <Button
-                      label="Show all apps"
-                      variant="secondary"
-                      size="sm"
-                      onPress={() => setView((v) => ({ blockedOnly: v.blockedOnly }))}
-                    />
-                  }
-                />
-              )}
-              {fw.activity.length === 0 ? (
-                <Row
-                  title="No connections to show"
-                  subtitle={
-                    status.enabled
-                      ? 'Connections appear here as apps use the network.'
-                      : 'Turn the firewall on to log connections.'
-                  }
-                />
-              ) : (
-                fw.activity.map((entry, index) => {
-                  const row = activityRow(entry, names.get(entry.uid));
-                  const blocked = entry.verdict === 'blocked';
-                  return (
-                    <Row
-                      key={`${entry.timestampMs}-${index}`}
-                      title={row.title}
-                      subtitle={row.subtitle}
-                      trailing={<Pill label={blocked ? 'Blocked' : 'Allowed'} tone={blocked ? 'danger' : 'neutral'} />}
-                    />
-                  );
-                })
-              )}
-            </Group>
-          </>
-        )}
+            )}
+            {entries.length === 0 && (
+              <Row
+                title="No connections to show"
+                subtitle={
+                  status.enabled
+                    ? 'Connections appear here as apps use the network.'
+                    : 'Turn the firewall on to log connections.'
+                }
+              />
+            )}
+          </Group>
+        </>
+      )}
+    </View>
+  );
+
+  const footer =
+    status !== null ? (
+      <Text variant="meta" tone="muted" style={{ paddingHorizontal: space.xs, paddingTop: space.sm }}>
+        {`The latest ${ACTIVITY_LIMIT} connections, newest first.`}
+      </Text>
+    ) : null;
+
+  const renderEntry = ({ item, index }: { item: ActivityEntry; index: number }) => {
+    const row = activityRow(item, names.get(item.uid));
+    const blocked = item.verdict === 'blocked';
+    return (
+      <View
+        style={{
+          backgroundColor: c.surface,
+          borderColor: c.line,
+          borderWidth: 1,
+          borderTopWidth: index === 0 ? 1 : 0,
+          borderBottomWidth: index === last ? 1 : 0,
+          borderTopLeftRadius: index === 0 ? radius.group : 0,
+          borderTopRightRadius: index === 0 ? radius.group : 0,
+          borderBottomLeftRadius: index === last ? radius.group : 0,
+          borderBottomRightRadius: index === last ? radius.group : 0,
+          overflow: 'hidden',
+        }}
+      >
+        {index > 0 && <View style={{ height: 1, backgroundColor: c.line, marginLeft: space.lg }} />}
+        <Row
+          title={row.title}
+          subtitle={row.subtitle}
+          trailing={<Pill label={blocked ? 'Blocked' : 'Allowed'} tone={blocked ? 'danger' : 'neutral'} />}
+        />
+      </View>
+    );
+  };
+
+  return (
+    <>
+      <Screen>
+        <FlatList
+          data={status === null ? [] : entries}
+          keyExtractor={(entry, index) => `${entry.timestampMs}-${index}`}
+          renderItem={renderEntry}
+          ListHeaderComponent={header}
+          ListFooterComponent={footer}
+          refreshControl={
+            <RefreshControl
+              refreshing={fw.refreshing}
+              onRefresh={() => void fw.reload()}
+              colors={[c.accent]}
+              tintColor={c.accent}
+              progressBackgroundColor={c.surface}
+            />
+          }
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            paddingTop: space.lg,
+            paddingBottom: insets.bottom + space.xxxl,
+            paddingHorizontal: space.lg,
+          }}
+          initialNumToRender={20}
+          windowSize={7}
+        />
       </Screen>
 
       <Sheet visible={consentOpen} onClose={() => setConsentOpen(false)} title="Before you turn the firewall on" doneLabel="Cancel">

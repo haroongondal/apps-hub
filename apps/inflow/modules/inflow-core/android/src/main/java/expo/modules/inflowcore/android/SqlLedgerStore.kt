@@ -65,7 +65,20 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
   }
 
   override fun setAiDetails(id: Long, category: String, label: String?) {
-    run("UPDATE txns SET category = ?, label = COALESCE(?, label) WHERE id = ?", category, label, id)
+    run("UPDATE txns SET category = CASE WHEN category_set = 1 THEN category ELSE ? END, label = COALESCE(?, label) WHERE id = ?", category, label, id)
+  }
+
+  // Clearing also resets the categoriser's tries, so the AI picks the category up again.
+  override fun setCategory(id: Long, category: String?) {
+    val set = if (category != null) 1L else 0L
+    run("UPDATE txns SET category = ?, category_set = ?, category_tries = CASE WHEN ? = 0 THEN 0 ELSE category_tries END WHERE id = ?", category, set, set, id)
+  }
+
+  override fun uncategorized(limit: Int): List<Txn> =
+    txns("t.category IS NULL AND t.category_set = 0 AND t.category_tries < 3 ORDER BY t.at DESC, t.id DESC LIMIT ?", limit.toLong())
+
+  override fun categoryTried(ids: List<Long>) {
+    ids.forEach { run("UPDATE txns SET category_tries = category_tries + 1 WHERE id = ?", it) }
   }
 
   override fun sourceCount(txnId: Long): Int =
@@ -80,6 +93,18 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
     run("UPDATE txns SET by_ai = 0 WHERE id = ?", id)
   }
 
+  override fun setOwnerLabel(id: Long, label: String?) {
+    run("UPDATE txns SET label = ? WHERE id = ?", label, id)
+  }
+
+  // A tombstone per source item (ids are never reused: items is AUTOINCREMENT). The backfill query and Ledger skip these items.
+  override fun blockSources(txnId: Long) {
+    run("INSERT OR IGNORE INTO tombstones(hash, at) SELECT '$BLOCKED_PREFIX' || item_id, ? FROM txn_sources WHERE txn_id = ?", System.currentTimeMillis(), txnId)
+  }
+
+  override fun sourceBlocked(itemId: Long): Boolean =
+    db.rawQuery("SELECT 1 FROM tombstones WHERE hash = ?", "$BLOCKED_PREFIX$itemId").use { it.moveToFirst() }
+
   /**
    * Ask AI (R35): the newest `limit` non-own transactions in the range, of any age (not only since the first key). One with a
    * source that is an OTP, or belongs to an app, sender or recording the owner kept from the AI, is left out. R44 also reads the source's
@@ -89,9 +114,13 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
     txns(
       "t.own = 0 AND t.at BETWEEN ? AND ? AND NOT EXISTS (SELECT 1 FROM txn_sources s JOIN items i ON i.id = s.item_id " +
         "WHERE s.txn_id = t.id AND NOT (${SqlItemStore.NEVER_SEND_FILTER})) AND NOT EXISTS (SELECT 1 FROM txn_sources p WHERE p.txn_id = t.id AND $PUSH_SOURCE) " +
+        "AND NOT EXISTS (SELECT 1 FROM txn_sources k JOIN tombstones n ON n.hash = '${SqlItemStore.NEVER_SENT_PREFIX}' || k.item_id WHERE k.txn_id = t.id) " +
         "ORDER BY t.at DESC, t.id DESC LIMIT ?",
       from, to, limit.toLong(),
     )
+
+  /** Every transaction (own ones too) with `from <= at < to`, oldest first: what a report is made from. */
+  fun between(from: Long, to: Long): List<Txn> = txns("t.at >= ? AND t.at < ? ORDER BY t.at, t.id", from, to)
 
   override fun undecided(): List<Txn> = txns("t.own_set = 0 AND t.pair_id IS NULL")
 
@@ -109,16 +138,6 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
         }
       }
     }
-    val merchants = db.rawQuery(
-      "SELECT counterparty, currency, SUM(amount_minor), COUNT(*) FROM txns " +
-        "WHERE own = 0 AND direction = 'OUT' AND counterparty IS NOT NULL AND at >= ? AND at < ? " +
-        "GROUP BY counterparty, currency ORDER BY SUM(amount_minor) DESC, counterparty LIMIT 10",
-      from, to,
-    ).use { c ->
-      buildList {
-        while (c.moveToNext()) add(mapOf("counterparty" to c.getString(0), "currency" to c.getString(1), "total" to c.getLong(2), "count" to c.getInt(3)))
-      }
-    }
     // Money out only. A transaction nobody has sorted yet (no AI result) is not in any category.
     val categories = db.rawQuery(
       "SELECT category, currency, SUM(amount_minor), COUNT(*) FROM txns " +
@@ -130,14 +149,52 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
         while (c.moveToNext()) add(mapOf("category" to c.getString(0), "currency" to c.getString(1), "total" to c.getLong(2), "count" to c.getInt(3)))
       }
     }
-    return mapOf("accounts" to accounts, "merchants" to merchants, "categories" to categories)
+    // Every person or shop, both directions; own transfers are one row with no name. A blank name is "Unknown" on screen.
+    // Grouped ignoring case; the name shown is the spelling of the newest row (SQLite takes the bare columns from the single MAX(at) row).
+    val parties = db.rawQuery(PARTIES_SQL, from, to).use { c ->
+      buildList {
+        while (c.moveToNext()) {
+          add(
+            mapOf(
+              "name" to c.str(0)?.ifEmpty { null }, "own" to (c.getInt(1) != 0), "currency" to c.getString(2),
+              "moneyIn" to c.getLong(3), "moneyOut" to c.getLong(4), "count" to c.getInt(5),
+            ),
+          )
+        }
+      }
+    }
+    return mapOf("accounts" to accounts, "categories" to categories, "parties" to parties)
   }
 
+  /** All-time totals with one person or shop (null name = Unknown), or of own transfers when own. */
+  fun partyTotals(name: String?, own: Boolean): List<Map<String, Any>> {
+    val (clause, args) = partyClause(name, own)
+    return db.rawQuery(
+      "SELECT t.currency, SUM(CASE t.direction WHEN 'IN' THEN t.amount_minor ELSE 0 END), " +
+        "SUM(CASE t.direction WHEN 'OUT' THEN t.amount_minor ELSE 0 END), COUNT(*) FROM txns t WHERE $clause GROUP BY t.currency ORDER BY t.currency",
+      *args,
+    ).use { c ->
+      buildList {
+        while (c.moveToNext()) add(mapOf("currency" to c.getString(0), "moneyIn" to c.getLong(1), "moneyOut" to c.getLong(2), "count" to c.getInt(3)))
+      }
+    }
+  }
+
+  fun listPartyTxns(name: String?, own: Boolean, before: Long?, limit: Int, beforeId: Long?): List<Map<String, Any?>> {
+    val (clause, args) = partyClause(name, own)
+    return pageTxns(clause, args.toList(), before, limit, beforeId)
+  }
+
+  private fun partyClause(name: String?, own: Boolean): Pair<String, Array<Any?>> =
+    if (own) "t.own = 1" to emptyArray() else PARTY_CLAUSE to arrayOf(name ?: "")
+
   /** Newest first; paging matches SqlItemStore.list. */
-  fun listTxns(account: String?, before: Long?, limit: Int, beforeId: Long?): List<Map<String, Any?>> {
-    val where = mutableListOf("1 = 1")
-    val args = mutableListOf<Any?>()
-    if (account != null) { where += "t.account = ?"; args += account }
+  fun listTxns(account: String?, before: Long?, limit: Int, beforeId: Long?): List<Map<String, Any?>> =
+    if (account != null) pageTxns("t.account = ?", listOf(account), before, limit, beforeId) else pageTxns("1 = 1", emptyList(), before, limit, beforeId)
+
+  private fun pageTxns(clause: String, clauseArgs: List<Any?>, before: Long?, limit: Int, beforeId: Long?): List<Map<String, Any?>> {
+    val where = mutableListOf(clause)
+    val args = clauseArgs.toMutableList()
     if (before != null) {
       if (beforeId != null) {
         where += "(t.at < ? OR (t.at = ? AND t.id < ?))"
@@ -149,7 +206,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
     args += limit.toLong()
     return db.rawQuery(
       "SELECT t.id, t.direction, t.amount_minor, t.currency, t.account, t.counterparty, t.tx_id, t.at, t.own, t.pair_id, " +
-        "(SELECT group_concat(item_id) FROM txn_sources s WHERE s.txn_id = t.id), t.category, t.label, t.by_ai " +
+        "(SELECT group_concat(item_id) FROM txn_sources s WHERE s.txn_id = t.id), t.category, t.label, t.by_ai, t.category_set " +
         "FROM txns t WHERE ${where.joinToString(" AND ")} ORDER BY t.at DESC, t.id DESC LIMIT ?",
       *args.toTypedArray(),
     ).use { c ->
@@ -161,7 +218,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
               "account" to c.getString(4), "counterparty" to c.str(5), "txId" to c.str(6), "at" to c.getLong(7),
               "own" to (c.getInt(8) != 0), "paired" to !c.isNull(9),
               "itemIds" to (c.str(10)?.split(',')?.map { it.toLong() } ?: emptyList()),
-              "category" to c.str(11), "label" to c.str(12), "byAi" to (c.getInt(13) != 0),
+              "category" to c.str(11), "label" to c.str(12), "byAi" to (c.getInt(13) != 0), "categorySet" to (c.getInt(14) != 0),
             ),
           )
         }
@@ -172,7 +229,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
   private fun txns(where: String, vararg args: Any?): List<Txn> =
     db.rawQuery(
       "SELECT t.id, t.direction, t.amount_minor, t.currency, t.account, t.counterparty, t.tx_id, t.at, t.own, t.own_set, t.pair_id, " +
-        "(SELECT group_concat(channel) FROM txn_sources s WHERE s.txn_id = t.id), t.category, t.label, t.by_ai FROM txns t WHERE $where",
+        "(SELECT group_concat(channel) FROM txn_sources s WHERE s.txn_id = t.id), t.category, t.label, t.by_ai, t.category_set FROM txns t WHERE $where",
       *args,
     ).use { c ->
       buildList {
@@ -182,7 +239,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
               c.getLong(0), Direction.valueOf(c.getString(1)), c.getLong(2), c.getString(3), c.getString(4), c.str(5), c.str(6), c.getLong(7),
               c.getInt(8) != 0, c.getInt(9) != 0, if (c.isNull(10)) null else c.getLong(10),
               c.str(11)?.split(',')?.map { Channel.valueOf(it) }?.toSet() ?: emptySet(),
-              c.str(12), c.str(13), c.getInt(14) != 0,
+              c.str(12), c.str(13), c.getInt(14) != 0, c.getInt(15) != 0,
             ),
           )
         }
@@ -206,8 +263,18 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
 
   private fun Cursor.str(i: Int): String? = if (isNull(i)) null else getString(i)
 
-  private companion object {
+  internal companion object {
+    /** Tombstone key prefix for an item whose transaction the owner deleted; SqlBackfillStore.UNPARSED_SQL checks it too. */
+    const val BLOCKED_PREFIX = "txnsrc:"
+    // The name a person or shop is shown under: the AI's clean name, else the bank's text. Grouping and matching use its lower() (shortcut: lower() folds ASCII only, which covers the names seen so far).
+    const val PARTY = "COALESCE(label, counterparty, '')"
+    const val PARTY_KEY_T = "lower(COALESCE(t.label, t.counterparty, ''))"
+    const val PARTY_CLAUSE = "t.own = 0 AND $PARTY_KEY_T = lower(?)"
+    const val PARTIES_SQL = "SELECT CASE WHEN own = 1 THEN NULL ELSE $PARTY END, own, currency, " +
+      "SUM(CASE direction WHEN 'IN' THEN amount_minor ELSE 0 END), SUM(CASE direction WHEN 'OUT' THEN amount_minor ELSE 0 END), COUNT(*), MAX(at) " +
+      "FROM txns WHERE at >= ? AND at < ? GROUP BY own, CASE WHEN own = 1 THEN '' ELSE lower($PARTY) END, currency " +
+      "ORDER BY SUM(amount_minor) DESC, 1"
     // The channel column is a comma list; ',NOTIFICATION,' is a source that was a bare push (WhatsApp, a bank app), whatever became of its item.
-    const val PUSH_SOURCE = "instr(',' || p.channel || ',', ',NOTIFICATION,') > 0"
+    private const val PUSH_SOURCE = "instr(',' || p.channel || ',', ',NOTIFICATION,') > 0"
   }
 }

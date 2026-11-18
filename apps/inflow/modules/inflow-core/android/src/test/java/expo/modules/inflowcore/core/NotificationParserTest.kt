@@ -252,4 +252,21 @@ class NotificationParserTest {
   }
 
   private fun assertNotEquals(a: Any?, b: Any?) = org.junit.Assert.assertNotEquals(a, b)
+
+  @Test fun aGenericNotificationTitleIsNeverTheChatName() {
+    val msgs = listOf(RawMessage(null, "Hi", 1L))
+    val c = NotificationParser.parse(raw(pkg = "com.linkedin.android", title = "1 new message", messages = msgs), own).single()
+    assertNull(c.conversation)
+    assertNull(c.conversationKey)
+    assertEquals("You", c.sender)
+  }
+
+  @Test fun aGroupTitleOrLearnedNameBeatsAGenericTitle() {
+    val msgs = listOf(RawMessage(null, "Hi", 1L))
+    val group = NotificationParser.parse(raw(pkg = wa, title = "1 new message", conversationTitle = "Family", messages = msgs), own).single()
+    assertEquals("Family", group.conversation)
+    val chats = Chats().also { it.learn("$wa|t9", "Sunflower") }
+    val learned = NotificationParser.parse(raw(pkg = wa, title = "1 new message", messages = msgs, chatTag = "t9"), own, chats).single()
+    assertEquals("Sunflower", learned.conversation)
+  }
 }

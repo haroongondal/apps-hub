@@ -137,7 +137,7 @@ export default function ToolSetup() {
 
       <Group title={single ? 'File' : 'Files'} footer="Your original files are never changed.">
         {files.map((f, n) => (
-          <Row key={`${f.id}-${n}`} trailing={<Button label="Remove" variant="ghost" onPress={() => setFiles(files.filter((_, i) => i !== n))} />} title={f.name} subtitle={`${formatClock(f.durationS)} · ${formatMb(f.bytes)}${f.tracks.find(t => t.kind === 'video')?.width ? ` · ${f.tracks.find(t => t.kind === 'video')!.width}×${f.tracks.find(t => t.kind === 'video')!.height}` : ''}`} />
+          <Row key={`${f.id}-${n}`} trailing={<Button label="Remove" variant="ghost" onPress={() => setFiles(files.filter((_, i) => i !== n))} />} title={f.name} subtitle={`${f.container === 'image' ? '' : `${formatClock(f.durationS)} · `}${formatMb(f.bytes)}${f.tracks.find(t => t.kind === 'video')?.width ? ` · ${f.tracks.find(t => t.kind === 'video')!.width}×${f.tracks.find(t => t.kind === 'video')!.height}` : ''}`} />
         ))}
         <Button label={files.length ? (single ? 'Choose another file' : 'Add more files') : 'Choose a file'} variant="secondary" block onPress={add} />
       </Group>
@@ -241,6 +241,9 @@ export default function ToolSetup() {
           ) : null}
           {def.key === 'backwards' ? (
             <Group title="Sound" footer="Works on videos up to 10 seconds.">{choose([{ key: 'with', label: 'Play it backwards too' }, { key: 'without', label: 'No sound' }], withSound ? 'with' : 'without', k => setWithSound(k === 'with'), 'Sound')}</Group>
+          ) : null}
+          {def.key === 'image' ? (
+            <Notice tone="accent">A PNG is packed tighter. A JPEG loses its camera, location and thumbnail data but keeps its rotation and colours. Some images can't get smaller.</Notice>
           ) : null}
           {def.key === 'steady' ? (
             <Group title="How much">{choose([{ key: 'minimum', label: 'Keep more picture' }, { key: 'recommended', label: 'Balanced' }, { key: 'most', label: 'Steadiest' }], level, setLevel, 'How much to steady')}</Group>

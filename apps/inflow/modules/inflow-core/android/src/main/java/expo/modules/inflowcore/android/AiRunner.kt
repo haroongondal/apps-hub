@@ -8,6 +8,10 @@ import expo.modules.inflowcore.core.AiMeta
 import expo.modules.inflowcore.core.AiRun
 import expo.modules.inflowcore.core.AiRunResult
 import expo.modules.inflowcore.core.Ask
+import expo.modules.inflowcore.core.Period
+import expo.modules.inflowcore.core.ReportRun
+import expo.modules.inflowcore.core.ReportSchedule
+import expo.modules.inflowcore.core.TxnCategorize
 import java.time.ZoneId
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
@@ -47,6 +51,7 @@ object AiRunner {
       if (!AiConfig(store).on()) return
       val last = store.meta(AiMeta.LAST_RUN_AT)?.toLongOrNull()
       if (last == null || System.currentTimeMillis() - last >= DUE_MS) execute(ctx)
+      else runReports(ctx, store, AiConfig(store))   // Home opened between ticks: a report that came due still gets made
     } catch (e: Exception) {
       Log.w(TAG, "scheduled run failed: ${e.javaClass.simpleName}")
     }
@@ -67,11 +72,68 @@ object AiRunner {
       Log.w(TAG, "run failed: ${e.javaClass.simpleName}")
       AiRunResult(0, 0, false, FAILED)
     }
+    // Every transaction gets a category (a failure here never hides the item run's result).
+    val categorised = try {
+      TxnCategorize(
+        SqlLedgerStore(store.db), { cfg.provider() }, cfg::spend, cfg::capReached, ZoneId.systemDefault(),
+        atomic = { block -> store.inTransaction { block() } },
+      ).run()
+    } catch (e: Exception) {
+      Log.w(TAG, "categorise failed: ${e.javaClass.simpleName}")
+      0
+    }
+    runReports(ctx, store, cfg)
     store.setMeta(AiMeta.LAST_RUN_AT, System.currentTimeMillis().toString())
     if (result.error != null) store.setMeta(AiMeta.ERROR, result.error) else store.deleteMeta(AiMeta.ERROR)
-    if (result.saved > 0) StoreHolder.onCaptured?.invoke(result.saved)
+    if (result.saved + categorised > 0) StoreHolder.onCaptured?.invoke(result.saved + categorised)
     return result
   }
+
+  private fun reportRun(ctx: Context, store: SqlItemStore, cfg: AiConfig) = ReportRun(
+    SqlReportStore(store.db), { cfg.provider(readMs = AiHttp.REPORT_READ_MS) }, cfg::spend, cfg::capReached,
+    { store.meta(StoreHolder.OWNER_NAME)?.takeIf { it.isNotBlank() } }, { SqlLedgerStore(store.db).accounts() },
+    System::currentTimeMillis, ZoneId.systemDefault(),
+  ) { id, headline -> SqlReportStore(store.db).get(id)?.let { ReportNotifier.notify(ctx, id, headline, it.kind) } }
+
+  /** Makes the weekly and monthly report that came due, if any. A failure here never reaches the item run. */
+  private fun runReports(ctx: Context, store: SqlItemStore, cfg: AiConfig) {
+    try {
+      reportRun(ctx, store, cfg).runDue()
+    } catch (e: Exception) {
+      Log.w(TAG, "reports failed: ${e.javaClass.simpleName}")
+    }
+  }
+
+  /** "Make a report now": the week so far, waiting for any run in progress. Call it off the main thread. */
+  fun makeReportNow(ctx: Context): Pair<Boolean, String?> =
+    makeReport(ctx) { _, now -> ReportSchedule.weekSoFar(now, ZoneId.systemDefault()) }
+
+  /** "Try again" on a report that did not finish. A partial week is remade as the week so far. */
+  fun retryReport(ctx: Context, id: Long): Pair<Boolean, String?> =
+    makeReport(ctx) { store, now ->
+      val row = SqlReportStore(store.db).get(id)
+      when {
+        row == null -> null
+        row.status == ReportRun.READY -> null
+        row.partial -> ReportSchedule.weekSoFar(now, ZoneId.systemDefault())
+        else -> Period(row.kind, row.periodStart, row.periodEnd, false)
+      }
+    }
+
+  private fun makeReport(ctx: Context, period: (SqlItemStore, Long) -> Period?): Pair<Boolean, String?> =
+    executor.submit(Callable {
+      val store = StoreHolder.get(ctx).getOrNull() ?: return@Callable false to FAILED
+      try {
+        val p = period(store, System.currentTimeMillis()) ?: return@Callable true to null
+        reportRun(ctx, store, AiConfig(store)).make(p, manual = true)
+      } catch (e: Exception) {
+        Log.w(TAG, "report failed: ${e.javaClass.simpleName}")
+        false to FAILED
+      }
+    }).get()
+
+  /** Nothing retries a key test or a question, so the timeout copy says to try again by hand. */
+  private fun copy(e: AiError): String? = if (e.kind == AiError.Kind.TIMEOUT) "The AI took too long to answer. Try again." else e.message
 
   /** One tiny request with one key. The error copy, or null when the model answered. */
   fun test(ctx: Context, keyId: Long): String? {
@@ -82,7 +144,7 @@ object AiRunner {
       cfg.spend(provider.complete("Reply with the single word OK.", "Test."))
       null
     } catch (e: AiError) {
-      e.message
+      copy(e)
     } catch (e: Exception) {
       Log.w(TAG, "key test failed: ${e.javaClass.simpleName}")
       FAILED
@@ -120,7 +182,7 @@ object AiRunner {
       cfg.spend(answer)
       reply(answer.text.trim(), null, plan.from, plan.to, items.size, txns.size)
     } catch (e: AiError) {
-      reply(null, e.message)
+      reply(null, copy(e))
     } catch (e: Exception) {
       Log.w(TAG, "ask failed: ${e.javaClass.simpleName}")
       reply(null, "Inflow couldn't answer that. Try again.")

@@ -128,6 +128,16 @@ class AdaptersTest {
     assertEquals("pw", saved.password)
   }
 
+  @Test fun aLoginDropsOnlyTheAppsTheScreenLeftOut() {
+    val other = AppLink(app.app.copy(pkg = "com.other.bank"), "other.example")
+    val stored = Entry.Login("Bank", "me", "old", emptyList(), listOf(app, other), "", 1)
+    val keepOther = login(emptyList()) + ("apps" to listOf(EntryInput.appLabel(other)))
+    assertEquals(listOf(other), (EntryInput.toEntry(keepOther, stored) as Entry.Login).apps)
+    assertTrue((EntryInput.toEntry(login(emptyList()) + ("apps" to emptyList<String>()), stored) as Entry.Login).apps.isEmpty())
+    assertEquals("a name the login doesn't hold links nothing new", listOf(app, other), EntryInput.keptApps(listOf(app, other), listOf("evil.app", EntryInput.appLabel(app), EntryInput.appLabel(other))))
+    assertEquals("no apps key keeps them all", listOf(app, other), (EntryInput.toEntry(login(emptyList()), stored) as Entry.Login).apps)
+  }
+
   @Test fun aNewLoginHasNoApps() {
     assertTrue((EntryInput.toEntry(login(emptyList()), null) as Entry.Login).apps.isEmpty())
     assertTrue((EntryInput.toEntry(login(emptyList()), Entry.Note("n", "t", 1)) as Entry.Login).apps.isEmpty())

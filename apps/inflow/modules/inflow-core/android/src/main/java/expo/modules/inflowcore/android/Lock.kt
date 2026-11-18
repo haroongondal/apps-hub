@@ -5,6 +5,7 @@ import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
 import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -15,6 +16,10 @@ object Lock {
   const val FAILED = "Inflow couldn't check your fingerprint. Try again."
 
   suspend fun authenticate(activity: FragmentActivity): Pair<Boolean, String?> = withContext(Dispatchers.Main) {
+    // BiometricPrompt silently drops a request made after onSaveInstanceState (no callback), which left Unlock spinning forever.
+    if (activity.supportFragmentManager.isStateSaved || !activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+      return@withContext Pair<Boolean, String?>(false, null)
+    }
     suspendCancellableCoroutine { cont ->
       val callback = object : BiometricPrompt.AuthenticationCallback() {
         override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {

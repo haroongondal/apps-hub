@@ -40,7 +40,7 @@ class PlanJsonTest {
       setOf(
         "size", "quality", "clipCopy", "clipExact", "audioCopy", "audioRaw", "audioAac", "gif", "gifNoTarget", "convertRemux",
         "convertMuted", "convertHevc", "convertM4a", "frame", "volumeNormalize", "volumeGain", "reverse", "stabilize", "volumeMeasured",
-        "compose",
+        "compose", "imagePng", "imageJpg",
       ),
       plans.keys,
     )
@@ -57,6 +57,8 @@ class PlanJsonTest {
     assertEquals(Loudness(-27.5, -3.1, 6.2, -38.1, 0.4), (plans["volumeMeasured"] as VolumePlan).measured)
     assertEquals(ReversePlan(true, 65.0, "mp4"), plans["reverse"])
     assertEquals(StabilizePlan("recommended", 16, 65.0, "mp4"), plans["stabilize"])
+    assertEquals(ImagePlan("png", "png"), plans["imagePng"])
+    assertEquals(ImagePlan("jpg", "jpg"), plans["imageJpg"])
   }
 
   @Test
@@ -85,5 +87,12 @@ class PlanJsonTest {
     val noted = job.copy(outputs = listOf(Output("a.mp4", "content://x", 9)))
     assertEquals(listOf(mapOf("name" to "a.mp4", "ref" to "content://x", "bytes" to 9L)), noted.toStatusMap()["outputs"])
     assertEquals("Couldn't fit under 20 MB.", jobs[3].toStatusMap()["error"])
+  }
+
+  @Test(expected = IllegalArgumentException::class)
+  fun refusesAnImageExtensionThatIsNotTheFormat() {
+    decodeJobs(
+      """[{"id":"x","inputId":"u","inputName":"a.png","state":"queued","progress":0,"attempt":1,"plan":{"tool":"image","format":"png","ext":"../x"}}]""",
+    )
   }
 }

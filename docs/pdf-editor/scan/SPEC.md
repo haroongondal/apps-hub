@@ -177,7 +177,7 @@ CREATE UNIQUE INDEX folders_unique_name ON folders (ifnull(parent_id, ''), name 
 CREATE TABLE items (
   rid        INTEGER PRIMARY KEY,           -- rowid alias, stable across VACUUM; = items_fts.rowid
   id         TEXT NOT NULL UNIQUE,          -- public id, directory name, referenced by feature tables
-  kind       TEXT NOT NULL CHECK (kind IN ('pdf', 'scan', 'article')),
+  kind       TEXT NOT NULL CHECK (kind IN ('pdf', 'scan', 'article', 'note', 'audio', 'image')),  -- note/audio/image: library step 2 (Nexus)
   title      TEXT NOT NULL,
   folder_id  TEXT REFERENCES folders(id) ON DELETE SET NULL,
   created_at INTEGER NOT NULL,
@@ -551,6 +551,15 @@ two permission functions and the view; Phase 3 adds `importImage`, `detectQuad` 
 Errors reject with Expo `CodedException` codes: `not_found` (file), `decode_failed`,
 `invalid_quad` (not 8 numbers in 0..1, or not convex), `busy`, `cancelled`, `ocr_init`
 (traineddata missing or corrupt), `out_of_memory`.
+
+**Update 2026-11-18 (Phase 3, design `docs/superpowers/specs/2026-11-18-scan-save-polish-cards-design.md`).**
+The contract above gained, in `modules/pdf-scan/src/index.ts`: `composeCardSheet(req)` (front and
+back card JPEGs onto one A4 sheet, 2,480 x 3,508 px, cards at 85.6 mm), `saveImagesToGallery(paths,
+album)` (MediaStore, `Pictures/<album>`, no permission), `shareImages(paths, chooserTitle)`
+(FileProvider), `detectQuad(src, card?)` and the camera prop `cardMode`. The filters keep their keys
+and are labelled Original, Magic (`auto`), Gray and Black and white. `scan_pages` has a `kind`
+column (`page`, `card`, `sheet`); card pages process at a 1,600 px long side. A session also carries
+`mode` (`document` or `card`), `sheet` and a per-page `side`.
 
 ### 6.2 Kotlin (`PdfScanModule.kt`)
 

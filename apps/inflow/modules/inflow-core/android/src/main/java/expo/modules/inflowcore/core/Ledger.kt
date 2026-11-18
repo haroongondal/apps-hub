@@ -11,6 +11,7 @@ data class Txn(
   val own: Boolean, val ownSet: Boolean,   // ownSet = the owner chose `own` by hand; automation never changes it again
   val pairId: Long?, val channels: Set<Channel>,
   val category: String? = null, val label: String? = null, val byAi: Boolean = false,   // set from an AI result; the numbers above never come from it for a pattern txn
+  val categorySet: Boolean = false,   // the owner chose `category`; no AI path changes it again
 )
 
 interface LedgerStore {
@@ -33,13 +34,24 @@ interface LedgerStore {
   /** Every distinct account string of known transactions, for Accounts.resolve. */
   fun accounts(): List<String>
   fun setCounterpartyIfNull(id: Long, counterparty: String)
-  /** A null label keeps the label already there. */
+  /** A null label keeps the label already there. A category the owner set stays; the label still updates. */
   fun setAiDetails(id: Long, category: String, label: String?)
+  /** The owner's choice (categorySet = true); null clears both, so the AI fills the category again. */
+  fun setCategory(id: Long, category: String?)
+  /** Transactions with no category, not owner-set and tried fewer than 3 times, newest first. */
+  fun uncategorized(limit: Int): List<Txn>
+  /** The categoriser sent these and did not categorise them: one more try each. */
+  fun categoryTried(ids: List<Long>)
   fun sourceCount(txnId: Long): Int
   /** Removes the transaction and its source rows. */
   fun deleteTxn(id: Long)
   /** A pattern source confirmed an AI transaction: it stops being "by AI". */
   fun clearByAi(id: Long)
+  /** The owner's own clean name, written as given (null clears). */
+  fun setOwnerLabel(id: Long, label: String?)
+  /** Remembers this transaction's source items as deleted by the owner, so neither the backfill nor a late AI result makes the transaction again. Call before deleteTxn. */
+  fun blockSources(txnId: Long)
+  fun sourceBlocked(itemId: Long): Boolean
 }
 
 const val OTHER_ACCOUNT = "Other account"
@@ -85,6 +97,7 @@ object OwnTransfer {
 
 class Ledger(private val store: LedgerStore, private val ownerName: () -> String?) {
   fun onItem(itemId: Long, text: String, channel: Channel, at: Long): Long? {
+    if (store.sourceBlocked(itemId)) return null
     val p = Accounts.resolve(BankParser.parse(text) ?: return null, store.accounts())
     // An AI-only transaction on this item would block the pattern: the bank's numbers replace it (unless the owner decided on it).
     var replaced: Txn? = null   // its category, label and own mark carry over to the transaction that takes its place
@@ -110,7 +123,10 @@ class Ledger(private val store: LedgerStore, private val ownerName: () -> String
     }
     replaced?.let { r ->
       val target = store.get(id) ?: return id
-      if (target.category == null && r.category != null) store.setAiDetails(id, r.category, r.label)
+      if (r.category != null) {
+        if (target.category == null) store.setAiDetails(id, r.category, r.label)
+        if (r.categorySet) store.setCategory(id, r.category)   // the owner's choice wins over a category the target already has
+      }
       if (r.own && !target.own && !target.ownSet) store.setOwn(id, true, false, target.pairId)
     }
     return id
@@ -143,6 +159,7 @@ class Ledger(private val store: LedgerStore, private val ownerName: () -> String
    * touches one the owner decided, and never pairs (a message cannot pair itself with real money by asking).
    */
   fun onAi(itemId: Long, money: AiMoney, channel: Channel, at: Long): Long? {
+    if (store.sourceBlocked(itemId)) return null
     val existing = store.txnOfItem(itemId)
     if (existing != null) {
       details(existing, money)
@@ -173,6 +190,25 @@ class Ledger(private val store: LedgerStore, private val ownerName: () -> String
   }
 
   fun addChannel(itemId: Long, channel: Channel) = store.addChannel(itemId, channel)
+
+  /** The owner's edit of a transaction's clean name. A later AI reading of another source may still change it. */
+  fun editLabel(txnId: Long, label: String?): Boolean {
+    if (store.get(txnId) == null) return false
+    store.setOwnerLabel(txnId, label)
+    return true
+  }
+
+  /**
+   * The owner deleted a transaction. Its sources are blocked first (no backfill or AI result brings it back). The other side of an
+   * own-transfer pair stays an own transfer but is unpaired and counts as hand-decided, so a name change cannot flip it.
+   */
+  fun deleteByOwner(txnId: Long): Boolean {
+    val txn = store.get(txnId) ?: return false
+    txn.pairId?.let(store::paired)?.filter { it.id != txnId }?.forEach { store.setOwn(it.id, it.own, true, null) }
+    store.blockSources(txnId)
+    store.deleteTxn(txnId)
+    return true
+  }
 
   fun setOwnTransfer(txnId: Long, own: Boolean) {
     val txn = store.get(txnId) ?: return

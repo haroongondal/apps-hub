@@ -11,6 +11,7 @@ import WebView, { type WebViewMessageEvent, type WebViewNavigation } from 'react
 
 import DesignMedia from 'design-media';
 import { createImagePicker, type ImagePickDeps } from '../src/editor/image-pick';
+import { aiHasKey, aiRequest, aiSetKey } from '../src/editor/ai';
 import { injectCommand, parseMessage, replyError, replyOk, type PageEvent } from '../src/editor/bridge';
 import { createVisionHost, type VisionHost } from '../src/editor/vision-host';
 import { getSearchTool } from '../src/photos/search-tool';
@@ -144,6 +145,15 @@ export default function EditorScreen() {
             injectCommand(webRef, replyOk(msg.reqId, true));
             break;
           }
+          case 'aiHasKey':
+            injectCommand(webRef, replyOk(msg.reqId, await aiHasKey()));
+            break;
+          case 'aiSetKey':
+            injectCommand(webRef, replyOk(msg.reqId, await aiSetKey(msg.key)));
+            break;
+          case 'aiRequest':
+            injectCommand(webRef, replyOk(msg.reqId, await aiRequest(msg.body)));
+            break;
           case 'docState': {
             docState.current = { title: msg.title, dirty: msg.dirty, filePath: msg.filePath };
             setTitle(msg.title);

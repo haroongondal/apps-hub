@@ -43,3 +43,9 @@ export function discardSession(): void {
   const dir = sessionDir();
   if (dir.exists) dir.delete();
 }
+
+/** Deletes one captured photo. Done before the session is saved without it, so a crash in between leaves a page whose file is gone, which loadSession drops. */
+export function deleteCapture(file: string): void {
+  const capture = new File(sessionDir(), file);
+  if (capture.exists) capture.delete();
+}
