@@ -1,9 +1,9 @@
 import type { Plan } from '@apps-hub/media-core';
 
-export type ToolKey = 'smaller' | 'trim' | 'sound' | 'gif' | 'format' | 'picture' | 'volume' | 'backwards' | 'steady';
+export type ToolKey = 'smaller' | 'trim' | 'sound' | 'gif' | 'format' | 'picture' | 'volume' | 'backwards' | 'steady' | 'image';
 
 // What each tool is called and what it does, in the words a person uses (PRD FR-13).
-export const TOOLS: { key: ToolKey; title: string; about: string; accept: ('video' | 'audio')[] }[] = [
+export const TOOLS: { key: ToolKey; title: string; about: string; accept: ('video' | 'audio' | 'image')[] }[] = [
   { key: 'smaller', title: 'Make smaller', about: 'Shrink a video to fit Discord, email or WhatsApp.', accept: ['video'] },
   { key: 'trim', title: 'Trim', about: 'Keep only the part you want.', accept: ['video'] },
   { key: 'sound', title: 'Get the sound', about: 'Save the sound from a video as an audio file.', accept: ['video'] },
@@ -13,6 +13,7 @@ export const TOOLS: { key: ToolKey; title: string; about: string; accept: ('vide
   { key: 'volume', title: 'Change the volume', about: 'Even out the loudness or make it louder or quieter.', accept: ['video', 'audio'] },
   { key: 'backwards', title: 'Play backwards', about: 'Reverse a short video.', accept: ['video'] },
   { key: 'steady', title: 'Steady a shaky video', about: 'Smooth out camera shake.', accept: ['video'] },
+  { key: 'image', title: 'Shrink an image', about: 'Make a PNG or JPEG file smaller without changing how it looks.', accept: ['image'] },
 ];
 
 export const toolTitle = (key: string | undefined) => TOOLS.find(t => t.key === key)?.title;
@@ -20,8 +21,8 @@ export const toolTitle = (key: string | undefined) => TOOLS.find(t => t.key === 
 // The title a finished or running job shows, from the plan's tool.
 const BY_PLAN: Record<Plan['tool'], string> = {
   size: 'Make smaller', quality: 'Make smaller', clip: 'Trim', audio: 'Get the sound', gif: 'Make a GIF',
-  convert: 'Change format', frame: 'Save a picture', volume: 'Change the volume', reverse: 'Play backwards', stabilize: 'Steady a shaky video',
-  compose: 'Make a video',
+  convert: 'Change format', frame: 'Save a picture', volume: 'Change the volume', reverse: 'Play backwards', stabilize: 'Steady a shaky video', image: 'Shrink an image',
+  compose: 'Make a video', 'photo-index': 'Get photos ready for search',
 };
 export const planTitle = (tool: string) => BY_PLAN[tool as Plan['tool']] ?? 'Video job';
 

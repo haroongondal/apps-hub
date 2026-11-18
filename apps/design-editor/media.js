@@ -4,10 +4,12 @@ import { randomUUID } from 'node:crypto';
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import { Readable } from 'node:stream';
+import { promisify } from 'node:util';
+import zlib from 'node:zlib';
 import path from 'node:path';
 import {
-  DESTINATIONS, ffmpegArgs, ffprobeArgs, fromFfprobe, keyframeArgs, loudnormMeasureArgs, nextGifAttempt, nextRunnable, nextSizeAttempt, outputName,
-  parseKeyframe, parseLoudnorm, parseProgress, planAudio, planClip, planConvert, planFrame, planGif, planQuality, planReverse, planSize, planStabilize, planVolume, reduce, thumbArgs, validateSpec,
+  DESTINATIONS, ffmpegArgs, ffprobeArgs, fromFfprobe, keyframeArgs, loudnormMeasureArgs, nextGifAttempt, nextRunnable, nextSizeAttempt, optimizeImage, outputName,
+  parseKeyframe, parseLoudnorm, parseProgress, planAudio, planClip, planConvert, planFrame, planGif, planImage, planQuality, planReverse, planSize, planStabilize, planVolume, reduce, thumbArgs, validateSpec,
 } from './vendor/media-core/index.ts';
 
 // Electron cannot run a binary inside app.asar; the packager unpacks vendor/ffmpeg beside it.
@@ -15,7 +17,15 @@ const BIN = path.join(import.meta.dirname, 'vendor/ffmpeg').replace('app.asar', 
 const FFMPEG = path.join(BIN, 'ffmpeg');
 const FFPROBE = path.join(BIN, 'ffprobe');
 const INPUT_EXTENSIONS = ['mp4', 'm4v', 'mov', 'mkv', 'webm', 'mp3', 'm4a', 'aac', 'ogg', 'opus', 'wav', 'flac', 'ac3', 'eac3', 'mka'];
-const LABELS = { size: 'compressed', quality: 'compressed', clip: 'clip', convert: 'converted', frame: 'frame', volume: 'volume', reverse: 'reversed', stabilize: 'stabilized' };
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg'];
+const deflateAsync = promisify(zlib.deflate);
+// Level 9 with both strategies, keeping the smaller: filtered data often packs better with Z_FILTERED. Async, so the main process stays free.
+const ZLIB = {
+  inflate: (b, max) => zlib.inflateSync(b, { maxOutputLength: max }),
+  deflate: async b => (await Promise.all([zlib.constants.Z_DEFAULT_STRATEGY, zlib.constants.Z_FILTERED]
+    .map(strategy => deflateAsync(b, { level: 9, memLevel: 9, strategy })))).reduce((a, c) => (c.length < a.length ? c : a)),
+};
+const LABELS = { size: 'compressed', quality: 'compressed', clip: 'clip', convert: 'converted', frame: 'frame', volume: 'volume', reverse: 'reversed', stabilize: 'stabilized', image: 'lossless' };
 const STATS_PATH = () => path.join(app.getPath('userData'), 'media-stats.json');
 
 // The renderer only ever sends ids; the paths stay here (PRD AC-11).
@@ -68,12 +78,13 @@ export function registerMedia() {
   app.whenReady().then(() => protocol.handle(MEDIA_SCHEME, serveInput));
   ipcMain.handle('media-status', () => ({ ready: existsSync(FFMPEG) && existsSync(FFPROBE), destinations: DESTINATIONS }));
   ipcMain.handle('media-pick', async () => {
-    const r = await showOpen({ properties: ['openFile', 'multiSelections'], filters: [{ name: 'Video and audio', extensions: INPUT_EXTENSIONS }] });
+    const r = await showOpen({ properties: ['openFile', 'multiSelections'], filters: [{ name: 'Video, audio and images', extensions: [...INPUT_EXTENSIONS, ...IMAGE_EXTENSIONS] }] });
     if (r.canceled) return [];
     const picked = [];
     for (const file of r.filePaths) {
-      const json = JSON.parse(await execText(FFPROBE, ffprobeArgs(file), file));
-      const info = fromFfprobe(json, randomUUID(), path.basename(file));
+      const info = IMAGE_EXTENSIONS.includes(path.extname(file).slice(1).toLowerCase())
+        ? { id: randomUUID(), name: path.basename(file), bytes: statSync(file).size, durationS: 0, container: 'image', tracks: [] }
+        : fromFfprobe(JSON.parse(await execText(FFPROBE, ffprobeArgs(file), file)), randomUUID(), path.basename(file));
       inputs.set(info.id, { path: file, info });
       picked.push(info);
     }
@@ -133,6 +144,7 @@ async function planFor(spec) {
     case 'volume': return planVolume(input.info, spec.mode, spec.gainDb);
     case 'reverse': return planReverse(input.info, spec.sound);
     case 'stabilize': return planStabilize(input.info, spec.level);
+    case 'image': return planImage(input.info);
     default: return { ok: false, reason: 'invalid', detail: "This job type isn't supported yet." };
   }
 }
@@ -184,6 +196,7 @@ async function runJob(job) {
       if (!next.ok) throw new Error(refusalText(next));
       if (next.plan === plan) {
         const output = await publish(job, out, m);
+        if (plan.tool === 'image') output.note = `${Math.round((1 - output.bytes / input.info.bytes) * 100)}% smaller`;
         dispatch({ type: 'done', id: job.id, outputs: [output], at: Date.now() });
         return;
       }
@@ -204,7 +217,16 @@ function checkOutput(plan, bytes) {
   return { ok: true, plan };
 }
 
+async function encodeImage(jobId, plan, input, out) {
+  const bytes = await optimizeImage(new Uint8Array(await fs.readFile(input.path)), plan.format, ZLIB);
+  await new Promise(resolve => setImmediate(resolve));
+  if (cancelled.has(jobId)) throw new Error('Cancelled');
+  if (!bytes) throw new Error('This image is already as small as it can get without changing how it looks.');
+  await fs.writeFile(out, bytes);
+}
+
 async function encode(jobId, plan, input, out, tmp) {
+  if (plan.tool === 'image') return encodeImage(jobId, plan, input, out);
   if (plan.tool === 'size' && plan.encoder === 'x264') {
     const passlog = path.join(tmp, 'x264');
     await runFfmpeg(jobId, ffmpegArgs(plan, input.path, out, { n: 1, log: passlog }), input.info.durationS, [0, 0.5]);
@@ -314,7 +336,7 @@ function labelFor(plan, info) {
 }
 
 function extOf(plan) {
-  return { size: 'mp4', quality: 'mp4', clip: plan.ext, audio: plan.ext, gif: 'gif', convert: plan.ext, frame: plan.ext, volume: plan.ext, reverse: 'mp4', stabilize: 'mp4' }[plan.tool];
+  return { size: 'mp4', quality: 'mp4', clip: plan.ext, audio: plan.ext, gif: 'gif', convert: plan.ext, frame: plan.ext, volume: plan.ext, reverse: 'mp4', stabilize: 'mp4', image: plan.ext }[plan.tool];
 }
 
 function refusalText(r) {

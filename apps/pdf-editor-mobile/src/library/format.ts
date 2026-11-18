@@ -1,7 +1,7 @@
 import type { Item, ItemKind } from '@apps-hub/library-core';
 
-export const KIND_LABEL: Record<ItemKind, string> = { pdf: 'PDF', scan: 'Scan', article: 'Article' };
-export const KIND_PLURAL: Record<ItemKind, string> = { pdf: 'PDFs', scan: 'Scans', article: 'Articles' };
+export const KIND_LABEL: Record<ItemKind, string> = { pdf: 'PDF', scan: 'Scan', article: 'Article', note: 'Note', audio: 'Voice note', image: 'Image' };
+export const KIND_PLURAL: Record<ItemKind, string> = { pdf: 'PDFs', scan: 'Scans', article: 'Articles', note: 'Notes', audio: 'Voice notes', image: 'Images' };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 

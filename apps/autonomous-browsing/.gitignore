@@ -1,0 +1,13 @@
+node_modules/
+out/
+dist/
+.cache/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+evals/results/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

@@ -9,6 +9,7 @@ pnpm release <app>                 apps-hub-store Worker (Cloudflare)           
   gradle assembleRelease  ──PUT /admin/*──▶  R2: apps/<id>/android/<vc>.apk  ◀──GET /f/*?exp&sig── PackageInstaller
   verify signer + badging                   R2: manifest.json  ◀──GET /manifest.json (Bearer)──── list + status
   upsert manifest.json                      POST /sign (Bearer) → 10-minute HMAC-signed URL ───▶ download
+  by hand: PUT /admin/models/<sha256>       R2: models/<sha256>  ◀──GET /models/<sha256> (public)── apps fetching a model
 ```
 
 | Piece | Path |
@@ -16,7 +17,7 @@ pnpm release <app>                 apps-hub-store Worker (Cloudflare)           
 | Manifest schema, pinned cert (`SIGNING_CERT_SHA256`), app id → package table (`ANDROID_PACKAGES`) | `packages/store-manifest` |
 | Release CLI | `tools/release` (`pnpm release`) |
 | CI/CD (auto-release on push to `main`) | `.github/workflows/ci.yml`, `tools/release/src/changed.ts` |
-| Worker: auth, signed URLs, uploads | `tools/store-api` |
+| Worker: auth, signed URLs, uploads, and a public read-only `GET /models/<sha256>` for model files (the app checks each file's SHA-256; upload needs the release token) | `tools/store-api` |
 | Store app + native module (`store-installer`) | `apps/store`, `apps/store/modules/store-installer` |
 
 **iOS is not set up.** Ad hoc over-the-air installs and TestFlight both need a paid
@@ -73,7 +74,7 @@ RELEASE_TOKEN=<RELEASE_TOKEN from .dev.vars>
 | Secret | Who holds it | Can do |
 |---|---|---|
 | `STORE_TOKEN` | your phone (Store app, Keystore-encrypted) | read manifest, get signed download URLs |
-| `RELEASE_TOKEN` | your Mac (`release.env`) | the above plus upload builds and the manifest |
+| `RELEASE_TOKEN` | your Mac (`release.env`) | the above plus upload builds, the manifest and model files |
 | `SIGNING_KEY` | Worker only | HMAC for download URLs (10-minute expiry) |
 
 ---
@@ -230,6 +231,7 @@ whose package names are registered by a verified developer. Google says the requ
   - `com.haroon.pdfeditor`
   - `com.haroon.deputy` (once it is released)
   - `com.haroon.designeditor` (once it is released)
+  - `com.haroon.inflow` (once it is released)
 - [ ] Signing cert SHA-256 for all of them: `e3af4a92b1e858ede650bf53521c9be86702036100b2dc07393a262748d0317d`.
       A signed APK from `pnpm release` is in `<app>/android/app/build/outputs/apk/release/`.
 - [ ] Authorize your phone in the Console as one of the 20 devices.

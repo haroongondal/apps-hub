@@ -101,6 +101,7 @@ async function syncSuite() {
 
     await popup.getByRole('button', { name: 'Sign in to sync' }).click();
     await popup.getByRole('heading', { name: 'Sign in to sync' }).waitFor();
+    check('reached from an already-unlocked vault, sign-in offers no Lost access dead end', (await popup.getByRole('button', { name: 'Lost access to your account?' }).count()) === 0);
     await popup.getByLabel('Master password', { exact: true }).fill('not the password');
     await popup.getByLabel('Account key', { exact: true }).fill(world.accountKeyText);
     await popup.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -127,6 +128,76 @@ async function syncSuite() {
     const synced = await send({ type: 'syncNow' });
     check('editOnOneSideAppearsOnTheOther', reached && synced.ok && (await names()).join() === 'From Chrome,From phone,Phone mail', JSON.stringify([synced, await names()]));
 
+    await popup.getByRole('button', { name: 'Settings' }).click();
+    await popup.getByRole('heading', { name: 'Settings' }).waitFor();
+    await popup.getByLabel('Email address').fill('me@example.com');
+    await popup.getByLabel('Master password').fill(world.password);
+    await popup.getByRole('button', { name: 'Turn on' }).click();
+    await popup.getByRole('heading', { name: 'Save your recovery key' }).waitFor();
+    const newKey = (await popup.locator('.key').innerText()).trim();
+    await popup.locator('input').first().fill(newKey.slice(0, 4));
+    await popup.getByRole('button', { name: "I've saved it" }).click();
+    await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+    await popup.getByRole('button', { name: 'Settings' }).click();
+    await popup.getByRole('heading', { name: 'Settings' }).waitFor();
+    check('the Settings screen discloses that autofill works while locked', (await popup.innerText('body')).includes('Anyone who can use this browser profile can use this vault'));
+    const mailCode = /code is ([A-Z2-7-]+)\./.exec(world.mail.sent.at(-1)?.text ?? '')?.[1];
+    check('enrol asks for the emailed code', (await popup.innerText('body')).includes('Check your email for the code') && !!mailCode, mailCode);
+
+    // Mistyped email, or the code never arrives: the waiting-for-code screen must offer a way out, not a dead end.
+    await popup.getByRole('button', { name: 'Turn off' }).click();
+    await popup.getByLabel('Email address').waitFor();
+    check('Turn off from the waiting-for-code screen returns to the pre-enrolment form', (await popup.getByRole('button', { name: 'Turn on' }).count()) === 1);
+    await popup.getByLabel('Email address').fill('me@example.com');
+    await popup.getByLabel('Master password').fill(world.password);
+    await popup.getByRole('button', { name: 'Turn on' }).click();
+    await popup.getByRole('heading', { name: 'Save your recovery key' }).waitFor();
+    const key2 = (await popup.locator('.key').innerText()).trim();
+    await popup.locator('input').first().fill(key2.slice(0, 4));
+    await popup.getByRole('button', { name: "I've saved it" }).click();
+    await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+    await popup.getByRole('button', { name: 'Settings' }).click();
+    await popup.getByRole('heading', { name: 'Settings' }).waitFor();
+    const mailCode2 = /code is ([A-Z2-7-]+)\./.exec(world.mail.sent.at(-1)?.text ?? '')?.[1];
+    await popup.getByLabel('Code from the email').fill(mailCode2);
+    await popup.getByRole('button', { name: 'Confirm' }).click();
+    await popup.getByText('Recovery by email is on.').waitFor();
+    check('enrol, code typed, status enrolled', true);
+    await popup.getByRole('button', { name: 'Back' }).click();
+    await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+
+    // A transport failure in the email-recovery status check must degrade gracefully, not take down the whole popup.
+    world.online = false;
+    await popup.reload();
+    await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+    check('vaultScreen still renders its logins when the email-recovery status check is offline', (await popup.locator('.row').count()) > 0, await popup.innerText('body'));
+    await popup.getByRole('button', { name: 'Settings' }).click();
+    await popup.getByRole('heading', { name: 'Settings' }).waitFor();
+    check('settingsScreen still renders when the email-recovery status check is offline', (await popup.innerText('body')).includes("Couldn't check its status"), await popup.innerText('body'));
+    await popup.getByRole('button', { name: 'Back' }).click();
+    await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+    world.online = true;
+
+    // N2: a hung email-recovery status check (the Worker never answers) must not block the unlock screen's password field,
+    // the one thing it must always do instantly. Non-manual lock keeps the device-held token, so the status call is attempted.
+    await send({ type: 'lock' });
+    let releaseGate = () => {};
+    world.gate = new Promise((resolve) => { releaseGate = resolve; });
+    try {
+      await popup.reload();
+      const reloadedAt = Date.now();
+      await popup.getByLabel('Master password', { exact: true }).waitFor({ timeout: 1000 });
+      check('the unlock screen shows the password field promptly while the email-recovery status check hangs', Date.now() - reloadedAt < 1000);
+    } catch (e) {
+      check('the unlock screen shows the password field promptly while the email-recovery status check hangs', false, String(e));
+    } finally {
+      releaseGate();
+      world.gate = undefined;
+    }
+    await popup.getByLabel('Master password', { exact: true }).fill(world.password);
+    await popup.getByRole('button', { name: 'Unlock', exact: true }).click();
+    await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+
     const session = await sw.evaluate(() => chrome.storage.session.get('loginToken'));
     check('the login token is in session storage while unlocked', session.loginToken === b64(world.tokens.loginToken));
     const alarm = await sw.evaluate(async () => (await chrome.alarms.getAll()).find((a) => a.name === 'sync'));
@@ -136,7 +207,8 @@ async function syncSuite() {
     const secrets = [world.accountKeyText, world.accountKeyText.replaceAll('-', ''), world.tokens.loginToken, world.tokens.readToken, recoveryLoginToken(world.recoveryKey)]
       .flatMap((s) => (typeof s === 'string' ? [s, b64(new TextEncoder().encode(s))] : [b64(s), Buffer.from(s).toString('hex'), Buffer.from(s).toString('base64url')]));
     check('storageLocalHasNoReadableTokenOrAccountKeyText', secrets.every((s) => !dump.includes(s)), secrets.filter((s) => dump.includes(s)).length + ' found');
-    check('the account key is kept beside the header as raw bytes, nothing more', JSON.parse(dump).accountKey === b64(world.accountKey));
+    // Stale since Task 6/7 sealed the account key (apps-hub strongroom-extension-security plan): the plain `accountKey` entry is gone, replaced by `accountKeySealed`.
+    check('the account key is kept sealed beside the header, not as plain bytes', JSON.parse(dump).accountKey === undefined && typeof JSON.parse(dump).accountKeySealed === 'string');
 
     // The content script runs on every web page, so storage.local (the account key) must be closed to it: setAccessLevel(TRUSTED_CONTEXTS).
     const site = await ctx.newPage();
@@ -154,6 +226,7 @@ async function syncSuite() {
 
     await popup.getByRole('button', { name: 'Lock' }).click();
     await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
+    check('the unlock screen discloses that autofill works while locked', (await popup.innerText('body')).includes('Anyone who can use this browser profile can use this vault'));
     check('a signed-in extension offers sign-in on the unlock screen', (await popup.getByRole('button', { name: 'Sign in with your account' }).count()) === 1);
     await popup.getByRole('button', { name: 'Sign in with your account' }).click();
     await popup.getByRole('heading', { name: 'Sign in to sync' }).waitFor();
@@ -175,6 +248,89 @@ async function syncSuite() {
     await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
     await until('the unlock sync to bring the phone login', async () => (await names()).includes('After restart'));
     check('unlocking after a restart signs in again by itself and syncs', (await names()).join() === 'After restart,From Chrome,From phone,Phone mail', (await names()).join());
+
+    // A separate profile with no local vault: the device that lost access, walked through the real Worker world with a backdated release time instead of a 24-hour wait.
+    // ctx (the owner's signed-in popup) stays open so it can cancel the lost-access request below, same as a real second device would.
+    const lostProfile = mkdtempSync(join(tmpdir(), 'sg-lost-e2e-'));
+    const lost = await launchWith(syncDist, lostProfile);
+    const lostPopup = await lost.ctx.newPage();
+    lostPopup.on('pageerror', (e) => errors.push(`lost popup: ${e.message}`));
+    await lostPopup.goto(`chrome-extension://${lost.id}/popup.html`);
+    await lostPopup.getByRole('heading', { name: 'Create your vault' }).waitFor();
+    await lostPopup.getByRole('button', { name: 'Use my Strongroom account instead' }).click();
+    await lostPopup.getByRole('heading', { name: 'Sign in to sync' }).waitFor();
+
+    await lostPopup.getByRole('button', { name: 'Lost access to your account?' }).click();
+    await lostPopup.getByRole('button', { name: 'Request access by email' }).click();
+    await lostPopup.getByText('Check your email and open the confirm link').waitFor();
+    check('the waiting screen offers a way to start over before confirmation', (await lostPopup.getByRole('button', { name: 'Start a new request' }).count()) === 1);
+
+    // A single click only arms the dangerous action; declining it (navigating away without the second click) must never have fired the network call or touched the stored claim.
+    await lostPopup.getByRole('button', { name: 'Start a new request' }).click();
+    await lostPopup.getByRole('button', { name: 'Yes, start a new request' }).waitFor();
+    const claimBeforeDecline = (await lost.sw.evaluate(() => chrome.storage.local.get('lostClaim'))).lostClaim;
+    await lostPopup.getByRole('button', { name: 'Back' }).click();
+    await lostPopup.getByRole('heading', { name: 'Create your vault' }).waitFor();
+    const claimAfterDecline = (await lost.sw.evaluate(() => chrome.storage.local.get('lostClaim'))).lostClaim;
+    check('declining the start-over confirmation leaves the original claim untouched', !!claimBeforeDecline && claimAfterDecline === claimBeforeDecline);
+    await lostPopup.getByRole('button', { name: 'Use my Strongroom account instead' }).click();
+    await lostPopup.getByRole('button', { name: 'Lost access to your account?' }).click();
+    await lostPopup.getByText('Check your email and open the confirm link').waitFor();
+
+    // A claim is already stored, so this Check again does reach the network: a transport failure here must show a distinct retry state, never fall into the request-button state that would overwrite the real claim.
+    world.online = false;
+    await lostPopup.getByRole('button', { name: 'Check again' }).click();
+    await lostPopup.getByText("Couldn't check its status just now").waitFor();
+    check('a failed check shows a retry state, never the request button', (await lostPopup.getByRole('button', { name: 'Request access by email' }).count()) === 0);
+    world.online = true;
+    await lostPopup.getByRole('button', { name: 'Try again' }).click();
+    await lostPopup.getByText('Check your email and open the confirm link').waitFor();
+
+    await send({ type: 'emailRecovery', action: 'cancelRecovery' });
+    await lostPopup.getByRole('button', { name: 'Check again' }).click();
+    await lostPopup.getByText('Check your email and open the confirm link').waitFor();
+    const mailsBeforeRestart = world.mail.sent.length;
+    await lostPopup.getByRole('button', { name: 'Start a new request' }).click();
+    await lostPopup.getByRole('button', { name: 'Yes, start a new request' }).click();
+    // The waiting-screen's text and the unarmed button's label are identical before and after a restart; only the mail count proves the new claim actually reached the server.
+    await until('the restarted request to mail its own confirm link', async () => world.mail.sent.length > mailsBeforeRestart);
+
+    // A literal double-click must not complete the two-step confirm in one gesture: the second press of the pair should land on a still-disabled button.
+    const mailsBeforeDblclick = world.mail.sent.length;
+    const claimBeforeDblclick = (await lost.sw.evaluate(() => chrome.storage.local.get('lostClaim'))).lostClaim;
+    await lostPopup.getByRole('button', { name: 'Start a new request' }).dblclick();
+    await lostPopup.getByRole('button', { name: 'Yes, start a new request' }).waitFor();
+    const claimAfterDblclick = (await lost.sw.evaluate(() => chrome.storage.local.get('lostClaim'))).lostClaim;
+    check('a double-click does not fire the destructive request in one gesture',
+      world.mail.sent.length === mailsBeforeDblclick && claimAfterDblclick === claimBeforeDblclick,
+      JSON.stringify({ mailsBefore: mailsBeforeDblclick, mailsAfter: world.mail.sent.length, claimBeforeDblclick, claimAfterDblclick }));
+
+    // Confirmed elsewhere while this popup still shows the armed, unconfirmed screen: the service's own truth check must refuse the stale click, not just whatever the UI happens to render.
+    await lostPopup.waitForTimeout(700);
+    await fetch(new URL('/v1/lost/confirm', harness.url), {
+      method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: `t=${/t=([^&\s]+)/.exec(world.mail.sent.at(-1).text)[1]}`,
+    });
+    await lostPopup.getByRole('button', { name: 'Yes, start a new request' }).click();
+    await lostPopup.locator('.msg:not(:empty)').waitFor();
+    const msgSeen = await lostPopup.locator('.msg').innerText();
+    check('a stale screen cannot replace a claim the server now calls confirmed',
+      (await lost.sw.evaluate(() => chrome.storage.local.get('lostClaim'))).lostClaim === claimBeforeDblclick, msgSeen);
+
+    await lostPopup.getByRole('button', { name: 'Check again' }).click();
+    await lostPopup.getByText(/lets you back in at/).waitFor();
+    check('a confirmed, counting-down claim offers no way to replace it', (await lostPopup.getByRole('button', { name: 'Start a new request' }).count()) === 0);
+    world.sqlite.exec(`UPDATE lost_request SET release_at = ${Date.now() - 1000}`);
+    await lostPopup.getByRole('button', { name: 'Check again' }).click();
+    await lostPopup.getByLabel('Code from the email').waitFor();
+    await lostPopup.getByLabel('Code from the email').fill(mailCode2);
+    await lostPopup.getByLabel('New master password (at least 12 characters)').fill('a lost access password');
+    await lostPopup.getByLabel('Type it again').fill('a lost access password');
+    await lostPopup.getByRole('button', { name: 'Open and sign in' }).click();
+    await lostPopup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+    check('lost access recovers even after the first request was cancelled, by starting a new one', (await lostPopup.locator('.row').count()) > 0, await lostPopup.innerText('body'));
+    await lost.ctx.close();
+    rmSync(lostProfile, { recursive: true, force: true });
     await ctx.close();
   } finally {
     await harness.close();
@@ -309,6 +465,20 @@ try {
   const ahead = (alarms.find((a) => a.name === 'auto-lock')?.scheduledTime ?? 0) - Date.now();
   check('the five-minute auto-lock alarm is set while unlocked', ahead > 4 * 60_000 && ahead <= 5 * 60_000 + 5_000, String(ahead));
 
+  // The auto-lock alarm sends a plain `lock` (no manual flag), simulated here the same way the alarm handler does it: fills must keep working from the device-held keys.
+  await send({ type: 'lock' });
+  const afterAlarm = await send({ type: 'status' });
+  check('status says locked once the auto-lock alarm fires', afterAlarm.ok && afterAlarm.data.state === 'locked', JSON.stringify(afterAlarm));
+  await page.goto(GOOD);
+  await page.locator('#u').click();
+  await page.waitForTimeout(1500);
+  check('fill still works after the popup session auto-locks', await menuShown(page));
+  const autoBox = await page.locator('#u').boundingBox();
+  await page.mouse.click(autoBox.x + 30, autoBox.y + autoBox.height + 18);
+  await page.waitForTimeout(800);
+  check('the fill after auto-lock restores the saved credentials', (await page.inputValue('#u')) === 'tester' && (await page.inputValue('#p')) === 'p4ssw0rd-local');
+  await send({ type: 'unlock', password: MASTER }); // restore the unlocked session for the checks below
+
   const noApi = await page.evaluate(() => typeof chrome === 'undefined' || typeof chrome.runtime?.sendMessage !== 'function');
   check('the web page itself has no way to message the extension', noApi);
 
@@ -330,7 +500,17 @@ try {
   await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
   check('the right master password unlocks', true);
 
+  // Chrome closes the toolbar popup when the file picker opens, so Import must run in its own tab.
+  const opened = ctx.waitForEvent('page', { timeout: 5000 }).catch(() => null);
   await popup.getByRole('button', { name: 'Import' }).click();
+  const tabPage = await opened;
+  const inTab = !!tabPage && tabPage.url().endsWith('#import');
+  check('Import opens in its own tab and imports', inTab, tabPage ? tabPage.url() : 'no new page');
+  if (!inTab) throw new Error('Import did not open a tab');
+  tabPage.on('pageerror', (e) => errors.push(`import tab: ${e.message}`));
+  await tabPage.locator('input[type=file]').waitFor();
+  await popup.close();
+  popup = tabPage;
   await popup.locator('input[type=file]').setInputFiles(CSV);
   await popup.getByText('logins found').waitFor();
   const summary = await popup.getByText('logins found').innerText();
@@ -345,11 +525,63 @@ try {
   check('flagged duplicates are marked for review', (await popup.getByText('Review', { exact: true }).count()) === 2);
   await popup.screenshot({ path: `${SCRATCH}/5-list.png` });
 
+  await popup.getByRole('button', { name: 'Export', exact: true }).click();
+  await popup.getByRole('heading', { name: 'Export for Chrome' }).waitFor();
+  await popup.locator('input[type=password]').fill('the wrong password');
+  await popup.getByRole('button', { name: 'Export for Chrome' }).click();
+  await popup.locator('.msg:not(:empty)').waitFor();
+  check('Export refuses a wrong master password', (await popup.locator('.msg').innerText()).includes("isn't right"));
+  await popup.locator('input[type=password]').fill(MASTER);
+  const [download] = await Promise.all([popup.waitForEvent('download'), popup.getByRole('button', { name: 'Export for Chrome' }).click()]);
+  const exportPath = join(profile, 'export.csv');
+  await download.saveAs(exportPath);
+  const exported = readFileSync(exportPath, 'utf8');
+  check('Export downloads strongroom-passwords.csv with the five Chrome columns and the logins', download.suggestedFilename() === 'strongroom-passwords.csv' && exported.startsWith('name,url,username,password,note\r\n') && exported.includes('p4ssw0rd-local') && exported.includes('newuser@example.com'), exported.slice(0, 200));
+  await popup.getByText('to strongroom-passwords.csv').waitFor();
+  check('Export tells the owner to delete the file and counts logins left out', (await popup.getByText('Delete the file as soon as Chrome has imported it').isVisible()) && (await popup.innerText('body')).includes('no website'));
+  await popup.getByRole('button', { name: 'Done' }).click();
+  await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+
+  // A plain restart (no manual Lock before it) must not block a fill: the popup's session is gone, but the device-held keys answer it.
   await ctx.close();
   ({ ctx, sw, id } = await launch());
   popup = await openPopup();
   await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
-  check('after a browser restart the vault is locked', true);
+  check('after a plain restart the popup still shows locked', true);
+  const restartedPage = await ctx.newPage();
+  restartedPage.on('pageerror', (e) => errors.push(`restarted page: ${e.message}`));
+  await restartedPage.goto(GOOD);
+  await restartedPage.locator('#u').click();
+  await restartedPage.waitForTimeout(1500);
+  check('fill still works after a plain restart (real suggestions, not a locked prompt)', await menuShown(restartedPage));
+  const restartedBox = await restartedPage.locator('#u').boundingBox();
+  await restartedPage.mouse.click(restartedBox.x + 30, restartedBox.y + restartedBox.height + 18);
+  await restartedPage.waitForTimeout(800);
+  check('a plain restart does not prevent a fill', (await restartedPage.inputValue('#u')) === 'tester' && (await restartedPage.inputValue('#p')) === 'p4ssw0rd-local');
+  await restartedPage.close();
+
+  // Only the popup's manual Lock button clears the device-held keys; it, and only it, should block a fill after the next restart.
+  await popup.locator('input[type=password]').fill(MASTER);
+  await popup.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+  await popup.getByRole('button', { name: 'Lock' }).click();
+  await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
+  await ctx.close();
+  ({ ctx, sw, id } = await launch());
+  popup = await openPopup();
+  await popup.getByRole('heading', { name: 'Unlock Strongroom' }).waitFor();
+  const lockedPage = await ctx.newPage();
+  lockedPage.on('pageerror', (e) => errors.push(`locked page: ${e.message}`));
+  await lockedPage.goto(GOOD);
+  await lockedPage.locator('#u').click();
+  await lockedPage.waitForTimeout(1500);
+  check('fill asks to unlock after the manual Lock button and a browser restart', await menuShown(lockedPage));
+  const lockedBox = await lockedPage.locator('#u').boundingBox();
+  await lockedPage.mouse.click(lockedBox.x + 30, lockedBox.y + lockedBox.height + 18);
+  await lockedPage.waitForTimeout(800);
+  check('clicking the locked prompt does not fill, unlike the plain-restart case above', (await lockedPage.inputValue('#u')) === '' && (await lockedPage.inputValue('#p')) === '');
+  await lockedPage.close();
+
   await popup.locator('input[type=password]').fill(MASTER);
   await popup.getByRole('button', { name: 'Unlock', exact: true }).click();
   await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();

@@ -1,4 +1,5 @@
-// Inlines the three vendor scripts plus shell-mobile.js, app.js and touch.js of the mobile
+// Inlines the vendor scripts and the page scripts, in the order of the `scripts` array below
+// (fabric, pdf-lib, fontkit, shell-mobile.js, ai-layout.js, copy.js, image-maths.js, selection.js, app.js, touch.js) of the mobile
 // page, and the design-system stylesheet (fonts as data: URLs) into one self-contained file
 // for the Expo WebView asset. Pure Node, no dependencies. Also publishes window.__fontsData —
 // the page's fonts resolve from that table in the WebView, because the asset alone ships no
@@ -26,10 +27,10 @@ if (!Object.keys(fonts).length) throw new Error('no .ttf fonts found under vendo
 const table = `window.__fontsData = ${JSON.stringify(fonts)};`;
 if (/<\/script/i.test(table)) throw new Error('the font table strings contain an inline </script>');
 
-// app.js must run before touch.js (window.editor) and after shell-mobile.js (native.onMenu);
+// ai-layout.js only has to exist before app.js runs; app.js must run before touch.js (window.editor) and after shell-mobile.js (native.onMenu);
 // SPEC §14.1 lists app.js before shell-mobile, which the four native.* calls make impossible —
 // the as-built order lives in this array and in the handoff.
-const scripts = ['vendor/fabric.min.js', 'vendor/pdf-lib.min.js', 'vendor/fontkit.min.js', 'shell-mobile.js', 'copy.js', 'app.js', 'touch.js'];
+const scripts = ['vendor/fabric.min.js', 'vendor/pdf-lib.min.js', 'vendor/fontkit.min.js', 'shell-mobile.js', 'ai-layout.js', 'copy.js', 'image-maths.js', 'selection.js', 'app.js', 'touch.js'];
 let html = fs.readFileSync(page, 'utf8');
 for (const src of scripts) {
   const tag = `<script src="${src}"></script>`;

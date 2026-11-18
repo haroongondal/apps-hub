@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Cloudflare Worker: token-gated manifest, short-lived signed download URLs, release uploads (R2)",
+  "description": "Cloudflare Worker: token-gated manifest, short-lived signed download URLs, release uploads (R2), public read-only model files by SHA-256",
   "scripts": {
     "test": "node --test src/__tests__/worker.test.ts",
     "typecheck": "tsc --noEmit",

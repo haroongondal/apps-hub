@@ -12,6 +12,9 @@
   <!-- §15.4: scan a site's QR. Requested by the scan screen at scan time only. A phone without a camera still installs. -->
   <uses-permission android:name="android.permission.CAMERA" />
   <uses-feature android:name="android.hardware.camera" android:required="false" />
+  <!-- A pass is presented to an NFC reader as an NDEF tag by host card emulation. Optional: phones without it just cannot present. -->
+  <uses-permission android:name="android.permission.NFC" />
+  <uses-feature android:name="android.hardware.nfc.hce" android:required="false" />
   <application>
     <service
       android:name="expo.modules.strongroomvault.android.StrongroomAutofillService"
@@ -53,6 +56,15 @@
       android:excludeFromRecents="true"
       android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize"
       android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
+    <service
+      android:name="expo.modules.strongroomvault.android.StrongroomTagService"
+      android:exported="true"
+      android:permission="android.permission.BIND_NFC_SERVICE">
+      <intent-filter>
+        <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
+      </intent-filter>
+      <meta-data android:name="android.nfc.cardemulation.host_apdu_service" android:resource="@xml/strongroom_tag_service" />
+    </service>
     <service
       android:name="expo.modules.strongroomvault.android.KeepAliveService"
       android:exported="false"

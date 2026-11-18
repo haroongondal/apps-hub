@@ -1,0 +1,69 @@
+import React, { useState } from 'react';
+import { Button, Dot, Group, Header, Notice, Row, Screen, Text } from '@apps-hub/ui';
+import InflowCore, { type Status } from 'inflow-core';
+import { SMS_BLOCKED } from './messages.ts';
+import { requestSms } from './sms.ts';
+import { setupComplete, setupRows, type SetupRow } from './setup.ts';
+
+const ACTION_LABEL: Record<SetupRow['action'], string> = { access: 'Open notification access', appInfo: 'Open App info', battery: 'Open battery settings', sms: 'Allow SMS' };
+const STATUS_LABEL: Record<SetupRow['status'], string> = { ok: 'Done', todo: 'To do', manual: 'Check by hand' };
+
+function runSetupAction(action: Exclude<SetupRow['action'], 'sms'>): void {
+  if (action === 'access') InflowCore.openNotificationAccess();
+  else if (action === 'appInfo') InflowCore.openAppInfo();
+  else InflowCore.openBatterySettings();
+}
+
+// Shared by Setup and Settings. `notice` is shown where the rows are, after a refused SMS request.
+export function useSetupAction(onDone: () => void) {
+  const [blocked, setBlocked] = useState(false);
+  const run = (action: SetupRow['action']) => {
+    if (action !== 'sms') {
+      runSetupAction(action);
+      onDone();
+      return;
+    }
+    void requestSms().then((result) => {
+      setBlocked(result === 'never_ask_again');
+      onDone();
+    });
+  };
+  const notice = blocked ? (
+    <Notice tone="warn" action={<Button label="Open App info" variant="secondary" size="sm" onPress={() => InflowCore.openAppInfo()} />}>
+      {SMS_BLOCKED}
+    </Notice>
+  ) : null;
+  return { run, notice };
+}
+
+// An array of rows, not a fragment: Group draws its dividers between its direct children.
+export function setupRowElements(rows: SetupRow[], onAction: (action: SetupRow['action']) => void) {
+  return rows.map((r) => (
+    <Row key={r.id} title={r.title} subtitle={r.detail} leading={<Dot tone={r.status === 'ok' ? 'ok' : r.status === 'todo' ? 'warn' : 'neutral'} />}>
+      <Text variant="caption" tone="muted">
+        {STATUS_LABEL[r.status]}
+      </Text>
+      {r.status !== 'ok' && <Button label={ACTION_LABEL[r.action]} variant={r.status === 'todo' ? 'primary' : 'secondary'} size="sm" onPress={() => onAction(r.action)} />}
+    </Row>
+  ));
+}
+
+export function SetupScreen({ status, onAction, onFinished }: { status: Status; onAction: () => void; onFinished: () => void }) {
+  const { run, notice } = useSetupAction(onAction);
+  const rows = setupRows(status);
+  const complete = setupComplete(rows);
+  return (
+    <Screen scroll>
+      <Header title="Set up Inflow" subtitle="Inflow can only save notifications once these steps are done." />
+      <Group
+        title="Steps"
+        footer="Come back here after each step. Inflow checks again when you return. The two steps marked Check by hand can't be checked, so do them if they apply to your phone. Read SMS is optional."
+      >
+        {setupRowElements(rows, run)}
+      </Group>
+      {notice}
+      {!complete && <Notice tone="warn">Finish the steps marked To do to continue.</Notice>}
+      <Button label="Continue" onPress={onFinished} disabled={!complete} block />
+    </Screen>
+  );
+}

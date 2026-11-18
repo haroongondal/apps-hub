@@ -10,6 +10,7 @@ import {
   buildPtrQuery,
   extractDeviceDescription,
   parseHttpResponse,
+  parseNetbiosMac,
   parseNetbiosStatus,
   parsePtrAnswer,
   ssdpDescriptionRequest,
@@ -99,9 +100,9 @@ function nbEntry(name: string, suffix: number, flags: number): number[] {
   return [...ascii(name.padEnd(15, ' ')), suffix, flags >> 8, flags & 0xff];
 }
 
-function netbiosReply(entries: number[][], id = 0x42): number[] {
+function netbiosReply(entries: number[][], id = 0x42, unitId: number[] = []): number[] {
   const answerName = buildNetbiosStatusRequest(0).slice(12, 46);
-  const rdata = [entries.length, ...entries.flat()];
+  const rdata = [entries.length, ...entries.flat(), ...unitId];
   return [
     ...[id >> 8, id & 0xff, 0x84, 0x00, 0, 0, 0, 1, 0, 0, 0, 0],
     ...answerName,
@@ -143,6 +144,38 @@ test('parseNetbiosStatus rejects a name count larger than the data', () => {
   const reply = netbiosReply([nbEntry('ALI-LAPTOP', 0x00, 0x0400)]);
   reply[reply.length - 19] = 5;
   assert.equal(parseNetbiosStatus(reply, 0x42), null);
+});
+
+const WINDOWS_MAC = [0x00, 0x1a, 0x2b, 0x3c, 0x4d, 0x5e];
+
+test('parseNetbiosMac reads the unit ID after the name table as an uppercase MAC', () => {
+  const reply = netbiosReply(
+    [nbEntry('WORKGROUP', 0x00, 0x8400), nbEntry('ALI-LAPTOP', 0x00, 0x0400)],
+    0x42,
+    WINDOWS_MAC,
+  );
+  assert.equal(parseNetbiosMac(reply, 0x42), '00:1A:2B:3C:4D:5E');
+  assert.equal(parseNetbiosStatus(reply, 0x42), 'ALI-LAPTOP');
+});
+
+test('parseNetbiosMac treats an all-zero unit ID (Samba) as no MAC', () => {
+  const reply = netbiosReply([nbEntry('NAS', 0x00, 0x0400)], 0x42, [0, 0, 0, 0, 0, 0]);
+  assert.equal(parseNetbiosMac(reply, 0x42), null);
+  assert.equal(parseNetbiosStatus(reply, 0x42), 'NAS');
+});
+
+test('parseNetbiosMac rejects a wrong id, a missing unit ID and every truncation', () => {
+  const full = netbiosReply([nbEntry('ALI-LAPTOP', 0x00, 0x0400)], 0x42, WINDOWS_MAC);
+  assert.equal(parseNetbiosMac(full, 0x43), null);
+  assert.equal(parseNetbiosMac(netbiosReply([nbEntry('ALI-LAPTOP', 0x00, 0x0400)]), 0x42), null);
+  assert.equal(
+    parseNetbiosMac(netbiosReply([nbEntry('ALI-LAPTOP', 0x00, 0x0400)], 0x42, [1, 2, 3, 4, 5]), 0x42),
+    null,
+  );
+  for (let n = 0; n < full.length; n++) {
+    assert.equal(parseNetbiosMac(full.slice(0, n), 0x42), null, `cut at ${n}`);
+  }
+  assert.equal(parseNetbiosMac(full, 0x42), '00:1A:2B:3C:4D:5E');
 });
 
 test('ssdpDescriptionRequest builds the exact request for a same-host private URL', () => {

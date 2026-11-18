@@ -109,6 +109,7 @@ class Vault(
         is Entry.Login -> Row(id, "login", e.name, e.username)
         is Entry.Card -> Row(id, "card", e.name, "\u2022\u2022\u2022\u2022 " + e.number.filter(Char::isDigit).takeLast(4))
         is Entry.Note -> Row(id, "note", e.name, "")
+        is Entry.Pass -> Row(id, "pass", e.name, "")
         is Entry.Deleted -> null
       }
     }.sortedWith(compareBy({ it.name.lowercase() }, { it.id }))
@@ -280,5 +281,6 @@ private fun Entry.stamped(t: Long): Entry = when (this) {
   is Entry.Login -> copy(updatedAt = t)
   is Entry.Card -> copy(updatedAt = t)
   is Entry.Note -> copy(updatedAt = t)
+  is Entry.Pass -> copy(updatedAt = t)
   is Entry.Deleted -> copy(updatedAt = t)
 }

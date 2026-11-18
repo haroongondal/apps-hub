@@ -16,6 +16,7 @@ import type {
   ServiceScanCompletePayload,
 } from './model.ts';
 import type { NetLensNativeBinding, TcpScanStartParams } from './native-binding.ts';
+import { isDiscoveryRunningError } from './service-discovery.ts';
 import { computeSubnetForHost, type SubnetPlan } from './subnet-calculator.ts';
 
 /** Hard OS constraint ports (AGENTS.md rule 7). */
@@ -170,11 +171,22 @@ export class TcpScanEngine {
       this.binding.addListener('onServiceScanComplete', onComplete),
     ];
 
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await this.binding.startServiceDiscovery(timeoutMs);
-      completion = await done;
-      return { mdns, ssdp, cancelled: completion.cancelled };
+      let running = false;
+      try {
+        await this.binding.startServiceDiscovery(timeoutMs);
+      } catch (error) {
+        if (!isDiscoveryRunningError(error)) throw error;
+        // Another discovery (the Router tab's) is running: its events reach our listeners too, so wait for it, but not forever.
+        running = true;
+      }
+      completion = running
+        ? await Promise.race([done, new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), timeoutMs); })])
+        : await done;
+      return { mdns, ssdp, cancelled: completion?.cancelled ?? false };
     } finally {
+      clearTimeout(timer);
       for (const handle of detach) handle.remove();
     }
   }

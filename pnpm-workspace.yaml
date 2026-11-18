@@ -10,6 +10,8 @@ allowBuilds:
   canvas: false
   unrs-resolver: false
   esbuild: false
+  better-sqlite3: true
+  electron-winstaller: false
 
 patchedDependencies:
   decode-uri-component@0.2.2: patches/decode-uri-component@0.2.2.patch

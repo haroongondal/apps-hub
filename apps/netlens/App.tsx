@@ -2,19 +2,24 @@ import React, { useState } from 'react';
 import { View } from 'react-native';
 import { TabBar, ThemeProvider } from '@apps-hub/ui';
 
+import { ScanProvider } from './src/scan/ScanProvider';
 import DiagnosticsScreen from './src/screens/DiagnosticsScreen';
+import HomeScreen from './src/screens/HomeScreen';
+import RouterScreen from './src/screens/RouterScreen';
 import ScannerScreen from './src/screens/ScannerScreen';
 
 /**
- * Phase 4 composition: bottom navigation with the Scanner and Diagnostics
- * tabs (PRD FR-2 / FR-3). No external navigation dependency — F-Droid
- * footprint stays minimal with RN primitives only.
+ * Bottom navigation: Devices, Home, Router and Checks. Tabs unmount when hidden, but
+ * the device scan lives in ScanProvider above them, so it survives tab changes. No external navigation dependency —
+ * F-Droid footprint stays minimal with RN primitives only.
  */
-type TabKey = 'scanner' | 'diagnostics';
+type TabKey = 'scanner' | 'home' | 'router' | 'diagnostics';
 
 const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
-  { key: 'scanner', label: 'Scanner' },
-  { key: 'diagnostics', label: 'Diagnostics' },
+  { key: 'scanner', label: 'Devices' },
+  { key: 'home', label: 'Home' },
+  { key: 'router', label: 'Router' },
+  { key: 'diagnostics', label: 'Checks' },
 ];
 
 export default function App() {
@@ -22,10 +27,20 @@ export default function App() {
 
   return (
     <ThemeProvider brand="netlens">
-      <View style={{ flex: 1 }}>
-        {activeTab === 'scanner' ? <ScannerScreen /> : <DiagnosticsScreen />}
-      </View>
-      <TabBar tabs={TABS} value={activeTab} onChange={setActiveTab} />
+      <ScanProvider>
+        <View style={{ flex: 1 }}>
+          {activeTab === 'scanner' ? (
+            <ScannerScreen />
+          ) : activeTab === 'home' ? (
+            <HomeScreen />
+          ) : activeTab === 'router' ? (
+            <RouterScreen />
+          ) : (
+            <DiagnosticsScreen />
+          )}
+        </View>
+        <TabBar tabs={TABS} value={activeTab} onChange={setActiveTab} />
+      </ScanProvider>
     </ThemeProvider>
   );
 }

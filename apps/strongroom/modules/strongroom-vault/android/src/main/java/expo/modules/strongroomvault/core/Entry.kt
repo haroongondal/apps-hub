@@ -68,7 +68,28 @@ sealed interface Entry {
     override fun toString() = "Note(name=$name, text=***, updatedAt=$updatedAt)"
   }
 
+  data class Pass(
+    val name: String,
+    val code: String,
+    val format: PassFormat,
+    val note: String,
+    override val updatedAt: Long,
+  ) : Entry {
+    override fun toString() = "Pass(name=$name, code=***, format=${format.id}, note=***, updatedAt=$updatedAt)"
+  }
+
   data class Deleted(override val updatedAt: Long) : Entry
+}
+
+enum class PassFormat(val id: String) {
+  QR("qr"),
+  CODE128("code128"),
+  EAN13("ean13"),
+  ;
+
+  companion object {
+    fun of(id: String): PassFormat? = entries.firstOrNull { it.id == id }
+  }
 }
 
 object EntryJson {
@@ -98,6 +119,13 @@ object EntryJson {
         put("type", "note")
         put("name", e.name)
         put("text", e.text)
+      }
+      is Entry.Pass -> {
+        put("type", "pass")
+        put("name", e.name)
+        put("code", e.code)
+        put("format", e.format.id)
+        put("note", e.note)
       }
       is Entry.Deleted -> put("type", "deleted")
     }
@@ -129,8 +157,15 @@ object EntryJson {
         updatedAt = updatedAt,
       )
       "note" -> Entry.Note(o.string("name"), o.string("text"), updatedAt)
+      "pass" -> Entry.Pass(
+        name = o.string("name"),
+        code = o.string("code"),
+        format = PassFormat.of(o.string("format")) ?: malformed("format"),
+        note = o.string("note"),
+        updatedAt = updatedAt,
+      )
       "deleted" -> Entry.Deleted(updatedAt)
-      else -> null
+      else -> null // a type from a newer build: the callers keep the sealed record untouched and count it unreadable
     }
   } catch (e: IllegalArgumentException) {
     null // SerializationException, a wrong JSON type, a bad number and AppId's digest check are all IllegalArgumentExceptions

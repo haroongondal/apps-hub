@@ -1,0 +1,92 @@
+/* --machine is the app acting alone, --human is a step that needed a person.
+   Success is quiet on purpose: a clean run is the one thing with no colour. */
+
+:root {
+  color-scheme: light dark;
+
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #fbfbfd;
+  --surface-sunk: #f1f3f6;
+  --line: #e4e7ec;
+  --line-strong: #cfd4dd;
+  --text: #171a20;
+  --text-2: #585f6d;
+  --text-3: #666e7d;
+
+  --machine: #3f51c7;
+  --machine-wash: #3f51c71f;
+  --human: #8a5200;
+  --human-wash: #8a52001f;
+  --fault: #b3242c;
+  --fault-wash: #b3242c17;
+  --ok: #0f7a52;
+
+  --shadow-pop: 0 6px 24px #171a2014, 0 1px 2px #171a200f;
+
+  --sans: 'Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --t-display: 600 20px/1.2 var(--sans);
+  --t-title: 600 15px/1.35 var(--sans);
+  --t-body: 400 13px/1.5 var(--sans);
+  --t-body-strong: 500 13px/1.5 var(--sans);
+  --t-meta: 400 12px/1.45 var(--sans);
+  --t-label: 500 11px/1.2 var(--sans);
+  --t-code: 400 12px/1.45 var(--mono);
+  --t-code-strong: 500 12px/1.45 var(--mono);
+  --tracking-label: 0.07em;
+
+  --s-1: 2px;
+  --s-2: 4px;
+  --s-3: 6px;
+  --s-4: 8px;
+  --s-5: 12px;
+  --s-6: 16px;
+  --s-7: 20px;
+  --s-8: 24px;
+  --s-9: 32px;
+
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 10px;
+
+  --rail-automations: 268px;
+  --rail-runs: 232px;
+  --spine-gutter: 22px;
+
+  --dur-fast: 110ms;
+  --dur: 190ms;
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1116;
+    --surface: #15181f;
+    --surface-2: #1b1f28;
+    --surface-sunk: #0b0d11;
+    --line: #252a35;
+    --line-strong: #333a48;
+    --text: #e4e7ee;
+    --text-2: #9aa2b1;
+    --text-3: #7d8698;
+
+    --machine: #8a9bff;
+    --machine-wash: #8a9bff1f;
+    --human: #e8a94c;
+    --human-wash: #e8a94c1f;
+    --fault: #ff8a90;
+    --fault-wash: #ff8a901f;
+    --ok: #5fbf94;
+
+    --shadow-pop: 0 8px 28px #00000059, 0 1px 2px #00000040;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur: 0ms;
+  }
+}

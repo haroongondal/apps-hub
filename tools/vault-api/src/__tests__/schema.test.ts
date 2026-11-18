@@ -4,10 +4,17 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 const migration = readFileSync(new URL('../../migrations/0001_init.sql', import.meta.url), 'utf8');
+const escrowMigration = readFileSync(new URL('../../migrations/0002_escrow.sql', import.meta.url), 'utf8');
 
 function fresh() {
   const db = new DatabaseSync(':memory:');
   db.exec(migration);
+  return db;
+}
+
+function freshWithEscrow() {
+  const db = fresh();
+  db.exec(escrowMigration);
   return db;
 }
 
@@ -39,4 +46,39 @@ test('recordRevAndCiphertextAreRequired', () => {
   assert.throws(() => db.exec("INSERT INTO records (id, rev, ciphertext, updated_at) VALUES ('a', 1, NULL, 1)"), /NOT NULL/);
   db.exec("INSERT INTO records (id, rev, ciphertext, updated_at) VALUES ('a', 1, 'x', 1)");
   assert.throws(() => db.exec("INSERT INTO records (id, rev, ciphertext, updated_at) VALUES ('a', 2, 'y', 1)"), /UNIQUE/);
+});
+
+test('escrowMigrationAddsEscrowAndLostRequestHoldingOneRowEach', () => {
+  const db = freshWithEscrow();
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all();
+  assert.deepEqual(plain(tables), [{ name: 'account' }, { name: 'auth_state' }, { name: 'escrow' }, { name: 'lost_request' }, { name: 'meta' }, { name: 'records' }]);
+
+  db.exec("INSERT INTO escrow (id, email, blob, created_at) VALUES (1, 'a@example.com', 'blob', 1)");
+  assert.throws(() => db.exec("INSERT INTO escrow (id, email, blob, created_at) VALUES (2, 'b@example.com', 'blob', 1)"), /CHECK constraint failed/);
+
+  db.exec("INSERT INTO lost_request (id, claim_hash, confirm_hash, requested_at) VALUES (1, 'c', 'd', 1)");
+  assert.throws(() => db.exec("INSERT INTO lost_request (id, claim_hash, confirm_hash, requested_at) VALUES (2, 'c', 'd', 1)"), /CHECK constraint failed/);
+  assert.deepEqual(plain(db.prepare('SELECT release_at AS releaseAt, cancelled FROM lost_request').all()), [{ releaseAt: null, cancelled: 0 }]);
+});
+
+test('signinMigrationOnlyAddsSigninWithOneRowAndSigninRequestWithOneRowPerClaim', () => {
+  const db = freshWithEscrow();
+  const before = plain(db.prepare("SELECT name, sql FROM sqlite_master ORDER BY name").all());
+  db.exec(readFileSync(new URL('../../migrations/0003_signin.sql', import.meta.url), 'utf8'));
+  const after = plain(db.prepare("SELECT name, sql FROM sqlite_master ORDER BY name").all());
+  assert.deepEqual(after.filter((t) => !before.some((b) => JSON.stringify(b) === JSON.stringify(t))).map((t: any) => t.name), [
+    'signin',
+    'signin_request',
+    'sqlite_autoindex_signin_request_1',
+    'sqlite_autoindex_signin_request_2',
+    'sqlite_autoindex_signin_request_3',
+  ]);
+
+  db.exec("INSERT INTO signin (id, blob, created_at) VALUES (1, 'blob', 1)");
+  assert.throws(() => db.exec("INSERT INTO signin (id, blob, created_at) VALUES (2, 'blob', 1)"), /CHECK constraint failed/);
+  db.exec("INSERT INTO signin_request (id, claim_hash, approve_hash, deny_hash, requested_at) VALUES (1, 'c', 'a', 'd', 1)");
+  for (const dup of ["'c', 'a2', 'd2'", "'c2', 'a', 'd2'", "'c2', 'a2', 'd'"])
+    assert.throws(() => db.exec(`INSERT INTO signin_request (claim_hash, approve_hash, deny_hash, requested_at) VALUES (${dup}, 1)`), /UNIQUE constraint failed/);
+  db.exec("INSERT INTO signin_request (claim_hash, approve_hash, deny_hash, requested_at) VALUES ('c2', 'a2', 'd2', 1)");
+  assert.deepEqual(plain(db.prepare('SELECT approved_at AS approvedAt, cancelled FROM signin_request').all()), [{ approvedAt: null, cancelled: 0 }, { approvedAt: null, cancelled: 0 }]);
 });

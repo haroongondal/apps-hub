@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
-import { Button, Field, Header, Notice, Screen, Segmented } from '@apps-hub/ui';
-import Vault, { type EntryInput, type TotpInfo } from 'strongroom-vault';
+import { Button, Field, Group, Header, Notice, Row, Screen, Segmented, confirmAction } from '@apps-hub/ui';
+import Vault, { type EntryInput, type PassFormat, type TotpInfo } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
+import { normalisePassCode, validatePass } from './forms.ts';
 import { BackButton, SecretField } from './parts.tsx';
 
 type Kind = EntryInput['type'];
@@ -11,10 +12,17 @@ const KINDS = [
   { key: 'login', label: 'Login' },
   { key: 'card', label: 'Card' },
   { key: 'note', label: 'Note' },
+  { key: 'pass', label: 'Pass' },
+] as const;
+
+const FORMATS = [
+  { key: 'qr', label: 'QR' },
+  { key: 'code128', label: 'Code 128' },
+  { key: 'ean13', label: 'EAN-13' },
 ] as const;
 
 // totp stays null when untouched: the stored code, if any, is then left alone by the save.
-const BLANK = { name: '', username: '', password: '', sites: '', holder: '', number: '', expMonth: '', expYear: '', cvc: '', note: '', text: '', totp: null as string | null };
+const BLANK = { name: '', username: '', password: '', sites: '', holder: '', number: '', expMonth: '', expYear: '', cvc: '', note: '', text: '', code: '', format: 'qr' as PassFormat, totp: null as string | null };
 type Draft = typeof BLANK;
 
 // An empty box means "not set"; anything else must be a whole number in range.
@@ -24,15 +32,19 @@ function whole(text: string, min: number, max: number): number | null | undefine
   return n >= min && n <= max ? n : undefined;
 }
 
-function build(kind: Kind, d: Draft): EntryInput | string {
+function build(kind: Kind, d: Draft, keepApps: string[] | null): EntryInput | string {
   const name = d.name.trim();
   if (!name) return 'Give this entry a name.';
   if (kind === 'login') {
     const login: EntryInput = { type: 'login', name, username: d.username.trim(), password: d.password, sites: d.sites.split(/[\s,]+/).filter(Boolean), note: d.note };
     if (d.totp !== null) login.totp = d.totp;
-    return login;
+    return keepApps ? { ...login, apps: keepApps } : login;
   }
   if (kind === 'note') return { type: 'note', name, text: d.text };
+  if (kind === 'pass') {
+    const problem = validatePass(name, d.code, d.format);
+    return problem ?? { type: 'pass', name, code: normalisePassCode(d.code, d.format), format: d.format, note: d.note };
+  }
   const expMonth = whole(d.expMonth, 1, 12);
   const expYear = whole(d.expYear, 2000, 2999);
   if (expMonth === undefined) return 'Enter the expiry month as a number from 1 to 12.';
@@ -54,12 +66,14 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
   const [loaded, setLoaded] = useState(id === null);
   const [shown, setShown] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [apps, setApps] = useState<string[]>([]);
+  const [keepApps, setKeepApps] = useState<string[] | null>(null);
 
   const fail = (e: unknown) => (isLocked(e) ? onLocked() : setError(messageOf(e)));
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const totpLabel = totp ? [totp.issuer, totp.account, `${totp.digits} digits, every ${totp.period} s`].filter(Boolean).join(' · ') : '';
 
-  // The entry being edited is the one place, besides Show, where a stored password, card number or security code reaches JS.
+  // The entry being edited is the one place, besides Show, where a stored password, card number, security code or pass code reaches JS.
   useEffect(() => {
     if (id === null) return;
     try {
@@ -72,7 +86,9 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
         Object.assign(fields, { holder: e.holder ?? '', expMonth: e.expMonth ? String(e.expMonth) : '', expYear: e.expYear ? String(e.expYear) : '' });
         Object.assign(fields, { number: Vault.reveal(id, 'number'), cvc: Vault.reveal(id, 'cvc') });
       }
+      if (e.type === 'pass') Object.assign(fields, { format: e.format ?? 'qr', code: Vault.reveal(id, 'code') });
       setKind(e.type);
+      setApps(e.apps ?? []);
       set(fields);
       setLoaded(true);
     } catch (e) {
@@ -85,8 +101,18 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
     return () => sub.remove();
   }, []);
 
+  const linked = keepApps ?? apps;
+
+  const unlink = (app: string) =>
+    confirmAction({
+      title: `Unlink ${app}?`,
+      message: 'Strongroom stops offering this login in that app once you save. You can link it again by filling it there.',
+      confirmLabel: 'Unlink',
+      onConfirm: () => setKeepApps(linked.filter((a) => a !== app)),
+    });
+
   const save = () => {
-    const input = build(kind, draft);
+    const input = build(kind, draft, keepApps);
     if (typeof input === 'string') return setError(input);
     try {
       onSaved(Vault.save(id, input));
@@ -141,6 +167,13 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
               />
               <Button label={totp ? 'Replace QR code' : 'Scan QR code'} variant="ghost" onPress={scan} />
               {totp && <Button label="Remove code" variant="ghost" onPress={dropTotp} />}
+              {linked.length > 0 && (
+                <Group title="Linked apps" footer="Strongroom fills this login in these apps. Unlinking takes effect when you save.">
+                  {linked.map((a) => (
+                    <Row key={a} title={a} mono trailing={<Button label="Unlink" variant="ghost" size="sm" onPress={() => unlink(a)} accessibilityHint="Stops filling this login in that app" />} />
+                  ))}
+                </Group>
+              )}
             </>
           )}
           {kind === 'card' && (
@@ -150,6 +183,12 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
               <Field label="Expiry month" hint="1 to 12" value={draft.expMonth} onChangeText={(expMonth) => set({ expMonth })} keyboardType="number-pad" />
               <Field label="Expiry year" hint="Four digits, such as 2029" value={draft.expYear} onChangeText={(expYear) => set({ expYear })} keyboardType="number-pad" />
               <SecretField label="Security code" shown={shown} value={draft.cvc} onChangeText={(cvc) => set({ cvc })} keyboardType="number-pad" mono />
+            </>
+          )}
+          {kind === 'pass' && (
+            <>
+              <SecretField label="Code" hint="The number or text the barcode stands for." shown={shown} value={draft.code} onChangeText={(code) => set({ code })} mono />
+              <Segmented options={FORMATS} value={draft.format} onChange={(format) => set({ format })} accessibilityLabel="Barcode format" />
             </>
           )}
           {kind === 'note' ? (

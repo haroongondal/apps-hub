@@ -39,5 +39,7 @@ dependencies {
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
   // §15.4: the scan screen. Apache-2.0 (owner-approved, the feature's only new dependency); zxing core comes with it.
   implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+  // Barcode encoding for passes: pure Java, Apache-2.0, no transitive dependencies, no network or Play Services code.
+  implementation("com.google.zxing:core:3.5.3")
   testImplementation("junit:junit:4.13.2")
 }

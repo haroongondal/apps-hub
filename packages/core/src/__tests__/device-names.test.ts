@@ -32,6 +32,8 @@ function fullDevice(overrides: Partial<StoredDevice> = {}): StoredDevice {
     friendlyName: 'Samsung Q60',
     model: 'QN60Q60',
     netbiosName: 'ALI-LAPTOP',
+    person: 'Sara',
+    mac: 'AA:BB:CC:DD:EE:FF',
     ...overrides,
   };
 }
@@ -137,11 +139,14 @@ test('applyDeviceNames keeps identity and user fields and old names where new on
     friendlyName: 'Fresh friendly',
     model: null,
     netbiosName: null,
+    mac: '11:22:33:44:55:66',
   });
   assert.equal(merged.identityKey, existing.identityKey);
   assert.equal(merged.id, existing.id);
   assert.equal(merged.customName, 'My TV');
   assert.equal(merged.isTrusted, true);
+  assert.equal(merged.person, 'Sara');
+  assert.equal(merged.mac, 'AA:BB:CC:DD:EE:FF');
   assert.equal(merged.hostname, 'a.lan');
   assert.equal(merged.mdnsName, 'Old mDNS');
   assert.equal(merged.friendlyName, 'Fresh friendly');
@@ -155,6 +160,7 @@ const noNames = {
   friendlyName: null,
   model: null,
   netbiosName: null,
+  mac: null,
 };
 
 test('applyDeviceNames replaces every name when the hostname changed (IP reuse)', () => {
@@ -169,6 +175,30 @@ test('applyDeviceNames replaces every name when the hostname changed (IP reuse)'
   assert.equal(merged.id, tv.id);
   assert.equal(merged.customName, 'My TV');
   assert.equal(merged.isTrusted, true);
+});
+
+test('applyDeviceNames drops the old machine\'s MAC and person on IP reuse and takes the scanned MAC', () => {
+  const tv = fullDevice({ hostname: 'tv.lan' });
+  const merged = applyDeviceNames(tv, { ...noNames, hostname: 'phone.lan', mac: '00:1A:2B:3C:4D:5E' });
+  assert.equal(merged.mac, '00:1A:2B:3C:4D:5E');
+  assert.equal(merged.person, null);
+});
+
+test('applyDeviceNames on IP reuse without a scanned MAC leaves no MAC', () => {
+  const merged = applyDeviceNames(fullDevice({ hostname: 'tv.lan' }), { ...noNames, hostname: 'phone.lan' });
+  assert.equal(merged.mac, null);
+  assert.equal(merged.person, null);
+});
+
+test('applyDeviceNames keeps a typed MAC over a scanned one, and fills an empty one', () => {
+  const tv = fullDevice({ hostname: 'tv.lan' });
+  const different = applyDeviceNames(tv, { ...noNames, hostname: 'tv.lan', mac: '00:1A:2B:3C:4D:5E' });
+  assert.equal(different.mac, 'AA:BB:CC:DD:EE:FF');
+  assert.equal(different.person, 'Sara');
+  assert.equal(applyDeviceNames(tv, noNames).mac, 'AA:BB:CC:DD:EE:FF');
+  const empty = fullDevice({ mac: null });
+  assert.equal(applyDeviceNames(empty, { ...noNames, mac: '00:1A:2B:3C:4D:5E' }).mac, '00:1A:2B:3C:4D:5E');
+  assert.equal(applyDeviceNames(empty, noNames).mac, null);
 });
 
 test('applyDeviceNames keeps stored names when the hostname is unchanged, ignoring case', () => {

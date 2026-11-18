@@ -1,25 +1,24 @@
 /**
- * Home screen (phase-4 plan §4): connection shield, throughput from native
- * `onTrafficUpdate` deltas, auto-select-fastest, and the on-demand public
- * IP badge. Every tunnel state shown here arrives through the
- * `createTunnelClient` snapshot; nothing native is duplicated in this
- * component, and no state is rendered that the native side has not
- * reported.
+ * Home screen (phase-4 plan §4): throughput from native `onTrafficUpdate`
+ * deltas, the relay controls, and the on-demand public IP badge. The
+ * connection shield itself lives in the docked `TunnelShield` (App.tsx
+ * pins it below this scroll content); every tunnel state shown arrives
+ * through the `createTunnelClient` snapshot; nothing native is duplicated
+ * in this component, and no state is rendered that the native side has
+ * not reported.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import {
   Button,
-  Dot,
   Group,
   Notice,
   Pill,
   Readout,
   Row,
   Text,
-  toneColors,
+  space,
   useTheme,
-  type Tone,
 } from '@apps-hub/ui';
 
 import type { VpnNode } from 'open-tunnel-core';
@@ -27,7 +26,6 @@ import type { TunnelSnapshot } from '../tunnel/tunnel-client.ts';
 import { countryLabel, formatBytes, formatDuration, type CountryOption } from './format.ts';
 import { SMOOTHED_SAMPLE_COUNT, sparklineBars, type TrafficSample } from './traffic-samples.ts';
 import { forgetPublicIp, fetchPublicIp } from './public-ip.ts';
-import { shieldTap } from './shield-tap.ts';
 import { useTrafficRing } from './use-traffic-ring.ts';
 
 export interface HomeScreenProps {
@@ -40,28 +38,18 @@ export interface HomeScreenProps {
   /** Selected country code, or null for any country. */
   country: string | null;
   onSelectCountry(code: string | null): void;
-  scanning: boolean;
+  /** Relay-list refresh in progress (manual, pull-to-refresh, or auto). */
+  refreshing: boolean;
+  onRefreshList(): void;
   loadError: string | null;
   /** Verbatim local (pre-start) failure wording, shown next to the
    * native error surface; null when clear. */
   actionError: string | null;
-  onConnect(node: VpnNode): void;
   onAutoSelect(): void;
-  onDisconnect(): void;
   onOpenServers(): void;
   onOpenSettings(): void;
   onOpenSystemSettings(): void;
 }
-
-/** One tone per contract state; all six values render distinctly. */
-const STATE_TONE: Record<TunnelSnapshot['state'], Tone> = {
-  disconnected: 'neutral',
-  connecting: 'warn',
-  connected: 'ok',
-  reasserting: 'warn',
-  disconnecting: 'warn',
-  error: 'danger',
-};
 
 export function HomeScreen({
   tunnel,
@@ -70,12 +58,11 @@ export function HomeScreen({
   countries,
   country,
   onSelectCountry,
-  scanning,
+  refreshing,
+  onRefreshList,
   loadError,
   actionError,
-  onConnect,
   onAutoSelect,
-  onDisconnect,
   onOpenServers,
   onOpenSettings,
   onOpenSystemSettings,
@@ -91,19 +78,15 @@ export function HomeScreen({
   ];
 
   return (
-    <View style={{ gap: 24 }}>
-      <Group title="Connection">
-        <ShieldRow
-          tunnel={tunnel}
-          activeNode={activeNode}
-          scanning={scanning}
-          busy={busy}
-          onConnect={onConnect}
-          onAutoSelect={onAutoSelect}
-          onDisconnect={onDisconnect}
-        />
-        {live && tunnel.traffic && <ThroughputRow ring={ring} traffic={tunnel.traffic} />}
-      </Group>
+    <View style={{ gap: space.xl }}>
+      {/* The docked `TunnelShield` carries the connection surface now, so
+          this group only appears while there is throughput to show — a
+          settled tunnel never leaves a dangling header behind. */}
+      {live && tunnel.traffic && (
+        <Group title="Throughput">
+          <ThroughputRow ring={ring} traffic={tunnel.traffic} />
+        </Group>
+      )}
 
       {tunnel.state === 'error' && tunnel.message !== null && (
         <Notice tone="danger" title="Couldn't connect">
@@ -160,6 +143,24 @@ export function HomeScreen({
           onPress={busy ? undefined : onOpenServers}
           accessibilityHint="Opens the filterable server list"
         />
+        {/* Refresh keeps its own warn accent so an in-flight VPN Gate
+            fetch never reads like a scan or a plain secondary action; the
+            spinner carries the in-flight state, so the button stays
+            enabled and a second tap re-enters the same guarded path. */}
+        <Row
+          title="Refresh relay list"
+          subtitle="Fetches a fresh VPN Gate list and re-measures every relay"
+          trailing={
+            <Button
+              label="Refresh"
+              variant="secondary"
+              size="sm"
+              tone="warn"
+              busy={refreshing}
+              onPress={onRefreshList}
+            />
+          }
+        />
         <Row
           title="Auto-select fastest"
           subtitle={
@@ -170,9 +171,8 @@ export function HomeScreen({
           trailing={
             <Button
               label="Scan"
-              variant="secondary"
+              variant="primary"
               size="sm"
-              busy={scanning}
               disabled={busy || nodeCount === 0}
               onPress={onAutoSelect}
             />
@@ -204,144 +204,6 @@ export function HomeScreen({
 }
 
 // ---------------------------------------------------------------------------
-// Shield
-
-function ShieldRow({
-  tunnel,
-  activeNode,
-  scanning,
-  busy,
-  onConnect,
-  onAutoSelect,
-  onDisconnect,
-}: {
-  tunnel: TunnelSnapshot;
-  activeNode: VpnNode | null;
-  scanning: boolean;
-  busy: boolean;
-  onConnect(node: VpnNode): void;
-  onAutoSelect(): void;
-  onDisconnect(): void;
-}) {
-  const { c } = useTheme();
-  const tone = STATE_TONE[tunnel.state];
-  const color = tone === 'neutral' ? c.faint : toneColors(c, tone).fg;
-
-  const { title, subtitle, action } = shieldCopy(tunnel, activeNode, scanning);
-
-  const press = () => {
-    switch (shieldTap(tunnel.state)) {
-      case 'connect':
-        // The explicit start out of a terminal state — same path as the
-        // sheet rows; the client owns the transition into `connecting`.
-        if (activeNode) onConnect(activeNode);
-        else onAutoSelect();
-        return;
-      case 'retry':
-        // Retrying a relay that just failed usually fails again: VPN Gate relays drop out often.
-        onAutoSelect();
-        return;
-      case 'stop':
-        onDisconnect();
-        return;
-      case 'none':
-        return;
-    }
-  };
-
-  return (
-    <Pressable
-      onPress={press}
-      accessibilityRole="button"
-      accessibilityLabel={`Connection: ${title}. ${action}`}
-      accessibilityState={{ busy: busy || scanning }}
-      accessibilityHint={action}
-      android_ripple={{ color: c.raised }}
-      style={({ pressed }) => ({
-        alignItems: 'center',
-        gap: 8,
-        paddingVertical: 24,
-        paddingHorizontal: 16,
-        opacity: pressed ? 0.85 : 1,
-      })}
-    >
-      <View
-        style={{
-          width: 104,
-          height: 104,
-          borderRadius: 52,
-          borderWidth: 3,
-          borderColor: color,
-          backgroundColor: tone === 'neutral' ? c.raised : toneColors(c, tone).bg,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Dot tone={tone} size={36} />
-      </View>
-      <Text variant="heading" align="center">
-        {title}
-      </Text>
-      <Text variant="meta" tone="muted" align="center">
-        {subtitle}
-      </Text>
-    </Pressable>
-  );
-}
-
-function shieldCopy(
-  tunnel: TunnelSnapshot,
-  activeNode: VpnNode | null,
-  scanning: boolean,
-): { title: string; subtitle: string; action: string } {
-  const where = activeNode ? ` to ${countryLabel(activeNode)}` : '';
-  switch (tunnel.state) {
-    case 'connected':
-      return {
-        title: 'Connected',
-        subtitle: activeNode
-          ? `${countryLabel(activeNode)} · ${activeNode.hostName}`
-          : 'The tunnel is up',
-        action: 'Tap to disconnect',
-      };
-    case 'connecting':
-      return {
-        title: `Connecting${where}`,
-        subtitle: 'Opening the tunnel',
-        action: 'Tap to cancel',
-      };
-    case 'reasserting':
-      return {
-        title: 'Reconnecting',
-        subtitle: 'The tunnel is re-establishing',
-        action: 'Tap to cancel',
-      };
-    case 'disconnecting':
-      return {
-        title: 'Disconnecting',
-        subtitle: 'Closing the tunnel',
-        action: 'The native side owns the outcome',
-      };
-    case 'error':
-      return {
-        title: 'Connection failed',
-        subtitle: scanning ? 'Measuring relays' : 'Tap to find another relay',
-        action: 'Connects the fastest relay that answers',
-      };
-    default:
-      return {
-        title: 'Not connected',
-        subtitle: scanning
-          ? 'Measuring relays'
-          : activeNode
-            ? `Tap to connect to ${countryLabel(activeNode)}`
-            : 'Tap to find the fastest relay',
-        action: 'Connects the selected relay, or the fastest one',
-      };
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Throughput
 
 function ThroughputRow({ ring, traffic }: {
@@ -352,8 +214,8 @@ function ThroughputRow({ ring, traffic }: {
   const bars = sparklineBars(ring.all());
   const { c } = useTheme();
   return (
-    <View style={{ gap: 12, paddingHorizontal: 16, paddingBottom: 16 }}>
-      <View style={{ flexDirection: 'row', gap: 24 }}>
+    <View style={{ gap: space.md, paddingHorizontal: space.lg, paddingBottom: space.lg }}>
+      <View style={{ flexDirection: 'row', gap: space.xl }}>
         <Readout label="Down" value={formatBytes(traffic.bytesIn)} unit="/s" tone="ok" />
         <Readout label="Up" value={formatBytes(traffic.bytesOut)} unit="/s" tone="ok" />
         <Readout label="Connected" value={formatDuration(traffic.connectedDurationSec)} />
