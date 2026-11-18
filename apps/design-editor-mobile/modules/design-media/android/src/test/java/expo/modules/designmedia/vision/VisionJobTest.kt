@@ -61,6 +61,28 @@ class VisionJobTest {
     assertTrue("the edge is soft", soft > 0)
   }
 
+  // A cut-out as the cut-out tool writes it: transparent pixels keep the old background's RGB (white here). The real
+  // model is sharper than the LANCZOS alpha, so nearest 4x stands for it next to the smoothing fake.
+  @Test
+  fun upscaledCutoutHasNoRim() {
+    val w = 40
+    val c = 0x4080C0
+    for ((name, model) in listOf("nearest" to ::nearest, "smooth" to ::smooth)) {
+      val src = Image(IntArray(w * w) { i -> if (i / w in 10..29 && i % w in 10..29) (0xFF shl 24) or c else 0x00FFFFFF }, w, w)
+      val out = VisionJob.upscale(src, upscalePlan(w, w, 4)!!, model, { false }) {}
+      var edge = 0
+      for (p in out.argb) {
+        val a = p ushr 24
+        if (a == 0) assertEquals(0, p)
+        if (a in 1..254) edge++
+        if (a > 0) for (sh in intArrayOf(16, 8, 0)) {
+          assertTrue("$name rim %08x".format(p), Math.abs((p shr sh and 0xFF) - (c shr sh and 0xFF)) <= 2)
+        }
+      }
+      assertTrue("$name: the edge is soft", edge > 0)
+    }
+  }
+
   @Test
   fun aFailedWriteSaysSoAndLeavesNoFile() {
     val out = File(folder.root, "vision/job.png")

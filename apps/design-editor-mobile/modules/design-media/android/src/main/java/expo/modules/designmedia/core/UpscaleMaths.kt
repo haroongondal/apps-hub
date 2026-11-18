@@ -78,3 +78,28 @@ fun upscalePlan(w: Int, h: Int, scale: Int): UpscalePlan? {
 fun upscaleTiles(inW: Int, inH: Int): Int = ((inW + TILE - 1) / TILE) * ((inH + TILE - 1) / TILE)
 
 fun hasAlpha(argb: IntArray): Boolean = argb.any { it ushr 24 != 0xFF }
+
+// Gives every fully transparent pixel the RGB of its nearest (4-connected steps) visible pixel, in place, so an upscale
+// sees no edge in RGB where the cut-out had one only in alpha (no dark or old-background rim). One BFS pass: O(pixels).
+fun bleedTransparent(argb: IntArray, w: Int, h: Int) {
+  require(argb.size == w * h) { "bad image size" }
+  val queue = IntArray(argb.size)
+  val seen = BooleanArray(argb.size)
+  var tail = 0
+  for (i in argb.indices) if (argb[i] ushr 24 != 0) { seen[i] = true; queue[tail++] = i }
+  fun visit(j: Int, from: Int) {
+    if (seen[j]) return
+    seen[j] = true
+    argb[j] = argb[from] and 0xFFFFFF
+    queue[tail++] = j
+  }
+  var head = 0
+  while (head < tail) {
+    val i = queue[head++]
+    val x = i % w
+    if (x > 0) visit(i - 1, i)
+    if (x < w - 1) visit(i + 1, i)
+    if (i >= w) visit(i - w, i)
+    if (i + w < argb.size) visit(i + w, i)
+  }
+}

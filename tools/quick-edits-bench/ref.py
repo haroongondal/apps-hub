@@ -42,7 +42,9 @@ U2-Netp (u2netp.onnx, input "input.1" 1x3x320x320, first of 7 outputs "1959" 1x1
   mask can be scaled to any photo size in one step.
 Real-ESRGAN general-x4v3 (input "input" 1x3xTxT, output "output" 1x3x4Tx4T, T = tile + 2*overlap):
   RGB float32 0..1 in, RGB float 0..1 out (unclamped; clip, then floor(255 x + 0.5)). Alpha is
-  not upscaled by the reference (the input is converted to RGB); Phase 3.2 decides.
+  not upscaled by the reference (the input is converted to RGB). The app (VisionJob.upscale) first
+  fills the RGB of fully transparent pixels from the nearest visible pixel, runs RGB as here, and
+  resizes alpha alone with LANCZOS, so a model sharper than that alpha leaves no dark rim.
   Tiles: 128 px cores in row-major order; each input is the TxT window starting overlap px
   above-left of its core, with coordinates outside the image mirrored (numpy "reflect", edge
   pixel not repeated, bouncing as often as needed), so border tiles keep the one fixed shape:

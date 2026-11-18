@@ -117,6 +117,17 @@ class UpscaleMathsTest {
   }
 
   @Test
+  fun bleedTransparentFillsFromTheNearestVisiblePixel() {
+    // 4x2: visible red at (0, 0) and blue at (3, 1); no fill wraps from a row's end to the next row's start.
+    val px = intArrayOf(0x80FF0000.toInt(), 0x00FFFFFF, 0x00FFFFFF, 0x00FFFFFF, 0x00FFFFFF, 0x00FFFFFF, 0x00FFFFFF, 0xFF0000FF.toInt())
+    bleedTransparent(px, 4, 2)
+    assertArrayEquals(intArrayOf(0x80FF0000.toInt(), 0xFF0000, 0xFF0000, 0x0000FF, 0xFF0000, 0xFF0000, 0x0000FF, 0xFF0000FF.toInt()), px)
+    val clear = IntArray(6) { 0x00123456 }
+    bleedTransparent(clear, 3, 2)
+    assertTrue(clear.all { it == 0x00123456 })
+  }
+
+  @Test
   fun upscaleTilesCountsTheModelRuns() {
     assertEquals(25, upscaleTiles(540, 540))
     assertEquals(64, upscaleTiles(1024, 1024))
