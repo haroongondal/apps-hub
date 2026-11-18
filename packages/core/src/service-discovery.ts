@@ -9,7 +9,8 @@ export function isDiscoveryRunningError(error: unknown): boolean {
 
 /**
  * Runs one service discovery and returns the events that arrived. If another discovery is already running
- * (the scan's), it is not a failure: keep listening until that one completes or `durationMs` passes. Any other
+ * (the scan's), it is not a failure: wait until that one completes or `durationMs` passes, then start one more and
+ * collect from it (its replies went out before we listened). Any other
  * failure stops waiting and returns what arrived. `cancel()` removes the listeners and timers and ends the wait.
  */
 export function collectServiceEvents(
@@ -50,11 +51,14 @@ export function collectServiceEvents(
   };
   const run = async (): Promise<ServiceEvent[]> => {
     const failures: unknown[] = [];
-    const started = binding.startServiceDiscovery(durationMs).catch((error: unknown) => {
-      failures.push(error);
-    });
-    await wait(guardMs, started);
-    if (failures.length > 0 && isDiscoveryRunningError(failures[0])) await wait(durationMs, complete);
+    const start = (): Promise<void> =>
+      wait(guardMs, binding.startServiceDiscovery(durationMs).catch((error: unknown) => void failures.push(error)));
+    await start();
+    if (failures.length > 0 && isDiscoveryRunningError(failures[0])) {
+      // That run's replies went out before we listened, so ask again once it ends. A second failure just ends here.
+      await wait(durationMs, complete);
+      if (!cancelled) await start();
+    }
     cancel();
     return events;
   };
