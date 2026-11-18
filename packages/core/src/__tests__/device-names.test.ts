@@ -32,6 +32,8 @@ function fullDevice(overrides: Partial<StoredDevice> = {}): StoredDevice {
     friendlyName: 'Samsung Q60',
     model: 'QN60Q60',
     netbiosName: 'ALI-LAPTOP',
+    person: 'Sara',
+    mac: 'AA:BB:CC:DD:EE:FF',
     ...overrides,
   };
 }
@@ -142,6 +144,8 @@ test('applyDeviceNames keeps identity and user fields and old names where new on
   assert.equal(merged.id, existing.id);
   assert.equal(merged.customName, 'My TV');
   assert.equal(merged.isTrusted, true);
+  assert.equal(merged.person, 'Sara');
+  assert.equal(merged.mac, 'AA:BB:CC:DD:EE:FF');
   assert.equal(merged.hostname, 'a.lan');
   assert.equal(merged.mdnsName, 'Old mDNS');
   assert.equal(merged.friendlyName, 'Fresh friendly');
