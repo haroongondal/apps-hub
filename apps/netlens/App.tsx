@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { View } from 'react-native';
 import { TabBar, ThemeProvider } from '@apps-hub/ui';
 
+import { ScanProvider } from './src/scan/ScanProvider';
 import DiagnosticsScreen from './src/screens/DiagnosticsScreen';
 import RouterScreen from './src/screens/RouterScreen';
 import ScannerScreen from './src/screens/ScannerScreen';
 
 /**
- * Bottom navigation: Devices, Router and Checks. Tabs unmount when hidden, so
- * a screen's work stops when you leave it. No external navigation dependency —
+ * Bottom navigation: Devices, Router and Checks. Tabs unmount when hidden, but
+ * the device scan lives in ScanProvider above them, so it survives tab changes. No external navigation dependency —
  * F-Droid footprint stays minimal with RN primitives only.
  */
 type TabKey = 'scanner' | 'router' | 'diagnostics';
@@ -24,10 +25,12 @@ export default function App() {
 
   return (
     <ThemeProvider brand="netlens">
-      <View style={{ flex: 1 }}>
-        {activeTab === 'scanner' ? <ScannerScreen /> : activeTab === 'router' ? <RouterScreen /> : <DiagnosticsScreen />}
-      </View>
-      <TabBar tabs={TABS} value={activeTab} onChange={setActiveTab} />
+      <ScanProvider>
+        <View style={{ flex: 1 }}>
+          {activeTab === 'scanner' ? <ScannerScreen /> : activeTab === 'router' ? <RouterScreen /> : <DiagnosticsScreen />}
+        </View>
+        <TabBar tabs={TABS} value={activeTab} onChange={setActiveTab} />
+      </ScanProvider>
     </ThemeProvider>
   );
 }

@@ -1,13 +1,9 @@
 /**
- * ScannerScreen — FR-1/FR-2/FR-4 composition (Phase 4).
- * Flow: detect interface → sweep the clamped /24 (live events) →
- * enrich alive hosts with SSDP/mDNS facts → reconcile into the local
- * store → render → look up device names in the background and fill them in
- * as they arrive. Custom names and trust survive rescans via the store
- * port (AC-3); unknown identities surface the NEW badge (AC-2). Names never
- * feed the reconcile enrichment, so they cannot change a device's identity.
+ * ScannerScreen — FR-1/FR-2/FR-4 view (Phase 4). The scan itself runs in
+ * ScanProvider so it outlives this tab; this screen renders the devices and
+ * owns the filter, the device sheet and its ping, port and control checks.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, FlatList, Linking, Switch, View } from 'react-native';
 import {
   Button,
@@ -32,36 +28,19 @@ import {
 
 import {
   COMMON_PORTS,
-  TcpScanEngine,
-  applyDeviceNames,
   checkPorts,
   detectControls,
   webUrlFor,
-  cleanMdnsInstanceName,
-  computeSubnetForHost,
   displayNameFor,
-  hashNetworkId,
-  reconcileScan,
-  resolveDeviceNames,
   type DetectedControl,
-  type DeviceNames,
-  type DeviceStore,
-  type DiscoveredHost,
-  type HostEnrichment,
-  type InterfaceInfo,
   type KnownPort,
-  type NameTarget,
   type ReconciledDevice,
-  type ServiceEvent,
-  type SubnetPlan,
 } from '@apps-hub/core';
-import { createNetLensNativeBinding } from 'netlens-core';
 
 import { DeviceControls } from '../components/DeviceControls';
-import { openDeviceStore } from '../db/device-store-sqlite';
+import { useNetworkScan } from '../scan/ScanProvider';
 
 type FilterKey = 'all' | 'new' | 'untrusted';
-type Phase = 'idle' | 'scanning' | 'reconciling' | 'done' | 'error';
 
 const FILTERS: ReadonlyArray<{ key: FilterKey; label: string }> = [
   { key: 'all', label: 'All' },
@@ -73,12 +52,6 @@ const FILTERS: ReadonlyArray<{ key: FilterKey; label: string }> = [
 const PING_SAMPLE_COUNT = 5;
 const PING_INTERVAL_MS = 250;
 const PING_TIMEOUT_MS = 800;
-/** Most UPnP description URLs kept per device. */
-const MAX_SSDP_LOCATIONS = 8;
-
-/** mDNS/SSDP enrichment window appended around the sweep (SPEC §3.3). */
-const SERVICE_DISCOVERY_MS = 4000;
-
 /** First stored open/forwarded port, falling back to the hard-rule set. */
 function detailPort(device: ReconciledDevice): number {
   const first = Number(device.openPortsCsv.split(',')[0]);
@@ -98,29 +71,31 @@ interface PingResult {
 
 export default function ScannerScreen() {
   const { c } = useTheme();
-  const bindingProxy = useRef(createNetLensNativeBinding()).current;
-  const engineProxy = useRef(new TcpScanEngine(bindingProxy)).current;
-  const storeProxy = useRef<DeviceStore | null>(null);
-  // Bumped when a scan starts and on unmount; a name lookup from an older scan sees a mismatch and does nothing.
-  const scanGeneration = useRef(0);
-  // Latest rows, updated in step with state, so name merges and edits build on current data.
-  const devicesRef = useRef<ReconciledDevice[]>([]);
-  // Every UPnP description URL the last scan saw per IP, for the device sheet's remote controls.
-  const locationsByIp = useRef<Map<string, string[]>>(new Map());
+  const {
+    iface,
+    plan,
+    phase,
+    discovered,
+    devices,
+    mdnsTypes,
+    errorNote,
+    locationsByIp,
+    store,
+    runScan,
+    stopScan,
+    saveDevice,
+    binding: bindingProxy,
+  } = useNetworkScan();
 
-  const [iface, setIface] = useState<InterfaceInfo | null>(null);
-  const [plan, setPlan] = useState<SubnetPlan | null>(null);
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [discovered, setDiscovered] = useState(0);
-  const [devices, setDevices] = useState<ReconciledDevice[]>([]);
-  const commitDevices = useCallback((rows: ReconciledDevice[]): void => {
-    devicesRef.current = rows;
-    setDevices(rows);
-  }, []);
   const [filter, setFilter] = useState<FilterKey>('all');
-  const [errorNote, setErrorNote] = useState<string | null>(null);
-  const [detail, setDetail] = useState<ReconciledDevice | null>(null);
+  const [opened, setDetail] = useState<ReconciledDevice | null>(null);
+  // The open sheet follows the latest row, so names that arrive while it is open show up.
+  const detail = useMemo(
+    () => (opened === null ? null : (devices.find((row) => row.id === opened.id) ?? opened)),
+    [devices, opened],
+  );
   const [nameDraft, setNameDraft] = useState('');
+  const [personDraft, setPersonDraft] = useState('');
   const [trustDraft, setTrustDraft] = useState(false);
   const [pingTargetBusy, setPingTargetBusy] = useState(false);
   const [pingResult, setPingResult] = useState<PingResult | null>(null);
@@ -128,193 +103,9 @@ export default function ScannerScreen() {
   const [portCheck, setPortCheck] = useState<{ ip: string; open: KnownPort[] | null } | null>(null);
   // Tagged with the ip it was detected for, so a sheet moved to another device never shows it.
   const [controls, setControls] = useState<{ ip: string; found: DetectedControl[] } | null>(null);
-  const [mdnsTypes, setMdnsTypes] = useState<string[]>([]);
-  const [storeReady, setStoreReady] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    openDeviceStore()
-      .then((store) => {
-        if (cancelled) return;
-        storeProxy.current = store;
-        setStoreReady(true);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setErrorNote(`HomeNet could not open its device list on this phone: ${e instanceof Error ? e.message : String(e)}`);
-      });
-    bindingProxy.detectInterface().then((info) => {
-      if (!cancelled) setIface(info);
-    });
-    return () => {
-      cancelled = true;
-      scanGeneration.current += 1;
-    };
-  }, [bindingProxy]);
 
   const scanning = phase === 'scanning' || phase === 'reconciling';
   const totalTargets = plan?.hosts.length ?? 254;
-
-  const runScan = useCallback(async () => {
-    const store = storeProxy.current;
-    if (!store || scanning) return;
-    scanGeneration.current += 1;
-    const generation = scanGeneration.current;
-    setErrorNote(null);
-    setDiscovered(0);
-    setPhase('scanning');
-    try {
-      const info = await bindingProxy.detectInterface();
-      setIface(info);
-      if (!info) {
-        throw new Error("This phone isn't connected to a Wi-Fi network.");
-      }
-      const planned = computeSubnetForHost(info.localIp, info.cidrPrefix);
-      setPlan(planned);
-
-      // Enrichment buffers, filled by native events while the sweep runs.
-      const ssdpByIp = new Map<
-        string,
-        { usn: string | null; vendor: string | null; locations: string[] }
-      >();
-      const mdnsByIp = new Map<string, string>();
-      const mdns = new Set<string>();
-      const collectedTargets: DiscoveredHost[] = [];
-
-      const serviceHandle = bindingProxy.addListener(
-        'onServiceDiscovered',
-        (event: ServiceEvent): void => {
-          if (event.kind === 'mdns') {
-            if (typeof event.serviceName === 'string') mdns.add(event.serviceName);
-            return;
-          }
-          if (typeof event.host !== 'string' || !event.host) return;
-          if (event.kind === 'mdns-instance') {
-            // First usable name per host wins; a device announces many services.
-            // Keep the raw text: resolveDeviceNames is the one place that cleans it.
-            if (
-              typeof event.instanceName === 'string' &&
-              !mdnsByIp.has(event.host) &&
-              cleanMdnsInstanceName(event.instanceName) !== null
-            ) {
-              mdnsByIp.set(event.host, event.instanceName);
-            }
-            return;
-          }
-          if (event.kind === 'ssdp') {
-            const prev = ssdpByIp.get(event.host);
-            const locations = prev?.locations ?? [];
-            // A device on the LAN can spam SSDP, so the list stays short.
-            if (
-              typeof event.location === 'string' &&
-              !locations.includes(event.location) &&
-              locations.length < MAX_SSDP_LOCATIONS
-            ) {
-              locations.push(event.location);
-            }
-            ssdpByIp.set(event.host, {
-              usn: typeof event.usn === 'string' ? event.usn : (prev?.usn ?? null),
-              vendor: typeof event.server === 'string' ? event.server : (prev?.vendor ?? null),
-              locations,
-            });
-          }
-        },
-      );
-      const hostHandle = bindingProxy.addListener(
-        'onHostDiscovered',
-        (host: DiscoveredHost): void => {
-          collectedTargets.push(host);
-          if (host.isReachable) {
-            setDiscovered((count) => Math.min(count + 1, planned.hosts.length));
-          }
-        },
-      );
-
-      try {
-        const [scanSummary] = await Promise.all([
-          engineProxy.scanOnce({ requestedPrefix: info.cidrPrefix }),
-          engineProxy.discoverServices(SERVICE_DISCOVERY_MS),
-        ]);
-
-        setMdnsTypes([...mdns].sort());
-        if (scanGeneration.current === generation) {
-          locationsByIp.current = new Map(
-            [...ssdpByIp].map(([ip, facts]) => [ip, facts.locations]),
-          );
-        }
-        setPhase('reconciling');
-
-        const reachable = scanSummary.discovered.filter((entry) => entry.isReachable);
-        const enrichment: Record<string, HostEnrichment> = {};
-        for (const entry of reachable) {
-          const facts = ssdpByIp.get(entry.ip) ?? null;
-          enrichment[entry.ip] = {
-            usn: facts?.usn ?? null,
-            vendorOrModel: facts?.vendor ?? null,
-          };
-        }
-        const result = await reconcileScan(
-          {
-            networkId: hashNetworkId(info.gatewayIp ?? info.localIp, planned.prefix),
-            gatewayIp: info.gatewayIp,
-            subnetCidr: `${planned.networkIp}/${planned.prefix}`,
-            // Prefer the engine's collected set; the parallel-collected copy
-            // is a live mirror used only for the progress counter.
-            hosts: reachable.length > 0 ? reachable : collectedTargets,
-            enrichmentByIp: enrichment,
-          },
-          store,
-        );
-        commitDevices(result.devices);
-        setPhase('done');
-
-        // Names come after the sweep so they can't slow it down. Each one is
-        // merged and saved as it arrives; lookup failures just mean no name.
-        const onNames = (ip: string, names: DeviceNames): void => {
-          if (scanGeneration.current !== generation) return;
-          const row = devicesRef.current.find((d) => d.seenThisScan && d.lastIp === ip);
-          if (!row) return;
-          const merged: ReconciledDevice = { ...row, ...applyDeviceNames(row, names) };
-          if (
-            merged.hostname === row.hostname &&
-            merged.mdnsName === row.mdnsName &&
-            merged.friendlyName === row.friendlyName &&
-            merged.model === row.model &&
-            merged.netbiosName === row.netbiosName
-          ) {
-            return;
-          }
-          commitDevices(devicesRef.current.map((d) => (d.id === merged.id ? merged : d)));
-          setDetail((open) => (open !== null && open.id === merged.id ? merged : open));
-          store.updateDevice(merged).catch((e: unknown) => {
-            if (scanGeneration.current !== generation) return;
-            setErrorNote(`HomeNet could not save the device names it found: ${e instanceof Error ? e.message : String(e)}`);
-          });
-        };
-        const nameTargets: NameTarget[] = result.devices
-          .filter((d) => d.seenThisScan)
-          .map((d) => ({
-            ip: d.lastIp,
-            ssdpLocation: ssdpByIp.get(d.lastIp)?.locations[0] ?? null,
-            mdnsName: mdnsByIp.get(d.lastIp) ?? null,
-          }));
-        if (scanGeneration.current !== generation) return;
-        void resolveDeviceNames(bindingProxy, nameTargets, info.gatewayIp, onNames);
-      } finally {
-        serviceHandle.remove();
-        hostHandle.remove();
-      }
-    } catch (error: unknown) {
-      setErrorNote(error instanceof Error ? error.message : String(error));
-      setPhase('error');
-    }
-  }, [bindingProxy, commitDevices, engineProxy, scanning]);
-
-  const stopScan = useCallback(async () => {
-    await Promise.allSettled([
-      engineProxy.stop(),
-      engineProxy.stopServiceDiscovery(),
-    ]);
-  }, [engineProxy]);
 
   const activeCount = useMemo(
     () => devices.filter((row) => row.seenThisScan).length,
@@ -342,29 +133,22 @@ export default function ScannerScreen() {
   const openDetail = useCallback((device: ReconciledDevice): void => {
     setDetail(device);
     setNameDraft(device.customName ?? '');
+    setPersonDraft(device.person ?? '');
     setTrustDraft(device.isTrusted);
     setPingResult(null);
     setPortCheck(null);
   }, []);
 
   const saveDetail = useCallback(async (): Promise<void> => {
-    const store = storeProxy.current;
-    if (!store || detail === null) return;
-    // Build on the latest row: names may have arrived since the sheet opened.
-    const updated: ReconciledDevice = {
-      ...(devicesRef.current.find((row) => row.id === detail.id) ?? detail),
-      customName: nameDraft.trim() || null,
-      isTrusted: trustDraft,
-    };
-    // Commit before the write so a name arriving meanwhile builds on this edit.
-    commitDevices(devicesRef.current.map((row) => (row.id === updated.id ? updated : row)));
+    if (detail === null) return;
     setDetail(null);
-    try {
-      await store.updateDevice(updated);
-    } catch (e: unknown) {
-      setErrorNote(`HomeNet could not save your changes to this device: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }, [commitDevices, detail, nameDraft, trustDraft]);
+    await saveDevice({
+      ...detail,
+      customName: nameDraft.trim() || null,
+      person: personDraft.trim() || null,
+      isTrusted: trustDraft,
+    });
+  }, [detail, nameDraft, personDraft, saveDevice, trustDraft]);
 
   const pingTarget = useCallback(async (): Promise<void> => {
     if (detail === null || pingTargetBusy) return;
@@ -405,13 +189,13 @@ export default function ScannerScreen() {
     setControls(null);
     if (detailIp === null || iface === null) return;
     let stale = false;
-    void detectControls(bindingProxy, iface, detailIp, locationsByIp.current.get(detailIp) ?? []).then((found) => {
+    void detectControls(bindingProxy, iface, detailIp, locationsByIp.get(detailIp) ?? []).then((found) => {
       if (!stale) setControls({ ip: detailIp, found });
     });
     return () => {
       stale = true;
     };
-  }, [bindingProxy, detailIp, iface]);
+  }, [bindingProxy, detailIp, iface, locationsByIp]);
 
   const subnet = plan ? `${plan.networkIp}/${plan.prefix}` : null;
   const hasScanned = phase !== 'idle' || devices.length > 0;
@@ -494,7 +278,7 @@ export default function ScannerScreen() {
           label={hasScanned ? 'Scan again' : 'Scan network'}
           block
           onPress={runScan}
-          disabled={!storeReady}
+          disabled={store === null}
           accessibilityHint="Looks for devices on your Wi-Fi"
         />
       )}
@@ -628,6 +412,15 @@ export default function ScannerScreen() {
               onChangeText={setNameDraft}
               placeholder="e.g. Living room TV"
               hint="Shown instead of the address and kept across scans."
+              returnKeyType="done"
+            />
+
+            <Field
+              label="Whose phone is this?"
+              value={personDraft}
+              onChangeText={setPersonDraft}
+              placeholder="e.g. Sara"
+              hint="Shows this person on the Home tab."
               returnKeyType="done"
             />
 
