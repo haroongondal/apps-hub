@@ -60,6 +60,13 @@ Read this file completely first and trust the verified facts below; do not redo 
 - 2026-11-19: accessibility service fixed the taps (Notch 0.2.0 / build 3). Phase 1 built: settings, live preview, clock, battery, card (Notch 0.3.0 / build 4). Owner chose the ears layout; the island was rebuilt as ears and released as Notch 0.3.1 / build 5 and tested on the phone.
 - 2026-11-19 (later): owner answered the two call questions (calls in; speaker and end). Owner chose extra rows for the card. Design doc updated for calls. Phase 2 plan written with `superpowers:writing-plans`, self-reviewed (a missing spec layout and a `setActive` gap found and handled), saved. Awaiting plan approval. Nothing built, nothing committed in this session, no phone work.
 
+## Release and phone state (2026-11-19, after the phase 2 code)
+
+- Released: Notch 0.4.0, Store build 6, published with `pnpm release notch` from branch `notch` (commit `c5dcd918` is the version bump). Manifest read back: all 11 apps present, notch 6 0.4.0, halo 7 intact. Changelog text: "Timer, stopwatch, now playing and ongoing calls on the island. Now playing and calls need Notch under Notification access."
+- Phone (49kjmnuwonkffqzh): Notch updated through the Store by tapping Update from uiautomator bounds, then confirming the system dialog. Installed: versionCode 6, versionName 0.4.0. The coord claim was released at the end of this step.
+- Waiting on the owner before the phone test can run: (1) the settings screen says "Notch is off" although `enabled_accessibility_services` lists Notch; toggle Notch off and on under Accessibility (do not force-stop it); (2) Notch is not in `enabled_notification_listeners`; switch it on under Notification access (needed for now playing and calls); (3) for the call probe, make or take one phone call while the probe runs.
+- After those: claim device:49kjmnuwonkffqzh, run the Task 10 phone checks, set `SPEAKER_ACTION` and `HANGUP_ACTION` in core/Calls.kt from the probe, rebuild, and release a patch version only if the owner asks.
+
 ## Phase 2 status (2026-11-19, controller session)
 
 Code complete on branch `notch`, HEAD `2ed8d398`, 16 commits since the plan (`5a66db3`). Gates on HEAD: `corepack pnpm test` 16/16, `tsc --noEmit` clean, `./gradlew :notch-island:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL with 41 JVM tests, 0 failures. Reviews: privacy review of the listener (no Important), TypeScript review (clean), native runtime review (one Important crash, fixed in dadd8083; minors fixed or listed below). Not yet on the phone; not released; not merged.
