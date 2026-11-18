@@ -20,20 +20,35 @@ export async function aiHasKey(): Promise<boolean> {
   return (await readKey()) !== null;
 }
 
-export async function aiSetKey(key: unknown): Promise<true> {
+// Same reply as the Mac's ai-set-key (ledger R6): { ok, error? }. A write that fails still rejects; the bridge turns that into a replyError.
+export async function aiSetKey(key: unknown): Promise<{ ok: boolean; error?: 'nosecure' | 'bad' }> {
   const trimmed = typeof key === 'string' ? key.trim() : '';
-  if (!trimmed) throw new Error('Enter an API key.');
+  if (!trimmed) return { ok: false, error: 'bad' };
   await FileSystem.writeAsStringAsync(KEY_FILE, trimmed);
-  return true;
+  return { ok: true };
 }
 
-export async function aiRequest(body: unknown): Promise<AiReply> {
-  if (typeof body !== 'object' || body === null || Array.isArray(body)) return { ok: false, status: 0, error: 'bad' };
-  const key = await readKey();
-  if (!key) return { ok: false, status: 0, error: 'nokey' };
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+// The page picks the prompt and the tool, not the model, the spend or a server tool. Keep this in step with aiSanitise in apps/design-editor/main.js.
+const AI_MODEL = 'claude-sonnet-5-5'; // keep in step with MODEL in packages/design-editor-engine/ai-layout.js
+function aiSanitise(body: unknown): Record<string, unknown> | null {
+  if (!isObj(body) || !Array.isArray(body.messages)) return null;
+  if (body.tools !== undefined && (!Array.isArray(body.tools) || body.tools.some((t) => !isObj(t) || 'type' in t))) return null;
+  const clean: Record<string, unknown> = { ...body, model: AI_MODEL, max_tokens: Math.min(Number(body.max_tokens) || 8000, 8000) };
+  delete clean.stream;
+  return clean;
+}
+
+export async function aiRequest(page: unknown): Promise<AiReply> {
+  const body = aiSanitise(page);
+  if (!body) return { ok: false, status: 0, error: 'bad' };
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
+    // a storage failure answers 'nokey' and never rejects with a file path in the message
+    const key = await readKey().catch(() => null);
+    if (!key) return { ok: false, status: 0, error: 'nokey' };
+    timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     const res = await fetch(ENDPOINT, {
       method: 'POST',
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -54,6 +69,6 @@ export async function aiRequest(body: unknown): Promise<AiReply> {
   } catch {
     return { ok: false, status: 0, error: ctl.signal.aborted ? 'timeout' : 'offline' };
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
   }
 }

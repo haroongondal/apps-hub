@@ -118,8 +118,19 @@ ipcMain.handle('ai-set-key', async (_, key) => {
   await fs.writeFile(aiKeyPath(), safeStorage.encryptString(key));
   return { ok: true };
 });
-ipcMain.handle('ai-request', async (_, body) => {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) return { ok: false, status: 0, error: 'bad' };
+const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+// The page picks the prompt and the tool, not the model, the spend or a server tool. Keep this in step with aiSanitise in apps/design-editor-mobile/src/editor/ai.ts.
+const AI_MODEL = 'claude-sonnet-5-5'; // keep in step with MODEL in packages/design-editor-engine/ai-layout.js
+function aiSanitise(body) {
+  if (!isObj(body) || !Array.isArray(body.messages)) return null;
+  if (body.tools !== undefined && (!Array.isArray(body.tools) || body.tools.some(t => !isObj(t) || 'type' in t))) return null;
+  const clean = { ...body, model: AI_MODEL, max_tokens: Math.min(Number(body.max_tokens) || 8000, 8000) };
+  delete clean.stream;
+  return clean;
+}
+ipcMain.handle('ai-request', async (_, page) => {
+  const body = aiSanitise(page);
+  if (!body) return { ok: false, status: 0, error: 'bad' };
   const key = await readAiKey();
   if (!key) return { ok: false, status: 0, error: 'nokey' };
   try {
@@ -131,7 +142,7 @@ ipcMain.handle('ai-request', async (_, body) => {
     });
     const text = await res.text();
     let json;
-    try { json = JSON.parse(text); } catch { /* an HTTP error page without JSON keeps its status */ }
+    try { const parsed = JSON.parse(text); if (isObj(parsed)) json = parsed; } catch { /* an HTTP error page without JSON keeps its status */ }
     if (res.ok && !json) return { ok: false, status: res.status, error: 'bad' };
     return json ? { ok: res.ok, status: res.status, json } : { ok: res.ok, status: res.status };
   } catch (e) {
