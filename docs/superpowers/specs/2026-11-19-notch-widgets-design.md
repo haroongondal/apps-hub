@@ -11,21 +11,23 @@ Notch is a pill around the camera. It works and takes taps. Turn it into a small
 - A live preview of the collapsed and expanded pill inside the app's settings.
 - When music plays or a timer runs, the folded pill widens a little and shows a small indicator beside the camera, like a compact island.
 - Plugging in the charger opens the pill for 3 s with the battery ring.
+- Ongoing call (added 2026-11-19 after the owner chose it): while a call runs, the folded pill shows a green call timer and takes priority over music and timers. Tapped, the card shows the call timer and two controls, speaker and end call. The listener reads only the call notification's category and its duration. No caller name, number or text.
 
 ## Non-goals
 
 - No weather, calendar, notification text, messages, or anything that reads the screen. No network (INTERNET stays blocked). No new dependencies. No iOS.
+- Reading notifications is limited to media metadata (now playing) and the call category and duration (ongoing call). Nothing else from a notification is read.
 - No sounds, haptics, per-app rules, or custom widgets from outside.
 
 ## Anti-goals
 
-- Reading what is on screen or in notifications beyond media metadata (title, artist, art, play state) would make it a failure even if it works.
+- Reading what is on screen or in notifications beyond media metadata (title, artist, art, play state) and the call category and duration would make it a failure even if it works.
 - A settings screen that feels like a form dump; the preview and the swatches should be the first thing seen.
 
 ## Constraints
 
 - The pill is built from native Android views inside `NotchAccessibilityService` (RN cannot render in that overlay). RN renders only the app: settings controls and the preview.
-- Now playing needs the owner to switch on Notch under Notification access once (a `NotificationListenerService`, used only to reach `MediaSessionManager`). Without it the app says so and the widget is skipped; nothing else breaks.
+- Now playing and ongoing calls need the owner to switch on Notch under Notification access once (a `NotificationListenerService`, used to reach `MediaSessionManager` and to read the call notification's category and duration). Without it the app says so, the widgets are skipped and the clock and battery keep working; nothing else breaks.
 - Settings live in one `SharedPreferences` file read by both the app and the service (same process); the service re-applies on change.
 - Shared UI package for all app screens (`@apps-hub/ui`). The pill's own colours are user choices, kept in one `swatches` table, not app theme colours.
 - Copy is sentence case and plain words. Release screens carry no engineering text.
@@ -48,7 +50,7 @@ TS (`apps/notch`): `src/settings.ts` (types, defaults, validation, swatches, wid
 Phases, each released to the Store and tested on the phone:
 
 1. Settings, customization with live preview, clock/date/alarm header, battery and charging, compact indicator plumbing.
-2. Timer and stopwatch, now playing with the notification listener.
+2. Timer and stopwatch, now playing with the notification listener, and ongoing calls (speaker and end controls; the speaker control is shown only when the phone's call notification supplies that action).
 
 ## Left to the builder
 
