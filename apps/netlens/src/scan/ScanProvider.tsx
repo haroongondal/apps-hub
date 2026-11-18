@@ -6,6 +6,7 @@
  * names in the background and fill them in as they arrive. Names never feed the
  * reconcile enrichment, so they cannot change a device's identity.
  */
+import { AppState } from 'react-native';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   TcpScanEngine,
@@ -125,6 +126,22 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
   }, [bindingProxy]);
 
   const scanning = phase === 'scanning' || phase === 'reconciling';
+
+  // The Devices header reads iface; refresh it when the app returns, so a Wi-Fi change shows without a scan. A scan sets it itself.
+  useEffect(() => {
+    if (scanning) return;
+    let cancelled = false;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      bindingProxy.detectInterface().then((info) => {
+        if (!cancelled) setIface(info);
+      }, () => undefined);
+    });
+    return () => {
+      cancelled = true;
+      sub.remove();
+    };
+  }, [bindingProxy, scanning]);
 
   // Moves a person's tag to the same phone's new row; carryPersonTags returns only changed rows, so a second pass is empty.
   const carryTags = useCallback(
