@@ -120,11 +120,11 @@ ipcMain.handle('ai-set-key', async (_, key) => {
 });
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 // The page picks the prompt and the tool, not the model, the spend or a server tool. Keep this in step with aiSanitise in apps/design-editor-mobile/src/editor/ai.ts.
-const AI_MODEL = 'claude-sonnet-5-5'; // keep in step with MODEL in packages/design-editor-engine/ai-layout.js
+const AI_MODEL = 'openai/gpt-oss-120b'; // keep in step with MODEL in packages/design-editor-engine/ai-layout.js
 function aiSanitise(body) {
   if (!isObj(body) || !Array.isArray(body.messages)) return null;
-  if (body.tools !== undefined && (!Array.isArray(body.tools) || body.tools.some(t => !isObj(t) || 'type' in t))) return null;
-  const clean = { ...body, model: AI_MODEL, max_tokens: Math.min(Number(body.max_tokens) || 8000, 8000) };
+  if (body.tools !== undefined && (!Array.isArray(body.tools) || body.tools.some(t => !isObj(t) || t.type !== 'function' || !isObj(t.function)))) return null;
+  const clean = { ...body, model: AI_MODEL, max_completion_tokens: Math.min(Number(body.max_completion_tokens) || 8000, 8000) };
   delete clean.stream;
   return clean;
 }
@@ -134,9 +134,9 @@ ipcMain.handle('ai-request', async (_, page) => {
   const key = await readAiKey();
   if (!key) return { ok: false, status: 0, error: 'nokey' };
   try {
-    const res = await net.fetch('https://api.anthropic.com/v1/messages', {
+    const res = await net.fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      headers: { Authorization: `Bearer ${key}`, 'content-type': 'application/json' },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(60000),
     });

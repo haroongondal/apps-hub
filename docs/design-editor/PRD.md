@@ -73,7 +73,7 @@ hardware encoders; §6.6 works the numbers for a one-minute clip into 20 MB (720
 | Background on Android | Kotlin `mediaProcessing` foreground service owning a sequential queue | RESEARCH §9.1 |
 | Distribution | Android through the private Store only, never `adb install`; Mac built locally | AGENTS.md, memory |
 | Name | No new app name; the feature is "Media tools" ("SnapCompress" collides) | RESEARCH §15 |
-| Design with AI | The one online feature: a prompt sent to Anthropic's API builds an editable page from the editor's own objects. Only the prompt and the page size are sent; the key stays on the device and the page never sees it. Everything else stays offline. Images are not generated | Owner, 2026-11-18; `docs/superpowers/specs/2026-11-18-design-editor-ai-layout-design.md` |
+| Design with AI | The one online feature: a prompt sent to Groq's API (`openai/gpt-oss-120b`, OpenAI-compatible chat with one tool) builds an editable page from the editor's own objects. Only the prompt and the page size are sent; the key stays on the device and the page never sees it. Everything else stays offline. Images are not generated. Provider changed from Anthropic to Groq by the owner, 2026-11-19 | Owner, 2026-11-18; `docs/superpowers/specs/2026-11-18-design-editor-ai-layout-design.md` |
 
 ## 5. Requirements
 
