@@ -30,9 +30,9 @@ export async function removeJob(id: string): Promise<void> {
   await refreshQueue();
 }
 
-export async function pickFiles(accept: ('video' | 'audio')[], multiple = true): Promise<MediaInfo[]> {
+export async function pickFiles(accept: ('video' | 'audio' | 'image')[], multiple = true): Promise<MediaInfo[]> {
   const res = await DocumentPicker.getDocumentAsync({
-    type: accept.map(a => `${a}/*`), copyToCacheDirectory: false, multiple,
+    type: accept.flatMap(a => (a === 'image' ? ['image/png', 'image/jpeg'] : [`${a}/*`])), copyToCacheDirectory: false, multiple,
   });
   if (res.canceled) return [];
   const infos: MediaInfo[] = [];

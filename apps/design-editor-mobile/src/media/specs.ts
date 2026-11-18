@@ -28,5 +28,6 @@ export function specsFor(tool: ToolKey, f: MediaInfo, o: Options): JobSpec[] {
     case 'volume': return [o.louder === 'even' ? { tool: 'volume', inputId: f.id, mode: 'normalize', gainDb: 0 } : { tool: 'volume', inputId: f.id, mode: 'gain', gainDb: Number(o.louder) }];
     case 'backwards': return [{ tool: 'reverse', inputId: f.id, sound: o.withSound }];
     case 'steady': return [{ tool: 'stabilize', inputId: f.id, level: o.level }];
+    case 'image': return [{ tool: 'image', inputId: f.id }];
   }
 }

@@ -16,6 +16,9 @@ object Probe {
       .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
       ?.use { c -> if (c.moveToFirst()) c.getString(0).orEmpty() to c.getLong(1) else null }
       ?: (uri.lastPathSegment.orEmpty() to 0L)
+    if (context.contentResolver.getType(uri)?.startsWith("image/") == true) {
+      return mapOf("id" to uri.toString(), "name" to name, "bytes" to bytes, "durationS" to 0.0, "container" to "image", "tracks" to emptyList<Any>())
+    }
     val retriever = MediaMetadataRetriever()
     val meta = try {
       retriever.setDataSource(context, uri)
