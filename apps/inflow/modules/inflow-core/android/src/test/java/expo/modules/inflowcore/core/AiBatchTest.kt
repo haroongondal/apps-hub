@@ -238,6 +238,55 @@ class AiBatchTest {
     assertTrue(AiBatch.parse("[1,2]", listOf(input(1)), karachi).isEmpty())
   }
 
+  private fun suggestOf(suggest: String): AiSuggest? =
+    AiBatch.parse(reply(item(1, extra = ""","suggest":$suggest""")), listOf(input(1)), karachi).single().suggest
+
+  @Test fun replySuggestionParses() {
+    assertEquals(
+      AiSuggest(SuggestType.REPLY, null, "asks for the clinic address"),
+      suggestOf("""{"type":"reply","due":null,"detail":"asks for the clinic address"}"""),
+    )
+  }
+
+  @Test fun eventSuggestionDueIsLocalTimeInTheZone() {
+    val s = suggestOf("""{"type":"event","due":"2026-11-19T11:00","detail":"Dentist"}""")!!
+    assertEquals(SuggestType.EVENT, s.type)
+    assertEquals(Instant.parse("2026-11-19T06:00:00Z").toEpochMilli(), s.dueAt)
+    assertEquals(SuggestType.BILL, suggestOf("""{"type":"BILL","due":null,"detail":"Electricity"}""")!!.type)
+  }
+
+  @Test fun noSuggestionForNoneUnknownMalformedOrMissingFields() {
+    for (bad in listOf(
+      """{"type":"none","due":null,"detail":"x"}""",
+      """{"type":"spaceship","due":null,"detail":"x"}""",
+      """{"due":null,"detail":"x"}""",
+      """{"type":"reply","due":null}""",
+      """{"type":"reply","due":null,"detail":"  "}""",
+      """"reply"""",
+      """[1]""",
+      "null",
+    )) assertNull(bad, suggestOf(bad))
+    // The rest of the result still parses.
+    val r = AiBatch.parse(reply(item(1, extra = ""","suggest":"reply"""")), listOf(input(1)), karachi).single()
+    assertEquals("A short note.", r.summary)
+    assertNull(AiBatch.parse(reply(item(1)), listOf(input(1)), karachi).single().suggest)
+  }
+
+  @Test fun suggestDetailIsTrimmedAndCutAndBadDueIsNull() {
+    assertEquals("d".repeat(200), suggestOf("""{"type":"reply","due":null,"detail":"  ${"d".repeat(250)}  "}""")!!.detail)
+    assertEquals("ok", suggestOf("""{"type":"reply","due":null,"detail":"  ok "}""")!!.detail)
+    for (due in listOf("\"tomorrow\"", "\"2026-11-19\"", "12", "null")) {
+      assertNull(due, suggestOf("""{"type":"event","due":$due,"detail":"x"}""")!!.dueAt)
+    }
+  }
+
+  @Test fun systemPromptHasTheSuggestRuleAndNoTitle() {
+    val s = AiBatch.system()
+    assertTrue(s.contains("\"suggest\""))
+    assertTrue(s.contains("reply|bill|event|none"))
+    assertFalse(s.contains("\"title\""))
+  }
+
   private fun moneyItem(id: Long, amount: String, category: String? = "Food") =
     """{"id":$id,"kind":"money","summary":"A payment.","importance":"normal","money":{"direction":"out","own":false,"amount":$amount,"currency":"PKR","account":null,"counterparty":null,${
       if (category == null) "" else "\"category\":\"$category\","
