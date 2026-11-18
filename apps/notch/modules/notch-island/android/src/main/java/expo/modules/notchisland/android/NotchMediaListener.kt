@@ -14,7 +14,9 @@ import expo.modules.notchisland.core.sampleSize
 /**
  * Exists so Notch may reach MediaSessionManager and see the ongoing call notification.
  * Privacy: reads only media session metadata and play state, and for calls only the
- * notification category, `when`, isOngoing and its actions' PendingIntents. Never extras, text or action titles.
+ * notification category, `when` (start time), isOngoing, the action count, each action's
+ * PendingIntent, and the notification key (an id, used only to match removal).
+ * Never extras, text or action titles.
  */
 class NotchMediaListener : NotificationListenerService() {
   private var sessions: MediaSessionManager? = null

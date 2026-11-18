@@ -11,17 +11,17 @@ Notch is a pill around the camera. It works and takes taps. Turn it into a small
 - A live preview of the collapsed and expanded pill inside the app's settings.
 - When music plays or a timer runs, the folded pill widens a little and shows a small indicator beside the camera, like a compact island.
 - Plugging in the charger opens the pill for 3 s with the battery ring.
-- Ongoing call (added 2026-11-19 after the owner chose it): while a call runs, the folded pill shows a green call timer and takes priority over music and timers. Tapped, the card shows the call timer and two controls, speaker and end call. The listener reads only the call notification's category and its duration. No caller name, number or text.
+- Ongoing call (added 2026-11-19 after the owner chose it): while a call runs, the folded pill shows a green call timer and takes priority over music and timers. Tapped, the card shows the call timer and two controls, speaker and end call. The listener reads only the call notification's category, start time, isOngoing, the action count, each action's PendingIntent, and the notification key. No caller name, number or text.
 
 ## Non-goals
 
 - No weather, calendar, notification text, messages, or anything that reads the screen. No network (INTERNET stays blocked). No new dependencies. No iOS.
-- Reading notifications is limited to media metadata (now playing) and the call category and duration (ongoing call). Nothing else from a notification is read.
+- Reading notifications is limited to media metadata (now playing) and the call notification's category, start time, isOngoing, the action count, each action's PendingIntent, and the notification key (ongoing call). Nothing else from a notification is read.
 - No sounds, haptics, per-app rules, or custom widgets from outside.
 
 ## Anti-goals
 
-- Reading what is on screen or in notifications beyond media metadata (title, artist, art, play state) and the call category and duration would make it a failure even if it works.
+- Reading what is on screen or in notifications beyond media metadata (title, artist, art, play state) and the call notification's category, start time, isOngoing, the action count, each action's PendingIntent, and the notification key would make it a failure even if it works.
 - A settings screen that feels like a form dump; the preview and the swatches should be the first thing seen.
 
 ## Constraints
@@ -43,7 +43,7 @@ Notch is a pill around the camera. It works and takes taps. Turn it into a small
 
 Pure Kotlin (`core/`, JVM-tested): `NotchSettings` (parse, validate, defaults, JSON), `WidgetOrder`, `TimerState` (countdown and stopwatch state machine on a fake clock), `Format` (12/24-hour, date, alarm text), `PillGeometry` (adds size presets and the compact "active" width).
 
-Android (`android/`): `NotchAccessibilityService` builds the card from small view classes (`HeaderView`, `NowPlayingView`, `TimerView`, `BatteryView`) and listens for settings changes, battery and power broadcasts, and the next alarm; `NotchMediaListener` (notification listener) gives `MediaSessionManager` access and feeds `NowPlayingView`; `NotchIslandModule` adds `getSettings`, `setSettings`, `isMediaAllowed`, `openNotificationAccessSettings`.
+Android (`android/`): `NotchAccessibilityService` builds the card from small view classes (`HeaderView`, `NowPlayingView`, `TimerView`, `BatteryView`) and listens for settings changes, battery and power broadcasts, and the next alarm; `NotchMediaListener` (notification listener) gives `MediaSessionManager` access and feeds `NowPlayingView`; `NotchIslandModule` adds `getSettings`, `setSettings`, `isListenerAllowed`, `openNotificationAccessSettings`.
 
 TS (`apps/notch`): `src/settings.ts` (types, defaults, validation, swatches, widget reorder, pure and tested), a Preview component, sections for Look, Behaviour and Widgets on the app screen.
 
