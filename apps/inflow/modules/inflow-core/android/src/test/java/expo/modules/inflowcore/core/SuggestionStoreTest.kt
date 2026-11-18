@@ -84,14 +84,31 @@ class SuggestionStoreTest {
   }
 
   @Test fun closeRepliesFlipsWaitingRepliesOfThatKeyOnly() {
-    val a = store.add(s("reply:a"))!!
-    val b = store.add(s("reply:b"))!!
+    val a = store.add(s("reply:p|a"))!!
+    val b = store.add(s("reply:p|b"))!!
     val bill = store.add(s("bill:1:2026-12-01", SuggestionKind.BILL))!!
-    assertEquals(1, store.closeReplies("a", t0 + 5))
+    assertEquals(1, store.closeReplies("p", "a", t0 + 5))
     assertEquals(SuggestionState.EXPIRED, store.get(a)!!.state)
     assertEquals(SuggestionState.WAITING, store.get(b)!!.state)
     assertEquals(SuggestionState.WAITING, store.get(bill)!!.state)
-    assertEquals(0, store.closeReplies("a", t0 + 6))
+    assertEquals(0, store.closeReplies("p", "a", t0 + 6))
+  }
+
+  // Number chats share one conversation key (num:...) across apps, so the package is part of the reply key.
+  private fun replyFor(pkg: String, key: String = "num:3001234567") = AiResult(5, Kind.MESSAGE, "x", Importance.NORMAL, null, emptyList(), emptyList(), AiSuggest(SuggestType.REPLY, null, "asks"))
+    .let { r -> AiInput(5, "App", "Ali", null, "text", t0, "Ali", false, key, pkg) to r }
+
+  @Test fun aWhatsAppAndAnSmsReplyToTheSameNumberAreTwoSuggestions() {
+    val hook = suggestionHook(store, { AutopilotSettings() }, { t0 }, ZoneId.of("Asia/Karachi"))
+    for (pkg in listOf("com.whatsapp", "com.google.android.apps.messaging")) replyFor(pkg).let { (i, r) -> hook(r, i) }
+    assertEquals(setOf("reply:com.whatsapp|num:3001234567", "reply:com.google.android.apps.messaging|num:3001234567"), store.waiting().map { it.dedupeKey }.toSet())
+  }
+
+  @Test fun anOwnMessageInSignalExpiresOnlyTheSignalReply() {
+    val hook = suggestionHook(store, { AutopilotSettings() }, { t0 }, ZoneId.of("Asia/Karachi"))
+    for (pkg in listOf("com.whatsapp", "org.thoughtcrime.securesms")) replyFor(pkg).let { (i, r) -> hook(r, i) }
+    assertEquals(1, store.closeReplies("org.thoughtcrime.securesms", "num:3001234567", t0 + 1))
+    assertEquals(listOf("reply:com.whatsapp|num:3001234567"), store.waiting().map { it.dedupeKey })
   }
 
   @Test fun listFiltersByStateNewestFirstWithALimit() {
@@ -107,8 +124,8 @@ class SuggestionStoreTest {
   @Test fun theHookStoresAReplySuggestionForAnOwnerKind() {
     val hook = suggestionHook(store, { AutopilotSettings() }, { t0 }, ZoneId.of("Asia/Karachi"))
     val r = AiResult(5, Kind.MESSAGE, "x", Importance.NORMAL, null, emptyList(), emptyList(), AiSuggest(SuggestType.REPLY, null, "asks"))
-    hook(r, AiInput(5, "App", "Ali", null, "text", t0, "Ali", false, "wa:ali"))
-    hook(r, AiInput(5, "App", "Ali", null, "text", t0, "Ali", false, "wa:ali"))
-    assertEquals(listOf("reply:wa:ali"), store.waiting().map { it.dedupeKey })
+    hook(r, AiInput(5, "App", "Ali", null, "text", t0, "Ali", false, "wa:ali", "com.whatsapp"))
+    hook(r, AiInput(5, "App", "Ali", null, "text", t0, "Ali", false, "wa:ali", "com.whatsapp"))
+    assertEquals(listOf("reply:com.whatsapp|wa:ali"), store.waiting().map { it.dedupeKey })
   }
 }

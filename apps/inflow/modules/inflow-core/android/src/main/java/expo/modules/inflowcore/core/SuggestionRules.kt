@@ -7,6 +7,9 @@ import java.time.ZoneId
 object SuggestionRules {
   private const val DAY_MS = 24 * 3_600_000L
 
+  /** One reply per chat of one app: a number chat has the same key (`num:...`) in every app, so the package is part of it. */
+  fun replyKey(pkg: String?, conversationKey: String): String = "reply:" + (pkg?.let { pickedChatKey(it, conversationKey) } ?: conversationKey)
+
   fun fromResult(r: AiResult, input: AiInput, conversationKey: String?, now: Long, zone: ZoneId, s: AutopilotSettings): Suggestion? {
     val sg = r.suggest ?: return null
     if (input.own) return null
@@ -21,7 +24,7 @@ object SuggestionRules {
       SuggestionKind.REPLY -> {
         if (r.importance == Importance.LOW) return null
         // A reply without a chat key is keyed by its item, so it still dedupes against itself only.
-        "reply:${conversationKey ?: "item:${input.itemId}"}"
+        conversationKey?.let { replyKey(input.pkg, it) } ?: "reply:item:${input.itemId}"
       }
       SuggestionKind.BILL -> {
         if (due == null || due < now - 3 * DAY_MS) return null

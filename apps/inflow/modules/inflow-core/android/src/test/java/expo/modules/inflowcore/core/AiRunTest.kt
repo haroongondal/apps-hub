@@ -438,7 +438,7 @@ class AiRunTest {
     runner().run()
     val s = suggestionStore.waiting().single()
     assertEquals(SuggestionKind.REPLY, s.kind)
-    assertEquals("reply:sms:ali", s.dedupeKey)
+    assertEquals("reply:$sms|sms:ali", s.dedupeKey)
     assertEquals("Reply to Ali", s.title)   // built by code from the chat name
     assertEquals(id, s.itemId)
     assertEquals(clock + 24 * 3_600_000L, s.expiresAt)

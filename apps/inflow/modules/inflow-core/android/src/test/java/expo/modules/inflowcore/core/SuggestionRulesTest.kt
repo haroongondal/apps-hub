@@ -17,7 +17,7 @@ class SuggestionRulesTest {
   private val on = AutopilotSettings()
 
   private fun input(text: String = "hello", own: Boolean = false, conversation: String? = "Ali", sender: String? = "Ali") =
-    AiInput(7, "com.whatsapp", sender, null, text, now, conversation, own)
+    AiInput(7, "WhatsApp", sender, null, text, now, conversation, own, pkg = "com.whatsapp")
 
   private fun result(suggest: AiSuggest?, importance: Importance = Importance.NORMAL) =
     AiResult(7, Kind.MESSAGE, "summary", importance, null, emptyList(), emptyList(), suggest)
@@ -34,7 +34,7 @@ class SuggestionRulesTest {
   @Test fun replyBecomesASuggestion() {
     val s = run(reply())!!
     assertEquals(SuggestionKind.REPLY, s.kind)
-    assertEquals("reply:wa:ali", s.dedupeKey)
+    assertEquals("reply:com.whatsapp|wa:ali", s.dedupeKey)
     assertEquals("Reply to Ali", s.title)
     assertEquals(7L, s.itemId)
     assertEquals(SuggestionState.WAITING, s.state)

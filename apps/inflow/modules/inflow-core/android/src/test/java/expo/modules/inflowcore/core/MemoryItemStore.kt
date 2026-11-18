@@ -213,6 +213,7 @@ class MemoryItemStore : ItemStore, AiStore, BackfillStore, AutopilotItems {
   override fun unparsed(afterPostedAt: Long, afterId: Long, limit: Int): List<BackfillItem> =
     items.values
       .filter { (it.capture.postedAt > afterPostedAt || (it.capture.postedAt == afterPostedAt && it.id > afterId)) }
+      .filter { it.smsHash != null || it.emailHash != null || it.capture.pkg in smsPackages || it.capture.pkg == Email.GMAIL }   // SMS and Gmail only
       .filter { it.otpExpiresAt == null && !hasSource(it.id) && (it.emailText ?: it.capture.text).isNotBlank() }
       .sortedWith(compareBy({ it.capture.postedAt }, { it.id }))
       .take(limit)

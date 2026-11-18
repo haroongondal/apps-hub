@@ -11,7 +11,7 @@ class Ingest(
   private val aiOn: () -> Boolean = { false },
   private val bump: (name: String, by: Long) -> Unit = { _, _ -> },
   /** The owner wrote in this conversation (a new "You" message): its waiting reply suggestions are moot. */
-  private val onOwnMessage: (conversationKey: String) -> Unit = {},
+  private val onOwnMessage: (pkg: String, conversationKey: String) -> Unit = { _, _ -> },
   /** The owner picked this conversation for Autopilot (the one exception to R44). */
   private val pickedChat: (pkg: String, conversationKey: String?) -> Boolean = { _, _ -> false },
   /** A fast item was queued: the AI runner starts its quiet-window timer. */
@@ -40,7 +40,7 @@ class Ingest(
       saved++
       saveMedia(id, c)
       // Whatever goes wrong in the callback never takes the saved item back or stops the rest of the notification.
-      if (c.sender.equals("You", ignoreCase = true)) c.conversationKey?.let { runCatching { onOwnMessage(it) } }
+      if (c.sender.equals("You", ignoreCase = true)) c.conversationKey?.let { runCatching { onOwnMessage(c.pkg, it) } }
       otpExpiresAt?.let(onOtpSaved)
       if (otpExpiresAt == null) {
         val channel = when {
@@ -49,7 +49,8 @@ class Ingest(
           else -> Channel.NOTIFICATION
         }
         if (c.text.isNotBlank()) {
-          ledger?.onItem(id, c.text, channel, c.postedAt)
+          // Owner decision 2026-11-19: bank parsing and the ledger take only SMS and Gmail items, never a WhatsApp or app push.
+          if (fromSmsApp || c.pkg == Email.GMAIL) ledger?.onItem(id, c.text, channel, c.postedAt)
           // R44: of the notifications only an SMS app's and Gmail's reach the AI, plus the chats the owner picked for Autopilot.
           val picked = pickedChat(c.pkg, c.conversationKey)
           val own = c.sender.equals("You", ignoreCase = true)   // the owner's own line is context for the AI, never a reason to run

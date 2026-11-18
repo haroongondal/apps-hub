@@ -270,7 +270,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
   private fun Cursor.str(i: Int): String? = if (isNull(i)) null else getString(i)
 
   internal companion object {
-    /** Tombstone key prefix for an item whose transaction the owner deleted; SqlBackfillStore.UNPARSED_SQL checks it too. */
+    /** Tombstone key prefix for an item whose transaction the owner deleted; SqlBackfillStore.unparsedSql checks it too. */
     const val BLOCKED_PREFIX = "txnsrc:"
     // Autopilot's money rule: the owner's own money-out amounts of one category and currency since a time (own transfers left out), and every name seen on another transaction.
     const val OUT_HISTORY_SQL = "SELECT amount_minor FROM txns WHERE category = ? AND currency = ? AND direction = 'OUT' AND own = 0 AND at >= ? AND id <> ?"

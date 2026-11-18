@@ -17,8 +17,8 @@ interface SuggestionStore {
   fun setState(id: Long, state: SuggestionState, now: Long): Boolean
   /** WAITING and STARTED rows with expiresAt <= now become EXPIRED (Deputy writes DONE only on a clean finish). Returns the count. */
   fun expire(now: Long): Int
-  /** The owner wrote in this chat: its WAITING replies (dedupeKey "reply:<conversationKey>") become EXPIRED. Returns the count. */
-  fun closeReplies(conversationKey: String, now: Long): Int
+  /** The owner wrote in this chat of this app: its WAITING replies (dedupeKey [SuggestionRules.replyKey]) become EXPIRED. Returns the count. */
+  fun closeReplies(pkg: String, conversationKey: String, now: Long): Int
 }
 
 /** The states a row may be in for it to move to this one: WAITING starts (STARTED needs a WAITING row, so a second Run finds none) and DONE, SKIPPED and EXPIRED are final. */

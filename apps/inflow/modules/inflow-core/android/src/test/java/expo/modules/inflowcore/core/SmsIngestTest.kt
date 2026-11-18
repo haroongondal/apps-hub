@@ -102,6 +102,23 @@ class SmsIngestTest {
     assertEquals(setOf(Channel.SMS), txn.channels)
   }
 
+  // Owner decision 2026-11-19: only SMS and Gmail items reach the bank parser and the ledger.
+  private fun push(pkg: String, text: String) = notification(text).copy(pkg = pkg, appLabel = "App", key = "0|$pkg|1|null|10001", title = "Alfalah")
+
+  @Test fun aBankLookingWhatsAppOrAppPushMakesNoTransaction() {
+    assertEquals(1, ingest.onNotification(push("com.whatsapp", debit)))
+    assertEquals(1, ingest.onNotification(push("com.bank.app", debit.replace("1,500.00", "2,500.00"))))
+    assertEquals(2, store.items.size)
+    assertTrue(ledgerStore.txns.isEmpty())
+  }
+
+  @Test fun anSmsAppNotificationAndAGmailNotificationStillMakeTransactions() {
+    assertEquals(1, ingest.onNotification(push(pkg, debit)))
+    assertEquals(1, ingest.onNotification(push(Email.GMAIL, debit.replace("1,500.00", "2,500.00"))))
+    assertEquals(setOf(Channel.SMS_NOTIFICATION, Channel.EMAIL_NOTIFICATION), ledgerStore.txns.values.flatMap { it.channels }.toSet())
+    assertEquals(2, ledgerStore.txns.size)
+  }
+
   @Test fun notificationAndSmsAsSeparateSourcesMergeInLedger() {
     // Different texts (the notification truncates), so no item twin: the ledger does the merge.
     ingest.onNotification(notification(debit.substringAfter("Your ")))

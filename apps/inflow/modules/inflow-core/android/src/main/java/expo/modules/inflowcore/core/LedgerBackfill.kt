@@ -28,7 +28,8 @@ class LedgerBackfill(private val store: BackfillStore, private val ledger: Ledge
       ?.let { (_, a, i) -> (a.toLongOrNull() ?: 0L) to (i.toLongOrNull() ?: 0L) } ?: (Long.MIN_VALUE to 0L)
     val batch = store.inTransaction {
       val items = store.unparsed(afterAt, afterId, limit)
-      for (it in items) if (ledger.onItem(it.id, it.text, it.channel, it.postedAt) != null) linked++
+      // Only SMS and Gmail items reach the ledger (owner decision 2026-11-19); the store query already leaves the rest out, this keeps a twin or a later change honest.
+      for (it in items) if (it.channel != Channel.NOTIFICATION && ledger.onItem(it.id, it.text, it.channel, it.postedAt) != null) linked++
       items.lastOrNull()?.let { store.setMeta(CURSOR_KEY, "$VERSION:${it.postedAt}:${it.id}") }
       items
     }

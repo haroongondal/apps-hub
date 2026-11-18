@@ -63,7 +63,7 @@ object StoreHolder {
     Ingest(
       store, context.packageName, System::currentTimeMillis, onOtpSaved, ledger(store, context), smsPackages(context), media(context, store),
       aiOn = { AiConfig(store).on() }, bump = store::bump,
-      onOwnMessage = { key -> SqlSuggestionStore(store.db).closeReplies(key, System.currentTimeMillis()) },
+      onOwnMessage = { pkg, key -> SqlSuggestionStore(store.db).closeReplies(pkg, key, System.currentTimeMillis()) },
       // The one R44 exception: a conversation the owner picked for Autopilot. Read per call, so a change in Settings counts at once.
       pickedChat = { pkg, key -> key != null && pickedChatKey(pkg, key) in AutopilotSettings.fromJson(store.meta(AUTOPILOT_META)).pickedChats },
       onFast = { AiRunner.onFastArrival(context.applicationContext) },

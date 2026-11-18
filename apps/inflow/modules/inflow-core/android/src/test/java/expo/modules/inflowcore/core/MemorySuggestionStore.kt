@@ -33,8 +33,8 @@ class MemorySuggestionStore : SuggestionStore {
     return due.size
   }
 
-  override fun closeReplies(conversationKey: String, now: Long): Int {
-    val hit = rows.values.filter { it.state == SuggestionState.WAITING && it.kind == SuggestionKind.REPLY && it.dedupeKey == "reply:$conversationKey" }
+  override fun closeReplies(pkg: String, conversationKey: String, now: Long): Int {
+    val hit = rows.values.filter { it.state == SuggestionState.WAITING && it.kind == SuggestionKind.REPLY && it.dedupeKey == SuggestionRules.replyKey(pkg, conversationKey) }
     hit.forEach { rows[it.id] = it.copy(state = SuggestionState.EXPIRED, updatedAt = now) }
     return hit.size
   }

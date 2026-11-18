@@ -2,6 +2,7 @@ package expo.modules.inflowcore.android
 
 import android.database.Cursor
 import expo.modules.inflowcore.core.Suggestion
+import expo.modules.inflowcore.core.SuggestionRules
 import expo.modules.inflowcore.core.SuggestionKind
 import expo.modules.inflowcore.core.SuggestionState
 import expo.modules.inflowcore.core.SuggestionStore
@@ -42,8 +43,8 @@ class SqlSuggestionStore(private val db: SQLiteDatabase) : SuggestionStore {
   override fun expire(now: Long): Int =
     exec("UPDATE suggestions SET state = 'EXPIRED', updated_at = ? WHERE state IN ('WAITING', 'STARTED') AND expires_at <= ?", now, now)
 
-  override fun closeReplies(conversationKey: String, now: Long): Int =
-    exec("UPDATE suggestions SET state = 'EXPIRED', updated_at = ? WHERE state = 'WAITING' AND kind = 'REPLY' AND dedupe_key = ?", now, "reply:$conversationKey")
+  override fun closeReplies(pkg: String, conversationKey: String, now: Long): Int =
+    exec("UPDATE suggestions SET state = 'EXPIRED', updated_at = ? WHERE state = 'WAITING' AND kind = 'REPLY' AND dedupe_key = ?", now, SuggestionRules.replyKey(pkg, conversationKey))
 
   private fun exec(sql: String, vararg args: Any): Int =
     db.compileStatement(sql).use { st ->
