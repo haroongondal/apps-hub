@@ -63,6 +63,8 @@ export interface ExportCounts {
   logins: number;
   cards: number;
   notes: number;
+  // Passes are left out of the file: the importer would read their rows as logins.
+  passesSkipped: number;
 }
 
 export interface Diagnostics {

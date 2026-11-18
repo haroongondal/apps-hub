@@ -90,6 +90,10 @@ class StrongroomVaultModule : Module() {
     a.runOnUiThread { runCatching { nfcCardEmulation()?.unsetPreferredService(a) } }
   }
 
+  private fun restoreBrightness() {
+    appContext.currentActivity?.let { a -> a.runOnUiThread { a.window.attributes = a.window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE } } }
+  }
+
   private fun nfcCardEmulation(): CardEmulation? =
     NfcAdapter.getDefaultAdapter(context)?.let { CardEmulation.getInstance(it) }
 
@@ -115,13 +119,16 @@ class StrongroomVaultModule : Module() {
     OnDestroy {
       VaultHolder.lockListener = null
       VaultHolder.syncListener = null
+      // A JS reload destroys the module while a pass may be armed and the screen lit.
+      stopPresenting()
+      restoreBrightness()
     }
 
     // Also on a cold start: a killed process can leave a copied secret that no timer or job will clear.
     // A presented pass and a lit-up screen must not outlive the app being on screen.
     OnActivityEntersBackground {
       stopPresenting()
-      appContext.currentActivity?.let { a -> a.runOnUiThread { a.window.attributes = a.window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE } } }
+      restoreBrightness()
     }
 
     OnActivityEntersForeground { appContext.currentActivity?.let { a -> a.runOnUiThread { SensitiveClipboard.whenFocused(a) } } }
@@ -355,7 +362,7 @@ class StrongroomVaultModule : Module() {
             } finally {
               bytes.fill(0)
             }
-            mapOf("logins" to entries.count { it is Entry.Login }, "cards" to entries.count { it is Entry.Card }, "notes" to entries.count { it is Entry.Note })
+            mapOf("logins" to entries.count { it is Entry.Login }, "cards" to entries.count { it is Entry.Card }, "notes" to entries.count { it is Entry.Note }, "passesSkipped" to entries.count { it is Entry.Pass })
           } catch (e: Exception) {
             // The picker already made the file: don't leave an empty or half-written one behind.
             runCatching { DocumentsContract.deleteDocument(context.contentResolver, uri) }
@@ -560,6 +567,11 @@ class StrongroomVaultModule : Module() {
       if (!adapter.isEnabled) throw CodedException("NFC_OFF", "NFC is off. Turn it on in the phone's settings, then try again.", null)
       val tooLong = CodedException("CODE_TOO_LONG", "This code is too long to present over NFC. Show the barcode instead.", null)
       if (!Presenting.arm(pass.code)) throw tooLong
+      // The vault can lock between the read above and the arm; its lock hook then ran before there was anything to disarm. Not nested in the vault's monitor: Vault.onLock takes Presenting's, so the reverse order could deadlock.
+      if (!VaultHolder.get(context).isUnlocked) {
+        Presenting.disarm()
+        throw CodedException("LOCKED", "Strongroom is locked. Unlock it and try again.", null)
+      }
       val a = activity()
       val routed = withContext(Dispatchers.Main) { runCatching { CardEmulation.getInstance(adapter).setPreferredService(a, Presenting.serviceComponent(a)) }.getOrDefault(false) }
       if (!routed) {
