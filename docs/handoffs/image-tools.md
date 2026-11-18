@@ -174,43 +174,21 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
 
 ## Current state + exact next step
 
-Design Editor build 14 is live (2026-11-18, from image-tools 3de9ec14): quick edits (feature 3), Clean
-up the gallery (feature 2), and the ONNX Runtime telemetry removal. Owner checked Clean up on 13:
-works. image-tools is NOT merged to main: any Design Editor release from main or photo-search would
-drop features 2-3 and bring the telemetry back. Next:
-1. Owner on build 14: Gallery app's recycle bin visibility, the Blurry slider on real photos, the quick
-   edits (Person cut-out, Upscale 2x/4x with Cancel, airplane mode), the new copy.
-2. Ship image-tools to main (pr-shipper, owner's go), so main has the Worker /models/ route and the
-   telemetry fix.
-3. Feature 4 (Heavy edits): 4.0 phone spike (MI-GAN vs LaMa, owner judges; SlimSAM; Depth Anything V2
-   Small; YuNet; GFPGAN licence/size check first).
-Phone test of 14 over adb (2026-11-18; report and screenshots in
-`.superpowers/sdd/2026-11-18-image-tools-2.2/phone-check/qa/`): palette, enhance+Undo, Person (about 4 s,
-whole person, shirt edge ragged), Object (about 7 s, arm ghosted), Upscale 2x (about 20 s incl. first
-download) and 4x Cancel, Clean up groups, delete + Undo, Recently removed + Restore, Blurry slider all PASS.
-Wireless adb dropped 3 times (no crash: uptime 19 h, empty crash buffer). Gallery recycle-bin visibility
-NOT proven (list too long to check without touching the owner's deleted photos). Test photos removed
-with proof. Bug fixed f/ below: Copies kept the half-size copy as Best (sharpness-first); now biggest
-first for Copies (Kotlin 279/0). Leftover: the 'Continue' draft (Instagram post with the test photo)
-for the owner to reset. UI findings: 'Best' label hard to read on busy thumbnails; 'restore for 30 days'
-vs '29 days left'; two toasts stack; Upscale Cancel hidden behind the tab bar until the sheet scrolls;
-'Photo' in the image chooser opens the camera; Undo deselects the image; sheet blank 2-5 s after a tap.
-Open Minors: 2.2 M1 (two 'Undo' for screen readers), M2 (repeated hint); 3.2 thin rim after upscaling a
-cut-out (check by eye); P3 photos reduced to sRGB.
-
-Fix phase after the phone test (2026-11-18; plan `docs/superpowers/plans/2026-11-18-image-tools-fixes.md`, ledger
-`.superpowers/sdd/2026-11-18-image-tools-fixes/progress.md`). Done on image-tools, not released (build 15 is next):
-Best badge solid; days left rounds up (30 on the first day); a new delete clears the old result line; Undo buttons
-read "Undo delete" / "Undo hide" and the tile hint is gone (Button takes an optional accessibilityLabel); Upscale and
-cut-out progress + Cancel stay pinned in the sheet (CSS sticky, mobile.html); Undo/Redo keep the same object selected
-(engine objects now have ids; every page gets ids at load) and the panel; "Photo" in the picture picker no longer opens
-the camera (react-native-webview always adds a camera entry for image/* when CAMERA is not requested, so the page asks
-the app to pick through expo-document-picker and reads the copies in 786432-byte pieces: shell-mobile.js, image-pick.ts,
-bridge.ts); Cancel aborts a model download and removes the partial file; cut-out mask gets a smoothstep 0.3-0.7 before
-the feather (CutoutMaths.kt, ref.py); upscaled cut-outs no longer get a dark rim (bleedTransparent in UpscaleMaths.kt).
-Item "sheet blank 2-5 s": not an app bug as far as measured (the two screenshots are broken captures: alpha-0 rows incl.
-the native toolbar; Chrome at 6x CPU slowdown shows no long task); reopen only if seen on the phone, and check capture
-integrity first. Check on the phone: Best badge in light and dark; Upscale 4x scroll while running; Undo keeps selection
-and the panel; adding a picture from Uploads (no camera entry, big photo, several photos, cancel); cancel during a first
-model download; Object cut-out arm ghost and Person shirt edge, hair and glass; 2x upscale of a soft-edged cut-out for a
-faint rim; TalkBack reads "Undo delete" / "Undo hide". New sentence: "Couldn't open your pictures. Try again."
+Design Editor build 15 is live (2026-11-18, from image-tools f4ced537; manifest re-fetched, other entries
+intact): quick edits, Clean up, telemetry removal, copies-keep-biggest fix and the 11 fixes from the phone
+test (plan `docs/superpowers/plans/2026-11-18-image-tools-fixes.md`, ledger
+`.superpowers/sdd/2026-11-18-image-tools-fixes/progress.md`). Item 8 (blank sheet) had no code change: the
+screenshots were broken captures. image-tools is NOT merged to main: a Design Editor release from main or
+photo-search would drop features 2-3 and bring the telemetry back.
+Next:
+1. Owner installs build 15 from the Store (never adb-install). Then claim the phone (join the queue if held)
+   and check over adb, first item 6 (adding a picture from Uploads: no camera entry, big photo, several
+   photos, cancel the picker, a short read toast), then Best badge, 4x Upscale Cancel while scrolling, Undo/Redo
+   keep selection, Cancel during a first model download, Object/Person edges, 2x upscale of a soft-edged
+   cut-out. Don't use airplane mode (cuts wireless adb). Never touch the owner's photos or drafts.
+2. Gallery recycle-bin visibility is still unproven; the owner can look in the Gallery app after a Clean up
+   delete.
+3. Ship image-tools to main (pr-shipper, owner's go): puts the Worker /models/ route and telemetry fix on main.
+4. Feature 4 (Heavy edits): 4.0 phone spike (MI-GAN vs LaMa, owner judges; SlimSAM; Depth Anything V2 Small;
+   YuNet; GFPGAN licence/size check first).
+Owner: reset the 'Continue' draft in Design Editor (test edits).
