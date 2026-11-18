@@ -32,12 +32,14 @@ import {
   detectControls,
   webUrlFor,
   displayNameFor,
+  parseMac,
   type DetectedControl,
   type KnownPort,
   type ReconciledDevice,
 } from '@apps-hub/core';
 
 import { DeviceControls } from '../components/DeviceControls';
+import { WakeDevice } from '../components/WakeDevice';
 import { useNetworkScan } from '../scan/ScanProvider';
 
 type FilterKey = 'all' | 'new' | 'untrusted';
@@ -97,6 +99,8 @@ export default function ScannerScreen() {
   const [nameDraft, setNameDraft] = useState('');
   const [personDraft, setPersonDraft] = useState('');
   const openedPerson = useRef('');
+  const [macDraft, setMacDraft] = useState('');
+  const openedMac = useRef('');
   const [trustDraft, setTrustDraft] = useState(false);
   const [pingTargetBusy, setPingTargetBusy] = useState(false);
   const [pingResult, setPingResult] = useState<PingResult | null>(null);
@@ -105,6 +109,8 @@ export default function ScannerScreen() {
   // Tagged with the ip it was detected for, so a sheet moved to another device never shows it.
   const [controls, setControls] = useState<{ ip: string; found: DetectedControl[] } | null>(null);
 
+  const parsedMac = parseMac(macDraft);
+  const macInvalid = macDraft.trim() !== '' && parsedMac === null;
   const scanning = phase === 'scanning' || phase === 'reconciling';
   const totalTargets = plan?.hosts.length ?? 254;
 
@@ -139,6 +145,8 @@ export default function ScannerScreen() {
     setNameDraft(device.customName ?? '');
     setPersonDraft(device.person ?? '');
     openedPerson.current = device.person ?? '';
+    setMacDraft(device.mac ?? '');
+    openedMac.current = device.mac ?? '';
     setTrustDraft(device.isTrusted);
     setPingResult(null);
     setPortCheck(null);
@@ -148,14 +156,18 @@ export default function ScannerScreen() {
     // Keep the sheet open until the store is ready, so the edit isn't dropped.
     if (store === null || detail === null) return;
     const person = personDraft.trim();
+    // An invalid MAC is never saved; the sheet stays open with the hint showing.
+    if (macInvalid) return;
     setDetail(null);
     await saveDevice(detail.id, {
       customName: nameDraft.trim() || null,
       // Untouched means the latest row's tag stays: a tag carried over while the sheet was open must survive.
       ...(person !== openedPerson.current.trim() && { person: person || null }),
+      // Same for the MAC: a hardware address learned while the sheet was open must survive.
+      ...(macDraft.trim() !== openedMac.current.trim() && { mac: parsedMac }),
       isTrusted: trustDraft,
     });
-  }, [detail, nameDraft, personDraft, saveDevice, store, trustDraft]);
+  }, [detail, macDraft, macInvalid, nameDraft, parsedMac, personDraft, saveDevice, store, trustDraft]);
 
   const pingTarget = useCallback(async (): Promise<void> => {
     if (detail === null || pingTargetBusy) return;
@@ -430,6 +442,29 @@ export default function ScannerScreen() {
               hint="Shows this person on the Home tab."
               returnKeyType="done"
             />
+
+            <Field
+              label="Hardware address (MAC)"
+              value={macDraft}
+              onChangeText={setMacDraft}
+              placeholder="AA:BB:CC:DD:EE:FF"
+              hint="Needed to wake this device. Found automatically for some Windows PCs."
+              error={macInvalid ? 'Use six pairs like AA:BB:CC:DD:EE:FF.' : null}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              mono
+              returnKeyType="done"
+            />
+
+            {parsedMac !== null ? (
+              <WakeDevice
+                key={detail.id}
+                binding={bindingProxy}
+                iface={iface}
+                mac={parsedMac}
+                ip={detail.lastIp}
+              />
+            ) : null}
 
             <Group>
               <Row

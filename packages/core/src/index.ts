@@ -22,4 +22,5 @@ export * from './device-controls.ts';
 export * from './device-actions.ts';
 export * from './people.ts';
 export * from './wifi-qr.ts';
+export * from './wake.ts';
 export * from './wol.ts';
