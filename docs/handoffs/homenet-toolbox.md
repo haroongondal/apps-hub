@@ -53,8 +53,9 @@ Continue from "Current state + exact next step".
 
 - 2026-11-18: design approved; plan written; Task 0 done (commits `5b0c11ae` port check, `dd1ce571` docs). Phase 1 agent started.
 - 2026-11-18: Phase 1 run 1 PARTIAL at cap: Tasks 1, 2, 4 done (`05113574`, `05a3bd7e`, `efa4696b`, `ac4c6d41`); Task 3 `2bff3a29` reviewed with open I1 (quadratic regex), I2 (negative rate on 64-bit reset), m1–m6. Resume agent started with `.orchestration/phase-1-resume-brief.md`.
+- 2026-11-18: Phase 1 DONE. Fix `e27ebda2` re-reviewed clean. Main-session gate at e27ebda2: core tests 180/180, core + netlens typecheck clean, tree clean. Deferred minors: n1 (rateBps fake tick on 64-bit reset → Phase 2), n2 (`upnp-soap.ts` ~61 unclosed child hides later values) and parked (`httpRequest` TypeError on null args) → Task 18 review batch. Phase 2 agent started with `.orchestration/phase-2-brief.md`.
 
 ## Current state + exact next step
 
-Phase 1 resume agent finishing the Task 3 fix round (brief `.orchestration/phase-1-resume-brief.md`, ledger `.orchestration/progress.md`).
-Next: read its report; on DONE run the gate (`pnpm --filter @apps-hub/core test && pnpm --filter @apps-hub/core --filter netlens typecheck`), update this file, write `.orchestration/phase-2-brief.md` (Tasks 5–8, cap 6) and start Phase 2.
+Phase 2 (Tasks 5–8 + n1) running under `.orchestration/phase-2-brief.md`; ledger `.orchestration/progress.md` (`## Phase 2`).
+Next: read its report; on DONE run the gate (`pnpm --filter @apps-hub/core test && pnpm --filter @apps-hub/core --filter netlens typecheck`, `git status --short`), update this file, write `.orchestration/phase-3-brief.md` (Tasks 9–12; Task 11 moves the scan out of ScannerScreen, review it) and start Phase 3. Carry n2 + parked item to Task 18.
