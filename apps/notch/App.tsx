@@ -13,7 +13,7 @@ export default function App() {
 }
 
 function Home() {
-  const read = useCallback(() => notchStatus(NotchIsland.canDrawOverlay(), NotchIsland.isRunning()), []);
+  const read = useCallback(() => notchStatus(NotchIsland.isRunning()), []);
   const [status, setStatus] = useState(read);
 
   useEffect(() => {
@@ -21,37 +21,20 @@ function Home() {
     return () => sub.remove();
   }, [read]);
 
-  const toggle = (on: boolean) => {
-    NotchIsland.setEnabled(on);
-    // The service starts a beat after the call returns.
-    setTimeout(() => setStatus(read()), 400);
-  };
+  const open = <Button label="Open accessibility settings" variant="secondary" size="sm" onPress={() => NotchIsland.openAccessibilitySettings()} />;
 
   return (
     <Screen scroll>
       <Header title="Notch" subtitle="A pill around your camera. Tap it to expand." />
-      {status === 'needs-permission' && (
-        <Notice
-          tone="warn"
-          title="Allow display over other apps"
-          action={<Button label="Open settings" variant="secondary" size="sm" onPress={() => NotchIsland.openOverlaySettings()} />}
-        >
-          Notch draws its pill over your other apps, so Android asks you first. Turn on Notch there, then come back.
+      {status === 'off' && (
+        <Notice tone="warn" title="Notch is off" action={open}>
+          Turn on Notch in Accessibility settings, under Installed apps. Android needs this to let the pill take taps at the top of the screen. Notch does not read your screen.
         </Notice>
       )}
       <Group title="Pill">
         <Row
           title={status === 'on' ? 'On' : 'Off'}
-          subtitle={status === 'on' ? 'The pill sits around your camera. It folds back after four seconds.' : 'Turn it on to show the pill.'}
-          trailing={
-            <Button
-              label={status === 'on' ? 'Turn off' : 'Turn on'}
-              variant={status === 'on' ? 'secondary' : 'primary'}
-              size="sm"
-              disabled={status === 'needs-permission'}
-              onPress={() => toggle(status !== 'on')}
-            />
-          }
+          subtitle={status === 'on' ? 'The pill sits around your camera. It folds back after four seconds. To turn it off, switch Notch off in Accessibility settings.' : 'Switch Notch on in Accessibility settings to show the pill.'}
         />
       </Group>
     </Screen>

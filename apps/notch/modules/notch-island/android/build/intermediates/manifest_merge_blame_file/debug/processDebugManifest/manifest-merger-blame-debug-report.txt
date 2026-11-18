@@ -4,33 +4,32 @@
 4
 5    <uses-sdk android:minSdkVersion="24" />
 6
-7    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-7-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:2:5-78
-7-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:2:22-75
-8    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-8-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:3:5-77
-8-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:3:22-74
-9    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-9-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:4:5-89
-9-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:4:22-86
-10
-11    <application>
-11-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:5:5-14:19
-12        <service
-12-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:6:9-13:19
-13            android:name="expo.modules.notchisland.android.NotchService"
-13-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:7:13-73
-14            android:exported="false"
-14-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:8:13-37
-15            android:foregroundServiceType="specialUse" >
-15-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:9:13-55
-16            <property
-16-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:10:13-12:68
-17                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-17-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:11:17-76
-18                android:value="Overlay around the camera cutout" />
-18-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:12:17-65
-19        </service>
-20    </application>
-21
-22</manifest>
+7    <application>
+7-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:2:5-15:19
+8        <service
+8-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:3:9-14:19
+9            android:name="expo.modules.notchisland.android.NotchAccessibilityService"
+9-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:4:13-86
+10            android:exported="true"
+10-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:7:13-36
+11            android:label="@string/notch_service_label"
+11-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:5:13-56
+12            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" >
+12-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:6:13-79
+13            <intent-filter>
+13-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:8:13-10:29
+14                <action android:name="android.accessibilityservice.AccessibilityService" />
+14-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:9:17-92
+14-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:9:25-89
+15            </intent-filter>
+16
+17            <meta-data
+17-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:11:13-13:71
+18                android:name="android.accessibilityservice"
+18-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:12:17-60
+19                android:resource="@xml/notch_accessibility_service" />
+19-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:13:17-68
+20        </service>
+21    </application>
+22
+23</manifest>

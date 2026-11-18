@@ -1,6 +1,5 @@
-export type NotchStatus = 'needs-permission' | 'off' | 'on';
+export type NotchStatus = 'on' | 'off';
 
-export function notchStatus(canDrawOverlay: boolean, running: boolean): NotchStatus {
-  if (!canDrawOverlay) return 'needs-permission';
+export function notchStatus(running: boolean): NotchStatus {
   return running ? 'on' : 'off';
 }

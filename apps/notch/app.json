@@ -2,17 +2,20 @@
   "expo": {
     "name": "Notch",
     "slug": "notch",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "platforms": ["android"],
+    "platforms": [
+      "android"
+    ],
     "android": {
       "package": "com.haroon.notch",
       "allowBackup": false,
       "edgeToEdgeEnabled": true,
-      "permissions": ["POST_NOTIFICATIONS"],
+      "permissions": [],
       "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.INTERNET",
         "android.permission.VIBRATE",
         "android.permission.READ_EXTERNAL_STORAGE",
