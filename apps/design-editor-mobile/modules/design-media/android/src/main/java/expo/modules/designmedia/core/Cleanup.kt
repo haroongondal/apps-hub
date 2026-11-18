@@ -25,19 +25,21 @@ const val DARK_MEAN = 0.08
 const val BLOWN_MEAN = 0.95
 const val LOW_SPREAD = 0.08
 
-private val KEEPER = compareByDescending<CleanupPhoto> { it.scores.laplacian }.thenByDescending { it.pixels }
-  .thenByDescending { it.bytes }.thenBy { it.takenAt }.thenBy { it.id }
+private val BIGGEST = compareByDescending<CleanupPhoto> { it.pixels }.thenByDescending { it.bytes }.thenBy { it.takenAt }.thenBy { it.id }
+private val KEEPER = compareByDescending<CleanupPhoto> { it.scores.laplacian }.then(BIGGEST)
+// Copies are one picture at several sizes; shrinking raises the Laplacian score, so sharpness would keep the smallest.
+private val COPY_KEEPER = BIGGEST
 private val NEWEST = compareByDescending<CleanupPhoto> { it.takenAt }.thenBy { it.id }
 
 fun cleanupGroups(photos: List<CleanupPhoto>, dismissed: Set<Pair<CleanupKind, Long>>, opts: CleanupOptions): List<CleanupGroup> {
   fun of(kind: CleanupKind) = photos.filter { (kind to it.id) !in dismissed }
   val blur = if (opts.blurThreshold.isNaN()) BLUR_DEFAULT else opts.blurThreshold.coerceIn(BLUR_MIN, BLUR_MAX)
-  val copies = similarGroups(CleanupKind.COPIES, of(CleanupKind.COPIES), ::linkCopies)
+  val copies = similarGroups(CleanupKind.COPIES, of(CleanupKind.COPIES), COPY_KEEPER, ::linkCopies)
   val cosine = if (opts.lookalikeCosine.isNaN()) LOOKALIKE_DEFAULT else opts.lookalikeCosine.coerceIn(LOOKALIKE_DEFAULT, LOOKALIKE_STRICT)
   // A copy the user dismissed has cosine ~1 with its twin; it must not come back pre-ticked as a look-alike.
   val notLookalike = copies.flatMapTo(HashSet()) { g -> g.members.map { it.id } } +
     dismissed.filter { it.first == CleanupKind.COPIES }.map { it.second }
-  val lookalikes = similarGroups(CleanupKind.LOOKALIKES, of(CleanupKind.LOOKALIKES).filter { it.id !in notLookalike }) { ps, uf ->
+  val lookalikes = similarGroups(CleanupKind.LOOKALIKES, of(CleanupKind.LOOKALIKES).filter { it.id !in notLookalike }, KEEPER) { ps, uf ->
     linkLookalikes(ps, uf, cosine)
   }
   return listOfNotNull(
@@ -63,12 +65,14 @@ private class UnionFind(n: Int) {
   fun union(a: Int, b: Int) { parent[find(a)] = find(b) }
 }
 
-private fun similarGroups(kind: CleanupKind, ps: List<CleanupPhoto>, link: (List<CleanupPhoto>, UnionFind) -> Unit): List<CleanupGroup> {
+private fun similarGroups(
+  kind: CleanupKind, ps: List<CleanupPhoto>, keeperOrder: Comparator<CleanupPhoto>, link: (List<CleanupPhoto>, UnionFind) -> Unit,
+): List<CleanupGroup> {
   val uf = UnionFind(ps.size)
   link(ps, uf)
   return ps.indices.groupBy { uf.find(it) }.values.filter { it.size >= 2 }.map { idx ->
     val group = idx.map { ps[it] }
-    val keeper = group.minWith(KEEPER)
+    val keeper = group.minWith(keeperOrder)
     val rest = group.filter { it !== keeper }.sortedWith(NEWEST)
     CleanupGroup(
       kind, "${kind.wire}:${group.minOf { it.id }}",

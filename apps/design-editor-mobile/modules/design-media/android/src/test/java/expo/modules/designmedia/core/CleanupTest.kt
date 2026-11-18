@@ -65,8 +65,10 @@ class CleanupTest {
 
   @Test
   fun keeperOrder() {
-    assertEquals(2L, keeper(photo(1, 7L, lap = 100f), photo(2, 7L, lap = 200f)))
-    assertEquals(1L, keeper(photo(1, 7L, lap = 200f, pixels = 10), photo(2, 7L, lap = 100f, pixels = 20)))
+    // copies: one picture at several sizes, so the biggest wins even when a shrunk copy scores sharper
+    assertEquals(2L, keeper(photo(1, 7L, lap = 900f, pixels = 3_000_000, bytes = 30_000), photo(2, 7L, lap = 200f, pixels = 12_000_000, bytes = 200_000)))
+    assertEquals(1L, keeper(photo(1, 7L, lap = 100f), photo(2, 7L, lap = 200f)))
+    assertEquals(2L, keeper(photo(1, 7L, lap = 200f, pixels = 10), photo(2, 7L, lap = 100f, pixels = 20)))
     assertEquals(1L, keeper(photo(1, 7L, pixels = 20), photo(2, 7L, pixels = 10, bytes = 5000)))
     assertEquals(2L, keeper(photo(1, 7L, bytes = 10, takenAt = 0), photo(2, 7L, bytes = 20, takenAt = 9)))
     assertEquals(2L, keeper(photo(1, 7L, takenAt = 9), photo(2, 7L, takenAt = 5)))
@@ -74,8 +76,17 @@ class CleanupTest {
   }
 
   @Test
+  fun lookalikeKeeperIsTheSharpest() {
+    val v = oneHot(3)
+    val g = groups(listOf(photo(1, 1L, vec = v, takenAt = 60_000, lap = 100f, pixels = 20), photo(2, 2L.inv(), vec = v, takenAt = 0, lap = 300f, pixels = 10)))
+      .single { it.kind == CleanupKind.LOOKALIKES }
+    assertEquals(2L, g.members[0].id)
+    assertTrue(g.members[0].best)
+  }
+
+  @Test
   fun membersKeeperFirstThenNewest() {
-    val g = groups(listOf(photo(1, 7L, takenAt = 1), photo(2, 7L, takenAt = 3, lap = 900f), photo(3, 7L, takenAt = 2)))
+    val g = groups(listOf(photo(1, 7L, takenAt = 1), photo(2, 7L, takenAt = 3, pixels = 20_000_000), photo(3, 7L, takenAt = 2)))
       .single { it.kind == CleanupKind.COPIES }
     assertEquals(listOf(2L, 3L, 1L), g.members.map { it.id })
   }
