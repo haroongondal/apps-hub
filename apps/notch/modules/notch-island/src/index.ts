@@ -5,6 +5,8 @@ interface NotchIslandModule {
   openAccessibilitySettings(): void;
   getSettings(): string;
   setSettings(json: string): void;
+  isListenerAllowed(): boolean;
+  openNotificationAccessSettings(): void;
 }
 
 export default requireNativeModule<NotchIslandModule>('NotchIsland');
