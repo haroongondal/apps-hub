@@ -7,6 +7,11 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
+import android.nfc.NfcAdapter
+import android.nfc.cardemulation.CardEmulation
+import android.os.Handler
+import android.os.Looper
+import android.view.WindowManager
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.provider.Settings
@@ -19,6 +24,8 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.strongroomvault.android.BiometricKey
 import expo.modules.strongroomvault.android.EntryInput
 import expo.modules.strongroomvault.android.KeepAliveService
+import expo.modules.strongroomvault.android.PassImage
+import expo.modules.strongroomvault.android.Presenting
 import expo.modules.strongroomvault.android.SecretFieldView
 import expo.modules.strongroomvault.android.SensitiveClipboard
 import expo.modules.strongroomvault.android.SyncJobService
@@ -26,6 +33,8 @@ import expo.modules.strongroomvault.android.VaultHolder
 import expo.modules.strongroomvault.core.AccountKey
 import expo.modules.strongroomvault.core.AccountKeyRequired
 import expo.modules.strongroomvault.core.AppId
+import expo.modules.strongroomvault.core.Barcode
+import expo.modules.strongroomvault.core.BarcodeResult
 import expo.modules.strongroomvault.core.Browsers
 import expo.modules.strongroomvault.core.CsvExport
 import expo.modules.strongroomvault.core.Entry
@@ -41,6 +50,7 @@ import expo.modules.strongroomvault.core.SyncHttpError
 import expo.modules.strongroomvault.core.SyncOfflineError
 import expo.modules.strongroomvault.core.SyncRollbackError
 import expo.modules.strongroomvault.core.SyncStatus
+import expo.modules.strongroomvault.core.Type4Tag
 import expo.modules.strongroomvault.core.Vault
 import java.io.IOException
 import java.security.MessageDigest
@@ -57,6 +67,7 @@ private const val LOCK_EVENT = "onLock"
 private const val SYNC_EVENT = "onSync"
 private const val PICK_CSV = 7401
 private const val SAVE_CSV = 7402
+private const val MAX_PASS_PX = 2048
 private const val MAX_CSV_BYTES = 5 * 1024 * 1024
 internal const val KDF_REFUSED =
   "Strongroom won't open this vault: its security settings are weaker than it allows. The vault file may have been changed."
@@ -68,6 +79,19 @@ class StrongroomVaultModule : Module() {
     get() = requireNotNull(appContext.reactContext) { "React context unavailable" }
 
   private var pendingPick: CancellableContinuation<Uri?>? = null
+  private val main = Handler(Looper.getMainLooper())
+  private val autoStop = Runnable { stopPresenting() }
+
+  // Disarms the tag and hands the NFC route back; safe to call when nothing is presenting.
+  private fun stopPresenting() {
+    main.removeCallbacks(autoStop)
+    Presenting.disarm()
+    val a = appContext.currentActivity ?: return
+    a.runOnUiThread { runCatching { nfcCardEmulation()?.unsetPreferredService(a) } }
+  }
+
+  private fun nfcCardEmulation(): CardEmulation? =
+    NfcAdapter.getDefaultAdapter(context)?.let { CardEmulation.getInstance(it) }
 
   // Vault.touch() runs the expiry check before it refreshes, so a session that has run out is locked, not revived.
   private fun vault(): Vault = VaultHolder.get(context).also { VaultHolder.touch() }
@@ -81,7 +105,10 @@ class StrongroomVaultModule : Module() {
     Events(LOCK_EVENT, SYNC_EVENT)
 
     OnCreate {
-      VaultHolder.lockListener = { sendEvent(LOCK_EVENT) }
+      VaultHolder.lockListener = {
+        stopPresenting()
+        sendEvent(LOCK_EVENT)
+      }
       VaultHolder.syncListener = { sendEvent(SYNC_EVENT, it.toMap()) }
     }
 
@@ -91,6 +118,12 @@ class StrongroomVaultModule : Module() {
     }
 
     // Also on a cold start: a killed process can leave a copied secret that no timer or job will clear.
+    // A presented pass and a lit-up screen must not outlive the app being on screen.
+    OnActivityEntersBackground {
+      stopPresenting()
+      appContext.currentActivity?.let { a -> a.runOnUiThread { a.window.attributes = a.window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE } } }
+    }
+
     OnActivityEntersForeground { appContext.currentActivity?.let { a -> a.runOnUiThread { SensitiveClipboard.whenFocused(a) } } }
 
     View(SecretFieldView::class) {
@@ -510,6 +543,41 @@ class StrongroomVaultModule : Module() {
       }
     }
 
+    AsyncFunction("passImage") Coroutine { id: String, widthPx: Int ->
+      val pass = passOf(id)
+      val matrix = when (val r = Barcode.encodeMatrix(pass.code, pass.format.id)) {
+        is BarcodeResult.Ok -> r.matrix
+        is BarcodeResult.Error -> throw CodedException("BAD_PASS", r.message, null)
+      }
+      withContext(Dispatchers.Default) { PassImage.dataUri(matrix, widthPx.coerceIn(1, MAX_PASS_PX)) }
+    }
+
+    AsyncFunction("presentPass") Coroutine { id: String ->
+      val pass = passOf(id)
+      val hasHce = context.packageManager.hasSystemFeature(PackageManager.FEATURE_NFC_HOST_CARD_EMULATION)
+      val adapter = NfcAdapter.getDefaultAdapter(context)
+      if (!hasHce || adapter == null) throw CodedException("NO_NFC", "This phone can't present a pass over NFC. Show the barcode instead.", null)
+      if (!adapter.isEnabled) throw CodedException("NFC_OFF", "NFC is off. Turn it on in the phone's settings, then try again.", null)
+      val tooLong = CodedException("CODE_TOO_LONG", "This code is too long to present over NFC. Show the barcode instead.", null)
+      if (!Presenting.arm(pass.code)) throw tooLong
+      val a = activity()
+      val routed = withContext(Dispatchers.Main) { runCatching { CardEmulation.getInstance(adapter).setPreferredService(a, Presenting.serviceComponent(a)) }.getOrDefault(false) }
+      if (!routed) {
+        Presenting.disarm()
+        throw CodedException("NFC_BUSY", "Strongroom couldn't take over NFC. Keep Strongroom open and try again.", null)
+      }
+      main.removeCallbacks(autoStop)
+      main.postDelayed(autoStop, Type4Tag.DEFAULT_TTL_MS)
+      mapOf("expiresInMs" to Type4Tag.DEFAULT_TTL_MS)
+    }
+
+    AsyncFunction("stopPresenting") { stopPresenting() }
+
+    AsyncFunction("setBright") { on: Boolean ->
+      val a = activity()
+      a.runOnUiThread { a.window.attributes = a.window.attributes.apply { screenBrightness = if (on) 1f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE } }
+    }
+
     AsyncFunction("syncNow") Coroutine { ->
       vault()
       val r = withContext(Dispatchers.IO) { syncCall { VaultHolder.syncNow(context) } }
@@ -519,6 +587,10 @@ class StrongroomVaultModule : Module() {
       )
     }
   }
+
+  private suspend fun passOf(id: String): Entry.Pass =
+    withContext(Dispatchers.IO) { guard { vault().get(id) } } as? Entry.Pass
+      ?: throw CodedException("NOT_FOUND", "That pass is gone. Go back to the list and pick another.", null)
 
   private fun readGoogleCsv(uri: Uri): ImportResult {
     val bytes = context.contentResolver.openInputStream(uri)?.use { it.readNBytes(MAX_CSV_BYTES + 1) } ?: throw IOException("no stream")

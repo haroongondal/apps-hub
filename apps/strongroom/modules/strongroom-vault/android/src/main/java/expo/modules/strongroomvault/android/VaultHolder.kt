@@ -83,6 +83,7 @@ object VaultHolder {
         it.autoLockMinutes = prefs(context).getInt(AUTO_LOCK, 5).takeIf(LockPolicy::validTimeout) ?: 5
         it.onLock = {
           dropUnlockPassword()
+          Presenting.disarm() // at once, even when no JS listener is alive to do it
           main.post { lockListener?.invoke() }
         }
         val s = SyncSession(it, store, secrets, PrefsSyncSettings(prefs(ctx)), SyncConfig.transport(), System::currentTimeMillis)
