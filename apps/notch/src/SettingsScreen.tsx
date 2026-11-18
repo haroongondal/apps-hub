@@ -1,6 +1,7 @@
-import React from 'react';
-import { Pressable, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { AppState, Pressable, View } from 'react-native';
 import { Button, Group, Row, Segmented, useTheme } from '@apps-hub/ui';
+import NotchIsland from 'notch-island';
 import {
   ACCENTS,
   CLOCKS,
@@ -15,6 +16,7 @@ import {
   type NotchSettings,
   type WidgetId,
 } from './settings';
+import { accessLine } from './status';
 
 const PILL_NAMES = { black: 'Black', graphite: 'Graphite', tinted: 'Tinted' } as const;
 const SIZE_NAMES = { compact: 'Compact', regular: 'Regular', large: 'Large' } as const;
@@ -31,6 +33,12 @@ const READY: WidgetId[] = ['clock', 'battery'];
 
 export function SettingsScreen({ value, onChange }: { value: NotchSettings; onChange: (next: NotchSettings) => void }) {
   const { c } = useTheme();
+  // Read on mount and each time the app comes back, e.g. from the notification access page.
+  const [listener, setListener] = useState(() => NotchIsland.isListenerAllowed());
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => s === 'active' && setListener(NotchIsland.isListenerAllowed()));
+    return () => sub.remove();
+  }, []);
   const set = (patch: Partial<NotchSettings>) => onChange({ ...value, ...patch });
   const shown = value.widgets;
   const toggle = (id: WidgetId) => set({ widgets: shown.includes(id) ? shown.filter((w) => w !== id) : [...shown, id] });
@@ -121,6 +129,14 @@ export function SettingsScreen({ value, onChange }: { value: NotchSettings; onCh
               accessibilityLabel="Clock style"
             />
           }
+        />
+      </Group>
+
+      <Group title="Notification access">
+        <Row
+          title={listener ? 'On' : 'Off'}
+          subtitle={accessLine(listener)}
+          trailing={<Button label="Open settings" variant="secondary" size="sm" onPress={() => NotchIsland.openNotificationAccessSettings()} />}
         />
       </Group>
 
