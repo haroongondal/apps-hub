@@ -6,7 +6,7 @@
  * Note (Expo SDK 52+): requireNativeModule returns an object that IS an
  * EventEmitter, so listeners hang straight off the module.
  */
-import { udpBroadcastArgsError } from '@apps-hub/core';
+import { tcpFetchArgsError, udpBroadcastArgsError, udpRequestArgsError } from '@apps-hub/core';
 import type {
   DnsResolution,
   ListenerHandle,
@@ -99,6 +99,8 @@ export function createNetLensNativeBinding(): NetLensNativeBinding {
     },
     /** Only a clean byte array counts as a reply; anything else is no reply. */
     async udpRequest(ip, port, payload, timeoutMs) {
+      const problem = udpRequestArgsError(port, payload, timeoutMs);
+      if (problem) throw new Error(problem);
       const raw: unknown = await NetLensCore.udpRequest(ip, port, [...payload], timeoutMs);
       const isByte = (n: unknown): n is number =>
         typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 255;
@@ -110,6 +112,8 @@ export function createNetLensNativeBinding(): NetLensNativeBinding {
       await NetLensCore.sendUdpBroadcast(ip, port, [...payload]);
     },
     async tcpFetch(ip, port, request, timeoutMs, maxBytes) {
+      const problem = tcpFetchArgsError(port, timeoutMs, maxBytes);
+      if (problem) throw new Error(problem);
       const raw: unknown = await NetLensCore.tcpFetch(ip, port, request, timeoutMs, maxBytes);
       return typeof raw === 'string' ? raw : null;
     },
