@@ -14,15 +14,18 @@ export interface Status {
 
 export interface Row {
   id: string;
-  type: 'login' | 'card' | 'note';
+  type: 'login' | 'card' | 'note' | 'pass';
   name: string;
   subtitle: string;
 }
 
+export type PassFormat = 'qr' | 'code128' | 'ean13';
+
 export type EntryInput =
   | { type: 'login'; name: string; username: string; password: string; sites: string[]; note: string }
   | { type: 'card'; name: string; holder: string; number: string; expMonth: number | null; expYear: number | null; cvc: string; note: string }
-  | { type: 'note'; name: string; text: string };
+  | { type: 'note'; name: string; text: string }
+  | { type: 'pass'; name: string; code: string; format: PassFormat; note: string };
 
 export interface EntryView {
   id: string;
@@ -37,6 +40,7 @@ export interface EntryView {
   expYear?: number | null;
   note: string;
   text?: string;
+  format?: PassFormat;
 }
 
 export interface ImportPreview {
@@ -101,7 +105,7 @@ export interface StrongroomVaultApi {
   lock(): void;
   rows(): Row[];
   entry(id: string): EntryView | null;
-  reveal(id: string, field: 'password' | 'number' | 'cvc'): string;
+  reveal(id: string, field: 'password' | 'number' | 'cvc' | 'code'): string;
   copy(id: string, field: 'username' | 'password' | 'number' | 'cvc'): void;
   save(id: string | null, e: EntryInput): string;
   remove(id: string): void;
@@ -134,6 +138,14 @@ export interface StrongroomVaultApi {
   // accountKey is needed only on a phone that holds none (a new phone, or one whose Keystore lost it); nothing can check it, so ask for it twice.
   recoverSync(recoveryKey: string, newPassword: string, accountKey?: string): Promise<void>;
   syncNow(): Promise<SyncReport>;
+  // A data:image/png;base64 barcode on a white background; rejects with a plain message when the stored code is not valid for its format. Needs an unlocked vault.
+  passImage(id: string, widthPx: number): Promise<string>;
+  // Arms the NFC tag for 60 s (a URI record for an http(s) code, else text). Rejects when the phone has no NFC, NFC is off, the vault is locked or the code is too long. Same auth gate as showing a card number.
+  presentPass(id: string): Promise<{ expiresInMs: number }>;
+  // Presenting also stops by itself when the app goes to background, the vault locks, or 60 s pass.
+  stopPresenting(): Promise<void>;
+  // Window brightness to max while on; restored on off and when the app goes to background.
+  setBright(on: boolean): Promise<void>;
   addListener(event: 'onLock', listener: () => void): { remove(): void };
   addListener(event: 'onSync', listener: (status: SyncStatus) => void): { remove(): void };
 }
