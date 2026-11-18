@@ -97,7 +97,7 @@ object AiRunner {
   // fastOnly: the quick run for picked chats. It skips the categoriser and the reports and leaves LAST_RUN_AT alone, so the 30-minute run still takes everything.
   private fun execute(ctx: Context, fastOnly: Boolean = false): AiRunResult {
     val store = StoreHolder.get(ctx).getOrNull() ?: return AiRunResult(0, 0, false, null)
-    val suggestions = SqlSuggestionStore(store.db)
+    val suggestions = StoreHolder.suggestions(ctx, store)
     try {
       suggestions.expire(System.currentTimeMillis())   // first thing in every run, whether or not the AI is on
     } catch (e: Exception) {
@@ -108,7 +108,7 @@ object AiRunner {
     val sms = StoreHolder.smsPackages(ctx)
     val result = try {
       AiRun(
-        store, StoreHolder.ledger(store), { cfg.provider() }, { cfg.prices() }, { cfg.capUsd() },
+        store, StoreHolder.ledger(store, ctx), { cfg.provider() }, { cfg.prices() }, { cfg.capUsd() },
         { SqlLedgerStore(store.db).aiAccounts() }, { store.channelOf(it, sms) }, System::currentTimeMillis, ZoneId.systemDefault(),
         atomic = { block -> store.inTransaction { block() } },
         suggestions = suggestionHook(suggestions, { AutopilotSettings.fromJson(store.meta(AUTOPILOT_META)) }, System::currentTimeMillis, ZoneId.systemDefault()),

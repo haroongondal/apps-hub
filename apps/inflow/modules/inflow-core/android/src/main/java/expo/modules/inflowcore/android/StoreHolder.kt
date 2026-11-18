@@ -10,7 +10,9 @@ import expo.modules.inflowcore.core.MoneySuggestions
 import expo.modules.inflowcore.core.Ingest
 import expo.modules.inflowcore.core.KEY_LOST_MESSAGE
 import expo.modules.inflowcore.core.LedgerBackfill
+import expo.modules.inflowcore.core.NotifyingSuggestionStore
 import expo.modules.inflowcore.core.Sms
+import expo.modules.inflowcore.core.SuggestionStore
 import java.io.File
 import java.time.ZoneId
 import java.util.concurrent.atomic.AtomicBoolean
@@ -31,9 +33,14 @@ object StoreHolder {
 
   const val OWNER_NAME = "ownerName"
 
-  fun ledger(store: SqlItemStore): Ledger {
+  /** Every suggestion that is really stored gets its card. Posted inside the AI run's transaction: if that rolls back, the orphan card's Run says the suggestion is gone. */
+  fun suggestions(context: Context, store: SqlItemStore): SuggestionStore =
+    NotifyingSuggestionStore(SqlSuggestionStore(store.db)) { SuggestionNotifier.post(context.applicationContext, it) }
+
+  /** [context] null (the module's owner edits) makes no suggestions, so it needs no cards. */
+  fun ledger(store: SqlItemStore, context: Context? = null): Ledger {
     val ledgerStore = SqlLedgerStore(store.db)
-    val money = MoneySuggestions(ledgerStore, SqlSuggestionStore(store.db), { AutopilotSettings.fromJson(store.meta(AUTOPILOT_META)) }, System::currentTimeMillis, ZoneId.systemDefault())
+    val money = MoneySuggestions(ledgerStore, context?.let { suggestions(it, store) } ?: SqlSuggestionStore(store.db), { AutopilotSettings.fromJson(store.meta(AUTOPILOT_META)) }, System::currentTimeMillis, ZoneId.systemDefault())
     return Ledger(ledgerStore, { store.meta(OWNER_NAME)?.takeIf { it.isNotBlank() } }, money::onNew)
   }
 
@@ -53,7 +60,7 @@ object StoreHolder {
 
   fun ingest(context: Context, store: SqlItemStore, onOtpSaved: (Long) -> Unit = {}) =
     Ingest(
-      store, context.packageName, System::currentTimeMillis, onOtpSaved, ledger(store), smsPackages(context), media(context, store),
+      store, context.packageName, System::currentTimeMillis, onOtpSaved, ledger(store, context), smsPackages(context), media(context, store),
       aiOn = { AiConfig(store).on() }, bump = store::bump,
       onOwnMessage = { key -> SqlSuggestionStore(store.db).closeReplies(key, System.currentTimeMillis()) },
       // The one R44 exception: a conversation the owner picked for Autopilot. Read per call, so a change in Settings counts at once.
@@ -75,7 +82,7 @@ object StoreHolder {
         backfilling.set(false)
         return
       }
-      val job = started ?: LedgerBackfill(SqlBackfillStore(store, smsPackages(context)), ledger(store), System::currentTimeMillis)
+      val job = started ?: LedgerBackfill(SqlBackfillStore(store, smsPackages(context)), ledger(store, context), System::currentTimeMillis)
       if (job.runBatch()) {
         InflowListener.executor.execute { backfillStep(context, job) }   // a turn between batches for the notifications waiting behind it
         return

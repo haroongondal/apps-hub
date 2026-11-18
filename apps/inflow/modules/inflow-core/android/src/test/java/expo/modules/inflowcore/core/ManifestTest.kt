@@ -41,6 +41,11 @@ class ManifestTest {
     assertEquals(3, exported.size)
   }
 
+  @Test fun theSuggestionComponentsAreDeclaredAndNotExported() {
+    val names = listOf("activity", "receiver").flatMap { tags(it) }.associateBy { it.attr("name").substringAfterLast('.') }
+    for (n in listOf("SuggestionRunActivity", "SuggestionSkipReceiver", "SuggestionReminderReceiver")) assertEquals(n, "false", names.getValue(n).attr("exported"))
+  }
+
   @Test fun deputyIsVisibleToThePackageManager() {
     assertTrue(tags("package").any { it.attr("name") == "com.haroon.deputy" })
     assertEquals(1, tags("queries").size)

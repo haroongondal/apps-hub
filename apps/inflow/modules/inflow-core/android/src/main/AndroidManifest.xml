@@ -14,6 +14,11 @@
       <action android:name="android.intent.action.MAIN" />
       <category android:name="android.intent.category.LAUNCHER" />
     </intent>
+    <!-- The phone's default contacts, maps, calendar and photos apps, for the apps Deputy may look in. -->
+    <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.APP_CONTACTS" /></intent>
+    <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.APP_MAPS" /></intent>
+    <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.APP_CALENDAR" /></intent>
+    <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.APP_GALLERY" /></intent>
   </queries>
   <application>
     <service
@@ -42,6 +47,16 @@
       android:exported="true"
       android:readPermission="com.haroon.permission.AUTOPILOT"
       android:writePermission="com.haroon.permission.AUTOPILOT" />
+    <!-- Run and Skip on a suggestion card, and the bill reminder. None is exported: only Inflow's own PendingIntents reach them. -->
+    <activity
+      android:name=".android.SuggestionRunActivity"
+      android:exported="false"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar"
+      android:taskAffinity=""
+      android:excludeFromRecents="true"
+      android:noHistory="true" />
+    <receiver android:name=".android.SuggestionSkipReceiver" android:exported="false" />
+    <receiver android:name=".android.SuggestionReminderReceiver" android:exported="false" />
     <receiver
       android:name="expo.modules.inflowcore.android.SmsReceiver"
       android:exported="true"
