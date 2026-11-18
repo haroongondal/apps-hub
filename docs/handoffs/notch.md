@@ -52,3 +52,17 @@ Store pitfalls learned (see also `docs/app-store.md` section 5):
 Resolved 2026-11-19: option A shipped as Notch 0.2.0 (build 3), `NotchAccessibilityService` in `notch-island`, with no overlay permission and no foreground service. Phone check: the owner enabled Notch in Accessibility settings, a tap expands the pill (window 843x278, clock inside), it folds back after 4 s, and it works over the launcher. No crashes in logcat. Not checked: the new launcher icon, rotation, other apps' screens in front. Remaining: merge `notch` to main so Store builds keep the Notch and Halo ids; a real feature (music, timers) is the next product step.
 
 Old plan, kept for the reasoning: make the pill tappable. Option A (recommended): draw it with `TYPE_ACCESSIBILITY_OVERLAY` from an AccessibilityService, as Deputy's StopChip does; windows of that type sit above the status bar. The owner must enable the service in Accessibility settings (see the HyperOS accessibility note in memory). Option B: keep the overlay and make the touch target a transparent strip below the status bar; the pill itself stays untouchable. Then rebuild icons, release Notch and retest on the phone (coord claim first).
+
+## Phase 1 of the widgets (2026-11-19)
+
+Plan: `docs/superpowers/plans/2026-11-19-notch-widgets-phase-1.md`. Design: `docs/superpowers/specs/2026-11-19-notch-widgets-design.md`.
+
+Done and committed on branch `notch`: Task 1 to Task 8 (settings model in TypeScript and Kotlin with tests; settings saved natively; header with clock, date and next alarm; battery ring; the card in the accessibility service; the settings screen with a live preview).
+
+Gates, run on this branch: `corepack pnpm --filter notch test` (12 pass), `corepack pnpm --filter notch typecheck` (clean), `./gradlew :notch-island:testDebugUnitTest :app:assembleDebug` (5 + 5 + 8 pass, build green).
+
+Released: Notch 0.3.0, Store build 4. Manifest checked after release; every other app's entry intact.
+
+Not yet done: the phone test (Task 9 step 3). Claim `device:49kjmnuwonkffqzh`, update Notch through the Store, then check: the card opens on tap; each setting changes the pill without a restart; plugging in opens the card for 3 s; an alarm shows; without an alarm no alarm line.
+
+Deviation from the plan: the once-a-minute refresh uses the system's minute tick broadcast instead of a handler timer. Same effect, fewer moving parts.
