@@ -2,25 +2,32 @@ package expo.modules.notchisland.android
 
 import android.accessibilityservice.AccessibilityService
 import android.animation.ValueAnimator
+import android.app.Notification
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.FrameLayout
+import android.widget.TextView
 import expo.modules.notchisland.core.Cutout
 import expo.modules.notchisland.core.NotchSettings
 import expo.modules.notchisland.core.PillBox
 import expo.modules.notchisland.core.PillGeometry
+import expo.modules.notchisland.core.callElapsed
+import expo.modules.notchisland.core.durationText
 import java.util.Calendar
 
 // An accessibility overlay, unlike TYPE_APPLICATION_OVERLAY, sits above the status bar, so HyperOS lets the pill take touches there. The service reads no events and no screen content.
@@ -33,21 +40,39 @@ class NotchAccessibilityService : AccessibilityService() {
   private var animator: ValueAnimator? = null
   private var open = false
   private var settings = NotchSettings.DEFAULTS
+  private var hole: Cutout? = null
   private var small = PillBox(0, 0, 0)
-  private var big = PillBox(0, 0, 0)
+  private var dot: View? = null
+  private var callTime: TextView? = null
+  private var shown: String? = null
   private var events: BroadcastReceiver? = null
   private val collapse = Runnable { setOpen(false) }
+  private val tick = object : Runnable {
+    override fun run() {
+      val now = SystemClock.elapsedRealtime()
+      val t = NotchTimer.state
+      if (t.running && t.done(now)) NotchTimer.state = t.pause(now)
+      if (open) card?.tickRows()
+      if (!open && indicator() != shown) return reapply()
+      updateIndicator()
+      if (ticking()) main.postDelayed(this, 1000)
+    }
+  }
 
   override fun onServiceConnected() {
     running = true
     instance = this
     show()
     registerEvents()
+    NotchMedia.onChange = this::setActive
+    NotchTimer.onChange = this::setActive
   }
 
   override fun onUnbind(intent: Intent?): Boolean {
     running = false
     instance = null
+    NotchMedia.onChange = null
+    NotchTimer.onChange = null
     unregisterEvents()
     remove()
     return super.onUnbind(intent)
@@ -69,6 +94,55 @@ class NotchAccessibilityService : AccessibilityService() {
     }
   }
 
+  // The phase 1 indicator hook: media, a call or the timer changed. An open card rebinds its rows; a folded pill whose indicator changed is rebuilt at the new width.
+  fun setActive() {
+    if (pill == null) return
+    if (open) card?.bindRows(settings)
+    else if (indicator() != shown) return reapply()
+    updateIndicator()
+    main.removeCallbacks(tick)
+    if (ticking()) main.post(tick)
+  }
+
+  // A call wins over music and the timer.
+  private fun indicator(): String? = when {
+    NotchMedia.call != null -> CALL
+    ("media" in settings.widgets && NotchMedia.media?.playing == true) || ("timer" in settings.widgets && NotchTimer.state.running) -> DOT
+    else -> null
+  }
+
+  private fun ticking() = NotchTimer.state.running || NotchMedia.call != null
+
+  private fun folded(): PillBox {
+    val density = resources.displayMetrics.density
+    return when (shown) {
+      CALL -> PillGeometry.withIndicator(small, (56 * density).toInt())
+      DOT -> PillGeometry.withIndicator(small, (24 * density).toInt())
+      else -> small
+    }
+  }
+
+  private fun expanded(): PillBox {
+    val density = resources.displayMetrics.density
+    val screenW = resources.displayMetrics.widthPixels
+    val rows = card?.activeRows(settings)?.size ?: 0
+    return scaled(PillGeometry.expanded(hole, screenW, density, rows), PillGeometry.sizeScale(settings.size), screenW, density)
+  }
+
+  // Green dot and call time either side of the hole for a call; one dot for music or the timer.
+  private fun updateIndicator() {
+    val kind = indicator()
+    shown = kind
+    val d = dot ?: return
+    val t = callTime ?: return
+    d.visibility = if (kind == null) View.GONE else View.VISIBLE
+    (d.background as GradientDrawable).setColor(if (kind == CALL) GO else Colours.accent(settings.accent))
+    (d.layoutParams as FrameLayout.LayoutParams).gravity = Gravity.CENTER_VERTICAL or (if (kind == CALL) Gravity.START else Gravity.END)
+    d.requestLayout()
+    t.visibility = if (kind == CALL) View.VISIBLE else View.GONE
+    NotchMedia.call?.let { t.text = durationText(callElapsed(Notification.CATEGORY_CALL, it.startedAt, System.currentTimeMillis()) ?: 0L) }
+  }
+
   private fun cutout(manager: WindowManager): Cutout? {
     if (Build.VERSION.SDK_INT < 30) return null
     val r = manager.currentWindowMetrics.windowInsets.displayCutout?.boundingRectTop ?: return null
@@ -82,21 +156,40 @@ class NotchAccessibilityService : AccessibilityService() {
     val screenW = resources.displayMetrics.widthPixels
     val scale = PillGeometry.sizeScale(settings.size)
     val hole = cutout(manager)
+    this.hole = hole
     small = scaled(PillGeometry.collapsed(hole, screenW, density), scale, screenW, density)
-    big = scaled(PillGeometry.expanded(hole, screenW, density), scale, screenW, density)
 
     val holeWidth = hole?.let { it.right - it.left } ?: (58 * density).toInt()
     val content = IslandCard(this, holeWidth, small.height, density).apply { alpha = if (open) 1f else 0f }
     card = content
     refresh()
+    val edge = (10 * density).toInt()
+    val indicatorDot = View(this).apply {
+      background = GradientDrawable().apply { shape = GradientDrawable.OVAL }
+      layoutParams = FrameLayout.LayoutParams((6 * density).toInt(), (6 * density).toInt()).apply { leftMargin = edge; rightMargin = edge }
+    }
+    val indicatorTime = TextView(this).apply {
+      textSize = 10f
+      setTextColor(GO)
+      setTypeface(typeface, android.graphics.Typeface.BOLD)
+      fontFeatureSettings = "tnum"
+      layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL or Gravity.END)
+        .apply { rightMargin = (6 * density).toInt() }
+    }
+    dot = indicatorDot
+    callTime = indicatorTime
+    updateIndicator()
 
     val view = FrameLayout(this).apply {
       background = GradientDrawable().apply { setColor(Colours.pill(settings.pill, settings.accent)) }
       contentDescription = "Notch"
       setOnClickListener { setOpen(!open) }
       addView(content, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+      addView(indicatorDot)
+      addView(indicatorTime)
     }
-    val box = if (open) big else small
+    for (v in listOf(indicatorDot, indicatorTime)) v.alpha = if (open) 0f else 1f
+    val box = if (open) expanded() else folded()
     val lp = WindowManager.LayoutParams(
       box.width,
       box.height,
@@ -113,6 +206,8 @@ class NotchAccessibilityService : AccessibilityService() {
     pill = view
     params = lp
     corners(box)
+    main.removeCallbacks(tick)
+    if (ticking()) main.post(tick)
   }
 
   private fun scaled(box: PillBox, scale: Float, screenW: Int, density: Float): PillBox =
@@ -120,10 +215,13 @@ class NotchAccessibilityService : AccessibilityService() {
 
   private fun remove() {
     main.removeCallbacks(collapse)
+    main.removeCallbacks(tick)
     animator?.cancel()
     pill?.let { v -> runCatching { wm?.removeView(v) } }
     pill = null
     card = null
+    dot = null
+    callTime = null
   }
 
   private fun corners(box: PillBox) {
@@ -155,11 +253,14 @@ class NotchAccessibilityService : AccessibilityService() {
     open = next
     if (next) {
       refresh()
+    } else {
+      updateIndicator()
     }
     animator?.cancel()
     val from = PillBox(lp.x, lp.width, lp.height)
-    val to = if (next) big else small
+    val to = if (next) expanded() else folded()
     val c = card
+    val marks = listOfNotNull(dot, callTime)
     animator = ValueAnimator.ofFloat(0f, 1f).apply {
       duration = 220
       addUpdateListener {
@@ -170,6 +271,7 @@ class NotchAccessibilityService : AccessibilityService() {
         lp.height = box.height
         corners(box)
         c?.alpha = if (next) t else 1f - t
+        for (m in marks) m.alpha = if (next) 1f - t else t
         runCatching { wm?.updateViewLayout(view, lp) }
       }
       start()
@@ -204,6 +306,10 @@ class NotchAccessibilityService : AccessibilityService() {
 
   companion object {
     private const val CHARGE_OPEN_MS = 3000L
+    private const val CALL = "call"
+    private const val DOT = "dot"
+    // The mockup's --go.
+    private val GO = Color.parseColor("#34D399")
 
     @Volatile var running = false
       private set

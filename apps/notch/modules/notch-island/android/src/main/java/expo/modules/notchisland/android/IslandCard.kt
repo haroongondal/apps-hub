@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.os.SystemClock
 import android.text.format.DateFormat
 import android.view.Gravity
 import android.view.View
@@ -17,9 +18,10 @@ import expo.modules.notchisland.core.batteryText
 import expo.modules.notchisland.core.clockText
 import expo.modules.notchisland.core.dateText
 import expo.modules.notchisland.core.earLayout
+import expo.modules.notchisland.core.rowsFor
 import java.util.Calendar
 
-// Time in the left ear, battery in the right, with the camera hole between them; the date and alarm line sits below.
+// Time in the left ear, battery in the right, with the camera hole between them; the date and alarm line sits below, then the widget rows.
 class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val density: Float) : LinearLayout(context) {
   private val time = TextView(context).apply {
     textSize = 15f
@@ -42,6 +44,11 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
     setTextColor(0xB3FFFFFF.toInt())
     gravity = Gravity.CENTER
   }
+  private val callRow = CallRow(context, density)
+  private val mediaRow = MediaRow(context, density)
+  private val timerRow = TimerRow(context, density)
+  private val rows = LinearLayout(context).apply { orientation = VERTICAL }
+  private var accent = Color.WHITE
 
   init {
     orientation = VERTICAL
@@ -51,6 +58,26 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
     ears.addView(battery, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
     addView(ears, LayoutParams(LayoutParams.MATCH_PARENT, earHeight))
     addView(sub, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+    addView(rows, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+  }
+
+  // The call row first, then the media and timer rows in widget order, each only when it has something to show.
+  fun activeRows(s: NotchSettings): List<View> =
+    listOfNotNull(callRow.takeIf { NotchMedia.call != null }) +
+      rowsFor(s.widgets).mapNotNull { if (it == "media") mediaRow.takeIf { r -> r.isVisibleFor(NotchMedia.media) } else timerRow }
+
+  fun bindRows(s: NotchSettings) {
+    accent = Colours.accent(s.accent)
+    rows.removeAllViews()
+    for (row in activeRows(s)) rows.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+    mediaRow.bind(NotchMedia.media, accent, NotchMediaListener.controller)
+    tickRows()
+  }
+
+  // The once-a-second part: the call time and the timer.
+  fun tickRows() {
+    NotchMedia.call?.let { callRow.bind(it, System.currentTimeMillis(), accent) }
+    timerRow.bind(NotchTimer.state, SystemClock.elapsedRealtime(), accent)
   }
 
   fun bind(s: NotchSettings, now: Calendar, batteryPercent: Int?, charging: Boolean) {
@@ -77,6 +104,7 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
     val date = dateText(now.get(Calendar.DAY_OF_WEEK), now.get(Calendar.DAY_OF_MONTH), now.get(Calendar.MONTH))
     sub.text = listOfNotNull(date, alarm).joinToString("  ·  ")
     sub.visibility = if (ears.dateLine) VISIBLE else GONE
+    bindRows(s)
   }
 
   private class Ring(context: Context) : View(context) {
