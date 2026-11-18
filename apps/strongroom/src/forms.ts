@@ -53,18 +53,41 @@ export function importConfirm(b: ImportBatch): string {
 }
 
 export function exportedNotice(c: ExportCounts): string {
-  const parts = [plural(c.logins, 'login', 'logins'), plural(c.cards, 'card', 'cards'), plural(c.notes, 'note', 'notes')];
-  return `Exported ${parts[0]}, ${parts[1]} and ${parts[2]}. Delete the file once you're done with it: it isn't encrypted.`;
+  const parts = [plural(c.logins, 'login', 'logins'), plural(c.cards, 'card', 'cards'), plural(c.notes, 'note', 'notes'), plural(c.passes, 'pass', 'passes')];
+  return `Exported ${parts[0]}, ${parts[1]}, ${parts[2]} and ${parts[3]}. Delete the file once you're done with it: it isn't encrypted.`;
 }
 
-// Mirrors the native barcode encoders, so a bad code is caught on Save and not when the owner needs the pass at a till.
+// Same limits as the native Barcode encoder (Barcode.kt), so a bad code is caught on Save and not when the owner needs the pass at a till.
+export const CODE128_MAX = 80;
+export const QR_MAX = 2000;
+
+export function ean13CheckDigit(twelve: string): string {
+  const sum = [...twelve].reduce((s, d, i) => s + Number(d) * (i % 2 === 0 ? 1 : 3), 0);
+  return String((10 - (sum % 10)) % 10);
+}
+
 export function validatePass(name: string, code: string, format: PassFormat): string | null {
   if (!name.trim()) return 'Give this pass a name.';
   const c = code.trim();
   if (!c) return 'Enter the code printed under or inside the barcode.';
-  if (format === 'ean13' && !/^\d{12,13}$/.test(c)) return 'An EAN-13 code is 12 or 13 digits, with no spaces or letters.';
-  if (format === 'code128' && !/^[\x20-\x7e]+$/.test(c)) return 'A Code 128 code can only use letters, digits, spaces and the symbols on a standard keyboard.';
+  if (format === 'ean13') {
+    if (!/^\d{12,13}$/.test(c)) return 'An EAN-13 code is 12 or 13 digits, with no spaces or letters.';
+    if (c.length === 13 && ean13CheckDigit(c.slice(0, 12)) !== c[12]) return 'The last digit of this EAN-13 code is wrong';
+  }
+  if (format === 'code128') {
+    if (!/^[\x20-\x7e]+$/.test(c)) return 'A Code 128 code can only use letters, digits, spaces and the symbols on a standard keyboard.';
+    if (c.length > CODE128_MAX) return 'That code is too long for Code 128';
+  }
+  if (format === 'qr' && c.length > QR_MAX) return 'That code is too long for a QR code';
   return null;
 }
 
+// The string that is stored, shown, presented over NFC and scanned: a 12-digit EAN-13 gets its check digit so all four agree.
+export const normalisePassCode = (code: string, format: PassFormat): string => {
+  const c = code.trim();
+  return format === 'ean13' && c.length === 12 ? c + ean13CheckDigit(c) : c;
+};
+
 export const secondsLeft = (until: number, now: number): number => Math.max(0, Math.ceil((until - now) / 1000));
+
+export const secondsLeftText = (n: number): string => `${plural(n, 'second', 'seconds')} left`;

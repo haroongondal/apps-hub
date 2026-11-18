@@ -3,7 +3,7 @@ import { AppState } from 'react-native';
 import { Button, Field, Header, Notice, Screen, Segmented } from '@apps-hub/ui';
 import Vault, { type EntryInput, type PassFormat } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
-import { validatePass } from './forms.ts';
+import { normalisePassCode, validatePass } from './forms.ts';
 import { BackButton, SecretField } from './parts.tsx';
 
 type Kind = EntryInput['type'];
@@ -38,7 +38,7 @@ function build(kind: Kind, d: Draft): EntryInput | string {
   if (kind === 'note') return { type: 'note', name, text: d.text };
   if (kind === 'pass') {
     const problem = validatePass(name, d.code, d.format);
-    return problem ?? { type: 'pass', name, code: d.code.trim(), format: d.format, note: d.note };
+    return problem ?? { type: 'pass', name, code: normalisePassCode(d.code, d.format), format: d.format, note: d.note };
   }
   const expMonth = whole(d.expMonth, 1, 12);
   const expYear = whole(d.expYear, 2000, 2999);
@@ -64,7 +64,7 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
   const fail = (e: unknown) => (isLocked(e) ? onLocked() : setError(messageOf(e)));
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
 
-  // The entry being edited is the one place, besides Show, where a stored password, card number or security code reaches JS.
+  // The entry being edited is the one place, besides Show, where a stored password, card number, security code or pass code reaches JS.
   useEffect(() => {
     if (id === null) return;
     try {
