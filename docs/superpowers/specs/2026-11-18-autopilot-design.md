@@ -151,11 +151,12 @@ Halo shows that something is waiting, and a creature on the always-on screen gro
   reads the provider. The broadcast itself carries no text.
 - **Starting Deputy:** Deputy exports one activity `RunSuggestionActivity`, guarded by AUTOPILOT, taking a
   suggestion id. It reads the suggestion and its item from Inflow's provider, builds the task and allowed apps
-  (§8.3), shows a one-screen "Starting: Reply to Ali on WhatsApp" with Stop, starts the normal run and finishes.
-  Run outcome is written back to `suggestions/<id>`.
+  (§8.3), starts the normal run and finishes. Run outcome is written back to `suggestions/<id>`. (Built: the
+  activity has no screen and shows only a toast when the start fails; the Stop chip is Deputy's existing one. See
+  Build decisions.)
 - **Deputy's trust boundary (builder check):** Deputy's prompt treats only the task text as the owner's
   (`core/Prompt.kt`, SPEC §10). So the task text Autopilot builds is written by code from fixed templates and
-  holds only names, the app and dates. The other person's message goes in a separate untrusted block, like
+  holds only the app label. The other person's name and their message travel together in a separate untrusted block, like
   Deputy's existing notification block. This needs one new parameter on `AgentRuntime.start` (a list of untrusted
   context strings), plus a test that text in that block can't change allowed apps or the gate.
 - **Open links stay open:** `designeditor://` is BROWSABLE and any app can open it. The card link carries only
@@ -262,9 +263,37 @@ look (default: Contacts, Maps, Calendar, Gallery). Deputy's trust table still ap
 
 1. **Channel and autopilot core:** the permission in all four apps, Inflow's provider, the fast path, suggestion
    rules and the AI field, Inflow's Waiting block, Suggestions list and notification cards, Deputy's
-   `RunSuggestionActivity`, system actions for events and bills. Wallpaper theming check on the phone (one probe).
+   `RunSuggestionActivity`, system actions for events and bills. (The wallpaper theming probe moved to stage 3: it needs Halo code and a Store build.)
 2. **Visual layer:** Halo edge pulse, AOD Waiting row, bubble, daily digest.
 3. **Fun layer:** creature state in Inflow, creature face and Home in Halo, wallpaper, Design Editor cards.
+
+### Build decisions (stage 1, 2026-11-19)
+
+These are where the build differs from, or settles, what is written above.
+
+- The name travels with the message (R9). The sender or chat name is set by the other person, so it is in Deputy's
+  untrusted block next to their text, not in the task. Cost: Deputy picks the chat from untrusted text.
+- No "Starting: Reply to Ali" screen (R10). `RunSuggestionActivity` has no display and shows a toast only on failure.
+  A screen can come in stage 2.
+- Picked chats are stored and matched as `pkg|conversationKey` (the app package, a bar, the chat key), so picking a
+  WhatsApp chat never picks the same number in Signal or Telegram. Only the owner's own picks are widened for the AI.
+- Picked-chat items reach the AI for Autopilot only (R16, R17). They never reach Ask AI, the ledger or bank parsing,
+  which take only SMS and Gmail items. Old WhatsApp or push transactions already in the ledger stay (R18); the owner
+  may want a one-off cleanup.
+- Reply suggestions are keyed `reply:<pkg>|<conversation>`, and a reply is dropped when the owner already wrote in
+  that chat after the message.
+- The provider is reachable while Inflow is locked or not running (R12). The fingerprint lock covers Inflow's own
+  screens only, which matches "phone lock is enough". Any app signed with the owner's key that holds the AUTOPILOT
+  permission can read permitted item text and set suggestion state.
+- Run (R13): a reply leaves its state to Deputy, so a failed start keeps it waiting and Run can be tried again; an
+  event, bill or money suggestion moves to done once its action works. Run is once only, and an expired or skipped
+  suggestion says so. Only a start sweeps expired rows first, so a late done from Deputy still lands (a started row is
+  otherwise swept at its expiry, so a crashed run does not stay started forever).
+- The calendar (R14, R15): an event opens the calendar's new-event form with the alarm extra, so no alarm permission
+  is needed, and the entry is titled "Meeting" because the row holds no detail; the owner edits it. A bill reminder
+  uses an inexact alarm that is lost on reboot.
+- Fast path timing, titles and expiry follow the plan: 45 seconds quiet, at most one fast run a minute, titles built
+  by code from kind, name and date, expiry 24 h, event time, 3 days after due, 7 days.
 
 ## 11. Testing
 
