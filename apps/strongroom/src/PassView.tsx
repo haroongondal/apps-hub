@@ -2,8 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AppState, Image, PixelRatio, View } from 'react-native';
 import { Button, Notice, Sheet, Text, radius, space } from '@apps-hub/ui';
 import Vault from 'strongroom-vault';
+import { serialBrightness } from './brightness.ts';
 import { isLocked, messageOf } from './call.ts';
-import { secondsLeft } from './forms.ts';
+import { secondsLeft, secondsLeftText } from './forms.ts';
 
 interface Props {
   id: string;
@@ -19,6 +20,8 @@ export function PassView({ id, onLocked }: Props) {
   const [until, setUntil] = useState<number | null>(null);
   const [left, setLeft] = useState(0);
   const armed = useRef(false);
+  const mounted = useRef(true);
+  const busy = useRef(false);
 
   const fail = (e: unknown) => (isLocked(e) ? onLocked() : setError(messageOf(e)));
 
@@ -36,7 +39,7 @@ export function PassView({ id, onLocked }: Props) {
 
   // Brightness is cosmetic, so a failed call isn't worth an error; the native side restores it itself when the app goes to the background.
   useEffect(() => {
-    const bright = (on: boolean) => Vault.setBright(on).catch(() => {});
+    const bright = serialBrightness((on) => Vault.setBright(on));
     bright(true);
     const sub = AppState.addEventListener('change', (s) => bright(s === 'active'));
     return () => {
@@ -56,14 +59,19 @@ export function PassView({ id, onLocked }: Props) {
   };
 
   const present = async () => {
+    if (busy.current) return;
+    busy.current = true;
     try {
       const { expiresInMs } = await Vault.presentPass(id);
+      if (!mounted.current) return void Vault.stopPresenting().catch(() => {});
       armed.current = true;
       setError(null);
       setLeft(secondsLeft(expiresInMs, 0));
       setUntil(Date.now() + expiresInMs);
     } catch (e) {
-      fail(e);
+      if (mounted.current) fail(e);
+    } finally {
+      busy.current = false;
     }
   };
 
@@ -84,8 +92,12 @@ export function PassView({ id, onLocked }: Props) {
   }, [until]);
 
   // Leaving the screen disarms the tag.
-  useEffect(() => () => {
-    if (armed.current) Vault.stopPresenting().catch(() => {});
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (armed.current) Vault.stopPresenting().catch(() => {});
+    };
   }, []);
 
   return (
@@ -105,7 +117,7 @@ export function PassView({ id, onLocked }: Props) {
       </View>
       <Sheet visible={until !== null} onClose={stop} title="Hold to reader" doneLabel="Cancel">
         <Text>Hold the back of your phone to the reader.</Text>
-        <Text variant="data" accessibilityLabel={`${left} seconds left`}>{`${left} seconds left`}</Text>
+        <Text variant="data" accessibilityLabel={secondsLeftText(left)}>{secondsLeftText(left)}</Text>
       </Sheet>
     </>
   );
