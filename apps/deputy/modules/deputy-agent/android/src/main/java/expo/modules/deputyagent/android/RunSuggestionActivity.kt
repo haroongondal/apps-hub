@@ -49,10 +49,8 @@ class RunSuggestionActivity : Activity() {
 
     /** The suggestion row names its source item; an empty cursor at either step means Inflow refused. */
     private fun readItem(context: Context, id: Long): SuggestionItem? = runCatching {
-      val itemId = context.contentResolver.query(Uri.parse("$BASE/suggestions"), null, null, null, null)?.use { c ->
-        val idCol = c.getColumnIndexOrThrow("id")
-        val itemCol = c.getColumnIndexOrThrow("item_id")
-        generateSequence { if (c.moveToNext()) c else null }.firstOrNull { it.getLong(idCol) == id }?.getLong(itemCol)
+      val itemId = context.contentResolver.query(Uri.parse("$BASE/suggestions/$id"), null, null, null, null)?.use { c ->
+        if (c.moveToFirst()) c.getLong(c.getColumnIndexOrThrow("item_id")) else null
       } ?: return@runCatching null
       context.contentResolver.query(Uri.parse("$BASE/items/$itemId"), null, null, null, null)?.use { c ->
         if (!c.moveToFirst()) return@runCatching null
