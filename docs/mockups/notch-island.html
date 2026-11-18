@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Notch island mockups</title>
+<style>
+/* Layout: three phone screens stacked on phones and side by side on wide screens. The island sits on the camera cut-out, so every screen shows the same centred hole. */
+:root {
+  --bg: #f4f4f8;
+  --fg: #15151d;
+  --muted: #5d5f6e;
+  --card: #ffffff;
+  --line: #dadbe6;
+  --accent: #4338ca;
+  --wall-a: #1e1b4b;
+  --wall-b: #0b0b1a;
+  --island: #000000;
+  --island-fg: #ffffff;
+  --island-muted: rgba(255, 255, 255, 0.62);
+  --ring: #818cf8;
+  --go: #34d399;
+  --end: #f87171;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0c13;
+    --fg: #eeeef6;
+    --muted: #9fa1b2;
+    --card: #16161f;
+    --line: #2b2b3a;
+    --accent: #a5b4fc;
+    --wall-a: #1e1b4b;
+    --wall-b: #0b0b1a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c0c13;
+  --fg: #eeeef6;
+  --muted: #9fa1b2;
+  --card: #16161f;
+  --line: #2b2b3a;
+  --accent: #a5b4fc;
+  --wall-a: #1e1b4b;
+  --wall-b: #0b0b1a;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 48px;
+}
+main { max-width: 1040px; margin: 0 auto; display: grid; gap: 40px; }
+header h1 { font-size: 26px; line-height: 1.15; margin: 0 0 8px; letter-spacing: -0.01em; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); max-width: 60ch; }
+.kicker { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; font-weight: 600; }
+section h2 { font-size: 18px; margin: 0 0 4px; }
+section > p { margin: 0 0 18px; color: var(--muted); max-width: 62ch; }
+.row { display: flex; flex-wrap: wrap; gap: 28px 32px; align-items: flex-start; }
+
+/* A phone screen with the camera cut-out and the island over it */
+.phone {
+  width: 300px;
+  height: 420px;
+  border-radius: 40px;
+  padding: 10px;
+  background: #0a0a0f;
+  box-shadow: 0 0 0 1px var(--line), 0 18px 40px rgba(0, 0, 0, 0.25);
+  flex: 0 0 auto;
+}
+.screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 31px;
+  overflow: hidden;
+  background: radial-gradient(120% 80% at 50% 0%, var(--wall-a), var(--wall-b));
+}
+.status {
+  position: absolute; top: 12px; left: 22px; right: 22px;
+  display: flex; justify-content: space-between; color: rgba(255,255,255,0.85); font-size: 12px; font-weight: 600;
+}
+.hole {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 58px; height: 28px; border-radius: 0 0 18px 18px; background: #000;
+}
+.island {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  background: var(--island);
+  color: var(--island-fg);
+  border-radius: 0 0 26px 26px;
+  overflow: hidden;
+}
+.label { position: absolute; left: 0; right: 0; bottom: 22px; text-align: center; font-size: 12px; color: rgba(255,255,255,0.55); }
+
+/* Option A: ears */
+.ears { width: 268px; height: 74px; display: grid; grid-template-columns: 1fr 58px 1fr; grid-template-rows: 44px 30px; align-items: center; padding: 0 14px; }
+.ears .left { grid-row: 1; justify-self: start; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ears .right { grid-row: 1; grid-column: 3; justify-self: end; }
+.ears .sub { grid-column: 1 / 4; grid-row: 2; text-align: center; font-size: 12px; color: var(--island-muted); }
+.ring { width: 26px; height: 26px; }
+.collapsed { width: 96px; height: 28px; border-radius: 0 0 16px 16px; }
+
+/* Option B: drop card */
+.card {
+  width: 268px; height: 178px; padding: 40px 18px 16px; border-radius: 0 0 30px 30px;
+  display: grid; gap: 4px;
+}
+.card .time { font-size: 38px; font-weight: 600; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.card .date { font-size: 13px; color: var(--island-muted); }
+.card .foot { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
+.card .foot .alarm { color: var(--ring); font-weight: 600; }
+.card .battery { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+
+/* Ongoing call */
+.call { width: 268px; height: 74px; display: grid; grid-template-columns: 1fr 58px 1fr; grid-template-rows: 44px 30px; align-items: center; padding: 0 14px; }
+.call .left { grid-row: 1; justify-self: start; display: flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--go); }
+.call .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--go); }
+.call .right { grid-row: 1; grid-column: 3; justify-self: end; color: var(--island-fg); }
+.call .sub { grid-column: 1 / 4; grid-row: 2; display: flex; justify-content: center; gap: 10px; }
+.btn { font: inherit; font-size: 12px; font-weight: 600; border: 0; border-radius: 999px; padding: 5px 14px; background: rgba(255,255,255,0.14); color: var(--island-fg); }
+.btn.end { background: var(--end); color: #1a0505; }
+.call-collapsed { width: 112px; height: 28px; border-radius: 0 0 16px 16px; display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--go); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.caption { max-width: 300px; font-size: 13px; color: var(--muted); }
+.caption strong { color: var(--fg); display: block; font-size: 14px; margin-bottom: 2px; }
+.pair { display: grid; gap: 14px; }
+.swatch-note { font-size: 12px; color: var(--muted); }
+.specs { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; display: grid; gap: 4px; }
+.specs li::marker { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <p class="kicker">Notch · mockups</p>
+  <h1>Expanded card and ongoing calls</h1>
+  <p>Two ways to open the island, and how a call takes it over. Phone screens are drawn at actual proportion, with the camera cut-out in the middle. Pick one option per state and I'll build that one.</p>
+</header>
+
+<section>
+  <h2>1. Expanded card: option A, ears</h2>
+  <p>The island widens sideways: time on the left, battery ring on the right, date and next alarm underneath. Nothing sits behind the camera.</p>
+  <div class="row">
+    <div class="phone"><div class="screen">
+      <div class="status"><span>1:50</span><span>80%</span></div>
+      <div class="island ears">
+        <div class="left">1:50</div>
+        <div class="right">
+          <svg class="ring" viewBox="0 0 26 26" aria-label="Battery 80 percent" role="img">
+            <circle cx="13" cy="13" r="10" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="3"/>
+            <circle cx="13" cy="13" r="10" fill="none" stroke="var(--ring)" stroke-width="3" stroke-linecap="round" stroke-dasharray="50.3" stroke-dashoffset="10" transform="rotate(-90 13 13)"/>
+          </svg>
+        </div>
+        <div class="sub">Thu 19 Nov · Alarm 07:00</div>
+      </div>
+      <div class="label">Tap again or wait 5 s to fold</div>
+    </div></div>
+    <div class="caption pair">
+      <div><strong>What it shows</strong>Clock, battery ring, date, next alarm. Only the widgets the owner turned on appear.</div>
+      <div><strong>Why it works</strong>The camera hole stays clear, and the battery is always in view, including on a small phone.</div>
+      <ul class="specs">
+        <li>Width grows from the camera outward, 268 dp.</li>
+        <li>Height 74 dp: a 44 dp top row and a 30 dp date line.</li>
+        <li>Springs open in 220 ms; closes the same way.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>2. Expanded card: option B, drop-down card</h2>
+  <p>The card hangs from the camera with a larger clock and the battery row across the bottom. More room, and it looks more like a panel than an island.</p>
+  <div class="row">
+    <div class="phone"><div class="screen">
+      <div class="status"><span>1:50</span><span>80%</span></div>
+      <div class="island card">
+        <div class="time">1:50</div>
+        <div class="date">Thu 19 Nov</div>
+        <div class="foot">
+          <span class="battery">
+            <svg class="ring" viewBox="0 0 26 26" aria-label="Battery 80 percent" role="img" style="width:22px;height:22px">
+              <circle cx="13" cy="13" r="10" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="3"/>
+              <circle cx="13" cy="13" r="10" fill="none" stroke="var(--ring)" stroke-width="3" stroke-linecap="round" stroke-dasharray="50.3" stroke-dashoffset="10" transform="rotate(-90 13 13)"/>
+            </svg>
+            80%
+          </span>
+          <span class="alarm">Alarm 07:00</span>
+        </div>
+      </div>
+      <div class="label">Tap again or wait 5 s to fold</div>
+    </div></div>
+    <div class="caption pair">
+      <div><strong>What it shows</strong>The same widgets as option A, with a larger clock.</div>
+      <div><strong>Trade-off</strong>It covers more of the app underneath, and the camera hole sits in the top padding rather than a row of its own.</div>
+      <ul class="specs">
+        <li>Width 268 dp, height 178 dp, bottom corners 30 dp.</li>
+        <li>Clock 38 sp, date 13 sp.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>3. Ongoing call</h2>
+  <p>While a call is running, the island switches to the call, ahead of music and timers. Folded, it shows the call timer in green. Tapped, it shows the speaker and end controls.</p>
+  <div class="row">
+    <div class="phone"><div class="screen">
+      <div class="status"><span>1:50</span><span>80%</span></div>
+      <div class="island call-collapsed-wrap" style="position:absolute;top:0;left:50%;transform:translateX(-50%);background:#000;border-radius:0 0 16px 16px">
+        <div class="call-collapsed" style="width:112px;height:28px"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--go)"></span>03:12</div>
+      </div>
+      <div class="label">Folded during a call: green timer</div>
+    </div></div>
+    <div class="phone"><div class="screen">
+      <div class="status"><span>1:50</span><span>80%</span></div>
+      <div class="island call">
+        <div class="left"><span class="dot"></span>03:12</div>
+        <div class="right" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>
+        </div>
+        <div class="sub">
+          <button class="btn" type="button">Speaker</button>
+          <button class="btn end" type="button">End call</button>
+        </div>
+      </div>
+      <div class="label">Tapped during a call</div>
+    </div></div>
+    <div class="caption pair">
+      <div><strong>What it shows</strong>The call timer and the controls only. No caller name or message text: the listener reads the call's category and duration, not what is said or written.</div>
+      <div><strong>Needs</strong>The owner's notification access for Notch, the same permission now playing needs. Without it, the island still shows the clock and battery, and calls are not detected.</div>
+      <ul class="specs">
+        <li>Call takes priority over music and timers.</li>
+        <li>End call works through the call notification's own hang-up action.</li>
+        <li>Speaker is a toggle on that same action, when the phone supplies one.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>What I'd build first</h2>
+  <p>Option A for the expanded card, because it keeps the camera clear and fits the existing size settings. For calls, the folded green timer plus the tapped controls. Both sit under the same settings screen, and the call behaviour needs no new permission beyond the one now playing already needs.</p>
+  <p class="swatch-note">Nothing is built yet. Tell me which option to build for the card, and whether the call controls should be speaker and end, or end only.</p>
+</section>
+
+</main>
+</body>
+</html>

@@ -1,68 +1,70 @@
 # Notch handoff
 
-## Resume prompt (2026-11-18)
+## Resume prompt (2026-11-19)
 
-Read this file completely first and trust the facts below; do not redo them. Continue from "Current state and next step".
+Read this file completely first and trust the verified facts below; do not redo them. Follow the handoff contract in the owner's CLAUDE.md. Continue from "Current state and next step". Before building anything new, ask the owner the two open call questions in that section, one at a time.
 
 ## Goal and fixed constraints
 
-- Android app that draws an expanding pill around the phone's camera cutout, like a Mac notch app. First version: tap to expand, shows the clock, folds back after 4 s.
-- Owner's phone only for device tests (Xiaomi 24116RACCG, HyperOS 3.0, Android 16, serial 49kjmnuwonkffqzh). Never an emulator. Claim `device:49kjmnuwonkffqzh` in coord before touching it.
-- Install through the Store, never `adb install` (the app is Store-released). adb is fine for logcat, screenshots and taps.
+- Android app: a pill around the phone's camera cutout that grows into an island. Tap expands it; it shows time, battery and date/alarm, and later timer, stopwatch, now playing and ongoing calls.
+- Owner's phone only for device tests: Xiaomi 24116RACCG, HyperOS 3.0, Android 16, serial `49kjmnuwonkffqzh`. Never an emulator. Claim `device:49kjmnuwonkffqzh` in coord before touching it.
+- Install through the Store, never `adb install`. adb is fine for logcat, screenshots and taps. Store Update buttons: tap from `uiautomator dump` bounds, never from a screenshot, because the list scrolls between the two.
+- Commits: no Claude attribution lines (owner's memory rule). Release with `pnpm release notch` only on the owner's go.
+- Accessibility service: do not force-stop Notch, which can switch the service off until the owner re-enables it. Use Back and relaunch.
+- Notch's approved design: `docs/superpowers/specs/2026-11-19-notch-widgets-design.md`. Phase 1 plan: `docs/superpowers/plans/2026-11-19-notch-widgets-phase-1.md`.
 
 ## Decisions
 
-- Overlay is `TYPE_APPLICATION_OVERLAY` with the "display over other apps" permission and a foreground service (`specialUse`). Deputy uses an accessibility overlay, but that needs enabling a service on HyperOS; this does not.
-- Geometry is pure Kotlin (`PillGeometry`) so JVM tests cover it. The cutout comes from `WindowMetrics.windowInsets.displayCutout` (API 30+), with a centred 72x28 dp fallback.
+- Overlay is an accessibility overlay (`TYPE_ACCESSIBILITY_OVERLAY` from `NotchAccessibilityService`), enabled by the owner in Accessibility settings. It sits above HyperOS's status bar, so taps reach it. The old `TYPE_APPLICATION_OVERLAY` version could not take taps there.
+- Settings: one JSON string, saved in SharedPreferences `notch_settings` (`NotchPrefs`), passed through `NotchIslandModule.getSettings` / `setSettings`. `NotchSettings.parse` never throws. The allowed values in `settings.ts` and `NotchSettings.kt` must stay in step.
+- Layout: option A, "ears", chosen by the owner on 2026-11-19 from `docs/mockups/notch-island.html` (published: https://claude.ai/artifact/LuD3GVDy2XhT2UcAjL5FX9). Clock in the left ear, battery ring and percent in the right ear, camera hole in the middle, date and next alarm on a line under the hole. The rule is `earLayout` in `core/EarLayout.kt` and `earPlan` in `settings.ts`, with tests on both sides.
+- Ears ignore the widget order setting: clock always left, battery always right. Recorded as a known gap below.
 - Brand `notch` is indigo (hue 235). Teal was already taken by Inflow.
-- Store table also gained `halo` (`com.haroon.halo`): Halo is released from its own branch and is not in `main`, so a Store built without it would refuse Halo updates.
+- Store table (`packages/store-manifest`, `tools/release/src/apps.ts`) gained `halo` and `notch`. These are on the `notch` branch only, not `main`.
 
 ## Verified facts
 
-- The phone's cutout: x 510..570, y 0..110 on a 1080x2400 screen, density 2.8125.
-- Gradle `:notch-island:testDebugUnitTest :app:assembleDebug` passes (6 tests). TS tests and typecheck pass.
-- Released 2026-11-18 from branch `notch` (based on origin/main df22cc60): Store build 21, Notch build 2 (0.1.0). Manifest checked afterwards: no other app's entry was lost.
+- Phone cutout: x 510..570, y 0..110 on a 1080x2400 screen, density 2.8125.
+- Gates, run on this branch: `corepack pnpm --filter notch test` (13 pass); `corepack pnpm --filter notch typecheck` (clean); `./gradlew :notch-island:testDebugUnitTest :app:assembleDebug` (JVM tests 5 + 5 + 3 + 8 pass; build green).
+- Released: Notch 0.3.1, Store build 5, on 2026-11-19. Manifest checked after release: every other app's entry intact.
+- Phone, Notch 0.3.1 through the Store:
+  - Pill collapsed: 119x121 px at x 480..599 with Large size (104 px x 1.15).
+  - Expanded: 969x222 px, the ears layout. Clock, battery ring with "79% charging", and "Thu 19 Nov · Alarm 5:16" all visible.
+  - Folds back to the collapsed size after about 5 s.
+  - Settings changed from the app apply straight away (Large, Rounded, Indigo confirmed). They survive leaving and reopening the app.
+  - Alarm line appears when an alarm is set on the phone.
+- Phone, Notch 0.2.0: a tap expands the pill, it folds back, and it works over the launcher. No crashes in logcat.
+- The settings screen had mis-taps during testing (a scrolled list). The phone's values at the end of the test: Indigo, Black, Large, Rounded, 5 s, phone clock style. The owner may want defaults back.
 
 ## File map
 
-- `apps/notch/` app (App.tsx, `src/status.ts`, committed `android/` prebuild).
-- `apps/notch/modules/notch-island/` Kotlin module: `core/PillGeometry.kt`, `android/NotchService.kt`, `NotchIslandModule.kt`, `src/index.ts`.
-- `packages/ui/src/tokens.ts` (brand), `packages/store-manifest/src/index.ts` and `tools/release/src/apps.ts` (release registry).
+- App: `apps/notch/App.tsx`, `src/settings.ts` (types, defaults, `normalize`, `pillHex`, `clockLabel`, `resolveClock`, `earPlan`, `foldLabel`, `moveWidget`), `src/Preview.tsx`, `src/SettingsScreen.tsx`, `src/status.ts`, tests in `src/__tests__/`.
+- Native module: `apps/notch/modules/notch-island/`
+  - `core/` (JVM-tested, pure): `PillGeometry.kt`, `NotchSettings.kt`, `Format.kt`, `EarLayout.kt`
+  - `android/`: `NotchAccessibilityService.kt` (pill, card, receivers), `IslandCard.kt` (ears view), `NotchPrefs.kt`, `Colours.kt`
+  - `NotchIslandModule.kt` and `src/index.ts`: the bridge.
+  - `res/xml/notch_accessibility_service.xml`, `res/values/strings.xml`.
+- Mockups: `docs/mockups/notch-island.html`.
+- Release registry: `packages/store-manifest/src/index.ts`, `tools/release/src/apps.ts`.
 
 ## Session log
 
-- 2026-11-18: built the app, tests, released Store 21 + Notch 2. Phone was off wireless adb for a while, then back; queued behind apps-hub-c5.
+- 2026-11-18: built the first app and released Store 21 and Notch 2. The overlay could not take taps.
+- 2026-11-19: accessibility service fixed the taps (Notch 0.2.0 / build 3). Phase 1 built: settings, live preview, clock, battery, card (Notch 0.3.0 / build 4). Owner chose the ears layout; the island was rebuilt as ears and released as Notch 0.3.1 / build 5 and tested on the phone.
 
 ## Current state and next step
 
-Branch `notch` is committed in the worktree `apps-hub-wt/notch`, rebased on origin/main 18937ec4, not pushed or merged to main (merge with `[skip ci]`, owner's call).
+Branch `notch` (worktree `/Users/outsentia/Documents/apps-hub-wt/notch`) is committed through "Notch: version 0.3.1 for the ears layout". Not pushed, not merged to `main`. Merging with `[skip ci]` is the owner's call. A Store built from `main` lacks the `notch` and `halo` ids and will refuse those installs ("Update Store, then try again").
 
-Phone test, 2026-11-19 (Store 23, Notch 2 installed through the Store):
+**Not built yet, in order of what the owner should decide first:**
 
-- Works: install, overlay permission via Settings, service starts, the black pill is drawn over the camera hole (window 104x121 at x 488..592, correct).
-- Broken: tapping the pill does nothing. HyperOS's StatusBar window (layer 151000, y 0..110) is above an APPLICATION_OVERLAY window (layer 111000) and takes every touch in that band (a tap logs `onScrollToTop` in the foreground app). Only 11 px of the pill lies below the status bar.
-- Stale icon: the launcher icon is still the first cyan version. `tools/icons/render-icon.mjs` wrote PNG mipmaps, but prebuild's `ic_launcher_foreground.webp` files and `iconBackground #06181C` in `values/colors.xml` win. Re-run prebuild for the icons, or convert the webp files.
-- Unexplained: the app showed "On" and the service was running right after the overlay permission was granted, although nobody tapped Turn on.
+1. **Ongoing calls.** Open questions for the owner (ask one at a time):
+   - Is the call feature wanted? It needs the notification listener to read the call's category and duration (not names or text). That goes beyond the approved design's non-goals, so the design doc needs updating if yes.
+   - Call controls: speaker and end, or end only? Speaker depends on the phone's call notification supplying that action, which is unverified on this phone.
+   - Mockup for calls is on the mockup page (section 3).
+2. **Phase 2 plan** (not written): timer, stopwatch, now playing (`MediaSessionManager` via the notification listener), and calls if approved. The design doc describes these. Write the plan with `superpowers:writing-plans` after the owner approves the call decision; do not build before approval.
+3. **Widget order** is ignored by the ears layout (clock always left, battery right). Decide whether order should matter, and if so how the ears take it.
+4. **Not tested on the phone:** the charger opening the card for 3 s (unplugging breaks adb; the owner may unplug and replug, with a test script); the tinted pill's text contrast (not measured); "Never" fold time; 12/24-hour clock; rotation.
+5. **Git history:** earlier `notch` commits track Gradle build output under `apps/notch/modules/notch-island/android/build` and `apps/notch/android/app/build`. The latest commit untracks it. Rewriting unpushed history is the owner's call.
 
-Store pitfalls learned (see also `docs/app-store.md` section 5):
-
-- A Store built from main lacks the `notch` and `halo` ids, so it refuses those installs ("Update Store, then try again"). Merge `notch` to main so every later Store release keeps them.
-- Concurrent `pnpm release` runs overwrite each other's manifest entries (Design Editor 19 reverted Store 23 to 22 once). Check the manifest after each release.
-
-Resolved 2026-11-19: option A shipped as Notch 0.2.0 (build 3), `NotchAccessibilityService` in `notch-island`, with no overlay permission and no foreground service. Phone check: the owner enabled Notch in Accessibility settings, a tap expands the pill (window 843x278, clock inside), it folds back after 4 s, and it works over the launcher. No crashes in logcat. Not checked: the new launcher icon, rotation, other apps' screens in front. Remaining: merge `notch` to main so Store builds keep the Notch and Halo ids; a real feature (music, timers) is the next product step.
-
-Old plan, kept for the reasoning: make the pill tappable. Option A (recommended): draw it with `TYPE_ACCESSIBILITY_OVERLAY` from an AccessibilityService, as Deputy's StopChip does; windows of that type sit above the status bar. The owner must enable the service in Accessibility settings (see the HyperOS accessibility note in memory). Option B: keep the overlay and make the touch target a transparent strip below the status bar; the pill itself stays untouchable. Then rebuild icons, release Notch and retest on the phone (coord claim first).
-
-## Phase 1 of the widgets (2026-11-19)
-
-Plan: `docs/superpowers/plans/2026-11-19-notch-widgets-phase-1.md`. Design: `docs/superpowers/specs/2026-11-19-notch-widgets-design.md`.
-
-Done and committed on branch `notch`: Task 1 to Task 8 (settings model in TypeScript and Kotlin with tests; settings saved natively; header with clock, date and next alarm; battery ring; the card in the accessibility service; the settings screen with a live preview).
-
-Gates, run on this branch: `corepack pnpm --filter notch test` (12 pass), `corepack pnpm --filter notch typecheck` (clean), `./gradlew :notch-island:testDebugUnitTest :app:assembleDebug` (5 + 5 + 8 pass, build green).
-
-Released: Notch 0.3.0, Store build 4. Manifest checked after release; every other app's entry intact.
-
-Not yet done: the phone test (Task 9 step 3). Claim `device:49kjmnuwonkffqzh`, update Notch through the Store, then check: the card opens on tap; each setting changes the pill without a restart; plugging in opens the card for 3 s; an alarm shows; without an alarm no alarm line.
-
-Deviation from the plan: the once-a-minute refresh uses the system's minute tick broadcast instead of a handler timer. Same effect, fewer moving parts.
+**Process reminders:** the owner's memory rules apply: phone only through coord; Store installs only; merge and release only on the owner's go; no Claude attribution on commits or PRs.
