@@ -27,7 +27,7 @@ enum class Importance { HIGH, NORMAL, LOW }
 /** `conversation` is the chat or thread the item belongs to; `own` is true when the owner wrote it (sender "You"). */
 data class AiInput(
   val itemId: Long, val app: String, val sender: String?, val title: String?, val text: String, val at: Long,
-  val conversation: String? = null, val own: Boolean = false,
+  val conversation: String? = null, val own: Boolean = false, val conversationKey: String? = null,
 )
 
 data class AiMoney(

@@ -57,6 +57,23 @@ class IngestTest {
     assertEquals(setOf("Sunflower"), store.items.values.map { it.capture.conversation }.toSet())
   }
 
+  @Test fun anOwnMessageClosesTheConversationsReplySuggestions() {
+    val closed = mutableListOf<String>()
+    val ing = Ingest(store, own, { clock }, onOwnMessage = { closed += it })
+    val m1 = RawMessage("Sunflower", "Are you free?", clock + 1)
+    val reply = RawMessage("You", "On my way", clock + 3, own = true)
+    ing.onNotification(chat(m1).copy(title = "Sunflower", chatTag = "t1"))
+    assertTrue(closed.isEmpty())
+    ing.onNotification(chat(m1, reply).copy(title = "You", chatTag = "t1"))
+    assertEquals(listOf(store.items.values.first().capture.conversationKey!!), closed)
+  }
+
+  @Test fun aFailingOwnMessageCallbackNeverLosesTheItem() {
+    val ing = Ingest(store, own, { clock }, onOwnMessage = { error("boom") })
+    assertEquals(1, ing.onNotification(chat(RawMessage("You", "On my way", clock + 3, own = true)).copy(title = "Sunflower", chatTag = "t1")))
+    assertEquals(1, store.items.size)
+  }
+
   // The retention pins: WhatsApp text is kept forever and never mistaken for a code.
   @Test fun whatsappIsKeptForever() {
     assertNull(Retention.default("com.whatsapp", "WhatsApp").keepDays)

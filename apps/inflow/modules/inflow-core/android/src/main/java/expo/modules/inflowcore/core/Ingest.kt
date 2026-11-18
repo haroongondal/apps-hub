@@ -10,6 +10,8 @@ class Ingest(
   private val media: MediaSink? = null,
   private val aiOn: () -> Boolean = { false },
   private val bump: (name: String, by: Long) -> Unit = { _, _ -> },
+  /** The owner wrote in this conversation (a new "You" message): its waiting reply suggestions are moot. */
+  private val onOwnMessage: (conversationKey: String) -> Unit = {},
 ) {
   fun onNotification(raw: RawNotification): Int {
     if (raw.pkg == ownPkg) return 0
@@ -33,6 +35,8 @@ class Ingest(
       val id = store.insert(c, search, otpExpiresAt) ?: continue
       saved++
       saveMedia(id, c)
+      // Whatever goes wrong in the callback never takes the saved item back or stops the rest of the notification.
+      if (c.sender.equals("You", ignoreCase = true)) c.conversationKey?.let { runCatching { onOwnMessage(it) } }
       otpExpiresAt?.let(onOtpSaved)
       if (otpExpiresAt == null) {
         val channel = when {

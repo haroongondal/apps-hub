@@ -3,12 +3,16 @@ package expo.modules.inflowcore.android
 import android.content.Context
 import android.provider.Telephony
 import android.util.Log
+import expo.modules.inflowcore.core.AUTOPILOT_META
+import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.Ledger
+import expo.modules.inflowcore.core.MoneySuggestions
 import expo.modules.inflowcore.core.Ingest
 import expo.modules.inflowcore.core.KEY_LOST_MESSAGE
 import expo.modules.inflowcore.core.LedgerBackfill
 import expo.modules.inflowcore.core.Sms
 import java.io.File
+import java.time.ZoneId
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** The one store the listener and the module share. A failed open is retried later unless the key is lost; the database file is never touched. */
@@ -27,7 +31,11 @@ object StoreHolder {
 
   const val OWNER_NAME = "ownerName"
 
-  fun ledger(store: SqlItemStore) = Ledger(SqlLedgerStore(store.db)) { store.meta(OWNER_NAME)?.takeIf { it.isNotBlank() } }
+  fun ledger(store: SqlItemStore): Ledger {
+    val ledgerStore = SqlLedgerStore(store.db)
+    val money = MoneySuggestions(ledgerStore, SqlSuggestionStore(store.db), { AutopilotSettings.fromJson(store.meta(AUTOPILOT_META)) }, System::currentTimeMillis, ZoneId.systemDefault())
+    return Ledger(ledgerStore, { store.meta(OWNER_NAME)?.takeIf { it.isNotBlank() } }, money::onNew)
+  }
 
   fun smsPackages(context: Context): Set<String> = Sms.KNOWN_APPS + listOfNotNull(Telephony.Sms.getDefaultSmsPackage(context))
 
@@ -47,6 +55,7 @@ object StoreHolder {
     Ingest(
       store, context.packageName, System::currentTimeMillis, onOtpSaved, ledger(store), smsPackages(context), media(context, store),
       aiOn = { AiConfig(store).on() }, bump = store::bump,
+      onOwnMessage = { key -> SqlSuggestionStore(store.db).closeReplies(key, System.currentTimeMillis()) },
     )
 
   private val backfilling = AtomicBoolean(false)

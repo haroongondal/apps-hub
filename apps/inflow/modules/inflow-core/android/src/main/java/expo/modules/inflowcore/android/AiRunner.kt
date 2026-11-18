@@ -7,11 +7,14 @@ import expo.modules.inflowcore.core.AiError
 import expo.modules.inflowcore.core.AiMeta
 import expo.modules.inflowcore.core.AiRun
 import expo.modules.inflowcore.core.AiRunResult
+import expo.modules.inflowcore.core.AUTOPILOT_META
+import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.Ask
 import expo.modules.inflowcore.core.Period
 import expo.modules.inflowcore.core.ReportRun
 import expo.modules.inflowcore.core.ReportSchedule
 import expo.modules.inflowcore.core.TxnCategorize
+import expo.modules.inflowcore.core.suggestionHook
 import java.time.ZoneId
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
@@ -59,6 +62,12 @@ object AiRunner {
 
   private fun execute(ctx: Context): AiRunResult {
     val store = StoreHolder.get(ctx).getOrNull() ?: return AiRunResult(0, 0, false, null)
+    val suggestions = SqlSuggestionStore(store.db)
+    try {
+      suggestions.expire(System.currentTimeMillis())   // first thing in every run, whether or not the AI is on
+    } catch (e: Exception) {
+      Log.w(TAG, "expire failed: ${e.javaClass.simpleName}")
+    }
     val cfg = AiConfig(store)
     if (!cfg.on()) return AiRunResult(0, 0, false, null)
     val sms = StoreHolder.smsPackages(ctx)
@@ -67,6 +76,7 @@ object AiRunner {
         store, StoreHolder.ledger(store), { cfg.provider() }, { cfg.prices() }, { cfg.capUsd() },
         { SqlLedgerStore(store.db).aiAccounts() }, { store.channelOf(it, sms) }, System::currentTimeMillis, ZoneId.systemDefault(),
         atomic = { block -> store.inTransaction { block() } },
+        suggestions = suggestionHook(suggestions, { AutopilotSettings.fromJson(store.meta(AUTOPILOT_META)) }, System::currentTimeMillis, ZoneId.systemDefault()),
       ).run()
     } catch (e: Exception) {
       Log.w(TAG, "run failed: ${e.javaClass.simpleName}")

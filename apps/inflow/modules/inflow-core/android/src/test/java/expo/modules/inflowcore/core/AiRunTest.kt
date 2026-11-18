@@ -48,10 +48,12 @@ class AiRunTest {
 
   private val provider = OpenAiCompatProvider("https://x.example/v1", "m", listOf("k"), null, ::post, {})
 
+  private val suggestionStore = MemorySuggestionStore()
+
   private fun runner(
     cap: Double? = 0.50, hasProvider: Boolean = true, channelOf: (Long) -> Channel = { Channel.NOTIFICATION },
-    accounts: List<String> = emptyList(),
-  ) = AiRun(store, ledger, { if (hasProvider) provider else null }, { prices }, { cap }, { accounts }, channelOf, { clock }, karachi)
+    accounts: List<String> = emptyList(), hook: ((AiResult, AiInput) -> Unit)? = suggestionHook(suggestionStore, { AutopilotSettings() }, { clock }, karachi),
+  ) = AiRun(store, ledger, { if (hasProvider) provider else null }, { prices }, { cap }, { accounts }, channelOf, { clock }, karachi, suggestions = hook)
 
   private fun keyAdded(at: Long = t0 - 60_000) = store.setMeta(AiMeta.SINCE, at.toString())
 
@@ -416,5 +418,84 @@ class AiRunTest {
     assertEquals(1, store.queue.size)
     runner().run()
     assertTrue(store.queue.isEmpty())
+  }
+
+  // --- Autopilot suggestions
+  private fun suggestReply(suggest: String, importance: String = "normal") = { ids: List<Long> ->
+    """{"items":[${ids.joinToString(",") { """{"id":$it,"kind":"message","summary":"Note $it.","importance":"$importance","money":null,"todos":[],"tags":[],"suggest":$suggest}""" }}]}"""
+  }
+
+  private fun pickedChatItem(sender: String? = "Ali", text: String = "Are you coming tonight?"): Long {
+    val id = store.insert(capture(sms, text).copy(sender = sender, conversation = "Ali", conversationKey = "sms:ali"), "s", null)!!
+    store.enqueueAi(id, clock)
+    return id
+  }
+
+  @Test fun aReplyResultFromAPickedChatMakesAWaitingSuggestion() {
+    keyAdded()
+    val id = pickedChatItem()
+    answer = suggestReply("""{"type":"reply","due":null,"detail":"Ali asks if you are coming"}""")
+    runner().run()
+    val s = suggestionStore.waiting().single()
+    assertEquals(SuggestionKind.REPLY, s.kind)
+    assertEquals("reply:sms:ali", s.dedupeKey)
+    assertEquals("Reply to Ali", s.title)   // built by code from the chat name
+    assertEquals(id, s.itemId)
+    assertEquals(clock + 24 * 3_600_000L, s.expiresAt)
+  }
+
+  @Test fun aRunWhoseProviderThrowsMakesNoSuggestion() {
+    keyAdded()
+    pickedChatItem()
+    offline = true
+    runner().run()
+    assertTrue(suggestionStore.rows.isEmpty())
+    assertEquals(1, store.queue.size)
+  }
+
+  @Test fun badSuggestFieldsMakeNothingAndNeverFailTheRun() {
+    keyAdded()
+    val past = "2026-11-01T10:00"
+    val cases = listOf(
+      """{"type":"bill","due":"$past","detail":"Pay it"}""",       // a bill long past due
+      """{"type":"bill","due":"soon","detail":"Pay it"}""",        // malformed due: a bill needs a time
+      """{"type":"event","due":"2026-11-10T10:00","detail":"x"}""", // an event already over
+      """{"type":"teleport","due":null,"detail":"x"}""",           // unknown type
+      """"reply"""",                                               // not an object
+    )
+    for ((n, c) in cases.withIndex()) {
+      pickedChatItem(text = "Are you coming $n?")
+      answer = suggestReply(c)
+      val r = runner().run()
+      assertNull(r.error)
+      assertEquals(1, r.saved)
+    }
+    assertTrue(suggestionStore.rows.isEmpty())
+  }
+
+  @Test fun aReplyToTheOwnersOwnMessageMakesNothing() {
+    keyAdded()
+    pickedChatItem(sender = "You", text = "I will call you")
+    answer = suggestReply("""{"type":"reply","due":null,"detail":"x"}""")
+    runner().run()
+    assertTrue(suggestionStore.rows.isEmpty())
+  }
+
+  @Test fun aThrowingSuggestionHookNeverLosesTheResult() {
+    keyAdded()
+    pickedChatItem()
+    val r = runner(hook = { _, _ -> error("boom") }).run()
+    assertEquals(1, r.saved)
+    assertEquals(1, store.aiResults.size)
+    assertTrue(store.queue.isEmpty())
+  }
+
+  @Test fun theSameChatTwiceInARunMakesOneSuggestion() {
+    keyAdded()
+    pickedChatItem(text = "Are you coming?")
+    pickedChatItem(text = "Hello? Are you there?")
+    answer = suggestReply("""{"type":"reply","due":null,"detail":"asks"}""")
+    runner().run()
+    assertEquals(1, suggestionStore.waiting().size)
   }
 }

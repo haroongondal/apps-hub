@@ -35,6 +35,7 @@ class AiRun(
   private val capUsd: () -> Double?, private val accounts: () -> List<String>, private val channelOf: (Long) -> Channel,
   private val now: () -> Long, private val zone: ZoneId,
   private val atomic: ((() -> Unit) -> Unit) = { it() },
+  private val suggestions: ((AiResult, AiInput) -> Unit)? = null,
 ) {
   /** One run: batches until the queue is empty, the cap is reached or an error. An item is tried once per run, so a bad reply never loops. */
   fun run(): AiRunResult {
@@ -71,6 +72,8 @@ class AiRun(
       atomic {
         results.forEach { r -> r.money?.let { ledger.onAi(r.itemId, it, channelOf(r.itemId), batch.first { b -> b.itemId == r.itemId }.at) } }
         store.save(results, t)
+        // A bad row must never fail the save; the call sits inside the transaction so a suggestion and its result stand or fall together.
+        suggestions?.let { hook -> results.forEach { r -> runCatching { hook(r, batch.first { b -> b.itemId == r.itemId }) } } }
         store.failed(batch.map { it.itemId } - results.map { it.itemId }.toSet())
       }
       tried += batch.map { it.itemId }

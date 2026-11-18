@@ -123,9 +123,9 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     val since = enabledSince() ?: return emptyList()
     run("DELETE FROM ai_queue WHERE item_id NOT IN (SELECT i.id FROM items i WHERE i.posted_at >= ? AND $NEVER_SEND_FILTER)", since)
     return query(
-      "SELECT i.id, i.app_label, COALESCE(n.name, i.sender), i.title, COALESCE(i.email_text, i.text), i.posted_at, i.conversation, lower(i.sender) = 'you' $QUEUE_FROM ORDER BY q.at, q.item_id LIMIT ?",
+      "SELECT i.id, i.app_label, COALESCE(n.name, i.sender), i.title, COALESCE(i.email_text, i.text), i.posted_at, i.conversation, lower(i.sender) = 'you', i.conversation_key $QUEUE_FROM ORDER BY q.at, q.item_id LIMIT ?",
       since, limit.toLong(),
-    ).use { c -> buildList { while (c.moveToNext()) add(AiInput(c.getLong(0), c.getString(1), c.str(2), c.str(3), c.getString(4), c.getLong(5), c.str(6), c.getInt(7) != 0)) } }
+    ).use { c -> buildList { while (c.moveToNext()) add(AiInput(c.getLong(0), c.getString(1), c.str(2), c.str(3), c.getString(4), c.getLong(5), c.str(6), c.getInt(7) != 0, c.str(8))) } }
   }
 
   fun queuedCount(): Int {
@@ -534,7 +534,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
 
   companion object {
     private const val DB_NAME = "inflow.db"
-    private const val SCHEMA_VERSION = 7
+    private const val SCHEMA_VERSION = 8
     private const val GENERIC_FAILURE =
       "Inflow can't open your saved history. The history file is kept, not deleted. Restart the phone and try again."
     private const val ITEM_COLUMNS = "i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, " +
@@ -718,6 +718,15 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       "CREATE INDEX items_sender ON items(sender_key)",
     )
 
+    // Not idempotent, like the others. ai_queue.fast: Autopilot's fast path marks a row it wants sent soon (nothing reads it yet).
+    // suggestions: what Autopilot offers the owner. kind and state are enum names; no foreign key on item_id (retention deletes items, a suggestion outlives them until it expires).
+    internal val SCHEMA_V8 = listOf(
+      "ALTER TABLE ai_queue ADD COLUMN fast INTEGER NOT NULL DEFAULT 0",
+      "CREATE TABLE suggestions(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, title TEXT NOT NULL, item_id INTEGER NOT NULL, due_at INTEGER, " +
+        "dedupe_key TEXT NOT NULL, state TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)",
+      "CREATE INDEX suggestions_state ON suggestions(state)",
+    )
+
     // Runs after SCHEMA_V6, in its transaction: the old names become the new ones (money out), and a money-in txn holding a name that is not a money-in category is cleared to be categorised again.
     internal const val V6_RENAME = "UPDATE txns SET category = ? WHERE category = ? AND direction = 'OUT'"
     internal val V6_CLEAR_IN = "UPDATE txns SET category = NULL WHERE direction = 'IN' AND category IS NOT NULL AND category NOT IN (${Categories.IN.joinToString { "?" }})"
@@ -814,6 +823,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
             migrateCategories(db)
           }
           if (db.version < 7) SCHEMA_V7.forEach(db::execSQL)
+          if (db.version < 8) SCHEMA_V8.forEach(db::execSQL)
           db.version = SCHEMA_VERSION
           db.setTransactionSuccessful()
         } finally {
