@@ -8,9 +8,11 @@ export function realSearchToolDeps(): SearchToolDeps {
     install: name => DesignMedia.installPhotoModel(name),
     freeBytes: () => getFreeDiskStorageAsync(),
     remove: path => deleteAsync(`${documentDirectory}${path}`, { idempotent: true }),
-    async download(url, to, onBytes) {
+    async download(url, to, onBytes, signal) {
       await makeDirectoryAsync(`${documentDirectory}models/`, { intermediates: true });
       const job = createDownloadResumable(url, `${documentDirectory}${to}`, {}, p => onBytes(p.totalBytesWritten));
+      signal?.addEventListener('abort', () => { void job.cancelAsync().catch(() => {}); }, { once: true });
+      if (signal?.aborted) return;
       await job.downloadAsync();
     },
   };

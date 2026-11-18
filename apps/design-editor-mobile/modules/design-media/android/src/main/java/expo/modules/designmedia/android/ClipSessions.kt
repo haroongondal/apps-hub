@@ -12,7 +12,7 @@ import java.nio.LongBuffer
 
 // Both sessions open on first use: the image one is released after each scan job, the text one (127 MB) when the tab closes.
 object ClipSessions {
-  private val env: OrtEnvironment by lazy { OrtEnvironment.getEnvironment() }
+  private val env: OrtEnvironment by lazy { OrtEnvironment.getEnvironment().apply { setTelemetry(false) } }
   private var image: OrtSession? = null
   private var text: OrtSession? = null
 

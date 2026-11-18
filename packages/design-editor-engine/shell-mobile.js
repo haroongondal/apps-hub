@@ -35,6 +35,7 @@
   let seq = 0;
   let menuHandler = null;
   const menuBacklog = [];
+  let visionRun = null; // the one vision run in flight: { id, stopped, onProgress, stop }
 
   const post = msg => {
     const rn = window.ReactNativeWebView;
@@ -71,6 +72,9 @@
       menuHandler ? menuHandler(p.cmd) : menuBacklog.push(p.cmd);
     } else if (type === 'toast') {
       toast(p.message, 5000);
+    } else if (type === 'visionProgress') {
+      const r = visionRun;
+      if (r && r.id === p.id && !r.stopped && r.onProgress) r.onProgress(p.phase, p.fraction);
     }
   };
 
@@ -84,6 +88,106 @@
     for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode(...bytes.subarray(i, i + 8192));
     return btoa(s);
   };
+
+  // Vision (SPEC §14.3, as built 2026-11-18): the image goes to the app in pieces of 786,432
+  // bytes (1,048,576 base64 chars, a multiple of 3 so they join), the PNG comes back the same way.
+  const PIECE = 786432;
+  const fromB64 = s => {
+    const bin = atob(s), out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  };
+  async function visionSteps(r, op, option, image) {
+    const bytes = new Uint8Array(await image.arrayBuffer());
+    const chunks = Math.max(1, Math.ceil(bytes.length / PIECE));
+    for (let index = 0; index < chunks; index++) {
+      if (r.stopped) return null;
+      await call('visionChunk', { id: r.id, index, data: b64(bytes.subarray(index * PIECE, (index + 1) * PIECE)) });
+    }
+    if (r.stopped) return null;
+    const res = await call('vision', { id: r.id, op, option, chunks });
+    const parts = [];
+    let got = 0;
+    for (let index = 0; res && !r.stopped; index++) {
+      const { data, done } = await call('visionRead', { id: r.id, index });
+      parts.push(fromB64(data));
+      got += parts[index].length;
+      if (!done) continue;
+      if (got !== res.bytes) throw new Error("The changed image wasn't saved. Try again.");
+      return new Blob(parts, { type: 'image/png' });
+    }
+    return null;
+  }
+  function vision(req = {}) {
+    if (req.op === 'tools') return call('visionTools');
+    if (req.op === 'cancel') {
+      const r = visionRun;
+      if (!r || r.stopped) return Promise.resolve();
+      r.stop();
+      return call('visionCancel', { id: r.id }).then(() => {}, () => {});
+    }
+    if (visionRun) return Promise.reject(new Error('Wait for the current change to finish.'));
+    if ((req.op !== 'cutout' && req.op !== 'upscale') || !(req.image instanceof Blob)) {
+      return Promise.reject(new Error("This change didn't start properly. Try again."));
+    }
+    let stop;
+    const stopped = new Promise(res => { stop = () => res(null); });
+    const r = {
+      id: 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10),
+      stopped: false,
+      onProgress: req.onProgress,
+      stop: () => { r.stopped = true; stop(); },
+    };
+    visionRun = r;
+    // the run stays busy until the app has answered, even after a cancel resolved the page's promise
+    const work = visionSteps(r, req.op, req.op === 'cutout' ? req.kind : String(req.scale), req.image)
+      .catch(err => {
+        if (r.stopped) return null;
+        call('visionCancel', { id: r.id }).catch(() => {}); // the app drops whatever it still holds
+        throw err;
+      })
+      .finally(() => { if (visionRun === r) visionRun = null; });
+    return Promise.race([work, stopped]);
+  }
+
+  // Uploads on the phone. The WebView's own file chooser adds a camera entry to an image input,
+  // so the label asks the app to pick (gallery and files only), pulls each photo over in pieces
+  // like vision does, and hands them to #imgFile's change event so app.js's readFiles runs as is.
+  const drop = document.querySelector('#drop');
+  let picking = false;
+  if (drop && window.ReactNativeWebView) drop.addEventListener('click', async e => {
+    e.preventDefault();
+    if (picking) return;
+    picking = true;
+    let given = [];
+    try {
+      given = await call('pickImages');
+      if (!given.length) return; // backed out: nothing to say
+      const files = [];
+      for (const g of given) {
+        const parts = [];
+        let got = 0;
+        for (let index = 0; ; index++) {
+          const { data, done } = await call('readImage', { uri: g.uri, index });
+          parts.push(fromB64(data));
+          got += parts[index].length;
+          if (done) break;
+        }
+        if (got !== g.bytes) throw new Error('short read'); // a cut photo must not be added
+        files.push(new File(parts, g.name, { type: g.type || 'image/jpeg' }));
+      }
+      const input = drop.querySelector('input');
+      const list = new DataTransfer();
+      files.forEach(f => list.items.add(f));
+      input.files = list.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch {
+      toast("Couldn't open your pictures. Try again.");
+    } finally {
+      picking = false;
+      if (given.length) call('releaseImages', { uris: given.map(g => g.uri) }).catch(() => {});
+    }
+  });
 
   window.native = {
     saveFile: ({ name, ext, data, filePath }) => {
@@ -121,6 +225,7 @@
     },
     // the Media tools window is the Mac's; the rail button is hidden on phones (mobile.html).
     // The stubs stand in so a stray media call can never crash the page.
+    vision,
     media: { openWindow() {}, onEvent() {}, async status() { return {}; }, async pick() { return null; }, async pickFolder() { return null; }, async plan() { return null; }, async enqueue() { return []; }, async cancel() {}, async keyframe() { return null; }, async thumbs() { return []; }, async queue() { return []; }, async reveal() { return null; }, async open() { return null; } },
   };
 

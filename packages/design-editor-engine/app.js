@@ -5,8 +5,8 @@ const PHONE = document.body.classList.contains('embedded'); // the phone page: s
 let selectMany = false;
 const $$ = s => [...document.querySelectorAll(s)];
 
-// fabric leaves these out of toObject, so locks would vanish on undo and save
-const PROPS = ['lockMovementX', 'lockMovementY', 'lockScalingX', 'lockScalingY', 'lockRotation', 'hasControls', 'name'];
+// fabric leaves these out of toObject, so locks would vanish on undo and save; id lets undo reselect the same object
+const PROPS = ['lockMovementX', 'lockMovementY', 'lockScalingX', 'lockScalingY', 'lockRotation', 'hasControls', 'name', 'id'];
 const SANS = 'Atkinson Hyperlegible Next';
 const BUNDLED = {
   [SANS]: '../ui/fonts/AtkinsonHyperlegibleNext_400Regular ../ui/fonts/AtkinsonHyperlegibleNext_600SemiBold ../ui/fonts/AtkinsonHyperlegibleNext_800ExtraBold vendor/fonts/AtkinsonHyperlegibleNext_700Bold vendor/fonts/AtkinsonHyperlegibleNext_400Regular_Italic vendor/fonts/AtkinsonHyperlegibleNext_700Bold_Italic',
@@ -140,23 +140,35 @@ function parseDoc(text) {
   if (!(d.W > 0 && d.H > 0 && Array.isArray(list) && list.length && list.every(p => p && typeof p === 'object'))) throw new Error('not a design file');
   return { W: d.W, H: d.H, pages: list };
 }
+const newId = () => Math.random().toString(36).slice(2, 10);
 async function load(d, page = 0) {
   W = d.W; H = d.H; pages = d.pages;
+  for (const p of pages) giveIds(p.objects || [], newId);
   await openPage(Math.min(page, pages.length - 1));
   updateSize(); fit();
 }
 const restore = (s, page) => load(parseDoc(s), page);
+// undo and redo select the same objects again (by id) so the inspector sheet stays open where it was;
+// the drawer's open section is never touched; objects that are gone leave nothing selected
+async function restoreKeep(s, page) {
+  const ids = page === cur ? canvas.getActiveObjects().map(o => o.id) : [], top = $('#inspector').scrollTop;
+  await restore(s, page);
+  const objs = idsToReselect(ids, canvas.getObjects());
+  if (!objs.length) return;
+  canvas.setActiveObject(objs.length > 1 ? new fabric.ActiveSelection(objs, { canvas }) : objs[0]);
+  canvas.requestRenderAll(); $('#inspector').scrollTop = top;
+}
 async function undo() {
   if (loading) return;
   commit();
   if (undoStack.length < 2) return;
   const u = undoStack.pop(); redoStack.push(u);
-  await restore(undoStack.at(-1).s, u.page); docChanged(undoStack.at(-1).s);
+  await restoreKeep(undoStack.at(-1).s, u.page); docChanged(undoStack.at(-1).s);
 }
 async function redo() {
   if (loading || !redoStack.length) return;
   const r = redoStack.pop(); undoStack.push(r);
-  await restore(r.s, r.page); docChanged(r.s);
+  await restoreKeep(r.s, r.page); docChanged(r.s);
 }
 
 async function openPage(i) {
@@ -206,7 +218,11 @@ function renderPages() {
 }
 for (const [id, op] of [['pageAdd', 'add'], ['pageDup', 'duplicate'], ['pageDel', 'delete'], ['pageLeft', 'left'], ['pageRight', 'right']]) $('#' + id).onclick = () => pageOp(op);
 $('#undo').onclick = undo; $('#redo').onclick = redo;
-canvas.on('object:added', record);
+// a new object, a paste or a clone gets its own id; a loaded one keeps the id it was saved with
+canvas.on('object:added', ({ target: o }) => {
+  if (!o.id || canvas.getObjects().find(x => x.id === o.id) !== o) o.id = newId();
+  record();
+});
 canvas.on('object:removed', record);
 canvas.on('object:modified', record);
 canvas.on('text:changed', record);
@@ -494,6 +510,25 @@ function applyColor(c) {
   canvas.requestRenderAll(); record(); inspect();
 }
 
+// a 128 px RGBA copy of the unfiltered source: enough for colours and levels, fast on a 4000 px photo
+function smallPixels(img) {
+  const src = img._originalElement || img.getElement();
+  const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
+  const k = Math.min(1, 128 / Math.max(sw, sh));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(sw * k)); c.height = Math.max(1, Math.round(sh * k));
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(src, 0, 0, c.width, c.height);
+  return ctx.getImageData(0, 0, c.width, c.height).data;
+}
+// keyed by the source element: Remove background sets a new one, so it gets a fresh palette
+const paletteCache = new WeakMap();
+function paletteOf(img) {
+  const src = img._originalElement || img.getElement();
+  if (!paletteCache.has(src)) paletteCache.set(src, paletteFromPixels(smallPixels(img)));
+  return paletteCache.get(src);
+}
+
 // shortcut: flood fill of the edge colour, not an AI model; fine on plain backgrounds, swap in an on-device segmentation model for busy photos.
 function removeBackground(px, w, h, tol) {
   const bucket = i => ((px[i * 4] >> 4) << 8) | ((px[i * 4 + 1] >> 4) << 4) | (px[i * 4 + 2] >> 4);
@@ -524,18 +559,60 @@ function removeBackground(px, w, h, tol) {
   }
   return tail;
 }
-async function removeBg(img, tol) {
+function originalCanvas(img) {
   const src = img._originalElement || img.getElement();
   const c = document.createElement('canvas');
   c.width = src.naturalWidth || src.width; c.height = src.naturalHeight || src.height;
-  const ctx = c.getContext('2d');
-  ctx.drawImage(src, 0, 0);
+  c.getContext('2d').drawImage(src, 0, 0);
+  return c;
+}
+async function removeBg(img, tol) {
+  const c = originalCanvas(img), ctx = c.getContext('2d');
   const d = ctx.getImageData(0, 0, c.width, c.height);
   const removed = removeBackground(d.data, c.width, c.height, tol);
   ctx.putImageData(d, 0, 0);
   await img.setSrc(c.toDataURL('image/png'));
   canvas.requestRenderAll(); record();
+  inspect(); // the colours panel must read the cut-out, not the old backdrop
   toast(removed ? 'Background removed' : 'No plain background found at the edges');
+}
+
+// Person / Object cut-out and Upscale: phone only (window.native.vision is absent on the Mac)
+const KINDS = { person: 'Person', object: 'Object' };
+let visionTools = null, visionRun = null;
+function visionKinds() {
+  if (visionTools?.fn !== native.vision) visionTools = { fn: native.vision, kinds: native.vision({ op: 'tools' }).then(k => k.filter(x => KINDS[x])).catch(() => { visionTools = null; return []; }) };
+  return visionTools.kinds;
+}
+function drawVision(html = '') {
+  const box = $('#vbox'); if (!box) return;
+  if (visionRun) html = `<p class="hint">${visionRun.phase === 'download' && visionRun.fraction < 1 ? 'Getting the tool' : visionRun.text}</p>
+    <progress max="1" ${visionRun.fraction == null ? '' : `value="${visionRun.fraction}"`} style="width:100%" aria-label="Progress"></progress>
+    <button id="vstop" style="width:100%;margin-top:6px">Cancel</button>`;
+  box.replaceChildren(el(html));
+  $$('[data-cut], [data-up], #rbg').forEach(b => b.disabled = !!visionRun);
+  const stop = $('#vstop'); if (stop) stop.onclick = () => native.vision({ op: 'cancel' }).catch(() => {});
+}
+const blobURL = b => new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => fail(r.error); r.readAsDataURL(b); });
+async function runVision(img, req, text, done) {
+  if (visionRun) return;
+  visionRun = { text }; drawVision();
+  try {
+    const image = await new Promise(ok => originalCanvas(img).toBlob(ok, 'image/png'));
+    const out = await native.vision({ ...req, image, onProgress: (phase, fraction) => { visionRun = { text, phase, fraction }; drawVision(); } });
+    if (!out) return; // cancelled: nothing changes
+    if (!canvas.getObjects().includes(img)) return toast('The image changed, so nothing was applied.'); // undo and page switches rebuild every object
+    // data: URL, not blob: (a blob: URL dies with the page and breaks save and undo); same size on the page
+    const w = img.getScaledWidth(), h = img.getScaledHeight();
+    await img.setSrc(await blobURL(out.type ? out : new Blob([out], { type: 'image/png' })));
+    img.set({ scaleX: w / img.width, scaleY: h / img.height }); img.setCoords();
+    canvas.requestRenderAll(); record();
+    toast(done);
+  } catch (e) {
+    toast(e?.message || "This tool didn't work on this image. Try again.", 6000);
+  } finally {
+    visionRun = null; inspect();
+  }
 }
 
 const active = () => canvas.getActiveObject();
@@ -630,6 +707,7 @@ function inspect() {
   }
   const multi = o.type === 'activeselection', isText = o instanceof Textbox, isImg = o instanceof FabricImage, isLine = o.type === 'line', isGroup = o.type === 'group';
   const locked = !!o.lockMovementX;
+  const palette = isImg ? paletteOf(o) : [];
   const hasFill = !multi && !isImg && !isGroup && !isLine;
   const range = (id, label, min, max, step, value) => `<div class="row"><label for="${id}">${label}</label><input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}" style="width:110px"></div>`;
   box.replaceChildren(el(`
@@ -649,11 +727,20 @@ function inspect() {
       <div class="row" style="margin-top:6px"><label for="lh">Line spacing</label><input type="number" id="lh" min="0.5" max="4" step="0.05" value="${+o.lineHeight}" style="width:72px"></div>
       <div class="row"><label for="cs">Letter spacing</label><input type="number" id="cs" min="-200" max="2000" step="10" value="${+o.charSpacing}" style="width:72px"></div>` : ''}
     ${isImg ? `
+      <h3>Colours in this photo</h3>
+      ${palette.length ? `<div class="swatches" id="photoColors">${palette.map(c => `<button class="swatch" style="background:${c}" title="${c}" aria-label="Use ${c} as the page background"></button>`).join('')}</div>
+      <button id="paletteToKit" style="width:100%;margin-top:6px">Add to brand kit</button>
+      <p class="hint">Pick a colour to use it as the page background.</p>` : '<p class="hint">This image has no visible colours.</p>'}
       <h3>Remove background</h3>
+      ${native.vision ? '<div class="grid2" id="cutKinds" style="margin-bottom:6px"></div>' : ''}
       ${range('tol', 'Tolerance', 5, 160, 1, 48)}
-      <button id="rbg" style="width:100%">Remove background</button>
-      <p class="hint">Best on plain or studio backgrounds.</p>
+      <button id="rbg" style="width:100%">${native.vision ? 'Plain background' : 'Remove background'}</button>
+      <p class="hint">${native.vision ? 'Tolerance is for Plain background, best on plain or studio backgrounds.' : 'Best on plain or studio backgrounds.'}</p>
+      ${native.vision ? `<h3>Upscale</h3>
+      <div class="grid2"><button data-up="2">2x</button><button data-up="4">4x</button></div>
+      <div id="vbox"></div>` : ''}
       <h3>Adjust</h3>
+      <button id="fauto" style="width:100%">Auto-enhance</button>
       ${range('fbr', 'Brightness', -1, 1, 0.02, +(imgFilter(o, 'Brightness')?.brightness ?? 0))}
       ${range('fco', 'Contrast', -1, 1, 0.02, +(imgFilter(o, 'Contrast')?.contrast ?? 0))}
       ${range('fbl', 'Blur', 0, 1, 0.02, +(imgFilter(o, 'Blur')?.blur ?? 0))}
@@ -709,7 +796,38 @@ function inspect() {
       o.filters = f; o.applyFilters(); canvas.requestRenderAll(); record();
     };
     ['fbr', 'fco', 'fbl'].forEach(id => on(id, 'oninput', apply));
+    $$('#photoColors .swatch').forEach(b => b.onclick = () => { canvas.backgroundColor = b.title; canvas.requestRenderAll(); record(); });
+    on('paletteToKit', 'onclick', () => {
+      const added = palette.filter(c => !brand.colors.includes(c));
+      brand.colors.push(...added); saveBrand(); renderBrand();
+      toast(added.length ? `Added ${added.length} ${added.length === 1 ? 'colour' : 'colours'} to the brand kit` : 'These colours are already in the brand kit');
+    });
+    on('fauto', 'onclick', () => {
+      const v = enhanceValues(smallPixels(o)), balanced = !v.brightness && !v.contrast;
+      // a balanced photo with no Brightness or Contrast of the person's own is left untouched
+      if (balanced && !imgFilter(o, 'Brightness') && !imgFilter(o, 'Contrast')) return toast('This photo already looks balanced');
+      $('#fbr').value = v.brightness; $('#fco').value = v.contrast; apply();
+      if (balanced) toast('This photo already looks balanced, so Brightness and Contrast are back to 0');
+    });
     on('fgr', 'onchange', apply);
+    if (native.vision) {
+      $$('[data-up]').forEach(b => b.onclick = () => {
+        const src = o._originalElement || o.getElement(), scale = +b.dataset.up;
+        const e = upscaleEstimate(src.naturalWidth || src.width, src.naturalHeight || src.height, scale);
+        if (!e) return toast('This image is already as big as it can be.');
+        drawVision(`<p class="hint" id="vest">${e.label} on this phone. The result is ${e.outW} × ${e.outH} px.</p>
+          <div class="grid2"><button id="vgo" class="primary">Start</button><button id="vno">Cancel</button></div>`);
+        $('#vgo').onclick = () => runVision(o, { op: 'upscale', scale }, `Upscaling. ${e.label}.`, 'Image upscaled');
+        $('#vno').onclick = () => drawVision();
+      });
+      visionKinds().then(kinds => {
+        const box = $('#cutKinds');
+        if (!box || active() !== o) return;
+        box.replaceChildren(el(kinds.map(k => `<button data-cut="${k}" ${visionRun ? 'disabled' : ''}>${KINDS[k]}</button>`).join('')));
+        $$('[data-cut]').forEach(b => b.onclick = () => runVision(o, { op: 'cutout', kind: b.dataset.cut }, 'Removing the background', 'Background removed'));
+      });
+      drawVision();
+    }
   }
 }
 canvas.on('selection:created', inspect);
@@ -913,4 +1031,4 @@ $('#openMedia').onclick = () => native.media.openWindow();
 })();
 // setZoom exports for touch.js: pinch zoom and pan stay in sync with app.js's zoom variable,
 // the element size and the zoom label through the same function the buttons use
-window.editor = { get selectMany() { return selectMany; }, canvas, MENU, removeBackground, resizePage, exportAs, applyTemplate, applyLayout, pickFace, TEMPLATES, setZoom, get size() { return [W, H]; }, get page() { return [cur, pages.length]; } };
+window.editor = { paletteOf, get selectMany() { return selectMany; }, canvas, MENU, removeBackground, resizePage, exportAs, applyTemplate, applyLayout, pickFace, TEMPLATES, setZoom, get size() { return [W, H]; }, get page() { return [cur, pages.length]; } };

@@ -4,14 +4,18 @@ import { Asset } from 'expo-asset';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import WebView, { type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 
 import DesignMedia from 'design-media';
+import { createImagePicker, type ImagePickDeps } from '../src/editor/image-pick';
 import { aiHasKey, aiRequest, aiSetKey } from '../src/editor/ai';
 import { injectCommand, parseMessage, replyError, replyOk, type PageEvent } from '../src/editor/bridge';
+import { createVisionHost, type VisionHost } from '../src/editor/vision-host';
+import { getSearchTool } from '../src/photos/search-tool';
+import { realVisionToolDeps } from '../src/photos/vision-tool-deps';
 import {
   designTitle,
   readAutosave,
@@ -35,6 +39,14 @@ export default function EditorScreen() {
   const [dirty, setDirty] = useState(false);
   const webRef = useRef<WebView>(null);
   const docState = useRef({ title: params.name ?? 'Design Editor', dirty: false, filePath: null as string | null });
+  const visionRef = useRef<VisionHost | null>(null);
+  visionRef.current ??= realVisionHost(webRef);
+  const imagesRef = useRef<ReturnType<typeof createImagePicker> | null>(null);
+  imagesRef.current ??= createImagePicker(realImageDeps);
+  useEffect(() => () => {
+    void visionRef.current?.dispose();
+    void imagesRef.current?.dispose();
+  }, []);
 
   // The inlined editor page ships as a metro asset; downloadAsync pins localUri (PDF Editor pattern).
   useEffect(() => {
@@ -100,6 +112,40 @@ export default function EditorScreen() {
           case 'openDesign': {
             const design = await pickDesign();
             injectCommand(webRef, replyOk(msg.reqId, design));
+            break;
+          }
+          case 'pickImages': {
+            injectCommand(webRef, replyOk(msg.reqId, await imagesRef.current!.pick()));
+            break;
+          }
+          case 'readImage': {
+            injectCommand(webRef, replyOk(msg.reqId, await imagesRef.current!.read(msg.uri, msg.index)));
+            break;
+          }
+          case 'releaseImages': {
+            await imagesRef.current!.release(msg.uris);
+            injectCommand(webRef, replyOk(msg.reqId, true));
+            break;
+          }
+          case 'visionTools': {
+            injectCommand(webRef, replyOk(msg.reqId, await visionRef.current!.tools()));
+            break;
+          }
+          case 'visionChunk': {
+            injectCommand(webRef, replyOk(msg.reqId, visionRef.current!.chunk(msg.id, msg.index, msg.data)));
+            break;
+          }
+          case 'vision': {
+            injectCommand(webRef, replyOk(msg.reqId, await visionRef.current!.run(msg.id, msg.op, msg.option, msg.chunks)));
+            break;
+          }
+          case 'visionRead': {
+            injectCommand(webRef, replyOk(msg.reqId, await visionRef.current!.read(msg.id, msg.index)));
+            break;
+          }
+          case 'visionCancel': {
+            await visionRef.current!.cancel(msg.id);
+            injectCommand(webRef, replyOk(msg.reqId, true));
             break;
           }
           case 'aiHasKey':
@@ -243,6 +289,51 @@ async function saveFileMsg(msg: Extract<PageEvent, { type: 'saveFile' }>): Promi
   }
   return path;
 }
+
+function realVisionHost(webRef: RefObject<WebView | null>): VisionHost {
+  const dir = `${FileSystem.cacheDirectory}vision/`;
+  return createVisionHost({
+    dir,
+    makeDir: () => FileSystem.makeDirectoryAsync(dir, { intermediates: true }),
+    writeBase64: (uri, base64) => FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 }),
+    readBase64: (uri, position, length) => FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64, position, length }),
+    async size(uri) {
+      const info = await FileSystem.getInfoAsync(uri);
+      if (!info.exists) throw new Error("The changed image wasn't saved. Try again.");
+      return info.size;
+    },
+    remove: uri => FileSystem.deleteAsync(uri, { idempotent: true }),
+    getTool: (tool, onProgress, signal) => getSearchTool(realVisionToolDeps(tool), onProgress, signal),
+    tools: () => DesignMedia.visionTools(),
+    runVision: (id, op, path, option) => DesignMedia.runVision(id, op, path, option),
+    cancelVision: id => DesignMedia.cancelVision(id),
+    onRunProgress: fn => DesignMedia.addListener('onVisionProgress', fn),
+    send: p => injectCommand(webRef, { type: 'visionProgress', ...p }),
+  });
+}
+
+// Gallery and files only: the WebView's own chooser would add a camera entry (see image-pick.ts).
+// DocumentPicker copies each photo into the cache (a file path reads whole pieces; a content:// read
+// does not promise to), and the picker deletes the copies when the page is done.
+const realImageDeps: ImagePickDeps = {
+  async pick() {
+    if (picking.current) return null;
+    picking.current = true;
+    try {
+      const res = await DocumentPicker.getDocumentAsync({ type: 'image/*', multiple: true, copyToCacheDirectory: true });
+      return res.canceled ? null : res.assets;
+    } finally {
+      picking.current = false;
+    }
+  },
+  async size(uri) {
+    const info = await FileSystem.getInfoAsync(uri);
+    if (!info.exists) throw new Error("The picture wasn't there. Try again.");
+    return info.size;
+  },
+  readBase64: (uri, position, length) => FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64, position, length }),
+  remove: uri => FileSystem.deleteAsync(uri, { idempotent: true }),
+};
 
 async function pickDesign(): Promise<{ text: string; filePath: string } | null> {
   if (picking.current) return null;

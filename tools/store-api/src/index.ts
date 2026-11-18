@@ -43,22 +43,29 @@ async function authorized(req: Request, env: Env, ...tokens: string[]): Promise<
 const isKey = (key: string) => /^[a-z0-9][a-z0-9/._-]*$/i.test(key) && !key.includes('..');
 const status = (code: number, message: string) => new Response(message, { status: code });
 
-async function serve(env: Env, key: string): Promise<Response> {
+async function serve(env: Env, key: string, cacheControl = 'private, no-store'): Promise<Response> {
   const obj = await env.BUCKET.get(key);
   if (!obj) return status(404, 'not found');
   return new Response(obj.body, {
     headers: {
       'content-type': obj.httpMetadata?.contentType ?? 'application/octet-stream',
       'content-length': String(obj.size),
-      'cache-control': 'private, no-store',
+      'cache-control': cacheControl,
     },
   });
 }
 
+// Models are public by design: content-addressed, so the key is rebuilt from 64 hex chars and nothing else is reachable.
+const MODEL_PATH = /^\/models\/([0-9a-f]{64})$/;
+
 export async function handle(req: Request, env: Env, now = Date.now()): Promise<Response> {
-  if (!env.SIGNING_KEY) return status(500, 'not configured');
   const url = new URL(req.url);
   const path = url.pathname;
+
+  const model = req.method === 'GET' ? MODEL_PATH.exec(path) : null;
+  if (model) return serve(env, `models/${model[1]}`, 'public, max-age=31536000, immutable');
+
+  if (!env.SIGNING_KEY) return status(500, 'not configured');
 
   if (req.method === 'GET' && path === `/${MANIFEST_PATH}`) {
     if (!(await authorized(req, env, env.STORE_TOKEN, env.RELEASE_TOKEN))) return status(401, 'unauthorized');

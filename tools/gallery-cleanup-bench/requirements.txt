@@ -1,0 +1,4 @@
+numpy==2.5.4
+pillow==13.0.0
+onnxruntime==1.32.0
+av==19.0.2

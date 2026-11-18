@@ -1,0 +1,92 @@
+[
+  {
+    "id": "459272",
+    "kind": "people",
+    "url": "http://images.cocodataset.org/val2017/000000459272.jpg",
+    "page": "https://www.flickr.com/photos/russelljsmith/3675278938/",
+    "licence": "Attribution License (Flickr, CC BY 2.0), as listed in COCO val2017 annotations and re-checked on the Flickr page",
+    "author": "Russell James Smith",
+    "sha256": "86fcc50b7b87ac6fb66e75e2158d0017730a1f05c5e6351c0d3e87bb760223f9"
+  },
+  {
+    "id": "544519",
+    "kind": "people",
+    "url": "http://images.cocodataset.org/val2017/000000544519.jpg",
+    "page": "https://www.flickr.com/photos/stevendepolo/4947025740/",
+    "licence": "Attribution License (Flickr, CC BY 2.0), as listed in COCO val2017 annotations and re-checked on the Flickr page",
+    "author": "Steven Depolo",
+    "sha256": "cd136b4b242d19bb35620006b775b4587e9fb7d02f2625505e5c0b1cb66932eb"
+  },
+  {
+    "id": "175251",
+    "kind": "people",
+    "url": "http://images.cocodataset.org/val2017/000000175251.jpg",
+    "page": "https://www.flickr.com/photos/erikbenson/8123945429/",
+    "licence": "Attribution-ShareAlike License (Flickr, CC BY-SA 2.0), as listed in COCO val2017 annotations and re-checked on the Flickr page",
+    "author": "Buster Benson",
+    "sha256": "2c557edf27254df0c5c11458f07506e462ca93e7dd3c47e851baed0fd654a776"
+  },
+  {
+    "id": "284991",
+    "kind": "people",
+    "url": "http://images.cocodataset.org/val2017/000000284991.jpg",
+    "page": "https://www.flickr.com/photos/craigcloutier/4511666450/",
+    "licence": "Attribution-ShareAlike License (Flickr, CC BY-SA 2.0), as listed in COCO val2017 annotations and re-checked on the Flickr page",
+    "author": "craigcloutier",
+    "sha256": "916e3eab5929c2ec0ebc9971f98ce5fa5b5cc44af1036b5104e093f53f48c46a"
+  },
+  {
+    "id": "488710",
+    "kind": "people",
+    "url": "http://images.cocodataset.org/val2017/000000488710.jpg",
+    "page": "https://www.flickr.com/photos/zepfanman/2733176290/",
+    "licence": "Attribution License (Flickr, CC BY 2.0), as listed in COCO val2017 annotations and re-checked on the Flickr page",
+    "author": "zepfanman",
+    "sha256": "8fbacc18f6c96ebabcdcccee0d26a171b4a5de298942178e9b2f101ceddadbb9"
+  },
+  {
+    "id": "248631",
+    "kind": "product",
+    "url": "http://images.cocodataset.org/val2017/000000248631.jpg",
+    "page": "https://www.flickr.com/photos/serdal/6856333555/",
+    "licence": "Attribution License (Flickr, CC BY 2.0), as listed in COCO val2017 annotations and re-checked on the Flickr page",
+    "author": "Abdulla Al Muhairi",
+    "sha256": "45ea37728704ce7d5a62ff39c68ab4a1d149cdd743414c0a5455524ea337150a"
+  },
+  {
+    "id": "167353",
+    "kind": "product",
+    "url": "http://images.cocodataset.org/val2017/000000167353.jpg",
+    "page": "https://www.flickr.com/photos/ell-r-brown/7178592902/",
+    "licence": "Attribution License (Flickr, CC BY 2.0), as listed in COCO val2017 annotations and re-checked on the Flickr page",
+    "author": "Elliott Brown",
+    "sha256": "8e6737773e7548e3fc299c7dc5e255b5997c0b05e08423f016b277719e8232a0"
+  },
+  {
+    "id": "355610",
+    "kind": "product",
+    "url": "http://images.cocodataset.org/val2017/000000355610.jpg",
+    "page": "https://www.flickr.com/photos/jepoirrier/2090506037/",
+    "licence": "Attribution-ShareAlike License (Flickr, CC BY-SA 2.0), as listed in COCO val2017 annotations and re-checked on the Flickr page",
+    "author": "Jean-Etienne Minh-Duy Poirrier",
+    "sha256": "2ccae45b3bcbcc5f1fc797eacdf1151e50d86187e08c2fe3b9e01efd13529c58"
+  },
+  {
+    "id": "331075",
+    "kind": "pet",
+    "url": "http://images.cocodataset.org/val2017/000000331075.jpg",
+    "page": "https://www.flickr.com/photos/sonstroem/9178299324/",
+    "licence": "Attribution License (Flickr, CC BY 2.0), as listed in COCO val2017 annotations and re-checked on the Flickr page",
+    "author": "Eric Sonstroem",
+    "sha256": "f9a0c8e0050fa38bb4fd0a7d3007e0ff5def7cea1c67a9a70ae80c6256d9a549"
+  },
+  {
+    "id": "392818",
+    "kind": "pet",
+    "url": "http://images.cocodataset.org/val2017/000000392818.jpg",
+    "page": "https://www.flickr.com/photos/jelene/3572256424/",
+    "licence": "Attribution License (Flickr, CC BY 2.0), as listed in COCO val2017 annotations and re-checked on the Flickr page",
+    "author": "Jelene Morris",
+    "sha256": "8918cd7c88cfe2bf32a8417abf5ad4a0402d677573c149fb29de7a6b9b6490f5"
+  }
+]

@@ -2,6 +2,8 @@ package expo.modules.designmedia
 
 import android.net.Uri
 import expo.modules.designmedia.android.Access
+import expo.modules.designmedia.android.CleanupTool
+import expo.modules.designmedia.android.CleanupTrash
 import expo.modules.designmedia.android.CodecReport
 import expo.modules.designmedia.android.CompositionView
 import expo.modules.designmedia.android.DesignSaves
@@ -11,13 +13,16 @@ import expo.modules.designmedia.android.PhotoSearch
 import expo.modules.designmedia.android.Probe
 import expo.modules.designmedia.android.Thumbs
 import expo.modules.designmedia.android.Waveform
+import expo.modules.designmedia.vision.Vision
 import expo.modules.designmedia.core.AtomicFile
 import expo.modules.designmedia.core.EncoderStatsStore
 import expo.modules.designmedia.core.QueueStore
+import expo.modules.designmedia.core.TrashAction
 import expo.modules.designmedia.core.decodeJobs
 import expo.modules.designmedia.core.shownQueue
 import expo.modules.designmedia.core.thumbFolder
 import expo.modules.designmedia.core.toStatusMap
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -35,7 +40,7 @@ class DesignMediaModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("DesignMedia")
 
-    Events(MediaJobService.EVENT_PROGRESS, MediaJobService.EVENT_QUEUE)
+    Events(MediaJobService.EVENT_PROGRESS, MediaJobService.EVENT_QUEUE, Vision.EVENT_PROGRESS)
 
     View(CompositionView::class) {
       Events("onPosition", "onEnded", "onError")
@@ -55,6 +60,10 @@ class DesignMediaModule : Module() {
     }
 
     OnActivityEntersBackground { CompositionView.pauseAll() }
+
+    OnActivityResult { _, result -> CleanupTrash.onResult(context, result.requestCode, result.resultCode) }
+
+    OnActivityEntersForeground { CleanupTrash.onForeground() }
 
     AsyncFunction("probe") { uri: String -> Probe.read(context, Uri.parse(uri)) }
 
@@ -126,6 +135,35 @@ class DesignMediaModule : Module() {
     AsyncFunction("similarPhotos") { uri: String -> PhotoSearch.similar(context, uri) }.runOnQueue(readScope)
 
     AsyncFunction("releasePhotoSearch") { PhotoSearch.release() }
+
+    AsyncFunction("cleanupGroups") { options: Map<String, Any?>? -> CleanupTool.groups(context, options) }.runOnQueue(readScope)
+
+    AsyncFunction("trashPhotos") { uris: List<String>, promise: Promise ->
+      CleanupTrash.start(context, appContext.currentActivity, TrashAction.TRASH, uris, promise)
+    }.runOnQueue(readScope)
+
+    AsyncFunction("recentlyRemoved") { CleanupTool.recentlyRemoved(context) }.runOnQueue(readScope)
+
+    AsyncFunction("restorePhotos") { uris: List<String>, promise: Promise ->
+      CleanupTrash.start(context, appContext.currentActivity, TrashAction.RESTORE, uris, promise)
+    }.runOnQueue(readScope)
+
+    AsyncFunction("dismissCleanup") { kind: String, uris: List<String> -> CleanupTool.dismiss(context, kind, uris) }.runOnQueue(readScope)
+
+    AsyncFunction("undismissCleanup") { kind: String, uris: List<String> -> CleanupTool.undismiss(context, kind, uris) }.runOnQueue(readScope)
+
+    AsyncFunction("clearCleanupDismissals") { CleanupTool.clearDismissals(context) }.runOnQueue(readScope)
+
+    AsyncFunction("visionTools") { Vision.tools(context) }
+
+    AsyncFunction("installVisionModel") { name: String -> Vision.install(context, name) }.runOnQueue(readScope)
+
+    // ids must be unique per run: a cancel sent after a run ends stays set for its id, and the output is <id>.png.
+    AsyncFunction("runVision") { id: String, op: String, src: String, option: String ->
+      Vision.run(context, id, op, src, option) { sendEvent(Vision.EVENT_PROGRESS, mapOf("id" to id, "fraction" to it)) }
+    }.runOnQueue(Vision.queue)
+
+    AsyncFunction("cancelVision") { id: String -> Vision.cancel(id) }
 
     // saveFile posts from the editor page: designs cross as text, exports as base64 (SPEC §14.3)
     AsyncFunction("saveJson") { name: String, text: String, filePath: String? ->

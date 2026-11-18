@@ -14,6 +14,15 @@ export interface NativeJobStatus {
 }
 export interface JobProgressEvent { id: string; fraction: number; attempt: number }
 export interface QueueEvent { jobs: NativeJobStatus[] }
+export interface VisionToolEntry { tool: 'person' | 'object' | 'upscale'; name: string; url: string; bytes: number; ready: boolean }
+export interface VisionProgressEvent { id: string; fraction: number }
+export type CleanupKind = 'blurry' | 'copies' | 'lookalikes' | 'screenshots' | 'dark';
+export interface CleanupPhoto { uri: string; name: string; bytes: number; takenAt: number; ticked: boolean; best: boolean }
+export interface CleanupGroup { kind: CleanupKind; key: string; photos: CleanupPhoto[]; bytes: number } // bytes of the photos suggested for removal (all of them, or all but the keeper)
+export interface CleanupResult {
+  groups: CleanupGroup[]; blur: { min: number; max: number; default: number }; lookalike: { default: number; strict: number }; indexed: number;
+}
+export interface RemovedPhoto { uri: string; name: string; bytes: number; trashedAt: number; expiresAt: number }
 
 // Phase 3 additions (SPEC §14.3): the page's saveFile for reals — designs written through
 // MediaStore where the Files app shows them. saveJson returns the display path; saveExport the
@@ -42,15 +51,29 @@ export interface DesignMediaModule {
   photoModels(): Promise<{ name: string; url: string; bytes: number; ready: boolean }[]>;
   installPhotoModel(name: string): Promise<boolean>; // checks a finished download, then keeps it; false when it is damaged
   startPhotoIndex(): Promise<string>; // the job id; the one already waiting when there is one
-  photoIndexState(): Promise<{ indexed: number; modelsReady: boolean; waiting: 'heat' | 'battery' | null }>; // waiting: why a running scan is holding back
+  photoIndexState(): Promise<{ indexed: number; modelsReady: boolean; waiting: 'heat' | 'battery' | null; lastScan: number }>; // waiting: why a running scan is holding back; lastScan: ms when the last scan finished, 0 if never
   photoGalleryChanged(): Promise<boolean>; // true when photos changed since the last finished scan, or none has finished
   searchPhotos(query: string): Promise<string[]>; // content URIs, best first, at most 60
   similarPhotos(uri: string): Promise<string[]>; // photos that look like this one, not including it
   releasePhotoSearch(): Promise<void>; // frees the text model's memory
+  // Clean up: groups from the photo index. A photo leaves the gallery only through Android's own trash dialog.
+  cleanupGroups(options?: { blurThreshold?: number; lookalikeCosine?: number }): Promise<CleanupResult>; // photos still in the gallery only
+  trashPhotos(uris: string[]): Promise<{ moved: number; uris: string[]; noted: boolean }>; // opens Android's dialog; 0 and [] when the owner says no; uris: the ones sent, for Undo; noted false: in Android's trash but not in Recently removed
+  recentlyRemoved(): Promise<RemovedPhoto[]>; // trashed here in the last 30 days and still in Android's trash
+  restorePhotos(uris: string[]): Promise<{ restored: number; uris: string[] }>; // opens Android's dialog; 0 and [] when the owner says no
+  dismissCleanup(kind: CleanupKind, uris: string[]): Promise<void>; // "Not a mistake": never shown in that kind again
+  undismissCleanup(kind: CleanupKind, uris: string[]): Promise<void>; // undoes dismissCleanup for just these photos
+  clearCleanupDismissals(): Promise<void>; // brings every dismissed photo back
+  // Quick edits: cut-out and upscale models. Same download-then-install steps as the photo models above.
+  visionTools(): Promise<VisionToolEntry[]>;
+  installVisionModel(name: string): Promise<boolean>; // file name, like installPhotoModel
+  runVision(id: string, op: 'cutout' | 'upscale', src: string, option: string): Promise<string>; // option 'person'|'object' or '2'|'4'; returns the PNG's absolute path
+  cancelVision(id: string): Promise<void>;
   saveJson(name: string, text: string, filePath: string | null): Promise<string>;
   saveExport(name: string, ext: string, base64: string): Promise<string>;
   addListener(name: 'onJobProgress', fn: (e: JobProgressEvent) => void): { remove(): void };
   addListener(name: 'onQueue', fn: (e: QueueEvent) => void): { remove(): void };
+  addListener(name: 'onVisionProgress', fn: (e: VisionProgressEvent) => void): { remove(): void };
 }
 
 export default requireNativeModule<DesignMediaModule>('DesignMedia');

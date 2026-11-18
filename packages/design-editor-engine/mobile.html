@@ -85,7 +85,7 @@ h3 { font-size: 12px; color: var(--ink-soft); font-weight: 600; margin: 16px 0 6
 .shape svg { width: 30px; height: 30px; fill: var(--ink); }
 .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
 .swatch { width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); position: relative; }
-.drop { border: 1.5px dashed var(--c-faint); border-radius: 8px; padding: 18px 10px; text-align: center; color: var(--ink-soft); }
+.drop { display: block; border: 1.5px dashed var(--c-faint); border-radius: 8px; padding: 18px 10px; text-align: center; color: var(--ink-soft); }
 .drop.over { border-color: var(--cobalt); background: var(--cobalt-tint); }
 .uploads { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
 .uploads button { padding: 0; aspect-ratio: 1; overflow: hidden; }
@@ -139,6 +139,9 @@ body.embedded.obj .inspector { display: block; }
 /* room under the page for the sheet, so a selected item can scroll up above it (touch.js, keepVisible) */
 body.embedded.obj.room #board { padding-bottom: calc(46vh + 12px); }
 body.embedded .drawer, body.embedded .inspector { -webkit-overflow-scrolling: touch; }
+/* Upscale and cut-out: the estimate, progress and Cancel stay on screen however far the sheet is scrolled
+   (the offsets are the sheet's own padding, which sticky positions count from) */
+body.embedded #vbox:not(:empty) { position: sticky; top: -8px; bottom: -14px; z-index: 1; background: var(--surface); padding: 8px 0; }
 /* a close button per drawer section, added by touch.js (class sheetdone); the inspector dismisses by tapping the board */
 body.embedded .drawer section::before { content: ""; display: block; width: 36px; height: 4px; margin: 0 auto 10px; border-radius: 2px; background: var(--ink-soft); }
 body.embedded .drawer .sheetdone { display: block; margin: 8px 0 0 auto; border: 0; color: var(--cobalt); font-weight: 600; }
@@ -285,6 +288,8 @@ body.embedded .toast { bottom: calc(var(--rail) + 12px); }
 <script src="shell-mobile.js"></script>
 <script src="ai-layout.js"></script>
 <script src="copy.js"></script>
+<script src="image-maths.js"></script>
+<script src="selection.js"></script>
 <script src="app.js"></script>
 <script src="touch.js"></script>
 </body>
