@@ -35,6 +35,18 @@ Read this file completely first and trust the facts below; do not redo them. Con
 
 ## Current state and next step
 
-Not yet run on the phone. Branch `notch` is committed in the worktree `apps-hub-wt/notch`, not pushed or merged to main (merge with `[skip ci]`, owner's call).
+Branch `notch` is committed in the worktree `apps-hub-wt/notch`, rebased on origin/main 18937ec4, not pushed or merged to main (merge with `[skip ci]`, owner's call).
 
-Next: when coord gives the phone, update the Store if it offers it, install Notch from the Store, grant overlay permission (Settings > Notch), turn it on, and check: the pill sits over the camera hole on the status bar, tap expands and folds back, it survives leaving the app. HyperOS may need Autostart or background-popup permission. Take screenshots with `adb exec-out screencap`. Then `coord release` the phone.
+Phone test, 2026-11-19 (Store 23, Notch 2 installed through the Store):
+
+- Works: install, overlay permission via Settings, service starts, the black pill is drawn over the camera hole (window 104x121 at x 488..592, correct).
+- Broken: tapping the pill does nothing. HyperOS's StatusBar window (layer 151000, y 0..110) is above an APPLICATION_OVERLAY window (layer 111000) and takes every touch in that band (a tap logs `onScrollToTop` in the foreground app). Only 11 px of the pill lies below the status bar.
+- Stale icon: the launcher icon is still the first cyan version. `tools/icons/render-icon.mjs` wrote PNG mipmaps, but prebuild's `ic_launcher_foreground.webp` files and `iconBackground #06181C` in `values/colors.xml` win. Re-run prebuild for the icons, or convert the webp files.
+- Unexplained: the app showed "On" and the service was running right after the overlay permission was granted, although nobody tapped Turn on.
+
+Store pitfalls learned (see also `docs/app-store.md` section 5):
+
+- A Store built from main lacks the `notch` and `halo` ids, so it refuses those installs ("Update Store, then try again"). Merge `notch` to main so every later Store release keeps them.
+- Concurrent `pnpm release` runs overwrite each other's manifest entries (Design Editor 19 reverted Store 23 to 22 once). Check the manifest after each release.
+
+Next step (owner decides): make the pill tappable. Option A (recommended): draw it with `TYPE_ACCESSIBILITY_OVERLAY` from an AccessibilityService, as Deputy's StopChip does; windows of that type sit above the status bar. The owner must enable the service in Accessibility settings (see the HyperOS accessibility note in memory). Option B: keep the overlay and make the touch target a transparent strip below the status bar; the pill itself stays untouchable. Then rebuild icons, release Notch and retest on the phone (coord claim first).
