@@ -6,14 +6,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, FlatList, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { addActions, type AddAction } from '../src/library/add-actions';
-import { exportPdf } from '../src/library/files';
-import { KIND_PLURAL } from '../src/library/format';
-import { IconButton } from '../src/library/icon-button';
-import { openItem } from '../src/library/open-item';
-import { openLibrary } from '../src/library/open-library';
-import { itemDir } from '../src/library/paths';
-import { FolderRow, ItemRow } from '../src/library/rows';
+import { addActions, type AddAction } from '../../src/library/add-actions';
+import { exportPdf } from '../../src/library/files';
+import { KIND_PLURAL } from '../../src/library/format';
+import { IconButton } from '../../src/library/icon-button';
+import { openItem } from '../../src/library/open-item';
+import { openLibrary } from '../../src/library/open-library';
+import { itemDir } from '../../src/library/paths';
+import { FolderRow, ItemRow } from '../../src/library/rows';
 import {
   AddSheet,
   FolderPickerSheet,
@@ -23,9 +23,9 @@ import {
   TagFilterSheet,
   TagsSheet,
   type ItemAction,
-} from '../src/library/sheets';
-import { errorMessage, useDebounced, useLibraryData } from '../src/library/use-library';
-import { discardSession, loadSession } from '../src/scan/session';
+} from '../../src/library/sheets';
+import { errorMessage, useDebounced, useLibraryData } from '../../src/library/use-library';
+import { discardSession, loadSession } from '../../src/scan/session';
 
 type SheetState =
   | { type: 'add' }
@@ -40,7 +40,7 @@ type SheetState =
   | { type: 'moveFolder'; folder: Folder }
   | null;
 
-const KINDS: ItemKind[] = ['pdf', 'scan', 'article'];
+const KINDS: ItemKind[] = ['pdf', 'scan', 'article', 'note', 'audio', 'image'];
 
 export default function LibraryScreen() {
   const { folder } = useLocalSearchParams<{ folder?: string }>();
@@ -156,7 +156,7 @@ export default function LibraryScreen() {
             await (await openLibrary()).deleteFolder(target.id);
             if (target.id === folderId) {
               if (router.canGoBack()) router.back();
-              else router.replace('/');
+              else router.replace('/library');
             }
           }),
       },
@@ -260,7 +260,7 @@ export default function LibraryScreen() {
         keyExtractor={(row) => row.key}
         renderItem={({ item: row }) =>
           row.type === 'folder' ? (
-            <FolderRow folder={row.folder} onOpen={() => router.push({ pathname: '/', params: { folder: row.folder.id } })} />
+            <FolderRow folder={row.folder} onOpen={() => router.push({ pathname: '/folder', params: { folder: row.folder.id } })} />
           ) : (
             <ItemRow
               item={row.item}

@@ -12,11 +12,14 @@ const KIND_ICON: Record<ItemKind, IconName> = {
   pdf: 'document-text-outline',
   scan: 'scan-outline',
   article: 'newspaper-outline',
+  note: 'create-outline',
+  audio: 'mic-outline',
+  image: 'image-outline',
 };
 
 function Thumb({ item }: { item: Item }) {
   const { c } = useTheme();
-  const thumb = itemFile(item.id, 'thumb.jpg');
+  const thumb = itemFile(item.id, item.kind === 'image' ? 'image.jpg' : 'thumb.jpg');
   return (
     <View style={{ width: 40, height: 52, borderRadius: 4, overflow: 'hidden', backgroundColor: c.raised, alignItems: 'center', justifyContent: 'center' }}>
       {thumb.exists ? (

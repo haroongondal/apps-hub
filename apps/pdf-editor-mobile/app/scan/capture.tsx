@@ -165,7 +165,7 @@ export default function CaptureScreen() {
               )
             }
           >
-            PDF Editor needs it to scan pages.
+            Nexus needs it to scan pages.
           </Notice>
         ) : null}
         {error ? (

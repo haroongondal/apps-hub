@@ -29,6 +29,9 @@ export const itemOpeners: Partial<Record<ItemKind, (item: Item) => Promise<void>
       params: { uri: itemFile(item.id, 'document.pdf').uri, name: `${item.title}.pdf`, itemId: item.id },
     });
   },
+  note: async (item) => router.push({ pathname: '/item', params: { id: item.id } }),
+  audio: async (item) => router.push({ pathname: '/item', params: { id: item.id } }),
+  image: async (item) => router.push({ pathname: '/item', params: { id: item.id } }),
 };
 
 export const openItem = async (item: Item) => itemOpeners[item.kind]?.(item);

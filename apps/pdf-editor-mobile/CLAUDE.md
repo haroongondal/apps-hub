@@ -32,13 +32,22 @@ The editor UI is not here. It lives in `packages/pdf-editor-engine` (`mobile.htm
 
 ## The library
 
-The home screen (`app/index.tsx`) is the Library. Its logic is `packages/library-core` (`pnpm --filter @apps-hub/library-core test`); `src/library/` is the app glue. The contract is `docs/pdf-editor/scan/SPEC.md` §4, shared with Scan and Reader, so keep names, schema and tracks as written.
+The Library tab (`app/(tabs)/library.tsx`) is the Library. Its logic is `packages/library-core` (`pnpm --filter @apps-hub/library-core test`); `src/library/` is the app glue. The contract is `docs/pdf-editor/scan/SPEC.md` §4, shared with Scan and Reader, so keep names, schema and tracks as written.
 
 - `openLibrary()` (`open-library.ts`) is the only way to get the `Library`. It opens `library.db` once, sets `foreign_keys = ON`, and runs the start-up sweep before resolving, so nothing can create files ahead of it. Never use `withTransactionAsync` or `withExclusiveTransactionAsync`; `serialPort` in library-core does the transactions.
 - Don't call a `Library` method inside a `library.db.transaction` callback: it waits on the transaction that is calling it and never returns.
 - Files live in `library/<id>/` (`paths.ts`). Create the files first, then the row; delete the row, then the directory. Write the row only through `Library`, never `items`, `folders`, `tags` or `items_fts` directly.
 - New "+" sheet entries go in `add-actions.ts`; opening an item by kind goes in `open-item.ts`.
 - The editor reports page text and a cover through the `docInfo` bridge event; `app/editor.tsx` indexes the item from it and, on save, adds the edited PDF as a new "(edited)" item before sharing.
+
+## Nexus (AI layer)
+
+The app is named Nexus (N2). Logic is `packages/knowledge-core` (job queue, graph, Ask, OpenAI adapter; `pnpm --filter @apps-hub/knowledge-core test`); `src/nexus/` is the glue. Design: `docs/superpowers/specs/2026-11-18-nexus-design.md`; progress: `docs/handoffs/nexus.md`.
+
+- Tabs: Stream (`app/(tabs)/index.tsx`, capture + Ask) and Library (`app/(tabs)/library.tsx`). A folder opens as `/folder` (same screen) so Back works.
+- `openKnowledge()` (`src/nexus/worker.ts`) opens `Knowledge` on the Library's connection; `startWorker()` in the root layout runs up to 3 `runNext` loops while the app is in the foreground. Nothing is sent without a key (`src/nexus/ai.ts`, expo-secure-store).
+- Per kind, `src/nexus/content.ts` turns an item into text: `note.md`, `pages.json` (written by the editor from `docInfo`, so citations name pages), `audio.m4a` (Whisper), `image.jpg` (vision), else the Library body.
+- New captures go through `src/nexus/capture.ts` (files first, then the row, then `enqueue`).
 
 ## Scan (the `pdf-scan` module)
 

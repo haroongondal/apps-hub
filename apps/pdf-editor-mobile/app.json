@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "PDF Editor",
+    "name": "Nexus",
     "slug": "pdf-editor",
     "version": "1.2.0",
     "orientation": "portrait",
@@ -18,8 +18,9 @@
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.SYSTEM_ALERT_WINDOW"
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ],
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
@@ -50,7 +51,15 @@
         }
       ],
       "expo-asset",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-secure-store",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundRecording": true,
+          "microphonePermission": "Nexus records voice notes when you tap the microphone."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

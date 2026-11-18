@@ -18,7 +18,7 @@ export const APPS: Record<string, ReleasableApp> = {
     android: { packageName: ANDROID_PACKAGES['open-tunnel'] },
   },
   'pdf-editor': {
-    name: 'PDF Editor',
+    name: 'Nexus',
     dir: 'apps/pdf-editor-mobile',
     android: { packageName: ANDROID_PACKAGES['pdf-editor'] },
     prepare: [['node', '../../packages/pdf-editor-engine/build.mjs']],

@@ -177,7 +177,7 @@ CREATE UNIQUE INDEX folders_unique_name ON folders (ifnull(parent_id, ''), name 
 CREATE TABLE items (
   rid        INTEGER PRIMARY KEY,           -- rowid alias, stable across VACUUM; = items_fts.rowid
   id         TEXT NOT NULL UNIQUE,          -- public id, directory name, referenced by feature tables
-  kind       TEXT NOT NULL CHECK (kind IN ('pdf', 'scan', 'article')),
+  kind       TEXT NOT NULL CHECK (kind IN ('pdf', 'scan', 'article', 'note', 'audio', 'image')),  -- note/audio/image: library step 2 (Nexus)
   title      TEXT NOT NULL,
   folder_id  TEXT REFERENCES folders(id) ON DELETE SET NULL,
   created_at INTEGER NOT NULL,

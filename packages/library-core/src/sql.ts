@@ -1,4 +1,4 @@
-export type SqlValue = string | number | null;
+export type SqlValue = string | number | null | Uint8Array; // Uint8Array: BLOBs (embeddings)
 export type Row = Record<string, SqlValue>;
 
 /** What a driver must provide: four direct calls on one connection. */
