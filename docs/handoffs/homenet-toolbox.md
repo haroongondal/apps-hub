@@ -1,0 +1,59 @@
+# HomeNet toolbox handoff
+
+## Resume prompt (2026-11-18)
+
+Continue the HomeNet toolbox build. Work only in the worktree
+`~/Documents/apps-hub-wt/homenet-toolbox` (branch `homenet-toolbox`, cut from `main`).
+Read this file completely first, then the plan
+`docs/superpowers/plans/2026-11-18-homenet-toolbox.md` and the spec
+`docs/superpowers/specs/2026-11-18-homenet-toolbox-design.md`. Trust the verified facts
+below and do not redo that work. Follow the owner's handoff contract (update this file
+as milestones land; at ~85% context write a resume prompt and stop). Execute with
+`cd-engineering-tools:phased-orchestration` (one phase agent per phase, briefs and
+ledgers in `.orchestration/`), never `superpowers:subagent-driven-development`.
+Continue from "Current state + exact next step".
+
+## Goal and fixed constraints
+
+- Add to HomeNet: Router tab (UPnP facts, live usage meter, open doors with close),
+  device remotes (Roku, DLNA/Sonos, Shelly, Tasmota, WLED), Who's home tab, Wake PC,
+  guest Wi-Fi QR.
+- AGENTS.md hard rules; pure-TS logic in `packages/core`; LAN-only requests; no
+  telemetry; FOSS only; `@apps-hub/ui` only.
+- Owner decisions: build all four feature sets in order 1→4; ONE merge and ONE Store
+  release at the end, only on the owner's go; install on the phone only via the Store.
+- Commits carry no Claude attribution lines.
+
+## Decisions (with why)
+
+- UPnP IGD for router control: one standard; admin pages are per-brand HTTPS.
+- `qrcode-generator` (MIT, pure JS) for QR: no native dependency.
+- Native `sendUdpBroadcast` for Wake-on-LAN: `udpRequest` can't broadcast.
+- Broadcast address from `InterfaceInfo.localIp`/`cidrPrefix`, not `SubnetPlan` (clamped to /24).
+- Phones matched by IP, with a name-based tag carry-over.
+- `android:allowBackup=false` (app.json + manifest) so the guest password isn't backed up.
+- No Chromecast / Samsung-LG power-input / Hue control this round (need TLS, websockets or pairing).
+
+## Verified facts
+
+- Native `tcpFetch` accepts any IP: the LAN guard must live in TS (Task 1).
+- `parseHttpResponse` exists in `packages/core/src/name-formats.ts`; no `JSON.parse` exists in core yet.
+- Scan keeps only the last SSDP event per IP (`ScannerScreen.tsx`), fixed in Task 5.
+- `lanBinder` (Kotlin) binds only private/link-local targets to Wi-Fi.
+- HomeNet version in `apps/netlens/app.json` is `0.1.0`; versionCode comes from the release tool.
+- Worktree setup: `pnpm install` ok; `@apps-hub/core` tests 115/115 pass; core + netlens typecheck clean (2026-11-18).
+
+## File map
+
+- Plan / spec: `docs/superpowers/plans/2026-11-18-homenet-toolbox.md`, `docs/superpowers/specs/2026-11-18-homenet-toolbox-design.md`
+- Orchestration workspace (git-excluded): `.orchestration/` (phase briefs, `progress.md` ledgers, `shared-files.txt`, `locks/`)
+- Core logic: `packages/core/src/*.ts`; app: `apps/netlens/src`, native: `apps/netlens/modules/netlens-core`
+
+## Session log
+
+- 2026-11-18: design approved; plan written; Task 0 done (commits `5b0c11ae` port check, `dd1ce571` docs). Phase 1 agent started.
+
+## Current state + exact next step
+
+Phase 1 (Tasks 1–4) dispatched to a phase agent with brief `.orchestration/phase-1-brief.md`.
+Next: read its report; on DONE run the clean-export gate, update this file, start Phase 2.
