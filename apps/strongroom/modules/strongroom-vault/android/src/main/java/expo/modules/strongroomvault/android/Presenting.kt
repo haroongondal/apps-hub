@@ -12,7 +12,7 @@ object Presenting {
   @Volatile private var armed = false
   @Volatile private var armedUntil = 0L
 
-  fun arm(code: String): Boolean {
+  @Synchronized fun arm(code: String): Boolean {
     val now = SystemClock.elapsedRealtime()
     return try {
       tag.arm(Ndef.forCode(code), now)
@@ -31,7 +31,7 @@ object Presenting {
     armedUntil = 0L
   }
 
-  fun isArmed(): Boolean = armed && SystemClock.elapsedRealtime() < armedUntil
+  @Synchronized fun isArmed(): Boolean = armed && SystemClock.elapsedRealtime() < armedUntil
 
   fun process(apdu: ByteArray): ByteArray = tag.process(apdu, SystemClock.elapsedRealtime())
 
