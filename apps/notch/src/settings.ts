@@ -78,3 +78,25 @@ export function foldLabel(foldMs: number): string {
   if (foldMs === 0) return 'Never';
   return `${foldMs / 1000} seconds`;
 }
+
+// Same rule as the native card: the accent is mixed into black at 20%, each channel truncated.
+export function pillHex(pill: PillColour, accent: Accent): string {
+  if (pill === 'graphite') return '#1C1C1E';
+  if (pill === 'black') return '#000000';
+  const hex = SWATCHES[accent];
+  const channel = (i: number) => Math.trunc(parseInt(hex.slice(i, i + 2), 16) * 0.2);
+  return '#' + [1, 3, 5].map((i) => channel(i).toString(16).padStart(2, '0').toUpperCase()).join('');
+}
+
+export function clockLabel(hour24: number, minute: number, clock: '12' | '24'): string {
+  const m = String(minute).padStart(2, '0');
+  if (clock === '24') return `${String(hour24).padStart(2, '0')}:${m}`;
+  return `${hour24 % 12 || 12}:${m}`;
+}
+
+// 'system' follows the phone's own 12/24-hour setting.
+export function resolveClock(clock: Clock): '12' | '24' {
+  if (clock !== 'system') return clock;
+  const hour12 = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12;
+  return hour12 ? '12' : '24';
+}

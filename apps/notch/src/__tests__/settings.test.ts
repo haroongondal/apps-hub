@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEFAULTS, SWATCHES, foldLabel, moveWidget, normalize } from '../settings.ts';
+import { DEFAULTS, SWATCHES, clockLabel, foldLabel, moveWidget, normalize, pillHex } from '../settings.ts';
+
+test('the pill colours match the native card', () => {
+  assert.equal(pillHex('black', 'indigo'), '#000000');
+  assert.equal(pillHex('graphite', 'indigo'), '#1C1C1E');
+  // The accent at 20% over black; truncated per channel, as Colours.kt does.
+  assert.equal(pillHex('tinted', 'indigo'), '#191C31');
+});
+
+test('clock labels in 12 and 24 hours', () => {
+  assert.equal(clockLabel(21, 5, '24'), '21:05');
+  assert.equal(clockLabel(0, 0, '12'), '12:00');
+  assert.equal(clockLabel(13, 7, '12'), '1:07');
+});
 
 test('missing or non-object input gives the defaults', () => {
   assert.deepEqual(normalize(undefined), DEFAULTS);
