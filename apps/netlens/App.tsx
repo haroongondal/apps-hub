@@ -3,18 +3,20 @@ import { View } from 'react-native';
 import { TabBar, ThemeProvider } from '@apps-hub/ui';
 
 import DiagnosticsScreen from './src/screens/DiagnosticsScreen';
+import RouterScreen from './src/screens/RouterScreen';
 import ScannerScreen from './src/screens/ScannerScreen';
 
 /**
- * Phase 4 composition: bottom navigation with the Scanner and Diagnostics
- * tabs (PRD FR-2 / FR-3). No external navigation dependency — F-Droid
- * footprint stays minimal with RN primitives only.
+ * Bottom navigation: Devices, Router and Checks. Tabs unmount when hidden, so
+ * a screen's work stops when you leave it. No external navigation dependency —
+ * F-Droid footprint stays minimal with RN primitives only.
  */
-type TabKey = 'scanner' | 'diagnostics';
+type TabKey = 'scanner' | 'router' | 'diagnostics';
 
 const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
-  { key: 'scanner', label: 'Scanner' },
-  { key: 'diagnostics', label: 'Diagnostics' },
+  { key: 'scanner', label: 'Devices' },
+  { key: 'router', label: 'Router' },
+  { key: 'diagnostics', label: 'Checks' },
 ];
 
 export default function App() {
@@ -23,7 +25,7 @@ export default function App() {
   return (
     <ThemeProvider brand="netlens">
       <View style={{ flex: 1 }}>
-        {activeTab === 'scanner' ? <ScannerScreen /> : <DiagnosticsScreen />}
+        {activeTab === 'scanner' ? <ScannerScreen /> : activeTab === 'router' ? <RouterScreen /> : <DiagnosticsScreen />}
       </View>
       <TabBar tabs={TABS} value={activeTab} onChange={setActiveTab} />
     </ThemeProvider>
