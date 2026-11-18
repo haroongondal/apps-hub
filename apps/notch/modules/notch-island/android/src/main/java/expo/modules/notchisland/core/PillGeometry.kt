@@ -12,6 +12,7 @@ object PillGeometry {
   private const val EXPANDED_WIDTH_DP = 300
   private const val EXPANDED_EXTRA_DP = 36
   private const val EDGE_DP = 16
+  private const val ROW_DP = 40
 
   // The offset is from the screen's centre because that is what Gravity.CENTER_HORIZONTAL wants; a cutout reports its bounds from the left edge.
   fun collapsed(cutout: Cutout?, screenWidth: Int, density: Float): PillBox {
@@ -23,11 +24,17 @@ object PillGeometry {
     )
   }
 
-  fun expanded(cutout: Cutout?, screenWidth: Int, density: Float): PillBox {
+  fun expanded(cutout: Cutout?, screenWidth: Int, density: Float, rows: Int = 0): PillBox {
     val c = collapsed(cutout, screenWidth, density)
     val width = minOf((EXPANDED_WIDTH_DP * density).toInt(), screenWidth - 2 * (EDGE_DP * density).toInt())
-    return c.copy(width = width, height = c.height + (EXPANDED_EXTRA_DP * density).toInt())
+    return c.copy(width = width, height = c.height + (EXPANDED_EXTRA_DP * density).toInt() + expandedRowsPx(rows, density))
   }
+
+  // Each widget row under the clock and battery line.
+  fun expandedRowsPx(rows: Int, density: Float): Int = rows * (ROW_DP * density).toInt()
+
+  // Widening keeps xFromCenter, so the pill grows evenly on both sides of the hole.
+  fun withIndicator(box: PillBox, extraPx: Int): PillBox = box.copy(width = box.width + extraPx)
 
   fun lerp(a: PillBox, b: PillBox, t: Float) = PillBox(
     xFromCenter = a.xFromCenter + ((b.xFromCenter - a.xFromCenter) * t).toInt(),

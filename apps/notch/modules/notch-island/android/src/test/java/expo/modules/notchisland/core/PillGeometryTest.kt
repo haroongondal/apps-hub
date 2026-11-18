@@ -35,6 +35,23 @@ class PillGeometryTest {
     assertEquals(c.xFromCenter, e.xFromCenter)
   }
 
+  @Test fun withIndicator_widens_both_sides_and_keeps_centre() {
+    assertEquals(PillBox(10, 124, 50), PillGeometry.withIndicator(PillBox(10, 100, 50), 24))
+  }
+
+  @Test fun expanded_grows_by_row_height() {
+    val base = PillGeometry.expanded(hole, 1080, d)
+    val tall = PillGeometry.expanded(hole, 1080, d, rows = 2)
+    assertEquals(2 * 112, PillGeometry.expandedRowsPx(2, d))
+    assertEquals(base.height + 2 * 112, tall.height)
+    assertEquals(base.width, tall.width)
+  }
+
+  @Test fun existing_expanded_unchanged_with_zero_rows() {
+    assertEquals(PillGeometry.expanded(hole, 1080, d), PillGeometry.expanded(hole, 1080, d, rows = 0))
+    assertEquals(0, PillGeometry.expandedRowsPx(0, d))
+  }
+
   @Test fun expandedNeverReachesTheScreenEdge() {
     val e = PillGeometry.expanded(hole, 300, 1f)
     assertEquals(300 - 32, e.width)
