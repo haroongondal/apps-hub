@@ -108,3 +108,13 @@ Unknowns the JVM tests cannot settle (from the ledger), also not run:
 11. The calendar insert intent and its alarm extra; package visibility for the four app-category lookups and for Deputy.
 12. The exact queued-items SELECT (column indices 9 and 10) on SQLCipher; the bill reminder's delay (inexact alarm).
 13. The provider answers while Inflow is locked and not running (R12).
+
+
+## Final state, 2026-11-19 (stage 1 code-complete on autopilot-stage-1)
+- Built and checked: T1 to T12, plus the whole-branch reviews and their fixes. Reviews: code (not ready, then fixed), privacy (a blocker: item text served without a suggestion; fixed in a812f1cb, re-reviewed privacy-clean).
+- Gates on the final HEAD: `pnpm test` exit 0, `pnpm typecheck` exit 0, `pnpm --filter @apps-hub/ui test` 21/21, Inflow `:inflow-core:testDebugUnitTest :app:assembleDebug :app:processReleaseMainManifest` 554 tests 0 failures, Deputy 267 tests 0 failures, Inflow TS 86/86, typecheck 0.
+- Owner decisions taken this session: R17 (bank parsing and ledger take only SMS and Gmail), R22 (event titles carry the absolute date: "Meeting 11:00 on 19 Nov"; the design example "tomorrow" is superseded), R12 (the provider answers while locked; a signature holder can read live reply text), R18 (old WhatsApp transactions kept; say if you want them removed), the chat key format pkg|conversationKey.
+- Not pushed. Nothing released. The design PR #46 holds the design and the plan; stage 1 needs its own branch PR when the owner says.
+- Open minors (recorded in .sdd/progress.md): the B1 SQL has no real-SQLite test (JVM tests run on the in-memory twin); a bankApp saved before the package check is not re-validated on read; a contact-named SMS sender gets no reply suggestion unless picked; the suggestion list still shows titles to any holder; blocked senders do not sweep existing cards (R20); the bill key uses the largest number in the text (shortcut).
+- Phone checks (13, see above): NOT RUN. Needs the owner's phone, coord device claim and a Store release for Inflow and Deputy (owner's go).
+- Next step: owner review of the branch; then the owner's go to push and open the stage 1 PR, and to release Inflow and Deputy; then the phone checks; then stage 2 (Halo) after Halo's branch merges.
