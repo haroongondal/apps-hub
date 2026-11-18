@@ -18,15 +18,17 @@ const KINDS = [
   { key: 'login', label: 'Logins' },
   { key: 'card', label: 'Cards' },
   { key: 'note', label: 'Notes' },
+  { key: 'pass', label: 'Passes' },
 ] as const;
 
-const NONE: Record<VaultRow['type'], string> = { login: 'No logins yet', card: 'No cards yet', note: 'No notes yet' };
+const NONE: Record<VaultRow['type'], string> = { login: 'No logins yet', card: 'No cards yet', note: 'No notes yet', pass: 'No passes yet' };
 const EMPTY_BODY: Record<VaultRow['type'], string> = {
   login: 'Add one, or import your logins from Google in Settings.',
   card: 'Tap Add to save a card.',
   note: 'Tap Add to save a note.',
+  pass: 'Tap Add to save a ticket, membership or loyalty card as a barcode.',
 };
-const KIND_LABEL: Record<VaultRow['type'], string> = { login: 'Login', card: 'Card', note: 'Note' };
+const KIND_LABEL: Record<VaultRow['type'], string> = { login: 'Login', card: 'Card', note: 'Note', pass: 'Pass' };
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -128,7 +130,7 @@ export function VaultScreen({ status, refresh, view, onView, onOpen, onEdit, onA
         </Notice>
       )}
       {error && <Notice tone="danger">{error}</Notice>}
-      <Field label="Search" placeholder="Search logins, cards, notes" value={view.query} onChangeText={(query) => onView({ ...view, query })} autoCapitalize="none" autoCorrect={false} />
+      <Field label="Search" placeholder="Search logins, cards, notes, passes" value={view.query} onChangeText={(query) => onView({ ...view, query })} autoCapitalize="none" autoCorrect={false} />
       {!searching && <Segmented options={KINDS} value={view.kind} onChange={(kind) => onView({ ...view, kind })} accessibilityLabel="Entry type" />}
       {shown && shown.length === 0 && (
         <Empty

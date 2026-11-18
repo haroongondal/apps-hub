@@ -16,7 +16,9 @@ test('deleting an import says how many edited entries it leaves alone', () => {
 });
 
 test('the export notice counts each kind', () => {
-  assert.match(exportedNotice({ logins: 1, cards: 0, notes: 2 }), /^Exported 1 login, 0 cards and 2 notes\. /);
+  assert.match(exportedNotice({ logins: 1, cards: 0, notes: 2, passesSkipped: 0 }), /^Exported 1 login, 0 cards and 2 notes\. Delete the file/);
+  assert.match(exportedNotice({ logins: 1, cards: 0, notes: 2, passesSkipped: 1 }), /notes\. 1 pass was not exported: the file can't hold passes\. It stays in Strongroom\. Delete/);
+  assert.match(exportedNotice({ logins: 0, cards: 0, notes: 0, passesSkipped: 3 }), /3 passes were not exported: .* They stay in Strongroom\./);
 });
 
 const TOO_SHORT = 'Use at least 12 characters.';

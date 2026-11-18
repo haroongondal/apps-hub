@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { Button, Field, Group, Header, Notice, Row, Screen, Segmented, confirmAction } from '@apps-hub/ui';
-import Vault, { type EntryInput } from 'strongroom-vault';
+import Vault, { type EntryInput, type PassFormat } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
+import { normalisePassCode, validatePass } from './forms.ts';
 import { BackButton, SecretField } from './parts.tsx';
 
 type Kind = EntryInput['type'];
@@ -11,9 +12,16 @@ const KINDS = [
   { key: 'login', label: 'Login' },
   { key: 'card', label: 'Card' },
   { key: 'note', label: 'Note' },
+  { key: 'pass', label: 'Pass' },
 ] as const;
 
-const BLANK = { name: '', username: '', password: '', sites: '', holder: '', number: '', expMonth: '', expYear: '', cvc: '', note: '', text: '' };
+const FORMATS = [
+  { key: 'qr', label: 'QR' },
+  { key: 'code128', label: 'Code 128' },
+  { key: 'ean13', label: 'EAN-13' },
+] as const;
+
+const BLANK = { name: '', username: '', password: '', sites: '', holder: '', number: '', expMonth: '', expYear: '', cvc: '', note: '', text: '', code: '', format: 'qr' as PassFormat };
 type Draft = typeof BLANK;
 
 // An empty box means "not set"; anything else must be a whole number in range.
@@ -31,6 +39,10 @@ function build(kind: Kind, d: Draft, keepApps: string[] | null): EntryInput | st
     return keepApps ? { ...login, apps: keepApps } : login;
   }
   if (kind === 'note') return { type: 'note', name, text: d.text };
+  if (kind === 'pass') {
+    const problem = validatePass(name, d.code, d.format);
+    return problem ?? { type: 'pass', name, code: normalisePassCode(d.code, d.format), format: d.format, note: d.note };
+  }
   const expMonth = whole(d.expMonth, 1, 12);
   const expYear = whole(d.expYear, 2000, 2999);
   if (expMonth === undefined) return 'Enter the expiry month as a number from 1 to 12.';
@@ -57,7 +69,7 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
   const fail = (e: unknown) => (isLocked(e) ? onLocked() : setError(messageOf(e)));
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
 
-  // The entry being edited is the one place, besides Show, where a stored password, card number or security code reaches JS.
+  // The entry being edited is the one place, besides Show, where a stored password, card number, security code or pass code reaches JS.
   useEffect(() => {
     if (id === null) return;
     try {
@@ -69,6 +81,7 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
         Object.assign(fields, { holder: e.holder ?? '', expMonth: e.expMonth ? String(e.expMonth) : '', expYear: e.expYear ? String(e.expYear) : '' });
         Object.assign(fields, { number: Vault.reveal(id, 'number'), cvc: Vault.reveal(id, 'cvc') });
       }
+      if (e.type === 'pass') Object.assign(fields, { format: e.format ?? 'qr', code: Vault.reveal(id, 'code') });
       setKind(e.type);
       setApps(e.apps ?? []);
       set(fields);
@@ -140,6 +153,12 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
               <Field label="Expiry month" hint="1 to 12" value={draft.expMonth} onChangeText={(expMonth) => set({ expMonth })} keyboardType="number-pad" />
               <Field label="Expiry year" hint="Four digits, such as 2029" value={draft.expYear} onChangeText={(expYear) => set({ expYear })} keyboardType="number-pad" />
               <SecretField label="Security code" shown={shown} value={draft.cvc} onChangeText={(cvc) => set({ cvc })} keyboardType="number-pad" mono />
+            </>
+          )}
+          {kind === 'pass' && (
+            <>
+              <SecretField label="Code" hint="The number or text the barcode stands for." shown={shown} value={draft.code} onChangeText={(code) => set({ code })} mono />
+              <Segmented options={FORMATS} value={draft.format} onChange={(format) => set({ format })} accessibilityLabel="Barcode format" />
             </>
           )}
           {kind === 'note' ? (
