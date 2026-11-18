@@ -1,5 +1,3 @@
-import neverShare from '../fixtures/never-share.json' with { type: 'json' };
-
 export const AUTHORITY = 'com.haroon.inflow.autopilot';
 export const PERMISSION = 'com.haroon.permission.AUTOPILOT';
 
@@ -25,5 +23,5 @@ const rowKeys: Record<keyof SuggestionRow, true> = {
 };
 export const ROW_KEYS = Object.keys(rowKeys) as (keyof SuggestionRow)[];
 
-/** Packages whose items never reach the AI or Deputy. */
-export const NEVER_SHARE: readonly string[] = neverShare;
+/** Packages whose items never reach the AI or Deputy. Inline for Metro; contract.test.ts keeps it equal to fixtures/never-share.json. */
+export const NEVER_SHARE: readonly string[] = ['com.haroon.strongroom', 'com.haroon.inflow'];
