@@ -19,3 +19,4 @@ export * from './lan-http.ts';
 export * from './upnp-soap.ts';
 export * from './igd.ts';
 export * from './device-controls.ts';
+export * from './device-actions.ts';
