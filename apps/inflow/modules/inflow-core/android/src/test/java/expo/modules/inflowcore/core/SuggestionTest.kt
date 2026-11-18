@@ -26,8 +26,9 @@ class SuggestionTest {
   }
 
   @Test fun eventTitles() {
-    assertEquals("Meeting 11:00 tomorrow", title(SuggestionKind.EVENT, null, at(2026, 11, 19, 11, 0)))
-    assertEquals("Meeting 16:05 today", title(SuggestionKind.EVENT, null, at(2026, 11, 18, 16, 5)))
+    // Always the absolute date, never today or tomorrow: the title is stored and read the next day too.
+    assertEquals("Meeting 11:00 on 19 Nov", title(SuggestionKind.EVENT, null, at(2026, 11, 19, 11, 0)))
+    assertEquals("Meeting 16:05 on 18 Nov", title(SuggestionKind.EVENT, null, at(2026, 11, 18, 16, 5)))
     assertEquals("Meeting 09:00 on 3 Dec", title(SuggestionKind.EVENT, null, at(2026, 12, 3, 9, 0)))
     assertEquals("Meeting 11:00 on 20 Nov", title(SuggestionKind.EVENT, null, at(2026, 11, 20, 11, 0)))
     assertEquals("Meeting 11:00 on 17 Nov", title(SuggestionKind.EVENT, null, at(2026, 11, 17, 11, 0)))

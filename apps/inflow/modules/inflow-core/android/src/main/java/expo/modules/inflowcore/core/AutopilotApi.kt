@@ -20,6 +20,9 @@ fun AutopilotSettings.toMap(): Map<String, Any?> = mapOf(
 )
 
 object AutopilotSettingsInput {
+  /** Same pattern as PACKAGE in src/autopilot.ts. */
+  private val PACKAGE = Regex("""[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+""")
+
   /**
    * What JS sent, checked: a bad field falls back to its default ([AutopilotSettings.fromJson]), kinds are matched in any case, and a picked
    * chat without the "|" of [pickedChatKey] is dropped (it could never match a conversation), as is one in a [AutopilotAccess.NEVER_SHARE] app.
@@ -27,7 +30,10 @@ object AutopilotSettingsInput {
   fun fromMap(m: Map<String, Any?>): AutopilotSettings {
     val fixed = m.mapValues { (k, v) -> if (k == "kinds" && v is Iterable<*>) v.map { (it as? String)?.uppercase() ?: it } else v }
     val s = AutopilotSettings.fromJson(element(fixed).toString())
-    return s.copy(pickedChats = s.pickedChats.filter { '|' in it && it.substringBefore('|') !in AutopilotAccess.NEVER_SHARE }.toSet())
+    return s.copy(
+      pickedChats = s.pickedChats.filter { '|' in it && it.substringBefore('|') !in AutopilotAccess.NEVER_SHARE }.toSet(),
+      bankApp = s.bankApp?.takeIf { PACKAGE.matches(it) },   // the notifier opens it as a package: anything else is no app
+    )
   }
 
   // A JS number reaches Kotlin as a Double: 5000000.0 has no Long form in JSON text, so a whole number is passed on as a Long.

@@ -50,4 +50,9 @@ class AutopilotApiTest {
     val s = AutopilotSettingsInput.fromMap(mapOf("pickedChats" to listOf("com.haroon.strongroom|wa:x", "com.haroon.inflow|wa:y", "com.whatsapp|num:1")))
     assertEquals(setOf("com.whatsapp|num:1"), s.pickedChats)
   }
+
+  @Test fun aBankAppThatIsNotAPackageNameIsDropped() {
+    assertEquals("com.example.bank", AutopilotSettingsInput.fromMap(mapOf("bankApp" to "com.example.bank")).bankApp)
+    for (bad in listOf("HBL", "My Bank", "com..bank", "com.bank;rm", "1com.bank", "", " com.bank")) assertEquals(bad, null, AutopilotSettingsInput.fromMap(mapOf("bankApp" to bad)).bankApp)
+  }
 }

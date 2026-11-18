@@ -13,6 +13,10 @@ object AiMeta {
   const val SINCE = "aiSince"
   const val LAST_RUN_AT = "aiLastRunAt"
   const val ERROR = "aiError"
+
+  /** What ERROR holds after a run (null deletes it). A fast run that saved nothing leaves it alone: it may not have reached the provider at all, so it knows nothing about the full run's key error. */
+  fun errorAfter(fastOnly: Boolean, r: AiRunResult, current: String?): String? =
+    if (r.error != null) r.error else if (fastOnly && r.saved == 0) current else null
 }
 
 interface AiStore {

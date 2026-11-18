@@ -10,7 +10,7 @@ sealed interface RunPlan {
   data class OpenCalendar(val title: String, val startAt: Long, val alarmBefore: Boolean) : RunPlan
   data class Remind(val at: Long) : RunPlan
   data object AskDeputy : RunPlan
-  /** Null opens the transaction in Inflow itself. */
+  /** Null opens Inflow's home (it has no screen for one transaction). */
   data class OpenApp(val pkg: String?) : RunPlan
 }
 

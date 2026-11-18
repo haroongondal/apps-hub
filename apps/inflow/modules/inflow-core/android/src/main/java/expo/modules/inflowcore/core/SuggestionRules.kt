@@ -23,6 +23,9 @@ object SuggestionRules {
     val key = when (kind) {
       SuggestionKind.REPLY -> {
         if (r.importance == Importance.LOW) return null
+        // A reply goes to a real person: a chat the owner picked, or an SMS from a phone number. A bank's short code or name ("8287", "HBL") never gets one.
+        val picked = input.pickedOnly || (input.pkg != null && conversationKey != null && pickedChatKey(input.pkg, conversationKey) in s.pickedChats)
+        if (!picked && !FastPath.isPerson(input.sender)) return null
         // A reply without a chat key is keyed by its item, so it still dedupes against itself only.
         conversationKey?.let { replyKey(input.pkg, it) } ?: "reply:item:${input.itemId}"
       }

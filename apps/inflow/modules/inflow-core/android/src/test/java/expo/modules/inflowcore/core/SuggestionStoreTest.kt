@@ -34,6 +34,28 @@ class SuggestionStoreTest {
     assertNotNull(store.add(s()))
   }
 
+  // One suggestion per biller and due date: a bill or event the owner skipped or finished does not come back; replies and money may.
+  @Test fun aSkippedOrDoneBillOrEventKeyIsRefusedAgain() {
+    for ((key, kind) in listOf("bill:450000:2026-11-25" to SuggestionKind.BILL, "event:1800000000000:standup" to SuggestionKind.EVENT)) {
+      for (final in listOf(SuggestionState.SKIPPED, SuggestionState.DONE)) {
+        val k = "$key-$final"
+        val first = store.add(s(k, kind))!!
+        assertTrue(store.setState(first, final, t0))
+        assertNull("$k after $final", store.add(s(k, kind)))
+      }
+    }
+  }
+
+  @Test fun anExpiredBillKeyMayComeBackAndRepliesAndMoneyAreNotBlockedByADoneRow() {
+    val bill = store.add(s("bill:1:2026-11-25", SuggestionKind.BILL))!!
+    store.setState(bill, SuggestionState.EXPIRED, t0)
+    assertNotNull(store.add(s("bill:1:2026-11-25", SuggestionKind.BILL)))
+    for ((key, kind) in listOf("reply:a" to SuggestionKind.REPLY, "money:9" to SuggestionKind.MONEY)) {
+      store.setState(store.add(s(key, kind))!!, SuggestionState.DONE, t0)
+      assertNotNull(key, store.add(s(key, kind)))
+    }
+  }
+
   @Test fun differentKeysAreDifferentRows() {
     assertNotNull(store.add(s("reply:a")))
     assertNotNull(store.add(s("reply:b")))
@@ -96,7 +118,7 @@ class SuggestionStoreTest {
 
   // Number chats share one conversation key (num:...) across apps, so the package is part of the reply key.
   private fun replyFor(pkg: String, key: String = "num:3001234567") = AiResult(5, Kind.MESSAGE, "x", Importance.NORMAL, null, emptyList(), emptyList(), AiSuggest(SuggestType.REPLY, null, "asks"))
-    .let { r -> AiInput(5, "App", "Ali", null, "text", t0, "Ali", false, key, pkg) to r }
+    .let { r -> AiInput(5, "App", "+923001234567", null, "text", t0, "Ali", false, key, pkg) to r }
 
   @Test fun aWhatsAppAndAnSmsReplyToTheSameNumberAreTwoSuggestions() {
     val hook = suggestionHook(store, { AutopilotSettings() }, { t0 }, ZoneId.of("Asia/Karachi"))
@@ -124,8 +146,8 @@ class SuggestionStoreTest {
   @Test fun theHookStoresAReplySuggestionForAnOwnerKind() {
     val hook = suggestionHook(store, { AutopilotSettings() }, { t0 }, ZoneId.of("Asia/Karachi"))
     val r = AiResult(5, Kind.MESSAGE, "x", Importance.NORMAL, null, emptyList(), emptyList(), AiSuggest(SuggestType.REPLY, null, "asks"))
-    hook(r, AiInput(5, "App", "Ali", null, "text", t0, "Ali", false, "wa:ali", "com.whatsapp"))
-    hook(r, AiInput(5, "App", "Ali", null, "text", t0, "Ali", false, "wa:ali", "com.whatsapp"))
+    hook(r, AiInput(5, "App", "Ali", null, "text", t0, "Ali", false, "wa:ali", "com.whatsapp", pickedOnly = true))
+    hook(r, AiInput(5, "App", "Ali", null, "text", t0, "Ali", false, "wa:ali", "com.whatsapp", pickedOnly = true))
     assertEquals(listOf("reply:com.whatsapp|wa:ali"), store.waiting().map { it.dedupeKey })
   }
 }

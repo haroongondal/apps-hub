@@ -118,7 +118,7 @@ object AiRunner {
       AiRunResult(0, 0, false, FAILED)
     }
     if (fastOnly) {
-      if (result.error != null) store.setMeta(AiMeta.ERROR, result.error) else store.deleteMeta(AiMeta.ERROR)
+      AiMeta.errorAfter(true, result, store.meta(AiMeta.ERROR))?.let { store.setMeta(AiMeta.ERROR, it) } ?: store.deleteMeta(AiMeta.ERROR)
       if (result.saved > 0) StoreHolder.onCaptured?.invoke(result.saved)
       return result
     }

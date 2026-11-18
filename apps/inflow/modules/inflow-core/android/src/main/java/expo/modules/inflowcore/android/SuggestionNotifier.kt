@@ -82,7 +82,7 @@ object SuggestionNotifier {
       }
       is RunPlan.OpenCalendar -> openCalendar(app, plan)
       is RunPlan.Remind -> remind(app, s, plan, settings)
-      is RunPlan.OpenApp -> openApp(app, plan, id)
+      is RunPlan.OpenApp -> openApp(app, plan)
       RunPlan.AskDeputy -> askDeputy(app, id, settings)
     }
     if (error != null) return error
@@ -115,8 +115,8 @@ object SuggestionNotifier {
     return null
   }
 
-  private fun openApp(ctx: Context, p: RunPlan.OpenApp, id: Long): String? {
-    val launch = p.pkg?.let { ctx.packageManager.getLaunchIntentForPackage(it) } ?: ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.putExtra("inflow.suggestionId", id)
+  private fun openApp(ctx: Context, p: RunPlan.OpenApp): String? {
+    val launch = p.pkg?.let { ctx.packageManager.getLaunchIntentForPackage(it) } ?: ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
     return start(ctx, launch ?: return "Inflow couldn't be opened.", "That app isn't installed.")
   }
 

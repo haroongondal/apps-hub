@@ -31,12 +31,14 @@ object SuggestionTitle {
   private val DAY = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
   private val CLOCK = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH)
 
+  // An event title always carries its date: it is stored, and "tomorrow" would be wrong by the next morning. `now` is kept so callers need not change.
+  @Suppress("UNUSED_PARAMETER")
   fun of(kind: SuggestionKind, name: String?, dueAt: Long?, now: Long, zone: ZoneId, moneyIn: Boolean = false): String {
     val who = clean(name)
     return when (kind) {
       SuggestionKind.REPLY -> if (who == null) "Reply in a chat" else "Reply to $who"
       SuggestionKind.BILL -> if (dueAt == null) "Bill due soon" else "Bill due ${DAY.format(local(dueAt, zone))}"
-      SuggestionKind.EVENT -> if (dueAt == null) "Meeting soon" else "Meeting ${CLOCK.format(local(dueAt, zone))} ${whenWord(dueAt, now, zone)}"
+      SuggestionKind.EVENT -> if (dueAt == null) "Meeting soon" else "Meeting ${CLOCK.format(local(dueAt, zone))} on ${DAY.format(local(dueAt, zone))}"
       SuggestionKind.MONEY -> when {
         moneyIn -> if (who == null) "Money in from someone new" else "Money in from $who"
         who == null -> "Unusual payment"
@@ -50,17 +52,6 @@ object SuggestionTitle {
     name?.trim()?.replace(Regex("\\s+"), " ")?.take(NAME_MAX)?.trim()?.takeIf { it.isNotEmpty() }
 
   private fun local(ms: Long, zone: ZoneId) = Instant.ofEpochMilli(ms).atZone(zone)
-
-  /** "today" and "tomorrow" by calendar day in the owner's zone; any other day (past ones too) is "on 3 Dec". */
-  private fun whenWord(dueAt: Long, now: Long, zone: ZoneId): String {
-    val day = local(dueAt, zone).toLocalDate()
-    val today = local(now, zone).toLocalDate()
-    return when (day) {
-      today -> "today"
-      today.plusDays(1) -> "tomorrow"
-      else -> "on ${DAY.format(day)}"
-    }
-  }
 }
 
 private const val HOUR_MS = 3_600_000L

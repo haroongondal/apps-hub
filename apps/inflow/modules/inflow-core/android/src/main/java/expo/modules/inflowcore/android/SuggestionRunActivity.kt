@@ -9,7 +9,12 @@ class SuggestionRunActivity : Activity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     val id = intent.getLongExtra(SuggestionNotifier.EXTRA_ID, -1L)
-    if (id >= 0) SuggestionNotifier.run(this, id)?.let { Toast.makeText(applicationContext, it, Toast.LENGTH_LONG).show() }
+    // A thrown database error must not crash Inflow from a notification tap: the owner gets the plain message instead.
+    if (id >= 0) (try { SuggestionNotifier.run(this, id) } catch (e: Exception) { FAILED })?.let { Toast.makeText(applicationContext, it, Toast.LENGTH_LONG).show() }
     finish()
+  }
+
+  private companion object {
+    const val FAILED = "Inflow couldn't start that. Close and reopen the app, then try again."
   }
 }

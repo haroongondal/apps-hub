@@ -59,8 +59,9 @@ class SqlSuggestionStore(private val db: SQLiteDatabase) : SuggestionStore {
 
   internal companion object {
     const val SELECT = "SELECT id, kind, title, item_id, due_at, dedupe_key, state, created_at, updated_at, expires_at FROM suggestions"
-    // A WAITING or STARTED row with the same key blocks the insert.
+    // A WAITING or STARTED row with the same key blocks the insert; so does a DONE or SKIPPED bill or event (one suggestion per biller and due date).
     const val ADD_SQL = "INSERT INTO suggestions(kind, title, item_id, due_at, dedupe_key, state, created_at, updated_at, expires_at) " +
-      "SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM suggestions WHERE dedupe_key = ? AND state IN ('WAITING', 'STARTED'))"
+      "SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM suggestions WHERE dedupe_key = ? AND (state IN ('WAITING', 'STARTED') " +
+      "OR (state IN ('DONE', 'SKIPPED') AND (dedupe_key LIKE 'bill:%' OR dedupe_key LIKE 'event:%'))))"
   }
 }

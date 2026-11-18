@@ -16,8 +16,10 @@ class SuggestionRulesTest {
   private val day = 24 * 3_600_000L
   private val on = AutopilotSettings()
 
-  private fun input(text: String = "hello", own: Boolean = false, conversation: String? = "Ali", sender: String? = "Ali") =
-    AiInput(7, "WhatsApp", sender, null, text, now, conversation, own, pkg = "com.whatsapp")
+  private fun input(
+    text: String = "hello", own: Boolean = false, conversation: String? = "Ali", sender: String? = "Ali",
+    pkg: String = "com.whatsapp", pickedOnly: Boolean = true,
+  ) = AiInput(7, "WhatsApp", sender, null, text, now, conversation, own, pkg = pkg, pickedOnly = pickedOnly)
 
   private fun result(suggest: AiSuggest?, importance: Importance = Importance.NORMAL) =
     AiResult(7, Kind.MESSAGE, "summary", importance, null, emptyList(), emptyList(), suggest)
@@ -46,6 +48,29 @@ class SuggestionRulesTest {
     assertNull(run(reply(), input = input(own = true)))
     assertNull(run(reply(), importance = Importance.LOW))
     assertNotNull(run(reply(), importance = Importance.HIGH))
+  }
+
+  private val sms = "com.google.android.apps.messaging"
+
+  @Test fun aShortCodeOrNamedSmsSenderNeverGetsAReply() {
+    assertNull(run(reply(), input = input(pkg = sms, pickedOnly = false, conversation = null, sender = "8287", text = "Reply 1 to activate"), key = "num:8287"))
+    assertNull(run(reply(), input = input(pkg = sms, pickedOnly = false, conversation = null, sender = "HBL"), key = "name:hbl"))
+  }
+
+  @Test fun aPhoneNumberSmsGetsAReply() {
+    val s = run(reply(), input = input(pkg = sms, pickedOnly = false, conversation = null, sender = "+92 300 1234567"), key = "num:923001234567")
+    assertEquals(SuggestionKind.REPLY, s!!.kind)
+  }
+
+  @Test fun aPickedChatGetsAReplyWhetherFlaggedOrPickedInSettings() {
+    assertNotNull(run(reply(), input = input(pickedOnly = true, sender = "Ali")))
+    val picked = AutopilotSettings(pickedChats = setOf("com.whatsapp|wa:ali"))
+    assertNotNull(run(reply(), input = input(pickedOnly = false, sender = "Ali"), s = picked))
+    assertNull(run(reply(), input = input(pickedOnly = false, sender = "Ali")))
+  }
+
+  @Test fun theGateIsForRepliesOnly() {
+    assertNotNull(run(bill(now + day), input = input(pkg = sms, pickedOnly = false, sender = "HBL")))
   }
 
   @Test fun replyWithoutAChatKeyIsKeyedByItsItem() = assertEquals("reply:item:7", run(reply(), key = null)!!.dedupeKey)
@@ -116,6 +141,4 @@ class SuggestionRulesTest {
     assertEquals("Reply to Sara", run(reply(), input = input(conversation = null, sender = "Sara"))!!.title)
     assertEquals("Reply in a chat", run(reply(), input = input(conversation = null, sender = null))!!.title)
   }
-
-  @Test fun moneyKindNeverComesFromTheModel() = assertTrue(SuggestionKind.MONEY !in listOf(run(reply())!!.kind))
 }

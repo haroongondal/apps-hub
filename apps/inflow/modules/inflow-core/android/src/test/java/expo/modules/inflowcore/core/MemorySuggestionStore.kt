@@ -4,7 +4,8 @@ class MemorySuggestionStore : SuggestionStore {
   val rows = LinkedHashMap<Long, Suggestion>()
   private var nextId = 1L
 
-  private fun open(key: String) = rows.values.any { it.dedupeKey == key && it.state in OPEN }
+  // Mirrors SqlSuggestionStore.ADD_SQL: a DONE or SKIPPED bill or event also blocks its key.
+  private fun open(key: String) = rows.values.any { it.dedupeKey == key && (it.state in OPEN || (it.state in FINISHED && (key.startsWith("bill:") || key.startsWith("event:")))) }
 
   override fun add(s: Suggestion): Long? {
     if (open(s.dedupeKey)) return null
@@ -41,5 +42,6 @@ class MemorySuggestionStore : SuggestionStore {
 
   private companion object {
     val OPEN = setOf(SuggestionState.WAITING, SuggestionState.STARTED)
+    val FINISHED = setOf(SuggestionState.DONE, SuggestionState.SKIPPED)
   }
 }

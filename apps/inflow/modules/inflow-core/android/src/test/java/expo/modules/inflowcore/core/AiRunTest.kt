@@ -52,7 +52,7 @@ class AiRunTest {
 
   private fun runner(
     cap: Double? = 0.50, hasProvider: Boolean = true, channelOf: (Long) -> Channel = { Channel.NOTIFICATION },
-    accounts: List<String> = emptyList(), hook: ((AiResult, AiInput) -> Unit)? = suggestionHook(suggestionStore, { AutopilotSettings() }, { clock }, karachi, store::hasOwnMessageAfter),
+    accounts: List<String> = emptyList(), hook: ((AiResult, AiInput) -> Unit)? = suggestionHook(suggestionStore, { AutopilotSettings(pickedChats = setOf("$sms|sms:ali")) }, { clock }, karachi, store::hasOwnMessageAfter),
   ) = AiRun(store, ledger, { if (hasProvider) provider else null }, { prices }, { cap }, { accounts }, channelOf, { clock }, karachi, suggestions = hook)
 
   private fun keyAdded(at: Long = t0 - 60_000) = store.setMeta(AiMeta.SINCE, at.toString())
@@ -541,5 +541,16 @@ class AiRunTest {
     answer = suggestReply("""{"type":"reply","due":null,"detail":"asks"}""")
     runner().run()
     assertEquals(1, suggestionStore.waiting().size)
+  }
+
+  // The stored error after a run (null = delete it): a fast run that found nothing must not wipe a real error from the full run.
+  @Test fun aFastRunThatSavedNothingKeepsTheStoredError() {
+    val idle = AiRunResult(0, 0, false, null)
+    assertEquals("Gmail refused", AiMeta.errorAfter(fastOnly = true, idle, "Gmail refused"))
+    assertEquals(null, AiMeta.errorAfter(fastOnly = true, AiRunResult(1, 1, false, null), "Gmail refused"))
+    assertEquals("new", AiMeta.errorAfter(fastOnly = true, AiRunResult(1, 0, false, "new"), "old"))
+    // The full run still clears it whenever it finishes without one.
+    assertEquals(null, AiMeta.errorAfter(fastOnly = false, idle, "old"))
+    assertEquals("new", AiMeta.errorAfter(fastOnly = false, AiRunResult(1, 0, false, "new"), null))
   }
 }
