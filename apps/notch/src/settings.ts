@@ -106,3 +106,14 @@ export function earPlan(widgets: WidgetId[]): { time: boolean; battery: boolean;
   const clock = widgets.includes('clock');
   return { time: clock, battery: widgets.includes('battery'), dateLine: clock };
 }
+
+// Same rule as rowsFor() in the Kotlin card: clock and battery sit in the ears, the rest get a row.
+export function rowsFor(widgets: WidgetId[]): ('media' | 'timer')[] {
+  return widgets.filter((w): w is 'media' | 'timer' => w === 'media' || w === 'timer');
+}
+
+const WIDGET_LABELS: Record<WidgetId, string> = { clock: 'Clock', battery: 'Battery', timer: 'Timer', media: 'Now playing' };
+
+export function widgetLabel(id: WidgetId): string {
+  return WIDGET_LABELS[id];
+}

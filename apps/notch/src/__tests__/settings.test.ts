@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEFAULTS, SWATCHES, clockLabel, earPlan, foldLabel, moveWidget, normalize, pillHex } from '../settings.ts';
+import { DEFAULTS, SWATCHES, clockLabel, earPlan, foldLabel, moveWidget, normalize, pillHex, rowsFor, widgetLabel } from '../settings.ts';
 
 test('the pill colours match the native card', () => {
   assert.equal(pillHex('black', 'indigo'), '#000000');
@@ -77,4 +77,16 @@ test('ears: clock left, battery right, date line only with the clock', () => {
   assert.deepEqual(earPlan(['clock', 'battery']), { time: true, battery: true, dateLine: true });
   assert.deepEqual(earPlan(['battery']), { time: false, battery: true, dateLine: false });
   assert.deepEqual(earPlan([]), { time: false, battery: false, dateLine: false });
+});
+
+test('rowsFor follows widget order and skips clock and battery', () => {
+  assert.deepEqual(rowsFor(['timer', 'clock', 'media', 'battery']), ['timer', 'media']);
+  assert.deepEqual(rowsFor(['clock', 'battery']), []);
+});
+
+test('widgetLabel uses plain words', () => {
+  assert.equal(widgetLabel('media'), 'Now playing');
+  assert.equal(widgetLabel('timer'), 'Timer');
+  assert.equal(widgetLabel('clock'), 'Clock');
+  assert.equal(widgetLabel('battery'), 'Battery');
 });
