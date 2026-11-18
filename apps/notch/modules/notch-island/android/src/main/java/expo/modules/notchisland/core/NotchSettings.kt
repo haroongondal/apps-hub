@@ -40,6 +40,12 @@ data class NotchSettings(
       widgets = listOf("clock", "battery"),
     )
 
+    // The same colours as SWATCHES in apps/notch/src/settings.ts.
+    val SWATCHES = mapOf(
+      "indigo" to "#818CF8", "cyan" to "#22D3EE", "mint" to "#34D399", "amber" to "#FBBF24",
+      "rose" to "#FB7185", "violet" to "#C084FC", "sky" to "#38BDF8", "lime" to "#A3E635",
+    )
+
     private val ACCENTS = setOf("indigo", "cyan", "mint", "amber", "rose", "violet", "sky", "lime")
     private val PILLS = setOf("black", "graphite", "tinted")
     private val SIZES = setOf("compact", "regular", "large")
