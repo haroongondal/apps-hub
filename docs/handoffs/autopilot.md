@@ -50,8 +50,12 @@ at ~85% context). Continue from "Current state + next step".
   enough" for Run/Skip. My calls folded in: code-built titles, untrusted block for Deputy, branch timing.
   Root CLAUDE.md got the standing "Apps working together" rule.
 
+- 2026-11-18 S1 (end): PR #46 opened (design). Stage 1 plan written: docs/superpowers/plans/2026-11-18-autopilot-stage-1.md
+  (12 tasks: contract package, Inflow core + provider + notifications + screens, Deputy untrusted block and
+  RunSuggestionActivity, gates/phone checks). Wallpaper probe moved to stage 3 (needs Halo).
+
 ## Current state + next step
-Design approved by the owner (2026-11-18) and committed on branch `autopilot` (worktree
-~/Documents/apps-hub-wt/autopilot, from origin/main df22cc60). Next: superpowers:writing-plans for stage 1
-(channel + autopilot core in Inflow and Deputy; the plan goes in docs/superpowers/plans/). Stage 1 starts after
-inflow/post-release merges to main; stage 2 (Halo) after Halo incl. stage 5 merges. Not pushed.
+Design approved; stage 1 plan written, waiting for the owner's review and choice of execution method (use
+cd-engineering-tools:parallel-agents-coord, never superpowers:subagent-driven-development). Execution starts after
+inflow/post-release merges to main, in a new worktree apps-hub-wt/autopilot-1 on branch autopilot/stage-1. Stage 2
+plan (Halo) is written after Halo (incl. stage 5) merges; stage 3 plan after that.
