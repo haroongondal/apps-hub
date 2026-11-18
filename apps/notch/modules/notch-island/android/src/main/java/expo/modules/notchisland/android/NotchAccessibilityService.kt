@@ -17,20 +17,18 @@ import android.view.Gravity
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.FrameLayout
-import android.widget.LinearLayout
 import expo.modules.notchisland.core.Cutout
 import expo.modules.notchisland.core.NotchSettings
 import expo.modules.notchisland.core.PillBox
 import expo.modules.notchisland.core.PillGeometry
+import java.util.Calendar
 
 // An accessibility overlay, unlike TYPE_APPLICATION_OVERLAY, sits above the status bar, so HyperOS lets the pill take touches there. The service reads no events and no screen content.
 class NotchAccessibilityService : AccessibilityService() {
   private val main = Handler(Looper.getMainLooper())
   private var wm: WindowManager? = null
   private var pill: FrameLayout? = null
-  private var card: LinearLayout? = null
-  private var header: HeaderView? = null
-  private var battery: BatteryView? = null
+  private var card: IslandCard? = null
   private var params: WindowManager.LayoutParams? = null
   private var animator: ValueAnimator? = null
   private var open = false
@@ -87,28 +85,16 @@ class NotchAccessibilityService : AccessibilityService() {
     small = scaled(PillGeometry.collapsed(hole, screenW, density), scale, screenW, density)
     big = scaled(PillGeometry.expanded(hole, screenW, density), scale, screenW, density)
 
-    val content = LinearLayout(this).apply {
-      orientation = LinearLayout.VERTICAL
-      gravity = Gravity.CENTER
-      alpha = if (open) 1f else 0f
-    }
-    header = null
-    battery = null
-    for (id in settings.widgets) {
-      when (id) {
-        "clock" -> HeaderView(this).also { header = it; content.addView(it) }
-        "battery" -> BatteryView(this).also { battery = it; content.addView(it) }
-      }
-    }
-    header?.bind(settings)
-    refreshBattery()
+    val holeWidth = hole?.let { it.right - it.left } ?: (58 * density).toInt()
+    val content = IslandCard(this, holeWidth, small.height, density).apply { alpha = if (open) 1f else 0f }
     card = content
+    refresh()
 
     val view = FrameLayout(this).apply {
       background = GradientDrawable().apply { setColor(Colours.pill(settings.pill, settings.accent)) }
       contentDescription = "Notch"
       setOnClickListener { setOpen(!open) }
-      addView(content, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT).apply { topMargin = small.height })
+      addView(content, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
     }
     val box = if (open) big else small
     val lp = WindowManager.LayoutParams(
@@ -138,8 +124,6 @@ class NotchAccessibilityService : AccessibilityService() {
     pill?.let { v -> runCatching { wm?.removeView(v) } }
     pill = null
     card = null
-    header = null
-    battery = null
   }
 
   private fun corners(box: PillBox) {
@@ -152,14 +136,14 @@ class NotchAccessibilityService : AccessibilityService() {
     (pill?.background as? GradientDrawable)?.cornerRadius = radius
   }
 
-  private fun refreshBattery() {
-    val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return
-    val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-    val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-    if (level < 0 || scale <= 0) return
-    val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+  private fun refresh() {
+    val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+    val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+    val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+    val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+    val percent = if (level >= 0 && scale > 0) level * 100 / scale else null
     val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
-    battery?.bind(level * 100 / scale, charging, Colours.accent(settings.accent))
+    card?.bind(settings, Calendar.getInstance(), percent, charging)
   }
 
   private fun setOpen(next: Boolean, holdMs: Long? = PillGeometry.foldDelayMs(settings.foldMs)) {
@@ -170,8 +154,7 @@ class NotchAccessibilityService : AccessibilityService() {
     if (next == open) return
     open = next
     if (next) {
-      header?.bind(settings)
-      refreshBattery()
+      refresh()
     }
     animator?.cancel()
     val from = PillBox(lp.x, lp.width, lp.height)
@@ -198,8 +181,8 @@ class NotchAccessibilityService : AccessibilityService() {
       override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
           Intent.ACTION_POWER_CONNECTED -> setOpen(true, CHARGE_OPEN_MS)
-          Intent.ACTION_TIME_TICK -> if (open) header?.bind(settings)
-          Intent.ACTION_BATTERY_CHANGED -> if (open) refreshBattery()
+          Intent.ACTION_TIME_TICK -> if (open) refresh()
+          Intent.ACTION_BATTERY_CHANGED -> if (open) refresh()
         }
       }
     }

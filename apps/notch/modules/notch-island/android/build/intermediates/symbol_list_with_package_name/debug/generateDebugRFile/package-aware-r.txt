@@ -1,4 +1,0 @@
-expo.modules.notchisland
-string notch_service_description
-string notch_service_label
-xml notch_accessibility_service

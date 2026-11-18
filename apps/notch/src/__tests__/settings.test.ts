@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEFAULTS, SWATCHES, clockLabel, foldLabel, moveWidget, normalize, pillHex } from '../settings.ts';
+import { DEFAULTS, SWATCHES, clockLabel, earPlan, foldLabel, moveWidget, normalize, pillHex } from '../settings.ts';
 
 test('the pill colours match the native card', () => {
   assert.equal(pillHex('black', 'indigo'), '#000000');
@@ -71,4 +71,10 @@ test('every swatch reaches WCAG AA on the black and graphite pills', () => {
 test('fold labels read in plain words', () => {
   assert.equal(foldLabel(0), 'Never');
   assert.equal(foldLabel(3000), '3 seconds');
+});
+
+test('ears: clock left, battery right, date line only with the clock', () => {
+  assert.deepEqual(earPlan(['clock', 'battery']), { time: true, battery: true, dateLine: true });
+  assert.deepEqual(earPlan(['battery']), { time: false, battery: true, dateLine: false });
+  assert.deepEqual(earPlan([]), { time: false, battery: false, dateLine: false });
 });

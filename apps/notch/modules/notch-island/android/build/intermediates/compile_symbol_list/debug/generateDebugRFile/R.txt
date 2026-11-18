@@ -1,3 +1,0 @@
-int string notch_service_description 0x0
-int string notch_service_label 0x0
-int xml notch_accessibility_service 0x0

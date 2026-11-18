@@ -100,3 +100,9 @@ export function resolveClock(clock: Clock): '12' | '24' {
   const hour12 = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12;
   return hour12 ? '12' : '24';
 }
+
+// Same rule as earLayout() in EarLayout.kt.
+export function earPlan(widgets: WidgetId[]): { time: boolean; battery: boolean; dateLine: boolean } {
+  const clock = widgets.includes('clock');
+  return { time: clock, battery: widgets.includes('battery'), dateLine: clock };
+}

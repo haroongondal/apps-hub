@@ -10,7 +10,7 @@ object PillGeometry {
   private const val HUG_DP = 8
   private const val DROP_DP = 4
   private const val EXPANDED_WIDTH_DP = 300
-  private const val EXPANDED_EXTRA_DP = 56
+  private const val EXPANDED_EXTRA_DP = 36
   private const val EDGE_DP = 16
 
   // The offset is from the screen's centre because that is what Gravity.CENTER_HORIZONTAL wants; a cutout reports its bounds from the left edge.

@@ -1,5 +1,0 @@
-R_DEF: Internal format may change without notice
-local
-string notch_service_description
-string notch_service_label
-xml notch_accessibility_service
