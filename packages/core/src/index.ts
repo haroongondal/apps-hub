@@ -24,5 +24,6 @@ export * from './people.ts';
 export * from './wifi-qr.ts';
 export * from './udp-broadcast-args.ts';
 export * from './native-args.ts';
+export * from './same-interface.ts';
 export * from './wake.ts';
 export * from './wol.ts';

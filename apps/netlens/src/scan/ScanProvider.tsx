@@ -17,6 +17,7 @@ import {
   hashNetworkId,
   normalizeNetworkName,
   reconcileScan,
+  sameInterface,
   resolveDeviceNames,
   type DeviceNames,
   type DeviceStore,
@@ -91,7 +92,11 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
   const locationsByIp = useRef<Map<string, string[]>>(new Map()).current;
 
   const [store, setStore] = useState<(DeviceStore & SettingsStore) | null>(null);
-  const [iface, setIface] = useState<InterfaceInfo | null>(null);
+  const [iface, setIfaceState] = useState<InterfaceInfo | null>(null);
+  // An unchanged address keeps the same object, so effects that depend on iface (the open device sheet's remotes) do not re-run.
+  const setIface = useCallback((info: InterfaceInfo | null): void => {
+    setIfaceState((prev) => (sameInterface(prev, info) ? prev : info));
+  }, []);
   const [plan, setPlan] = useState<SubnetPlan | null>(null);
   const [phase, setPhase] = useState<Phase>('idle');
   const [discovered, setDiscovered] = useState(0);
@@ -123,7 +128,7 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       scanGeneration.current += 1;
     };
-  }, [bindingProxy]);
+  }, [bindingProxy, setIface]);
 
   const scanning = phase === 'scanning' || phase === 'reconciling';
 
@@ -141,7 +146,7 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       sub.remove();
     };
-  }, [bindingProxy, scanning]);
+  }, [bindingProxy, scanning, setIface]);
 
   // Moves a person's tag to the same phone's new row; carryPersonTags returns only changed rows, so a second pass is empty.
   const carryTags = useCallback(
@@ -325,7 +330,7 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
       setErrorNote(error instanceof Error ? error.message : String(error));
       setPhase('error');
     }
-  }, [bindingProxy, carryTags, commitDevices, engineProxy, scanning, store]);
+  }, [bindingProxy, carryTags, commitDevices, engineProxy, scanning, setIface, store]);
 
   const stopScan = useCallback(async () => {
     await Promise.allSettled([
