@@ -94,6 +94,45 @@ data class ComposePlan(
   override val tool get() = "compose"
 }
 
+// Lossless: PNG is re-packed, JPEG loses its metadata (packages/media-core/src/image.ts).
+data class ImagePlan(val format: String, val ext: String) : Plan {
+  override val tool get() = "image"
+}
+
+data object PhotoIndexPlan : Plan {
+  override val tool get() = "photo-index"
+}
+
+fun photoIndexJob(id: String) = Job(id, "gallery", Messages.PHOTOS, PhotoIndexPlan, JobState.QUEUED, 0.0, 1, emptyList())
+
+// One scan covers the whole gallery, so a second one waiting behind it would only redo the same work.
+fun jobToAdd(jobs: List<Job>, id: String): Job? =
+  if (jobs.any { it.plan == PhotoIndexPlan && (it.state == JobState.QUEUED || it.state == JobState.RUNNING) }) null else photoIndexJob(id)
+
+// Two enqueues sent close together both pass the caller's check, so the service drops the later scan here.
+fun withoutDuplicateScans(existing: List<Job>, incoming: List<Job>): List<Job> =
+  incoming.fold(emptyList()) { kept, job ->
+    if (job.plan == PhotoIndexPlan && jobToAdd(existing + kept, job.id) == null) kept else kept + job
+  }
+
+// job is null when a scan is already waiting or running; id is then that scan's id. stale are the old scans a new job replaces.
+data class IndexStart(val job: Job?, val id: String, val stale: List<String> = emptyList())
+
+fun planIndexStart(shown: List<Job>, id: String): IndexStart =
+  jobToAdd(shown, id)?.let { job ->
+    val old = shown.filter { it.plan == PhotoIndexPlan && (it.state == JobState.INTERRUPTED || it.state == JobState.PAUSED) }
+    IndexStart(job, job.id, old.map { it.id })
+  } ?: IndexStart(null, shown.first { it.plan == PhotoIndexPlan && (it.state == JobState.QUEUED || it.state == JobState.RUNNING) }.id)
+
+fun failureMessage(plan: Plan): String = when (plan) {
+  is PhotoIndexPlan -> Messages.PHOTOS_FAILED
+  is ImagePlan -> Messages.IMAGE_FAILED
+  else -> Messages.COULDNT_PROCESS
+}
+
+// The photo scan has no CBR choice of its own, so enqueuing it must not undo the one set for waiting video jobs.
+fun cbrOnlyAfter(current: Boolean, jobs: List<Job>, cbr: Boolean): Boolean = if (jobs.any { it.plan != PhotoIndexPlan }) cbr else current
+
 data class Output(val name: String, val ref: String, val bytes: Long, val note: String? = null)
 data class AttemptLog(val attempt: Int, val plannedBytes: Long, val actualBytes: Long, val seconds: Double, val mode: String)
 
@@ -159,6 +198,10 @@ fun decodePlan(o: JsonObject): Plan = when (val tool = textOf(o, "tool")) {
   "reverse" -> ReversePlan(o.getValue("sound").jsonPrimitive.boolean, doubleOf(o, "quality"), textOf(o, "ext"))
   "stabilize" -> StabilizePlan(textOf(o, "level"), intOf(o, "search"), doubleOf(o, "quality"), textOf(o, "ext"))
   "compose" -> decodeComposePlan(o)
+  "image" -> ImagePlan(textOf(o, "format"), textOf(o, "ext")).also {
+    require(it.format in setOf("png", "jpg") && it.ext == it.format) { "Pick a PNG or JPEG image." }
+  }
+  "photo-index" -> PhotoIndexPlan
   else -> throw IllegalArgumentException("Unknown tool: $tool")
 }
 
@@ -209,6 +252,11 @@ fun encodePlan(p: Plan): JsonObject = when (p) {
       put("audio", buildJsonObject { put("codec", a.codec); a.bps?.let { put("bps", it) }; put("copy", a.copy) })
     }
   }
+  is ImagePlan -> buildJsonObject {
+    put("tool", "image")
+    put("format", p.format)
+    put("ext", p.ext)
+  }
   is FramePlan -> buildJsonObject {
     put("tool", "frame")
     put("timeS", p.timeS)
@@ -241,6 +289,7 @@ fun encodePlan(p: Plan): JsonObject = when (p) {
     put("quality", p.quality)
     put("ext", p.ext)
   }
+  PhotoIndexPlan -> buildJsonObject { put("tool", "photo-index") }
   is ComposePlan -> buildJsonObject {
     put("tool", "compose")
     put("clips", JsonArray(p.clips.map { c ->

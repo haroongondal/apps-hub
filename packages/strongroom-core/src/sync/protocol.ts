@@ -14,7 +14,13 @@ export type Prelogin = { version: number; kdf: KdfParams; salt: string; accountK
 
 export type AccountCreate = { header: string; loginHash: string; recoveryHash: string; readHash: string };
 // An update names the header revision it replaces (the Worker answers 400 without it), so it never overwrites blindly; devices don't hold the recovery key, so without recoveryHash the Worker keeps the stored one.
-export type AccountUpdate = Omit<AccountCreate, 'recoveryHash'> & { recoveryHash?: string; ifRev: number };
+export type AccountUpdate = Omit<AccountCreate, 'recoveryHash'> & {
+  recoveryHash?: string;
+  ifRev: number;
+  escrow?: { email: string; blob: string; code: string };
+  // Only together with escrow: the account key sealed under the same emailed code (sealSignin).
+  signin?: { blob: string };
+};
 export type AccountPutResponse = { headerRev: number };
 
 export type WireRecord = { id: string; rev: number; ciphertext: string; updatedAt: number };

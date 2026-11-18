@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { Button, Field, Group, Notice, Row, Sheet, space } from '@apps-hub/ui';
+import { Button, Field, Group, Notice, RecordMenu, Row, Sheet, confirmAction, editDeleteActions, space } from '@apps-hub/ui';
 import DeputyAgent, { type AppTrust, type SavedTask, type ServiceState } from 'deputy-agent';
 import { canRun } from './setup';
 
@@ -9,9 +9,16 @@ export function SavedTasks({ state, refresh }: { state: ServiceState; refresh: (
   const [editing, setEditing] = useState<SavedTask | 'new' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => setTasks(DeputyAgent.listSavedTasks()), [state]);
+
   const run = (t: SavedTask) => {
     setError(DeputyAgent.startRun(t.task, t.apps).error);
     refresh();
+  };
+
+  const remove = (t: SavedTask) => {
+    DeputyAgent.deleteTask(t.id);
+    setTasks(DeputyAgent.listSavedTasks());
   };
 
   return (
@@ -26,7 +33,15 @@ export function SavedTasks({ state, refresh }: { state: ServiceState; refresh: (
             key={t.id}
             title={t.name}
             subtitle={t.apps.length > 0 ? `${t.task}\nOnly in ${t.apps.length === 1 ? 'one app' : `${t.apps.length} apps`}` : t.task}
-            trailing={<Button label="Run" size="sm" onPress={() => run(t)} disabled={!canRun(state)} />}
+            trailing={
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+                <Button label="Run" size="sm" onPress={() => run(t)} disabled={!canRun(state)} />
+                <RecordMenu
+                  title={t.name}
+                  actions={editDeleteActions({ onEdit: () => setEditing(t), onDelete: () => remove(t), noun: 'task', name: t.name })}
+                />
+              </View>
+            }
             onPress={() => setEditing(t)}
             accessibilityHint="Edits this task"
           />
@@ -48,9 +63,10 @@ export function SavedTasks({ state, refresh }: { state: ServiceState; refresh: (
   );
 }
 
-function TaskSheet({ task, onClose, onSaved }: { task: SavedTask | null; onClose: () => void; onSaved: () => void }) {
-  const [name, setName] = useState(task?.name ?? '');
-  const [text, setText] = useState(task?.task ?? '');
+/** `draft` prefills a new task, such as one saved from a past run. */
+export function TaskSheet({ task, draft, onClose, onSaved }: { task: SavedTask | null; draft?: { name: string; task: string }; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(task?.name ?? draft?.name ?? '');
+  const [text, setText] = useState(task?.task ?? draft?.task ?? '');
   const [apps, setApps] = useState<string[]>(task?.apps ?? []);
   const [all, setAll] = useState<AppTrust[]>([]);
   const [query, setQuery] = useState('');
@@ -109,11 +125,17 @@ function TaskSheet({ task, onClose, onSaved }: { task: SavedTask | null; onClose
         <Button
           label="Delete this task"
           variant="danger"
-          onPress={() => {
-            DeputyAgent.deleteTask(task.id);
-            onSaved();
-            onClose();
-          }}
+          onPress={() =>
+            confirmAction({
+              title: `Delete \u201c${task.name}\u201d?`,
+              message: 'This can\u2019t be undone.',
+              onConfirm: () => {
+                DeputyAgent.deleteTask(task.id);
+                onSaved();
+                onClose();
+              },
+            })
+          }
           block
         />
       )}

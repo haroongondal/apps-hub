@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { PermissionsAndroid, View } from 'react-native';
-import { Button, Field, Group, Header, Notice, Pill, Row, Screen, Text, space } from '@apps-hub/ui';
+import { Button, Field, Group, Header, Notice, Pill, Row, Screen, Text, confirmAction, space } from '@apps-hub/ui';
 import DeputyAgent, { type KnownModel, type ServiceState, type TreeDump } from 'deputy-agent';
 import { fromForm, toForm, type SettingsForm } from './settingsForm';
 import { setupComplete, setupRows, type SetupAction, type SetupRow } from './setup';
@@ -221,10 +221,17 @@ function KeyPanel({ state, refresh }: { state: ServiceState; refresh: () => void
                 label="Remove"
                 variant="ghost"
                 size="sm"
-                onPress={() => {
-                  DeputyAgent.removeApiKey(k.id);
-                  changed();
-                }}
+                onPress={() =>
+                  confirmAction({
+                    title: `Remove key ${i + 1}?`,
+                    message: `Deputy forgets the key ending in ${k.ending}. You'll need to paste it again to use it.`,
+                    confirmLabel: 'Remove',
+                    onConfirm: () => {
+                      DeputyAgent.removeApiKey(k.id);
+                      changed();
+                    },
+                  })
+                }
               />
             </View>
           }

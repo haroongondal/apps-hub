@@ -11,6 +11,12 @@ object Messages {
   const val WENT_WRONG = "Something went wrong. Try again."
   const val TOO_SMALL = "This video can't get that small. Pick a bigger size."
   const val COULDNT_OPEN = "Couldn't open that file. Pick it again."
+  const val PHOTOS = "Photos"
+  const val PHOTOS_FAILED = "Couldn't get your photos ready for search. Try again."
+  const val IMAGE_NO_GAIN = "This image is already as small as it can get without changing how it looks."
+  const val IMAGE_HDR = "This photo carries a second picture, such as an HDR copy, so it is left as it is."
+  const val IMAGE_FAILED = "Couldn't shrink this image. It may be damaged, animated or too large."
+  const val TOOL_MISSING = "Get the search tool first, then try again."
   const val NO_APP = "No app on this phone can open that file."
 
   fun working(n: Int, of: Int) = "Working on $n of $of"

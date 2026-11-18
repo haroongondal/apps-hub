@@ -73,6 +73,7 @@ hardware encoders; §6.6 works the numbers for a one-minute clip into 20 MB (720
 | Background on Android | Kotlin `mediaProcessing` foreground service owning a sequential queue | RESEARCH §9.1 |
 | Distribution | Android through the private Store only, never `adb install`; Mac built locally | AGENTS.md, memory |
 | Name | No new app name; the feature is "Media tools" ("SnapCompress" collides) | RESEARCH §15 |
+| Design with AI | The one online feature: a prompt sent to Anthropic's API builds an editable page from the editor's own objects. Only the prompt and the page size are sent; the key stays on the device and the page never sees it. Everything else stays offline. Images are not generated | Owner, 2026-11-18; `docs/superpowers/specs/2026-11-18-design-editor-ai-layout-design.md` |
 
 ## 5. Requirements
 
@@ -123,6 +124,16 @@ hardware encoders; §6.6 works the numbers for a one-minute clip into 20 MB (720
   - Volume: normalize the sound to -23 LUFS (two-pass loudnorm) or change it by -20 to +20 dB. The picture is copied when it fits MP4, else re-encoded to H.264.
   - Reverse: the picture and, by default, the sound run backwards. Clips up to 10 s, at 1920×1080 or below.
   - Stabilize: FFmpeg's `deshake` at three levels (Minimum cut, Recommended, Most stable). Edges are mirrored, so the frame keeps its size.
+- **Shrink an image (Mac and Android, added 2026-11-18):** lossless, so every pixel stays identical.
+  PNG is unfiltered, re-filtered per row and deflated at level 9, and drops text, EXIF and timestamp
+  chunks (colour, transparency and print-size chunks stay). JPEG keeps its picture data byte for byte
+  and drops GPS, camera, thumbnail and XMP data; rotation and the colour profile stay. Written as
+  `<name> (lossless).png|jpg`. Mac needs no FFmpeg. A file that cannot shrink fails with "already as
+  small as it can get". Animated PNG is refused, and a JPEG with a gain map or second picture after its
+  end marker is left alone. WebP, HEIC, GIF and TIFF are not covered, and JPEG Huffman re-optimisation
+  is not done. Android: a Kotlin port (`ImageOptimizer`) runs as an `ImageRunner` in the media queue,
+  reads the original read-only and saves to `Pictures/Design Editor`; the Media tab lists it as
+  "Shrink an image". Images over about 96 MB decoded are refused.
 - **FR-9: Batch queue.**
   - The same settings apply to every selected file; each file is one job.
   - Jobs run one at a time, with progress per job and for the batch.

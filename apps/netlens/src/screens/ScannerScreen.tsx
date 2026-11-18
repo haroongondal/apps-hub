@@ -16,14 +16,17 @@ import {
   Pill,
   Progress,
   Readout,
+  RecordMenu,
   Row,
   Screen,
   Segmented,
   Sheet,
   Text,
+  confirmAction,
   radius,
   space,
   useTheme,
+  type RecordAction,
 } from '@apps-hub/ui';
 
 import {
@@ -32,10 +35,12 @@ import {
   detectControls,
   webUrlFor,
   displayNameFor,
+  networkLabel,
   parseMac,
   type DetectedControl,
   type KnownPort,
   type ReconciledDevice,
+  type StoredNetwork,
 } from '@apps-hub/core';
 
 import { DeviceControls } from '../components/DeviceControls';
@@ -86,6 +91,13 @@ export default function ScannerScreen() {
     runScan,
     stopScan,
     saveDevice,
+    forgetDevice: forgetStoredDevice,
+    currentNetworkId,
+    networkName,
+    savedNetworks,
+    loadNetworks,
+    renameNetwork,
+    forgetNetwork: forgetStoredNetwork,
     binding: bindingProxy,
   } = useNetworkScan();
 
@@ -108,6 +120,8 @@ export default function ScannerScreen() {
   const [portCheck, setPortCheck] = useState<{ ip: string; open: KnownPort[] | null } | null>(null);
   // Tagged with the ip it was detected for, so a sheet moved to another device never shows it.
   const [controls, setControls] = useState<{ ip: string; found: DetectedControl[] } | null>(null);
+  const [networksOpen, setNetworksOpen] = useState(false);
+  const [renaming, setRenaming] = useState<{ network: StoredNetwork; draft: string } | null>(null);
 
   const parsedMac = parseMac(macDraft);
   const macInvalid = macDraft.trim() !== '' && parsedMac === null;
@@ -169,6 +183,73 @@ export default function ScannerScreen() {
     });
   }, [detail, macDraft, macInvalid, nameDraft, parsedMac, personDraft, saveDevice, store, trustDraft]);
 
+  const forgetDevice = useCallback(
+    (device: ReconciledDevice): Promise<void> => {
+      setDetail((open) => (open !== null && open.id === device.id ? null : open));
+      return forgetStoredDevice(device);
+    },
+    [forgetStoredDevice],
+  );
+
+  const deviceActions = (device: ReconciledDevice, name: string): RecordAction[] => [
+    { label: 'Edit', onPress: () => openDetail(device) },
+    {
+      label: 'Forget device',
+      destructive: true,
+      confirmTitle: `Forget \u201c${name}\u201d?`,
+      confirmMessage: 'HomeNet removes its saved name and trust. It shows up as new if it answers a scan again.',
+      confirmLabel: 'Forget',
+      onPress: () => void forgetDevice(device),
+    },
+  ];
+
+  const confirmForgetDetail = (device: ReconciledDevice): void => {
+    confirmAction({
+      title: `Forget \u201c${displayNameFor(device)}\u201d?`,
+      message: 'HomeNet removes its saved name and trust. It shows up as new if it answers a scan again.',
+      confirmLabel: 'Forget',
+      onConfirm: () => void forgetDevice(device),
+    });
+  };
+
+  const openNetworks = useCallback(async (): Promise<void> => {
+    if (store === null) return;
+    setRenaming(null);
+    setNetworksOpen(true);
+    if (!(await loadNetworks())) setNetworksOpen(false);
+  }, [loadNetworks, store]);
+
+  const closeNetworks = (): void => {
+    if (renaming !== null) return setRenaming(null);
+    setNetworksOpen(false);
+  };
+
+  const saveNetworkName = useCallback(async (): Promise<void> => {
+    if (renaming === null) return;
+    setRenaming(null);
+    await renameNetwork(renaming.network, renaming.draft);
+  }, [renameNetwork, renaming]);
+
+  const forgetNetwork = useCallback(
+    async (network: StoredNetwork): Promise<void> => {
+      const current = network.networkId === currentNetworkId;
+      if ((await forgetStoredNetwork(network)) && current) setDetail(null);
+    },
+    [currentNetworkId, forgetStoredNetwork],
+  );
+
+  const networkActions = (network: StoredNetwork): RecordAction[] => [
+    { label: 'Rename', onPress: () => setRenaming({ network, draft: network.customName ?? '' }) },
+    {
+      label: 'Forget network',
+      destructive: true,
+      confirmTitle: `Forget \u201c${networkLabel(network)}\u201d?`,
+      confirmMessage: 'HomeNet removes this network and every device it saved for it. A later scan starts fresh.',
+      confirmLabel: 'Forget',
+      onPress: () => void forgetNetwork(network),
+    },
+  ];
+
   const pingTarget = useCallback(async (): Promise<void> => {
     if (detail === null || pingTargetBusy) return;
     setPingTargetBusy(true);
@@ -217,6 +298,7 @@ export default function ScannerScreen() {
   }, [bindingProxy, detailIp, iface, locationsByIp]);
 
   const subnet = plan ? `${plan.networkIp}/${plan.prefix}` : null;
+  const networkLine = subnet && networkName ? `${networkName}, ${subnet}` : subnet;
   const hasScanned = phase !== 'idle' || devices.length > 0;
 
   const header = (
@@ -252,9 +334,9 @@ export default function ScannerScreen() {
               tone={scanning ? 'accent' : undefined}
             />
           </View>
-          {subnet ? (
+          {networkLine ? (
             <Text variant="data" tone="muted">
-              {subnet}
+              {networkLine}
             </Text>
           ) : null}
           {scanning ? (
@@ -302,6 +384,15 @@ export default function ScannerScreen() {
         />
       )}
 
+      <Button
+        label="Saved networks"
+        variant="ghost"
+        block
+        onPress={() => void openNetworks()}
+        disabled={store === null || scanning}
+        accessibilityHint="Rename or forget networks HomeNet has scanned"
+      />
+
       {devices.length > 0 ? (
         <Segmented
           options={FILTERS}
@@ -340,8 +431,6 @@ export default function ScannerScreen() {
       </View>
     ) : null;
 
-  const groupEdge = { borderColor: c.line, borderLeftWidth: 1, borderRightWidth: 1, marginHorizontal: space.lg, backgroundColor: c.surface };
-
   return (
     <Screen>
       <FlatList
@@ -352,14 +441,8 @@ export default function ScannerScreen() {
         ListFooterComponent={footer}
         contentContainerStyle={{ paddingBottom: space.xxxl }}
         keyboardShouldPersistTaps="handled"
-        ItemSeparatorComponent={() => (
-          <View style={groupEdge}>
-            <View style={{ height: 1, backgroundColor: c.line, marginLeft: space.lg }} />
-          </View>
-        )}
+        ItemSeparatorComponent={GroupSeparator}
         renderItem={({ item, index }) => {
-          const first = index === 0;
-          const last = index === visible.length - 1;
           const name = displayNameFor(item);
           const facts = [
             item.isNew ? 'new' : null,
@@ -367,14 +450,7 @@ export default function ScannerScreen() {
             item.seenThisScan ? null : 'not seen in this scan',
           ].filter(Boolean);
           return (
-            <View
-              style={[
-                groupEdge,
-                { overflow: 'hidden' },
-                first && { borderTopWidth: 1, borderTopLeftRadius: radius.group, borderTopRightRadius: radius.group },
-                last && { borderBottomWidth: 1, borderBottomLeftRadius: radius.group, borderBottomRightRadius: radius.group },
-              ]}
-            >
+            <GroupItem first={index === 0} last={index === visible.length - 1}>
               <Row
                 onPress={() => openDetail(item)}
                 accessibilityLabel={[name, item.lastIp, ...facts].join(', ')}
@@ -403,15 +479,18 @@ export default function ScannerScreen() {
                   </View>
                 }
                 trailing={
-                  item.isNew || item.isTrusted ? (
-                    <View style={{ gap: space.xs, alignItems: 'flex-end' }}>
-                      {item.isNew ? <Pill label="New" tone="accent" /> : null}
-                      {item.isTrusted ? <Pill label="Trusted" tone="ok" /> : null}
-                    </View>
-                  ) : null
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                    {item.isNew || item.isTrusted ? (
+                      <View style={{ gap: space.xs, alignItems: 'flex-end' }}>
+                        {item.isNew ? <Pill label="New" tone="accent" /> : null}
+                        {item.isTrusted ? <Pill label="Trusted" tone="ok" /> : null}
+                      </View>
+                    ) : null}
+                    <RecordMenu title={name} actions={deviceActions(item, name)} />
+                  </View>
                 }
               />
-            </View>
+            </GroupItem>
           );
         }}
       />
@@ -585,11 +664,86 @@ export default function ScannerScreen() {
                 accessibilityHint="Checks which common services this device offers"
               />
             </View>
+
+            <Button
+              label="Forget device"
+              variant="secondary"
+              tone="danger"
+              block
+              onPress={() => confirmForgetDetail(detail)}
+              accessibilityHint="Removes this device and its saved name and trust"
+            />
           </>
         ) : null}
       </Sheet>
+
+      <Sheet
+        visible={networksOpen}
+        onClose={closeNetworks}
+        onDone={renaming !== null ? () => void saveNetworkName() : undefined}
+        doneLabel={renaming !== null ? 'Save' : 'Done'}
+        title={renaming !== null ? 'Rename network' : 'Saved networks'}
+      >
+        {renaming !== null ? (
+          <Field
+            label="Name"
+            value={renaming.draft}
+            onChangeText={(draft) => setRenaming({ ...renaming, draft })}
+            placeholder="e.g. Home"
+            hint={`Shown instead of ${renaming.network.subnetCidr}. Leave it empty to use the address.`}
+            returnKeyType="done"
+            autoFocus
+          />
+        ) : savedNetworks.length === 0 ? (
+          <Empty title="No saved networks" body="Networks you scan are remembered here so you can rename or forget them." />
+        ) : (
+          <Group footer="Forgetting a network also forgets the devices saved for it.">
+            {savedNetworks.map((network) => (
+              <Row
+                key={network.networkId}
+                title={networkLabel(network)}
+                subtitle={
+                  <Text variant="meta" tone="muted">
+                    {`${network.subnetCidr}, last scanned ${new Date(network.lastScannedAt).toLocaleDateString()}`}
+                  </Text>
+                }
+                trailing={<RecordMenu title={networkLabel(network)} actions={networkActions(network)} />}
+              />
+            ))}
+          </Group>
+        )}
+      </Sheet>
     </Screen>
   );
+}
+
+/** One FlatList row drawn as part of a rounded group, matching the ui Group look without losing virtualisation. */
+function GroupItem({ first, last, children }: { first: boolean; last: boolean; children: React.ReactNode }) {
+  const { c } = useTheme();
+  return (
+    <View
+      style={[
+        { ...groupEdge(c), overflow: 'hidden' },
+        first && { borderTopWidth: 1, borderTopLeftRadius: radius.group, borderTopRightRadius: radius.group },
+        last && { borderBottomWidth: 1, borderBottomLeftRadius: radius.group, borderBottomRightRadius: radius.group },
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+function GroupSeparator() {
+  const { c } = useTheme();
+  return (
+    <View style={groupEdge(c)}>
+      <View style={{ height: 1, backgroundColor: c.line, marginLeft: space.lg }} />
+    </View>
+  );
+}
+
+function groupEdge(c: ReturnType<typeof useTheme>['c']) {
+  return { borderColor: c.line, borderLeftWidth: 1, borderRightWidth: 1, marginHorizontal: space.lg, backgroundColor: c.surface };
 }
 
 function Fact({ label, value, plain }: { label: string; value: string; plain?: boolean }) {

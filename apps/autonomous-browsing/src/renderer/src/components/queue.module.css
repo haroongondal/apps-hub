@@ -1,0 +1,99 @@
+.header {
+  display: grid;
+  gap: var(--s-4);
+  padding: var(--s-6) var(--s-8) var(--s-5);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.title {
+  font: var(--t-display);
+  letter-spacing: -0.02em;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-4);
+  font: var(--t-meta);
+  color: var(--text-2);
+}
+
+.separator {
+  color: var(--line-strong);
+}
+
+.suspendedFlag {
+  color: var(--human);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.body {
+  padding: var(--s-6) var(--s-8) var(--s-9);
+  display: grid;
+  gap: var(--s-2);
+}
+
+/* The marker column is the thread's spine width, so switching views keeps one
+   optical column: marks for what has run, positions for what has not. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.marker {
+  width: var(--spine-gutter);
+  flex: none;
+  text-align: center;
+  font: var(--t-code);
+  color: var(--text-3);
+}
+
+.markerNow {
+  position: relative;
+}
+
+.markerNow::after {
+  content: '';
+  position: absolute;
+  inset: 50% auto auto 50%;
+  translate: -50% -50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--machine);
+}
+
+.rowBody {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+  flex: 1;
+}
+
+.rowTitle {
+  font: var(--t-body-strong);
+  overflow-wrap: anywhere;
+}
+
+.rowMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  font: var(--t-meta);
+  color: var(--text-2);
+}

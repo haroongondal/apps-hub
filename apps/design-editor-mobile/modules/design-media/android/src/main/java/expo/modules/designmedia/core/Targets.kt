@@ -15,7 +15,7 @@ private val IMAGE_MIME = mapOf("gif" to "image/gif", "png" to "image/png", "jpg"
 fun targetFor(plan: Plan): Target {
   val ext = outputExt(plan)
   val kind = when {
-    plan is GifPlan || plan is FramePlan -> Kind.IMAGE
+    plan is GifPlan || plan is FramePlan || plan is ImagePlan -> Kind.IMAGE
     plan is AudioPlan || ext == "m4a" -> Kind.AUDIO
     else -> Kind.VIDEO
   }

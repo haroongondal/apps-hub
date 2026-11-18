@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { addClip, addMusic, emptyProject, splitAt, type AudioSource, type Source } from '@apps-hub/media-core';
-import { droppedNote, dropUnreadable, queued, restoreDraft } from '../video/draft.ts';
+import { droppedNote, dropUnreadable, isBlank, queued, restoreDraft } from '../video/draft.ts';
 
 const src = (n: string): Source => ({ uri: `content://${n}`, name: `${n}.mp4`, durationS: 5, width: 1280, height: 720, fps: 30, hasAudio: true });
 const draft = (...names: string[]) => JSON.stringify(names.reduce((p, n, i) => addClip(p, src(n), `c${i}`), emptyProject()));
@@ -79,4 +79,10 @@ test('dropUnreadable: the count is of files, so a cut clip whose file is gone co
   const got = await dropUnreadable(p, async uri => uri !== 'content://gone');
   assert.deepEqual(got.project.clips.map(c => c.id), ['c1']);
   assert.equal(got.dropped, 1);
+});
+
+test('isBlank: only a project with no clips and no music counts as nothing to keep', () => {
+  assert.equal(isBlank(emptyProject()), true);
+  assert.equal(isBlank(JSON.parse(draft('a'))), false);
+  assert.equal(isBlank({ ...emptyProject(), music: withMusic(['a'], ['s']).music }), false);
 });

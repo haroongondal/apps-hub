@@ -14,6 +14,7 @@ import {
   cleanMdnsInstanceName,
   computeSubnetForHost,
   hashNetworkId,
+  normalizeNetworkName,
   reconcileScan,
   resolveDeviceNames,
   type DeviceNames,
@@ -25,6 +26,7 @@ import {
   type NetLensNativeBinding,
   type ReconciledDevice,
   type ServiceEvent,
+  type StoredNetwork,
   type SubnetPlan,
 } from '@apps-hub/core';
 import { createNetLensNativeBinding } from 'netlens-core';
@@ -53,6 +55,19 @@ export interface NetworkScan {
   stopScan(): Promise<void>;
   /** Merges the patch onto the latest row of that device (names may have arrived since the caller read it) and saves it. */
   saveDevice(id: number | null, patch: Partial<ReconciledDevice>): Promise<void>;
+  /** Removes the row at once and puts it back if the store refuses. */
+  forgetDevice(device: ReconciledDevice): Promise<void>;
+  /** Network of the last finished scan, and the name the person gave it. */
+  currentNetworkId: string | null;
+  networkName: string | null;
+  /** Filled by loadNetworks(), most recently scanned first. */
+  savedNetworks: StoredNetwork[];
+  /** Resolves false (with errorNote set) when the store could not be read. */
+  loadNetworks(): Promise<boolean>;
+  /** Empty or blank names clear the custom name. */
+  renameNetwork(network: StoredNetwork, draft: string): Promise<void>;
+  /** Forgets the network and its devices; resolves true when it was removed. Clears the scan if it was the current one. */
+  forgetNetwork(network: StoredNetwork): Promise<boolean>;
   binding: NetLensNativeBinding;
 }
 
@@ -86,6 +101,9 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const [errorNote, setErrorNote] = useState<string | null>(null);
   const [mdnsTypes, setMdnsTypes] = useState<string[]>([]);
+  const [currentNetworkId, setCurrentNetworkId] = useState<string | null>(null);
+  const [networkName, setNetworkName] = useState<string | null>(null);
+  const [savedNetworks, setSavedNetworks] = useState<StoredNetwork[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,7 +255,15 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
         );
         commitDevices(result.devices);
         carryTags(store, generation);
+        setCurrentNetworkId(result.networkId);
         setPhase('done');
+        store
+          .listNetworks()
+          .then((saved) => {
+            if (scanGeneration.current !== generation) return;
+            setNetworkName(saved.find((n) => n.networkId === result.networkId)?.customName ?? null);
+          })
+          .catch(() => undefined);
 
         // Names come after the sweep so they can't slow it down. Each one is
         // merged and saved as it arrives; lookup failures just mean no name.
@@ -307,6 +333,72 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
     [commitDevices, store],
   );
 
+  const forgetDevice = useCallback(
+    async (device: ReconciledDevice): Promise<void> => {
+      if (!store || device.id === null) return;
+      const id = device.id;
+      const before = devicesRef.current;
+      commitDevices(before.filter((row) => row.id !== id));
+      try {
+        await store.deleteDevice(id);
+      } catch (e: unknown) {
+        commitDevices(before);
+        setErrorNote(`HomeNet could not forget this device: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    },
+    [commitDevices, store],
+  );
+
+  const loadNetworks = useCallback(async (): Promise<boolean> => {
+    if (!store) return false;
+    try {
+      setSavedNetworks(await store.listNetworks());
+      return true;
+    } catch (e: unknown) {
+      setErrorNote(`HomeNet could not read your saved networks: ${e instanceof Error ? e.message : String(e)}`);
+      return false;
+    }
+  }, [store]);
+
+  const renameNetwork = useCallback(
+    async (network: StoredNetwork, draft: string): Promise<void> => {
+      if (!store) return;
+      const customName = normalizeNetworkName(draft);
+      try {
+        await store.renameNetwork(network.networkId, customName);
+        setSavedNetworks((rows) => rows.map((row) => (row.networkId === network.networkId ? { ...row, customName } : row)));
+        if (network.networkId === currentNetworkId) setNetworkName(customName);
+      } catch (e: unknown) {
+        setErrorNote(`HomeNet could not rename this network: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    },
+    [currentNetworkId, store],
+  );
+
+  const forgetNetwork = useCallback(
+    async (network: StoredNetwork): Promise<boolean> => {
+      if (!store) return false;
+      try {
+        await store.deleteNetwork(network.networkId);
+      } catch (e: unknown) {
+        setErrorNote(`HomeNet could not forget this network: ${e instanceof Error ? e.message : String(e)}`);
+        return false;
+      }
+      setSavedNetworks((rows) => rows.filter((row) => row.networkId !== network.networkId));
+      if (network.networkId !== currentNetworkId) return true;
+      // Name lookups still running for this scan must not write to the forgotten rows.
+      scanGeneration.current += 1;
+      commitDevices([]);
+      setCurrentNetworkId(null);
+      setNetworkName(null);
+      setMdnsTypes([]);
+      setPlan(null);
+      setPhase('idle');
+      return true;
+    },
+    [commitDevices, currentNetworkId, store],
+  );
+
   const value = useMemo<NetworkScan>(
     () => ({
       iface,
@@ -321,9 +413,37 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
       runScan,
       stopScan,
       saveDevice,
+      forgetDevice,
+      currentNetworkId,
+      networkName,
+      savedNetworks,
+      loadNetworks,
+      renameNetwork,
+      forgetNetwork,
       binding: bindingProxy,
     }),
-    [bindingProxy, devices, discovered, errorNote, iface, locationsByIp, mdnsTypes, phase, plan, runScan, saveDevice, stopScan, store],
+    [
+      bindingProxy,
+      currentNetworkId,
+      devices,
+      discovered,
+      errorNote,
+      forgetDevice,
+      forgetNetwork,
+      iface,
+      loadNetworks,
+      locationsByIp,
+      mdnsTypes,
+      networkName,
+      phase,
+      plan,
+      renameNetwork,
+      runScan,
+      saveDevice,
+      savedNetworks,
+      stopScan,
+      store,
+    ],
   );
 
   return <ScanContext.Provider value={value}>{children}</ScanContext.Provider>;

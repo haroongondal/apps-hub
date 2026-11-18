@@ -1,5 +1,8 @@
 import { emptyProject, parseDraft, type Project } from '@apps-hub/media-core';
 
+// A project with nothing in it is the same as no draft, so it is not kept on the phone.
+export const isBlank = (p: Project) => p.clips.length === 0 && p.music.length === 0;
+
 export const droppedNote = (n: number) =>
   n === 1 ? '1 file could not be opened and was taken out of the video.' : `${n} files could not be opened and were taken out of the video.`;
 

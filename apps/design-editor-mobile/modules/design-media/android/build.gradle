@@ -23,6 +23,8 @@ dependencies {
   implementation("androidx.media3:media3-inspector:1.11.1")
   // Reverse, stabilize and volume only. Pinned: LGPL-3.0, AAR sha256 591ddcf3698028e838b854dc775e60aedaf43fffd59689cb59b8af632aba3d76 (SPEC §3).
   implementation("dev.ffmpegkit-maintained:ffmpeg-kit-min:8.1.7")
+  // On-device CLIP image/text search. Pinned: MIT, AAR sha256 8e8dbb412ed4939675a157702f0c1e3621b436a645af7f7244536ac20bfad628 (owner approved 2026-11-16).
+  implementation("com.microsoft.onnxruntime:onnxruntime-android:1.32.0")
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
   testImplementation("junit:junit:4.13.2")
 }
@@ -31,6 +33,7 @@ dependencies {
 tasks.withType(Test).configureEach {
   systemProperty 'fixtures.dir', file('../../../../../packages/media-core/fixtures').absolutePath
   systemProperty 'module.src', file('src/main/java').absolutePath
+  systemProperty 'module.assets', file('src/main/assets').absolutePath
 }
 
 // The owner approved this AAR by hash (SPEC §3). Fail the build if Gradle resolves different bytes (a comment alone checks nothing).
@@ -43,3 +46,13 @@ tasks.register('verifyFfmpegAar') {
   }
 }
 tasks.matching { it.name == 'preBuild' }.configureEach { dependsOn 'verifyFfmpegAar' }
+
+def onnxAarSha256 = '8e8dbb412ed4939675a157702f0c1e3621b436a645af7f7244536ac20bfad628'
+tasks.register('verifyOnnxRuntimeAar') {
+  doLast {
+    def aar = configurations.detachedConfiguration(dependencies.create('com.microsoft.onnxruntime:onnxruntime-android:1.32.0@aar')).singleFile
+    def sha = java.security.MessageDigest.getInstance('SHA-256').digest(aar.bytes).encodeHex().toString()
+    if (sha != onnxAarSha256) throw new GradleException("onnxruntime-android AAR sha256 is ${sha}, not the approved ${onnxAarSha256}")
+  }
+}
+tasks.matching { it.name == 'preBuild' }.configureEach { dependsOn 'verifyOnnxRuntimeAar' }

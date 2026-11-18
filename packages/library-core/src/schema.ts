@@ -44,5 +44,32 @@ CREATE VIRTUAL TABLE items_fts USING fts5(
 CREATE TRIGGER items_ad AFTER DELETE ON items BEGIN
   DELETE FROM items_fts WHERE rowid = old.rid;
 END;
+`,  // Nexus: adds note, audio and image items. SQLite can't alter a CHECK, so items is rebuilt with
+  // the same rid (items_fts.rowid). DROP TABLE cascades every table that references items (only
+  // item_tags at this step; a later rebuild must also keep aside the kn_* and feature tables).
+  `
+CREATE TEMP TABLE keep_item_tags AS SELECT item_id, tag_id FROM item_tags;
+CREATE TABLE items_new (
+  rid        INTEGER PRIMARY KEY,
+  id         TEXT NOT NULL UNIQUE,
+  kind       TEXT NOT NULL CHECK (kind IN ('pdf', 'scan', 'article', 'note', 'audio', 'image')),
+  title      TEXT NOT NULL,
+  folder_id  TEXT REFERENCES folders(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  size_bytes INTEGER NOT NULL DEFAULT 0,
+  page_count INTEGER
+);
+INSERT INTO items_new (rid, id, kind, title, folder_id, created_at, updated_at, size_bytes, page_count)
+  SELECT rid, id, kind, title, folder_id, created_at, updated_at, size_bytes, page_count FROM items;
+DROP TABLE items;
+ALTER TABLE items_new RENAME TO items;
+CREATE INDEX items_folder_updated ON items (folder_id, updated_at DESC);
+CREATE INDEX items_updated ON items (updated_at DESC);
+CREATE TRIGGER items_ad AFTER DELETE ON items BEGIN
+  DELETE FROM items_fts WHERE rowid = old.rid;
+END;
+INSERT INTO item_tags (item_id, tag_id) SELECT item_id, tag_id FROM temp.keep_item_tags;
+DROP TABLE temp.keep_item_tags;
 `,
 ];

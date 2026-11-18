@@ -3,6 +3,7 @@ import { Button, Header, Notice, Screen } from '@apps-hub/ui';
 import Vault, { type Status } from 'strongroom-vault';
 import { messageOf, whileDeriving } from './call.ts';
 import { validateMasterPassword } from './forms.ts';
+import { LostAccessScreen } from './LostAccessScreen.tsx';
 import { BackButton, NewPasswordFields, SecretField } from './parts.tsx';
 import { SyncScreen, useSyncStatus } from './SyncScreen.tsx';
 import { ACTION_LABEL, FIELD_LABEL, accountKeyProblems, explain, offerSignIn, type Problems } from './sync-flow.ts';
@@ -66,6 +67,7 @@ export function UnlockScreen({ status, notice, onUnlocked }: { status: Status; n
 }
 
 function Recover({ onBack, onUnlocked, onSignIn }: { onBack: () => void; onUnlocked: () => void; onSignIn: () => void }) {
+  const [lostKey, setLostKey] = useState(false);
   const [recoveryKey, setRecoveryKey] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -102,6 +104,8 @@ function Recover({ onBack, onUnlocked, onSignIn }: { onBack: () => void; onUnloc
     setBusy(false);
   };
 
+  if (lostKey) return <LostAccessScreen onBack={() => setLostKey(false)} onUnlocked={onUnlocked} />;
+
   return (
     <Screen scroll>
       <BackButton onPress={onBack} />
@@ -119,6 +123,7 @@ function Recover({ onBack, onUnlocked, onSignIn }: { onBack: () => void; onUnloc
       {fault && <Notice tone="danger">{fault}</Notice>}
       {offerSignIn(null, failure) && <Button label={ACTION_LABEL.signIn} variant="secondary" onPress={onSignIn} disabled={busy} block />}
       <Button label="Reset and unlock" onPress={reset} busy={busy} block />
+      <Button label="I also lost my recovery key" variant="ghost" onPress={() => setLostKey(true)} disabled={busy} />
     </Screen>
   );
 }

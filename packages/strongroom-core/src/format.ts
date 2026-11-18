@@ -3,6 +3,7 @@ import { KDF_DEFAULT, KDF_FLOOR, argon2id, hkdf, kdfInRange, kdfWeaker, open, ra
 import type { KdfParams } from './crypto.ts';
 import { decodeEntry, encodeEntry } from './entry.ts';
 import type { Entry } from './entry.ts';
+import { generateRecoveryKey } from './recovery-key.ts';
 
 export type Header = {
   version: number;
@@ -146,6 +147,16 @@ export const unlockWithRecovery = (h: Header, recoveryKey: Uint8Array): Promise<
 export const recoveryLoginToken = (recoveryKey: Uint8Array): Uint8Array => hkdf(recoveryKey, LOGIN_LABEL);
 
 export const tokenHash = (token: Uint8Array): string => toBase64(sha256(token));
+
+// Reseals recoveryWrap under a new recovery key; everything else in the header stays byte-identical.
+export async function rotateRecoveryKey(
+  h: Header,
+  vaultKey: Uint8Array,
+): Promise<{ header: Header; recoveryKey: Uint8Array; recoveryHash: string }> {
+  const recoveryKey = generateRecoveryKey();
+  const recoveryWrap = await seal(hkdf(recoveryKey, WRAP_LABEL), vaultKey, RECOVERY_WRAP_AAD);
+  return { header: { ...h, recoveryWrap }, recoveryKey, recoveryHash: tokenHash(recoveryLoginToken(recoveryKey)) };
+}
 
 export async function withNewPassword(
   h: Header,

@@ -21,6 +21,7 @@ import expo.modules.designmedia.core.Job
 import expo.modules.designmedia.core.JobState
 import expo.modules.designmedia.core.Messages
 import expo.modules.designmedia.core.Next
+import expo.modules.designmedia.core.PhotoIndexPlan
 import expo.modules.designmedia.core.Plan
 import expo.modules.designmedia.core.QualityPlan
 import expo.modules.designmedia.core.QueueEvent
@@ -28,6 +29,9 @@ import expo.modules.designmedia.core.QueueStore
 import expo.modules.designmedia.core.SizePlan
 import expo.modules.designmedia.core.VBR
 import expo.modules.designmedia.core.decodeJobs
+import expo.modules.designmedia.core.cbrOnlyAfter
+import expo.modules.designmedia.core.withoutDuplicateScans
+import expo.modules.designmedia.core.failureMessage
 import expo.modules.designmedia.core.firstMode
 import expo.modules.designmedia.core.neededBytes
 import expo.modules.designmedia.core.nextGifAttempt
@@ -85,6 +89,7 @@ class MediaJobService : Service() {
         ACTION_CANCEL -> cancel(id)
         ACTION_CANCEL_ALL -> cancel(ALL)
         ACTION_RESUME -> record(QueueEvent.Resume)
+        ACTION_REMOVE -> record(QueueEvent.Remove(id))
         ACTION_CLEAR -> clear()
       }
       pump()
@@ -123,10 +128,10 @@ class MediaJobService : Service() {
   }
 
   private fun enqueue(json: String, cbr: Boolean) {
-    cbrOnly = cbr
-    val jobs = decodeJobs(json).map {
+    val jobs = withoutDuplicateScans(store.load(), decodeJobs(json).map {
       it.copy(state = JobState.QUEUED, progress = 0.0, attempt = 1, outputs = emptyList(), error = null)
-    }
+    })
+    cbrOnly = cbrOnlyAfter(cbrOnly, jobs, cbr)
     record(QueueEvent.Enqueue(jobs))
   }
 
@@ -151,7 +156,7 @@ class MediaJobService : Service() {
       stopSelf(lastStartId)
       return
     }
-    val needed = try {
+    val needed = if (next.plan is PhotoIndexPlan) 0L else try {
       val input = Uri.parse(next.inputId)
       neededBytes(next.plan, Probe.bytesOf(this, input), if (next.plan is ClipPlan) Probe.source(this, input).durationS else 0.0)
     } catch (e: Exception) {
@@ -182,7 +187,7 @@ class MediaJobService : Service() {
       r.runner = Runners.start(request) { outcome -> finishedWith(r, out, outcome) }
     } catch (e: Exception) {
       Log.w(TAG, "${r.plan.tool} did not start", e)
-      fail(r.job.id, Messages.COULDNT_PROCESS)
+      fail(r.job.id, failureMessage(r.plan))
       pump()
       return
     }
@@ -197,7 +202,12 @@ class MediaJobService : Service() {
     when (outcome) {
       is Outcome.Failed -> {
         Log.w(TAG, "${r.plan.tool} failed: ${outcome.detail}")
-        encoderFailed(r, Messages.COULDNT_PROCESS)
+        when (outcome.detail) {
+          PhotoIndexRunner.MODELS_MISSING -> giveUp(r, Messages.TOOL_MISSING)
+          ImageRunner.NO_GAIN -> giveUp(r, Messages.IMAGE_NO_GAIN)
+          ImageRunner.LEFT_ALONE -> giveUp(r, Messages.IMAGE_HDR)
+          else -> encoderFailed(r, failureMessage(r.plan))
+        }
       }
       is Outcome.Written -> {
         r.label = outcome.label
@@ -207,6 +217,12 @@ class MediaJobService : Service() {
   }
 
   private fun completed(r: Run, out: File) {
+    if (r.plan is PhotoIndexPlan) {
+      record(QueueEvent.Done(r.job.id, emptyList(), now()))
+      release(r)
+      pump()
+      return
+    }
     val actual = out.length()
     val plan = r.plan
     if (actual == 0L) {
@@ -373,6 +389,7 @@ class MediaJobService : Service() {
     private const val ACTION_CANCEL_ALL = "expo.modules.designmedia.CANCEL_ALL"
     private const val ACTION_RESUME = "expo.modules.designmedia.RESUME"
     private const val ACTION_CLEAR = "expo.modules.designmedia.CLEAR"
+    private const val ACTION_REMOVE = "expo.modules.designmedia.REMOVE"
     private const val EXTRA_JOBS = "jobs"
     private const val EXTRA_CBR_ONLY = "cbrOnly"
     private const val EXTRA_ID = "id"
@@ -389,6 +406,8 @@ class MediaJobService : Service() {
     fun cancel(context: Context, id: String) = send(context, ACTION_CANCEL) { putExtra(EXTRA_ID, id) }
 
     fun resume(context: Context) = send(context, ACTION_RESUME)
+
+    fun remove(context: Context, id: String) = send(context, ACTION_REMOVE) { putExtra(EXTRA_ID, id) }
 
     fun clearQueue(context: Context) = send(context, ACTION_CLEAR)
 

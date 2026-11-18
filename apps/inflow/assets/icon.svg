@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Placeholder mark (provisional, like the brand accent) until a launcher icon is chosen. -->
+  <rect id="plate" width="1024" height="1024" rx="228" fill="#06201E"/>
+  <g id="mark" fill="#5EEAD4">
+    <path fill-rule="evenodd" d="M362 222H662a100 100 0 0 1 100 100V702a100 100 0 0 1-100 100H362a100 100 0 0 1-100-100V322a100 100 0 0 1 100-100ZM362 294a28 28 0 0 0-28 28V702a28 28 0 0 0 28 28H662a28 28 0 0 0 28-28V322a28 28 0 0 0-28-28Z"/>
+    <rect x="382" y="400" width="260" height="44" rx="22"/>
+    <rect x="382" y="490" width="260" height="44" rx="22"/>
+    <rect x="382" y="580" width="160" height="44" rx="22"/>
+  </g>
+</svg>

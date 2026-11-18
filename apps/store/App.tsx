@@ -14,6 +14,7 @@ import {
   Segmented,
   Text,
   ThemeProvider,
+  confirmAction,
   fonts,
   radius,
   space,
@@ -238,6 +239,13 @@ function StoreList({ creds, onSignOut }: { creds: Credentials; onSignOut: () => 
     StoreInstaller.scheduleUpdateCheck(0);
     onSignOut();
   };
+  const askSignOut = () =>
+    confirmAction({
+      title: 'Sign out of Store?',
+      message: 'This removes the server address and token from this phone. You will need them to sign in again. Installed apps stay as they are.',
+      confirmLabel: 'Sign out',
+      onConfirm: signOut,
+    });
 
   const apps = manifest?.apps ?? [];
   const statuses = apps.map((a) => appStatus(a, installed[a.id] ?? null));
@@ -352,7 +360,7 @@ function StoreList({ creds, onSignOut }: { creds: Credentials; onSignOut: () => 
       <Group title="Server">
         <Row title="Connected to" subtitle={creds.apiUrl} mono />
       </Group>
-      <Button label="Sign out" variant="danger" onPress={signOut} block accessibilityHint="Removes the server address and token from this phone" />
+      <Button label="Sign out" variant="danger" onPress={askSignOut} block accessibilityHint="Removes the server address and token from this phone" />
     </Screen>
   );
 }

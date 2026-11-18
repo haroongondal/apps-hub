@@ -31,6 +31,8 @@ class EntryJsonTest {
     Entry.Card("Visa", "A. Holder", "4111111111111111", 12, 2030, "123", "", 1_700_000_001_000),
     Entry.Card("Gift card", "", "1234", null, null, "", "no expiry", 0),
     Entry.Note("Wi-Fi", "SSID: home\nkey: correct horse", 1_700_000_002_000),
+    Entry.Pass("Gym", "https://gym.example/m/42", PassFormat.QR, "", 1_700_000_004_000),
+    Entry.Pass("Shop", "1234567890128", PassFormat.EAN13, "front desk", 0),
     Entry.Deleted(1_700_000_003_000),
   )
 
@@ -54,6 +56,28 @@ class EntryJsonTest {
     assertEquals("""{"type":"deleted","updatedAt":5}""", EntryJson.encode(Entry.Deleted(5)))
   }
 
+  // The same literal is asserted in strongroom-core's entry-pass.test.ts, so both encoders are pinned to one string.
+  @Test fun passEncodingMatchesTheTypeScriptEncoder() {
+    val pass = Entry.Pass("Gym \"Club\"", "1234567890128", PassFormat.EAN13, "desk\nopen 6-22", 1_700_000_004_000)
+    val json =
+      """{"type":"pass","name":"Gym \"Club\"","code":"1234567890128","format":"ean13","note":"desk\nopen 6-22","updatedAt":1700000004000}"""
+    assertEquals(json, EntryJson.encode(pass))
+    assertEquals(pass, EntryJson.decode(json))
+  }
+
+  @Test fun everyPassFormatHasItsStableId() {
+    assertEquals(listOf("qr", "code128", "ean13"), PassFormat.entries.map { it.id })
+    for (f in PassFormat.entries) assertEquals(f, PassFormat.of(f.id))
+    assertNull(PassFormat.of("QR"))
+  }
+
+  // A newer build's entry type must not crash the vault: decode says null, and every caller then keeps the sealed record untouched
+  // and counts it unreadable (SyncMerge quarantines it; see SyncMergeTest.unreadableLocalIsKeptAndReported).
+  @Test fun aTypeFromANewerBuildDecodesToNullInsteadOfThrowing() {
+    assertNull(EntryJson.decode("""{"type":"passkey","name":"n","updatedAt":5}"""))
+    assertNull(EntryJson.decode("""{"type":"pass","name":"n","code":"1","format":"aztec","note":"","updatedAt":5}"""))
+  }
+
   @Test fun decodeIgnoresUnknownFields() {
     assertEquals(Entry.Deleted(7), EntryJson.decode("""{"type":"deleted","updatedAt":7,"future":{"x":[1]}}"""))
   }
@@ -74,6 +98,12 @@ class EntryJsonTest {
       """{"type":"deleted"}""",
       """{"updatedAt":5}""",
       """{"type":"other","updatedAt":5}""",
+      """{"type":"pass","name":"n","code":"1","format":"aztec","note":"","updatedAt":5}""",
+      """{"type":"pass","name":"n","code":"1","format":"QR","note":"","updatedAt":5}""",
+      """{"type":"pass","name":"n","code":"1","format":5,"note":"","updatedAt":5}""",
+      """{"type":"pass","name":"n","code":"1","note":"","updatedAt":5}""",
+      """{"type":"pass","name":"n","code":5,"format":"qr","note":"","updatedAt":5}""",
+      """{"type":"pass","name":"n","code":"1","format":"qr","updatedAt":5}""",
       """{"type":5,"updatedAt":5}""",
       """{"type":"deleted","updatedAt":"5"}""",
       """{"type":"deleted","updatedAt":5.5}""",
@@ -108,6 +138,12 @@ class EntryJsonTest {
     val c = Entry.Card("Visa", "A. Holder", "4111111111111111", 12, 2030, "987", "", 1).toString()
     assertTrue(c, "number=***" in c && "cvc=***" in c && "A. Holder" in c)
     assertFalse(c, "4111111111111111" in c || "987" in c)
+  }
+
+  @Test fun toStringRedactsPassCodeAndNote() {
+    val p = Entry.Pass("Gym", "MEMBER-0042-secret", PassFormat.CODE128, "locker 17", 1).toString()
+    assertTrue(p, "code=***" in p && "note=***" in p && "Gym" in p && "code128" in p)
+    assertFalse(p, "0042" in p || "locker" in p)
   }
 
   @Test fun toStringRedactsNotes() {

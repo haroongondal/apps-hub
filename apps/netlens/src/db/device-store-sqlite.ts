@@ -66,6 +66,24 @@ interface DeviceRow {
   mac: string | null;
 }
 
+interface NetworkRow {
+  network_id: string;
+  gateway_ip: string;
+  subnet_cidr: string;
+  custom_name: string | null;
+  last_scanned_at: number;
+}
+
+function rowToNetwork(row: NetworkRow): StoredNetwork {
+  return {
+    networkId: row.network_id,
+    gatewayIp: row.gateway_ip,
+    subnetCidr: row.subnet_cidr,
+    customName: row.custom_name,
+    lastScannedAt: row.last_scanned_at,
+  };
+}
+
 function rowToDevice(row: DeviceRow): StoredDevice {
   return {
     id: row.id,
@@ -144,6 +162,31 @@ function createStore(db: SQLiteDatabase): DeviceStore & SettingsStore {
       });
     },
 
+    async listNetworks(): Promise<StoredNetwork[]> {
+      const rows = await db.getAllAsync<NetworkRow>(
+        `SELECT * FROM networks ORDER BY last_scanned_at DESC`,
+      );
+      return rows.map(rowToNetwork);
+    },
+
+    renameNetwork(networkId: string, customName: string | null): Promise<void> {
+      return serialized(async () => {
+        await db.runAsync(`UPDATE networks SET custom_name = ? WHERE network_id = ?`, [
+          customName,
+          networkId,
+        ]);
+      });
+    },
+
+    deleteNetwork(networkId: string): Promise<void> {
+      return serialized(async () => {
+        await db.withTransactionAsync(async () => {
+          await db.runAsync(`DELETE FROM devices WHERE network_id = ?`, [networkId]);
+          await db.runAsync(`DELETE FROM networks WHERE network_id = ?`, [networkId]);
+        });
+      });
+    },
+
     async listDevices(networkId: string): Promise<StoredDevice[]> {
       const rows = await db.getAllAsync<DeviceRow>(
         `SELECT * FROM devices WHERE network_id = ? ORDER BY last_seen_at DESC`,
@@ -165,6 +208,12 @@ function createStore(db: SQLiteDatabase): DeviceStore & SettingsStore {
           deviceToParams(device),
         );
         return Number(result.lastInsertRowId);
+      });
+    },
+
+    deleteDevice(id: number): Promise<void> {
+      return serialized(async () => {
+        await db.runAsync(`DELETE FROM devices WHERE id = ?`, [id]);
       });
     },
 

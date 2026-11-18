@@ -60,7 +60,7 @@ test('the screens and their helpers use plain words (the debug lab is exempt)', 
 test('the editor page says nothing a phone cannot do or a person cannot read', () => {
   const found = [
     ...offences('mobile.html', htmlText(readFileSync(join(ENGINE, 'mobile.html'), 'utf8'))),
-    ...['app.js', 'shell-mobile.js', 'touch.js'].flatMap(f => offences(f, literals(readFileSync(join(ENGINE, f), 'utf8')))),
+    ...['app.js', 'ai-layout.js', 'shell-mobile.js', 'touch.js'].flatMap(f => offences(f, literals(readFileSync(join(ENGINE, f), 'utf8')))),
   ];
   assert.deepEqual(found, []);
 });

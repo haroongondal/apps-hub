@@ -1,0 +1,64 @@
+.app {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  height: 100%;
+  min-height: 0;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: var(--rail-automations) var(--rail-runs) 1fr;
+  min-height: 0;
+}
+
+@media (max-width: 1080px) {
+  .workspace {
+    grid-template-columns: 236px 188px 1fr;
+  }
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+}
+
+.railHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: var(--s-5) var(--s-5) var(--s-4);
+  min-height: 44px;
+}
+
+/* min-height: 0 is what keeps a long list scrolling inside the rail instead of
+   growing it and pushing the composer off the bottom of the window. */
+.railBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--s-5) var(--s-6);
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--bg);
+}
+
+.detailBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.count {
+  font: var(--t-code);
+  color: var(--text-3);
+}

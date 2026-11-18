@@ -37,7 +37,7 @@ const EMPTY: LibraryData = { loading: true, error: null, path: [], tags: [], kin
 
 export function errorMessage(error: unknown): string {
   if (error instanceof LibraryError && error.code === 'too_new') {
-    return 'This library was made by a newer version of PDF Editor.';
+    return 'This library was made by a newer version of Nexus.';
   }
   return error instanceof Error ? error.message : String(error);
 }

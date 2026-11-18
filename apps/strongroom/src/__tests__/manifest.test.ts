@@ -13,6 +13,16 @@ const syncConfig = read('modules', 'strongroom-vault', 'android', 'src', 'main',
 
 const permissions = (xml: string) => [...xml.matchAll(/<uses-permission\b[^>]*android:name="([^"]+)"[^>]*>/g)].map((m) => m[1]);
 const services = (xml: string) => [...xml.matchAll(/<service\b([^>]*)>/g)].map((m) => m[1]);
+const serviceNamed = (xml: string, name: string) => {
+  const tag = services(xml).find((s) => attr(s, 'android:name') === `expo.modules.strongroomvault.android.${name}`);
+  assert.ok(tag, `${name} is declared`);
+  return tag;
+};
+const serviceBlock = (xml: string, name: string) => {
+  const block = xml.match(new RegExp(`<service\\b[^>]*android:name="expo\\.modules\\.strongroomvault\\.android\\.${name}"[\\s\\S]*?</service>`))?.[0];
+  assert.ok(block, `the ${name} block exists`);
+  return block;
+};
 const attr = (tag: string, name: string) => tag.match(new RegExp(`${name}="([^"]*)"`))?.[1];
 
 // Until sync has a server, INTERNET in release only helps a bad dependency send secrets out, so release drops it until BASE_URL is set.
@@ -36,8 +46,12 @@ test('the vault module keeps services private plus the keep-alive foreground ser
     'android.permission.FOREGROUND_SERVICE',
     'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
     'android.permission.POST_NOTIFICATIONS',
+    'android.permission.NFC',
   ]);
-  const [autofill, syncJob, clipboardJob, keepAlive] = services(vaultModule);
+  const autofill = serviceNamed(vaultModule, 'StrongroomAutofillService');
+  const syncJob = serviceNamed(vaultModule, 'SyncJobService');
+  const clipboardJob = serviceNamed(vaultModule, 'ClipboardClearJob');
+  const keepAlive = serviceNamed(vaultModule, 'KeepAliveService');
   assert.equal(attr(autofill, 'android:name'), 'expo.modules.strongroomvault.android.StrongroomAutofillService');
   assert.deepEqual(
     [syncJob, clipboardJob].map((j) => attr(j, 'android:name')),
@@ -51,11 +65,23 @@ test('the vault module keeps services private plus the keep-alive foreground ser
   assert.equal(attr(keepAlive, 'android:name'), 'expo.modules.strongroomvault.android.KeepAliveService');
   assert.equal(attr(keepAlive, 'android:exported'), 'false');
   assert.equal(attr(keepAlive, 'android:foregroundServiceType'), 'specialUse');
-  const keepAliveBlock = vaultModule.match(
-    /<service\b[^>]*android:name="expo\.modules\.strongroomvault\.android\.KeepAliveService"[\s\S]*?<\/service>/,
-  )?.[0];
-  assert.ok(keepAliveBlock, 'the keep-alive service block exists');
-  assert.match(keepAliveBlock, /android\.app\.PROPERTY_SPECIAL_USE_FGS_SUBTYPE/);
+  assert.match(serviceBlock(vaultModule, 'KeepAliveService'), /android\.app\.PROPERTY_SPECIAL_USE_FGS_SUBTYPE/);
+});
+
+// The NFC tag service has to be exported for the system to bind it, and only the system may (BIND_NFC_SERVICE).
+test('the NFC tag service is bindable by the system only and asks for an unlocked phone', () => {
+  const tag = serviceNamed(vaultModule, 'StrongroomTagService');
+  assert.equal(attr(tag, 'android:exported'), 'true');
+  assert.equal(attr(tag, 'android:permission'), 'android.permission.BIND_NFC_SERVICE');
+  const block = serviceBlock(vaultModule, 'StrongroomTagService');
+  assert.match(block, /<intent-filter>\s*<action android:name="android\.nfc\.cardemulation\.action\.HOST_APDU_SERVICE" \/>\s*<\/intent-filter>/);
+  assert.match(block, /<meta-data android:name="android\.nfc\.cardemulation\.host_apdu_service" android:resource="@xml\/strongroom_tag_service" \/>/);
+  const xml = read('modules', 'strongroom-vault', 'android', 'src', 'main', 'res', 'xml', 'strongroom_tag_service.xml');
+  assert.equal(attr(xml.match(/<host-apdu-service\b[^>]*>/)![0], 'android:requireDeviceUnlock'), 'true');
+  assert.match(xml, /<aid-group android:category="other">\s*<aid-filter android:name="D2760000850101" \/>\s*<\/aid-group>/);
+  const hce = vaultModule.match(/<uses-feature\b[^>]*android:name="android\.hardware\.nfc\.hce"[^>]*>/)?.[0];
+  assert.ok(hce, 'the HCE feature is declared');
+  assert.equal(attr(hce, 'android:required'), 'false');
 });
 
 test('backup stays off', () => {

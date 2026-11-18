@@ -3,6 +3,8 @@ import { Button, Dot, Group, Header, Notice, Row, Screen } from '@apps-hub/ui';
 import Vault, { addSyncListener, type SyncStatus } from 'strongroom-vault';
 import { isLocked, messageOf, whileDeriving } from './call.ts';
 import { pickGroupIndex } from './forms.ts';
+import { EmailSignInScreen } from './EmailSignInScreen.tsx';
+import { LostAccessScreen } from './LostAccessScreen.tsx';
 import { BackButton, NewPasswordFields, RecoveryKeyCard, SecretField } from './parts.tsx';
 import { AskPassword } from './SettingsFlows.tsx';
 import {
@@ -83,11 +85,13 @@ interface FormProps {
   onEnabled: (accountKey: string) => void;
   onDone: () => void;
   onForgot?: () => void;
+  onLost?: () => void;
+  onEmail?: () => void;
 }
 
 const MONO: FieldName[] = ['setupToken', 'recoveryKey', 'accountKey', 'accountKeyAgain'];
 
-function SyncForm({ form, intro, note, onBack, onLocked, onEnabled, onDone, onForgot }: FormProps) {
+function SyncForm({ form, intro, note, onBack, onLocked, onEnabled, onDone, onForgot, onLost, onEmail }: FormProps) {
   const [values, setValues] = useState<Values>(EMPTY_VALUES);
   const [problems, setProblems] = useState<Problems>({});
   const [fault, setFault] = useState<string | null>(null);
@@ -177,7 +181,9 @@ function SyncForm({ form, intro, note, onBack, onLocked, onEnabled, onDone, onFo
       })}
       {fault && <Notice tone="danger">{fault}</Notice>}
       <Button label={copy.button} onPress={submit} busy={busy} block />
+      {onEmail && <Button label="No account key? Sign in with your email code" variant="ghost" onPress={onEmail} disabled={busy} />}
       {onForgot && <Button label={ACTION_LABEL.recover} variant="ghost" onPress={onForgot} disabled={busy} />}
+      {onLost && <Button label="I also lost my recovery key" variant="ghost" onPress={onLost} disabled={busy} />}
     </Screen>
   );
 }
@@ -214,6 +220,8 @@ export function SyncScreen({ start, onBack, onDone, onLocked, onHold }: Props) {
   const [typedError, setTypedError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [lostKey, setLostKey] = useState(false);
+  const [emailKey, setEmailKey] = useState(false);
   const holding = step === 'key' || step === 'verify';
 
   useEffect(() => {
@@ -253,6 +261,11 @@ export function SyncScreen({ start, onBack, onDone, onLocked, onHold }: Props) {
     onDone(DONE.turnedOn);
   };
 
+  // Back returns to the recovery step it came from.
+  if (lostKey) return <LostAccessScreen onBack={() => setLostKey(false)} onUnlocked={() => onDone(DONE.reset)} />;
+
+  if (emailKey) return <EmailSignInScreen onBack={() => setEmailKey(false)} onDone={() => onDone(DONE.signedIn)} onLocked={onLocked} />;
+
   if (step === 'turnOn' || step === 'finish' || step === 'signIn' || step === 'recover') {
     const note = step === 'signIn' ? signInNote(status?.state) : null;
     return (
@@ -271,7 +284,9 @@ export function SyncScreen({ start, onBack, onDone, onLocked, onHold }: Props) {
           setStep('key');
         }}
         onDone={() => onDone(step === 'recover' ? DONE.reset : DONE.signedIn)}
+        onEmail={step === 'signIn' ? () => setEmailKey(true) : undefined}
         onForgot={step === 'signIn' ? () => setStep('recover') : undefined}
+        onLost={step === 'recover' ? () => setLostKey(true) : undefined}
       />
     );
   }

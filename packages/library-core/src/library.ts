@@ -6,7 +6,7 @@ import { ITEM_ID } from './orphan-dirs.ts';
 import { LIBRARY_STEPS } from './schema.ts';
 import type { Row, SqlPort, SqlValue } from './sql.ts';
 
-export type ItemKind = 'pdf' | 'scan' | 'article';
+export type ItemKind = 'pdf' | 'scan' | 'article' | 'note' | 'audio' | 'image';
 
 export interface Item {
   id: string;
@@ -122,6 +122,14 @@ async function tagsIn(q: SqlPort, itemId: string): Promise<Tag[]> {
     [itemId],
   );
   return rows.map(toTag);
+}
+async function tagIn(q: SqlPort, id: string): Promise<Tag> {
+  const row = await q.first(
+    'SELECT t.id, t.name, (SELECT COUNT(*) FROM item_tags x WHERE x.tag_id = t.id) AS item_count FROM tags t WHERE t.id = ?',
+    [id],
+  );
+  if (!row) throw new LibraryError('not_found', `No tag ${id}`);
+  return toTag(row);
 }
 /** FR-4: a tag lives only while some item uses it. */
 const pruneTags = (q: SqlPort) => q.run('DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM item_tags)');
@@ -408,6 +416,36 @@ export class Library {
 
   tagsFor(itemId: string): Promise<Tag[]> {
     return tagsIn(this.db, itemId);
+  }
+
+  /**
+   * Renames a tag on every item that has it. Spelling is kept as typed (trimmed); a change of case only
+   * is a rename. When another tag already has the name (ignoring case) it throws duplicate_name, or with
+   * `merge` moves this tag's items onto that tag, which keeps its own spelling, and returns it.
+   */
+  async renameTag(id: string, name: string, opts: { merge?: boolean } = {}): Promise<Tag> {
+    const clean = cleanName(name, MAX_NAME, 'Tag name');
+    return this.db.transaction(async (tx) => {
+      await tagIn(tx, id);
+      const clash = await tx.first('SELECT id FROM tags WHERE name = ? COLLATE NOCASE AND id <> ?', [clean, id]);
+      if (!clash) {
+        await tx.run('UPDATE tags SET name = ? WHERE id = ?', [clean, id]);
+        return tagIn(tx, id);
+      }
+      if (!opts.merge) throw new LibraryError('duplicate_name', `A tag named "${clean}" already exists`);
+      const target = clash.id as string;
+      await tx.run('INSERT OR IGNORE INTO item_tags (item_id, tag_id) SELECT item_id, ? FROM item_tags WHERE tag_id = ?', [target, id]);
+      await tx.run('DELETE FROM tags WHERE id = ?', [id]);
+      return tagIn(tx, target);
+    });
+  }
+
+  /** Removes the tag from every item. The items themselves are untouched. */
+  async deleteTag(id: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tagIn(tx, id);
+      await tx.run('DELETE FROM tags WHERE id = ?', [id]);
+    });
   }
 
   /** Trims, dedupes ignoring case (an existing tag keeps its spelling), creates new tags, drops unused ones. */

@@ -1,6 +1,9 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
 import type { AutosaveRecord } from './bridge';
+import { removeSaved, renameSaved, upsertSaved, type SavedDesign } from './saved-list';
+
+export type { SavedDesign } from './saved-list';
 
 // On-phone storage for the Designs tab and the editor's autosave (SPEC §14.3):
 // - documentDirectory/autosave.json — the page's record { filePath, dirty, doc }, exactly what
@@ -11,8 +14,6 @@ import type { AutosaveRecord } from './bridge';
 const AUTOSAVE = FileSystem.documentDirectory + 'autosave.json';
 const DESIGNS_DIR = FileSystem.documentDirectory + 'designs/';
 export const DESIGNS_INDEX = DESIGNS_DIR + 'index.json';
-
-export type SavedDesign = { id: string; name: string; path: string; added: number };
 
 export function designTitle(path: string | null | undefined): string {
   return path ? path.split(/[\\/]/).pop()?.replace(/\.json$/i, '') ?? 'Untitled design' : 'Untitled design';
@@ -64,23 +65,34 @@ export async function readDesignText(design: SavedDesign): Promise<string | null
   }
 }
 
-// Upsert by display path (a re-save keeps its row and its date), names follow new saves, newest
-// first. Returns the surviving row's id, so the caller can overwrite that row's mirror file
-// instead of accumulating one mirror per save.
-export async function recordSaved(design: { id: string; name: string; path: string }): Promise<string> {
+async function writeSavedList(list: SavedDesign[]): Promise<void> {
   await makeDesignsDir();
-  const list = await readSavedList();
-  const previous = list.find(d => d.path === design.path);
-  if (previous && previous.id !== design.id) await removeMirror(previous.id);
-  const entry: SavedDesign = {
-    id: previous?.id ?? design.id,
-    name: design.name,
-    path: design.path,
-    added: previous?.added ?? Date.now(),
-  };
-  const next = [entry, ...list.filter(d => d.id !== entry.id && d.path !== design.path)].slice(0, 50);
-  await FileSystem.writeAsStringAsync(DESIGNS_INDEX, JSON.stringify(next));
+  await FileSystem.writeAsStringAsync(DESIGNS_INDEX, JSON.stringify(list));
+}
+
+// Returns the surviving row's id, so the caller can overwrite that row's mirror file instead of
+// accumulating one mirror per save. Rows pushed off the end of the list lose their mirror too.
+export async function recordSaved(design: { id: string; name: string; path: string }): Promise<string> {
+  const { next, entry, dropped } = upsertSaved(await readSavedList(), design, Date.now());
+  await writeSavedList(next);
+  await Promise.all(dropped.map(d => removeMirror(d.id)));
   return entry.id;
+}
+
+// Takes the design out of the Designs list and deletes this app's mirror copy. The file in
+// Documents/Design Editor is never touched: it is the person's own file, in shared storage.
+export async function deleteSavedDesign(id: string): Promise<void> {
+  await writeSavedList(removeSaved(await readSavedList(), id));
+  await removeMirror(id);
+}
+
+// Renames the design in the Designs list only; the saved file keeps its name.
+// Returns false when the name is empty or the design is no longer listed.
+export async function renameSavedDesign(id: string, name: string): Promise<boolean> {
+  const next = renameSaved(await readSavedList(), id, name);
+  if (!next) return false;
+  await writeSavedList(next);
+  return true;
 }
 
 export async function writeDesignMirror(id: string, text: string): Promise<void> {

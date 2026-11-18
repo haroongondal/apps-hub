@@ -48,6 +48,30 @@ function server() {
     putAccount: async () => {
       throw new Error('not used');
     },
+    lostRequest: async () => {
+      throw new Error('not used');
+    },
+    lostRelease: async () => {
+      throw new Error('not used');
+    },
+    lostStatus: async () => {
+      throw new Error('not used');
+    },
+    lostCancel: async () => {
+      throw new Error('not used');
+    },
+    deleteEscrow: async () => {
+      throw new Error('not used');
+    },
+    signinRequest: async () => {
+      throw new Error('not used');
+    },
+    signinRelease: async () => {
+      throw new Error('not used');
+    },
+    signinCancel: async () => {
+      throw new Error('not used');
+    },
   };
   const setHeader = (h: string, rev = headerRev) => {
     header = h;
