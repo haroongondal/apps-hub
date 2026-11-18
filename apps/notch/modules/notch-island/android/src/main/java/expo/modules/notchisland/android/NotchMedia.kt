@@ -1,12 +1,14 @@
 package expo.modules.notchisland.android
 
+import android.app.PendingIntent
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 
 data class MediaInfo(val title: String?, val artist: String?, val art: Bitmap?, val playing: Boolean)
 
-data class CallInfo(val startedAt: Long, val actionCount: Int, val key: String)
+// actions: the call notification's action PendingIntents, by position. Never their titles.
+data class CallInfo(val startedAt: Long, val actionCount: Int, val key: String, val actions: List<PendingIntent>)
 
 /** State the notification listener feeds and the island reads. */
 object NotchMedia {

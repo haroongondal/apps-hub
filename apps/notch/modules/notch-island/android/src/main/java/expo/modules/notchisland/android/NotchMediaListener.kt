@@ -1,5 +1,6 @@
 package expo.modules.notchisland.android
 
+import android.app.Notification
 import android.content.ComponentName
 import android.graphics.Bitmap
 import android.media.MediaMetadata
@@ -13,7 +14,7 @@ import expo.modules.notchisland.core.sampleSize
 /**
  * Exists so Notch may reach MediaSessionManager and see the ongoing call notification.
  * Privacy: reads only media session metadata and play state, and for calls only the
- * notification category, `when`, isOngoing and the action count. Never extras, text or action titles.
+ * notification category, `when`, isOngoing and its actions' PendingIntents. Never extras, text or action titles.
  */
 class NotchMediaListener : NotificationListenerService() {
   private var sessions: MediaSessionManager? = null
@@ -31,6 +32,8 @@ class NotchMediaListener : NotificationListenerService() {
       manager.addOnActiveSessionsChangedListener(sessionsChanged, me)
       sessions = manager
       onSessions(manager.getActiveSessions(me))
+      // A call already running when the listener (re)connects.
+      activeNotifications?.forEach(::onNotificationPosted)
     } catch (_: SecurityException) {
       // Access was withdrawn between connect and this call; the island keeps the clock and battery.
     }
@@ -82,8 +85,23 @@ class NotchMediaListener : NotificationListenerService() {
     @Volatile var controller: MediaController? = null
   }
 
-  // Call notifications: filled in by Task 7. Read nothing from sbn here.
-  override fun onNotificationPosted(sbn: StatusBarNotification?) {}
+  override fun onNotificationPosted(sbn: StatusBarNotification?) {
+    val n = sbn?.notification ?: return
+    if (n.category == Notification.CATEGORY_CALL && sbn.isOngoing) {
+      val actions = n.actions.orEmpty().map { it.actionIntent }
+      NotchMedia.call = CallInfo(startedAt = n.`when`, actionCount = actions.size, key = sbn.key, actions = actions)
+      NotchMedia.changed()
+    } else if (NotchMedia.call?.key == sbn.key) {
+      clearCall()
+    }
+  }
 
-  override fun onNotificationRemoved(sbn: StatusBarNotification?) {}
+  override fun onNotificationRemoved(sbn: StatusBarNotification?) {
+    if (sbn != null && NotchMedia.call?.key == sbn.key) clearCall()
+  }
+
+  private fun clearCall() {
+    NotchMedia.call = null
+    NotchMedia.changed()
+  }
 }
