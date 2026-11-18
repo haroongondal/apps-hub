@@ -60,7 +60,20 @@ Read this file completely first and trust the verified facts below; do not redo 
 - 2026-11-19: accessibility service fixed the taps (Notch 0.2.0 / build 3). Phase 1 built: settings, live preview, clock, battery, card (Notch 0.3.0 / build 4). Owner chose the ears layout; the island was rebuilt as ears and released as Notch 0.3.1 / build 5 and tested on the phone.
 - 2026-11-19 (later): owner answered the two call questions (calls in; speaker and end). Owner chose extra rows for the card. Design doc updated for calls. Phase 2 plan written with `superpowers:writing-plans`, self-reviewed (a missing spec layout and a `setActive` gap found and handled), saved. Awaiting plan approval. Nothing built, nothing committed in this session, no phone work.
 
+## Phase 2 status (2026-11-19, controller session)
+
+Code complete on branch `notch`, HEAD `2ed8d398`, 16 commits since the plan (`5a66db3`). Gates on HEAD: `corepack pnpm test` 16/16, `tsc --noEmit` clean, `./gradlew :notch-island:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL with 41 JVM tests, 0 failures. Reviews: privacy review of the listener (no Important), TypeScript review (clean), native runtime review (one Important crash, fixed in dadd8083; minors fixed or listed below). Not yet on the phone; not released; not merged.
+
+Still open before release (Task 10):
+- Speaker and End call stay hidden: `SPEAKER_ACTION` and `HANGUP_ACTION` are -1 in `core/Calls.kt`. The probe needs a live call; set the indices from the notification shade label mapping (dev-only uiautomator dump, no label text in the app).
+- Phone tests (coord claim `device:49kjmnuwonkffqzh` first, Store install only): notification access off then on; now playing row and controls; timer and stopwatch (fold and reopen, Done, no sound); call timer folded and tapped; ringing call showing a running timer (review finding 2); call time after an hour under the camera hole (review finding 7); card height with the 104 dp rows; the charger opening; 12/24-hour clock; rotation.
+- Known deferred: reapply() while the card is open can drop the fold timer (phase 1 issue; phase 2 makes it more reachable, mitigated by holdOpen on rebuild); only one call is tracked at a time (review minor M1).
+
 ## Current state and next step
+
+**Superseded for phase 2 by "Phase 2 status" above.** Phase 1 notes below still apply.
+
+
 
 Branch `notch` (worktree `/Users/outsentia/Documents/apps-hub-wt/notch`) is committed through "Notch: version 0.3.1 for the ears layout". Uncommitted: the design doc update and the phase 2 plan and this handoff. Not pushed, not merged to `main`. Merging with `[skip ci]` is the owner's call. A Store built from `main` lacks the `notch` and `halo` ids and will refuse those installs ("Update Store, then try again").
 
