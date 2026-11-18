@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import DesignMedia, { type CleanupGroup, type CleanupKind, type CleanupPhoto, type CleanupResult } from 'design-media';
-import { Button, Empty, Header, Notice, Pill, Progress, Screen, Sheet, Text, alpha, radius, space, useTheme, type Tone } from '@apps-hub/ui';
+import { Button, Empty, Header, Notice, Progress, Screen, Sheet, Text, alpha, radius, space, useTheme, type Tone } from '@apps-hub/ui';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Image, Pressable, View, useWindowDimensions } from 'react-native';
@@ -91,6 +91,7 @@ function Review({ kind }: { kind: CleanupKind }) {
     try {
       const a = await DesignMedia.trashPhotos(uris);
       if (a.moved === 0) return; // the owner said no in Android's dialog: nothing changes, nothing is said
+      setMessage(null); // a new delete replaces the older Restored or Hidden line
       setUndo({ tone: 'ok', text: doneText(a.moved, a.noted), undo: () => { void restore(a.uris); } });
       // take the trashed photos off screen and out of the ticks now, before the reload lands
       const gone = new Set(a.uris);
@@ -178,7 +179,6 @@ function Review({ kind }: { kind: CleanupKind }) {
         key={n}
         onPress={() => setTicks(t => ({ ...t, [p.uri]: !t[p.uri] }))}
         onLongPress={() => setPicked(p.uri)}
-        accessibilityHint="Touch and hold for more"
         accessibilityActions={[{ name: 'longpress', label: 'More options' }]}
         onAccessibilityAction={e => { if (e.nativeEvent.actionName === 'longpress') setPicked(p.uri); }}
         accessibilityRole="checkbox"
@@ -198,7 +198,7 @@ function Review({ kind }: { kind: CleanupKind }) {
         >
           {on ? <Ionicons name="checkmark" size={18} color={c.onAccent} /> : null}
         </View>
-        {p.best ? <View pointerEvents="none" style={{ position: 'absolute', left: space.sm, bottom: space.sm }}><Pill label="Best" tone="accent" /></View> : null}
+        {p.best ? <View pointerEvents="none" style={{ position: 'absolute', left: space.sm, bottom: space.sm }}><View style={{ backgroundColor: c.accent, borderRadius: radius.pill, paddingHorizontal: space.sm, paddingVertical: 2 }}><Text variant="meta" style={{ color: c.onAccent }}>Best</Text></View></View> : null}
       </Pressable>
     );
   }

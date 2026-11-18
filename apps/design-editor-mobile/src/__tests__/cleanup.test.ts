@@ -112,7 +112,12 @@ test('doneAndRestoredText', () => {
 
 test('removedTextDaysLeft', () => {
   const p = (expiresAt: number): RemovedPhoto => ({ uri: 'u', name: 'n', bytes: 2_100_000, trashedAt: 0, expiresAt });
-  assert.equal(removedText(p(NOW + 27.2 * DAY), NOW), '2.1 MB · 27 days left');
+  assert.equal(removedText(p(NOW + 27.2 * DAY), NOW), '2.1 MB · 28 days left'); // rounds up, so Done's "30 days" and the list agree
+  assert.equal(removedText(p(NOW + 30 * DAY), NOW), '2.1 MB · 30 days left');
+  assert.equal(removedText(p(NOW + 29.999 * DAY), NOW), '2.1 MB · 30 days left');
+  assert.equal(removedText(p(NOW + 1.2 * DAY), NOW), '2.1 MB · 2 days left');
+  assert.equal(removedText(p(NOW + DAY), NOW), '2.1 MB · 1 day left');
+  assert.equal(removedText(p(NOW), NOW), '2.1 MB · Less than a day left');
   assert.equal(removedText(p(NOW + 0.5 * DAY), NOW), '2.1 MB · Less than a day left');
   assert.equal(removedText(p(NOW - DAY), NOW), '2.1 MB · Less than a day left');
   assert.equal(removedText(p(NaN), NOW), '2.1 MB · Less than a day left');

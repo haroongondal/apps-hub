@@ -68,8 +68,9 @@ export const doneText = (moved: number, noted: boolean): string =>
 export const restoredText = (n: number): string => `${photosText(n)} ${n === 1 ? 'is' : 'are'} back in your gallery.`;
 
 export function removedText(p: RemovedPhoto, now: number): string {
-  const days = Math.floor((p.expiresAt - now) / 86_400_000);
-  return `${formatMb(p.bytes)} · ${!(days >= 1) ? 'Less than a day left' : `${plural(days, 'day')} left`}`;
+  const days = (p.expiresAt - now) / 86_400_000;
+  // rounds up so a photo trashed just now says 30 days, as the Done line promises
+  return `${formatMb(p.bytes)} · ${!(days >= 1) ? 'Less than a day left' : `${plural(Math.ceil(days), 'day')} left`}`;
 }
 export const hiddenText = (kind: CleanupKind): string => `Hidden from ${kindName(kind)}.`;
 
