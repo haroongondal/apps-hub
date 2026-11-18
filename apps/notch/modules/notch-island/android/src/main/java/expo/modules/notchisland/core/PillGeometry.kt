@@ -34,4 +34,13 @@ object PillGeometry {
     width = a.width + ((b.width - a.width) * t).toInt(),
     height = a.height + ((b.height - a.height) * t).toInt(),
   )
+
+  fun sizeScale(size: String): Float = when (size) {
+    "compact" -> 0.85f
+    "large" -> 1.15f
+    else -> 1.0f
+  }
+
+  // Null means never fold back.
+  fun foldDelayMs(foldMs: Int): Long? = if (foldMs == 0) null else foldMs.toLong()
 }

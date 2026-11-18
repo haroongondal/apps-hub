@@ -1,6 +1,7 @@
 package expo.modules.notchisland.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -44,5 +45,16 @@ class PillGeometryTest {
     val b = PillGeometry.expanded(hole, 1080, d)
     assertEquals(a, PillGeometry.lerp(a, b, 0f))
     assertEquals(b, PillGeometry.lerp(a, b, 1f))
+  }
+
+  @Test fun sizePresetsScaleAndUnknownIsRegular() {
+    assertEquals(0.85f, PillGeometry.sizeScale("compact"), 0.0001f)
+    assertEquals(1.15f, PillGeometry.sizeScale("large"), 0.0001f)
+    assertEquals(1.0f, PillGeometry.sizeScale("bogus"), 0.0001f)
+  }
+
+  @Test fun foldDelayIsNullForNever() {
+    assertNull(PillGeometry.foldDelayMs(0))
+    assertEquals(5000L, PillGeometry.foldDelayMs(5000))
   }
 }
