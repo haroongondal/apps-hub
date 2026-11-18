@@ -7,6 +7,7 @@ import expo.modules.designmedia.core.SCALE
 import expo.modules.designmedia.core.UpscalePlan
 import expo.modules.designmedia.core.VisionModels
 import expo.modules.designmedia.core.alphaMask
+import expo.modules.designmedia.core.bleedTransparent
 import expo.modules.designmedia.core.hasAlpha
 import expo.modules.designmedia.core.placeTile
 import expo.modules.designmedia.core.resize
@@ -73,32 +74,19 @@ object VisionJob {
     return out
   }
 
-  // input is already plan.inW x plan.inH (the decoder makes that copy) and the output is exactly 4x it. With alpha, the model runs on premultiplied RGB
-  // (Pillow's RGBa) so transparent pixels can't bleed a dark fringe; the output alpha is the input's alpha resized.
+  // input is already plan.inW x plan.inH (the decoder makes that copy) and the output is exactly 4x it. With alpha, the model
+  // runs on unpremultiplied RGB with transparent pixels bled from their visible neighbours, and the output alpha is the
+  // input's alpha resized. (Premultiplied RGB left a dark rim: the model's edge is sharper than the LANCZOS alpha.)
   fun upscale(input: Image, plan: UpscalePlan, model: (FloatArray) -> FloatArray, cancelled: () -> Boolean, progress: (Double) -> Unit): Image {
     require(input.w == plan.inW && input.h == plan.inH) { "input is not the plan's size" }
     val alpha = hasAlpha(input.argb)
-    if (alpha) for (i in input.argb.indices) input.argb[i] = premultiply(input.argb[i])
+    if (alpha) bleedTransparent(input.argb, input.w, input.h)
     val out = stitch(input, model, cancelled, progress)
     if (alpha) {
       val a = resize(input.argb, input.w, input.h, out.w, out.h, Filter.LANCZOS)
-      for (i in out.argb.indices) out.argb[i] = unpremultiply(out.argb[i], a[i] ushr 24)
+      for (i in out.argb.indices) out.argb[i] = (a[i] ushr 24).let { if (it == 0) 0 else (it shl 24) or (out.argb[i] and 0xFFFFFF) }
     }
     return out
-  }
-
-  // Pillow's MULDIV255 rounding.
-  private fun mul(c: Int, a: Int): Int = (c * a + 128).let { (it + (it shr 8)) shr 8 }
-
-  private fun premultiply(p: Int): Int {
-    val a = p ushr 24
-    return (a shl 24) or (mul(p shr 16 and 0xFF, a) shl 16) or (mul(p shr 8 and 0xFF, a) shl 8) or mul(p and 0xFF, a)
-  }
-
-  private fun unpremultiply(p: Int, a: Int): Int {
-    if (a == 0) return 0
-    val c = { v: Int -> minOf(255, v * 255 / a) }
-    return (a shl 24) or (c(p shr 16 and 0xFF) shl 16) or (c(p shr 8 and 0xFF) shl 8) or c(p and 0xFF)
   }
 
   // encode writes the part file; on cancel or any failure neither the part nor <id>.png is left behind.
