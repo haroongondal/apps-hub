@@ -91,7 +91,7 @@ object AgentRuntime {
     job = scope.launch {
       try {
         // Off the JS thread: recall reads every kept run. The new run has no end line yet, so it is never recalled.
-        val result = loop.run(task, store.recall(task, blockedLabels()), untrusted)
+        val result = loop.run(task, if (untrusted.isEmpty()) store.recall(task, blockedLabels()) else null, untrusted)
         runCatching { onEnd(result) }
       } finally {
         app.stopService(Intent(app, RunService::class.java))

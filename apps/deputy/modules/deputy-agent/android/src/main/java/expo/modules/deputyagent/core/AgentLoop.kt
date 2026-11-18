@@ -68,7 +68,8 @@ class AgentLoop(
     history += Msgs.system(systemPrompt)
     history += Msgs.user("The owner's task: $task")
     // Its steps hold labels from other apps' screens, so they never share the message that carries the owner's words.
-    memory?.let { history += Msgs.user(it) }
+    // A suggestion run's task is the same text every time, so recall would hand it another chat's route.
+    memory?.takeIf { untrusted.isEmpty() }?.let { history += Msgs.user(it) }
     // Other people's words (a message being answered): one message each, `<` escaped so none can close its own wrapper.
     untrusted.forEach { history += Msgs.user("<notification>${it.replace("<", "&lt;")}</notification>") }
     var backs = 0
