@@ -648,6 +648,7 @@ private fun secret(v: Vault, id: String, field: String): String {
     e is Entry.Login && field == "password" -> e.password
     e is Entry.Card && field == "number" -> e.number
     e is Entry.Card && field == "cvc" -> e.cvc
+    e is Entry.Pass && field == "code" -> e.code
     else -> throw IllegalArgumentException("this entry has no $field")
   }
 }
@@ -664,6 +665,7 @@ private fun view(id: String, e: Entry): Map<String, Any?>? = when (e) {
     "last4" to e.number.filter(Char::isDigit).takeLast(4), "expMonth" to e.expMonth, "expYear" to e.expYear, "note" to e.note,
   )
   is Entry.Note -> mapOf("id" to id, "type" to "note", "name" to e.name, "note" to "", "text" to e.text)
+  is Entry.Pass -> mapOf("id" to id, "type" to "pass", "name" to e.name, "format" to e.format.id, "note" to e.note)
   is Entry.Deleted -> null
 }
 

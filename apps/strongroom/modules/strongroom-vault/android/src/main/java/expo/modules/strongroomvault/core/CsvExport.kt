@@ -15,7 +15,8 @@ object CsvExport {
       .map { (url, domain) -> listOf(e.name, url, e.username, e.password, e.note, "login", "", "", "", "", "", domain) }
     is Entry.Card -> listOf(listOf(e.name, "", "", "", e.note, "card", e.holder, e.number, e.expMonth?.toString() ?: "", e.expYear?.toString() ?: "", e.cvc, ""))
     is Entry.Note -> listOf(listOf(e.name, "", "", "", e.text, "note", "", "", "", "", "", ""))
-    is Entry.Deleted -> emptyList()
+    // Google has no column for a pass, and its code must not leave the vault in a plain file.
+    is Entry.Pass, is Entry.Deleted -> emptyList()
   }
 
   private fun androidUrl(a: AppId) =
