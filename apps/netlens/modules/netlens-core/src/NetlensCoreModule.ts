@@ -35,6 +35,8 @@ export interface NetlensCoreApi {
     payload: number[],
     timeoutMs: number,
   ): Promise<number[] | null>;
+  /** One Wake-on-LAN datagram to a private IPv4 address; rejects on invalid args or send failure. */
+  sendUdpBroadcast(ip: string, port: number, payload: number[]): Promise<void>;
   /** Connect, write `request`, read up to `maxBytes`; UTF-8 text, or null on failure. */
   tcpFetch(
     ip: string,

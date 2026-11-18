@@ -434,6 +434,21 @@ public class NetlensCoreModule: Module {
       }
     }
 
+    AsyncFunction("sendUdpBroadcast") { (ip: String, port: Int, payload: [Int], promise: Promise) in
+      let target = ip.trimmingCharacters(in: .whitespacesAndNewlines)
+      if let problem = UdpBroadcast.validate(ip: target, port: port, payload: payload) {
+        promise.reject("INVALID_PARAMS", problem)
+        return
+      }
+      DispatchQueue.global(qos: .userInitiated).async {
+        if UdpBroadcast.send(ip: target, port: port, payload: payload.map { UInt8($0) }) {
+          promise.resolve(nil)
+        } else {
+          promise.reject("UDP_BROADCAST_FAILED", "the datagram could not be sent")
+        }
+      }
+    }
+
     AsyncFunction("tcpFetch") { (ip: String, port: Int, request: String, timeoutMs: Int, maxBytes: Int, promise: Promise) in
       guard port >= 1, port <= 65535 else {
         promise.reject("INVALID_PARAMS", "port must be in 1..65535")

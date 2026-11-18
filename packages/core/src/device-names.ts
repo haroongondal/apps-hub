@@ -13,6 +13,8 @@ export interface DeviceNames {
   friendlyName: string | null;
   model: string | null;
   netbiosName: string | null;
+  /** Learned from a NetBIOS reply; fills an empty MAC only. */
+  mac: string | null;
 }
 
 const NAME_MAX = 64;
@@ -75,7 +77,11 @@ export function displayNameFor(device: StoredDevice): string {
   );
 }
 
-/** Callers pass clean names; null keeps the stored value. Identity is untouched. */
+/**
+ * Callers pass clean names; null keeps the stored value. Identity, custom name
+ * and trust are untouched. A scanned MAC only fills an empty one, unless another
+ * machine took over the IP: then the old MAC and person go with the old names.
+ */
 export function applyDeviceNames(
   device: StoredDevice,
   names: DeviceNames,
@@ -86,8 +92,8 @@ export function applyDeviceNames(
     device.hostname !== null &&
     names.hostname.toLowerCase() !== device.hostname.toLowerCase()
   ) {
-    const { hostname, mdnsName, friendlyName, model, netbiosName } = names;
-    return { ...device, hostname, mdnsName, friendlyName, model, netbiosName };
+    const { hostname, mdnsName, friendlyName, model, netbiosName, mac } = names;
+    return { ...device, hostname, mdnsName, friendlyName, model, netbiosName, mac, person: null };
   }
   return {
     ...device,
@@ -96,5 +102,6 @@ export function applyDeviceNames(
     friendlyName: names.friendlyName ?? device.friendlyName,
     model: names.model ?? device.model,
     netbiosName: names.netbiosName ?? device.netbiosName,
+    mac: device.mac ?? names.mac,
   };
 }

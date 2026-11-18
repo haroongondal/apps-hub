@@ -51,6 +51,9 @@ export interface StoredDevice {
   friendlyName: string | null;
   model: string | null;
   netbiosName: string | null;
+  /** Who owns the device and its hardware address; user/enrichment set, a scan never overwrites them. */
+  person: string | null;
+  mac: string | null;
 }
 
 export interface DeviceStore {
@@ -175,7 +178,7 @@ function enrichedRow(
   const vendorOrModel = enrichment?.vendorOrModel?.trim() ?? null;
   return {
     ...existing,
-    // Custom name and trust are scan-immutable (AC-3) — never reassigned.
+    // Custom name, trust, person and mac are scan-immutable (AC-3) — never reassigned.
     lastIp: ip,
     hostname: hostname ?? existing.hostname,
     vendorOrModel: vendorOrModel ?? existing.vendorOrModel,
@@ -264,6 +267,8 @@ export async function reconcileScan(
       friendlyName: null,
       model: null,
       netbiosName: null,
+      person: null,
+      mac: null,
     };
     const id = await store.insertDevice(anchor as StoredDevice);
     const inserted: StoredDevice = { ...anchor, id };

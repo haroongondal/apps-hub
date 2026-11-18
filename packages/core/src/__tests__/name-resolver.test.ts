@@ -33,7 +33,7 @@ function ptrReply(request: readonly number[]): number[] {
 function netbiosReply(request: readonly number[]): number[] {
   const id = idOf(request);
   const entry = [...ascii('ALI-LAPTOP'.padEnd(15, ' ')), 0x00, 0x04, 0x00];
-  const rdata = [1, ...entry];
+  const rdata = [1, ...entry, 0x00, 0x1a, 0x2b, 0x3c, 0x4d, 0x5e];
   return [
     ...[id >> 8, id & 0xff, 0x84, 0x00, 0, 0, 0, 1, 0, 0, 0, 0],
     ...buildNetbiosStatusRequest(0).slice(12, 46),
@@ -58,6 +58,8 @@ class FakeBinding {
   maxInFlight = 0;
   udpOverride: ((ip: string, port: number) => Promise<number[] | null>) | null = null;
   tcpReply: string | null = HTTP_OK;
+
+  async sendUdpBroadcast(): Promise<void> {}
 
   async udpRequest(
     ip: string,
@@ -95,6 +97,7 @@ const NONE: DeviceNames = {
   friendlyName: null,
   model: null,
   netbiosName: null,
+  mac: null,
 };
 
 const target = (ip: string, ssdpLocation: string | null = null, mdnsName: string | null = null) => ({
@@ -122,6 +125,7 @@ test('one target: PTR to the gateway, NetBIOS to the device, mDNS cleaned', asyn
   const expected: DeviceNames = {
     hostname: 'Galaxy-S24.lan',
     netbiosName: 'ALI-LAPTOP',
+    mac: '00:1A:2B:3C:4D:5E',
     mdnsName: 'Living Room TV',
     friendlyName: null,
     model: null,

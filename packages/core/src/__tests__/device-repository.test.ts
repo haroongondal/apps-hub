@@ -115,6 +115,8 @@ function seedDevice(overrides: Partial<StoredDevice> = {}): StoredDevice {
     friendlyName: null,
     model: null,
     netbiosName: null,
+    person: null,
+    mac: null,
     ...overrides,
   };
 }
@@ -210,6 +212,23 @@ test('a rescan updates rows and preserves custom name and trust (AC-3 setup)', a
   assert.equal(store.updates.length, 1);
   assert.equal(store.updates[0].customName, 'Living Room TV');
   assert.equal(store.updates[0].isTrusted, true);
+});
+
+test('reconcileScan keeps person and mac across a rescan', async () => {
+  const store = new FakeStore();
+  await store.insertDevice(seedDevice({ person: 'Sara', mac: 'AA:BB:CC:DD:EE:FF' }));
+  const result = await runScan(store, { nowMs: 3_000, hosts: [host('192.168.7.5')] });
+  assert.equal(result.devices[0].person, 'Sara');
+  assert.equal(result.devices[0].mac, 'AA:BB:CC:DD:EE:FF');
+  assert.equal((await store.listDevices(NETWORK.networkId))[0].person, 'Sara');
+  assert.equal((await store.listDevices(NETWORK.networkId))[0].mac, 'AA:BB:CC:DD:EE:FF');
+});
+
+test('a brand-new device row starts with no person and no mac', async () => {
+  const store = new FakeStore();
+  const result = await runScan(store, { nowMs: 2_000, hosts: [host('192.168.7.9')] });
+  assert.equal(result.devices[0].person, null);
+  assert.equal(result.devices[0].mac, null);
 });
 
 test('a stable USN keeps identity across an IP change (AC-3)', async () => {

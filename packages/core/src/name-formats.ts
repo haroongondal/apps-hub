@@ -104,20 +104,41 @@ export function buildNetbiosStatusRequest(id: number): number[] {
   ];
 }
 
-export function parseNetbiosStatus(bytes: readonly number[], id: number): string | null {
+// The NBSTAT answer's name table: `count` 18-byte entries, then the 6-byte unit ID.
+function netbiosTable(
+  bytes: readonly number[],
+  id: number,
+): { first: number; count: number; end: number } | null {
   const start = answersStart(bytes, id);
   if (!start || start.count < 1) return null;
   const rec = readRecord(bytes, start.off);
   if (!rec || rec.type !== 0x21 || rec.end <= rec.data) return null;
   const count = bytes[rec.data];
   if (rec.data + 1 + count * 18 > rec.end) return null;
-  for (let i = 0; i < count; i++) {
-    const p = rec.data + 1 + i * 18;
+  return { first: rec.data + 1, count, end: rec.end };
+}
+
+export function parseNetbiosStatus(bytes: readonly number[], id: number): string | null {
+  const table = netbiosTable(bytes, id);
+  if (!table) return null;
+  for (let i = 0; i < table.count; i++) {
+    const p = table.first + i * 18;
     if (bytes[p + 15] !== 0 || u16(bytes, p + 16) & 0x8000) continue;
     const name = String.fromCharCode(...bytes.slice(p, p + 15)).replace(/[\s\0]+$/, '');
     return name || null;
   }
   return null;
+}
+
+/** The unit ID after the name table is the PC's MAC; Samba sends zeros, which count as none. */
+export function parseNetbiosMac(bytes: readonly number[], id: number): string | null {
+  const table = netbiosTable(bytes, id);
+  if (!table) return null;
+  const p = table.first + table.count * 18;
+  if (p + 6 > table.end) return null;
+  const mac = bytes.slice(p, p + 6);
+  if (mac.every((b) => b === 0)) return null;
+  return mac.map((b) => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
 }
 
 // No URL: React Native's URL lacks hostname and port.

@@ -11,6 +11,12 @@ import {
 } from 'expo-sqlite';
 import type { DeviceStore, StoredDevice, StoredNetwork } from '@apps-hub/core';
 
+export interface SettingsStore {
+  getSetting(key: string): Promise<string | null>;
+  /** A null value deletes the row. */
+  setSetting(key: string, value: string | null): Promise<void>;
+}
+
 const DATABASE_NAME = 'netlens.db';
 
 const SCHEMA_SQL = `
@@ -56,6 +62,8 @@ interface DeviceRow {
   friendly_name: string | null;
   model: string | null;
   netbios_name: string | null;
+  person: string | null;
+  mac: string | null;
 }
 
 interface NetworkRow {
@@ -94,6 +102,8 @@ function rowToDevice(row: DeviceRow): StoredDevice {
     friendlyName: row.friendly_name,
     model: row.model,
     netbiosName: row.netbios_name,
+    person: row.person,
+    mac: row.mac,
   };
 }
 
@@ -114,6 +124,8 @@ function deviceToParams(device: StoredDevice): SQLiteBindValue[] {
     device.friendlyName,
     device.model,
     device.netbiosName,
+    device.person,
+    device.mac,
   ];
 }
 
@@ -128,7 +140,7 @@ function serialized<T>(write: () => Promise<T>): Promise<T> {
   return run;
 }
 
-function createStore(db: SQLiteDatabase): DeviceStore {
+function createStore(db: SQLiteDatabase): DeviceStore & SettingsStore {
   return {
     upsertNetwork(network: StoredNetwork): Promise<void> {
       return serialized(async () => {
@@ -190,8 +202,9 @@ function createStore(db: SQLiteDatabase): DeviceStore {
              network_id, identity_key, last_ip, hostname, custom_name,
              vendor_or_model, open_ports_csv, mdns_services_csv,
              is_trusted, first_seen_at, last_seen_at,
-             mdns_name, friendly_name, model, netbios_name
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             mdns_name, friendly_name, model, netbios_name,
+             person, mac
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           deviceToParams(device),
         );
         return Number(result.lastInsertRowId);
@@ -216,25 +229,60 @@ function createStore(db: SQLiteDatabase): DeviceStore {
              custom_name = ?, vendor_or_model = ?, open_ports_csv = ?,
              mdns_services_csv = ?, is_trusted = ?, first_seen_at = ?,
              last_seen_at = ?, mdns_name = ?, friendly_name = ?, model = ?,
-             netbios_name = ?
+             netbios_name = ?, person = ?, mac = ?
            WHERE id = ?`,
           [...deviceToParams(device), id],
+        );
+      });
+    },
+
+    async getSetting(key: string): Promise<string | null> {
+      const row = await db.getFirstAsync<{ value: string | null }>(
+        'SELECT value FROM settings WHERE key = ?',
+        [key],
+      );
+      return row?.value ?? null;
+    },
+
+    setSetting(key: string, value: string | null): Promise<void> {
+      return serialized(async () => {
+        if (value === null) {
+          await db.runAsync('DELETE FROM settings WHERE key = ?', [key]);
+          return;
+        }
+        await db.runAsync(
+          `INSERT INTO settings (key, value) VALUES (?, ?)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+          [key, value],
         );
       });
     },
   };
 }
 
-/** Version 1 adds the four name columns; user_version 0 means they aren't there yet. */
+/**
+ * Version 1 adds the four name columns; version 2 adds person, mac and the settings table.
+ * They stay out of SCHEMA_SQL on purpose: fresh installs get them through here too.
+ */
 async function migrate(db: SQLiteDatabase): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
-  if ((row?.user_version ?? 0) >= 1) return;
-  await db.withTransactionAsync(async () => {
-    for (const column of ['mdns_name', 'friendly_name', 'model', 'netbios_name']) {
-      await db.execAsync(`ALTER TABLE devices ADD COLUMN ${column} TEXT`);
-    }
-    await db.execAsync('PRAGMA user_version = 1');
-  });
+  const version = row?.user_version ?? 0;
+  if (version < 1) {
+    await db.withTransactionAsync(async () => {
+      for (const column of ['mdns_name', 'friendly_name', 'model', 'netbios_name']) {
+        await db.execAsync(`ALTER TABLE devices ADD COLUMN ${column} TEXT`);
+      }
+      await db.execAsync('PRAGMA user_version = 1');
+    });
+  }
+  if (version < 2) {
+    await db.withTransactionAsync(async () => {
+      await db.execAsync('ALTER TABLE devices ADD COLUMN person TEXT');
+      await db.execAsync('ALTER TABLE devices ADD COLUMN mac TEXT');
+      await db.execAsync('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)');
+      await db.execAsync('PRAGMA user_version = 2');
+    });
+  }
 }
 
 /**
@@ -242,7 +290,7 @@ async function migrate(db: SQLiteDatabase): Promise<void> {
  * implementation. The connection is kept for the app's lifetime; closing is
  * handled by the OS on process exit, which is acceptable for a scanner tool.
  */
-export async function openDeviceStore(): Promise<DeviceStore> {
+export async function openDeviceStore(): Promise<DeviceStore & SettingsStore> {
   const db = await openDatabaseAsync(DATABASE_NAME);
   await db.execAsync(SCHEMA_SQL);
   await migrate(db);
