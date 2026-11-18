@@ -3,11 +3,16 @@ import type { Quad } from 'pdf-scan';
 export type Rotation = 0 | 90 | 180 | 270;
 export type PageFilter = 'original' | 'auto' | 'gray' | 'bw';
 
+export type ScanMode = 'document' | 'card';
+export type CardSide = 'front' | 'back';
+
 export interface SessionPage {
   file: string;
   quad: Quad | null;
   rotation: Rotation;
   filter: PageFilter;
+  /** Card mode only: which side of the card this photo shows. */
+  side: CardSide | null;
 }
 
 /** scan-session/session.json (SPEC §7.1). */
@@ -16,20 +21,31 @@ export interface ScanSession {
   startedAt: number;
   folderId: string | null;
   appendTo: string | null;
+  mode: ScanMode;
+  /** Card mode: save front and back as one A4 sheet instead of two pages. */
+  sheet: boolean;
   pages: SessionPage[];
 }
 
 const CAPTURE = /^cap-(\d+)\.jpg$/;
 
-export const newSession = (folderId: string | null, now: number): ScanSession => ({
+export const newSession = (folderId: string | null, now: number, mode: ScanMode = 'document'): ScanSession => ({
   version: 1,
   startedAt: now,
   folderId,
   appendTo: null,
+  mode,
+  sheet: false,
   pages: [],
 });
 
-export const newPage = (file: string, quad: Quad | null): SessionPage => ({ file, quad, rotation: 0, filter: 'auto' });
+export const newPage = (file: string, quad: Quad | null, side: CardSide | null = null): SessionPage => ({
+  file,
+  quad,
+  rotation: 0,
+  filter: 'auto',
+  side,
+});
 
 export const fileNameOf = (uri: string) => decodeURIComponent(uri.replace(/\/+$/, '').split('/').pop() ?? '');
 
@@ -38,7 +54,13 @@ function parse(json: string | null): ScanSession | null {
   try {
     const v = JSON.parse(json) as ScanSession;
     if (v?.version !== 1 || !Array.isArray(v.pages) || !v.pages.every((p) => typeof p?.file === 'string')) return null;
-    return v;
+    // A session saved before card mode has no mode, sheet or side.
+    return {
+      ...v,
+      mode: v.mode === 'card' ? 'card' : 'document',
+      sheet: v.sheet === true,
+      pages: v.pages.map((p) => ({ ...p, side: p.side === 'front' || p.side === 'back' ? p.side : null })),
+    };
   } catch {
     return null;
   }

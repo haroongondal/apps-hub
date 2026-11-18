@@ -10,13 +10,14 @@
     "ios": "expo run:ios",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/__tests__/decode-uri-component.test.ts src/__tests__/session-data.test.ts src/__tests__/nexus-labels.test.ts",
+    "test": "node --test src/__tests__/decode-uri-component.test.ts src/__tests__/session-data.test.ts src/__tests__/quad-math.test.ts src/__tests__/capture-rules.test.ts src/__tests__/nexus-labels.test.ts",
     "doctor": "expo-doctor",
     "prebuild": "expo prebuild --no-install"
   },
   "dependencies": {
     "@apps-hub/knowledge-core": "workspace:*",
     "@apps-hub/library-core": "workspace:*",
+    "@apps-hub/scan-core": "workspace:*",
     "@apps-hub/ui": "workspace:*",
     "@expo/vector-icons": "^15.0.3",
     "@react-navigation/bottom-tabs": "^7.4.0",

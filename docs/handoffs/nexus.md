@@ -98,6 +98,12 @@ push or release only when the owner says so.
     id; a failed note save keeps the text; settings footer wording. Re-ran: app typecheck,
     lint, tests 10/10, Android bundle, repo `pnpm test` exit 0.
 
+- 2026-11-18 S1 (cont.): owner: "commit, PR and release". The Store's PDF Editor 1.3.2
+  came from the unmerged `scan-phase-3`; the owner chose to merge it into `nexus` and ship
+  both as 1.4.0. Conflicts (root layout, test script, open-item) kept both sides. Re-ran:
+  repo test + typecheck exit 0, app tests 24/24, lint clean, `:pdf-scan:testDebugUnitTest`
+  (59 tests) + `:app:assembleDebug` BUILD SUCCESSFUL, Android bundle OK.
+
 ## Current state + exact next step
 
 N1 and N2 are built in the worktree, uncommitted and unreleased. Not tried on a phone.

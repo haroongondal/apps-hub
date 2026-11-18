@@ -583,6 +583,9 @@ importers:
       '@apps-hub/library-core':
         specifier: workspace:*
         version: link:../../packages/library-core
+      '@apps-hub/scan-core':
+        specifier: workspace:*
+        version: link:../../packages/scan-core
       '@apps-hub/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -876,6 +879,19 @@ importers:
         version: 5.9.3
 
   packages/pdf-editor-engine: {}
+
+  packages/scan-core:
+    dependencies:
+      '@apps-hub/library-core':
+        specifier: workspace:*
+        version: link:../library-core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.10.10
+      typescript:
+        specifier: ~5.9.2
+        version: 5.9.3
 
   packages/store-manifest:
     dependencies:
