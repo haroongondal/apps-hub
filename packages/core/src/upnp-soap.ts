@@ -54,6 +54,7 @@ export function parseSoapResponse(status: number, body: string): SoapResult {
   const close = new RegExp(`</(?:[\\w.-]+:)?${open[1].replace(/\./g, '\\.')}\\s*>`).exec(rest);
   const inner = close ? rest.slice(0, close.index) : rest;
   // Only direct children of the response that hold plain text are values.
+  // known limit: an unclosed child tag keeps depth above 0, so complete siblings after it are skipped; telling that from real nesting needs a name stack and a guess.
   let depth = 0;
   let name = '';
   let start = 0;
