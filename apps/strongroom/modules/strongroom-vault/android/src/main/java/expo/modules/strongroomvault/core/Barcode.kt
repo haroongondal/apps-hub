@@ -39,8 +39,8 @@ object Barcode {
     return when (format) {
       "qr" -> {
         val hints = mutableMapOf<EncodeHintType, Any>(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to QR_QUIET_MODULES)
-        // Only text ISO-8859-1 cannot hold gets a UTF-8 ECI header; plain scanners misread it on ASCII.
-        if (code.any { it.code > 0xFF }) hints[EncodeHintType.CHARACTER_SET] = "UTF-8"
+        // ASCII gets no ECI header (plain scanners misread it); anything else gets UTF-8 with the ECI, because zxing guesses Shift_JIS for Latin-1 bytes without one.
+        if (code.any { it.code > 0x7F }) hints[EncodeHintType.CHARACTER_SET] = "UTF-8"
         write(code, BarcodeFormat.QR_CODE, 0, 0, hints, "That code is too long for a QR code")
       }
       "code128" ->

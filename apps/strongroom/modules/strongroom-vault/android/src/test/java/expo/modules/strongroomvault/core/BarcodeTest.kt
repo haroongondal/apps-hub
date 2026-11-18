@@ -63,11 +63,11 @@ class BarcodeTest {
 
   @Test fun unknownFormatIsRejected() = assertEquals("Unknown barcode format", err("1", "pdf417"))
 
-  @Test fun oneDimensionalCodesCarryAtLeastTenModulesOfQuietZoneEachSide() {
+  @Test fun oneDimensionalCodesCarryAtLeastElevenModulesOfQuietZoneEachSide() {
     for ((code, format) in listOf("AB-1234 xyz" to "code128", "4006381333931" to "ean13")) {
       val m = ok(code, format)
-      assertTrue("$format left", leftQuiet(m) >= 10)
-      assertTrue("$format right", rightQuiet(m) >= 10)
+      assertTrue("$format left", leftQuiet(m) >= 11)
+      assertTrue("$format right", rightQuiet(m) >= 11)
     }
   }
 
@@ -89,6 +89,10 @@ class BarcodeTest {
     val plain = QRCodeWriter().encode(code, BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to 4))
     assertEquals(plain, ok(code, "qr"))
     assertEquals("日本語 7", decode(ok("日本語 7", "qr")))
+  }
+
+  @Test fun latin1QrTextRoundTripsBecauseItCarriesTheUtf8Eci() {
+    for (code in listOf("ÄÖÜ ß", "MÜLLER-123")) assertEquals(code, decode(ok(code, "qr")))
   }
 
   @Test fun pixelPlanNeverPassesTheBudgetEvenForTheLargestCodes() {

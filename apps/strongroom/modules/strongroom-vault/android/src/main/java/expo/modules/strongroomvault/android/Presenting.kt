@@ -25,8 +25,6 @@ object Presenting {
 
   @Synchronized fun disarm() = tag.disarm()
 
-  fun isArmed(): Boolean = tag.isArmed(SystemClock.elapsedRealtime())
-
   fun process(apdu: ByteArray): ByteArray = tag.process(apdu, SystemClock.elapsedRealtime())
 
   val serviceComponent: (Context) -> ComponentName = { ComponentName(it, StrongroomTagService::class.java) }
