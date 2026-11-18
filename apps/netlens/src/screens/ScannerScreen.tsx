@@ -35,6 +35,7 @@ import {
   TcpScanEngine,
   applyDeviceNames,
   checkPorts,
+  detectControls,
   webUrlFor,
   cleanMdnsInstanceName,
   computeSubnetForHost,
@@ -42,6 +43,7 @@ import {
   hashNetworkId,
   reconcileScan,
   resolveDeviceNames,
+  type DetectedControl,
   type DeviceNames,
   type DeviceStore,
   type DiscoveredHost,
@@ -55,6 +57,7 @@ import {
 } from '@apps-hub/core';
 import { createNetLensNativeBinding } from 'netlens-core';
 
+import { DeviceControls } from '../components/DeviceControls';
 import { openDeviceStore } from '../db/device-store-sqlite';
 
 type FilterKey = 'all' | 'new' | 'untrusted';
@@ -123,6 +126,8 @@ export default function ScannerScreen() {
   const [pingResult, setPingResult] = useState<PingResult | null>(null);
   // open === null while the check runs.
   const [portCheck, setPortCheck] = useState<{ ip: string; open: KnownPort[] | null } | null>(null);
+  // Tagged with the ip it was detected for, so a sheet moved to another device never shows it.
+  const [controls, setControls] = useState<{ ip: string; found: DetectedControl[] } | null>(null);
   const [mdnsTypes, setMdnsTypes] = useState<string[]>([]);
   const [storeReady, setStoreReady] = useState(false);
 
@@ -395,6 +400,19 @@ export default function ScannerScreen() {
     setPortCheck((current) => (current?.ip === ip ? { ip, open } : current));
   }, [bindingProxy, detail, portsBusy]);
 
+  const detailIp = detail?.lastIp ?? null;
+  useEffect(() => {
+    setControls(null);
+    if (detailIp === null || iface === null) return;
+    let stale = false;
+    void detectControls(bindingProxy, iface, detailIp, locationsByIp.current.get(detailIp) ?? []).then((found) => {
+      if (!stale) setControls({ ip: detailIp, found });
+    });
+    return () => {
+      stale = true;
+    };
+  }, [bindingProxy, detailIp, iface]);
+
   const subnet = plan ? `${plan.networkIp}/${plan.prefix}` : null;
   const hasScanned = phase !== 'idle' || devices.length > 0;
 
@@ -628,6 +646,16 @@ export default function ScannerScreen() {
                 }
               />
             </Group>
+
+            {controls !== null && controls.ip === detail.lastIp && iface !== null ? (
+              <DeviceControls
+                key={controls.ip}
+                binding={bindingProxy}
+                iface={iface}
+                ip={controls.ip}
+                controls={controls.found}
+              />
+            ) : null}
 
             <Group title="Details">
               <Fact label="IP address" value={detail.lastIp} />
