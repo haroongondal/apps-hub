@@ -40,6 +40,12 @@ const pad = (n: number) => String(n).padStart(2, '0');
 export const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 export const entries = (n: number) => plural(n, 'entry', 'entries');
 
+// Authenticator apps show a code split in two (123 456); 6 and 8 digit codes both halve cleanly.
+export function groupCode(code: string): string {
+  const half = code.length / 2;
+  return Number.isInteger(half) && half > 0 ? `${code.slice(0, half)} ${code.slice(half)}` : code;
+}
+
 export function importRow(b: ImportBatch): { title: string; subtitle: string } {
   const d = new Date(b.at);
   const when = `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;

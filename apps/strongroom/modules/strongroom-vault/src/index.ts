@@ -35,6 +35,13 @@ export interface TotpInfo {
   period: number;
 }
 
+// §15.5: the live code and how long it stays valid. Derived in Kotlin; the secret never crosses the bridge.
+export interface TotpCode {
+  code: string;
+  secondsLeft: number;
+  period: number;
+}
+
 export interface EntryView {
   id: string;
   type: Row['type'];
@@ -128,7 +135,7 @@ export interface SyncReport {
   headerChanged: boolean;
 }
 
-// Rejections carry a code (LOCKED, NOT_SET_UP, KDF_OUT_OF_RANGE, HEADER_UNREADABLE, ACCOUNT_KEY_REQUIRED, BAD_SITE, IMPORT_*, NO_FINGERPRINT,
+// Rejections carry a code (LOCKED, NOT_SET_UP, KDF_OUT_OF_RANGE, HEADER_UNREADABLE, ACCOUNT_KEY_REQUIRED, BAD_SITE, NO_TOTP, IMPORT_*, NO_FINGERPRINT,
 // SYNC_UNAVAILABLE, SYNC_OFF, SYNC_SIGN_IN, SYNC_OFFLINE, SYNC_SERVER, SYNC_ROLLBACK, SYNC_KEY_LOST, HEADER_CHECK_FAILED, WRONG_RECOVERY_KEY,
 // WRONG_SETUP_TOKEN, BAD_ACCOUNT_KEY, ...) and an owner-ready message.
 export interface StrongroomVaultApi {
@@ -143,7 +150,11 @@ export interface StrongroomVaultApi {
   rows(): Row[];
   entry(id: string): EntryView | null;
   reveal(id: string, field: 'password' | 'number' | 'cvc'): string;
-  copy(id: string, field: 'username' | 'password' | 'number' | 'cvc'): void;
+  copy(id: string, field: 'username' | 'password' | 'number' | 'cvc' | 'totp'): void;
+  // §15.5: the live code and countdown; throws NO_TOTP when the login has no code.
+  totpCode(id: string): TotpCode;
+  // Removes the login's code; the password and the rest of the entry stay as they are.
+  removeTotp(id: string): void;
   save(id: string | null, e: EntryInput): string;
   remove(id: string): void;
   // Opens the camera and shows the parsed code for confirmation; null when the scan is cancelled.

@@ -214,7 +214,29 @@ class StrongroomVaultModule : Module() {
 
     Function("reveal") { id: String, field: String -> guard { secret(vault(), id, field) } }
 
-    Function("copy") { id: String, field: String -> guard { SensitiveClipboard.copy(context, secret(vault(), id, field)) } }
+    // §15.5: the entry screen's live code and countdown. The code is derived here, never stored.
+    Function("totpCode") { id: String ->
+      guard { currentTotp(vault(), id).let { mapOf("code" to it.code, "secondsLeft" to it.secondsLeft, "period" to it.period) } }
+    }
+
+    Function("copy") { id: String, field: String ->
+      guard {
+        val value = if (field == "totp") currentTotp(vault(), id).code else secret(vault(), id, field)
+        SensitiveClipboard.copy(context, value)
+      }
+    }
+
+    // Removing a code is not editing the login: the password and everything else stay as they are.
+    Function("removeTotp") { id: String ->
+      guard {
+        val v = vault()
+        val login = v.get(id) as? Entry.Login
+        if (login != null && login.totp != null) {
+          v.put(id, login.copy(totp = null))
+          VaultHolder.refreshIndex(context)
+        }
+      }
+    }
 
     Function("save") { id: String?, input: Map<String, Any?> ->
       guard {
@@ -796,6 +818,14 @@ private fun secret(v: Vault, id: String, field: String): String {
     e is Entry.Card && field == "cvc" -> e.cvc
     else -> throw IllegalArgumentException("this entry has no $field")
   }
+}
+
+/** The current code for a login, refusing (NO_TOTP) when it has none. The secret never leaves the vault. */
+private fun currentTotp(v: Vault, id: String): Otp.State {
+  val login = v.get(id) as? Entry.Login
+  val totp = login?.totp?.let(Otp::parse)
+    ?: throw CodedException("NO_TOTP", "This login has no authenticator code.", null)
+  return Otp.state(totp, System.currentTimeMillis() / 1000)
 }
 
 private fun view(id: String, e: Entry): Map<String, Any?>? = when (e) {

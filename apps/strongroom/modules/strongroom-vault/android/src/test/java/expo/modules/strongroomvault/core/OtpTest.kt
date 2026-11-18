@@ -63,6 +63,18 @@ class OtpTest {
     assertNull(Otp.code("otpauth://hotp/x?secret=${vectors.secrets["sha1"]}&counter=0", 59))
   }
 
+  @Test fun stateCountsDownAndNeverReadsZero() {
+    val t = Otp.parse(uri(vectors.secrets["sha1"]!!))!!
+    assertEquals(30, Otp.state(t, 0).secondsLeft)
+    assertEquals(30, Otp.state(t, 60).secondsLeft)
+    assertEquals(29, Otp.state(t, 61).secondsLeft)
+    assertEquals(1, Otp.state(t, 89).secondsLeft)
+    assertEquals(Otp.code(t, 60), Otp.state(t, 60).code)
+    assertEquals(30, Otp.state(t, 60).period)
+    val eight = Otp.parse(uri(vectors.secrets["sha1"]!!, digits = 8))!!
+    assertEquals(8, Otp.state(eight, 45).code.length)
+  }
+
   @Test fun defaultsAreSha1SixDigitsThirtySeconds() {
     val t = Otp.parse("otpauth://totp/alice@example.com?secret=${vectors.secrets["sha1"]}")!!
     assertEquals(Otp.Digest.SHA1, t.algorithm)

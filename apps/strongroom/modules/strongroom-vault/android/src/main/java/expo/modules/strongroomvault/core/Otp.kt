@@ -128,6 +128,16 @@ object Otp {
   /** Convenience for callers that hold the stored string: null only if it stopped parsing (it was validated on save). */
   fun code(uri: String, unixSeconds: Long): String? = parse(uri)?.let { code(it, unixSeconds) }
 
+  /** A code and how long it stays valid — what the entry screen shows (§15.5). */
+  data class State(val code: String, val secondsLeft: Int, val period: Int)
+
+  /**
+   * [code] at [unixSeconds] plus the seconds left before the period turns over:
+   * a fresh period starts at the full period, the last second reads 1 (never 0).
+   */
+  fun state(totp: TotpUri, unixSeconds: Long): State =
+    State(code(totp, unixSeconds), (totp.period - (unixSeconds % totp.period)).toInt(), totp.period)
+
   private val POW10 = intArrayOf(1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000)
 
   /** RFC 4648 base32: case-insensitive, `=` padding optional, whitespace ignored, non-canonical trailing bits discarded. */
