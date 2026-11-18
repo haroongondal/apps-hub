@@ -9,29 +9,23 @@ import expo.modules.strongroomvault.core.Type4Tag
 // One process-wide tag: the module thread arms it, the HCE service binder thread reads it. Type4Tag is synchronized.
 object Presenting {
   private val tag = Type4Tag()
-  @Volatile private var armed = false
-  @Volatile private var armedUntil = 0L
 
   @Synchronized fun arm(code: String): Boolean {
-    val now = SystemClock.elapsedRealtime()
+    val message = Ndef.forCode(code)
     return try {
-      tag.arm(Ndef.forCode(code), now)
-      armedUntil = now + Type4Tag.DEFAULT_TTL_MS
-      armed = true
+      tag.arm(message, SystemClock.elapsedRealtime())
       true
     } catch (e: IllegalArgumentException) {
       disarm()
       false
+    } finally {
+      message.fill(0)
     }
   }
 
-  @Synchronized fun disarm() {
-    tag.disarm()
-    armed = false
-    armedUntil = 0L
-  }
+  @Synchronized fun disarm() = tag.disarm()
 
-  @Synchronized fun isArmed(): Boolean = armed && SystemClock.elapsedRealtime() < armedUntil
+  fun isArmed(): Boolean = tag.isArmed(SystemClock.elapsedRealtime())
 
   fun process(apdu: ByteArray): ByteArray = tag.process(apdu, SystemClock.elapsedRealtime())
 

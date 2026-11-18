@@ -5,6 +5,7 @@ import java.nio.ByteBuffer
 import kotlin.random.Random
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -183,6 +184,34 @@ class Type4TagTest {
     assertNull(tag.heldForTest())
     assertEquals(0x6D00, tag.sw(readBinary(0, 2)))
     assertEquals(0x6A82, tag.sw(selectAid))
+  }
+
+  @Test fun armZeroesTheCallersMessageAfterCopyingIt() {
+    val message = Ndef.forCode("secret-member-code")
+    val tag = Type4Tag().apply { arm(message, 0) }
+    assertTrue(message.all { it == 0.toByte() })
+    assertEquals("the tag keeps its own copy", "secret-member-code", readAsReader(tag))
+  }
+
+  @Test fun aRefusedArmStillZeroesTheCallersMessage() {
+    val message = Ndef.forCode("secret-member-code")
+    assertThrows(IllegalArgumentException::class.java) { Type4Tag().arm(message, 0, 0) }
+    assertTrue(message.all { it == 0.toByte() })
+  }
+
+  @Test fun isArmedFollowsTheMonotonicClockAndDisarm() {
+    val tag = Type4Tag()
+    assertFalse(tag.isArmed(0))
+    tag.arm(Ndef.forCode("x"), 1_000, 60_000)
+    assertTrue(tag.isArmed(1_000))
+    assertTrue(tag.isArmed(60_999))
+    assertFalse("expired at exactly the ttl", tag.isArmed(61_000))
+    assertNull("expiry wipes the payload", tag.heldForTest())
+    tag.arm(Ndef.forCode("x"), 1_000, 60_000)
+    assertFalse("a clock before arming counts as expired", tag.isArmed(999))
+    tag.arm(Ndef.forCode("x"), 0)
+    tag.disarm()
+    assertFalse(tag.isArmed(0))
   }
 
   @Test fun readsPastTheEndAreRefusedOrCut() {

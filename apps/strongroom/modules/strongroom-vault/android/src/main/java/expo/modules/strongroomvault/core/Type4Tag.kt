@@ -10,15 +10,27 @@ class Type4Tag {
 
   @Synchronized fun arm(message: ByteArray, nowMs: Long, ttlMs: Long = DEFAULT_TTL_MS) {
     disarm()
-    require(message.isNotEmpty() && message.size <= MAX_MESSAGE) { "An NFC pass must be 1 to $MAX_MESSAGE bytes, this one is ${message.size}." }
-    require(ttlMs > 0) { "ttlMs must be positive." }
-    file = ByteArray(2 + message.size).also {
-      it[0] = (message.size ushr 8).toByte()
-      it[1] = message.size.toByte()
-      message.copyInto(it, 2)
+    try {
+      require(message.isNotEmpty() && message.size <= MAX_MESSAGE) { "An NFC pass must be 1 to $MAX_MESSAGE bytes, this one is ${message.size}." }
+      require(ttlMs > 0) { "ttlMs must be positive." }
+      file = ByteArray(2 + message.size).also {
+        it[0] = (message.size ushr 8).toByte()
+        it[1] = message.size.toByte()
+        message.copyInto(it, 2)
+      }
+      armedAt = nowMs
+      ttl = ttlMs
+    } finally {
+      message.fill(0) // the caller's copy of the code must not linger on the heap
     }
-    armedAt = nowMs
-    ttl = ttlMs
+  }
+
+  /** True while a payload is held and unexpired at [nowMs] (monotonic). An expired one is wiped here too. */
+  @Synchronized fun isArmed(nowMs: Long): Boolean {
+    if (file == null) return false
+    val age = nowMs - armedAt
+    if (age < 0 || age >= ttl) disarm()
+    return file != null
   }
 
   @Synchronized fun disarm() {
