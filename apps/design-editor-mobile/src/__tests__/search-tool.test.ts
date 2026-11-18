@@ -6,7 +6,7 @@ const MB = 1024 * 1024;
 const vision: PhotoModel = { name: 'vision.onnx', url: 'https://x/vision', bytes: 100 * MB, ready: false };
 const text: PhotoModel = { name: 'text.onnx', url: 'https://x/text', bytes: 100 * MB, ready: false };
 
-function fakes(models: PhotoModel[], free = 10_000 * MB, installOk = true, downloadFails = false, hangs = false) {
+function fakes(models: PhotoModel[], free = 10_000 * MB, installOk = true, downloadFails = false, hangs: boolean | 'resolves' = false) {
   const state = { hangs };
   const calls = { downloaded: [] as string[], installed: [] as string[], removed: [] as string[] };
   const deps = {
@@ -18,7 +18,8 @@ function fakes(models: PhotoModel[], free = 10_000 * MB, installOk = true, downl
       calls.downloaded.push(to);
       if (state.hangs) {
         onBytes(1);
-        await new Promise<void>((_, reject) => signal?.addEventListener('abort', () => reject(new Error('Download canceled')), { once: true }));
+        // the real expo download resolves (null) after cancelAsync instead of rejecting
+        await new Promise<void>((resolve, reject) => signal?.addEventListener('abort', () => (state.hangs === 'resolves' ? resolve() : reject(new Error('Download canceled'))), { once: true }));
       }
       if (downloadFails) throw new Error('Network request failed');
       const m = models.find(x => x.url === url)!;
@@ -116,4 +117,18 @@ test('laterRunAfterCancel: a new run downloads the model again from scratch', as
   assert.equal(await getSearchTool(deps, () => {}, new AbortController().signal), 'ready');
   assert.deepEqual(calls.downloaded, ['models/vision.onnx.part', 'models/vision.onnx.part']);
   assert.deepEqual(calls.installed, ['vision.onnx']);
+});
+
+test('cancelWhenTheDownloadResolvesNormally: a cancelled download that resolves still removes the partial file and installs nothing', async () => {
+  const { deps, calls } = fakes([vision, text], undefined, true, false, 'resolves');
+  const abort = new AbortController();
+  const run = getSearchTool(deps, () => {}, abort.signal);
+  await new Promise(r => setImmediate(r));
+  abort.abort();
+  const winner = await Promise.race([run, new Promise(r => setTimeout(() => r('hung'), 500))]);
+  assert.notEqual(winner, 'hung');
+  assert.notEqual(winner, 'ready');
+  assert.deepEqual(calls.removed, ['models/vision.onnx.part']);
+  assert.deepEqual(calls.installed, []);
+  assert.deepEqual(calls.downloaded, ['models/vision.onnx.part']);
 });
