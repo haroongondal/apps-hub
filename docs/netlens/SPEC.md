@@ -157,7 +157,7 @@ Single source of truth for the sweep list:
   bound defensively.
 
 ### 3.6 Device Names (`resolveDeviceNames`, after the sweep)
-After the sweep is reconciled and the list is on screen, `ScannerScreen` calls
+After the sweep is reconciled and the list is on screen, `ScanProvider` calls
 `resolveDeviceNames` (`packages/core/src/name-resolver.ts`) for every device
 seen this scan. It is best effort: nothing rejects, and a failed lookup means
 no name. Parsing and sanitising are pure TypeScript (`device-names.ts`,
@@ -206,7 +206,10 @@ moves bytes; for mDNS it also browses and resolves instances.
    `modelName` is stored as `model`.
 4. **NetBIOS node status.** A name-status request (type `0x21`) goes to the
    device on UDP 137. The first unique name with suffix `0x00` is the name
-   (trailing spaces trimmed). Stored as `netbiosName`.
+   (trailing spaces trimmed). Stored as `netbiosName`. The same reply carries
+   the PC's MAC after the name table (`parseNetbiosMac`); an all-zero MAC (Samba)
+   counts as none. Stored as `mac`, filling an empty one only. This is the only
+   scanned source of a MAC: nothing reads an ARP table (AGENTS.md rule 1).
 
 **Native primitives** (the four-place contract: `NetLensNativeBinding`, the
 `createNetLensNativeBinding` adapter, Kotlin, Swift). `timeoutMs` is 1..10000
@@ -215,7 +218,15 @@ on both platforms.
 | Function | Behaviour |
 |---|---|
 | `udpRequest(ip, port, payload, timeoutMs) → number[] \| null` | Sends one datagram and returns the first reply that comes from that same `ip:port`; null on timeout or error. Android binds the socket to Wi-Fi for private targets when it can and falls back to the default route when binding fails (a VPN can refuse it). |
+| `sendUdpBroadcast(ip, port, payload) → void` | Fire and forget, for Wake-on-LAN (§6.5). Validated before any socket opens, in Kotlin and Swift with the same texts: `ip` is a dotted-quad private IPv4 (10/8, 172.16/12, 192.168/16, 169.254/16; no DNS), `port` 1..65535, `payload` 1..1024 bytes of 0..255. Rejects with `INVALID_PARAMS`, or `UDP_BROADCAST_FAILED` when the send fails. Android sets `broadcast = true` and binds to Wi-Fi through `lanBinder` (falls back to the default route when binding fails); iOS uses a BSD socket with `SO_BROADCAST`, not pinned to Wi-Fi. |
 | `tcpFetch(ip, port, request, timeoutMs, maxBytes) → string \| null` | Connects, writes `request`, reads until EOF, `maxBytes` or the deadline, decodes UTF-8. Null when the connect fails or no byte arrived. Android uses the Wi-Fi socket factory. |
+
+**Argument checks in JS.** Expo's iOS bridge traps on a NaN, Infinity or huge JS
+number before native code can validate it, and Android truncates where iOS
+rounds. So the adapter (`netlens-core/src/index.ts`) calls `udpRequestArgsError`,
+`tcpFetchArgsError` (`native-args.ts`) and `udpBroadcastArgsError`
+(`udp-broadcast-args.ts`) first and throws their text; only exact integers reach
+native code. The texts match the native `INVALID_PARAMS` ones.
 
 **Display order** (`displayNameFor`): custom name, mDNS instance name, SSDP
 `friendlyName`, NetBIOS name, first label of the hostname (an IP-literal
@@ -252,6 +263,8 @@ the five name fields and nothing else. Known devices keep their rows and no
 
 ## 4. Database Schema (`expo-sqlite`, Phase 3)
 
+The block below is the version 0 schema; the migrations that follow add the rest.
+
 ```sql
 CREATE TABLE networks (
   network_id TEXT PRIMARY KEY,          -- hash of GatewayIP + CIDR (or BSSID if granted)
@@ -285,6 +298,21 @@ statements and sets `user_version = 1` in one transaction, and skips them when
 `user_version` is already 1 or higher. Existing rows keep every value, with the
 new columns null until a scan names them. See §3.6.
 
+Version 2 adds `person TEXT` and `mac TEXT` to `devices` and a
+`settings (key TEXT PRIMARY KEY, value TEXT)` table, in one transaction, and
+sets `user_version = 2`. `openDeviceStore` runs each step only when
+`user_version` is below its number, so a fresh, a version 0 and a version 1
+database all end at 2 with their rows kept. A failed step rolls back to the
+previous version. The settings table is reached through `SettingsStore`
+(`getSetting`, `setSetting`; a null value deletes the row). `StoredDevice` carries
+`person` and `mac`.
+
+Named networks (`networks.custom_name`) need no migration: the column is in the
+version 0 schema. `ScanProvider` exposes `currentNetworkId`, `networkName`,
+`savedNetworks`, `loadNetworks`, `renameNetwork` and `forgetNetwork` (a blank name
+clears the custom name; forgetting removes the network and its devices), and
+`forgetDevice` for one row.
+
 ## 5. Diagnostic Engine ("Why is my Wi-Fi slow?" — Phase 2)
 
 - Execute 10 sequential probes (200ms interval):
@@ -303,7 +331,109 @@ new columns null until a scan names them. See §3.6.
 - DNS latency via native host-resolution bridge (Android `InetAddress`,
   iOS `getaddrinfo`).
 
-## 6. Verification Matrix
+## 6. Toolbox Features (Router, remotes, who's home, wake, guest QR)
+
+All in `packages/core` unless noted; every network call reaches the phone through
+`NetLensNativeBinding` and is tested against a fake.
+
+### 6.1 LAN-only guard (`lan-http.ts`)
+Native `tcpFetch` accepts any IP, so every toolbox request is built and gated in
+core by `httpRequest`. `isLanTarget(ip, iface)` is true only for a canonical,
+private IPv4 inside the phone's own subnet (`InterfaceInfo.localIp` + `cidrPrefix`),
+excluding the network and broadcast address; a prefix below /8 refuses
+everything. `parseHttpUrl` accepts only `http://a.b.c.d[:port]/path` or a path
+resolved against a base, and refuses non-canonical octets. `httpRequest` sends
+HTTP/1.0 with `Connection: close`, refuses caller `Host`, `Connection` and
+`Content-Length` headers, CR/LF/NUL in values and a bad path, returns null for
+a refused or failed call, and never throws. `parseJsonObject` is the JSON
+helper (try/catch, objects only). `utf8Length` counts bytes without
+`TextEncoder` (Hermes lacks it).
+
+### 6.2 SOAP and the internet gateway (`upnp-soap.ts`, `igd.ts`)
+- `buildSoapEnvelope`, `parseSoapResponse`, `soapCall`: UPnP SOAP over `httpRequest`.
+  A reply is parsed in one pass; only direct, plain-text children of the
+  `...Response` element are values; a fault gives its `errorCode`.
+- `discoverIgd(binding, iface, ssdpEvents)`: takes the gateway's own SSDP
+  answers (IGD-looking first, at most 8 locations), fetches each description
+  (256 KB cap, `DOCTYPE`/`ENTITY` refused) and returns the first with a usable
+  WAN service. A control URL on any host other than the gateway is ignored.
+  `findIgdServices` picks `WANIPConnection:*`, else `WANPPPConnection:1`, plus
+  `WANCommonInterfaceConfig:1`; service types must be exact URNs because they go
+  unescaped into the envelope.
+- `getRouterFacts` (public IP, status, uptime, line speed; 0 speed means unknown),
+  `readByteCounters` and `rateBps` (the live meter: a 32-bit wrap adds 2^32; an
+  implausible or reset rate gives null), `listPortMappings` (from index 0 until a
+  fault or 64 entries) and `deletePortMapping`.
+- No reboot and no `ForceTermination` exist in the code.
+
+### 6.3 Device detection and actions (`device-controls.ts`, `device-actions.ts`)
+`detectControls(binding, iface, ip, ssdpLocations)` runs read-only GETs in
+parallel (1.5 s each) and returns the `DetectedControl` kinds found: `roku`
+(`:8060/query/device-info`), `dlna` (RenderingControl and/or AVTransport from the
+device's own descriptions, plus a Sonos fallback at `:1400`; a control URL on another
+host gives null for that service), `shelly` (gen 1 or 2), `tasmota` (a 401 counts
+as a locked plug only when the body is JSON with a string `WARNING`) and `wled`.
+Detection never switches anything. `device-actions.ts` holds the actions:
+`rokuKey`, `dlnaTransport`, `dlnaGetVolume`/`dlnaSetVolume`, `dlnaGetMute`/`dlnaSetMute`,
+`plugGetPower`/`plugSetPower` (returns the state the device reports) and
+`wledGet`/`wledSet`. The app keeps every UPnP location per IP from the last scan
+(`locationsByIp` in `ScanProvider`) for the DLNA lookup.
+
+### 6.4 Who's home (`people.ts`)
+`peopleStatus` gives one entry per person (case-insensitive tag; home when any
+of their devices was seen this scan). `carryPersonTags` moves a tag from a row not
+seen this scan to the one untagged row seen this scan with the same non-empty
+hostname or `mdnsName`, only when that is the single match; a generic name
+(`isGenericDeviceName`: "iPhone", "android", "Galaxy-S21") never matches.
+`probeHome` re-probes a device on `HOME_PROBE_PORTS` (a refused connection counts as home)
+before the Home tab calls someone away; that answer is shown for the view only and
+never stored.
+
+### 6.5 Wake-on-LAN (`wol.ts`, `wake.ts`)
+`parseMac` accepts `:`, `-` or no separator. `magicPacket` builds 6 x FF + 16 x MAC
+and throws on an invalid, all-zero or all-FF MAC. The destination is
+`subnetBroadcast(localIp, cidrPrefix)` from the interface, not
+`SubnetPlan.broadcastIp`: the plan is clamped to a /24 and is wrong on wider
+networks. `wakeAndWatch` sends 3 times on port 9 (300 ms apart; only a failed first
+send counts as failure), then probes the device's last IP every 3 s for up to 60 s,
+and is cancelled through an `AbortSignal`. It sends only when the user taps the
+button (`WakeDevice.tsx`). The native call is `sendUdpBroadcast` (§3.6).
+
+### 6.6 Guest Wi-Fi QR (`wifi-qr.ts`, app `QrCode.tsx`)
+`wifiQrText` builds `WIFI:T:WPA;S:<ssid>;P:<password>;;` (or `T:nopass`), escaping
+`\ ; , : "` and quoting all-hex values; an empty name gives an empty string. The
+Router tab stores name, password and the no-password toggle as JSON under the
+`guestWifi` key in the `settings` table, in plain text. The QR is drawn from
+`qrcode-generator` (MIT, pure JS), black on white regardless of theme, and
+`android:allowBackup="false"` is set in `app.json` and the manifest so the
+password is not cloud-backed-up on Android.
+
+### 6.7 Port check (`port-check.ts`)
+`checkPorts` probes `COMMON_PORTS` (8 at a time, 800 ms each) with
+`measureTcpHandshake`; only `open` counts, a refused connection is a closed port.
+`webUrlFor` builds the link for web ports.
+
+## 7. Known Limits
+- iOS Wake-on-LAN broadcast probably needs the
+  `com.apple.developer.networking.multicast` entitlement. The entitlements file
+  (`apps/netlens/ios/NetLens/NetLens.entitlements`) is empty, so the send will likely fail
+  on iOS (`UDP_BROADCAST_FAILED`) until Apple grants it.
+- Supported remotes: Roku, DLNA/Sonos, Shelly, Tasmota, WLED. Not supported:
+  Chromecast, Samsung/LG power and input, Philips Hue.
+- Nothing from §6 has run on a phone yet (state as of 2026-11-19). Roku, Shelly,
+  Tasmota, WLED, Sonos and router reply shapes come from test fixtures. The iOS app
+  build was not run (CocoaPods Pods unavailable offline); Swift was only type-checked.
+- The guest Wi-Fi password sits in plain text in the `settings` table. Android
+  backup is off; iOS backs up the app's Documents folder.
+- A malformed SOAP reply with an unclosed child tag hides the values after it in
+  that block (`known limit:` comment in `upnp-soap.ts`).
+- `magicPacket` still accepts a non-broadcast multicast MAC.
+- Forgetting a device while a scan is reconciling can show its row again for that
+  scan.
+- Forget and rename failures share the one `errorNote`, so a failed forget or
+  rename can show on the Home tab too.
+
+## 8. Verification Matrix
 ```bash
 pnpm test                      # SubnetCalculator + engine suites (node --test)
 pnpm typecheck                 # strict tsc over packages/core, module, app

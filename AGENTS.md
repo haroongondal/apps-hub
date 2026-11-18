@@ -7,7 +7,8 @@ in `packages/`.
 
 Current apps:
 - **HomeNet** (`apps/netlens`, formerly NetLens) — FOSS, zero-telemetry LAN scanner & connectivity
-  diagnostic toolkit. Android-first, iOS second. Feature docs: `docs/netlens/`.
+  diagnostic toolkit with a router dashboard, device remotes, who's home, wake PC and guest QR.
+  Android-first, iOS second. Feature docs: `docs/netlens/`.
 - **TunnelWall** (`apps/open_tunnel_vpn`, formerly OpenTunnel) — zero-registration VPN client
   aggregating VPN Gate relays + user WireGuard nodes. Migrated from Flutter to
   React Native (Expo SDK 54) on 2026-10-26 (Dart snapshot: commit `a8cf6e9`).
