@@ -16,7 +16,7 @@ test('deleting an import says how many edited entries it leaves alone', () => {
 });
 
 test('the export notice counts each kind', () => {
-  assert.match(exportedNotice({ logins: 1, cards: 0, notes: 2 }), /^Exported 1 login, 0 cards and 2 notes\. /);
+  assert.match(exportedNotice({ logins: 1, cards: 0, notes: 2, passes: 1 }), /^Exported 1 login, 0 cards, 2 notes and 1 pass\. /);
 });
 
 const TOO_SHORT = 'Use at least 12 characters.';
