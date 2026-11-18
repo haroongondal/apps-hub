@@ -8,7 +8,7 @@
  * feed the reconcile enrichment, so they cannot change a device's identity.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, FlatList, Switch, View } from 'react-native';
+import { AccessibilityInfo, FlatList, Linking, Switch, View } from 'react-native';
 import {
   Button,
   Dot,
@@ -31,8 +31,11 @@ import {
 } from '@apps-hub/ui';
 
 import {
+  COMMON_PORTS,
   TcpScanEngine,
   applyDeviceNames,
+  checkPorts,
+  webUrlFor,
   cleanMdnsInstanceName,
   computeSubnetForHost,
   displayNameFor,
@@ -44,6 +47,7 @@ import {
   type DiscoveredHost,
   type HostEnrichment,
   type InterfaceInfo,
+  type KnownPort,
   type NameTarget,
   type ReconciledDevice,
   type ServiceEvent,
@@ -112,6 +116,8 @@ export default function ScannerScreen() {
   const [trustDraft, setTrustDraft] = useState(false);
   const [pingTargetBusy, setPingTargetBusy] = useState(false);
   const [pingResult, setPingResult] = useState<PingResult | null>(null);
+  // open === null while the check runs.
+  const [portCheck, setPortCheck] = useState<{ ip: string; open: KnownPort[] | null } | null>(null);
   const [mdnsTypes, setMdnsTypes] = useState<string[]>([]);
   const [storeReady, setStoreReady] = useState(false);
 
@@ -313,6 +319,7 @@ export default function ScannerScreen() {
     setNameDraft(device.customName ?? '');
     setTrustDraft(device.isTrusted);
     setPingResult(null);
+    setPortCheck(null);
   }, []);
 
   const saveDetail = useCallback(async (): Promise<void> => {
@@ -357,6 +364,16 @@ export default function ScannerScreen() {
       setPingTargetBusy(false);
     }
   }, [bindingProxy, detail, pingTargetBusy]);
+
+  const portsBusy = portCheck !== null && portCheck.open === null;
+  const runPortCheck = useCallback(async (): Promise<void> => {
+    if (detail === null || portsBusy) return;
+    const ip = detail.lastIp;
+    setPortCheck({ ip, open: null });
+    const open = await checkPorts(bindingProxy, ip);
+    // Drop the result if the sheet moved on to another device meanwhile.
+    setPortCheck((current) => (current?.ip === ip ? { ip, open } : current));
+  }, [bindingProxy, detail, portsBusy]);
 
   const subnet = plan ? `${plan.networkIp}/${plan.prefix}` : null;
   const hasScanned = phase !== 'idle' || devices.length > 0;
@@ -638,6 +655,51 @@ export default function ScannerScreen() {
                 busy={pingTargetBusy}
                 onPress={pingTarget}
                 accessibilityHint="Measures how quickly this device answers"
+              />
+            </View>
+
+            <View style={{ gap: space.md }}>
+              <Group title="Open ports" footer={`Checks ${COMMON_PORTS.length} common services.`}>
+                {portCheck === null || portCheck.open === null ? (
+                  <Row
+                    title={portsBusy ? 'Checking' : 'Not checked yet'}
+                    subtitle={portsBusy ? 'Takes a few seconds.' : 'See which services this device offers, and open its web page.'}
+                  />
+                ) : portCheck.open.length === 0 ? (
+                  <Row title="No common ports open" subtitle="The device may still use ports HomeNet doesn't check." />
+                ) : (
+                  portCheck.open.map((known) => {
+                    const url = webUrlFor(portCheck.ip, known);
+                    return (
+                      <Row
+                        key={known.port}
+                        title={known.label}
+                        subtitle={known.risk ? `Port ${known.port}. ${known.risk}` : `Port ${known.port}`}
+                        trailing={
+                          url !== null ? (
+                            <Button
+                              label="Open"
+                              variant="secondary"
+                              size="sm"
+                              onPress={() => void Linking.openURL(url).catch(() => undefined)}
+                              accessibilityHint={`Opens ${url} in your browser`}
+                            />
+                          ) : known.risk ? (
+                            <Pill label="Risky" tone="warn" />
+                          ) : undefined
+                        }
+                      />
+                    );
+                  })
+                )}
+              </Group>
+              <Button
+                label={portsBusy ? 'Checking' : portCheck !== null ? 'Check again' : 'Check ports'}
+                variant="secondary"
+                block
+                busy={portsBusy}
+                onPress={() => void runPortCheck()}
+                accessibilityHint="Checks which common services this device offers"
               />
             </View>
           </>

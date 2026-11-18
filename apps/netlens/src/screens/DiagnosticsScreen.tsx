@@ -4,7 +4,7 @@
  * per-hop groups (RTT / jitter / loss) and the plain-English verdict.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, View } from 'react-native';
+import { AccessibilityInfo, Linking, View } from 'react-native';
 import {
   Button,
   Empty,
@@ -194,7 +194,20 @@ export default function DiagnosticsScreen() {
               } />
             )}
             {output.report.gateway !== null ? (
-              <Row title="Router" subtitle={output.report.gateway.targetIp} mono />
+              <Row
+                title="Router"
+                subtitle={output.report.gateway.targetIp}
+                mono
+                trailing={
+                  <Button
+                    label="Settings"
+                    variant="secondary"
+                    size="sm"
+                    onPress={() => void Linking.openURL(`http://${output.report.gateway?.targetIp}/`).catch(() => undefined)}
+                    accessibilityHint="Opens your router's settings page in your browser"
+                  />
+                }
+              />
             ) : null}
           </Group>
 
