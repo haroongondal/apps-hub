@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { Button, Field, Group, Header, Notice, Row, Screen, Segmented, confirmAction } from '@apps-hub/ui';
-import Vault, { type EntryInput, type PassFormat } from 'strongroom-vault';
+import Vault, { type EntryInput, type PassFormat, type TotpInfo } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
 import { normalisePassCode, validatePass } from './forms.ts';
 import { BackButton, SecretField } from './parts.tsx';
@@ -21,7 +21,8 @@ const FORMATS = [
   { key: 'ean13', label: 'EAN-13' },
 ] as const;
 
-const BLANK = { name: '', username: '', password: '', sites: '', holder: '', number: '', expMonth: '', expYear: '', cvc: '', note: '', text: '', code: '', format: 'qr' as PassFormat };
+// totp stays null when untouched: the stored code, if any, is then left alone by the save.
+const BLANK = { name: '', username: '', password: '', sites: '', holder: '', number: '', expMonth: '', expYear: '', cvc: '', note: '', text: '', code: '', format: 'qr' as PassFormat, totp: null as string | null };
 type Draft = typeof BLANK;
 
 // An empty box means "not set"; anything else must be a whole number in range.
@@ -36,6 +37,7 @@ function build(kind: Kind, d: Draft, keepApps: string[] | null): EntryInput | st
   if (!name) return 'Give this entry a name.';
   if (kind === 'login') {
     const login: EntryInput = { type: 'login', name, username: d.username.trim(), password: d.password, sites: d.sites.split(/[\s,]+/).filter(Boolean), note: d.note };
+    if (d.totp !== null) login.totp = d.totp;
     return keepApps ? { ...login, apps: keepApps } : login;
   }
   if (kind === 'note') return { type: 'note', name, text: d.text };
@@ -60,6 +62,7 @@ interface Props {
 export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
   const [kind, setKind] = useState<Kind>('login');
   const [draft, setDraft] = useState<Draft>(BLANK);
+  const [totp, setTotp] = useState<TotpInfo | null>(null);
   const [loaded, setLoaded] = useState(id === null);
   const [shown, setShown] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +71,7 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
 
   const fail = (e: unknown) => (isLocked(e) ? onLocked() : setError(messageOf(e)));
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
+  const totpLabel = totp ? [totp.issuer, totp.account, `${totp.digits} digits, every ${totp.period} s`].filter(Boolean).join(' · ') : '';
 
   // The entry being edited is the one place, besides Show, where a stored password, card number, security code or pass code reaches JS.
   useEffect(() => {
@@ -77,6 +81,7 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
       if (!e) return setError('That entry is gone. Go back to the list and pick another.');
       const fields: Partial<Draft> = { name: e.name, note: e.note, text: e.text ?? '' };
       if (e.type === 'login') Object.assign(fields, { username: e.username ?? '', sites: (e.sites ?? []).join('\n'), password: Vault.reveal(id, 'password') });
+      setTotp(e.totp ?? null);
       if (e.type === 'card') {
         Object.assign(fields, { holder: e.holder ?? '', expMonth: e.expMonth ? String(e.expMonth) : '', expYear: e.expYear ? String(e.expYear) : '' });
         Object.assign(fields, { number: Vault.reveal(id, 'number'), cvc: Vault.reveal(id, 'cvc') });
@@ -116,6 +121,23 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
     }
   };
 
+  // The scanner holds the secret until the save stores it; only the parsed shape is shown here.
+  const scan = () => {
+    Vault.scanQr()
+      .then((r) => {
+        if (!r) return; // cancelled: the entry stays as it was
+        set({ totp: r.raw });
+        setTotp(r);
+        setError(null);
+      })
+      .catch(fail);
+  };
+
+  const dropTotp = () => {
+    set({ totp: '' });
+    setTotp(null);
+  };
+
   return (
     <Screen scroll>
       <BackButton onPress={onBack} />
@@ -137,6 +159,14 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
                 autoCorrect={false}
                 multiline
               />
+              <Field
+                label="Authenticator code"
+                hint={totp ? undefined : 'Optional. Scan the QR code the site shows for its authenticator app.'}
+                value={totpLabel}
+                editable={false}
+              />
+              <Button label={totp ? 'Replace QR code' : 'Scan QR code'} variant="ghost" onPress={scan} />
+              {totp && <Button label="Remove code" variant="ghost" onPress={dropTotp} />}
               {linked.length > 0 && (
                 <Group title="Linked apps" footer="Strongroom fills this login in these apps. Unlinking takes effect when you save.">
                   {linked.map((a) => (

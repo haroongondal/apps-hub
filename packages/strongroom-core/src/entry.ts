@@ -1,9 +1,14 @@
+import { parseTotp } from './otp.ts';
+
 export type Site = { https: boolean; host: string };
 export type AppLink = { pkg: string; certSha256: string; domain: string | null };
 
 export type Login = {
   type: 'login'; name: string; username: string; password: string;
-  sites: Site[]; apps: AppLink[]; note: string; updatedAt: number;
+  sites: Site[]; apps: AppLink[]; note: string;
+  /** The whole `otpauth://totp/` URI exactly as it was scanned; a login never holds an unreadable one (validated on decode and import). */
+  totp?: string;
+  updatedAt: number;
 };
 export type Card = {
   type: 'card'; name: string; holder: string; number: string;
@@ -23,7 +28,10 @@ export function encodeEntry(e: Entry): string {
         type: e.type, name: e.name, username: e.username, password: e.password,
         sites: e.sites.map((s) => ({ https: s.https, host: s.host })),
         apps: e.apps.map((a) => ({ pkg: a.pkg, certSha256: a.certSha256, domain: a.domain })),
-        note: e.note, updatedAt: e.updatedAt,
+        note: e.note,
+        // Absent, never null: an older phone reader throws on an unexpected null it doesn't know.
+        ...(e.totp != null ? { totp: e.totp } : {}),
+        updatedAt: e.updatedAt,
       });
     case 'card':
       return JSON.stringify({
@@ -55,6 +63,8 @@ const passFormat = (o: Obj, k: string): PassFormat => {
 };
 const optStr = (o: Obj, k: string): string | null => (o[k] === null ? null : str(o, k));
 const optInt = (o: Obj, k: string): number | null => (o[k] === null ? null : int(o, k));
+/** Absent (missing) or null reads as null; a present non-string is malformed. */
+const absentStr = (o: Obj, k: string): string | null => (o[k] === undefined || o[k] === null ? null : str(o, k));
 const objs = (o: Obj, k: string): Obj[] => (Array.isArray(o[k]) && (o[k] as unknown[]).every(isObj) ? (o[k] as Obj[]) : bad(k));
 
 const site = (o: Obj): Site => ({ https: bool(o, 'https'), host: str(o, 'host') });
@@ -71,11 +81,17 @@ export function decodeEntry(text: string): Entry | null {
     if (!isObj(o)) return null;
     const updatedAt = int(o, 'updatedAt');
     switch (o.type) {
-      case 'login':
+      case 'login': {
+        const totp = absentStr(o, 'totp');
+        // Re-validated on every read: a URI that no longer parses loses the record instead of surfacing a broken code field.
+        if (totp !== null && parseTotp(totp) === null) bad('totp');
         return {
           type: 'login', name: str(o, 'name'), username: str(o, 'username'), password: str(o, 'password'),
-          sites: objs(o, 'sites').map(site), apps: objs(o, 'apps').map(appLink), note: str(o, 'note'), updatedAt,
+          sites: objs(o, 'sites').map(site), apps: objs(o, 'apps').map(appLink), note: str(o, 'note'),
+          ...(totp !== null ? { totp } : {}),
+          updatedAt,
         };
+      }
       case 'card':
         return {
           type: 'card', name: str(o, 'name'), holder: str(o, 'holder'), number: str(o, 'number'),

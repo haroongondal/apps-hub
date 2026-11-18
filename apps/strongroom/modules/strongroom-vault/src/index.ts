@@ -10,6 +10,7 @@ export interface Status {
   unreadable: number;
   lostSaves: number;
   keepAliveEnabled: boolean;
+  smsFillEnabled: boolean;
 }
 
 export interface Row {
@@ -21,12 +22,29 @@ export interface Row {
 
 export type PassFormat = 'qr' | 'code128' | 'ean13';
 
+// A login's totp: omit the key to keep a stored code as is, '' to remove it, a raw otpauth URI (from scanQr) to set it.
+// apps, when given, lists the linked apps (as EntryView.apps names them) to keep: it can only drop links, never add one, so the others stay linked.
 export type EntryInput =
-  // apps, when given, lists the linked apps (as EntryView.apps names them) to keep: it can only drop links, never add one, so the others stay linked.
-  | { type: 'login'; name: string; username: string; password: string; sites: string[]; note: string; apps?: string[] }
+  | { type: 'login'; name: string; username: string; password: string; sites: string[]; note: string; totp?: string; apps?: string[] }
   | { type: 'card'; name: string; holder: string; number: string; expMonth: number | null; expYear: number | null; cvc: string; note: string }
   | { type: 'note'; name: string; text: string }
   | { type: 'pass'; name: string; code: string; format: PassFormat; note: string };
+
+// A login's authenticator code, without its secret: the raw otpauth URI never leaves the vault except through the scanner.
+export interface TotpInfo {
+  issuer: string | null;
+  account: string | null;
+  algorithm: string;
+  digits: number;
+  period: number;
+}
+
+// §15.5: the live code and how long it stays valid. Derived in Kotlin; the secret never crosses the bridge.
+export interface TotpCode {
+  code: string;
+  secondsLeft: number;
+  period: number;
+}
 
 export interface EntryView {
   id: string;
@@ -41,6 +59,7 @@ export interface EntryView {
   expYear?: number | null;
   note: string;
   text?: string;
+  totp?: TotpInfo;
   format?: PassFormat;
 }
 
@@ -50,6 +69,35 @@ export interface ImportPreview {
   flagged: number;
   // Cards and notes, which only a Strongroom export carries.
   others: number;
+}
+
+// Progress after one scanned Authenticator export batch (§15.5): scanned of total batches.
+export interface AuthenticatorProgress {
+  scanned: number;
+  total: number;
+  entries: number;
+  hotp: number;
+}
+
+// One line of the Authenticator review: a code that attaches to an existing login (login = its name)
+// or becomes a new login (name). The code itself is never shown here.
+export type AuthenticatorItem =
+  | { kind: 'attach'; login: string; issuer: string | null; account: string | null }
+  | { kind: 'create'; name: string; issuer: string | null; account: string | null };
+
+export interface AuthenticatorReview {
+  items: AuthenticatorItem[];
+  created: number;
+  attached: number;
+  duplicates: number;
+  // Counter-based (HOTP) codes, and codes refused by the same bounds as a scanned QR.
+  hotp: number;
+  bad: number;
+}
+
+export interface AuthenticatorCommit {
+  created: number;
+  attached: number;
 }
 
 // One import: the entries still exactly as imported. name and imported are null for an import made before this phone kept a log of them.
@@ -110,7 +158,7 @@ export interface SyncReport {
   headerChanged: boolean;
 }
 
-// Rejections carry a code (LOCKED, NOT_SET_UP, KDF_OUT_OF_RANGE, HEADER_UNREADABLE, ACCOUNT_KEY_REQUIRED, BAD_SITE, IMPORT_*, NO_FINGERPRINT,
+// Rejections carry a code (LOCKED, NOT_SET_UP, KDF_OUT_OF_RANGE, HEADER_UNREADABLE, ACCOUNT_KEY_REQUIRED, BAD_SITE, NO_TOTP, IMPORT_*, NO_FINGERPRINT,
 // SYNC_UNAVAILABLE, SYNC_OFF, SYNC_SIGN_IN, SYNC_OFFLINE, SYNC_SERVER, SYNC_ROLLBACK, SYNC_KEY_LOST, HEADER_CHECK_FAILED, WRONG_RECOVERY_KEY,
 // WRONG_SETUP_TOKEN, BAD_ACCOUNT_KEY, BAD_EMAIL, SYNC_FIRST, NOT_WAITING_FOR_CODE, LOST_STILL_ALIVE, LOST_NOT_READY, LOST_DIFFERENT_ACCOUNT, MAIL_FAILED, VAULT_MOVED, ...) and an owner-ready message.
 export interface StrongroomVaultApi {
@@ -125,11 +173,23 @@ export interface StrongroomVaultApi {
   rows(): Row[];
   entry(id: string): EntryView | null;
   reveal(id: string, field: 'password' | 'number' | 'cvc' | 'code'): string;
-  copy(id: string, field: 'username' | 'password' | 'number' | 'cvc'): void;
+  copy(id: string, field: 'username' | 'password' | 'number' | 'cvc' | 'totp'): void;
+  // §15.5: the live code and countdown; throws NO_TOTP when the login has no code.
+  totpCode(id: string): TotpCode;
+  // Removes the login's code; the password and the rest of the entry stay as they are.
+  removeTotp(id: string): void;
   save(id: string | null, e: EntryInput): string;
   remove(id: string): void;
+  // Opens the camera and shows the parsed code for confirmation; null when the scan is cancelled.
+  // The raw URI is stored by the following save. It carries the secret, so nothing but save holds it.
+  scanQr(): Promise<(TotpInfo & { raw: string }) | null>;
   pickGoogleCsv(): Promise<ImportPreview | null>;
   commitImport(): number;
+  // §15.5: scan the Authenticator export's batch QRs one by one, then review and commit once.
+  scanAuthenticatorBatch(): Promise<AuthenticatorProgress | null>;
+  authenticatorReview(): AuthenticatorReview;
+  commitAuthenticatorImport(): AuthenticatorCommit;
+  cancelAuthenticatorImport(): void;
   imports(): ImportBatch[];
   deleteImport(at: number): number;
   // Null when the password is wrong; rejects with EXPORT_CANCELLED when no file was picked.
@@ -141,6 +201,8 @@ export interface StrongroomVaultApi {
   setAutoLockMinutes(m: 1 | 5 | 15): void;
   // Keeps the process unfrozen so autofill requests are delivered (see KeepAliveService).
   setKeepAlive(enable: boolean): void;
+  // The RECEIVE_SMS permission is requested from the Settings toggle only, never at setup.
+  setSmsFill(enable: boolean): void;
   changePassword(oldPw: string, newPw: string): Promise<boolean>;
   newRecoveryKey(password: string): Promise<string | null>;
   clearLostSaves(): void;

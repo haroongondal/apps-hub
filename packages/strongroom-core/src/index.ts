@@ -6,6 +6,7 @@ export * from './escrow.ts';
 export * from './format.ts';
 export * from './google-import.ts';
 export * from './matching.ts';
+export * from './otp.ts';
 export * from './public-suffix.ts';
 export * from './recovery-key.ts';
 export * from './sync/client.ts';

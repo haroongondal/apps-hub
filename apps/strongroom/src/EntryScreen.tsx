@@ -1,17 +1,18 @@
 import React, { useEffect, useState, type ReactNode } from 'react';
 import { AppState, View } from 'react-native';
-import { Button, Group, Header, Notice, Row, Screen, Sheet, Text, space } from '@apps-hub/ui';
-import Vault, { type EntryView } from 'strongroom-vault';
+import { Button, Group, Header, Notice, Readout, Row, Screen, Sheet, Text, space } from '@apps-hub/ui';
+import Vault, { type EntryView, type TotpCode } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
 import { PassView } from './PassView.tsx';
+import { groupCode, plural } from './forms.ts';
 import { BackButton, HIDE_FROM_ACCESSIBILITY } from './parts.tsx';
 
 type Secret = 'password' | 'number' | 'cvc' | 'code';
 // A pass code is shown, never copied: the barcode is how it's used.
-type Copyable = Exclude<Secret, 'code'> | 'username';
+type Copyable = Exclude<Secret, 'code'> | 'username' | 'totp';
 
 const MASK = '••••••••••••';
-const LABEL: Record<Copyable | 'code', string> = { username: 'Username', password: 'Password', number: 'Card number', cvc: 'Security code', code: 'Code' };
+const LABEL: Record<Copyable | 'code', string> = { username: 'Username', password: 'Password', number: 'Card number', cvc: 'Security code', code: 'Code', totp: 'Authenticator code' };
 
 interface Props {
   id: string;
@@ -25,6 +26,8 @@ export function EntryScreen({ id, onBack, onEdit, onLocked }: Props) {
   const [revealed, setRevealed] = useState<Partial<Record<Secret, string>>>({});
   const [message, setMessage] = useState<{ tone: 'ok' | 'danger'; text: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [code, setCode] = useState<TotpCode | null>(null);
+  const [removingCode, setRemovingCode] = useState(false);
 
   const fail = (e: unknown) => (isLocked(e) ? onLocked() : setMessage({ tone: 'danger', text: messageOf(e) }));
 
@@ -43,6 +46,25 @@ export function EntryScreen({ id, onBack, onEdit, onLocked }: Props) {
     const sub = AppState.addEventListener('change', (s) => s !== 'active' && setRevealed({}));
     return () => sub.remove();
   }, []);
+
+  // §15.5: the code refreshes on its own; one tick a second keeps the countdown honest and picks up the next code.
+  const hasCode = entry?.type === 'login' && entry.totp !== undefined;
+  useEffect(() => {
+    if (!hasCode) {
+      setCode(null);
+      return;
+    }
+    const tick = () => {
+      try {
+        setCode(Vault.totpCode(id));
+      } catch (e) {
+        fail(e);
+      }
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [id, hasCode]);
 
   const show = (field: Secret) => {
     try {
@@ -66,6 +88,18 @@ export function EntryScreen({ id, onBack, onEdit, onLocked }: Props) {
     try {
       Vault.remove(id);
       onBack();
+    } catch (e) {
+      fail(e);
+    }
+  };
+
+  // Only the code goes; the password and the rest of the login stay as they are.
+  const removeCode = () => {
+    setRemovingCode(false);
+    try {
+      Vault.removeTotp(id);
+      setEntry(Vault.entry(id));
+      setMessage({ tone: 'ok', text: 'Authenticator code removed. The password is unchanged.' });
     } catch (e) {
       fail(e);
     }
@@ -95,8 +129,27 @@ export function EntryScreen({ id, onBack, onEdit, onLocked }: Props) {
     />
   );
 
+  const codeRow =
+    entry?.type === 'login' && entry.totp ? (
+      <Row
+        key="totp"
+        title="Authenticator code"
+        subtitle={code ? <Readout value={groupCode(code.code)} label={`${plural(code.secondsLeft, 'second', 'seconds')} left`} /> : undefined}
+        trailing={
+          <Button
+            label="Copy"
+            size="sm"
+            variant="ghost"
+            onPress={() => copy('totp')}
+            accessibilityHint="Copies the current code; the clipboard clears in 30 seconds"
+          />
+        }
+      />
+    ) : null;
+
   const fields: ReactNode[] = [];
   if (entry?.type === 'login') {
+    if (codeRow) fields.push(codeRow);
     fields.push(
       <Row key="username" title="Username" subtitle={value(entry.username ?? '')} trailing={<Button label="Copy" size="sm" variant="ghost" onPress={() => copy('username')} />} />,
       secretRow('password'),
@@ -126,6 +179,9 @@ export function EntryScreen({ id, onBack, onEdit, onLocked }: Props) {
         <>
           {entry.type === 'pass' && <PassView id={id} onLocked={onLocked} />}
           <Group>{fields}</Group>
+          {entry.type === 'login' && entry.totp && (
+            <Button label="Remove code" variant="secondary" onPress={() => setRemovingCode(true)} block />
+          )}
           <Button label="Edit" variant="secondary" onPress={onEdit} block />
           <Button label="Delete" variant="danger" onPress={() => setDeleting(true)} block />
         </>
@@ -133,6 +189,10 @@ export function EntryScreen({ id, onBack, onEdit, onLocked }: Props) {
       <Sheet visible={deleting} onClose={() => setDeleting(false)} title="Delete this entry?" doneLabel="Cancel">
         <Text>{`${entry?.name ?? 'This entry'} will be removed from your vault. This can't be undone.`}</Text>
         <Button label="Delete" variant="danger" onPress={remove} block />
+      </Sheet>
+      <Sheet visible={removingCode} onClose={() => setRemovingCode(false)} title="Remove this code?" doneLabel="Cancel">
+        <Text>The password stays. The authenticator code is removed from this login; you can add it again by scanning its QR.</Text>
+        <Button label="Remove code" variant="danger" onPress={removeCode} block />
       </Sheet>
     </Screen>
   );

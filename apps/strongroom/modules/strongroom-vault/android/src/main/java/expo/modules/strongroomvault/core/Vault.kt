@@ -140,6 +140,8 @@ class Vault(
     store.putAll(mapOf(id to VaultFormat.sealEntry(k, id, Entry.Deleted(clock()))))
   }
 
+  // Same erased JVM signature as the pairs overload below; the Kotlin name stays putMany for call sites.
+  @JvmName("putManyEntries")
   @Synchronized fun putMany(entries: List<Entry>): Long {
     val k = requireKey()
     val now = clock()
@@ -147,6 +149,25 @@ class Vault(
       val id = UUID.randomUUID().toString()
       id to VaultFormat.sealEntry(k, id, it.stamped(now))
     })
+    return now
+  }
+
+  /**
+   * An import commit in one store transaction (DESIGN §15.5): a null id creates a new
+   * entry under the shared import stamp; a set id edits that entry, stamped one ms
+   * later so it stays out of the import group (an edit must never be undone as part
+   * of the import it joined). Returns the import stamp — the creates' stamp.
+   */
+  @Synchronized fun putMany(entries: List<Pair<String?, Entry>>): Long {
+    val k = requireKey()
+    val now = clock()
+    val sealed = HashMap<String, ByteArray>()
+    for ((id, e) in entries) {
+      val rid = id ?: UUID.randomUUID().toString()
+      require(rid != KEY_CHECK_ID) { "reserved id" }
+      sealed[rid] = VaultFormat.sealEntry(k, rid, e.stamped(if (id == null) now else now + 1))
+    }
+    store.putAll(sealed)
     return now
   }
 

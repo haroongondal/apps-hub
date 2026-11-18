@@ -6,6 +6,7 @@ import expo.modules.strongroomvault.core.BarcodeResult
 import expo.modules.strongroomvault.core.AppLink
 import expo.modules.strongroomvault.core.Entry
 import expo.modules.strongroomvault.core.Matching
+import expo.modules.strongroomvault.core.Otp
 import expo.modules.strongroomvault.core.PassFormat
 import expo.modules.strongroomvault.core.Site
 
@@ -24,18 +25,27 @@ internal object EntryInput {
 
   /** A login keeps the apps already stored for it, less any the screen left out of `apps`. */
   fun toEntry(input: Map<String, Any?>, stored: Entry?): Entry = when (val type = input["type"]) {
-    "login" -> Entry.Login(
-      name = input.text("name"),
-      username = input.text("username"),
-      password = input.text("password"),
-      sites = (input["sites"] as? List<*> ?: emptyList<Any?>())
-        .map { it as? String ?: throw IllegalArgumentException("sites must be strings") }
-        .filter { it.isNotBlank() }
-        .map { site(it) ?: throw CodedException("BAD_SITE", BAD_SITE, null) },
-      apps = keptApps((stored as? Entry.Login)?.apps.orEmpty(), input["apps"] as? List<*>),
-      note = input.text("note"),
-      updatedAt = 0,
-    )
+    "login" -> {
+      // Absent key = the stored code stays; "" = remove it; a URI = replace it (the scanner only hands out parsed URIs).
+      val totp = when (val t = input["totp"]) {
+        is String -> t.trim().takeIf { it.isNotEmpty() }
+        else -> (stored as? Entry.Login)?.totp
+      }
+      if (totp != null && Otp.parse(totp) == null) throw CodedException("BAD_TOTP", "That authenticator code QR isn't valid. Scan it again.", null)
+      Entry.Login(
+        name = input.text("name"),
+        username = input.text("username"),
+        password = input.text("password"),
+        sites = (input["sites"] as? List<*> ?: emptyList<Any?>())
+          .map { it as? String ?: throw IllegalArgumentException("sites must be strings") }
+          .filter { it.isNotBlank() }
+          .map { site(it) ?: throw CodedException("BAD_SITE", BAD_SITE, null) },
+        apps = keptApps((stored as? Entry.Login)?.apps.orEmpty(), input["apps"] as? List<*>),
+        note = input.text("note"),
+        updatedAt = 0,
+        totp = totp,
+      )
+    }
     "card" -> Entry.Card(
       name = input.text("name"),
       holder = input.text("holder"),

@@ -6,6 +6,12 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- §15.3: fill codes from text messages. The permission is requested from the Settings toggle only, never at setup;
+       only the incoming-message broadcast is handled, never MMS and never the inbox. -->
+  <uses-permission android:name="android.permission.RECEIVE_SMS" />
+  <!-- §15.4: scan a site's QR. Requested by the scan screen at scan time only. A phone without a camera still installs. -->
+  <uses-permission android:name="android.permission.CAMERA" />
+  <uses-feature android:name="android.hardware.camera" android:required="false" />
   <!-- A pass is presented to an NFC reader as an NDEF tag by host card emulation. Optional: phones without it just cannot present. -->
   <uses-permission android:name="android.permission.NFC" />
   <uses-feature android:name="android.hardware.nfc.hce" android:required="false" />
@@ -29,12 +35,26 @@
       android:name="expo.modules.strongroomvault.android.ClipboardClearJob"
       android:exported="false"
       android:permission="android.permission.BIND_JOB_SERVICE" />
+    <!-- §15.3: the code extractor. A protected system broadcast, so only the platform can send it. -->
+    <receiver
+      android:name="expo.modules.strongroomvault.android.SmsReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+      </intent-filter>
+    </receiver>
     <activity
       android:name="expo.modules.strongroomvault.android.UnlockActivity"
       android:exported="false"
       android:excludeFromRecents="true"
       android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize"
       android:windowSoftInputMode="adjustResize"
+      android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
+    <activity
+      android:name="expo.modules.strongroomvault.android.ScanActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize"
       android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
     <service
       android:name="expo.modules.strongroomvault.android.StrongroomTagService"

@@ -191,6 +191,37 @@ class VaultTest {
     assertEquals(emptyList<Pair<Long, Int>>(), v.imports(emptySet()))
   }
 
+  @Test fun putManyPairsKeepAttachEditsOutOfTheImport() {
+    // §15.5's commit: creates share one stamp; an attach-edit in the same call is stamped
+    // one ms later, so it never joins the import group a deleteImport would remove.
+    val v = setUpVault()
+    val uri = "otpauth://totp/Example:me@example.com?secret=" +
+      MigrationImport.base32Of(ByteArray(20) { (it + 1).toByte() }) + "&issuer=Example"
+    store.putAllCalls = 0
+    val created = v.putMany(listOf(null to login, null to card))
+    assertEquals(wall, created)
+    assertEquals(1, store.putAllCalls)
+    assertEquals(setOf<Long>(wall), v.all().values.map { it.updatedAt }.toSet())
+    assertEquals(listOf(created to 2), v.imports(emptySet())) // the creates share their stamp
+
+    store.putAllCalls = 0
+    val attachId = v.all().entries.first { it.value is Entry.Login }.key
+    val at = v.putMany(listOf(attachId to (v.all().getValue(attachId) as Entry.Login).copy(totp = uri)))
+    assertEquals(1, store.putAllCalls)
+    assertEquals(created, at) // the stamp the import log keys on
+    assertEquals(wall + 1, v.all().getValue(attachId).updatedAt)
+    assertEquals(2, v.all().size)
+
+    // The attach-edit left the group: only the create still carries the stamp, so the log's
+    // stamp is what keeps the import visible (the module passes the log's stamps as known).
+    assertEquals(emptyList<Pair<Long, Int>>(), v.imports(emptySet()))
+    assertEquals(listOf(created to 1), v.imports(setOf(created)))
+    assertEquals(1, v.deleteImport(created))
+    val kept = v.all().values.single()
+    assertTrue(kept is Entry.Login)
+    assertEquals(uri, (kept as Entry.Login).totp)
+  }
+
   @Test fun deleteAllLeavesTombstonesAndKeepsTheVaultUsable() {
     val v = setUpVault()
     v.putMany(listOf(login, card))

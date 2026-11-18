@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Debug build only (run-as): finds known secrets (username, password, account key text, a token's Base64) as plain, UTF-16 or Base64 (also line-wrapped) bytes, and hex:<hex> secrets (raw token bytes), in the app's data. Exit 1 on a hit, 2 if unreadable.
+# Debug build only (run-as): finds known secrets (username, password, account key text, a token's Base64) as plain, UTF-16 or Base64 (also line-wrapped) bytes, and hex:<hex> secrets (raw token bytes), in the app's data. A b32:<base32> secret is the TOTP key: its text in either case, and the raw bytes it decodes to. Exit 1 on a hit, 2 if unreadable.
 # Covers the credential-encrypted app data directory only (run-as's working directory), not /data/user_de or /sdcard/Android/data.
 set -euo pipefail
 export LC_ALL=C
 
 if [ $# -lt 3 ]; then
-  echo "usage: $0 <serial> <package, e.g. com.haroon.strongroom.synctest> <secret>... (a secret written hex:<hex> is searched as raw bytes)" >&2
+  echo "usage: $0 <serial> <package, e.g. com.haroon.strongroom.synctest> <secret>... (a secret written hex:<hex> is searched as raw bytes, b32:<base32> as its text and raw bytes)" >&2
   exit 2
 fi
 serial=$1
@@ -43,6 +43,24 @@ hits=0
 i=0
 for secret in "$@"; do
   i=$((i + 1))
+  if [ "${secret#b32:}" != "$secret" ]; then
+    key=$(printf '%s' "${secret#b32:}" | tr -d ' =' | tr 'a-z' 'A-Z')
+    if [ -z "$key" ]; then
+      echo "secret $i: the b32 secret is empty" >&2
+      exit 2
+    fi
+    hex=$(printf '%s' "$key" | python3 -c 'import base64, sys; s = sys.stdin.read().strip(); s += "=" * (-len(s) % 8); sys.stdout.write(base64.b32decode(s).hex())' 2>/dev/null) || {
+      echo "secret $i: not valid base32" >&2
+      exit 2
+    }
+    n=$(count "$tmp/data.tar" "$key")
+    n=$((n + $(count "$tmp/data.tar" "$(printf '%s' "$key" | tr 'A-Z' 'a-z')")))
+    n=$((n + $(count "$tmp/nonul" "$key")))
+    n=$((n + $(count "$tmp/hex" "$hex")))
+    echo "secret $i, base32 text or raw bytes: $n"
+    hits=$((hits + n))
+    continue
+  fi
   if [ "${secret#hex:}" != "$secret" ]; then
     n=$(count "$tmp/hex" "$(printf '%s' "${secret#hex:}" | tr 'A-F' 'a-f')")
     echo "secret $i, raw bytes: $n"

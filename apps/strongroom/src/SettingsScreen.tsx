@@ -23,7 +23,7 @@ const MIUI = (() => {
   }
 })();
 
-export type SettingsFlow = 'password' | 'fingerprint' | 'newKey' | 'import' | 'sync' | 'emailRecovery' | 'export' | 'imports' | 'deleteAll';
+export type SettingsFlow = 'password' | 'fingerprint' | 'newKey' | 'import' | 'authenticator' | 'sync' | 'emailRecovery' | 'export' | 'imports' | 'deleteAll';
 
 interface Props {
   status: Status;
@@ -80,6 +80,20 @@ export function SettingsScreen({ status, refresh, notice, onOpen }: Props) {
     }
   };
 
+  const toggleSmsFill = async (on: boolean) => {
+    try {
+      // Without the permission the phone never delivers the message, so a denied request leaves the toggle off.
+      if (on) {
+        const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECEIVE_SMS);
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
+      }
+      Vault.setSmsFill(on);
+      refresh();
+    } catch (e) {
+      fail(e);
+    }
+  };
+
   const toggleFingerprint = async (on: boolean) => {
     if (on) return onOpen('fingerprint');
     try {
@@ -129,6 +143,21 @@ export function SettingsScreen({ status, refresh, notice, onOpen }: Props) {
           }
         />
       </Group>
+      <Group title="Text messages" footer="Strongroom reads incoming text messages only to find verification codes, and keeps nothing.">
+        <Row
+          title="Fill codes from text messages"
+          subtitle="A code that arrives shows as a suggestion in the verification field."
+          trailing={
+            <Switch
+              value={status.smsFillEnabled}
+              onValueChange={toggleSmsFill}
+              accessibilityLabel="Fill codes from text messages"
+              trackColor={{ false: c.line, true: c.accent }}
+              thumbColor={c.surface}
+            />
+          }
+        />
+      </Group>
       {MIUI && (
         <Group title="Xiaomi battery" footer="HyperOS can still freeze Strongroom despite the keep-alive service.">
           <Row
@@ -154,6 +183,7 @@ export function SettingsScreen({ status, refresh, notice, onOpen }: Props) {
       </Group>
       <Group title="Your passwords">
         <Row title="Import from Google" subtitle="Move your saved passwords out of Google Password Manager." onPress={() => onOpen('import')} />
+        <Row title="Import from Google Authenticator" subtitle="Move your authenticator codes into Strongroom." onPress={() => onOpen('authenticator')} />
         <Row title="Imported files" subtitle="Delete what one import brought in." onPress={() => onOpen('imports')} />
         <Row title="Export all" subtitle="Save every login, card and note to a file." onPress={() => onOpen('export')} />
         <Row title="Delete all passwords" subtitle="Empty the vault." onPress={() => onOpen('deleteAll')} />

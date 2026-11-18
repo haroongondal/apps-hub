@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { COMMON_PASSWORDS } from '../common-passwords.ts';
-import { exportedNotice, filterRows, importConfirm, importRow, keyboardNotice, pickGroupIndex, recoveryGroupMatches, validateMasterPassword } from '../forms.ts';
+import { exportedNotice, filterRows, groupCode, importConfirm, importRow, keyboardNotice, pickGroupIndex, recoveryGroupMatches, validateMasterPassword } from '../forms.ts';
 
 test('an import shows its file name, or its date when the phone has no log of it', () => {
   const at = new Date(2026, 10, 6, 14, 2).getTime();
@@ -95,4 +95,12 @@ test('pickGroupIndex covers 0 to 7', () => {
   assert.equal(pickGroupIndex(() => 0), 0);
   assert.equal(pickGroupIndex(() => 0.999999), 7);
   assert.equal(pickGroupIndex(() => 0.5), 4);
+});
+
+test('groupCode splits a code the way Authenticator apps show it', () => {
+  assert.equal(groupCode('123456'), '123 456');
+  assert.equal(groupCode('12345678'), '1234 5678');
+  assert.equal(groupCode('012345'), '012 345');
+  assert.equal(groupCode('12345'), '12345');
+  assert.equal(groupCode(''), '');
 });

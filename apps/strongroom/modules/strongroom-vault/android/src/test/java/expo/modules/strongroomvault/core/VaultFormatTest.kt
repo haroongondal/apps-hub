@@ -241,7 +241,8 @@ class VaultFormatTest {
     assertEquals(v["recoveryWrap"]!!.jsonObject.text("sealed"), header.recoveryWrap.toHex())
 
     val records: JsonArray = v["records"]!!.jsonArray
-    assertEquals(listOf("login", "card", "note", "deleted"), records.map { it.jsonObject["entry"]!!.jsonObject.text("type") })
+    // The second login is §15's record with an authenticator code; the kinds stay grouped in the file.
+    assertEquals(listOf("login", "login", "card", "note", "deleted"), records.map { it.jsonObject["entry"]!!.jsonObject.text("type") })
     for (r in records.map { it.jsonObject }) {
       val id = r.text("id")
       val sealed = r.hex("sealed")

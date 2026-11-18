@@ -40,8 +40,14 @@ sealed interface Entry {
     val apps: List<AppLink>,
     val note: String,
     override val updatedAt: Long,
+    val totp: String? = null,
   ) : Entry {
-    override fun toString() = "Login(name=$name, username=$username, password=***, sites=$sites, apps=$apps, note=***, updatedAt=$updatedAt)"
+    init {
+      // The invariant lives in the type: a login can never hold an invalid URI, whoever builds it.
+      if (totp != null) require(Otp.parse(totp) != null) { "totp must be a valid otpauth://totp/ URI" }
+    }
+
+    override fun toString() = "Login(name=$name, username=$username, password=***, sites=$sites, apps=$apps, note=***, totp=***, updatedAt=$updatedAt)"
   }
 
   data class Card(
@@ -97,6 +103,7 @@ object EntryJson {
         putJsonArray("sites") { e.sites.forEach { addSite(it) } }
         putJsonArray("apps") { e.apps.forEach { addAppLink(it) } }
         put("note", e.note)
+        if (e.totp != null) put("totp", e.totp)
       }
       is Entry.Card -> {
         put("type", "card")
@@ -136,6 +143,7 @@ object EntryJson {
         sites = o.objects("sites").map { it.site() },
         apps = o.objects("apps").map { it.appLink() },
         note = o.string("note"),
+        totp = o.absentOrNull("totp"),
         updatedAt = updatedAt,
       )
       "card" -> Entry.Card(
@@ -188,6 +196,13 @@ internal fun JsonObject.int(key: String): Int = literal(key).takeIf { !it.isStri
 internal fun JsonObject.bool(key: String): Boolean = literal(key).takeIf { !it.isString }?.booleanOrNull ?: malformed(key)
 
 internal fun JsonObject.optString(key: String): String? = if (literal(key) is JsonNull) null else string(key)
+
+/** Null when the key is missing or null, the string when present, malformed otherwise. */
+internal fun JsonObject.absentOrNull(key: String): String? =
+  when (this[key]) {
+    null, is JsonNull -> null
+    else -> string(key)
+  }
 
 internal fun JsonObject.optInt(key: String): Int? = if (literal(key) is JsonNull) null else int(key)
 

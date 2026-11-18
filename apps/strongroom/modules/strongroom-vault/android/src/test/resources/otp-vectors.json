@@ -1,0 +1,180 @@
+{
+ "note": "RFC 6238 appendix B (https://www.rfc-editor.org/rfc/rfc6238.txt, fetched 2026-11-15); 6-digit and period-edge rows recomputed independently by tools/vectors/otp_vectors.py. Secrets are the RFC's ASCII strings, base32 without padding.",
+ "secrets": {
+  "sha1": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+  "sha256": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA",
+  "sha512": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA"
+ },
+ "rfc6238": [
+  {
+   "t": 59,
+   "sha1": "94287082",
+   "sha256": "46119246",
+   "sha512": "90693936"
+  },
+  {
+   "t": 1111111109,
+   "sha1": "07081804",
+   "sha256": "68084774",
+   "sha512": "25091201"
+  },
+  {
+   "t": 1111111111,
+   "sha1": "14050471",
+   "sha256": "67062674",
+   "sha512": "99943326"
+  },
+  {
+   "t": 1234567890,
+   "sha1": "89005924",
+   "sha256": "91819424",
+   "sha512": "93441116"
+  },
+  {
+   "t": 2000000000,
+   "sha1": "69279037",
+   "sha256": "90698825",
+   "sha512": "38618901"
+  },
+  {
+   "t": 20000000000,
+   "sha1": "65353130",
+   "sha256": "77737706",
+   "sha512": "47863826"
+  }
+ ],
+ "sixDigit": [
+  {
+   "t": 59,
+   "digest": "sha1",
+   "code": "287082"
+  },
+  {
+   "t": 59,
+   "digest": "sha256",
+   "code": "119246"
+  },
+  {
+   "t": 59,
+   "digest": "sha512",
+   "code": "693936"
+  },
+  {
+   "t": 1111111109,
+   "digest": "sha1",
+   "code": "081804"
+  },
+  {
+   "t": 1111111109,
+   "digest": "sha256",
+   "code": "084774"
+  },
+  {
+   "t": 1111111109,
+   "digest": "sha512",
+   "code": "091201"
+  },
+  {
+   "t": 1111111111,
+   "digest": "sha1",
+   "code": "050471"
+  },
+  {
+   "t": 1111111111,
+   "digest": "sha256",
+   "code": "062674"
+  },
+  {
+   "t": 1111111111,
+   "digest": "sha512",
+   "code": "943326"
+  },
+  {
+   "t": 1234567890,
+   "digest": "sha1",
+   "code": "005924"
+  },
+  {
+   "t": 1234567890,
+   "digest": "sha256",
+   "code": "819424"
+  },
+  {
+   "t": 1234567890,
+   "digest": "sha512",
+   "code": "441116"
+  },
+  {
+   "t": 2000000000,
+   "digest": "sha1",
+   "code": "279037"
+  },
+  {
+   "t": 2000000000,
+   "digest": "sha256",
+   "code": "698825"
+  },
+  {
+   "t": 2000000000,
+   "digest": "sha512",
+   "code": "618901"
+  },
+  {
+   "t": 20000000000,
+   "digest": "sha1",
+   "code": "353130"
+  },
+  {
+   "t": 20000000000,
+   "digest": "sha256",
+   "code": "737706"
+  },
+  {
+   "t": 20000000000,
+   "digest": "sha512",
+   "code": "863826"
+  }
+ ],
+ "periodEdges": [
+  {
+   "period": 30,
+   "t": 0,
+   "code": "755224"
+  },
+  {
+   "period": 30,
+   "t": 29,
+   "code": "755224"
+  },
+  {
+   "period": 30,
+   "t": 59,
+   "code": "287082"
+  },
+  {
+   "period": 30,
+   "t": 60,
+   "code": "359152"
+  },
+  {
+   "period": 30,
+   "t": 89,
+   "code": "359152"
+  },
+  {
+   "period": 30,
+   "t": 90,
+   "code": "969429"
+  },
+  {
+   "period": 15,
+   "t": 45,
+   "code": "969429"
+  },
+  {
+   "period": 120,
+   "t": 240,
+   "code": "359152"
+  }
+ ]
+}

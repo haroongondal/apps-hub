@@ -36,6 +36,29 @@ test("a Strongroom export's card and note rows are skipped, and its app_domain c
   assert.equal(r.merged, 0);
 });
 
+test("a Strongroom export's totp column carries the code onto the login, whole", () => {
+  const totp = 'otpauth://totp/Router:admin?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Router';
+  const csv =
+    'name,url,username,password,note,type,holder,number,exp_month,exp_year,cvc,app_domain,totp\n' +
+    `Router,,admin,=1+2,,login,,,,,,,${totp}\n` +
+    'NAS,,admin,=1+2,,login,,,,,,,\n';
+  const r = parseGoogleExport(csv, 1);
+  assert.deepEqual(r.logins[0], {
+    type: 'login', name: 'Router', username: 'admin', password: '=1+2', sites: [], apps: [], note: '', totp, updatedAt: 1,
+  });
+  // A login without a code stays keyless, exactly as older exports decode.
+  assert.deepEqual(r.logins[1], { type: 'login', name: 'NAS', username: 'admin', password: '=1+2', sites: [], apps: [], note: '', updatedAt: 1 });
+});
+
+test("a totp cell that is not a readable URI refuses the import, naming the row but never the URI", () => {
+  const m = messageOf(
+    'name,url,username,password,note,type,holder,number,exp_month,exp_year,cvc,app_domain,totp\n' +
+      'Router,,admin,=1+2,,login,,,,,,,not a uri\n',
+  );
+  assert.equal(m, "Row 1 of this file has an authenticator code link we can't read (This QR is not an authenticator code).");
+  assert.ok(!m.includes('=1+2'));
+});
+
 test('an android:// URL becomes an app link', () => {
   const r = imp(`Example app,android://${hashB64}@com.example/,me,pw,\r\n`);
   assert.deepEqual(r.logins[0].apps, [{ pkg: 'com.example', certSha256: hash, domain: null }]);

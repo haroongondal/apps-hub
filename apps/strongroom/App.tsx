@@ -8,6 +8,7 @@ import { EmailRecoveryScreen } from './src/EmailRecoveryScreen.tsx';
 import { EditScreen } from './src/EditScreen.tsx';
 import { EntryScreen } from './src/EntryScreen.tsx';
 import { ImportScreen } from './src/ImportScreen.tsx';
+import { AuthenticatorImportScreen } from './src/AuthenticatorImportScreen.tsx';
 import { SettingsScreen, type SettingsFlow } from './src/SettingsScreen.tsx';
 import { ChangePasswordScreen, FingerprintScreen, NewRecoveryKeyScreen } from './src/SettingsFlows.tsx';
 import { SetupScreen } from './src/SetupScreen.tsx';
@@ -21,6 +22,7 @@ type Route =
   | { name: 'entry'; id: string }
   | { name: 'edit'; id: string | null }
   | { name: 'import' }
+  | { name: 'authenticator' }
   | { name: 'password' }
   | { name: 'fingerprint' }
   | { name: 'sync' }
@@ -41,6 +43,7 @@ const FLOW_ROUTES: Record<SettingsFlow, Route> = {
   fingerprint: { name: 'fingerprint' },
   newKey: { name: 'newKey', key: null },
   import: { name: 'import' },
+  authenticator: { name: 'authenticator' },
   sync: { name: 'sync' },
   emailRecovery: { name: 'emailRecovery' },
   export: { name: 'export' },
@@ -175,6 +178,7 @@ function Home() {
     return <EditScreen id={id} onBack={() => setRoute(id === null ? TABS_ROUTE : { name: 'entry', id })} onSaved={(saved) => setRoute({ name: 'entry', id: saved })} onLocked={refresh} />;
   }
   if (route.name === 'import') return <ImportScreen onBack={home} onDone={home} onLocked={refresh} />;
+  if (route.name === 'authenticator') return <AuthenticatorImportScreen onBack={home} onDone={home} onLocked={refresh} />;
   if (route.name === 'imports') return <ImportsScreen onBack={home} onLocked={refresh} />;
   if (route.name === 'export') return <ExportScreen onBack={home} onDone={finishFlow} onLocked={refresh} />;
   if (route.name === 'deleteAll') return <DeleteAllScreen onBack={home} onDone={finishFlow} onLocked={refresh} />;
