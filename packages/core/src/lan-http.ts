@@ -46,8 +46,8 @@ export function parseHttpUrl(url: string, base?: HttpTarget): HttpTarget | null 
   if (!m) return null;
   const ip = parseIpv4(m[1]);
   const port = m[2] === undefined ? 80 : Number(m[2]);
-  if (ip === null || port < 1 || port > 65535) return null;
-  return { ip: formatIpv4(ip), port, path: m[3] ?? '/' };
+  if (ip === null || formatIpv4(ip) !== m[1] || port < 1 || port > 65535) return null;
+  return { ip: m[1], port, path: m[3] ?? '/' };
 }
 
 export async function httpRequest(

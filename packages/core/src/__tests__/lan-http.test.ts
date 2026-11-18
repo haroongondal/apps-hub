@@ -58,6 +58,8 @@ test('isLanTarget refuses an invalid or missing iface', () => {
     { localIp: '192.168.1.20', cidrPrefix: NaN, gatewayIp: null },
   ];
   for (const i of bad) assert.equal(isLanTarget('192.168.1.1', i as InterfaceInfo), false, JSON.stringify(i));
+  // Public localIp whose subnet still contains a private target: only the localIp privacy check refuses it.
+  assert.equal(isLanTarget('172.16.0.1', { localIp: '172.32.0.5', cidrPrefix: 10, gatewayIp: null }), false);
 });
 
 test('isLanTarget: a very wide iface is invalid, a wide one still only allows private targets', () => {
@@ -78,7 +80,7 @@ test('parseHttpUrl reads absolute and relative URLs', () => {
 
 test('parseHttpUrl returns null for https, hostnames, bad ports, bad IPs and junk', () => {
   for (const u of ['https://192.168.1.1/', 'http://router.local/', 'http://192.168.1.1:70000/',
-    'http://192.168.1.1:0/', 'http://999.1.1.1/', 'http://192.168.1/', 'http://192.168.1.1:80\r\n/x',
+    'http://192.168.1.1:0/', 'http://999.1.1.1/', 'http://010.0.0.1/', 'http://192.168.001.001/', 'http://192.168.1/', 'http://192.168.1.1:80\r\n/x',
     'http://192.168.1.1/a b', 'http://192.168.1.1/a\r\nX: y', 'ctl/IPConn', '', ' http://192.168.1.1/']) {
     assert.equal(parseHttpUrl(u, target), null, JSON.stringify(u));
   }
@@ -89,6 +91,7 @@ test('parseHttpUrl returns null for https, hostnames, bad ports, bad IPs and jun
 test('httpRequest refuses an off-LAN target without calling tcpFetch', async () => {
   const b = fakeBinding();
   assert.equal(await httpRequest(b, iface24, { ip: '8.8.8.8', port: 80, path: '/' }, {}), null);
+  assert.equal(await httpRequest(b, iface24, { ip: '192.168.2.1', port: 80, path: '/' }, {}), null);
   assert.equal(b.calls.length, 0);
 });
 
@@ -139,6 +142,8 @@ test('httpRequest refuses header injection, bad paths and bad ports without call
     [target, { headers: { host: 'evil' } }],
     [target, { headers: { 'Content-Length': '0' } }],
     [target, { headers: { CONNECTION: 'keep-alive' } }],
+    [target, { headers: { A: 'b\0c' } }],
+    [target, { method: 'PUT' as 'GET' }],
   ];
   for (const [t, init] of cases) assert.equal(await httpRequest(b, iface24, t, init), null, JSON.stringify([t, init]));
   assert.equal(b.calls.length, 0);
