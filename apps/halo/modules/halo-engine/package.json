@@ -1,0 +1,11 @@
+{
+  "name": "halo-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Halo's audio tap, edge overlay and always-on display (Expo local module, Android only)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "expo-modules-core": "~3.0.30"
+  }
+}

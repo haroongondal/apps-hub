@@ -1,7 +1,7 @@
 // Pure TS so the RN theme and the generated web/tokens.css share one source of truth.
 
 export type Scheme = 'light' | 'dark';
-export type BrandKey = 'netlens' | 'opentunnel' | 'store' | 'pdf' | 'design' | 'deputy' | 'strongroom' | 'inflow' | 'clipboard' | 'notch';
+export type BrandKey = 'netlens' | 'opentunnel' | 'store' | 'pdf' | 'design' | 'deputy' | 'strongroom' | 'inflow' | 'clipboard' | 'notch' | 'halo';
 export type Tone = 'neutral' | 'accent' | 'ok' | 'warn' | 'danger';
 
 export interface Palette {
@@ -43,6 +43,7 @@ export const brands: Record<BrandKey, Brand> = {
   inflow: { name: 'Inflow', hue: 190, accent: { dark: '#5EEAD4', light: '#0F766E' }, onAccent: { dark: '#042F2C', light: '#FFFFFF' } },
   clipboard: { name: 'Clipboard', hue: 95, accent: { dark: '#A3E635', light: '#4D7C0F' }, onAccent: { dark: '#1A2E05', light: '#FFFFFF' } },
   notch: { name: 'Notch', hue: 235, accent: { dark: '#818CF8', light: '#4338CA' }, onAccent: { dark: '#14123A', light: '#FFFFFF' } },
+  halo: { name: 'Halo', hue: 190, accent: { dark: '#22D3EE', light: '#0E7490' }, onAccent: { dark: '#03181D', light: '#FFFFFF' } },
 };
 
 export function hsl(h: number, s: number, l: number): string {
