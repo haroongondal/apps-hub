@@ -9,9 +9,11 @@ export type Card = {
   type: 'card'; name: string; holder: string; number: string;
   expMonth: number | null; expYear: number | null; cvc: string; note: string; updatedAt: number;
 };
+export type PassFormat = 'qr' | 'code128' | 'ean13';
+export type Pass = { type: 'pass'; name: string; code: string; format: PassFormat; note: string; updatedAt: number };
 export type Note = { type: 'note'; name: string; text: string; updatedAt: number };
 export type Deleted = { type: 'deleted'; updatedAt: number };
-export type Entry = Login | Card | Note | Deleted;
+export type Entry = Login | Card | Note | Pass | Deleted;
 
 // Key order matches the Android encoder; the sealed bytes need not be identical, but the vectors check that they are.
 export function encodeEntry(e: Entry): string {
@@ -30,6 +32,8 @@ export function encodeEntry(e: Entry): string {
       });
     case 'note':
       return JSON.stringify({ type: e.type, name: e.name, text: e.text, updatedAt: e.updatedAt });
+    case 'pass':
+      return JSON.stringify({ type: e.type, name: e.name, code: e.code, format: e.format, note: e.note, updatedAt: e.updatedAt });
     case 'deleted':
       return JSON.stringify({ type: e.type, updatedAt: e.updatedAt });
   }
@@ -45,6 +49,10 @@ const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !
 const str = (o: Obj, k: string): string => (typeof o[k] === 'string' ? (o[k] as string) : bad(k));
 const int = (o: Obj, k: string): number => (Number.isSafeInteger(o[k]) ? (o[k] as number) : bad(k));
 const bool = (o: Obj, k: string): boolean => (typeof o[k] === 'boolean' ? (o[k] as boolean) : bad(k));
+const passFormat = (o: Obj, k: string): PassFormat => {
+  const f = str(o, k);
+  return f === 'qr' || f === 'code128' || f === 'ean13' ? f : bad(k);
+};
 const optStr = (o: Obj, k: string): string | null => (o[k] === null ? null : str(o, k));
 const optInt = (o: Obj, k: string): number | null => (o[k] === null ? null : int(o, k));
 const objs = (o: Obj, k: string): Obj[] => (Array.isArray(o[k]) && (o[k] as unknown[]).every(isObj) ? (o[k] as Obj[]) : bad(k));
@@ -75,6 +83,8 @@ export function decodeEntry(text: string): Entry | null {
         };
       case 'note':
         return { type: 'note', name: str(o, 'name'), text: str(o, 'text'), updatedAt };
+      case 'pass':
+        return { type: 'pass', name: str(o, 'name'), code: str(o, 'code'), format: passFormat(o, 'format'), note: str(o, 'note'), updatedAt };
       case 'deleted':
         return { type: 'deleted', updatedAt };
       default:
