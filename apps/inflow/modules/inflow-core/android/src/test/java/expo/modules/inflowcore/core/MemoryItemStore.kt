@@ -5,7 +5,7 @@ class StoredItem(
   var emailHash: String? = null, var emailText: String? = null,
 )
 
-class MemoryItemStore : ItemStore, AiStore, BackfillStore {
+class MemoryItemStore : ItemStore, AiStore, BackfillStore, AutopilotItems {
   val items = LinkedHashMap<String, StoredItem>()
   val tombstones = mutableSetOf<String>()
   private val settings = LinkedHashMap<String, AppSetting>()
@@ -165,6 +165,16 @@ class MemoryItemStore : ItemStore, AiStore, BackfillStore {
     }
     queue.keys.retainAll(sendable.map { it.itemId }.toSet())
     return sendable.filter { !fastOnly || it.itemId in fastIds }.take(limit)
+  }
+
+  // Mirrors SqlItemStore.autopilotItem: the queue's conditions without the posted_at one, minus NEVER_SHARE.
+  override fun autopilotItem(id: Long): AutopilotItem? {
+    val it = items.values.firstOrNull { s -> s.id == id } ?: return null
+    val c = it.capture
+    val picked = AutopilotSettings.fromJson(meta[AUTOPILOT_META]).pickedChats
+    val ok = it.otpExpiresAt == null && (it.smsHash != null || it.emailHash != null || c.pkg in AiChannels.PKGS || c.conversationKey in picked) && (settings[c.pkg]?.record ?: true) &&
+      "app:${c.pkg}" !in aiBlocks && (c.senderKey == null || "sender:${c.senderKey}" !in aiBlocks)
+    return if (AutopilotAccess.mayShare(c.pkg, ok)) AutopilotItem(id, c.appLabel, c.pkg, c.sender, c.conversation, it.emailText ?: c.text, c.postedAt) else null
   }
 
   override fun save(results: List<AiResult>, now: Long) {

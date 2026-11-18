@@ -5,6 +5,9 @@ import android.database.Cursor
 import android.database.sqlite.SQLiteDatabaseCorruptException
 import android.database.sqlite.SQLiteException
 import expo.modules.inflowcore.core.AUTOPILOT_META
+import expo.modules.inflowcore.core.AutopilotAccess
+import expo.modules.inflowcore.core.AutopilotItem
+import expo.modules.inflowcore.core.AutopilotItems
 import expo.modules.inflowcore.core.AiChannels
 import expo.modules.inflowcore.core.AiInput
 import expo.modules.inflowcore.core.AiMeta
@@ -37,7 +40,7 @@ import net.zetetic.database.sqlcipher.SQLiteDatabaseHook
 import net.zetetic.database.sqlcipher.SQLiteStatement
 import java.io.File
 
-class SqlItemStore private constructor(internal val db: SQLiteDatabase, private val mediaDir: File, private val openDir: File) : ItemStore, AiStore {
+class SqlItemStore private constructor(internal val db: SQLiteDatabase, private val mediaDir: File, private val openDir: File) : ItemStore, AiStore, AutopilotItems {
   override fun nameFor(tag: String): String? =
     query("SELECT name FROM chat_map WHERE tag = ?", tag).use { if (it.moveToFirst()) it.getString(0) else null }
 
@@ -132,6 +135,18 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
         "${queueFrom(filter)}${if (fastOnly) " AND q.fast = 1" else ""} ORDER BY q.at, q.item_id LIMIT ?",
       since, *picked, limit.toLong(),
     ).use { c -> buildList { while (c.moveToNext()) add(AiInput(c.getLong(0), c.getString(1), c.str(2), c.str(3), c.getString(4), c.getLong(5), c.str(6), c.getInt(7) != 0, c.str(8))) } }
+  }
+
+  // The provider's one item read: the send queue's filter (so only what Inflow could send to the AI), minus the NEVER_SHARE packages. Every value is bound.
+  override fun autopilotItem(id: Long): AutopilotItem? {
+    val picked = pickedChats().toTypedArray()
+    val never = AutopilotAccess.NEVER_SHARE.toTypedArray()
+    return query(
+      "SELECT i.id, i.app_label, i.pkg, COALESCE(n.name, i.sender), i.conversation, COALESCE(i.email_text, i.text), i.posted_at " +
+        "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
+        "WHERE i.id = ? AND ${queueFilter(picked.size)} AND i.pkg NOT IN (${never.joinToString(",") { "?" }})",
+      id, *picked, *never,
+    ).use { c -> if (c.moveToFirst()) AutopilotItem(c.getLong(0), c.getString(1), c.getString(2), c.str(3), c.str(4), c.getString(5), c.getLong(6)) else null }
   }
 
   private fun pickedChats(): Set<String> = AutopilotSettings.fromJson(meta(AUTOPILOT_META)).pickedChats
