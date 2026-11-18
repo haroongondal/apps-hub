@@ -22,7 +22,9 @@ disk check). Tasks 1–6 are done and E2E verified (emulator);
 Task 7 is implemented, gated, and its import flow verified on the phone — the
 on-camera QR part stays JVM-proven; Task 8 is implemented, gated, and verified
 on the phone (see its section). The OTP plan is closed.
-No upstream, never push, merge or release without the owner's word.
+Never merge or release without the owner's word.
+The branch is pushed and PR #51 (https://github.com/haroongondal/apps-hub/pull/51)
+is open against `main`.
 
 Read first: `docs/strongroom/OTP-PLAN.md` (the task list — one task at a time,
 committed and reviewed before the next), then `DESIGN.md` §15, then
