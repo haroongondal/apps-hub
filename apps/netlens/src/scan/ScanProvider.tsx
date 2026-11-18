@@ -51,7 +51,8 @@ export interface NetworkScan {
   store: (DeviceStore & SettingsStore) | null;
   runScan(): Promise<void>;
   stopScan(): Promise<void>;
-  saveDevice(device: ReconciledDevice): Promise<void>;
+  /** Merges the patch onto the latest row of that device (names may have arrived since the caller read it) and saves it. */
+  saveDevice(id: number | null, patch: Partial<ReconciledDevice>): Promise<void>;
   binding: NetLensNativeBinding;
 }
 
@@ -111,10 +112,11 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
   const carryTags = useCallback(
     (target: DeviceStore, generation: number): void => {
       const changed = carryPersonTags(devicesRef.current);
-      if (changed.length === 0) return;
-      const byId = new Map(changed.map((row) => [row.id, row]));
+      const rows = changed.filter((row) => row.id !== null);
+      if (rows.length === 0) return;
+      const byId = new Map(rows.map((row) => [row.id, row]));
       commitDevices(devicesRef.current.map((row) => byId.get(row.id) ?? row));
-      for (const row of changed) {
+      for (const row of rows) {
         target.updateDevice(row).catch((e: unknown) => {
           if (scanGeneration.current !== generation) return;
           setErrorNote(`HomeNet could not save who is home: ${e instanceof Error ? e.message : String(e)}`);
@@ -288,8 +290,10 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
   }, [engineProxy]);
 
   const saveDevice = useCallback(
-    async (updated: ReconciledDevice): Promise<void> => {
-      if (!store) return;
+    async (id: number | null, patch: Partial<ReconciledDevice>): Promise<void> => {
+      const latest = devicesRef.current.find((row) => row.id === id);
+      if (!store || !latest) return;
+      const updated: ReconciledDevice = { ...latest, ...patch };
       // Commit before the write so a name arriving meanwhile builds on this edit.
       commitDevices(devicesRef.current.map((row) => (row.id === updated.id ? updated : row)));
       try {

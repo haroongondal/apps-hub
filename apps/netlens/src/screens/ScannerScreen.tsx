@@ -3,7 +3,7 @@
  * ScanProvider so it outlives this tab; this screen renders the devices and
  * owns the filter, the device sheet and its ping, port and control checks.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, FlatList, Linking, Switch, View } from 'react-native';
 import {
   Button,
@@ -96,6 +96,7 @@ export default function ScannerScreen() {
   );
   const [nameDraft, setNameDraft] = useState('');
   const [personDraft, setPersonDraft] = useState('');
+  const openedPerson = useRef('');
   const [trustDraft, setTrustDraft] = useState(false);
   const [pingTargetBusy, setPingTargetBusy] = useState(false);
   const [pingResult, setPingResult] = useState<PingResult | null>(null);
@@ -122,33 +123,39 @@ export default function ScannerScreen() {
   }, [devices, filter]);
 
   // iOS has no live regions, so the finished result is announced explicitly.
+  const prevPhase = useRef(phase);
   useEffect(() => {
-    if (phase === 'done') {
+    // Only on the move to done, not when the tab remounts with the scan already done.
+    if (phase === 'done' && prevPhase.current !== 'done') {
       AccessibilityInfo.announceForAccessibility(
         `Scan finished. ${activeCount} devices responding, ${newBadgeCount} new.`,
       );
     }
+    prevPhase.current = phase;
   }, [phase, activeCount, newBadgeCount]);
 
   const openDetail = useCallback((device: ReconciledDevice): void => {
     setDetail(device);
     setNameDraft(device.customName ?? '');
     setPersonDraft(device.person ?? '');
+    openedPerson.current = device.person ?? '';
     setTrustDraft(device.isTrusted);
     setPingResult(null);
     setPortCheck(null);
   }, []);
 
   const saveDetail = useCallback(async (): Promise<void> => {
-    if (detail === null) return;
+    // Keep the sheet open until the store is ready, so the edit isn't dropped.
+    if (store === null || detail === null) return;
+    const person = personDraft.trim();
     setDetail(null);
-    await saveDevice({
-      ...detail,
+    await saveDevice(detail.id, {
       customName: nameDraft.trim() || null,
-      person: personDraft.trim() || null,
+      // Untouched means the latest row's tag stays: a tag carried over while the sheet was open must survive.
+      ...(person !== openedPerson.current.trim() && { person: person || null }),
       isTrusted: trustDraft,
     });
-  }, [detail, nameDraft, personDraft, saveDevice, trustDraft]);
+  }, [detail, nameDraft, personDraft, saveDevice, store, trustDraft]);
 
   const pingTarget = useCallback(async (): Promise<void> => {
     if (detail === null || pingTargetBusy) return;
