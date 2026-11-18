@@ -7,6 +7,7 @@ import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
 import expo.modules.inflowcore.core.Suggestion
+import expo.modules.inflowcore.core.SuggestionMoves
 import expo.modules.inflowcore.core.SuggestionState
 
 /**
@@ -29,10 +30,10 @@ class AutopilotProvider : ContentProvider() {
     val store = runCatching { store() }.getOrNull()
     return when (matcher.match(uri)) {
       LIST -> MatrixCursor(ROW_COLUMNS).also { c ->
-        if (store != null) runCatching { SqlSuggestionStore(store.db).list(states(uri), LIST_LIMIT) }.getOrDefault(emptyList()).forEach { c.addRow(row(it)) }
+        if (store != null) runCatching { fresh(store).list(states(uri), LIST_LIMIT) }.getOrDefault(emptyList()).forEach { c.addRow(row(it)) }
       }
       ONE -> MatrixCursor(ROW_COLUMNS).also { c ->
-        if (store != null) runCatching { SqlSuggestionStore(store.db).get(uri.lastPathSegment!!.toLong()) }.getOrNull()?.let { c.addRow(row(it)) }
+        if (store != null) runCatching { fresh(store).get(uri.lastPathSegment!!.toLong()) }.getOrNull()?.let { c.addRow(row(it)) }
       }
       ITEM -> MatrixCursor(ITEM_COLUMNS).also { c ->
         val item = if (store != null) runCatching { store.autopilotItem(uri.lastPathSegment!!.toLong()) }.getOrNull() else null
@@ -52,7 +53,7 @@ class AutopilotProvider : ContentProvider() {
       else -> return 0
     }
     val id = uri.lastPathSegment?.toLongOrNull() ?: return 0
-    return runCatching { store()?.let { SqlSuggestionStore(it.db).setState(id, state, System.currentTimeMillis()) } }.getOrNull()?.let { if (it) 1 else 0 } ?: 0
+    return runCatching { store()?.let { SuggestionMoves.move(SqlSuggestionStore(it.db), id, state, System.currentTimeMillis()) } }.getOrNull()?.let { if (it) 1 else 0 } ?: 0
   }
 
   override fun insert(uri: Uri, values: ContentValues?): Uri = throw UnsupportedOperationException("Read-only")
@@ -64,6 +65,9 @@ class AutopilotProvider : ContentProvider() {
     ITEM -> "vnd.android.cursor.item/vnd.com.haroon.inflow.item"
     else -> null
   }
+
+  /** Expired rows are swept before every read, so nobody sees one as waiting. */
+  private fun fresh(store: SqlItemStore) = SqlSuggestionStore(store.db).also { it.expire(System.currentTimeMillis()) }
 
   private fun states(uri: Uri): Set<SuggestionState> {
     val wanted = uri.getQueryParameter("state")?.split(",")?.mapNotNull { n -> SuggestionState.values().firstOrNull { it.name.equals(n.trim(), ignoreCase = true) } }?.toSet()
