@@ -13,7 +13,7 @@ function bytesOf(n: number) {
   return b;
 }
 
-function fake(files: Record<string, Buffer>, opts: { cancel?: boolean; sizeFails?: boolean; hold?: Promise<void> } = {}) {
+function fake(files: Record<string, Buffer>, opts: { cancel?: boolean; sizeFails?: boolean | string; hold?: Promise<void> } = {}) {
   const store = new Map(Object.entries(files));
   const removed: string[] = [];
   const deps: ImagePickDeps = {
@@ -22,7 +22,7 @@ function fake(files: Record<string, Buffer>, opts: { cancel?: boolean; sizeFails
       return opts.cancel ? null : [...store.keys()].map(uri => ({ uri, name: uri.split('/').pop()!, mimeType: 'image/jpeg' }));
     },
     async size(uri) {
-      if (opts.sizeFails) throw new Error('gone');
+      if (opts.sizeFails === true || opts.sizeFails === uri) throw new Error('gone');
       return store.get(uri)!.length;
     },
     async readBase64(uri, position, length) {
@@ -127,4 +127,23 @@ test('the phone page asks the app to pick, and never adds a camera path', () => 
   }
   assert.match(editor, /copyToCacheDirectory: true/);
   assert.match(editor, /type: 'image\/\*'/);
+  assert.match(editor, /imagesRef\.current\?\.dispose\(\)/, 'leaving the editor deletes copies the page never released');
+});
+
+test('a pick that fails partway deletes every copy, including the ones not reached yet', async () => {
+  const { picker, removed } = fake(
+    { 'file:///c/a.jpg': bytesOf(10), 'file:///c/b.jpg': bytesOf(10), 'file:///c/c.jpg': bytesOf(10) },
+    { sizeFails: 'file:///c/b.jpg' },
+  );
+  await assert.rejects(picker.pick(), /gone/);
+  assert.deepEqual(removed.sort(), ['file:///c/a.jpg', 'file:///c/b.jpg', 'file:///c/c.jpg']);
+});
+
+test('dispose deletes every copy still held, for when the editor closes before the page releases them', async () => {
+  const { picker, removed } = fake({ 'file:///c/a.jpg': bytesOf(10), 'file:///c/b.jpg': bytesOf(10) });
+  await picker.pick();
+  await picker.release(['file:///c/a.jpg']);
+  await picker.dispose();
+  assert.deepEqual(removed, ['file:///c/a.jpg', 'file:///c/b.jpg']);
+  await assert.rejects(picker.read('file:///c/b.jpg', 0), /no longer available/);
 });
