@@ -9,6 +9,7 @@ import android.graphics.RectF
 import android.os.SystemClock
 import android.text.format.DateFormat
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -49,6 +50,7 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
   private val timerRow = TimerRow(context, density)
   private val rows = LinearLayout(context).apply { orientation = VERTICAL }
   private var accent = Color.WHITE
+  var onTouchDown: (() -> Unit)? = null
 
   init {
     orientation = VERTICAL
@@ -59,6 +61,12 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
     addView(ears, LayoutParams(LayoutParams.MATCH_PARENT, earHeight))
     addView(sub, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
     addView(rows, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+  }
+
+  // Sees every touch in the card before its controls do, without taking it.
+  override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+    if (ev.actionMasked == MotionEvent.ACTION_DOWN) onTouchDown?.invoke()
+    return false
   }
 
   // The call row first, then the media and timer rows in widget order, each only when it has something to show.

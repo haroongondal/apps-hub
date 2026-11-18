@@ -77,7 +77,7 @@ class NotchMediaListener : NotificationListenerService() {
   // The session hands over a decoded Bitmap, so inSampleSize cannot apply; scale by the same factor instead.
   private fun thumb(b: Bitmap): Bitmap {
     val s = sampleSize(b.width, b.height, 96)
-    return if (s == 1) b else Bitmap.createScaledBitmap(b, b.width / s, b.height / s, true)
+    return if (s == 1) b else Bitmap.createScaledBitmap(b, (b.width / s).coerceAtLeast(1), (b.height / s).coerceAtLeast(1), true)
   }
 
   companion object {

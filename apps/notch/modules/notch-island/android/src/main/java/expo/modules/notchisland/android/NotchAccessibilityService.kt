@@ -1,6 +1,8 @@
 package expo.modules.notchisland.android
 
 import android.accessibilityservice.AccessibilityService
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.app.Notification
 import android.content.BroadcastReceiver
@@ -125,7 +127,15 @@ class NotchAccessibilityService : AccessibilityService() {
     else -> null
   }
 
-  private fun ticking() = NotchTimer.state.running || NotchMedia.call != null
+  // A running timer whose widget is off stays running unseen; its row shows the true time when the widget is back.
+  private fun ticking() = ("timer" in settings.widgets && NotchTimer.state.running) || NotchMedia.call != null
+
+  // A tap on the open card, or a rebuild while open, starts the fold-back delay again.
+  private fun holdOpen() {
+    if (!open) return
+    main.removeCallbacks(collapse)
+    PillGeometry.foldDelayMs(settings.foldMs)?.let { main.postDelayed(collapse, it) }
+  }
 
   private fun folded(): PillBox {
     val density = resources.displayMetrics.density
@@ -174,7 +184,10 @@ class NotchAccessibilityService : AccessibilityService() {
     small = scaled(PillGeometry.collapsed(hole, screenW, density), scale, screenW, density)
 
     val holeWidth = hole?.let { it.right - it.left } ?: (58 * density).toInt()
-    val content = IslandCard(this, holeWidth, small.height, density).apply { alpha = if (open) 1f else 0f }
+    val content = IslandCard(this, holeWidth, small.height, density).apply {
+      alpha = if (open) 1f else 0f
+      onTouchDown = this@NotchAccessibilityService::holdOpen
+    }
     card = content
     refresh()
     val edge = (10 * density).toInt()
@@ -220,6 +233,7 @@ class NotchAccessibilityService : AccessibilityService() {
     pill = view
     params = lp
     corners(box)
+    holdOpen()
     main.removeCallbacks(tick)
     if (ticking()) main.post(tick)
   }
@@ -288,6 +302,12 @@ class NotchAccessibilityService : AccessibilityService() {
         for (m in marks) m.alpha = if (next) 1f - t else t
         runCatching { wm?.updateViewLayout(view, lp) }
       }
+      // Rows that changed during the animation were skipped by resizeOpen; catch up once it has ended.
+      addListener(object : AnimatorListenerAdapter() {
+        override fun onAnimationEnd(animation: Animator) {
+          main.post { if (open) resizeOpen() }
+        }
+      })
       start()
     }
   }
