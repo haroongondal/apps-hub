@@ -42,7 +42,7 @@ The Library tab (`app/(tabs)/library.tsx`) is the Library. Its logic is `package
 
 ## Nexus (AI layer)
 
-The app is named Nexus (N2). Logic is `packages/knowledge-core` (job queue, graph, Ask, OpenAI adapter; `pnpm --filter @apps-hub/knowledge-core test`); `src/nexus/` is the glue. Design: `docs/superpowers/specs/2026-11-18-nexus-design.md`; progress: `docs/handoffs/nexus.md`.
+The app is named Nexus (N2). Logic is `packages/knowledge-core` (job queue, graph, Ask, the Gemini and Groq ports over the OpenAI-compatible adapter; `pnpm --filter @apps-hub/knowledge-core test`); `src/nexus/` is the glue. Design: `docs/superpowers/specs/2026-11-18-nexus-design.md`; progress: `docs/handoffs/nexus.md`.
 
 - Tabs: Stream (`app/(tabs)/index.tsx`, capture + Ask) and Library (`app/(tabs)/library.tsx`). A folder opens as `/folder` (same screen) so Back works.
 - `openKnowledge()` (`src/nexus/worker.ts`) opens `Knowledge` on the Library's connection; `startWorker()` in the root layout runs up to 3 `runNext` loops while the app is in the foreground. Nothing is sent without a key (`src/nexus/ai.ts`, expo-secure-store).

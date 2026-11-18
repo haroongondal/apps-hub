@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { pruneConcepts } from '../knowledge.ts';
+import { Knowledge, pruneConcepts } from '../knowledge.ts';
 import { AiError } from '../types.ts';
 import { setup } from './helpers.ts';
 
@@ -215,4 +215,31 @@ test('on a cold start every running job goes back in the queue at once', async (
   assert.equal(await kn.recover(), 0);
   assert.equal(await kn.recover(0), 1);
   assert.equal((await kn.job(a.id))?.status, 'queued');
+});
+
+test('a new embedding model drops the old vectors, keeps the transcript and graph, and embeds once', async () => {
+  const { lib, db, ai, content, add, drain, clock } = await setup();
+  ai.onExtract = () => graph;
+  const item = await add('A', 'Event sourcing stores events');
+  await drain();
+  const before = ai.calls.embed;
+  assert.equal((await db.first('SELECT COUNT(*) AS n FROM kn_chunks'))?.n, 1);
+
+  let n = 0;
+  const reopen = () => Knowledge.open(lib, { ai, content, embedTag: 'new-model', now: () => clock.now, newId: () => `x${++n}` });
+  const kn = await reopen();
+  assert.equal((await db.first('SELECT COUNT(*) AS n FROM kn_chunks'))?.n, 0);
+  assert.equal((await db.first("SELECT COUNT(*) AS n FROM kn_nodes WHERE type = 'concept' AND embedding IS NOT NULL"))?.n, 0);
+  assert.deepEqual([(await kn.job(item.id))?.stage, (await kn.job(item.id))?.status], ['embed', 'queued']);
+  assert.equal((await db.first('SELECT COUNT(*) AS n FROM kn_segments WHERE item_id = ?', [item.id]))?.n, 1);
+
+  while ((await kn.runNext()) === 'ran');
+  assert.equal((await kn.job(item.id))?.status, 'done');
+  assert.equal((await db.first('SELECT COUNT(*) AS n FROM kn_chunks'))?.n, 1);
+  assert.equal(ai.calls.embed - before, 1);
+  assert.equal((await db.first("SELECT COUNT(*) AS n FROM kn_nodes WHERE type = 'concept'"))?.n, 2); // matched by name, no duplicates
+
+  await reopen(); // same model again: nothing to redo
+  assert.equal((await db.first('SELECT COUNT(*) AS n FROM kn_chunks'))?.n, 1);
+  assert.equal((await kn.job(item.id))?.status, 'done');
 });

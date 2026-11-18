@@ -1,20 +1,26 @@
-import { openAiPort, type OpenAiPort } from '@apps-hub/knowledge-core';
+import { nexusPort, type CompatPort } from '@apps-hub/knowledge-core';
 import * as SecureStore from 'expo-secure-store';
 
-const KEY = 'openai-api-key';
+// Gemini embeds text and reads images; Groq answers, builds the graph and transcribes. Both keys are needed.
+export type Service = 'gemini' | 'groq';
 const TIMEOUT_MS = 10 * 60_000; // long enough to upload and transcribe a 25 MB recording
 
-let cached: string | null | undefined;
+const keyName = (s: Service) => `${s}-api-key`;
+const cached: Partial<Record<Service, string | null>> = {};
 
-export async function getApiKey(): Promise<string | null> {
-  if (cached === undefined) cached = await SecureStore.getItemAsync(KEY);
-  return cached;
+export async function getKey(s: Service): Promise<string | null> {
+  if (cached[s] === undefined) cached[s] = await SecureStore.getItemAsync(keyName(s));
+  return cached[s] ?? null;
 }
 
-export async function setApiKey(key: string | null): Promise<void> {
-  if (key) await SecureStore.setItemAsync(KEY, key);
-  else await SecureStore.deleteItemAsync(KEY);
-  cached = key;
+export async function setKey(s: Service, key: string | null): Promise<void> {
+  if (key) await SecureStore.setItemAsync(keyName(s), key);
+  else await SecureStore.deleteItemAsync(keyName(s));
+  cached[s] = key;
+}
+
+export async function hasKeys(): Promise<boolean> {
+  return !!(await getKey('gemini')) && !!(await getKey('groq'));
 }
 
 const timedFetch: typeof fetch = (input, init) => {
@@ -23,11 +29,16 @@ const timedFetch: typeof fetch = (input, init) => {
   return fetch(input, { ...init, signal: abort.signal }).finally(() => clearTimeout(timer));
 };
 
-export const portFor = (apiKey: string) => openAiPort({ apiKey, fetch: timedFetch });
+/** Proves one key works before it is saved: an embedding for Gemini, a one-line answer for Groq. */
+export async function checkKey(s: Service, key: string): Promise<void> {
+  const port = nexusPort({ gemini: s === 'gemini' ? key : '', groq: s === 'groq' ? key : '', fetch: timedFetch });
+  if (s === 'gemini') await port.embed(['Nexus key check']);
+  else await port.answer('Nexus key check', ['Nexus key check']);
+}
 
-const current = () => portFor(cached ?? '');
+const current = () => nexusPort({ gemini: cached.gemini ?? '', groq: cached.groq ?? '', fetch: timedFetch });
 
-export const ai: OpenAiPort = {
+export const ai: CompatPort = {
   embed: (texts) => current().embed(texts),
   extract: (segments) => current().extract(segments),
   answer: (question, sources) => current().answer(question, sources),

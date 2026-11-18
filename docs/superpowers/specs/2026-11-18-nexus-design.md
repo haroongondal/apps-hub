@@ -108,10 +108,17 @@ adds the new label as an alias.
 
 ### AI provider **(call)**
 
-One OpenAI-compatible adapter over `fetch`, with the base URL configurable:
-`text-embedding-3-small` (512 dims), `gpt-4o-mini` for JSON-schema extraction, answers and
-image description, `whisper-1` (`verbose_json` segments) for audio. One key covers every
-stage. The key lives in expo-secure-store (needs approval).
+One OpenAI-compatible adapter over `fetch` (the wire format, not the OpenAI service), with the
+base URL and models set per provider (`packages/knowledge-core/src/providers.ts`):
+- Gemini (`https://generativelanguage.googleapis.com/v1beta/openai/`): `gemini-embedding-001`
+  cut to 512 dims and re-normalised (embeddings), `gemini-3.5-flash-lite` (image description).
+- Groq (`https://api.groq.com/openai/v1/`): `openai/gpt-oss-120b` with `reasoning_effort` low
+  (graph as `json_object`, answers), `whisper-large-v3-turbo` (`verbose_json` segments) for audio.
+
+Two keys, `gemini-api-key` and `groq-api-key`, in expo-secure-store. Nexus needs both. Vectors
+record their embedding model (`kn_meta.embed_tag`); a change drops the old vectors and re-runs
+each item from the embed stage, keeping its transcript and atoms. Not verified against live
+calls yet: the Gemini `dimensions` field, `json_object` on gpt-oss, and the model IDs.
 
 ### App (PDF Editor, Phase N2+)
 
@@ -138,7 +145,7 @@ Prompt wording, chunk overlap, which atoms to show in the graph, UI layout withi
 
 ## Owner decisions (2026-11-18)
 
-- OpenAI as the provider, with the owner's key: yes.
+- OpenAI as the provider, with the owner's key: yes (2026-11-18). Changed 2026-11-19 by the owner's instruction: Gemini and Groq instead of OpenAI, two keys (see "AI provider").
 - New dependencies expo-secure-store 15.0.8 and expo-audio 1.1.1 (both MIT, AndroidX only,
   no install scripts): approved. Background recording is on (foreground service, microphone).
 - Rename to "Nexus": yes (display name, Store name; package id and Store id unchanged).

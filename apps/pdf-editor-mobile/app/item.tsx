@@ -11,7 +11,7 @@ import { IconButton } from '../src/library/icon-button';
 import { openItem } from '../src/library/open-item';
 import { itemFile } from '../src/library/paths';
 import { errorMessage, useDebounced } from '../src/library/use-library';
-import { getApiKey } from '../src/nexus/ai';
+import { hasKeys } from '../src/nexus/ai';
 import { saveNote } from '../src/nexus/capture';
 import { jobLabel } from '../src/nexus/labels';
 import { enqueue, kick, onQueueChange, openKnowledge } from '../src/nexus/worker';
@@ -134,7 +134,7 @@ export default function ItemScreen() {
       ideas: await kn.ideas(item.id),
       segments: item.kind === 'note' ? [] : await kn.segmentsOf(item.id),
       related: (await kn.related(item.id)).map((r) => r.item),
-      hasKey: !!(await getApiKey()),
+      hasKey: await hasKeys(),
     });
   }, [params.id]);
   useEffect(() => {

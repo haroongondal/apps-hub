@@ -33,6 +33,8 @@ export interface Answer {
 export interface KnowledgeDeps {
   ai: AiPort;
   content: ContentPort;
+  /** Names the embedding model; when it changes, stored vectors are made again. */
+  embedTag: string;
   now(): number;
   newId(): string;
 }
@@ -101,7 +103,29 @@ export class Knowledge {
 
   static async open(lib: Library, deps: KnowledgeDeps): Promise<Knowledge> {
     await migrate(lib.db, 'knowledge', KNOWLEDGE_STEPS);
-    return new Knowledge(lib, deps);
+    const kn = new Knowledge(lib, deps);
+    await kn.retagEmbeddings();
+    return kn;
+  }
+
+  /**
+   * Vectors from another embedding model can't be compared with the new ones, so they go. Segments, atoms and links stay.
+   * Items that had vectors re-run from the embed stage, which then rebuilds their graph too.
+   */
+  private async retagEmbeddings(): Promise<void> {
+    const tag = this.deps.embedTag;
+    if ((await this.db.first("SELECT value FROM kn_meta WHERE key = 'embed_tag'"))?.value === tag) return;
+    await this.db.transaction(async (tx) => {
+      await tx.run(
+        `UPDATE kn_jobs SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, error = NULL, updated_at = ?
+         WHERE stage <> 'text' AND item_id IN (SELECT item_id FROM kn_chunks)`,
+        [this.deps.now()],
+      );
+      await tx.run('DELETE FROM kn_chunks');
+      // shortcut: concepts that existed before keep name-only matching (no vector to compare); new concepts get vectors again, upgrade by re-embedding labels here if duplicates show up.
+      await tx.run("UPDATE kn_nodes SET embedding = NULL WHERE type = 'concept'");
+      await tx.run("INSERT INTO kn_meta (key, value) VALUES ('embed_tag', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", [tag]);
+    });
   }
 
   async enqueue(itemId: string): Promise<void> {
