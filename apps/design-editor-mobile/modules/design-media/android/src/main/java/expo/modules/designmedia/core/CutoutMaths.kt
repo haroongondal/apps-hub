@@ -56,6 +56,13 @@ private fun axis(nOut: Int, nIn: Int): Axis {
   return Axis(i0, i1, f)
 }
 
+// ref.mask_curve: smoothstep from 0.3 to 0.7 pushes half-sure alphas (a ghosted arm) to 0 or 1 before the feather; 0, 0.5
+// and 1 stay put, so the subject's area at alpha 0.5 is unchanged (checked on the Phase 0 photos). One curve for both models.
+fun maskCurve(a: Float): Float {
+  val t = ((a - 0.5f) * 2.5f + 0.5f).coerceIn(0f, 1f) // centred so 0.5 maps to exactly 0.5 in float32
+  return t * t * (3f - 2f * t)
+}
+
 // ref.u2_mask in float32 (it runs float64; a 12 MP photo would need ~200 MB more), so a pixel may differ by 1.
 fun alphaMask(pred: FloatArray, pw: Int, ph: Int, w: Int, h: Int, minMax: Boolean, featherPx: Float): ByteArray {
   require(pred.size == pw * ph && w > 0 && h > 0) { "bad mask size" }
@@ -80,7 +87,7 @@ fun alphaMask(pred: FloatArray, pw: Int, ph: Int, w: Int, h: Int, minMax: Boolea
       val fx = ax.f[x]
       val top = p[r0 + x0] * (1 - fx) + p[r0 + x1] * fx
       val bot = p[r1 + x0] * (1 - fx) + p[r1 + x1] * fx
-      m[y * w + x] = top * (1 - fy) + bot * fy
+      m[y * w + x] = maskCurve(top * (1 - fy) + bot * fy)
     }
   }
   val out = ByteArray(w * h)

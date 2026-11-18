@@ -111,6 +111,41 @@ class CutoutMathsTest {
   }
 
   @Test
+  fun maskCurveKneesEndsAndMonotonic() {
+    for ((a, want) in listOf(-1f to 0f, 0f to 0f, 0.3f to 0f, 0.5f to 0.5f, 0.7f to 1f, 1f to 1f, 2f to 1f)) assertEquals("$a", want, maskCurve(a), 1e-6f)
+    assertEquals(0.15625f, maskCurve(0.4f), 1e-6f)
+    var last = 0f
+    for (i in 0..1000) {
+      val v = maskCurve(i / 1000f)
+      assertTrue("not monotonic at ${i / 1000f}", v >= last)
+      last = v
+    }
+  }
+
+  @Test
+  fun ghostArmMostlyGoes() {
+    // 120x80: a solid body (1.0) and an arm-sized ghost (0.4, as U2-Netp left the arm in qa/a4-object-3.png).
+    val w = 120
+    val h = 80
+    val pred = FloatArray(w * h) { i -> val x = i % w; val y = i / w; if (x >= 70) 1f else if (x in 10..60 && y in 30..50) 0.4f else 0f }
+    val got = alphaMask(pred, w, h, w, h, false, 2f)
+    for (y in 37..43) for (x in 17..53) assertTrue("ghost ($x, $y) = ${got[y * w + x].toInt() and 0xFF}", (got[y * w + x].toInt() and 0xFF) <= 40)
+    for (y in 0 until h) for (x in 80 until w) assertEquals(255, got[y * w + x].toInt() and 0xFF)
+  }
+
+  @Test
+  fun softEdgeStaysSoftAfterTheFeather() {
+    // A solid mask whose edge is one 0.5 pixel: the curve keeps 0.5, the feather still ramps over several pixels.
+    val w = 40
+    val pred = FloatArray(w * w) { i -> val x = i % w; if (x < 20) 0f else if (x == 20) 0.5f else 1f }
+    val got = alphaMask(pred, w, w, w, w, false, 2f)
+    val row = (0 until w).map { got[20 * w + it].toInt() and 0xFF }
+    assertTrue("mid ${row[20]}", row[20] in 127..128)
+    assertTrue("ramp $row", row.count { it in 10..245 } >= 5)
+    assertTrue("ramp $row", row.zipWithNext().all { (a, b) -> b >= a })
+  }
+
+  @Test
   fun withAlphaAndHasAlpha() {
     val px = intArrayOf(0xFF102030.toInt(), 0x00405060)
     assertFalse(hasAlpha(intArrayOf(0xFF000000.toInt(), -1)))
