@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Kind, SuggestionRow } from '@apps-hub/autopilot-contract';
 import type { AutopilotSettings } from '../../modules/inflow-core/src/index.ts';
-import { formFromSettings, groupByState, kindLabel, settingsForSave, toggleChat, waitingSummary, type SettingsForm } from '../autopilot.ts';
+import { formFromSettings, groupByState, kindLabel, runDoneMessage, settingsForSave, toggleChat, waitingSummary, type SettingsForm } from '../autopilot.ts';
 
 const row = (id: number, state: SuggestionRow['state'], created_at: number, expires_at: number, kind: Kind = 'reply'): SuggestionRow => ({
   id, kind, title: `t${id}`, item_id: id, due_at: null, state, created_at, expires_at,
@@ -10,7 +10,7 @@ const row = (id: number, state: SuggestionRow['state'], created_at: number, expi
 
 const base: AutopilotSettings = {
   kinds: ['reply', 'bill'], multiple: 3, minMinor: 500_000, hugeMinor: 5_000_000,
-  pickedChats: ['com.whatsapp|num:1'], lookIn: ['com.google.android.apps.maps'], bankApp: 'Meezan', alarmBefore: true,
+  pickedChats: ['com.whatsapp|num:1'], lookIn: ['com.google.android.apps.maps'], bankApp: 'com.example.bank', alarmBefore: true,
 };
 const form = (over: Partial<SettingsForm> = {}): SettingsForm => ({ ...formFromSettings(base), ...over });
 const failure = (f: SettingsForm) => {
@@ -89,11 +89,21 @@ test('settingsForSave look-in apps: lines, dedupe, package-like only', () => {
   assert.deepEqual(none.ok && none.settings.lookIn, []);
 });
 
-test('settingsForSave bank app: blank means none', () => {
+test('settingsForSave bank app: blank means none, a package is kept, a name is rejected', () => {
   const r = settingsForSave(form({ bankApp: '   ' }));
   assert.equal(r.ok && r.settings.bankApp, null);
-  const t = settingsForSave(form({ bankApp: ' Meezan ' }));
-  assert.equal(t.ok && t.settings.bankApp, 'Meezan');
+  const t = settingsForSave(form({ bankApp: ' com.example.bank ' }));
+  assert.equal(t.ok && t.settings.bankApp, 'com.example.bank');
+  for (const v of ['Meezan', 'com.example bank', 'bank.', '.bank']) assert.match(failure(form({ bankApp: v })), /Bank app/, v);
+});
+
+test('runDoneMessage says what each kind of Run did', () => {
+  assert.equal(runDoneMessage('reply', false), 'Deputy is starting.');
+  assert.equal(runDoneMessage('reply', true), 'Deputy is starting.');
+  assert.equal(runDoneMessage('event', false), 'Calendar entry opened.');
+  assert.equal(runDoneMessage('bill', false), 'Reminder set for the morning it is due.');
+  assert.equal(runDoneMessage('money', true), 'Bank app opened.');
+  assert.equal(runDoneMessage('money', false), 'Inflow opened.');
 });
 
 test('formFromSettings shows whole rupees and one package per line', () => {

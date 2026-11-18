@@ -4,13 +4,12 @@ import { Button, Empty, Group, Header, Notice, Pill, Row, Screen, Text, space } 
 import type { State, SuggestionRow } from '@apps-hub/autopilot-contract';
 import InflowCore, { addSuggestionsListener } from 'inflow-core';
 import { dueLabel } from './ai.ts';
-import { groupByState, kindLabel } from './autopilot.ts';
+import { groupByState, kindLabel, runDoneMessage } from './autopilot.ts';
 import { LOAD_ERROR } from './messages.ts';
 import { useHardwareBack } from './useHardwareBack.ts';
 
 const RUN_ERROR = "Inflow couldn't start that. Close and reopen the app, then try again.";
 const SKIP_ERROR = "Inflow couldn't skip that. Close and reopen the app, then try again.";
-const STARTED = 'Deputy is starting.';
 const REPLY_NOTE = 'Deputy will ask you before it sends anything.';
 const STATE_LABEL: Record<State, string> = { waiting: 'Waiting', started: 'Started', done: 'Done', skipped: 'Skipped', expired: 'Expired' };
 
@@ -19,14 +18,22 @@ export interface ActionMessage {
   text: string;
 }
 
+const bankAppIsSet = (): boolean => {
+  try {
+    return InflowCore.autopilotSettings().bankApp !== null;
+  } catch {
+    return false;
+  }
+};
+
 // Run and Skip for any list of suggestions; onChanged reloads the list after either one.
-export function useSuggestionActions(onChanged: () => void): { run: (id: number) => void; skip: (id: number) => void; message: ActionMessage | null } {
+export function useSuggestionActions(onChanged: () => void): { run: (row: SuggestionRow) => void; skip: (id: number) => void; message: ActionMessage | null } {
   const [message, setMessage] = useState<ActionMessage | null>(null);
-  const run = (id: number) => {
+  const run = (row: SuggestionRow) => {
     try {
-      // null: Deputy was started. Text: why it could not be, written for the owner.
-      const reason = InflowCore.runSuggestion(id);
-      setMessage(reason === null ? { tone: 'neutral', text: STARTED } : { tone: 'danger', text: reason });
+      // null: it started. Text: why it could not, written for the owner.
+      const reason = InflowCore.runSuggestion(row.id);
+      setMessage(reason === null ? { tone: 'neutral', text: runDoneMessage(row.kind, bankAppIsSet()) } : { tone: 'danger', text: reason });
     } catch {
       setMessage({ tone: 'danger', text: RUN_ERROR });
     }
@@ -44,7 +51,7 @@ export function useSuggestionActions(onChanged: () => void): { run: (id: number)
   return { run, skip, message };
 }
 
-export function SuggestionRowItem({ row, now, onRun, onSkip }: { row: SuggestionRow; now: number; onRun: (id: number) => void; onSkip: (id: number) => void }) {
+export function SuggestionRowItem({ row, now, onRun, onSkip }: { row: SuggestionRow; now: number; onRun: (row: SuggestionRow) => void; onSkip: (id: number) => void }) {
   const waiting = row.state === 'waiting';
   const when = row.due_at === null ? '' : ` · ${dueLabel(row.due_at, now)}`;
   return (
@@ -54,7 +61,7 @@ export function SuggestionRowItem({ row, now, onRun, onSkip }: { row: Suggestion
       trailing={
         waiting ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
-            <Button label="Run" size="sm" onPress={() => onRun(row.id)} accessibilityHint={`Run: ${row.title}`} />
+            <Button label="Run" size="sm" onPress={() => onRun(row)} accessibilityHint={`Run: ${row.title}`} />
             <Button label="Skip" variant="ghost" size="sm" onPress={() => onSkip(row.id)} accessibilityHint={`Skip: ${row.title}`} />
           </View>
         ) : (

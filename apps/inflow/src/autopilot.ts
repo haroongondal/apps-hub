@@ -44,6 +44,14 @@ export const formFromSettings = (s: AutopilotSettings): SettingsForm => ({
 export const toggleChat = (picked: string[], id: string, on: boolean): string[] =>
   on ? (picked.includes(id) ? picked : [...picked, id]) : picked.filter((p) => p !== id);
 
+// What the owner sees once Run worked; the money run opens the bank app, or Inflow when none is set.
+export function runDoneMessage(kind: Kind, bankAppSet: boolean): string {
+  if (kind === 'event') return 'Calendar entry opened.';
+  if (kind === 'bill') return 'Reminder set for the morning it is due.';
+  if (kind === 'money') return bankAppSet ? 'Bank app opened.' : 'Inflow opened.';
+  return 'Deputy is starting.';
+}
+
 const PACKAGE = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$/;
 const MULTIPLE_ERROR = 'Enter a whole number from 1 to 1000 for the multiple, for example 3.';
 const amountError = (name: string) => `Enter ${name} as a number of rupees, 0 or more, for example 5000.`;
@@ -68,5 +76,6 @@ export function settingsForSave(form: SettingsForm): SaveResult {
   if (bad !== undefined) return { ok: false, error: `"${bad}" is not a package name. Use names like com.google.android.apps.maps, one per line.` };
   const pickedChats = [...new Set(form.pickedChats.map((c) => c.trim()).filter((c) => c !== ''))];
   const bankApp = form.bankApp.trim();
+  if (bankApp !== '' && !PACKAGE.test(bankApp)) return { ok: false, error: `Bank app "${bankApp}" is not a package name. Use a name like com.example.bank, or leave it blank.` };
   return { ok: true, settings: { kinds: form.kinds, multiple, minMinor, hugeMinor, pickedChats, lookIn, bankApp: bankApp === '' ? null : bankApp, alarmBefore: form.alarmBefore } };
 }

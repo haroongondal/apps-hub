@@ -103,7 +103,7 @@ export function AutopilotSettings({ onBack }: { onBack: () => void }) {
         <Field label="Multiple of your usual" value={form.multiple} onChangeText={(v) => edit({ multiple: v })} keyboardType="number-pad" mono />
         <Field label="Minimum amount (PKR)" value={form.minRupees} onChangeText={(v) => edit({ minRupees: v })} keyboardType="decimal-pad" mono />
         <Field label="Large amount (PKR)" value={form.hugeRupees} onChangeText={(v) => edit({ hugeRupees: v })} keyboardType="decimal-pad" mono />
-        <Field label="Bank app" hint="The app name shown on the Check a payment button. Leave blank for none." value={form.bankApp} onChangeText={(v) => edit({ bankApp: v })} autoCapitalize="words" />
+        <Field label="Bank app" hint="The app's package name, for example com.example.bank. Leave blank for none." value={form.bankApp} onChangeText={(v) => edit({ bankApp: v })} autoCapitalize="none" autoCorrect={false} mono />
       </Group>
       <Field
         label="Apps Deputy may look in"
