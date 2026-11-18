@@ -163,11 +163,14 @@
       const files = [];
       for (const g of given) {
         const parts = [];
+        let got = 0;
         for (let index = 0; ; index++) {
           const { data, done } = await call('readImage', { uri: g.uri, index });
           parts.push(fromB64(data));
+          got += parts[index].length;
           if (done) break;
         }
+        if (got !== g.bytes) throw new Error('short read'); // a cut photo must not be added
         files.push(new File(parts, g.name, { type: g.type || 'image/jpeg' }));
       }
       const input = drop.querySelector('input');

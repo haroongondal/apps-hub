@@ -58,6 +58,21 @@ test('photos of every awkward size come back byte for byte, in pieces of 1 MB or
   for (const p of picked) assert.ok((await download(picker, p.uri)).equals(files[p.uri as keyof typeof files]), p.uri);
 });
 
+test('a short piece from the reader fails the read instead of cutting the photo short', async () => {
+  const files = { 'file:///c/a.jpg': bytesOf(PIECE_BYTES * 2 + 5) };
+  const store = new Map(Object.entries(files));
+  const picker = createImagePicker({
+    pick: async () => [{ uri: 'file:///c/a.jpg', name: 'a.jpg' }],
+    size: async uri => store.get(uri)!.length,
+    // one read() that returns less than asked, as the legacy Android reader may
+    readBase64: async (uri, position, length) => store.get(uri)!.subarray(position, position + length).subarray(0, -2).toString('base64'),
+    remove: async () => {},
+  });
+  await picker.pick();
+  await assert.rejects(picker.read('file:///c/a.jpg', 0), /Try again/);
+  await assert.rejects(picker.read('file:///c/a.jpg', 2), /Try again/, 'the last piece is checked too');
+});
+
 test('backing out of the picker returns nothing and leaves nothing behind', async () => {
   const { picker, removed } = fake({}, { cancel: true });
   assert.deepEqual(await picker.pick(), []);
@@ -99,6 +114,7 @@ test('the phone page asks the app to pick, and never adds a camera path', () => 
   assert.match(shell, /call\('pickImages'\)/);
   assert.match(shell, /call\('readImage'/);
   assert.match(shell, /call\('releaseImages'/);
+  assert.match(shell, /got !== g\.bytes/, 'the page counts the bytes it received');
   assert.match(shell, /dispatchEvent\(new Event\('change'/);
   for (const f of ['mobile.html', 'desktop.html', 'app.js']) {
     assert.doesNotMatch(read(`packages/design-editor-engine/${f}`), /\bcapture\s*=|capture:/, `${f} must not ask for the camera`);
