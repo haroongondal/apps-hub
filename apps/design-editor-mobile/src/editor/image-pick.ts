@@ -33,19 +33,18 @@ export function createImagePicker(d: ImagePickDeps) {
     async pick(): Promise<PickedImage[]> {
       if (busy) return [];
       busy = true;
-      const got: string[] = [];
+      let assets: Awaited<ReturnType<ImagePickDeps['pick']>> = null;
       try {
-        const assets = (await d.pick()) ?? [];
+        assets = (await d.pick()) ?? [];
         const out: PickedImage[] = [];
         for (const a of assets) {
-          got.push(a.uri);
           const bytes = await d.size(a.uri);
           held.set(a.uri, bytes);
           out.push({ uri: a.uri, name: a.name, type: a.mimeType ?? '', bytes });
         }
         return out;
       } catch (err) {
-        for (const uri of got) await drop(uri);
+        for (const a of assets ?? []) await drop(a.uri);
         throw err;
       } finally {
         busy = false;
@@ -63,6 +62,9 @@ export function createImagePicker(d: ImagePickDeps) {
     },
     async release(uris: string[]): Promise<void> {
       for (const uri of uris) if (held.has(uri)) await drop(uri); // the page may only drop what it was given
+    },
+    async dispose(): Promise<void> {
+      for (const uri of [...held.keys()]) await drop(uri);
     },
   };
 }

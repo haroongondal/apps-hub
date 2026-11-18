@@ -43,7 +43,10 @@ export default function EditorScreen() {
   visionRef.current ??= realVisionHost(webRef);
   const imagesRef = useRef<ReturnType<typeof createImagePicker> | null>(null);
   imagesRef.current ??= createImagePicker(realImageDeps);
-  useEffect(() => () => void visionRef.current?.dispose(), []);
+  useEffect(() => () => {
+    void visionRef.current?.dispose();
+    void imagesRef.current?.dispose();
+  }, []);
 
   // The inlined editor page ships as a metro asset; downloadAsync pins localUri (PDF Editor pattern).
   useEffect(() => {
