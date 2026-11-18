@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="expo.modules.notchisland.core.PillGeometryTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-18T20:11:33.513Z" hostname="OUTSENTIAs-MacBook-Pro.local" time="0.002">
+<testsuite name="expo.modules.notchisland.core.PillGeometryTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-18T20:31:07.653Z" hostname="OUTSENTIAs-MacBook-Pro.local" time="0.0">
   <properties/>
-  <testcase name="lerpEndsMatchTheBoxes" classname="expo.modules.notchisland.core.PillGeometryTest" time="0.001"/>
+  <testcase name="lerpEndsMatchTheBoxes" classname="expo.modules.notchisland.core.PillGeometryTest" time="0.0"/>
   <testcase name="expandedNeverReachesTheScreenEdge" classname="expo.modules.notchisland.core.PillGeometryTest" time="0.0"/>
   <testcase name="expandedIsBiggerAndCentredOnTheSameSpot" classname="expo.modules.notchisland.core.PillGeometryTest" time="0.0"/>
   <testcase name="noCutoutGivesACentredFallbackPill" classname="expo.modules.notchisland.core.PillGeometryTest" time="0.0"/>
