@@ -1,7 +1,7 @@
 // Pure request and reply handling for "Design with AI". No DOM, no Node API:
 // it loads as a plain <script> (globalThis.AiLayout) and through require() in node --test.
 (function (root) {
-  const MODEL = 'claude-sonnet-5-5';
+  const MODEL = 'openai/gpt-oss-120b'; // on Groq, OpenAI-compatible chat completions
   const FONTS = ['Atkinson Hyperlegible Next', 'Jost', 'Playfair Display', 'Dancing Script'];
   const TYPES = ['text', 'rect', 'circle', 'star', 'line'];
   const ALIGNS = ['left', 'center', 'right'];
@@ -58,16 +58,18 @@
     ].join('\n');
   }
 
-  // No forced tool_choice: claude-sonnet-5-5 rejects {type:'tool'} with a 400, so the system prompt asks for the call and parseReply checks it.
+  // tool_choice stays 'auto': the system prompt asks for the call and parseReply checks it.
   function buildRequest(prompt, W, H) {
     return {
       model: MODEL,
-      max_tokens: 8000,
-      output_config: { effort: 'low' },
-      system: systemPrompt(W, H),
-      tools: [{ name: TOOL, description: 'Place the elements of the design on the page.', input_schema: INPUT_SCHEMA }],
-      tool_choice: { type: 'auto' },
-      messages: [{ role: 'user', content: String(prompt).trim() }],
+      max_completion_tokens: 8000,
+      reasoning_effort: 'low',
+      messages: [
+        { role: 'system', content: systemPrompt(W, H) },
+        { role: 'user', content: String(prompt).trim() },
+      ],
+      tools: [{ type: 'function', function: { name: TOOL, description: 'Place the elements of the design on the page.', parameters: INPUT_SCHEMA } }],
+      tool_choice: 'auto',
     };
   }
 
@@ -97,11 +99,12 @@
     return item;
   }
 
-  // reply is the parsed JSON of a Messages API response.
+  // reply is the parsed JSON of a chat completion. The tool's arguments arrive as a JSON string.
   function parseReply(reply) {
-    const blocks = reply && Array.isArray(reply.content) ? reply.content : [];
-    const call = blocks.find((b) => b && b.type === 'tool_use' && b.name === TOOL);
-    const input = call && call.input;
+    const calls = reply && reply.choices && reply.choices[0] && reply.choices[0].message && reply.choices[0].message.tool_calls;
+    const call = Array.isArray(calls) ? calls.find((c) => c && c.function && c.function.name === TOOL) : undefined;
+    let input;
+    try { input = call && JSON.parse(call.function.arguments); } catch { input = undefined; }
     if (!input || typeof input !== 'object' || !Array.isArray(input.items)) throw noLayout();
     const items = input.items.slice(0, MAX_ITEMS).map(cleanItem).filter(Boolean);
     if (!items.length) throw noLayout();

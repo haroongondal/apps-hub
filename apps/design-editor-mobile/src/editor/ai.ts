@@ -4,7 +4,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 // headers: it sends a request body, and this file adds the rest.
 // shortcut: the key sits in an app-private file, not hardware-backed; upgrade to expo-secure-store if wanted.
 const KEY_FILE = FileSystem.documentDirectory + 'ai-key.txt';
-const ENDPOINT = 'https://api.anthropic.com/v1/messages';
+const ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 const TIMEOUT_MS = 60_000;
 
 // Same shape as the desktop's reply (Task 3, ledger R2): HTTP errors carry status and no `error`.
@@ -30,11 +30,11 @@ export async function aiSetKey(key: unknown): Promise<{ ok: boolean; error?: 'no
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 // The page picks the prompt and the tool, not the model, the spend or a server tool. Keep this in step with aiSanitise in apps/design-editor/main.js.
-const AI_MODEL = 'claude-sonnet-5-5'; // keep in step with MODEL in packages/design-editor-engine/ai-layout.js
+const AI_MODEL = 'openai/gpt-oss-120b'; // keep in step with MODEL in packages/design-editor-engine/ai-layout.js
 function aiSanitise(body: unknown): Record<string, unknown> | null {
   if (!isObj(body) || !Array.isArray(body.messages)) return null;
-  if (body.tools !== undefined && (!Array.isArray(body.tools) || body.tools.some((t) => !isObj(t) || 'type' in t))) return null;
-  const clean: Record<string, unknown> = { ...body, model: AI_MODEL, max_tokens: Math.min(Number(body.max_tokens) || 8000, 8000) };
+  if (body.tools !== undefined && (!Array.isArray(body.tools) || body.tools.some((t) => !isObj(t) || t.type !== 'function' || !isObj(t.function)))) return null;
+  const clean: Record<string, unknown> = { ...body, model: AI_MODEL, max_completion_tokens: Math.min(Number(body.max_completion_tokens) || 8000, 8000) };
   delete clean.stream;
   return clean;
 }
@@ -51,7 +51,7 @@ export async function aiRequest(page: unknown): Promise<AiReply> {
     timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     const res = await fetch(ENDPOINT, {
       method: 'POST',
-      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      headers: { Authorization: `Bearer ${key}`, 'content-type': 'application/json' },
       body: JSON.stringify(body),
       signal: ctl.signal,
     });
