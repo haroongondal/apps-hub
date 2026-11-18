@@ -6,22 +6,27 @@ const MB = 1024 * 1024;
 const vision: PhotoModel = { name: 'vision.onnx', url: 'https://x/vision', bytes: 100 * MB, ready: false };
 const text: PhotoModel = { name: 'text.onnx', url: 'https://x/text', bytes: 100 * MB, ready: false };
 
-function fakes(models: PhotoModel[], free = 10_000 * MB, installOk = true, downloadFails = false) {
+function fakes(models: PhotoModel[], free = 10_000 * MB, installOk = true, downloadFails = false, hangs = false) {
+  const state = { hangs };
   const calls = { downloaded: [] as string[], installed: [] as string[], removed: [] as string[] };
   const deps = {
     models: async () => models,
     freeBytes: async () => free,
     remove: async (path: string) => { calls.removed.push(path); },
     install: async (name: string) => { calls.installed.push(name); return installOk; },
-    async download(url: string, to: string, onBytes: (n: number) => void) {
+    async download(url: string, to: string, onBytes: (n: number) => void, signal?: AbortSignal) {
       calls.downloaded.push(to);
+      if (state.hangs) {
+        onBytes(1);
+        await new Promise<void>((_, reject) => signal?.addEventListener('abort', () => reject(new Error('Download canceled')), { once: true }));
+      }
       if (downloadFails) throw new Error('Network request failed');
       const m = models.find(x => x.url === url)!;
       onBytes(m.bytes / 2);
       onBytes(m.bytes);
     },
   };
-  return { deps, calls };
+  return { deps, calls, state };
 }
 
 test('skipsReadyModels: a model already on the phone is not fetched again', async () => {
@@ -65,4 +70,50 @@ test('removeFailureStillReportsOffline: a failed clean-up does not hide the offl
   const { deps } = fakes([vision, text], undefined, true, true);
   deps.remove = async () => { throw new Error('No such file'); };
   assert.equal(await getSearchTool(deps, () => {}), 'offline');
+});
+
+// the fake download never finishes on its own: only the abort ends it
+test('cancelMidDownload: aborting settles at once, deletes the partial file and skips the install', async () => {
+  const { deps, calls } = fakes([vision, text], undefined, true, false, true);
+  const abort = new AbortController();
+  const run = getSearchTool(deps, () => {}, abort.signal);
+  await new Promise(r => setImmediate(r));
+  abort.abort();
+  const winner = await Promise.race([run, new Promise(r => setTimeout(() => r('hung'), 500))]);
+  assert.notEqual(winner, 'hung');
+  assert.deepEqual(calls.removed, ['models/vision.onnx.part']);
+  assert.deepEqual(calls.installed, []);
+  assert.deepEqual(calls.downloaded, ['models/vision.onnx.part'], 'the second model is never started');
+});
+
+test('cancelBeforeTheDownload: an aborted signal downloads nothing', async () => {
+  const { deps, calls } = fakes([vision]);
+  const abort = new AbortController();
+  abort.abort();
+  await getSearchTool(deps, () => {}, abort.signal);
+  assert.deepEqual(calls.downloaded, []);
+  assert.deepEqual(calls.installed, []);
+});
+
+test('cancelAfterFinishAndTwice: aborting a finished run or aborting twice changes nothing', async () => {
+  const { deps, calls } = fakes([vision]);
+  const abort = new AbortController();
+  assert.equal(await getSearchTool(deps, () => {}, abort.signal), 'ready');
+  abort.abort();
+  abort.abort();
+  assert.deepEqual(calls.installed, ['vision.onnx']);
+  assert.deepEqual(calls.removed, []);
+});
+
+test('laterRunAfterCancel: a new run downloads the model again from scratch', async () => {
+  const { deps, calls, state } = fakes([vision], undefined, true, false, true);
+  const abort = new AbortController();
+  const first = getSearchTool(deps, () => {}, abort.signal);
+  await new Promise(r => setImmediate(r));
+  abort.abort();
+  await first;
+  state.hangs = false;
+  assert.equal(await getSearchTool(deps, () => {}, new AbortController().signal), 'ready');
+  assert.deepEqual(calls.downloaded, ['models/vision.onnx.part', 'models/vision.onnx.part']);
+  assert.deepEqual(calls.installed, ['vision.onnx']);
 });
