@@ -14,18 +14,43 @@ sealed class BarcodeResult {
   class Error(val message: String) : BarcodeResult()
 }
 
+/** What [PassImage] draws: whole pixels per module and the resulting bitmap size. */
+class PixelPlan(val scale: Int, val widthPx: Int, val heightPx: Int)
+
 object Barcode {
+  // zxing's MARGIN is the TOTAL side margin for 1-D codes (11 modules a side, the scanner minimum) and the margin per side for QR (4, the standard).
+  const val ONE_D_QUIET_MODULES = 22
+  const val QR_QUIET_MODULES = 4
+  const val MAX_CODE128 = 80
+  const val MAX_SIDE_PX = 2048
+  const val MAX_PIXELS = 4_000_000L
+
+  /** 1-D codes come out one row high and are drawn a third as tall as wide. The scale never lets the bitmap pass the pixel budget. */
+  fun pixelPlan(matrixWidth: Int, matrixHeight: Int, wantedWidthPx: Int): PixelPlan {
+    val hModules = if (matrixHeight == 1) maxOf(1, matrixWidth / 3) else matrixHeight
+    val fit = minOf(MAX_SIDE_PX / matrixWidth, MAX_SIDE_PX / hModules, Math.sqrt(MAX_PIXELS.toDouble() / (matrixWidth.toLong() * hModules)).toInt())
+    require(fit >= 1) { "That barcode is too big to draw." }
+    val scale = minOf(fit, maxOf(1, wantedWidthPx / matrixWidth))
+    return PixelPlan(scale, matrixWidth * scale, hModules * scale)
+  }
+
   fun encodeMatrix(code: String, format: String): BarcodeResult {
     if (code.isEmpty()) return BarcodeResult.Error("Enter the code first")
     return when (format) {
-      "qr" -> write(code, BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to 2, EncodeHintType.CHARACTER_SET to "UTF-8"), "That code is too long for a QR code")
+      "qr" -> {
+        val hints = mutableMapOf<EncodeHintType, Any>(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to QR_QUIET_MODULES)
+        // Only text ISO-8859-1 cannot hold gets a UTF-8 ECI header; plain scanners misread it on ASCII.
+        if (code.any { it.code > 0xFF }) hints[EncodeHintType.CHARACTER_SET] = "UTF-8"
+        write(code, BarcodeFormat.QR_CODE, 0, 0, hints, "That code is too long for a QR code")
+      }
       "code128" ->
         if (code.any { it.code !in 32..126 }) BarcodeResult.Error("Code 128 supports printable ASCII only")
-        else write(code, BarcodeFormat.CODE_128, 0, 1, mapOf(EncodeHintType.MARGIN to 10), "That code is too long for Code 128")
+        else if (code.length > MAX_CODE128) BarcodeResult.Error("That code is too long for Code 128")
+        else write(code, BarcodeFormat.CODE_128, 0, 1, mapOf(EncodeHintType.MARGIN to ONE_D_QUIET_MODULES), "That code is too long for Code 128")
       "ean13" -> {
         if (code.length !in 12..13 || code.any { it !in '0'..'9' }) BarcodeResult.Error("EAN-13 needs 12 or 13 digits")
         else if (code.length == 13 && checkDigit(code.take(12)) != code[12]) BarcodeResult.Error("The last digit of this EAN-13 code is wrong")
-        else write(code, BarcodeFormat.EAN_13, 0, 1, mapOf(EncodeHintType.MARGIN to 10), "That code is not a valid EAN-13")
+        else write(code, BarcodeFormat.EAN_13, 0, 1, mapOf(EncodeHintType.MARGIN to ONE_D_QUIET_MODULES), "That code is not a valid EAN-13")
       }
       else -> BarcodeResult.Error("Unknown barcode format")
     }

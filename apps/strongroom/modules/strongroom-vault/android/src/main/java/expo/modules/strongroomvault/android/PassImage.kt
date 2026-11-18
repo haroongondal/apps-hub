@@ -4,15 +4,15 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.util.Base64
 import com.google.zxing.common.BitMatrix
+import expo.modules.strongroomvault.core.Barcode
 import java.io.ByteArrayOutputStream
 
 /** Draws a pass barcode as a PNG: black on white always, so scanners work even in dark mode. */
 object PassImage {
-  /** 1-D codes come out one row high, so they are stretched to a third of their width. */
   fun png(matrix: BitMatrix, widthPx: Int): ByteArray {
-    val scale = maxOf(1, widthPx / matrix.width)
-    val heightModules = if (matrix.height == 1) matrix.width / 3 else matrix.height
-    val bmp = Bitmap.createBitmap(matrix.width * scale, heightModules * scale, Bitmap.Config.ARGB_8888)
+    val plan = Barcode.pixelPlan(matrix.width, matrix.height, widthPx)
+    val scale = plan.scale
+    val bmp = Bitmap.createBitmap(plan.widthPx, plan.heightPx, Bitmap.Config.ARGB_8888)
     val row = IntArray(bmp.width)
     for (y in 0 until bmp.height) {
       val my = if (matrix.height == 1) 0 else y / scale
