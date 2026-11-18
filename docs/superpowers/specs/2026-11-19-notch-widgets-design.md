@@ -27,7 +27,7 @@ Notch is a pill around the camera. It works and takes taps. Turn it into a small
 ## Constraints
 
 - The pill is built from native Android views inside `NotchAccessibilityService` (RN cannot render in that overlay). RN renders only the app: settings controls and the preview.
-- Now playing and ongoing calls need the owner to switch on Notch under Notification access once (a `NotificationListenerService`, used to reach `MediaSessionManager` and to read the call notification's category and duration). Without it the app says so, the widgets are skipped and the clock and battery keep working; nothing else breaks.
+- Now playing and ongoing calls need the owner to switch on Notch under Notification access once (a `NotificationListenerService`, used to reach `MediaSessionManager` and to read the call notification's category, start time, isOngoing, the action count, each action's PendingIntent, and the notification key). Without it the app says so, the widgets are skipped and the clock and battery keep working; nothing else breaks.
 - Settings live in one `SharedPreferences` file read by both the app and the service (same process); the service re-applies on change.
 - Shared UI package for all app screens (`@apps-hub/ui`). The pill's own colours are user choices, kept in one `swatches` table, not app theme colours.
 - Copy is sentence case and plain words. Release screens carry no engineering text.
