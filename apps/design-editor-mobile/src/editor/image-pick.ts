@@ -1,0 +1,60 @@
+import { PIECE_BYTES } from './vision-host.ts';
+
+// The app's half of the Uploads button on the phone. The WebView's own file chooser always adds a
+// camera entry to an image input (react-native-webview 13.15.0 RNCWebViewModuleImpl.startPhotoPickerIntent,
+// which only skips it when the app declares CAMERA), so the page asks the app to pick instead and
+// feeds the bytes back into its own input. The picker copies each photo into the cache, so the
+// pieces are read from a file path (a content:// read cannot promise whole pieces). The bytes cross
+// in pieces of PIECE_BYTES, the same size as the vision transfer, and every copy is deleted when
+// the page says it is done.
+export type PickedImage = { uri: string; name: string; type: string; bytes: number };
+
+export interface ImagePickDeps {
+  // null when the person backs out; assets are cache copies
+  pick(): Promise<{ uri: string; name: string; mimeType?: string | null }[] | null>;
+  size(uri: string): Promise<number>;
+  readBase64(uri: string, position: number, length: number): Promise<string>;
+  remove(uri: string): Promise<void>;
+}
+
+export function createImagePicker(d: ImagePickDeps) {
+  const held = new Map<string, number>(); // cache copy → bytes; only these may be read
+  let busy = false;
+  const drop = async (uri: string) => {
+    held.delete(uri);
+    await d.remove(uri).catch(() => {});
+  };
+  return {
+    async pick(): Promise<PickedImage[]> {
+      if (busy) return [];
+      busy = true;
+      const got: string[] = [];
+      try {
+        const assets = (await d.pick()) ?? [];
+        const out: PickedImage[] = [];
+        for (const a of assets) {
+          got.push(a.uri);
+          const bytes = await d.size(a.uri);
+          held.set(a.uri, bytes);
+          out.push({ uri: a.uri, name: a.name, type: a.mimeType ?? '', bytes });
+        }
+        return out;
+      } catch (err) {
+        for (const uri of got) await drop(uri);
+        throw err;
+      } finally {
+        busy = false;
+      }
+    },
+    async read(uri: string, index: number): Promise<{ data: string; done: boolean }> {
+      const bytes = held.get(uri);
+      if (bytes === undefined || !Number.isInteger(index) || index < 0) throw new Error('This picture is no longer available.');
+      if (bytes === 0) return { data: '', done: true };
+      const data = await d.readBase64(uri, index * PIECE_BYTES, PIECE_BYTES);
+      return { data, done: (index + 1) * PIECE_BYTES >= bytes };
+    },
+    async release(uris: string[]): Promise<void> {
+      for (const uri of uris) if (held.has(uri)) await drop(uri); // the page may only drop what it was given
+    },
+  };
+}

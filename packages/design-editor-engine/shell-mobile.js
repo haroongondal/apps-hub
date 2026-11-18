@@ -147,6 +147,42 @@
     return Promise.race([work, stopped]);
   }
 
+  // Uploads on the phone. The WebView's own file chooser adds a camera entry to an image input,
+  // so the label asks the app to pick (gallery and files only), pulls each photo over in pieces
+  // like vision does, and hands them to #imgFile's change event so app.js's readFiles runs as is.
+  const drop = document.querySelector('#drop');
+  let picking = false;
+  if (drop && window.ReactNativeWebView) drop.addEventListener('click', async e => {
+    e.preventDefault();
+    if (picking) return;
+    picking = true;
+    let given = [];
+    try {
+      given = await call('pickImages');
+      if (!given.length) return; // backed out: nothing to say
+      const files = [];
+      for (const g of given) {
+        const parts = [];
+        for (let index = 0; ; index++) {
+          const { data, done } = await call('readImage', { uri: g.uri, index });
+          parts.push(fromB64(data));
+          if (done) break;
+        }
+        files.push(new File(parts, g.name, { type: g.type || 'image/jpeg' }));
+      }
+      const input = drop.querySelector('input');
+      const list = new DataTransfer();
+      files.forEach(f => list.items.add(f));
+      input.files = list.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch {
+      toast("Couldn't open your pictures. Try again.");
+    } finally {
+      picking = false;
+      if (given.length) call('releaseImages', { uris: given.map(g => g.uri) }).catch(() => {});
+    }
+  });
+
   window.native = {
     saveFile: ({ name, ext, data, filePath }) => {
       // binary exports (png/jpg/pdf) cross as base64; json and svg are strings. The page refuses

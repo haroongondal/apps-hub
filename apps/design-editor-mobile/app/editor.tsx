@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import WebView, { type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 
 import DesignMedia from 'design-media';
+import { createImagePicker, type ImagePickDeps } from '../src/editor/image-pick';
 import { injectCommand, parseMessage, replyError, replyOk, type PageEvent } from '../src/editor/bridge';
 import { createVisionHost, type VisionHost } from '../src/editor/vision-host';
 import { getSearchTool } from '../src/photos/search-tool';
@@ -39,6 +40,8 @@ export default function EditorScreen() {
   const docState = useRef({ title: params.name ?? 'Design Editor', dirty: false, filePath: null as string | null });
   const visionRef = useRef<VisionHost | null>(null);
   visionRef.current ??= realVisionHost(webRef);
+  const imagesRef = useRef<ReturnType<typeof createImagePicker> | null>(null);
+  imagesRef.current ??= createImagePicker(realImageDeps);
   useEffect(() => () => void visionRef.current?.dispose(), []);
 
   // The inlined editor page ships as a metro asset; downloadAsync pins localUri (PDF Editor pattern).
@@ -105,6 +108,19 @@ export default function EditorScreen() {
           case 'openDesign': {
             const design = await pickDesign();
             injectCommand(webRef, replyOk(msg.reqId, design));
+            break;
+          }
+          case 'pickImages': {
+            injectCommand(webRef, replyOk(msg.reqId, await imagesRef.current!.pick()));
+            break;
+          }
+          case 'readImage': {
+            injectCommand(webRef, replyOk(msg.reqId, await imagesRef.current!.read(msg.uri, msg.index)));
+            break;
+          }
+          case 'releaseImages': {
+            await imagesRef.current!.release(msg.uris);
+            injectCommand(webRef, replyOk(msg.reqId, true));
             break;
           }
           case 'visionTools': {
@@ -282,6 +298,29 @@ function realVisionHost(webRef: RefObject<WebView | null>): VisionHost {
     send: p => injectCommand(webRef, { type: 'visionProgress', ...p }),
   });
 }
+
+// Gallery and files only: the WebView's own chooser would add a camera entry (see image-pick.ts).
+// DocumentPicker copies each photo into the cache (a file path reads whole pieces; a content:// read
+// does not promise to), and the picker deletes the copies when the page is done.
+const realImageDeps: ImagePickDeps = {
+  async pick() {
+    if (picking.current) return null;
+    picking.current = true;
+    try {
+      const res = await DocumentPicker.getDocumentAsync({ type: 'image/*', multiple: true, copyToCacheDirectory: true });
+      return res.canceled ? null : res.assets;
+    } finally {
+      picking.current = false;
+    }
+  },
+  async size(uri) {
+    const info = await FileSystem.getInfoAsync(uri);
+    if (!info.exists) throw new Error("The picture wasn't there. Try again.");
+    return info.size;
+  },
+  readBase64: (uri, position, length) => FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64, position, length }),
+  remove: uri => FileSystem.deleteAsync(uri, { idempotent: true }),
+};
 
 async function pickDesign(): Promise<{ text: string; filePath: string } | null> {
   if (picking.current) return null;
