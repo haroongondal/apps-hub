@@ -106,12 +106,17 @@ class OpenTunnelNativeModule : Module() {
 
     OnStartObserving {
       val listener = object : TunnelEventBus.Listener {
-        override fun onStatus(state: String, message: String?) {
+        override fun onStatus(state: String, message: String?, code: String?) {
           moduleScope.launch {
-            postEvent(
-              EVENT_STATUS_CHANGED,
-              mapOf("state" to state, "message" to message),
-            )
+            // `code` is part of the JS contract only when the failure carries
+            // one; the key is omitted otherwise (VpnStatusPayload).
+            val payload =
+              if (code == null) {
+                mapOf("state" to state, "message" to message)
+              } else {
+                mapOf("state" to state, "message" to message, "code" to code)
+              }
+            postEvent(EVENT_STATUS_CHANGED, payload)
           }
         }
 

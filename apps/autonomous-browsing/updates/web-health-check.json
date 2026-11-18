@@ -1,0 +1,16 @@
+{
+  "id": "sys.web-health-check",
+  "name": "Web Health Check",
+  "version": 1,
+  "description": "Loads a target URL and captures an optimized screenshot of the landing state.",
+  "definition": {
+    "params": {
+      "url": { "description": "Target URL to check", "required": true }
+    },
+    "steps": [
+      { "kind": "navigate", "url": "{{url}}" },
+      { "kind": "wait", "ms": 1500 },
+      { "kind": "screenshot", "label": "landing" }
+    ]
+  }
+}

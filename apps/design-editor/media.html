@@ -26,6 +26,7 @@
     <button data-tool="volume">Volume</button>
     <button data-tool="reverse">Reverse</button>
     <button data-tool="stabilize">Stabilize</button>
+    <button data-tool="image">Compress image</button>
   </nav>
   <section class="setup">
     <div class="row">
@@ -134,6 +135,9 @@
             <option value="most">Most stable</option>
           </select>
         </label>
+      </section>
+      <section data-tool="image" hidden>
+        <p class="ui-meta">PNG and JPEG. The picture stays pixel for pixel the same. PNG is packed tighter; JPEG loses its camera, location and thumbnail data but keeps rotation and colour profile.</p>
       </section>
     </div>
     <p id="plan" class="plan" role="status"></p>

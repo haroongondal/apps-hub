@@ -1,0 +1,43 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.READ_SMS" />
+  <uses-permission android:name="android.permission.RECEIVE_SMS" />
+  <!-- Gmail over IMAP (imap.gmail.com:993), and https to the AI address the owner sets in Settings; nothing else. -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <!-- The "your report is ready" notification. A runtime permission (Android 13+); without it reports are still made and listed. -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.MAIN" />
+      <category android:name="android.intent.category.LAUNCHER" />
+    </intent>
+  </queries>
+  <application>
+    <service
+      android:name="expo.modules.inflowcore.android.InflowListener"
+      android:label="Inflow"
+      android:exported="true"
+      android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+      <intent-filter>
+        <action android:name="android.service.notification.NotificationListenerService" />
+      </intent-filter>
+    </service>
+    <!-- Hands one decrypted media file to a viewer app for as long as the viewer needs it. Not exported; the file lives in cache/open and is cleared at the next start. -->
+    <provider
+      android:name="expo.modules.inflowcore.android.InflowMediaProvider"
+      android:authorities="com.haroon.inflow.media"
+      android:exported="false"
+      android:grantUriPermissions="true">
+      <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/inflow_media_paths" />
+    </provider>
+    <receiver
+      android:name="expo.modules.inflowcore.android.SmsReceiver"
+      android:exported="true"
+      android:permission="android.permission.BROADCAST_SMS">
+      <intent-filter>
+        <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+      </intent-filter>
+    </receiver>
+  </application>
+</manifest>

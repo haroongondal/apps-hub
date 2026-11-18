@@ -22,6 +22,10 @@ Current apps:
   Arabic and Urdu normalised) over one `library.db`: logic in
   `packages/library-core`, app glue in `apps/pdf-editor-mobile/src/library`. Scan
   and Reader build on it; specs `docs/pdf-editor/`, progress `docs/handoffs/pdf-editor-scan.md`.
+  The mobile app is named **Nexus** since N2 (package id and Store id unchanged): an opt-in
+  AI layer (owner's OpenAI key; fully offline without one) over the same Library, with
+  logic in `packages/knowledge-core` and glue in `apps/pdf-editor-mobile/src/nexus`. Design
+  `docs/superpowers/specs/2026-11-18-nexus-design.md`, progress `docs/handoffs/nexus.md`.
 - **design-editor** (`apps/design-editor`) — offline Canva-style editor for the
   Mac (Electron), moved in from `~/Documents/design-editor` on 2026-10-26.
   Its Android sibling `apps/design-editor-mobile` (`com.haroon.designeditor`, Store
@@ -44,9 +48,29 @@ Current apps:
   `vault-vectors.json`); fills and saves logins; signs in to sync with the phone
   through the vault server (`tools/vault-api`, Phase 2, not deployed yet). Handoffs:
   `docs/handoffs/strongroom-extension.md`, `docs/handoffs/strongroom-sync.md`.
+- **inflow** (`apps/inflow`, formerly Notebox) — personal notification, SMS and
+  money archive: saves every notification, the SMS inbox and marked Gmail senders'
+  emails (IMAP with an app password) into an encrypted on-phone store (SQLCipher),
+  reads bank SMS and emails into a spending ledger, and shows it behind a fingerprint
+  lock, with AI summaries, importance, to-dos, money categories and an Ask AI tab
+  through the owner's OpenAI-compatible API key (https only; never sent: OTPs,
+  blocked apps or senders, apps not recorded, items saved before the first key; Ask AI also sends ledger transactions of any age, with chat titles and a you/not-you flag per item; spending categories and the weekly/monthly reports send the fields of every transaction, including ones from bank pushes and from apps or senders kept from the AI, but never message text). Reports (8 weekly, 4 monthly kept) are the only reason for POST_NOTIFICATIONS.
+  Android only, private Store only (`com.haroon.inflow`; READ_SMS, RECEIVE_SMS,
+  INTERNET for `imap.gmail.com` and the owner's chosen AI address). Kotlin owns
+  capture, storage, parsing, Gmail and AI; RN only renders. WhatsApp chats are grouped by contact, WhatsApp text is kept forever, and the media WhatsApp notifications expose is stored encrypted in the app's private files (never sent to the AI). Home is money card, Inbox (one row per chat-like app), Important (no payments), Coming up, Recent chats, All apps; Money has Overview, Reports and All. In an SMS contact list, senders the AI mostly reads as promotions (and no bank) fold into one "Promotions" row (nothing is deleted; the owner can override per sender; schema v7 `sender_promo`). Spec:
+  `docs/superpowers/specs/2026-11-13-inflow-design.md`, `docs/superpowers/specs/2026-11-17-inflow-ux-design.md`; plans:
+  `docs/superpowers/plans/2026-11-13-inflow-stage-*.md`, `docs/superpowers/plans/2026-11-18-inflow-ux.md`; progress:
+  `docs/handoffs/inflow.md`.
 
-Not here on purpose: `~/Documents/browser-automation` (stays standalone) and
-`~/Documents/agent-harness` (deferred until its phase branches are merged).
+- **autonomous-browsing** (`apps/autonomous-browsing`) — Electron desktop app for
+  chat-authored browser automation routines, copied in from
+  `~/Documents/browser-automation` on 2026-11-17 (tracked files only, no git
+  history; the original stays standalone). A normal pnpm workspace member now;
+  its `CLAUDE.md` and `AI_CONTEXT.md` still say `npm run`, read that as
+  `pnpm --filter autonomous-browsing <script>`.
+
+Not here on purpose: `~/Documents/agent-harness` (deferred until its phase
+branches are merged).
 
 Planned (do not scaffold yet):
 - macOS/Windows targets for NetLens (react-native-macos / Electron) — future scope.
@@ -60,7 +84,7 @@ Planned (do not scaffold yet):
 - Tokens live in `src/tokens.ts` only. After changing them run
   `pnpm --filter @apps-hub/ui build:css`; the test fails if `web/tokens.css` is
   stale, and it enforces WCAG AA contrast for every brand in light and dark.
-- Brands: netlens, opentunnel, store, pdf, design, deputy, strongroom (hue + accent from each
+- Brands: netlens, opentunnel, store, pdf, design, deputy, strongroom, inflow (hue + accent from each
   launcher icon). Light and dark follow the system.
 - Copy is sentence case, active voice; errors say what happened and how to fix
   it. No emoji icons, no ALL-CAPS labels.
@@ -139,6 +163,12 @@ cd apps/deputy/android && JAVA_HOME=$JAVA_HOME ./gradlew \
 # Native compile gate (Strongroom):
 cd apps/strongroom/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :strongroom-vault:testDebugUnitTest :app:assembleDebug
+# Native compile gate (Inflow):
+cd apps/inflow/android && JAVA_HOME=$JAVA_HOME ./gradlew \
+  :inflow-core:testDebugUnitTest :app:assembleDebug
+# Native compile gate (PDF Editor mobile; the Scan module's JVM tests):
+cd apps/pdf-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
+  :pdf-scan:testDebugUnitTest :app:assembleDebug
 # Native compile gate (Design Editor mobile):
 cd apps/design-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :design-media:testDebugUnitTest :app:assembleDebug

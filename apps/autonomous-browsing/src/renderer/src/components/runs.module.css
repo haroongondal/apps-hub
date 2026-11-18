@@ -1,0 +1,90 @@
+.list {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s-4);
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  padding: var(--s-4);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.row:hover {
+  background: var(--surface-2);
+}
+
+.selected {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+}
+
+.body {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.title {
+  font: var(--t-body-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  font: var(--t-meta);
+  color: var(--text-2);
+}
+
+.separator {
+  color: var(--text-3);
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  border: none;
+  background: none;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm);
+  font: var(--t-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--text-2);
+}
+
+.tabOn {
+  background: var(--surface-sunk);
+  color: var(--text);
+}
+
+.tabCount {
+  font: var(--t-code);
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--machine);
+}

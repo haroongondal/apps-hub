@@ -20,14 +20,17 @@ import {
   Pill,
   Progress,
   Readout,
+  RecordMenu,
   Row,
   Screen,
   Segmented,
   Sheet,
   Text,
+  confirmAction,
   radius,
   space,
   useTheme,
+  type RecordAction,
 } from '@apps-hub/ui';
 
 import {
@@ -37,6 +40,8 @@ import {
   computeSubnetForHost,
   displayNameFor,
   hashNetworkId,
+  networkLabel,
+  normalizeNetworkName,
   reconcileScan,
   resolveDeviceNames,
   type DeviceNames,
@@ -47,6 +52,7 @@ import {
   type NameTarget,
   type ReconciledDevice,
   type ServiceEvent,
+  type StoredNetwork,
   type SubnetPlan,
 } from '@apps-hub/core';
 import { createNetLensNativeBinding } from 'netlens-core';
@@ -114,6 +120,11 @@ export default function ScannerScreen() {
   const [pingResult, setPingResult] = useState<PingResult | null>(null);
   const [mdnsTypes, setMdnsTypes] = useState<string[]>([]);
   const [storeReady, setStoreReady] = useState(false);
+  const [currentNetworkId, setCurrentNetworkId] = useState<string | null>(null);
+  const [networkName, setNetworkName] = useState<string | null>(null);
+  const [networksOpen, setNetworksOpen] = useState(false);
+  const [savedNetworks, setSavedNetworks] = useState<StoredNetwork[]>([]);
+  const [renaming, setRenaming] = useState<{ network: StoredNetwork; draft: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -234,7 +245,15 @@ export default function ScannerScreen() {
           store,
         );
         commitDevices(result.devices);
+        setCurrentNetworkId(result.networkId);
         setPhase('done');
+        store
+          .listNetworks()
+          .then((saved) => {
+            if (scanGeneration.current !== generation) return;
+            setNetworkName(saved.find((n) => n.networkId === result.networkId)?.customName ?? null);
+          })
+          .catch(() => undefined);
 
         // Names come after the sweep so they can't slow it down. Each one is
         // merged and saved as it arrives; lookup failures just mean no name.
@@ -334,6 +353,114 @@ export default function ScannerScreen() {
     }
   }, [commitDevices, detail, nameDraft, trustDraft]);
 
+  const forgetDevice = useCallback(
+    async (device: ReconciledDevice): Promise<void> => {
+      const store = storeProxy.current;
+      if (!store || device.id === null) return;
+      const id = device.id;
+      const before = devicesRef.current;
+      commitDevices(before.filter((row) => row.id !== id));
+      setDetail((open) => (open !== null && open.id === id ? null : open));
+      try {
+        await store.deleteDevice(id);
+      } catch (e: unknown) {
+        commitDevices(before);
+        setErrorNote(`HomeNet could not forget this device: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    },
+    [commitDevices],
+  );
+
+  const deviceActions = (device: ReconciledDevice, name: string): RecordAction[] => [
+    { label: 'Edit', onPress: () => openDetail(device) },
+    {
+      label: 'Forget device',
+      destructive: true,
+      confirmTitle: `Forget \u201c${name}\u201d?`,
+      confirmMessage: 'HomeNet removes its saved name and trust. It shows up as new if it answers a scan again.',
+      confirmLabel: 'Forget',
+      onPress: () => void forgetDevice(device),
+    },
+  ];
+
+  const confirmForgetDetail = (device: ReconciledDevice): void => {
+    confirmAction({
+      title: `Forget \u201c${displayNameFor(device)}\u201d?`,
+      message: 'HomeNet removes its saved name and trust. It shows up as new if it answers a scan again.',
+      confirmLabel: 'Forget',
+      onConfirm: () => void forgetDevice(device),
+    });
+  };
+
+  const openNetworks = useCallback(async (): Promise<void> => {
+    const store = storeProxy.current;
+    if (!store) return;
+    setRenaming(null);
+    setNetworksOpen(true);
+    try {
+      setSavedNetworks(await store.listNetworks());
+    } catch (e: unknown) {
+      setNetworksOpen(false);
+      setErrorNote(`HomeNet could not read your saved networks: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, []);
+
+  const closeNetworks = (): void => {
+    if (renaming !== null) return setRenaming(null);
+    setNetworksOpen(false);
+  };
+
+  const saveNetworkName = useCallback(async (): Promise<void> => {
+    const store = storeProxy.current;
+    if (!store || renaming === null) return;
+    const { network, draft } = renaming;
+    const customName = normalizeNetworkName(draft);
+    setRenaming(null);
+    try {
+      await store.renameNetwork(network.networkId, customName);
+      setSavedNetworks((rows) => rows.map((row) => (row.networkId === network.networkId ? { ...row, customName } : row)));
+      if (network.networkId === currentNetworkId) setNetworkName(customName);
+    } catch (e: unknown) {
+      setErrorNote(`HomeNet could not rename this network: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [currentNetworkId, renaming]);
+
+  const forgetNetwork = useCallback(
+    async (network: StoredNetwork): Promise<void> => {
+      const store = storeProxy.current;
+      if (!store) return;
+      try {
+        await store.deleteNetwork(network.networkId);
+      } catch (e: unknown) {
+        setErrorNote(`HomeNet could not forget this network: ${e instanceof Error ? e.message : String(e)}`);
+        return;
+      }
+      setSavedNetworks((rows) => rows.filter((row) => row.networkId !== network.networkId));
+      if (network.networkId !== currentNetworkId) return;
+      scanGeneration.current += 1;
+      commitDevices([]);
+      setDetail(null);
+      setCurrentNetworkId(null);
+      setNetworkName(null);
+      setMdnsTypes([]);
+      setPlan(null);
+      setPhase('idle');
+    },
+    [commitDevices, currentNetworkId],
+  );
+
+  const networkActions = (network: StoredNetwork): RecordAction[] => [
+    { label: 'Rename', onPress: () => setRenaming({ network, draft: network.customName ?? '' }) },
+    {
+      label: 'Forget network',
+      destructive: true,
+      confirmTitle: `Forget \u201c${networkLabel(network)}\u201d?`,
+      confirmMessage: 'HomeNet removes this network and every device it saved for it. A later scan starts fresh.',
+      confirmLabel: 'Forget',
+      onPress: () => void forgetNetwork(network),
+    },
+  ];
+
   const pingTarget = useCallback(async (): Promise<void> => {
     if (detail === null || pingTargetBusy) return;
     setPingTargetBusy(true);
@@ -359,6 +486,7 @@ export default function ScannerScreen() {
   }, [bindingProxy, detail, pingTargetBusy]);
 
   const subnet = plan ? `${plan.networkIp}/${plan.prefix}` : null;
+  const networkLine = subnet && networkName ? `${networkName}, ${subnet}` : subnet;
   const hasScanned = phase !== 'idle' || devices.length > 0;
 
   const header = (
@@ -394,9 +522,9 @@ export default function ScannerScreen() {
               tone={scanning ? 'accent' : undefined}
             />
           </View>
-          {subnet ? (
+          {networkLine ? (
             <Text variant="data" tone="muted">
-              {subnet}
+              {networkLine}
             </Text>
           ) : null}
           {scanning ? (
@@ -443,6 +571,15 @@ export default function ScannerScreen() {
           accessibilityHint="Looks for devices on your Wi-Fi"
         />
       )}
+
+      <Button
+        label="Saved networks"
+        variant="ghost"
+        block
+        onPress={() => void openNetworks()}
+        disabled={!storeReady || scanning}
+        accessibilityHint="Rename or forget networks HomeNet has scanned"
+      />
 
       {devices.length > 0 ? (
         <Segmented
@@ -494,14 +631,8 @@ export default function ScannerScreen() {
         ListFooterComponent={footer}
         contentContainerStyle={{ paddingBottom: space.xxxl }}
         keyboardShouldPersistTaps="handled"
-        ItemSeparatorComponent={() => (
-          <View style={groupEdge}>
-            <View style={{ height: 1, backgroundColor: c.line, marginLeft: space.lg }} />
-          </View>
-        )}
+        ItemSeparatorComponent={GroupSeparator}
         renderItem={({ item, index }) => {
-          const first = index === 0;
-          const last = index === visible.length - 1;
           const name = displayNameFor(item);
           const facts = [
             item.isNew ? 'new' : null,
@@ -509,14 +640,7 @@ export default function ScannerScreen() {
             item.seenThisScan ? null : 'not seen in this scan',
           ].filter(Boolean);
           return (
-            <View
-              style={[
-                groupEdge,
-                { overflow: 'hidden' },
-                first && { borderTopWidth: 1, borderTopLeftRadius: radius.group, borderTopRightRadius: radius.group },
-                last && { borderBottomWidth: 1, borderBottomLeftRadius: radius.group, borderBottomRightRadius: radius.group },
-              ]}
-            >
+            <GroupItem first={index === 0} last={index === visible.length - 1}>
               <Row
                 onPress={() => openDetail(item)}
                 accessibilityLabel={[name, item.lastIp, ...facts].join(', ')}
@@ -545,15 +669,18 @@ export default function ScannerScreen() {
                   </View>
                 }
                 trailing={
-                  item.isNew || item.isTrusted ? (
-                    <View style={{ gap: space.xs, alignItems: 'flex-end' }}>
-                      {item.isNew ? <Pill label="New" tone="accent" /> : null}
-                      {item.isTrusted ? <Pill label="Trusted" tone="ok" /> : null}
-                    </View>
-                  ) : null
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                    {item.isNew || item.isTrusted ? (
+                      <View style={{ gap: space.xs, alignItems: 'flex-end' }}>
+                        {item.isNew ? <Pill label="New" tone="accent" /> : null}
+                        {item.isTrusted ? <Pill label="Trusted" tone="ok" /> : null}
+                      </View>
+                    ) : null}
+                    <RecordMenu title={name} actions={deviceActions(item, name)} />
+                  </View>
                 }
               />
-            </View>
+            </GroupItem>
           );
         }}
       />
@@ -640,11 +767,86 @@ export default function ScannerScreen() {
                 accessibilityHint="Measures how quickly this device answers"
               />
             </View>
+
+            <Button
+              label="Forget device"
+              variant="secondary"
+              tone="danger"
+              block
+              onPress={() => confirmForgetDetail(detail)}
+              accessibilityHint="Removes this device and its saved name and trust"
+            />
           </>
         ) : null}
       </Sheet>
+
+      <Sheet
+        visible={networksOpen}
+        onClose={closeNetworks}
+        onDone={renaming !== null ? () => void saveNetworkName() : undefined}
+        doneLabel={renaming !== null ? 'Save' : 'Done'}
+        title={renaming !== null ? 'Rename network' : 'Saved networks'}
+      >
+        {renaming !== null ? (
+          <Field
+            label="Name"
+            value={renaming.draft}
+            onChangeText={(draft) => setRenaming({ ...renaming, draft })}
+            placeholder="e.g. Home"
+            hint={`Shown instead of ${renaming.network.subnetCidr}. Leave it empty to use the address.`}
+            returnKeyType="done"
+            autoFocus
+          />
+        ) : savedNetworks.length === 0 ? (
+          <Empty title="No saved networks" body="Networks you scan are remembered here so you can rename or forget them." />
+        ) : (
+          <Group footer="Forgetting a network also forgets the devices saved for it.">
+            {savedNetworks.map((network) => (
+              <Row
+                key={network.networkId}
+                title={networkLabel(network)}
+                subtitle={
+                  <Text variant="meta" tone="muted">
+                    {`${network.subnetCidr}, last scanned ${new Date(network.lastScannedAt).toLocaleDateString()}`}
+                  </Text>
+                }
+                trailing={<RecordMenu title={networkLabel(network)} actions={networkActions(network)} />}
+              />
+            ))}
+          </Group>
+        )}
+      </Sheet>
     </Screen>
   );
+}
+
+/** One FlatList row drawn as part of a rounded group, matching the ui Group look without losing virtualisation. */
+function GroupItem({ first, last, children }: { first: boolean; last: boolean; children: React.ReactNode }) {
+  const { c } = useTheme();
+  return (
+    <View
+      style={[
+        { ...groupEdge(c), overflow: 'hidden' },
+        first && { borderTopWidth: 1, borderTopLeftRadius: radius.group, borderTopRightRadius: radius.group },
+        last && { borderBottomWidth: 1, borderBottomLeftRadius: radius.group, borderBottomRightRadius: radius.group },
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+function GroupSeparator() {
+  const { c } = useTheme();
+  return (
+    <View style={groupEdge(c)}>
+      <View style={{ height: 1, backgroundColor: c.line, marginLeft: space.lg }} />
+    </View>
+  );
+}
+
+function groupEdge(c: ReturnType<typeof useTheme>['c']) {
+  return { borderColor: c.line, borderLeftWidth: 1, borderRightWidth: 1, marginHorizontal: space.lg, backgroundColor: c.surface };
 }
 
 function Fact({ label, value, plain }: { label: string; value: string; plain?: boolean }) {

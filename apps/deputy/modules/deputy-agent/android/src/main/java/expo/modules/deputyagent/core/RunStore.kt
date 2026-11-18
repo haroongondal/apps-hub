@@ -141,6 +141,14 @@ class RunStore(root: File, private val now: () -> Long, zone: ZoneId = ZoneId.sy
   @Synchronized
   fun clear() = drop(files().filter { it != current })
 
+  /** Deletes one finished run. The run in progress stays, and the spend still counts toward the daily cap. */
+  @Synchronized
+  fun delete(runId: String): Boolean {
+    val file = files().firstOrNull { it != current && it.name.endsWith("-$runId.jsonl") } ?: return false
+    drop(listOf(file))
+    return true
+  }
+
   /** Today's spend in deleted runs is carried over first, so neither clearing nor retention resets the daily cap. */
   private fun drop(gone: List<File>) {
     if (gone.isEmpty()) return

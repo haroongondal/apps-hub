@@ -72,6 +72,8 @@ export interface AppTrust {
   trust: TrustLevel;
   /** A money app by default, so it needs its name typed before it can be standard. */
   financial: boolean;
+  /** What Deputy uses until the owner changes it; setting this level clears the owner's choice. */
+  defaultTrust: TrustLevel;
 }
 
 /** Prices are dollars per million tokens. With `customPrices` false they are the known model's published prices. */
@@ -133,6 +135,8 @@ interface DeputyAgentApi {
   getRun(): RunSnapshot;
   listRuns(limit: number): RunSummary[];
   getRunLog(runId: string): RunEvent[];
+  /** Deletes one finished run; false when it is unknown or still running. Today's spend still counts toward the daily limit. */
+  deleteRun(runId: string): boolean;
   /** Keeps a run in progress, and today's spend still counts toward the daily limit. */
   clearHistory(): void;
   listApps(): Promise<AppTrust[]>;

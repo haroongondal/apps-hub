@@ -167,6 +167,18 @@ export class VpnNodeCache {
     if (rows.length === 0) return null;
     return nodeFromRow(rows[0]!, withConfig);
   }
+
+  /** Epoch milliseconds of the newest cached fetch — the staleness signal
+   * for the open-time auto-refresh decision. Null while the cache is empty
+   * (nothing has ever been fetched). */
+  async lastFetchedAtMs(): Promise<number | null> {
+    await this.open();
+    const row = await this.driver.first(
+      'SELECT MAX(fetched_at_ms) AS max_fetched FROM vpn_nodes',
+    );
+    const stamped = row?.max_fetched;
+    return typeof stamped === 'number' ? stamped : null;
+  }
 }
 
 /** Column list shared by both read paths. */

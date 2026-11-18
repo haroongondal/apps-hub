@@ -8,6 +8,11 @@ contextBridge.exposeInMainWorld('native', {
   keepAutosave: () => ipcRenderer.invoke('autosave-keep'),
   setDocState: state => ipcRenderer.send('doc-state', state),
   onMenu: fn => ipcRenderer.on('menu', (_, cmd) => fn(cmd)),
+  ai: {
+    hasKey: () => ipcRenderer.invoke('ai-has-key'),
+    setKey: key => ipcRenderer.invoke('ai-set-key', key),
+    request: body => ipcRenderer.invoke('ai-request', body),
+  },
   media: {
     status: () => ipcRenderer.invoke('media-status'),
     pick: () => ipcRenderer.invoke('media-pick'),

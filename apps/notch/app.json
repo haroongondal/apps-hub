@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Notch",
+    "slug": "notch",
+    "version": "0.4.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": [
+      "android"
+    ],
+    "android": {
+      "package": "com.haroon.notch",
+      "allowBackup": false,
+      "edgeToEdgeEnabled": true,
+      "permissions": [],
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.INTERNET",
+        "android.permission.VIBRATE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0B22",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      }
+    },
+    "icon": "./assets/icon.png"
+  }
+}

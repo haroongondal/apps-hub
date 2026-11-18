@@ -30,6 +30,7 @@ declare namespace chrome {
   }
   namespace tabs {
     function query(info: { active: boolean; currentWindow: boolean }): Promise<{ id?: number; url?: string }[]>;
+    function create(props: { url: string }): Promise<unknown>;
     function sendMessage(tabId: number, message: unknown): Promise<any>;
     const onUpdated: { addListener(cb: (tabId: number, info: { status?: string }) => void): void };
   }

@@ -2,28 +2,46 @@ import { fetchTransport, loadPublicSuffixList } from 'strongroom-core';
 import { UserError, createService } from './service.ts';
 import type { Ctx, Pending, Request } from './service.ts';
 import { SYNC_URL } from './sync-url.ts';
-import { localStore, sessionKv } from './storage.ts';
+import { createLocalStore, localKv, migrateAccountKey, sessionKv } from './storage.ts';
+import { createDeviceVault, idbKeyStore } from './device-vault.ts';
 
 const AUTO_LOCK_MINUTES = 5;
 const SYNC_MINUTES = 5;
 
+const device = createDeviceVault(localKv, idbKeyStore);
+const localStore = createLocalStore(device);
+
 const service = createService({
   store: localStore,
   session: sessionKv,
+  settings: localKv,
   now: Date.now,
   resetAutoLock: () => void chrome.alarms.create('auto-lock', { delayInMinutes: AUTO_LOCK_MINUTES }),
   syncAlarm: (on) => void (on ? chrome.alarms.create('sync', { periodInMinutes: SYNC_MINUTES }) : chrome.alarms.clear('sync')),
   sync: SYNC_URL ? { store: localStore, transport: fetchTransport(SYNC_URL) } : undefined,
+  device,
 });
 
 // storage.local is readable from content scripts by default; the ciphertext and header should stay with the extension's own pages.
 void chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
 
-const ready = fetch(chrome.runtime.getURL('public_suffix_list.dat')).then((r) => r.text()).then(loadPublicSuffixList);
+// Migration runs once before any message is handled, so a request never races it for the account key.
+const ready = Promise.all([
+  fetch(chrome.runtime.getURL('public_suffix_list.dat')).then((r) => r.text()).then(loadPublicSuffixList),
+  migrateAccountKey(localKv, device),
+]);
+
+// The owner rarely opens the popup now that autofill works while locked (Task 8), so the periodic sync alarm is this
+// banner's only reliable chance to be seen: it flags the toolbar, same as a captured sign-in does per tab.
+async function checkRecoveryBadge() {
+  const status = (await service.handle({ type: 'emailRecovery', action: 'status' })) as { pendingRecovery: unknown };
+  await chrome.action.setBadgeText({ text: status.pendingRecovery ? '!' : '' });
+}
 
 chrome.alarms.onAlarm.addListener(({ name }) => {
+  // No `manual: true` here: the auto-lock alarm clears the session only, so autofill and sync keep answering from the device-held keys.
   if (name === 'auto-lock') void ready.then(() => service.handle({ type: 'lock' }));
-  if (name === 'sync') void ready.then(() => service.handle({ type: 'syncNow' })).catch(() => {});
+  if (name === 'sync') void ready.then(() => service.handle({ type: 'syncNow' }).catch(() => {})).then(() => checkRecoveryBadge().catch(() => {}));
 });
 
 // Chrome clears a tab's badge when the tab navigates, and a sign-in navigates right after the capture, so the badge is set again once the new page has loaded.

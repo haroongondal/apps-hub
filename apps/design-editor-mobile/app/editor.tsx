@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import WebView, { type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 
 import DesignMedia from 'design-media';
+import { aiHasKey, aiRequest, aiSetKey } from '../src/editor/ai';
 import { injectCommand, parseMessage, replyError, replyOk, type PageEvent } from '../src/editor/bridge';
 import {
   designTitle,
@@ -101,6 +102,15 @@ export default function EditorScreen() {
             injectCommand(webRef, replyOk(msg.reqId, design));
             break;
           }
+          case 'aiHasKey':
+            injectCommand(webRef, replyOk(msg.reqId, await aiHasKey()));
+            break;
+          case 'aiSetKey':
+            injectCommand(webRef, replyOk(msg.reqId, await aiSetKey(msg.key)));
+            break;
+          case 'aiRequest':
+            injectCommand(webRef, replyOk(msg.reqId, await aiRequest(msg.body)));
+            break;
           case 'docState': {
             docState.current = { title: msg.title, dirty: msg.dirty, filePath: msg.filePath };
             setTitle(msg.title);

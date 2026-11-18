@@ -1,0 +1,138 @@
+.header {
+  display: grid;
+  gap: var(--s-4);
+  padding: var(--s-6) var(--s-8) var(--s-5);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.title {
+  font: var(--t-display);
+  letter-spacing: -0.02em;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-4);
+  font: var(--t-meta);
+  color: var(--text-2);
+}
+
+.separator {
+  color: var(--line-strong);
+}
+
+.body {
+  padding: var(--s-6) var(--s-8) var(--s-9);
+  display: grid;
+  gap: var(--s-5);
+}
+
+.problem {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  border: 1px solid var(--fault);
+  background: var(--fault-wash);
+  border-radius: var(--r-md);
+  padding: var(--s-4) var(--s-5);
+  font: var(--t-meta);
+}
+
+.problem p {
+  flex: 1;
+}
+
+/* The same left-rule the thread uses for a repair, so a proposal reads as the
+   same object in both places. */
+.proposal {
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--human);
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+  background: var(--surface);
+  padding: var(--s-5) var(--s-6);
+  display: grid;
+  gap: var(--s-4);
+}
+
+.proposalHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-4);
+}
+
+.routine {
+  font: var(--t-title);
+  overflow-wrap: anywhere;
+}
+
+.step {
+  font: var(--t-code);
+  color: var(--text-3);
+}
+
+.reason {
+  font: var(--t-body);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.swap {
+  display: grid;
+  gap: var(--s-2);
+  font: var(--t-code);
+}
+
+.was,
+.now {
+  display: flex;
+  gap: var(--s-4);
+  overflow-wrap: anywhere;
+}
+
+.was {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.now {
+  color: var(--text);
+}
+
+.swapKind {
+  flex: none;
+  width: 68px;
+  color: var(--text-3);
+  text-decoration: none;
+}
+
+.frame {
+  font: var(--t-meta);
+  color: var(--text-3);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+
+.note {
+  font: var(--t-meta);
+  color: var(--text-2);
+  max-width: 44ch;
+}
+
+.grow {
+  flex: 1;
+}
+
+.stale {
+  font: var(--t-meta);
+  color: var(--human);
+  border-left: 2px solid var(--human);
+  padding-left: var(--s-4);
+}

@@ -1,0 +1,138 @@
+.header {
+  display: grid;
+  gap: var(--s-4);
+  padding: var(--s-6) var(--s-8) var(--s-5);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.title {
+  font: var(--t-display);
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-4);
+  font: var(--t-meta);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.separator {
+  color: var(--line-strong);
+}
+
+.body {
+  padding: var(--s-6) var(--s-8) var(--s-9);
+  display: grid;
+  gap: var(--s-7);
+  max-width: 720px;
+}
+
+.description {
+  font: var(--t-body);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.section {
+  display: grid;
+  gap: var(--s-4);
+}
+
+.plain {
+  font: var(--t-body);
+  color: var(--text-2);
+}
+
+.list {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-4);
+  font: var(--t-body);
+  overflow-wrap: anywhere;
+}
+
+.certain,
+.suspected {
+  flex: none;
+  font: var(--t-code-strong);
+}
+
+.certain {
+  color: var(--fault);
+}
+
+.suspected {
+  color: var(--human);
+}
+
+/* The one place this screen must not sound confident: an opaque selector is
+   unknowable from a file, and saying so is the feature's residual risk. */
+.caveat {
+  font: var(--t-meta);
+  color: var(--text);
+  border-left: 2px solid var(--human);
+  background: var(--human-wash);
+  padding: var(--s-4) var(--s-5);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+
+.caveat code {
+  font: var(--t-code);
+}
+
+.secretRow {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  cursor: pointer;
+}
+
+.secretWhere {
+  font: var(--t-body-strong);
+}
+
+.struck,
+.kept {
+  font: var(--t-code);
+  padding-left: var(--s-6);
+  overflow-wrap: anywhere;
+}
+
+.struck {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.kept {
+  color: var(--fault);
+}
+
+.problem {
+  border: 1px solid var(--fault);
+  background: var(--fault-wash);
+  border-radius: var(--r-md);
+  padding: var(--s-4) var(--s-5);
+  font: var(--t-body);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+}

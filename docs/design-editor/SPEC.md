@@ -527,10 +527,11 @@ Covered in §6.3: child processes, `powerSaveBlocker`, quit confirmation.
 - **Design files:** saved and opened through the document picker and `expo-file-system`
   (`.json`); exports (PNG, JPG, SVG, PDF) go to `Pictures/Design Editor` or `Documents` via the
   same `Outputs.publish`, or Share.
-- **Permissions:** `INTERNET` stays (Expo's default; nothing uses it in release), `POST_NOTIFICATIONS`,
-  `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PROCESSING`. `blockedPermissions`:
-  `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`, `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`,
-  `READ_MEDIA_AUDIO`, `CAMERA`, `SYSTEM_ALERT_WINDOW`, `VIBRATE` (as Deputy does for the ones it
+- **Permissions:** `INTERNET` stays (Expo's default) and is used only by the app's one-time search-tool
+  download, never by media jobs; `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE`,
+  `FOREGROUND_SERVICE_MEDIA_PROCESSING`; `READ_MEDIA_IMAGES` and `READ_MEDIA_VISUAL_USER_SELECTED`
+  for Find a photo. `blockedPermissions`: `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`,
+  `READ_MEDIA_VIDEO`, `READ_MEDIA_AUDIO`, `CAMERA`, `SYSTEM_ALERT_WINDOW`, `VIBRATE` (as Deputy does for the ones it
   doesn't use).
 - **Backup:** off, `allowBackup="false"` in the manifest and `android.allowBackup: false` in
   `app.json` (owner, 2026-10-31), as in Deputy and the Store, and in PDF Editor from Scan Phase 2
@@ -690,6 +691,9 @@ type PageEvent =
   | { type: 'openDesign'; reqId: string }
   | { type: 'readAutosave'; reqId: string }
   | { type: 'writeAutosave'; reqId: string; text: string }
+  | { type: 'aiHasKey'; reqId: string }                    // Design with AI: key stays in the app
+  | { type: 'aiSetKey'; reqId: string; key: string }        // reply value { ok, error?: 'nosecure'|'bad' }, same as the Mac
+  | { type: 'aiRequest'; reqId: string; body: unknown }    // reply value { ok, status, json?, error? }, never replyError
   | { type: 'docState'; title: string; dirty: boolean; filePath: string | null };
 // Native → web
 type WebCommand =

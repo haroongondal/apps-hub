@@ -1,0 +1,11 @@
+{
+  "name": "pdf-scan",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PDF Editor's document scanner: camera, page detection (Expo local module, Android now, iOS in Phase 6)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "expo-modules-core": "~3.0.30"
+  }
+}

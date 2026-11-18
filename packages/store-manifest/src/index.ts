@@ -14,6 +14,10 @@ export const ANDROID_PACKAGES = {
   store: 'com.haroon.store',
   deputy: 'com.haroon.deputy',
   strongroom: 'com.haroon.strongroom',
+  inflow: 'com.haroon.inflow',
+  clipboard: 'com.haroon.clipboard',
+  halo: 'com.haroon.halo',
+  notch: 'com.haroon.notch',
 } as const;
 
 export function androidPackageFor(id: string): string | undefined {

@@ -80,7 +80,7 @@ for (let i = 0; i < 100 && !m; i++) {
 }
 assert.ok(m, 'the media window opens from File > Media Tools');
 await m.waitForLoadState('domcontentloaded');
-assert.equal(await m.locator('.tools button').count(), 10);
+assert.equal(await m.locator('.tools button').count(), 11);
 assert.equal(await m.isDisabled('#start'), true);
 
 const status = await m.evaluate(() => window.native.media.status());

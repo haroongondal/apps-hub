@@ -264,7 +264,7 @@ No telemetry: the owner measures these on the phone and records them in
 - OCR languages other than English in v1 (Arabic and Urdu search is in v1, FR-5). The
   engine, storage and settings allow more later (Q6). Next: Urdu and Arabic, downloaded from the Tesseract repository when the owner asks
   (owner, 2026-10-31).
-- Handwriting recognition, tables to Excel, export to Word, fax, ID-card and QR modes.
+- Handwriting recognition, tables to Excel, export to Word, fax and QR modes. (Card mode, image export and the three filters were added on 2026-11-18, see the Phase 3 design.)
 - Page-curve dewarping (book spines); multi-column reading order beyond what Tesseract does.
 - PDF passwords and signing (the editor may add them later; not part of Scan).
 - A folder-picking export through the Storage Access Framework; the share sheet covers

@@ -77,6 +77,50 @@ test('malformedServerBodiesAreRefused', async () => {
   await assert.rejects(with_(200, { headerRev: '2' }).putAccount({ setupToken: 's' }, ACCOUNT), refused(200));
 });
 
+test('lostRequestPostsTheClaimHashWithNoAuthorizationHeader', async () => {
+  const f = fakeFetch(() => ({ status: 200, body: { ok: true } }));
+  const t = fetchTransport('https://vault.example', f.fn);
+  await t.lostRequest('a'.repeat(43) + '=');
+  assert.deepEqual(f.sent, [{ url: 'https://vault.example/v1/lost/request', method: 'POST', auth: null, body: { claimHash: 'a'.repeat(43) + '=' } }]);
+});
+
+test('lostReleaseReadsWaitingAndReady', async () => {
+  const waiting = fetchTransport('https://vault.example', fakeFetch(() => ({ status: 200, body: { state: 'waiting', releaseAt: 123 } })).fn);
+  assert.deepEqual(await waiting.lostRelease('claim'), { state: 'waiting', releaseAt: 123 });
+  const stillWaiting = fetchTransport('https://vault.example', fakeFetch(() => ({ status: 200, body: { state: 'waiting', releaseAt: null } })).fn);
+  assert.deepEqual(await stillWaiting.lostRelease('claim'), { state: 'waiting', releaseAt: null });
+  const f = fakeFetch((s) => ({ status: 200, body: { state: 'ready', blob: 'AA==' } }));
+  const ready = fetchTransport('https://vault.example', f.fn);
+  assert.deepEqual(await ready.lostRelease('the-claim'), { state: 'ready', blob: 'AA==' });
+  assert.deepEqual(f.sent, [{ url: 'https://vault.example/v1/lost/release', method: 'POST', auth: null, body: { claim: 'the-claim' } }]);
+});
+
+test('lostReleaseRejectsAMalformedBodyAsAReadableError', async () => {
+  const refused = (e: unknown) => e instanceof SyncHttpError && !(e instanceof SyncAuthError) && e.status === 200;
+  for (const body of [{}, { state: 'waiting' }, { state: 'waiting', releaseAt: '1' }, { state: 'ready' }, { state: 'ready', blob: 3 }, { state: 'other' }]) {
+    const t = fetchTransport('https://vault.example', fakeFetch(() => ({ status: 200, body })).fn);
+    await assert.rejects(t.lostRelease('claim'), refused, JSON.stringify(body));
+  }
+});
+
+test('lostStatusAndLostCancelSendTheBearerToken', async () => {
+  const f = fakeFetch((s) => (s.url.endsWith('/v1/lost/status') ? { status: 200, body: { escrow: true, pending: { releaseAt: null } } } : { status: 200, body: { ok: true } }));
+  const t = fetchTransport('https://vault.example', f.fn);
+  assert.deepEqual(await t.lostStatus(TOKEN), { escrow: true, pending: { releaseAt: null } });
+  await t.lostCancel(TOKEN);
+  assert.deepEqual(f.sent, [
+    { url: 'https://vault.example/v1/lost/status', method: 'GET', auth: BEARER, body: undefined },
+    { url: 'https://vault.example/v1/lost/cancel', method: 'POST', auth: BEARER, body: undefined },
+  ]);
+});
+
+test('deleteEscrowSendsDeleteWithTheBearerToken', async () => {
+  const f = fakeFetch(() => ({ status: 200, body: { ok: true } }));
+  const t = fetchTransport('https://vault.example', f.fn);
+  await t.deleteEscrow(TOKEN);
+  assert.deepEqual(f.sent, [{ url: 'https://vault.example/v1/escrow', method: 'DELETE', auth: BEARER, body: undefined }]);
+});
+
 test('fetchTransportGivesUpAfter30Seconds', async () => {
   mock.timers.enable({ apis: ['setTimeout'] });
   try {
@@ -89,8 +133,73 @@ test('fetchTransportGivesUpAfter30Seconds', async () => {
     await Promise.resolve();
     assert.equal(settled, false);
     mock.timers.tick(1);
+    await new Promise<void>((r) => setImmediate(r));
+    mock.timers.tick(5_000); // the prelogin probe hangs too, so this is offline
     await assert.rejects(pending, SyncOfflineError);
   } finally {
     mock.timers.reset();
   }
+});
+
+test('signinRequestReleaseAndCancelUseTheirRoutes', async () => {
+  const f = fakeFetch((s) => (s.url.endsWith('/release') ? { status: 200, body: { state: 'ready', blob: 'AA==' } } : { status: 200, body: { ok: true } }));
+  const t = fetchTransport('https://vault.example', f.fn);
+  await t.signinRequest('a'.repeat(43) + '=', 'Chrome on Mac');
+  assert.deepEqual(await t.signinRelease('the-claim'), { state: 'ready', blob: 'AA==' });
+  await t.signinCancel(TOKEN);
+  assert.deepEqual(f.sent, [
+    { url: 'https://vault.example/v1/signin/request', method: 'POST', auth: null, body: { claimHash: 'a'.repeat(43) + '=', deviceName: 'Chrome on Mac' } },
+    { url: 'https://vault.example/v1/signin/release', method: 'POST', auth: null, body: { claim: 'the-claim' } },
+    { url: 'https://vault.example/v1/signin/cancel', method: 'POST', auth: BEARER, body: undefined },
+  ]);
+  for (const body of [{}, { state: 'waiting' }, { state: 'ready', blob: 3 }]) {
+    await assert.rejects(fetchTransport('https://vault.example', fakeFetch(() => ({ status: 200, body })).fn).signinRelease('c'), SyncHttpError);
+  }
+});
+
+// Waits until the request is aborted (the transport's own timeout), like a Worker holding a refused token in its queue.
+const held = (init?: RequestInit) => new Promise<Response>((_, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))));
+const flush = () => new Promise<void>((r) => setImmediate(r));
+
+test('aTokenGetHeldPastTheTimeoutWhilePreloginAnswersIsARefusalNotOffline', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const fn = (async (input: string | URL | Request, init?: RequestInit) =>
+    String(input).endsWith('/v1/prelogin') ? new Response('{}', { status: 200 }) : held(init)) as typeof fetch;
+  const pull = fetchTransport('https://vault.example', fn).pull(TOKEN, 0);
+  await flush();
+  t.mock.timers.tick(30_000);
+  await assert.rejects(pull, SyncAuthError);
+});
+
+test('aTimeoutIsOfflineWhenPreloginDoesNotAnswerEither', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const fn = (async (_: string | URL | Request, init?: RequestInit) => held(init)) as typeof fetch;
+  const pull = fetchTransport('https://vault.example', fn).pull(TOKEN, 0);
+  await flush();
+  t.mock.timers.tick(30_000);
+  await flush();
+  t.mock.timers.tick(5_000);
+  await assert.rejects(pull, SyncOfflineError);
+});
+
+test('aTimeoutIsOfflineWhenPreloginAnswersWithAServerError', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const fn = (async (input: string | URL | Request, init?: RequestInit) =>
+    String(input).endsWith('/v1/prelogin') ? new Response('{}', { status: 500 }) : held(init)) as typeof fetch;
+  const pull = fetchTransport('https://vault.example', fn).pull(TOKEN, 0);
+  await flush();
+  t.mock.timers.tick(30_000);
+  await assert.rejects(pull, SyncOfflineError);
+});
+
+test('aTimedOutPushOrANetworkErrorIsStillOffline', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const fn = (async (input: string | URL | Request, init?: RequestInit) =>
+    String(input).endsWith('/v1/prelogin') ? new Response('{}', { status: 200 }) : held(init)) as typeof fetch;
+  const push = fetchTransport('https://vault.example', fn).push(TOKEN, { upserts: [] });
+  await flush();
+  t.mock.timers.tick(30_000);
+  await assert.rejects(push, SyncOfflineError);
+  const down = fetchTransport('https://vault.example', (async () => { throw new TypeError('offline'); }) as typeof fetch);
+  await assert.rejects(down.pull(TOKEN, 0), SyncOfflineError);
 });

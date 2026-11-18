@@ -1,22 +1,25 @@
 import { snippetParts, type Folder, type Item, type ItemKind } from '@apps-hub/library-core';
-import { fonts, Group, Row, Text, useTheme } from '@apps-hub/ui';
+import { fonts, Group, RecordMenu, Row, Text, useTheme, type RecordAction } from '@apps-hub/ui';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { View } from 'react-native';
 
 import { describeItem, plural } from './format';
-import { IconButton, type IconName } from './icon-button';
+import type { IconName } from './icon-button';
 import { itemFile } from './paths';
 
 const KIND_ICON: Record<ItemKind, IconName> = {
   pdf: 'document-text-outline',
   scan: 'scan-outline',
   article: 'newspaper-outline',
+  note: 'create-outline',
+  audio: 'mic-outline',
+  image: 'image-outline',
 };
 
 function Thumb({ item }: { item: Item }) {
   const { c } = useTheme();
-  const thumb = itemFile(item.id, 'thumb.jpg');
+  const thumb = itemFile(item.id, item.kind === 'image' ? 'image.jpg' : 'thumb.jpg');
   return (
     <View style={{ width: 40, height: 52, borderRadius: 4, overflow: 'hidden', backgroundColor: c.raised, alignItems: 'center', justifyContent: 'center' }}>
       {thumb.exists ? (
@@ -44,7 +47,15 @@ function Snippet({ snippet }: { snippet: string }) {
   );
 }
 
-export function FolderRow({ folder, onOpen }: { folder: Folder; onOpen: () => void }) {
+export function FolderRow({
+  folder,
+  onOpen,
+  actions,
+}: {
+  folder: Folder;
+  onOpen: () => void;
+  actions: RecordAction[];
+}) {
   const { c } = useTheme();
   const count = plural(folder.itemCount, 'item');
   return (
@@ -53,7 +64,7 @@ export function FolderRow({ folder, onOpen }: { folder: Folder; onOpen: () => vo
         title={folder.name}
         subtitle={count}
         leading={<Ionicons name="folder-outline" size={32} color={c.accent} />}
-        trailing={<Ionicons name="chevron-forward" size={20} color={c.faint} />}
+        trailing={<RecordMenu title={folder.name} actions={actions} />}
         onPress={onOpen}
         accessibilityLabel={`Folder ${folder.name}, ${count}`}
       />
@@ -66,13 +77,13 @@ export function ItemRow({
   snippet,
   where,
   onOpen,
-  onMore,
+  actions,
 }: {
   item: Item;
   snippet: string | null;
   where: string | null;
   onOpen: () => void;
-  onMore: () => void;
+  actions: RecordAction[];
 }) {
   const subtitle = where ? `${describeItem(item)} · in ${where}` : describeItem(item);
   return (
@@ -81,7 +92,7 @@ export function ItemRow({
         title={item.title}
         subtitle={subtitle}
         leading={<Thumb item={item} />}
-        trailing={<IconButton icon="ellipsis-horizontal" label={`More actions for ${item.title}`} onPress={onMore} />}
+        trailing={<RecordMenu title={item.title} actions={actions} />}
         onPress={onOpen}
         accessibilityLabel={`${item.title}, ${subtitle}`}
       >

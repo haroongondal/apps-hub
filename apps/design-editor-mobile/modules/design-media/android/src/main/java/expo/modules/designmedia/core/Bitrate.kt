@@ -26,6 +26,7 @@ fun neededBytes(plan: Plan, inputBytes: Long, durationS: Double): Long = when (p
   is ComposePlan -> 2 * plan.plannedBytes
   is GifPlan -> 2 * (plan.targetBytes ?: 20_000_000L)
   is FramePlan -> 25_000_000L
+  PhotoIndexPlan -> 0L
   is ClipPlan ->
     if (durationS > 0) (inputBytes * min(1.0, (plan.endS - plan.keyframeS) / durationS) * 1.1).toLong() else inputBytes
   else -> inputBytes

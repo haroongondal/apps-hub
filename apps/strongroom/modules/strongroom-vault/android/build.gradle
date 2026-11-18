@@ -37,5 +37,7 @@ dependencies {
   // Already in the app (it is React Native); SecretFieldView resolves fonts with its ReactFontManager, as expo-font does.
   implementation("com.facebook.react:react-android")
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+  // Barcode encoding for passes: pure Java, Apache-2.0, no transitive dependencies, no network or Play Services code.
+  implementation("com.google.zxing:core:3.5.3")
   testImplementation("junit:junit:4.13.2")
 }
