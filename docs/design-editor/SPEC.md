@@ -752,13 +752,20 @@ type WebCommand =
 - Cleanup: the `.src` file is deleted after every run, the result after its last piece is read;
   `visionCancel`, any error and leaving the editor delete the source, the result and held pieces;
   a new editor screen sweeps `cacheDirectory/vision/` once, for files left by a killed app. The
-  page refuses a result whose length differs from `bytes`. A model download cannot be stopped
-  midway: a cancel during a first-use download resolves at once, but the next change can start
-  only after that download finishes.
+  page refuses a result whose length differs from `bytes`. Cancel aborts a first-use model
+  download and deletes the partial file; the run settles as cancelled at once
+  (`cancelDuringDownloadAbortsItAndTheRunSettlesAtOnce`).
 - This replaces "file path, never base64" (quick-edits design) and "photos never cross the
   bridge" (above) for vision only (owner decision 2026-11-18): the page has no file route and its
   CSP loads images only from `data:` and `blob:`. App side: `src/editor/vision-host.ts`
   (`vision-host.test.ts`); page side: `shell-mobile.js` (Chrome check `test/vision-bridge.mjs`).
+- Uploads on the phone: the WebView's own file chooser always offers the camera, so a tap on
+  `#drop` asks the app instead. `pickImages` opens the system document picker (images only, copies
+  in the cache) and replies `[{ uri, name, type, bytes }]` (`[]` if cancelled); `readImage` replies
+  `{ data, done }`, one base64 piece of the same size as vision's; the page checks the total against
+  `bytes`, feeds the files to `#imgFile` and then sends `releaseImages`, which deletes the copies.
+  The app reads and deletes only copies it handed out, and deletes any left when the editor
+  closes. App side: `src/editor/image-pick.ts` (`image-chooser.test.ts`).
 
 ## 15. Build, release and Store
 

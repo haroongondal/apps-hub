@@ -9,7 +9,7 @@ pnpm release <app>                 apps-hub-store Worker (Cloudflare)           
   gradle assembleRelease  ──PUT /admin/*──▶  R2: apps/<id>/android/<vc>.apk  ◀──GET /f/*?exp&sig── PackageInstaller
   verify signer + badging                   R2: manifest.json  ◀──GET /manifest.json (Bearer)──── list + status
   upsert manifest.json                      POST /sign (Bearer) → 10-minute HMAC-signed URL ───▶ download
-  PUT /admin/models/<sha256>                R2: models/<sha256>  ◀──GET /models/<sha256> (public)── apps fetching a model
+  by hand: PUT /admin/models/<sha256>       R2: models/<sha256>  ◀──GET /models/<sha256> (public)── apps fetching a model
 ```
 
 | Piece | Path |
@@ -74,7 +74,7 @@ RELEASE_TOKEN=<RELEASE_TOKEN from .dev.vars>
 | Secret | Who holds it | Can do |
 |---|---|---|
 | `STORE_TOKEN` | your phone (Store app, Keystore-encrypted) | read manifest, get signed download URLs |
-| `RELEASE_TOKEN` | your Mac (`release.env`) | the above plus upload builds and the manifest |
+| `RELEASE_TOKEN` | your Mac (`release.env`) | the above plus upload builds, the manifest and model files |
 | `SIGNING_KEY` | Worker only | HMAC for download URLs (10-minute expiry) |
 
 ---

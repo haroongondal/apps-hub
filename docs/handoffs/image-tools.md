@@ -128,6 +128,10 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
   (model 1182 ms median, RAM 410 MB); MODNet fp32 about 1.48 s (1315 ms, RAM 274 MB); Real-ESRGAN
   T=176 1925 ms per tile (RAM 59 MB, no throttling over 81 runs). Phone outputs match the Mac to
   <= 7.8e-5. Results note `docs/superpowers/plans/2026-11-17-quick-edits-phase-0-results.md`.
+- Fix item 8 (sheet blank 2-5 s after a tap), 2026-11-18: no code change. The two "blank" screenshots
+  were broken captures (alpha-0 rows including the native toolbar; one file 0 bytes) and Chrome at 6x
+  CPU slowdown shows no long task. Check capture integrity on the phone (`adb exec-out screencap`,
+  pngcheck, or screenrecord); reopen only if the owner sees a blank sheet.
 - Live checks 2026-11-18: GET /models/1c1bda58... returns 200, 4,866,394 B, SHA-256 matches;
   manifest without token 401, with release token 200; bad model path refused.
 
