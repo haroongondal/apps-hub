@@ -174,28 +174,19 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
 
 ## Current state + exact next step
 
-Design Editor build 15 is live (2026-11-18, from image-tools f4ced537; manifest re-fetched, other entries
-intact): quick edits, Clean up, telemetry removal, copies-keep-biggest fix and the 11 fixes from the phone
-test (plan `docs/superpowers/plans/2026-11-18-image-tools-fixes.md`, ledger
-`.superpowers/sdd/2026-11-18-image-tools-fixes/progress.md`). Item 8 (blank sheet) had no code change: the
-screenshots were broken captures. image-tools is NOT merged to main: a Design Editor release from main or
-photo-search would drop features 2-3 and bring the telemetry back.
-Phone test of 15 over adb (2026-11-18, qa15/ screenshots): PASS picture picker (Android Files picker, no camera
-entry; one photo, two at once, a 4000x3000 photo, Back cancels clean), Undo keeps selection and panel, 4x Upscale
-progress+Cancel stay visible while scrolling and Cancel cancels cleanly, Person cut-out under 3 s. Layout bug still
-there: the dashed 'Choose pictures' box overlaps the 'Uploads' heading. NOT yet run: Object (arm ghost), 2x upscale of
-a cut-out (rim), Clean up (biggest copy Best, 30 days), cleanup of test photos. Wi-Fi adb dropped again at 23:49
-(drops every 10-20 min of use: ask the owner for USB adb). LEFT ON PHONE: /sdcard/Pictures/ImageToolsTest/ with 5
-ittest-*.jpg scanned into MediaStore; an unsaved test design in Continue (the old owner draft was probably replaced).
+**Urgent (2026-11-19):** while image-tools was unmerged, other sessions merged to main and CI released Design
+Editor builds 16-19 (build 19 = main 18937ec4: Design with AI #45, shrink images #49). The owner's phone now has
+build 19, which has NONE of feature 2 (Clean up), feature 3 (quick edits), the telemetry removal or the fixes; the
+ORT telemetry provider is back in the shipped app (it is in main via #38). Fix: image-tools merged with origin/main
+at 2026-11-19 (merge commit on branch; layout fix 5e474c99 included). Gates on the merge: pnpm test 0, typecheck 0,
+node build.mjs ok, Kotlin 298/0 + assembleDebug 0. Not run: clean export of the merge, desktop e2e (owner rule).
 Next:
-1. Owner installs build 15 from the Store (never adb-install). Then claim the phone (join the queue if held)
-   and check over adb, first item 6 (adding a picture from Uploads: no camera entry, big photo, several
-   photos, cancel the picker, a short read toast), then Best badge, 4x Upscale Cancel while scrolling, Undo/Redo
-   keep selection, Cancel during a first model download, Object/Person edges, 2x upscale of a soft-edged
-   cut-out. Don't use airplane mode (cuts wireless adb). Never touch the owner's photos or drafts.
-2. Gallery recycle-bin visibility is still unproven; the owner can look in the Gallery app after a Clean up
-   delete.
-3. Ship image-tools to main (pr-shipper, owner's go): puts the Worker /models/ route and telemetry fix on main.
-4. Feature 4 (Heavy edits): 4.0 phone spike (MI-GAN vs LaMa, owner judges; SlimSAM; Depth Anything V2 Small;
+1. Owner's go to ship: pr-shipper reviews and opens one PR into main; squash-merge with [skip ci], then
+   `pnpm release design-editor` locally from merged main (build 20+), then re-fetch the manifest.
+   Until main has image-tools, any CI or local Design Editor release from main drops features 2-3 again.
+2. Then phone checks on the new build over adb (USB adb is now connected; use `adb -s 49kjmnuwonkffqzh`):
+   Object cut-out arm, 2x upscale of a cut-out (rim), Clean up (biggest copy Best, 30 days, Best badge),
+   layout fix (Uploads heading), picture picker, Design with AI still works. Join the coord queue first.
+3. Owner: reset the 'Continue' draft; check Gallery recycle-bin visibility after a Clean up delete.
+4. Feature 4 (Heavy edits): 4.0 phone spike (MI-GAN vs LaMa owner judges, SlimSAM, Depth Anything V2 Small,
    YuNet; GFPGAN licence/size check first).
-Owner: reset the 'Continue' draft in Design Editor (test edits).
