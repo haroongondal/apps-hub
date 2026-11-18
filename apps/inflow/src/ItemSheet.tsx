@@ -79,6 +79,26 @@ export function ItemSheet({ item, onClose, onRename, onShowSender }: { item: Ite
     }
     setError(null);
   }, [senderKey]);
+  const promoKey = item?.conversationKey ?? item?.senderKey ?? null;
+  const itemId = item?.id ?? null;
+  const [promo, setPromo] = useState<boolean | null>(null);
+  useEffect(() => {
+    try {
+      setPromo(promoKey === null || itemId === null ? null : InflowCore.smsPromotion(itemId));
+    } catch {
+      setPromo(null);
+    }
+  }, [promoKey, itemId]);
+  const togglePromo = () => {
+    if (promoKey === null || promo === null) return;
+    try {
+      InflowCore.setPromotion(promoKey, !promo);
+      setPromo(!promo);
+      setError(null);
+    } catch {
+      setError(SAVE_ERROR);
+    }
+  };
   const toggleKept = () => {
     if (senderKey === null) return;
     try {
@@ -119,6 +139,7 @@ export function ItemSheet({ item, onClose, onRename, onShowSender }: { item: Ite
           </Group>
           {item.senderKey !== null && <Button label="Rename sender" variant="secondary" onPress={() => onRename(item)} block />}
           {error !== null && <Notice tone="danger">{error}</Notice>}
+          {promo !== null && <Button label={promo ? 'Keep in my list' : 'Move to Promotions'} variant="secondary" onPress={togglePromo} block />}
           {senderKey !== null && <Button label={kept ? 'Send this sender to AI again' : "Don't send this sender to AI"} variant="secondary" onPress={toggleKept} block />}
           {who !== null && <Button label="Show everything from this sender" variant="secondary" onPress={() => onShowSender(who)} block />}
         </>

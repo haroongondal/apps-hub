@@ -1,53 +1,51 @@
 # Inflow handoff (formerly Notebox)
 
-## Resume prompt (2026-11-16, stage 4b installed and tested on the phone; next build pending)
+## Resume prompt (2026-11-17, late: items 1-4 built and on the phone as a test build; item 5 designed, not planned)
 
 ```
-Continue the Inflow work (formerly Notebox), resume prompt dated 2026-11-16. Work only in the
-worktree /Users/outsentia/Documents/apps-hub-wt/inflow (branch inflow/stage-4b, which holds stages
-1-4 and 4b), never in the main checkout /Users/outsentia/Documents/apps-hub (branch model-host,
-unrelated uncommitted work; its untracked docs/handoffs/notebox.md and Notebox design copy are
-stale leftovers, delete only after the merge and with the owner's OK). Claim the worktree folder
-with coord before you start (~/.claude/plugins/cache/claude-agent-workflow/coord/1.0.0/bin/coord
-claim <folder>) and release it when you stop. Use cd-engineering-tools:parallel-agents-coord
-(never superpowers:subagent-driven-development) for any agent work.
+Continue the Inflow work (Android app com.haroon.inflow, apps/inflow), resume prompt dated 2026-11-17 (late).
+The owner's 5-item list: items 1-4 are BUILT, reviewed and installed on the phone as a test build; item 5 (UX rework
++ quieter SMS) is DESIGNED and APPROVED but has no plan yet.
 
-1. Read docs/handoffs/inflow.md completely first (especially "Current state and next step"), then
-   progress.md (untracked ledger of stage 4b: rulings R35-R46, reviews, fix waves, the 2026-11-16
-   phone results; progress-stage-{1..4}.md hold earlier stages). Plans: docs/superpowers/plans/
-   2026-11-13-inflow-stage-{1,2,3}.md, 2026-11-14-inflow-stage-4.md, 2026-11-16-inflow-stage-4b.md;
-   briefs fix-4b/4c/4d-brief.md. Trust the decisions, rulings and verified facts; do not re-ask what
-   the owner settled; do not re-run reviews or fix waves already done.
-2. PHONE RULES: the owner's phone is reached ONLY with `adb -s adb-49kjmnuwonkffqzh-zHnffO._adb-tls-connect._tcp`
-   (an emulator, emulator-5556, belongs to ANOTHER session: never use it, never `adb kill-server`).
-   Claim `device:49kjmnuwonkffqzh` with coord first and release it when done. Inflow is adb-installed
-   (installer null, debug-signed, same cert fac61745...3b9c, versionCode 1): `adb install -r` of the
-   new APK keeps data. Never uninstall. The owner unlocks Inflow, ticks HyperOS risk boxes, enables
-   Autostart/notification access, and types settings themselves; never enter their PIN or credentials.
-   Screenshots of lock/secure screens are black (Android). Describe the owner's messages by structure only.
-3. State (updated 16:05): installed on the phone = 2b46d9e (d999812 + name hint, step 4a/4b DONE). Older note: c74d2f1 was installed, then d999812 (AI-filter gaps L1-L5: Ask txns of
-   notification-only sources, default SMS app eligible, accounts list, versioned backfill cursor,
-   AI-made txns re-read) is committed and gated (313 Kotlin tests, pnpm 46/46) but NOT installed.
-   Build the next release APK from HEAD (`NODE_ENV=production ./gradlew :app:assembleRelease` in
-   apps/inflow/android, JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home,
-   ANDROID_HOME=/opt/homebrew/share/android-commandlinetools), check cert/badging, `adb -s <phone> install -r`.
-   After an update check `adb logcat | grep AutoStartManagerService`: HyperOS may reject binding the
-   notification listener (Autostart reset): the owner then enables Inflow in Security > Background
-   autostart (open with `am start -n com.miui.securitycenter/com.miui.permcenter.autostart.AutoStartManagementActivity`)
-   and toggles notification access off/on.
-4. Remaining TODO, in order: (a) T copy: hint under Settings > Your name must say "your full name as
-   your bank writes it" (owner typed first name, then a name with a surname the bank omits; the matcher is
-   exact + at most one bank tag by design). (b) Build/install d999812 + (a). (c) Phone checks still open:
-   Ask AI money answer on the corrected ledger; WhatsApp MEDIA test (ask the owner's friend to send a photo,
-   video, voice note, document, sticker, GIF, location, contact; read Settings > Saved media counters and the
-   item sheets; unknown whether WhatsApp notifications expose any media the listener can read); Gmail (owner
-   enters their own app password) ; a live bank SMS gives one item + one txn; AI summaries only for SMS/email
-   now (R44). (d) Parked minors R43/R46: media read holds the DB write lock; legacy "You" copy with a twin and a
-   todo stays; empty-text unreadable media row shows nothing; mixed-source (SMS + push) txn is excluded from
-   Ask money (relax if totals look low). (e) Owner decisions pending: release of stages 1-4b (owner said
-   "hold release"); never merge/push/release without their go. Stage 5 (rules/tags) is the last stage.
-5. Keep docs/handoffs/inflow.md and progress.md current; at ~85% context stop, rewrite this prompt.
-   No Claude attribution lines in commits or PRs. Never adb-install a Store-installed app.
+Work only in the worktree /Users/outsentia/Documents/apps-hub-wt/inflow (branch inflow/post-release, not pushed; it is
+2 commits behind origin/main), never in the main checkout /Users/outsentia/Documents/apps-hub. Claim the worktree with
+coord first (~/.claude/plugins/cache/claude-agent-workflow/coord/1.0.0/bin/coord claim <folder>) and release it when you
+stop. Agent work: cd-engineering-tools:parallel-agents-coord, never superpowers:subagent-driven-development.
+
+1. Read docs/handoffs/inflow.md completely first, then progress.md (ledger of the reports plan, rulings R47-R51) and
+   the tail of progress-stage-4b.md (entries 52-56: items 1-2 and the item 3/4 design). Trust the decisions and
+   verified facts; do not redo reviews, fix waves or designs already done; do not re-ask what the owner settled.
+2. NEXT: write the item 5 plan from docs/superpowers/specs/2026-11-17-inflow-ux-design.md (approved), using
+   superpowers:writing-plans; show it to the owner; on their OK build it with parallel-agents-coord (one Kotlin agent,
+   one TS agent, disjoint files as in docs/superpowers/plans/2026-11-17-inflow-reports.md), then one opus review, one
+   fix agent, a scoped re-review, the gates, and a phone test.
+3. GATES: from the worktree root `pnpm test` and `pnpm typecheck`; from apps/inflow/android
+   `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+   ./gradlew :inflow-core:testDebugUnitTest :app:assembleDebug :app:processReleaseMainManifest` (386 tests at 3e15ed3; the
+   fresh merged release manifest is app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml,
+   NOT the older merged_manifests/... file; expected permissions: READ_SMS, RECEIVE_SMS, INTERNET, POST_NOTIFICATIONS,
+   USE_BIOMETRIC, USE_FINGERPRINT, DYNAMIC_RECEIVER).
+4. PHONE: only `adb -s adb-49kjmnuwonkffqzh-zHnffO._adb-tls-connect._tcp` (emulator-5556 is another session's; never adb
+   kill-server). Claim device:49kjmnuwonkffqzh with coord; other sessions queue for it (hand it over while you wait,
+   ask for it back). The owner unlocks Inflow (fingerprint) and types names/keys; screenshots of secure screens are black.
+   The phone now runs the STORE-SIGNED Inflow (release key e3af4a92...317d; the owner reinstalled from the Store on
+   2026-11-16 23:13, which wiped the old debug-build data). Debug-signed builds can NOT be installed any more. The owner
+   allowed adb TEST installs (2026-11-17): build `NODE_ENV=production ./gradlew :app:assembleRelease` with versionCode 2
+   (temporarily `versionCode 2` in apps/inflow/android/app/build.gradle, then put back 1; never commit it), re-sign with
+   `apksigner sign --ks <APPS_HUB_RELEASE_STORE_FILE> --ks-key-alias <APPS_HUB_RELEASE_KEY_ALIAS> --ks-pass env:SP
+   --key-pass env:KP` reading the values from ~/.gradle/gradle.properties without printing them, verify the cert is
+   e3af4a92 and versionCode 2, then `adb install -r` (keeps data; installer becomes null). Keep versionCode 2 so the next
+   Store release (versionCode 3) is still an update. After an install check `dumpsys notification` for a live
+   InflowListener and logcat for "Reject service" (HyperOS Autostart).
+5. RELEASE only on the owner's explicit go: merge origin/main into the branch, push, PR to main, squash merge with
+   "[skip ci]", then from a clean worktree of the merged commit `NODE_ENV=production pnpm release inflow -m "<plain words>"`
+   (versionCode 3). The owner has not asked for a release yet (they may want items 1-5 in one release).
+6. Open on the phone (owner): Settings > Your name may be empty after the Store reinstall (own NayaPay transfer counted
+   as spending): it must be the full name as the bank writes it ("Haroon Mukhtar"). Categorising old transactions runs in
+   the background (100 per batch, 5 batches per 30-min tick). Not yet tried: Make a report now, the notification
+   permission prompt and a tapped notification, the SMS/Gmail contact lists (SMS unreachable from Home until item 5).
+7. Keep this handoff and progress.md current; at ~85% context stop and rewrite this prompt. No Claude attribution lines.
+   Never push, merge or release without the owner's go.
 ```
 
 ## Goal and fixed constraints
@@ -195,12 +193,18 @@ most likely to be second-guessed:
   build was ever installed, so no change (wipe such an install if one turns up). Nit left:
   `setOwnerName` re-labels on the JS thread (sync Function); fine at current sizes.
 
+- 2026-11-17 (post-release session): owner list of five items. (1) Unlock spun after minimizing: BiometricPrompt drops a
+  request made after onSaveInstanceState; fixed 335f7e2 (prompt waits for AppState active; native returns at once unless RESUMED).
+  (2) Group by contact, per app (owner: "show only the app's messages"; also "similar case for transactions"): spec dd15112,
+  plan docs/superpowers/plans/2026-11-17-inflow-contacts.md, built 04528e2 (Kotlin) + 3bf8003 (TS). (3)+(4) categories and
+  weekly/monthly reports: owner picked approach A (the AI computes the numbers as JSON; the app validates and draws), accepted
+  the category list and the playback; design docs/superpowers/specs/2026-11-17-inflow-reports-design.md under builder check;
+  owner answered "Send both"; built 723095a..657d291 + aa70ccb, review fixes 6cc1f6c, 70126ad, 3e15ed3 (386 tests). (5) UI/UX + quieter SMS:
+  phone walkthrough, design approved (2026-11-17-inflow-ux-design.md). Phone: owner had switched to the Store build; test build
+  installed by adb with the release key (owner's OK).
+
 ## Current state and next step
 
-State (2026-11-16 16:05): stages 1-4 and 4b built, reviewed, fixed and installed on the owner's phone (adb install -r, build 2b46d9e = d999812 AI-filter gaps + the 'full name as your bank writes it' hint). Listener bound, no Autostart reject. Gates at d999812: Kotlin 313 tests 0 failures, assembleDebug, processReleaseMainManifest (no new permission), pnpm test 0, typecheck 0 (inflow 46/46). Nothing pushed, merged or released (owner: "hold release").
+State (2026-11-18): items 1-5 BUILT on branch inflow/post-release (not pushed). Item 5 (UX rework, quieter SMS): plan docs/superpowers/plans/2026-11-18-inflow-ux.md, commits 554bd2a, c0fa8a2, 3853704, b69a9de, then review fixes e2bee03, 177e66c, 1094de0, 75775fb, docs fc10f87d (SQL proof: docs/handoffs/inflow-ux-sql-proof.md). One opus review + one scoped re-review done (R52, R53 in progress.md); parked: M4 (a default SMS app outside Sms.KNOWN_APPS with unmatched notifications can show a sender in both lists), F6 (SMS keep-days can fold a bank), Home per-conversation "today" counts across apps (pre-existing). Gates at 75775fb: Gradle 396 tests 0 failures, inflow 61/61, typecheck 0, manifest permissions unchanged. Test APK (release key e3af4a92, versionCode 2, built from 75775fb) is in the 2026-11-18 session scratchpad (gone with it; rebuild with the recipe in the resume prompt). NOT yet on the phone: the phone was held by other sessions (Design Editor test, Strongroom OTP); this session was queued for device:49kjmnuwonkffqzh.
 
-Phone results 2026-11-16 (details in progress.md): v4->v5 upgrade on the real SQLCipher database worked (WhatsApp "You" duplicates repaired into one thread); LedgerBackfill re-read the saved SMS: November Money now in 840,749.01 / out 381,902.20 / 49 txns (was 20 txns, out 58,090.20), and after Settings > Your name = "Haroon Mukhtar" own transfers drop out: in 645,749.01 / out 356,902.20 / 47 txns; AI (Groq, GPT-OSS 20B) summaries and Ask AI work; Settings order, "Never sent to AI" labels ok; HyperOS rejected the listener after the first update until Autostart + notification access were re-enabled.
-
-Decisions this round: WhatsApp text kept forever; WhatsApp grouped by contact; all media WhatsApp notifications expose stored encrypted (untested: owner skipped the media test); AI sees only SMS and email (R44; WhatsApp summaries from 14:06-14:07 were sent by the old build before R44); Ask AI uses transactions of any age (R35/R41); bank fees not added (R37).
-
-Next step: phone checks that need the owner: Ask AI money answer, WhatsApp media test (friend), Gmail (owner's app password), a live bank SMS (resume prompt step 4c). Then owner decision on release; never merge, push or release without their go.
+Next step: when the phone is free, claim it, `adb install -r` the test APK, check dumpsys notification for a live InflowListener and logcat for "Reject service", ask the owner to unlock and check: Home order (Money card, Inbox, Important without payments, Coming up, Recent chats, All apps), Money Overview/Reports/All, SMS contact list Promotions row and "Move to Promotions"/"Keep in my list" in an SMS item sheet, short code 8287 named after its bank, same-name apps merged in All apps, LinkedIn chat not named "1 new message". Then release only on the owner's go (items 1-5 in one release, versionCode 3).

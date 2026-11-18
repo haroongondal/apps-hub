@@ -24,3 +24,8 @@ export function exactTime(at: number): string {
   const d = new Date(at);
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`;
 }
+
+export function startOfToday(): number {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}

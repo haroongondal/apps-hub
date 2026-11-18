@@ -50,12 +50,12 @@ Current apps:
   reads bank SMS and emails into a spending ledger, and shows it behind a fingerprint
   lock, with AI summaries, importance, to-dos, money categories and an Ask AI tab
   through the owner's OpenAI-compatible API key (https only; never sent: OTPs,
-  blocked apps or senders, apps not recorded, items saved before the first key; Ask AI also sends ledger transactions of any age, with chat titles and a you/not-you flag per item).
+  blocked apps or senders, apps not recorded, items saved before the first key; Ask AI also sends ledger transactions of any age, with chat titles and a you/not-you flag per item; spending categories and the weekly/monthly reports send the fields of every transaction, including ones from bank pushes and from apps or senders kept from the AI, but never message text). Reports (8 weekly, 4 monthly kept) are the only reason for POST_NOTIFICATIONS.
   Android only, private Store only (`com.haroon.inflow`; READ_SMS, RECEIVE_SMS,
   INTERNET for `imap.gmail.com` and the owner's chosen AI address). Kotlin owns
-  capture, storage, parsing, Gmail and AI; RN only renders. WhatsApp chats are grouped by contact, WhatsApp text is kept forever, and the media WhatsApp notifications expose is stored encrypted in the app's private files (never sent to the AI). Spec:
-  `docs/superpowers/specs/2026-11-13-inflow-design.md`; plans:
-  `docs/superpowers/plans/2026-11-13-inflow-stage-*.md`; progress:
+  capture, storage, parsing, Gmail and AI; RN only renders. WhatsApp chats are grouped by contact, WhatsApp text is kept forever, and the media WhatsApp notifications expose is stored encrypted in the app's private files (never sent to the AI). Home is money card, Inbox (one row per chat-like app), Important (no payments), Coming up, Recent chats, All apps; Money has Overview, Reports and All. In an SMS contact list, senders the AI mostly reads as promotions (and no bank) fold into one "Promotions" row (nothing is deleted; the owner can override per sender; schema v7 `sender_promo`). Spec:
+  `docs/superpowers/specs/2026-11-13-inflow-design.md`, `docs/superpowers/specs/2026-11-17-inflow-ux-design.md`; plans:
+  `docs/superpowers/plans/2026-11-13-inflow-stage-*.md`, `docs/superpowers/plans/2026-11-18-inflow-ux.md`; progress:
   `docs/handoffs/inflow.md`.
 
 - **autonomous-browsing** (`apps/autonomous-browsing`) — Electron desktop app for

@@ -1,5 +1,6 @@
 package expo.modules.inflowcore
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -10,6 +11,7 @@ import android.webkit.MimeTypeMap
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import androidx.fragment.app.FragmentActivity
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
@@ -21,6 +23,8 @@ import expo.modules.inflowcore.android.GmailClient
 import expo.modules.inflowcore.android.GmailSync
 import expo.modules.inflowcore.android.InflowListener
 import expo.modules.inflowcore.android.MediaStore
+import expo.modules.inflowcore.android.ReportNotifier
+import expo.modules.inflowcore.android.SqlReportStore
 import expo.modules.inflowcore.android.SqlMediaIndex
 import expo.modules.inflowcore.android.SmsImporter
 import expo.modules.inflowcore.android.SqlItemStore
@@ -29,6 +33,7 @@ import expo.modules.inflowcore.android.StoreHolder
 import expo.modules.inflowcore.core.AiChannels
 import expo.modules.inflowcore.core.AiModels
 import expo.modules.inflowcore.core.AppSetting
+import expo.modules.inflowcore.core.Categories
 import expo.modules.inflowcore.core.GmailPolicy
 import expo.modules.inflowcore.core.Prices
 import expo.modules.inflowcore.core.Retention
@@ -55,6 +60,16 @@ class InflowCoreModule : Module() {
     context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
   }
 
+  /** The report a tapped notification asked for, until JS takes it. The extra is removed so a second read cannot repeat it. */
+  @Volatile private var openReport: Long? = null
+
+  private fun readOpenReport(intent: Intent?) {
+    if (intent == null || !intent.hasExtra(ReportNotifier.EXTRA)) return
+    val id = intent.getLongExtra(ReportNotifier.EXTRA, -1L)
+    intent.removeExtra(ReportNotifier.EXTRA)
+    if (id >= 0) openReport = id
+  }
+
   private fun settingFor(store: SqlItemStore, pkg: String): AppSetting = store.appSetting(pkg) ?: Retention.default(pkg, InflowListener.label(context, pkg))
 
   override fun definition() = ModuleDefinition {
@@ -73,6 +88,8 @@ class InflowCoreModule : Module() {
         }
       }
     }
+
+    OnNewIntent { intent -> readOpenReport(intent) }
 
     OnDestroy {
       StoreHolder.onCaptured = null
@@ -124,11 +141,31 @@ class InflowCoreModule : Module() {
       val store = store()
       StoreHolder.ingest(context, store).housekeeping()
       AiRunner.runIfDue(context)   // in the background: Home never waits for the model
-      store.home(startOfDay, System.currentTimeMillis())
+      store.home(startOfDay, System.currentTimeMillis(), StoreHolder.smsPackages(context))
     }
 
     Function("listItems") { filter: Map<String, Any?>, before: Long?, limit: Int, beforeId: Long? ->
       store().list(filter, before, limit, System.currentTimeMillis(), beforeId)
+    }
+
+    Function("apps") { startOfDay: Long ->
+      store().apps(startOfDay, System.currentTimeMillis(), StoreHolder.smsPackages(context))
+    }
+
+    Function("contacts") { pkg: String, startOfDay: Long, before: Long?, beforeKey: String?, limit: Int, promo: Boolean ->
+      store().contacts(pkg, startOfDay, System.currentTimeMillis(), before, beforeKey, limit, promo)
+    }
+
+    Function("promotions") { pkg: String ->
+      store().promotions(pkg, System.currentTimeMillis())
+    }
+
+    Function("smsPromotion") { itemId: Long ->
+      store().smsPromotion(itemId)
+    }
+
+    Function("setPromotion") { key: String, promotional: Boolean ->
+      store().setPromotion(key, promotional)
     }
 
     Function("listApps") { ->
@@ -150,9 +187,66 @@ class InflowCoreModule : Module() {
       SqlLedgerStore(store().db).listTxns(account, before, limit, beforeId)
     }
 
+    Function("partyTotals") { name: String?, own: Boolean ->
+      SqlLedgerStore(store().db).partyTotals(name, own)
+    }
+
+    Function("listPartyTxns") { name: String?, own: Boolean, before: Long?, limit: Int, beforeId: Long? ->
+      SqlLedgerStore(store().db).listPartyTxns(name, own, before, limit, beforeId)
+    }
+
     Function("setOwnTransfer") { txnId: Long, own: Boolean ->
       val store = store()
       store.inTransaction { StoreHolder.ledger(store).setOwnTransfer(txnId, own) }
+    }
+
+    Function("categories") { ->
+      mapOf("out" to Categories.OUT, "in" to Categories.IN)
+    }
+
+    // null = back to the AI's choice. A name that is not in the txn's direction list is refused, never stored.
+    Function("setCategory") { txnId: Long, category: String? ->
+      val ledger = SqlLedgerStore(store().db)
+      val txn = ledger.get(txnId) ?: throw CodedException("TXN_MISSING", "That transaction is gone.", null)
+      if (category != null && category !in Categories.forDirection(txn.direction)) throw CodedException("BAD_CATEGORY", "That category doesn't fit this transaction.", null)
+      ledger.setCategory(txnId, category)
+    }
+
+    Function("listReports") { ->
+      SqlReportStore(store().db).list().map { SqlReportStore.row(it) }
+    }
+
+    // `data` is the stored report as a Map/List tree (amounts in minor units), null when the row has none.
+    Function("getReport") { id: Long ->
+      val reports = SqlReportStore(store().db)
+      reports.get(id)?.let { mapOf("row" to SqlReportStore.row(it), "data" to reports.data(id)) }
+    }
+
+    AsyncFunction("makeReportNow") Coroutine { ->
+      val (ok, message) = withContext(Dispatchers.IO) { AiRunner.makeReportNow(context) }
+      mapOf("ok" to ok, "message" to message)
+    }
+
+    AsyncFunction("retryReport") Coroutine { id: Long ->
+      val (ok, message) = withContext(Dispatchers.IO) { AiRunner.retryReport(context, id) }
+      mapOf("ok" to ok, "message" to message)
+    }
+
+    Function("notificationsAllowed") { ->
+      ReportNotifier.allowed(context)
+    }
+
+    // Shows the system prompt once; resolves with whether notifications are allowed afterwards.
+    AsyncFunction("askNotifications") { promise: Promise ->
+      val permissions = appContext.permissions
+      if (permissions == null) promise.resolve(false)
+      else permissions.askForPermissions({ _ -> promise.resolve(ReportNotifier.allowed(context)) }, Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    // The id from a tapped notification (cold start or already running), once.
+    Function("takeOpenReport") { ->
+      readOpenReport(appContext.currentActivity?.intent)
+      openReport.also { openReport = null }
     }
 
     Function("getItem") { id: Long ->

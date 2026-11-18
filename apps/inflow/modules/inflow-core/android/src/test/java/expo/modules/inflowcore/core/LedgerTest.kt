@@ -340,6 +340,41 @@ class LedgerTest {
     assertEquals("Food", store.get(a!!)!!.category)
   }
 
+  @Test fun ownerCategoryIsNeverOverwrittenByAi() {
+    val id = ai(aiMoney(amount = 700, category = "Other"), Channel.NOTIFICATION, t0)!!
+    store.setCategory(id, "Rent")
+    assertTrue(store.get(id)!!.categorySet)
+    store.setAiDetails(id, "Food & dining", "KFC")
+    assertEquals("Rent", store.get(id)!!.category)
+    assertEquals("KFC", store.get(id)!!.label)
+    // The item AI run reaching the same txn again also leaves the owner's choice alone.
+    ledger.onAi(nextItem - 1, aiMoney(amount = 700, category = "Groceries"), Channel.NOTIFICATION, t0)
+    assertEquals("Rent", store.get(id)!!.category)
+  }
+
+  @Test fun ownerCategoryOfAReplacedAiTxnSurvivesDedupOntoACategorisedTxn() {
+    item(debit("999.00"), Channel.SMS, t0 - 180 * min)   // makes "Alfalah 2310" a known account
+    val aiTxn = ai(aiMoney(amount = 150_000, account = "Alfalah 2310", category = "Other"), Channel.NOTIFICATION, t0)!!
+    val source = nextItem - 1
+    store.setCategory(aiTxn, "Rent")
+    val pattern = item(debit("1,500.00"), Channel.SMS, t0 + 30 * min)!!   // outside the merge window: its own txn
+    store.setAiDetails(pattern, "Health", null)
+    assertEquals(pattern, ledger.onItem(source, debit("1,500.00"), Channel.NOTIFICATION, t0 + 31 * min))
+    assertNull(store.get(aiTxn))
+    assertEquals("Rent", store.get(pattern)!!.category)
+    assertTrue(store.get(pattern)!!.categorySet)
+  }
+
+  @Test fun clearingOwnerCategoryLetsAiFillItAgain() {
+    val id = ai(aiMoney(amount = 700, category = "Other"), Channel.NOTIFICATION, t0)!!
+    store.setCategory(id, "Rent")
+    store.setCategory(id, null)
+    assertFalse(store.get(id)!!.categorySet)
+    assertNull(store.get(id)!!.category)
+    store.setAiDetails(id, "Food & dining", null)
+    assertEquals("Food & dining", store.get(id)!!.category)
+  }
+
   @Test fun aiOwnerNameStillMarksAnAiOnlyTxnOwn() {
     owner = "Haroon Mukhtar"
     val id = ai(aiMoney(amount = 700, counterparty = "HAROON MUKHTAR"), Channel.NOTIFICATION, t0)!!

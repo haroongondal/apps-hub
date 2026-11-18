@@ -292,4 +292,5 @@ The owner chose this on 2026-11-13 over the "to check" default.
 - WhatsApp chats are grouped by who they are with; the owner's own replies sit in that thread.
 - The non-goal "saving photos, voice notes or attachments" is reversed for WhatsApp: every media file a WhatsApp notification exposes is stored, encrypted, kept as long as its message, never sent to the AI.
 - Ask AI answers money questions from the ledger, so it sends transactions of any age (amount, account, merchant, category) when the owner asks; the AI also receives each item's chat title and a you/not-you flag. Items saved before the first key are still never sent as items.
+- Spending categories and the weekly/monthly reports (owner, 2026-11-17, design 2026-11-17-inflow-reports-design.md) send transaction fields only (amount, direction, account, name, date, own, category) for every transaction, including ones read from bank pushes and from apps or senders kept from the AI; never item or message text. Reports notify through POST_NOTIFICATIONS.
 

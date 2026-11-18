@@ -9,10 +9,14 @@ import expo.modules.inflowcore.core.AiInput
 import expo.modules.inflowcore.core.AiMeta
 import expo.modules.inflowcore.core.AiResult
 import expo.modules.inflowcore.core.AiStore
+import expo.modules.inflowcore.core.AppRow
+import expo.modules.inflowcore.core.AppRows
 import expo.modules.inflowcore.core.AppSetting
+import expo.modules.inflowcore.core.AppStat
 import expo.modules.inflowcore.core.AskItem
 import expo.modules.inflowcore.core.Channel
 import expo.modules.inflowcore.core.Capture
+import expo.modules.inflowcore.core.Categories
 import expo.modules.inflowcore.core.DeferredDeletes
 import expo.modules.inflowcore.core.Email
 import expo.modules.inflowcore.core.ItemStore
@@ -290,17 +294,8 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     run("UPDATE gmail_senders SET uid_validity = NULL, last_uid = 0")
   }
 
-  fun home(startOfDay: Long, now: Long): Map<String, Any> {
-    val conversations = query(
-      "SELECT i.conversation_key, i.pkg, i.app_label, COALESCE(n.name, i.conversation, i.conversation_key), i.text, i.posted_at, " +
-        "(SELECT COUNT(*) FROM items t WHERE t.conversation_key = i.conversation_key AND t.posted_at >= ? AND $VISIBLE_T) " +
-        "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.conversation_key " +
-        "WHERE i.conversation_key IS NOT NULL AND $VISIBLE_I " +
-        "AND i.id = (SELECT j.id FROM items j WHERE j.conversation_key = i.conversation_key AND $VISIBLE_J " +
-        "ORDER BY j.posted_at DESC, j.id DESC LIMIT 1) " +
-        "ORDER BY i.posted_at DESC, i.id DESC LIMIT 5",
-      startOfDay, now, now, now,
-    ).use { c ->
+  fun home(startOfDay: Long, now: Long, sms: Set<String>): Map<String, Any> {
+    val conversations = query(HOME_CONVERSATIONS_SQL, startOfDay, now, now, now).use { c ->
       buildList {
         while (c.moveToNext()) {
           add(
@@ -312,20 +307,9 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
         }
       }
     }
-    val apps = query(
-      "SELECT i.pkg, COALESCE(a.label, MAX(i.app_label)), MAX(i.posted_at), SUM(CASE WHEN i.posted_at >= ? THEN 1 ELSE 0 END) " +
-        "FROM items i LEFT JOIN apps a ON a.pkg = i.pkg WHERE $VISIBLE_I " +
-        "GROUP BY i.pkg ORDER BY MAX(i.posted_at) DESC LIMIT 8",
-      startOfDay, now,
-    ).use { c ->
-      buildList {
-        while (c.moveToNext()) add(mapOf("pkg" to c.getString(0), "label" to c.getString(1), "lastAt" to c.getLong(2), "today" to c.getInt(3)))
-      }
-    }
-    val important = query(
-      "SELECT $ITEM_COLUMNS $ITEM_FROM WHERE r.importance = 'high' AND i.posted_at >= ? AND $VISIBLE_I ORDER BY i.posted_at DESC, i.id DESC LIMIT 5",
-      now - 7 * DAY_MS, now,
-    ).use { c -> buildList { while (c.moveToNext()) add(c.toItem()) } }
+    // Chat-like apps, counted over non-promotional senders only: an app with none drops out of the inbox (it stays in apps()).
+    val inbox = AppRows.build(stats(startOfDay, now, excludePromo = true), sms).filter { it.byContact }.map { it.toMap() }
+    val important = query(HOME_IMPORTANT_SQL, now - 7 * DAY_MS, now).use { c -> buildList { while (c.moveToNext()) add(c.toItem()) } }
     // Not done, due from the start of today (soonest first) or undated and from the last 3 days (after the dated ones).
     val comingUp = query(
       "SELECT t.id, t.item_id, t.text, t.due_at, t.done FROM todos t JOIN items i ON i.id = t.item_id " +
@@ -339,7 +323,52 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
         }
       }
     }
-    return mapOf("conversations" to conversations, "apps" to apps, "important" to important, "comingUp" to comingUp)
+    val hasItems = query(HAS_ITEMS_SQL, now).use { it.moveToFirst() && it.getInt(0) != 0 }
+    return mapOf("conversations" to conversations, "inbox" to inbox, "important" to important, "comingUp" to comingUp, "hasItems" to hasItems)
+  }
+
+  /** Every app, newest first; same-label apps that are not contact apps are one row. */
+  fun apps(startOfDay: Long, now: Long, sms: Set<String>): List<Map<String, Any>> =
+    AppRows.build(stats(startOfDay, now, excludePromo = false), sms).map { it.toMap() }
+
+  private fun stats(startOfDay: Long, now: Long, excludePromo: Boolean): List<AppStat> =
+    query(statsSql(excludePromo), startOfDay, now).use { c ->
+      buildList { while (c.moveToNext()) add(AppStat(c.getString(0), c.getString(1), c.getLong(2), c.getInt(3), c.getInt(4) != 0)) }
+    }
+
+  private fun AppRow.toMap(): Map<String, Any> = mapOf("label" to label, "pkgs" to pkgs, "lastAt" to lastAt, "today" to today, "byContact" to byContact)
+
+  /**
+   * One row per contact of one app, newest first: a chat (with the owner's own replies), else the sender. SQLite takes the bare
+   * columns from the row that holds MAX(posted_at), so the name and last text come from the newest visible item.
+   * promo false = the main list (promotional senders left out), true = only the promotional ones.
+   */
+  fun contacts(pkg: String, startOfDay: Long, now: Long, before: Long?, beforeKey: String?, limit: Int, promo: Boolean): List<Map<String, Any?>> {
+    val args = mutableListOf<Any?>(startOfDay, pkg, now)
+    if (before != null) { args += before; args += before; args += beforeKey ?: "" }
+    args += limit.toLong()
+    return query(contactsSql(promo, before != null), *args.toTypedArray()).use { c ->
+      buildList {
+        while (c.moveToNext()) {
+          add(mapOf("key" to c.getString(0), "name" to c.getString(1), "lastText" to c.getString(2), "lastAt" to c.getLong(3), "today" to c.getInt(4)))
+        }
+      }
+    }
+  }
+
+  /** The senders of one app that are folded into Promotions, with the newest visible item among them. */
+  fun promotions(pkg: String, now: Long): Map<String, Any?> =
+    query(PROMOTIONS_SQL, pkg, now).use { c ->
+      c.moveToFirst()
+      mapOf("senders" to c.getInt(0), "lastAt" to if (c.isNull(1)) null else c.getLong(1))
+    }
+
+  /** Null: the item is gone or not an SMS item, so there is nothing to choose. Else whether its sender is in Promotions now. */
+  fun smsPromotion(itemId: Long): Boolean? =
+    query(SMS_PROMOTION_SQL, itemId).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getInt(0) != 0 else null }
+
+  fun setPromotion(key: String, promotional: Boolean) {
+    run(SET_PROMOTION_SQL, key, if (promotional) 1L else 0L)
   }
 
   fun list(filter: Map<String, Any?>, before: Long?, limit: Int, now: Long, beforeId: Long? = null): List<Map<String, Any?>> {
@@ -347,7 +376,16 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     val args = mutableListOf<Any?>(now)
     when (filter["kind"] as? String) {
       "app" -> { where += "i.pkg = ?"; args += filter["pkg"] as? String }
+      "apps" -> {
+        val pkgs = (filter["pkgs"] as? List<*>)?.filterIsInstance<String>().orEmpty()
+        where += if (pkgs.isEmpty()) "0 = 1" else "i.pkg IN (${pkgs.joinToString(",") { "?" }})"
+        args.addAll(pkgs)
+      }
       "conversation" -> { where += "i.conversation_key = ?"; args += filter["key"] as? String }
+      "contact" -> {
+        where += "i.pkg = ? AND COALESCE(i.conversation_key, i.sender_key) = ?"
+        args += filter["pkg"] as? String; args += filter["key"] as? String
+      }
       "sender" -> { where += "COALESCE(n.name, i.sender) = ?"; args += filter["name"] as? String }
       "search" -> {
         // shortcut: LIKE scans every row; switch to FTS5 if search passes ~300 ms on the phone.
@@ -447,7 +485,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
 
   companion object {
     private const val DB_NAME = "inflow.db"
-    private const val SCHEMA_VERSION = 5
+    private const val SCHEMA_VERSION = 7
     private const val GENERIC_FAILURE =
       "Inflow can't open your saved history. The history file is kept, not deleted. Restart the phone and try again."
     private const val ITEM_COLUMNS = "i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, " +
@@ -467,6 +505,76 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     private const val VISIBLE_I = "(i.otp_expires_at IS NULL OR i.otp_expires_at > ?)"
     private const val VISIBLE_J = "(j.otp_expires_at IS NULL OR j.otp_expires_at > ?)"
     private const val VISIBLE_T = "(t.otp_expires_at IS NULL OR t.otp_expires_at > ?)"
+
+    // Quieter SMS. An SMS item is one with an sms_hash or from a known SMS app; only these senders can be promotional.
+    internal fun smsItem(a: String) = "($a.sms_hash IS NOT NULL OR $a.pkg IN (${Sms.KNOWN_APPS.joinToString(",") { "'$it'" }}))"
+    internal val SMS_ITEM = smsItem("i")
+
+    // The keys (conversation key, else sender key) of promotional SMS senders: the owner's choice (sender_promo) wins; else more than half of the sender's
+    // AI-read items are kind 'promotion' and none of its items is a transaction source (a bank stays visible). No parameters.
+    // shortcut: has_txn only sees items still stored; retention (keep-days on SMS) deletes old ones, so a bank whose remaining recent items are mostly promotions could fold. The owner's "Keep in my list" fixes it.
+    // shortcut: recomputed per query; switch to a stored flag if Home takes over ~300 ms on the phone.
+    internal val PROMO_KEYS = "SELECT s.k FROM (SELECT COALESCE(i.conversation_key, i.sender_key) AS k, COUNT(r.item_id) AS ai_read, SUM(r.kind = 'promotion') AS promo, " +
+      "MAX(EXISTS(SELECT 1 FROM txn_sources x WHERE x.item_id = i.id)) AS has_txn FROM items i LEFT JOIN ai_results r ON r.item_id = i.id " +
+      "WHERE $SMS_ITEM AND COALESCE(i.conversation_key, i.sender_key) IS NOT NULL GROUP BY k) s LEFT JOIN sender_promo o ON o.sender_key = s.k " +
+      "WHERE COALESCE(o.promo, s.ai_read >= 1 AND s.promo * 2 > s.ai_read AND s.has_txn = 0) = 1"
+
+    /** False only for an SMS item whose contact key is promotional: other apps sharing a num: key (a WhatsApp chat with an unsaved number) are never folded. */
+    internal fun notPromo(a: String) =
+      "(NOT ${smsItem(a)} OR COALESCE($a.conversation_key, $a.sender_key) IS NULL OR COALESCE($a.conversation_key, $a.sender_key) NOT IN ($PROMO_KEYS))"
+
+    /** SQL twin of GenericTitle. shortcut: the GLOB also matches "5x new message"; fine for notification titles seen so far. */
+    internal fun GENERIC_SQL(expr: String) =
+      "(lower(trim($expr)) GLOB '[0-9]* new message' OR lower(trim($expr)) GLOB '[0-9]* new messages' OR lower(trim($expr)) IN ('new message', 'new messages'))"
+
+    private fun usable(x: String) = "CASE WHEN ${GENERIC_SQL(x)} THEN NULL ELSE $x END"
+
+    // A short code (num: plus at most 6 digits) is named after its bank: the account text of its newest transaction without the trailing digits ("Alfalah 2310" is "Alfalah").
+    private fun bank(k: String) =
+      "CASE WHEN $k LIKE 'num:%' AND length($k) <= 10 THEN (SELECT NULLIF(trim(rtrim(t.account, '0123456789')), '') FROM items b " +
+        "JOIN txn_sources s ON s.item_id = b.id JOIN txns t ON t.id = s.txn_id WHERE b.sender_key = $k ORDER BY t.at DESC, t.id DESC LIMIT 1) END"
+
+    // The owner's rename (n.name) wins, then the bank, then the chat name or sender unless generic or "You", then the app, then the key.
+    private fun displayName(conversation: String, sender: String, appLabel: String, k: String) =
+      "COALESCE(n.name, ${bank(k)}, ${usable(conversation)}, CASE WHEN lower($sender) = 'you' THEN NULL ELSE ${usable(sender)} END, $appLabel, $k)"
+
+    internal val HOME_CONVERSATIONS_SQL =
+      "SELECT i.conversation_key, i.pkg, i.app_label, ${displayName("i.conversation", "i.sender", "i.app_label", "i.conversation_key")}, i.text, i.posted_at, " +
+        "(SELECT COUNT(*) FROM items t WHERE t.conversation_key = i.conversation_key AND t.posted_at >= ? AND $VISIBLE_T) " +
+        "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.conversation_key " +
+        "WHERE i.conversation_key IS NOT NULL AND $VISIBLE_I AND ${notPromo("i")} " +
+        "AND i.id = (SELECT j.id FROM items j WHERE j.conversation_key = i.conversation_key AND $VISIBLE_J AND ${notPromo("j")} " +
+        "ORDER BY j.posted_at DESC, j.id DESC LIMIT 1) " +
+        "ORDER BY i.posted_at DESC, i.id DESC LIMIT 5"
+
+    // A transaction source lives in Money (one row per transaction), so it is never Important; nor is a promotional sender.
+    internal val HOME_IMPORTANT_SQL =
+      "SELECT $ITEM_COLUMNS $ITEM_FROM WHERE r.importance = 'high' AND i.posted_at >= ? AND $VISIBLE_I " +
+        "AND NOT EXISTS (SELECT 1 FROM txn_sources ts WHERE ts.item_id = i.id) AND ${notPromo("i")} ORDER BY i.posted_at DESC, i.id DESC LIMIT 5"
+
+    internal fun statsSql(excludePromo: Boolean) =
+      "SELECT i.pkg, COALESCE(a.label, MAX(i.app_label)), MAX(i.posted_at), SUM(CASE WHEN i.posted_at >= ? THEN 1 ELSE 0 END), " +
+        "MAX(i.conversation_key IS NOT NULL) FROM items i LEFT JOIN apps a ON a.pkg = i.pkg WHERE $VISIBLE_I " +
+        "${if (excludePromo) "AND ${notPromo("i")} " else ""}GROUP BY i.pkg ORDER BY MAX(i.posted_at) DESC"
+
+    // Keyset (last, k), the same for both lists; the two lists never share a key.
+    internal fun contactsSql(promo: Boolean, paged: Boolean) =
+      "SELECT g.k, ${displayName("g.conversation", "g.sender", "g.app_label", "g.k")}, g.text, g.last, g.today FROM (" +
+        "SELECT COALESCE(i.conversation_key, i.sender_key) AS k, i.conversation AS conversation, i.sender AS sender, i.app_label AS app_label, i.text AS text, " +
+        "MAX(i.posted_at) AS last, SUM(CASE WHEN i.posted_at >= ? THEN 1 ELSE 0 END) AS today FROM items i " +
+        "WHERE i.pkg = ? AND $VISIBLE_I AND COALESCE(i.conversation_key, i.sender_key) IS NOT NULL AND ${if (promo) "NOT " else ""}${notPromo("i")} GROUP BY k) g " +
+        "LEFT JOIN sender_names n ON n.sender_key = g.k ${if (paged) "WHERE (g.last < ? OR (g.last = ? AND g.k < ?)) " else ""}ORDER BY g.last DESC, g.k DESC LIMIT ?"
+
+    internal val PROMOTIONS_SQL =
+      "SELECT COUNT(DISTINCT COALESCE(i.conversation_key, i.sender_key)), MAX(i.posted_at) FROM items i WHERE i.pkg = ? AND $VISIBLE_I AND NOT ${notPromo("i")}"
+
+    // Null: the item is gone or not an SMS item (or has no key).
+    internal val SMS_PROMOTION_SQL =
+      "SELECT CASE WHEN $SMS_ITEM THEN COALESCE(i.conversation_key, i.sender_key) IN ($PROMO_KEYS) END FROM items i WHERE i.id = ?"
+
+    internal const val HAS_ITEMS_SQL = "SELECT EXISTS(SELECT 1 FROM items i WHERE $VISIBLE_I)"
+
+    internal const val SET_PROMOTION_SQL = "INSERT INTO sender_promo(sender_key, promo) VALUES (?, ?) ON CONFLICT(sender_key) DO UPDATE SET promo = excluded.promo"
     private val lock = Any()
 
     private val SCHEMA_V1 = listOf(
@@ -540,6 +648,32 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
         "size INTEGER NOT NULL, file TEXT NOT NULL, sha TEXT NOT NULL, at INTEGER NOT NULL, UNIQUE(item_id, sha))",
       "CREATE INDEX media_item ON media(item_id)",
     )
+
+    // Not idempotent, like the others. category_set: the owner chose the category (no AI path changes it). category_tries: how often the categoriser has tried this txn.
+    // reports: one row per period (a "so far" week is partial); json is the validated report, headline the notification line.
+    internal val SCHEMA_V6 = listOf(
+      "ALTER TABLE txns ADD COLUMN category_set INTEGER NOT NULL DEFAULT 0",
+      "ALTER TABLE txns ADD COLUMN category_tries INTEGER NOT NULL DEFAULT 0",
+      "CREATE TABLE reports(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, period_start INTEGER NOT NULL, period_end INTEGER NOT NULL, " +
+        "partial INTEGER NOT NULL, created_at INTEGER NOT NULL, status TEXT NOT NULL, message TEXT, tries INTEGER NOT NULL DEFAULT 0, headline TEXT, json TEXT)",
+      "CREATE UNIQUE INDEX reports_period ON reports(kind, period_start, partial)",
+    )
+
+    // Not idempotent, like the others. sender_promo: the owner's choice per sender key (1 = Move to Promotions, 0 = Keep in my list); it wins over the AI-based rule.
+    // items_sender serves the bank-name lookup of a short-code sender (an SMS notification merged by setSmsHash can have no conversation_key).
+    private val SCHEMA_V7 = listOf(
+      "CREATE TABLE sender_promo(sender_key TEXT PRIMARY KEY, promo INTEGER NOT NULL)",
+      "CREATE INDEX items_sender ON items(sender_key)",
+    )
+
+    // Runs after SCHEMA_V6, in its transaction: the old names become the new ones (money out), and a money-in txn holding a name that is not a money-in category is cleared to be categorised again.
+    internal const val V6_RENAME = "UPDATE txns SET category = ? WHERE category = ? AND direction = 'OUT'"
+    internal val V6_CLEAR_IN = "UPDATE txns SET category = NULL WHERE direction = 'IN' AND category IS NOT NULL AND category NOT IN (${Categories.IN.joinToString { "?" }})"
+
+    private fun migrateCategories(db: SQLiteDatabase) {
+      for ((old, new) in Categories.RENAMED) db.execSQL(V6_RENAME, arrayOf<Any?>(new, old))
+      db.execSQL(V6_CLEAR_IN, Categories.IN.toTypedArray<Any?>())
+    }
 
     private val neverDeleteOnCorruption = object : DatabaseErrorHandler {
       override fun onCorruption(db: SQLiteDatabase, e: SQLiteException) {}
@@ -623,6 +757,11 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
             SCHEMA_V5.forEach(db::execSQL)
             repairLegacyWhatsapp(db)
           }
+          if (db.version < 6) {
+            SCHEMA_V6.forEach(db::execSQL)
+            migrateCategories(db)
+          }
+          if (db.version < 7) SCHEMA_V7.forEach(db::execSQL)
           db.version = SCHEMA_VERSION
           db.setTransactionSuccessful()
         } finally {

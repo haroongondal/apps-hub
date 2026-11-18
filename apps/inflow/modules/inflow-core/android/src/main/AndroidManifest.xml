@@ -3,6 +3,8 @@
   <uses-permission android:name="android.permission.RECEIVE_SMS" />
   <!-- Gmail over IMAP (imap.gmail.com:993), and https to the AI address the owner sets in Settings; nothing else. -->
   <uses-permission android:name="android.permission.INTERNET" />
+  <!-- The "your report is ready" notification. A runtime permission (Android 13+); without it reports are still made and listed. -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <queries>
     <intent>
       <action android:name="android.intent.action.MAIN" />

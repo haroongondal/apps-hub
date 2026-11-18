@@ -1,6 +1,7 @@
 package expo.modules.inflowcore.core
 
 import java.io.IOException
+import java.net.SocketTimeoutException
 import java.net.URI
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -22,7 +23,7 @@ data class Usage(val inputTokens: Long, val cachedTokens: Long, val outputTokens
 data class HttpReply(val code: Int, val body: String, val retryAfterMs: Long? = null)
 
 class AiError(val kind: Kind, message: String) : Exception(message) {
-  enum class Kind { AUTH, BAD_REQUEST, SERVER, OFFLINE }
+  enum class Kind { AUTH, BAD_REQUEST, SERVER, OFFLINE, TIMEOUT }
 }
 
 /** `inputChars` is the length of the request, so a reply without `usage` can still be counted. */
@@ -39,10 +40,10 @@ class OpenAiCompatProvider(
 ) {
   private var current = 0 // the key in use; it changes only when that key reaches its limit
 
-  fun complete(system: String, user: String): AiReply {
+  fun complete(system: String, user: String, maxTokens: Int = MAX_TOKENS): AiReply {
     if (keys.isEmpty() || keys.any(String::isBlank)) throw AiError(AiError.Kind.AUTH, "No API key is set. Add your API key in Settings.")
     val url = baseUrl.trimEnd('/') + "/chat/completions"
-    val body = request(system, user)
+    val body = request(system, user, maxTokens)
     var attempt = 0
     var limited = 0 // keys that answered 429 in a row since the last wait
     while (true) {
@@ -50,6 +51,9 @@ class OpenAiCompatProvider(
       val headers = mapOf("Authorization" to "Bearer ${keys[current]}", "Content-Type" to "application/json")
       val reply = try {
         post(url, headers, body)
+      } catch (e: SocketTimeoutException) {
+        // The post turns a connect timeout into a plain IOException, so this one is a read timeout: the model has the request and bills it, so never send it again.
+        throw AiError(AiError.Kind.TIMEOUT, TIMEOUT_COPY)
       } catch (e: IOException) {
         if (last) throw AiError(AiError.Kind.OFFLINE, "Inflow couldn't reach the model. Check the phone's connection and try again.")
         null
@@ -61,6 +65,8 @@ class OpenAiCompatProvider(
           AiError.Kind.AUTH,
           "The model refused ${if (keys.size > 1) "API key ${current + 1} of ${keys.size}" else "the API key"} (HTTP ${reply.code}). Check your API key in Settings.",
         )
+        // A gateway that cuts a slow request (Cloudflare 524, others 504) has the request and may bill it: treated like a read timeout.
+        reply.code == 504 || reply.code == 524 -> throw AiError(AiError.Kind.TIMEOUT, TIMEOUT_COPY)
         // A key at its limit hands over to the next one at once; Inflow only waits once every key is limited.
         reply.code == 429 && ++limited < keys.size -> {
           current = (current + 1) % keys.size
@@ -81,7 +87,7 @@ class OpenAiCompatProvider(
     }
   }
 
-  private fun request(system: String, user: String): String = buildJsonObject {
+  private fun request(system: String, user: String, maxTokens: Int): String = buildJsonObject {
     put("model", model)
     put(
       "messages",
@@ -92,7 +98,7 @@ class OpenAiCompatProvider(
         ),
       ),
     )
-    put("max_tokens", MAX_TOKENS)
+    put("max_tokens", maxTokens)
     effort?.let { put("reasoning_effort", it) }
   }.toString()
 
@@ -109,10 +115,11 @@ class OpenAiCompatProvider(
     throw AiError(AiError.Kind.SERVER, "The model sent a reply Inflow couldn't read.")
   }
 
-  private companion object {
-    val RETRY_DELAYS = listOf(1_000L, 2_000L, 4_000L)
-    const val MAX_WAIT_MS = 60_000L
-    const val MAX_TOKENS = 8_000   // a batch of 40 items needs well under this; a runaway reply cannot cost more
+  companion object {
+    const val TIMEOUT_COPY = "The AI took too long to answer. Inflow will try again later."
+    private val RETRY_DELAYS = listOf(1_000L, 2_000L, 4_000L)
+    private const val MAX_WAIT_MS = 60_000L
+    private const val MAX_TOKENS = 8_000   // a batch of 40 items needs well under this; a runaway reply cannot cost more
   }
 }
 

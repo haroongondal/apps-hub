@@ -53,11 +53,6 @@ object AiBatch {
   private const val MAX_TAG = 30
   private const val MAX_NAME = 100
 
-  /** R25, in this order. */
-  val CATEGORIES: List<String> = listOf(
-    "Food", "Groceries", "Transport", "Fuel", "Bills", "Health", "Shopping", "Education", "Entertainment", "Travel", "Family", "Fees", "Other",
-  )
-
   /** The local time format the model is asked for and the prompt shows. */
   private val DUE = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
 
@@ -94,7 +89,7 @@ Rules:
   own is true only when the item says the owner moved money between their own accounts.
   account: copy one of the known accounts listed in the request when the item clearly belongs to it, else null.
   counterparty: the shop or person, as a short clean name (no codes, city or branch), else null.
-  category: one of ${CATEGORIES.joinToString(", ")}.
+  category: for money out one of ${Categories.OUT.joinToString(", ")}; for money in one of ${Categories.IN.joinToString(", ")}.
 - todos: things the owner has to do, each with "due" as local time in the stated time zone written YYYY-MM-DDTHH:MM, or null when no time is given. Work out words like "tomorrow" from the current time in the request.
 - tags: up to 5 short lowercase words.
 """.trim()
@@ -176,7 +171,7 @@ Rules:
     if (minor !in Amounts.inText(text)) return null
     val currency = o.str("currency")?.trim()?.uppercase(Locale.ROOT)?.ifEmpty { null } ?: "PKR"
     if (currency.length != 3 || !currency.all { it in 'A'..'Z' }) return null
-    val category = CATEGORIES.firstOrNull { it.equals(o.str("category")?.trim(), ignoreCase = true) } ?: "Other"
+    val category = Categories.match(o.str("category"), direction)
     return AiMoney(direction, o["own"].let { (it as? JsonPrimitive)?.booleanOrNull } == true, minor, currency, name(o.str("account")), name(o.str("counterparty")), category)
   }
 
