@@ -11,6 +11,8 @@ export interface PersonStatus {
 const tagOf = (d: ReconciledDevice): string => (d.person ?? '').trim();
 const nameKey = (n: string | null): string => (n ?? '').trim().toLowerCase();
 
+const matchKey = (n: string | null): string => (isGenericDeviceName(n ?? '') ? '' : nameKey(n));
+
 /** One entry per person (case-insensitive tag); home when any of their devices answered this scan. */
 export function peopleStatus(devices: readonly ReconciledDevice[]): PersonStatus[] {
   const byKey = new Map<string, PersonStatus>();
@@ -34,10 +36,31 @@ export function peopleStatus(devices: readonly ReconciledDevice[]): PersonStatus
   );
 }
 
+const DEVICE_WORDS = new Set([
+  'android', 'iphone', 'ipad', 'ipod', 'galaxy', 'pixel', 'redmi', 'oneplus', 'xiaomi', 'huawei',
+  'samsung', 'phone', 'tablet', 'localhost', 'unknown', 'device', 'mi', 'note', 'watch',
+]);
+
+/**
+ * True when a name is only device-type words and model codes ("iPhone", "Galaxy-S21", "Pixel 7",
+ * "localhost"): many phones share it, so it says nothing about whose phone it is. "iPhone 12" is
+ * generic; "Saras-iPhone" is not. A blank name is generic (nothing to match on).
+ */
+export function isGenericDeviceName(name: string): boolean {
+  const tokens = name.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  return tokens.every((t) => {
+    if (DEVICE_WORDS.has(t)) return true;
+    const word = /^(\p{L}+)\d{1,4}$/u.exec(t)?.[1]; // "note10", "pixel7"
+    if (word && DEVICE_WORDS.has(word)) return true;
+    return t.length <= 4 && /\d/.test(t) && (t.match(/\p{L}/gu) ?? []).length <= 2; // "s21", "8t", "12"
+  });
+}
+
 /**
  * A phone that came back with a new identity key (MAC randomisation) keeps its owner:
  * the tag moves from the stale row to the one seen untagged row with the same
- * non-empty hostname or mdnsName. Returns only the rows that changed.
+ * non-empty hostname or mdnsName. A generic name ({@link isGenericDeviceName}) never matches.
+ * Returns only the rows that changed.
  */
 export function carryPersonTags(devices: readonly ReconciledDevice[]): ReconciledDevice[] {
   const candidates = devices
@@ -46,8 +69,8 @@ export function carryPersonTags(devices: readonly ReconciledDevice[]): Reconcile
   const changed = new Map<number, ReconciledDevice>();
   devices.forEach((old, oldIndex) => {
     if (old.seenThisScan || !tagOf(old)) return;
-    const host = nameKey(old.hostname);
-    const mdns = nameKey(old.mdnsName);
+    const host = matchKey(old.hostname);
+    const mdns = matchKey(old.mdnsName);
     const matches = candidates.filter(
       ({ d }) =>
         (host !== '' && nameKey(d.hostname) === host) || (mdns !== '' && nameKey(d.mdnsName) === mdns),

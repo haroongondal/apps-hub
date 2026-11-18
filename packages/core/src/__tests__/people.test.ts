@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { carryPersonTags, peopleStatus, probeHome } from '../people.ts';
+import { carryPersonTags, isGenericDeviceName, peopleStatus, probeHome } from '../people.ts';
 import type { ReconciledDevice } from '../device-repository.ts';
 import type { ProbeOutcome } from '../model.ts';
 
@@ -168,6 +168,47 @@ test('two tagged rows match one candidate: the first moves, the second keeps its
   const nu = fresh();
   const out = carryPersonTags([first, second, nu]);
   assert.deepEqual(out, [{ ...first, person: null }, { ...nu, person: 'Sara' }]);
+});
+
+test('no carry: a generic hostname or mdnsName never carries a tag', () => {
+  for (const name of ['iPhone', 'android', 'Galaxy-S21', 'Pixel-7', 'localhost']) {
+    assert.deepEqual(carryPersonTags([stale({ hostname: name }), fresh({ hostname: name })]), [], `hostname ${name}`);
+    assert.deepEqual(
+      carryPersonTags([stale({ hostname: null, mdnsName: name }), fresh({ hostname: null, mdnsName: name })]),
+      [],
+      `mdnsName ${name}`,
+    );
+  }
+});
+
+test('carry: a personal name that contains a device word still carries', () => {
+  const out = carryPersonTags([stale({ hostname: 'Saras-iPhone' }), fresh({ hostname: 'saras-iphone' })]);
+  assert.equal(out.length, 2);
+  assert.equal(out[1].person, 'Sara');
+});
+
+test('no carry: a guest\'s untagged "iPhone" does not take Sara\'s tag from her stale "iPhone" row', () => {
+  assert.deepEqual(carryPersonTags([stale({ hostname: 'iPhone' }), fresh({ hostname: 'iPhone' })]), []);
+});
+
+test('carry: generic hostname with a personal mdnsName still carries via mdns', () => {
+  const out = carryPersonTags([
+    stale({ hostname: 'iPhone', mdnsName: 'saras-iphone.local' }),
+    fresh({ hostname: 'iPhone', mdnsName: 'Saras-iPhone.local' }),
+  ]);
+  assert.equal(out.length, 2);
+  assert.equal(out[1].person, 'Sara');
+});
+
+test('isGenericDeviceName: table', () => {
+  const generic = [
+    'iPhone', 'iPad', 'android', 'Android-1234', 'Galaxy-S21', 'galaxy_s21', 'Pixel-7', 'Pixel 7', 'Redmi Note 10',
+    'Note10', 'localhost', 'Unknown', 'iPhone 12', 'OnePlus-8T', 'Galaxy-A52', 'Samsung Galaxy', 'Mi Watch', '',
+    '   ', '---',
+  ];
+  const personal = ['Sara', 'Saras-iPhone', 'Haroons-iPad', 'Sara-Galaxy-S21', 'Omar iPhone', 'saras-phone', 'Pixel-Sara', 'ESP-A1B2C3'];
+  for (const n of generic) assert.equal(isGenericDeviceName(n), true, `generic: "${n}"`);
+  for (const n of personal) assert.equal(isGenericDeviceName(n), false, `personal: "${n}"`);
 });
 
 // probeHome
