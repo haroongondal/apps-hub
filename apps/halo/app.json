@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Halo",
+    "slug": "halo",
+    "version": "0.6.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": [
+      "android"
+    ],
+    "android": {
+      "package": "com.haroon.halo",
+      "allowBackup": false,
+      "edgeToEdgeEnabled": true,
+      "blockedPermissions": [
+        "android.permission.INTERNET",
+        "android.permission.VIBRATE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#07161C",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      }
+    },
+    "icon": "./assets/icon.png"
+  }
+}

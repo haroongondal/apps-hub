@@ -570,3 +570,123 @@
   --c-warn-soft: #FBBF2429;
   --c-danger-soft: #F8717129;
 }
+
+[data-brand='notch'], [data-brand='notch'][data-theme='light'] {
+  color-scheme: light;
+  --c-bg: #F2F3F7;
+  --c-surface: #FFFFFF;
+  --c-raised: #E6E7EF;
+  --c-line: #D3D4DF;
+  --c-text: #111327;
+  --c-muted: #515367;
+  --c-faint: #838595;
+  --c-accent: #4338CA;
+  --c-on-accent: #FFFFFF;
+  --c-accent-soft: #4338CA1A;
+  --c-ok: #15803D;
+  --c-warn: #8F5600;
+  --c-danger: #B91C1C;
+  --c-ok-soft: #15803D1A;
+  --c-warn-soft: #8F56001A;
+  --c-danger-soft: #B91C1C1A;
+}
+@media (prefers-color-scheme: dark) {
+  [data-brand='notch']:not([data-theme='light']) {
+  color-scheme: dark;
+  --c-bg: #0B0C19;
+  --c-surface: #141524;
+  --c-raised: #1E2033;
+  --c-line: #2F3146;
+  --c-text: #F2F2F8;
+  --c-muted: #AEAFC2;
+  --c-faint: #73758C;
+  --c-accent: #818CF8;
+  --c-on-accent: #14123A;
+  --c-accent-soft: #818CF829;
+  --c-ok: #4ADE80;
+  --c-warn: #FBBF24;
+  --c-danger: #F87171;
+  --c-ok-soft: #4ADE8029;
+  --c-warn-soft: #FBBF2429;
+  --c-danger-soft: #F8717129;
+  }
+}
+[data-brand='notch'][data-theme='dark'] {
+  color-scheme: dark;
+  --c-bg: #0B0C19;
+  --c-surface: #141524;
+  --c-raised: #1E2033;
+  --c-line: #2F3146;
+  --c-text: #F2F2F8;
+  --c-muted: #AEAFC2;
+  --c-faint: #73758C;
+  --c-accent: #818CF8;
+  --c-on-accent: #14123A;
+  --c-accent-soft: #818CF829;
+  --c-ok: #4ADE80;
+  --c-warn: #FBBF24;
+  --c-danger: #F87171;
+  --c-ok-soft: #4ADE8029;
+  --c-warn-soft: #FBBF2429;
+  --c-danger-soft: #F8717129;
+}
+
+[data-brand='halo'], [data-brand='halo'][data-theme='light'] {
+  color-scheme: light;
+  --c-bg: #F2F6F7;
+  --c-surface: #FFFFFF;
+  --c-raised: #E6EEEF;
+  --c-line: #D3DDDF;
+  --c-text: #112427;
+  --c-muted: #516367;
+  --c-faint: #839295;
+  --c-accent: #0E7490;
+  --c-on-accent: #FFFFFF;
+  --c-accent-soft: #0E74901A;
+  --c-ok: #15803D;
+  --c-warn: #8F5600;
+  --c-danger: #B91C1C;
+  --c-ok-soft: #15803D1A;
+  --c-warn-soft: #8F56001A;
+  --c-danger-soft: #B91C1C1A;
+}
+@media (prefers-color-scheme: dark) {
+  [data-brand='halo']:not([data-theme='light']) {
+  color-scheme: dark;
+  --c-bg: #0B1619;
+  --c-surface: #142224;
+  --c-raised: #1E3033;
+  --c-line: #2F4246;
+  --c-text: #F2F7F8;
+  --c-muted: #AEBEC2;
+  --c-faint: #73888C;
+  --c-accent: #22D3EE;
+  --c-on-accent: #03181D;
+  --c-accent-soft: #22D3EE29;
+  --c-ok: #4ADE80;
+  --c-warn: #FBBF24;
+  --c-danger: #F87171;
+  --c-ok-soft: #4ADE8029;
+  --c-warn-soft: #FBBF2429;
+  --c-danger-soft: #F8717129;
+  }
+}
+[data-brand='halo'][data-theme='dark'] {
+  color-scheme: dark;
+  --c-bg: #0B1619;
+  --c-surface: #142224;
+  --c-raised: #1E3033;
+  --c-line: #2F4246;
+  --c-text: #F2F7F8;
+  --c-muted: #AEBEC2;
+  --c-faint: #73888C;
+  --c-accent: #22D3EE;
+  --c-on-accent: #03181D;
+  --c-accent-soft: #22D3EE29;
+  --c-ok: #4ADE80;
+  --c-warn: #FBBF24;
+  --c-danger: #F87171;
+  --c-ok-soft: #4ADE8029;
+  --c-warn-soft: #FBBF2429;
+  --c-danger-soft: #F8717129;
+}

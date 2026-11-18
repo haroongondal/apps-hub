@@ -88,6 +88,13 @@ coverage/
 /apps/clipboard/android/**/.cxx/
 /apps/clipboard/modules/*/android/build/
 /apps/clipboard/.expo/
+/apps/halo/android/.gradle/
+/apps/halo/android/app/build/
+/apps/halo/android/build/
+/apps/halo/android/local.properties
+/apps/halo/android/**/.cxx/
+/apps/halo/modules/*/android/build/
+/apps/halo/.expo/
 /tools/store-api/.cloudflare/
 /tools/store-api/.wrangler/
 /tools/store-api/dist/
