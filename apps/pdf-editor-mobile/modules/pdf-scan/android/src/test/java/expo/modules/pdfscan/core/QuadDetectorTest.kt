@@ -96,6 +96,24 @@ class QuadDetectorTest {
     assertTrue("no clipped page was accepted, so nothing was checked", found > 0)
   }
 
+  private val cardDetector = QuadDetector(DetectorConfig(targetAspect = 1.586))
+
+  @Test fun cardModeFindsACard() {
+    val q = tilted(320.0, 240.0, 380.0, 240.0, 0.0)
+    assertFound(q, cardDetector.detect(frame(q, 20)))
+  }
+
+  @Test fun cardModeSkipsASquareTheDefaultFinds() {
+    val q = tilted(320.0, 240.0, 300.0, 300.0, 0.0)
+    assertNull(cardDetector.detect(frame(q, 21)))
+    assertFound(q, QuadDetector().detect(frame(q, 21)))
+  }
+
+  @Test fun cardModeFindsAPortraitCard() {
+    val q = tilted(320.0, 240.0, 240.0, 380.0, 0.0)
+    assertFound(q, cardDetector.detect(frame(q, 22)))
+  }
+
   @Test fun rotation270AndAspectSwap() {
     val q = doubleArrayOf(0.1, 0.2, 0.8, 0.25, 0.75, 0.9, 0.15, 0.85)
     val back = Quads.rotate(Quads.rotate(q, 270), 90)

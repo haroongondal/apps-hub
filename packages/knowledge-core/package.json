@@ -1,0 +1,19 @@
+{
+  "name": "@apps-hub/knowledge-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure TypeScript knowledge layer for Nexus (PDF Editor): AI job queue, chunks and embeddings, knowledge graph with entity resolution, and grounded Ask",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "node --test src/__tests__/chunk.test.ts src/__tests__/extraction.test.ts src/__tests__/pipeline.test.ts src/__tests__/resolve.test.ts src/__tests__/ask.test.ts src/__tests__/openai.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@apps-hub/library-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.9.2"
+  }
+}

@@ -1,4 +1,4 @@
-import React, { Children, Fragment, isValidElement, useEffect, useRef, useState, type ReactNode } from 'react';
+import React, { Children, Fragment, isValidElement, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -68,9 +68,10 @@ export interface ScreenProps {
   refreshing?: boolean;
   onRefresh?: () => void;
   style?: StyleProp<ViewStyle>;
+  scrollRef?: Ref<ScrollView>;
 }
 
-export function Screen({ children, scroll, refreshing, onRefresh, style }: ScreenProps) {
+export function Screen({ children, scroll, refreshing, onRefresh, style, scrollRef }: ScreenProps) {
   const { c, scheme } = useTheme();
   const insets = useSafeAreaInsets();
   const bar = <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />;
@@ -79,6 +80,7 @@ export function Screen({ children, scroll, refreshing, onRefresh, style }: Scree
       <View style={{ flex: 1, backgroundColor: c.bg }}>
         {bar}
         <ScrollView
+          ref={scrollRef}
           keyboardShouldPersistTaps="handled"
           refreshControl={
             onRefresh && (

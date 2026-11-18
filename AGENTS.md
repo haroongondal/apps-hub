@@ -22,6 +22,10 @@ Current apps:
   Arabic and Urdu normalised) over one `library.db`: logic in
   `packages/library-core`, app glue in `apps/pdf-editor-mobile/src/library`. Scan
   and Reader build on it; specs `docs/pdf-editor/`, progress `docs/handoffs/pdf-editor-scan.md`.
+  The mobile app is named **Nexus** since N2 (package id and Store id unchanged): an opt-in
+  AI layer (owner's OpenAI key; fully offline without one) over the same Library, with
+  logic in `packages/knowledge-core` and glue in `apps/pdf-editor-mobile/src/nexus`. Design
+  `docs/superpowers/specs/2026-11-18-nexus-design.md`, progress `docs/handoffs/nexus.md`.
 - **design-editor** (`apps/design-editor`) — offline Canva-style editor for the
   Mac (Electron), moved in from `~/Documents/design-editor` on 2026-10-26.
   Its Android sibling `apps/design-editor-mobile` (`com.haroon.designeditor`, Store

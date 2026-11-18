@@ -25,6 +25,8 @@ data class DetectorConfig(
   val supportSamples: Int = 64,
   val supportRadius: Int = 2,
   val borderShare: Double = 0.01,
+  val targetAspect: Double? = null,
+  val aspectTolerance: Double = 0.15,
 )
 
 class Detection(val quad: DoubleArray, val aspect: Double, val sharpness: Double, val thumb: ByteArray) {
@@ -227,12 +229,24 @@ class QuadDetector(val config: DetectorConfig = DetectorConfig()) {
       }
       if (x1 - x0 + 1 < minW || y1 - y0 + 1 < minH) continue
       val quad = quadOf(count, y0, y1) ?: continue
+      if (!aspectFits(quad)) continue
       val support = minSideSupport(quad)
       if (support < config.minSupport) continue
       val score = area(quad) * support
       if (score > bestScore) { bestScore = score; best = quad }
     }
     return best
+  }
+
+  // Either orientation; each side is the mean of two opposite edges, so mild perspective still fits.
+  private fun aspectFits(q: DoubleArray): Boolean {
+    val target = config.targetAspect ?: return true
+    fun edge(a: Int, b: Int) = hypot(q[b * 2] - q[a * 2], q[b * 2 + 1] - q[a * 2 + 1])
+    val across = (edge(0, 1) + edge(3, 2)) / 2
+    val down = (edge(0, 3) + edge(1, 2)) / 2
+    if (min(across, down) <= 0) return false
+    val ratio = max(across, down) / min(across, down)
+    return ratio >= target * (1 - config.aspectTolerance) && ratio <= target * (1 + config.aspectTolerance)
   }
 
   private fun quadOf(count: Int, y0: Int, y1: Int): DoubleArray? {

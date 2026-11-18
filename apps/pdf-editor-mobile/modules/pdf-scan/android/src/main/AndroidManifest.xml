@@ -1,4 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <application>
+        <provider
+            android:name="expo.modules.pdfscan.android.PdfScanFileProvider"
+            android:authorities="${applicationId}.pdfscan.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/pdfscan_paths" />
+        </provider>
+    </application>
 </manifest>
