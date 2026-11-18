@@ -74,6 +74,12 @@ test('dlnaTransport sends InstanceID, plus Speed=1 for Play only', async () => {
   assert.match(b.requests[0], /<InstanceID>0<\/InstanceID><Speed>1<\/Speed><\/u:Play>/);
   assert.match(b.requests[1], /<InstanceID>0<\/InstanceID><\/u:Pause>/);
   assert.deepEqual(b.lines, ['49152 POST /avt', '49152 POST /avt']);
+  assert.equal(await dlnaTransport(b, iface, transport, 'Next'), true);
+  assert.equal(await dlnaTransport(b, iface, transport, 'Previous'), true);
+  assert.match(b.requests[2], /#Next"/);
+  assert.match(b.requests[2], /<InstanceID>0<\/InstanceID><\/u:Next>/);
+  assert.match(b.requests[3], /<InstanceID>0<\/InstanceID><\/u:Previous>/);
+  assert.doesNotMatch(b.requests[2] + b.requests[3], /Speed/);
   const fault = fake(() => http('<Fault><errorCode>701</errorCode></Fault>', 500));
   assert.equal(await dlnaTransport(fault, iface, transport, 'Next'), false);
 });

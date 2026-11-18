@@ -7,7 +7,7 @@ import { httpRequest, parseHttpUrl, parseJsonObject } from './lan-http.ts';
 import type { HttpTarget } from './lan-http.ts';
 import type { InterfaceInfo } from './model.ts';
 import type { NetLensNativeBinding } from './native-binding.ts';
-import { MAX_XML, SERVICE_BLOCK, resolveControl, tagText, withoutComments } from './igd.ts';
+import { MAX_XML, resolveControl, serviceBlocks, tagText, withoutComments } from './igd.ts';
 import type { SoapService } from './upnp-soap.ts';
 
 type Binding = Pick<NetLensNativeBinding, 'tcpFetch'>;
@@ -37,10 +37,10 @@ export function findMediaServices(
   const baseUrl = tagText(xml, 'URLBase');
   const base = (baseUrl !== null ? parseHttpUrl(baseUrl) : null) ?? location;
   const seen = new Set<string>();
-  for (const m of xml.matchAll(SERVICE_BLOCK)) {
-    const type = tagText(m[1], 'serviceType');
+  for (const block of serviceBlocks(xml)) {
+    const type = tagText(block, 'serviceType');
     const kind = type === null ? null : MEDIA_SERVICE.exec(type)?.[1];
-    const url = tagText(m[1], 'controlURL');
+    const url = tagText(block, 'controlURL');
     // The type lands unescaped in the SOAP envelope, so only exact URNs pass.
     if (!type || !kind || url === null || seen.has(kind)) continue;
     seen.add(kind);
@@ -67,8 +67,9 @@ async function detectShelly(binding: Binding, iface: InterfaceInfo, ip: string):
 async function detectTasmota(binding: Binding, iface: InterfaceInfo, ip: string): Promise<DetectedControl | null> {
   // "cmnd=Power" with no argument only reports the state.
   const res = await httpRequest(binding, iface, { ip, port: 80, path: '/cm?cmnd=Power' }, { method: 'GET', timeoutMs: PROBE_MS, maxBytes: JSON_MAX_BYTES });
-  if (res?.status === 401) return { kind: 'tasmota', locked: true };
-  const json = res?.status === 200 ? parseJsonObject(res.body) : null;
+  const json = res && (res.status === 200 || res.status === 401) ? parseJsonObject(res.body) : null;
+  // Tasmota's 401 body is {"WARNING":"Need user=..."}; a bare 401 is any device with a password.
+  if (res?.status === 401) return typeof json?.WARNING === 'string' ? { kind: 'tasmota', locked: true } : null;
   return json && Object.entries(json).some(([k, v]) => /^POWER\d*$/.test(k) && typeof v === 'string') ? { kind: 'tasmota', locked: false } : null;
 }
 

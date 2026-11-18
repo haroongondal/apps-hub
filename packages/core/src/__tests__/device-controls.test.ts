@@ -45,6 +45,12 @@ test('a Roku reply gives roku', async () => {
   assert.deepEqual(await detectControls(f.binding, iface, IP, []), [{ kind: 'roku' }]);
 });
 
+test('Roku needs a device-info body on a 200', async () => {
+  for (const r of [reply(200, 'ok'), reply(404, '<device-info/>')]) {
+    assert.deepEqual(await detectControls(fake({ '8060/query/device-info': r }).binding, iface, IP, []), []);
+  }
+});
+
 test('Shelly gen 2 and gen 1 are told apart', async () => {
   const g2 = fake({ '80/shelly': reply(200, '{"name":"x","gen":2,"id":"shellyplus1"}') });
   assert.deepEqual(await detectControls(g2.binding, iface, IP, []), [{ kind: 'shelly', gen: 2 }]);
@@ -57,8 +63,13 @@ test('Shelly gen 2 and gen 1 are told apart', async () => {
 });
 
 test('Tasmota is locked on 401 and unlocked on a POWER reply', async () => {
-  const locked = fake({ '80/cm?cmnd=Power': reply(401, 'Unauthorized') });
+  const locked = fake({ '80/cm?cmnd=Power': reply(401, '{"WARNING":"Need user=<username>&password=<password>"}') });
   assert.deepEqual(await detectControls(locked.binding, iface, IP, []), [{ kind: 'tasmota', locked: true }]);
+  // A router or camera with HTTP Basic auth also answers 401, but not with Tasmota's JSON warning.
+  for (const body of ['<html><h1>401 Unauthorized</h1></html>', 'Unauthorized', '{"WARNING":1}', '{"error":"x"}']) {
+    const other = fake({ '80/cm?cmnd=Power': reply(401, body) });
+    assert.deepEqual(await detectControls(other.binding, iface, IP, []), [], body);
+  }
   const open = fake({ '80/cm?cmnd=Power': reply(200, '{"POWER":"ON"}') });
   assert.deepEqual(await detectControls(open.binding, iface, IP, []), [{ kind: 'tasmota', locked: false }]);
   const multi = fake({ '80/cm?cmnd=Power': reply(200, '{"POWER2":"OFF"}') });
@@ -86,8 +97,16 @@ test('findMediaServices refuses other hosts, bad URNs, entities and oversize inp
   const r = findMediaServices(foreign, location);
   assert.equal(r.rendering, null);
   assert.equal(r.transport?.control.path, '/MediaRenderer/AVTransport/Control');
-  const evil = `<root>${service('urn:schemas-upnp-org:service:AVTransport:1"><x/', '/c')}</root>`;
-  assert.deepEqual(findMediaServices(evil, location), { rendering: null, transport: null });
+  // Each bad URN has no "<", so tagText accepts it and only the URN check can refuse it.
+  for (const bad of [
+    'urn:schemas-upnp-org:service:AVTransport:1&quot; x=&quot;',
+    'urn:schemas-upnp-org:service:AVTransport:1junk',
+    'xurn:schemas-upnp-org:service:AVTransport:1',
+    'urn:schemas-upnp-org:service:AVTransport:',
+    'urn:schemas-upnp-org:service:RenderingControlX:1',
+  ]) {
+    assert.deepEqual(findMediaServices(`<root>${service(bad, '/c')}</root>`, location), { rendering: null, transport: null }, bad);
+  }
   assert.deepEqual(findMediaServices('<!DOCTYPE x [<!ENTITY a "b">]>' + SONOS, location), { rendering: null, transport: null });
   assert.deepEqual(findMediaServices(SONOS + ' '.repeat(262144), location), { rendering: null, transport: null });
   const first = `<root>${service(RC, 'http://192.168.1.99/c')}${service(RC, '/second')}</root>`;
@@ -145,4 +164,11 @@ test('an off-LAN ip makes no request, and a throwing binding gives []', async ()
   assert.equal(f.calls.length, 0);
   const boom = { tcpFetch: async (): Promise<string | null> => { throw new Error('boom'); } };
   assert.deepEqual(await detectControls(boom, iface, IP, []), []);
+});
+
+test('findMediaServices gives the same result on every call', () => {
+  const first = findMediaServices(SONOS, location);
+  findMediaServices('<root></root>', location);
+  assert.deepEqual(findMediaServices(SONOS, location), first);
+  assert.ok(first.rendering && first.transport);
 });

@@ -23,7 +23,7 @@ const WAN_IP = /^urn:schemas-upnp-org:service:WANIPConnection:\d+$/;
 const WAN_PPP = 'urn:schemas-upnp-org:service:WANPPPConnection:1';
 const WAN_COMMON = 'urn:schemas-upnp-org:service:WANCommonInterfaceConfig:1';
 // The lookahead stops a block at the next <service, so an unclosed tag cannot rescan to the end (quadratic).
-export const SERVICE_BLOCK = /<service\b[^<>]*>((?:(?!<service\b)[\s\S])*?)<\/service\s*>/gi;
+const SERVICE_BLOCK = /<service\b[^<>]*>((?:(?!<service\b)[\s\S])*?)<\/service\s*>/gi;
 const IGD_HINT = /InternetGatewayDevice|WANIPConnection|WANPPPConnection/i;
 
 const XML_NAMED: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
@@ -31,6 +31,9 @@ const decodeXml = (s: string): string =>
   s.replace(/&(amp|lt|gt|quot|apos);/g, (_, e: string) => XML_NAMED[e]);
 
 // Linear scan, unlike a lazy regex, which goes quadratic on many unterminated "<!--".
+/** Inner text of each <service> block. The /g regex stays private: a caller's .test() would move its lastIndex. */
+export const serviceBlocks = (xml: string): string[] => Array.from(xml.matchAll(SERVICE_BLOCK), (m) => m[1]);
+
 export function withoutComments(xml: string): string {
   let out = '';
   let pos = 0;
@@ -64,9 +67,9 @@ export function findIgdServices(descriptionXml: string, location: HttpTarget): I
   const ip: SoapService[] = [];
   const ppp: SoapService[] = [];
   let common: SoapService | null = null;
-  for (const m of xml.matchAll(SERVICE_BLOCK)) {
-    const type = tagText(m[1], 'serviceType');
-    const url = tagText(m[1], 'controlURL');
+  for (const block of serviceBlocks(xml)) {
+    const type = tagText(block, 'serviceType');
+    const url = tagText(block, 'controlURL');
     // The type lands unescaped in the SOAP envelope and header, so only exact known URNs pass.
     if (type === null || url === null) continue;
     const isIp = WAN_IP.test(type);
