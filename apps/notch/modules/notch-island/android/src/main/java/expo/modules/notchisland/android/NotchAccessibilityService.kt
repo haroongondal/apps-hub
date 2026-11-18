@@ -33,13 +33,23 @@ class NotchAccessibilityService : AccessibilityService() {
 
   override fun onServiceConnected() {
     running = true
+    instance = this
     show()
   }
 
   override fun onUnbind(intent: Intent?): Boolean {
     running = false
+    instance = null
     remove()
     return super.onUnbind(intent)
+  }
+
+  /** Rebuilds the pill from the saved settings; the card is rebuilt in phase 1's Task 7. */
+  fun reapply() {
+    main.post {
+      remove()
+      show()
+    }
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {
@@ -139,6 +149,9 @@ class NotchAccessibilityService : AccessibilityService() {
     private const val AUTO_COLLAPSE_MS = 4000L
 
     @Volatile var running = false
+      private set
+
+    @Volatile var instance: NotchAccessibilityService? = null
       private set
   }
 }
