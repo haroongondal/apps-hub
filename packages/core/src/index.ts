@@ -18,3 +18,4 @@ export * from './port-check.ts';
 export * from './lan-http.ts';
 export * from './upnp-soap.ts';
 export * from './igd.ts';
+export * from './device-controls.ts';

@@ -16,14 +16,14 @@ export interface IgdServices {
   common: SoapService | null;
 }
 
-const MAX_XML = 262144;
+export const MAX_XML = 262144;
 const MAX_LOCATIONS = 8;
 const MAX_MAPPINGS = 64;
 const WAN_IP = /^urn:schemas-upnp-org:service:WANIPConnection:\d+$/;
 const WAN_PPP = 'urn:schemas-upnp-org:service:WANPPPConnection:1';
 const WAN_COMMON = 'urn:schemas-upnp-org:service:WANCommonInterfaceConfig:1';
 // The lookahead stops a block at the next <service, so an unclosed tag cannot rescan to the end (quadratic).
-const SERVICE_BLOCK = /<service\b[^<>]*>((?:(?!<service\b)[\s\S])*?)<\/service\s*>/gi;
+export const SERVICE_BLOCK = /<service\b[^<>]*>((?:(?!<service\b)[\s\S])*?)<\/service\s*>/gi;
 const IGD_HINT = /InternetGatewayDevice|WANIPConnection|WANPPPConnection/i;
 
 const XML_NAMED: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
@@ -31,7 +31,7 @@ const decodeXml = (s: string): string =>
   s.replace(/&(amp|lt|gt|quot|apos);/g, (_, e: string) => XML_NAMED[e]);
 
 // Linear scan, unlike a lazy regex, which goes quadratic on many unterminated "<!--".
-function withoutComments(xml: string): string {
+export function withoutComments(xml: string): string {
   let out = '';
   let pos = 0;
   for (;;) {
@@ -44,12 +44,12 @@ function withoutComments(xml: string): string {
   }
 }
 
-function tagText(xml: string, tag: string): string | null {
+export function tagText(xml: string, tag: string): string | null {
   const m = new RegExp(`<${tag}\\s*>([^<]*)</${tag}\\s*>`, 'i').exec(xml);
   return m ? decodeXml(m[1]).trim() : null;
 }
 
-function resolveControl(url: string, base: HttpTarget): HttpTarget | null {
+export function resolveControl(url: string, base: HttpTarget): HttpTarget | null {
   return parseHttpUrl(/^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith('/') ? url : `/${url}`, base);
 }
 
