@@ -26,7 +26,8 @@ cipher or KDF is not.
 ## 2. What it does
 
 - Stores **logins** (name, website and/or app, username, password, note), **payment
-  cards** and **secure notes** in an encrypted vault.
+  cards**, **secure notes** and **passes** (membership, loyalty and gym cards that
+  are not bank cards) in an encrypted vault.
 - **Fills** logins into Android apps and websites. Fills cards into card fields
   that are labelled as card fields.
 - **Offers to save** a login when the owner signs up or logs in with a password
@@ -74,6 +75,10 @@ Phase 1 is described in the most detail.
   breach checking. *(My calls. The generator is small and the obvious first
   extra.)* CSV export came later, on the owner's request (§8).
 - Saving cards from forms. Cards are added by hand and only filled. *(My call.)*
+- Real tap-to-pay, and cloning MIFARE, DESFire or 125 kHz cards. Android lets an app
+  answer a reader only as an ISO-DEP (14443-4) device and never copy a hardware ID,
+  and a payment needs issuer-provisioned keys that a typed-in card number does not
+  have.
 - Filling apps that block autofill by abusing the accessibility service (the
   Deputy technique). It's too easy to get wrong for passwords.
 - Multiple users, or accounts for anyone but the owner.
@@ -160,7 +165,7 @@ vaultKey = 32 random bytes, generated once. Changes only through a re-key (§10)
 
 **Records.** One record per entry: `{ id: random UUID, ciphertext }`. The
 ciphertext is AES-GCM under the vaultKey of a JSON entry (`type: login | card |
-note`, fields, `updatedAt`, …), with **AAD = record id + format version**, so
+note | pass`, fields, `updatedAt`, …), with **AAD = record id + format version**, so
 neither the server nor a bug can move one record's ciphertext onto another id.
 Deletions are tombstones: the same record id, with a ciphertext that says
 "deleted".
@@ -399,11 +404,11 @@ Built from `@apps-hub/ui`. Rough layout in the mockups.
   setting → optional Google import.
 - **Unlock**: fingerprint, or master password; "Forgot master password" → recovery key.
   After unlocking, a notice reports any pending saves that couldn't be recovered (§7).
-- **Vault**: search across everything; Logins / Cards / Notes tabs; rows show
+- **Vault**: search across everything; Logins / Cards / Notes / Passes tabs; rows show
   name, site/app and username. Footer shows sync state from Phase 2 on.
 - **Entry**: view with Show / Copy; edit; delete (with confirmation). Logins show
   their linked websites and apps.
-- **Add**: login, card or note.
+- **Add**: login, card, note or pass.
 - **Import from Google.**
 - **Settings**: auto-lock time, fingerprint on/off, change master password, new
   recovery key, lock now. Turning fingerprint on and generating a new recovery key
@@ -637,3 +642,37 @@ Module and file layout inside `apps/strongroom`, screen components, the exact
 SQLite schema, JSON field names inside an entry, Argon2 params after measuring
 (within §6's bounds), the test-vector file location, the rate-limit mechanism,
 the launcher icon and brand colours.
+
+
+## Passes (barcode and NFC tag)
+
+*Added 2026-11-18. Plan: `docs/superpowers/plans/2026-11-18-strongroom-passes.md`.*
+
+A pass is `{ name, code, format: qr | code128 | ean13, note }`. It is shown as a
+barcode (drawn natively with zxing core, always black on white, screen brightness
+raised while it is open) and can be presented over NFC for 60 seconds.
+
+- **What NFC does.** "Hold to reader" arms an NFC Forum Type 4 tag (AID
+  `D2760000850101`, read-only) carrying the code as a URI record when it starts with
+  `http://` or `https://`, otherwise as a text record. It helps only with readers
+  that accept an NDEF tag. It does not work with MIFARE, DESFire or 125 kHz readers
+  and it is not a payment.
+- **Arming.** Unarmed, the service answers every select with "file not found" and
+  reveals nothing, not even the capability container. Armed state is in memory only
+  and ends on a 60 s timer, when the app goes to the background, when the vault
+  locks, or when the owner cancels. `requireDeviceUnlock` is set on the service, so
+  a locked phone presents nothing. The phone must be unlocked and the Strongroom
+  screen in front (`setPreferredService`).
+- **Secrecy.** The code is never in a list row, the autofill match index or an
+  autofill dataset, and passes are never filled. It reaches JS only through the
+  existing reveal path (`code`, like a card number). CSV export emits no rows for
+  passes (they have no Google CSV columns), so "Export all" does not include them.
+- **Sync.** A pass is one more entry type inside the same ciphertext records, so the
+  server and the sync protocol did not change. A build that does not know the type
+  reads the record as unreadable, keeps it unchanged and never drops it. The shared
+  TS model (`packages/strongroom-core/src/entry.ts`) has `Pass`, and one JSON literal
+  is pinned in both the Kotlin and the TS tests so the two encoders cannot drift.
+- **Not yet proven on a phone.** The Type 4 tag logic is tested against a fake
+  reader. Whether HyperOS lets Strongroom win the NDEF AID over Google Wallet, and
+  whether a given reader accepts the capability container, are checked only by the
+  phone test in the plan.
