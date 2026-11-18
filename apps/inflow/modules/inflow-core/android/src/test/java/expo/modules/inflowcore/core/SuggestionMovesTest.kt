@@ -33,5 +33,12 @@ class SuggestionMovesTest {
     assertEquals(SuggestionState.DONE, store.get(id)!!.state)
   }
 
+  @Test fun aStartedRowStillAcceptsDoneAfterItsExpiryTime() {
+    val id = add(expiresAt = t0 + 1_000)
+    assertTrue(SuggestionMoves.move(store, id, SuggestionState.STARTED, t0))
+    assertTrue(SuggestionMoves.move(store, id, SuggestionState.DONE, t0 + 5_000))
+    assertEquals(SuggestionState.DONE, store.get(id)!!.state)
+  }
+
   @Test fun anUnknownIdMovesNothing() = assertFalse(SuggestionMoves.move(store, 99, SuggestionState.SKIPPED, t0))
 }

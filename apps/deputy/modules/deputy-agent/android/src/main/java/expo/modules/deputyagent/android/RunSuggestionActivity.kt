@@ -20,9 +20,12 @@ import expo.modules.deputyagent.core.SuggestionTask
 class RunSuggestionActivity : Activity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    val id = intent.getLongExtra(EXTRA_ID, -1L)
-    if (id >= 0) toast(run(applicationContext, id, intent.getStringArrayExtra(EXTRA_LOOK_IN)?.toSet().orEmpty()))
-    finish()
+    try {
+      val id = intent.getLongExtra(EXTRA_ID, -1L)
+      if (id >= 0) toast(run(applicationContext, id, intent.getStringArrayExtra(EXTRA_LOOK_IN)?.toSet().orEmpty()))
+    } finally {
+      finish()
+    }
   }
 
   private fun toast(message: String?) {

@@ -55,6 +55,11 @@ class SuggestionTaskTest {
     assertEquals(Begin.Failed(msg), begin(item, emptySet(), Seen()) { throw IllegalStateException(msg) })
   }
 
+  @Test fun anyOtherFailureOfTheStartBecomesAFailedResultAndDoesNotPropagate() {
+    assertEquals(Begin.Failed("boom"), begin(item, emptySet(), Seen()) { throw RuntimeException("boom") })
+    assertEquals(Begin.Failed("Deputy couldn't start that task."), begin(item, emptySet(), Seen()) { throw SecurityException() })
+  }
+
   @Test fun anItemWithNoUsableNameOrTextNeverStartsAnything() {
     for (bad in listOf(item.copy(name = "\n\n"), item.copy(name = "  "), item.copy(text = " "), item.copy(pkg = ""), item.copy(app = "<>"))) {
       val seen = Seen()

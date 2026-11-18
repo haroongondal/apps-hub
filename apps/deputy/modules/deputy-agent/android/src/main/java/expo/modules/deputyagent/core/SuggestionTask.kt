@@ -14,6 +14,7 @@ sealed interface Begin {
 /** Turns a suggestion into a normal run: a code-written task, the item's app plus the owner's look-in apps, the sender and text as untrusted context. */
 object SuggestionTask {
   const val CANT_SHARE = "Inflow can't share that message."
+  const val CANT_START = "Deputy couldn't start that task."
   private const val NAME_MAX = 40
   private const val SENDER_MAX = 80
 
@@ -37,8 +38,8 @@ object SuggestionTask {
     if (plain(item.app).isEmpty() || item.name.isBlank() || item.pkg.isBlank() || item.text.isBlank()) return Begin.Failed(CANT_SHARE)
     return try {
       Begin.Started(start(build(item.app), setOf(item.pkg) + lookIn, listOf(untrustedEntry(item.name, item.text))) {})
-    } catch (e: IllegalStateException) {
-      Begin.Failed(e.message ?: CANT_SHARE)
+    } catch (e: Exception) { // any throw (permission, bad state) must come back as a message, never crash the process
+      Begin.Failed(e.message ?: CANT_START)
     }
   }
 }

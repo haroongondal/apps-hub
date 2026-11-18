@@ -38,10 +38,13 @@ fun suggestionHook(
   if (!answered) SuggestionRules.fromResult(r, input, input.conversationKey, now(), zone, settings())?.let { store.add(it) }
 }
 
-/** The one way a suggestion changes state from outside (the provider, Inflow's Run): sweep expired rows first, so a suggestion past its time can never start. */
+/**
+ * The one way a suggestion changes state from outside (the provider, Inflow's Run). Only a start sweeps expired rows first, so a
+ * suggestion past its time can never start; a late done or skip of a row already started or waiting still lands (R6 ruling).
+ */
 object SuggestionMoves {
   fun move(store: SuggestionStore, id: Long, to: SuggestionState, now: Long): Boolean {
-    store.expire(now)
+    if (to == SuggestionState.STARTED) store.expire(now)
     return store.setState(id, to, now)
   }
 }
