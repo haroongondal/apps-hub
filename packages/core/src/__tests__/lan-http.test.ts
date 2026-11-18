@@ -149,6 +149,14 @@ test('httpRequest refuses header injection, bad paths and bad ports without call
   assert.equal(b.calls.length, 0);
 });
 
+test('httpRequest returns null for a missing target or init, without a request', async () => {
+  const b = fakeBinding();
+  for (const [t, init] of [[null, {}], [undefined, {}], [target, null], [target, undefined]]) {
+    assert.equal(await httpRequest(b, iface24, t as unknown as HttpTarget, init as unknown as object), null);
+  }
+  assert.equal(b.calls.length, 0);
+});
+
 test('httpRequest returns null on no reply, an unparseable reply, or a throwing tcpFetch', async () => {
   assert.equal(await httpRequest(fakeBinding(null), iface24, target, {}), null);
   assert.equal(await httpRequest(fakeBinding('garbage'), iface24, target, {}), null);

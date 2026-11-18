@@ -72,6 +72,8 @@ export async function httpRequest(
     maxBytes?: number;
   },
 ): Promise<{ status: number; body: string } | null> {
+  // The types forbid these, but callers build targets from parsed device data.
+  if (!target || !init) return null;
   const { ip, port, path } = target;
   if (!isLanTarget(ip, iface)) return null;
   if (!Number.isInteger(port) || port < 1 || port > 65535 || !PATH.test(path)) return null;
