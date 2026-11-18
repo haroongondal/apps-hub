@@ -70,6 +70,9 @@ const FILTERS: ReadonlyArray<{ key: FilterKey; label: string }> = [
 const PING_SAMPLE_COUNT = 5;
 const PING_INTERVAL_MS = 250;
 const PING_TIMEOUT_MS = 800;
+/** Most UPnP description URLs kept per device. */
+const MAX_SSDP_LOCATIONS = 8;
+
 /** mDNS/SSDP enrichment window appended around the sweep (SPEC §3.3). */
 const SERVICE_DISCOVERY_MS = 4000;
 
@@ -99,6 +102,8 @@ export default function ScannerScreen() {
   const scanGeneration = useRef(0);
   // Latest rows, updated in step with state, so name merges and edits build on current data.
   const devicesRef = useRef<ReconciledDevice[]>([]);
+  // Every UPnP description URL the last scan saw per IP, for the device sheet's remote controls.
+  const locationsByIp = useRef<Map<string, string[]>>(new Map());
 
   const [iface, setIface] = useState<InterfaceInfo | null>(null);
   const [plan, setPlan] = useState<SubnetPlan | null>(null);
@@ -164,7 +169,7 @@ export default function ScannerScreen() {
       // Enrichment buffers, filled by native events while the sweep runs.
       const ssdpByIp = new Map<
         string,
-        { usn: string | null; vendor: string | null; location: string | null }
+        { usn: string | null; vendor: string | null; locations: string[] }
       >();
       const mdnsByIp = new Map<string, string>();
       const mdns = new Set<string>();
@@ -191,10 +196,20 @@ export default function ScannerScreen() {
             return;
           }
           if (event.kind === 'ssdp') {
+            const prev = ssdpByIp.get(event.host);
+            const locations = prev?.locations ?? [];
+            // A device on the LAN can spam SSDP, so the list stays short.
+            if (
+              typeof event.location === 'string' &&
+              !locations.includes(event.location) &&
+              locations.length < MAX_SSDP_LOCATIONS
+            ) {
+              locations.push(event.location);
+            }
             ssdpByIp.set(event.host, {
-              usn: typeof event.usn === 'string' ? event.usn : null,
-              vendor: typeof event.server === 'string' ? event.server : null,
-              location: typeof event.location === 'string' ? event.location : null,
+              usn: typeof event.usn === 'string' ? event.usn : (prev?.usn ?? null),
+              vendor: typeof event.server === 'string' ? event.server : (prev?.vendor ?? null),
+              locations,
             });
           }
         },
@@ -216,6 +231,11 @@ export default function ScannerScreen() {
         ]);
 
         setMdnsTypes([...mdns].sort());
+        if (scanGeneration.current === generation) {
+          locationsByIp.current = new Map(
+            [...ssdpByIp].map(([ip, facts]) => [ip, facts.locations]),
+          );
+        }
         setPhase('reconciling');
 
         const reachable = scanSummary.discovered.filter((entry) => entry.isReachable);
@@ -269,7 +289,7 @@ export default function ScannerScreen() {
           .filter((d) => d.seenThisScan)
           .map((d) => ({
             ip: d.lastIp,
-            ssdpLocation: ssdpByIp.get(d.lastIp)?.location ?? null,
+            ssdpLocation: ssdpByIp.get(d.lastIp)?.locations[0] ?? null,
             mdnsName: mdnsByIp.get(d.lastIp) ?? null,
           }));
         if (scanGeneration.current !== generation) return;
