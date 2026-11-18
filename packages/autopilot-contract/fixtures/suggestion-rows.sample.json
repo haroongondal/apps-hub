@@ -1,0 +1,6 @@
+[
+  { "id": 1, "kind": "reply", "title": "Reply to Ali", "item_id": 101, "due_at": null, "state": "waiting", "created_at": 1763539200000, "expires_at": 1763625600000 },
+  { "id": 2, "kind": "bill", "title": "Bill due 25 Nov", "item_id": 102, "due_at": 1764028800000, "state": "waiting", "created_at": 1763539200000, "expires_at": 1764288000000 },
+  { "id": 3, "kind": "event", "title": "Meeting 11:00 tomorrow", "item_id": 103, "due_at": 1763604000000, "state": "started", "created_at": 1763539200000, "expires_at": 1763604000000 },
+  { "id": 4, "kind": "money", "title": "Large debit at Alfalah", "item_id": 104, "due_at": null, "state": "skipped", "created_at": 1763539200000, "expires_at": 1764144000000 }
+]
