@@ -690,6 +690,9 @@ type PageEvent =
   | { type: 'openDesign'; reqId: string }
   | { type: 'readAutosave'; reqId: string }
   | { type: 'writeAutosave'; reqId: string; text: string }
+  | { type: 'aiHasKey'; reqId: string }                    // Design with AI: key stays in the app
+  | { type: 'aiSetKey'; reqId: string; key: string }
+  | { type: 'aiRequest'; reqId: string; body: unknown }    // reply value { ok, status, json?, error? }, never replyError
   | { type: 'docState'; title: string; dirty: boolean; filePath: string | null };
 // Native → web
 type WebCommand =

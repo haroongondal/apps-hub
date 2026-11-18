@@ -3,6 +3,8 @@
 // bridge instead of Electron IPC (SPEC §14.3). Requests carry a reqId; the app answers every
 // one with window.__editorCommand('reply', { reqId, ok, value? }). The schema lives in
 // apps/design-editor-mobile/src/editor/bridge.ts; keep the two in step.
+// Additions over the six original native functions: confirm, keepAutosave, and native.ai
+// (hasKey, setKey, request: Design with AI, 2026-11-18).
 // Script order note: this runs before app.js because app.js calls native.onMenu() during its
 // own body — the desktop's preload guarantees native exists for that too.
 (() => {
@@ -108,6 +110,13 @@
     onMenu: fn => {
       menuHandler = fn;
       while (menuBacklog.length) fn(menuBacklog.shift());
+    },
+    // Design with AI (2026-11-18): the key lives in the app and never reaches the page; request
+    // always resolves { ok, status, json?, error? } (SPEC §14.3, same as preload.cjs)
+    ai: {
+      hasKey: () => call('aiHasKey'),
+      setKey: key => call('aiSetKey', { key }),
+      request: body => call('aiRequest', { body }),
     },
     // the Media tools window is the Mac's; the rail button is hidden on phones (mobile.html).
     // The stubs stand in so a stray media call can never crash the page.
