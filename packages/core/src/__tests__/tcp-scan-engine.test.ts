@@ -58,6 +58,8 @@ class FakeBinding implements NetLensNativeBinding {
     return null;
   }
 
+  async sendUdpBroadcast(): Promise<void> {}
+
   async tcpFetch(): Promise<string | null> {
     return null;
   }

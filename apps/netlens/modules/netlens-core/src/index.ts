@@ -103,6 +103,9 @@ export function createNetLensNativeBinding(): NetLensNativeBinding {
         typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 255;
       return Array.isArray(raw) && raw.every(isByte) ? raw : null;
     },
+    async sendUdpBroadcast(ip, port, payload) {
+      await NetLensCore.sendUdpBroadcast(ip, port, [...payload]);
+    },
     async tcpFetch(ip, port, request, timeoutMs, maxBytes) {
       const raw: unknown = await NetLensCore.tcpFetch(ip, port, request, timeoutMs, maxBytes);
       return typeof raw === 'string' ? raw : null;

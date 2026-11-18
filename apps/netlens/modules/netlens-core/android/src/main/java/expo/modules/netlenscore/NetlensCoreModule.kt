@@ -292,6 +292,24 @@ class NetlensCoreModule : Module() {
       }
     }
 
+    /** Wake-on-LAN: one datagram to a private IPv4 broadcast address, no reply awaited. */
+    AsyncFunction("sendUdpBroadcast") { ip: String, port: Int, payload: List<Int>, promise: Promise ->
+      val target = ip.trim()
+      val problem = UdpBroadcast.validate(target, port, payload)
+      if (problem != null) {
+        promise.reject(ERR_INVALID_PARAMS, problem, null)
+      } else {
+        moduleScope.launch {
+          try {
+            UdpBroadcast.send(target, port, ByteArray(payload.size) { payload[it].toByte() }, lanBinder(target))
+            promise.resolve(null)
+          } catch (error: Exception) {
+            promise.reject("UDP_BROADCAST_FAILED", error.message, error)
+          }
+        }
+      }
+    }
+
     /** Name lookups: a bounded HTTP-style exchange, decoded as UTF-8. Null when nothing was read. */
     AsyncFunction("tcpFetch") { ip: String, port: Int, request: String, timeoutMs: Int, maxBytes: Int, promise: Promise ->
       if (port !in 1..65535) {

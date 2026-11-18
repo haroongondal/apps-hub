@@ -59,6 +59,8 @@ class FakeBinding {
   udpOverride: ((ip: string, port: number) => Promise<number[] | null>) | null = null;
   tcpReply: string | null = HTTP_OK;
 
+  async sendUdpBroadcast(): Promise<void> {}
+
   async udpRequest(
     ip: string,
     port: number,

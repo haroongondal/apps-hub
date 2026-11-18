@@ -56,6 +56,12 @@ export interface NetLensNativeBinding {
     timeoutMs: number,
   ): Promise<number[] | null>;
   /**
+   * Fire-and-forget Wake-on-LAN datagram. Private IPv4 destinations only
+   * (rejected before any socket opens otherwise); resolves once sent, rejects
+   * on invalid arguments or a send failure.
+   */
+  sendUdpBroadcast(ip: string, port: number, payload: readonly number[]): Promise<void>;
+  /**
    * Connects, writes `request`, reads until EOF or `maxBytes` (returning what
    * it read) and decodes UTF-8. Null on connect failure, or timeout before any
    * byte.
