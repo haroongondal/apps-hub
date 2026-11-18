@@ -21,7 +21,7 @@ export function ExportScreen({ onBack, onDone, onLocked }: Flow) {
       onBack={onBack}
       onLocked={onLocked}
       title="Export all"
-      intro="Saves every login, card, note and pass to a CSV file you choose. The file isn't encrypted: anyone who gets it can read every password in it."
+      intro="Saves every login, card and note to a CSV file you choose. Passes aren't included. The file isn't encrypted: anyone who gets it can read every password in it."
       action="Export"
       wrong={WRONG}
       run={async (pw) => (counts.current = await whileDeriving(() => Vault.exportAll(pw))) !== null}

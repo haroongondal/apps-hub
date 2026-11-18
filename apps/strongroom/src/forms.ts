@@ -53,8 +53,9 @@ export function importConfirm(b: ImportBatch): string {
 }
 
 export function exportedNotice(c: ExportCounts): string {
-  const parts = [plural(c.logins, 'login', 'logins'), plural(c.cards, 'card', 'cards'), plural(c.notes, 'note', 'notes'), plural(c.passes, 'pass', 'passes')];
-  return `Exported ${parts[0]}, ${parts[1]}, ${parts[2]} and ${parts[3]}. Delete the file once you're done with it: it isn't encrypted.`;
+  const parts = [plural(c.logins, 'login', 'logins'), plural(c.cards, 'card', 'cards'), plural(c.notes, 'note', 'notes')];
+  const left = c.passesSkipped > 0 ? ` ${plural(c.passesSkipped, 'pass', 'passes')} ${c.passesSkipped === 1 ? 'was' : 'were'} not exported: the file can't hold passes. ${c.passesSkipped === 1 ? 'It stays' : 'They stay'} in Strongroom.` : '';
+  return `Exported ${parts[0]}, ${parts[1]} and ${parts[2]}.${left} Delete the file once you're done with it: it isn't encrypted.`;
 }
 
 // Same limits as the native Barcode encoder (Barcode.kt), so a bad code is caught on Save and not when the owner needs the pass at a till.
