@@ -54,8 +54,16 @@ at ~85% context). Continue from "Current state + next step".
   (12 tasks: contract package, Inflow core + provider + notifications + screens, Deputy untrusted block and
   RunSuggestionActivity, gates/phone checks). Wallpaper probe moved to stage 3 (needs Halo).
 
+- 2026-11-19 S2: stage 1 execution started with cd-engineering-tools:parallel-agents-coord. Worktree
+  ~/Documents/apps-hub-wt/autopilot-1, branch `autopilot-stage-1` (git refuses `autopilot/stage-1` while branch
+  `autopilot` exists), from origin/main 18937ec4 + merge of `autopilot`. Run ledger (untracked, local):
+  ~/Documents/apps-hub-wt/autopilot-1/.sdd/progress.md with briefs and rulings R1-R11. Done and controller-checked:
+  T1 contract (90f76a27), T2 model (770cb596), T3 AI field (3710fd98), T4 rules (c55b5dc2), T5 store (726ddddb),
+  T9 Deputy (b2cd8172, opus review: 0 Important). T6 running. Spec deviation: the sender name travels in Deputy's
+  untrusted block, not the task text (spec §8.1 to be corrected in T12).
+
 ## Current state + next step
-Design approved; stage 1 plan written, waiting for the owner's review and choice of execution method (use
-cd-engineering-tools:parallel-agents-coord, never superpowers:subagent-driven-development). Execution starts after
-inflow/post-release merges to main, in a new worktree apps-hub-wt/autopilot-1 on branch autopilot/stage-1. Stage 2
-plan (Halo) is written after Halo (incl. stage 5) merges; stage 3 plan after that.
+Stage 1 in progress on `autopilot-stage-1` (nothing pushed; pushing and releases need the owner's go). Remaining:
+T6 (picked chats, R44 exception, fast path) then opus review, T7 provider, T8 actions and notifications, T10 module
+API, T11 screens, T12 gates, docs, phone checks. Resume: read .sdd/progress.md first; tasks with a
+`Task N: complete` line are done. Inflow Kotlin tasks run one at a time (R1).
