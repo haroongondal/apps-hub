@@ -31,13 +31,17 @@ object SuggestionTitle {
   private val DAY = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
   private val CLOCK = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH)
 
-  fun of(kind: SuggestionKind, name: String?, dueAt: Long?, now: Long, zone: ZoneId): String {
+  fun of(kind: SuggestionKind, name: String?, dueAt: Long?, now: Long, zone: ZoneId, moneyIn: Boolean = false): String {
     val who = clean(name)
     return when (kind) {
       SuggestionKind.REPLY -> if (who == null) "Reply in a chat" else "Reply to $who"
       SuggestionKind.BILL -> if (dueAt == null) "Bill due soon" else "Bill due ${DAY.format(local(dueAt, zone))}"
       SuggestionKind.EVENT -> if (dueAt == null) "Meeting soon" else "Meeting ${CLOCK.format(local(dueAt, zone))} ${whenWord(dueAt, now, zone)}"
-      SuggestionKind.MONEY -> if (who == null) "Unusual payment" else "Large debit at $who"
+      SuggestionKind.MONEY -> when {
+        moneyIn -> if (who == null) "Money in from someone new" else "Money in from $who"
+        who == null -> "Unusual payment"
+        else -> "Large debit at $who"
+      }
     }
   }
 

@@ -18,7 +18,7 @@ class MoneySuggestions(
     if (!MoneySurprise.check(t.direction, t.amountMinor, t.currency, t.own, t.counterparty, history, ledger.knownCounterparties(txnId), s.surprise)) return
     suggestions.add(
       Suggestion(
-        id = 0, kind = SuggestionKind.MONEY, title = SuggestionTitle.of(SuggestionKind.MONEY, t.counterparty, null, n, zone), itemId = itemId,
+        id = 0, kind = SuggestionKind.MONEY, title = SuggestionTitle.of(SuggestionKind.MONEY, t.counterparty, null, n, zone, moneyIn = t.direction == Direction.IN), itemId = itemId,
         dueAt = null, dedupeKey = "money:$txnId", state = SuggestionState.WAITING, createdAt = n, updatedAt = n, expiresAt = expiryFor(SuggestionKind.MONEY, n, null),
       ),
     )

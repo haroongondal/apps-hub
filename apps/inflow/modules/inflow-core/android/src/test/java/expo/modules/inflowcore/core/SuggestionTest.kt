@@ -37,6 +37,9 @@ class SuggestionTest {
   @Test fun moneyTitles() {
     assertEquals("Large debit at Alfalah", title(SuggestionKind.MONEY, "Alfalah"))
     assertEquals("Unusual payment", title(SuggestionKind.MONEY, null))
+    assertEquals("Money in from Ali", SuggestionTitle.of(SuggestionKind.MONEY, "Ali", null, now, karachi, moneyIn = true))
+    assertEquals("Money in from someone new", SuggestionTitle.of(SuggestionKind.MONEY, null, null, now, karachi, moneyIn = true))
+    assertEquals("Money in from " + "x".repeat(40), SuggestionTitle.of(SuggestionKind.MONEY, "x".repeat(60), null, now, karachi, moneyIn = true))
   }
 
   @Test fun nameIsCollapsedAndCut() {

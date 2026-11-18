@@ -2,6 +2,7 @@ package expo.modules.inflowcore.core
 
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -46,6 +47,13 @@ class MoneySuggestionsTest {
     ai(2_000_00, Direction.IN, name = "Stranger")
     ai(2_000_00, Direction.IN, name = "stranger", at = now + 1)   // same name, any case: known now
     assertEquals(1, suggestions.rows.size)
+  }
+
+  @Test fun anIncomingPaymentFromANewNameSaysMoneyInNeverDebit() {
+    ai(2_000_00, Direction.IN, name = "Sara Khan")
+    val title = suggestions.rows.values.single().title
+    assertEquals("Money in from Sara Khan", title)
+    assertFalse(title.contains("debit", ignoreCase = true))
   }
 
   @Test fun anOwnTransferIsNeverFlagged() {
