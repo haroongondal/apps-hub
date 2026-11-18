@@ -104,15 +104,22 @@ push or release only when the owner says so.
   repo test + typecheck exit 0, app tests 24/24, lint clean, `:pdf-scan:testDebugUnitTest`
   (59 tests) + `:app:assembleDebug` BUILD SUCCESSFUL, Android bundle OK.
 
+- 2026-11-18 S1 (cont.): also merged `origin/main` (#43 edit/delete menus; conflicts in the
+  Library tab, Scan capture and the session test, resolved keeping both). Gates re-run
+  green. Pushed `nexus`, opened PR #44. Released `pnpm release pdf-editor`: **Nexus 1.4.0,
+  versionCode 18**; manifest re-fetched, all 10 apps intact.
+
 ## Current state + exact next step
 
-N1 and N2 are built in the worktree, uncommitted and unreleased. Not tried on a phone.
+Nexus 1.4.0 (versionCode 18) is on the Store, built from `nexus` at a88538e8. PR #44 is open
+(merge with `[skip ci]` in the subject, owner's go only). Not yet tested on the phone.
 
-Next step: on the owner's go, commit,
-open the PR and release (`pnpm release pdf-editor`, with a version bump), install from the
-Store (never adb) and test on the phone with the coord queue: note → ideas, voice note →
-transcript + seek from a citation, photo → text, PDF → page citations, Ask, no-key offline
-behaviour, kill-and-resume of a running job.
+Next step: phone test through the coord queue (`device:49kjmnuwonkffqzh`), installing from
+the Store only. First check the existing library still opens after the migration (library
+step 2 on real data), then: tabs, note capture without a key ("Waiting for an AI key"),
+voice note record/stop (and with the screen off), photo, PDF page text; with the owner's key
+entered by the owner: transcription, ideas, Ask with citations, seek from a voice
+citation, kill-and-resume.
 
 Known shortcuts: cited PDFs open at page 1 (needs a bridge message, N3); recordings over
 25 MB fail; first ~24k characters per item feed the graph; brute-force vector search;
