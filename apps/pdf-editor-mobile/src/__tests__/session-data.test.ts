@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { fileNameOf, newPage, newSession, restoreSession } from '../scan/session-data.ts';
+import { fileNameOf, newPage, newSession, restoreSession, withoutPage } from '../scan/session-data.ts';
 
 const quad = [0.1, 0.1, 0.9, 0.1, 0.9, 0.9, 0.1, 0.9] as const;
 
@@ -32,4 +32,17 @@ test('an empty saved session stays a session with no pages', () => {
 
 test('fileNameOf takes the last path segment of a file URI', () => {
   assert.equal(fileNameOf('file:///data/user/0/x/files/scan-session/cap-17.jpg'), 'cap-17.jpg');
+});
+
+test('withoutPage drops only the page with that file and keeps the order of the rest', () => {
+  const s = { ...newSession('f', 1), pages: [newPage('cap-1.jpg', null), newPage('cap-2.jpg', null), newPage('cap-3.jpg', null)] };
+  const next = withoutPage(s, 'cap-2.jpg');
+  assert.deepEqual(next.pages.map((p) => p.file), ['cap-1.jpg', 'cap-3.jpg']);
+  assert.equal(next.folderId, 'f');
+  assert.equal(s.pages.length, 3);
+});
+
+test('withoutPage on a file that is not a page changes nothing', () => {
+  const s = { ...newSession(null, 1), pages: [newPage('cap-1.jpg', null)] };
+  assert.equal(withoutPage(s, 'cap-9.jpg'), s);
 });

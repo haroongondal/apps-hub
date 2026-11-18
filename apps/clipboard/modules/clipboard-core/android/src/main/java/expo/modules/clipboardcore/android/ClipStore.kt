@@ -85,13 +85,29 @@ class ClipStore private constructor(context: Context) : SQLiteOpenHelper(context
   @Synchronized
   fun remove(id: Long) {
     val db = writableDatabase
-    val newest = db.rawQuery("SELECT id, text FROM clips ORDER BY at DESC, id DESC LIMIT 1", null).use { c ->
-      if (c.moveToFirst()) c.getLong(0) to c.getString(1) else null
-    }
+    val newest = newest(db)
     db.delete("clips", "id = ?", arrayOf(id.toString()))
     if (newest?.first != id) return
+    forget(newest.second)
+  }
+
+  /** Deletes every clip. The newest is remembered like a single delete, so it isn't saved again on the next open. */
+  @Synchronized
+  fun clearAll() {
+    val db = writableDatabase
+    val newest = newest(db)
+    db.delete("clips", null, null)
+    forget(newest?.second)
+  }
+
+  private fun newest(db: SQLiteDatabase): Pair<Long, String?>? =
+    db.rawQuery("SELECT id, text FROM clips ORDER BY at DESC, id DESC LIMIT 1", null).use { c ->
+      if (c.moveToFirst()) c.getLong(0) to c.getString(1) else null
+    }
+
+  private fun forget(text: String?) {
     lastFingerprint = null
-    newest.second?.let { prefs.edit().putInt(DISMISSED, it.hashCode()).apply() }
+    text?.let { prefs.edit().putInt(DISMISSED, it.hashCode()).apply() }
   }
 
   fun recent(limit: Int): List<Clip> =

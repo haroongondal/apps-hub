@@ -16,6 +16,20 @@ async function readSaved(): Promise<Saved> {
 export const savedJob = async (id: string) => (await readSaved())[id];
 export const forgetJobs = () => FileSystem.deleteAsync(STORE(), { idempotent: true });
 
+// The saved plan of one job, so "Try again" cannot start a job whose row the person removed.
+export async function forgetJob(id: string): Promise<void> {
+  const saved = await readSaved();
+  delete saved[id];
+  await FileSystem.writeAsStringAsync(STORE(), JSON.stringify(saved));
+}
+
+// Drops one row from the Queue. Files the job saved are never deleted.
+export async function removeJob(id: string): Promise<void> {
+  await DesignMedia.removeJob(id);
+  await forgetJob(id);
+  await refreshQueue();
+}
+
 export async function pickFiles(accept: ('video' | 'audio')[], multiple = true): Promise<MediaInfo[]> {
   const res = await DocumentPicker.getDocumentAsync({
     type: accept.map(a => `${a}/*`), copyToCacheDirectory: false, multiple,

@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { Button, Field, Group, Notice, Pill, Row, Text, space } from '@apps-hub/ui';
+import { Button, Field, Group, Notice, Pill, Row, Text, confirmAction, space } from '@apps-hub/ui';
 import InflowCore, { addCapturedListener, type AiStatus, type KnownModelInfo } from 'inflow-core';
 import { capLabel, CAP_ERROR, CAP_REACHED, parseCap, sendResultLabel } from './ai.ts';
 import { whenLabel } from './format.ts';
 import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
+import { removeAiKeyConfirm } from './records.ts';
 
 const PRICES = [
   ['inputPerM', 'Input'],
@@ -155,6 +156,11 @@ function KeyPanel({ status, onChanged }: { status: AiStatus; onChanged: () => vo
       .finally(() => setTesting(null));
   };
 
+  const askRemove = (id: number, ending: string) => {
+    const c = removeAiKeyConfirm(ending);
+    confirmAction({ title: c.title, message: c.message, confirmLabel: c.confirmLabel, onConfirm: () => remove(id) });
+  };
+
   const remove = (id: number) => {
     try {
       InflowCore.removeAiKey(id);
@@ -187,7 +193,7 @@ function KeyPanel({ status, onChanged }: { status: AiStatus; onChanged: () => vo
           trailing={
             <View style={{ flexDirection: 'row', gap: space.sm }}>
               <Button label="Test" variant="secondary" size="sm" onPress={() => test(k.id)} busy={testing === k.id} disabled={testing !== null} />
-              <Button label="Remove" variant="ghost" size="sm" onPress={() => remove(k.id)} />
+              <Button label="Remove" variant="ghost" size="sm" onPress={() => askRemove(k.id, k.ending)} />
             </View>
           }
         >

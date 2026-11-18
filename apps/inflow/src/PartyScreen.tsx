@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, View } from 'react-native';
 import { Button, Empty, Group, Header, Notice, Row, Screen, Text, space, useTheme } from '@apps-hub/ui';
 import InflowCore, { addCapturedListener, type Txn } from 'inflow-core';
-import { LOAD_ERROR } from './messages.ts';
+import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
 import { formatAmount } from './money.ts';
 import { TxnRow } from './MoneyScreen.tsx';
+import { TxnEditSheet } from './TxnEditSheet.tsx';
 import { TxnSheet } from './TxnSheet.tsx';
 
 const PAGE = 50;
@@ -20,6 +21,7 @@ export function PartyScreen({ title, name, own, onBack }: { title: string; name:
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Txn | null>(null);
+  const [editing, setEditing] = useState<Txn | null>(null);
   const busy = useRef(false);
   const count = useRef(0);
 
@@ -52,6 +54,16 @@ export function PartyScreen({ title, name, own, onBack }: { title: string; name:
     const sub = addCapturedListener(() => load(true, null));
     return () => sub.remove();
   }, [load]);
+
+  const remove = (txn: Txn) => {
+    try {
+      InflowCore.deleteTxn(txn.id);
+    } catch {
+      setError(SAVE_ERROR);
+      return;
+    }
+    load(true, null);
+  };
 
   const now = Date.now();
   const last = txns.length > 0 ? txns[txns.length - 1] : null;
@@ -86,14 +98,34 @@ export function PartyScreen({ title, name, own, onBack }: { title: string; name:
         ListHeaderComponent={header}
         renderItem={({ item }) => (
           <Group>
-            <TxnRow txn={item} now={now} onPress={() => setSelected(item)} />
+            <TxnRow txn={item} now={now} onPress={() => setSelected(item)} onEdit={() => setEditing(item)} onDelete={() => remove(item)} />
           </Group>
         )}
         onEndReached={() => more && last !== null && load(false, last)}
         onEndReachedThreshold={0.5}
         ListEmptyComponent={loaded && error === null ? <Empty title="No transactions" body="Transactions with them will appear here." /> : null}
       />
-      <TxnSheet txn={selected} onClose={() => setSelected(null)} onChanged={() => load(true, null)} />
+      <TxnSheet
+        txn={selected}
+        onClose={() => setSelected(null)}
+        onChanged={() => load(true, null)}
+        onEdit={(t) => {
+          setSelected(null);
+          setEditing(t);
+        }}
+        onDeleted={() => {
+          setSelected(null);
+          load(true, null);
+        }}
+      />
+      <TxnEditSheet
+        txn={editing}
+        onClose={() => setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
+          load(true, null);
+        }}
+      />
     </Screen>
   );
 }

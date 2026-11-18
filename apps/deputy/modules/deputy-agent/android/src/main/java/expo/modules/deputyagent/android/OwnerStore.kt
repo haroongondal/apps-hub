@@ -1,6 +1,7 @@
 package expo.modules.deputyagent.android
 
 import android.content.Context
+import expo.modules.deputyagent.core.DefaultTrust
 import expo.modules.deputyagent.core.SavedTask
 import expo.modules.deputyagent.core.Settings
 import expo.modules.deputyagent.core.TrustLevel
@@ -31,7 +32,10 @@ object OwnerStore {
   fun apps(c: Context): List<Map<String, Any>> {
     val t = trust(c)
     return launcherApps(c).filter { it.first != c.packageName }.sortedBy { it.second.lowercase() }.map { (pkg, label) ->
-      mapOf("pkg" to pkg, "label" to label, "trust" to t.level(pkg).name.lowercase(), "financial" to t.financial(pkg))
+      mapOf(
+        "pkg" to pkg, "label" to label, "trust" to t.level(pkg).name.lowercase(), "financial" to t.financial(pkg),
+        "defaultTrust" to DefaultTrust.level(pkg, c.packageName).name.lowercase(),
+      )
     }
   }
 

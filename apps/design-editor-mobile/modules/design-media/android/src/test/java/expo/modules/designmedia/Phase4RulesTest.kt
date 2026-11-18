@@ -68,6 +68,15 @@ class Phase4RulesTest {
   }
 
   @Test
+  fun removingOneJobOnlyDropsItsListRow() {
+    val service = source("MediaJobService.kt")
+    assertTrue(service.contains("ACTION_REMOVE -> record(QueueEvent.Remove(id))"))
+    assertTrue(source("DesignMediaModule.kt").contains("MediaJobService.remove(context, id)"))
+    val removal = source("JobQueue.kt").substringAfter("is QueueEvent.Remove ->").substringBefore("\n")
+    assertFalse(removal.contains("Outputs") || removal.contains("delete"))
+  }
+
+  @Test
   fun pausedAndInterruptedJobsComeBackOnResume() {
     val service = source("MediaJobService.kt")
     assertTrue(service.contains("ACTION_RESUME -> record(QueueEvent.Resume)"))

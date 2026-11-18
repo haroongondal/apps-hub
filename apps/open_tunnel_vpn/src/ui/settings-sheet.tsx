@@ -127,12 +127,7 @@ export function SettingsSheet({
               title={app}
               mono
               trailing={
-                <Button
-                  label="Remove"
-                  variant="danger"
-                  size="sm"
-                  onPress={() => onRemoveDisallowedApp(app)}
-                />
+                <Button label="Remove" variant="danger" size="sm" onPress={() => onRemoveDisallowedApp(app)} />
               }
             />
           ))}
