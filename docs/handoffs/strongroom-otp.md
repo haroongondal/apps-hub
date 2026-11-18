@@ -2,18 +2,23 @@
 
 ## Resume prompt
 
-Dated 2026-11-15, last updated 2026-11-17 (Tasks 1–6 done and E2E-verified).
+Dated 2026-11-15, last updated 2026-11-19 (Tasks 1–7 code-complete and gated;
+Task 7's flow E2E verified on the owner's phone over adb — see the Task 7
+section and its decision note).
 Implements `docs/strongroom/DESIGN.md` §15 per `docs/strongroom/OTP-PLAN.md`. Work happens
 in a worktree off `main` (226a947) on branch `strongroom-otp` — this run used
 `/Users/outsentia/.local/share/opencode/worktree/044235/strongroom-otp`; any
-fresh worktree off the same branch is equivalent. The branch has nine commits:
+fresh worktree off the same branch is equivalent. The branch has twelve commits:
 f2d7684 (DESIGN §15 + OTP plan), fb3a7fd (Task 1, `Otp.kt` + vectors), 7e1a1c0
 (Task 2, the vault field, both languages), 565066c (Task 3, code-field
 detection), eb473da (Task 4, TOTP fill datasets), 72d6bec (Task 5, SMS fill),
 ba36251 (Task 5 fix, an armed delayed fill is a response), 2c202a4 (Task 5
-handoff), 9844f85 (Task 6, the QR scan screen). Tasks 1–5 are done and E2E
-verified (see the Task 5 section); Task 6 is implemented, gated and its
-emulator E2E is verified (see the Task 6 section).
+handoff), 9844f85 (Task 6, the QR scan screen), b6e568b (Task 7 Step 0),
+a106286 (Task 7, the migration reader + module + vault), 935120c (Task 7, the
+RN import flow). Tasks 1–5 are done and E2E verified (see the Task 5 section);
+Task 6 is implemented, gated, emulator E2E verified (see its section); Task 7
+is implemented, gated, and its import flow verified on the phone — the
+on-camera QR part stays JVM-proven (see the Task 7 section).
 No upstream, never push, merge or release without the owner's word.
 
 Read first: `docs/strongroom/OTP-PLAN.md` (the task list — one task at a time,
@@ -21,9 +26,14 @@ committed and reviewed before the next), then `DESIGN.md` §15, then
 `docs/handoffs/strongroom.md` (the app's background: phone facts, emulator,
 Store rules). Bound rules: Kotlin owns all vault and OTP logic, RN renders
 only; JVM tests via `:strongroom-vault:testDebugUnitTest`; `node --test` for
-TS; `coord claim apps/strongroom` before any build-install-test loop; never
-adb-install on the phone — Store releases only, with the owner's word; no
-commit attribution lines; explicit `git add` pathspecs.
+TS; `coord claim apps/strongroom` before any build-install-test loop; on the
+phone (owner's word, 2026-11-18): E2E runs over adb on the owner's phone —
+only ever the side-by-side test build (`-PstrongroomIdSuffix=.synctest`, app
+name "Strongroom test"), never the Store app `com.haroon.strongroom` or its
+data, and coord-queue the device (`device:49kjmnuwonkffqzh`) around any
+install/tap; the emulator is the fallback (owner: "use mobile over adb
+instead of emulator"); no commit attribution lines; explicit `git add`
+pathspecs.
 
 **Task 3 note (resolved):** an earlier version of this handoff warned about a
 then-uncommitted password-generator iteration on `FormDetector.kt` in the main
@@ -142,12 +152,95 @@ checkout. It landed on `main` as 226a947 before this branch was cut, so Tasks
   denied screen with Open settings, and the `FLAG_SECURE` black-screencap
   invariant. The decode→confirm screen is JVM-proved
   (`QrRoundTripTest`); the real-camera proof stays with the owner's phone.
-- **Task 7 next** (§15.5): `otpauth-migration` protobuf reader, batches ≤ 10, dedup,
-  review list, HOTP skipped with a count, one transaction. **Step 0 done**
-  (see below). Emulator ready for it: fresh 9844f85 build installed with
-  vault `scan-qr-vault-pass-1` unlocked state above; CAMERA is currently
-  **denied** on the emulator (left in that state by the denial-path test —
-  grant through the dialog on the next scan).
+- **Task 7 done** (a106286 native + 935120c RN flow): the Google Authenticator
+  `otpauth-migration` import, end to end in Kotlin with the RN flow driving it.
+  - Step 0 (b6e568b) checked a real export first — see the Step 0 bullet
+    below; **its payloads were lost on 2026-11-18** when the session server
+    restart wiped the temp dir (the export dir was under
+    `<temp>/opencode/otp-export/`, nothing was committed). Re-derive from the
+    owner's phone if the real-QR proof is ever needed.
+  - `core/MigrationImport.kt` (new): own protobuf reader (own-code rule) —
+    `parse(uri)` percent-decodes `data`, base64-decodes it, walks the
+    MigrationPayload (`entries` ≤ 10, `version` read and ignored, `batchSize`
+    1..MAX_BATCHES, `batchIndex` in range; type-safe reads — a varint where
+    bytes belong is damaged data, refused cleanly); unknown fields skipped
+    including fixed-size wire types 1/5, bounds-checked; `delimited` length
+    is checked as `len > msg.size - after` (no overflow). `review(batches,
+    existing)` applies §15.1 bounds per entry (secret 10..64 B, algorithm
+    SHA1/SHA256/SHA512, digits 6/8, period 30 — HOTP (type 1) is skipped and
+    counted), dedupes against existing logins by issuer+account (attach
+    target) and against the batch itself, orders batches by index then entry
+    order, and returns `Review(created, attached, duplicates, hotp, bad,
+    items)` where `Item` is `Create(loginName, username, totp, …)` or
+    `Attach(loginId, loginName, totp, …)` — the attach item carries the URI
+    so the commit can write it. Bounds are not re-checked here: `uriOf`
+    builds the URI and `Otp.parse` stays the single validator (§15.1 secret
+    10–64 B, SHA1/SHA256/SHA512, 6/8 digits; a null URI counts bad). Period
+    is always 30 — migration has none. The parse-level sanity caps are
+    looser (`MAX_BATCH_ENTRIES` 100, `MAX_BATCHES` 500, `MAX_SECRET_BYTES`
+    128). `uriOf(params)` builds
+    `otpauth://totp/<label>?secret=…&issuer=…&algorithm=…&digits=…&period=…`
+    percent-encoded; every built URI round-trips through `Otp.parse` (tests
+    prove it). The parsed URI is the single source of truth for issuer and
+    account.
+  - `Vault.putMany(List<Pair<String?, Entry>>)` (new overload): one
+    transaction — null id creates stamped `now`, a set id is an attach-edit
+    stamped `now + 1`, so a same-call attach never joins the import group a
+    later `deleteImport` removes. The old `List<Entry>` overload got
+    `@JvmName("putManyEntries")` (JVM erasure clash). `imports(known)`
+    semantics confirmed by test: a stamp counts when shared by >1 entry OR
+    when the caller passes it in `known` — the module passes the import log's
+    stamps, which keeps single-create imports visible (the log's stamps are
+    written by `commitAuthenticatorImport`).
+  - `ScanActivity`: `SCAN_MODE` extra with `MODE_TOTP` / `MODE_MIGRATION`;
+    the migration branch shows the multi-QR heading ("Point the camera at
+    each QR of the Authenticator export, one after another."), confirms each
+    batch with "Batch scanned." → "Next QR", and refuses a foreign QR with
+    "This QR is not an Authenticator export code." Cancel keeps batches
+    scanned so far.
+  - Module: `AsyncFunction("scanAuthenticatorBatch")` scans one batch,
+    decodes on IO, accumulates raw URIs by `batchIndex` in
+    `VaultHolder.pendingMigration` (a re-scanned index replaces its batch;
+    `pendingMigrationSize` must match — a `MIGRATION_STATE` coded error
+    otherwise; failed scans never mutate state), and returns
+    `AuthenticatorProgress {scanned, total, entries, hotp}` — null on
+    cancel. `authenticatorReview()` runs the review (`MIGRATION_INCOMPLETE`
+    coded error until every batch is scanned), stores
+    `pendingMigrationReview`, and exposes kind/login/issuer/account only —
+    the raw URIs never leave Kotlin. `commitAuthenticatorImport()` seals one
+    transaction (`NO_MIGRATION` / `MIGRATION_EMPTY` coded errors), writes the
+    import log counting **created only** under the name "Google Authenticator",
+    and clears all pending state. `cancelAuthenticatorImport()` drops it.
+    `VaultHolder` pending fields clear on lock, as `pendingScan` does.
+  - TS surface: `AuthenticatorProgress`, `AuthenticatorReview`/`Item`
+    (`kind: 'create' | 'attach'`, never the URI), `AuthenticatorCommit`;
+    `scanAuthenticatorBatch(): Promise<Progress | null>`,
+    `authenticatorReview(): Promise<Review>`,
+    `commitAuthenticatorImport(): Promise<Commit>`,
+    `cancelAuthenticatorImport(): void`.
+  - RN: `src/AuthenticatorImportScreen.tsx` (How steps, "Scan the first QR" →
+    "Scan QR N of M", progress + skipped rows, review list with attach rows
+    ("Adds the code for …") and create rows, "Left out" counts
+    (duplicates/HOTP/bad), Import button, done Notice warning that anyone
+    who scans the export QRs gets every code, restart paths — entering fresh
+    cancels an abandoned run, a `MIGRATION_STATE` error auto-restarts with
+    the Notice shown, Cancel from the scan screen keeps scanned batches,
+    Back mid-flow restarts); `SettingsScreen` row "Import from Google
+    Authenticator" + flow `'authenticator'`; `App.tsx` route.
+  - Tests: `MigrationImportTest` 25 (format shape from Step 0, unknown and
+    fixed-size field skips, truncated fixed64/varint-where-bytes refusals,
+    `uriOf` round-trips incl. non-Latin issuer, review: HOTP skip count,
+    out-of-range entries counted not crashed, dedup, attach rules — second
+    code for the same login, attach when the login already has a code,
+    attach target vanished between review and commit — batch ordering,
+    issuer-less naming); `VaultTest.putManyPairsKeepAttachEditsOutOfTheImport`
+    (one store write; the attach-edit keeps its +1 stamp out of the import
+    group; `imports(known)` shows the create; `deleteImport` removes only
+    the create); `ModuleErrorsTest` pins `emptyList<Entry>()` (overload
+    ambiguity).
+  - Gates at commit: Gradle module suite **462 tests / 0 failures / 1
+    skipped**; workspace `pnpm -r --workspace-concurrency=1 test`
+    (112 + 95 + 149 + 33, 0 fail) and `typecheck` exit 0.
 - **Task 7 Step 0 — real export checked** (2026-11-17, owner's Authenticator,
   two batch QRs photographed, decoded on the host with a throwaway macOS
   Vision script; payloads kept only in the session temp dir, never
@@ -155,6 +248,8 @@ checkout. It landed on `main` as 226a947 before this branch was cut, so Tasks
   - Two batches — `batch_size = 2`, indices 0 and 1; 15 accounts total
     (index 0 carried 10 entries, index 1 carried 5, so the last batch may
     be short). "N of M scanned" = `batch_index + 1` of `batch_size`.
+    (The payloads lived only in the session temp dir and were wiped by the
+    2026-11-18 server restart — see the Task 7 done bullet.)
   - **Top-level `version` is 2** in the wild (older docs say 1) — the
     reader must not enforce a version, just read and ignore.
   - Every entry is TOTP / SHA1 / 6 digits (type 2, algorithm 1, digits 1);
@@ -300,6 +395,67 @@ Verified flows:
    `Otp.parse`, including a foreign QR's refusal) and stay for the owner's
    phone as the real-camera proof.
 
+## Task 7 flow E2E (2026-11-18 to 19 — on the phone)
+
+The owner's word this run: **"use mobile over adb instead of emulator"** —
+the flow E2E runs on the owner's phone (Xiaomi 24116RACCG, Android 16)
+over adb, with the coord queue guarding the device. The emulator part of
+the run, for the record:
+
+- The session server restart killed the emulator and Metro mid-setup; on
+  relaunch the previously created vault (`scan-qr-vault-pass-1`) was
+  **rejected twice** — userdata apparently rolled back to an older vault
+  state around the emulator's crash. The vault was empty test data, so the
+  clean reset was `pm clear` (app stopped), `RECEIVE_SMS` re-granted,
+  autofill service re-set, fresh setup begun with `otp-import-pass-1`.
+- During setup's Continue, the app **ANRed** ("Strongroom isn't responding")
+  under heavy host load (system_server/systemui GCs taking seconds in
+  logcat); "Wait" didn't clear it and the system killed the process
+  (signal 9). Rather than fight a starved emulator, the E2E moved to the
+  phone.
+- Build recipe proven for the phone: `-PstrongroomIdSuffix=.synctest
+  -PstrongroomScreenshots=true` — the second property flips
+  `BuildConfig.ALLOW_SCREENSHOTS`, so `MainActivity` skips `FLAG_SECURE`
+  and every screen except `ScanActivity` (secure unconditionally, the QR
+  in view is a secret) can be captured. `:app:assembleDebug` in 3 m 11 s,
+  app name "Strongroom test", id `com.haroon.strongroom.synctest`,
+  installs beside the Store app without touching the owner's vault.
+
+Phone run results (2026-11-19, USB serial `49kjmnuwonkffqzh`; the device
+queue had to be re-entered after a server restart — apps-hub-46 lent it,
+then 66/63/1f took turns; released to apps-hub-1f at the end):
+
+- **Vault state surprise:** the test app's vault was no longer the empty
+  vault set up on 2026-11-18 — it held what looks like real account data
+  (Amazon Web Services ×2, Binance, carta, Deel, GitHub, Google; e.g.
+  `haroonmukhtar4@gmail.com`). Presumably pulled in by another session's
+  testing or sync; it was treated as read-only. The 2026-11-18 password
+  `otp-import-pass-1` still unlocked it (5-minute auto-lock had fired:
+  unlock screen, field native ≈ (540,558), Unlock ≈ (540,768)).
+- **Flow verified live:** Settings → "Import from Google Authenticator"
+  row → flow screen (How steps, "Scan the first QR") → Scan with CAMERA
+  already granted (no dialog; the intent from the 2026-11-18 dialog grant
+  persisted, `granted=true, USER_SET`) → `ScanActivity` focused →
+  screencap **black** (FLAG_SECURE holds on the phone, 27 KB) → Cancel →
+  MainActivity, flow re-rendered "Scan the first QR" (cancel with no
+  batches keeps the start state) → flow Back → Settings.
+- **Cancel tap point:** native ≈ (540,2232) hits the button; (540,2160),
+  which worked on 2026-11-18, lands above it on this panel — measure from
+  a fresh capture or prefer `keyevent 4` (no back override, BACK finishes
+  like Cancel).
+- **Not verified on device:** the migration heading ("Point the camera at
+  each QR…"), batch confirmations ("Batch scanned." → "Next QR") and the
+  foreign-QR refusal — `ScanActivity` is FLAG_SECURE by design, so its
+  pixels can never be captured, and no export QR can be fed the real
+  camera (the Step 0 payloads were lost; only the owner's Authenticator
+  can regenerate them). This part stays proven by `MigrationImportTest`
+  + `ModuleErrorsTest` + code review; re-derive a real export if the
+  end-to-end QR proof is ever wanted.
+- Wrap-up after the run: the app returned to the launcher, the
+  screenshots were deleted, the device was released (`coord release`).
+  The test app stays installed beside the Store app; its vault keeps the
+  data found above.
+
 ## Gotchas learned the hard way
 
 - **`pm grant`/`pm revoke` on a running app kills its process.** Bit once
@@ -352,6 +508,46 @@ Verified flows:
   the reverse of some TS runners.
 - TTL expiry is strict `>` (`now - cachedAt > TTL_MS`), so a code is usable
   for exactly the full two minutes.
+- **Kotlin forbids local functions inside `inline fun`s** — `walk()` started
+  inline and the compiler refused its `varint`/`delimited` helpers; made it
+  non-inline (payloads are ~1 KB, zero cost).
+- JVM `String` has `.length`, not `.size` — `StringBuilder(text.size)` is
+  an unresolved reference the K2 compiler only reports at the use site.
+- **K2 smart-cast does not survive a nested lambda** inside a `when` branch
+  on a sealed type: `(x as? T)?.takeIf { it.f == null }?.let { it.f }`
+  loses the smart cast. Restructure with a plain `val` in the branch
+  (`val stored = all[id] as? Login; if (stored != null && stored.f == null)`).
+- **JVM erasure clash on overloads**: `putMany(List<Entry>)` and
+  `putMany(List<Pair<…>>)` are both `putMany(Ljava/util/List;)J` —
+  disambiguate with `@JvmName("putManyEntries")` on one (Kotlin call sites
+  unaffected), then pin any `emptyList()` call that becomes ambiguous
+  (`emptyList<Entry>()`).
+- `imports(known)` counts a stamp when **shared by >1 entry OR present in
+  `known`** — after a batch import whose attach-edits restamp most entries,
+  the lone create is only visible because the module passes the import
+  log's stamps as `known`. Tests pin both halves.
+- Protobuf reading hardening that mattered: fixed-size wire types 1/5 must
+  bounds-check `afterKey + 8/4 > msg.size` (a truncated tail otherwise
+  reads garbage or dies with IOOBE); length checks compare
+  `len > msg.size - after` (no overflow, unlike `after + len > size`);
+  a varint on a known bytes-field must refuse via `as? ByteArray ?: throw`
+  (a raw `as` ClassCastExceptions out of `review`).
+- **The session server restart wipes the session temp dir** — the Task 7
+  Step 0 payloads (`<temp>/opencode/otp-export/`) are gone; nothing secret
+  was ever committed, and the real export can only be re-derived by the
+  owner's phone.
+- **An overloaded host ANRs the emulator app and can corrupt its state**:
+  under host GC thrash the Setup Continue hung, "Wait" didn't clear, and
+  the system killed the process; afterwards the previously created vault
+  password stopped working (userdata rollback suspected). `pm clear` (app
+  stopped) + fresh setup is the reset.
+- **coord from an OpenCode session**: coord's queue tidy() drops entries
+  whose SID has no live `~/.claude/sessions/<sid>.json` — any other
+  session's coord call deletes your queue slot mid-run. Fix: keep a
+  long-lived keeper process (e.g. a background `sleep`), write
+  `~/.claude/sessions/<pid>.json`
+  (`{"pid":…,"sessionId":"opencode-…","name":"…"}`), and export
+  `COORD_SID=<that sessionId>` for every coord call.
 
 ## Test commands
 
