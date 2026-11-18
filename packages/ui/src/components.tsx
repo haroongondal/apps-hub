@@ -127,9 +127,11 @@ export interface ButtonProps {
    * the background follows the variant). */
   tone?: Tone;
   accessibilityHint?: string;
+  /** Spoken name when it must differ from the visible label. */
+  accessibilityLabel?: string;
 }
 
-export function Button({ label, onPress, variant = 'primary', size = 'md', busy, disabled, block, tone, accessibilityHint }: ButtonProps) {
+export function Button({ label, onPress, variant = 'primary', size = 'md', busy, disabled, block, tone, accessibilityHint, accessibilityLabel }: ButtonProps) {
   const { c } = useTheme();
   const off = disabled || busy;
   const palettes: Record<ButtonVariant, { bg: string; fg: string; border: string }> = {
@@ -154,7 +156,7 @@ export function Button({ label, onPress, variant = 'primary', size = 'md', busy,
       onPress={onPress}
       disabled={off}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: !!off, busy: !!busy }}
       hitSlop={(touch - height) / 2}

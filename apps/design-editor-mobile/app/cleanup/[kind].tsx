@@ -230,7 +230,7 @@ function Review({ kind }: { kind: CleanupKind }) {
           <Notice
             key={i}
             tone={m.tone}
-            action={m.undo ? <Button label="Undo" variant="secondary" size="sm" busy={busy} onPress={m.undo} /> : undefined}
+            action={m.undo ? <Button label="Undo" accessibilityLabel={m === undo ? 'Undo delete' : 'Undo hide'} variant="secondary" size="sm" busy={busy} onPress={m.undo} /> : undefined}
           >
             {m.text}
           </Notice>
