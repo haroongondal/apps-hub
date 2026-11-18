@@ -1,4 +1,4 @@
-import type { ExportCounts, ImportBatch, Row } from 'strongroom-vault';
+import type { ExportCounts, ImportBatch, PassFormat, Row } from 'strongroom-vault';
 import { COMMON_PASSWORDS } from './common-passwords.ts';
 
 const TOO_SHORT = 'Use at least 12 characters.';
@@ -56,3 +56,15 @@ export function exportedNotice(c: ExportCounts): string {
   const parts = [plural(c.logins, 'login', 'logins'), plural(c.cards, 'card', 'cards'), plural(c.notes, 'note', 'notes')];
   return `Exported ${parts[0]}, ${parts[1]} and ${parts[2]}. Delete the file once you're done with it: it isn't encrypted.`;
 }
+
+// Mirrors the native barcode encoders, so a bad code is caught on Save and not when the owner needs the pass at a till.
+export function validatePass(name: string, code: string, format: PassFormat): string | null {
+  if (!name.trim()) return 'Give this pass a name.';
+  const c = code.trim();
+  if (!c) return 'Enter the code printed under or inside the barcode.';
+  if (format === 'ean13' && !/^\d{12,13}$/.test(c)) return 'An EAN-13 code is 12 or 13 digits, with no spaces or letters.';
+  if (format === 'code128' && !/^[\x20-\x7e]+$/.test(c)) return 'A Code 128 code can only use letters, digits, spaces and the symbols on a standard keyboard.';
+  return null;
+}
+
+export const secondsLeft = (until: number, now: number): number => Math.max(0, Math.ceil((until - now) / 1000));

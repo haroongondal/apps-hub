@@ -3,13 +3,15 @@ import { AppState, View } from 'react-native';
 import { Button, Group, Header, Notice, Row, Screen, Sheet, Text, space } from '@apps-hub/ui';
 import Vault, { type EntryView } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
+import { PassView } from './PassView.tsx';
 import { BackButton, HIDE_FROM_ACCESSIBILITY } from './parts.tsx';
 
-type Secret = 'password' | 'number' | 'cvc';
-type Copyable = Secret | 'username';
+type Secret = 'password' | 'number' | 'cvc' | 'code';
+// A pass code is shown, never copied: the barcode is how it's used.
+type Copyable = Exclude<Secret, 'code'> | 'username';
 
 const MASK = '••••••••••••';
-const LABEL: Record<Copyable, string> = { username: 'Username', password: 'Password', number: 'Card number', cvc: 'Security code' };
+const LABEL: Record<Copyable | 'code', string> = { username: 'Username', password: 'Password', number: 'Card number', cvc: 'Security code', code: 'Code' };
 
 interface Props {
   id: string;
@@ -87,7 +89,7 @@ export function EntryScreen({ id, onBack, onEdit, onLocked }: Props) {
           ) : (
             <Button label="Hide" size="sm" variant="ghost" onPress={() => setRevealed((r) => ({ ...r, [field]: undefined }))} />
           )}
-          <Button label="Copy" size="sm" variant="ghost" onPress={() => copy(field)} />
+          {field !== 'code' && <Button label="Copy" size="sm" variant="ghost" onPress={() => copy(field)} />}
         </View>
       }
     />
@@ -110,6 +112,8 @@ export function EntryScreen({ id, onBack, onEdit, onLocked }: Props) {
     );
   } else if (entry?.type === 'note') {
     fields.push(<Row key="text" title="Note" subtitle={value(entry.text ?? '')} />);
+  } else if (entry?.type === 'pass') {
+    fields.push(<Row key="format" title="Format" subtitle={value(entry.format === 'code128' ? 'Code 128' : entry.format === 'ean13' ? 'EAN-13' : 'QR')} />, secretRow('code'));
   }
   if (entry && entry.type !== 'note' && entry.note) fields.push(<Row key="note" title="Note" subtitle={value(entry.note)} />);
 
@@ -120,6 +124,7 @@ export function EntryScreen({ id, onBack, onEdit, onLocked }: Props) {
       {message && <Notice tone={message.tone}>{message.text}</Notice>}
       {entry && (
         <>
+          {entry.type === 'pass' && <PassView id={id} onLocked={onLocked} />}
           <Group>{fields}</Group>
           <Button label="Edit" variant="secondary" onPress={onEdit} block />
           <Button label="Delete" variant="danger" onPress={() => setDeleting(true)} block />
