@@ -50,6 +50,16 @@ export function parseHttpUrl(url: string, base?: HttpTarget): HttpTarget | null 
   return { ip: m[1], port, path: m[3] ?? '/' };
 }
 
+/** UTF-8 byte length without TextEncoder (Hermes lacks it). A lone surrogate counts as U+FFFD, 3 bytes. */
+export function utf8Length(s: string): number {
+  let n = 0;
+  for (const ch of s) {
+    const cp = ch.codePointAt(0) ?? 0xfffd;
+    n += cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+  }
+  return n;
+}
+
 export async function httpRequest(
   binding: Pick<NetLensNativeBinding, 'tcpFetch'>,
   iface: InterfaceInfo,
@@ -73,7 +83,7 @@ export async function httpRequest(
     head += `${name}: ${value}\r\n`;
   }
   const body = init.body;
-  if (body !== undefined) head += `Content-Length: ${new TextEncoder().encode(body).length}\r\n`;
+  if (body !== undefined) head += `Content-Length: ${utf8Length(body)}\r\n`;
   try {
     const raw = await binding.tcpFetch(ip, port, `${head}\r\n${body ?? ''}`, init.timeoutMs ?? 1500, init.maxBytes ?? 65536);
     return raw === null ? null : parseHttpResponse(raw);

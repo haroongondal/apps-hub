@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { httpRequest, isLanTarget, parseHttpUrl, parseJsonObject } from '../lan-http.ts';
+import { httpRequest, isLanTarget, parseHttpUrl, parseJsonObject, utf8Length } from '../lan-http.ts';
 import type { HttpTarget } from '../lan-http.ts';
 import type { InterfaceInfo } from '../model.ts';
 
@@ -158,4 +158,14 @@ test('httpRequest returns null on no reply, an unparseable reply, or a throwing 
 test('parseJsonObject accepts only plain objects', () => {
   assert.deepEqual(parseJsonObject('{"a":1}'), { a: 1 });
   for (const s of ['[1]', 'nope', 'null', '1', '"x"', '', 'true']) assert.equal(parseJsonObject(s), null, s);
+});
+
+test('utf8Length counts bytes, with a lone surrogate as U+FFFD', () => {
+  assert.equal(utf8Length(''), 0);
+  assert.equal(utf8Length('abc'), 3);
+  assert.equal(utf8Length('é'), 2);
+  assert.equal(utf8Length('€'), 3);
+  assert.equal(utf8Length('😀'), 4);
+  assert.equal(utf8Length('\ud800'), 3);
+  assert.equal(utf8Length('a\udc00b'), 5);
 });
