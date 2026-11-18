@@ -28,7 +28,6 @@ const WIDGET_NAMES: Record<WidgetId, string> = {
   timer: 'Timer and stopwatch',
   media: 'Now playing',
 };
-const READY: WidgetId[] = ['clock', 'battery', 'timer', 'media'];
 
 export function SettingsScreen({ value, onChange }: { value: NotchSettings; onChange: (next: NotchSettings) => void }) {
   const { c } = useTheme();
@@ -142,7 +141,6 @@ export function SettingsScreen({ value, onChange }: { value: NotchSettings; onCh
       <Group title="Widgets" footer="Widgets show in the order listed, top to bottom.">
         {order.map((w) => {
           const on = shown.includes(w);
-          const ready = READY.includes(w);
           const position = shown.indexOf(w);
           return (
             <Row
@@ -150,17 +148,15 @@ export function SettingsScreen({ value, onChange }: { value: NotchSettings; onCh
               title={WIDGET_NAMES[w]}
               subtitle={on ? 'Shown' : 'Hidden'}
               trailing={
-                ready ? (
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {on && (
-                      <>
-                        <Button label="Up" variant="secondary" size="sm" disabled={position <= 0} onPress={() => shift(w, -1)} accessibilityHint={`Move ${WIDGET_NAMES[w]} up`} />
-                        <Button label="Down" variant="secondary" size="sm" disabled={position >= shown.length - 1} onPress={() => shift(w, 1)} accessibilityHint={`Move ${WIDGET_NAMES[w]} down`} />
-                      </>
-                    )}
-                    <Button label={on ? 'Hide' : 'Show'} variant={on ? 'secondary' : 'primary'} size="sm" onPress={() => toggle(w)} />
-                  </View>
-                ) : undefined
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {on && (
+                    <>
+                      <Button label="Up" variant="secondary" size="sm" disabled={position <= 0} onPress={() => shift(w, -1)} accessibilityHint={`Move ${WIDGET_NAMES[w]} up`} />
+                      <Button label="Down" variant="secondary" size="sm" disabled={position >= shown.length - 1} onPress={() => shift(w, 1)} accessibilityHint={`Move ${WIDGET_NAMES[w]} down`} />
+                    </>
+                  )}
+                  <Button label={on ? 'Hide' : 'Show'} variant={on ? 'secondary' : 'primary'} size="sm" onPress={() => toggle(w)} />
+                </View>
               }
             />
           );

@@ -80,7 +80,7 @@ test('ears: clock left, battery right, date line only with the clock', () => {
 });
 
 test('rowsFor follows widget order and skips clock and battery', () => {
-  assert.deepEqual(rowsFor(['timer', 'clock', 'media', 'battery']), ['timer', 'media']);
+  assert.deepEqual(rowsFor(['media', 'clock', 'timer', 'battery']), ['media', 'timer']);
   assert.deepEqual(rowsFor(['clock', 'battery']), []);
 });
 
