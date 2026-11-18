@@ -5,6 +5,7 @@ import {
   buildPtrQuery,
   extractDeviceDescription,
   parseHttpResponse,
+  parseNetbiosMac,
   parseNetbiosStatus,
   parsePtrAnswer,
   ssdpDescriptionRequest,
@@ -56,6 +57,20 @@ async function udpName(
   return sanitizeName(reply && parse(reply, id));
 }
 
+// One NBSTAT reply carries both the machine name and its MAC.
+async function netbiosLookup(
+  binding: NameBinding,
+  ip: string,
+  timeoutMs: number,
+): Promise<Pick<DeviceNames, 'netbiosName' | 'mac'>> {
+  const id = queryId();
+  const reply = await binding.udpRequest(ip, 137, buildNetbiosStatusRequest(id), timeoutMs);
+  return {
+    netbiosName: sanitizeName(reply && parseNetbiosStatus(reply, id)),
+    mac: reply && parseNetbiosMac(reply, id),
+  };
+}
+
 async function describe(
   binding: NameBinding,
   target: NameTarget,
@@ -86,7 +101,7 @@ async function lookupNames(
   gatewayIp: string | null,
   timeoutMs: number,
 ): Promise<DeviceNames> {
-  const [hostname, netbiosName, description] = await Promise.all([
+  const [hostname, netbios, description] = await Promise.all([
     gatewayIp
       ? attempt(
           () =>
@@ -94,15 +109,13 @@ async function lookupNames(
           timeoutMs,
         )
       : null,
-    attempt(
-      () => udpName(binding, target.ip, 137, buildNetbiosStatusRequest, parseNetbiosStatus, timeoutMs),
-      timeoutMs,
-    ),
+    attempt(() => netbiosLookup(binding, target.ip, timeoutMs), timeoutMs),
     attempt(() => describe(binding, target, timeoutMs), timeoutMs),
   ]);
   return {
     hostname,
-    netbiosName,
+    netbiosName: netbios?.netbiosName ?? null,
+    mac: netbios?.mac ?? null,
     mdnsName: target.mdnsName === null ? null : cleanMdnsInstanceName(target.mdnsName),
     friendlyName: description?.friendlyName ?? null,
     model: description?.model ?? null,
