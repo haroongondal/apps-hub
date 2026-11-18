@@ -16,3 +16,4 @@ export * from './name-formats.ts';
 export * from './name-resolver.ts';
 export * from './port-check.ts';
 export * from './lan-http.ts';
+export * from './upnp-soap.ts';
