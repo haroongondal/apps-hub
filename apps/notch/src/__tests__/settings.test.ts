@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { DEFAULTS, SWATCHES, foldLabel, moveWidget, normalize } from '../settings.ts';
+
+test('missing or non-object input gives the defaults', () => {
+  assert.deepEqual(normalize(undefined), DEFAULTS);
+  assert.deepEqual(normalize('nope'), DEFAULTS);
+});
+
+test('an unknown value falls back for that field only', () => {
+  const s = normalize({ accent: 'neon', size: 'large' });
+  assert.equal(s.accent, DEFAULTS.accent);
+  assert.equal(s.size, 'large');
+});
+
+test('a fold time outside the allowed set falls back to the default', () => {
+  assert.equal(normalize({ foldMs: 7000 }).foldMs, 5000);
+  assert.equal(normalize({ foldMs: 0 }).foldMs, 0);
+});
+
+test('unknown and repeated widgets are dropped, order kept', () => {
+  assert.deepEqual(normalize({ widgets: ['battery', 'nope', 'battery', 'clock'] }).widgets, ['battery', 'clock']);
+});
+
+test('an empty widget list is kept', () => {
+  assert.deepEqual(normalize({ widgets: [] }).widgets, []);
+});
+
+test('moveWidget places an item and clamps to the list', () => {
+  assert.deepEqual(moveWidget(['clock', 'battery', 'timer'], 'timer', 0), ['timer', 'clock', 'battery']);
+  assert.deepEqual(moveWidget(['clock', 'battery'], 'clock', 99), ['battery', 'clock']);
+});
+
+test('every swatch is a #RRGGBB colour', () => {
+  for (const hex of Object.values(SWATCHES)) assert.match(hex, /^#[0-9A-F]{6}$/i);
+});
+
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrast(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+test('every swatch reaches WCAG AA on the black and graphite pills', () => {
+  for (const hex of Object.values(SWATCHES)) {
+    assert.ok(contrast(hex, '#000000') >= 4.5, `${hex} on black`);
+    assert.ok(contrast(hex, '#1C1C1E') >= 4.5, `${hex} on graphite`);
+  }
+});
+
+test('fold labels read in plain words', () => {
+  assert.equal(foldLabel(0), 'Never');
+  assert.equal(foldLabel(3000), '3 seconds');
+});
