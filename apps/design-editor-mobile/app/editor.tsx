@@ -290,7 +290,7 @@ function realVisionHost(webRef: RefObject<WebView | null>): VisionHost {
       return info.size;
     },
     remove: uri => FileSystem.deleteAsync(uri, { idempotent: true }),
-    getTool: (tool, onProgress) => getSearchTool(realVisionToolDeps(tool), onProgress),
+    getTool: (tool, onProgress, signal) => getSearchTool(realVisionToolDeps(tool), onProgress, signal),
     tools: () => DesignMedia.visionTools(),
     runVision: (id, op, path, option) => DesignMedia.runVision(id, op, path, option),
     cancelVision: id => DesignMedia.cancelVision(id),
