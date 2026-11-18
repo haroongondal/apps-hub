@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, View } from 'react-native';
-import { Button, Empty, Group, Header, Notice, Pill, Row, Screen, Segmented, Text, space, useTheme } from '@apps-hub/ui';
+import { Button, Empty, Group, Header, Notice, Pill, RecordMenu, Row, Screen, Segmented, Text, space, useTheme } from '@apps-hub/ui';
 import InflowCore, { addCapturedListener, type MoneySummary, type PartyTotal, type ReportRow, type Status, type Txn } from 'inflow-core';
 import { Bar } from './Bar.tsx';
 import { whenLabel } from './format.ts';
 import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
 import { formatAmount, monthLabel, monthOverview, monthRange, partySubtitle, partyTitle, shiftMonth, signedAmount, withinMonth } from './money.ts';
+import { deleteTxnConfirm, txnName } from './records.ts';
 import { reportTitle } from './report.ts';
+import { TxnEditSheet } from './TxnEditSheet.tsx';
 import { TxnSheet } from './TxnSheet.tsx';
 
 const PAGE = 50;
@@ -19,11 +21,13 @@ const VIEWS = [
 type MoneyView = (typeof VIEWS)[number]['key'];
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-export function TxnRow({ txn, now, onPress }: { txn: Txn; now: number; onPress: () => void }) {
+export function TxnRow({ txn, now, onPress, onEdit, onDelete }: { txn: Txn; now: number; onPress: () => void; onEdit: () => void; onDelete: () => void }) {
+  const name = txnName(txn);
+  const confirm = deleteTxnConfirm();
   return (
     <Row
       onPress={onPress}
-      title={txn.label ?? txn.counterparty ?? (txn.direction === 'in' ? 'Money in' : 'Money out')}
+      title={name}
       subtitle={
         <View style={{ gap: 2 }}>
           <Text variant="caption" tone="muted">{`${txn.account} · ${whenLabel(txn.at, now)}`}</Text>
@@ -32,9 +36,18 @@ export function TxnRow({ txn, now, onPress }: { txn: Txn; now: number; onPress: 
         </View>
       }
       trailing={
-        <Text variant="data" tone={txn.own ? 'muted' : txn.direction === 'in' ? 'ok' : 'text'}>
-          {signedAmount(txn)}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+          <Text variant="data" tone={txn.own ? 'muted' : txn.direction === 'in' ? 'ok' : 'text'}>
+            {signedAmount(txn)}
+          </Text>
+          <RecordMenu
+            title={name}
+            actions={[
+              { label: 'Edit name', onPress: onEdit },
+              { label: 'Delete', onPress: onDelete, destructive: true, confirmTitle: confirm.title, confirmMessage: confirm.message, confirmLabel: confirm.confirmLabel },
+            ]}
+          />
+        </View>
       }
     />
   );
@@ -115,6 +128,7 @@ export function MoneyScreen({ status, onOpenParty, onOpenReport }: { status: Sta
   const [selected, setSelected] = useState<Txn | null>(null);
   const [view, setView] = useState<MoneyView>('overview');
   const [allParties, setAllParties] = useState(false);
+  const [editing, setEditing] = useState<Txn | null>(null);
   const busy = useRef(false);
   const raw = useRef(0);
   const range = useMemo(() => monthRange(ym.year, ym.month), [ym]);
@@ -153,6 +167,16 @@ export function MoneyScreen({ status, onOpenParty, onOpenReport }: { status: Sta
     const sub = addCapturedListener(() => load(true, null));
     return () => sub.remove();
   }, [load]);
+
+  const remove = (txn: Txn) => {
+    try {
+      InflowCore.deleteTxn(txn.id);
+    } catch {
+      setError(SAVE_ERROR);
+      return;
+    }
+    load(true, null);
+  };
 
   const now = Date.now();
   const last = txns.length > 0 ? txns[txns.length - 1] : null;
@@ -241,14 +265,34 @@ export function MoneyScreen({ status, onOpenParty, onOpenReport }: { status: Sta
         ListHeaderComponent={header}
         renderItem={({ item }) => (
           <Group>
-            <TxnRow txn={item} now={now} onPress={() => setSelected(item)} />
+            <TxnRow txn={item} now={now} onPress={() => setSelected(item)} onEdit={() => setEditing(item)} onDelete={() => remove(item)} />
           </Group>
         )}
         onEndReached={() => more && last !== null && load(false, last)}
         onEndReachedThreshold={0.5}
         ListEmptyComponent={view === 'all' && loaded && error === null && summary !== null && summary.accounts.length > 0 ? <Empty title="No transactions" body="Transactions for this month will appear here." /> : null}
       />
-      <TxnSheet txn={selected} onClose={() => setSelected(null)} onChanged={() => load(true, null)} />
+      <TxnSheet
+        txn={selected}
+        onClose={() => setSelected(null)}
+        onChanged={() => load(true, null)}
+        onEdit={(t) => {
+          setSelected(null);
+          setEditing(t);
+        }}
+        onDeleted={() => {
+          setSelected(null);
+          load(true, null);
+        }}
+      />
+      <TxnEditSheet
+        txn={editing}
+        onClose={() => setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
+          load(true, null);
+        }}
+      />
     </Screen>
   );
 }

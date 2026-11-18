@@ -1,4 +1,4 @@
-import { Button, Notice, Pill, Segmented, Text, radius, space, useTheme } from '@apps-hub/ui';
+import { Button, Notice, Pill, Segmented, Text, confirmAction, radius, space, useTheme } from '@apps-hub/ui';
 import { useIsFocused } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { File } from 'expo-file-system';
@@ -6,13 +6,13 @@ import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { PdfScan, ScanCameraView, type CameraErrorEvent, type CaptureEvent, type QuadEvent, type ScanCameraViewRef, type ScanHint } from 'pdf-scan';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, AppState, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, AppState, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IconButton } from '../../src/library/icon-button';
 import { canSwitchMode, nextSide, sortCardPages } from '../../src/scan/capture-rules';
-import { discardSession, loadSession, openSession, saveSession, sessionDir } from '../../src/scan/session';
-import { fileNameOf, newPage, type ScanMode, type ScanSession } from '../../src/scan/session-data';
+import { deleteCapture, discardSession, loadSession, openSession, saveSession, sessionDir } from '../../src/scan/session';
+import { fileNameOf, newPage, withoutPage, type ScanMode, type ScanSession, type SessionPage } from '../../src/scan/session-data';
 
 type Access = 'checking' | 'granted' | 'ask' | 'blocked';
 
@@ -38,13 +38,10 @@ export default function CaptureScreen() {
   const camera = useRef<ScanCameraViewRef>(null);
   const [initial] = useState<ScanSession>(() => loadSession() ?? openSession(null));
   const session = useRef(initial);
-  const [count, setCount] = useState(initial.pages.length);
+  const [pages, setPages] = useState<SessionPage[]>(initial.pages);
+  const count = pages.length;
   const [mode, setMode] = useState<ScanMode>(initial.mode);
   const [side, setSide] = useState(() => nextSide(initial.mode, initial.pages));
-  const [lastUri, setLastUri] = useState<string | null>(() => {
-    const last = initial.pages[initial.pages.length - 1];
-    return last ? new File(sessionDir(), last.file).uri : null;
-  });
   const [saving, setSaving] = useState(false);
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   const [access, setAccess] = useState<Access>('checking');
@@ -77,11 +74,9 @@ export default function CaptureScreen() {
     useCallback(() => {
       const fresh = loadSession() ?? openSession(session.current.folderId);
       session.current = fresh;
-      setCount(fresh.pages.length);
+      setPages(fresh.pages);
       setMode(fresh.mode);
       setSide(nextSide(fresh.mode, fresh.pages));
-      const last = fresh.pages[fresh.pages.length - 1];
-      setLastUri(last ? new File(sessionDir(), last.file).uri : null);
     }, []),
   );
 
@@ -114,9 +109,8 @@ export default function CaptureScreen() {
       setError(`The page list couldn't be saved: ${err instanceof Error ? err.message : String(err)}`);
     }
     session.current = next;
-    setCount(next.pages.length);
+    setPages(next.pages);
     setSide(nextSide(next.mode, next.pages));
-    setLastUri(uri);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     AccessibilityInfo.announceForAccessibility(`Captured page ${next.pages.length}`);
   };
@@ -126,6 +120,26 @@ export default function CaptureScreen() {
     if (e.nativeEvent.code === 'permission') void check(false);
     else setError(e.nativeEvent.message);
   };
+
+  const deletePage = (file: string, number: number) =>
+    confirmAction({
+      title: `Delete page ${number}?`,
+      message: 'It hasn\u2019t been saved and can\u2019t be brought back.',
+      confirmLabel: 'Delete page',
+      onConfirm: () => {
+        const next = withoutPage(session.current, file);
+        session.current = next;
+        setPages(next.pages);
+        setSide(nextSide(next.mode, next.pages));
+        try {
+          deleteCapture(file);
+          saveSession(next);
+        } catch (err) {
+          setError(`The page couldn't be deleted: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        AccessibilityInfo.announceForAccessibility(`Deleted page ${number}`);
+      },
+    });
 
   const leave = () => {
     if (session.current.pages.length === 0) discardSession();
@@ -256,36 +270,73 @@ export default function CaptureScreen() {
           right: 0,
           bottom: 0,
           paddingBottom: insets.bottom + space.lg,
-          paddingHorizontal: space.lg,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          gap: space.md,
         }}
       >
-        <View style={{ flex: 1, alignItems: 'flex-start', gap: space.xs }} accessible accessibilityLabel={`${count} ${count === 1 ? 'page' : 'pages'} captured`}>
-          {lastUri ? <Image source={{ uri: lastUri }} style={{ width: 48, height: 64, borderRadius: radius.control / 2 }} contentFit="cover" /> : null}
-          <Pill label={`${count} ${count === 1 ? 'page' : 'pages'}`} tone={count > 0 ? 'accent' : 'neutral'} />
-        </View>
-        <Pressable
-          onPress={shutter}
-          disabled={access !== 'granted' || full}
-          accessibilityRole="button"
-          accessibilityLabel="Take photo"
-          accessibilityState={{ disabled: access !== 'granted' || full }}
-          style={({ pressed }) => ({
-            width: 72,
-            height: 72,
-            borderRadius: 36,
-            borderWidth: 4,
-            borderColor: c.text,
-            backgroundColor: pressed ? c.accentSoft : c.accent,
-            opacity: access === 'granted' && !full ? 1 : 0.4,
-          })}
-        />
-        <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }}>
-          <Button label="Done" onPress={done} disabled={count === 0} />
+        {count > 0 ? <PageStrip pages={pages} onDelete={deletePage} /> : null}
+        <View style={{ paddingHorizontal: space.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flex: 1, alignItems: 'flex-start' }} accessible accessibilityLabel={`${count} ${count === 1 ? 'page' : 'pages'} captured`}>
+            <Pill label={`${count} ${count === 1 ? 'page' : 'pages'}`} tone={count > 0 ? 'accent' : 'neutral'} />
+          </View>
+          <Pressable
+            onPress={shutter}
+            disabled={access !== 'granted' || full}
+            accessibilityRole="button"
+            accessibilityLabel="Take photo"
+            accessibilityState={{ disabled: access !== 'granted' || full }}
+            style={({ pressed }) => ({
+              width: 72,
+              height: 72,
+              borderRadius: 36,
+              borderWidth: 4,
+              borderColor: c.text,
+              backgroundColor: pressed ? c.accentSoft : c.accent,
+              opacity: access === 'granted' && !full ? 1 : 0.4,
+            })}
+          />
+          <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }}>
+            <Button label="Done" onPress={done} disabled={count === 0} />
+          </View>
         </View>
       </View>
+    </View>
+  );
+}
+
+function PageStrip({ pages, onDelete }: { pages: SessionPage[]; onDelete: (file: string, number: number) => void }) {
+  const { c } = useTheme();
+  const scroll = useRef<ScrollView>(null);
+  return (
+    <View style={{ gap: space.xs }}>
+      <View style={{ alignSelf: 'flex-start', marginLeft: space.lg, backgroundColor: c.surface, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs }}>
+        <Text variant="meta" tone="muted">
+          Tap a page to delete it
+        </Text>
+      </View>
+      <ScrollView
+        ref={scroll}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}
+        contentContainerStyle={{ paddingHorizontal: space.lg, gap: space.sm }}
+        accessibilityLabel="Captured pages"
+      >
+        {pages.map((page, i) => (
+          <Pressable
+            key={page.file}
+            onPress={() => onDelete(page.file, i + 1)}
+            accessibilityRole="button"
+            accessibilityLabel={`Page ${i + 1}`}
+            accessibilityHint="Asks before deleting this page"
+          >
+            <Image
+              source={{ uri: new File(sessionDir(), page.file).uri }}
+              style={{ width: 48, height: 64, borderRadius: radius.control / 2, borderWidth: 1, borderColor: c.line }}
+              contentFit="cover"
+            />
+          </Pressable>
+        ))}
+      </ScrollView>
     </View>
   );
 }

@@ -16,6 +16,7 @@ import { ReportScreen } from './src/ReportScreen.tsx';
 import { LOAD_ERROR } from './src/messages.ts';
 import { SettingsScreen } from './src/SettingsScreen.tsx';
 import { SetupScreen } from './src/SetupScreen.tsx';
+import { TodosScreen } from './src/TodosScreen.tsx';
 import { setupComplete, setupRows } from './src/setup.ts';
 
 type Tab = 'home' | 'money' | 'ask' | 'settings';
@@ -55,6 +56,7 @@ function Root() {
   const [inSetup, setInSetup] = useState(false);
   const [tab, setTab] = useState<Tab>('home');
   const [stack, setStack] = useState<Route[]>([]);
+  const [todosOpen, setTodosOpen] = useState(false);
 
   const lockedRef = useRef(true);
   lockedRef.current = locked;
@@ -77,6 +79,7 @@ function Root() {
       if (s === 'background') {
         setLocked(true);
         setStack([]);
+        setTodosOpen(false);
         setTab('home');
       } else if (s === 'active') {
         refresh();
@@ -90,12 +93,19 @@ function Root() {
   }, [status, complete]);
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (locked || stack.length === 0) return false;
-      setStack((s) => s.slice(0, -1));
-      return true;
+      if (locked) return false;
+      if (stack.length > 0) {
+        setStack((s) => s.slice(0, -1));
+        return true;
+      }
+      if (todosOpen) {
+        setTodosOpen(false);
+        return true;
+      }
+      return false;
     });
     return () => sub.remove();
-  }, [locked, stack.length]);
+  }, [locked, stack.length, todosOpen]);
 
   const push = (r: Route) => setStack((s) => [...s, r]);
   const open = (filter: ItemFilter, title: string) => push({ kind: 'items', filter, title });
@@ -136,11 +146,13 @@ function Root() {
   if (top?.kind === 'report') return <ReportScreen key={stack.length} id={top.id} title={top.title} onBack={back} />;
   if (top?.kind === 'party') return <PartyScreen key={stack.length} title={top.title} name={top.name} own={top.own} onBack={back} />;
 
+  if (todosOpen) return <TodosScreen onBack={() => setTodosOpen(false)} onOpen={open} />;
+
   return (
     <>
       <View style={{ flex: 1 }}>
         {tab === 'home' ? (
-          <HomeScreen status={status} refreshStatus={refresh} onOpen={open} onOpenContacts={openContacts} onOpenMoney={() => setTab('money')} onOpenApps={() => push({ kind: 'apps' })} />
+          <HomeScreen status={status} refreshStatus={refresh} onOpen={open} onOpenContacts={openContacts} onOpenMoney={() => setTab('money')} onOpenApps={() => push({ kind: 'apps' })} onOpenTodos={() => setTodosOpen(true)} />
         ) : tab === 'money' ? (
           <MoneyScreen status={status} onOpenParty={openParty} onOpenReport={openReport} />
         ) : tab === 'ask' ? (

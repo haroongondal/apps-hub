@@ -16,6 +16,8 @@ import {
   deriveIdentityKey,
   hashNetworkId,
   isDeviceWorthy,
+  networkLabel,
+  normalizeNetworkName,
   openPortsCsvFor,
   reconcileScan,
   type DeviceStore,
@@ -37,6 +39,28 @@ class FakeStore implements DeviceStore {
   async upsertNetwork(network: StoredNetwork): Promise<void> {
     this.upserts.push(network);
     this.networks.set(network.networkId, { ...network });
+  }
+
+  async listNetworks(): Promise<StoredNetwork[]> {
+    return [...this.networks.values()].sort((a, b) => b.lastScannedAt - a.lastScannedAt);
+  }
+
+  async renameNetwork(networkId: string, customName: string | null): Promise<void> {
+    const network = this.networks.get(networkId);
+    if (network) this.networks.set(networkId, { ...network, customName });
+  }
+
+  async deleteNetwork(networkId: string): Promise<void> {
+    this.networks.delete(networkId);
+    for (const [key, row] of this.rows) {
+      if (row.networkId === networkId) this.rows.delete(key);
+    }
+  }
+
+  async deleteDevice(id: number): Promise<void> {
+    for (const [key, row] of this.rows) {
+      if (row.id === id) this.rows.delete(key);
+    }
   }
 
   async listDevices(networkId: string): Promise<StoredDevice[]> {
@@ -328,4 +352,69 @@ test('identity helpers: precedence, CSV shaping, and network hashing', () => {
   assert.notEqual(home, hashNetworkId('192.168.7.1', 16));
   assert.notEqual(home, hashNetworkId('192.168.8.1', 24));
   assert.match(home, /^net_[0-9a-f]{8}$/);
+});
+
+test('a scan keeps the name the person gave the network', async () => {
+  const store = new FakeStore();
+  await runScan(store, { nowMs: 2_000, hosts: [host('192.168.7.3')] });
+  await store.renameNetwork(NETWORK.networkId, 'Home');
+  await runScan(store, { nowMs: 3_000, hosts: [host('192.168.7.3')] });
+
+  const saved = await store.listNetworks();
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].customName, 'Home');
+  assert.equal(saved[0].lastScannedAt, 3_000);
+  assert.equal(store.upserts.at(-1)?.customName, 'Home');
+});
+
+test('renaming to null clears the network name', async () => {
+  const store = new FakeStore();
+  await runScan(store, { nowMs: 2_000, hosts: [] });
+  await store.renameNetwork(NETWORK.networkId, 'Home');
+  await store.renameNetwork(NETWORK.networkId, null);
+  assert.equal((await store.listNetworks())[0].customName, null);
+});
+
+test('listNetworks puts the most recently scanned network first', async () => {
+  const store = new FakeStore();
+  await store.upsertNetwork({ networkId: 'net_old', gatewayIp: '10.0.0.1', subnetCidr: '10.0.0.0/24', customName: null, lastScannedAt: 1_000 });
+  await store.upsertNetwork({ networkId: 'net_new', gatewayIp: '10.0.1.1', subnetCidr: '10.0.1.0/24', customName: null, lastScannedAt: 2_000 });
+  assert.deepEqual((await store.listNetworks()).map((n) => n.networkId), ['net_new', 'net_old']);
+});
+
+test('deleteDevice forgets one device; the next scan stores it as new', async () => {
+  const store = new FakeStore();
+  await runScan(store, { nowMs: 2_000, hosts: [host('192.168.7.3'), host('192.168.7.4')] });
+  const [first] = await store.listDevices(NETWORK.networkId);
+  assert.ok(first.id !== null);
+  await store.deleteDevice(first.id);
+
+  const remaining = await store.listDevices(NETWORK.networkId);
+  assert.equal(remaining.length, 1);
+  assert.notEqual(remaining[0].identityKey, first.identityKey);
+
+  const rescan = await runScan(store, { nowMs: 3_000, hosts: [host('192.168.7.3'), host('192.168.7.4')] });
+  assert.equal(rescan.newCount, 1);
+  assert.equal(rescan.devices.find((d) => d.identityKey === first.identityKey)?.isNew, true);
+});
+
+test('deleteNetwork removes the network and only its devices', async () => {
+  const store = new FakeStore();
+  await runScan(store, { nowMs: 2_000, hosts: [host('192.168.7.3')] });
+  await store.upsertNetwork({ networkId: 'net_other', gatewayIp: '10.0.0.1', subnetCidr: '10.0.0.0/24', customName: null, lastScannedAt: 1_000 });
+  await store.insertDevice(seedDevice({ networkId: 'net_other', identityKey: 'ip:10.0.0.9', lastIp: '10.0.0.9' }));
+
+  await store.deleteNetwork(NETWORK.networkId);
+
+  assert.deepEqual((await store.listNetworks()).map((n) => n.networkId), ['net_other']);
+  assert.equal((await store.listDevices(NETWORK.networkId)).length, 0);
+  assert.equal((await store.listDevices('net_other')).length, 1);
+});
+
+test('network label falls back to the subnet; names are trimmed', () => {
+  assert.equal(networkLabel({ customName: 'Home', subnetCidr: '192.168.7.0/24' }), 'Home');
+  assert.equal(networkLabel({ customName: '  ', subnetCidr: '192.168.7.0/24' }), '192.168.7.0/24');
+  assert.equal(networkLabel({ customName: null, subnetCidr: '192.168.7.0/24' }), '192.168.7.0/24');
+  assert.equal(normalizeNetworkName('  Office  '), 'Office');
+  assert.equal(normalizeNetworkName('   '), null);
 });

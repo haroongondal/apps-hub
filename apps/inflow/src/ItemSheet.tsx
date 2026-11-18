@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Image, View } from 'react-native';
-import { Button, Group, Notice, Row, Sheet, Text, radius, space } from '@apps-hub/ui';
+import { Button, Group, Notice, Row, Sheet, Text, confirmAction, radius, space } from '@apps-hub/ui';
 import InflowCore, { type Item, type MediaInfo } from 'inflow-core';
 import { importanceLabel, kindLabel } from './ai.ts';
 import { exactTime } from './format.ts';
 import { mediaKindLabel, sizeLabel } from './media.ts';
 import { SAVE_ERROR } from './messages.ts';
+import { deleteItemConfirm, keepBlockConfirm } from './records.ts';
 
 const OPEN_ERROR = 'This file could not be opened.';
 const INLINE_MAX = 8 * 1024 * 1024;   // as readMedia allows in Kotlin
@@ -66,7 +67,20 @@ function MediaGroup({ itemId }: { itemId: number }) {
   );
 }
 
-export function ItemSheet({ item, onClose, onRename, onShowSender }: { item: Item | null; onClose: () => void; onRename: (item: Item) => void; onShowSender: (name: string) => void }) {
+export function ItemSheet({
+  item,
+  onClose,
+  onRename,
+  onShowSender,
+  onDeleted,
+}: {
+  item: Item | null;
+  onClose: () => void;
+  onRename: (item: Item) => void;
+  onShowSender: (name: string) => void;
+  // Called after the message was deleted; the sheet is closed by the caller.
+  onDeleted: () => void;
+}) {
   const who = item ? (item.displayName ?? item.sender) : null;
   const [kept, setKept] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +123,30 @@ export function ItemSheet({ item, onClose, onRename, onShowSender }: { item: Ite
       setError(SAVE_ERROR);
     }
   };
+  // Sending a kept sender to the AI again asks first; keeping one back is harmless and needs no question.
+  const askToggleKept = () => {
+    if (!kept) return toggleKept();
+    const c = keepBlockConfirm(who ?? 'this sender');
+    confirmAction({ title: c.title, message: c.message, confirmLabel: c.confirmLabel, onConfirm: toggleKept });
+  };
+  const askDelete = () => {
+    if (!item) return;
+    const c = deleteItemConfirm();
+    confirmAction({
+      title: c.title,
+      message: c.message,
+      confirmLabel: c.confirmLabel,
+      onConfirm: () => {
+        try {
+          InflowCore.deleteItem(item.id);
+        } catch {
+          setError(SAVE_ERROR);
+          return;
+        }
+        onDeleted();
+      },
+    });
+  };
   return (
     <Sheet visible={item !== null} onClose={onClose} title={item?.title ?? item?.appLabel ?? 'Notification'}>
       {item && (
@@ -140,8 +178,9 @@ export function ItemSheet({ item, onClose, onRename, onShowSender }: { item: Ite
           {item.senderKey !== null && <Button label="Rename sender" variant="secondary" onPress={() => onRename(item)} block />}
           {error !== null && <Notice tone="danger">{error}</Notice>}
           {promo !== null && <Button label={promo ? 'Keep in my list' : 'Move to Promotions'} variant="secondary" onPress={togglePromo} block />}
-          {senderKey !== null && <Button label={kept ? 'Send this sender to AI again' : "Don't send this sender to AI"} variant="secondary" onPress={toggleKept} block />}
+          {senderKey !== null && <Button label={kept ? 'Send this sender to AI again' : "Don't send this sender to AI"} variant="secondary" onPress={askToggleKept} block />}
           {who !== null && <Button label="Show everything from this sender" variant="secondary" onPress={() => onShowSender(who)} block />}
+          <Button label="Delete message" variant="danger" onPress={askDelete} block />
         </>
       )}
     </Sheet>

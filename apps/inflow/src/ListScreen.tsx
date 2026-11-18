@@ -1,47 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, View } from 'react-native';
-import { Button, Empty, Group, Header, Notice, Pill, Row, Screen, Text, space, useTheme } from '@apps-hub/ui';
+import { Button, Empty, Group, Header, Notice, Screen, space, useTheme } from '@apps-hub/ui';
 import InflowCore, { type Item, type ItemFilter } from 'inflow-core';
-import { whenLabel } from './format.ts';
+import { ItemRow } from './ItemRow.tsx';
 import { ItemSheet } from './ItemSheet.tsx';
-import { mediaCountLabel } from './media.ts';
 import { LOAD_ERROR } from './messages.ts';
+import { ConversationMenu, ItemMenu, itemRenameTarget } from './RecordMenus.tsx';
 import { RenameSheet, type RenameTarget } from './RenameSheet.tsx';
 
 const PAGE = 50;
-
-function ItemRow({ item, now, onPress }: { item: Item; now: number; onPress: () => void }) {
-  const name = item.displayName ?? item.sender ?? item.appLabel;
-  const showTitle = item.title !== null && item.title !== '' && item.title !== name && item.title !== item.sender;
-  return (
-    <Row
-      onPress={onPress}
-      title={name}
-      subtitle={
-        <View style={{ gap: 2 }}>
-          {showTitle && (
-            <Text variant="meta" numberOfLines={1}>
-              {item.title}
-            </Text>
-          )}
-          {item.ai !== null ? (
-            <>
-              <Text numberOfLines={2}>{item.ai.summary}</Text>
-              <Text variant="meta" tone="muted" numberOfLines={1}>
-                {item.text}
-              </Text>
-            </>
-          ) : (
-            <Text numberOfLines={3}>{item.text}</Text>
-          )}
-          {item.mediaCount > 0 && <Pill label={mediaCountLabel(item.mediaCount)} />}
-          <Text variant="caption" tone="muted">{`${item.appLabel} · ${whenLabel(item.postedAt, now)}`}</Text>
-          {item.deletedBySender && <Pill label="Deleted by sender" tone="warn" />}
-        </View>
-      }
-    />
-  );
-}
 
 export function ListScreen({ title, filter, onBack, onOpen }: { title: string; filter: ItemFilter; onBack: () => void; onOpen: (filter: ItemFilter, title: string) => void }) {
   const { c } = useTheme();
@@ -80,11 +47,23 @@ export function ListScreen({ title, filter, onBack, onOpen }: { title: string; f
 
   const now = Date.now();
   const last = items.length > 0 ? items[items.length - 1] : null;
+  const reload = () => load(true, null);
+  // A conversation list gets a menu of its own: rename the sender, or delete every message and leave the emptied list.
+  const conversationMenu =
+    filter.kind === 'conversation' ? (
+      <ConversationMenu
+        conversationKey={filter.key}
+        name={title}
+        onRename={setRenaming}
+        onChanged={onBack}
+        onError={setError}
+      />
+    ) : undefined;
   return (
     <Screen>
       <View style={{ paddingHorizontal: space.lg, gap: space.sm, paddingBottom: space.md }}>
         <Button label="Back" variant="ghost" size="sm" onPress={onBack} />
-        <Header title={title} />
+        <Header title={title} trailing={conversationMenu} />
       </View>
       {error !== null && (
         <View style={{ paddingHorizontal: space.lg, paddingBottom: space.md }}>
@@ -98,7 +77,12 @@ export function ListScreen({ title, filter, onBack, onOpen }: { title: string; f
         contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxxl, gap: space.md }}
         renderItem={({ item }) => (
           <Group>
-            <ItemRow item={item} now={now} onPress={() => setSelected(item)} />
+            <ItemRow
+              item={item}
+              now={now}
+              onPress={() => setSelected(item)}
+              menu={<ItemMenu item={item} onRename={setRenaming} onChanged={reload} onError={setError} />}
+            />
           </Group>
         )}
         onEndReached={() => more && last !== null && load(false, last)}
@@ -110,7 +94,11 @@ export function ListScreen({ title, filter, onBack, onOpen }: { title: string; f
         onClose={() => setSelected(null)}
         onRename={(item) => {
           setSelected(null);
-          if (item.senderKey !== null) setRenaming({ senderKey: item.senderKey, sender: item.sender ?? item.appLabel, name: item.displayName });
+          setRenaming(itemRenameTarget(item));
+        }}
+        onDeleted={() => {
+          setSelected(null);
+          reload();
         }}
         onShowSender={(name) => {
           setSelected(null);
@@ -122,7 +110,7 @@ export function ListScreen({ title, filter, onBack, onOpen }: { title: string; f
         onClose={() => setRenaming(null)}
         onSaved={() => {
           setRenaming(null);
-          load(true, null);
+          reload();
         }}
       />
     </Screen>

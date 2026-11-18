@@ -10,6 +10,7 @@ sealed interface QueueEvent {
   data class Done(val id: String, val outputs: List<Output>, val at: Long) : QueueEvent
   data class Fail(val id: String, val error: String, val at: Long) : QueueEvent
   data class Cancel(val id: String) : QueueEvent
+  data class Remove(val id: String) : QueueEvent
   data object Interrupt : QueueEvent
   data object Pause : QueueEvent
   data object Resume : QueueEvent
@@ -31,12 +32,16 @@ fun reduce(jobs: List<Job>, e: QueueEvent): List<Job> = when (e) {
       (e.id != "all" && (it.state == JobState.INTERRUPTED || it.state == JobState.PAUSED))
     if (matches && cancellable) it.copy(state = JobState.CANCELLED) else it
   }
+  is QueueEvent.Remove -> jobs.filterNot { it.id == e.id && it.isRemovable() }
   QueueEvent.Interrupt -> jobs.map { if (it.state == JobState.RUNNING) it.copy(state = JobState.INTERRUPTED) else it }
   QueueEvent.Pause -> jobs.map { if (it.state == JobState.RUNNING) it.copy(state = JobState.PAUSED) else it }
   QueueEvent.Resume -> jobs.map {
     if (it.state == JobState.PAUSED || it.state == JobState.INTERRUPTED) it.copy(state = JobState.QUEUED, error = null) else it
   }
 }
+
+// Only the list row goes; a job that is running or waiting has to be stopped first, and no output file is touched.
+private fun Job.isRemovable() = state != JobState.RUNNING && state != JobState.QUEUED
 
 // A new scan replaces the older finished scan rows, so the Queue does not fill with identical ones.
 private fun Job.isFinished() = state == JobState.DONE || state == JobState.FAILED || state == JobState.CANCELLED

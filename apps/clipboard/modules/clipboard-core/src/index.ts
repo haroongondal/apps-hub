@@ -27,6 +27,8 @@ interface ClipboardCoreApi {
   recent(limit: number): Clip[];
   copy(id: number): boolean;
   remove(id: number): void;
+  /** Deletes every saved clip. */
+  clearAll(): void;
   /** JSON `{ light, dark }` palettes for the bubble, which draws without React Native. */
   setPalettes(json: string): void;
   addListener(event: 'onClip', listener: () => void): { remove(): void };

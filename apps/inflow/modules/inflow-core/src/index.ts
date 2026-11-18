@@ -55,6 +55,7 @@ export interface MediaStats {
 
 export interface Todo {
   id: number;
+  // The message the AI found it in; 0 for one the owner added by hand.
   itemId: number;
   text: string;
   dueAt: number | null;
@@ -284,6 +285,14 @@ export interface InflowCoreApi {
   listPartyTxns(name: string | null, own: boolean, before: number | null, limit: number, beforeId: number | null): Txn[];
   // null when the keep-for period removed the item.
   getItem(id: number): Item | null;
+  // Removes the message with its AI result, to-dos and media; a later SMS or email import does not bring it back. False when it was already gone.
+  deleteItem(id: number): boolean;
+  // deleteItem for every message of one conversation (ConversationRow.key or Item.conversationKey). Returns how many were deleted.
+  deleteConversation(key: string): number;
+  // The owner's clean name for a transaction; null or blank clears it. Returns the error copy, or null once saved. The category is set with setCategory.
+  setTxnLabel(txnId: number, label: string | null): string | null;
+  // Removes the transaction; the messages it came from stay and are not read into a transaction again. False when it was already gone.
+  deleteTxn(txnId: number): boolean;
   getOwnerName(): string | null;
   // Blank or null clears it.
   setOwnerName(name: string | null): void;
@@ -311,6 +320,12 @@ export interface InflowCoreApi {
   setAiBlocked(blockKey: string, blocked: boolean): void;
   listAiBlocks(): string[];
   setTodoDone(id: number, done: boolean): void;
+  // Done ones last when includeDone; the owner's own to-dos have itemId 0.
+  listTodos(includeDone: boolean): Todo[];
+  // Add and edit return the error copy for blank text, or null once saved. dueAt null = no date.
+  addTodo(text: string, dueAt: number | null): string | null;
+  updateTodo(id: number, text: string, dueAt: number | null): string | null;
+  deleteTodo(id: number): void;
   ask(question: string): Promise<{ answer: string | null; error: string | null; from: number; to: number; items: number; txns: number }>;
   mediaFor(itemId: number): MediaInfo[];
   // Base64 of the decrypted bytes; only for images and stickers up to 8 MB, otherwise it throws.

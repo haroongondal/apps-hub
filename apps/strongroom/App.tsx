@@ -198,6 +198,7 @@ function Home() {
             view={view}
             onView={setView}
             onOpen={(id) => setRoute({ name: 'entry', id })}
+            onEdit={(id) => setRoute({ name: 'edit', id })}
             onAdd={() => setRoute({ name: 'edit', id: null })}
             onOpenSync={() => openFlow('sync')}
           />

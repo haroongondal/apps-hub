@@ -5,10 +5,12 @@ import InflowCore, { addCapturedListener, type HomeSummary, type Item, type Item
 import { dueLabel } from './ai.ts';
 import { Bar } from './Bar.tsx';
 import { startOfToday, whenLabel } from './format.ts';
+import { ItemRow } from './ItemRow.tsx';
 import { ItemSheet } from './ItemSheet.tsx';
 import { healthNotice } from './health.ts';
 import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
 import { formatAmount, monthOverview, monthRange } from './money.ts';
+import { ConversationMenu, ItemMenu, itemRenameTarget } from './RecordMenus.tsx';
 import { RenameSheet, type RenameTarget } from './RenameSheet.tsx';
 
 const EMPTY_TEXT = "New notifications will appear here as they arrive. Inflow can't read ones that came before it was set up.";
@@ -20,6 +22,7 @@ export function HomeScreen({
   onOpenContacts,
   onOpenMoney,
   onOpenApps,
+  onOpenTodos,
 }: {
   status: Status;
   refreshStatus: () => void;
@@ -27,6 +30,7 @@ export function HomeScreen({
   onOpenContacts: (pkg: string, title: string) => void;
   onOpenMoney: () => void;
   onOpenApps: () => void;
+  onOpenTodos: () => void;
 }) {
   const [summary, setSummary] = useState<HomeSummary | null>(null);
   const [money, setMoney] = useState<MoneySummary | null>(null);
@@ -108,6 +112,7 @@ export function HomeScreen({
     load();
   };
   const openTodoItem = (itemId: number) => {
+    if (itemId === 0) return;   // a to-do the owner added has no message to open
     try {
       setSelected(InflowCore.getItem(itemId));
     } catch {
@@ -176,16 +181,12 @@ export function HomeScreen({
       {summary !== null && summary.important.length > 0 && (
         <Group title="Important">
           {summary.important.map((i) => (
-            <Row
+            <ItemRow
               key={i.id}
-              title={i.displayName ?? i.sender ?? i.appLabel}
-              subtitle={
-                <View style={{ gap: 2 }}>
-                  <Text numberOfLines={2}>{i.ai?.summary ?? i.text}</Text>
-                  <Text variant="caption" tone="muted">{`${i.appLabel} · ${whenLabel(i.postedAt, now)}`}</Text>
-                </View>
-              }
+              item={i}
+              now={now}
               onPress={() => setSelected(i)}
+              menu={<ItemMenu item={i} onRename={setRenaming} onChanged={load} onError={setError} />}
             />
           ))}
         </Group>
@@ -205,6 +206,7 @@ export function HomeScreen({
               />
             ))
           )}
+          <Row title="See all" onPress={onOpenTodos} />
         </Group>
       )}
       {empty && <Empty title="Nothing saved yet" body={EMPTY_TEXT} />}
@@ -221,9 +223,12 @@ export function HomeScreen({
               }
               onPress={() => onOpen({ kind: 'conversation', key: r.key }, r.name)}
               trailing={
-                <Text variant="caption" tone="muted" align="right">
-                  {r.today > 0 ? `${whenLabel(r.lastAt, now)}\n${r.today} today` : whenLabel(r.lastAt, now)}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                  <Text variant="caption" tone="muted" align="right">
+                    {r.today > 0 ? `${whenLabel(r.lastAt, now)}\n${r.today} today` : whenLabel(r.lastAt, now)}
+                  </Text>
+                  <ConversationMenu conversationKey={r.key} name={r.name} onRename={setRenaming} onChanged={load} onError={setError} />
+                </View>
               }
             />
           ))}
@@ -240,7 +245,11 @@ export function HomeScreen({
         onClose={() => setSelected(null)}
         onRename={(item) => {
           setSelected(null);
-          if (item.senderKey !== null) setRenaming({ senderKey: item.senderKey, sender: item.sender ?? item.appLabel, name: item.displayName });
+          setRenaming(itemRenameTarget(item));
+        }}
+        onDeleted={() => {
+          setSelected(null);
+          load();
         }}
         onShowSender={(name) => {
           setSelected(null);

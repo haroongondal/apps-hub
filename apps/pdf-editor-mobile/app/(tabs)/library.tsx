@@ -1,5 +1,5 @@
 import type { Folder, Item, ItemKind, Library } from '@apps-hub/library-core';
-import { Button, Empty, Field, Header, Notice, Progress, Screen, Segmented, space } from '@apps-hub/ui';
+import { Button, confirmAction, Empty, Field, Header, Notice, Progress, RecordMenu, Screen, Segmented, space, type RecordAction } from '@apps-hub/ui';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useState } from 'react';
@@ -14,16 +14,7 @@ import { openItem } from '../../src/library/open-item';
 import { openLibrary } from '../../src/library/open-library';
 import { itemDir } from '../../src/library/paths';
 import { FolderRow, ItemRow } from '../../src/library/rows';
-import {
-  AddSheet,
-  FolderPickerSheet,
-  FolderSheet,
-  ItemSheet,
-  NameSheet,
-  TagFilterSheet,
-  TagsSheet,
-  type ItemAction,
-} from '../../src/library/sheets';
+import { AddSheet, FolderPickerSheet, NameSheet, TagFilterSheet, TagManageSheet, TagsSheet } from '../../src/library/sheets';
 import { errorMessage, useDebounced, useLibraryData } from '../../src/library/use-library';
 import { discardSession, loadSession } from '../../src/scan/session';
 
@@ -31,11 +22,10 @@ type SheetState =
   | { type: 'add' }
   | { type: 'newFolder' }
   | { type: 'tagFilter' }
-  | { type: 'item'; item: Item }
+  | { type: 'manageTags' }
   | { type: 'renameItem'; item: Item }
   | { type: 'moveItem'; item: Item }
   | { type: 'tags'; item: Item }
-  | { type: 'folder'; folder: Folder }
   | { type: 'renameFolder'; folder: Folder }
   | { type: 'moveFolder'; folder: Folder }
   | null;
@@ -70,21 +60,19 @@ export default function LibraryScreen() {
   );
 
   const discardScan = () =>
-    Alert.alert(`Discard ${unsavedPages} scanned ${unsavedPages === 1 ? 'page' : 'pages'}?`, "They haven't been saved and can't be brought back.", [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Discard',
-        style: 'destructive',
-        onPress: () => {
-          try {
-            discardSession();
-          } catch (error) {
-            Alert.alert('Could not discard the scan', errorMessage(error));
-          }
-          setUnsavedPages(loadSession()?.pages.length ?? 0);
-        },
+    confirmAction({
+      title: `Discard ${unsavedPages} scanned ${unsavedPages === 1 ? 'page' : 'pages'}?`,
+      message: 'They haven\u2019t been saved and can\u2019t be brought back.',
+      confirmLabel: 'Discard',
+      onConfirm: () => {
+        try {
+          discardSession();
+        } catch (error) {
+          Alert.alert('Could not discard the scan', errorMessage(error));
+        }
+        setUnsavedPages(loadSession()?.pages.length ?? 0);
       },
-    ]);
+    });
 
   const guard = useCallback(
     async (title: string, work: () => Promise<void>) => {
@@ -113,55 +101,59 @@ export default function LibraryScreen() {
     setBusy(false);
   };
 
-  const onItemAction = (item: Item, action: ItemAction) => {
-    if (action === 'rename') return setSheet({ type: 'renameItem', item });
-    if (action === 'move') return setSheet({ type: 'moveItem', item });
-    if (action === 'tags') return setSheet({ type: 'tags', item });
-    setSheet(null);
-    if (action === 'share') {
-      void guard('Could not share the PDF', async () => {
-        await Sharing.shareAsync(exportPdf(item), { mimeType: 'application/pdf', dialogTitle: 'Share PDF', UTI: 'com.adobe.pdf' });
-      });
-      return;
-    }
-    Alert.alert(`Delete "${item.title}"?`, "This removes it from this device and can't be undone.", [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () =>
-          void guard('Could not delete it', async () => {
-            await (await openLibrary()).deleteItem(item.id);
-            try {
-              itemDir(item.id).delete();
-            } catch {
-              // the start-up sweep removes a directory that outlives its row
-            }
-          }),
-      },
-    ]);
-  };
+  // A menu sheet must finish closing before the next sheet opens, or one of them is dropped.
 
-  const onFolderAction = (target: Folder, action: 'rename' | 'move' | 'delete') => {
-    if (action === 'rename') return setSheet({ type: 'renameFolder', folder: target });
-    if (action === 'move') return setSheet({ type: 'moveFolder', folder: target });
-    setSheet(null);
-    Alert.alert(`Delete the folder "${target.name}"?`, 'Its items and subfolders move up one level. Nothing else is deleted.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete folder',
-        style: 'destructive',
-        onPress: () =>
-          void guard('Could not delete the folder', async () => {
-            await (await openLibrary()).deleteFolder(target.id);
-            if (target.id === folderId) {
-              if (router.canGoBack()) router.back();
-              else router.replace('/library');
-            }
-          }),
-      },
-    ]);
-  };
+  const itemActions = (item: Item): RecordAction[] => [
+    { label: 'Rename', onPress: () => setSheet({ type: 'renameItem', item }) },
+    { label: 'Move to folder', onPress: () => setSheet({ type: 'moveItem', item }) },
+    { label: 'Tags', onPress: () => setSheet({ type: 'tags', item }) },
+    ...(item.kind === 'pdf'
+      ? [
+          {
+            label: 'Share PDF',
+            onPress: () =>
+              void guard('Could not share the PDF', async () => {
+                await Sharing.shareAsync(exportPdf(item), { mimeType: 'application/pdf', dialogTitle: 'Share PDF', UTI: 'com.adobe.pdf' });
+              }),
+          },
+        ]
+      : []),
+    {
+      label: 'Delete',
+      destructive: true,
+      confirmTitle: `Delete \u201c${item.title}\u201d?`,
+      confirmMessage: 'This removes it from this device and can\u2019t be undone.',
+      onPress: () =>
+        void guard('Could not delete it', async () => {
+          await (await openLibrary()).deleteItem(item.id);
+          try {
+            itemDir(item.id).delete();
+          } catch {
+            // the start-up sweep removes a directory that outlives its row
+          }
+        }),
+    },
+  ];
+
+  const folderActions = (target: Folder): RecordAction[] => [
+    { label: 'Rename', onPress: () => setSheet({ type: 'renameFolder', folder: target }) },
+    { label: 'Move to folder', onPress: () => setSheet({ type: 'moveFolder', folder: target }) },
+    {
+      label: 'Delete',
+      destructive: true,
+      confirmTitle: `Delete the folder \u201c${target.name}\u201d?`,
+      confirmMessage: 'Its items and subfolders move up one level. Nothing else is deleted.',
+      confirmLabel: 'Delete folder',
+      onPress: () =>
+        void guard('Could not delete the folder', async () => {
+          await (await openLibrary()).deleteFolder(target.id);
+          if (target.id === folderId) {
+            if (router.canGoBack()) router.back();
+            else router.replace('/library');
+          }
+        }),
+    },
+  ];
 
   const filtering = query.trim() !== '' || kind !== null || tagId !== null;
   const shownKinds = KINDS.filter((k) => data.kinds.includes(k) || k === kind);
@@ -175,7 +167,7 @@ export default function LibraryScreen() {
         subtitle={current ? ['Library', ...data.path.map((f) => f.name)].join(' / ') : undefined}
         trailing={
           <View style={{ flexDirection: 'row' }}>
-            {current ? <IconButton icon="ellipsis-horizontal" label="Folder actions" onPress={() => setSheet({ type: 'folder', folder: current })} /> : null}
+            {current ? <RecordMenu title={current.name} actions={folderActions(current)} accessibilityLabel="Folder actions" /> : null}
             <IconButton icon="add" label="Add" onPress={() => setSheet({ type: 'add' })} />
           </View>
         }
@@ -260,14 +252,18 @@ export default function LibraryScreen() {
         keyExtractor={(row) => row.key}
         renderItem={({ item: row }) =>
           row.type === 'folder' ? (
-            <FolderRow folder={row.folder} onOpen={() => router.push({ pathname: '/folder', params: { folder: row.folder.id } })} />
+            <FolderRow
+              folder={row.folder}
+              onOpen={() => router.push({ pathname: '/folder', params: { folder: row.folder.id } })}
+              actions={folderActions(row.folder)}
+            />
           ) : (
             <ItemRow
               item={row.item}
               snippet={row.snippet}
               where={row.where}
               onOpen={() => void guard('Could not open it', async () => void (await openItem(row.item)))}
-              onMore={() => setSheet({ type: 'item', item: row.item })}
+              actions={itemActions(row.item)}
             />
           )
         }
@@ -290,10 +286,11 @@ export default function LibraryScreen() {
             setTagId(id);
             close();
           }}
+          onManage={() => setSheet({ type: 'manageTags' })}
           onClose={close}
         />
       )}
-      {sheet?.type === 'item' && <ItemSheet item={sheet.item} onAction={(a) => onItemAction(sheet.item, a)} onClose={close} />}
+      {sheet?.type === 'manageTags' && <TagManageSheet onChanged={() => void reload()} onClose={close} />}
       {sheet?.type === 'renameItem' && (
         <NameSheet
           title="Rename"
@@ -314,9 +311,6 @@ export default function LibraryScreen() {
       )}
       {sheet?.type === 'tags' && (
         <TagsSheet item={sheet.item} onSave={(names) => write((lib) => lib.setItemTags(sheet.item.id, names))} onClose={close} />
-      )}
-      {sheet?.type === 'folder' && (
-        <FolderSheet name={sheet.folder.name} onAction={(a) => onFolderAction(sheet.folder, a)} onClose={close} />
       )}
       {sheet?.type === 'renameFolder' && (
         <NameSheet

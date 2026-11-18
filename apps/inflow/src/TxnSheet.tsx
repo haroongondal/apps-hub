@@ -1,17 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { Group, Notice, Row, Segmented, Sheet, Text, space } from '@apps-hub/ui';
+import { Button, Group, Notice, Row, Segmented, Sheet, Text, confirmAction, space } from '@apps-hub/ui';
 import InflowCore, { type Item, type Txn } from 'inflow-core';
 import { exactTime } from './format.ts';
 import { ITEM_REMOVED, LOAD_ERROR, SAVE_ERROR } from './messages.ts';
 import { formatAmount } from './money.ts';
+import { deleteTxnConfirm } from './records.ts';
 
 const OWN_OPTIONS = [
   { key: 'yes', label: 'Yes' },
   { key: 'no', label: 'No' },
 ] as const;
 
-export function TxnSheet({ txn, onClose, onChanged }: { txn: Txn | null; onClose: () => void; onChanged: () => void }) {
+export function TxnSheet({
+  txn,
+  onClose,
+  onChanged,
+  onEdit,
+  onDeleted,
+}: {
+  txn: Txn | null;
+  onClose: () => void;
+  onChanged: () => void;
+  // Opens the edit sheet for this transaction; the caller closes this one.
+  onEdit: (txn: Txn) => void;
+  // Called after the transaction was deleted; the caller closes this sheet and reloads.
+  onDeleted: () => void;
+}) {
   const [own, setOwn] = useState(false);
   const [category, setCategory] = useState<string | null>(null);
   const [categorySet, setCategorySet] = useState(false);
@@ -79,6 +94,25 @@ export function TxnSheet({ txn, onClose, onChanged }: { txn: Txn | null; onClose
     onChanged();
   };
 
+  const askDelete = () => {
+    if (!txn) return;
+    const c = deleteTxnConfirm();
+    confirmAction({
+      title: c.title,
+      message: c.message,
+      confirmLabel: c.confirmLabel,
+      onConfirm: () => {
+        try {
+          InflowCore.deleteTxn(txn.id);
+        } catch {
+          setError(SAVE_ERROR);
+          return;
+        }
+        onDeleted();
+      },
+    });
+  };
+
   return (
     <Sheet visible={txn !== null} onClose={onClose} title={txn ? formatAmount(txn.amount, txn.currency) : 'Transaction'}>
       {txn && (
@@ -117,6 +151,8 @@ export function TxnSheet({ txn, onClose, onChanged }: { txn: Txn | null; onClose
               </Text>
             ))}
           </View>
+          <Button label="Edit name" variant="secondary" onPress={() => onEdit(txn)} block />
+          <Button label="Delete transaction" variant="danger" onPress={askDelete} block />
         </>
       )}
     </Sheet>

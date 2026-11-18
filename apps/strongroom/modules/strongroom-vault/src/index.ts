@@ -20,7 +20,8 @@ export interface Row {
 }
 
 export type EntryInput =
-  | { type: 'login'; name: string; username: string; password: string; sites: string[]; note: string }
+  // apps, when given, lists the linked apps (as EntryView.apps names them) to keep: it can only drop links, never add one, so the others stay linked.
+  | { type: 'login'; name: string; username: string; password: string; sites: string[]; note: string; apps?: string[] }
   | { type: 'card'; name: string; holder: string; number: string; expMonth: number | null; expYear: number | null; cvc: string; note: string }
   | { type: 'note'; name: string; text: string };
 

@@ -783,7 +783,7 @@ private fun view(id: String, e: Entry): Map<String, Any?>? = when (e) {
   is Entry.Login -> mapOf(
     "id" to id, "type" to "login", "name" to e.name, "username" to e.username,
     "sites" to e.sites.map { (if (it.https) "https://" else "http://") + it.host },
-    "apps" to e.apps.map { a -> a.domain?.let { "${a.app.pkg} ($it)" } ?: a.app.pkg },
+    "apps" to e.apps.map(EntryInput::appLabel),
     "note" to e.note,
   )
   is Entry.Card -> mapOf(

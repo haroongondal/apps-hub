@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { fileNameOf, newPage, newSession, restoreSession } from '../scan/session-data.ts';
+import { fileNameOf, newPage, newSession, restoreSession, withoutPage } from '../scan/session-data.ts';
 
 const quad = [0.1, 0.1, 0.9, 0.1, 0.9, 0.9, 0.1, 0.9] as const;
 
@@ -47,4 +47,17 @@ test('card sessions and page sides are kept', () => {
   assert.equal(newPage('cap-1.jpg', null, 'front').side, 'front');
   const s = { ...newSession(null, 1, 'card'), sheet: true, pages: [newPage('cap-1.jpg', null, 'front'), newPage('cap-2.jpg', null, 'back')] };
   assert.deepEqual(restoreSession(JSON.stringify(s), ['cap-1.jpg', 'cap-2.jpg'], 9), s);
+});
+
+test('withoutPage drops only the page with that file and keeps the order of the rest', () => {
+  const s = { ...newSession('f', 1), pages: [newPage('cap-1.jpg', null), newPage('cap-2.jpg', null), newPage('cap-3.jpg', null)] };
+  const next = withoutPage(s, 'cap-2.jpg');
+  assert.deepEqual(next.pages.map((p) => p.file), ['cap-1.jpg', 'cap-3.jpg']);
+  assert.equal(next.folderId, 'f');
+  assert.equal(s.pages.length, 3);
+});
+
+test('withoutPage on a file that is not a page changes nothing', () => {
+  const s = { ...newSession(null, 1), pages: [newPage('cap-1.jpg', null)] };
+  assert.equal(withoutPage(s, 'cap-9.jpg'), s);
 });

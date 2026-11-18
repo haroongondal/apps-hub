@@ -32,6 +32,10 @@ interface ItemStore : ChatDirectory {
   fun purgeOlder(pkg: String, cutoff: Long): Int
   /** Also tombstones email hashes, like purgeOlder. */
   fun deleteApp(pkg: String): Int
+  /** The owner removed one item. Tombstones its hash, SMS hash and email hash so an inbox sync or mailbox re-read cannot bring it back; takes its AI result, queue entry, to-dos and media with it. False when it is already gone. */
+  fun deleteItem(id: Long): Boolean
+  /** The owner removed a whole conversation: deleteItem for every row with this conversation key. Returns how many rows went. */
+  fun deleteConversation(key: String): Int
   fun allAppSettings(): List<AppSetting>
   fun meta(key: String): String?
   fun setMeta(key: String, value: String)

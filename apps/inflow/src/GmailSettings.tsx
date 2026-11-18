@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Field, Group, Notice, Row, Text } from '@apps-hub/ui';
+import { Button, Field, Group, Notice, Row, Text, confirmAction } from '@apps-hub/ui';
 import InflowCore, { addCapturedListener, type GmailStatus } from 'inflow-core';
 import { cleanAppPassword, gmailFormError, syncLabel } from './gmail.ts';
 import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
+import { disconnectGmailConfirm, removeGmailSenderConfirm, type Confirm } from './records.ts';
 
 const HELP =
   'Inflow reads emails only from the senders below. It needs an app password: turn on 2-Step Verification in your Google account, open myaccount.google.com/apppasswords, make one for Inflow and paste it here.';
@@ -39,6 +40,8 @@ export function GmailSettings() {
     }
     load();
   };
+
+  const ask = (c: Confirm, apply: () => void) => confirmAction({ title: c.title, message: c.message, confirmLabel: c.confirmLabel, onConfirm: () => change(apply) });
 
   const check = () => {
     setBusy('sync');
@@ -97,7 +100,7 @@ export function GmailSettings() {
       {connected ? (
         <>
           <Button label="Check now" variant="secondary" busy={busy === 'sync'} onPress={check} block />
-          <Button label="Disconnect" variant="danger" onPress={() => change(() => InflowCore.disconnectGmail())} block />
+          <Button label="Disconnect" variant="danger" onPress={() => ask(disconnectGmailConfirm(gmail?.address ?? null), () => InflowCore.disconnectGmail())} block />
         </>
       ) : (
         <>
@@ -131,7 +134,7 @@ export function GmailSettings() {
           <Row title={<Text tone="muted">No senders yet</Text>} />
         ) : (
           (gmail?.senders ?? []).map((s) => (
-            <Row key={s} title={s} trailing={<Button label="Remove" variant="ghost" size="sm" onPress={() => change(() => InflowCore.removeGmailSender(s))} />} />
+            <Row key={s} title={s} trailing={<Button label="Remove" variant="ghost" size="sm" onPress={() => ask(removeGmailSenderConfirm(s), () => InflowCore.removeGmailSender(s))} />} />
           ))
         )}
       </Group>
