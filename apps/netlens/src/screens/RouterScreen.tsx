@@ -26,6 +26,7 @@ import {
 import {
   computeSubnetForHost,
   deletePortMapping,
+  collectServiceEvents,
   discoverIgd,
   displayNameFor,
   getRouterFacts,
@@ -39,7 +40,6 @@ import {
   type InterfaceInfo,
   type PortMapping,
   type RouterFacts,
-  type ServiceEvent,
   wifiQrText,
 } from '@apps-hub/core';
 import { createNetLensNativeBinding } from 'netlens-core';
@@ -241,6 +241,7 @@ export default function RouterScreen() {
   const bindingProxy = useRef(createNetLensNativeBinding()).current;
   // Bumped on every load and on unmount; results from an older run see a mismatch and do nothing.
   const generation = useRef(0);
+  const collector = useRef<{ cancel(): void } | null>(null);
   const { store } = useNetworkScan();
 
   const [phase, setPhase] = useState<Phase>('finding');
@@ -284,20 +285,10 @@ export default function RouterScreen() {
       }
       setGatewayIp(iface.gatewayIp);
 
-      const events: ServiceEvent[] = [];
-      const handle = bindingProxy.addListener('onServiceDiscovered', (event: ServiceEvent): void => {
-        events.push(event);
-      });
-      try {
-        await Promise.race([
-          bindingProxy.startServiceDiscovery(DISCOVERY_MS),
-          new Promise<void>((resolve) => setTimeout(resolve, DISCOVERY_GUARD_MS)),
-        ]);
-      } catch {
-        // Discovery failed: the router may still be found from whatever arrived.
-      } finally {
-        handle.remove();
-      }
+      collector.current?.cancel();
+      const run = collectServiceEvents(bindingProxy, DISCOVERY_MS, DISCOVERY_GUARD_MS);
+      collector.current = run;
+      const events = await run.events;
       if (generation.current !== gen) return;
 
       const igd = await discoverIgd(bindingProxy, iface, events);
@@ -320,6 +311,7 @@ export default function RouterScreen() {
     void load();
     return () => {
       generation.current += 1;
+      collector.current?.cancel();
     };
   }, [load]);
 
