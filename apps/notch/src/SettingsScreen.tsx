@@ -28,8 +28,7 @@ const WIDGET_NAMES: Record<WidgetId, string> = {
   timer: 'Timer and stopwatch',
   media: 'Now playing',
 };
-// Phase 1 ships these two; the others stay listed, unavailable, until phase 2.
-const READY: WidgetId[] = ['clock', 'battery'];
+const READY: WidgetId[] = ['clock', 'battery', 'timer', 'media'];
 
 export function SettingsScreen({ value, onChange }: { value: NotchSettings; onChange: (next: NotchSettings) => void }) {
   const { c } = useTheme();
@@ -149,7 +148,7 @@ export function SettingsScreen({ value, onChange }: { value: NotchSettings; onCh
             <Row
               key={w}
               title={WIDGET_NAMES[w]}
-              subtitle={ready ? (on ? 'Shown' : 'Hidden') : 'Coming soon'}
+              subtitle={on ? 'Shown' : 'Hidden'}
               trailing={
                 ready ? (
                   <View style={{ flexDirection: 'row', gap: 8 }}>
