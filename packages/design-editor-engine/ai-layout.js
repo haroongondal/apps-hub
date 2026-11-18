@@ -10,7 +10,8 @@
   const TOOL = 'make_layout';
   const DEFAULT_FILL = '#1d2433';
   const DEFAULT_BG = '#ffffff';
-  const NO_LAYOUT = 'The reply had no layout. Try again.';
+  // plain: true marks a message written for the person, so the page may show it as is
+  const noLayout = () => Object.assign(new Error('The reply had no layout. Try again.'), { plain: true });
 
   const fraction = { type: 'number', minimum: 0, maximum: 1 };
   const INPUT_SCHEMA = {
@@ -75,10 +76,12 @@
 
   function cleanItem(raw) {
     if (!raw || typeof raw !== 'object' || !TYPES.includes(raw.type)) return null;
-    const item = { type: raw.type, x: num(raw.x, 0, 1, 0.5), y: num(raw.y, 0, 1, 0.5), w: num(raw.w, 0, 1, 0.2), h: num(raw.h, 0, 1, 0.2) };
+    const w = num(raw.w, 0, 1, 0.2), h = num(raw.h, 0, 1, 0.2);
+    // x and y are the centre (a line's bounding box too), so the whole item stays on the page
+    const item = { type: raw.type, x: num(raw.x, w / 2, 1 - w / 2, 0.5), y: num(raw.y, h / 2, 1 - h / 2, 0.5), w, h };
     item.fill = colour(raw.fill, DEFAULT_FILL);
     if (raw.type === 'text') {
-      const text = typeof raw.text === 'string' ? raw.text.slice(0, MAX_TEXT) : '';
+      const text = typeof raw.text === 'string' ? Array.from(raw.text).slice(0, MAX_TEXT).join('') : '';
       if (!text.trim()) return null;
       item.text = text;
       item.size = num(raw.size, 0.01, 0.3, 0.06);
@@ -99,8 +102,9 @@
     const blocks = reply && Array.isArray(reply.content) ? reply.content : [];
     const call = blocks.find((b) => b && b.type === 'tool_use' && b.name === TOOL);
     const input = call && call.input;
-    if (!input || typeof input !== 'object' || !Array.isArray(input.items)) throw new Error(NO_LAYOUT);
+    if (!input || typeof input !== 'object' || !Array.isArray(input.items)) throw noLayout();
     const items = input.items.slice(0, MAX_ITEMS).map(cleanItem).filter(Boolean);
+    if (!items.length) throw noLayout();
     return { bg: colour(input.bg, DEFAULT_BG), items };
   }
 
