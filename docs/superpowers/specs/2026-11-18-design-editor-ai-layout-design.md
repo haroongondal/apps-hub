@@ -44,7 +44,7 @@ about 10 tokens/s and 150 s per image).
 ## Approaches
 
 1. **Engine builds the page from a validated layout (picked).** Claude returns a layout through
-   a forced tool call (`input_schema`), the pure module `ai-layout.js` validates and clamps it,
+   a tool call (`input_schema`), the pure module `ai-layout.js` validates and clamps it,
    and `app.js` builds Fabric objects the way `applyTemplate` does. Native only stores the key
    and forwards the request. Trade-off: the layout vocabulary is small (five object types).
 2. **Claude returns a full design JSON** in the editor's save format. More expressive, but the
@@ -60,7 +60,9 @@ inlined by `build.mjs` for the phone, and `require`-able from `node --test`):
 
 - `buildRequest(prompt, W, H)` returns the Messages API body: model constant (my call:
   `claude-sonnet-5-5`), a system prompt that states the page size and the allowed fonts, one
-  tool `make_layout` with `tool_choice` forcing it.
+  tool `make_layout`. `tool_choice` is `auto`: the Messages API rejects a forced tool on this
+  model (claude-api skill, 2026-11-18), so the prompt asks for exactly one call and
+  `parseReply` throws when there is none.
 - Layout schema: `{ bg: "#rrggbb", items: [...] }`, at most 30 items. Each item has `type`
   (`text`, `rect`, `circle`, `star`, `line`), a centre `x`, `y` and size `w`, `h` as fractions
   of the page (0 to 1). Text adds `text` (at most 300 characters), `size` as a fraction of the
