@@ -52,6 +52,8 @@ class OutputNameTest {
     assertEquals("reversed", labels["reverse"])
     assertEquals("stabilized", labels["stabilize"])
     assertEquals("", labels["gif"])
+    assertEquals("lossless", labels["imagePng"])
+    assertEquals("Shot (lossless).jpg", outputName("Shot.jpeg", labels.getValue("imageJpg"), outputExt(plans.getValue("imageJpg")), none))
     assertEquals("Clip (frame).png", outputName("Clip.mp4", labels.getValue("frame"), outputExt(plans.getValue("frame")), none))
   }
 

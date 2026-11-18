@@ -17,6 +17,8 @@ class TargetsTest {
     assertEquals(Target(Kind.AUDIO, "Music/Design Editor/", "audio/mp4"), target("convertM4a"))
     assertEquals(Target(Kind.IMAGE, "Pictures/Design Editor/", "image/gif"), target("gif"))
     assertEquals(Target(Kind.IMAGE, "Pictures/Design Editor/", "image/png"), target("frame"))
+    assertEquals(Target(Kind.IMAGE, "Pictures/Design Editor/", "image/png"), target("imagePng"))
+    assertEquals(Target(Kind.IMAGE, "Pictures/Design Editor/", "image/jpeg"), target("imageJpg"))
   }
 
   @Test

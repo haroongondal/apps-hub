@@ -202,7 +202,12 @@ class MediaJobService : Service() {
     when (outcome) {
       is Outcome.Failed -> {
         Log.w(TAG, "${r.plan.tool} failed: ${outcome.detail}")
-        if (outcome.detail == PhotoIndexRunner.MODELS_MISSING) giveUp(r, Messages.TOOL_MISSING) else encoderFailed(r, failureMessage(r.plan))
+        when (outcome.detail) {
+          PhotoIndexRunner.MODELS_MISSING -> giveUp(r, Messages.TOOL_MISSING)
+          ImageRunner.NO_GAIN -> giveUp(r, Messages.IMAGE_NO_GAIN)
+          ImageRunner.LEFT_ALONE -> giveUp(r, Messages.IMAGE_HDR)
+          else -> encoderFailed(r, failureMessage(r.plan))
+        }
       }
       is Outcome.Written -> {
         r.label = outcome.label

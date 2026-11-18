@@ -23,6 +23,7 @@ fun outputLabel(plan: Plan): String = when (plan) {
   is ClipPlan -> "clip"
   is ConvertPlan -> "converted"
   is FramePlan -> "frame"
+  is ImagePlan -> "lossless"
   is VolumePlan -> "volume"
   is ReversePlan -> "reversed"
   is StabilizePlan -> "stabilized"
@@ -41,6 +42,7 @@ fun outputExt(plan: Plan): String = when (plan) {
   is AudioPlan -> plan.ext
   is ConvertPlan -> plan.ext
   is FramePlan -> plan.ext
+  is ImagePlan -> plan.ext
   is VolumePlan -> plan.ext
   PhotoIndexPlan -> "bin"
 }

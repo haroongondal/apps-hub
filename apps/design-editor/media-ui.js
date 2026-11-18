@@ -2,7 +2,7 @@ const api = window.native.media;
 const $ = id => document.getElementById(id);
 const $$ = sel => [...document.querySelectorAll(sel)];
 const MB = 1e6;
-const TOOL_LABELS = { size: 'Compress to size', quality: 'Compress by quality', clip: 'Clip', audio: 'Extract audio', gif: 'Make a GIF', convert: 'Convert', frame: 'Still frame', volume: 'Volume', reverse: 'Reverse', stabilize: 'Stabilize' };
+const TOOL_LABELS = { size: 'Compress to size', quality: 'Compress by quality', clip: 'Clip', audio: 'Extract audio', gif: 'Make a GIF', convert: 'Convert', frame: 'Still frame', volume: 'Volume', reverse: 'Reverse', stabilize: 'Stabilize', image: 'Compress image' };
 const STATE_TEXT = { queued: 'Queued', running: 'Working', done: 'Done', failed: 'Failed', cancelled: 'Cancelled', interrupted: 'Interrupted', paused: 'Paused' };
 const state = { tool: 'size', files: [], selected: new Set(), folder: null, jobs: [], destinations: [], specs: new Map() };
 let planTimer = 0;
@@ -63,6 +63,7 @@ function selectedFiles() {
 }
 
 function describe(f) {
+  if (f.container === 'image') return `Image · ${(f.bytes / MB).toFixed(1)} MB`;
   const v = f.tracks.find(t => t.kind === 'video');
   const audio = f.tracks.filter(t => t.kind === 'audio').length;
   return [
@@ -209,6 +210,8 @@ function buildSpec(f) {
       return { tool: 'reverse', inputId: f.id, sound: $('reverseSound').checked };
     case 'stabilize':
       return { tool: 'stabilize', inputId: f.id, level: $('stabilizeLevel').value };
+    case 'image':
+      return { tool: 'image', inputId: f.id };
     default:
       throw new Error("This job type isn't supported yet.");
   }
@@ -248,6 +251,8 @@ function describePlan(p) {
       return p.sound ? 'Picture and sound run backwards, re-encoded to H.264' : 'Picture runs backwards, sound removed';
     case 'stabilize':
       return `Stabilized, level ${{ minimum: 'Minimum cut', recommended: 'Recommended', most: 'Most stable' }[p.level]}`;
+    case 'image':
+      return `Lossless ${p.format === 'png' ? 'PNG' : 'JPEG'}: every pixel stays the same`;
     default:
       return 'Ready';
   }
@@ -293,7 +298,7 @@ function updateStart() {
 const JOB_LINE = job => {
   const parts = [TOOL_LABELS[job.plan.tool], STATE_TEXT[job.state] ?? job.state];
   if (job.state === 'running' && job.attempt > 1) parts.push(`Try ${job.attempt} of 3`);
-  if (job.state === 'done') parts.push(job.outputs[0].name);
+  if (job.state === 'done') parts.push(job.outputs[0].name, ...(job.outputs[0].note ? [job.outputs[0].note] : []));
   return parts.join(' · ');
 };
 

@@ -1,5 +1,5 @@
 export type Platform = 'mac' | 'android';
-export type Tool = 'size' | 'quality' | 'clip' | 'audio' | 'gif' | 'convert' | 'frame' | 'volume' | 'reverse' | 'stabilize' | 'compose';
+export type Tool = 'size' | 'quality' | 'clip' | 'audio' | 'gif' | 'convert' | 'frame' | 'volume' | 'reverse' | 'stabilize' | 'compose' | 'image';
 export type Codec = 'h264' | 'hevc' | 'vp8' | 'vp9' | 'av1' | 'mpeg4' | 'prores'
   | 'aac' | 'alac' | 'mp3' | 'opus' | 'vorbis' | 'ac3' | 'eac3' | 'flac' | 'pcm' | 'dts' | 'truehd' | 'other';
 
@@ -13,7 +13,7 @@ export interface Track {
 export interface MediaInfo {
   id: string;               // Mac: main-process input id; Android: the content:// URI
   name: string; bytes: number; durationS: number;
-  container: 'mp4' | 'mov' | 'mkv' | 'webm' | 'mp3' | 'm4a' | 'ogg' | 'wav' | 'flac' | 'other';
+  container: 'mp4' | 'mov' | 'mkv' | 'webm' | 'mp3' | 'm4a' | 'ogg' | 'wav' | 'flac' | 'image' | 'other';
   tracks: Track[];
 }
 export type Encoder = 'hw-h264' | 'hw-hevc' | 'x264';          // hw = MediaCodec or VideoToolbox
@@ -52,7 +52,9 @@ export interface ComposeClip { uri: string; name: string; inS: number; outS: num
 export interface ComposeMusic { uri: string; name: string; inS: number; outS: number; startS: number; volume: number }
 export interface ComposePlan { tool: 'compose'; clips: ComposeClip[]; music: ComposeMusic[]; width: number; height: number; fps: number; videoBps: number; plannedBytes: number; ext: 'mp4' }
 export interface PhotoIndexPlan { tool: 'photo-index' }
-export type Plan = SizePlan | QualityPlan | ClipPlan | AudioPlan | GifPlan | ConvertPlan | FramePlan | VolumePlan | ReversePlan | StabilizePlan | ComposePlan | PhotoIndexPlan;
+// Lossless: PNG is re-packed, JPEG loses its metadata. The picture's pixels never change.
+export interface ImagePlan { tool: 'image'; format: 'png' | 'jpg'; ext: 'png' | 'jpg' }
+export type Plan = SizePlan | QualityPlan | ClipPlan | AudioPlan | GifPlan | ConvertPlan | FramePlan | VolumePlan | ReversePlan | StabilizePlan | ComposePlan | PhotoIndexPlan | ImagePlan;
 
 export type JobState = 'queued' | 'running' | 'done' | 'failed' | 'cancelled' | 'interrupted' | 'paused';
 export interface Output { name: string; ref: string /* Mac path or Android content URI */; bytes: number; note?: string /* "converted to AAC" */ }

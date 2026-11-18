@@ -4,6 +4,7 @@ import { planClip } from './clip.ts';
 import { planConvert } from './convert.ts';
 import { planFrame } from './frame.ts';
 import { planGif } from './gif.ts';
+import { planImage } from './image.ts';
 import { planQuality } from './quality.ts';
 import { planReverse } from './reverse.ts';
 import { planStabilize } from './stabilize.ts';
@@ -35,5 +36,6 @@ export function planFor(spec: JobSpec, info: MediaInfo, ctx: PlanContext): Plann
     case 'volume': return planVolume(info, spec.mode, spec.gainDb);
     case 'reverse': return planReverse(info, spec.sound);
     case 'stabilize': return planStabilize(info, spec.level);
+    case 'image': return planImage(info);
   }
 }
