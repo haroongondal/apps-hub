@@ -1,4 +1,4 @@
-"""Computes the escrow section of vault-vectors.json without Strongroom's own code.
+"""Computes the escrow and signin sections of vault-vectors.json without Strongroom's own code.
 
 Requires only cryptography (AES-GCM); HKDF-SHA-256 comes from account_key_vectors.py, which writes
 it out from RFC 5869 with hmac and hashlib. Dev-time oracle only, never a project dependency; run it
@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from account_key_vectors import VECTORS, hkdf  # noqa: E402
 
 LABEL = 'strongroom/v1/escrow'
+SIGNIN_LABEL = 'strongroom/v1/signin'
 CODE = bytes(range(0x50, 0x64))  # 20 fixed bytes: the emailed code
 RECOVERY_KEY = bytes(range(0x70, 0x84))
 ACCOUNT_KEY = bytes(range(0x90, 0xA4))
@@ -46,10 +47,21 @@ def main() -> None:
         'nonce': NONCE.hex(),
         'blob': blob.hex(),
     }
-    print(json.dumps(section, indent=4))
+    signin_blob = NONCE + AESGCM(hkdf(CODE, SIGNIN_LABEL)).encrypt(NONCE, ACCOUNT_KEY, SIGNIN_LABEL.encode())
+    assert len(signin_blob) == 12 + 20 + 16
+    signin = {
+        'note': NOTE.replace('recoveryKey || accountKey (40 bytes)', 'accountKey only (20 bytes)').replace('escrow_vectors.py', 'escrow_vectors.py (signin section)'),
+        'label': SIGNIN_LABEL,
+        'code': CODE.hex(),
+        'accountKey': ACCOUNT_KEY.hex(),
+        'nonce': NONCE.hex(),
+        'blob': signin_blob.hex(),
+    }
+    print(json.dumps({'escrow': section, 'signin': signin}, indent=4))
     if '--write' in sys.argv:
         v = json.loads(VECTORS.read_text())
         v['escrow'] = section
+        v['signin'] = signin
         VECTORS.write_text(json.dumps(v, indent=4) + '\n')
         print(f'wrote {VECTORS}')
 

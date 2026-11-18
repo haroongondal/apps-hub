@@ -1,0 +1,74 @@
+# Deploys the Strongroom vault Worker (tools/vault-api) to the owner's personal Cloudflare account:
+# on a push to main that changes the Worker or the code it bundles, or by hand ("Run workflow"; use it after a [skip ci] merge).
+# Order: tests, then every new D1 migration (the owner chose to apply them all), then the deploy, then a check that the Worker answers.
+# Repository secrets: CLOUDFLARE_API_TOKEN (personal account; Workers Scripts: Edit, D1: Edit), CLOUDFLARE_ACCOUNT_ID,
+# VAULT_SETUP_TOKEN (the SETUP_TOKEN value from tools/vault-api/.dev.vars on the owner's Mac).
+name: Deploy vault Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/vault-api/**
+      - packages/strongroom-core/**
+      - pnpm-lock.yaml
+      - .github/workflows/deploy-vault.yml
+  workflow_dispatch:
+
+concurrency:
+  # One deploy at a time, never cancelled halfway (a migration may be mid-apply).
+  group: deploy-vault
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: tools/vault-api
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_QUIET: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0, pinned: this job holds the Cloudflare token
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      # The Worker and the workspace code it bundles (strongroom-core).
+      - run: pnpm --filter '@apps-hub/vault-api...' test
+      - run: pnpm --filter '@apps-hub/vault-api...' typecheck
+      - name: Check the secrets are set
+        env:
+          SETUP_TOKEN: ${{ secrets.VAULT_SETUP_TOKEN }}
+        run: |
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID SETUP_TOKEN; do
+            [ -n "${!name}" ] || { echo "::error::Repository secret for $name is missing (see the top of deploy-vault.yml)."; exit 1; }
+          done
+      - name: Apply new D1 migrations
+        run: |
+          db=$(grep -o "d1({ id: '[0-9a-f-]*'" cloudflare.config.ts | cut -d"'" -f2)
+          [ -n "$db" ] || { echo "::error::No D1 id found in cloudflare.config.ts"; exit 1; }
+          pnpm exec cf d1 migrations apply "$db"
+      - name: Deploy
+        env:
+          SETUP_TOKEN: ${{ secrets.VAULT_SETUP_TOKEN }}
+        run: |
+          umask 077
+          printf 'SETUP_TOKEN=%s\n' "$SETUP_TOKEN" > "$RUNNER_TEMP/vault.vars"
+          pnpm exec cf deploy --secrets-file "$RUNNER_TEMP/vault.vars"
+      - name: Check the Worker answers
+        run: |
+          url=$(grep -o "PUBLIC_URL: bindings.text('[^']*'" cloudflare.config.ts | cut -d"'" -f2)
+          curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -o /dev/null -w "prelogin %{http_code}\n" "$url/v1/prelogin"
+      - name: Remove the secrets file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/vault.vars"

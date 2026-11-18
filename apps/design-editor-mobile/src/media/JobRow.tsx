@@ -13,7 +13,7 @@ export function JobRow({ job }: { job: NativeJobStatus }) {
   const out = job.outputs[0];
   const actions = job.state === 'running' || job.state === 'queued'
     ? <Button label="Stop" variant="ghost" onPress={() => DesignMedia.cancel(job.id).catch(say)} />
-    : job.state === 'done' && out
+    : job.state === 'done' && out && job.tool !== 'photo-index'
       ? (
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           <Button label="Share" variant="secondary" onPress={() => DesignMedia.share(out.ref).catch(say)} />
@@ -21,7 +21,10 @@ export function JobRow({ job }: { job: NativeJobStatus }) {
         </View>
       )
       : job.state === 'failed' || job.state === 'cancelled'
-        ? <Button label="Try again" variant="secondary" onPress={() => { tryAgain(job.id).then(ok => { if (!ok) Alert.alert('Pick the file again', 'Start this from its tool.'); }, say); }} />
+        ? <Button label="Try again" variant="secondary" onPress={() => {
+          if (job.tool === 'photo-index') DesignMedia.startPhotoIndex().catch(say);
+          else tryAgain(job.id).then(ok => { if (!ok) Alert.alert('Pick the file again', 'Start this from its tool.'); }, say);
+        }} />
         : job.state === 'paused' || job.state === 'interrupted'
           ? <Button label="Resume" variant="secondary" onPress={() => DesignMedia.resume().catch(say)} />
           : null;

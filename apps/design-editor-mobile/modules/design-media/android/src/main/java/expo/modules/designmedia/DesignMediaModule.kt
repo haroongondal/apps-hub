@@ -7,6 +7,7 @@ import expo.modules.designmedia.android.CompositionView
 import expo.modules.designmedia.android.DesignSaves
 import expo.modules.designmedia.android.Intents
 import expo.modules.designmedia.android.MediaJobService
+import expo.modules.designmedia.android.PhotoSearch
 import expo.modules.designmedia.android.Probe
 import expo.modules.designmedia.android.Thumbs
 import expo.modules.designmedia.android.Waveform
@@ -107,6 +108,22 @@ class DesignMediaModule : Module() {
     AsyncFunction("queue") {
       shownQueue(QueueStore(AtomicFile(File(context.filesDir, "media-queue.json"))).load(), MediaJobService.alive).map { it.toStatusMap() }
     }
+
+    AsyncFunction("photoModels") { PhotoSearch.models(context) }
+
+    AsyncFunction("installPhotoModel") { name: String -> PhotoSearch.install(context, name) }.runOnQueue(readScope)
+
+    AsyncFunction("startPhotoIndex") { PhotoSearch.startIndex(context) }.runOnQueue(readScope)
+
+    AsyncFunction("photoIndexState") { PhotoSearch.state(context) }.runOnQueue(readScope)
+
+    AsyncFunction("photoGalleryChanged") { PhotoSearch.galleryChanged(context) }.runOnQueue(readScope)
+
+    AsyncFunction("searchPhotos") { query: String -> PhotoSearch.search(context, query) }.runOnQueue(readScope)
+
+    AsyncFunction("similarPhotos") { uri: String -> PhotoSearch.similar(context, uri) }.runOnQueue(readScope)
+
+    AsyncFunction("releasePhotoSearch") { PhotoSearch.release() }
 
     // saveFile posts from the editor page: designs cross as text, exports as base64 (SPEC §14.3)
     AsyncFunction("saveJson") { name: String, text: String, filePath: String? ->

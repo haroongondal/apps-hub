@@ -399,6 +399,8 @@ internal class PrefsRecoverySettings(private val p: SharedPreferences) : Recover
     confirmed = p.getBoolean("escrowConfirmed", false),
     lostClaim = p.getString("lostClaim", null),
     lostBlob = p.getString("lostBlob", null),
+    signinClaim = p.getString("signinClaim", null),
+    signinBlob = p.getString("signinBlob", null),
     keyUnseen = p.getBoolean("keyUnseen", false),
   )
 
@@ -409,6 +411,8 @@ internal class PrefsRecoverySettings(private val p: SharedPreferences) : Recover
       .putBoolean("escrowConfirmed", r.confirmed)
       .putString("lostClaim", r.lostClaim)
       .putString("lostBlob", r.lostBlob)
+      .putString("signinClaim", r.signinClaim)
+      .putString("signinBlob", r.signinBlob)
       .putBoolean("keyUnseen", r.keyUnseen)
       .commit()
   }

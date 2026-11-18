@@ -58,8 +58,15 @@ Current apps:
   `docs/superpowers/plans/2026-11-13-inflow-stage-*.md`, `docs/superpowers/plans/2026-11-18-inflow-ux.md`; progress:
   `docs/handoffs/inflow.md`.
 
-Not here on purpose: `~/Documents/browser-automation` (stays standalone) and
-`~/Documents/agent-harness` (deferred until its phase branches are merged).
+- **autonomous-browsing** (`apps/autonomous-browsing`) — Electron desktop app for
+  chat-authored browser automation routines, copied in from
+  `~/Documents/browser-automation` on 2026-11-17 (tracked files only, no git
+  history; the original stays standalone). A normal pnpm workspace member now;
+  its `CLAUDE.md` and `AI_CONTEXT.md` still say `npm run`, read that as
+  `pnpm --filter autonomous-browsing <script>`.
+
+Not here on purpose: `~/Documents/agent-harness` (deferred until its phase
+branches are merged).
 
 Planned (do not scaffold yet):
 - macOS/Windows targets for NetLens (react-native-macos / Electron) — future scope.
@@ -155,6 +162,9 @@ cd apps/strongroom/android && JAVA_HOME=$JAVA_HOME ./gradlew \
 # Native compile gate (Inflow):
 cd apps/inflow/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :inflow-core:testDebugUnitTest :app:assembleDebug
+# Native compile gate (PDF Editor mobile; the Scan module's JVM tests):
+cd apps/pdf-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
+  :pdf-scan:testDebugUnitTest :app:assembleDebug
 # Native compile gate (Design Editor mobile):
 cd apps/design-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :design-media:testDebugUnitTest :app:assembleDebug

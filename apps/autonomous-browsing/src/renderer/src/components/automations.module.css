@@ -1,0 +1,107 @@
+.group {
+  margin-top: var(--s-6);
+}
+
+.groupHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--s-4);
+}
+
+.row {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  padding: var(--s-5);
+  margin-bottom: var(--s-4);
+}
+
+.name {
+  font: var(--t-body-strong);
+  letter-spacing: -0.01em;
+}
+
+.description {
+  font: var(--t-meta);
+  color: var(--text-2);
+  margin-top: var(--s-2);
+}
+
+.params {
+  display: grid;
+  gap: var(--s-4);
+  margin-top: var(--s-5);
+  padding-top: var(--s-5);
+  border-top: 1px dashed var(--line);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-top: var(--s-5);
+}
+
+.grow {
+  flex: 1;
+}
+
+.rowError {
+  margin-top: var(--s-4);
+  font: var(--t-meta);
+  color: var(--fault);
+}
+
+.syncErrors {
+  margin: var(--s-4) 0 0;
+  border: 1px solid var(--fault);
+  border-radius: var(--r-md);
+  background: var(--fault-wash);
+  padding: var(--s-4) var(--s-5);
+  display: grid;
+  gap: var(--s-2);
+}
+
+.syncError {
+  font: var(--t-code);
+  color: var(--fault);
+  overflow-wrap: anywhere;
+}
+
+.newGoal {
+  width: 100%;
+}
+
+.hint {
+  font: var(--t-meta);
+  color: var(--text-3);
+}
+
+.groupTail {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+}
+
+.pending {
+  justify-self: start;
+  border: 1px solid var(--human);
+  background: var(--human-wash);
+  color: var(--human);
+  border-radius: var(--r-sm);
+  padding: var(--s-2) var(--s-3);
+  font: var(--t-meta);
+  cursor: pointer;
+  text-align: left;
+}
+
+.pending:hover {
+  background: var(--surface-2);
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
