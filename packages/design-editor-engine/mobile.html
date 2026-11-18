@@ -137,8 +137,9 @@ body.embedded.obj .inspector { display: block; }
 /* room under the page for the sheet, so a selected item can scroll up above it (touch.js, keepVisible) */
 body.embedded.obj.room #board { padding-bottom: calc(46vh + 12px); }
 body.embedded .drawer, body.embedded .inspector { -webkit-overflow-scrolling: touch; }
-/* Upscale and cut-out: the estimate, progress and Cancel stay on screen however far the sheet is scrolled */
-body.embedded #vbox:not(:empty) { position: sticky; top: 0; bottom: 0; z-index: 1; background: var(--surface); padding: 2px 0 6px; }
+/* Upscale and cut-out: the estimate, progress and Cancel stay on screen however far the sheet is scrolled
+   (the offsets are the sheet's own padding, which sticky positions count from) */
+body.embedded #vbox:not(:empty) { position: sticky; top: -8px; bottom: -14px; z-index: 1; background: var(--surface); padding: 8px 0; }
 /* a close button per drawer section, added by touch.js (class sheetdone); the inspector dismisses by tapping the board */
 body.embedded .drawer section::before { content: ""; display: block; width: 36px; height: 4px; margin: 0 auto 10px; border-radius: 2px; background: var(--ink-soft); }
 body.embedded .drawer .sheetdone { display: block; margin: 8px 0 0 auto; border: 0; color: var(--cobalt); font-weight: 600; }
