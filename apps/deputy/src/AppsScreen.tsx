@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Empty, Field, Group, Header, Notice, Pill, Row, Screen, Segmented, Sheet, Text, type Tone } from '@apps-hub/ui';
+import { Button, Empty, Field, Group, Header, Notice, Pill, Row, Screen, Segmented, Sheet, Text, type Tone } from '@apps-hub/ui';
 import DeputyAgent, { type AppTrust, type TrustLevel } from 'deputy-agent';
 
 const LEVELS: Record<TrustLevel, { label: string; tone: Tone; detail: string }> = {
@@ -62,6 +62,13 @@ function TrustSheet({ app, onClose, onSaved }: { app: AppTrust; onClose: () => v
     onClose();
   };
 
+  const reset = async () => {
+    const e = await DeputyAgent.setAppTrust(app.pkg, app.defaultTrust, null);
+    if (e) return setError(e);
+    onSaved();
+    onClose();
+  };
+
   return (
     <Sheet visible onClose={onClose} title={app.label} doneLabel="Save" onDone={save}>
       <Segmented
@@ -86,6 +93,9 @@ function TrustSheet({ app, onClose, onSaved }: { app: AppTrust; onClose: () => v
         <Notice tone="danger" title="Not changed">
           {error}
         </Notice>
+      )}
+      {app.trust !== app.defaultTrust && (
+        <Button label={`Reset to default (${LEVELS[app.defaultTrust].label})`} variant="secondary" onPress={reset} block />
       )}
     </Sheet>
   );

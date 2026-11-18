@@ -58,6 +58,15 @@ test('the store description and the setup text make no claim that a sync build b
   assert.doesNotMatch(popup, /Nothing leaves it/);
 });
 
+test('the anti-goal disclosure (anyone who can use this browser profile can use this vault) is on both the Settings and unlock screens', () => {
+  const popup = readFileSync(join(pkg, 'src/popup.ts'), 'utf8');
+  assert.match(popup, /anyone who can use this browser profile can use this vault/i);
+  const [settingsScreen] = popup.match(/async function settingsScreen\(\)[\s\S]*?\n}/) ?? [];
+  const [unlockScreen] = popup.match(/async function unlockScreen\(\)[\s\S]*?\n}/) ?? [];
+  assert.match(settingsScreen ?? '', /PROFILE_NOTICE/, 'settingsScreen');
+  assert.match(unlockScreen ?? '', /PROFILE_NOTICE/, 'unlockScreen');
+});
+
 test('a build refuses a server address that is not https, except on this computer', () => {
   assert.throws(() => build('http://vault.example.com'), /https/);
   assert.ok(build('https://vault.example.com/').manifest.host_permissions[0] === 'https://vault.example.com/*');

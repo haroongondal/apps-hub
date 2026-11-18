@@ -16,7 +16,8 @@
  *     dead probes never create rows,
  *   - a row whose identityKey was never stored for this network is flagged
  *     isNew = true (AC-2, drives the UI "NEW" badge),
- *   - custom_name and is_trusted are never overwritten by a scan (AC-3),
+ *   - custom_name and is_trusted (devices) and a network's custom_name are
+ *     never overwritten by a scan (AC-3),
  *   - devices not answering in the current sweep remain stored (history)
  *     and are reported with seenThisScan = false.
  */
@@ -53,12 +54,36 @@ export interface StoredDevice {
 }
 
 export interface DeviceStore {
+  /**
+   * Insert a network or refresh its gateway, subnet and scan time. An existing
+   * row keeps its custom_name: only `renameNetwork` changes it.
+   */
   upsertNetwork(network: StoredNetwork): Promise<void>;
+  /** Every saved network, most recently scanned first. */
+  listNetworks(): Promise<StoredNetwork[]>;
+  /** Set or clear (null) the name the person gave a network. */
+  renameNetwork(networkId: string, customName: string | null): Promise<void>;
+  /** Forget a network and every device saved for it. */
+  deleteNetwork(networkId: string): Promise<void>;
   listDevices(networkId: string): Promise<StoredDevice[]>;
   /** Insert a brand-new device row; resolves with its generated row id. */
   insertDevice(device: StoredDevice): Promise<number>;
   /** Full-row update (id required); callers compose from the existing row. */
   updateDevice(device: StoredDevice): Promise<void>;
+  /** Forget one device by row id. A later scan that sees it stores it as new. */
+  deleteDevice(id: number): Promise<void>;
+}
+
+/** What to show for a network: the person's name for it, else its subnet. */
+export function networkLabel(network: Pick<StoredNetwork, 'customName' | 'subnetCidr'>): string {
+  const name = network.customName?.trim();
+  return name ? name : network.subnetCidr;
+}
+
+/** Trimmed name to store, or null when the person cleared the field. */
+export function normalizeNetworkName(input: string): string | null {
+  const name = input.trim();
+  return name ? name : null;
 }
 
 /**
@@ -170,11 +195,14 @@ export async function reconcileScan(
   store: DeviceStore,
   now: number = Date.now(),
 ): Promise<ReconcileResult> {
+  const savedNetworks = await store.listNetworks();
+  const savedNetwork = savedNetworks.find((network) => network.networkId === scan.networkId);
   await store.upsertNetwork({
     networkId: scan.networkId,
     gatewayIp: scan.gatewayIp ?? '',
     subnetCidr: scan.subnetCidr,
-    customName: null,
+    // A scan never renames a network; the name the person chose stays.
+    customName: savedNetwork?.customName ?? null,
     lastScannedAt: now,
   });
 

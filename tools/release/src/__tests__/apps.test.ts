@@ -12,9 +12,10 @@ test('releaseIdsForDirs maps changed package dirs to Store apps only', () => {
   assert.deepEqual(releaseIdsForDirs(['apps/pdf-editor-desktop', 'apps/netlens/modules/netlens-core']), []);
 });
 
+// The table may list apps still on unmerged branches, so a released Store already knows them.
 test("the Store's package table covers every releasable app and matches its app.json", () => {
-  assert.deepEqual(Object.keys(ANDROID_PACKAGES).sort(), Object.keys(APPS).sort());
-  for (const app of Object.values(APPS)) {
+  for (const [id, app] of Object.entries(APPS)) {
+    assert.equal(ANDROID_PACKAGES[id as keyof typeof ANDROID_PACKAGES], app.android.packageName, id);
     const appJson = JSON.parse(readFileSync(new URL(`../../../../${app.dir}/app.json`, import.meta.url), 'utf8'));
     assert.equal(app.android.packageName, appJson.expo.android.package, app.dir);
   }

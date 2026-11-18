@@ -1,5 +1,10 @@
 # Handoff: Strongroom for Chrome (browser extension)
 
+**See also:** this file documents the extension as it stood before the 2026-11-08
+security plan. `docs/handoffs/strongroom-extension-security.md` is the current handoff;
+it added lock-free autofill and sync, Export for Chrome, a sealed account key, and
+opt-in email recovery.
+
 ## Resume prompt
 
 Dated 2026-11-05. Strongroom is the owner's own-code password manager. Phase 1 (Android app) is

@@ -54,6 +54,7 @@ export function ffmpegArgs(plan: Plan, input: string, output: string, pass?: { n
     case 'reverse': return reverseArgs(plan, input, output);
     case 'stabilize': return stabilizeArgs(plan, input, output);
     case 'compose': throw new Error('Make a video runs on the phone only.');
+    case 'photo-index': throw new Error('Getting photos ready for search runs on the phone only.');
   }
 }
 

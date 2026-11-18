@@ -76,3 +76,63 @@ test('changing tags does not bump updated_at', async () => {
   await lib.setItemTags(a.id, ['x']);
   assert.equal((await lib.getItem(a.id))!.updatedAt, a.updatedAt);
 });
+
+test('renameTag changes the name on every item, and a case-only change is a rename', async () => {
+  const { lib } = await openLibrary();
+  const a = await lib.createItem({ kind: 'pdf', title: 'A' });
+  const b = await lib.createItem({ kind: 'pdf', title: 'B' });
+  await lib.setItemTags(a.id, ['tax']);
+  await lib.setItemTags(b.id, ['tax']);
+  const [tax] = await lib.listTags();
+  const renamed = await lib.renameTag(tax.id, '  Taxes 2026 ');
+  assert.deepEqual([renamed.id, renamed.name, renamed.itemCount], [tax.id, 'Taxes 2026', 2]);
+  assert.deepEqual(names(await lib.tagsFor(a.id)), ['Taxes 2026']);
+  assert.deepEqual(names(await lib.tagsFor(b.id)), ['Taxes 2026']);
+  assert.equal((await lib.renameTag(tax.id, 'TAXES 2026')).name, 'TAXES 2026');
+  assert.equal((await lib.getItem(a.id))!.updatedAt, a.updatedAt);
+});
+
+test('renameTag onto an existing name is a clear error that changes nothing, unless merge is asked for', async () => {
+  const { lib } = await openLibrary();
+  const a = await lib.createItem({ kind: 'pdf', title: 'A' });
+  const b = await lib.createItem({ kind: 'pdf', title: 'B' });
+  await lib.setItemTags(a.id, ['tax', 'bills']);
+  await lib.setItemTags(b.id, ['Taxes', 'bills']);
+  const byName = async (n: string) => (await lib.listTags()).find((t) => t.name === n)!;
+  const tax = await byName('tax');
+  await assert.rejects(lib.renameTag(tax.id, 'TAXES'), code('duplicate_name'));
+  assert.deepEqual(names(await lib.listTags()), ['bills', 'tax', 'Taxes']);
+
+  const merged = await lib.renameTag(tax.id, 'TAXES', { merge: true });
+  assert.deepEqual([merged.name, merged.itemCount], ['Taxes', 2]); // the existing tag keeps its spelling
+  assert.deepEqual(names(await lib.listTags()), ['bills', 'Taxes']);
+  assert.deepEqual(names(await lib.tagsFor(a.id)), ['bills', 'Taxes']);
+  assert.deepEqual(names(await lib.tagsFor(b.id)), ['bills', 'Taxes']); // no duplicate link for the item that had both
+});
+
+test('renameTag validates the name and the tag must exist', async () => {
+  const { lib } = await openLibrary();
+  const a = await lib.createItem({ kind: 'pdf', title: 'A' });
+  await lib.setItemTags(a.id, ['x']);
+  const [x] = await lib.listTags();
+  for (const bad of ['', '   ', 'x'.repeat(101), 'bad\u0000tag']) {
+    await assert.rejects(lib.renameTag(x.id, bad), code('invalid_name'), JSON.stringify(bad));
+  }
+  await assert.rejects(lib.renameTag('0000000000000000', 'y'), code('not_found'));
+  assert.deepEqual(names(await lib.listTags()), ['x']);
+});
+
+test('deleteTag removes it from every item and leaves the items alone', async () => {
+  const { lib } = await openLibrary();
+  const a = await lib.createItem({ kind: 'pdf', title: 'A' });
+  const b = await lib.createItem({ kind: 'scan', title: 'B' });
+  await lib.setItemTags(a.id, ['tax', 'keep']);
+  await lib.setItemTags(b.id, ['tax']);
+  const tax = (await lib.listTags()).find((t) => t.name === 'tax')!;
+  await lib.deleteTag(tax.id);
+  assert.deepEqual(names(await lib.listTags()), ['keep']);
+  assert.deepEqual(names(await lib.tagsFor(a.id)), ['keep']);
+  assert.deepEqual(await lib.tagsFor(b.id), []);
+  assert.deepEqual(titles(await lib.list({ everywhere: true, sort: 'title' })), ['A', 'B']);
+  await assert.rejects(lib.deleteTag(tax.id), code('not_found'));
+});

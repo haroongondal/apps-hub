@@ -3,20 +3,24 @@ package expo.modules.strongroomvault.android
 import expo.modules.strongroomvault.core.AccountCreate
 import expo.modules.strongroomvault.core.AccountUpdate
 import expo.modules.strongroomvault.core.PushRequest
+import expo.modules.strongroomvault.core.SyncAuthError
 import expo.modules.strongroomvault.core.SyncOfflineError
 import expo.modules.strongroomvault.core.SyncTransport
 import expo.modules.strongroomvault.core.SyncWire
 import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 
 private const val CONNECT_MS = 15_000
 private const val READ_MS = 30_000
+private const val PROBE_MS = 5_000
 private const val PAGE = 100
 private const val MAX_BODY = 16 * 1024 * 1024
 
-internal class HttpSyncTransport(baseUrl: String) : SyncTransport {
+// readMs and probeMs are parameters only so a test can wait for a timeout in milliseconds.
+internal class HttpSyncTransport(baseUrl: String, private val readMs: Int = READ_MS, private val probeMs: Int = PROBE_MS) : SyncTransport {
   private val base: URL
 
   init {
@@ -38,15 +42,41 @@ internal class HttpSyncTransport(baseUrl: String) : SyncTransport {
   override fun putAccount(token: ByteArray, body: AccountUpdate) =
     call("PUT", "/v1/account", bearer(token), SyncWire.toJson(body)).let { (s, b) -> SyncWire.account(s, b) }
 
+  override fun lostRequest(claimHash: String) =
+    call("POST", "/v1/lost/request", null, SyncWire.lostRequestBody(claimHash)).let { (s, b) -> SyncWire.ok(s, b) }
+
+  override fun lostRelease(claim: String) =
+    call("POST", "/v1/lost/release", null, SyncWire.lostReleaseBody(claim)).let { (s, b) -> SyncWire.lostRelease(s, b) }
+
+  override fun lostStatus(token: ByteArray) =
+    call("GET", "/v1/lost/status", bearer(token), null).let { (s, b) -> SyncWire.lostStatus(s, b) }
+
+  // The Worker ignores the cancel body; it is sent so no proxy refuses a POST without a length.
+  override fun lostCancel(token: ByteArray) =
+    call("POST", "/v1/lost/cancel", bearer(token), "{}").let { (s, b) -> SyncWire.ok(s, b) }
+
+  override fun deleteEscrow(token: ByteArray) =
+    call("DELETE", "/v1/escrow", bearer(token), null).let { (s, b) -> SyncWire.ok(s, b) }
+
+  override fun signinRequest(claimHash: String, deviceName: String) =
+    call("POST", "/v1/signin/request", null, SyncWire.signinRequestBody(claimHash, deviceName)).let { (s, b) -> SyncWire.ok(s, b) }
+
+  override fun signinRelease(claim: String) =
+    call("POST", "/v1/signin/release", null, SyncWire.lostReleaseBody(claim)).let { (s, b) -> SyncWire.lostRelease(s, b) }
+
+  override fun signinCancel(token: ByteArray) =
+    call("POST", "/v1/signin/cancel", bearer(token), "{}").let { (s, b) -> SyncWire.ok(s, b) }
+
   private fun bearer(token: ByteArray) = "Bearer " + SyncWire.toBase64(token)
 
   // No redirects: one could carry the bearer token to another host or to plain http.
   private fun call(method: String, path: String, auth: String?, body: String?): Pair<Int, String> {
     val c = URL(base, path).openConnection() as HttpURLConnection
+    var status: Int? = null
     try {
       c.requestMethod = method
       c.connectTimeout = CONNECT_MS
-      c.readTimeout = READ_MS
+      c.readTimeout = readMs
       c.instanceFollowRedirects = false
       c.useCaches = false
       c.setRequestProperty("User-Agent", "Strongroom") // not the default, which names the phone model
@@ -56,10 +86,30 @@ internal class HttpSyncTransport(baseUrl: String) : SyncTransport {
         c.setRequestProperty("Content-Type", "application/json")
         c.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
       }
-      val status = c.responseCode
-      return status to ((if (status >= 400) c.errorStream else c.inputStream)?.use(::read) ?: "")
+      val code = c.responseCode
+      status = code
+      return code to ((if (code >= 400) c.errorStream else c.inputStream)?.use(::read) ?: "")
     } catch (e: IOException) {
+      // The Worker holds refused tokens in a queue and answers right ones at once, so a token GET with no reply, while the public prelogin answers 200 or 404, is a refusal; a 5xx there is an unhealthy server, still offline.
+      if (e is SocketTimeoutException && status == null && method == "GET" && auth != null && answers("/v1/prelogin")) throw SyncAuthError()
       throw SyncOfflineError()
+    } finally {
+      c.disconnect()
+    }
+  }
+
+  // Only prelogin's two real answers count: 200, or 404 before an account exists.
+  private fun answers(path: String): Boolean {
+    val c = URL(base, path).openConnection() as HttpURLConnection
+    return try {
+      c.connectTimeout = probeMs
+      c.readTimeout = probeMs
+      c.instanceFollowRedirects = false
+      c.useCaches = false
+      c.setRequestProperty("User-Agent", "Strongroom")
+      c.responseCode.let { it == 200 || it == 404 }
+    } catch (e: IOException) {
+      false
     } finally {
       c.disconnect()
     }

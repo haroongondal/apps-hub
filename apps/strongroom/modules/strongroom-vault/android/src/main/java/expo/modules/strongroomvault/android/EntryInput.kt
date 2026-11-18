@@ -3,6 +3,7 @@ package expo.modules.strongroomvault.android
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.strongroomvault.core.Barcode
 import expo.modules.strongroomvault.core.BarcodeResult
+import expo.modules.strongroomvault.core.AppLink
 import expo.modules.strongroomvault.core.Entry
 import expo.modules.strongroomvault.core.Matching
 import expo.modules.strongroomvault.core.PassFormat
@@ -11,7 +12,17 @@ import expo.modules.strongroomvault.core.Site
 internal object EntryInput {
   private const val BAD_SITE = "That website address isn't valid. Check it and try again."
 
-  /** A login keeps the apps already stored for it: links are made only by autofill, never typed. */
+  /** An app link as the screen lists it, and as the screen names one to keep. */
+  fun appLabel(a: AppLink): String = a.domain?.let { "${a.app.pkg} ($it)" } ?: a.app.pkg
+
+  /** Links are made only by autofill, never typed: a login keeps its stored apps, or the stored ones named in `keep` when it is given. */
+  fun keptApps(stored: List<AppLink>, keep: List<*>?): List<AppLink> {
+    if (keep == null) return stored
+    val names = keep.filterIsInstance<String>().toSet()
+    return stored.filter { appLabel(it) in names }
+  }
+
+  /** A login keeps the apps already stored for it, less any the screen left out of `apps`. */
   fun toEntry(input: Map<String, Any?>, stored: Entry?): Entry = when (val type = input["type"]) {
     "login" -> Entry.Login(
       name = input.text("name"),
@@ -21,7 +32,7 @@ internal object EntryInput {
         .map { it as? String ?: throw IllegalArgumentException("sites must be strings") }
         .filter { it.isNotBlank() }
         .map { site(it) ?: throw CodedException("BAD_SITE", BAD_SITE, null) },
-      apps = (stored as? Entry.Login)?.apps.orEmpty(),
+      apps = keptApps((stored as? Entry.Login)?.apps.orEmpty(), input["apps"] as? List<*>),
       note = input.text("note"),
       updatedAt = 0,
     )

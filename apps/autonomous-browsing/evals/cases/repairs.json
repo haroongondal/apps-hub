@@ -1,0 +1,98 @@
+[
+  {
+    "id": "R01-selector-rot",
+    "note": "The stored selector rotted but the link is plainly there: repair onto the real element.",
+    "goal": "Open the Aurora desk lamp product page",
+    "steps": [
+      { "kind": "navigate", "url": "https://shop.lumen.example/lighting", "intent": "Open the lighting category" },
+      { "kind": "click", "selector": "#lamp-card-118 > a.buy", "intent": "Open the Aurora desk lamp page" }
+    ],
+    "failingIndex": 1,
+    "problem": "step \"click\" failed: could not use \"#lamp-card-118 > a.buy\" — nothing on this page matches it",
+    "page": { "file": "products-list.html", "url": "https://shop.lumen.example/lighting" },
+    "expect": { "verdict": "repair", "lastTarget": "product-aurora" }
+  },
+  {
+    "id": "R02-already-satisfied",
+    "note": "The banner the step dismisses is not on the page any more: proceed, do not invent a click.",
+    "goal": "Read the ferry article on the Daily Bugle",
+    "steps": [
+      { "kind": "navigate", "url": "https://dailybugle.example/city/night-ferry", "intent": "Open the article" },
+      { "kind": "click", "selector": "#accept-cookies", "intent": "Dismiss the cookie banner" },
+      { "kind": "extract", "selector": "article h1", "into": "headline", "intent": "Read the headline" }
+    ],
+    "failingIndex": 1,
+    "problem": "step \"click\" failed: could not use \"#accept-cookies\" — nothing on this page matches it",
+    "page": { "file": "news-article.html", "url": "https://dailybugle.example/city/night-ferry" },
+    "expect": { "verdict": "proceed" }
+  },
+  {
+    "id": "R03-behind-login",
+    "note": "The content sits behind a sign-in: no selector can reach it, so the verdict is impossible.",
+    "goal": "Get the current account balance from Acme Billing",
+    "steps": [
+      { "kind": "navigate", "url": "https://billing.acme.example/dashboard", "intent": "Open the dashboard" },
+      { "kind": "extract", "selector": ".account-balance", "into": "balance", "intent": "Read the balance" }
+    ],
+    "failingIndex": 1,
+    "problem": "step \"extract\" failed: could not use \".account-balance\" — nothing on this page matches it",
+    "page": { "file": "login-wall.html", "url": "https://billing.acme.example/invoices" },
+    "expect": { "verdict": "impossible" }
+  },
+  {
+    "id": "R04-committing-ambiguous",
+    "note": "Place order ran on a completed form with no visible reaction: never retried on the chance it did not land.",
+    "goal": "Order one SoundCore Q30 for Jane Doe",
+    "steps": [
+      { "kind": "navigate", "url": "https://shop.lumen.example/checkout", "intent": "Open the checkout page" },
+      { "kind": "type", "selector": "input[name=\"name\"]", "text": "Jane Doe", "intent": "Fill in the name" },
+      { "kind": "type", "selector": "input[name=\"email\"]", "text": "jane@example.com", "intent": "Fill in the receipt email" },
+      { "kind": "click", "selector": "button:has-text(\"Place order\")", "intent": "Place the order" }
+    ],
+    "failingIndex": 3,
+    "problem": "the action ran but the page did not react to it at all",
+    "page": {
+      "file": "checkout-form.html",
+      "url": "https://shop.lumen.example/checkout",
+      "prepare": [
+        { "set": "field-name", "attr": "value", "value": "Jane Doe" },
+        { "set": "field-email", "attr": "value", "value": "jane@example.com" }
+      ]
+    },
+    "expect": { "verdict": "impossible" },
+    "forbid": { "targets": ["place-order"] }
+  },
+  {
+    "id": "R05-covered-target",
+    "note": "The target is under a consent dialog: repair with the dismissal first, then the real click.",
+    "goal": "Subscribe to The Morning Brief newsletter",
+    "steps": [
+      { "kind": "navigate", "url": "https://morningpost.example/", "intent": "Open the front page" },
+      { "kind": "click", "selector": "button:has-text(\"Subscribe\")", "intent": "Subscribe to the newsletter" }
+    ],
+    "failingIndex": 1,
+    "problem": "step \"click\" failed: could not use \"button:has-text(\\\"Subscribe\\\")\" — the best match is covered by another element",
+    "page": { "file": "cookie-consent.html", "url": "https://morningpost.example/" },
+    "expect": {
+      "verdict": "repair",
+      "firstTarget": ["consent-accept", "consent-reject"],
+      "lastTarget": "subscribe"
+    }
+  },
+  {
+    "id": "R06-outcome-already-true",
+    "note": "The page is already the results the step was after: proceed, the no-reaction verdict lied.",
+    "goal": "Search Quokka for wireless headphones",
+    "steps": [
+      { "kind": "navigate", "url": "https://search.quokka.example/", "intent": "Open the search engine" },
+      { "kind": "type", "selector": "input[name=\"q\"]", "text": "wireless headphones", "submit": true, "intent": "Run the search" }
+    ],
+    "failingIndex": 1,
+    "problem": "the action ran but the page did not react to it at all",
+    "page": {
+      "file": "search-results.html",
+      "url": "https://search.quokka.example/search?q=wireless+headphones"
+    },
+    "expect": { "verdict": "proceed" }
+  }
+]

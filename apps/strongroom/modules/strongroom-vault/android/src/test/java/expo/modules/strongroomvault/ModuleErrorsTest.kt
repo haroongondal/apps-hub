@@ -114,4 +114,45 @@ class ModuleErrorsTest {
       lost.message,
     )
   }
+
+  // Email recovery: the core throws plain exceptions with short messages; the module turns each into a code the screens explain.
+  @Test fun emailRecoveryFaultsAreCodedWithOwnerReadyCopy() {
+    fun failed(e: Throwable) = assertThrows(CodedException::class.java) { syncCall { throw e } }
+    val email = failed(IllegalArgumentException("bad email"))
+    assertEquals("BAD_EMAIL", email.code)
+    assertEquals("That email address isn't valid. Check it and try again.", email.message)
+    val first = failed(IllegalStateException("sync first"))
+    assertEquals("SYNC_FIRST", first.code)
+    assertEquals("This phone has changes it hasn't synced yet. Choose Sync now, then try again.", first.message)
+    assertEquals("SYNC_OFF", failed(IllegalStateException("sync off")).code)
+    val mail = failed(IllegalStateException("mail failed"))
+    assertEquals("MAIL_FAILED", mail.code)
+    assertEquals("We couldn't send the email, so nothing changed and your old recovery key still works. Try again later.", mail.message)
+    val moved = failed(IllegalStateException("vault moved"))
+    assertEquals("VAULT_MOVED", moved.code)
+    assertEquals("Your vault changed on another device, so nothing changed and your old recovery key still works. If an email with a code arrived, ignore it. Choose Sync now, then try again.", moved.message)
+    val alive = failed(IllegalStateException("request alive"))
+    assertEquals("LOST_STILL_ALIVE", alive.code)
+    assertEquals("A recovery request is already counting down on this account. Wait for it to finish, or cancel it from a device that is signed in.", alive.message)
+    val early = failed(IllegalStateException("not ready"))
+    assertEquals("LOST_NOT_READY", early.code)
+    assertEquals("The 24-hour wait isn't over yet. Try again once it ends.", early.message)
+    val other = failed(IllegalStateException("different account"))
+    assertEquals("LOST_DIFFERENT_ACCOUNT", other.code)
+    assertEquals(
+      "This phone is already set up with another Strongroom account, so it can't open this vault. Use a phone or a fresh install that has no Strongroom account.",
+      other.message,
+    )
+  }
+
+  @Test fun aConfirmWithNothingToConfirmIsCodedNotRaw() {
+    val e = assertThrows(CodedException::class.java) { syncCall { throw IllegalStateException("not waiting") } }
+    assertEquals("NOT_WAITING_FOR_CODE", e.code)
+    assertEquals("There is no email code to enter. Turn on email recovery first.", e.message)
+  }
+
+  @Test fun anUnrelatedIllegalArgumentPassesThroughUnchanged() {
+    val other = IllegalArgumentException("something else")
+    assertSame(other, assertThrows(IllegalArgumentException::class.java) { syncCall { throw other } })
+  }
 }

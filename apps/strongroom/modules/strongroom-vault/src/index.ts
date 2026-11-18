@@ -22,7 +22,8 @@ export interface Row {
 export type PassFormat = 'qr' | 'code128' | 'ean13';
 
 export type EntryInput =
-  | { type: 'login'; name: string; username: string; password: string; sites: string[]; note: string }
+  // apps, when given, lists the linked apps (as EntryView.apps names them) to keep: it can only drop links, never add one, so the others stay linked.
+  | { type: 'login'; name: string; username: string; password: string; sites: string[]; note: string; apps?: string[] }
   | { type: 'card'; name: string; holder: string; number: string; expMonth: number | null; expYear: number | null; cvc: string; note: string }
   | { type: 'note'; name: string; text: string }
   | { type: 'pass'; name: string; code: string; format: PassFormat; note: string };
@@ -84,6 +85,22 @@ export interface SyncStatus {
   available: boolean;
 }
 
+// Email recovery as the server and this phone last agreed; checked is false when the server couldn't be reached, and the other fields then mean nothing.
+export interface EmailRecoveryStatus {
+  available: boolean;
+  checked: boolean;
+  enrolled: boolean;
+  waitingForCode: boolean;
+  // releaseAt is null until the owner opens the emailed link, which starts the 24-hour wait.
+  pendingRecovery: { releaseAt: number | null } | null;
+  wasTurnedOff: boolean;
+  // True from the moment turning it on made a new recovery key until the owner confirms they saved it; kept on this phone, so it holds whatever checked says.
+  keyUnseen: boolean;
+}
+
+// What a lost-access (or email sign-in) claim on this phone has reached; releaseAt is null until the owner opens the emailed link.
+export type LostAccessState = { state: 'none' } | { state: 'waiting'; releaseAt: number | null } | { state: 'ready' };
+
 export interface SyncReport {
   pulled: number;
   pushed: number;
@@ -95,7 +112,7 @@ export interface SyncReport {
 
 // Rejections carry a code (LOCKED, NOT_SET_UP, KDF_OUT_OF_RANGE, HEADER_UNREADABLE, ACCOUNT_KEY_REQUIRED, BAD_SITE, IMPORT_*, NO_FINGERPRINT,
 // SYNC_UNAVAILABLE, SYNC_OFF, SYNC_SIGN_IN, SYNC_OFFLINE, SYNC_SERVER, SYNC_ROLLBACK, SYNC_KEY_LOST, HEADER_CHECK_FAILED, WRONG_RECOVERY_KEY,
-// WRONG_SETUP_TOKEN, BAD_ACCOUNT_KEY, ...) and an owner-ready message.
+// WRONG_SETUP_TOKEN, BAD_ACCOUNT_KEY, BAD_EMAIL, SYNC_FIRST, NOT_WAITING_FOR_CODE, LOST_STILL_ALIVE, LOST_NOT_READY, LOST_DIFFERENT_ACCOUNT, MAIL_FAILED, VAULT_MOVED, ...) and an owner-ready message.
 export interface StrongroomVaultApi {
   getStatus(): Status;
   generateRecoveryKey(): string;
@@ -148,6 +165,28 @@ export interface StrongroomVaultApi {
   stopPresenting(): Promise<void>;
   // Window brightness to max while on; restored on off and when the app goes to background.
   setBright(on: boolean): Promise<void>;
+  // Never rejects for being offline (checked is false instead); needs no unlocked vault.
+  emailRecoveryStatus(): Promise<EmailRecoveryStatus>;
+  // Null when the password is wrong. Makes a NEW recovery key (shown once, like newRecoveryKey) and emails a code; sent is false when the reply was lost and the next sync finishes it.
+  // Rejects with BAD_EMAIL, SYNC_OFF, SYNC_SIGN_IN or SYNC_FIRST (nothing changed). Does not mark the key as seen: call markRecoveryKeyShown once the owner has saved it.
+  enableEmailRecovery(email: string, password: string): Promise<{ recoveryKey: string; sent: boolean } | null>;
+  // False when the code is wrong; NOT_WAITING_FOR_CODE when there is nothing to confirm.
+  confirmEmailRecovery(code: string): Promise<boolean>;
+  turnOffEmailRecovery(): Promise<void>;
+  // Cancels a pending lost-access request on the account (works for an unconfirmed one too).
+  cancelLostRequest(): Promise<void>;
+  // Clears keyUnseen: call after the owner confirms they saved the new recovery key.
+  markRecoveryKeyShown(): Promise<void>;
+  // The next three need no unlocked vault and no sync account (the Unlock screen uses them). Request rejects with LOST_STILL_ALIVE while an earlier one is alive.
+  lostAccessRequest(): Promise<void>;
+  lostAccessCheck(): Promise<LostAccessState>;
+  // False when the code is wrong; LOST_NOT_READY before the wait ends, LOST_DIFFERENT_ACCOUNT on a phone holding another account. True unlocks the vault with the new password and starts sync.
+  lostAccessOpen(code: string, newPassword: string): Promise<boolean>;
+  // A new phone signs in by email. Request and check need no vault or account (request needs the server); a request makes a fresh claim, and rejects with SIGNIN_APPROVED when the earlier one is already approved.
+  emailSignInRequest(): Promise<void>;
+  emailSignInCheck(): Promise<LostAccessState>;
+  // False when the code is wrong; SIGNIN_NOT_READY before the approval, LOST_DIFFERENT_ACCOUNT on a phone holding another account, SYNC_SIGN_IN for a wrong master password. True signs in, as signInSync does.
+  emailSignInOpen(code: string, password: string): Promise<boolean>;
   addListener(event: 'onLock', listener: () => void): { remove(): void };
   addListener(event: 'onSync', listener: (status: SyncStatus) => void): { remove(): void };
 }

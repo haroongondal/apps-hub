@@ -89,6 +89,7 @@ class DeputyAgentModule : Module() {
     Function("getRun") { AgentRuntime.snapshot() }
     Function("listRuns") { limit: Int -> AgentRuntime.history(context, limit) }
     Function("getRunLog") { runId: String -> AgentRuntime.readRun(context, runId) }
+    Function("deleteRun") { runId: String -> AgentRuntime.deleteRun(context, runId) }
     Function("clearHistory") { AgentRuntime.clearHistory(context) }
 
     AsyncFunction("listApps") { OwnerStore.apps(context) }

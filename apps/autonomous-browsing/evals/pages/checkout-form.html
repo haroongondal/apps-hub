@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Checkout — Lumen Supplies</title>
+  </head>
+  <body>
+    <header class="site-chrome">
+      <a href="/">Lumen Supplies</a>
+      <a href="/cart" aria-label="Cart, 1 item">Cart</a>
+    </header>
+    <main>
+      <h1>Checkout</h1>
+      <section aria-label="Order summary">
+        <p>SoundCore Q30 Wireless Headphones — $79.99 each</p>
+      </section>
+      <form action="/orders" method="post">
+        <label for="qty">Quantity</label>
+        <input type="number" id="qty" name="quantity" min="1" max="10" value="1" data-eval-target="field-qty" />
+        <label for="name">Full name</label>
+        <input type="text" id="name" name="name" autocomplete="name" data-eval-target="field-name" />
+        <label for="email">Email for the receipt</label>
+        <input type="email" id="email" name="email" autocomplete="email" data-eval-target="field-email" />
+        <button type="submit" data-eval-target="place-order" id="c92">Place order</button>
+      </form>
+      <p class="fine-print">Orders placed before 3 p.m. ship the same day.</p>
+    </main>
+  </body>
+</html>

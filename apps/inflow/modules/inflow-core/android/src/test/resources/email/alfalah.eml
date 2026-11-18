@@ -1,0 +1,35 @@
+From: "Bank Alfalah" <email.notification@bankalfalah.com>
+To: owner@example.com
+Subject: =?UTF-8?B?QmFuayBBbGZhbGFoIOKAkyBUcmFuc2FjdGlvbiBTdWNjZXNzZnVs?=
+Message-ID: <FT263160G6MC4S12@alerts.bankalfalah.example>
+Date: Thu, 12 Nov 2026 16:19:40 +0500
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+Your transaction was successful. View this email in HTML to see the details.
+
+--b1
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: base64
+
+PGh0bWw+PGhlYWQ+PHN0eWxlPnRkIHsgcGFkZGluZzogNHB4IH08L3N0eWxlPjwvaGVhZD48Ym9k
+eT4NCjxoMj5UcmFuc2FjdGlvbiBTdWNjZXNzZnVsPC9oMj4NCjxwPlRodXJzZGF5LCBOb3ZlbWJl
+ciAxMiwgMjAyNiB8IDQ6MTkgUE08L3A+DQo8cD5SZWYjIEZUMjYzMTYwRzZNQzRTMTI8L3A+DQo8
+dGFibGU+DQo8dHI+PHRkPkFjY291bnQgVGl0bGU8L3RkPjx0ZD5IQVJPT04gTVVLSFRBUjwvdGQ+
+PC90cj4NCjx0cj48dGQ+QWNjb3VudC9JQkFOPC90ZD48dGQ+KioqKioyMzEwPC90ZD48L3RyPg0K
+PHRyPjx0ZD5QdXJwb3NlIG9mIFBheW1lbnQ8L3RkPjx0ZD5PdGhlcnM8L3RkPjwvdHI+DQo8dHI+
+PHRkPlRyYW5zYWN0aW9uIFR5cGU8L3RkPjx0ZD5QT1M8L3RkPjwvdHI+DQo8dHI+PHRkPlRheC9D
+aGFyZ2VzPC90ZD48dGQ+UEtSIDAuMDAwMC8tPC90ZD48L3RyPg0KPHRyPjx0ZD5PcmJpdHM8L3Rk
+Pjx0ZD4tPC90ZD48L3RyPg0KPHRyPjx0ZD5BdmFpbGFibGUgQmFsYW5jZTwvdGQ+PHRkPlR5cGUg
+J0FCJyAmYW1wOyBzZW5kIFNNUyB0byA4Mjg3PC90ZD48L3RyPg0KPHRyPjx0ZD5BbW91bnQ8L3Rk
+Pjx0ZD5QS1ImbmJzcDsxLDcwMC4wMC8tPC90ZD48L3RyPg0KPC90YWJsZT4NCjxwPkdldCBleGNs
+dXNpdmUgdXBkYXRlcywgZXhjaXRpbmcgb2ZmZXJzLCBhbmQgdGhlIGxhdGVzdCBmZWF0dXJlcyYj
+ODIxMjtyaWdodCBhdCB5b3VyIGZpbmdlcnRpcHMhPGJyPg0KRm9yIHF1ZXJpZXMgb3IgYXNzaXN0
+YW5jZSwgcGxlYXNlIGNhbGwvV2hhdHNhcHA6IDAyMTExMTIyNTExMTwvcD4NCjwvYm9keT48L2h0
+bWw+DQo=
+
+--b1--

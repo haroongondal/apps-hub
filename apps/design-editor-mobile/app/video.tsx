@@ -3,7 +3,7 @@ import {
   projectProblem, setClipVolume, setMusicVolume, sourceFrom, splitAt, totalS, trimAt, trimMusicAt, unheardMusic, VOLUME_STEPS,
   type MediaInfo, type Project,
 } from '@apps-hub/media-core';
-import { Button, Group, Header, Notice, Screen, Segmented, Text, radius, space, useTheme } from '@apps-hub/ui';
+import { Button, confirmAction, Group, Header, Notice, Screen, Segmented, Text, radius, space, useTheme } from '@apps-hub/ui';
 import { CompositionView, type CompositionViewHandle } from 'design-media';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
@@ -14,7 +14,7 @@ import { pickFiles, startJobs } from '../src/media/jobs';
 import { timeText } from '../src/media/tools';
 import { ClipStrip } from '../src/timeline/ClipStrip';
 import { droppedNote, dropUnreadable } from '../src/video/draft';
-import { canOpen, loadDraft, saveDraft } from '../src/video/draft-file';
+import { canOpen, discardDraft, loadDraft, saveDraft } from '../src/video/draft-file';
 
 const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const say = (e: unknown) => plainError(e, 'Something went wrong. Try again.');
@@ -147,6 +147,26 @@ export default function MakeAVideo() {
     edit(next);
   }
 
+  function startNew() {
+    setPlaying(false);
+    setSelectedId(undefined);
+    setMusicId(undefined);
+    setHeadS(0);
+    setSeekS(undefined);
+    setError(null);
+    setNote(null);
+    setProject(emptyProject());
+    discardDraft().catch(() => setError('The old project could not be cleared from the phone. Try again.'));
+  }
+
+  const confirmStartNew = () =>
+    confirmAction({
+      title: 'Start a new project?',
+      message: 'The clips and music in this video are cleared. Your video files stay on your phone.',
+      confirmLabel: 'Start new project',
+      onConfirm: startNew,
+    });
+
   async function save() {
     if (!planned.ok) return;
     setError(null);
@@ -263,6 +283,7 @@ export default function MakeAVideo() {
           <View style={{ flex: 1 }} />
         </Pair>
       </View>
+      {project.clips.length || project.music.length ? <Button label="Start new project" variant="ghost" block onPress={confirmStartNew} accessibilityHint="Clears this video after you confirm; your video files stay" /> : null}
       {project.clips.length && !planned.ok ? <Notice tone="warn">{projectProblem(project)}</Notice> : null}
       {project.clips.length ? <Text tone="muted">{`${project.clips.length === 1 ? '1 clip' : `${project.clips.length} clips`}, ${timeText(totalS(project))} in all`}</Text> : null}
     </Screen>
