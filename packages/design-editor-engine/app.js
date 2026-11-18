@@ -140,8 +140,10 @@ function parseDoc(text) {
   if (!(d.W > 0 && d.H > 0 && Array.isArray(list) && list.length && list.every(p => p && typeof p === 'object'))) throw new Error('not a design file');
   return { W: d.W, H: d.H, pages: list };
 }
+const newId = () => Math.random().toString(36).slice(2, 10);
 async function load(d, page = 0) {
   W = d.W; H = d.H; pages = d.pages;
+  for (const p of pages) giveIds(p.objects || [], newId);
   await openPage(Math.min(page, pages.length - 1));
   updateSize(); fit();
 }
@@ -218,7 +220,7 @@ for (const [id, op] of [['pageAdd', 'add'], ['pageDup', 'duplicate'], ['pageDel'
 $('#undo').onclick = undo; $('#redo').onclick = redo;
 // a new object, a paste or a clone gets its own id; a loaded one keeps the id it was saved with
 canvas.on('object:added', ({ target: o }) => {
-  if (!o.id || canvas.getObjects().find(x => x.id === o.id) !== o) o.id = Math.random().toString(36).slice(2, 10);
+  if (!o.id || canvas.getObjects().find(x => x.id === o.id) !== o) o.id = newId();
   record();
 });
 canvas.on('object:removed', record);
