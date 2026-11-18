@@ -12,6 +12,10 @@ class Ingest(
   private val bump: (name: String, by: Long) -> Unit = { _, _ -> },
   /** The owner wrote in this conversation (a new "You" message): its waiting reply suggestions are moot. */
   private val onOwnMessage: (conversationKey: String) -> Unit = {},
+  /** The owner picked this conversation for Autopilot (the one exception to R44). */
+  private val pickedChat: (conversationKey: String?) -> Boolean = { false },
+  /** A fast item was queued: the AI runner starts its quiet-window timer. */
+  private val onFast: () -> Unit = {},
 ) {
   fun onNotification(raw: RawNotification): Int {
     if (raw.pkg == ownPkg) return 0
@@ -46,8 +50,10 @@ class Ingest(
         }
         if (c.text.isNotBlank()) {
           ledger?.onItem(id, c.text, channel, c.postedAt)
-          // R44: of the notifications only an SMS app's and Gmail's reach the AI.
-          if (fromSmsApp || c.pkg == Email.GMAIL) queueForAi(id)
+          // R44: of the notifications only an SMS app's and Gmail's reach the AI, plus the chats the owner picked for Autopilot.
+          val picked = pickedChat(c.conversationKey)
+          val own = c.sender.equals("You", ignoreCase = true)   // the owner's own line is context for the AI, never a reason to run
+          if (fromSmsApp || c.pkg == Email.GMAIL || picked) queueForAi(id, fast = !own && (picked || (fromSmsApp && FastPath.isPerson(c.sender))))
         }
       }
     }
@@ -85,7 +91,7 @@ class Ingest(
     otpExpiresAt?.let(onOtpSaved)
     if (!isOtp) {
       ledger?.onItem(id, sms.body, Channel.SMS, c.postedAt)
-      queueForAi(id)
+      queueForAi(id, fast = FastPath.isPerson(sms.address) || pickedChat(c.conversationKey))
     }
     housekeeping()
     return 1
@@ -113,9 +119,11 @@ class Ingest(
     return 1
   }
 
-  // OTPs and anything that is not SMS or email never get here (R44). Whether the item may really be sent is decided again at send time (AiStore.queued).
-  private fun queueForAi(id: Long) {
-    if (aiOn()) store.enqueueAi(id, now())
+  // OTPs and anything that is not SMS, email or a picked chat never get here (R44). Whether the item may really be sent is decided again at send time (AiStore.queued).
+  private fun queueForAi(id: Long, fast: Boolean = false) {
+    if (!aiOn()) return
+    store.enqueueAi(id, now(), fast)
+    if (fast) runCatching(onFast)
   }
 
   // A bank-pattern message is money news, never an OTP, whatever warning text it carries.

@@ -12,6 +12,7 @@ class MemoryItemStore : ItemStore, AiStore, BackfillStore {
   private val meta = HashMap<String, String>()
   private var nextId = 1L
   val queue = LinkedHashMap<Long, Pair<Long, Int>>()   // itemId -> (at, tries)
+  val fastIds = mutableSetOf<Long>()   // the queue rows marked fast
   val aiResults = LinkedHashMap<Long, AiResult>()
   val todos = mutableListOf<Pair<Long, AiTodo>>()
   val aiBlocks = mutableSetOf<String>()
@@ -144,24 +145,26 @@ class MemoryItemStore : ItemStore, AiStore, BackfillStore {
     meta[key] = value
   }
 
-  override fun enqueueAi(itemId: Long, at: Long) {
+  override fun enqueueAi(itemId: Long, at: Long, fast: Boolean) {
     if (itemId !in queue) queue[itemId] = at to 0
+    if (fast) fastIds += itemId
   }
 
   override fun enabledSince(): Long? = meta[AiMeta.SINCE]?.toLongOrNull()
 
   // Mirrors SqlItemStore.queued: the same conditions, evaluated now.
-  override fun queued(limit: Int): List<AiInput> {
+  override fun queued(limit: Int, fastOnly: Boolean): List<AiInput> {
     val since = enabledSince() ?: return emptyList()
+    val picked = AutopilotSettings.fromJson(meta[AUTOPILOT_META]).pickedChats
     val sendable = queue.entries.sortedWith(compareBy({ it.value.first }, { it.key })).mapNotNull { (id, _) ->
       val it = items.values.firstOrNull { s -> s.id == id }
       val c = it?.capture
-      val ok = it != null && c != null && it.otpExpiresAt == null && (it.smsHash != null || it.emailHash != null || c.pkg in AiChannels.PKGS) && c.postedAt >= since && (settings[c.pkg]?.record ?: true) &&
+      val ok = it != null && c != null && it.otpExpiresAt == null && (it.smsHash != null || it.emailHash != null || c.pkg in AiChannels.PKGS || c.conversationKey in picked) && c.postedAt >= since && (settings[c.pkg]?.record ?: true) &&
         "app:${c.pkg}" !in aiBlocks && (c.senderKey == null || "sender:${c.senderKey}" !in aiBlocks)
       if (ok) AiInput(id, c!!.appLabel, c.sender, c.title, it!!.emailText ?: c.text, c.postedAt, c.conversation, c.sender.equals("You", ignoreCase = true), c.conversationKey) else null
     }
     queue.keys.retainAll(sendable.map { it.itemId }.toSet())
-    return sendable.take(limit)
+    return sendable.filter { !fastOnly || it.itemId in fastIds }.take(limit)
   }
 
   override fun save(results: List<AiResult>, now: Long) {

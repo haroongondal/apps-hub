@@ -22,8 +22,8 @@ interface ItemStore : ChatDirectory {
   /** Sets email_hash and email_text on a notification item and adds the email text to its search column. */
   fun claimEmail(itemId: Long, emailHash: String, emailText: String, search: String)
   fun setSmsHash(itemId: Long, smsHash: String)
-  /** Puts a saved item in the AI queue (once). */
-  fun enqueueAi(itemId: Long, at: Long)
+  /** Puts a saved item in the AI queue (once). `fast`: Autopilot wants it sent soon (a picked chat or a person's SMS). */
+  fun enqueueAi(itemId: Long, at: Long, fast: Boolean = false)
 
   fun markDeletedBySender(pkg: String, conversationKey: String?, sender: String?, postedAt: Long): Boolean
   /** Also tombstones Sms.textHash(text) of each purged row. */

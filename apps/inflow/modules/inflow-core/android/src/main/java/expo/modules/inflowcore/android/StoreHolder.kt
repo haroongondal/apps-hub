@@ -56,6 +56,9 @@ object StoreHolder {
       store, context.packageName, System::currentTimeMillis, onOtpSaved, ledger(store), smsPackages(context), media(context, store),
       aiOn = { AiConfig(store).on() }, bump = store::bump,
       onOwnMessage = { key -> SqlSuggestionStore(store.db).closeReplies(key, System.currentTimeMillis()) },
+      // The one R44 exception: a conversation the owner picked for Autopilot. Read per call, so a change in Settings counts at once.
+      pickedChat = { key -> key != null && key in AutopilotSettings.fromJson(store.meta(AUTOPILOT_META)).pickedChats },
+      onFast = { AiRunner.onFastArrival(context.applicationContext) },
     )
 
   private val backfilling = AtomicBoolean(false)

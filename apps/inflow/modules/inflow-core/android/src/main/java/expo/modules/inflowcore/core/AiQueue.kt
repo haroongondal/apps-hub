@@ -18,8 +18,12 @@ object AiMeta {
 interface AiStore {
   /** Time the first key was added; null = AI off. */
   fun enabledSince(): Long?
-  /** The send-time filter: item exists, not OTP, posted_at >= enabledSince, app record on, app and sender not blocked. Oldest first. Queue rows that fail it are deleted. */
-  fun queued(limit: Int): List<AiInput>
+  /**
+   * The send-time filter: item exists, not OTP, SMS or email (or in a conversation the owner picked for Autopilot, the one R44 exception),
+   * posted_at >= enabledSince, app record on, app and sender not blocked. Oldest first. Queue rows that fail it are deleted.
+   * `fastOnly` returns only the rows Autopilot marked fast.
+   */
+  fun queued(limit: Int, fastOnly: Boolean = false): List<AiInput>
   /** Results and their to-dos; removes those items from the queue. */
   fun save(results: List<AiResult>, now: Long)
   /** First failure: tries = 1; second: removed from the queue. */
@@ -36,6 +40,8 @@ class AiRun(
   private val now: () -> Long, private val zone: ZoneId,
   private val atomic: ((() -> Unit) -> Unit) = { it() },
   private val suggestions: ((AiResult, AiInput) -> Unit)? = null,
+  /** Autopilot's fast run: only the queue rows marked fast. */
+  private val fastOnly: Boolean = false,
 ) {
   /** One run: batches until the queue is empty, the cap is reached or an error. An item is tried once per run, so a bad reply never loops. */
   fun run(): AiRunResult {
@@ -47,7 +53,7 @@ class AiRun(
     var refusal: String? = null           // the last refusal message; the run reports it so Settings shows it
     var refused: List<Long>? = null       // the previous batch, refused: its failed() waits to see whether the next one is refused too
     while (true) {
-      val batch = AiBatch.split(store.queued(FETCH).filter { it.itemId !in tried }).firstOrNull() ?: break
+      val batch = AiBatch.split(store.queued(FETCH, fastOnly).filter { it.itemId !in tried }).firstOrNull() ?: break
       val t = now()
       val day = LocalDate.ofInstant(Instant.ofEpochMilli(t), zone).toString()   // the cap counts the local day
       val cap = capUsd()

@@ -4,6 +4,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabaseCorruptException
 import android.database.sqlite.SQLiteException
+import expo.modules.inflowcore.core.AUTOPILOT_META
 import expo.modules.inflowcore.core.AiChannels
 import expo.modules.inflowcore.core.AiInput
 import expo.modules.inflowcore.core.AiMeta
@@ -14,6 +15,7 @@ import expo.modules.inflowcore.core.AppRows
 import expo.modules.inflowcore.core.AppSetting
 import expo.modules.inflowcore.core.AppStat
 import expo.modules.inflowcore.core.AskItem
+import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.Channel
 import expo.modules.inflowcore.core.Capture
 import expo.modules.inflowcore.core.Categories
@@ -111,26 +113,33 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     run("UPDATE OR IGNORE items SET sms_hash = ? WHERE id = ?", smsHash, itemId)
   }
 
-  override fun enqueueAi(itemId: Long, at: Long) {
-    run("INSERT OR IGNORE INTO ai_queue(item_id, at) VALUES (?, ?)", itemId, at)
+  override fun enqueueAi(itemId: Long, at: Long, fast: Boolean) {
+    run("INSERT OR IGNORE INTO ai_queue(item_id, at, fast) VALUES (?, ?, ?)", itemId, at, if (fast) 1L else 0L)
   }
 
   override fun enabledSince(): Long? = meta(AiMeta.SINCE)?.toLongOrNull()
 
   // The send-time filter (also behind queuedCount): the item still exists, is no OTP, is SMS or email (R44), was posted after the first key, its app records, and neither app nor sender is blocked.
   // A row that fails it is deleted first, so an item blocked or left out at send time can never go out later (unblocking does not bring it back).
-  override fun queued(limit: Int): List<AiInput> {
+  override fun queued(limit: Int, fastOnly: Boolean): List<AiInput> {
     val since = enabledSince() ?: return emptyList()
-    run("DELETE FROM ai_queue WHERE item_id NOT IN (SELECT i.id FROM items i WHERE i.posted_at >= ? AND $NEVER_SEND_FILTER)", since)
+    // R44 exception (owner, 2026-11-18): the conversations picked for Autopilot count as sendable here. askItems and the ledger keep NEVER_SEND_FILTER.
+    val picked = pickedChats().toTypedArray()
+    val filter = queueFilter(picked.size)
+    run("DELETE FROM ai_queue WHERE item_id NOT IN (SELECT i.id FROM items i WHERE i.posted_at >= ? AND $filter)", since, *picked)
     return query(
-      "SELECT i.id, i.app_label, COALESCE(n.name, i.sender), i.title, COALESCE(i.email_text, i.text), i.posted_at, i.conversation, lower(i.sender) = 'you', i.conversation_key $QUEUE_FROM ORDER BY q.at, q.item_id LIMIT ?",
-      since, limit.toLong(),
+      "SELECT i.id, i.app_label, COALESCE(n.name, i.sender), i.title, COALESCE(i.email_text, i.text), i.posted_at, i.conversation, lower(i.sender) = 'you', i.conversation_key " +
+        "${queueFrom(filter)}${if (fastOnly) " AND q.fast = 1" else ""} ORDER BY q.at, q.item_id LIMIT ?",
+      since, *picked, limit.toLong(),
     ).use { c -> buildList { while (c.moveToNext()) add(AiInput(c.getLong(0), c.getString(1), c.str(2), c.str(3), c.getString(4), c.getLong(5), c.str(6), c.getInt(7) != 0, c.str(8))) } }
   }
 
+  private fun pickedChats(): Set<String> = AutopilotSettings.fromJson(meta(AUTOPILOT_META)).pickedChats
+
   fun queuedCount(): Int {
     val since = enabledSince() ?: return 0
-    return query("SELECT COUNT(*) $QUEUE_FROM", since).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+    val picked = pickedChats().toTypedArray()
+    return query("SELECT COUNT(*) ${queueFrom(queueFilter(picked.size))}", since, *picked).use { if (it.moveToFirst()) it.getInt(0) else 0 }
   }
 
   override fun save(results: List<AiResult>, now: Long) = transaction {
@@ -546,11 +555,17 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       "AND NOT EXISTS (SELECT 1 FROM ai_blocks b WHERE b.block_key = 'app:' || i.pkg) " +
       "AND (i.sender_key IS NULL OR NOT EXISTS (SELECT 1 FROM ai_blocks b WHERE b.block_key = 'sender:' || i.sender_key))"
     // R44: only SMS and email go to the AI. sms_hash/email_hash cover the default SMS app and Gmail whatever the package; the package list is AiChannels.PKGS.
-    private val SMS_OR_EMAIL = "(i.sms_hash IS NOT NULL OR i.email_hash IS NOT NULL OR i.pkg IN (${AiChannels.SQL_LIST}))"
+    private val SMS_OR_EMAIL_TERMS = "i.sms_hash IS NOT NULL OR i.email_hash IS NOT NULL OR i.pkg IN (${AiChannels.SQL_LIST})"
+    private val SMS_OR_EMAIL = "($SMS_OR_EMAIL_TERMS)"
     internal const val NEVER_SENT_PREFIX = "nosend:"
     internal val NEVER_SEND_FILTER = "i.otp_expires_at IS NULL AND $SMS_OR_EMAIL AND $SENDABLE"
-    private val QUEUE_FROM = "FROM ai_queue q JOIN items i ON i.id = q.item_id LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
-      "WHERE i.posted_at >= ? AND $NEVER_SEND_FILTER"
+    // R44's one exception: NEVER_SEND_FILTER with the owner's picked conversations also eligible, bound as parameters (one ? each, after the posted_at one). Only the queue uses it.
+    internal fun queueFilter(picked: Int): String {
+      val pickedChat = if (picked == 0) "0" else "i.conversation_key IN (${List(picked) { "?" }.joinToString(",")})"
+      return "i.otp_expires_at IS NULL AND ($SMS_OR_EMAIL_TERMS OR $pickedChat) AND $SENDABLE"
+    }
+    private fun queueFrom(filter: String) = "FROM ai_queue q JOIN items i ON i.id = q.item_id LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
+      "WHERE i.posted_at >= ? AND $filter"
     private const val DAY_MS = 86_400_000L
     // item_id of a to-do the owner added by hand: no item has id 0 (AUTOINCREMENT starts at 1).
     private const val MANUAL_TODO = 0

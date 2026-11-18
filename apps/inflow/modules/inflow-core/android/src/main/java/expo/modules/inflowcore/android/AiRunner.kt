@@ -10,6 +10,7 @@ import expo.modules.inflowcore.core.AiRunResult
 import expo.modules.inflowcore.core.AUTOPILOT_META
 import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.Ask
+import expo.modules.inflowcore.core.FastPath
 import expo.modules.inflowcore.core.Period
 import expo.modules.inflowcore.core.ReportRun
 import expo.modules.inflowcore.core.ReportSchedule
@@ -32,6 +33,8 @@ object AiRunner {
   private val executor = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "inflow-ai").apply { isDaemon = true } }
   private val periodic = AtomicBoolean(false)
   private val waiting = AtomicBoolean(false)
+  @Volatile private var lastFastArrivalAt: Long? = null
+  @Volatile private var lastFastRunAt: Long? = null
 
   /** Every 30 minutes while the process lives; started once from the listener. */
   fun startPeriodic(ctx: Context) {
@@ -48,6 +51,37 @@ object AiRunner {
   /** "Send now": waits for any run in progress, then runs. Call it off the main thread. */
   fun runNow(ctx: Context): AiRunResult = executor.submit(Callable { execute(ctx) }).get()
 
+  /**
+   * Autopilot's fast path: Ingest calls this when it queues a picked-chat or person-SMS item. After the quiet window a check on the AI
+   * executor runs the fast items (one run at a time, since the executor is single-threaded). A check that finds the one-a-minute gap
+   * still open schedules itself again. The timer dies with the process; the rows stay queued and the 30-minute run takes them.
+   */
+  fun onFastArrival(ctx: Context) {
+    lastFastArrivalAt = System.currentTimeMillis()
+    executor.schedule({ fastCheck(ctx) }, FastPath.QUIET_MS, TimeUnit.MILLISECONDS)
+  }
+
+  private fun fastCheck(ctx: Context) {
+    val arrival = lastFastArrivalAt ?: return
+    val last = lastFastRunAt
+    val now = System.currentTimeMillis()
+    if (FastPath.due(arrival, last, now)) {
+      lastFastRunAt = now
+      runFast(ctx)
+    } else if (last == null || arrival > last) {   // something is still waiting: look again when both windows are over
+      val wait = maxOf(arrival + FastPath.QUIET_MS - now, (last ?: 0L) + FastPath.MIN_GAP_MS - now, 1_000L)
+      executor.schedule({ fastCheck(ctx) }, wait, TimeUnit.MILLISECONDS)
+    }
+  }
+
+  /** One run over the fast items only, under the same daily cap and spend counting as [execute]. Runs on the AI executor, never the capture thread. */
+  internal fun runFast(ctx: Context): AiRunResult = try {
+    execute(ctx, fastOnly = true)
+  } catch (e: Exception) {
+    Log.w(TAG, "fast run failed: ${e.javaClass.simpleName}")
+    AiRunResult(0, 0, false, FAILED)
+  }
+
   private fun runIfDueNow(ctx: Context) {
     try {
       val store = StoreHolder.get(ctx).getOrNull() ?: return
@@ -60,7 +94,8 @@ object AiRunner {
     }
   }
 
-  private fun execute(ctx: Context): AiRunResult {
+  // fastOnly: the quick run for picked chats. It skips the categoriser and the reports and leaves LAST_RUN_AT alone, so the 30-minute run still takes everything.
+  private fun execute(ctx: Context, fastOnly: Boolean = false): AiRunResult {
     val store = StoreHolder.get(ctx).getOrNull() ?: return AiRunResult(0, 0, false, null)
     val suggestions = SqlSuggestionStore(store.db)
     try {
@@ -77,10 +112,16 @@ object AiRunner {
         { SqlLedgerStore(store.db).aiAccounts() }, { store.channelOf(it, sms) }, System::currentTimeMillis, ZoneId.systemDefault(),
         atomic = { block -> store.inTransaction { block() } },
         suggestions = suggestionHook(suggestions, { AutopilotSettings.fromJson(store.meta(AUTOPILOT_META)) }, System::currentTimeMillis, ZoneId.systemDefault()),
+        fastOnly = fastOnly,
       ).run()
     } catch (e: Exception) {
       Log.w(TAG, "run failed: ${e.javaClass.simpleName}")
       AiRunResult(0, 0, false, FAILED)
+    }
+    if (fastOnly) {
+      if (result.error != null) store.setMeta(AiMeta.ERROR, result.error)
+      if (result.saved > 0) StoreHolder.onCaptured?.invoke(result.saved)
+      return result
     }
     // Every transaction gets a category (a failure here never hides the item run's result).
     val categorised = try {
