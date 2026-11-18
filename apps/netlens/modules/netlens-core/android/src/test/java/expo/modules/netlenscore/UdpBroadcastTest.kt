@@ -42,6 +42,9 @@ class UdpBroadcastTest {
     rejected("192.168.01.255")
     rejected("192.168.1.256")
     rejected("192.168.1.255.1")
+    rejected("192.168.1.255.")
+    rejected("192..1.255")
+    rejected("192.168.1.99999999999") // over-long octet must be an error text, never NumberFormatException
     rejected("0xC0.168.1.255")
     rejected("0300.168.1.255")
     rejected("3232235775")

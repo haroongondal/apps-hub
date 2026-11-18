@@ -304,7 +304,7 @@ class NetlensCoreModule : Module() {
             UdpBroadcast.send(target, port, ByteArray(payload.size) { payload[it].toByte() }, lanBinder(target))
             promise.resolve(null)
           } catch (error: Exception) {
-            promise.reject("UDP_BROADCAST_FAILED", error.message, error)
+            promise.reject("UDP_BROADCAST_FAILED", "the datagram could not be sent", error)
           }
         }
       }

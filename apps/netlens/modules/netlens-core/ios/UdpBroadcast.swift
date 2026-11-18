@@ -39,6 +39,7 @@ enum UdpBroadcast {
   /// Sends one datagram to a validated `ip`. True only when the whole payload went out (a short send is a failure).
   static func send(ip: String, port: Int, payload: [UInt8]) -> Bool {
     var target = sockaddr_in()
+    target.sin_len = __uint8_t(MemoryLayout<sockaddr_in>.size)
     target.sin_family = sa_family_t(AF_INET)
     target.sin_port = in_port_t(UInt16(port).bigEndian)
     guard inet_pton(AF_INET, ip, &target.sin_addr) == 1 else { return false }
@@ -50,6 +51,9 @@ enum UdpBroadcast {
     var enable: Int32 = 1
     guard setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &enable, socklen_t(MemoryLayout<Int32>.size)) == 0 else { return false }
 
+    // Not pinned to Wi-Fi (no IP_BOUND_IF), same as udpRequest. Broadcast on iOS also needs the
+    // com.apple.developer.networking.multicast entitlement (NetLens.entitlements is empty), so until it is
+    // granted this probably fails and the caller sees UDP_BROADCAST_FAILED.
     let sent = payload.withUnsafeBytes { bytes -> Int in
       withUnsafePointer(to: &target) { targetPointer in
         targetPointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
