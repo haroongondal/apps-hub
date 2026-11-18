@@ -37,7 +37,7 @@
 - Modify: `packages/design-editor-engine/package.json` (add `"scripts": { "test": "node --test test/ai-layout.test.js" }`, add `ai-layout.js` to `files`)
 
 **Interfaces:**
-- Produces: `AiLayout.buildRequest(prompt: string, W: number, H: number): object` (Messages API body with a forced `make_layout` tool), `AiLayout.parseReply(reply: object): { bg: string, items: Item[] }` (throws `Error` with a plain-words message), `AiLayout.MODEL`, `AiLayout.FONTS`.
+- Produces: `AiLayout.buildRequest(prompt: string, W: number, H: number): object` (Messages API body offering the `make_layout` tool with `tool_choice` auto), `AiLayout.parseReply(reply: object): { bg: string, items: Item[] }` (throws `Error` with a plain-words message), `AiLayout.MODEL`, `AiLayout.FONTS`.
 - `Item` = `{ type: 'text'|'rect'|'circle'|'star'|'line', x, y, w, h: number (0..1, centre and size as page fractions), text?, size? (0.01..0.3 of the shorter side), font?, bold?, italic?, align?: 'left'|'center'|'right', fill?: '#rrggbb', round? (0..0.5), stroke? (0.002..0.05) }`.
 - Exports as `globalThis.AiLayout` and, when `module` exists, `module.exports`.
 
@@ -49,7 +49,7 @@
   - `cuts to 30 items and 300 characters of text`.
   - `drops unknown item types`.
   - `throws "The reply had no layout. Try again." when there is no tool_use block`.
-  - `buildRequest forces the tool and names the page size`: `tool_choice` is `{ type: 'tool', name: 'make_layout' }`, the system prompt contains `1080×1350` for `(1080, 1350)`, the user message is the trimmed prompt.
+  - `buildRequest offers the tool and names the page size`: `tool_choice` is `{ type: 'auto' }` (claude-sonnet-5-5 rejects a forced tool), the system prompt contains `1080×1350` for `(1080, 1350)`, the user message is the trimmed prompt.
 - [ ] **Step 2: Run** `pnpm --filter @apps-hub/design-editor-engine test`. Expected: FAIL, module not found.
 - [ ] **Step 3: Implement** `ai-layout.js` to the signatures above. One UMD-style IIFE, no DOM. The tool `input_schema` mirrors `Item`; the system prompt says what the allowed fonts and fractions mean and asks for a legible, contrasting layout.
 - [ ] **Step 4: Run** the same command. Expected: all pass.

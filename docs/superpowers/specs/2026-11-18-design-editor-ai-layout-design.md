@@ -28,7 +28,7 @@ about 10 tokens/s and 150 s per image).
 
 - Silent network use. A request happens only after a tap on "Generate", and the panel says
   it contacts Anthropic.
-- The API key reaching the WebView page or any file the user shares.
+- The key being readable by the page after it is entered (the field is cleared, nothing reads it back, and no message or log contains it).
 - A reply that can crash the page or paint outside it. Replies are validated and clamped.
 
 ## Constraints
