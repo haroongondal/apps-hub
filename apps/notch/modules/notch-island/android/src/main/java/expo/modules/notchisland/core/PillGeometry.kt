@@ -12,7 +12,8 @@ object PillGeometry {
   private const val EXPANDED_WIDTH_DP = 300
   private const val EXPANDED_EXTRA_DP = 36
   private const val EDGE_DP = 16
-  private const val ROW_DP = 40
+  // One height for every row, sized for the tallest (the timer row); shortcut: shorter rows leave a gap, measure per row if the owner asks.
+  private const val ROW_DP = 104
 
   // The offset is from the screen's centre because that is what Gravity.CENTER_HORIZONTAL wants; a cutout reports its bounds from the left edge.
   fun collapsed(cutout: Cutout?, screenWidth: Int, density: Float): PillBox {

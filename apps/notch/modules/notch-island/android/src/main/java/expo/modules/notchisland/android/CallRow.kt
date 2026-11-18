@@ -1,5 +1,6 @@
 package expo.modules.notchisland.android
 
+import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
 import android.graphics.Color
@@ -8,8 +9,10 @@ import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.TextView
+import expo.modules.notchisland.core.CALL_GREEN
 import expo.modules.notchisland.core.HANGUP_ACTION
 import expo.modules.notchisland.core.SPEAKER_ACTION
+import expo.modules.notchisland.core.callElapsed
 import expo.modules.notchisland.core.durationText
 import expo.modules.notchisland.core.endAvailable
 import expo.modules.notchisland.core.speakerAvailable
@@ -40,7 +43,7 @@ class CallRow(context: Context, private val density: Float) : LinearLayout(conte
 
   fun bind(info: CallInfo, now: Long, accent: Int) {
     actions = info.actions
-    time.text = durationText(now - info.startedAt)
+    time.text = durationText(callElapsed(Notification.CATEGORY_CALL, info.startedAt, now) ?: 0L)
     speaker.visibility = if (speakerAvailable(info.actions.size)) VISIBLE else GONE
     end.visibility = if (endAvailable(info.actions.size)) VISIBLE else GONE
     style(speaker, accent, Color.BLACK)
@@ -75,7 +78,6 @@ class CallRow(context: Context, private val density: Float) : LinearLayout(conte
   }
 
   private companion object {
-    val CALL_GREEN = Color.parseColor("#34C759")
     val END_RED = Color.parseColor("#FF3B30")
   }
 }

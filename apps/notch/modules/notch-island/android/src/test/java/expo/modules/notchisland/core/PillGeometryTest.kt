@@ -42,8 +42,8 @@ class PillGeometryTest {
   @Test fun expanded_grows_by_row_height() {
     val base = PillGeometry.expanded(hole, 1080, d)
     val tall = PillGeometry.expanded(hole, 1080, d, rows = 2)
-    assertEquals(2 * 112, PillGeometry.expandedRowsPx(2, d))
-    assertEquals(base.height + 2 * 112, tall.height)
+    assertEquals(2 * (104 * d).toInt(), PillGeometry.expandedRowsPx(2, d))
+    assertEquals(base.height + 2 * 292, tall.height)
     assertEquals(base.width, tall.width)
   }
 

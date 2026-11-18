@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
-import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.BatteryManager
@@ -25,6 +24,7 @@ import android.widget.TextView
 import expo.modules.notchisland.core.Cutout
 import expo.modules.notchisland.core.NotchSettings
 import expo.modules.notchisland.core.PillBox
+import expo.modules.notchisland.core.CALL_GREEN
 import expo.modules.notchisland.core.PillGeometry
 import expo.modules.notchisland.core.callElapsed
 import expo.modules.notchisland.core.durationText
@@ -97,11 +97,25 @@ class NotchAccessibilityService : AccessibilityService() {
   // The phase 1 indicator hook: media, a call or the timer changed. An open card rebinds its rows; a folded pill whose indicator changed is rebuilt at the new width.
   fun setActive() {
     if (pill == null) return
-    if (open) card?.bindRows(settings)
-    else if (indicator() != shown) return reapply()
+    if (open) {
+      card?.bindRows(settings)
+      resizeOpen()
+    } else if (indicator() != shown) return reapply()
     updateIndicator()
     main.removeCallbacks(tick)
     if (ticking()) main.post(tick)
+  }
+
+  // Rows appeared or went while the card is open: match the window height; the fold timer is left as it is.
+  private fun resizeOpen() {
+    val view = pill ?: return
+    val lp = params ?: return
+    if (animator?.isRunning == true) return
+    val box = expanded()
+    if (lp.height == box.height) return
+    lp.height = box.height
+    corners(box)
+    runCatching { wm?.updateViewLayout(view, lp) }
   }
 
   // A call wins over music and the timer.
@@ -136,7 +150,7 @@ class NotchAccessibilityService : AccessibilityService() {
     val d = dot ?: return
     val t = callTime ?: return
     d.visibility = if (kind == null) View.GONE else View.VISIBLE
-    (d.background as GradientDrawable).setColor(if (kind == CALL) GO else Colours.accent(settings.accent))
+    (d.background as GradientDrawable).setColor(if (kind == CALL) CALL_GREEN else Colours.accent(settings.accent))
     (d.layoutParams as FrameLayout.LayoutParams).gravity = Gravity.CENTER_VERTICAL or (if (kind == CALL) Gravity.START else Gravity.END)
     d.requestLayout()
     t.visibility = if (kind == CALL) View.VISIBLE else View.GONE
@@ -170,7 +184,7 @@ class NotchAccessibilityService : AccessibilityService() {
     }
     val indicatorTime = TextView(this).apply {
       textSize = 10f
-      setTextColor(GO)
+      setTextColor(CALL_GREEN)
       setTypeface(typeface, android.graphics.Typeface.BOLD)
       fontFeatureSettings = "tnum"
       layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL or Gravity.END)
@@ -308,8 +322,6 @@ class NotchAccessibilityService : AccessibilityService() {
     private const val CHARGE_OPEN_MS = 3000L
     private const val CALL = "call"
     private const val DOT = "dot"
-    // The mockup's --go.
-    private val GO = Color.parseColor("#34D399")
 
     @Volatile var running = false
       private set
