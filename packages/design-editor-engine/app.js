@@ -335,7 +335,7 @@ const TEMPLATES = [
   ] },
 ];
 async function applyTemplate(t) {
-  if (loading) return;
+  if (loading) return false;
   if (canvas.getObjects().length) await pageOp('add');
   restoring = true;
   canvas.clear();
@@ -343,6 +343,7 @@ async function applyTemplate(t) {
   t.items().forEach(o => canvas.add(o));
   restoring = false;
   canvas.requestRenderAll(); record(); inspect();
+  return true;
 }
 // Design with AI: the reply is parsed and clamped by AiLayout; fractions here are of the page.
 function buildItems(layout) {
@@ -372,6 +373,7 @@ const AI_COPY = {
   aiOffline: 'Couldn’t reach Anthropic. Check your connection and try again.',
   aiFailed: 'The request didn’t work. Try again.',
   aiDone: 'Done. Undo puts the page back.',
+  aiDoneNewPage: 'Done. It is on a new page. Undo removes it.',
 };
 const AI_ERR = { nosecure: AI_COPY.aiNoSecure, offline: AI_COPY.aiOffline, timeout: AI_COPY.aiOffline };
 const aiStatus = msg => { $('#aiStatus').textContent = msg; };
@@ -385,23 +387,28 @@ async function generate() {
   if (!native.ai) return aiStatus(AI_COPY.aiUnavailable);
   const go = $('#aiGo'); go.disabled = true; aiStatus(AI_COPY.aiWorking);
   try {
+    const hadObjects = canvas.getObjects().length > 0;
     const res = await native.ai.request(AiLayout.buildRequest(prompt, W, H));
     if (res.error === 'nokey') { aiShowKeyRow(true); return aiStatus(AI_COPY.aiNoKey); }
+    if (res.status === 401) aiShowKeyRow(true);
     if (!res.ok) return aiStatus(AI_ERR[res.error] || (res.status === 401 ? AI_COPY.aiRefused : res.status === 429 ? AI_COPY.aiRateLimit : AI_COPY.aiFailed));
     const layout = AiLayout.parseReply(res.json);
-    await applyLayout(layout);
-    aiStatus(AI_COPY.aiDone);
-  } catch (e) { aiStatus(e?.message || AI_COPY.aiFailed); } finally { go.disabled = false; }
+    if (!(await applyLayout(layout))) return aiStatus(AI_COPY.aiFailed);
+    aiStatus(hadObjects ? AI_COPY.aiDoneNewPage : AI_COPY.aiDone);
+  } catch (e) { aiStatus(e?.plain ? e.message : AI_COPY.aiFailed); } finally { go.disabled = false; }
 }
 $('#aiGo').onclick = generate;
 $('#aiChange').onclick = () => aiShowKeyRow(true);
 $('#aiSave').onclick = async () => {
   const key = $('#aiKey').value.trim();
   if (!key) return aiStatus(AI_COPY.aiNoKey);
+  // the field is cleared whatever happens: nothing keeps the key in the page
+  $('#aiKey').value = '';
   try {
-    await native.ai.setKey(key);
-    $('#aiKey').value = ''; aiShowKeyRow(false); aiStatus(AI_COPY.aiKeySaved);
-  } catch (e) { aiStatus(/secure/i.test(e?.message) ? AI_COPY.aiNoSecure : AI_COPY.aiFailed); }
+    const r = await native.ai.setKey(key);
+    if (r && r.ok === false) return aiStatus(r.error === 'nosecure' ? AI_COPY.aiNoSecure : AI_COPY.aiFailed);
+    aiShowKeyRow(false); aiStatus(AI_COPY.aiKeySaved);
+  } catch { aiStatus(AI_COPY.aiFailed); }
 };
 aiShowKeyRow(false);
 

@@ -4,7 +4,8 @@
 // one with window.__editorCommand('reply', { reqId, ok, value? }). The schema lives in
 // apps/design-editor-mobile/src/editor/bridge.ts; keep the two in step.
 // Additions over the six original native functions: confirm, keepAutosave, and native.ai
-// (hasKey, setKey, request: Design with AI, 2026-11-18).
+// (hasKey, setKey, request: Design with AI, 2026-11-18). setKey resolves { ok, error?: 'nosecure'|'bad' }
+// on both platforms; request resolves { ok, status, json?, error? }.
 // Script order note: this runs before app.js because app.js calls native.onMenu() during its
 // own body — the desktop's preload guarantees native exists for that too.
 (() => {
