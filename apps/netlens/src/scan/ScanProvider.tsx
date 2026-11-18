@@ -251,7 +251,9 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
             merged.mdnsName === row.mdnsName &&
             merged.friendlyName === row.friendlyName &&
             merged.model === row.model &&
-            merged.netbiosName === row.netbiosName
+            merged.netbiosName === row.netbiosName &&
+            merged.mac === row.mac &&
+            merged.person === row.person
           ) {
             return;
           }
