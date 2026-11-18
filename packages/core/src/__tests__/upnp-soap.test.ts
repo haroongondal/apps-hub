@@ -137,3 +137,12 @@ test('soapCall: no reply, or a target the LAN guard refuses, gives errorCode nul
   assert.deepEqual(await soapCall(off, iface, wan, 'GetExternalIPAddress'), { ok: false, errorCode: null });
   assert.equal(off.calls.length, 0);
 });
+
+test('parseSoapResponse stays linear on unterminated elements', () => {
+  const start = performance.now();
+  parseSoapResponse(200, '<xResponse>' + '<a '.repeat(21845));
+  parseSoapResponse(200, '<xResponse>' + '<a>'.repeat(21845));
+  parseSoapResponse(200, '<xResponse '.repeat(24000));
+  parseSoapResponse(200, '<xResponse><a><b><c>'.repeat(14000));
+  assert.ok(performance.now() - start < 200, `took ${performance.now() - start} ms`);
+});

@@ -99,6 +99,18 @@ test('findIgdServices returns null for no WAN service, garbage, entities and ove
   assert.equal(findIgdServices('<!--'.repeat(50_000), location), null);
 });
 
+test('findIgdServices stays linear on unclosed <service tags', () => {
+  const start = performance.now();
+  assert.equal(findIgdServices('<service '.repeat(29000), location), null);
+  assert.equal(findIgdServices('<service>'.repeat(29000), location), null);
+  assert.ok(performance.now() - start < 200, `took ${performance.now() - start} ms`);
+});
+
+test('findIgdServices takes the first WANCommonInterfaceConfig', () => {
+  const xml = `<root>${service(COMMON, '/first')}${service(COMMON, '/second')}${service(IP2, '/ok')}</root>`;
+  assert.equal(findIgdServices(xml, location)?.common?.control.path, '/first');
+});
+
 // ---- fakes ----
 
 const wrap = (body: string, status = 200): string => `HTTP/1.0 ${status} OK\r\nContent-Type: text/xml\r\n\r\n${body}`;
@@ -117,11 +129,11 @@ const soapFault = (code: number): string =>
 
 /** Routes by SOAPAction (action name) or, for a GET, by path; returns null (no reply) when the handler does. */
 function fakeBinding(handler: (key: string, request: string, ip: string, port: number) => string | null) {
-  const calls: { ip: string; port: number; request: string }[] = [];
+  const calls: { ip: string; port: number; request: string; maxBytes?: number }[] = [];
   return {
     calls,
-    tcpFetch: async (ip: string, port: number, request: string) => {
-      calls.push({ ip, port, request });
+    tcpFetch: async (ip: string, port: number, request: string, _timeoutMs?: number, maxBytes?: number) => {
+      calls.push({ ip, port, request, maxBytes });
       const action = /SOAPAction: "[^"#]*#([^"]*)"/.exec(request);
       return handler(action ? action[1] : request.split(' ')[1], request, ip, port);
     },
@@ -146,6 +158,38 @@ test('discoverIgd fetches the gateway description and ignores ssdp events from o
   assert.equal(b.calls[0].ip, '192.168.1.1');
   assert.equal(await discoverIgd(b, iface, events.slice(0, 2)), null);
   assert.equal(b.calls.length, 1);
+});
+
+test('discoverIgd ignores an event whose host is not the gateway even if its LOCATION is the gateway', async () => {
+  const b = fakeBinding(() => wrap(IP2_XML));
+  const ev: ServiceEvent = { kind: 'ssdp', host: '192.168.1.50', location: 'http://192.168.1.1:5000/rootDesc.xml' };
+  assert.equal(await discoverIgd(b, iface, [ev]), null);
+  assert.equal(b.calls.length, 0);
+});
+
+test('discoverIgd asks for up to 256 KB of description', async () => {
+  const b = fakeBinding(() => wrap(IP2_XML));
+  await discoverIgd(b, iface, [{ kind: 'ssdp', host: '192.168.1.1', location: 'http://192.168.1.1:5000/rootDesc.xml' }]);
+  assert.equal(b.calls[0].maxBytes, 262144);
+});
+
+test('discoverIgd rejects a description that moves the WAN service to another host and tries the next LOCATION', async () => {
+  const evil = IP2_XML.replace('<device>', '<URLBase>http://192.168.1.99:5000/</URLBase><device>');
+  const b = fakeBinding((path) => (path === '/evil.xml' ? wrap(evil) : wrap(IP2_XML)));
+  const ev = (name: string): ServiceEvent => ({ kind: 'ssdp', host: '192.168.1.1', location: `http://192.168.1.1:1/${name}` });
+  const found = await discoverIgd(b, iface, [ev('evil.xml'), ev('good.xml')]);
+  assert.equal(found?.wan.control.ip, '192.168.1.1');
+  assert.equal(b.calls.length, 2);
+  const b2 = fakeBinding(() => wrap(evil));
+  assert.equal(await discoverIgd(b2, iface, [ev('evil.xml')]), null);
+});
+
+test('discoverIgd drops a common service on another host but keeps the gateway WAN service', async () => {
+  const xml = `<root>${service(IP2, '/ctl/IPConn')}${service(COMMON, 'http://192.168.1.99:5000/c')}</root>`;
+  const b = fakeBinding(() => wrap(xml));
+  const found = await discoverIgd(b, iface, [{ kind: 'ssdp', host: '192.168.1.1', location: 'http://192.168.1.1:5000/d.xml' }]);
+  assert.equal(found?.wan.control.path, '/ctl/IPConn');
+  assert.equal(found?.common, null);
 });
 
 test('discoverIgd needs a gateway and a LOCATION that points at that same gateway', async () => {
@@ -272,6 +316,9 @@ test('rateBps returns null for a reset, no elapsed time or non-finite input', ()
   assert.equal(rateBps({ rx: 0, tx: 0, atMs: 100 }, { rx: 5, tx: 5, atMs: 100 }), null);
   assert.equal(rateBps({ rx: 0, tx: 0, atMs: 100 }, { rx: 5, tx: 5, atMs: 50 }), null);
   assert.equal(rateBps({ rx: 0, tx: 0, atMs: 0 }, { rx: NaN, tx: 0, atMs: 1000 }), null);
+  assert.equal(rateBps({ rx: 0, tx: 4e9, atMs: 0 }, { rx: 0, tx: 10, atMs: 100 }), null, 'upload cap');
+  assert.equal(rateBps({ rx: 5e9, tx: 0, atMs: 0 }, { rx: 10, tx: 0, atMs: 1000 }), null, '64-bit counter reset is not a negative rate');
+  assert.equal(rateBps({ rx: 0, tx: 5e9, atMs: 0 }, { rx: 0, tx: 10, atMs: 1000 }), null);
 });
 
 const entry = (i: number, over: Record<string, string> = {}): string =>

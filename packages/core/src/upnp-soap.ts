@@ -38,8 +38,9 @@ function decodeXml(s: string): string {
 
 const FAULT = /<(?:[\w.-]+:)?Fault[\s>]/;
 const ERROR_CODE = /<(?:[\w.-]+:)?errorCode\s*>\s*(\d+)\s*</;
-const RESPONSE_OPEN = /<(?:[\w.-]+:)?([\w.-]*Response)\b[^>]*?(\/?)>/;
-const ELEMENT = /<(?:[\w.-]+:)?([\w.-]+)(?:\s[^>]*?)?(?:\/>|>([\s\S]*?)<\/(?:[\w.-]+:)?\1\s*>)/g;
+const RESPONSE_OPEN = /<(?:[\w.-]+:)?([\w.-]*Response)\b[^<>]*?(\/?)>/;
+// One pass over the tags with a depth counter: a per-element lazy regex rescans to the end for every unclosed tag (quadratic).
+const TAG = /<(\/?)(?:[\w.-]+:)?([\w.-]+)(?:\s[^<>]*?)?(\/?)>/g;
 
 export function parseSoapResponse(status: number, body: string): SoapResult {
   if (status !== 200 || FAULT.test(body)) {
@@ -52,9 +53,24 @@ export function parseSoapResponse(status: number, body: string): SoapResult {
   const rest = body.slice(open.index + open[0].length);
   const close = new RegExp(`</(?:[\\w.-]+:)?${open[1].replace(/\./g, '\\.')}\\s*>`).exec(rest);
   const inner = close ? rest.slice(0, close.index) : rest;
-  for (const m of inner.matchAll(ELEMENT)) {
-    const content = m[2] ?? '';
-    if (!content.includes('<')) values[m[1]] = decodeXml(content);
+  // Only direct children of the response that hold plain text are values.
+  let depth = 0;
+  let name = '';
+  let start = 0;
+  let leaf = true;
+  for (const m of inner.matchAll(TAG)) {
+    const end = m.index + m[0].length;
+    if (m[3]) {
+      if (depth === 0) values[m[2]] = '';
+      else leaf = false;
+    } else if (!m[1]) {
+      if (depth === 0) [name, start, leaf] = [m[2], end, true];
+      else leaf = false;
+      depth++;
+    } else if (depth > 0 && --depth === 0 && leaf && m[2] === name) {
+      const content = inner.slice(start, m.index);
+      if (!content.includes('<')) values[name] = decodeXml(content);
+    }
   }
   return { ok: true, values };
 }

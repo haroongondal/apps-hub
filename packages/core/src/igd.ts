@@ -22,7 +22,8 @@ const MAX_MAPPINGS = 64;
 const WAN_IP = /^urn:schemas-upnp-org:service:WANIPConnection:\d+$/;
 const WAN_PPP = 'urn:schemas-upnp-org:service:WANPPPConnection:1';
 const WAN_COMMON = 'urn:schemas-upnp-org:service:WANCommonInterfaceConfig:1';
-const SERVICE_BLOCK = /<service\b[^>]*>([\s\S]*?)<\/service\s*>/gi;
+// The lookahead stops a block at the next <service, so an unclosed tag cannot rescan to the end (quadratic).
+const SERVICE_BLOCK = /<service\b[^<>]*>((?:(?!<service\b)[\s\S])*?)<\/service\s*>/gi;
 const IGD_HINT = /InternetGatewayDevice|WANIPConnection|WANPPPConnection/i;
 
 const XML_NAMED: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
@@ -100,7 +101,10 @@ export async function discoverIgd(
   for (const target of [...hinted, ...rest].slice(0, MAX_LOCATIONS)) {
     const res = await httpRequest(binding, iface, target, { maxBytes: MAX_XML });
     const igd = res && res.status === 200 ? findIgdServices(res.body, target) : null;
-    if (igd) return igd;
+    // A URLBase or absolute controlURL could point SOAP calls (DeletePortMapping) at another LAN host.
+    if (igd && igd.wan.control.ip === gateway) {
+      return { wan: igd.wan, common: igd.common?.control.ip === gateway ? igd.common : null };
+    }
   }
   return null;
 }
@@ -169,7 +173,8 @@ export function rateBps(prev: ByteCounters, next: ByteCounters): { downBps: numb
   const bps = (a: number, b: number): number => ((b - a < 0 ? b - a + 2 ** 32 : b - a) * 8 * 1000) / elapsed;
   const downBps = bps(prev.rx, next.rx);
   const upBps = bps(prev.tx, next.tx);
-  return downBps <= 10e9 && upBps <= 10e9 ? { downBps, upBps } : null;
+  // Negative: a 64-bit counter that reset (the 32-bit wrap fix only covers counters below 2^32).
+  return downBps >= 0 && downBps <= 10e9 && upBps >= 0 && upBps <= 10e9 ? { downBps, upBps } : null;
 }
 
 export interface PortMapping {
