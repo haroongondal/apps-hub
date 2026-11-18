@@ -14,7 +14,7 @@ usage: ref.py <realesr-general-x4v3-dyn.onnx>
   (s) the seam band: pixels within 8 input px of an interior seam and >= 40 px from the border,
       against (a)'s run. The rule: OVERLAP is the smallest overlap whose seam-band max is
       <= 1 step (p99 over all pixels is not enough: at 16 the band's max is 10.4 steps).
-Importable: u2_prep, u2_norm, u2_mask, cutout, tiles, upscale, synth.
+Importable: u2_prep, u2_norm, mask_curve, u2_mask, cutout, tiles, upscale, synth.
 
 U2-Netp (u2netp.onnx, input "input.1" 1x3x320x320, first of 7 outputs "1959" 1x1x320x320), as rembg does it:
   u2_prep: RGB uint8 -> 320x320 with Pillow's LANCZOS -> divide by the largest value (any
@@ -35,7 +35,8 @@ U2-Netp (u2netp.onnx, input "input.1" 1x3x320x320, first of 7 outputs "1959" 1x1
   different kernel is not close: bilinear gives 0.98 on the tensor and 98 steps on the mask.
   u2_norm: first output min-max normalised to 0..1 in float32 (idempotent).
   u2_mask: in float64, bilinear (half-pixel centres, edge clamp, no antialias) to the photo's own
-  w x h, then a separable Gaussian, sigma = feather_px photo px (radius ceil(3 sigma), edge
+  w x h, then mask_curve (smoothstep 0.3 -> 0.7: alphas the model is half sure of, like a ghosted
+  arm, go to 0 or 1; 0, 0.5 and 1 stay put; the app runs it for MODNet too), then a separable Gaussian, sigma = feather_px photo px (radius ceil(3 sigma), edge
   clamp), then floor(255 * clip(m, 0, 1) + 0.5) as uint8; a float32 port may differ by 1.
   rembg instead quantises at 320 and resizes the uint8 mask with LANCZOS; we keep floats so the
   mask can be scaled to any photo size in one step.
@@ -101,9 +102,14 @@ def _q8(a):
     return np.floor(np.clip(a, 0, 1) * 255 + 0.5).astype(np.uint8)
 
 
+def mask_curve(m, lo=0.3, hi=0.7):
+    t = np.clip((m - lo) / (hi - lo), 0, 1)
+    return t * t * (3 - 2 * t)
+
+
 def u2_mask(pred, w, h, feather_px=FEATHER):
     """U2-Netp output (raw or u2_norm'd) -> h x w uint8 alpha."""
-    m = _bilinear(u2_norm(pred).astype(np.float64), w, h)
+    m = mask_curve(_bilinear(u2_norm(pred).astype(np.float64), w, h))
     if feather_px > 0:
         r = math.ceil(3 * feather_px)
         k = np.exp(-np.arange(-r, r + 1) ** 2 / (2 * feather_px ** 2))

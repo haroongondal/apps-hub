@@ -126,8 +126,8 @@ class VisionJobTest {
   @Test
   fun cutoutKeepsExistingTransparency() {
     val px = intArrayOf(0x00FF0000, 0xFF00FF00.toInt(), 0x3200FF00, 0xFF0000FF.toInt())
-    val img = VisionJob.cutout(Image(px, 2, 2), floatArrayOf(0.4f), 1, 1, false, 0f)
-    assertEquals(listOf(0, 102, 50, 102), img.argb.map { it ushr 24 })
+    val img = VisionJob.cutout(Image(px, 2, 2), floatArrayOf(0.5f), 1, 1, false, 0f)
+    assertEquals(listOf(0, 128, 50, 128), img.argb.map { it ushr 24 })
     assertEquals(listOf(0xFF0000, 0x00FF00, 0x00FF00, 0x0000FF), img.argb.map { it and 0xFFFFFF })
     assertSame("written in place", px, img.argb)
   }

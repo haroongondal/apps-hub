@@ -43,7 +43,7 @@ def modnet_cutout(sess, img):
     a = np.asarray(img.convert("RGB").resize((rw, rh), Image.Resampling.BILINEAR), np.float32) / 127.5 - 1
     m = sess.run(None, {sess.get_inputs()[0].name: a.transpose(2, 0, 1)[None]})[0].reshape(rh, rw)
     m = np.asarray(Image.fromarray(m.astype(np.float32), "F").resize((w, h), Image.Resampling.BILINEAR))
-    return ref.cutout(img, ref._q8(m))
+    return ref.cutout(img, ref._q8(ref.mask_curve(m)))
 
 
 def on_checker(cut):
