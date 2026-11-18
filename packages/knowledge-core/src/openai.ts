@@ -1,18 +1,20 @@
 import { AiError, RELATIONS, type AiPort, type Segment } from './types.ts';
 
-export interface OpenAiOptions {
+// The OpenAI-compatible wire format, not the OpenAI service: Gemini and Groq both speak it (see providers.ts).
+export interface OpenAiCompatOptions {
   apiKey: string;
-  baseUrl?: string;
+  baseUrl: string;
   chatModel?: string;
   embedModel?: string;
   transcribeModel?: string;
+  reasoningEffort?: string;
   fetch?: typeof fetch;
 }
 
 /** React Native's FormData takes `{ uri, name, type }` for a file on disk; Node takes a Blob. */
 export type UploadFile = Blob | { uri: string; name: string; type: string };
 
-export interface OpenAiPort extends AiPort {
+export interface CompatPort extends AiPort {
   transcribe(file: UploadFile): Promise<Segment[]>;
   readImage(jpegBase64: string): Promise<string>;
 }
@@ -20,11 +22,11 @@ export interface OpenAiPort extends AiPort {
 export const EMBED_DIMS = 512;
 
 const EXTRACT_PROMPT = `You build a personal knowledge graph. The user message is numbered segments of one document.
-Return JSON with:
-- concepts: the distinct topics, people, tools, frameworks and places it is about. "label" is the clearest name; "aliases" are other names used for it (abbreviations, spellings).
-- atoms: the atomic ideas, claims, insights and action items, each one self-contained sentence; "segment" is the number of the segment it comes from; "concepts" are the labels it is about.
-- relations: links between two concept labels, "type" one of ${RELATIONS.join(', ')}, "weight" 0 to 1 for how strongly the text supports it, "evidence" a short quote.
-Skip filler and generic concepts such as "idea" or "thing". Write in the document's language.`;
+Reply with one JSON object with exactly these keys:
+- "concepts": the distinct topics, people, tools, frameworks and places it is about. Each is {"label", "aliases"}: "label" is the clearest name; "aliases" are other names used for it (abbreviations, spellings).
+- "atoms": the atomic ideas, claims, insights and action items. Each is {"text", "segment", "concepts"}: "text" one self-contained sentence; "segment" the number of the segment it comes from; "concepts" the labels it is about.
+- "relations": links between two concept labels. Each is {"from", "to", "type", "weight", "evidence"}: "type" one of ${RELATIONS.join(', ')}; "weight" 0 to 1 for how strongly the text supports it; "evidence" a short quote.
+Use [] for any list with nothing in it. Skip filler and generic concepts such as "idea" or "thing". Write in the document's language.`;
 
 const ANSWER_PROMPT = `Answer the question using only the numbered sources from the user's own library.
 Cite every claim with its source number in square brackets, like [2] or [1, 3].
@@ -32,19 +34,15 @@ If the sources don't answer it, say so in one sentence. Be brief.`;
 
 const IMAGE_PROMPT = `Transcribe all text in this image verbatim. Then, on a new line starting "Description:", describe what it shows in two sentences.`;
 
-const str = { type: 'string' } as const;
-const list = (items: object) => ({ type: 'array', items }) as const;
-const obj = (properties: Record<string, object>) => ({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties }) as const;
-const GRAPH_SCHEMA = obj({
-  concepts: list(obj({ label: str, aliases: list(str) })),
-  atoms: list(obj({ text: str, segment: { type: 'integer' }, concepts: list(str) })),
-  relations: list(obj({ from: str, to: str, type: { type: 'string', enum: [...RELATIONS] }, weight: { type: 'number' }, evidence: str })),
-});
+// Gemini's dimensions option is not verified here, so cut to EMBED_DIMS and re-normalise ourselves.
+const unit = (v: number[]): Float32Array => {
+  const out = Float32Array.from(v.slice(0, EMBED_DIMS));
+  const n = Math.hypot(...out) || 1;
+  return out.map((x) => x / n);
+};
 
-export function openAiPort(o: OpenAiOptions): OpenAiPort {
-  const base = (o.baseUrl ?? 'https://api.openai.com/v1').replace(/\/+$/, '');
-  const chatModel = o.chatModel ?? 'gpt-4o-mini';
-  const embedModel = o.embedModel ?? 'text-embedding-3-small';
+export function openAiCompatPort(o: OpenAiCompatOptions): CompatPort {
+  const base = o.baseUrl.replace(/\/+$/, '');
   const doFetch = o.fetch ?? fetch;
 
   async function call(path: string, body: string | FormData): Promise<Record<string, unknown>> {
@@ -70,7 +68,13 @@ export function openAiPort(o: OpenAiOptions): OpenAiPort {
   }
 
   async function chat(messages: object[], format?: object): Promise<string> {
-    const reply = await call('/chat/completions', JSON.stringify({ model: chatModel, messages, ...(format ? { response_format: format } : {}) }));
+    const body = {
+      model: o.chatModel,
+      messages,
+      ...(o.reasoningEffort ? { reasoning_effort: o.reasoningEffort } : {}),
+      ...(format ? { response_format: format } : {}),
+    };
+    const reply = await call('/chat/completions', JSON.stringify(body));
     const content = (reply.choices as { message?: { content?: unknown } }[] | undefined)?.[0]?.message?.content;
     if (typeof content !== 'string') throw new AiError('bad_reply', 'The AI service sent an empty reply.');
     return content;
@@ -78,10 +82,10 @@ export function openAiPort(o: OpenAiOptions): OpenAiPort {
 
   return {
     async embed(texts) {
-      const reply = await call('/embeddings', JSON.stringify({ model: embedModel, input: texts, dimensions: EMBED_DIMS }));
+      const reply = await call('/embeddings', JSON.stringify({ model: o.embedModel, input: texts, dimensions: EMBED_DIMS }));
       const data = reply.data as { index: number; embedding: number[] }[] | undefined;
       if (!Array.isArray(data) || data.length !== texts.length) throw new AiError('bad_reply', 'The AI service sent the wrong number of embeddings.');
-      return [...data].sort((a, b) => a.index - b.index).map((d) => Float32Array.from(d.embedding));
+      return [...data].sort((a, b) => a.index - b.index).map((d) => unit(d.embedding));
     },
 
     async extract(segments) {
@@ -90,7 +94,7 @@ export function openAiPort(o: OpenAiOptions): OpenAiPort {
           { role: 'system', content: EXTRACT_PROMPT },
           { role: 'user', content: segments.map((s, i) => `[${i}] ${s}`).join('\n\n') },
         ],
-        { type: 'json_schema', json_schema: { name: 'knowledge_graph', strict: true, schema: GRAPH_SCHEMA } },
+        { type: 'json_object' },
       );
       try {
         return JSON.parse(content) as unknown;
@@ -121,7 +125,7 @@ export function openAiPort(o: OpenAiOptions): OpenAiPort {
     async transcribe(file) {
       const form = new FormData();
       form.append('file', file as Blob);
-      form.append('model', o.transcribeModel ?? 'whisper-1');
+      form.append('model', o.transcribeModel ?? '');
       form.append('response_format', 'verbose_json');
       const reply = await call('/audio/transcriptions', form);
       const segments = reply.segments as { start: number; end: number; text: string }[] | undefined;

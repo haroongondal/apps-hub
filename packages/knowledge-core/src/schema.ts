@@ -57,4 +57,11 @@ CREATE UNIQUE INDEX kn_edges_unique ON kn_edges (from_id, to_id, rel, ifnull(ite
 CREATE INDEX kn_edges_to ON kn_edges (to_id);
 CREATE INDEX kn_edges_item ON kn_edges (item_id);
 `,
+  `
+-- Which embedding model made the stored vectors. Vectors from two models are not comparable.
+CREATE TABLE kn_meta (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+`,
 ];

@@ -35,7 +35,8 @@ everything into an interactive on-device knowledge graph.
   diarization); Gemini 2.5 Flash or GPT-4o-mini for multimodal parsing and OCR; structured
   output (JSON Schema) to extract Entities, Atomic Ideas and typed relationships
   (`SUPPORTS`, `CONTRADICTS`, `PART_OF`, `INSPIRED_BY`); `text-embedding-3-small` (1536d or
-  512d) or Gemini embeddings.
+  512d) or Gemini embeddings. Chosen 2026-11-19 (owner): Gemini embeds and reads images,
+  Groq builds the graph, answers and transcribes; see the nexus spec, "AI provider".
 - Local graph + vectors: `@op-engineering/op-sqlite` with libsql / sqlite-vec; adjacency
   tables, recursive CTE traversal, sub-50 ms KNN.
 - Storage: binaries in the app sandbox, metadata/graph/vectors in SQLite. Sync-ready: UUIDv7

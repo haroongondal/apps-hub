@@ -85,7 +85,7 @@ export async function setup() {
       return texts.get(item.id) ?? [];
     },
   };
-  const kn = await Knowledge.open(lib, { ai, content, ...deps });
+  const kn = await Knowledge.open(lib, { ai, content, embedTag: 'test-model', ...deps });
   const add = async (title: string, segments: Segment[] | string, kind: Item['kind'] = 'note') => {
     const item = await lib.createItem({ kind, title });
     texts.set(item.id, typeof segments === 'string' ? [{ text: segments, locator: null }] : segments);

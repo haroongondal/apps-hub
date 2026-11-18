@@ -1,10 +1,10 @@
-import { Knowledge } from '@apps-hub/knowledge-core';
+import { EMBED_TAG, Knowledge } from '@apps-hub/knowledge-core';
 import { AppState } from 'react-native';
 
 import { newId } from '../library/ids';
 import { openLibrary } from '../library/open-library';
 
-import { ai, getApiKey } from './ai';
+import { ai, hasKeys } from './ai';
 import { content } from './content';
 
 const WORKERS = 3;
@@ -18,7 +18,7 @@ const listeners = new Set<() => void>();
 
 export function openKnowledge(): Promise<Knowledge> {
   if (!opening) {
-    opening = openLibrary().then((lib) => Knowledge.open(lib, { ai, content, now: Date.now, newId }));
+    opening = openLibrary().then((lib) => Knowledge.open(lib, { ai, content, embedTag: EMBED_TAG, now: Date.now, newId }));
     opening.catch(() => {
       opening = null;
     });
@@ -47,7 +47,7 @@ async function work(kn: Knowledge) {
 /** Without a key nothing leaves the phone: queued items wait until one is saved. */
 export function kick(): Promise<void> {
   return inTurn(async () => {
-    if (!(await getApiKey())) return emit();
+    if (!(await hasKeys())) return emit();
     const kn = await openKnowledge();
     while (running < WORKERS) {
       running++;
