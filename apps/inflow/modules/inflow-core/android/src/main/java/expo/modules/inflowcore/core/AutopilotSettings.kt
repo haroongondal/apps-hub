@@ -15,10 +15,14 @@ import kotlinx.serialization.json.put
 
 data class MoneySurpriseConfig(val multiple: Int = 3, val minMinor: Long = 500_000, val hugeMinor: Long = 5_000_000)
 
+/** The form a picked chat is stored in and compared by. */
+fun pickedChatKey(pkg: String, conversationKey: String): String = "$pkg|$conversationKey"
+
 /** Stored as JSON in `ItemStore.meta("autopilotSettings")`. */
 data class AutopilotSettings(
   val kinds: Set<SuggestionKind> = SuggestionKind.values().toSet(),
   val surprise: MoneySurpriseConfig = MoneySurpriseConfig(),
+  /** The chats the owner picked, each as [pickedChatKey] ("pkg|conversationKey"): the package keeps a number chat in one app from picking the same number in another. */
   val pickedChats: Set<String> = emptySet(),
   val lookIn: Set<String> = emptySet(),
   val bankApp: String? = null,

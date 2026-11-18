@@ -29,8 +29,13 @@ fun SuggestionState.movableFrom(): Set<SuggestionState> = when (this) {
 }
 
 /** What AiRun calls for each saved result: at most one suggestion, only for a kind the owner switched on. Settings are read per call. */
-fun suggestionHook(store: SuggestionStore, settings: () -> AutopilotSettings, now: () -> Long, zone: ZoneId): (AiResult, AiInput) -> Unit = { r, input ->
-  SuggestionRules.fromResult(r, input, input.conversationKey, now(), zone, settings())?.let { store.add(it) }
+fun suggestionHook(
+  store: SuggestionStore, settings: () -> AutopilotSettings, now: () -> Long, zone: ZoneId,
+  hasOwnAfter: (pkg: String, conversationKey: String, at: Long) -> Boolean = { _, _, _ -> false },
+): (AiResult, AiInput) -> Unit = { r, input ->
+  // A reply is moot when the owner already wrote in that chat after the message.
+  val answered = r.suggest?.type == SuggestType.REPLY && input.pkg != null && input.conversationKey != null && hasOwnAfter(input.pkg, input.conversationKey, input.at)
+  if (!answered) SuggestionRules.fromResult(r, input, input.conversationKey, now(), zone, settings())?.let { store.add(it) }
 }
 
 /** The one way a suggestion changes state from outside (the provider, Inflow's Run): sweep expired rows first, so a suggestion past its time can never start. */

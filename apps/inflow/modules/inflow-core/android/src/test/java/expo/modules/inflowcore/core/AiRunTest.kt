@@ -52,7 +52,7 @@ class AiRunTest {
 
   private fun runner(
     cap: Double? = 0.50, hasProvider: Boolean = true, channelOf: (Long) -> Channel = { Channel.NOTIFICATION },
-    accounts: List<String> = emptyList(), hook: ((AiResult, AiInput) -> Unit)? = suggestionHook(suggestionStore, { AutopilotSettings() }, { clock }, karachi),
+    accounts: List<String> = emptyList(), hook: ((AiResult, AiInput) -> Unit)? = suggestionHook(suggestionStore, { AutopilotSettings() }, { clock }, karachi, store::hasOwnMessageAfter),
   ) = AiRun(store, ledger, { if (hasProvider) provider else null }, { prices }, { cap }, { accounts }, channelOf, { clock }, karachi, suggestions = hook)
 
   private fun keyAdded(at: Long = t0 - 60_000) = store.setMeta(AiMeta.SINCE, at.toString())
@@ -442,6 +442,50 @@ class AiRunTest {
     assertEquals("Reply to Ali", s.title)   // built by code from the chat name
     assertEquals(id, s.itemId)
     assertEquals(clock + 24 * 3_600_000L, s.expiresAt)
+  }
+
+  @Test fun aReplyForAnItemTheOwnerAlreadyAnsweredMakesNoSuggestion() {
+    keyAdded()
+    pickedChatItem()
+    store.insert(capture(sms, "On my way").copy(sender = "You", conversation = "Ali", conversationKey = "sms:ali", postedAt = clock + 1_000), "s", null)!!
+    answer = suggestReply("""{"type":"reply","due":null,"detail":"Ali asks if you are coming"}""")
+    runner().run()
+    assertTrue(suggestionStore.waiting().isEmpty())
+    assertEquals(1, store.aiResults.size)   // the result itself is still saved
+  }
+
+  @Test fun anOwnMessageInAnotherChatOrBeforeTheItemDoesNotStopTheReply() {
+    keyAdded()
+    pickedChatItem()
+    store.insert(capture(sms, "elsewhere").copy(sender = "You", conversationKey = "sms:bob", postedAt = clock + 1_000), "s", null)!!
+    store.insert(capture(sms, "earlier").copy(sender = "You", conversationKey = "sms:ali", postedAt = clock - 1_000), "s", null)!!
+    answer = suggestReply("""{"type":"reply","due":null,"detail":"Ali asks if you are coming"}""")
+    runner().run()
+    assertEquals(1, suggestionStore.waiting().size)
+  }
+
+  // R16: an item only the picked-chat exception let through never writes the ledger; an SMS with the same reply still does.
+  private val surprise = { ids: List<Long> -> reply(ids) { """{"direction":"out","own":false,"amount":500,"currency":"PKR","account":null,"counterparty":"Daraz","category":"Shopping"}""" } }
+
+  @Test fun aPickedWhatsAppItemWithAMoneyReplyCreatesNoTransaction() {
+    keyAdded()
+    store.setMeta(AUTOPILOT_META, AutopilotSettings(pickedChats = setOf("com.whatsapp|wa:ali")).toJson())
+    val id = store.insert(capture("com.whatsapp", "PKR 500 sent to Daraz").copy(sender = "Ali", conversation = "Ali", conversationKey = "wa:ali"), "s", null)!!
+    store.enqueueAi(id, clock)
+    answer = surprise
+    runner(channelOf = { Channel.NOTIFICATION }).run()
+    assertTrue(ledgerStore.txns.isEmpty())
+    assertEquals(1, store.aiResults.size)   // the summary still saves
+  }
+
+  @Test fun anSmsItemWithTheSameMoneyReplyStillCreatesATransaction() {
+    keyAdded()
+    store.setMeta(AUTOPILOT_META, AutopilotSettings(pickedChats = setOf("com.whatsapp|wa:ali")).toJson())
+    val id = store.insert(capture(sms, "PKR 500 sent to Daraz").copy(sender = "Ali", conversation = "Ali", conversationKey = "wa:ali"), "s", null)!!
+    store.enqueueAi(id, clock)
+    answer = surprise
+    runner(channelOf = { Channel.SMS_NOTIFICATION }).run()
+    assertEquals(1, ledgerStore.txns.size)
   }
 
   @Test fun aRunWhoseProviderThrowsMakesNoSuggestion() {

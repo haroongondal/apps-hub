@@ -25,6 +25,9 @@ interface ItemStore : ChatDirectory {
   /** Puts a saved item in the AI queue (once). `fast`: Autopilot wants it sent soon (a picked chat or a person's SMS). */
   fun enqueueAi(itemId: Long, at: Long, fast: Boolean = false)
 
+  /** An own ("You") message in this conversation posted after `at`: the owner already answered. */
+  fun hasOwnMessageAfter(pkg: String, conversationKey: String, at: Long): Boolean
+
   fun markDeletedBySender(pkg: String, conversationKey: String?, sender: String?, postedAt: Long): Boolean
   /** Also tombstones Sms.textHash(text) of each purged row. */
   fun purgeExpiredOtps(now: Long): Int

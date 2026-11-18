@@ -7,12 +7,19 @@ object FastPath {
 
   private val NUMBER = Regex("""\+?\d{7,15}""")
 
-  /** Quiet for 45 s since the last fast arrival, at most one fast run a minute, and nothing new since the last fast run means nothing to send. */
-  fun due(lastArrivalAt: Long?, lastFastRunAt: Long?, now: Long): Boolean {
-    if (lastArrivalAt == null || now - lastArrivalAt < QUIET_MS) return false
-    return lastFastRunAt == null || (now - lastFastRunAt >= MIN_GAP_MS && lastArrivalAt > lastFastRunAt)
+  /**
+   * How long until a fast run is due: null when nothing waits (no arrival, or the last fast run already took it), 0 when it is due now.
+   * Due means 45 s quiet since the last fast arrival and at most one fast run a minute.
+   */
+  fun waitMs(lastArrivalAt: Long?, lastFastRunAt: Long?, now: Long): Long? {
+    if (lastArrivalAt == null || (lastFastRunAt != null && lastArrivalAt <= lastFastRunAt)) return null
+    val quiet = lastArrivalAt + QUIET_MS - now
+    val gap = lastFastRunAt?.let { it + MIN_GAP_MS - now } ?: 0L
+    return maxOf(0L, quiet, gap)
   }
 
+  fun due(lastArrivalAt: Long?, lastFastRunAt: Long?, now: Long): Boolean = waitMs(lastArrivalAt, lastFastRunAt, now) == 0L
+
   // shortcut: a saved contact name from an SMS app counts as a person only through picked chats, upgrade if needed.
-  fun isPerson(sender: String?): Boolean = sender != null && NUMBER.matches(sender)
+  fun isPerson(sender: String?): Boolean = sender != null && NUMBER.matches(sender.filter { it != ' ' && it != '-' && it != '(' && it != ')' })
 }

@@ -13,7 +13,7 @@ class Ingest(
   /** The owner wrote in this conversation (a new "You" message): its waiting reply suggestions are moot. */
   private val onOwnMessage: (conversationKey: String) -> Unit = {},
   /** The owner picked this conversation for Autopilot (the one exception to R44). */
-  private val pickedChat: (conversationKey: String?) -> Boolean = { false },
+  private val pickedChat: (pkg: String, conversationKey: String?) -> Boolean = { _, _ -> false },
   /** A fast item was queued: the AI runner starts its quiet-window timer. */
   private val onFast: () -> Unit = {},
 ) {
@@ -51,7 +51,7 @@ class Ingest(
         if (c.text.isNotBlank()) {
           ledger?.onItem(id, c.text, channel, c.postedAt)
           // R44: of the notifications only an SMS app's and Gmail's reach the AI, plus the chats the owner picked for Autopilot.
-          val picked = pickedChat(c.conversationKey)
+          val picked = pickedChat(c.pkg, c.conversationKey)
           val own = c.sender.equals("You", ignoreCase = true)   // the owner's own line is context for the AI, never a reason to run
           if (fromSmsApp || c.pkg == Email.GMAIL || picked) queueForAi(id, fast = !own && (picked || (fromSmsApp && FastPath.isPerson(c.sender))))
         }
@@ -91,7 +91,7 @@ class Ingest(
     otpExpiresAt?.let(onOtpSaved)
     if (!isOtp) {
       ledger?.onItem(id, sms.body, Channel.SMS, c.postedAt)
-      queueForAi(id, fast = FastPath.isPerson(sms.address) || pickedChat(c.conversationKey))
+      queueForAi(id, fast = FastPath.isPerson(sms.address) || pickedChat(c.pkg, c.conversationKey))
     }
     housekeeping()
     return 1

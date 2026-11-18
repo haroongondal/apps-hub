@@ -44,7 +44,7 @@ class AutopilotAccessTest {
   }
 
   @Test fun refusesTheFiveCasesAndReturnsAPickedChat() {
-    store.setMeta(AUTOPILOT_META, AutopilotSettings(pickedChats = setOf("wa:ammi")).toJson())
+    store.setMeta(AUTOPILOT_META, AutopilotSettings(pickedChats = setOf("$wa|wa:ammi")).toJson())
     store.putAppSetting(AppSetting("com.off", "Off", false, null))
     store.aiBlocks += "app:com.blocked"
     val otp = add(sms, "num:1", "otp 123456", otp = 9_000, smsHash = "a")
@@ -70,5 +70,13 @@ class AutopilotAccessTest {
     store.aiBlocks += "sender:sk:vip"
     val id = store.insert(Capture(sms, "App", "VIP", "sk:vip", null, "num:3", "t", "hello", 1, "hv", false), "x", null, "c")!!
     assertNull(store.autopilotItem(id))
+  }
+
+  @Test fun aPickedNumberChatDoesNotOpenTheSameNumberInAnotherApp() {
+    store.setMeta(AUTOPILOT_META, AutopilotSettings(pickedChats = setOf("$wa|num:3001234567")).toJson())
+    val signal = add("org.thoughtcrime.securesms", "num:3001234567", "from signal")
+    val whatsapp = add(wa, "num:3001234567", "from whatsapp")
+    assertNull(store.autopilotItem(signal))
+    assertEquals("from whatsapp", store.autopilotItem(whatsapp)?.text)
   }
 }

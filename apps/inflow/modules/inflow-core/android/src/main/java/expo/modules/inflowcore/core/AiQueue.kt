@@ -76,7 +76,10 @@ class AiRun(
       val results = AiBatch.parse(reply.text, batch, zone)
       // Ledger first: a crash between the two leaves the items queued, and onAi on an item it already handled only sets details.
       atomic {
-        results.forEach { r -> r.money?.let { ledger.onAi(r.itemId, it, channelOf(r.itemId), batch.first { b -> b.itemId == r.itemId }.at) } }
+        results.forEach { r ->
+          val input = batch.first { b -> b.itemId == r.itemId }
+          if (!input.pickedOnly) r.money?.let { ledger.onAi(r.itemId, it, channelOf(r.itemId), input.at) }   // R16: a picked chat's money never reaches the ledger
+        }
         store.save(results, t)
         // A bad row must never fail the save; the call sits inside the transaction so a suggestion and its result stand or fall together.
         suggestions?.let { hook -> results.forEach { r -> runCatching { hook(r, batch.first { b -> b.itemId == r.itemId }) } } }

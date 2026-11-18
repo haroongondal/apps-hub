@@ -12,6 +12,7 @@ import expo.modules.inflowcore.core.KEY_LOST_MESSAGE
 import expo.modules.inflowcore.core.LedgerBackfill
 import expo.modules.inflowcore.core.NotifyingSuggestionStore
 import expo.modules.inflowcore.core.Sms
+import expo.modules.inflowcore.core.pickedChatKey
 import expo.modules.inflowcore.core.SuggestionStore
 import java.io.File
 import java.time.ZoneId
@@ -64,7 +65,7 @@ object StoreHolder {
       aiOn = { AiConfig(store).on() }, bump = store::bump,
       onOwnMessage = { key -> SqlSuggestionStore(store.db).closeReplies(key, System.currentTimeMillis()) },
       // The one R44 exception: a conversation the owner picked for Autopilot. Read per call, so a change in Settings counts at once.
-      pickedChat = { key -> key != null && key in AutopilotSettings.fromJson(store.meta(AUTOPILOT_META)).pickedChats },
+      pickedChat = { pkg, key -> key != null && pickedChatKey(pkg, key) in AutopilotSettings.fromJson(store.meta(AUTOPILOT_META)).pickedChats },
       onFast = { AiRunner.onFastArrival(context.applicationContext) },
     )
 

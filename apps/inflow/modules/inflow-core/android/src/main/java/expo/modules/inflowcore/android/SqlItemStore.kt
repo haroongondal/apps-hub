@@ -131,10 +131,10 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     val filter = queueFilter(picked.size)
     run("DELETE FROM ai_queue WHERE item_id NOT IN (SELECT i.id FROM items i WHERE i.posted_at >= ? AND $filter)", since, *picked)
     return query(
-      "SELECT i.id, i.app_label, COALESCE(n.name, i.sender), i.title, COALESCE(i.email_text, i.text), i.posted_at, i.conversation, lower(i.sender) = 'you', i.conversation_key " +
+      "SELECT i.id, i.app_label, COALESCE(n.name, i.sender), i.title, COALESCE(i.email_text, i.text), i.posted_at, i.conversation, lower(i.sender) = 'you', i.conversation_key, i.pkg, NOT $SMS_OR_EMAIL " +
         "${queueFrom(filter)}${if (fastOnly) " AND q.fast = 1" else ""} ORDER BY q.at, q.item_id LIMIT ?",
       since, *picked, limit.toLong(),
-    ).use { c -> buildList { while (c.moveToNext()) add(AiInput(c.getLong(0), c.getString(1), c.str(2), c.str(3), c.getString(4), c.getLong(5), c.str(6), c.getInt(7) != 0, c.str(8))) } }
+    ).use { c -> buildList { while (c.moveToNext()) add(AiInput(c.getLong(0), c.getString(1), c.str(2), c.str(3), c.getString(4), c.getLong(5), c.str(6), c.getInt(7) != 0, c.str(8), c.str(9), c.getInt(10) != 0)) } }
   }
 
   // The provider's one item read: the send queue's filter (so only what Inflow could send to the AI), minus the NEVER_SHARE packages. Every value is bound.
@@ -148,6 +148,9 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       id, *picked, *never,
     ).use { c -> if (c.moveToFirst()) AutopilotItem(c.getLong(0), c.getString(1), c.getString(2), c.str(3), c.str(4), c.getString(5), c.getLong(6)) else null }
   }
+
+  override fun hasOwnMessageAfter(pkg: String, conversationKey: String, at: Long): Boolean =
+    query("SELECT 1 FROM items WHERE pkg = ? AND conversation_key = ? AND lower(sender) = 'you' AND posted_at > ? LIMIT 1", pkg, conversationKey, at).use { it.moveToFirst() }
 
   private fun pickedChats(): Set<String> = AutopilotSettings.fromJson(meta(AUTOPILOT_META)).pickedChats
 
@@ -574,9 +577,9 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     private val SMS_OR_EMAIL = "($SMS_OR_EMAIL_TERMS)"
     internal const val NEVER_SENT_PREFIX = "nosend:"
     internal val NEVER_SEND_FILTER = "i.otp_expires_at IS NULL AND $SMS_OR_EMAIL AND $SENDABLE"
-    // R44's one exception: NEVER_SEND_FILTER with the owner's picked conversations also eligible, bound as parameters (one ? each, after the posted_at one). Only the queue uses it.
+    // R44's one exception: NEVER_SEND_FILTER with the owner's picked conversations ("pkg|conversationKey") also eligible, bound as parameters (one ? each, after the posted_at one). Only the queue uses it.
     internal fun queueFilter(picked: Int): String {
-      val pickedChat = if (picked == 0) "0" else "i.conversation_key IN (${List(picked) { "?" }.joinToString(",")})"
+      val pickedChat = if (picked == 0) "0" else "(i.pkg || '|' || i.conversation_key) IN (${List(picked) { "?" }.joinToString(",")})"
       return "i.otp_expires_at IS NULL AND ($SMS_OR_EMAIL_TERMS OR $pickedChat) AND $SENDABLE"
     }
     private fun queueFrom(filter: String) = "FROM ai_queue q JOIN items i ON i.id = q.item_id LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
@@ -748,7 +751,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       "CREATE INDEX items_sender ON items(sender_key)",
     )
 
-    // Not idempotent, like the others. ai_queue.fast: Autopilot's fast path marks a row it wants sent soon (nothing reads it yet).
+    // Not idempotent, like the others. ai_queue.fast: Autopilot's fast path marks a row it wants sent soon (queued(fastOnly) reads it).
     // suggestions: what Autopilot offers the owner. kind and state are enum names; no foreign key on item_id (retention deletes items, a suggestion outlives them until it expires).
     internal val SCHEMA_V8 = listOf(
       "ALTER TABLE ai_queue ADD COLUMN fast INTEGER NOT NULL DEFAULT 0",

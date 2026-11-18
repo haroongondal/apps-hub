@@ -28,6 +28,10 @@ enum class Importance { HIGH, NORMAL, LOW }
 data class AiInput(
   val itemId: Long, val app: String, val sender: String?, val title: String?, val text: String, val at: Long,
   val conversation: String? = null, val own: Boolean = false, val conversationKey: String? = null,
+  /** The app package; with `conversationKey` it names the chat. */
+  val pkg: String? = null,
+  /** True when only the owner's picked-chat exception let the item through: not SMS or email, so its money never reaches the ledger (R16). */
+  val pickedOnly: Boolean = false,
 )
 
 data class AiMoney(

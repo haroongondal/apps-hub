@@ -27,7 +27,7 @@ class AiFilterTest {
     val none = SqlItemStore.queueFilter(0)
     assertTrue(none.contains("(i.sms_hash IS NOT NULL OR i.email_hash IS NOT NULL OR i.pkg IN (${AiChannels.SQL_LIST}) OR 0)"))
     val two = SqlItemStore.queueFilter(2)
-    assertTrue(two.contains("OR i.conversation_key IN (?,?))"))
+    assertTrue(two.contains("OR (i.pkg || '|' || i.conversation_key) IN (?,?))"))
     assertEquals(2, two.count { it == '?' })
     // Everything else NEVER_SEND_FILTER demands stays: no OTP, record on, app and sender not blocked.
     assertTrue(two.startsWith("i.otp_expires_at IS NULL AND "))
@@ -70,7 +70,7 @@ class AiFilterTest {
   private fun MemoryItemStore.texts(fastOnly: Boolean = false) = queued(10, fastOnly).map { it.text }
 
   @Test fun aPickedWhatsAppChatIsQueuedAndAnUnpickedOneIsNot() {
-    val s = store(setOf("k1"), cap("com.whatsapp", "hi", "k1"), cap("com.whatsapp", "hello", "k2"))
+    val s = store(setOf("com.whatsapp|k1"), cap("com.whatsapp", "hi", "k1"), cap("com.whatsapp", "hello", "k2"))
     assertEquals(listOf("hi"), s.texts())
   }
 
@@ -80,13 +80,13 @@ class AiFilterTest {
   }
 
   @Test fun aPickedChatOtpIsStillExcluded() {
-    val s = store(setOf("k1"), cap("com.whatsapp", "123456", "k1"), cap("com.whatsapp", "hi", "k1"), otp = setOf("123456"))
+    val s = store(setOf("com.whatsapp|k1"), cap("com.whatsapp", "123456", "k1"), cap("com.whatsapp", "hi", "k1"), otp = setOf("123456"))
     assertEquals(listOf("hi"), s.texts())
   }
 
   @Test fun aPickedChatWithRecordingOffOrBlockedIsStillExcluded() {
     val s = store(
-      setOf("k1", "k2", "k3"),
+      setOf("org.telegram.messenger|k1", "com.whatsapp|k2", "com.whatsapp|k3"),
       cap("org.telegram.messenger", "recording off", "k1"), cap("com.whatsapp", "blocked sender", "k2", "Bob"), cap("com.whatsapp", "fine", "k3", "Cy"),
     )
     s.putAppSetting(AppSetting("org.telegram.messenger", "T", record = false, keepDays = null))
@@ -97,8 +97,33 @@ class AiFilterTest {
   }
 
   @Test fun fastOnlyReturnsTheFastRowsAndTheBatchTakesAll() {
-    val s = store(setOf("k1"), cap("com.whatsapp", "hi", "k1"), cap("com.whatsapp", "later", "k1", "Dee"), fast = setOf("hi"))
+    val s = store(setOf("com.whatsapp|k1"), cap("com.whatsapp", "hi", "k1"), cap("com.whatsapp", "later", "k1", "Dee"), fast = setOf("hi"))
     assertEquals(listOf("hi"), s.texts(fastOnly = true))
     assertEquals(listOf("hi", "later"), s.texts())
+  }
+
+  @Test fun aPickedNumberChatInAnotherAppIsNotReturned() {
+    val s = store(
+      setOf("com.whatsapp|num:3001234567"),
+      cap("com.whatsapp", "from whatsapp", "num:3001234567"), cap("org.thoughtcrime.securesms", "from signal", "num:3001234567", "Cy"),
+    )
+    assertEquals(listOf("from whatsapp"), s.texts())
+  }
+
+  @Test fun onlyAPickedChatItemIsMarkedPickedOnlyAndTheInputCarriesItsPackage() {
+    val s = store(setOf("com.whatsapp|k1"), cap("com.whatsapp", "hi", "k1"), cap("com.google.android.apps.messaging", "sms", "k2", "Dee"))
+    assertEquals(listOf(true, false), s.queued(10).map { it.pickedOnly })
+    assertEquals(listOf("com.whatsapp", "com.google.android.apps.messaging"), s.queued(10).map { it.pkg })
+  }
+
+  @Test fun enqueuingAgainNeverChangesTheFastMarkOfAQueuedRow() {
+    val s = MemoryItemStore()
+    val a = s.insert(cap("com.whatsapp", "a", "k1"), "", null)!!
+    val b = s.insert(cap("com.whatsapp", "b", "k1", "Dee"), "", null)!!
+    s.enqueueAi(a, now, fast = false)
+    s.enqueueAi(a, now + 1, fast = true)
+    s.enqueueAi(b, now, fast = true)
+    s.enqueueAi(b, now + 1, fast = false)
+    assertEquals(setOf(b), s.fastIds)
   }
 }

@@ -35,6 +35,7 @@ object AiRunner {
   private val waiting = AtomicBoolean(false)
   @Volatile private var lastFastArrivalAt: Long? = null
   @Volatile private var lastFastRunAt: Long? = null
+  private val checkPending = AtomicBoolean(false)
 
   /** Every 30 minutes while the process lives; started once from the listener. */
   fun startPeriodic(ctx: Context) {
@@ -58,19 +59,17 @@ object AiRunner {
    */
   fun onFastArrival(ctx: Context) {
     lastFastArrivalAt = System.currentTimeMillis()
-    executor.schedule({ fastCheck(ctx) }, FastPath.QUIET_MS, TimeUnit.MILLISECONDS)
+    if (checkPending.compareAndSet(false, true)) executor.schedule({ fastCheck(ctx) }, FastPath.QUIET_MS, TimeUnit.MILLISECONDS)   // a burst shares one timer chain
   }
 
   private fun fastCheck(ctx: Context) {
-    val arrival = lastFastArrivalAt ?: return
-    val last = lastFastRunAt
-    val now = System.currentTimeMillis()
-    if (FastPath.due(arrival, last, now)) {
-      lastFastRunAt = now
+    checkPending.set(false)   // before the decision: an arrival from here on starts a new chain, so none is lost
+    val wait = FastPath.waitMs(lastFastArrivalAt, lastFastRunAt, System.currentTimeMillis()) ?: return
+    if (wait == 0L) {
+      lastFastRunAt = System.currentTimeMillis()
       runFast(ctx)
-    } else if (last == null || arrival > last) {   // something is still waiting: look again when both windows are over
-      val wait = maxOf(arrival + FastPath.QUIET_MS - now, (last ?: 0L) + FastPath.MIN_GAP_MS - now, 1_000L)
-      executor.schedule({ fastCheck(ctx) }, wait, TimeUnit.MILLISECONDS)
+    } else if (checkPending.compareAndSet(false, true)) {   // still inside the quiet window or the one-a-minute gap
+      executor.schedule({ fastCheck(ctx) }, maxOf(wait, 1_000L), TimeUnit.MILLISECONDS)
     }
   }
 
@@ -111,7 +110,7 @@ object AiRunner {
         store, StoreHolder.ledger(store, ctx), { cfg.provider() }, { cfg.prices() }, { cfg.capUsd() },
         { SqlLedgerStore(store.db).aiAccounts() }, { store.channelOf(it, sms) }, System::currentTimeMillis, ZoneId.systemDefault(),
         atomic = { block -> store.inTransaction { block() } },
-        suggestions = suggestionHook(suggestions, { AutopilotSettings.fromJson(store.meta(AUTOPILOT_META)) }, System::currentTimeMillis, ZoneId.systemDefault()),
+        suggestions = suggestionHook(suggestions, { AutopilotSettings.fromJson(store.meta(AUTOPILOT_META)) }, System::currentTimeMillis, ZoneId.systemDefault(), store::hasOwnMessageAfter),
         fastOnly = fastOnly,
       ).run()
     } catch (e: Exception) {
@@ -119,7 +118,7 @@ object AiRunner {
       AiRunResult(0, 0, false, FAILED)
     }
     if (fastOnly) {
-      if (result.error != null) store.setMeta(AiMeta.ERROR, result.error)
+      if (result.error != null) store.setMeta(AiMeta.ERROR, result.error) else store.deleteMeta(AiMeta.ERROR)
       if (result.saved > 0) StoreHolder.onCaptured?.invoke(result.saved)
       return result
     }

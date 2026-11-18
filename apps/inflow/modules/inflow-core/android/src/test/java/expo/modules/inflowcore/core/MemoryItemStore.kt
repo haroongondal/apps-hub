@@ -81,6 +81,9 @@ class MemoryItemStore : ItemStore, AiStore, BackfillStore, AutopilotItems {
     items.values.first { it.id == itemId }.smsHash = smsHash
   }
 
+  override fun hasOwnMessageAfter(pkg: String, conversationKey: String, at: Long): Boolean =
+    items.values.any { it.capture.pkg == pkg && it.capture.conversationKey == conversationKey && it.capture.sender.equals("You", ignoreCase = true) && it.capture.postedAt > at }
+
   override fun markDeletedBySender(pkg: String, conversationKey: String?, sender: String?, postedAt: Long): Boolean {
     val hit = items.values.firstOrNull {
       val c = it.capture
@@ -146,7 +149,8 @@ class MemoryItemStore : ItemStore, AiStore, BackfillStore, AutopilotItems {
   }
 
   override fun enqueueAi(itemId: Long, at: Long, fast: Boolean) {
-    if (itemId !in queue) queue[itemId] = at to 0
+    if (itemId in queue) return   // INSERT OR IGNORE: a queued row keeps its fast mark
+    queue[itemId] = at to 0
     if (fast) fastIds += itemId
   }
 
@@ -159,9 +163,9 @@ class MemoryItemStore : ItemStore, AiStore, BackfillStore, AutopilotItems {
     val sendable = queue.entries.sortedWith(compareBy({ it.value.first }, { it.key })).mapNotNull { (id, _) ->
       val it = items.values.firstOrNull { s -> s.id == id }
       val c = it?.capture
-      val ok = it != null && c != null && it.otpExpiresAt == null && (it.smsHash != null || it.emailHash != null || c.pkg in AiChannels.PKGS || c.conversationKey in picked) && c.postedAt >= since && (settings[c.pkg]?.record ?: true) &&
+      val ok = it != null && c != null && it.otpExpiresAt == null && (it.smsHash != null || it.emailHash != null || c.pkg in AiChannels.PKGS || (c.conversationKey != null && pickedChatKey(c.pkg, c.conversationKey) in picked)) && c.postedAt >= since && (settings[c.pkg]?.record ?: true) &&
         "app:${c.pkg}" !in aiBlocks && (c.senderKey == null || "sender:${c.senderKey}" !in aiBlocks)
-      if (ok) AiInput(id, c!!.appLabel, c.sender, c.title, it!!.emailText ?: c.text, c.postedAt, c.conversation, c.sender.equals("You", ignoreCase = true), c.conversationKey) else null
+      if (ok) AiInput(id, c!!.appLabel, c.sender, c.title, it!!.emailText ?: c.text, c.postedAt, c.conversation, c.sender.equals("You", ignoreCase = true), c.conversationKey, c.pkg, it.smsHash == null && it.emailHash == null && c.pkg !in AiChannels.PKGS) else null
     }
     queue.keys.retainAll(sendable.map { it.itemId }.toSet())
     return sendable.filter { !fastOnly || it.itemId in fastIds }.take(limit)
@@ -172,7 +176,7 @@ class MemoryItemStore : ItemStore, AiStore, BackfillStore, AutopilotItems {
     val it = items.values.firstOrNull { s -> s.id == id } ?: return null
     val c = it.capture
     val picked = AutopilotSettings.fromJson(meta[AUTOPILOT_META]).pickedChats
-    val ok = it.otpExpiresAt == null && (it.smsHash != null || it.emailHash != null || c.pkg in AiChannels.PKGS || c.conversationKey in picked) && (settings[c.pkg]?.record ?: true) &&
+    val ok = it.otpExpiresAt == null && (it.smsHash != null || it.emailHash != null || c.pkg in AiChannels.PKGS || (c.conversationKey != null && pickedChatKey(c.pkg, c.conversationKey) in picked)) && (settings[c.pkg]?.record ?: true) &&
       "app:${c.pkg}" !in aiBlocks && (c.senderKey == null || "sender:${c.senderKey}" !in aiBlocks)
     return if (AutopilotAccess.mayShare(c.pkg, ok)) AutopilotItem(id, c.appLabel, c.pkg, c.sender, c.conversation, it.emailText ?: c.text, c.postedAt) else null
   }
