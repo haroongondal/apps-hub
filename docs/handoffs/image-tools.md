@@ -197,3 +197,20 @@ vs '29 days left'; two toasts stack; Upscale Cancel hidden behind the tab bar un
 'Photo' in the image chooser opens the camera; Undo deselects the image; sheet blank 2-5 s after a tap.
 Open Minors: 2.2 M1 (two 'Undo' for screen readers), M2 (repeated hint); 3.2 thin rim after upscaling a
 cut-out (check by eye); P3 photos reduced to sRGB.
+
+Fix phase after the phone test (2026-11-18; plan `docs/superpowers/plans/2026-11-18-image-tools-fixes.md`, ledger
+`.superpowers/sdd/2026-11-18-image-tools-fixes/progress.md`). Done on image-tools, not released (build 15 is next):
+Best badge solid; days left rounds up (30 on the first day); a new delete clears the old result line; Undo buttons
+read "Undo delete" / "Undo hide" and the tile hint is gone (Button takes an optional accessibilityLabel); Upscale and
+cut-out progress + Cancel stay pinned in the sheet (CSS sticky, mobile.html); Undo/Redo keep the same object selected
+(engine objects now have ids; every page gets ids at load) and the panel; "Photo" in the picture picker no longer opens
+the camera (react-native-webview always adds a camera entry for image/* when CAMERA is not requested, so the page asks
+the app to pick through expo-document-picker and reads the copies in 786432-byte pieces: shell-mobile.js, image-pick.ts,
+bridge.ts); Cancel aborts a model download and removes the partial file; cut-out mask gets a smoothstep 0.3-0.7 before
+the feather (CutoutMaths.kt, ref.py); upscaled cut-outs no longer get a dark rim (bleedTransparent in UpscaleMaths.kt).
+Item "sheet blank 2-5 s": not an app bug as far as measured (the two screenshots are broken captures: alpha-0 rows incl.
+the native toolbar; Chrome at 6x CPU slowdown shows no long task); reopen only if seen on the phone, and check capture
+integrity first. Check on the phone: Best badge in light and dark; Upscale 4x scroll while running; Undo keeps selection
+and the panel; adding a picture from Uploads (no camera entry, big photo, several photos, cancel); cancel during a first
+model download; Object cut-out arm ghost and Person shirt edge, hair and glass; 2x upscale of a soft-edged cut-out for a
+faint rim; TalkBack reads "Undo delete" / "Undo hide". New sentence: "Couldn't open your pictures. Try again."
