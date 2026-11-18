@@ -4,11 +4,12 @@
  * for devices. Every router call goes through the core IGD client; nothing
  * here talks to the network directly. States: finding, no-wifi, no-upnp, ready.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Linking, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Linking, Switch, View } from 'react-native';
 import {
   Button,
   Empty,
+  Field,
   Group,
   Header,
   Notice,
@@ -19,6 +20,7 @@ import {
   Sheet,
   Text,
   space,
+  useTheme,
 } from '@apps-hub/ui';
 
 import {
@@ -32,20 +34,25 @@ import {
   rateBps,
   readByteCounters,
   type ByteCounters,
+  type GuestWifi,
   type IgdServices,
   type InterfaceInfo,
   type PortMapping,
   type RouterFacts,
   type ServiceEvent,
+  wifiQrText,
 } from '@apps-hub/core';
 import { createNetLensNativeBinding } from 'netlens-core';
 
-import { openDeviceStore } from '../db/device-store-sqlite';
+import { QrCode } from '../components/QrCode';
+import { useNetworkScan } from '../scan/ScanProvider';
 
 const DISCOVERY_MS = 3000;
 // Native discovery ends by itself; this only guarantees the screen never waits on a stuck bridge.
 const DISCOVERY_GUARD_MS = 6000;
 const METER_INTERVAL_MS = 2000;
+const GUEST_WIFI_KEY = 'guestWifi';
+const SAVE_DEBOUNCE_MS = 500;
 
 type Phase = 'finding' | 'no-wifi' | 'no-upnp' | 'ready';
 
@@ -93,11 +100,134 @@ function SettingsButton({ gatewayIp }: { gatewayIp: string }) {
   );
 }
 
+function parseGuestWifi(raw: string | null): GuestWifi {
+  const empty: GuestWifi = { ssid: '', password: '', open: false };
+  if (raw === null) return empty;
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (typeof v !== 'object' || v === null) return empty;
+    const { ssid, password, open } = v as Record<string, unknown>;
+    return {
+      ssid: typeof ssid === 'string' ? ssid : '',
+      password: typeof password === 'string' ? password : '',
+      open: open === true,
+    };
+  } catch {
+    return empty;
+  }
+}
+
+// Works without UPnP, so it sits outside the router phases and shows in every one of them.
+function GuestWifiCard() {
+  const { c } = useTheme();
+  const { store } = useNetworkScan();
+  const [form, setForm] = useState<GuestWifi | null>(null);
+  const latest = useRef<GuestWifi | null>(null);
+  const dirty = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (store === null) return;
+    let cancelled = false;
+    store
+      .getSetting(GUEST_WIFI_KEY)
+      .catch(() => null)
+      .then((raw) => {
+        if (cancelled) return;
+        latest.current = parseGuestWifi(raw);
+        setForm(latest.current);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [store]);
+
+  const persist = useCallback((): void => {
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = null;
+    if (!dirty.current || store === null || latest.current === null) return;
+    dirty.current = false;
+    void store.setSetting(GUEST_WIFI_KEY, JSON.stringify(latest.current)).catch(() => undefined);
+  }, [store]);
+
+  // Flush a pending edit when the tab goes away.
+  useEffect(() => persist, [persist]);
+
+  const update = (patch: Partial<GuestWifi>): void => {
+    if (latest.current === null) return;
+    latest.current = { ...latest.current, ...patch };
+    setForm(latest.current);
+    dirty.current = true;
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = setTimeout(persist, SAVE_DEBOUNCE_MS);
+  };
+
+  const qrText = useMemo(
+    () => (form !== null && (form.open || form.password !== '') ? wifiQrText(form) : ''),
+    [form],
+  );
+
+  return (
+    <Group title="Guest Wi-Fi" footer="Guests point their camera at this to join.">
+      {form === null ? (
+        <Row title="Loading" subtitle="Opening your saved details." />
+      ) : (
+        <Row
+          title={
+            <Field
+              label="Network name"
+              value={form.ssid}
+              onChangeText={(ssid) => update({ ssid })}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
+              importantForAutofill="no"
+            />
+          }
+        />
+      )}
+      {form !== null && !form.open ? (
+        <Row
+          title={
+            <Field
+              label="Password"
+              value={form.password}
+              onChangeText={(password) => update({ password })}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
+              importantForAutofill="no"
+            />
+          }
+        />
+      ) : null}
+      {form !== null ? (
+        <Row
+          title="No password"
+          trailing={
+            <Switch
+              value={form.open}
+              onValueChange={(open) => update({ open })}
+              accessibilityLabel="No password"
+              trackColor={{ false: c.line, true: c.accent }}
+              ios_backgroundColor={c.line}
+            />
+          }
+        />
+      ) : null}
+      {form !== null && form.ssid !== '' && qrText !== '' ? (
+        <Row title={<QrCode text={qrText} label={`QR code to join ${form.ssid}`} />} />
+      ) : null}
+    </Group>
+  );
+}
+
 export default function RouterScreen() {
   const bindingProxy = useRef(createNetLensNativeBinding()).current;
   // Bumped on every load and on unmount; results from an older run see a mismatch and do nothing.
   const generation = useRef(0);
-  const networkId = useRef<string | null>(null);
+  const { store } = useNetworkScan();
 
   const [phase, setPhase] = useState<Phase>('finding');
   const [router, setRouter] = useState<Ready | null>(null);
@@ -166,19 +296,6 @@ export default function RouterScreen() {
       if (generation.current !== gen) return;
       setRouter({ iface, igd, facts });
       setPhase('ready');
-
-      // Names for the doors list come from the saved scan; the IP is the fallback.
-      try {
-        const planned = computeSubnetForHost(iface.localIp, iface.cidrPrefix);
-        networkId.current = hashNetworkId(iface.gatewayIp ?? iface.localIp, planned.prefix);
-        const store = await openDeviceStore();
-        const known = await store.listDevices(networkId.current);
-        if (generation.current === gen) {
-          setNames(new Map(known.map((device) => [device.lastIp, displayNameFor(device)])));
-        }
-      } catch {
-        // No saved names: rows show the device address instead.
-      }
       await loadDoors(iface, igd, gen);
     } catch {
       if (generation.current === gen) setPhase('no-upnp');
@@ -191,6 +308,23 @@ export default function RouterScreen() {
       generation.current += 1;
     };
   }, [load]);
+
+  // Names for the doors list come from the saved scan; the IP is the fallback.
+  useEffect(() => {
+    if (router === null || store === null) return;
+    let cancelled = false;
+    const { iface } = router;
+    const planned = computeSubnetForHost(iface.localIp, iface.cidrPrefix);
+    store
+      .listDevices(hashNetworkId(iface.gatewayIp ?? iface.localIp, planned.prefix))
+      .then((known) => {
+        if (!cancelled) setNames(new Map(known.map((device) => [device.lastIp, displayNameFor(device)])));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [router, store]);
 
   // The meter runs only while the router is ready and this tab is mounted.
   useEffect(() => {
@@ -386,6 +520,8 @@ export default function RouterScreen() {
           </Group>
         </>
       ) : null}
+
+      <GuestWifiCard />
 
       <Sheet visible={confirm !== null} onClose={dismissConfirm} title="Close this door?">
         {confirm !== null ? (
