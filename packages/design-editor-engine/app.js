@@ -5,8 +5,8 @@ const PHONE = document.body.classList.contains('embedded'); // the phone page: s
 let selectMany = false;
 const $$ = s => [...document.querySelectorAll(s)];
 
-// fabric leaves these out of toObject, so locks would vanish on undo and save
-const PROPS = ['lockMovementX', 'lockMovementY', 'lockScalingX', 'lockScalingY', 'lockRotation', 'hasControls', 'name'];
+// fabric leaves these out of toObject, so locks would vanish on undo and save; id lets undo reselect the same object
+const PROPS = ['lockMovementX', 'lockMovementY', 'lockScalingX', 'lockScalingY', 'lockRotation', 'hasControls', 'name', 'id'];
 const SANS = 'Atkinson Hyperlegible Next';
 const BUNDLED = {
   [SANS]: '../ui/fonts/AtkinsonHyperlegibleNext_400Regular ../ui/fonts/AtkinsonHyperlegibleNext_600SemiBold ../ui/fonts/AtkinsonHyperlegibleNext_800ExtraBold vendor/fonts/AtkinsonHyperlegibleNext_700Bold vendor/fonts/AtkinsonHyperlegibleNext_400Regular_Italic vendor/fonts/AtkinsonHyperlegibleNext_700Bold_Italic',
@@ -146,17 +146,27 @@ async function load(d, page = 0) {
   updateSize(); fit();
 }
 const restore = (s, page) => load(parseDoc(s), page);
+// undo and redo select the same objects again (by id) so the inspector sheet stays open where it was;
+// the drawer's open section is never touched; objects that are gone leave nothing selected
+async function restoreKeep(s, page) {
+  const ids = page === cur ? canvas.getActiveObjects().map(o => o.id) : [], top = $('#inspector').scrollTop;
+  await restore(s, page);
+  const objs = idsToReselect(ids, canvas.getObjects());
+  if (!objs.length) return;
+  canvas.setActiveObject(objs.length > 1 ? new fabric.ActiveSelection(objs, { canvas }) : objs[0]);
+  canvas.requestRenderAll(); $('#inspector').scrollTop = top;
+}
 async function undo() {
   if (loading) return;
   commit();
   if (undoStack.length < 2) return;
   const u = undoStack.pop(); redoStack.push(u);
-  await restore(undoStack.at(-1).s, u.page); docChanged(undoStack.at(-1).s);
+  await restoreKeep(undoStack.at(-1).s, u.page); docChanged(undoStack.at(-1).s);
 }
 async function redo() {
   if (loading || !redoStack.length) return;
   const r = redoStack.pop(); undoStack.push(r);
-  await restore(r.s, r.page); docChanged(r.s);
+  await restoreKeep(r.s, r.page); docChanged(r.s);
 }
 
 async function openPage(i) {
@@ -206,7 +216,11 @@ function renderPages() {
 }
 for (const [id, op] of [['pageAdd', 'add'], ['pageDup', 'duplicate'], ['pageDel', 'delete'], ['pageLeft', 'left'], ['pageRight', 'right']]) $('#' + id).onclick = () => pageOp(op);
 $('#undo').onclick = undo; $('#redo').onclick = redo;
-canvas.on('object:added', record);
+// a new object, a paste or a clone gets its own id; a loaded one keeps the id it was saved with
+canvas.on('object:added', ({ target: o }) => {
+  if (!o.id || canvas.getObjects().find(x => x.id === o.id) !== o) o.id = Math.random().toString(36).slice(2, 10);
+  record();
+});
 canvas.on('object:removed', record);
 canvas.on('object:modified', record);
 canvas.on('text:changed', record);
