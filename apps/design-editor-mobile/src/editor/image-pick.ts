@@ -17,6 +17,11 @@ export interface ImagePickDeps {
   remove(uri: string): Promise<void>;
 }
 
+export const COULD_NOT_OPEN = "Couldn't open your pictures. Try again.";
+
+// bytes behind a base64 string (Hermes has no Buffer)
+const decodedLength = (b64: string) => (b64.length * 3) / 4 - (b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0);
+
 export function createImagePicker(d: ImagePickDeps) {
   const held = new Map<string, number>(); // cache copy → bytes; only these may be read
   let busy = false;
@@ -50,7 +55,10 @@ export function createImagePicker(d: ImagePickDeps) {
       const bytes = held.get(uri);
       if (bytes === undefined || !Number.isInteger(index) || index < 0) throw new Error('This picture is no longer available.');
       if (bytes === 0) return { data: '', done: true };
+      const want = Math.min(PIECE_BYTES, bytes - index * PIECE_BYTES);
       const data = await d.readBase64(uri, index * PIECE_BYTES, PIECE_BYTES);
+      // the legacy reader does one read(), which may return less than asked; never pass a cut photo on
+      if (want <= 0 || decodedLength(data) !== want) throw new Error(COULD_NOT_OPEN);
       return { data, done: (index + 1) * PIECE_BYTES >= bytes };
     },
     async release(uris: string[]): Promise<void> {
