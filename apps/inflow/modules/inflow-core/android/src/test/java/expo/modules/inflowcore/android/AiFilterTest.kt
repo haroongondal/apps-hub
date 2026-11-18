@@ -2,6 +2,7 @@ package expo.modules.inflowcore.android
 
 import expo.modules.inflowcore.core.AUTOPILOT_META
 import expo.modules.inflowcore.core.AiChannels
+import expo.modules.inflowcore.core.AutopilotAccess
 import expo.modules.inflowcore.core.AiMeta
 import expo.modules.inflowcore.core.AppSetting
 import expo.modules.inflowcore.core.AutopilotSettings
@@ -31,6 +32,8 @@ class AiFilterTest {
     assertEquals(2, two.count { it == '?' })
     // Everything else NEVER_SEND_FILTER demands stays: no OTP, record on, app and sender not blocked.
     assertTrue(two.startsWith("i.otp_expires_at IS NULL AND "))
+    // Strongroom and Inflow never go to the AI, even in a picked chat.
+    AutopilotAccess.NEVER_SHARE.forEach { assertTrue(it, two.contains("i.pkg NOT IN (${AutopilotAccess.SQL_LIST})") && it in AutopilotAccess.SQL_LIST) }
     assertTrue(two.endsWith(SqlItemStore.SENDABLE))
   }
 
@@ -94,6 +97,14 @@ class AiFilterTest {
     assertEquals(listOf("fine"), s.texts())
     s.aiBlocks += "app:com.whatsapp"
     assertEquals(emptyList<String>(), s.texts())
+  }
+
+  @Test fun aStrongroomOrInflowItemIsNeverQueuedEvenInAPickedChatOrAnSms() {
+    val s = store(
+      setOf("com.haroon.strongroom|k1", "com.whatsapp|k2"),
+      cap("com.haroon.strongroom", "vault", "k1"), cap("com.haroon.inflow", "own", "k3", "Cy"), cap("com.whatsapp", "fine", "k2", "Dee"),
+    )
+    assertEquals(listOf("fine"), s.texts())
   }
 
   @Test fun fastOnlyReturnsTheFastRowsAndTheBatchTakesAll() {

@@ -45,4 +45,9 @@ class AutopilotApiTest {
     assertEquals(AutopilotSettings(), AutopilotSettingsInput.fromMap(emptyMap()))
     assertEquals(AutopilotSettings(), AutopilotSettingsInput.fromMap(mapOf("kinds" to mapOf("a" to 1), "lookIn" to 4)))
   }
+
+  @Test fun aPickInANeverShareAppIsDropped() {
+    val s = AutopilotSettingsInput.fromMap(mapOf("pickedChats" to listOf("com.haroon.strongroom|wa:x", "com.haroon.inflow|wa:y", "com.whatsapp|num:1")))
+    assertEquals(setOf("com.whatsapp|num:1"), s.pickedChats)
+  }
 }

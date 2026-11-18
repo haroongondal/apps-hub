@@ -36,7 +36,7 @@ class AutopilotProvider : ContentProvider() {
         if (store != null) runCatching { fresh(store).get(uri.lastPathSegment!!.toLong()) }.getOrNull()?.let { c.addRow(row(it)) }
       }
       ITEM -> MatrixCursor(ITEM_COLUMNS).also { c ->
-        val item = if (store != null) runCatching { store.autopilotItem(uri.lastPathSegment!!.toLong()) }.getOrNull() else null
+        val item = if (store != null) runCatching { store.autopilotItem(uri.lastPathSegment!!.toLong(), System.currentTimeMillis()) }.getOrNull() else null
         if (item != null) c.addRow(arrayOf<Any?>(item.id, item.app, item.pkg, item.sender, item.conversation, item.text, item.at))
       }
       else -> throw IllegalArgumentException("Unknown uri")

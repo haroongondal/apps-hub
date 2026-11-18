@@ -138,15 +138,15 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     ).use { c -> buildList { while (c.moveToNext()) add(AiInput(c.getLong(0), c.getString(1), c.str(2), c.str(3), c.getString(4), c.getLong(5), c.str(6), c.getInt(7) != 0, c.str(8), c.str(9), c.getInt(10) != 0)) } }
   }
 
-  // The provider's one item read: the send queue's filter (so only what Inflow could send to the AI), minus the NEVER_SHARE packages. Every value is bound.
-  override fun autopilotItem(id: Long): AutopilotItem? {
+  // The provider's one item read: the send queue's filter (which also leaves out NEVER_SHARE), and only while a live REPLY suggestion names the item, so full text never leaves in bulk. Every value is bound.
+  override fun autopilotItem(id: Long, now: Long): AutopilotItem? {
     val picked = pickedChats().toTypedArray()
-    val never = AutopilotAccess.NEVER_SHARE.toTypedArray()
     return query(
       "SELECT i.id, i.app_label, i.pkg, COALESCE(n.name, i.sender), i.conversation, COALESCE(i.email_text, i.text), i.posted_at " +
         "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
-        "WHERE i.id = ? AND ${queueFilter(picked.size)} AND i.pkg NOT IN (${never.joinToString(",") { "?" }})",
-      id, *picked, *never,
+        "WHERE i.id = ? AND ${queueFilter(picked.size)} " +
+        "AND EXISTS (SELECT 1 FROM suggestions s WHERE s.item_id = i.id AND s.kind = 'REPLY' AND s.state IN ('WAITING','STARTED') AND s.expires_at > ?)",
+      id, *picked, now,
     ).use { c -> if (c.moveToFirst()) AutopilotItem(c.getLong(0), c.getString(1), c.getString(2), c.str(3), c.str(4), c.getString(5), c.getLong(6)) else null }
   }
 
@@ -589,7 +589,8 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     // R44's one exception: NEVER_SEND_FILTER with the owner's picked conversations ("pkg|conversationKey") also eligible, bound as parameters (one ? each, after the posted_at one). Only the queue uses it.
     internal fun queueFilter(picked: Int): String {
       val pickedChat = if (picked == 0) "0" else "(i.pkg || '|' || i.conversation_key) IN (${List(picked) { "?" }.joinToString(",")})"
-      return "i.otp_expires_at IS NULL AND ($SMS_OR_EMAIL_TERMS OR $pickedChat) AND $SENDABLE"
+      // NEVER_SHARE (Strongroom, Inflow) never reaches the AI or Deputy, picked or not; constants, so no bind order changes.
+      return "i.otp_expires_at IS NULL AND ($SMS_OR_EMAIL_TERMS OR $pickedChat) AND i.pkg NOT IN (${AutopilotAccess.SQL_LIST}) AND $SENDABLE"
     }
     private fun queueFrom(filter: String) = "FROM ai_queue q JOIN items i ON i.id = q.item_id LEFT JOIN sender_names n ON n.sender_key = i.sender_key " +
       "WHERE i.posted_at >= ? AND $filter"

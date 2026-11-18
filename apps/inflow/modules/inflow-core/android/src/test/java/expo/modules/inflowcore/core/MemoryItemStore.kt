@@ -163,7 +163,7 @@ class MemoryItemStore : ItemStore, AiStore, BackfillStore, AutopilotItems {
     val sendable = queue.entries.sortedWith(compareBy({ it.value.first }, { it.key })).mapNotNull { (id, _) ->
       val it = items.values.firstOrNull { s -> s.id == id }
       val c = it?.capture
-      val ok = it != null && c != null && it.otpExpiresAt == null && (it.smsHash != null || it.emailHash != null || c.pkg in AiChannels.PKGS || (c.conversationKey != null && pickedChatKey(c.pkg, c.conversationKey) in picked)) && c.postedAt >= since && (settings[c.pkg]?.record ?: true) &&
+      val ok = it != null && c != null && c.pkg !in AutopilotAccess.NEVER_SHARE && it.otpExpiresAt == null && (it.smsHash != null || it.emailHash != null || c.pkg in AiChannels.PKGS || (c.conversationKey != null && pickedChatKey(c.pkg, c.conversationKey) in picked)) && c.postedAt >= since && (settings[c.pkg]?.record ?: true) &&
         "app:${c.pkg}" !in aiBlocks && (c.senderKey == null || "sender:${c.senderKey}" !in aiBlocks)
       if (ok) AiInput(id, c!!.appLabel, c.sender, c.title, it!!.emailText ?: c.text, c.postedAt, c.conversation, c.sender.equals("You", ignoreCase = true), c.conversationKey, c.pkg, it.smsHash == null && it.emailHash == null && c.pkg !in AiChannels.PKGS) else null
     }
@@ -171,14 +171,17 @@ class MemoryItemStore : ItemStore, AiStore, BackfillStore, AutopilotItems {
     return sendable.filter { !fastOnly || it.itemId in fastIds }.take(limit)
   }
 
-  // Mirrors SqlItemStore.autopilotItem: the queue's conditions without the posted_at one, minus NEVER_SHARE.
-  override fun autopilotItem(id: Long): AutopilotItem? {
+  val suggestions = MemorySuggestionStore()
+
+  // Mirrors SqlItemStore.autopilotItem: the queue's conditions without the posted_at one, minus NEVER_SHARE, and a live REPLY suggestion for the item.
+  override fun autopilotItem(id: Long, now: Long): AutopilotItem? {
     val it = items.values.firstOrNull { s -> s.id == id } ?: return null
     val c = it.capture
     val picked = AutopilotSettings.fromJson(meta[AUTOPILOT_META]).pickedChats
     val ok = it.otpExpiresAt == null && (it.smsHash != null || it.emailHash != null || c.pkg in AiChannels.PKGS || (c.conversationKey != null && pickedChatKey(c.pkg, c.conversationKey) in picked)) && (settings[c.pkg]?.record ?: true) &&
       "app:${c.pkg}" !in aiBlocks && (c.senderKey == null || "sender:${c.senderKey}" !in aiBlocks)
-    return if (AutopilotAccess.mayShare(c.pkg, ok)) AutopilotItem(id, c.appLabel, c.pkg, c.sender, c.conversation, it.emailText ?: c.text, c.postedAt) else null
+    val live = suggestions.rows.values.any { it.itemId == id && it.kind == SuggestionKind.REPLY && it.state in setOf(SuggestionState.WAITING, SuggestionState.STARTED) && it.expiresAt > now }
+    return if (live && AutopilotAccess.mayShare(c.pkg, ok)) AutopilotItem(id, c.appLabel, c.pkg, c.sender, c.conversation, it.emailText ?: c.text, c.postedAt) else null
   }
 
   override fun save(results: List<AiResult>, now: Long) {

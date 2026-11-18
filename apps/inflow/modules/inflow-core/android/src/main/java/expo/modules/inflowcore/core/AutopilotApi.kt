@@ -22,12 +22,12 @@ fun AutopilotSettings.toMap(): Map<String, Any?> = mapOf(
 object AutopilotSettingsInput {
   /**
    * What JS sent, checked: a bad field falls back to its default ([AutopilotSettings.fromJson]), kinds are matched in any case, and a picked
-   * chat without the "|" of [pickedChatKey] is dropped (it could never match a conversation).
+   * chat without the "|" of [pickedChatKey] is dropped (it could never match a conversation), as is one in a [AutopilotAccess.NEVER_SHARE] app.
    */
   fun fromMap(m: Map<String, Any?>): AutopilotSettings {
     val fixed = m.mapValues { (k, v) -> if (k == "kinds" && v is Iterable<*>) v.map { (it as? String)?.uppercase() ?: it } else v }
     val s = AutopilotSettings.fromJson(element(fixed).toString())
-    return s.copy(pickedChats = s.pickedChats.filter { '|' in it }.toSet())
+    return s.copy(pickedChats = s.pickedChats.filter { '|' in it && it.substringBefore('|') !in AutopilotAccess.NEVER_SHARE }.toSet())
   }
 
   // A JS number reaches Kotlin as a Double: 5000000.0 has no Long form in JSON text, so a whole number is passed on as a Long.
