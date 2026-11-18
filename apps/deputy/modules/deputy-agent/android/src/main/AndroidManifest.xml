@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Keeps an approval's heads-up on screen until it is answered (Notifier.gate). -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Same definition in every app that takes part in Autopilot, so install order doesn't matter. -->
+    <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
+    <uses-permission android:name="com.haroon.permission.AUTOPILOT" />
     <application>
         <service
             android:name="expo.modules.deputyagent.android.DeputyAccessibilityService"
@@ -31,6 +34,13 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Phone agent task" />
         </service>
+        <!-- Inflow's Run tap. Only apps holding the signature permission can start it; it shows nothing. -->
+        <activity
+            android:name="expo.modules.deputyagent.android.RunSuggestionActivity"
+            android:exported="true"
+            android:permission="com.haroon.permission.AUTOPILOT"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.NoDisplay" />
         <receiver
             android:name="expo.modules.deputyagent.android.GateReceiver"
             android:exported="false" />
@@ -41,5 +51,6 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <provider android:authorities="com.haroon.inflow.autopilot" />
     </queries>
 </manifest>

@@ -14,6 +14,7 @@ import expo.modules.deputyagent.core.Policy
 import expo.modules.deputyagent.core.Prompt
 import expo.modules.deputyagent.core.ProviderError
 import expo.modules.deputyagent.core.RunEvent
+import expo.modules.deputyagent.core.RunResult
 import expo.modules.deputyagent.core.RunStore
 import expo.modules.deputyagent.core.TrustLevel
 import java.io.File
@@ -57,7 +58,9 @@ object AgentRuntime {
   }
 
   @Synchronized
-  fun start(context: Context, task: String, allowedApps: Set<String>?): String {
+  fun start(
+    context: Context, task: String, allowedApps: Set<String>?, untrusted: List<String> = emptyList(), onEnd: (RunResult) -> Unit = {},
+  ): String {
     init(context)
     check(!active) { "Deputy is already doing a task. Stop it first." }
     check(task.isNotBlank()) { "Type a task first." }
@@ -88,7 +91,8 @@ object AgentRuntime {
     job = scope.launch {
       try {
         // Off the JS thread: recall reads every kept run. The new run has no end line yet, so it is never recalled.
-        loop.run(task, store.recall(task, blockedLabels()))
+        val result = loop.run(task, store.recall(task, blockedLabels()), untrusted)
+        runCatching { onEnd(result) }
       } finally {
         app.stopService(Intent(app, RunService::class.java))
         StopChip.hide()
