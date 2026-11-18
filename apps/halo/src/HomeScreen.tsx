@@ -20,7 +20,7 @@ function statusLine(s: Status, enabled: boolean, setupDone: boolean): string {
   return 'Waiting for music.';
 }
 
-export default function HomeScreen({ settings, update, onOpen }: { settings: Settings; update: UpdateSettings; onOpen: (to: 'edges' | 'diagnostics' | 'rules') => void }) {
+export default function HomeScreen({ settings, update, onOpen }: { settings: Settings; update: UpdateSettings; onOpen: (to: 'edges' | 'diagnostics' | 'rules' | 'island') => void }) {
   const [status, setStatus] = useState<Status>(() => HaloEngine.getStatus());
   const refresh = useCallback(() => setStatus(HaloEngine.getStatus()), []);
 
@@ -66,6 +66,7 @@ export default function HomeScreen({ settings, update, onOpen }: { settings: Set
       <Group>
         <Row title="Screen edges" subtitle="Fit the lights to the corners of your screen." onPress={() => onOpen('edges')} />
         <Row title="When to hide the lights" subtitle="Full screen, calls, battery saver and chosen apps." onPress={() => onOpen('rules')} />
+        <Row title="Notch" subtitle="A pill around your camera. Tap it to expand." onPress={() => onOpen('island')} />
         <Row title="Diagnostics" subtitle="Setup check and the event log." onPress={() => onOpen('diagnostics')} />
       </Group>
     </Screen>

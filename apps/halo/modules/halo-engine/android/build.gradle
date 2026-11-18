@@ -20,5 +20,7 @@ android {
 dependencies {
   // No network library on purpose: Halo never talks to a server.
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+  // The one notification listener here also feeds Notch's pill.
+  implementation(project(":notch-island"))
   testImplementation("junit:junit:4.13.2")
 }

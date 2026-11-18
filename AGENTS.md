@@ -43,8 +43,10 @@ Current apps:
   (`com.haroon.strongroom`). Design: `docs/strongroom/DESIGN.md`; phases:
   `docs/strongroom/PHASE-1-PLAN.md` and `docs/handoffs/strongroom.md`.
 - **halo** (`apps/halo`) — edge visualizer: audio-reactive lights around the screen edge and
-  an always-on display. Android only, private Store only (`com.haroon.halo`); Kotlin module
-  `halo-engine`, RN renders settings. Spec: `docs/superpowers/specs/2026-11-17-edge-visualizer-design.md`;
+  an always-on display. It also carries Notch, the pill around the camera (`modules/notch-island`,
+  fed by halo-engine's one notification listener; the separate `notch` app is gone). Android only,
+  private Store only (`com.haroon.halo`); Kotlin modules `halo-engine` and `notch-island`, RN renders
+  settings. Spec: `docs/superpowers/specs/2026-11-17-edge-visualizer-design.md`;
   plan: `docs/superpowers/plans/2026-11-17-halo.md`; handoff: `docs/handoffs/edge-visualizer.md`.
 - **strongroom-extension** (`apps/strongroom-extension`) — Strongroom for Chrome
   (Manifest V3, Mac and Windows, loaded unpacked). Its own local vault in the
@@ -175,7 +177,7 @@ cd apps/pdf-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :pdf-scan:testDebugUnitTest :app:assembleDebug
 # Native compile gate (Halo):
 cd apps/halo/android && JAVA_HOME=$JAVA_HOME ./gradlew \
-  :halo-engine:testDebugUnitTest :app:assembleDebug
+  :halo-engine:testDebugUnitTest :notch-island:testDebugUnitTest :app:assembleDebug
 # Native compile gate (Design Editor mobile):
 cd apps/design-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :design-media:testDebugUnitTest :app:assembleDebug
