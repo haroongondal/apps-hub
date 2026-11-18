@@ -66,6 +66,13 @@ coverage/
 /apps/deputy/android/**/.cxx/
 /apps/deputy/modules/*/android/build/
 /apps/deputy/.expo/
+/apps/notch/android/.gradle/
+/apps/notch/android/app/build/
+/apps/notch/android/build/
+/apps/notch/android/local.properties
+/apps/notch/android/**/.cxx/
+/apps/notch/modules/*/android/build/
+/apps/notch/.expo/
 /apps/strongroom/android/.gradle/
 /apps/strongroom/android/app/build/
 /apps/strongroom/android/build/

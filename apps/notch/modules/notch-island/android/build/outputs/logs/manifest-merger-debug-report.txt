@@ -1,0 +1,44 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:1:1-15:12
+INJECTED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:1:1-15:12
+	package
+		INJECTED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:1:11-69
+uses-permission#android.permission.SYSTEM_ALERT_WINDOW
+ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:2:5-78
+	android:name
+		ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:2:22-75
+uses-permission#android.permission.FOREGROUND_SERVICE
+ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:3:5-77
+	android:name
+		ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:3:22-74
+uses-permission#android.permission.FOREGROUND_SERVICE_SPECIAL_USE
+ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:4:5-89
+	android:name
+		ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:4:22-86
+application
+ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:5:5-14:19
+service#expo.modules.notchisland.android.NotchService
+ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:6:9-13:19
+	android:exported
+		ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:8:13-37
+	android:foregroundServiceType
+		ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:9:13-55
+	android:name
+		ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:7:13-73
+property#android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE
+ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:10:13-12:68
+	android:value
+		ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:12:17-65
+	android:name
+		ADDED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:11:17-76
+uses-sdk
+INJECTED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml
+INJECTED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml

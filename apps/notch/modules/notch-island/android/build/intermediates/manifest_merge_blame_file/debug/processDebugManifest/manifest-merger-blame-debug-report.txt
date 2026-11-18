@@ -1,0 +1,36 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="expo.modules.notchisland" >
+4
+5    <uses-sdk android:minSdkVersion="24" />
+6
+7    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+7-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:2:5-78
+7-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:2:22-75
+8    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+8-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:3:5-77
+8-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:3:22-74
+9    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+9-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:4:5-89
+9-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:4:22-86
+10
+11    <application>
+11-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:5:5-14:19
+12        <service
+12-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:6:9-13:19
+13            android:name="expo.modules.notchisland.android.NotchService"
+13-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:7:13-73
+14            android:exported="false"
+14-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:8:13-37
+15            android:foregroundServiceType="specialUse" >
+15-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:9:13-55
+16            <property
+16-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:10:13-12:68
+17                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+17-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:11:17-76
+18                android:value="Overlay around the camera cutout" />
+18-->/Users/outsentia/Documents/apps-hub-wt/notch/apps/notch/modules/notch-island/android/src/main/AndroidManifest.xml:12:17-65
+19        </service>
+20    </application>
+21
+22</manifest>

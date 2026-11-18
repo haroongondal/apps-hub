@@ -35,6 +35,7 @@ export const APPS: Record<string, ReleasableApp> = {
   strongroom: { name: 'Strongroom', dir: 'apps/strongroom', android: { packageName: ANDROID_PACKAGES.strongroom } },
   inflow: { name: 'Inflow', dir: 'apps/inflow', android: { packageName: ANDROID_PACKAGES.inflow } },
   clipboard: { name: 'Clipboard', dir: 'apps/clipboard', android: { packageName: ANDROID_PACKAGES.clipboard } },
+  notch: { name: 'Notch', dir: 'apps/notch', android: { packageName: ANDROID_PACKAGES.notch } },
 };
 
 /** Release ids of the apps whose workspace-relative dir is in `dirs` (the packages pnpm says changed). */
