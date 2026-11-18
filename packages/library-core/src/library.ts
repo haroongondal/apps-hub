@@ -6,7 +6,7 @@ import { ITEM_ID } from './orphan-dirs.ts';
 import { LIBRARY_STEPS } from './schema.ts';
 import type { Row, SqlPort, SqlValue } from './sql.ts';
 
-export type ItemKind = 'pdf' | 'scan' | 'article';
+export type ItemKind = 'pdf' | 'scan' | 'article' | 'note' | 'audio' | 'image';
 
 export interface Item {
   id: string;

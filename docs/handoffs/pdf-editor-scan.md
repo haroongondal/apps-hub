@@ -426,6 +426,11 @@ Test notes for the next session that drives the phone:
 
 ## Current state + exact next step
 
+**2026-11-18:** `scan-phase-3` was merged into the `nexus` branch (owner's choice) and ships
+inside Nexus 1.4.0 (`docs/handoffs/nexus.md`). Build further Scan work on `nexus` (or on
+`main` once that PR is merged), never on `scan-phase-3`: Nexus adds `library` step 2, so a
+build without it fails to open the library ("made by a newer version").
+
 Scan Phase 2 (session A2) is built and verified on the Mac and the emulator, committed and open
 as a PR into `main` (`gh pr list --head scan-phase-2`), not merged or released, from the worktree `/Users/outsentia/Documents/apps-hub/.claude/worktrees/scan-phase-2` (branch
 `scan-phase-2`, from `origin/main` d1b61ea). Phase 1 is merged (PR #6).

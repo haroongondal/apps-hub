@@ -1,0 +1,10 @@
+export { chunkSegments, MAX_CHUNK } from './chunk.ts';
+export { cleanExtraction, normLabel } from './extraction.ts';
+export { Knowledge, locatorLabel, MAX_ATTEMPTS, MERGE_AT, pruneConcepts, STUCK_MS } from './knowledge.ts';
+export type { Answer, Job, JobStage, JobStatus, KnowledgeDeps, RunResult, Source } from './knowledge.ts';
+export { EMBED_DIMS, openAiPort } from './openai.ts';
+export type { OpenAiOptions, OpenAiPort, UploadFile } from './openai.ts';
+export { KNOWLEDGE_STEPS } from './schema.ts';
+export { AiError, RELATIONS } from './types.ts';
+export type { AiErrorKind, AiPort, ConceptRelation, ContentPort, Extraction, Locator, Relation, Segment } from './types.ts';
+export { cosine, fromBlob, toBlob } from './vectors.ts';
