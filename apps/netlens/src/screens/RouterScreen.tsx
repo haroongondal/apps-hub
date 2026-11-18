@@ -53,6 +53,9 @@ const DISCOVERY_GUARD_MS = 6000;
 const METER_INTERVAL_MS = 2000;
 const GUEST_WIFI_KEY = 'guestWifi';
 const SAVE_DEBOUNCE_MS = 500;
+// WPA limits; they also keep the text inside what a QR code can hold.
+const MAX_SSID = 32;
+const MAX_PASSWORD = 63;
 
 type Phase = 'finding' | 'no-wifi' | 'no-upnp' | 'ready';
 
@@ -108,8 +111,8 @@ function parseGuestWifi(raw: string | null): GuestWifi {
     if (typeof v !== 'object' || v === null) return empty;
     const { ssid, password, open } = v as Record<string, unknown>;
     return {
-      ssid: typeof ssid === 'string' ? ssid : '',
-      password: typeof password === 'string' ? password : '',
+      ssid: typeof ssid === 'string' ? ssid.slice(0, MAX_SSID) : '',
+      password: typeof password === 'string' ? password.slice(0, MAX_PASSWORD) : '',
       open: open === true,
     };
   } catch {
@@ -120,7 +123,7 @@ function parseGuestWifi(raw: string | null): GuestWifi {
 // Works without UPnP, so it sits outside the router phases and shows in every one of them.
 function GuestWifiCard() {
   const { c } = useTheme();
-  const { store } = useNetworkScan();
+  const { store, errorNote } = useNetworkScan();
   const [form, setForm] = useState<GuestWifi | null>(null);
   const latest = useRef<GuestWifi | null>(null);
   const dirty = useRef(false);
@@ -141,6 +144,13 @@ function GuestWifiCard() {
       cancelled = true;
     };
   }, [store]);
+
+  // The store could not open: show the form anyway (it works for this visit, nothing is saved).
+  useEffect(() => {
+    if (store !== null || errorNote === null || latest.current !== null) return;
+    latest.current = parseGuestWifi(null);
+    setForm(latest.current);
+  }, [store, errorNote]);
 
   const persist = useCallback((): void => {
     if (timer.current !== null) clearTimeout(timer.current);
@@ -167,8 +177,10 @@ function GuestWifiCard() {
     [form],
   );
 
+  const showQr = form !== null && form.ssid !== '' && qrText !== '';
+
   return (
-    <Group title="Guest Wi-Fi" footer="Guests point their camera at this to join.">
+    <Group title="Guest Wi-Fi" footer={showQr ? 'Guests point their camera at this to join.' : undefined}>
       {form === null ? (
         <Row title="Loading" subtitle="Opening your saved details." />
       ) : (
@@ -178,6 +190,7 @@ function GuestWifiCard() {
               label="Network name"
               value={form.ssid}
               onChangeText={(ssid) => update({ ssid })}
+              maxLength={MAX_SSID}
               autoCapitalize="none"
               autoCorrect={false}
               autoComplete="off"
@@ -193,6 +206,7 @@ function GuestWifiCard() {
               label="Password"
               value={form.password}
               onChangeText={(password) => update({ password })}
+              maxLength={MAX_PASSWORD}
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
@@ -216,7 +230,7 @@ function GuestWifiCard() {
           }
         />
       ) : null}
-      {form !== null && form.ssid !== '' && qrText !== '' ? (
+      {form !== null && showQr ? (
         <Row title={<QrCode text={qrText} label={`QR code to join ${form.ssid}`} />} />
       ) : null}
     </Group>
