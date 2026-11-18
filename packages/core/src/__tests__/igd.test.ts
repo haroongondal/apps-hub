@@ -321,6 +321,12 @@ test('rateBps returns null for a reset, no elapsed time or non-finite input', ()
   assert.equal(rateBps({ rx: 0, tx: 5e9, atMs: 0 }, { rx: 0, tx: 10, atMs: 1000 }), null);
 });
 
+test('rateBps ignores a 64-bit counter reset that lands in 32-bit range', () => {
+  // next > prev - 2^32, so a blind +2^32 would give a small positive rate.
+  assert.equal(rateBps({ rx: 2 ** 32 + 1000, tx: 0, atMs: 0 }, { rx: 5000, tx: 0, atMs: 1000 }), null);
+  assert.equal(rateBps({ rx: 0, tx: 2 ** 32 + 1000, atMs: 0 }, { rx: 0, tx: 5000, atMs: 1000 }), null);
+});
+
 const entry = (i: number, over: Record<string, string> = {}): string =>
   soapOk('GetGenericPortMappingEntry', IP2, {
     NewRemoteHost: '',

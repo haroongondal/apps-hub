@@ -169,8 +169,8 @@ export async function readByteCounters(
 export function rateBps(prev: ByteCounters, next: ByteCounters): { downBps: number; upBps: number } | null {
   const elapsed = next.atMs - prev.atMs;
   if (!(elapsed > 0)) return null;
-  // Many routers keep 32-bit counters; a negative delta is a wrap.
-  const bps = (a: number, b: number): number => ((b - a < 0 ? b - a + 2 ** 32 : b - a) * 8 * 1000) / elapsed;
+  // Many routers keep 32-bit counters; a negative delta is a wrap only if the old value fit in 32 bits.
+  const bps = (a: number, b: number): number => ((b - a < 0 && a < 2 ** 32 ? b - a + 2 ** 32 : b - a) * 8 * 1000) / elapsed;
   const downBps = bps(prev.rx, next.rx);
   const upBps = bps(prev.tx, next.tx);
   // Negative: a 64-bit counter that reset (the 32-bit wrap fix only covers counters below 2^32).
