@@ -344,6 +344,67 @@ async function applyTemplate(t) {
   restoring = false;
   canvas.requestRenderAll(); record(); inspect();
 }
+// Design with AI: the reply is parsed and clamped by AiLayout; fractions here are of the page.
+function buildItems(layout) {
+  const m = Math.min(W, H);
+  return layout.items.map(it => {
+    const pos = { left: it.x * W, top: it.y * H }, w = it.w * W, h = it.h * H, fill = it.fill || '#1d2433';
+    switch (it.type) {
+      case 'text': return new Textbox(it.text || '', { ...pos, width: w, fontSize: (it.size || 0.05) * m, fontFamily: it.font || SANS, fontWeight: it.bold ? 'bold' : 'normal', fontStyle: it.italic ? 'italic' : 'normal', textAlign: it.align || 'center', fill });
+      case 'rect': return new Rect({ ...pos, width: w, height: h, rx: (it.round || 0) * Math.min(w, h), ry: (it.round || 0) * Math.min(w, h), fill });
+      case 'circle': return new Circle({ ...pos, radius: Math.min(w, h) / 2, fill });
+      case 'star': return new Polygon(starPoints(Math.min(w, h) / 2), { ...pos, fill });
+      case 'line': return new Line([0, 0, w, h], { ...pos, stroke: fill, strokeWidth: (it.stroke || 0.006) * m });
+    }
+  }).filter(Boolean);
+}
+const applyLayout = layout => applyTemplate({ bg: layout.bg, items: () => buildItems(layout) });
+
+const AI_COPY = {
+  aiNoPrompt: 'Describe the design first.',
+  aiUnavailable: 'Design with AI is not available here.',
+  aiWorking: 'Designing your page…',
+  aiNoKey: 'Add your Anthropic API key first.',
+  aiKeySaved: 'Key saved. Press Generate.',
+  aiNoSecure: `This ${PHONE ? 'phone' : 'Mac'} can’t store the key safely.`,
+  aiRefused: 'The API key was refused. Check it and save it again.',
+  aiRateLimit: 'Too many requests right now. Wait a minute and try again.',
+  aiOffline: 'Couldn’t reach Anthropic. Check your connection and try again.',
+  aiFailed: 'The request didn’t work. Try again.',
+  aiDone: 'Done. Undo puts the page back.',
+};
+const AI_ERR = { nosecure: AI_COPY.aiNoSecure, offline: AI_COPY.aiOffline, timeout: AI_COPY.aiOffline };
+const aiStatus = msg => { $('#aiStatus').textContent = msg; };
+async function aiShowKeyRow(force) {
+  const has = !force && !!(await native.ai?.hasKey().catch(() => false));
+  $('#aiKeyRow').hidden = has; $('#aiChange').hidden = !has;
+}
+async function generate() {
+  const prompt = $('#aiPrompt').value.trim();
+  if (!prompt) return aiStatus(AI_COPY.aiNoPrompt);
+  if (!native.ai) return aiStatus(AI_COPY.aiUnavailable);
+  const go = $('#aiGo'); go.disabled = true; aiStatus(AI_COPY.aiWorking);
+  try {
+    const res = await native.ai.request(AiLayout.buildRequest(prompt, W, H));
+    if (res.error === 'nokey') { aiShowKeyRow(true); return aiStatus(AI_COPY.aiNoKey); }
+    if (!res.ok) return aiStatus(AI_ERR[res.error] || (res.status === 401 ? AI_COPY.aiRefused : res.status === 429 ? AI_COPY.aiRateLimit : AI_COPY.aiFailed));
+    const layout = AiLayout.parseReply(res.json);
+    await applyLayout(layout);
+    aiStatus(AI_COPY.aiDone);
+  } catch (e) { aiStatus(e?.message || AI_COPY.aiFailed); } finally { go.disabled = false; }
+}
+$('#aiGo').onclick = generate;
+$('#aiChange').onclick = () => aiShowKeyRow(true);
+$('#aiSave').onclick = async () => {
+  const key = $('#aiKey').value.trim();
+  if (!key) return aiStatus(AI_COPY.aiNoKey);
+  try {
+    await native.ai.setKey(key);
+    $('#aiKey').value = ''; aiShowKeyRow(false); aiStatus(AI_COPY.aiKeySaved);
+  } catch (e) { aiStatus(/secure/i.test(e?.message) ? AI_COPY.aiNoSecure : AI_COPY.aiFailed); }
+};
+aiShowKeyRow(false);
+
 function templateThumb(t) {
   const sc = new fabric.StaticCanvas(document.createElement('canvas'), { width: W, height: H, backgroundColor: t.bg, renderOnAddRemove: false });
   t.items().forEach(o => sc.add(o));
@@ -845,4 +906,4 @@ $('#openMedia').onclick = () => native.media.openWindow();
 })();
 // setZoom exports for touch.js: pinch zoom and pan stay in sync with app.js's zoom variable,
 // the element size and the zoom label through the same function the buttons use
-window.editor = { get selectMany() { return selectMany; }, canvas, MENU, removeBackground, resizePage, exportAs, applyTemplate, pickFace, TEMPLATES, setZoom, get size() { return [W, H]; }, get page() { return [cur, pages.length]; } };
+window.editor = { get selectMany() { return selectMany; }, canvas, MENU, removeBackground, resizePage, exportAs, applyTemplate, applyLayout, pickFace, TEMPLATES, setZoom, get size() { return [W, H]; }, get page() { return [cur, pages.length]; } };
