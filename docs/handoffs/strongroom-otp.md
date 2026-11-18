@@ -2,23 +2,26 @@
 
 ## Resume prompt
 
-Dated 2026-11-15, last updated 2026-11-19 (Tasks 1–7 code-complete and gated;
-Task 7's flow E2E verified on the owner's phone over adb — see the Task 7
-section and its decision note).
+Dated 2026-11-15, last updated 2026-11-19 (Tasks 1–8 code-complete and gated;
+Task 7's flow E2E and Task 8's entry-screen code were verified on the owner's
+phone over adb — see their sections).
 Implements `docs/strongroom/DESIGN.md` §15 per `docs/strongroom/OTP-PLAN.md`. Work happens
 in a worktree off `main` (226a947) on branch `strongroom-otp` — this run used
 `/Users/outsentia/.local/share/opencode/worktree/044235/strongroom-otp`; any
-fresh worktree off the same branch is equivalent. The branch has twelve commits:
+fresh worktree off the same branch is equivalent. The branch has seventeen
+commits (this handoff's included):
 f2d7684 (DESIGN §15 + OTP plan), fb3a7fd (Task 1, `Otp.kt` + vectors), 7e1a1c0
-(Task 2, the vault field, both languages), 565066c (Task 3, code-field
-detection), eb473da (Task 4, TOTP fill datasets), 72d6bec (Task 5, SMS fill),
-ba36251 (Task 5 fix, an armed delayed fill is a response), 2c202a4 (Task 5
-handoff), 9844f85 (Task 6, the QR scan screen), b6e568b (Task 7 Step 0),
-a106286 (Task 7, the migration reader + module + vault), 935120c (Task 7, the
-RN import flow). Tasks 1–5 are done and E2E verified (see the Task 5 section);
-Task 6 is implemented, gated, emulator E2E verified (see its section); Task 7
-is implemented, gated, and its import flow verified on the phone — the
-on-camera QR part stays JVM-proven (see the Task 7 section).
+(Task 2, the vault field, both languages), 19edffcd (Tasks 1–2 handoff),
+565066c (Task 3, code-field detection), eb473da (Task 4, TOTP fill datasets),
+72d6bec (Task 5, SMS fill), ba36251 (Task 5 fix, an armed delayed fill is a
+response), 2c202a4 (Task 5 handoff), 9844f85 (Task 6, the QR scan screen),
+f1896761 (Task 6 handoff), b6e568b (Task 7 Step 0), a106286 (Task 7, the
+migration reader + module + vault), 935120c (Task 7, the RN import flow),
+249c133e (Task 7 handoff), 268c8d5c (Task 8, the entry-screen code, remove and
+disk check). Tasks 1–6 are done and E2E verified (emulator);
+Task 7 is implemented, gated, and its import flow verified on the phone — the
+on-camera QR part stays JVM-proven; Task 8 is implemented, gated, and verified
+on the phone (see its section). The OTP plan is closed.
 No upstream, never push, merge or release without the owner's word.
 
 Read first: `docs/strongroom/OTP-PLAN.md` (the task list — one task at a time,
@@ -264,8 +267,42 @@ checkout. It landed on `main` as 226a947 before this branch was cut, so Tasks
   - **Every entry has an unknown trailing field 8** (19 bytes, length-
     delimited) — the reader must skip unknown fields like `Otp.parse`
     does. No field 7, no groups; pure wire types 0 and 2.
-- **Task 8:** entry screen live code, Settings entries, disk-check totp
-  needle, whole-feature review, gates, handoff update.
+- **Task 8 done** (268c8d5c): the §15.5 entry screen and the disk-check
+  needle; the whole-feature §12 gate-4 review is recorded in the Task 8
+  section.
+  - `Otp.State(code, secondsLeft, period)` + `state(totp, unixSeconds)`:
+    `secondsLeft` = period − (t mod period), so a fresh window reads 30 and
+    the last second reads 1, never 0; `OtpTest.stateCountsDownAndNeverReadsZero`
+    pins 30/29/1, the code at the boundary, and an 8-digit code.
+  - Module: `Function("totpCode")` → `{code, secondsLeft, period}` via a new
+    `currentTotp(vault, id)` (coded `NO_TOTP` when the login has none);
+    `removeTotp(id)` rewrites the login without its code (password untouched,
+    index refreshed); `copy` accepts field `"totp"` (same SensitiveClipboard
+    path as passwords). The stored string is re-parsed on each read, so a code
+    that no longer parses is refused like a missing one.
+  - TS: `TotpCode`, `totpCode(id)`, `removeTotp(id)`, `copy` union gains
+    `'totp'`, `NO_TOTP` added to the rejection comment.
+  - RN `EntryScreen`: an "Authenticator code" row at the top of a login's
+    fields — `Readout` showing the code grouped like Authenticator apps
+    (`123 456` via the new `groupCode` in `forms.ts`; 8-digit codes split
+    4/4), "N seconds left" under it, ghost Copy; one `setInterval` tick a
+    second re-reads `Vault.totpCode(id)` and rolls the code itself; the row
+    disappears when the entry has no `totp`; "Remove code" opens a Sheet
+    ("Remove this code?", danger "Remove code") and the success Notice says
+    the password is unchanged.
+  - `tools/disk-check.sh`: a `b32:<base32>` needle — its text in either case
+    and the raw bytes it decodes to (host-side python3 base32; run-as can't
+    run one on the phone), plus the usual plain/UTF-16/Base64 passes for the
+    text form; usage comment updated.
+  - Gates at commit: Gradle module suite **463 tests / 0 failures / 1
+    skipped** (the new state test); workspace
+    `pnpm -r --workspace-concurrency=1 test` all `fail 0`; `pnpm typecheck`
+    Done in every package.
+  - Phone proof (live code, copy, remove) and the disk-check output are in the
+    Task 8 section. With this, every §15 claim has a phone or JVM proof; the
+    migration heading, batch confirmations and foreign-QR refusal stay
+    JVM-proven (the scan screen is FLAG_SECURE and no export QR can be fed
+    to the camera).
 
 ## Task 5 E2E on the emulator (verified 2026-11-17)
 
@@ -456,6 +493,82 @@ then 66/63/1f took turns; released to apps-hub-1f at the end):
   The test app stays installed beside the Store app; its vault keeps the
   data found above.
 
+## Task 8 E2E on the phone (verified 2026-11-19)
+
+Same side-by-side test build as Task 7 (`-PstrongroomIdSuffix=.synctest
+-PstrongroomScreenshots=true`), installed over the previous one with
+`adb install -r` (the reinstall locks the vault; `otp-import-pass-1` unlocks
+it). The test entry came from a Google CSV with a `totp` column, because the
+camera can't be fed a QR: `strongroom-e2e-code.csv` (pushed to Downloads,
+selected through DocumentsUI, never the owner's real export on Recent) with
+entry "Strongroom E2E code", `code-test@example.com`, `test-pass-1`, and
+`otpauth://totp/E2E:code-test@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=E2E`
+(RFC 6238's SHA-1 test secret). The import preview said "1 login found, 0
+duplicates merged"; the entry appeared under its name with a live code.
+
+- **Live code matches an independent TOTP.** With the phone clock at
+  t=1795033665 the screen showed `927 446`; a host-side HMAC-SHA1 over the
+  same base32 secret and counter (unix/30) gave `927446`. The countdown read
+  "16 seconds left", then "11" four seconds later with the same code.
+- **Rollover is automatic.** At t=1795033732 (a new period) the screen
+  showed `519 777`, matching the host computation for that counter; later
+  periods rolled the same way with no interaction (`183 554`, `893 852`,
+  `240 590` observed while the run went on). `secondsLeft` never read 0 —
+  the last second reads 1 by design.
+- **Copy** shows the Notice "Authenticator code copied. The clipboard clears
+  in 30 seconds." and leaves the row as it was (the clipboard path is Task
+  5's: token + timestamp in prefs, never the code).
+- **Remove code.** "Remove code" → Sheet "Remove this code?" (says the
+  password stays) → danger "Remove code" → the code row and the Remove
+  button disappear, Notice "Authenticator code removed. The password is
+  unchanged.", and Show on Password revealed `test-pass-1` — the login's
+  other fields were untouched.
+- **Disk check with the TOTP secret.** The import appends (it does not
+  merge), so re-importing the CSV after the remove-code run put a sealed
+  copy of the secret back without the camera; the second entry was deleted
+  afterwards. With the secret stored:
+  `tools/disk-check.sh 49kjmnuwonkffqzh com.haroon.strongroom.synctest
+  test-pass-1 code-test@example.com b32:GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ`
+  printed `secret 1, plain: 0` / `plain or UTF-16: 0` / `Base64: 0` (password),
+  the same three zeros for the username, `secret 3, base32 text or raw
+  bytes: 0`, and `0 hits in 16 files …`, exit 0. The knob that makes this
+  meaningful: the needle covers the base32 text in either case and the raw
+  bytes it decodes to, not just the stored URI.
+- **Cleanup:** both test entries were deleted through the UI (the list is
+  back to the data the vault held before this run), the pushed CSV was
+  removed from Downloads, the screenshots were deleted, the app returned
+  to the launcher, and the device was released (`coord release`). The test
+  app stays installed beside the Store app.
+
+### §12 gate 4 — review of the §15 additions
+
+- **TOTP code generation.** The code is derived in Kotlin per read
+  (`Otp.state` → `currentTotp`), never cached to disk; the bridge carries
+  `{code, secondsLeft, period}` only, so the raw URI/secret never reaches
+  RN. `removeTotp` is a field edit on the login, not a password edit, and
+  goes through the same sealed `put`. The disk check above is the
+  on-device proof that the secret is not readable on disk.
+- **QR scan screen.** `ScanActivity` sets `FLAG_SECURE` unconditionally
+  (not behind the screenshots build flag), hides overlay windows, marks
+  itself `accessibilityDataSensitive`, and holds the scanned URI only in
+  the activity result. The confirmation screen (issuer · account,
+  algorithm/digits/period) is inside that secure activity; the URI is
+  re-parsed in the module (`SCAN_BAD_URI`) before it can be saved.
+- **Migration import.** Pending batches and the review live only in
+  `VaultHolder` volatile fields; the raw URIs never cross the bridge, and a
+  lock clears every pending field (`VaultHolder` lock listener) so a later
+  unlock cannot commit a stale export. `commitAuthenticatorImport` writes
+  one transaction and clears the pending state.
+- **SMS receiver/delayed fill.** `SmsReceiver` reads only the incoming
+  `SMS_RECEIVED` broadcast (never the inbox/MMS), extracts the code through
+  `SmsCodes` into an in-memory deque (max 4, each gone after 2 minutes) and
+  writes nothing — no message text, no code, no log line. The only persisted
+  SMS-related value is the toggle boolean (`SmsToggle` prefs). The armed
+  fill lives in `SmsFill`'s volatile `session`; a dead process loses it.
+- **Clipboard.** The code is copied through `SensitiveClipboard` like a
+  password: the clip is marked sensitive, prefs hold only a UUID token and
+  a timestamp, and the 30-second clear runs through `ClipClear`.
+
 ## Gotchas learned the hard way
 
 - **`pm grant`/`pm revoke` on a running app kills its process.** Bit once
@@ -548,6 +661,28 @@ then 66/63/1f took turns; released to apps-hub-1f at the end):
   `~/.claude/sessions/<pid>.json`
   (`{"pid":…,"sessionId":"opencode-…","name":"…"}`), and export
   `COORD_SID=<that sessionId>` for every coord call.
+- **Task 8 taps move with the Notice.** On the entry screen "Remove code"
+  sits at native ≈ (540,2081) while the Copy notice is shown and
+  ≈ (540,1844) without it; the Delete button moves the same way when the
+  code row appears. Measure from a fresh capture each time, and re-check
+  the sheet's danger button too (≈ (540,2289) for both sheets at
+  zsh-provided sizes; the sheet grows with its text).
+- **A tap during screen wake can land on the launcher** (or on whatever
+  the system brings forward): one "Remove code" tap after a wake did
+  nothing, and the Store came to the front by itself mid-run (another
+  session's update). Don't tap the Store — `am start` the test app back to
+  the front and continue; the app process survives in the background.
+- **DocumentsUI's Recent lists the owner's real `Google Passwords.csv`.**
+  Always go to the drawer → Downloads → `strongroom-e2e-code.csv`; never
+  open or import the owner's export into the test app.
+- **The Google import appends, it does not merge.** Re-importing the same
+  CSV creates a second entry — useful to put a sealed TOTP secret back for
+  the disk check without the camera, but delete the extra entry (and the
+  pushed CSV from Downloads) afterwards.
+- **`disk-check.sh` needs `ANDROID_HOME` on this Mac** — it defaults to
+  `/opt/homebrew/share/android-commandlinetools`, but the working adb here
+  is under `/Users/outsentia/Library/Android/sdk`; run it as
+  `ANDROID_HOME=$HOME/Library/Android/sdk ./tools/disk-check.sh …`.
 
 ## Test commands
 
