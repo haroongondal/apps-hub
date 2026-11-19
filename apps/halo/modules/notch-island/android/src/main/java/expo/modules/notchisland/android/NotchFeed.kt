@@ -12,6 +12,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import expo.modules.notchisland.core.AlarmCard
 import expo.modules.notchisland.core.AlarmSnapshot
+import expo.modules.notchisland.core.MessagePeek
 import expo.modules.notchisland.core.Progress
 import expo.modules.notchisland.core.ProgressSnapshot
 import expo.modules.notchisland.core.callActions
@@ -28,7 +29,11 @@ import expo.modules.notchisland.core.sampleSize
  * progress numbers and EXTRA_TITLE, kept in memory for the card.
  * For a ringing alarm, only while the alarm card switch is on: category, isOngoing, whether it
  * has a full-screen intent, `when`, EXTRA_TITLE, and each action's title and semantic flag
- * (matched, never kept) and PendingIntent. Never other text.
+ * (matched, never kept) and PendingIntent.
+ * For message peek, only for apps on the user's allow-list while that switch is on: category,
+ * isOngoing, the group-summary flag, visibility, EXTRA_TITLE and EXTRA_TEXT (from the public
+ * version when private, nothing when secret) and the contentIntent, kept in memory for the card,
+ * never logged or saved. Never other text.
  */
 class NotchFeed(private val service: NotificationListenerService) {
   private var sessions: MediaSessionManager? = null
@@ -66,6 +71,7 @@ class NotchFeed(private val service: NotificationListenerService) {
     NotchMedia.progress = null
     alarms.clear()
     NotchMedia.alarm = null
+    NotchMedia.message = null
     NotchMedia.changed()
   }
 
@@ -121,12 +127,14 @@ class NotchFeed(private val service: NotificationListenerService) {
     }
     progressPosted(sbn, n)
     alarmPosted(sbn, n)
+    messagePosted(sbn, n)
   }
 
   fun removed(sbn: StatusBarNotification?) {
     if (sbn != null && NotchMedia.call?.key == sbn.key) clearCall()
     if (sbn != null && progress.remove(sbn.key) != null) publishProgress()
     if (sbn != null && alarms.remove(sbn.key) != null) publishAlarm()
+    if (sbn != null && NotchMedia.message?.snap?.key == sbn.key) setMessage(null)
   }
 
   // Another app's extras can fail to unparcel; that notification is then simply not a card.
@@ -178,6 +186,31 @@ class NotchFeed(private val service: NotificationListenerService) {
     val next = AlarmCard.pick(alarms.values.map { it.snap })?.let { alarms[it.key] }
     if (next == NotchMedia.alarm) return
     NotchMedia.alarm = next
+    NotchMedia.changed()
+  }
+
+  // Secret messages never peek; private ones show only their public title and text.
+  private fun messagePosted(sbn: StatusBarNotification, n: Notification) {
+    val snap = runCatching {
+      val summary = n.flags and Notification.FLAG_GROUP_SUMMARY != 0
+      if (!MessagePeek.qualifies(sbn.packageName, sbn.isOngoing, n.category, summary, NotchPrefs.load(service).messagePeek)) return@runCatching null
+      val shown = when (n.visibility) {
+        Notification.VISIBILITY_SECRET -> return@runCatching null
+        Notification.VISIBILITY_PRIVATE -> n.publicVersion?.extras
+        else -> n.extras
+      }
+      MessagePeek.snapshot(sbn.key, sbn.packageName, shown?.getCharSequence(Notification.EXTRA_TITLE), shown?.getCharSequence(Notification.EXTRA_TEXT), sbn.postTime)
+    }.getOrNull()
+    val current = NotchMedia.message
+    if (snap == null) {
+      if (current?.snap?.key == sbn.key) setMessage(null)
+    } else if (MessagePeek.next(current?.snap, snap) === snap) {
+      setMessage(MessageInfo(snap, n.contentIntent))
+    }
+  }
+
+  private fun setMessage(m: MessageInfo?) {
+    NotchMedia.message = m
     NotchMedia.changed()
   }
 
