@@ -188,3 +188,83 @@ Fixed, each with a failing test first:
 - DESIGN §6's "never accept a header with lower KDF settings" matters once sync exists.
 - Dependencies were not audited by the reviewer; `supply-chain-risk-auditor` on `@noble/hashes` and
   `esbuild` is a good next check.
+
+## Authenticator codes (2026-11-19)
+
+Branch `strongroom-extension-otp`, stacked on `strongroom-otp` (PR #51, still open
+against `main`) in the worktree
+`.local/share/opencode/worktree/strongroom-extension-otp`. Its PR must target
+`strongroom-otp`, not `main`.
+
+What shipped:
+
+- `packages/strongroom-core/src/otp.ts`: `totpState` and `totpCode` mirror
+  `Otp.kt` — RFC 4226 truncation, SHA-1/256/512, 6 or 8 digits, 15–120 s periods,
+  `secondsLeft = period - (unix % period)` in `1..period`. Uses the existing
+  `@noble/hashes`; no new dependency. Tests use the shared `otp-vectors.json`
+  RFC 6238 vectors plus 6-digit and period-edge cases.
+- `service.save` keeps `totp` when the edit screen rebuilds a login (regression
+  test). Import and sync already carried the field.
+- Service API: `Row.totp` is a boolean; `Detail.code` is the current
+  `TotpState | null`; the `fill` reply includes the code state; new page request
+  `totpCode` uses the same gate as `fill` (FROM_PAGE only, live `sender.url`,
+  `siteFromUrl`, `matches`, `requireFillKey`, `resetAutoLock`); `removeTotp`
+  strips the field from an unlocked vault. The raw `otpauth://` URI never crosses
+  the message boundary.
+- Content script: `autocomplete="one-time-code"` first, then name/id/aria/label
+  keywords (English and Roman-Urdu), numeric or maxlength 4–8; password fields
+  and card/CVC/security-code fields are excluded. A code field's menu lists
+  `123 456 · Name`; the click re-fetches the current state and writes every OTP
+  field in that form. A normal credential fill also fills the code when the
+  chosen login holds one.
+- Popup: grouped code, "N seconds left", 1 s countdown with a fresh state at
+  rollover, Copy, and a two-tap Remove code.
+- E2E covers CSV import, sealed storage, menu, code-only fill, credential fill,
+  locked fill, CVC exclusion and removal. The code login gets its own local port
+  so its site has exactly one candidate and the password menus stay untouched.
+
+Decisions:
+
+- **Locked codes follow the extension's fill policy, not the phone's.** The phone
+  refuses OTP fill while locked (DESIGN §15.2); the extension already fills
+  passwords from the device-held key while locked, so `totpCode` uses
+  `requireFillKey` and behaves the same. This adds no exposure beyond the
+  existing lock-free fill trade-off disclosed in Settings; the comment in
+  `service.ts` records the divergence.
+- **No QR scan, paste, HOTP or SMS**, per the non-goals. Codes arrive on the
+  existing `totp` field through sync or the Google CSV `totp` column; the edit
+  screen does not touch the code, and Remove code is the explicit removal path.
+- The code is shown only on the login's detail screen, never in the list.
+
+Gate outputs (actual, 2026-11-19):
+
+- `pnpm --filter strongroom-core test`: 187 tests, 187 pass, 0 fail (3800 ms).
+- `pnpm --filter strongroom-extension test`: 139 tests, 139 pass, 0 fail
+  (22173 ms).
+- `pnpm --filter strongroom-extension typecheck`: `tsc --noEmit`, no output.
+- `pnpm --filter strongroom-extension build`: `Built
+  .../apps/strongroom-extension/dist`.
+- `pnpm --filter strongroom-extension test:e2e`: 98/98 checks passed in real
+  Chromium with the built extension loaded unpacked, including a code fill on a
+  local test page.
+- `pnpm -r --workspace-concurrency=1 test`: exit 0; every workspace package
+  passed.
+- `pnpm typecheck`: every package `Done`.
+
+Gate-4 review (secret containment):
+
+- The stored URI lives only inside the entry ciphertext; codes are computed on
+  every read and never written. `Row` exposes only a boolean; `Detail`, `fill`
+  and `totpCode` expose only `{code, secondsLeft, period}`. E2E confirms neither
+  `otpauth` nor the secret appears in `storage.local`.
+- Page requests are checked against the live `sender.url` in the worker, never a
+  caller-supplied URL. `totpCode` additionally requires a page context and a site
+  match, so another origin or a lookalike host gets no code.
+- The content script cannot read `storage.local` (existing `TRUSTED_CONTEXTS`),
+  and only a trusted click inside the closed-shadow menu fills; the code fills
+  only detected OTP fields in the chosen form.
+- No code or URI is logged. The only clipboard write is the owner's Copy action
+  (no auto-clear, a documented cut).
+- Accepted edge: when the chosen login field is outside a form, the code can
+  target detected OTP fields anywhere on the page (`document`), still only after
+  a matching-site click. Not treated as a leak.

@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { recoveryLoginToken } from 'strongroom-core';
+import { recoveryLoginToken, totpCode } from 'strongroom-core';
 import { newWorld, serveHttp } from '../src/__tests__/sync-world.ts';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE ?? join(homedir(), 'Documents/browser-automation/node_modules/playwright-core/index.mjs'));
@@ -27,14 +27,25 @@ const check = (name, cond, extra = '') => {
 const page_html = `<!doctype html><title>Sign in</title><body style="font:16px sans-serif;padding:40px">
 <form id="f" action="/welcome" method="post" novalidate><p><label>Email <input id="u" name="email" type="email"></label></p>
 <p><label>Password <input id="p" name="pw" type="password"></label></p><button id="go" type="submit">Sign in</button></form></body>`;
-const server = http.createServer((req, res) => {
+const otp_html = `<!doctype html><title>Verify</title><body style="font:16px sans-serif;padding:40px">
+<form id="f" action="/welcome" method="post" novalidate><p><label>Email <input id="u" name="email" type="email"></label></p>
+<p><label>Password <input id="p" name="pw" type="password"></label></p>
+<p><label>Verification code <input id="otp" name="otp" autocomplete="one-time-code" inputmode="numeric" maxlength="6"></label></p>
+<button id="go" type="submit">Sign in</button></form>
+<form id="card"><p><label>Card code <input id="cvc" name="cardCvc" inputmode="numeric" maxlength="3"></label></p></form></body>`;
+const serve = (req, res) => {
   res.setHeader('content-type', 'text/html');
-  res.end(req.url.startsWith('/login') ? page_html : '<h1>Welcome</h1>');
-});
+  res.end(req.url.startsWith('/otp') ? otp_html : req.url.startsWith('/login') ? page_html : '<h1>Welcome</h1>');
+};
+const server = http.createServer(serve);
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const PORT = server.address().port;
 const GOOD = `http://localhost:${PORT}/login.html`;
 const OTHER = `http://127.0.0.1:${PORT}/login.html`;
+// The code login gets a site of its own, so the menus under test never mix it with the passwords saved on OTHER.
+const otpServer = http.createServer(serve);
+await new Promise((r) => otpServer.listen(0, '127.0.0.1', r));
+const OTP_SITE = `http://127.0.0.1:${otpServer.address().port}`;
 
 const profile = mkdtempSync(join(tmpdir(), 'sg-e2e-'));
 const launchWith = async (ext, dir) => {
@@ -589,12 +600,110 @@ try {
   check('the logins survive the restart', after === 10, String(after));
   const onDisk = await sw.evaluate(async () => JSON.stringify(await chrome.storage.local.get(null)));
   check('nothing readable is stored on disk', !onDisk.includes('p4ssw0rd-local') && !onDisk.includes('tester') && !onDisk.includes('brand-new-pass-1') && !onDisk.includes('Local test'));
+
+  // Authenticator codes, end to end in real Chromium: the URI arrives through the shared CSV column, then fills from the page.
+  const OTP_SECRET = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+  const OTP_URI = `otpauth://totp/OTP:otpuser?secret=${OTP_SECRET}&issuer=OTP`;
+  const otpCsv = 'name,url,username,password,note,type,holder,number,exp_month,exp_year,cvc,app_domain,totp\n'
+    + `OTP test,${OTP_SITE},otpuser,otp-pass-1,,login,,,,,,,${OTP_URI}\n`;
+  const importedOtp = await send({ type: 'import', csv: otpCsv, commit: true });
+  const otpRow = (await send({ type: 'list' })).data.rows.find((r) => r.name === 'OTP test');
+  check('a login with an authenticator code imports from the CSV totp column', importedOtp.ok && importedOtp.data.added === 1 && otpRow?.totp === true, JSON.stringify([importedOtp, otpRow]));
+  const otpDetail = await send({ type: 'get', id: otpRow.id });
+  check('the popup gets the current code state, never the stored URI', otpDetail.ok && /^\d{6}$/.test(otpDetail.data.code.code) && otpDetail.data.code.period === 30 && !JSON.stringify(otpDetail).includes('otpauth') && !JSON.stringify(otpDetail).includes(OTP_SECRET), JSON.stringify(otpDetail));
+  const otpDisk = await sw.evaluate(async () => JSON.stringify(await chrome.storage.local.get(null)));
+  check('the stored code URI and secret never appear in storage.local', !otpDisk.includes('otpauth') && !otpDisk.includes(OTP_SECRET));
+
+  await popup.reload();
+  await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+  await popup.getByRole('button', { name: /OTP test/ }).click();
+  await popup.getByRole('heading', { name: 'OTP test' }).waitFor();
+  const codeScreen = await popup.innerText('body');
+  check('the login screen shows a grouped code and seconds left', /Authenticator code/.test(codeScreen) && /\d{3} \d{3}/.test(codeScreen) && /seconds? left/.test(codeScreen), codeScreen);
+  const firstLeft = await popup.getByText(/seconds? left/).innerText();
+  await popup.waitForTimeout(1_100);
+  const secondLeft = await popup.getByText(/seconds? left/).innerText();
+  check('the code countdown refreshes every second', firstLeft !== secondLeft, `${firstLeft} -> ${secondLeft}`);
+  await popup.screenshot({ path: `${SCRATCH}/8-code-detail.png` });
+  await popup.getByRole('button', { name: 'Back' }).click();
+  await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+
+  const otpPage = await ctx.newPage();
+  otpPage.on('pageerror', (e) => errors.push(`otp page: ${e.message}`));
+  const OTP_URL = `${OTP_SITE}/otp`;
+  const expectedCode = (at) => totpCode(OTP_URI, at);
+  await otpPage.goto(OTP_URL);
+  await otpPage.locator('#otp').click();
+  await otpPage.waitForTimeout(1_500);
+  check('the code menu opens on a detected code field', await menuShown(otpPage));
+  const otpMenuBox = await otpPage.locator('#otp').boundingBox();
+  const beforePick = Math.floor(Date.now() / 1000);
+  await otpPage.mouse.click(otpMenuBox.x + 30, otpMenuBox.y + otpMenuBox.height + 18);
+  await otpPage.waitForTimeout(600);
+  const afterPick = Math.floor(Date.now() / 1000);
+  const picked = await otpPage.inputValue('#otp');
+  check('choosing a code fills the current code, never the menu copy', [expectedCode(beforePick), expectedCode(afterPick)].includes(picked) && (await otpPage.inputValue('#u')) === '' && (await otpPage.inputValue('#p')) === '', picked);
+
+  await otpPage.goto(OTP_URL);
+  await otpPage.locator('#u').click();
+  await otpPage.waitForTimeout(1_500);
+  check('the credential menu opens on the same site', await menuShown(otpPage));
+  const userBox = await otpPage.locator('#u').boundingBox();
+  const beforeCredential = Math.floor(Date.now() / 1000);
+  await otpPage.mouse.click(userBox.x + 30, userBox.y + userBox.height + 18);
+  await otpPage.waitForTimeout(600);
+  const afterCredential = Math.floor(Date.now() / 1000);
+  const filledUser = await otpPage.inputValue('#u');
+  const filledPassword = await otpPage.inputValue('#p');
+  const credentialCode = await otpPage.inputValue('#otp');
+  check('a credential fill also fills the code field in the same form',
+    filledUser === 'otpuser' && filledPassword === 'otp-pass-1'
+      && [expectedCode(beforeCredential), expectedCode(afterCredential)].includes(credentialCode),
+    JSON.stringify({ user: filledUser, password: filledPassword, code: credentialCode }));
+
+  await send({ type: 'lock' });
+  await otpPage.goto(OTP_URL);
+  await otpPage.locator('#otp').click();
+  await otpPage.waitForTimeout(1_500);
+  check('a locked session still offers the code from the device-held key', await menuShown(otpPage));
+  const lockedOtpBox = await otpPage.locator('#otp').boundingBox();
+  const beforeLocked = Math.floor(Date.now() / 1000);
+  await otpPage.mouse.click(lockedOtpBox.x + 30, lockedOtpBox.y + lockedOtpBox.height + 18);
+  await otpPage.waitForTimeout(600);
+  const afterLocked = Math.floor(Date.now() / 1000);
+  const lockedCode = await otpPage.inputValue('#otp');
+  check('the locked fill uses a current code, not a stale one', [expectedCode(beforeLocked), expectedCode(afterLocked)].includes(lockedCode), lockedCode);
+  await send({ type: 'unlock', password: MASTER });
+
+  await otpPage.goto(OTP_URL);
+  await otpPage.locator('#cvc').click();
+  await otpPage.waitForTimeout(1_000);
+  check('a card CVC field is never treated as a code field', !(await menuShown(otpPage)));
+
+  await popup.reload();
+  await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+  await popup.getByRole('button', { name: /OTP test/ }).click();
+  await popup.getByRole('heading', { name: 'OTP test' }).waitFor();
+  await popup.getByRole('button', { name: 'Remove code' }).click();
+  await popup.getByRole('button', { name: 'Tap again to remove' }).click();
+  // The old screen stays up until the service answers, so wait for the code section itself to go.
+  await popup.getByText('Authenticator code').waitFor({ state: 'detached' });
+  check('removing the code keeps the login and hides the code section', !(await popup.innerText('body')).includes('Authenticator code'));
+  await popup.getByRole('button', { name: 'Back' }).click();
+  await popup.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+  check('the login survives removing its code', (await popup.locator('.row').count()) === 11, String(await popup.locator('.row').count()));
+  await otpPage.goto(OTP_URL);
+  await otpPage.locator('#otp').click();
+  await otpPage.waitForTimeout(1_000);
+  check('a login without a code offers no code menu', !(await menuShown(otpPage)));
+
   await ctx.close();
   await syncSuite();
 } catch (e) {
   check('the run finished without an exception', false, String(e?.stack ?? e).split('\n').slice(0, 4).join(' | '));
 } finally {
   server.close();
+  otpServer.close();
   rmSync(profile, { recursive: true, force: true });
   rmSync(EXT, { recursive: true, force: true });
 }

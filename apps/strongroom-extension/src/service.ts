@@ -758,7 +758,8 @@ export function createService(deps: Deps) {
         }
         case 'totpCode': {
           // Same gate as fill: the request must come from the page itself and the login must match that page.
-          // A locked session may still answer from the device-held key, exactly like a password fill.
+          // The phone refuses codes while locked; the extension follows its own lock-free fill policy, so the
+          // device-held key answers here exactly as it does for a password.
           const site = where && siteFromUrl(where.url);
           if (!site) throw new UserError(NOT_ALLOWED);
           const target = (await logins(await requireFillKey())).found.find((f) => f.id === req.id);
