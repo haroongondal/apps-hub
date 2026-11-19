@@ -37,6 +37,8 @@ everything into an interactive on-device knowledge graph.
   (`SUPPORTS`, `CONTRADICTS`, `PART_OF`, `INSPIRED_BY`); `text-embedding-3-small` (1536d or
   512d) or Gemini embeddings. Chosen 2026-11-19 (owner): Gemini embeds and reads images,
   Groq builds the graph, answers and transcribes; see the nexus spec, "AI provider".
+  Each service takes several keys; one that is refused (401, 403) or at its limit (429) hands
+  over to the next (added 2026-11-19).
 - Local graph + vectors: `@op-engineering/op-sqlite` with libsql / sqlite-vec; adjacency
   tables, recursive CTE traversal, sub-50 ms KNN.
 - Storage: binaries in the app sandbox, metadata/graph/vectors in SQLite. Sync-ready: UUIDv7

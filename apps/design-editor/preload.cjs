@@ -10,7 +10,9 @@ contextBridge.exposeInMainWorld('native', {
   onMenu: fn => ipcRenderer.on('menu', (_, cmd) => fn(cmd)),
   ai: {
     hasKey: () => ipcRenderer.invoke('ai-has-key'),
+    keys: () => ipcRenderer.invoke('ai-keys'),
     setKey: key => ipcRenderer.invoke('ai-set-key', key),
+    removeKey: index => ipcRenderer.invoke('ai-remove-key', index),
     request: body => ipcRenderer.invoke('ai-request', body),
   },
   media: {

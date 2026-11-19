@@ -9,8 +9,8 @@ import type WebView from 'react-native-webview';
 //   has to become a bridged promise here.
 // - keepAutosave: app.js calls it when a broken autosave cannot be restored; the desktop
 //   answers in preload.cjs, so the mobile schema gains it too.
-// - aiHasKey / aiSetKey / aiRequest: Design with AI, the one online feature. The key stays in the
-//   app; aiRequest is always answered with replyOk { ok, status, json?, error? }, never replyError.
+// - aiHasKey / aiKeys / aiSetKey / aiRemoveKey / aiRequest: Design with AI, the one online feature. The keys stay in the
+//   app (aiKeys sends labels only); aiRequest is always answered with replyOk { ok, status, json?, error? }, never replyError.
 // Web -> Native
 export type PageEvent =
   | { type: 'ready' }
@@ -43,7 +43,9 @@ export type PageEvent =
   | { type: 'visionRead'; reqId: string; id: string; index: number }
   | { type: 'visionCancel'; reqId: string; id: string }
   | { type: 'aiHasKey'; reqId: string }
+  | { type: 'aiKeys'; reqId: string }
   | { type: 'aiSetKey'; reqId: string; key: string }
+  | { type: 'aiRemoveKey'; reqId: string; index: number }
   | { type: 'aiRequest'; reqId: string; body: unknown };
 // Native -> Web
 export type WebCommand =

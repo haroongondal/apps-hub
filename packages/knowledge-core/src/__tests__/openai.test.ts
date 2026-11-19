@@ -100,3 +100,44 @@ test('no key fails as auth without touching the network', async () => {
   await assert.rejects(openAiCompatPort({ apiKey: '  ', baseUrl: BASE, fetch }).answer('q', []), kind('auth'));
   assert.equal(sent.length, 0);
 });
+
+test('a key that is refused or at its limit hands over to the next, and the next call starts there', async () => {
+  for (const status of [401, 403, 429]) {
+    const seen: string[] = [];
+    const fetch = (async (_url: string, init: RequestInit) => {
+      const key = (init.headers as Record<string, string>).Authorization;
+      seen.push(key);
+      return new Response(JSON.stringify(key === 'Bearer a' ? {} : { data: [{ index: 0, embedding: [1, 0] }] }), { status: key === 'Bearer a' ? status : 200 });
+    }) as unknown as typeof globalThis.fetch;
+    const ai = openAiCompatPort({ apiKey: ['a', 'b'], baseUrl: BASE, fetch });
+    await ai.embed(['x']);
+    await ai.embed(['x']);
+    assert.deepEqual(seen, ['Bearer a', 'Bearer b', 'Bearer b'], String(status));
+  }
+});
+
+test('Gemini answering 400 for an unknown key counts as refused; any other 400 stops at once', async () => {
+  const seen: string[] = [];
+  const reply = (key: string, bad: string) => (key === 'Bearer a' ? new Response(bad, { status: 400 }) : new Response(JSON.stringify({ data: [{ index: 0, embedding: [1] }] }), { status: 200 }));
+  const fetchWith = (bad: string) => (async (_u: string, init: RequestInit) => { const k = (init.headers as Record<string, string>).Authorization; seen.push(k); return reply(k, bad); }) as unknown as typeof globalThis.fetch;
+  await openAiCompatPort({ apiKey: ['a', 'b'], baseUrl: BASE, fetch: fetchWith('API key not valid. Please pass a valid API key.') }).embed(['x']);
+  assert.deepEqual(seen, ['Bearer a', 'Bearer b']);
+  seen.length = 0;
+  await assert.rejects(openAiCompatPort({ apiKey: ['a', 'b'], baseUrl: BASE, fetch: fetchWith('bad body') }).embed(['x']), kind('bad_request'));
+  assert.deepEqual(seen, ['Bearer a']);
+});
+
+test('every key out: a limit is reported over a refusal, and a server error does not move to another key', async () => {
+  const run = (statuses: Record<string, number>) => {
+    const seen: string[] = [];
+    const fetch = (async (_u: string, init: RequestInit) => { const k = (init.headers as Record<string, string>).Authorization.slice(7); seen.push(k); return new Response('{}', { status: statuses[k] }); }) as unknown as typeof globalThis.fetch;
+    return { seen, ai: openAiCompatPort({ apiKey: ['a', 'b'], baseUrl: BASE, fetch }) };
+  };
+  const mixed = run({ a: 401, b: 429 });
+  await assert.rejects(mixed.ai.embed(['x']), kind('rate'));
+  const refused = run({ a: 401, b: 403 });
+  await assert.rejects(refused.ai.embed(['x']), (e: unknown) => e instanceof AiError && e.kind === 'auth' && /every API key/.test(e.message));
+  const broken = run({ a: 500, b: 200 });
+  await assert.rejects(broken.ai.embed(['x']), kind('server'));
+  assert.deepEqual(broken.seen, ['a']);
+});

@@ -5,9 +5,10 @@ export const GROQ_URL = 'https://api.groq.com/openai/v1/';
 /** Stored beside the vectors: when it changes, Knowledge re-embeds every item. */
 export const EMBED_TAG = `gemini-embedding-001@${EMBED_DIMS}`;
 
+/** Each service takes one key or several; a key that is refused or at its limit hands over to the next (openai.ts). */
 export interface NexusKeys {
-  gemini: string;
-  groq: string;
+  gemini: string | string[];
+  groq: string | string[];
   fetch?: typeof fetch;
 }
 
