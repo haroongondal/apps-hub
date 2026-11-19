@@ -15,6 +15,7 @@ allowBuilds:
 
 patchedDependencies:
   decode-uri-component@0.2.2: patches/decode-uri-component@0.2.2.patch
+  react-native-worklets@0.5.1: patches/react-native-worklets@0.5.1.patch
 
 overrides:
   # One supports-color for the whole graph: as peers it resolved to 8.1.1 and 10.2.2, which

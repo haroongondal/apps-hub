@@ -1,0 +1,21 @@
+diff --git a/android/build.gradle b/android/build.gradle
+index 021f5bc26aed96940148e8cc809955e29372d326..84eed0e00487a028a542468d88b8f7124e7daf4d 100644
+--- a/android/build.gradle
++++ b/android/build.gradle
+@@ -348,3 +348,16 @@ dependencies {
+ }
+ 
+ preBuild.dependsOn(prepareWorkletsHeadersForPrefabs)
++
++// shortcut: copies the RelWithDebInfo libworklets.so to cmake/release, where react-native-reanimated's CMake looks for it.
++// Upgrade: remove once Reanimated reads the CMake output directory of the build type that Gradle actually runs.
++tasks.matching { it.name == "externalNativeBuildRelease" }.configureEach { task ->
++  task.doLast {
++    fileTree(dir: "${buildDir}/intermediates/cxx/RelWithDebInfo", include: "*/obj/*/libworklets.so").each { so ->
++      copy {
++        from so
++        into "${buildDir}/intermediates/cmake/release/obj/${so.parentFile.name}"
++      }
++    }
++  }
++}
