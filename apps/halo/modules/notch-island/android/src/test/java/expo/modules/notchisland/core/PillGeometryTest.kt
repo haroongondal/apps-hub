@@ -61,6 +61,11 @@ class PillGeometryTest {
     assertEquals(121 + ((16 + 128 + 12 + 88 + 16) * d).toInt(), PillGeometry.expanded(hole, 1080, d, listOf("media", "timer")).height)
   }
 
+  @Test fun anEventRowKeepsTheShortBaseOrFitsUnderADeepHole() {
+    assertEquals(84, PillGeometry.expandedHeight(0, listOf("event"), 1f))
+    assertEquals(121 + ((16 + 48 + 16) * d).toInt(), PillGeometry.expanded(hole, 1080, d, listOf("event")).height)
+  }
+
   @Test fun extraRowsAdd64dpToTheBase() {
     assertEquals(84 + 64, PillGeometry.expandedHeight(-1000, listOf("call", "timer"), 1f))
     assertEquals(160 + 2 * 64, PillGeometry.expandedHeight(-1000, listOf("call", "media", "timer"), 1f))

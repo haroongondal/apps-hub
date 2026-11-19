@@ -28,4 +28,17 @@ class NotchSettingsTest {
     val s = NotchSettings.DEFAULTS.copy(size = "large", foldMs = 0, widgets = listOf("battery", "clock"))
     assertEquals(s, NotchSettings.parse(s.toJson()))
   }
+
+  @Test fun eventsDefaultOnAndFallBackPerSwitch() {
+    assertEquals(EventSwitches(true, true, true), NotchSettings.DEFAULTS.events)
+    assertEquals(EventSwitches(true, true, true), NotchSettings.parse("""{"accent":"mint"}""").events)
+    val s = NotchSettings.parse("""{"events":{"charging":false,"ringer":"no","dnd":1}}""")
+    assertEquals(EventSwitches(charging = false, ringer = true, dnd = true), s.events)
+    assertEquals(EventSwitches(true, true, true), NotchSettings.parse("""{"events":[false]}""").events)
+  }
+
+  @Test fun eventsRoundTrip() {
+    val s = NotchSettings.DEFAULTS.copy(events = EventSwitches(charging = false, ringer = true, dnd = false))
+    assertEquals(s, NotchSettings.parse(s.toJson()))
+  }
 }

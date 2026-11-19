@@ -4,8 +4,11 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
+
+data class EventSwitches(val charging: Boolean = true, val ringer: Boolean = true, val dnd: Boolean = true)
 
 // The same allowed values as apps/halo/src/island/settings.ts; keep the two lists in step.
 data class NotchSettings(
@@ -16,6 +19,7 @@ data class NotchSettings(
   val foldMs: Int,
   val clock: String,
   val widgets: List<String>,
+  val events: EventSwitches = EventSwitches(),
 ) {
   fun toJson(): String = JsonObject(
     mapOf(
@@ -26,6 +30,7 @@ data class NotchSettings(
       "foldMs" to JsonPrimitive(foldMs),
       "clock" to JsonPrimitive(clock),
       "widgets" to JsonArray(widgets.map { JsonPrimitive(it) }),
+      "events" to JsonObject(mapOf("charging" to JsonPrimitive(events.charging), "ringer" to JsonPrimitive(events.ringer), "dnd" to JsonPrimitive(events.dnd))),
     ),
   ).toString()
 
@@ -65,6 +70,9 @@ data class NotchSettings(
         ?.filter { it in WIDGETS }
         ?.distinct()
         ?: DEFAULTS.widgets
+      val e = o["events"] as? JsonObject
+      fun flag(key: String, fallback: Boolean): Boolean =
+        (e?.get(key) as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull ?: fallback
       return NotchSettings(
         accent = str("accent", ACCENTS, DEFAULTS.accent),
         pill = str("pill", PILLS, DEFAULTS.pill),
@@ -73,6 +81,11 @@ data class NotchSettings(
         foldMs = (o["foldMs"] as? JsonPrimitive)?.intOrNull?.takeIf { it in FOLDS } ?: DEFAULTS.foldMs,
         clock = str("clock", CLOCKS, DEFAULTS.clock),
         widgets = widgets,
+        events = EventSwitches(
+          charging = flag("charging", DEFAULTS.events.charging),
+          ringer = flag("ringer", DEFAULTS.events.ringer),
+          dnd = flag("dnd", DEFAULTS.events.dnd),
+        ),
       )
     }
   }

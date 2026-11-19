@@ -26,6 +26,7 @@ object PillGeometry {
   fun rowDp(kind: String): Int = when (kind) {
     "media" -> 128
     "timer" -> 88
+    "event" -> 48
     else -> 44
   }
 
