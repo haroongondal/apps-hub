@@ -118,7 +118,10 @@ class NotchFeed(private val service: NotificationListenerService) {
       val ownCard = "Media" in template || template.endsWith("CallStyle") || x.containsKey(Notification.EXTRA_MEDIA_SESSION)
       val max = x.getInt(Notification.EXTRA_PROGRESS_MAX, 0)
       if (!Progress.qualifies(sbn.isOngoing, n.category, max, ownCard) || !NotchPrefs.load(service).progressCards) return@runCatching null
-      val title = x.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.takeIf { it.isNotBlank() } ?: return@runCatching null
+      // Secret notifications never reach the card; private ones show only their public title, never the hidden one.
+      if (sbn.notification.visibility == Notification.VISIBILITY_SECRET) return@runCatching null
+      val shown = if (sbn.notification.visibility == Notification.VISIBILITY_PRIVATE) n.publicVersion?.extras else x
+      val title = shown?.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.takeIf { it.isNotBlank() } ?: return@runCatching null
       val percent = Progress.percent(x.getInt(Notification.EXTRA_PROGRESS, 0), max, x.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE))
       ProgressSnapshot(sbn.key, sbn.packageName, title, percent, sbn.postTime)
     }.getOrNull()
