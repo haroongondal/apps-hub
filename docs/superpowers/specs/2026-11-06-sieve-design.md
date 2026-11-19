@@ -227,8 +227,9 @@ extension's settings as one JSON file).
   tsurlfilter/tswebextension converter or eyeo's abp2dnr); the builder picks
   one. Chrome guarantees 30,000 enabled static rules per extension, with a
   larger shared pool. Choosing the lists to fit is the builder's job.
-- **List updates.** Lists refresh when the extension is rebuilt. That is a
-  known limit; a scheduled rebuild is a later option.
+- **List updates.** Lists refresh when the extension is rebuilt with
+  `--refresh` (ruling R27, the owner to confirm: a plain build reuses the
+  cached lists). That is a known limit; a scheduled rebuild is a later option.
 - **The owner's filters and allowlist** go into dynamic rules: per-site and
   per-page `allowAllRequests` rules at high priority, and "pause everywhere"
   disables all rulesets.
@@ -241,8 +242,9 @@ extension's settings as one JSON file).
   turned off for allowlisted channels. Expect upkeep as YouTube changes.
 - **Notification requests** are declined by a main-world script:
   `Notification.requestPermission` resolves `'denied'`.
-- **AI summaries** are hidden by a small hand-written cosmetic list for the
-  main search engines. Off by default.
+- **AI summaries** are hidden by a small cosmetic list for the main search
+  engines: rules taken from Stevo's AI Blocklist (MIT; see the README) plus
+  one of Sieve's own. Off by default.
 - **Defaults:** everything else is on by default.
 - **Counts and the DevTools panel** use `onRuleMatchedDebug`, grouped by the
   ruleset that matched (ads or trackers).

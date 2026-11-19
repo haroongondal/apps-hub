@@ -15,7 +15,8 @@ export interface VolumeSpec { tool: 'volume'; inputId: string; mode: 'normalize'
 export interface ReverseSpec { tool: 'reverse'; inputId: string; sound: boolean }
 export interface StabilizeSpec { tool: 'stabilize'; inputId: string; level: 'minimum' | 'recommended' | 'most' }
 export interface ImageSpec { tool: 'image'; inputId: string }
-export type JobSpec = SizeSpec | QualitySpec | ClipSpec | AudioSpec | GifSpec | ConvertSpec | FrameSpec | VolumeSpec | ReverseSpec | StabilizeSpec | ImageSpec;
+export interface MusicSpec { tool: 'music'; inputId: string; musicInputId: string; mode: 'mix' | 'replace'; gainDb: number }
+export type JobSpec = SizeSpec | QualitySpec | ClipSpec | AudioSpec | GifSpec | ConvertSpec | FrameSpec | VolumeSpec | ReverseSpec | StabilizeSpec | ImageSpec | MusicSpec;
 
 const MIN_TARGET_BYTES = 1_000_000;
 const ENCODERS: Record<Platform, readonly Encoder[]> = {

@@ -784,6 +784,25 @@ importers:
         specifier: ~3.0.30
         version: 3.0.30(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
 
+  apps/sieve:
+    dependencies:
+      '@apps-hub/sieve-core':
+        specifier: workspace:*
+        version: link:../../packages/sieve-core
+    devDependencies:
+      '@types/chrome':
+        specifier: 0.3.7
+        version: 0.3.7
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.10.10
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: ~5.9.2
+        version: 5.9.3
+
   apps/store:
     dependencies:
       '@apps-hub/store-manifest':
@@ -963,6 +982,28 @@ importers:
         specifier: ~5.9.2
         version: 5.9.3
 
+  packages/sieve-core:
+    dependencies:
+      '@adguard/agtree':
+        specifier: 4.3.0
+        version: 4.3.0
+      '@adguard/dnr-converter':
+        specifier: 2.0.0
+        version: 2.0.0(@adguard/re2-wasm@1.2.0)(typescript@5.9.3)
+      '@adguard/re2-wasm':
+        specifier: 1.2.0
+        version: 1.2.0
+      '@adguard/scriptlets':
+        specifier: 2.5.1
+        version: 2.5.1
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.10.10
+      typescript:
+        specifier: ~5.9.2
+        version: 5.9.3
+
   packages/store-manifest:
     dependencies:
       zod:
@@ -1093,6 +1134,36 @@ packages:
     peerDependenciesMeta:
       graphql:
         optional: true
+
+  '@adguard/agtree@4.2.1':
+    resolution: {integrity: sha512-SYS+88MBs7FxUovsjcWxxWS366toEjkvb3QzURJFlzHtGXNn4Sbx444RfHrBD2ZqojrJ7fFyWnlXPHxGE9/cZA==}
+    engines: {node: '>=22'}
+
+  '@adguard/agtree@4.3.0':
+    resolution: {integrity: sha512-b55w0xZANTQV93JpbS5JyQDTZVFzS7IMVlYqTcYyFl4zawtmO2fIopJRlNCqlJdfkMsE29qrrv2KFN9+BB9S6g==}
+    engines: {node: '>=22'}
+
+  '@adguard/css-tokenizer@1.3.0':
+    resolution: {integrity: sha512-0i5TNN4P34KbJGtPg5+ul9JNnw+MuOwd2oCjqFaQydaxzNpTr8dbMIS4fVTZNcvMgb6/GN/y/7/wmWRdcjo/7A==}
+
+  '@adguard/dnr-converter@2.0.0':
+    resolution: {integrity: sha512-BkbnLsUlRCMOLT7UgDg9RIJY/tZ24GYA8FQeaC6VU4QgzRH3idLexp1BfiN7m4/7oAt0FKuu/Ew8Gv7OWostdQ==}
+    engines: {node: '>=22'}
+    hasBin: true
+    peerDependencies:
+      '@adguard/re2-wasm': 1.2.0
+
+  '@adguard/logger@2.0.1':
+    resolution: {integrity: sha512-ZHF6u0qN3RPjAJREOX0b9nDgkQnyIvu39yQOEl04BUXJqUSZvnOLcpaMTbqGIbT9/nuzR0hZx/nXBNuvRgTp9w==}
+    engines: {node: '>=22'}
+
+  '@adguard/re2-wasm@1.2.0':
+    resolution: {integrity: sha512-yMtEJfThxN9rEYm2Zg3X8jUKaPYq5wByc90JbMspSWJo7MXw664gTvLD7/wijl6y79VSuAs77bXUIgBXutMp7A==}
+    engines: {node: '>=10'}
+
+  '@adguard/scriptlets@2.5.1':
+    resolution: {integrity: sha512-008B4qm6mXU4mqHOl1HE/jfRa0D/LUX2Lx4k00G45csiBF/fnIGzVivPsT1Q+Uhp9C+zj5tKoekkL39W8HqjzA==}
+    engines: {pnpm: '>=10.33.4 <11'}
 
   '@anthropic-ai/sdk@0.116.0':
     resolution: {integrity: sha512-4UEapYQ+epLEMsAuLZDvW8ExVSOtHD8a7zTyLzhw0H9RXJ1eilPgmqhjwgcdg22diwx13spw6fJ4rONZ+bS7Ww==}
@@ -3297,6 +3368,9 @@ packages:
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
 
+  '@types/chrome@0.3.7':
+    resolution: {integrity: sha512-jWZgbHqWbTL1a5+PoyN0OJutNyejWgyZ5MdcvKo6iJE1TNRtXR3FxsC4WzNl52yZWPidfWC8NV/VUNZf+OFKcA==}
+
   '@types/debug@4.1.13':
     resolution: {integrity: sha512-KSVgmQmzMwPlmtljOomayoR89W4FynCAi3E8PPs7vmDVPe84hT+vGPKkJfThkmXs0x0jAaa9U8uW8bbfyS2fWw==}
 
@@ -3317,6 +3391,9 @@ packages:
 
   '@types/hammerjs@2.0.46':
     resolution: {integrity: sha512-ynRvcq6wvqexJ9brDMS4BnBLzmr0e14d6ZJTEShTBWKymQiHwlAyGu0ZPEFI2Fh1U53F7tN9ufClWM5KvqkKOw==}
+
+  '@types/har-format@1.2.16':
+    resolution: {integrity: sha512-fluxdy7ryD3MV6h8pTfTYpy/xQzCFC7m89nOH9y94cNqJ1mDIDPut7MnRHI3F6qRmh/cT2fUjG1MLdCNb4hE9A==}
 
   '@types/http-cache-semantics@4.2.0':
     resolution: {integrity: sha512-L3LgimLHXtGkWikKnsPg0/VFx9OGZaC+eN1u4r+OB1XRqH3meBIAVC2zr1WdMH+RHmnRkqliQAOHNJ/E0j/e0Q==}
@@ -4079,6 +4156,10 @@ packages:
   cliui@8.0.1:
     resolution: {integrity: sha512-BSeNnyus75C4//NQ9gQt1/csTXyo/8Sb+afLAkzAptFuMsod9HFokGNudZpi/oQV73hnVK+sR+5PVRMd+Dr7YQ==}
     engines: {node: '>=12'}
+
+  clone-deep@4.0.1:
+    resolution: {integrity: sha512-neHB9xuzh/wk0dIHweyAXv2aPGZIVk3pLMe+/RNzINf17fe0OG96QroktYAUm7SM1PBnzTabaLboqqxDyMU+SQ==}
+    engines: {node: '>=6'}
 
   clone-response@1.0.3:
     resolution: {integrity: sha512-ROoL94jJH2dUVML2Y/5PEDNaSHgeOdSDicUyS7izcF63G6sTc/FTjLub4b8Il9S8S0beOfYt0TaA5qvFK+w0wA==}
@@ -5420,6 +5501,10 @@ packages:
   isexe@4.0.0:
     resolution: {integrity: sha512-FFUtZMpoZ8RqHS3XeXEmHWLA4thH+ZxCv2lOiPIn1Xc7CxrqhWzNSDzD+/chS/zbYezmiwWLdQC09JdQKmthOw==}
     engines: {node: '>=20'}
+
+  isobject@3.0.1:
+    resolution: {integrity: sha512-WhB9zCku7EGTj/HQQRz5aUQEUeoQZH2bWcltRErOpymJ4boYE6wL9Tbr23krRPSZ+C5zqNSrSw+Cc7sZZ4b7vg==}
+    engines: {node: '>=0.10.0'}
 
   istanbul-lib-coverage@3.2.2:
     resolution: {integrity: sha512-O8dpsF+r0WV/8MNRKfnmrtCWhuKjxrq2w+jpzBL5UZKTi2LeVWnWOmWRxFlesJONmc+wLAGvKQZEOanko0LFTg==}
@@ -7099,6 +7184,9 @@ packages:
     resolution: {integrity: sha512-LgO3D9yZJjApUiuUfl9iFAwrtaX4+lok3wJIqttGoKCHlWUqHqbQpnxCf82L8FjgKsh4iGo78hqJwgL8F6To2A==}
     engines: {node: '>=14.0.0'}
 
+  tldts-core@5.7.112:
+    resolution: {integrity: sha512-mutrEUgG2sp0e/MIAnv9TbSLR0IPbvmAImpzqul5O/HJ2XM1/I1sajchQ/fbj0fPdA31IiuWde8EUhfwyldY1Q==}
+
   tldts-core@6.1.86:
     resolution: {integrity: sha512-Je6p7pkk+KMzMv2XXKmAE3McmolOQFdxkKw0R8EYNr7sELW46JqnNeTX8ybPiQgvg1ymCoF8LXs5fzFaZvJPTA==}
 
@@ -7706,6 +7794,54 @@ packages:
 snapshots:
 
   '@0no-co/graphql.web@1.3.4': {}
+
+  '@adguard/agtree@4.2.1':
+    dependencies:
+      '@adguard/css-tokenizer': 1.3.0
+      camelcase-keys: 7.0.2
+      clone-deep: 4.0.1
+      glob-to-regexp: 0.4.1
+      is-ip: 3.1.0
+      json5: 2.2.3
+      sprintf-js: 1.1.3
+      tldts: 5.7.112
+      zod: 3.24.4
+
+  '@adguard/agtree@4.3.0':
+    dependencies:
+      '@adguard/css-tokenizer': 1.3.0
+      camelcase-keys: 7.0.2
+      clone-deep: 4.0.1
+      glob-to-regexp: 0.4.1
+      is-ip: 3.1.0
+      json5: 2.2.3
+      sprintf-js: 1.1.3
+      tldts: 5.7.112
+      zod: 3.24.4
+
+  '@adguard/css-tokenizer@1.3.0': {}
+
+  '@adguard/dnr-converter@2.0.0(@adguard/re2-wasm@1.2.0)(typescript@5.9.3)':
+    dependencies:
+      '@adguard/agtree': 4.3.0
+      '@adguard/logger': 2.0.1
+      '@adguard/re2-wasm': 1.2.0
+      '@adguard/scriptlets': 2.5.1
+      commander: 12.1.0
+      punycode: 2.3.1
+      valibot: 1.5.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - typescript
+
+  '@adguard/logger@2.0.1': {}
+
+  '@adguard/re2-wasm@1.2.0': {}
+
+  '@adguard/scriptlets@2.5.1':
+    dependencies:
+      '@adguard/agtree': 4.2.1
+      '@types/trusted-types': 2.0.7
+      js-yaml: 3.14.1
 
   '@anthropic-ai/sdk@0.116.0(zod@4.6.7)':
     dependencies:
@@ -11045,6 +11181,10 @@ snapshots:
       '@types/deep-eql': 4.0.2
       assertion-error: 2.0.1
 
+  '@types/chrome@0.3.7':
+    dependencies:
+      '@types/har-format': 1.2.16
+
   '@types/debug@4.1.13':
     dependencies:
       '@types/ms': 2.1.0
@@ -11064,6 +11204,8 @@ snapshots:
       '@types/node': 22.10.10
 
   '@types/hammerjs@2.0.46': {}
+
+  '@types/har-format@1.2.16': {}
 
   '@types/http-cache-semantics@4.2.0': {}
 
@@ -12126,6 +12268,12 @@ snapshots:
       string-width: 4.2.3
       strip-ansi: 6.0.1
       wrap-ansi: 7.0.0
+
+  clone-deep@4.0.1:
+    dependencies:
+      is-plain-object: 2.0.4
+      kind-of: 6.0.3
+      shallow-clone: 3.0.1
 
   clone-response@1.0.3:
     dependencies:
@@ -13943,6 +14091,8 @@ snapshots:
   isexe@3.1.5: {}
 
   isexe@4.0.0: {}
+
+  isobject@3.0.1: {}
 
   istanbul-lib-coverage@3.2.2: {}
 
@@ -16233,8 +16383,7 @@ snapshots:
 
   sprintf-js@1.0.3: {}
 
-  sprintf-js@1.1.3:
-    optional: true
+  sprintf-js@1.1.3: {}
 
   stable-hash@0.0.5: {}
 
@@ -16481,6 +16630,8 @@ snapshots:
       picomatch: 4.0.7
 
   tinyrainbow@3.2.0: {}
+
+  tldts-core@5.7.112: {}
 
   tldts-core@6.1.86:
     optional: true

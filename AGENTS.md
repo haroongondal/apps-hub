@@ -71,6 +71,11 @@ Current apps:
   `docs/superpowers/plans/2026-11-13-inflow-stage-*.md`, `docs/superpowers/plans/2026-11-18-inflow-ux.md`; progress:
   `docs/handoffs/inflow.md`. Autopilot (stage 1): turns what arrives into reply, bill, event and money suggestions with Run and Skip, shared with Deputy through a signature-guarded provider; design `docs/superpowers/specs/2026-11-18-autopilot-design.md`, progress `docs/handoffs/autopilot.md`. R44 has one exception: items from conversations the owner picked go to the AI for Autopilot only. Ask AI stays SMS and email only, and the ledger and bank parsing take only SMS and Gmail items, not pushes from chat or other apps.
 
+- **sieve** (`apps/sieve`) — the owner's ad blocker for Chrome (Manifest V3), sold through
+  the Chrome Web Store (release state in `docs/handoffs/sieve.md`). Filter compiler and
+  settings logic in `packages/sieve-core`; how to install and what is verified in
+  `apps/sieve/README.md`. Design: `docs/superpowers/specs/2026-11-06-sieve-design.md`;
+  plan: `docs/superpowers/plans/2026-11-06-sieve.md`; progress: `docs/handoffs/sieve.md`.
 - **autonomous-browsing** (`apps/autonomous-browsing`) — Electron desktop app for
   chat-authored browser automation routines, copied in from
   `~/Documents/browser-automation` on 2026-11-17 (tracked files only, no git
@@ -99,7 +104,7 @@ Planned (do not scaffold yet):
 - Tokens live in `src/tokens.ts` only. After changing them run
   `pnpm --filter @apps-hub/ui build:css`; the test fails if `web/tokens.css` is
   stale, and it enforces WCAG AA contrast for every brand in light and dark.
-- Brands: netlens, opentunnel, store, pdf, design, deputy, strongroom, inflow, clipboard, halo (hue + accent from each
+- Brands: netlens, opentunnel, store, pdf, design, deputy, strongroom, inflow, clipboard, halo, sieve (hue + accent from each
   launcher icon). Light and dark follow the system.
 - Copy is sentence case, active voice; errors say what happened and how to fix
   it. No emoji icons, no ALL-CAPS labels.

@@ -1,6 +1,6 @@
 import { STABILIZE_PASSES } from './stabilize.ts';
 import { LOUDNESS_TARGET_LUFS } from './volume.ts';
-import type { Codec, ConvertPlan, Encoder, GifPlan, ImagePlan, Plan, ReversePlan, SizePlan, StabilizePlan, VolumePlan } from './types.ts';
+import type { Codec, ConvertPlan, Encoder, GifPlan, ImagePlan, MusicPlan, Plan, ReversePlan, SizePlan, StabilizePlan, VolumePlan } from './types.ts';
 
 
 const GLOBAL = ['-hide_banner', '-nostats', '-progress', 'pipe:1', '-y'];
@@ -28,7 +28,8 @@ export function thumbArgs(input: string, timeS: number): string[] {
 }
 
 // pass: 1 or 2 for the two-pass libx264 size job; the log is the job's temp file.
-export function ffmpegArgs(plan: Exclude<Plan, ImagePlan>, input: string, output: string, pass?: { n: 1 | 2; log: string }): string[] {
+// song: the music file's path, needed by the music tool only.
+export function ffmpegArgs(plan: Exclude<Plan, ImagePlan>, input: string, output: string, pass?: { n: 1 | 2; log: string }, song?: string): string[] {
   switch (plan.tool) {
     case 'size': return sizeArgs(plan, input, output, pass);
     case 'quality': return [...GLOBAL, '-i', input, '-map', '0:v:0', '-map', '0:a?',
@@ -55,6 +56,7 @@ export function ffmpegArgs(plan: Exclude<Plan, ImagePlan>, input: string, output
     case 'stabilize': return stabilizeArgs(plan, input, output);
     case 'compose': throw new Error('Make a video runs on the phone only.');
     case 'photo-index': throw new Error('Getting photos ready for search runs on the phone only.');
+    case 'music': return musicArgs(plan, input, song ?? '', output);
   }
 }
 

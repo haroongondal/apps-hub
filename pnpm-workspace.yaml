@@ -11,7 +11,6 @@ allowBuilds:
   canvas: false
   unrs-resolver: false
   esbuild: false
-  better-sqlite3: true
   electron-winstaller: false
 
 patchedDependencies:
