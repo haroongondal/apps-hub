@@ -34,7 +34,18 @@ export interface NotchSettings {
   events: EventSwitches;
   /** Ongoing progress from other apps (rides, deliveries, navigation, downloads) as a row in the open card. */
   progressCards: boolean;
+  /** The newest message from the chosen apps as a row in the open card; off and empty until the user picks apps. */
+  messagePeek: MessagePeek;
 }
+
+export interface MessagePeek {
+  on: boolean;
+  apps: string[];
+}
+
+export const PEEK_MAX_APPS = 20;
+// Same rule as MessagePeek.PACKAGE in the Kotlin core.
+const PACKAGE = /^[a-zA-Z0-9_.]{1,150}$/;
 
 export const DEFAULTS: NotchSettings = {
   accent: 'indigo',
@@ -46,6 +57,7 @@ export const DEFAULTS: NotchSettings = {
   widgets: ['clock', 'battery'],
   events: { charging: true, ringer: true, dnd: true, bluetooth: true },
   progressCards: true,
+  messagePeek: { on: false, apps: [] },
 };
 
 // Each swatch must reach WCAG AA (4.5:1) on the black and graphite pills; settings.test.ts checks it.
@@ -76,6 +88,7 @@ export function normalize(raw: unknown): NotchSettings {
     if ((WIDGETS as readonly unknown[]).includes(id) && !widgets.includes(id as WidgetId)) widgets.push(id as WidgetId);
   }
   const events = typeof o.events === 'object' && o.events !== null && !Array.isArray(o.events) ? (o.events as Record<string, unknown>) : {};
+  const peek = typeof o.messagePeek === 'object' && o.messagePeek !== null && !Array.isArray(o.messagePeek) ? (o.messagePeek as Record<string, unknown>) : {};
   return {
     accent: pick(o.accent, ACCENTS, DEFAULTS.accent),
     pill: pick(o.pill, PILLS, DEFAULTS.pill),
@@ -91,6 +104,12 @@ export function normalize(raw: unknown): NotchSettings {
       bluetooth: flag(events.bluetooth, DEFAULTS.events.bluetooth),
     },
     progressCards: flag(o.progressCards, DEFAULTS.progressCards),
+    messagePeek: {
+      on: flag(peek.on, DEFAULTS.messagePeek.on),
+      apps: Array.isArray(peek.apps)
+        ? [...new Set(peek.apps.filter((p): p is string => typeof p === 'string' && PACKAGE.test(p)))].slice(0, PEEK_MAX_APPS)
+        : DEFAULTS.messagePeek.apps,
+    },
   };
 }
 
