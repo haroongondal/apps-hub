@@ -14,7 +14,7 @@ class PostedNote(
   val secret: Boolean = false,
 )
 
-/** colour is ARGB, or null to take it from the app icon. */
+/** colour is ARGB: the app's own, else its brand colour, else null to take it from the app icon. */
 data class FlashDecision(val pkg: String, val colour: Int?, val style: String, val repeat: Int, val durationMs: Long)
 
 /** Decides which posted notifications flash and which remind. Pure: the caller supplies the clock and the settings. */
@@ -91,7 +91,7 @@ class NotifyRules(private val ownPkg: String) {
     if (!s.enabled || QuietHours.active(s.quiet.on, s.quiet.start, s.quiet.end, minuteOfDay)) return null
     val app = s.apps[pkg]
     if (!(app?.on ?: s.defaultOn)) return null
-    return FlashDecision(pkg, app?.colour?.let(::argb), s.style, s.repeat, s.durationMs.toLong())
+    return FlashDecision(pkg, app?.colour?.let(::argb) ?: DotKinds.brandColour(pkg), app?.style ?: s.style, s.repeat, s.durationMs.toLong())
   }
 
   private fun argb(hex: String): Int? = if (hex.length == 7 && hex[0] == '#') hex.substring(1).toIntOrNull(16)?.or(0xFF000000.toInt()) else null

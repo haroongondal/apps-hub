@@ -13,6 +13,10 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.drawable.Icon
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
@@ -21,10 +25,14 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import expo.modules.haloengine.core.AodPolicy
+import expo.modules.haloengine.core.AodScreen
 import expo.modules.haloengine.core.AodState
 import expo.modules.haloengine.core.AudioState
 import expo.modules.haloengine.core.AudioWatch
+import expo.modules.haloengine.core.ChargeEffect
+import expo.modules.haloengine.core.ChargeWake
 import expo.modules.haloengine.core.ColorSource
+import expo.modules.haloengine.core.DotKind
 import expo.modules.haloengine.core.FlashDecision
 import expo.modules.haloengine.core.Pattern
 import expo.modules.haloengine.core.Patterns
@@ -32,6 +40,7 @@ import expo.modules.haloengine.core.RandomMotion
 import expo.modules.haloengine.core.Rules
 import expo.modules.haloengine.core.Settings
 import expo.modules.haloengine.core.serviceWanted
+import expo.modules.haloengine.core.shouldWakeForCharge
 import expo.modules.haloengine.core.Spectrum
 import expo.modules.haloengine.core.SpectrumFrame
 import java.time.LocalTime
@@ -46,6 +55,9 @@ class HaloService : Service() {
   private var rules: RuleInputs? = null
   private var hidden = false
   private var screenOff: BroadcastReceiver? = null
+  private var chargeRead: SensorEventListener? = null
+  private var chargeLock: PowerManager.WakeLock? = null
+  private val chargeTimeout = Runnable { endChargeRead(null) }
 
   // Art or wallpaper colours for `derivedFor`; null derived means the source gave nothing, so the palette is used.
   private val worker = Executors.newSingleThreadExecutor()
@@ -277,6 +289,7 @@ class HaloService : Service() {
   }
 
   private fun unregisterScreenOff() {
+    stopChargeRead()
     screenOff?.let { runCatching { unregisterReceiver(it) } }
     screenOff = null
   }
@@ -288,6 +301,10 @@ class HaloService : Service() {
         if (i.action == Intent.ACTION_USER_PRESENT) {
           aodPolicy.onUnlocked()
           ProbeLog.log(context, "aod", "phone unlocked, the always-on screen may show again")
+          return
+        }
+        if (i.action == Intent.ACTION_POWER_CONNECTED) {
+          onPlugIn()
           return
         }
         // Launching over an unlocked phone would cancel its pending lock, so AodPolicy only allows a locked one.
@@ -306,11 +323,68 @@ class HaloService : Service() {
         launchAod(context, wake = false)
       }
     }
-    val filter = IntentFilter(Intent.ACTION_SCREEN_OFF).apply { addAction(Intent.ACTION_USER_PRESENT) }
-    // SystemUI, not the system uid, sends USER_PRESENT, so a not-exported receiver never gets it; both actions are protected broadcasts, so no app can fake them.
+    val filter = IntentFilter(Intent.ACTION_SCREEN_OFF).apply {
+      addAction(Intent.ACTION_USER_PRESENT)
+      addAction(Intent.ACTION_POWER_CONNECTED)
+    }
+    // SystemUI, not the system uid, sends USER_PRESENT, so a not-exported receiver never gets it; all three actions are protected broadcasts, so no app can fake them.
     registerReceiver(r, filter, Context.RECEIVER_EXPORTED)
     screenOff = r
   }
+
+  /** A plug-in onto a dark screen wakes the always-on screen, but only after one proximity reading says it is not in a pocket. */
+  private fun onPlugIn() {
+    val s = settings
+    val screenOn = getSystemService(PowerManager::class.java).isInteractive
+    if (chargeRead != null || !ChargeWake.wanted(plugIn = true, screenOn, aodShowing, s.aod.enabled, s.aod.wakeOnCharge)) return
+    if (!chargeWakeAllowed(s)) {
+      ProbeLog.log(this, "aod", "charge wake skipped by the always-on policy (lock, trigger or off hours)")
+      return
+    }
+    val sensors = getSystemService(SensorManager::class.java)
+    val sensor = sensors?.getDefaultSensor(Sensor.TYPE_PROXIMITY)
+    val l = object : SensorEventListener {
+      override fun onSensorChanged(e: SensorEvent) = endChargeRead(AodScreen.near(e.values[0], e.sensor.maximumRange))
+      override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    }
+    if (sensor == null || !sensors.registerListener(l, sensor, SensorManager.SENSOR_DELAY_NORMAL, main)) {
+      ProbeLog.log(this, "aod", "charge wake skipped: no proximity sensor")
+      return
+    }
+    chargeRead = l
+    // The CPU may sleep once the broadcast returns; this keeps the timeout on time and expires on its own if all else fails.
+    chargeLock = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "halo:chargewake")
+      .apply { acquire(PROXIMITY_TIMEOUT_MS + 500) }
+    main.postDelayed(chargeTimeout, PROXIMITY_TIMEOUT_MS)
+  }
+
+  /** near null: no reading before the timeout, which counts as a pocket. */
+  private fun endChargeRead(near: Boolean?) {
+    if (!stopChargeRead()) return
+    val s = settings
+    val screenOn = getSystemService(PowerManager::class.java).isInteractive
+    if (!shouldWakeForCharge(screenOn, aodShowing, s.aod.enabled, s.aod.wakeOnCharge, near, plugIn = true) || !chargeWakeAllowed(s)) {
+      ProbeLog.log(this, "aod", "charge wake skipped: near=$near screenOn=$screenOn showing=$aodShowing")
+      return
+    }
+    if (s.aod.chargeEffect == ChargeEffect.SWEEP) wakeFlash = Triple(ChargeWake.SWEEP, DotKind.CHARGING.colour, SystemClock.uptimeMillis())
+    ProbeLog.log(this, "aod", "charge wake, nothing near the sensor")
+    launchAod(this, wake = true)
+  }
+
+  /** Unregisters the one-shot proximity listener and drops its wake lock; false when no read was running. */
+  private fun stopChargeRead(): Boolean {
+    val l = chargeRead ?: return false
+    chargeRead = null
+    main.removeCallbacks(chargeTimeout)
+    getSystemService(SensorManager::class.java)?.unregisterListener(l)
+    chargeLock?.takeIf { it.isHeld }?.release()
+    chargeLock = null
+    return true
+  }
+
+  // A plug-in is charging even if BatteryManager has not caught up with the broadcast yet.
+  private fun chargeWakeAllowed(s: Settings) = aodPolicy.onNotificationWake(s.aod, aodState(this).apply { charging = true }, true)
 
   private fun notification(): Notification {
     val nm = getSystemService(NotificationManager::class.java)
@@ -348,6 +422,7 @@ class HaloService : Service() {
     private const val RANDOM_SEED = 0x4A10
     private const val RANDOM_CHECK_MS = 3_050L
     private const val WAKE_FLASH_MS = 5_000L
+    private const val PROXIMITY_TIMEOUT_MS = 500L
 
     @Volatile var running = false
       private set

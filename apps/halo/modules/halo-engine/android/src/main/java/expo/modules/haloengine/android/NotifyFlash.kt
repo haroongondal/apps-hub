@@ -12,6 +12,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import expo.modules.haloengine.core.FlashDecision
 import expo.modules.haloengine.core.IconCount
+import expo.modules.haloengine.core.NoteGroup
 import expo.modules.haloengine.core.NoteIcons
 import expo.modules.haloengine.core.Notified
 import expo.modules.haloengine.core.NotifyRules
@@ -128,6 +129,8 @@ object NotifyFlash {
   private fun icons(ctx: Context) = icons ?: NoteIcons(ctx.packageName).also { icons = it }
 
   fun icons(): List<IconCount> = icons?.top() ?: emptyList()
+
+  fun groups(): List<NoteGroup> = icons?.groups() ?: emptyList()
 
   private fun flash(ctx: Context, d: FlashDecision, why: String): Int {
     val colour = d.colour ?: AppIcons.colour(ctx, d.pkg)

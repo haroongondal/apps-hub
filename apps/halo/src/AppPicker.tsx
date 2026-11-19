@@ -104,8 +104,16 @@ export const SearchField = ({ value, onChange }: { value: string; onChange: (q: 
   </Group>
 );
 
-export default function AppPicker({ settings, update, onBack }: { settings: Settings; update: UpdateSettings; onBack: () => void }) {
+export function Check({ on }: { on: boolean }) {
   const { c } = useTheme();
+  return (
+    <View style={{ width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: on ? c.accent : c.line, backgroundColor: on ? c.accent : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+      {on && <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: c.surface }} />}
+    </View>
+  );
+}
+
+export default function AppPicker({ settings, update, onBack }: { settings: Settings; update: UpdateSettings; onBack: () => void }) {
   const apps = useApps();
   const [query, setQuery] = useState('');
   const chosen = settings.rules.apps;
@@ -132,11 +140,7 @@ export default function AppPicker({ settings, update, onBack }: { settings: Sett
             title={a.label}
             accessibilityLabel={`${a.label}, ${on ? 'chosen' : 'not chosen'}`}
             accessibilityHint={on ? 'Show the lights over this app' : 'Hide the lights over this app'}
-            trailing={
-              <View style={{ width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: on ? c.accent : c.line, backgroundColor: on ? c.accent : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-                {on && <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: c.surface }} />}
-              </View>
-            }
+            trailing={<Check on={on} />}
             onPress={() => toggle(a.pkg)}
           />
         );

@@ -15,14 +15,15 @@ import ThemeScreen from './src/ThemeScreen.tsx';
 import IslandScreen from './src/IslandScreen.tsx';
 import { useSettings } from './src/useSettings.ts';
 
-type Tab = 'home' | 'lights' | 'notifications' | 'aod';
-type Route = 'tabs' | 'edges' | 'diagnostics' | 'rules' | 'appPicker' | 'colours' | 'theme' | 'island';
+type Tab = 'home' | 'lights' | 'notch' | 'notifications' | 'aod';
+type Route = 'tabs' | 'edges' | 'diagnostics' | 'rules' | 'appPicker' | 'colours' | 'theme';
 
 const TABS: ReadonlyArray<{ key: Tab; label: string }> = [
   { key: 'home', label: 'Home' },
   { key: 'lights', label: 'Lights' },
+  { key: 'notch', label: 'Notch' },
   { key: 'notifications', label: 'Alerts' },
-  { key: 'aod', label: 'Always-on' },
+  { key: 'aod', label: 'Screen' },
 ];
 
 export default function App() {
@@ -68,13 +69,13 @@ function Main() {
   if (route === 'colours') return <ColoursScreen settings={settings} update={update} onBack={back} />;
   if (route === 'theme') return <ThemeScreen key={themeId} settings={settings} update={update} themeId={themeId} onBack={back} />;
   if (route === 'diagnostics') return <DiagnosticsScreen onBack={back} />;
-  if (route === 'island') return <IslandScreen onBack={back} />;
 
   return (
     <>
       <View style={{ flex: 1 }}>
         {tab === 'home' && <HomeScreen settings={settings} update={update} onOpen={setRoute} />}
         {tab === 'lights' && <LightsScreen settings={settings} update={update} onColours={() => setRoute('colours')} />}
+        {tab === 'notch' && <IslandScreen />}
         {tab === 'notifications' && <NotificationsScreen settings={settings} update={update} />}
         {tab === 'aod' && (
           <AodScreen

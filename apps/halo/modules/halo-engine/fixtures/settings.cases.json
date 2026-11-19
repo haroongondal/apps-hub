@@ -71,7 +71,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -297,7 +315,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -508,7 +544,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -719,7 +773,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -922,7 +994,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -1142,7 +1232,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -1334,7 +1442,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -1534,7 +1660,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -1729,7 +1873,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -1921,7 +2083,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -2121,7 +2301,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -2314,7 +2512,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -2504,7 +2720,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -2694,7 +2928,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -2884,7 +3136,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -3074,7 +3344,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -3266,7 +3554,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -3469,7 +3775,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -3672,7 +3996,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -3862,7 +4204,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -4063,7 +4423,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -4262,15 +4640,18 @@
     "apps": {
      "com.whatsapp": {
       "on": true,
-      "colour": "#25D366"
+      "colour": "#25D366",
+      "style": null
      },
      "com.ex.app": {
       "on": false,
-      "colour": null
+      "colour": null,
+      "style": null
      },
      "com.x": {
       "on": true,
-      "colour": null
+      "colour": null,
+      "style": null
      }
     },
     "defaultOn": false,
@@ -4306,7 +4687,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -4502,7 +4901,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -4697,7 +5114,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -4887,7 +5322,8 @@
     "apps": {
      "com.ok": {
       "on": false,
-      "colour": null
+      "colour": null,
+      "style": null
      }
     },
     "defaultOn": true,
@@ -4923,7 +5359,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -5115,7 +5569,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -5307,7 +5779,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -5499,7 +5989,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -5692,7 +6200,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -5885,7 +6411,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -6078,7 +6622,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -6270,7 +6832,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -6462,7 +7042,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -6639,15 +7237,18 @@
     "apps": {
      "com.a": {
       "on": true,
-      "colour": null
+      "colour": null,
+      "style": null
      },
      "com.b": {
       "on": true,
-      "colour": null
+      "colour": null,
+      "style": null
      },
      "com.c": {
       "on": true,
-      "colour": null
+      "colour": null,
+      "style": null
      }
     },
     "defaultOn": true,
@@ -6680,7 +7281,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -6851,7 +7470,8 @@
     "apps": {
      "com.d": {
       "on": true,
-      "colour": null
+      "colour": null,
+      "style": null
      }
     },
     "defaultOn": true,
@@ -6884,7 +7504,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -10053,2003 +10691,2503 @@
     "apps": {
      "com.app0": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app1": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app2": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app3": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app4": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app5": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app6": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app7": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app8": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app9": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app10": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app11": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app12": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app13": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app14": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app15": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app16": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app17": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app18": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app19": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app20": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app21": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app22": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app23": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app24": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app25": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app26": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app27": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app28": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app29": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app30": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app31": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app32": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app33": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app34": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app35": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app36": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app37": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app38": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app39": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app40": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app41": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app42": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app43": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app44": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app45": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app46": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app47": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app48": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app49": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app50": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app51": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app52": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app53": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app54": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app55": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app56": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app57": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app58": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app59": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app60": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app61": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app62": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app63": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app64": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app65": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app66": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app67": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app68": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app69": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app70": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app71": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app72": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app73": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app74": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app75": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app76": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app77": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app78": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app79": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app80": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app81": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app82": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app83": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app84": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app85": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app86": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app87": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app88": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app89": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app90": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app91": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app92": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app93": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app94": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app95": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app96": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app97": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app98": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app99": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app100": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app101": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app102": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app103": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app104": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app105": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app106": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app107": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app108": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app109": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app110": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app111": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app112": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app113": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app114": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app115": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app116": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app117": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app118": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app119": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app120": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app121": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app122": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app123": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app124": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app125": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app126": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app127": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app128": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app129": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app130": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app131": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app132": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app133": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app134": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app135": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app136": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app137": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app138": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app139": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app140": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app141": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app142": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app143": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app144": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app145": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app146": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app147": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app148": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app149": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app150": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app151": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app152": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app153": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app154": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app155": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app156": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app157": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app158": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app159": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app160": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app161": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app162": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app163": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app164": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app165": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app166": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app167": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app168": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app169": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app170": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app171": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app172": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app173": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app174": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app175": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app176": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app177": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app178": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app179": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app180": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app181": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app182": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app183": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app184": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app185": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app186": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app187": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app188": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app189": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app190": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app191": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app192": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app193": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app194": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app195": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app196": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app197": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app198": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app199": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app200": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app201": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app202": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app203": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app204": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app205": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app206": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app207": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app208": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app209": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app210": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app211": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app212": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app213": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app214": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app215": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app216": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app217": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app218": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app219": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app220": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app221": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app222": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app223": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app224": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app225": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app226": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app227": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app228": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app229": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app230": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app231": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app232": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app233": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app234": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app235": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app236": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app237": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app238": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app239": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app240": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app241": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app242": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app243": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app244": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app245": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app246": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app247": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app248": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app249": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app250": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app251": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app252": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app253": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app254": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app255": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app256": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app257": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app258": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app259": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app260": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app261": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app262": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app263": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app264": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app265": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app266": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app267": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app268": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app269": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app270": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app271": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app272": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app273": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app274": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app275": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app276": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app277": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app278": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app279": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app280": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app281": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app282": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app283": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app284": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app285": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app286": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app287": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app288": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app289": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app290": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app291": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app292": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app293": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app294": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app295": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app296": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app297": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app298": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app299": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app300": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app301": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app302": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app303": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app304": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app305": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app306": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app307": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app308": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app309": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app310": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app311": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app312": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app313": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app314": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app315": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app316": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app317": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app318": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app319": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app320": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app321": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app322": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app323": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app324": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app325": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app326": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app327": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app328": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app329": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app330": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app331": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app332": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app333": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app334": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app335": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app336": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app337": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app338": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app339": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app340": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app341": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app342": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app343": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app344": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app345": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app346": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app347": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app348": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app349": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app350": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app351": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app352": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app353": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app354": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app355": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app356": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app357": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app358": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app359": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app360": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app361": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app362": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app363": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app364": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app365": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app366": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app367": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app368": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app369": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app370": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app371": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app372": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app373": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app374": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app375": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app376": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app377": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app378": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app379": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app380": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app381": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app382": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app383": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app384": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app385": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app386": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app387": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app388": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app389": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app390": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app391": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app392": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app393": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app394": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app395": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app396": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app397": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app398": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app399": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app400": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app401": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app402": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app403": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app404": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app405": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app406": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app407": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app408": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app409": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app410": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app411": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app412": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app413": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app414": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app415": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app416": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app417": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app418": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app419": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app420": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app421": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app422": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app423": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app424": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app425": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app426": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app427": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app428": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app429": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app430": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app431": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app432": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app433": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app434": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app435": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app436": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app437": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app438": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app439": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app440": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app441": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app442": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app443": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app444": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app445": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app446": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app447": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app448": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app449": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app450": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app451": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app452": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app453": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app454": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app455": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app456": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app457": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app458": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app459": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app460": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app461": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app462": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app463": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app464": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app465": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app466": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app467": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app468": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app469": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app470": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app471": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app472": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app473": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app474": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app475": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app476": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app477": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app478": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app479": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app480": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app481": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app482": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app483": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app484": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app485": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app486": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app487": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app488": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app489": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app490": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app491": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app492": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app493": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app494": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app495": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app496": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app497": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app498": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      },
      "com.app499": {
       "on": false,
-      "colour": "#FFFFFF"
+      "colour": "#FFFFFF",
+      "style": null
      }
     },
     "defaultOn": true,
@@ -12583,7 +13721,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -12774,7 +13930,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -12975,7 +14149,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -13166,7 +14358,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -13385,7 +14595,25 @@
       "start": "18:00",
       "themeId": "night"
      }
-    ]
+    ],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -13577,7 +14805,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -13769,7 +15015,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -13961,7 +15225,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -14153,7 +15435,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -14345,7 +15645,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -14535,7 +15853,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -14727,7 +16063,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -14919,7 +16273,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -15115,7 +16487,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -15307,7 +16697,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -15541,7 +16949,25 @@
       "start": "04:00",
       "themeId": "mono"
      }
-    ]
+    ],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -15756,7 +17182,25 @@
       "start": "08:00",
       "themeId": "mono"
      }
-    ]
+    ],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -15948,7 +17392,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -16138,7 +17600,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -16330,7 +17810,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -16528,7 +18026,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -16844,7 +18360,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -17479,7 +19013,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -17597,7 +19149,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -17726,7 +19296,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -17901,7 +19489,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -18050,7 +19656,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -18235,7 +19859,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -18403,7 +20045,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -18595,7 +20255,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -18707,7 +20385,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -18819,7 +20515,25 @@
      "end": "07:00"
     },
     "themeId": "night",
-    "slots": []
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
    },
    "themes": [
     {
@@ -18848,6 +20562,1757 @@
       "pattern": "pulse-ring"
      },
      "brightness": 0.02
+    }
+   ]
+  }
+ },
+ {
+  "name": "aod dots and charge effect full valid are kept",
+  "input": {
+   "aod": {
+    "dots": {
+     "on": false,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": false,
+      "alarm": true,
+      "media": false
+     },
+     "count": false
+    },
+    "chargeEffect": "off"
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": [],
+    "dots": {
+     "on": false,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": false,
+      "alarm": true,
+      "media": false
+     },
+     "count": false
+    },
+    "chargeEffect": "off",
+    "wakeOnCharge": true
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "bad dot fields fall back one by one and unknown kinds drop",
+  "input": {
+   "aod": {
+    "dots": {
+     "on": "no",
+     "kinds": {
+      "whatsapp": false,
+      "other": "off",
+      "email": 0,
+      "bogus": false
+     },
+     "count": 1
+    },
+    "chargeEffect": "rainbow"
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": false,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "dots and kinds of the wrong type give defaults",
+  "input": {
+   "aod": {
+    "dots": [
+     false
+    ],
+    "chargeEffect": 5
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "dot kinds of the wrong type are all on",
+  "input": {
+   "aod": {
+    "dots": {
+     "on": false,
+     "kinds": [
+      "whatsapp"
+     ]
+    }
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": [],
+    "dots": {
+     "on": false,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "per-app style: a valid id is kept, a bad or missing one follows the global style",
+  "input": {
+   "notify": {
+    "apps": {
+     "com.a": {
+      "style": "sweep"
+     },
+     "com.b": {
+      "on": true,
+      "style": "pulse-wave"
+     },
+     "com.c": {
+      "on": false,
+      "colour": "#25d366",
+      "style": "Bad Style"
+     },
+     "com.d": {
+      "style": null
+     }
+    }
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {
+     "com.a": {
+      "on": true,
+      "colour": null,
+      "style": "sweep"
+     },
+     "com.b": {
+      "on": true,
+      "colour": null,
+      "style": "pulse-wave"
+     },
+     "com.c": {
+      "on": false,
+      "colour": "#25D366",
+      "style": null
+     },
+     "com.d": {
+      "on": true,
+      "colour": null,
+      "style": null
+     }
+    },
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "aod wake on charge off is kept",
+  "input": {
+   "aod": {
+    "wakeOnCharge": false
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": false
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "aod wake on charge of the wrong type gives true",
+  "input": {
+   "aod": {
+    "wakeOnCharge": "false"
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "aod wake on charge as a number gives true",
+  "input": {
+   "aod": {
+    "wakeOnCharge": 0
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
     }
    ]
   }

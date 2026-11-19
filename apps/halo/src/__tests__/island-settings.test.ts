@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEFAULTS, SWATCHES, clockLabel, earPlan, foldLabel, moveWidget, normalize, pillHex, rowsFor, widgetLabel } from '../island/settings.ts';
+import { DEFAULTS, SWATCHES, availableSamples, clockLabel, earPlan, foldLabel, moveWidget, normalize, pillHex, resolveSample, rowsFor, widgetLabel } from '../island/settings.ts';
 
 test('the pill colours match the native card', () => {
   assert.equal(pillHex('black', 'indigo'), '#000000');
@@ -89,4 +89,76 @@ test('widgetLabel uses plain words', () => {
   assert.equal(widgetLabel('timer'), 'Timer');
   assert.equal(widgetLabel('clock'), 'Clock');
   assert.equal(widgetLabel('battery'), 'Battery');
+});
+
+test('event switches default on and fall back one by one', () => {
+  assert.deepEqual(DEFAULTS.events, { charging: true, ringer: true, dnd: true, bluetooth: true });
+  assert.deepEqual(normalize({ accent: 'mint' }).events, DEFAULTS.events);
+  assert.deepEqual(normalize({ events: { charging: false, ringer: 'no', dnd: 1, bluetooth: 'false' } }).events, { charging: false, ringer: true, dnd: true, bluetooth: true });
+  assert.deepEqual(normalize({ events: { bluetooth: false } }).events, { charging: true, ringer: true, dnd: true, bluetooth: false });
+  assert.deepEqual(normalize({ events: [false] }).events, DEFAULTS.events);
+});
+
+test('event switches survive a round trip through JSON', () => {
+  const s = { ...DEFAULTS, events: { charging: false, ringer: true, dnd: false, bluetooth: false } };
+  assert.deepEqual(normalize(JSON.parse(JSON.stringify(s))), s);
+});
+
+test('progress cards default on, reject non-booleans and survive a round trip', () => {
+  assert.equal(DEFAULTS.progressCards, true);
+  assert.equal(normalize({ accent: 'mint' }).progressCards, true);
+  assert.equal(normalize({ progressCards: false }).progressCards, false);
+  assert.equal(normalize({ progressCards: 'false' }).progressCards, true);
+  assert.equal(normalize({ progressCards: 0 }).progressCards, true);
+  const s = { ...DEFAULTS, progressCards: false };
+  assert.deepEqual(normalize(JSON.parse(JSON.stringify(s))), s);
+});
+
+test('the alarm card defaults on, rejects non-booleans and survives a round trip', () => {
+  assert.equal(DEFAULTS.alarmCard, true);
+  assert.equal(normalize({ accent: 'mint' }).alarmCard, true);
+  assert.equal(normalize({ alarmCard: false }).alarmCard, false);
+  assert.equal(normalize({ alarmCard: 'false' }).alarmCard, true);
+  assert.equal(normalize({ alarmCard: 0 }).alarmCard, true);
+  const s = { ...DEFAULTS, alarmCard: false };
+  assert.deepEqual(normalize(JSON.parse(JSON.stringify(s))), s);
+});
+
+test('preview samples follow the widgets that are on', () => {
+  assert.deepEqual(availableSamples(['clock', 'battery']), ['call', 'event', 'ears']);
+  assert.deepEqual(availableSamples(['media', 'timer']), ['music', 'call', 'timer', 'event', 'ears']);
+  assert.deepEqual(availableSamples(['timer']), ['call', 'timer', 'event', 'ears']);
+});
+
+test('a sample whose widget was switched off falls back to the first available one', () => {
+  assert.equal(resolveSample('music', ['clock']), 'call');
+  assert.equal(resolveSample('timer', ['media']), 'music');
+  assert.equal(resolveSample('music', ['media']), 'music');
+  assert.equal(resolveSample('event', []), 'event');
+});
+
+test('message peek defaults off with no apps', () => {
+  assert.deepEqual(DEFAULTS.messagePeek, { on: false, apps: [] });
+  assert.deepEqual(normalize({ accent: 'mint' }).messagePeek, { on: false, apps: [] });
+  assert.deepEqual(normalize({ messagePeek: [true] }).messagePeek, { on: false, apps: [] });
+});
+
+test('message peek fields fall back on their own and reject strings', () => {
+  assert.deepEqual(normalize({ messagePeek: { on: true, apps: 'com.whatsapp' } }).messagePeek, { on: true, apps: [] });
+  assert.deepEqual(normalize({ messagePeek: { on: 'true', apps: ['com.whatsapp'] } }).messagePeek, { on: false, apps: ['com.whatsapp'] });
+  assert.equal(normalize({ messagePeek: { on: 1 } }).messagePeek.on, false);
+});
+
+test('message peek keeps only valid, unique package names, at most 20', () => {
+  const apps = ['com.whatsapp', 1, null, true, 'com.whatsapp', 'bad/pkg', '', 'a'.repeat(151), 'org.telegram.messenger'];
+  assert.deepEqual(normalize({ messagePeek: { on: true, apps } }).messagePeek.apps, ['com.whatsapp', 'org.telegram.messenger']);
+  const many = Array.from({ length: 25 }, (_, i) => `com.app${i + 1}`);
+  const capped = normalize({ messagePeek: { apps: many } }).messagePeek.apps;
+  assert.equal(capped.length, 20);
+  assert.equal(capped[0], 'com.app1');
+});
+
+test('message peek survives a round trip through JSON', () => {
+  const s = { ...DEFAULTS, messagePeek: { on: true, apps: ['com.whatsapp', 'org.telegram.messenger'] } };
+  assert.deepEqual(normalize(JSON.parse(JSON.stringify(s))), s);
 });

@@ -13,6 +13,15 @@ export type Corners = (typeof CORNERS)[number];
 export type Clock = (typeof CLOCKS)[number];
 export type WidgetId = (typeof WIDGETS)[number];
 
+/** Short events the pill opens for by itself; each switch is on by default. */
+export interface EventSwitches {
+  charging: boolean;
+  ringer: boolean;
+  dnd: boolean;
+  /** Bluetooth or wired headphones connecting and disconnecting. */
+  bluetooth: boolean;
+}
+
 export interface NotchSettings {
   accent: Accent;
   pill: PillColour;
@@ -22,7 +31,23 @@ export interface NotchSettings {
   foldMs: number;
   clock: Clock;
   widgets: WidgetId[];
+  events: EventSwitches;
+  /** Ongoing progress from other apps (rides, deliveries, navigation, downloads) as a row in the open card. */
+  progressCards: boolean;
+  /** A ringing alarm as a row in the open card, with its own Snooze and Dismiss. */
+  alarmCard: boolean;
+  /** The newest message from the chosen apps as a row in the open card; off and empty until the user picks apps. */
+  messagePeek: MessagePeek;
 }
+
+export interface MessagePeek {
+  on: boolean;
+  apps: string[];
+}
+
+export const PEEK_MAX_APPS = 20;
+// Same rule as MessagePeek.PACKAGE in the Kotlin core.
+const PACKAGE = /^[a-zA-Z0-9_.]{1,150}$/;
 
 export const DEFAULTS: NotchSettings = {
   accent: 'indigo',
@@ -32,6 +57,10 @@ export const DEFAULTS: NotchSettings = {
   foldMs: 5000,
   clock: 'system',
   widgets: ['clock', 'battery'],
+  events: { charging: true, ringer: true, dnd: true, bluetooth: true },
+  progressCards: true,
+  alarmCard: true,
+  messagePeek: { on: false, apps: [] },
 };
 
 // Each swatch must reach WCAG AA (4.5:1) on the black and graphite pills; settings.test.ts checks it.
@@ -50,6 +79,10 @@ function pick<T extends string | number>(value: unknown, allowed: readonly T[], 
   return (allowed as readonly unknown[]).includes(value) ? (value as T) : fallback;
 }
 
+function flag(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
 export function normalize(raw: unknown): NotchSettings {
   const o = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
   const list = Array.isArray(o.widgets) ? o.widgets : DEFAULTS.widgets;
@@ -57,6 +90,8 @@ export function normalize(raw: unknown): NotchSettings {
   for (const id of list) {
     if ((WIDGETS as readonly unknown[]).includes(id) && !widgets.includes(id as WidgetId)) widgets.push(id as WidgetId);
   }
+  const events = typeof o.events === 'object' && o.events !== null && !Array.isArray(o.events) ? (o.events as Record<string, unknown>) : {};
+  const peek = typeof o.messagePeek === 'object' && o.messagePeek !== null && !Array.isArray(o.messagePeek) ? (o.messagePeek as Record<string, unknown>) : {};
   return {
     accent: pick(o.accent, ACCENTS, DEFAULTS.accent),
     pill: pick(o.pill, PILLS, DEFAULTS.pill),
@@ -65,6 +100,20 @@ export function normalize(raw: unknown): NotchSettings {
     foldMs: pick(o.foldMs, FOLDS, DEFAULTS.foldMs),
     clock: pick(o.clock, CLOCKS, DEFAULTS.clock),
     widgets,
+    events: {
+      charging: flag(events.charging, DEFAULTS.events.charging),
+      ringer: flag(events.ringer, DEFAULTS.events.ringer),
+      dnd: flag(events.dnd, DEFAULTS.events.dnd),
+      bluetooth: flag(events.bluetooth, DEFAULTS.events.bluetooth),
+    },
+    progressCards: flag(o.progressCards, DEFAULTS.progressCards),
+    alarmCard: flag(o.alarmCard, DEFAULTS.alarmCard),
+    messagePeek: {
+      on: flag(peek.on, DEFAULTS.messagePeek.on),
+      apps: Array.isArray(peek.apps)
+        ? [...new Set(peek.apps.filter((p): p is string => typeof p === 'string' && PACKAGE.test(p)))].slice(0, PEEK_MAX_APPS)
+        : DEFAULTS.messagePeek.apps,
+    },
   };
 }
 
@@ -116,4 +165,18 @@ const WIDGET_LABELS: Record<WidgetId, string> = { clock: 'Clock', battery: 'Batt
 
 export function widgetLabel(id: WidgetId): string {
   return WIDGET_LABELS[id];
+}
+
+export type PreviewSample = 'music' | 'call' | 'timer' | 'event' | 'ears';
+
+/** The samples worth showing: Music and Timer only while their widget is on, as native only gives those a card row then. */
+export function availableSamples(widgets: WidgetId[]): PreviewSample[] {
+  const all: PreviewSample[] = ['music', 'call', 'timer', 'event', 'ears'];
+  return all.filter((s) => (s === 'music' ? widgets.includes('media') : s === 'timer' ? widgets.includes('timer') : true));
+}
+
+/** The chosen sample, or the first available one when the chosen one has just been switched off. */
+export function resolveSample(chosen: PreviewSample, widgets: WidgetId[]): PreviewSample {
+  const available = availableSamples(widgets);
+  return available.includes(chosen) ? chosen : available[0];
 }
