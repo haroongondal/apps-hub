@@ -55,6 +55,20 @@ async function serve(env: Env, key: string, cacheControl = 'private, no-store'):
   });
 }
 
+// Models are public and cached for a year, so the type is fixed (never the uploader's) and sniffing is off.
+async function serveModel(env: Env, key: string): Promise<Response> {
+  const obj = await env.BUCKET.get(key);
+  if (!obj) return status(404, 'not found');
+  return new Response(obj.body, {
+    headers: {
+      'content-type': 'application/octet-stream',
+      'content-length': String(obj.size),
+      'cache-control': 'public, max-age=31536000, immutable',
+      'x-content-type-options': 'nosniff',
+    },
+  });
+}
+
 // Models are public by design: content-addressed, so the key is rebuilt from 64 hex chars and nothing else is reachable.
 const MODEL_PATH = /^\/models\/([0-9a-f]{64})$/;
 
@@ -63,7 +77,7 @@ export async function handle(req: Request, env: Env, now = Date.now()): Promise<
   const path = url.pathname;
 
   const model = req.method === 'GET' ? MODEL_PATH.exec(path) : null;
-  if (model) return serve(env, `models/${model[1]}`, 'public, max-age=31536000, immutable');
+  if (model) return serveModel(env, `models/${model[1]}`);
 
   if (!env.SIGNING_KEY) return status(500, 'not configured');
 
