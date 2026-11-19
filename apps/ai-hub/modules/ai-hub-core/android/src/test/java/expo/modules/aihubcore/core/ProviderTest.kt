@@ -1,6 +1,7 @@
 package expo.modules.aihubcore.core
 
 import java.io.IOException
+import java.net.ConnectException
 import java.net.SocketTimeoutException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -187,10 +188,18 @@ class ProviderTest {
     assertEquals(listOf(1_000L, 2_000L, 4_000L), http.sleeps)
   }
 
-  @Test fun aDroppedConnectionIsRetried() {
-    val http = Fake(IOException("reset"), ok)
+  @Test fun aRequestThatNeverConnectedIsRetried() {
+    val http = Fake(ConnectException("Connection refused"), ok)
     assertEquals("done", provider(http, g1).chat(groqChat, history, maxTokens = 100).text)
     assertEquals(2, http.calls.size)
+    assertEquals(listOf(1_000L), http.sleeps)
+  }
+
+  @Test fun aRateErrorCarriesTheServersRetryAfter() {
+    val http = Fake(*Array(3) { HttpReply(429, "", retryAfterMs = 30_000) })
+    val e = failure { provider(http, m1).embed(Job.EMBED.default, listOf("a")) }
+    assertEquals(AiError.Kind.RATE, e.kind)
+    assertEquals(30_000L, e.retryAfterMs)
   }
 
   @Test fun aToolCallGroqCouldNotParseIsRetriedOnce() {

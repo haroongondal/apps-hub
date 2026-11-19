@@ -205,7 +205,7 @@ class Provider(
         throw AiError(AiError.Kind.AUTH, "$names refused every key (HTTP $refusedCode). Check your $names keys in AI hub.")
       }
       if (waits++ == MAX_RATE_WAITS) {
-        throw AiError(AiError.Kind.RATE, "Every $names key is at its rate limit. Wait a minute and try again, or add another key in AI hub.")
+        throw AiError(AiError.Kind.RATE, "Every $names key is at its rate limit. Wait a minute and try again, or add another key in AI hub.", wait)
       }
       sleep(wait!!)
     }
