@@ -75,11 +75,24 @@ with `cd-engineering-tools:parallel-agents-coord` (section 0 loop with the ledge
   (vault never overwrites keys it can't open; clear() is the way out); T2 (providers, key
   hand-over, 42 tests) 84dfc98e. T5a (bound service, AIDL, worker) and T5b (module functions,
   screens) dispatched in parallel from 84dfc98e.
+- 2026-11-20: P1 done. T5b screens 6a9f0b6c; T5a bound service, AIDL v1, caller check, worker
+  259f4012. Wave review (no bypass of the caller check, keys or Strongroom block) and two
+  automated security findings fixed in 84162c46, 41a91563, 15da0d61, then 4cab1dc0, 22e97cb4,
+  1a748a04: embed replies as base64 float32 (max 8 texts); 8 requests per caller, 64 total;
+  attachments regular files only (7 MB image, 25 MB audio), closed only by the thread reading
+  them; key in use sticks; only never-connected requests are re-sent, no idle connection reuse;
+  one KeyVault and HubStore per process. Final gates from a clean export of 1a748a04: pnpm test
+  2463/0, typecheck clean, JVM 101/101, assembleDebug OK.
 
 ## Current state + exact next step
 
-P1: T1-T4 complete; T5a and T5b running (briefs task-5a-brief.md, task-5b-brief.md). When both
-are in: controller-check each commit, then one review of the risky commits (KeyVault 682b6e79,
-Provider 84dfc98e, the service and caller check from T5a), one fix round for Important findings,
-then the full gates from a clean export: `pnpm test`, `pnpm typecheck`, and
-`:ai-hub-core:testDebugUnitTest :app:assembleDebug`. Then P2 (chat screen).
+P1 (hub and providers) is complete on `ai-hub` at 1a748a04. Nothing has run on a phone yet.
+Deferred (ledger): linkToDeath on callbacks; request cap counts bytes while Binder carries UTF-16;
+a FUSE proxy descriptor passes the regular-file check; a small failed oneway send surfaces as
+DeadObjectException; VISION peaks near 35-40 MB per job (OOM is caught).
+
+Next: P2 (chat screen: sessions in expo-sqlite, image attach, model picker, streaming, which adds
+a streaming callback to the AIDL contract as v2). Start a P2 ledger at
+`.superpowers/sdd/ai-hub-p2/progress.md` and follow the same loop. A Store release of the hub
+needs the owner's go (PLAN P6), and the phone checks (a second app binding, a differently signed
+app refused, real Gemini/Groq replies, cancel during a read) need a Store build first.
