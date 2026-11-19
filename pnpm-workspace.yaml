@@ -15,3 +15,8 @@ allowBuilds:
 
 patchedDependencies:
   decode-uri-component@0.2.2: patches/decode-uri-component@0.2.2.patch
+
+overrides:
+  # One supports-color for the whole graph: as peers it resolved to 8.1.1 and 10.2.2, which
+  # split react-native-worklets in two and broke the release build's Reanimated step.
+  supports-color: 8.1.1
