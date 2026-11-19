@@ -59,6 +59,13 @@
           "enableBackgroundRecording": true,
           "microphonePermission": "Nexus records voice notes when you tap the microphone."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow PDF Editor to use the camera to read text from a photo.",
+          "microphonePermission": "Nexus records voice notes when you tap the microphone."
+        }
       ]
     ],
     "experiments": {

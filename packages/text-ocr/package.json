@@ -1,0 +1,19 @@
+{
+  "name": "text-ocr",
+  "version": "0.1.0",
+  "private": true,
+  "description": "On-device text recognition (Tesseract, English) shared by Design Editor and PDF Editor on Android: read the text in a picture and put text on the clipboard",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "node --test src/__tests__/pick.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo-modules-core": "~3.0.30"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.9.2"
+  }
+}
