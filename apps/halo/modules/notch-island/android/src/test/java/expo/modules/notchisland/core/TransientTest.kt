@@ -124,4 +124,40 @@ class TransientTest {
   @Test fun holdIsTwoAndAHalfSeconds() {
     assertEquals(2500L, Transients.HOLD_MS)
   }
+
+  @Test fun headsetKeysGroupOneDevicesPortsAndSkipOtherOutputs() {
+    assertEquals("bt:AA:BB", Transients.headsetKey(8, "AA:BB"))
+    assertEquals("bt:AA:BB", Transients.headsetKey(7, "AA:BB"))
+    assertEquals("bt:AA:BB", Transients.headsetKey(26, "AA:BB"))
+    assertEquals(Transients.WIRED_KEY, Transients.headsetKey(3, ""))
+    assertEquals(Transients.WIRED_KEY, Transients.headsetKey(4, ""))
+    assertEquals(Transients.WIRED_KEY, Transients.headsetKey(22, ""))
+    assertNull(Transients.headsetKey(2, ""))
+    assertNull(Transients.headsetKey(1, ""))
+  }
+
+  @Test fun headsetChangesReportConnectsAndDisconnectsOnly() {
+    val pods = mapOf("bt:AA" to "AirPods Pro")
+    assertEquals(listOf(Transient.Headset(true, "AirPods Pro")), Transients.headsetChanges(emptyMap(), pods))
+    assertEquals(listOf(Transient.Headset(false, "AirPods Pro")), Transients.headsetChanges(pods, emptyMap()))
+    assertEquals(emptyList<Transient.Headset>(), Transients.headsetChanges(pods, pods))
+    // Switching from wired to Bluetooth shows the connect last, so it wins.
+    assertEquals(
+      listOf(Transient.Headset(false, null), Transient.Headset(true, "AirPods Pro")),
+      Transients.headsetChanges(mapOf(Transients.WIRED_KEY to null), pods),
+    )
+  }
+
+  @Test fun headsetTextUsesTheNameWhenKnown() {
+    assertEquals(TransientText("headphones", "AirPods Pro", "Connected"), Transients.text(Transient.Headset(true, "AirPods Pro")))
+    assertEquals(TransientText("headphones", "AirPods Pro", "Disconnected"), Transients.text(Transient.Headset(false, "AirPods Pro")))
+    assertEquals(TransientText("headphones", "Headphones connected", null), Transients.text(Transient.Headset(true, null)))
+    assertEquals(TransientText("headphones", "Headphones disconnected", null), Transients.text(Transient.Headset(false, "  ")))
+  }
+
+  @Test fun theBluetoothSwitchGatesHeadsetEvents() {
+    assertFalse(Transients.allowed(Transient.Headset(true, null), EventSwitches(bluetooth = false)))
+    assertTrue(Transients.allowed(Transient.Headset(true, null), EventSwitches()))
+    assertTrue(Transients.allowed(plug, EventSwitches(bluetooth = false)))
+  }
 }
