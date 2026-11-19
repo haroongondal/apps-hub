@@ -95,6 +95,13 @@ coverage/
 /apps/halo/android/**/.cxx/
 /apps/halo/modules/*/android/build/
 /apps/halo/.expo/
+/apps/ai-hub/android/.gradle/
+/apps/ai-hub/android/app/build/
+/apps/ai-hub/android/build/
+/apps/ai-hub/android/local.properties
+/apps/ai-hub/android/**/.cxx/
+/apps/ai-hub/modules/*/android/build/
+/apps/ai-hub/.expo/
 /tools/store-api/.cloudflare/
 /tools/store-api/.wrangler/
 /tools/store-api/dist/
