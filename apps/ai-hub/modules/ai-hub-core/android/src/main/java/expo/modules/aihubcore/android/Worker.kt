@@ -235,14 +235,19 @@ class Worker(context: Context) {
 
   private fun settle(p: Pending, answer: (IAiHubCallback) -> Unit) {
     val first = synchronized(lock) { !p.settled.also { p.settled = true } }
-    if (first) send(p.callback, p.request.requestId, answer)
+    if (first) send(p.callback, p.request.requestId, p.request.job, answer)
   }
 
-  private fun send(callback: IAiHubCallback, id: String, answer: (IAiHubCallback) -> Unit) {
+  private fun send(callback: IAiHubCallback, id: String, job: Job? = null, answer: (IAiHubCallback) -> Unit) {
     try {
       answer(callback)
     } catch (e: TransactionTooLargeException) {
-      runCatching { callback.onError(id, "too_large", "The reply was too big to send. Send fewer texts at a time.") }
+      val fix = when (job) {
+        Job.EMBED -> "Send fewer texts at a time."
+        Job.TRANSCRIBE -> "Send a shorter recording."
+        else -> "Ask for a shorter answer."
+      }
+      runCatching { callback.onError(id, "too_large", "The reply was too big to send. $fix") }
     } catch (e: RemoteException) {
       return
     }
