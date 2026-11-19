@@ -1,9 +1,13 @@
 /**
- * TOTP (RFC 6238) and the `otpauth://totp/` URIs that carry its secrets — the parse half of the
- * vault's Otp.kt (DESIGN §15.1). Both ends must refuse exactly the same URIs with the same words,
- * so every message and bound here mirrors Kotlin. Code generation stays on the phone
- * (javax.crypto); the extension reads and validates only.
+ * TOTP (RFC 6238) and the `otpauth://totp/` URIs that carry its secrets — the TypeScript port of
+ * the vault's Otp.kt (DESIGN §15.1). Both ends must refuse exactly the same URIs with the same
+ * words, so every message and bound here mirrors Kotlin, and both compute the same codes from the
+ * same RFC 4226 truncation.
  */
+
+import { hmac } from '@noble/hashes/hmac.js';
+import { sha1 } from '@noble/hashes/legacy.js';
+import { sha256, sha512 } from '@noble/hashes/sha2.js';
 
 export type Digest = 'SHA1' | 'SHA256' | 'SHA512';
 
@@ -25,6 +29,9 @@ export const MIN_SECRET_BYTES = 10; // 80 bits
 export const MAX_SECRET_BYTES = 64; // 512 bits
 export const MIN_PERIOD = 15;
 export const MAX_PERIOD = 120;
+
+/** A code and how long it stays valid — what the entry screen shows (§15.5). */
+export type TotpState = { code: string; secondsLeft: number; period: number };
 
 class OtpRefused extends Error {}
 
@@ -51,6 +58,38 @@ export function totpRefusal(uri: string): string | null {
     if (e instanceof OtpRefused) return e.message;
     throw e;
   }
+}
+
+const HASHES = { SHA1: sha1, SHA256: sha256, SHA512: sha512 };
+
+/** The 6 or 8 digit code for `unixSeconds`, e.g. "012345"; mirrors Kotlin's `Otp.code`. */
+export function codeFor(totp: TotpUri, unixSeconds: number): string {
+  // Kotlin divides Longs; Unix seconds and the counter stay exact as JS numbers well past any real date.
+  let counter = Math.floor(unixSeconds / totp.period);
+  const message = new Uint8Array(8);
+  for (let i = 7; i >= 0; i--) {
+    message[i] = counter % 256;
+    counter = Math.floor(counter / 256);
+  }
+  const hash = hmac(HASHES[totp.algorithm], totp.secret, message);
+  const offset = hash[hash.length - 1]! & 0x0f;
+  // RFC 4226 dynamic truncation: the top bit is cleared, so the result cannot go negative.
+  const binary = ((hash[offset]! & 0x7f) << 24) | ((hash[offset + 1]! & 0xff) << 16) | ((hash[offset + 2]! & 0xff) << 8) | (hash[offset + 3]! & 0xff);
+  return String(binary % 10 ** totp.digits).padStart(totp.digits, '0');
+}
+
+/**
+ * `codeFor` at `unixSeconds` plus the seconds left before the period turns over:
+ * a fresh period starts at the full period, the last second reads 1 (never 0).
+ */
+export function totpState(totp: TotpUri, unixSeconds: number): TotpState {
+  return { code: codeFor(totp, unixSeconds), secondsLeft: totp.period - (unixSeconds % totp.period), period: totp.period };
+}
+
+/** Convenience for callers that hold the stored string: null only if it stopped parsing (it was validated on save). */
+export function totpCode(uri: string, unixSeconds: number): string | null {
+  const totp = parseTotp(uri);
+  return totp && codeFor(totp, unixSeconds);
 }
 
 // Kotlin's String.equals(ignoreCase) compares chars case-insensitively; uppercasing both matches it here.
