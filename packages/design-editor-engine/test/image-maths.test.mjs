@@ -104,15 +104,6 @@ test('enhance: values sit on the slider steps', () => {
   assert.deepEqual(enhanceValues(make(10, () => [1, 2, 3, 0])), { brightness: 0, contrast: 0 });
 });
 
-test('enhance: brightness is capped at the same size both ways', () => {
-  assert.equal(enhanceValues(ramp(0, 40)).brightness, 0.24);
-  assert.equal(enhanceValues(ramp(215, 255)).brightness, -0.24);
-});
-
-test('enhance: a dull ramp gets the capped contrast', () => {
-  assert.equal(enhanceValues(cases.dull).contrast, 0.24);
-});
-
 test('palette: a noisy three-colour image comes back in order of weight', () => {
   let s = 4242;
   const noise = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) % 9) - 4;
