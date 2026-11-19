@@ -1,11 +1,11 @@
 import {
   AccountKeyRequired, FLAG_PREFIX, ImportError, KdfOutOfRange, SyncAuthError, SyncHttpError, SyncOfflineError, SyncRollbackError, adoptHeader,
   equalBytes, exportForChrome, formatEmailCode, fromBase64, formatRecoveryKey, generateEmailCode, headerFromJson, headerToJson, kdfWeaker, matches,
-  newId, open, openEntry, openEscrow, openSignin, openWithPassword, parseAccountKey, parseEmailCode, parseGoogleExport, parseRecoveryKey, randomBytes, readEntries,
+  newId, open, openEntry, openEscrow, openSignin, openWithPassword, parseAccountKey, parseEmailCode, parseGoogleExport, parseRecoveryKey, parseTotp, randomBytes, readEntries,
   recoveryKeyGroup, recoveryLoginToken, recover, registrableDomain, rotateRecoveryKey, seal, sealEscrow, sealSignin, setupVault, signInWithPassword,
-  signInWithRecovery, siteFromUrl, syncOnce, toBase64, tokenHash, unlockWithRecovery, utf8, withNewPassword, writeEntries,
+  signInWithRecovery, siteFromUrl, syncOnce, toBase64, tokenHash, totpState, unlockWithRecovery, utf8, withNewPassword, writeEntries,
 } from 'strongroom-core';
-import type { Entry, Header, KdfParams, Login, RecordStore, Site, SignedIn, SyncReport, SyncStore, Transport } from 'strongroom-core';
+import type { Entry, Header, KdfParams, Login, RecordStore, Site, SignedIn, SyncReport, SyncStore, TotpState, Transport } from 'strongroom-core';
 import { COMMON_PASSWORDS } from './common-passwords.ts';
 import type { DeviceVault } from './device-vault.ts';
 
@@ -44,6 +44,7 @@ export type Request =
   | { type: 'export'; password: string }
   | { type: 'candidates'; page?: PageRef }
   | { type: 'fill'; id: string }
+  | { type: 'totpCode'; id: string }
   | { type: 'capture'; username: string; password: string }
   | { type: 'pending'; tabId: number }
   | { type: 'resolvePending'; tabId: number; action: 'save' | 'dismiss' }
@@ -65,8 +66,9 @@ export type Request =
   | { type: 'emailSignIn'; action: 'open'; code: string; password: string; replace?: boolean };
 
 export type Status = { state: 'no-vault' | 'locked' | 'unlocked'; recoveryKey: string | null };
-export type Row = { id: string; name: string; username: string; sites: string[]; apps: number; flagged: boolean };
-export type Detail = { id: string; name: string; username: string; password: string; websites: string; note: string };
+export type Row = { id: string; name: string; username: string; sites: string[]; apps: number; flagged: boolean; totp: boolean };
+// Computed at read time from the stored otpauth URI; the URI itself never leaves the service.
+export type Detail = { id: string; name: string; username: string; password: string; websites: string; note: string; code: TotpState | null };
 export type ImportPreview = { added: number; merged: number; flagged: number };
 export type SyncStatus = {
   available: boolean; state: 'off' | 'idle' | 'syncing' | 'needsSignIn' | 'error'; lastSyncAt: number | null; blocked: number; quarantined: number;
@@ -87,7 +89,7 @@ const MIN_PASSWORD_CHARS = 12;
 const PENDING_TTL_MS = 5 * 60_000;
 const MAX_USERNAME_CHARS = 1024;
 const MAX_PASSWORD_CHARS = 4096;
-const FROM_PAGE = new Set(['candidates', 'fill', 'capture']);
+const FROM_PAGE = new Set(['candidates', 'fill', 'totpCode', 'capture']);
 const NOT_ALLOWED = "That request isn't allowed.";
 const LOCKED = 'Strongroom is locked. Unlock it first.';
 const UNAVAILABLE = "Sync isn't available in this build.";
@@ -195,9 +197,16 @@ export function createService(deps: Deps) {
     return { found, unreadable };
   };
 
+  // Only the current code crosses to a page or the popup; the stored otpauth URI never does.
+  const codeStateOf = (login: Login): TotpState | null => {
+    if (login.totp === undefined) return null;
+    const totp = parseTotp(login.totp);
+    return totp && totpState(totp, Math.floor(now() / 1000));
+  };
+
   const row = ({ id, login }: Found): Row => ({
     id, name: login.name, username: login.username, sites: login.sites.map((s) => s.host), apps: login.apps.length,
-    flagged: login.note.startsWith(FLAG_PREFIX),
+    flagged: login.note.startsWith(FLAG_PREFIX), totp: login.totp !== undefined,
   });
   const byName = (a: Row, b: Row) => a.name.toLowerCase().localeCompare(b.name.toLowerCase());
 
@@ -581,7 +590,7 @@ export function createService(deps: Deps) {
     const fromPage = ctx !== undefined;
     if (typeof type !== 'string' || (fromPage && !FROM_PAGE.has(type))) throw new UserError(NOT_ALLOWED);
     const where = fromPage ? ctx : (req as { page?: PageRef }).page;
-    if (FROM_PAGE.has(type) && (!where || ((type === 'capture' || type === 'fill') && !ctx))) throw new UserError(NOT_ALLOWED);
+    if (FROM_PAGE.has(type) && (!where || ((type === 'capture' || type === 'fill' || type === 'totpCode') && !ctx))) throw new UserError(NOT_ALLOWED);
 
     try {
       switch (req.type) {
@@ -687,7 +696,10 @@ export function createService(deps: Deps) {
           if (!target) throw new UserError('That login no longer exists.');
           deps.resetAutoLock();
           const l = target.login;
-          return { id: target.id, name: l.name, username: l.username, password: l.password, websites: l.sites.map(siteLine).join('\n'), note: l.note } satisfies Detail;
+          return {
+            id: target.id, name: l.name, username: l.username, password: l.password, websites: l.sites.map(siteLine).join('\n'), note: l.note,
+            code: codeStateOf(l),
+          } satisfies Detail;
         }
         case 'save':
           return await save(req.id, req.login);
@@ -729,7 +741,17 @@ export function createService(deps: Deps) {
           const target = (await logins(await requireFillKey())).found.find((f) => f.id === req.id);
           if (!target || !matches(target.login.sites, site)) throw new UserError("That login isn't saved for this website.");
           deps.resetAutoLock();
-          return { username: target.login.username, password: target.login.password };
+          return { username: target.login.username, password: target.login.password, code: codeStateOf(target.login) };
+        }
+        case 'totpCode': {
+          // Same gate as fill: the request must come from the page itself and the login must match that page.
+          // A locked session may still answer from the device-held key, exactly like a password fill.
+          const site = where && siteFromUrl(where.url);
+          if (!site) throw new UserError(NOT_ALLOWED);
+          const target = (await logins(await requireFillKey())).found.find((f) => f.id === req.id);
+          if (!target || !matches(target.login.sites, site)) throw new UserError("That login isn't saved for this website.");
+          deps.resetAutoLock();
+          return codeStateOf(target.login);
         }
         case 'capture': {
           const site = siteFromUrl(ctx!.url);
