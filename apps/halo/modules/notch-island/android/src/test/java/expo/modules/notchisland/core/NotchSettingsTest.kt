@@ -48,6 +48,16 @@ class NotchSettingsTest {
     assertEquals(s, NotchSettings.parse(s.toJson()))
   }
 
+  @Test fun alarmCardDefaultsOnRejectsStringsAndRoundTrips() {
+    assertEquals(true, NotchSettings.DEFAULTS.alarmCard)
+    assertEquals(true, NotchSettings.parse("""{"accent":"mint"}""").alarmCard)
+    assertEquals(false, NotchSettings.parse("""{"alarmCard":false}""").alarmCard)
+    assertEquals(true, NotchSettings.parse("""{"alarmCard":"false"}""").alarmCard)
+    assertEquals(true, NotchSettings.parse("""{"alarmCard":0}""").alarmCard)
+    val s = NotchSettings.DEFAULTS.copy(alarmCard = false)
+    assertEquals(s, NotchSettings.parse(s.toJson()))
+  }
+
   @Test fun eventsRoundTrip() {
     val s = NotchSettings.DEFAULTS.copy(events = EventSwitches(charging = false, ringer = true, dnd = false))
     assertEquals(s, NotchSettings.parse(s.toJson()))
