@@ -9,8 +9,8 @@ import kotlin.math.sqrt
 // SwiftUI's spring(response:dampingFraction:) in closed form, so no physics dependency; it stops at SETTLE_MS, where it is within 0.1 % of 1.
 object Spring {
   const val RESPONSE_S = 0.4
-  const val DAMPING = 0.8
-  const val SETTLE_MS = 600L
+  const val DAMPING = 0.65
+  const val SETTLE_MS = 800L
 
   private val omega = 2 * PI / RESPONSE_S
   private val decay = DAMPING * omega

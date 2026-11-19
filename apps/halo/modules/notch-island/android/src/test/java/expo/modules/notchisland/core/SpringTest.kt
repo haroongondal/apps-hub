@@ -14,10 +14,10 @@ class SpringTest {
     assertEquals(1f, Spring.value(5_000), 0f)
   }
 
-  // Damping 0.8 overshoots by exp(-0.8 * pi / 0.6), about 1.5 %.
+  // Damping 0.65 overshoots by about 6.8 %, peaking near 263 ms.
   @Test fun overshootsOnceThenComesBack() {
     val peak = curve.max()
-    assertTrue("peak $peak", peak > 1.01f && peak < 1.03f)
+    assertTrue("peak $peak", peak > 1.05f && peak < 1.09f)
     assertTrue(curve.indexOfFirst { it > 1f } in 150..300)
     assertEquals(1f, curve[curve.size - 2], 0.002f)
   }
