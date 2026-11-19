@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -164,10 +165,11 @@ private class SizedBuffer(size: Int) : ByteArrayOutputStream(size) {
   fun bytes(): ByteArray = if (count == buf.size) buf else toByteArray()
 }
 
-fun readCapped(input: InputStream, cap: Int, expected: Long = 0): ByteArray? {
+fun readCapped(input: InputStream, cap: Int, expected: Long = 0, stop: () -> Boolean = { false }): ByteArray? {
   val out = SizedBuffer(expected.coerceIn(0, cap.toLong()).toInt())
   val buf = ByteArray(64 * 1024)
   while (true) {
+    if (stop()) throw CancellationException("The read was stopped.")
     val n = input.read(buf)
     if (n < 0) return out.bytes()
     if (out.size() + n > cap) return null

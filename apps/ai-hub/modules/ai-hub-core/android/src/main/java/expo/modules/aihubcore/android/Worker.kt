@@ -40,7 +40,8 @@ class Worker(context: Context) {
     val callback: IAiHubCallback,
   ) {
     var running = false
-    var settled = false
+    var started = false
+    @Volatile var settled = false
   }
 
   private val store = HubStore.get(context)
@@ -108,7 +109,8 @@ class Worker(context: Context) {
       }
       p
     }
-    close(p.attachment)
+    // A running job's thread still reads the attachment, so only run() may close it.
+    if (!p.running) close(p.attachment)
     settle(p) { it.onError(p.request.requestId, "cancelled", "The request was cancelled.") }
   }
 
@@ -120,14 +122,14 @@ class Worker(context: Context) {
   }
 
   fun shutdown() {
-    val all = synchronized(lock) {
+    val (all, unstarted) = synchronized(lock) {
       stopped = true
-      jobs.values.toList().also { jobs.clear() }
+      jobs.values.toList().also { jobs.clear() }.let { it to it.filter { p -> !p.started } }
     }
     // Every unfinished job is still in `jobs`, including those whose tasks shutdownNow() drops.
     executor.shutdownNow()
+    unstarted.forEach { close(it.attachment) }
     all.forEach { p ->
-      close(p.attachment)
       settle(p) { it.onError(p.request.requestId, "cancelled", "AI hub stopped before the request finished. Try again.") }
     }
   }
@@ -151,7 +153,7 @@ class Worker(context: Context) {
       try {
         executor.execute { run(item, p) }
       } catch (e: RejectedExecutionException) {
-        close(p.attachment)
+        // Only shutdown() rejects, and it closes the attachment of every job that never started.
         settle(p) { it.onError(p.request.requestId, "cancelled", "AI hub is closing. Try again.") }
       }
     }
@@ -159,6 +161,8 @@ class Worker(context: Context) {
 
   private fun run(item: QueueItem, p: Pending) {
     val id = p.request.requestId
+    // A job that had not started when shutdown() ran belongs to shutdown(), which settles it and closes its attachment.
+    if (!synchronized(lock) { (!stopped).also { p.started = it } }) return
     try {
       val result = execute(p)
       settle(p) { it.onResult(id, result) }
@@ -199,7 +203,7 @@ class Worker(context: Context) {
 
   private fun read(p: Pending): ByteArray {
     val cap = p.request.attachmentCap!!
-    val bytes = ParcelFileDescriptor.AutoCloseInputStream(p.attachment).use { readCapped(it, cap, p.size) }
+    val bytes = ParcelFileDescriptor.AutoCloseInputStream(p.attachment).use { readCapped(it, cap, p.size) { p.settled } }
     return bytes ?: throw BadRequest(p.request.requestId, "The ${p.request.attachmentName} is over ${cap / (1024 * 1024)} MB. Send a smaller one.")
   }
 

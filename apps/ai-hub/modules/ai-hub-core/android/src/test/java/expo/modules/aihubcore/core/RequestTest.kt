@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.Base64
+import java.util.concurrent.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -13,6 +14,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -192,6 +194,16 @@ class RequestTest {
       assertArrayEquals("$hint", data, readCapped(ByteArrayInputStream(data), 250_000, hint))
     }
     assertNull(readCapped(ByteArrayInputStream(data), 199_999, 200_000))
+  }
+
+  @Test fun readCappedStopsBetweenChunksWhenTheCheckTurnsTrue() {
+    val data = ByteArray(1_000_000)
+    val input = ByteArrayInputStream(data)
+    var checks = 0
+    assertThrows(CancellationException::class.java) { readCapped(input, 2_000_000, 0) { ++checks > 2 } }
+    assertEquals(3, checks)
+    assertEquals(data.size - 2 * 64 * 1024, input.available())
+    assertThrows(CancellationException::class.java) { readCapped(ByteArrayInputStream(data), 2_000_000) { true } }
   }
 
   @Test fun sharedUidWithStrongroomIsDenied() {
