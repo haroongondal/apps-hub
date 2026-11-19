@@ -166,6 +166,12 @@ export function SettingsScreen({ value, onChange }: { value: NotchSettings; onCh
           value={value.progressCards}
           onChange={(progressCards) => set({ progressCards })}
         />
+        <SwitchRow
+          title="Alarm card"
+          subtitle="A ringing alarm with Snooze and Dismiss, shown when you open the pill"
+          value={value.alarmCard}
+          onChange={(alarmCard) => set({ alarmCard })}
+        />
       </Group>
 
       <Group title="Notification access">
