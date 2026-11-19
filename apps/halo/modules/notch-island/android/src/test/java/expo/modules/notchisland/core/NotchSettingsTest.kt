@@ -61,4 +61,32 @@ class NotchSettingsTest {
     val s = NotchSettings.DEFAULTS.copy(events = EventSwitches(bluetooth = false))
     assertEquals(s, NotchSettings.parse(s.toJson()))
   }
+
+  @Test fun messagePeekDefaultsOffAndEmpty() {
+    assertEquals(MessagePeekSettings(false, emptyList()), NotchSettings.DEFAULTS.messagePeek)
+    assertEquals(MessagePeekSettings(), NotchSettings.parse("""{"accent":"mint"}""").messagePeek)
+    assertEquals(MessagePeekSettings(), NotchSettings.parse("""{"messagePeek":[true]}""").messagePeek)
+  }
+
+  @Test fun messagePeekFieldsFallBackOnTheirOwn() {
+    assertEquals(MessagePeekSettings(true, emptyList()), NotchSettings.parse("""{"messagePeek":{"on":true,"apps":"com.whatsapp"}}""").messagePeek)
+    assertEquals(MessagePeekSettings(false, listOf("com.whatsapp")), NotchSettings.parse("""{"messagePeek":{"on":"true","apps":["com.whatsapp"]}}""").messagePeek)
+    assertEquals(false, NotchSettings.parse("""{"messagePeek":{"on":1}}""").messagePeek.on)
+  }
+
+  @Test fun messagePeekAppsKeepOnlyValidUniquePackageNamesUpTo20() {
+    val apps = NotchSettings.parse(
+      """{"messagePeek":{"on":true,"apps":["com.whatsapp",1,null,true,"com.whatsapp","bad/pkg","","${"a".repeat(151)}","org.telegram.messenger"]}}""",
+    ).messagePeek.apps
+    assertEquals(listOf("com.whatsapp", "org.telegram.messenger"), apps)
+    val many = (1..25).joinToString(",") { "\"com.app$it\"" }
+    val capped = NotchSettings.parse("""{"messagePeek":{"apps":[$many]}}""").messagePeek.apps
+    assertEquals(20, capped.size)
+    assertEquals("com.app1", capped.first())
+  }
+
+  @Test fun messagePeekRoundTrips() {
+    val s = NotchSettings.DEFAULTS.copy(messagePeek = MessagePeekSettings(true, listOf("com.whatsapp", "org.telegram.messenger")))
+    assertEquals(s, NotchSettings.parse(s.toJson()))
+  }
 }
