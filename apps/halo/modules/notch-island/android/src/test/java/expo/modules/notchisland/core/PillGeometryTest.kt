@@ -68,6 +68,7 @@ class PillGeometryTest {
 
   @Test fun aProgressRowIs64dpAndAddsARowBelowMedia() {
     assertEquals(64, PillGeometry.rowDp("progress"))
+    assertEquals(64, PillGeometry.rowDp("alarm"))
     assertEquals(16 + 64 + 16, PillGeometry.expandedHeight(0, listOf("progress"), 1f))
     assertEquals(121 + ((16 + 64 + 16) * d).toInt(), PillGeometry.expanded(hole, 1080, d, listOf("progress")).height)
     assertEquals(121 + ((16 + 128 + 12 + 64 + 16) * d).toInt(), PillGeometry.expanded(hole, 1080, d, listOf("media", "progress")).height)
