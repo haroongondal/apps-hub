@@ -137,6 +137,14 @@ class NotchFeed(private val service: NotificationListenerService) {
     if (sbn != null && NotchMedia.message?.snap?.key == sbn.key) setMessage(null)
   }
 
+  // Secret stays hidden. Private shows its full text only while the phone is unlocked; on the lock screen, only the public version.
+  private fun shownExtras(n: Notification): android.os.Bundle? = when (n.visibility) {
+    Notification.VISIBILITY_SECRET -> null
+    Notification.VISIBILITY_PRIVATE ->
+      if (service.getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == false) n.extras else n.publicVersion?.extras
+    else -> n.extras
+  }
+
   // Another app's extras can fail to unparcel; that notification is then simply not a card.
   private fun progressPosted(sbn: StatusBarNotification, n: Notification) {
     val snapshot = runCatching {
@@ -145,10 +153,7 @@ class NotchFeed(private val service: NotificationListenerService) {
       val ownCard = "Media" in template || template.endsWith("CallStyle") || x.containsKey(Notification.EXTRA_MEDIA_SESSION)
       val max = x.getInt(Notification.EXTRA_PROGRESS_MAX, 0)
       if (!Progress.qualifies(sbn.isOngoing, n.category, max, ownCard) || !NotchPrefs.load(service).progressCards) return@runCatching null
-      // Secret notifications never reach the card; private ones show only their public title, never the hidden one.
-      if (sbn.notification.visibility == Notification.VISIBILITY_SECRET) return@runCatching null
-      val shown = if (sbn.notification.visibility == Notification.VISIBILITY_PRIVATE) n.publicVersion?.extras else x
-      val title = shown?.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.takeIf { it.isNotBlank() } ?: return@runCatching null
+      val title = shownExtras(n)?.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.takeIf { it.isNotBlank() } ?: return@runCatching null
       val percent = Progress.percent(x.getInt(Notification.EXTRA_PROGRESS, 0), max, x.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE))
       ProgressSnapshot(sbn.key, sbn.packageName, title, percent, sbn.postTime)
     }.getOrNull()
@@ -167,11 +172,7 @@ class NotchFeed(private val service: NotificationListenerService) {
   private fun alarmPosted(sbn: StatusBarNotification, n: Notification) {
     val info = runCatching {
       if (!AlarmCard.ringing(n.category, sbn.isOngoing, n.fullScreenIntent != null) || !NotchPrefs.load(service).alarmCard) return@runCatching null
-      val shown = when (n.visibility) {
-        Notification.VISIBILITY_SECRET -> null
-        Notification.VISIBILITY_PRIVATE -> n.publicVersion?.extras
-        else -> n.extras
-      }
+      val shown = shownExtras(n)
       val actions = n.actions.orEmpty()
       val picked = AlarmCard.actions(actions.map { it.title?.toString() }, actions.map { it.semanticAction })
       val title = AlarmCard.title(shown?.getCharSequence(Notification.EXTRA_TITLE)?.toString())
@@ -194,11 +195,7 @@ class NotchFeed(private val service: NotificationListenerService) {
     val snap = runCatching {
       val summary = n.flags and Notification.FLAG_GROUP_SUMMARY != 0
       if (!MessagePeek.qualifies(sbn.packageName, sbn.isOngoing, n.category, summary, NotchPrefs.load(service).messagePeek)) return@runCatching null
-      val shown = when (n.visibility) {
-        Notification.VISIBILITY_SECRET -> return@runCatching null
-        Notification.VISIBILITY_PRIVATE -> n.publicVersion?.extras
-        else -> n.extras
-      }
+      val shown = shownExtras(n) ?: return@runCatching null
       MessagePeek.snapshot(sbn.key, sbn.packageName, shown?.getCharSequence(Notification.EXTRA_TITLE), shown?.getCharSequence(Notification.EXTRA_TEXT), sbn.postTime)
     }.getOrNull()
     val current = NotchMedia.message
