@@ -20,6 +20,7 @@ data class NotchSettings(
   val clock: String,
   val widgets: List<String>,
   val events: EventSwitches = EventSwitches(),
+  val progressCards: Boolean = true,
 ) {
   fun toJson(): String = JsonObject(
     mapOf(
@@ -31,6 +32,7 @@ data class NotchSettings(
       "clock" to JsonPrimitive(clock),
       "widgets" to JsonArray(widgets.map { JsonPrimitive(it) }),
       "events" to JsonObject(mapOf("charging" to JsonPrimitive(events.charging), "ringer" to JsonPrimitive(events.ringer), "dnd" to JsonPrimitive(events.dnd), "bluetooth" to JsonPrimitive(events.bluetooth))),
+      "progressCards" to JsonPrimitive(progressCards),
     ),
   ).toString()
 
@@ -87,6 +89,7 @@ data class NotchSettings(
           dnd = flag("dnd", DEFAULTS.events.dnd),
           bluetooth = flag("bluetooth", DEFAULTS.events.bluetooth),
         ),
+        progressCards = (o["progressCards"] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull ?: DEFAULTS.progressCards,
       )
     }
   }

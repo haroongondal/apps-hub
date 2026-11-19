@@ -137,6 +137,12 @@ export function SettingsScreen({ value, onChange }: { value: NotchSettings; onCh
         <SwitchRow title="Charging and low battery" value={value.events.charging} onChange={(charging) => setEvent({ charging })} />
         <SwitchRow title="Ringer mode" subtitle="Ring, vibrate or silent" value={value.events.ringer} onChange={(ringer) => setEvent({ ringer })} />
         <SwitchRow title="Do not disturb" value={value.events.dnd} onChange={(dnd) => setEvent({ dnd })} />
+        <SwitchRow
+          title="Progress from apps"
+          subtitle="Rides, deliveries, navigation and downloads, shown when you open the pill"
+          value={value.progressCards}
+          onChange={(progressCards) => set({ progressCards })}
+        />
       </Group>
 
       <Group title="Notification access">

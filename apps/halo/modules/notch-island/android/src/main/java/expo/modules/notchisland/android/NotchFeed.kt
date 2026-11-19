@@ -9,6 +9,8 @@ import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import expo.modules.notchisland.core.Progress
+import expo.modules.notchisland.core.ProgressSnapshot
 import expo.modules.notchisland.core.sampleSize
 
 /**
@@ -17,12 +19,14 @@ import expo.modules.notchisland.core.sampleSize
  * Privacy: reads only media session metadata and play state, and for calls only the
  * notification category, `when` (start time), isOngoing, the action count, each action's
  * PendingIntent, and the notification key (an id, used only to match removal).
- * Never extras, text or action titles.
+ * For progress cards, only while that switch is on: isOngoing, category, the style name, the
+ * progress numbers and EXTRA_TITLE, kept in memory for the card. Never other text or action titles.
  */
 class NotchFeed(private val service: NotificationListenerService) {
   private var sessions: MediaSessionManager? = null
   private val sessionsChanged = MediaSessionManager.OnActiveSessionsChangedListener { onSessions(it) }
   private var tracked: List<MediaController> = emptyList()
+  private val progress = mutableMapOf<String, ProgressSnapshot>()
   private val sessionCallback = object : MediaController.Callback() {
     override fun onMetadataChanged(metadata: MediaMetadata?) = refresh()
     override fun onPlaybackStateChanged(state: PlaybackState?) = refresh()
@@ -49,6 +53,8 @@ class NotchFeed(private val service: NotificationListenerService) {
     controller = null
     NotchMedia.media = null
     NotchMedia.call = null
+    progress.clear()
+    NotchMedia.progress = null
     NotchMedia.changed()
   }
 
@@ -96,10 +102,35 @@ class NotchFeed(private val service: NotificationListenerService) {
     } else if (NotchMedia.call?.key == sbn.key) {
       clearCall()
     }
+    progressPosted(sbn, n)
   }
 
   fun removed(sbn: StatusBarNotification?) {
     if (sbn != null && NotchMedia.call?.key == sbn.key) clearCall()
+    if (sbn != null && progress.remove(sbn.key) != null) publishProgress()
+  }
+
+  // Another app's extras can fail to unparcel; that notification is then simply not a card.
+  private fun progressPosted(sbn: StatusBarNotification, n: Notification) {
+    val snapshot = runCatching {
+      val x = n.extras
+      val template = x.getString(Notification.EXTRA_TEMPLATE).orEmpty()
+      val ownCard = "Media" in template || template.endsWith("CallStyle") || x.containsKey(Notification.EXTRA_MEDIA_SESSION)
+      val max = x.getInt(Notification.EXTRA_PROGRESS_MAX, 0)
+      if (!Progress.qualifies(sbn.isOngoing, n.category, max, ownCard) || !NotchPrefs.load(service).progressCards) return@runCatching null
+      val title = x.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.takeIf { it.isNotBlank() } ?: return@runCatching null
+      val percent = Progress.percent(x.getInt(Notification.EXTRA_PROGRESS, 0), max, x.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE))
+      ProgressSnapshot(sbn.key, sbn.packageName, title, percent, sbn.postTime)
+    }.getOrNull()
+    val changed = if (snapshot == null) progress.remove(sbn.key) != null else { progress[sbn.key] = snapshot; true }
+    if (changed) publishProgress()
+  }
+
+  private fun publishProgress() {
+    val next = Progress.newest(progress.values)
+    if (next == NotchMedia.progress) return
+    NotchMedia.progress = next
+    NotchMedia.changed()
   }
 
   private fun clearCall() {

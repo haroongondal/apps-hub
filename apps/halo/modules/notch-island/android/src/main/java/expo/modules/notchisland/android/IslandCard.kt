@@ -19,6 +19,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import expo.modules.notchisland.core.NotchSettings
 import expo.modules.notchisland.core.PillGeometry
+import expo.modules.notchisland.core.Progress
 import expo.modules.notchisland.core.Transient
 import expo.modules.notchisland.core.alarmLine
 import expo.modules.notchisland.core.batteryText
@@ -55,6 +56,7 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
   private val mediaRow = MediaRow(context, density)
   private val timerRow = TimerRow(context, density)
   private val transientRow = TransientRow(context, density)
+  private val progressRow = ProgressRow(context, density)
   private val rows = LinearLayout(context).apply { orientation = VERTICAL; setPadding(0, dp(PillGeometry.INSET_BELOW_HOLE_DP), 0, 0) }
   private var accent = Color.WHITE
   private var dateLine = false
@@ -78,10 +80,13 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
     return false
   }
 
-  // A transient event alone; else the call row first, then the media and timer rows in widget order, each only when it has something to show.
-  fun activeRows(s: NotchSettings): List<View> =
-    if (transient != null) listOf(transientRow) else listOfNotNull(callRow.takeIf { NotchMedia.call != null }) +
+  // A transient event alone; else the call row first, then the media and timer rows in widget order, each only when it has something to show, then a progress card last.
+  fun activeRows(s: NotchSettings): List<View> {
+    if (transient != null) return listOf(transientRow)
+    val rows = listOfNotNull(callRow.takeIf { NotchMedia.call != null }) +
       rowsFor(s.widgets).mapNotNull { if (it == "media") mediaRow.takeIf { r -> r.isVisibleFor(NotchMedia.media) } else timerRow }
+    return rows + listOfNotNull(progressRow.takeIf { Progress.show(s.progressCards, NotchMedia.progress, rows.map(::kind)) })
+  }
 
   fun activeKinds(s: NotchSettings): List<String> = activeRows(s).map(::kind)
 
@@ -89,6 +94,7 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
     callRow -> "call"
     mediaRow -> "media"
     transientRow -> "event"
+    progressRow -> "progress"
     else -> "timer"
   }
 
@@ -104,6 +110,7 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
     sub.visibility = if (dateLine && active.isEmpty()) VISIBLE else GONE
     mediaRow.bind(NotchMedia.media, accent, NotchFeed.controller)
     transient?.let { transientRow.bind(it, accent) }
+    NotchMedia.progress?.let { progressRow.bind(it, accent) }
     tickRows()
   }
 

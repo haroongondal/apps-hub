@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
+import expo.modules.notchisland.core.ProgressSnapshot
 
 data class MediaInfo(val title: String?, val artist: String?, val art: Bitmap?, val playing: Boolean)
 
@@ -14,6 +15,7 @@ data class CallInfo(val startedAt: Long, val actionCount: Int, val key: String, 
 object NotchMedia {
   @Volatile var media: MediaInfo? = null
   @Volatile var call: CallInfo? = null
+  @Volatile var progress: ProgressSnapshot? = null
   @Volatile var onChange: (() -> Unit)? = null
 
   private val main = Handler(Looper.getMainLooper())

@@ -38,6 +38,16 @@ class NotchSettingsTest {
     assertEquals(EventSwitches(true, true, true), NotchSettings.parse("""{"events":[false]}""").events)
   }
 
+  @Test fun progressCardsDefaultOnRejectStringsAndRoundTrip() {
+    assertEquals(true, NotchSettings.DEFAULTS.progressCards)
+    assertEquals(true, NotchSettings.parse("""{"accent":"mint"}""").progressCards)
+    assertEquals(false, NotchSettings.parse("""{"progressCards":false}""").progressCards)
+    assertEquals(true, NotchSettings.parse("""{"progressCards":"false"}""").progressCards)
+    assertEquals(true, NotchSettings.parse("""{"progressCards":0}""").progressCards)
+    val s = NotchSettings.DEFAULTS.copy(progressCards = false)
+    assertEquals(s, NotchSettings.parse(s.toJson()))
+  }
+
   @Test fun eventsRoundTrip() {
     val s = NotchSettings.DEFAULTS.copy(events = EventSwitches(charging = false, ringer = true, dnd = false))
     assertEquals(s, NotchSettings.parse(s.toJson()))

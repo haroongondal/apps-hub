@@ -30,6 +30,8 @@ export interface NotchSettings {
   clock: Clock;
   widgets: WidgetId[];
   events: EventSwitches;
+  /** Ongoing progress from other apps (rides, deliveries, navigation, downloads) as a row in the open card. */
+  progressCards: boolean;
 }
 
 export const DEFAULTS: NotchSettings = {
@@ -41,6 +43,7 @@ export const DEFAULTS: NotchSettings = {
   clock: 'system',
   widgets: ['clock', 'battery'],
   events: { charging: true, ringer: true, dnd: true },
+  progressCards: true,
 };
 
 // Each swatch must reach WCAG AA (4.5:1) on the black and graphite pills; settings.test.ts checks it.
@@ -84,6 +87,7 @@ export function normalize(raw: unknown): NotchSettings {
       ringer: flag(events.ringer, DEFAULTS.events.ringer),
       dnd: flag(events.dnd, DEFAULTS.events.dnd),
     },
+    progressCards: flag(o.progressCards, DEFAULTS.progressCards),
   };
 }
 
