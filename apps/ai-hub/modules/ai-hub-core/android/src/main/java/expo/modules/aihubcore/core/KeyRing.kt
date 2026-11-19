@@ -22,8 +22,8 @@ enum class Exhausted { LIMITED, REFUSED }
 // A limit beats a refusal, since waiting can fix it.
 fun exhausted(anyLimited: Boolean) = if (anyLimited) Exhausted.LIMITED else Exhausted.REFUSED
 
-class KeyRing(keys: List<String>) {
-  private val byService: Map<Service, List<String>> = keys.map(String::trim).filter(String::isNotEmpty).distinct()
+class KeyRing(private val stored: List<String>) {
+  private val byService: Map<Service, List<String>> = stored.map(String::trim).filter(String::isNotEmpty).distinct()
     .mapNotNull { k -> serviceOf(k)?.let { it to k } }
     .groupBy({ it.first }, { it.second })
   private val inUse = ConcurrentHashMap<Service, Int>()
@@ -42,4 +42,7 @@ class KeyRing(keys: List<String>) {
   fun use(service: Service, index: Int) {
     inUse[service] = index
   }
+
+  // Compares the raw stored list, so the key in use carries across jobs until the owner changes the keys.
+  fun reuseFor(keys: List<String>): KeyRing = if (keys == stored) this else KeyRing(keys)
 }

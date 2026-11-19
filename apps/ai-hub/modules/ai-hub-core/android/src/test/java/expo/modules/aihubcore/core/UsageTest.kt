@@ -1,7 +1,8 @@
 package expo.modules.aihubcore.core
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import org.junit.Test
 
 class UsageTest {
@@ -37,8 +38,11 @@ class UsageTest {
     assertEquals(Usage(), Usage.fromJson("""{"apps":{"a":5}}"""))
   }
 
-  @Test fun noTextFieldsSerialised() {
-    val json = usage.toJson()
-    listOf("prompt", "text", "content", "message", "reply").forEach { assertFalse(json.contains(it)) }
+  @Test fun onlyCountsAreSerialised() {
+    val root = Json.parseToJsonElement(usage.toJson()).jsonObject
+    assertEquals(setOf("apps"), root.keys)
+    val services = root["apps"]!!.jsonObject.values.flatMap { it.jsonObject.values }
+    assertEquals(2, services.size)
+    services.forEach { assertEquals(setOf("calls", "inputTokens", "outputTokens", "lastUsedMs"), it.jsonObject.keys) }
   }
 }
