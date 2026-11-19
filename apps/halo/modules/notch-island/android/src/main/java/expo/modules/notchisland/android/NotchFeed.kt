@@ -1,6 +1,7 @@
 package expo.modules.notchisland.android
 
 import android.app.Notification
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.graphics.Bitmap
 import android.media.MediaMetadata
@@ -9,24 +10,32 @@ import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import expo.modules.notchisland.core.AlarmCard
+import expo.modules.notchisland.core.AlarmSnapshot
 import expo.modules.notchisland.core.Progress
 import expo.modules.notchisland.core.ProgressSnapshot
+import expo.modules.notchisland.core.callActions
 import expo.modules.notchisland.core.sampleSize
 
 /**
  * Fed by HaloListener, the app's one notification listener, so access is granted once.
  * Exists so Notch may reach MediaSessionManager and see the ongoing call notification.
  * Privacy: reads only media session metadata and play state, and for calls only the
- * notification category, `when` (start time), isOngoing, the action count, each action's
- * PendingIntent, and the notification key (an id, used only to match removal).
+ * notification category, `when` (start time), isOngoing, the CallStyle hang-up/decline intent,
+ * each action's title (matched against a keyword list, never kept) and PendingIntent, and the
+ * notification key (an id, used only to match removal).
  * For progress cards, only while that switch is on: isOngoing, category, the style name, the
- * progress numbers and EXTRA_TITLE, kept in memory for the card. Never other text or action titles.
+ * progress numbers and EXTRA_TITLE, kept in memory for the card.
+ * For a ringing alarm, only while the alarm card switch is on: category, isOngoing, whether it
+ * has a full-screen intent, `when`, EXTRA_TITLE, and each action's title and semantic flag
+ * (matched, never kept) and PendingIntent. Never other text.
  */
 class NotchFeed(private val service: NotificationListenerService) {
   private var sessions: MediaSessionManager? = null
   private val sessionsChanged = MediaSessionManager.OnActiveSessionsChangedListener { onSessions(it) }
   private var tracked: List<MediaController> = emptyList()
   private val progress = mutableMapOf<String, ProgressSnapshot>()
+  private val alarms = mutableMapOf<String, AlarmInfo>()
   private val sessionCallback = object : MediaController.Callback() {
     override fun onMetadataChanged(metadata: MediaMetadata?) = refresh()
     override fun onPlaybackStateChanged(state: PlaybackState?) = refresh()
@@ -55,6 +64,8 @@ class NotchFeed(private val service: NotificationListenerService) {
     NotchMedia.call = null
     progress.clear()
     NotchMedia.progress = null
+    alarms.clear()
+    NotchMedia.alarm = null
     NotchMedia.changed()
   }
 
@@ -96,18 +107,26 @@ class NotchFeed(private val service: NotificationListenerService) {
   fun posted(sbn: StatusBarNotification?) {
     val n = sbn?.notification ?: return
     if (n.category == Notification.CATEGORY_CALL && sbn.isOngoing) {
-      val actions = n.actions.orEmpty().map { it.actionIntent }
-      NotchMedia.call = CallInfo(startedAt = n.`when`, actionCount = actions.size, key = sbn.key, actions = actions)
+      val actions = n.actions.orEmpty()
+      val picked = callActions(actions.map { it.title?.toString() })
+      // CallStyle keeps hang-up (decline while ringing) in extras, outside the action list.
+      val styled = runCatching {
+        n.extras.getParcelable(Notification.EXTRA_HANG_UP_INTENT, PendingIntent::class.java)
+          ?: n.extras.getParcelable(Notification.EXTRA_DECLINE_INTENT, PendingIntent::class.java)
+      }.getOrNull()
+      NotchMedia.call = CallInfo(n.`when`, sbn.key, actions.getOrNull(picked.speaker)?.actionIntent, styled ?: actions.getOrNull(picked.hangUp)?.actionIntent)
       NotchMedia.changed()
     } else if (NotchMedia.call?.key == sbn.key) {
       clearCall()
     }
     progressPosted(sbn, n)
+    alarmPosted(sbn, n)
   }
 
   fun removed(sbn: StatusBarNotification?) {
     if (sbn != null && NotchMedia.call?.key == sbn.key) clearCall()
     if (sbn != null && progress.remove(sbn.key) != null) publishProgress()
+    if (sbn != null && alarms.remove(sbn.key) != null) publishAlarm()
   }
 
   // Another app's extras can fail to unparcel; that notification is then simply not a card.
@@ -133,6 +152,32 @@ class NotchFeed(private val service: NotificationListenerService) {
     val next = Progress.newest(progress.values)
     if (next == NotchMedia.progress) return
     NotchMedia.progress = next
+    NotchMedia.changed()
+  }
+
+  // Secret alarms show "Alarm", private ones their public title.
+  private fun alarmPosted(sbn: StatusBarNotification, n: Notification) {
+    val info = runCatching {
+      if (!AlarmCard.ringing(n.category, sbn.isOngoing, n.fullScreenIntent != null) || !NotchPrefs.load(service).alarmCard) return@runCatching null
+      val shown = when (n.visibility) {
+        Notification.VISIBILITY_SECRET -> null
+        Notification.VISIBILITY_PRIVATE -> n.publicVersion?.extras
+        else -> n.extras
+      }
+      val actions = n.actions.orEmpty()
+      val picked = AlarmCard.actions(actions.map { it.title?.toString() }, actions.map { it.semanticAction })
+      val title = AlarmCard.title(shown?.getCharSequence(Notification.EXTRA_TITLE)?.toString())
+      val snap = AlarmSnapshot(sbn.key, title, n.`when`.takeIf { it > 0 } ?: sbn.postTime, sbn.postTime, picked.snooze, picked.dismiss)
+      AlarmInfo(snap, actions.getOrNull(picked.snooze)?.actionIntent, actions.getOrNull(picked.dismiss)?.actionIntent)
+    }.getOrNull()
+    val changed = if (info == null) alarms.remove(sbn.key) != null else { alarms[sbn.key] = info; true }
+    if (changed) publishAlarm()
+  }
+
+  private fun publishAlarm() {
+    val next = AlarmCard.pick(alarms.values.map { it.snap })?.let { alarms[it.key] }
+    if (next == NotchMedia.alarm) return
+    NotchMedia.alarm = next
     NotchMedia.changed()
   }
 

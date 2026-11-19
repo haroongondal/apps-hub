@@ -10,17 +10,13 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import expo.modules.notchisland.R
 import expo.modules.notchisland.core.CALL_GREEN
-import expo.modules.notchisland.core.HANGUP_ACTION
 import expo.modules.notchisland.core.PillGeometry
-import expo.modules.notchisland.core.SPEAKER_ACTION
 import expo.modules.notchisland.core.callElapsed
 import expo.modules.notchisland.core.durationText
-import expo.modules.notchisland.core.endAvailable
-import expo.modules.notchisland.core.speakerAvailable
 
-// Green call time, then round "Speaker" and "End call" buttons. Each fires the call notification's own action and hides when the phone lacks it.
+// Green call time, then round "Speaker" and "End call" buttons. Each fires the call notification's own action and hides when the dialer lacks it (unverified on a device).
 class CallRow(context: Context, private val density: Float) : LinearLayout(context) {
-  private var actions: List<PendingIntent> = emptyList()
+  private var info: CallInfo? = null
 
   private val time = TextView(context).apply {
     textSize = 20f
@@ -29,8 +25,8 @@ class CallRow(context: Context, private val density: Float) : LinearLayout(conte
     fontFeatureSettings = "tnum"
     gravity = Gravity.CENTER_VERTICAL or Gravity.START
   }
-  private val speaker = roundButton(context, R.drawable.notch_speaker, "Speaker") { fire(SPEAKER_ACTION) }
-  private val end = roundButton(context, R.drawable.notch_end_call, "End call") { fire(HANGUP_ACTION) }
+  private val speaker = roundButton(context, R.drawable.notch_speaker, "Speaker") { fire(info?.speaker) }
+  private val end = roundButton(context, R.drawable.notch_end_call, "End call") { fire(info?.hangUp) }
 
   init {
     orientation = HORIZONTAL
@@ -44,17 +40,17 @@ class CallRow(context: Context, private val density: Float) : LinearLayout(conte
   }
 
   fun bind(info: CallInfo, now: Long, accent: Int) {
-    actions = info.actions
+    this.info = info
     time.text = durationText(callElapsed(Notification.CATEGORY_CALL, info.startedAt, now) ?: 0L)
-    speaker.visibility = if (speakerAvailable(info.actions.size)) VISIBLE else GONE
-    end.visibility = if (endAvailable(info.actions.size)) VISIBLE else GONE
+    speaker.visibility = if (info.speaker != null) VISIBLE else GONE
+    end.visibility = if (info.hangUp != null) VISIBLE else GONE
     speaker.paint(accent, Color.BLACK)
     end.paint(END_RED, Color.WHITE)
   }
 
-  private fun fire(index: Int) {
+  private fun fire(intent: PendingIntent?) {
     try {
-      actions.getOrNull(index)?.send()
+      intent?.send()
     } catch (_: PendingIntent.CanceledException) {
       // The call ended between bind and tap; the row goes on the next refresh.
     }
