@@ -722,6 +722,9 @@ importers:
       pdf-scan:
         specifier: workspace:*
         version: link:modules/pdf-scan
+      place-reminders:
+        specifier: workspace:*
+        version: link:modules/place-reminders
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -783,6 +786,12 @@ importers:
       expo-modules-core:
         specifier: ~3.0.30
         version: 3.0.30(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
+
+  apps/pdf-editor-mobile/modules/place-reminders:
+    dependencies:
+      expo-modules-core:
+        specifier: ~3.0.30
+        version: 3.0.30(react-native@0.81.5(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.1.17)(react@19.1.0)(supports-color@10.2.2))(react@19.1.0)
 
   apps/sieve:
     dependencies:
