@@ -13,10 +13,12 @@ import {
   WIDGETS,
   foldLabel,
   moveWidget,
+  type EventSwitches,
   type NotchSettings,
   type WidgetId,
 } from './settings';
 import { accessLine } from './status';
+import { SwitchRow } from '../Stepper.tsx';
 
 const PILL_NAMES = { black: 'Black', graphite: 'Graphite', tinted: 'Tinted' } as const;
 const SIZE_NAMES = { compact: 'Compact', regular: 'Regular', large: 'Large' } as const;
@@ -38,6 +40,7 @@ export function SettingsScreen({ value, onChange }: { value: NotchSettings; onCh
     return () => sub.remove();
   }, []);
   const set = (patch: Partial<NotchSettings>) => onChange({ ...value, ...patch });
+  const setEvent = (patch: Partial<EventSwitches>) => set({ events: { ...value.events, ...patch } });
   const shown = value.widgets;
   const toggle = (id: WidgetId) => set({ widgets: shown.includes(id) ? shown.filter((w) => w !== id) : [...shown, id] });
   const shift = (id: WidgetId, by: number) => set({ widgets: moveWidget(shown, id, shown.indexOf(id) + by) });
@@ -128,6 +131,12 @@ export function SettingsScreen({ value, onChange }: { value: NotchSettings; onCh
             />
           }
         />
+      </Group>
+
+      <Group title="Quick events" footer="The pill opens for a few seconds, then folds back. It stays out of the way during a call or while you have it open.">
+        <SwitchRow title="Charging and low battery" value={value.events.charging} onChange={(charging) => setEvent({ charging })} />
+        <SwitchRow title="Ringer mode" subtitle="Ring, vibrate or silent" value={value.events.ringer} onChange={(ringer) => setEvent({ ringer })} />
+        <SwitchRow title="Do not disturb" value={value.events.dnd} onChange={(dnd) => setEvent({ dnd })} />
       </Group>
 
       <Group title="Notification access">

@@ -90,3 +90,15 @@ test('widgetLabel uses plain words', () => {
   assert.equal(widgetLabel('clock'), 'Clock');
   assert.equal(widgetLabel('battery'), 'Battery');
 });
+
+test('event switches default on and fall back one by one', () => {
+  assert.deepEqual(DEFAULTS.events, { charging: true, ringer: true, dnd: true });
+  assert.deepEqual(normalize({ accent: 'mint' }).events, DEFAULTS.events);
+  assert.deepEqual(normalize({ events: { charging: false, ringer: 'no', dnd: 1 } }).events, { charging: false, ringer: true, dnd: true });
+  assert.deepEqual(normalize({ events: [false] }).events, DEFAULTS.events);
+});
+
+test('event switches survive a round trip through JSON', () => {
+  const s = { ...DEFAULTS, events: { charging: false, ringer: true, dnd: false } };
+  assert.deepEqual(normalize(JSON.parse(JSON.stringify(s))), s);
+});

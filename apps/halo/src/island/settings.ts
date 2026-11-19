@@ -13,6 +13,13 @@ export type Corners = (typeof CORNERS)[number];
 export type Clock = (typeof CLOCKS)[number];
 export type WidgetId = (typeof WIDGETS)[number];
 
+/** Short events the pill opens for by itself; each switch is on by default. */
+export interface EventSwitches {
+  charging: boolean;
+  ringer: boolean;
+  dnd: boolean;
+}
+
 export interface NotchSettings {
   accent: Accent;
   pill: PillColour;
@@ -22,6 +29,7 @@ export interface NotchSettings {
   foldMs: number;
   clock: Clock;
   widgets: WidgetId[];
+  events: EventSwitches;
 }
 
 export const DEFAULTS: NotchSettings = {
@@ -32,6 +40,7 @@ export const DEFAULTS: NotchSettings = {
   foldMs: 5000,
   clock: 'system',
   widgets: ['clock', 'battery'],
+  events: { charging: true, ringer: true, dnd: true },
 };
 
 // Each swatch must reach WCAG AA (4.5:1) on the black and graphite pills; settings.test.ts checks it.
@@ -50,6 +59,10 @@ function pick<T extends string | number>(value: unknown, allowed: readonly T[], 
   return (allowed as readonly unknown[]).includes(value) ? (value as T) : fallback;
 }
 
+function flag(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
 export function normalize(raw: unknown): NotchSettings {
   const o = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
   const list = Array.isArray(o.widgets) ? o.widgets : DEFAULTS.widgets;
@@ -57,6 +70,7 @@ export function normalize(raw: unknown): NotchSettings {
   for (const id of list) {
     if ((WIDGETS as readonly unknown[]).includes(id) && !widgets.includes(id as WidgetId)) widgets.push(id as WidgetId);
   }
+  const events = typeof o.events === 'object' && o.events !== null && !Array.isArray(o.events) ? (o.events as Record<string, unknown>) : {};
   return {
     accent: pick(o.accent, ACCENTS, DEFAULTS.accent),
     pill: pick(o.pill, PILLS, DEFAULTS.pill),
@@ -65,6 +79,11 @@ export function normalize(raw: unknown): NotchSettings {
     foldMs: pick(o.foldMs, FOLDS, DEFAULTS.foldMs),
     clock: pick(o.clock, CLOCKS, DEFAULTS.clock),
     widgets,
+    events: {
+      charging: flag(events.charging, DEFAULTS.events.charging),
+      ringer: flag(events.ringer, DEFAULTS.events.ringer),
+      dnd: flag(events.dnd, DEFAULTS.events.dnd),
+    },
   };
 }
 

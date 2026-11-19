@@ -13,6 +13,7 @@ const SAMPLES = [
   { key: 'music', label: 'Music' },
   { key: 'call', label: 'Call' },
   { key: 'timer', label: 'Timer' },
+  { key: 'event', label: 'Event' },
   { key: 'ears', label: 'Clock' },
 ] as const;
 type Sample = (typeof SAMPLES)[number]['key'];
@@ -30,6 +31,15 @@ function Triangle({ dir }: { dir: 'left' | 'right' }) {
   const colour = dir === 'right' ? 'borderLeftColor' : 'borderRightColor';
   return <View style={{ width: 0, height: 0, borderTopWidth: 6, borderBottomWidth: 6, borderTopColor: 'transparent', borderBottomColor: 'transparent', [side]: 10, [colour]: WHITE } as ViewStyle} />;
 }
+
+// A lightning bolt from two slanted bars and a joining bar.
+const Bolt = ({ colour }: { colour: string }) => (
+  <View style={{ width: 28, height: 28 }}>
+    <View style={{ position: 'absolute', left: 12, top: 2, width: 6, height: 13, backgroundColor: colour, transform: [{ skewX: '-25deg' }] }} />
+    <View style={{ position: 'absolute', left: 8, top: 12, width: 13, height: 4, backgroundColor: colour }} />
+    <View style={{ position: 'absolute', left: 10, top: 13, width: 6, height: 13, backgroundColor: colour, transform: [{ skewX: '-25deg' }] }} />
+  </View>
+);
 
 const Bars = () => (
   <View style={{ flexDirection: 'row', gap: 3 }}>
@@ -112,6 +122,19 @@ export function Preview({ value }: { value: NotchSettings }) {
         <Round size={44} colour={accent}><View style={{ width: 14, height: 14, backgroundColor: '#000000' }} /></Round>
       </>,
     );
+  } else if (sample === 'event') {
+    content = (
+      <>
+        {earsRow}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, marginTop: 8 }}>
+          <Bolt colour={accent} />
+          <View>
+            <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>Charging</Text>
+            <Text style={{ color: SOFT, fontSize: 13 }}>82%</Text>
+          </View>
+        </View>
+      </>
+    );
   } else {
     content = (
       <>
@@ -122,7 +145,7 @@ export function Preview({ value }: { value: NotchSettings }) {
   }
 
   return (
-    <Group title="Preview" footer="The battery number, song, caller and timer are samples.">
+    <Group title="Preview" footer="The battery number, song, caller, timer and event are samples.">
       <View accessibilityRole="image" accessibilityLabel="Preview of the pill" style={{ alignItems: 'center', gap: 12, paddingVertical: 12 }}>
         <View style={{ width: closedWidth, height: closedHeight, borderRadius: Math.min(RADIUS[value.corners], closedHeight / 2), backgroundColor: background, alignItems: 'center', justifyContent: 'center' }}>
           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: accent }} />
