@@ -2,6 +2,13 @@ package expo.modules.aihubcore.core
 
 enum class Priority { FOREGROUND, BACKGROUND }
 
+object Admission {
+  const val PER_CALLER = 8
+  const val TOTAL = 64
+
+  fun admits(uids: Collection<Int>, uid: Int): Boolean = uids.size < TOTAL && uids.count { it == uid } < PER_CALLER
+}
+
 data class QueueItem(val id: String, val service: String, val priority: Priority)
 
 class Queue(private val limit: Int = 2) {

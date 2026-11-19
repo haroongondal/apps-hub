@@ -14,7 +14,7 @@ import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
 // The owner's API keys for every service, as one AES-GCM sealed list under a non-exportable Keystore key (as Deputy's KeyVault).
-class KeyVault(context: Context) {
+class KeyVault private constructor(context: Context) {
   private val prefs = context.getSharedPreferences(ALIAS, Context.MODE_PRIVATE)
   private val serializer = ListSerializer(String.serializer())
 
@@ -65,10 +65,11 @@ class KeyVault(context: Context) {
     val clean = keys.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
     val cipher = Cipher.getInstance(TRANSFORM).apply { init(Cipher.ENCRYPT_MODE, key()) }
     val sealed = cipher.doFinal(Json.encodeToString(serializer, clean).toByteArray())
-    prefs.edit()
+    val saved = prefs.edit()
       .putString("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
       .putString("keys", Base64.encodeToString(sealed, Base64.NO_WRAP))
-      .apply()
+      .commit()
+    check(saved) { "Your keys couldn't be saved. Try again." }
   }
 
   private fun key(): SecretKey {
@@ -81,8 +82,14 @@ class KeyVault(context: Context) {
     return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply { init(spec) }.generateKey()
   }
 
-  private companion object {
-    const val ALIAS = "aihub_keys"
-    const val TRANSFORM = "AES/GCM/NoPadding"
+  companion object {
+    private const val ALIAS = "aihub_keys"
+    private const val TRANSFORM = "AES/GCM/NoPadding"
+
+    @Volatile private var shared: KeyVault? = null
+
+    fun get(context: Context): KeyVault = shared ?: synchronized(this) {
+      shared ?: KeyVault(context.applicationContext).also { shared = it }
+    }
   }
 }

@@ -6,7 +6,7 @@ import java.io.File
 import kotlinx.serialization.json.Json
 
 // One AtomicFile per setting: a torn write leaves the old value, and a corrupt file only loses that setting.
-class HubStore(context: Context) {
+class HubStore private constructor(context: Context) {
   private val dir = File(context.filesDir, "aihub-settings").apply { mkdirs() }
 
   private fun file(name: String): AtomicFile {
@@ -14,6 +14,7 @@ class HubStore(context: Context) {
     return AtomicFile(File(dir, "$name.json"))
   }
 
+  @Synchronized
   fun get(name: String): String? = try {
     file(name).readFully().toString(Charsets.UTF_8).also { Json.parseToJsonElement(it) }
   } catch (e: Exception) {
@@ -33,7 +34,13 @@ class HubStore(context: Context) {
     }
   }
 
-  private companion object {
-    val NAME = Regex("[a-z0-9_-]{1,64}")
+  companion object {
+    private val NAME = Regex("[a-z0-9_-]{1,64}")
+
+    @Volatile private var shared: HubStore? = null
+
+    fun get(context: Context): HubStore = shared ?: synchronized(this) {
+      shared ?: HubStore(context.applicationContext).also { shared = it }
+    }
   }
 }

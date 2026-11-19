@@ -2,6 +2,8 @@ package expo.modules.aihubcore.core
 
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -35,12 +37,29 @@ data class Request(
       else -> null
     }
 
+  val attachmentName: String
+    get() = when (job) {
+      Job.VISION -> "picture"
+      Job.TRANSCRIBE -> "audio file"
+      else -> "request"
+    }
+
+  // Null when the attachment can be read: a regular file (a pipe or socket could block the read forever) within the cap.
+  fun attachmentProblem(isRegularFile: Boolean, size: Long): String? {
+    val cap = attachmentCap ?: return null
+    return when {
+      !isRegularFile -> "Send the picture or audio as a file."
+      size > cap -> "The $attachmentName is over ${cap / (1024 * 1024)} MB. Send a smaller one."
+      else -> null
+    }
+  }
+
   companion object {
     const val MAX_JSON_BYTES = 512 * 1024
-    const val MAX_TEXTS = 256
+    const val MAX_TEXTS = 8
     const val MAX_TOKENS = 8192
     const val DEFAULT_MAX_TOKENS = 2048
-    const val MAX_IMAGE_BYTES = 20 * 1024 * 1024
+    const val MAX_IMAGE_BYTES = 7 * 1024 * 1024
     const val MAX_AUDIO_BYTES = 25 * 1024 * 1024
 
     private val ID = Regex("[A-Za-z0-9_-]{1,64}")
@@ -140,16 +159,24 @@ fun withImage(messages: List<Msg>, mime: String, base64: String): List<Msg> {
   return messages.toMutableList().apply { set(i, Msg("user", JsonObject(m.json + ("content" to JsonArray(parts))))) }
 }
 
-fun readCapped(input: InputStream, cap: Int): ByteArray? {
-  val out = ByteArrayOutputStream()
+// Sized to the file's own size up front, so a file that does not grow is read with no regrowth and no final copy.
+private class SizedBuffer(size: Int) : ByteArrayOutputStream(size) {
+  fun bytes(): ByteArray = if (count == buf.size) buf else toByteArray()
+}
+
+fun readCapped(input: InputStream, cap: Int, expected: Long = 0): ByteArray? {
+  val out = SizedBuffer(expected.coerceIn(0, cap.toLong()).toInt())
   val buf = ByteArray(64 * 1024)
   while (true) {
     val n = input.read(buf)
-    if (n < 0) return out.toByteArray()
+    if (n < 0) return out.bytes()
     if (out.size() + n > cap) return null
     out.write(buf, 0, n)
   }
 }
+
+fun vectorBytes(v: FloatArray): ByteArray =
+  ByteBuffer.allocate(v.size * 4).order(ByteOrder.LITTLE_ENDIAN).apply { asFloatBuffer().put(v) }.array()
 
 fun decideCallers(pkgs: List<String>, sameSignature: Boolean, switches: Map<String, Boolean>, hubPackage: String): Decision =
   if (pkgs.isEmpty()) {
@@ -170,8 +197,10 @@ object Results {
     put("model", t.served.model)
   }.toString()
 
-  fun embed(vectors: List<FloatArray>, model: String): String = buildJsonObject {
-    put("vectors", JsonArray(vectors.map { v -> JsonArray(v.map { JsonPrimitive(it) }) }))
+  // Each vector as base64 of little-endian float32: JSON numbers would push 8 large vectors past the Binder limit.
+  fun embed(vectors: List<FloatArray>, model: String, base64: (ByteArray) -> String): String = buildJsonObject {
+    put("vectorsB64", JsonArray(vectors.map { JsonPrimitive(base64(vectorBytes(it))) }))
+    put("dims", vectors.firstOrNull()?.size ?: 0)
     put("model", model)
   }.toString()
 

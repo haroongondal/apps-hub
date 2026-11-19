@@ -60,6 +60,16 @@ class QueueTest {
     assertEquals(20_000L, q.heldUntil("groq"))
   }
 
+  @Test fun eachAppMayHaveEightRequestsAndTheHubSixtyFour() {
+    assertTrue(Admission.admits(List(7) { 1 }, 1))
+    assertFalse(Admission.admits(List(8) { 1 }, 1))
+    assertTrue("another app still gets in", Admission.admits(List(8) { 1 }, 2))
+    val full = (1..8).flatMap { uid -> List(8) { uid } }
+    assertEquals(64, full.size)
+    assertFalse(Admission.admits(full, 9))
+    assertTrue(Admission.admits(full.drop(1), 9))
+  }
+
   @Test fun cancelRemovesQueuedItemOnly() {
     val q = Queue(limit = 1)
     q.enqueue(item("a"))

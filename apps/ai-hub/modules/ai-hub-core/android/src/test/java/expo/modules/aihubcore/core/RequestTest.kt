@@ -1,8 +1,10 @@
 package expo.modules.aihubcore.core
 
 import java.io.ByteArrayInputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.Base64
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
@@ -49,7 +51,7 @@ class RequestTest {
     val r = Request.parse(json("vision", """"messages":$chatMessages,"mime":"image/png""""))
     assertEquals(Job.VISION, r.job)
     assertEquals("image/png", r.mime)
-    assertEquals(Request.MAX_IMAGE_BYTES, r.attachmentCap)
+    assertEquals(7 * 1024 * 1024, r.attachmentCap)
   }
 
   @Test fun validEmbed() {
@@ -119,10 +121,42 @@ class RequestTest {
     rejects(json("embed", """"texts":["a",3]"""), "texts")
   }
 
-  @Test fun rejectsMoreThan256Texts() {
-    val texts = List(257) { "\"t$it\"" }.joinToString(",", "[", "]")
-    rejects(json("embed", """"texts":$texts"""), "at most 256")
-    assertEquals(256, Request.parse(json("embed", """"texts":${List(256) { "\"t\"" }.joinToString(",", "[", "]")}""")).texts.size)
+  @Test fun rejectsMoreThanEightTexts() {
+    val texts = List(9) { "\"t$it\"" }.joinToString(",", "[", "]")
+    rejects(json("embed", """"texts":$texts"""), "at most 8 texts")
+    assertEquals(8, Request.parse(json("embed", """"texts":${List(8) { "\"t\"" }.joinToString(",", "[", "]")}""")).texts.size)
+  }
+
+  private val b64 = { b: ByteArray -> Base64.getEncoder().encodeToString(b) }
+
+  @Test fun eightFullSizeVectorsFitOneBinderReplyAndRoundTrip() {
+    val vectors = List(Request.MAX_TEXTS) { i -> FloatArray(3072) { j -> (i * 3072 + j) * 0.37f - 1e6f } }
+    val text = Results.embed(vectors, "gemini-embedding-001", b64)
+    assertTrue("${text.length * 2} bytes as UTF-16", text.length * 2 < 300 * 1024)
+    val root = Json.parseToJsonElement(text).jsonObject
+    assertEquals(3072, root["dims"]!!.jsonPrimitive.content.toInt())
+    val back = root["vectorsB64"]!!.jsonArray.map { e ->
+      val bytes = ByteBuffer.wrap(Base64.getDecoder().decode(e.jsonPrimitive.content)).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
+      FloatArray(bytes.remaining()).also { bytes.get(it) }
+    }
+    assertEquals(vectors.size, back.size)
+    vectors.zip(back).forEach { (a, b) -> assertArrayEquals(a, b, 0f) }
+  }
+
+  @Test fun vectorBytesAreLittleEndianFloat32() {
+    assertArrayEquals(byteArrayOf(0, 0, -128, 63), vectorBytes(floatArrayOf(1f)))
+  }
+
+  @Test fun onlyARegularFileWithinTheCapIsAccepted() {
+    val vision = Request.parse(json("vision", """"messages":$chatMessages,"mime":"image/png""""))
+    val audio = Request.parse(json("transcribe", """"fileName":"note.m4a","mime":"audio/mp4""""))
+    assertEquals("Send the picture or audio as a file.", vision.attachmentProblem(false, 10))
+    assertEquals("Send the picture or audio as a file.", audio.attachmentProblem(false, 0))
+    assertNull(vision.attachmentProblem(true, 7L * 1024 * 1024))
+    assertEquals("The picture is over 7 MB. Send a smaller one.", vision.attachmentProblem(true, 7L * 1024 * 1024 + 1))
+    assertNull(audio.attachmentProblem(true, 25L * 1024 * 1024))
+    assertEquals("The audio file is over 25 MB. Send a smaller one.", audio.attachmentProblem(true, 25L * 1024 * 1024 + 1))
+    assertNull(Request.parse(json()).attachmentProblem(false, 0))
   }
 
   @Test fun rejectsTranscribeWithoutFileNameOrMime() {
@@ -150,6 +184,14 @@ class RequestTest {
     val data = ByteArray(200_000) { it.toByte() }
     assertArrayEquals(data, readCapped(ByteArrayInputStream(data), 200_000))
     assertNull(readCapped(ByteArrayInputStream(data), 199_999))
+  }
+
+  @Test fun readCappedWithASizeHintReadsAFileThatShrankOrGrew() {
+    val data = ByteArray(200_000) { it.toByte() }
+    for (hint in listOf(200_000L, 0L, 1_000L, 300_000L, Long.MAX_VALUE)) {
+      assertArrayEquals("$hint", data, readCapped(ByteArrayInputStream(data), 250_000, hint))
+    }
+    assertNull(readCapped(ByteArrayInputStream(data), 199_999, 200_000))
   }
 
   @Test fun sharedUidWithStrongroomIsDenied() {
@@ -196,8 +238,9 @@ class RequestTest {
     assertEquals("look", chat["toolCalls"]!!.jsonArray[0].jsonObject["name"]!!.jsonPrimitive.content)
     assertEquals("5", chat["usage"]!!.jsonObject["outputTokens"].toString())
     assertEquals("gemini-3.5-flash-lite", chat["model"]!!.jsonPrimitive.content)
-    val embed = Json.parseToJsonElement(Results.embed(listOf(floatArrayOf(0.5f, 1f)), "m")).jsonObject
-    assertEquals(2, (embed["vectors"]!!.jsonArray[0] as JsonArray).size)
+    val embed = Json.parseToJsonElement(Results.embed(listOf(floatArrayOf(0.5f, 1f)), "m", b64)).jsonObject
+    assertEquals(setOf("vectorsB64", "dims", "model"), embed.keys)
+    assertEquals("AAAAPwAAgD8=", embed["vectorsB64"]!!.jsonArray[0].jsonPrimitive.content)
     assertEquals("hi", Json.parseToJsonElement(Results.transcribe("hi")).jsonObject["text"]!!.jsonPrimitive.content)
   }
 }

@@ -7,6 +7,7 @@ import expo.modules.aihubcore.core.ApiVersion
 import expo.modules.aihubcore.core.CallerPolicy
 import expo.modules.aihubcore.core.Job
 import expo.modules.aihubcore.core.Service
+import expo.modules.aihubcore.core.Settings
 import expo.modules.aihubcore.core.Usage
 import expo.modules.aihubcore.core.labelOf
 import expo.modules.aihubcore.core.serviceOf
@@ -22,8 +23,8 @@ import kotlinx.serialization.json.put
 
 class AiHubCoreModule : Module() {
   private val context get() = requireNotNull(appContext.reactContext) { "React context unavailable" }
-  private val vault by lazy { KeyVault(context) }
-  private val store by lazy { HubStore(context) }
+  private val vault by lazy { KeyVault.get(context) }
+  private val store by lazy { HubStore.get(context) }
   private val settingsLock = Any()
 
   override fun definition() = ModuleDefinition {
@@ -53,17 +54,8 @@ class AiHubCoreModule : Module() {
     vault.add(value)
   }
 
-  private fun models(): Map<String, Map<String, String>> {
-    val saved = readObject("models")
-    return Job.entries.associate { job ->
-      val choice = saved[job.name.lowercase()] as? JsonObject
-      val service = choice?.get("service")?.jsonPrimitive?.content?.let(::serviceNamed)
-      val model = choice?.get("model")?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
-      val usable = service != null && model != null && allowed(job, service)
-      val shownService = if (usable) service!! else job.default.service
-      val shownModel = if (usable) model!! else job.default.model
-      job.name.lowercase() to mapOf("service" to shownService.name.lowercase(), "model" to shownModel)
-    }
+  private fun models(): Map<String, Map<String, String>> = Settings.models(store.get("models")).entries.associate { (job, c) ->
+    job.name.lowercase() to mapOf("service" to Settings.key(c.service), "model" to c.model)
   }
 
   private fun setModel(jobName: String, serviceName: String, model: String) {
@@ -72,8 +64,8 @@ class AiHubCoreModule : Module() {
     val service = serviceNamed(serviceName) ?: throw IllegalArgumentException("That service isn't one the hub supports.")
     val id = model.trim()
     if (id.isEmpty()) throw IllegalArgumentException("Enter a model id.")
-    if (!allowed(job, service)) {
-      throw IllegalArgumentException("${service.label} can't do this job. Pick ${Service.entries.first { allowed(job, it) }.label}.")
+    if (!Settings.allowed(job, service)) {
+      throw IllegalArgumentException("${service.label} can't do this job. Pick ${Service.entries.first { Settings.allowed(job, it) }.label}.")
     }
     synchronized(settingsLock) {
       val key = job.name.lowercase()
@@ -134,12 +126,6 @@ class AiHubCoreModule : Module() {
   }
 
   private fun serviceNamed(name: String): Service? = Service.entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
-
-  private fun allowed(job: Job, service: Service): Boolean = when (job) {
-    Job.VISION, Job.EMBED -> service == Service.GEMINI
-    Job.TRANSCRIBE -> service == Service.GROQ
-    Job.CHAT -> true
-  }
 
   private companion object {
     const val BAD_KEY = "This doesn't look like a Gemini key (AIza…) or a Groq key (gsk_…)."

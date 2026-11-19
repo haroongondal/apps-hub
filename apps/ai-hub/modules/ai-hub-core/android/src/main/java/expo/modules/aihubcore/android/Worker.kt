@@ -3,8 +3,13 @@ package expo.modules.aihubcore.android
 import android.content.Context
 import android.os.ParcelFileDescriptor
 import android.os.RemoteException
+import android.os.TransactionTooLargeException
+import android.system.ErrnoException
+import android.system.Os
+import android.system.OsConstants
 import android.util.Base64
 import expo.modules.aihubcore.IAiHubCallback
+import expo.modules.aihubcore.core.Admission
 import expo.modules.aihubcore.core.AiError
 import expo.modules.aihubcore.core.BadRequest
 import expo.modules.aihubcore.core.Job
@@ -27,17 +32,19 @@ import java.util.concurrent.TimeUnit
 class Worker(context: Context) {
   private class Pending(
     val key: String,
+    val uid: Int,
     val request: Request,
     val pkg: String,
     val attachment: ParcelFileDescriptor?,
+    val size: Long,
     val callback: IAiHubCallback,
   ) {
     var running = false
     var settled = false
   }
 
-  private val store = HubStore(context)
-  private val vault = KeyVault(context)
+  private val store = HubStore.get(context)
+  private val vault = KeyVault.get(context)
   private val transport = OkHttpTransport()
   private val executor = Executors.newScheduledThreadPool(THREADS)
   private val lock = Any()
@@ -55,28 +62,38 @@ class Worker(context: Context) {
       Request.parse(requestJson.orEmpty())
     } catch (e: BadRequest) {
       close(attachment)
-      return send(callback) { it.onError(e.requestId, "invalid", e.message) }
+      return send(callback, e.requestId) { it.onError(e.requestId, "invalid", e.message) }
     }
+    val id = request.requestId
     val cap = request.attachmentCap
     if (cap != null && attachment == null) {
-      return send(callback) { it.onError(request.requestId, "invalid", "Attach the ${what(request)} to the request.") }
+      return send(callback, id) { it.onError(id, "invalid", "Attach the ${request.attachmentName} to the request.") }
     }
     if (cap == null) close(attachment)
     val file = if (cap == null) null else attachment
-    val key = "${caller.uid}:${request.requestId}"
+    val size = file?.let(::regularFileSize)
+    val problem = if (file == null) null else request.attachmentProblem(size != null, size ?: 0)
+    if (problem != null) {
+      close(file)
+      return send(callback, id) { it.onError(id, "invalid", problem) }
+    }
+    val key = "${caller.uid}:$id"
     val service = Settings.key(models().getValue(request.job).service)
-    val added = synchronized(lock) {
-      if (stopped || key in jobs) {
-        false
-      } else {
-        jobs[key] = Pending(key, request, caller.pkg, file, callback)
-        queue.enqueue(QueueItem(key, service, request.priority))
-        true
+    val refusal = synchronized(lock) {
+      when {
+        stopped -> "cancelled" to "AI hub is closing. Try again."
+        key in jobs -> "invalid" to "A request with this id is already waiting or running. Use a new requestId."
+        !Admission.admits(jobs.values.map { it.uid }, caller.uid) -> "busy" to "Too many requests are waiting. Try again in a moment."
+        else -> {
+          jobs[key] = Pending(key, caller.uid, request, caller.pkg, file, size ?: 0, callback)
+          queue.enqueue(QueueItem(key, service, request.priority))
+          null
+        }
       }
     }
-    if (!added) {
+    if (refusal != null) {
       close(file)
-      return send(callback) { it.onError(request.requestId, "invalid", "A request with this id is already waiting or running. Use a new requestId.") }
+      return send(callback, id) { it.onError(id, refusal.first, refusal.second) }
     }
     pump()
   }
@@ -91,7 +108,7 @@ class Worker(context: Context) {
       }
       p
     }
-    if (!p.running) close(p.attachment)
+    close(p.attachment)
     settle(p) { it.onError(p.request.requestId, "cancelled", "The request was cancelled.") }
   }
 
@@ -107,9 +124,10 @@ class Worker(context: Context) {
       stopped = true
       jobs.values.toList().also { jobs.clear() }
     }
+    // Every unfinished job is still in `jobs`, including those whose tasks shutdownNow() drops.
     executor.shutdownNow()
     all.forEach { p ->
-      if (!p.running) close(p.attachment)
+      close(p.attachment)
       settle(p) { it.onError(p.request.requestId, "cancelled", "AI hub stopped before the request finished. Try again.") }
     }
   }
@@ -134,6 +152,7 @@ class Worker(context: Context) {
         executor.execute { run(item, p) }
       } catch (e: RejectedExecutionException) {
         close(p.attachment)
+        settle(p) { it.onError(p.request.requestId, "cancelled", "AI hub is closing. Try again.") }
       }
     }
   }
@@ -144,12 +163,14 @@ class Worker(context: Context) {
       val result = execute(p)
       settle(p) { it.onResult(id, result) }
     } catch (e: AiError) {
-      if (e.kind == AiError.Kind.RATE) hold(item.service)
+      if (e.kind == AiError.Kind.RATE) hold(item.service, e.retryAfterMs)
       settle(p) { it.onError(id, e.kind.name.lowercase(), e.message.orEmpty()) }
     } catch (e: BadRequest) {
       settle(p) { it.onError(id, "invalid", e.message.orEmpty()) }
     } catch (e: Exception) {
       settle(p) { it.onError(id, "internal", "AI hub hit an unexpected error. Try again.") }
+    } catch (e: OutOfMemoryError) {
+      settle(p) { it.onError(id, "too_large", "This ${p.request.attachmentName} is too big. Send a smaller one.") }
     } finally {
       close(p.attachment)
       synchronized(lock) {
@@ -171,26 +192,25 @@ class Worker(context: Context) {
         record(p.pkg, turn.served.service, turn.usage.inputTokens, turn.usage.outputTokens)
         Results.chat(turn)
       }
-      Job.EMBED -> Results.embed(provider.embed(choice, r.texts), choice.model).also { record(p.pkg, choice.service, 0, 0) }
+      Job.EMBED -> Results.embed(provider.embed(choice, r.texts), choice.model) { Base64.encodeToString(it, Base64.NO_WRAP) }.also { record(p.pkg, choice.service, 0, 0) }
       Job.TRANSCRIBE -> Results.transcribe(provider.transcribe(choice, read(p), r.fileName!!, r.mime!!)).also { record(p.pkg, choice.service, 0, 0) }
     }
   }
 
   private fun read(p: Pending): ByteArray {
     val cap = p.request.attachmentCap!!
-    val bytes = ParcelFileDescriptor.AutoCloseInputStream(p.attachment).use { readCapped(it, cap) }
-    return bytes ?: throw BadRequest(p.request.requestId, "The ${what(p.request)} is over ${cap / (1024 * 1024)} MB. Send a smaller one.")
+    val bytes = ParcelFileDescriptor.AutoCloseInputStream(p.attachment).use { readCapped(it, cap, p.size) }
+    return bytes ?: throw BadRequest(p.request.requestId, "The ${p.request.attachmentName} is over ${cap / (1024 * 1024)} MB. Send a smaller one.")
   }
 
-  private fun what(r: Request) = if (r.job == Job.VISION) "image" else "audio file"
+  private fun regularFileSize(pfd: ParcelFileDescriptor): Long? = try {
+    Os.fstat(pfd.fileDescriptor).takeIf { OsConstants.S_ISREG(it.st_mode) }?.st_size
+  } catch (e: ErrnoException) {
+    null
+  }
 
-  // One ring while the keys stay the same, so its key rotation carries across jobs.
   @Synchronized
-  private fun ring(): KeyRing {
-    val keys = vault.list()
-    if (keys != ring.all) ring = KeyRing(keys)
-    return ring
-  }
+  private fun ring(): KeyRing = ring.reuseFor(vault.list()).also { ring = it }
 
   // A lost usage count must never fail the caller's request, so a write error is dropped.
   @Synchronized
@@ -200,10 +220,10 @@ class Worker(context: Context) {
     }
   }
 
-  private fun hold(service: String) {
+  private fun hold(service: String, retryAfterMs: Long?) {
     val wait = synchronized(lock) {
       val now = System.currentTimeMillis()
-      queue.onLimited(service, null, now)
+      queue.onLimited(service, retryAfterMs, now)
       (queue.heldUntil(service) ?: now) - now
     }
     runCatching { executor.schedule({ pump() }, wait, TimeUnit.MILLISECONDS) }
@@ -211,12 +231,14 @@ class Worker(context: Context) {
 
   private fun settle(p: Pending, answer: (IAiHubCallback) -> Unit) {
     val first = synchronized(lock) { !p.settled.also { p.settled = true } }
-    if (first) send(p.callback, answer)
+    if (first) send(p.callback, p.request.requestId, answer)
   }
 
-  private fun send(callback: IAiHubCallback, answer: (IAiHubCallback) -> Unit) {
+  private fun send(callback: IAiHubCallback, id: String, answer: (IAiHubCallback) -> Unit) {
     try {
       answer(callback)
+    } catch (e: TransactionTooLargeException) {
+      runCatching { callback.onError(id, "too_large", "The reply was too big to send. Send fewer texts at a time.") }
     } catch (e: RemoteException) {
       return
     }
