@@ -6,7 +6,7 @@ import { View } from 'react-native';
 
 import { IconButton } from '../src/library/icon-button';
 import { errorMessage } from '../src/library/use-library';
-import { checkKey, getKey, type Service, setKey } from '../src/nexus/ai';
+import { addKey, checkKey, getKeys, removeKey, type Service } from '../src/nexus/ai';
 import { kick, openKnowledge } from '../src/nexus/worker';
 
 const SERVICES: { id: Service; name: string; placeholder: string; hint: string }[] = [
@@ -24,7 +24,7 @@ const SERVICES: { id: Service; name: string; placeholder: string; hint: string }
   },
 ];
 
-function KeyPanel({ service, saved, onChange }: { service: (typeof SERVICES)[number]; saved: string | null; onChange: (key: string | null) => void }) {
+function KeyPanel({ service, saved, onChange }: { service: (typeof SERVICES)[number]; saved: string[]; onChange: (keys: string[]) => void }) {
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -36,9 +36,9 @@ function KeyPanel({ service, saved, onChange }: { service: (typeof SERVICES)[num
     setError(null);
     try {
       await checkKey(service.id, key); // proves the key works before anything is queued on it
-      await setKey(service.id, key);
+      await addKey(service.id, key);
       setDraft('');
-      onChange(key);
+      onChange(await getKeys(service.id));
       await kick();
     } catch (err) {
       setError(err instanceof AiError ? err.message : `The key could not be checked: ${errorMessage(err)}`);
@@ -47,21 +47,23 @@ function KeyPanel({ service, saved, onChange }: { service: (typeof SERVICES)[num
     }
   };
 
-  const remove = async () => {
-    await setKey(service.id, null);
-    onChange(null);
+  const remove = async (index: number) => {
+    await removeKey(service.id, index);
+    onChange(await getKeys(service.id));
   };
 
   return (
     <>
-      {saved ? (
-        <Group title={`${service.name} key`}>
-          <Row title="Saved on this phone" subtitle={`Ends in ${saved.slice(-4)}`} trailing={<Button label="Remove" size="sm" variant="danger" onPress={() => void remove()} />} />
+      {saved.length > 0 ? (
+        <Group title={`${service.name} ${saved.length === 1 ? 'key' : 'keys'}`} footer={saved.length > 1 ? 'Nexus uses them in this order. When one is refused or at its limit, it moves to the next.' : undefined}>
+          {saved.map((key, i) => (
+            <Row key={key} title="Saved on this phone" subtitle={`Ends in ${key.slice(-4)}`} trailing={<Button label="Remove" size="sm" variant="danger" onPress={() => void remove(i)} />} />
+          ))}
         </Group>
       ) : null}
       <View style={{ gap: space.md }}>
         <Field
-          label={saved ? `Replace the ${service.name} key` : `${service.name} API key`}
+          label={saved.length > 0 ? `Add another ${service.name} key` : `${service.name} API key`}
           value={draft}
           onChangeText={setDraft}
           placeholder={service.placeholder}
@@ -79,14 +81,14 @@ function KeyPanel({ service, saved, onChange }: { service: (typeof SERVICES)[num
 }
 
 export default function SettingsScreen() {
-  const [keys, setKeys] = useState<Partial<Record<Service, string | null>>>({});
+  const [keys, setKeys] = useState<Record<Service, string[]>>({ gemini: [], groq: [] });
   const [queued, setQueued] = useState<string | null>(null);
 
   useEffect(() => {
-    void Promise.all([getKey('gemini'), getKey('groq')]).then(([gemini, groq]) => setKeys({ gemini, groq }));
+    void Promise.all([getKeys('gemini'), getKeys('groq')]).then(([gemini, groq]) => setKeys({ gemini, groq }));
   }, []);
 
-  const ready = !!keys.gemini && !!keys.groq;
+  const ready = keys.gemini.length > 0 && keys.groq.length > 0;
 
   const processAll = async () => {
     const n = await (await openKnowledge()).enqueueMissing();
@@ -103,7 +105,7 @@ export default function SettingsScreen() {
         files stay on this phone. Without the keys nothing is sent.
       </Notice>
       {SERVICES.map((s) => (
-        <KeyPanel key={s.id} service={s} saved={keys[s.id] ?? null} onChange={(key) => setKeys((k) => ({ ...k, [s.id]: key }))} />
+        <KeyPanel key={s.id} service={s} saved={keys[s.id]} onChange={(list) => setKeys((k) => ({ ...k, [s.id]: list }))} />
       ))}
       {ready ? (
         <Group title="Your library" footer="New notes, recordings, photos and opened PDFs are queued as you add them. Use this for older items.">

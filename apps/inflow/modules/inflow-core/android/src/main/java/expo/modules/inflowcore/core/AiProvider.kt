@@ -38,14 +38,15 @@ class OpenAiCompatProvider(
   private val post: (url: String, headers: Map<String, String>, body: String) -> HttpReply,
   private val sleep: (Long) -> Unit = Thread::sleep,
 ) {
-  private var current = 0 // the key in use; it changes only when that key reaches its limit
+  private var current = 0 // the key in use; it changes only when that key is refused or reaches its limit
 
   fun complete(system: String, user: String, maxTokens: Int = MAX_TOKENS): AiReply {
     if (keys.isEmpty() || keys.any(String::isBlank)) throw AiError(AiError.Kind.AUTH, "No API key is set. Add your API key in Settings.")
     val url = baseUrl.trimEnd('/') + "/chat/completions"
     val body = request(system, user, maxTokens)
     var attempt = 0
-    var limited = 0 // keys that answered 429 in a row since the last wait
+    var skipped = 0 // keys refused or at their limit in a row since the last wait
+    var denied = 0  // of those, the keys the model refused
     while (true) {
       val last = attempt == RETRY_DELAYS.size
       val headers = mapOf("Authorization" to "Bearer ${keys[current]}", "Content-Type" to "application/json")
@@ -58,24 +59,27 @@ class OpenAiCompatProvider(
         if (last) throw AiError(AiError.Kind.OFFLINE, "Inflow couldn't reach the model. Check the phone's connection and try again.")
         null
       }
+      // Gemini answers 400, not 401, for a key it does not know.
+      val refused = reply != null && (reply.code == 401 || reply.code == 403 || (reply.code == 400 && UNKNOWN_KEY.containsMatchIn(reply.body)))
+      if (refused) denied++
       when {
         reply == null -> Unit
         reply.code in 200..299 -> return parse(reply.body).copy(inputChars = system.length + user.length)
-        reply.code == 401 || reply.code == 403 -> throw AiError(
+        refused && denied == keys.size -> throw AiError(
           AiError.Kind.AUTH,
-          "The model refused ${if (keys.size > 1) "API key ${current + 1} of ${keys.size}" else "the API key"} (HTTP ${reply.code}). Check your API key in Settings.",
+          "The model refused ${if (keys.size > 1) "every API key" else "the API key"} (HTTP ${reply.code}). Check your API key${if (keys.size > 1) "s" else ""} in Settings.",
         )
         // A gateway that cuts a slow request (Cloudflare 524, others 504) has the request and may bill it: treated like a read timeout.
         reply.code == 504 || reply.code == 524 -> throw AiError(AiError.Kind.TIMEOUT, TIMEOUT_COPY)
-        // A key at its limit hands over to the next one at once; Inflow only waits once every key is limited.
-        reply.code == 429 && ++limited < keys.size -> {
+        // A key that is refused or at its limit hands over to the next one at once; Inflow only waits once every key is out.
+        (refused || reply.code == 429) && ++skipped < keys.size -> {
           current = (current + 1) % keys.size
           continue
         }
-        reply.code == 429 && last ->
+        (refused || reply.code == 429) && last ->
           throw AiError(AiError.Kind.SERVER, "The model's rate limit was reached (HTTP 429). Wait a minute, or check your plan's limits.")
         reply.code >= 500 && last -> throw AiError(AiError.Kind.SERVER, "The model is busy or failing (HTTP ${reply.code}). Try again later.")
-        reply.code == 429 || reply.code >= 500 -> Unit
+        refused || reply.code == 429 || reply.code >= 500 -> Unit
         else -> throw AiError(
           AiError.Kind.BAD_REQUEST,
           "The model rejected the request (HTTP ${reply.code}): " + keys.fold(reply.body) { b, k -> b.replace(k, "[key]") }.take(2_000),
@@ -83,7 +87,8 @@ class OpenAiCompatProvider(
       }
       sleep(reply?.retryAfterMs?.coerceIn(0, MAX_WAIT_MS) ?: RETRY_DELAYS[attempt])
       attempt++
-      limited = 0
+      skipped = 0
+      denied = 0
     }
   }
 
@@ -118,6 +123,7 @@ class OpenAiCompatProvider(
   companion object {
     const val TIMEOUT_COPY = "The AI took too long to answer. Inflow will try again later."
     private val RETRY_DELAYS = listOf(1_000L, 2_000L, 4_000L)
+    private val UNKNOWN_KEY = Regex("API key not valid|API_KEY_INVALID")
     private const val MAX_WAIT_MS = 60_000L
     private const val MAX_TOKENS = 8_000   // a batch of 40 items needs well under this; a runaway reply cannot cost more
   }

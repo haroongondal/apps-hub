@@ -9,8 +9,8 @@ import type WebView from 'react-native-webview';
 //   has to become a bridged promise here.
 // - keepAutosave: app.js calls it when a broken autosave cannot be restored; the desktop
 //   answers in preload.cjs, so the mobile schema gains it too.
-// - aiHasKey / aiSetKey / aiRequest: Design with AI, the one online feature. The key stays in the
-//   app; aiRequest is always answered with replyOk { ok, status, json?, error? }, never replyError.
+// - aiHasKey / aiKeys / aiSetKey / aiRemoveKey / aiRequest: Design with AI, the one online feature. The keys stay in the
+//   app (aiKeys sends labels only); aiRequest is always answered with replyOk { ok, status, json?, error? }, never replyError.
 // - recognizeText: the long-press Copy text on an image sends a downscaled JPEG (base64, no
 //   data: prefix) and the press point in that JPEG's pixels (null when outside it); the app
 //   reads it with text-ocr, copies the line under the point (or all text) and replies
@@ -47,7 +47,9 @@ export type PageEvent =
   | { type: 'visionRead'; reqId: string; id: string; index: number }
   | { type: 'visionCancel'; reqId: string; id: string }
   | { type: 'aiHasKey'; reqId: string }
+  | { type: 'aiKeys'; reqId: string }
   | { type: 'aiSetKey'; reqId: string; key: string }
+  | { type: 'aiRemoveKey'; reqId: string; index: number }
   | { type: 'aiRequest'; reqId: string; body: unknown }
   | { type: 'recognizeText'; reqId: string; base64: string; x: number | null; y: number | null };
 // Native -> Web
