@@ -224,7 +224,10 @@ export function createService(deps: Deps) {
     if (id !== null && !previous) throw new UserError('That login no longer exists.');
     const entry: Login = {
       type: 'login', name, username: String(input.username), password: String(input.password), sites,
-      apps: previous?.login.apps ?? [], note: String(input.note), updatedAt: now(),
+      apps: previous?.login.apps ?? [], note: String(input.note),
+      // The edit screen does not touch the code yet; rebuilding the login must never drop it.
+      ...(previous?.login.totp !== undefined ? { totp: previous.login.totp } : {}),
+      updatedAt: now(),
     };
     const savedId = id ?? newId();
     await writeEntries(store, key, [{ id: savedId, entry }]);
