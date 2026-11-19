@@ -123,6 +123,10 @@ export function createVisionHost(d: VisionHostDeps) {
         }
         results.set(id, { uri, bytes: 0 });
         const bytes = await d.size(uri);
+        if (cancelled.has(id)) {
+          await d.remove(uri);
+          return null;
+        }
         results.set(id, { uri, bytes });
         return { bytes };
       } catch (err) {

@@ -92,6 +92,19 @@ test('models route serves a stored model without any token', async () => {
   assert.equal((await handle(req('GET', `/models/${SHA}`), { ...e, SIGNING_KEY: '' })).status, 200);
 });
 
+test('models are served as opaque bytes whatever type the uploader gave', async () => {
+  const e = env();
+  const put = new Request(`https://store.example/admin/models/${SHA}`, {
+    method: 'PUT',
+    body: '<script>alert(1)</script>',
+    headers: { authorization: `Bearer ${RELEASE}`, 'content-type': 'text/html' },
+  });
+  await handle(put, e);
+  const res = await handle(req('GET', `/models/${SHA}`), e);
+  assert.equal(res.headers.get('content-type'), 'application/octet-stream');
+  assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+});
+
 test('models route 404s for a missing model', async () => {
   assert.equal((await handle(req('GET', `/models/${SHA}`), env())).status, 404);
 });
