@@ -34,6 +34,8 @@ export interface NotchSettings {
   events: EventSwitches;
   /** Ongoing progress from other apps (rides, deliveries, navigation, downloads) as a row in the open card. */
   progressCards: boolean;
+  /** A ringing alarm as a row in the open card, with its own Snooze and Dismiss. */
+  alarmCard: boolean;
   /** The newest message from the chosen apps as a row in the open card; off and empty until the user picks apps. */
   messagePeek: MessagePeek;
 }
@@ -57,6 +59,7 @@ export const DEFAULTS: NotchSettings = {
   widgets: ['clock', 'battery'],
   events: { charging: true, ringer: true, dnd: true, bluetooth: true },
   progressCards: true,
+  alarmCard: true,
   messagePeek: { on: false, apps: [] },
 };
 
@@ -104,6 +107,7 @@ export function normalize(raw: unknown): NotchSettings {
       bluetooth: flag(events.bluetooth, DEFAULTS.events.bluetooth),
     },
     progressCards: flag(o.progressCards, DEFAULTS.progressCards),
+    alarmCard: flag(o.alarmCard, DEFAULTS.alarmCard),
     messagePeek: {
       on: flag(peek.on, DEFAULTS.messagePeek.on),
       apps: Array.isArray(peek.apps)
