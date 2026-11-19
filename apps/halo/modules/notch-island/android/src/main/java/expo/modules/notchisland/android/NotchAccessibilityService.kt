@@ -21,6 +21,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import android.widget.TextView
 import expo.modules.notchisland.core.Cutout
@@ -28,6 +29,7 @@ import expo.modules.notchisland.core.NotchSettings
 import expo.modules.notchisland.core.PillBox
 import expo.modules.notchisland.core.CALL_GREEN
 import expo.modules.notchisland.core.PillGeometry
+import expo.modules.notchisland.core.Spring
 import expo.modules.notchisland.core.callElapsed
 import expo.modules.notchisland.core.durationText
 import java.util.Calendar
@@ -55,7 +57,10 @@ class NotchAccessibilityService : AccessibilityService() {
       val t = NotchTimer.state
       if (t.running && t.done(now)) NotchTimer.state = t.pause(now)
       if (open) card?.tickRows()
-      if (!open && indicator() != shown) return reapply()
+      if (stale()) {
+        if (!animating()) reapply()
+        return
+      }
       updateIndicator()
       if (ticking()) main.postDelayed(this, 1000)
     }
@@ -102,7 +107,10 @@ class NotchAccessibilityService : AccessibilityService() {
     if (open) {
       card?.bindRows(settings)
       resizeOpen()
-    } else if (indicator() != shown) return reapply()
+    } else if (stale()) {
+      if (!animating()) reapply()
+      return
+    }
     updateIndicator()
     main.removeCallbacks(tick)
     if (ticking()) main.post(tick)
@@ -112,7 +120,7 @@ class NotchAccessibilityService : AccessibilityService() {
   private fun resizeOpen() {
     val view = pill ?: return
     val lp = params ?: return
-    if (animator?.isRunning == true) return
+    if (animating()) return
     val box = expanded()
     if (lp.height == box.height) return
     lp.height = box.height
@@ -126,6 +134,11 @@ class NotchAccessibilityService : AccessibilityService() {
     ("media" in settings.widgets && NotchMedia.media?.playing == true) || ("timer" in settings.widgets && NotchTimer.state.running) -> DOT
     else -> null
   }
+
+  // A folded pill whose indicator changed is rebuilt at the new width, but never mid-morph; the morph's end catches up.
+  private fun stale() = !open && indicator() != shown
+
+  private fun animating() = animator?.isRunning == true
 
   // A running timer whose widget is off stays running unseen; its row shows the true time when the widget is back.
   private fun ticking() = ("timer" in settings.widgets && NotchTimer.state.running) || NotchMedia.call != null
@@ -149,8 +162,7 @@ class NotchAccessibilityService : AccessibilityService() {
   private fun expanded(): PillBox {
     val density = resources.displayMetrics.density
     val screenW = resources.displayMetrics.widthPixels
-    val rows = card?.activeRows(settings)?.size ?: 0
-    return scaled(PillGeometry.expanded(hole, screenW, density, rows), PillGeometry.sizeScale(settings.size), screenW, density)
+    return PillGeometry.expanded(hole, screenW, density, card?.activeKinds(settings) ?: emptyList())
   }
 
   // Green dot and call time either side of the hole for a call; one dot for music or the timer.
@@ -178,14 +190,16 @@ class NotchAccessibilityService : AccessibilityService() {
     val manager = getSystemService(WindowManager::class.java)
     val density = resources.displayMetrics.density
     val screenW = resources.displayMetrics.widthPixels
-    val scale = PillGeometry.sizeScale(settings.size)
     val hole = cutout(manager)
     this.hole = hole
-    small = scaled(PillGeometry.collapsed(hole, screenW, density), scale, screenW, density)
+    small = PillGeometry.collapsed(hole, screenW, density, PillGeometry.sizeScale(settings.size))
 
     val holeWidth = hole?.let { it.right - it.left } ?: (58 * density).toInt()
     val content = IslandCard(this, holeWidth, small.height, density).apply {
       alpha = if (open) 1f else 0f
+      scaleX = Spring.contentScale(alpha)
+      scaleY = scaleX
+      pivotY = 0f
       onTouchDown = this@NotchAccessibilityService::holdOpen
     }
     card = content
@@ -217,6 +231,7 @@ class NotchAccessibilityService : AccessibilityService() {
     }
     for (v in listOf(indicatorDot, indicatorTime)) v.alpha = if (open) 0f else 1f
     val box = if (open) expanded() else folded()
+    content.pivotX = box.width / 2f
     val lp = WindowManager.LayoutParams(
       box.width,
       box.height,
@@ -238,9 +253,6 @@ class NotchAccessibilityService : AccessibilityService() {
     if (ticking()) main.post(tick)
   }
 
-  private fun scaled(box: PillBox, scale: Float, screenW: Int, density: Float): PillBox =
-    box.copy(width = minOf((box.width * scale).toInt(), screenW - (32 * density).toInt()))
-
   private fun remove() {
     main.removeCallbacks(collapse)
     main.removeCallbacks(tick)
@@ -253,13 +265,7 @@ class NotchAccessibilityService : AccessibilityService() {
   }
 
   private fun corners(box: PillBox) {
-    val density = resources.displayMetrics.density
-    val radius = when (settings.corners) {
-      "squared" -> 6 * density
-      "rounded" -> 28 * density
-      else -> box.height / 2f
-    }
-    (pill?.background as? GradientDrawable)?.cornerRadius = radius
+    (pill?.background as? GradientDrawable)?.cornerRadius = PillGeometry.radius(settings.corners, box.height, resources.displayMetrics.density)
   }
 
   private fun refresh() {
@@ -289,23 +295,38 @@ class NotchAccessibilityService : AccessibilityService() {
     val to = if (next) expanded() else folded()
     val c = card
     val marks = listOfNotNull(dot, callTime)
+    val screenW = resources.displayMetrics.widthPixels
     animator = ValueAnimator.ofFloat(0f, 1f).apply {
-      duration = 220
+      duration = Spring.SETTLE_MS
+      interpolator = LinearInterpolator()
       addUpdateListener {
-        val t = it.animatedValue as Float
-        val box = PillGeometry.lerp(from, to, t)
+        val s = Spring.value((it.animatedFraction * Spring.SETTLE_MS).toLong())
+        val box = PillGeometry.lerp(from, to, s, screenW)
         lp.x = box.xFromCenter
         lp.width = box.width
         lp.height = box.height
         corners(box)
-        c?.alpha = if (next) t else 1f - t
-        for (m in marks) m.alpha = if (next) 1f - t else t
+        val p = s.coerceIn(0f, 1f)
+        c?.apply {
+          alpha = if (next) Spring.openAlpha(p) else Spring.closeAlpha(p)
+          scaleX = Spring.contentScale(alpha)
+          scaleY = scaleX
+          pivotX = box.width / 2f
+        }
+        for (m in marks) m.alpha = if (next) 1f - p else p
         runCatching { wm?.updateViewLayout(view, lp) }
       }
-      // Rows that changed during the animation were skipped by resizeOpen; catch up once it has ended.
+      // Rows or the indicator that changed during the morph were left alone; catch up once it has ended.
       addListener(object : AnimatorListenerAdapter() {
         override fun onAnimationEnd(animation: Animator) {
-          main.post { if (open) resizeOpen() }
+          main.post {
+            if (pill == null || animating()) return@post
+            when {
+              open -> resizeOpen()
+              stale() -> reapply()
+              ticking() -> { main.removeCallbacks(tick); main.post(tick) }
+            }
+          }
         }
       })
       start()

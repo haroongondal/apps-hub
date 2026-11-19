@@ -2,18 +2,23 @@ package expo.modules.notchisland.android
 
 import android.app.AlarmManager
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.drawable.GradientDrawable
 import android.os.SystemClock
 import android.text.format.DateFormat
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import expo.modules.notchisland.core.NotchSettings
+import expo.modules.notchisland.core.PillGeometry
 import expo.modules.notchisland.core.alarmLine
 import expo.modules.notchisland.core.batteryText
 import expo.modules.notchisland.core.clockText
@@ -28,7 +33,7 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
     textSize = 15f
     setTextColor(Color.WHITE)
     gravity = Gravity.CENTER_VERTICAL or Gravity.START
-    setPadding((16 * density).toInt(), 0, 0, 0)
+    setPadding(dp(PillGeometry.INSET_SIDE_DP), 0, 0, 0)
     setTypeface(typeface, android.graphics.Typeface.BOLD)
   }
   private val ring = Ring(context)
@@ -36,7 +41,7 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
   private val battery = LinearLayout(context).apply {
     orientation = HORIZONTAL
     gravity = Gravity.CENTER_VERTICAL or Gravity.END
-    setPadding(0, 0, (16 * density).toInt(), 0)
+    setPadding(0, 0, dp(PillGeometry.INSET_SIDE_DP), 0)
     addView(ring, LayoutParams((18 * density).toInt(), (18 * density).toInt()).apply { rightMargin = (6 * density).toInt() })
     addView(percent)
   }
@@ -48,8 +53,9 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
   private val callRow = CallRow(context, density)
   private val mediaRow = MediaRow(context, density)
   private val timerRow = TimerRow(context, density)
-  private val rows = LinearLayout(context).apply { orientation = VERTICAL }
+  private val rows = LinearLayout(context).apply { orientation = VERTICAL; setPadding(0, dp(PillGeometry.INSET_BELOW_HOLE_DP), 0, 0) }
   private var accent = Color.WHITE
+  private var dateLine = false
   var onTouchDown: (() -> Unit)? = null
 
   init {
@@ -59,7 +65,7 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
     ears.addView(View(context), LayoutParams(holeWidth, LayoutParams.MATCH_PARENT))
     ears.addView(battery, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
     addView(ears, LayoutParams(LayoutParams.MATCH_PARENT, earHeight))
-    addView(sub, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+    addView(sub, LayoutParams(LayoutParams.MATCH_PARENT, dp(PillGeometry.DATE_LINE_DP)))
     addView(rows, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
   }
 
@@ -74,10 +80,24 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
     listOfNotNull(callRow.takeIf { NotchMedia.call != null }) +
       rowsFor(s.widgets).mapNotNull { if (it == "media") mediaRow.takeIf { r -> r.isVisibleFor(NotchMedia.media) } else timerRow }
 
+  fun activeKinds(s: NotchSettings): List<String> = activeRows(s).map(::kind)
+
+  private fun kind(row: View) = when (row) {
+    callRow -> "call"
+    mediaRow -> "media"
+    else -> "timer"
+  }
+
+  // A row takes the date line's place, as an iPhone live activity replaces the idle island.
   fun bindRows(s: NotchSettings) {
     accent = Colours.accent(s.accent)
     rows.removeAllViews()
-    for (row in activeRows(s)) rows.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+    val active = activeRows(s)
+    for ((i, row) in active.withIndex()) {
+      rows.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, dp(PillGeometry.rowDp(kind(row)))).apply { if (i > 0) topMargin = dp(PillGeometry.ROW_GAP_DP) })
+    }
+    rows.visibility = if (active.isEmpty()) GONE else VISIBLE
+    sub.visibility = if (dateLine && active.isEmpty()) VISIBLE else GONE
     mediaRow.bind(NotchMedia.media, accent, NotchFeed.controller)
     tickRows()
   }
@@ -111,9 +131,11 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
     val alarm = at?.let { alarmLine(it.get(Calendar.HOUR_OF_DAY), it.get(Calendar.MINUTE), style) }
     val date = dateText(now.get(Calendar.DAY_OF_WEEK), now.get(Calendar.DAY_OF_MONTH), now.get(Calendar.MONTH))
     sub.text = listOfNotNull(date, alarm).joinToString("  ·  ")
-    sub.visibility = if (ears.dateLine) VISIBLE else GONE
+    dateLine = ears.dateLine
     bindRows(s)
   }
+
+  private fun dp(v: Int) = (v * density).toInt()
 
   private class Ring(context: Context) : View(context) {
     private val density = context.resources.displayMetrics.density
@@ -137,4 +159,20 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
       canvas.drawArc(rect, -90f, 360f * fraction, false, arc)
     }
   }
+}
+
+internal const val SOFT = 0x26FFFFFF
+
+// A round, icon-only button for the rows; paint() sets its fill and icon colour on bind.
+internal fun roundButton(context: Context, icon: Int, label: String, onTap: () -> Unit) = ImageButton(context).apply {
+  setImageResource(icon)
+  contentDescription = label
+  scaleType = ImageView.ScaleType.CENTER
+  background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(SOFT) }
+  setOnClickListener { onTap() }
+}
+
+internal fun ImageButton.paint(fill: Int, icon: Int) {
+  (background as GradientDrawable).setColor(fill)
+  imageTintList = ColorStateList.valueOf(icon)
 }
