@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { Button, Field, Group, Header, Pill, Row, Screen, Segmented, Sheet, space } from '@apps-hub/ui';
-import HaloEngine, { type AodTimeout, type AodTrigger, type Settings } from 'halo-engine';
+import HaloEngine, { DOT_KINDS, type AodTimeout, type AodTrigger, type ChargeEffect, type DotKind, type Settings } from 'halo-engine';
 import { addSlot, commitSlots, MAX_SLOTS, newTheme, slotErrors, type Slot } from './aodForm.ts';
 import { ThemePicture } from './FacePicker.tsx';
 import { parseTime } from './notifyForm.ts';
@@ -33,6 +33,23 @@ const TRIGGER_NOTE: Record<AodTrigger, string> = {
   charging: 'Shows only while the phone is charging.',
   music: 'Shows only while music is playing.',
 };
+
+const DOT_LABELS: Record<DotKind, string> = {
+  charging: 'Charging',
+  lowBattery: 'Low battery',
+  call: 'Missed calls',
+  whatsapp: 'WhatsApp',
+  instagram: 'Instagram',
+  message: 'Messages',
+  email: 'Email',
+  other: 'Other apps',
+  alarm: 'Alarm',
+  media: 'Music',
+};
+const CHARGE_EFFECTS = [
+  { key: 'off', label: 'Off' },
+  { key: 'sweep', label: 'Sweep' },
+] as const satisfies ReadonlyArray<{ key: ChargeEffect; label: string }>;
 
 const NEVER_NOTE = 'Uses more battery. The screen still turns off with the power button.';
 const TIME_ERROR = 'Use 24-hour time, like 22:00.';
@@ -106,6 +123,25 @@ export default function AodScreen({ settings, update, onOpenTheme }: { settings:
           subtitle="Show the always-on screen for new notifications. Only when the phone is locked."
           value={settings.notify.wakeScreen}
           onChange={(wakeScreen) => update({ notify: { wakeScreen } })}
+        />
+      </Group>
+      <Group title="Status dots" footer="Bright dots in the top corner, each kind with its own colour and shape.">
+        <SwitchRow title="Show status dots" value={a.dots.on} onChange={(on) => setAod({ dots: { ...a.dots, on } })} />
+        {a.dots.on &&
+          DOT_KINDS.map((k) => (
+            <SwitchRow key={k} title={DOT_LABELS[k]} value={a.dots.kinds[k]} onChange={(v) => setAod({ dots: { ...a.dots, kinds: { ...a.dots.kinds, [k]: v } } })} />
+          ))}
+        {a.dots.on && <SwitchRow title="Show counts" subtitle="A number on a dot for two or more notifications." value={a.dots.count} onChange={(count) => setAod({ dots: { ...a.dots, count } })} />}
+      </Group>
+      <Group title="Charging effect" footer={a.chargeEffect === 'sweep' ? 'A green light sweeps once around the edges when you plug in the charger while the always-on screen shows.' : undefined}>
+        <View style={{ padding: space.md }}>
+          <Segmented options={CHARGE_EFFECTS} value={a.chargeEffect} onChange={(chargeEffect) => setAod({ chargeEffect })} accessibilityLabel="Charging effect" />
+        </View>
+        <SwitchRow
+          title="Wake the screen when the charger is plugged in"
+          subtitle="Shows the always-on screen for 10 seconds. Only when the phone is locked and not in a pocket."
+          value={a.wakeOnCharge}
+          onChange={(wakeOnCharge) => setAod({ wakeOnCharge })}
         />
       </Group>
       <Group title="Themes" trailing={<Button label="Add theme" variant="secondary" size="sm" disabled={themes.length >= 20} onPress={addTheme} />}>

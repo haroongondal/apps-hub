@@ -9,11 +9,13 @@ import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
+import expo.modules.notchisland.R
+import expo.modules.notchisland.core.PillGeometry
 import expo.modules.notchisland.core.TimerMode
 import expo.modules.notchisland.core.TimerState
 import expo.modules.notchisland.core.durationText
 
-// Big time, then "Timer | Stopwatch", the preset chip (timer only), Start/Pause and Reset. No sound, haptics or notification.
+// Big time with round Start/Pause and Reset beside it, then "Timer | Stopwatch" and the preset chip (timer only). No sound, haptics or notification.
 class TimerRow(context: Context, private val density: Float) : LinearLayout(context) {
   private var accent = Color.WHITE
 
@@ -22,31 +24,33 @@ class TimerRow(context: Context, private val density: Float) : LinearLayout(cont
     setTextColor(Color.WHITE)
     setTypeface(typeface, Typeface.BOLD)
     fontFeatureSettings = "tnum"
+    includeFontPadding = false
     gravity = Gravity.CENTER_VERTICAL or Gravity.START
   }
-  private val timerTab = chip("Timer") { if (NotchTimer.state.mode != TimerMode.COUNTDOWN) act(TimerAction.MODE) }
+  private val timerTab = chip("Timer", 0) { if (NotchTimer.state.mode != TimerMode.COUNTDOWN) act(TimerAction.MODE) }
   private val stopwatchTab = chip("Stopwatch") { if (NotchTimer.state.mode != TimerMode.STOPWATCH) act(TimerAction.MODE) }
   private val preset = chip("") { act(TimerAction.PRESET) }
-  private val startPause = chip("Start") { act(TimerAction.START_PAUSE) }
-  private val reset = chip("Reset") { act(TimerAction.RESET) }
+  private val startPause = roundButton(context, R.drawable.notch_play, "Start") { act(TimerAction.START_PAUSE) }
+  private val reset = roundButton(context, R.drawable.notch_reset, "Reset") { act(TimerAction.RESET) }
 
   init {
     orientation = VERTICAL
-    val pad = (16 * density).toInt()
-    setPadding(pad, (8 * density).toInt(), pad, (8 * density).toInt())
+    val side = dp(PillGeometry.INSET_SIDE_DP)
+    setPadding(side, 0, side, 0)
 
+    val button = dp(44)
     val top = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     top.addView(time, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-    top.addView(preset)
-    addView(top, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+    top.addView(startPause, LayoutParams(button, button))
+    top.addView(reset, LayoutParams(button, button).apply { leftMargin = dp(12) })
+    addView(top, LayoutParams(LayoutParams.MATCH_PARENT, button))
 
     val bottom = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     bottom.addView(timerTab)
     bottom.addView(stopwatchTab)
     bottom.addView(View(context), LayoutParams(0, 1, 1f))
-    bottom.addView(startPause)
-    bottom.addView(reset)
-    addView(bottom, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = (6 * density).toInt() })
+    bottom.addView(preset)
+    addView(bottom, LayoutParams(LayoutParams.MATCH_PARENT, dp(36)).apply { topMargin = dp(8) })
   }
 
   fun bind(state: TimerState, now: Long, accent: Int) {
@@ -68,9 +72,10 @@ class TimerRow(context: Context, private val density: Float) : LinearLayout(cont
     preset.text = "${s.durationMs / 60_000} min"
     preset.visibility = if (countdown) VISIBLE else GONE
     style(preset, false)
-    startPause.text = if (s.running) "Pause" else "Start"
-    style(startPause, true)
-    style(reset, false)
+    startPause.setImageResource(if (s.running) R.drawable.notch_pause else R.drawable.notch_play)
+    startPause.contentDescription = if (s.running) "Pause" else "Start"
+    startPause.paint(accent, Color.BLACK)
+    reset.paint(SOFT, Color.WHITE)
   }
 
   private fun act(action: TimerAction) {
@@ -78,14 +83,16 @@ class TimerRow(context: Context, private val density: Float) : LinearLayout(cont
     bind(NotchTimer.state, SystemClock.elapsedRealtime(), accent)
   }
 
-  private fun chip(label: String, onTap: () -> Unit) = TextView(context).apply {
+  private fun dp(v: Int) = (v * density).toInt()
+
+  private fun chip(label: String, marginDp: Int = 6, onTap: () -> Unit) = TextView(context).apply {
     text = label
     textSize = 13f
     gravity = Gravity.CENTER
-    minHeight = (36 * density).toInt()
-    val h = (12 * density).toInt()
+    minHeight = dp(36)
+    val h = dp(12)
     setPadding(h, 0, h, 0)
-    layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { leftMargin = (6 * density).toInt() }
+    layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(marginDp) }
     setOnClickListener { onTap() }
   }
 

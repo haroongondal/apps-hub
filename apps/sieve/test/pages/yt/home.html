@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <title>YouTube</title>
+    <style>
+      body { margin: 0; font: 14px Roboto, Arial, sans-serif; background: #fff; color: #0f0f0f; }
+      ytd-app, ytd-page-manager, ytd-browse { display: block; }
+      #masthead-container { position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 2020; background: #fff; }
+      ytd-page-manager { padding-top: 56px; }
+      ytd-rich-item-renderer { display: inline-block; width: 200px; height: 120px; margin: 8px; background: #eee; }
+    </style>
+  </head>
+  <body>
+    <ytd-app>
+      <div id="masthead-container"><ytd-masthead id="masthead" logo-type="YOUTUBE_LOGO" role="banner"><a id="logo" href="/?fixture=home">YouTube</a></ytd-masthead></div>
+      <ytd-page-manager id="page-manager">
+        <ytd-browse>
+          <ytd-rich-item-renderer><a href="/watch?v=sieveTest01&fixture=watch">Home sieveTest01</a></ytd-rich-item-renderer>
+          <ytd-rich-item-renderer><a href="/watch?v=sieveTest02&fixture=watch">Home sieveTest02</a></ytd-rich-item-renderer>
+          <ytd-rich-item-renderer><a href="/watch?v=sieveTest03&fixture=watch">Home sieveTest03</a></ytd-rich-item-renderer>
+        </ytd-browse>
+      </ytd-page-manager>
+    </ytd-app>
+  </body>
+</html>

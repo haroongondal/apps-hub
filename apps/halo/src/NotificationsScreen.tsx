@@ -3,16 +3,21 @@ import { View } from 'react-native';
 import { Field, Group, Header, Pill, Row, Segmented, Sheet, Text, space, useTheme } from '@apps-hub/ui';
 import HaloEngine, { type AppNotify, type ReminderMin, type Settings } from 'halo-engine';
 import { AppIcon, AppList, SearchField, useApps } from './AppPicker.tsx';
-import { appSetting, parseTime } from './notifyForm.ts';
+import { appSetting, brandColour, parseTime, pickStyle, styleKey as toStyleKey, type StyleKey } from './notifyForm.ts';
 import { Stepper, SwitchRow, Toggle } from './Stepper.tsx';
 import type { UpdateSettings } from './useSettings.ts';
 
-type StyleKey = 'pulse' | 'sweep' | 'pattern';
 const STYLES = [
   { key: 'pulse', label: 'Pulse' },
   { key: 'sweep', label: 'Sweep' },
   { key: 'pattern', label: 'Pattern' },
 ] as const satisfies ReadonlyArray<{ key: StyleKey; label: string }>;
+type AppStyleKey = StyleKey | 'default';
+const APP_STYLES = [{ key: 'default', label: 'Default', a11yLabel: 'Same as the flash style above' }, ...STYLES] as const satisfies ReadonlyArray<{
+  key: AppStyleKey;
+  label: string;
+  a11yLabel?: string;
+}>;
 
 type ReminderKey = 'off' | '1' | '2' | '5' | '10' | '15';
 const REMINDERS: ReadonlyArray<{ key: ReminderKey; label: string; a11yLabel: string }> = [
@@ -37,7 +42,10 @@ export default function NotificationsScreen({ settings, update }: { settings: Se
   const [editing, setEditing] = useState<{ pkg: string; label: string } | null>(null);
   const [draft, setDraft] = useState('');
 
-  const styleKey: StyleKey = n.style === 'pulse' || n.style === 'sweep' ? n.style : 'pattern';
+  const styleKey = toStyleKey(n.style);
+  // A per-app Pattern starts from the shared pattern when there is one.
+  const fallbackPattern = styleKey === 'pattern' ? n.style : settings.pattern;
+  const styleName = (id: string) => (id === 'pulse' ? 'Pulse' : id === 'sweep' ? 'Sweep' : (patterns.find((p) => p.id === id)?.name ?? 'Pattern'));
   const setApp = (pkg: string, patch: Partial<AppNotify>) => set({ apps: { ...n.apps, [pkg]: { ...appSetting(n, pkg), ...patch } } });
   const editTime = (which: 'start' | 'end', text: string) => {
     (which === 'start' ? setStart : setEnd)(text);
@@ -69,7 +77,7 @@ export default function NotificationsScreen({ settings, update }: { settings: Se
               <Segmented
                 options={STYLES}
                 value={styleKey}
-                onChange={(k) => set({ style: k === 'pattern' ? (styleKey === 'pattern' ? n.style : settings.pattern) : k })}
+                onChange={(k) => set({ style: pickStyle(k, n.style, settings.pattern) })}
                 accessibilityLabel="Flash style"
               />
             </View>
@@ -139,13 +147,13 @@ export default function NotificationsScreen({ settings, update }: { settings: Se
             <Row
               leading={<AppIcon pkg={a.pkg} label={a.label} />}
               title={a.label}
-              subtitle={s.colour ? `Colour ${s.colour}` : 'Colour from the icon'}
-              accessibilityHint="Change the flash colour"
+              subtitle={`${s.colour ? `Colour ${s.colour}` : brandColour(a.pkg) ? 'Brand colour' : 'Colour from the icon'}${s.style ? `, ${styleName(s.style)}` : ''}`}
+              accessibilityHint="Change the flash colour and style"
               onPress={() => openColour(a.pkg, a.label)}
               trailing={
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
                   {/* The swatch shows the person's own colour, so it is the one place a colour comes from data, not the theme. */}
-                  <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: c.line, backgroundColor: s.colour ?? 'transparent' }} />
+                  <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: c.line, backgroundColor: s.colour ?? brandColour(a.pkg) ?? 'transparent' }} />
                   <Toggle label={`Flash for ${a.label}`} value={s.on} onChange={(on) => setApp(a.pkg, { on })} />
                 </View>
               }
@@ -153,10 +161,10 @@ export default function NotificationsScreen({ settings, update }: { settings: Se
           );
         }}
       />
-      <Sheet visible={editing !== null} onClose={() => setEditing(null)} title={editing ? `${editing.label} colour` : ''} doneLabel="Save" onDone={saveColour}>
-        <Group>
+      <Sheet visible={editing !== null} onClose={() => setEditing(null)} title={editing ? `${editing.label} flash` : ''} doneLabel="Save" onDone={saveColour}>
+        <Group title="Colour">
           <Row
-            title="Colour from the app icon"
+            title={editing && brandColour(editing.pkg) ? 'Brand colour' : 'Colour from the app icon'}
             trailing={current?.colour === null ? <Pill label="Selected" tone="accent" /> : undefined}
             onPress={() => {
               if (editing) setApp(editing.pkg, { colour: null });
@@ -178,6 +186,29 @@ export default function NotificationsScreen({ settings, update }: { settings: Se
         <Text variant="meta" tone="muted">
           Save keeps the typed colour. The next flash from this app uses it.
         </Text>
+        {current && editing && (
+          <Group title="Style">
+            <View style={{ padding: space.md }}>
+              <Segmented
+                options={APP_STYLES}
+                value={current.style === null ? 'default' : toStyleKey(current.style)}
+                onChange={(k) => setApp(editing.pkg, { style: k === 'default' ? null : pickStyle(k, current.style, fallbackPattern) })}
+                accessibilityLabel={`Flash style for ${editing.label}`}
+              />
+            </View>
+            {current.style !== null &&
+              toStyleKey(current.style) === 'pattern' &&
+              patterns.map((pt) => (
+                <Row
+                  key={pt.id}
+                  title={pt.name}
+                  trailing={pt.id === current.style ? <Pill label="Selected" tone="accent" /> : undefined}
+                  accessibilityLabel={pt.id === current.style ? `${pt.name}, selected` : pt.name}
+                  onPress={() => setApp(editing.pkg, { style: pt.id })}
+                />
+              ))}
+          </Group>
+        )}
       </Sheet>
     </>
   );

@@ -4,8 +4,8 @@ export type Quad = [number, number, number, number];
 
 /** 'pulse', 'sweep' or any edge pattern id. */
 export type FlashStyle = string;
-/** colour is '#RRGGBB', or null to take it from the app icon. */
-export interface AppNotify { on: boolean; colour: string | null }
+/** colour is '#RRGGBB', or null for the brand or icon colour; style null follows Notify.style. */
+export interface AppNotify { on: boolean; colour: string | null; style: FlashStyle | null }
 export type ReminderMin = 1 | 2 | 5 | 10 | 15;
 export interface Notify {
   enabled: boolean;
@@ -52,6 +52,16 @@ export interface Theme {
   edge: { on: boolean; pattern: string };
   brightness: number; // 0.005..0.3
 }
+/** Display order on the always-on screen; mirrors DotKind in core/DotKinds.kt. */
+export const DOT_KINDS = ['charging', 'lowBattery', 'call', 'whatsapp', 'instagram', 'message', 'email', 'other', 'alarm', 'media'] as const;
+export type DotKind = (typeof DOT_KINDS)[number];
+export type ChargeEffect = 'off' | 'sweep';
+export interface AodDots {
+  on: boolean;
+  kinds: Record<DotKind, boolean>;
+  /** Show the number on a dot of two or more. */
+  count: boolean;
+}
 export interface Aod {
   enabled: boolean;
   timeoutSec: AodTimeout;
@@ -60,6 +70,10 @@ export interface Aod {
   schedule: { on: boolean; start: string; end: string };
   themeId: string;
   slots: { start: string; themeId: string }[]; // max 4
+  dots: AodDots;
+  chargeEffect: ChargeEffect;
+  /** Plugging in the charger with the screen off wakes the always-on screen for 10 s, unless the phone is in a pocket. */
+  wakeOnCharge: boolean;
 }
 
 export interface Settings {
@@ -120,7 +134,17 @@ export const DEFAULT_SETTINGS: Settings = {
     quiet: { on: false, start: '22:00', end: '07:00' },
   },
   rules: { apps: [], fullscreen: true, landscape: false, calls: true, batterySaver: true, pocket: false },
-  aod: { enabled: false, timeoutSec: 30, trigger: 'always', schedule: { on: false, start: '00:00', end: '07:00' }, themeId: 'night', slots: [] },
+  aod: {
+    enabled: false,
+    timeoutSec: 30,
+    trigger: 'always',
+    schedule: { on: false, start: '00:00', end: '07:00' },
+    themeId: 'night',
+    slots: [],
+    dots: { on: true, kinds: Object.fromEntries(DOT_KINDS.map((k) => [k, true])) as Record<DotKind, boolean>, count: true },
+    chargeEffect: 'sweep',
+    wakeOnCharge: true,
+  },
   themes: STARTER_THEMES,
 };
 
@@ -159,7 +183,10 @@ function normalizeNotify(raw: unknown): Notify {
       .slice(0, MAX_APPS)
       .map(([k, v]): [string, AppNotify] => {
         const a = obj(v);
-        return [k, { on: bool(a.on, true), colour: typeof a.colour === 'string' && HEX.test(a.colour) ? a.colour.toUpperCase() : null }];
+        return [
+          k,
+          { on: bool(a.on, true), colour: typeof a.colour === 'string' && HEX.test(a.colour) ? a.colour.toUpperCase() : null, style: typeof a.style === 'string' && ID.test(a.style) ? a.style : null },
+        ];
       }),
   );
   return {
@@ -194,6 +221,8 @@ function normalizeAod(raw: unknown): Aod {
   const d = DEFAULT_SETTINGS.aod;
   const a = obj(raw);
   const sc = obj(a.schedule);
+  const dots = obj(a.dots);
+  const kinds = obj(dots.kinds);
   const trigger = a.trigger === 'always' || a.trigger === 'charging' || a.trigger === 'music' ? a.trigger : d.trigger;
   const slots: Aod['slots'] = [];
   for (const e of Array.isArray(a.slots) ? a.slots : []) {
@@ -209,6 +238,13 @@ function normalizeAod(raw: unknown): Aod {
     schedule: { on: bool(sc.on, d.schedule.on), start: time(sc.start, d.schedule.start), end: time(sc.end, d.schedule.end) },
     themeId: id(a.themeId) ?? d.themeId,
     slots: slots.slice(0, MAX_SLOTS),
+    dots: {
+      on: bool(dots.on, d.dots.on),
+      kinds: Object.fromEntries(DOT_KINDS.map((k) => [k, bool(kinds[k], true)])) as Record<DotKind, boolean>,
+      count: bool(dots.count, d.dots.count),
+    },
+    chargeEffect: a.chargeEffect === 'off' || a.chargeEffect === 'sweep' ? a.chargeEffect : d.chargeEffect,
+    wakeOnCharge: bool(a.wakeOnCharge, d.wakeOnCharge),
   };
 }
 

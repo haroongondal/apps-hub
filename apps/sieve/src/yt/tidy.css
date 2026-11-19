@@ -1,0 +1,16 @@
+/* Static and gated by attributes on <html> (set by tidy.ts from the settings at document_start), so a hidden element never paints. Names: tidy-selectors.ts. */
+html[sieve-yt~="hide-shorts"] grid-shelf-view-model:has(ytm-shorts-lockup-view-model),
+html[sieve-yt~="hide-shorts"] ytd-rich-section-renderer:has(ytm-shorts-lockup-view-model),
+html[sieve-yt~="hide-shorts"] ytd-rich-item-renderer:has(ytm-shorts-lockup-view-model),
+html[sieve-yt~="hide-shorts"] ytd-rich-item-renderer[is-shorts-grid],
+html[sieve-yt~="hide-shorts"] ytd-guide-entry-renderer:has(a[title="Shorts"]),
+html[sieve-yt~="hide-shorts"] ytd-mini-guide-entry-renderer:has(a[href="/shorts/"]),
+html[sieve-yt~="hide-shorts"] yt-tab-shape[tab-title="Shorts"],
+html[sieve-yt~="hide-related"] #related,
+html[sieve-yt~="hide-comments"] ytd-comments,
+html[sieve-yt~="hide-chat"] ytd-live-chat-frame,
+html[sieve-yt~="hide-cards"] .ytp-cards-button,
+html[sieve-yt~="hide-cards"] .ytp-cards-teaser,
+html[sieve-yt~="hide-cards"] .ytp-ce-element,
+html[sieve-yt~="hide-cards"] .ytp-ce-covering-overlay,
+html[sieve-yt~="hide-cards"] .ytp-endscreen-content { display: none !important; }

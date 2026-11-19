@@ -23,3 +23,5 @@ export * from './timeline.ts';
 export * from './project.ts';
 export * from './compose.ts';
 export * from './image.ts';
+export * from './music.ts';
+export * from './songs.ts';

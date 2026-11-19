@@ -48,14 +48,16 @@ class PocketTimer {
 
 data class IconCount(val pkg: String, val count: Int)
 
-/** Package names only, never title or text; NotifyRules' filter (what never flashes never shows an icon), minus notes hidden on the lock screen. */
+data class NoteGroup(val pkg: String, val category: String?, val count: Int)
+
+/** Package names and categories only, never title or text; NotifyRules' filter (what never flashes never shows an icon), minus notes hidden on the lock screen. */
 class NoteIcons(private val ownPkg: String, private val cap: Int = 200) {
-  private val notes = LinkedHashMap<String, String>()
+  private val notes = LinkedHashMap<String, Pair<String, String?>>()
 
   fun posted(n: PostedNote): Boolean {
     if (!NotifyRules.eligible(n, ownPkg) || n.secret) return false
     notes.remove(n.key)
-    notes[n.key] = n.pkg
+    notes[n.key] = n.pkg to n.category
     while (notes.size > cap) notes.remove(notes.keys.first())
     return true
   }
@@ -69,7 +71,14 @@ class NoteIcons(private val ownPkg: String, private val cap: Int = 200) {
 
   fun top(max: Int = 6): List<IconCount> {
     val counts = LinkedHashMap<String, Int>()
-    for (pkg in notes.values.reversed()) counts[pkg] = (counts[pkg] ?: 0) + 1
+    for ((pkg) in notes.values.reversed()) counts[pkg] = (counts[pkg] ?: 0) + 1
     return counts.entries.take(max).map { IconCount(it.key, it.value) }
+  }
+
+  /** Newest group first. */
+  fun groups(): List<NoteGroup> {
+    val counts = LinkedHashMap<Pair<String, String?>, Int>()
+    for (g in notes.values.reversed()) counts[g] = (counts[g] ?: 0) + 1
+    return counts.map { (g, n) -> NoteGroup(g.first, g.second, n) }
   }
 }

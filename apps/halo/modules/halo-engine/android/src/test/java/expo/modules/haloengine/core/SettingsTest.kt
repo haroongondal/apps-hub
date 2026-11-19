@@ -63,6 +63,7 @@ class SettingsTest {
         val a = v.jsonObject
         assertEquals("$name notify.apps.$pkg.on", a.b("on"), sn.apps[pkg]!!.on)
         assertEquals("$name notify.apps.$pkg.colour", a["colour"]!!.let { if (it is JsonNull) null else it.jsonPrimitive.content }, sn.apps[pkg]!!.colour)
+        assertEquals("$name notify.apps.$pkg.style", a["style"]!!.let { if (it is JsonNull) null else it.jsonPrimitive.content }, sn.apps[pkg]!!.style)
       }
       val q = n["quiet"]!!.jsonObject
       assertEquals("$name notify.quiet.on", q.b("on"), sn.quiet.on)
@@ -95,6 +96,14 @@ class SettingsTest {
     assertEquals("$name aod.schedule.end", sc.str("end"), s.schedule.end)
     assertEquals("$name aod.themeId", a.str("themeId"), s.themeId)
     assertEquals("$name aod.slots", a["slots"]!!.jsonArray.map { it.jsonObject.str("start") to it.jsonObject.str("themeId") }, s.slots.map { it.start to it.themeId })
+    val dots = a["dots"]!!.jsonObject
+    assertEquals("$name aod.dots.on", dots.b("on"), s.dots.on)
+    assertEquals("$name aod.dots.count", dots.b("count"), s.dots.count)
+    val kinds = dots["kinds"]!!.jsonObject
+    assertEquals("$name aod.dots.kinds keys", DotKind.entries.map { it.key }.toSet(), kinds.keys)
+    for (k in DotKind.entries) assertEquals("$name aod.dots.kinds.${k.key}", kinds.b(k.key), k in s.dots.kinds)
+    assertEquals("$name aod.chargeEffect", a.str("chargeEffect"), s.chargeEffect.key)
+    assertEquals("$name aod.wakeOnCharge", a.b("wakeOnCharge"), s.wakeOnCharge)
   }
 
   private fun checkThemes(name: String, expected: JsonArray, themes: List<Theme>) {

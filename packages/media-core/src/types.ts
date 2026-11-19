@@ -1,5 +1,5 @@
 export type Platform = 'mac' | 'android';
-export type Tool = 'size' | 'quality' | 'clip' | 'audio' | 'gif' | 'convert' | 'frame' | 'volume' | 'reverse' | 'stabilize' | 'compose' | 'image';
+export type Tool = 'size' | 'quality' | 'clip' | 'audio' | 'gif' | 'convert' | 'frame' | 'volume' | 'reverse' | 'stabilize' | 'compose' | 'image' | 'music';
 export type Codec = 'h264' | 'hevc' | 'vp8' | 'vp9' | 'av1' | 'mpeg4' | 'prores'
   | 'aac' | 'alac' | 'mp3' | 'opus' | 'vorbis' | 'ac3' | 'eac3' | 'flac' | 'pcm' | 'dts' | 'truehd' | 'other';
 
@@ -54,7 +54,9 @@ export interface ComposePlan { tool: 'compose'; clips: ComposeClip[]; music: Com
 export interface PhotoIndexPlan { tool: 'photo-index' }
 // Lossless: PNG is re-packed, JPEG loses its metadata. The picture's pixels never change.
 export interface ImagePlan { tool: 'image'; format: 'png' | 'jpg'; ext: 'png' | 'jpg' }
-export type Plan = SizePlan | QualityPlan | ClipPlan | AudioPlan | GifPlan | ConvertPlan | FramePlan | VolumePlan | ReversePlan | StabilizePlan | ComposePlan | PhotoIndexPlan | ImagePlan;
+// A song under the clip's sound (mix) or in place of it. The song is cut at the clip's end and never loops.
+export interface MusicPlan { tool: 'music'; mix: boolean; gainDb: number; video: 'copy' | 'hw-h264'; durationS: number; ext: 'mp4' }
+export type Plan = SizePlan | QualityPlan | ClipPlan | AudioPlan | GifPlan | ConvertPlan | FramePlan | VolumePlan | ReversePlan | StabilizePlan | ComposePlan | PhotoIndexPlan | ImagePlan | MusicPlan;
 
 export type JobState = 'queued' | 'running' | 'done' | 'failed' | 'cancelled' | 'interrupted' | 'paused';
 export interface Output { name: string; ref: string /* Mac path or Android content URI */; bytes: number; note?: string /* "converted to AAC" */ }

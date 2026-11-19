@@ -22,7 +22,7 @@ export const toolTitle = (key: string | undefined) => TOOLS.find(t => t.key === 
 const BY_PLAN: Record<Plan['tool'], string> = {
   size: 'Make smaller', quality: 'Make smaller', clip: 'Trim', audio: 'Get the sound', gif: 'Make a GIF',
   convert: 'Change format', frame: 'Save a picture', volume: 'Change the volume', reverse: 'Play backwards', stabilize: 'Steady a shaky video', image: 'Shrink an image',
-  compose: 'Make a video', 'photo-index': 'Get photos ready for search',
+  compose: 'Make a video', 'photo-index': 'Get photos ready for search', music: 'Add music',
 };
 export const planTitle = (tool: string) => BY_PLAN[tool as Plan['tool']] ?? 'Video job';
 

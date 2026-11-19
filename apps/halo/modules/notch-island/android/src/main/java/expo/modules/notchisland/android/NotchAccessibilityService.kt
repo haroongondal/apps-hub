@@ -5,8 +5,6 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.app.Notification
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
@@ -21,13 +19,19 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import android.widget.TextView
 import expo.modules.notchisland.core.Cutout
+import expo.modules.notchisland.core.MessagePeek
+import expo.modules.notchisland.core.MessageSnapshot
 import expo.modules.notchisland.core.NotchSettings
 import expo.modules.notchisland.core.PillBox
 import expo.modules.notchisland.core.CALL_GREEN
 import expo.modules.notchisland.core.PillGeometry
+import expo.modules.notchisland.core.Spring
+import expo.modules.notchisland.core.Transient
+import expo.modules.notchisland.core.Transients
 import expo.modules.notchisland.core.callElapsed
 import expo.modules.notchisland.core.durationText
 import java.util.Calendar
@@ -47,15 +51,22 @@ class NotchAccessibilityService : AccessibilityService() {
   private var dot: View? = null
   private var callTime: TextView? = null
   private var shown: String? = null
-  private var events: BroadcastReceiver? = null
+  private var events: NotchEvents? = null
+  // Set only while the pill is open for an event; null while open means the user opened the card.
+  private var transient: Transient? = null
   private val collapse = Runnable { setOpen(false) }
+  private var peeked: MessageSnapshot? = null
+  private val messageExpired = Runnable { setActive() }
   private val tick = object : Runnable {
     override fun run() {
       val now = SystemClock.elapsedRealtime()
       val t = NotchTimer.state
       if (t.running && t.done(now)) NotchTimer.state = t.pause(now)
       if (open) card?.tickRows()
-      if (!open && indicator() != shown) return reapply()
+      if (stale()) {
+        if (!animating()) reapply()
+        return
+      }
       updateIndicator()
       if (ticking()) main.postDelayed(this, 1000)
     }
@@ -99,20 +110,40 @@ class NotchAccessibilityService : AccessibilityService() {
   // The phase 1 indicator hook: media, a call or the timer changed. An open card rebinds its rows; a folded pill whose indicator changed is rebuilt at the new width.
   fun setActive() {
     if (pill == null) return
+    peekMessage()
     if (open) {
+      if (NotchMedia.call != null) transient = null
+      card?.transient = transient
       card?.bindRows(settings)
       resizeOpen()
-    } else if (indicator() != shown) return reapply()
+    } else if (stale()) {
+      if (!animating()) reapply()
+      return
+    }
     updateIndicator()
     main.removeCallbacks(tick)
     if (ticking()) main.post(tick)
+  }
+
+  // A new message from an allowed app opens the folded pill, or takes over from a quick event, for the rest of its 8 s.
+  private fun peekMessage() {
+    main.removeCallbacks(messageExpired)
+    val m = NotchMedia.message?.snap
+    val left = MessagePeek.remainingMs(m, settings.messagePeek, System.currentTimeMillis(), NotchMedia.messageSeenUntil, NotchMedia.call != null)
+    if (m == null || left <= 0) return
+    main.postDelayed(messageExpired, left)
+    if (m === peeked) return
+    peeked = m
+    if (open && transient == null) return
+    transient = null
+    setOpen(true, left)
   }
 
   // Rows appeared or went while the card is open: match the window height; the fold timer is left as it is.
   private fun resizeOpen() {
     val view = pill ?: return
     val lp = params ?: return
-    if (animator?.isRunning == true) return
+    if (animating()) return
     val box = expanded()
     if (lp.height == box.height) return
     lp.height = box.height
@@ -127,6 +158,11 @@ class NotchAccessibilityService : AccessibilityService() {
     else -> null
   }
 
+  // A folded pill whose indicator changed is rebuilt at the new width, but never mid-morph; the morph's end catches up.
+  private fun stale() = !open && indicator() != shown
+
+  private fun animating() = animator?.isRunning == true
+
   // A running timer whose widget is off stays running unseen; its row shows the true time when the widget is back.
   private fun ticking() = ("timer" in settings.widgets && NotchTimer.state.running) || NotchMedia.call != null
 
@@ -134,7 +170,17 @@ class NotchAccessibilityService : AccessibilityService() {
   private fun holdOpen() {
     if (!open) return
     main.removeCallbacks(collapse)
-    PillGeometry.foldDelayMs(settings.foldMs)?.let { main.postDelayed(collapse, it) }
+    (if (transient != null) Transients.HOLD_MS else PillGeometry.foldDelayMs(settings.foldMs))?.let { main.postDelayed(collapse, it) }
+  }
+
+  private fun onTransient(t: Transient) {
+    if (pill == null || !Transients.allowed(t, settings.events)) return
+    transient = Transients.decide(transient, t, NotchMedia.call != null, open && transient == null) ?: return
+    if (open) {
+      refresh()
+      resizeOpen()
+    }
+    setOpen(true, Transients.HOLD_MS)
   }
 
   private fun folded(): PillBox {
@@ -149,8 +195,7 @@ class NotchAccessibilityService : AccessibilityService() {
   private fun expanded(): PillBox {
     val density = resources.displayMetrics.density
     val screenW = resources.displayMetrics.widthPixels
-    val rows = card?.activeRows(settings)?.size ?: 0
-    return scaled(PillGeometry.expanded(hole, screenW, density, rows), PillGeometry.sizeScale(settings.size), screenW, density)
+    return PillGeometry.expanded(hole, screenW, density, card?.activeKinds(settings) ?: emptyList())
   }
 
   // Green dot and call time either side of the hole for a call; one dot for music or the timer.
@@ -178,15 +223,18 @@ class NotchAccessibilityService : AccessibilityService() {
     val manager = getSystemService(WindowManager::class.java)
     val density = resources.displayMetrics.density
     val screenW = resources.displayMetrics.widthPixels
-    val scale = PillGeometry.sizeScale(settings.size)
     val hole = cutout(manager)
     this.hole = hole
-    small = scaled(PillGeometry.collapsed(hole, screenW, density), scale, screenW, density)
+    small = PillGeometry.collapsed(hole, screenW, density, PillGeometry.sizeScale(settings.size))
 
     val holeWidth = hole?.let { it.right - it.left } ?: (58 * density).toInt()
     val content = IslandCard(this, holeWidth, small.height, density).apply {
       alpha = if (open) 1f else 0f
+      scaleX = Spring.contentScale(alpha)
+      scaleY = scaleX
+      pivotY = 0f
       onTouchDown = this@NotchAccessibilityService::holdOpen
+      onMessageOpened = { setOpen(false) }
     }
     card = content
     refresh()
@@ -217,6 +265,7 @@ class NotchAccessibilityService : AccessibilityService() {
     }
     for (v in listOf(indicatorDot, indicatorTime)) v.alpha = if (open) 0f else 1f
     val box = if (open) expanded() else folded()
+    content.pivotX = box.width / 2f
     val lp = WindowManager.LayoutParams(
       box.width,
       box.height,
@@ -238,9 +287,6 @@ class NotchAccessibilityService : AccessibilityService() {
     if (ticking()) main.post(tick)
   }
 
-  private fun scaled(box: PillBox, scale: Float, screenW: Int, density: Float): PillBox =
-    box.copy(width = minOf((box.width * scale).toInt(), screenW - (32 * density).toInt()))
-
   private fun remove() {
     main.removeCallbacks(collapse)
     main.removeCallbacks(tick)
@@ -253,13 +299,7 @@ class NotchAccessibilityService : AccessibilityService() {
   }
 
   private fun corners(box: PillBox) {
-    val density = resources.displayMetrics.density
-    val radius = when (settings.corners) {
-      "squared" -> 6 * density
-      "rounded" -> 28 * density
-      else -> box.height / 2f
-    }
-    (pill?.background as? GradientDrawable)?.cornerRadius = radius
+    (pill?.background as? GradientDrawable)?.cornerRadius = PillGeometry.radius(settings.corners, box.height, resources.displayMetrics.density)
   }
 
   private fun refresh() {
@@ -269,6 +309,7 @@ class NotchAccessibilityService : AccessibilityService() {
     val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
     val percent = if (level >= 0 && scale > 0) level * 100 / scale else null
     val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+    card?.transient = transient
     card?.bind(settings, Calendar.getInstance(), percent, charging)
   }
 
@@ -279,6 +320,10 @@ class NotchAccessibilityService : AccessibilityService() {
     if (next && holdMs != null) main.postDelayed(collapse, holdMs)
     if (next == open) return
     open = next
+    if (!next) {
+      transient = null
+      NotchMedia.messageSeenUntil = System.currentTimeMillis()
+    }
     if (next) {
       refresh()
     } else {
@@ -289,23 +334,38 @@ class NotchAccessibilityService : AccessibilityService() {
     val to = if (next) expanded() else folded()
     val c = card
     val marks = listOfNotNull(dot, callTime)
+    val screenW = resources.displayMetrics.widthPixels
     animator = ValueAnimator.ofFloat(0f, 1f).apply {
-      duration = 220
+      duration = Spring.SETTLE_MS
+      interpolator = LinearInterpolator()
       addUpdateListener {
-        val t = it.animatedValue as Float
-        val box = PillGeometry.lerp(from, to, t)
+        val s = Spring.value((it.animatedFraction * Spring.SETTLE_MS).toLong())
+        val box = PillGeometry.lerp(from, to, s, screenW)
         lp.x = box.xFromCenter
         lp.width = box.width
         lp.height = box.height
         corners(box)
-        c?.alpha = if (next) t else 1f - t
-        for (m in marks) m.alpha = if (next) 1f - t else t
+        val p = s.coerceIn(0f, 1f)
+        c?.apply {
+          alpha = if (next) Spring.openAlpha(p) else Spring.closeAlpha(p)
+          scaleX = Spring.contentScale(alpha)
+          scaleY = scaleX
+          pivotX = box.width / 2f
+        }
+        for (m in marks) m.alpha = if (next) 1f - p else p
         runCatching { wm?.updateViewLayout(view, lp) }
       }
-      // Rows that changed during the animation were skipped by resizeOpen; catch up once it has ended.
+      // Rows or the indicator that changed during the morph were left alone; catch up once it has ended.
       addListener(object : AnimatorListenerAdapter() {
         override fun onAnimationEnd(animation: Animator) {
-          main.post { if (open) resizeOpen() }
+          main.post {
+            if (pill == null || animating()) return@post
+            when {
+              open -> resizeOpen()
+              stale() -> reapply()
+              ticking() -> { main.removeCallbacks(tick); main.post(tick) }
+            }
+          }
         }
       })
       start()
@@ -313,33 +373,15 @@ class NotchAccessibilityService : AccessibilityService() {
   }
 
   private fun registerEvents() {
-    val receiver = object : BroadcastReceiver() {
-      override fun onReceive(context: Context, intent: Intent) {
-        when (intent.action) {
-          Intent.ACTION_POWER_CONNECTED -> setOpen(true, CHARGE_OPEN_MS)
-          Intent.ACTION_TIME_TICK -> if (open) refresh()
-          Intent.ACTION_BATTERY_CHANGED -> if (open) refresh()
-        }
-      }
-    }
-    val filter = IntentFilter().apply {
-      addAction(Intent.ACTION_POWER_CONNECTED)
-      addAction(Intent.ACTION_TIME_TICK)
-      addAction(Intent.ACTION_BATTERY_CHANGED)
-    }
-    events = receiver
-    // The three actions are system broadcasts, so an exported receiver is safe; the flag exists only from Android 13.
-    if (Build.VERSION.SDK_INT >= 33) registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-    else registerReceiver(receiver, filter)
+    events = NotchEvents(this, { if (open) refresh() }, this::onTransient).also { it.register() }
   }
 
   private fun unregisterEvents() {
-    events?.let { runCatching { unregisterReceiver(it) } }
+    events?.unregister()
     events = null
   }
 
   companion object {
-    private const val CHARGE_OPEN_MS = 3000L
     private const val CALL = "call"
     private const val DOT = "dot"
 

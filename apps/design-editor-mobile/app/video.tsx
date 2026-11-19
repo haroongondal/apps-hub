@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps,
 import { AppState, View } from 'react-native';
 
 import { plainError } from '../src/media/errors';
+import { FreeSongs, type PickedSong } from '../src/media/FreeSongs';
 import { pickFiles, startJobs } from '../src/media/jobs';
 import { timeText } from '../src/media/tools';
 import { ClipStrip } from '../src/timeline/ClipStrip';
@@ -43,6 +44,7 @@ export default function MakeAVideo() {
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
   const [musicId, setMusicId] = useState<string>(); // one choice at a time: a clip or a piece of music
+  const [songsOpen, setSongsOpen] = useState(false);
   const [headS, setHeadS] = useState(0);
   const [seekS, setSeekS] = useState<number>();
   const [playing, setPlaying] = useState(false);
@@ -121,6 +123,18 @@ export default function MakeAVideo() {
       setProject(next);
       chooseMusic(id);
     } catch (e) { setError(say(e)); }
+  }
+
+  // A free song is a plain file in the app's own folder, so it goes in as it is. Errors show inside the panel.
+  async function addFreeSong(song: PickedSong) {
+    setPlaying(false);
+    if (project.music.length >= MAX_MUSIC) throw new Error(`A video can have up to ${MAX_MUSIC} pieces of music.`);
+    const id = newId();
+    const next = addMusic(project, { uri: song.uri, name: song.name, durationS: song.durationS }, id, headS);
+    if (next === project) throw new Error('There is no room for music here. Move the line to a place without music.');
+    setProject(next);
+    chooseMusic(id);
+    setSongsOpen(false);
   }
 
   // With a piece of music chosen, Start here and End here trim it; otherwise the clip under the line.
@@ -246,7 +260,7 @@ export default function MakeAVideo() {
         </Pair>
       </View>
 
-      <Group title="Sound" footer="Music comes from sound files on this phone and stops where the video ends.">
+      <Group title="Sound" footer="Music comes from sound files on this phone or from free songs, and stops where the video ends.">
         {chosenClip && !chosenClip.source.hasAudio ? (
           <Text tone="muted">This clip has no sound of its own.</Text>
         ) : chosenMusic || chosenClip ? (
@@ -280,7 +294,7 @@ export default function MakeAVideo() {
         </Pair>
         <Pair>
           <Half label="Move here" disabled={!chosenMusic} onPress={() => edit(moveMusic(project, chosenMusic!.id, headS), 'Here the music would overlap other music or start at the very end. Move the line, then try again.')} accessibilityHint="The chosen music starts at the line" />
-          <View style={{ flex: 1 }} />
+          <Half label={songsOpen ? 'Hide free songs' : 'Free songs'} disabled={!loaded || !project.clips.length} onPress={() => setSongsOpen(o => !o)} accessibilityHint="Searches free songs from Freesound and adds one at the line" />
         </Pair>
       </View>
       {project.clips.length || project.music.length ? <Button label="Start new project" variant="ghost" block onPress={confirmStartNew} accessibilityHint="Clears this video after you confirm; your video files stay" /> : null}

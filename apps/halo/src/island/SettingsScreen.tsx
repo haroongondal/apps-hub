@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { AppState, Pressable, View } from 'react-native';
+import { AppState, PermissionsAndroid, Pressable, View } from 'react-native';
 import { Button, Group, Row, Segmented, useTheme } from '@apps-hub/ui';
+import HaloEngine from 'halo-engine';
 import NotchIsland from 'notch-island';
 import {
   ACCENTS,
@@ -13,10 +14,12 @@ import {
   WIDGETS,
   foldLabel,
   moveWidget,
+  type EventSwitches,
   type NotchSettings,
   type WidgetId,
 } from './settings';
 import { accessLine } from './status';
+import { SwitchRow } from '../Stepper.tsx';
 
 const PILL_NAMES = { black: 'Black', graphite: 'Graphite', tinted: 'Tinted' } as const;
 const SIZE_NAMES = { compact: 'Compact', regular: 'Regular', large: 'Large' } as const;
@@ -28,16 +31,39 @@ const WIDGET_NAMES: Record<WidgetId, string> = {
   timer: 'Timer and stopwatch',
   media: 'Now playing',
 };
+const BLUETOOTH = PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT;
 
-export function SettingsScreen({ value, onChange }: { value: NotchSettings; onChange: (next: NotchSettings) => void }) {
+export function SettingsScreen({
+  value,
+  onChange,
+  onPickMessageApps,
+}: {
+  value: NotchSettings;
+  onChange: (next: NotchSettings) => void;
+  onPickMessageApps: () => void;
+}) {
   const { c } = useTheme();
   // Read on mount and each time the app comes back, e.g. from the notification access page.
   const [listener, setListener] = useState(() => NotchIsland.isListenerAllowed());
+  const [bluetooth, setBluetooth] = useState(true);
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (s) => s === 'active' && setListener(NotchIsland.isListenerAllowed()));
+    const checkBluetooth = () => PermissionsAndroid.check(BLUETOOTH).then(setBluetooth, () => setBluetooth(false));
+    checkBluetooth();
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s !== 'active') return;
+      setListener(NotchIsland.isListenerAllowed());
+      checkBluetooth();
+    });
     return () => sub.remove();
   }, []);
+  const allowBluetooth = async () => {
+    const result = await PermissionsAndroid.request(BLUETOOTH);
+    // Once refused for good, the system dialog no longer shows; the switch lives on Halo's settings page.
+    if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) HaloEngine.openPermission('appDetails');
+    setBluetooth(result === PermissionsAndroid.RESULTS.GRANTED);
+  };
   const set = (patch: Partial<NotchSettings>) => onChange({ ...value, ...patch });
+  const setEvent = (patch: Partial<EventSwitches>) => set({ events: { ...value.events, ...patch } });
   const shown = value.widgets;
   const toggle = (id: WidgetId) => set({ widgets: shown.includes(id) ? shown.filter((w) => w !== id) : [...shown, id] });
   const shift = (id: WidgetId, by: number) => set({ widgets: moveWidget(shown, id, shown.indexOf(id) + by) });
@@ -127,6 +153,42 @@ export function SettingsScreen({ value, onChange }: { value: NotchSettings; onCh
               accessibilityLabel="Clock style"
             />
           }
+        />
+      </Group>
+
+      <Group title="Quick events" footer="The pill opens for a few seconds, then folds back. It stays out of the way during a call or while you have it open.">
+        <SwitchRow title="Charging and low battery" value={value.events.charging} onChange={(charging) => setEvent({ charging })} />
+        <SwitchRow title="Ringer mode" subtitle="Ring, vibrate or silent" value={value.events.ringer} onChange={(ringer) => setEvent({ ringer })} />
+        <SwitchRow title="Do not disturb" value={value.events.dnd} onChange={(dnd) => setEvent({ dnd })} />
+        <SwitchRow title="Headphones connected" subtitle="Bluetooth or wired, in and out" value={value.events.bluetooth} onChange={(bluetooth) => setEvent({ bluetooth })} />
+        {value.events.bluetooth && !bluetooth && (
+          <Row
+            title="Headphone names"
+            subtitle="Allow Bluetooth to show your headphones' name, like AirPods Pro."
+            trailing={<Button label="Allow Bluetooth" variant="secondary" size="sm" onPress={allowBluetooth} />}
+          />
+        )}
+        <SwitchRow
+          title="Progress from apps"
+          subtitle="Rides, deliveries, navigation and downloads, shown when you open the pill"
+          value={value.progressCards}
+          onChange={(progressCards) => set({ progressCards })}
+        />
+        <SwitchRow
+          title="Alarm card"
+          subtitle="A ringing alarm with Snooze and Dismiss, shown when you open the pill"
+          value={value.alarmCard}
+          onChange={(alarmCard) => set({ alarmCard })}
+        />
+      </Group>
+
+      <Group title="Message peek" footer="The pill opens for up to 8 seconds with the sender and one line of a new message, only from the apps you choose. Never during a call. Nothing is saved.">
+        <SwitchRow title="Message peek" value={value.messagePeek.on} onChange={(on) => set({ messagePeek: { ...value.messagePeek, on } })} />
+        <Row
+          title="Apps"
+          subtitle={value.messagePeek.apps.length === 0 ? 'None chosen yet' : `${value.messagePeek.apps.length} chosen`}
+          accessibilityHint="Choose which apps can peek"
+          onPress={onPickMessageApps}
         />
       </Group>
 

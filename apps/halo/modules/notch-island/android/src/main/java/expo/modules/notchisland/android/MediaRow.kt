@@ -1,47 +1,55 @@
 package expo.modules.notchisland.android
 
 import android.content.Context
-import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.media.session.MediaController
 import android.text.TextUtils
 import android.view.Gravity
-import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import expo.modules.notchisland.R
+import expo.modules.notchisland.core.PillGeometry
 
+// Art, title and artist, then previous, play/pause and next as large round buttons.
 class MediaRow(context: Context, private val density: Float) : LinearLayout(context) {
   private var controller: MediaController? = null
   private var playing = false
 
   private val art = ImageView(context).apply {
     scaleType = ImageView.ScaleType.CENTER_CROP
-    background = GradientDrawable().apply { cornerRadius = 8 * density; setColor(0x33FFFFFF) }
+    background = GradientDrawable().apply { cornerRadius = 12 * density; setColor(0x33FFFFFF) }
     clipToOutline = true
   }
-  private val title = line(14f, Color.WHITE)
-  private val artist = line(12f, 0xB3FFFFFF.toInt())
-  private val previous = button(android.R.drawable.ic_media_previous, "Previous") { controller?.transportControls?.skipToPrevious() }
-  private val playPause = button(android.R.drawable.ic_media_play, "Play") {
+  private val title = line(15f, Color.WHITE).apply { setTypeface(typeface, Typeface.BOLD) }
+  private val artist = line(13f, 0xA6FFFFFF.toInt())
+  private val previous = roundButton(context, R.drawable.notch_previous, "Previous") { controller?.transportControls?.skipToPrevious() }
+  private val playPause = roundButton(context, R.drawable.notch_play, "Play") {
     controller?.transportControls?.let { if (playing) it.pause() else it.play() }
   }
-  private val next = button(android.R.drawable.ic_media_next, "Next") { controller?.transportControls?.skipToNext() }
+  private val next = roundButton(context, R.drawable.notch_next, "Next") { controller?.transportControls?.skipToNext() }
 
   init {
-    orientation = HORIZONTAL
-    gravity = Gravity.CENTER_VERTICAL
-    val pad = dp(16)
-    setPadding(pad, dp(6), pad - dp(4), dp(6))
-    addView(art, LayoutParams(dp(48), dp(48)).apply { rightMargin = dp(12) })
+    orientation = VERTICAL
+    val side = dp(PillGeometry.INSET_SIDE_DP)
+    setPadding(side, 0, side, 0)
+    val top = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    top.addView(art, LayoutParams(dp(64), dp(64)))
     val texts = LinearLayout(context).apply {
       orientation = VERTICAL
       addView(title)
       addView(artist)
     }
-    addView(texts, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-    for (b in listOf(previous, playPause, next)) addView(b, LayoutParams(dp(44), dp(44)))
+    top.addView(texts, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(12) })
+    addView(top, LayoutParams(LayoutParams.MATCH_PARENT, dp(64)))
+
+    val controls = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER }
+    for ((i, b) in listOf(previous, playPause, next).withIndex()) {
+      controls.addView(b, LayoutParams(dp(52), dp(52)).apply { if (i > 0) leftMargin = dp(28) })
+    }
+    addView(controls, LayoutParams(LayoutParams.MATCH_PARENT, dp(52)).apply { topMargin = dp(12) })
   }
 
   fun isVisibleFor(info: MediaInfo?): Boolean = !info?.title.isNullOrBlank()
@@ -55,9 +63,11 @@ class MediaRow(context: Context, private val density: Float) : LinearLayout(cont
     title.text = info.title
     artist.text = info.artist.orEmpty()
     artist.visibility = if (info.artist.isNullOrBlank()) GONE else VISIBLE
-    playPause.setImageResource(if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play)
+    playPause.setImageResource(if (playing) R.drawable.notch_pause else R.drawable.notch_play)
     playPause.contentDescription = if (playing) "Pause" else "Play"
-    playPause.imageTintList = ColorStateList.valueOf(accent)
+    playPause.paint(accent, Color.BLACK)
+    previous.paint(SOFT, Color.WHITE)
+    next.paint(SOFT, Color.WHITE)
   }
 
   private fun dp(v: Int) = (v * density).toInt()
@@ -67,13 +77,5 @@ class MediaRow(context: Context, private val density: Float) : LinearLayout(cont
     setTextColor(colour)
     maxLines = 1
     ellipsize = TextUtils.TruncateAt.END
-  }
-
-  private fun button(icon: Int, label: String, onTap: () -> Unit) = ImageButton(context).apply {
-    setImageResource(icon)
-    contentDescription = label
-    background = null
-    imageTintList = ColorStateList.valueOf(Color.WHITE)
-    setOnClickListener { onTap() }
   }
 }

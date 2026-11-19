@@ -1,0 +1,22 @@
+{
+  "name": "@apps-hub/sieve-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure TypeScript settings, filter compiler and host matching for Sieve, the private Chrome extension (runnable from the extension and Node)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "node --test src/__tests__/settings.test.ts src/__tests__/hosts.test.ts src/__tests__/compile.test.ts src/__tests__/allowlist.test.ts src/__tests__/plan.test.ts src/__tests__/page.test.ts src/__tests__/counts.test.ts src/__tests__/picker.test.ts src/__tests__/my-filters.test.ts src/__tests__/youtube-ads.test.ts src/__tests__/youtube-settings.test.ts src/__tests__/yt-actions.test.ts src/__tests__/yt-bridge.test.ts src/__tests__/quality.test.ts src/__tests__/playback.test.ts src/__tests__/backup.test.ts src/__tests__/time.test.ts src/__tests__/visual.test.ts src/__tests__/tidy.test.ts src/__tests__/screenshot.test.ts src/__tests__/autoplay.test.ts src/__tests__/experiments.test.ts src/__tests__/dl-settings.test.ts src/__tests__/dl-record.test.ts src/__tests__/dl-plan.test.ts src/__tests__/dl-bucket.test.ts src/__tests__/dl-queue.test.ts src/__tests__/dl-takeover.test.ts src/__tests__/dl-view.test.ts src/__tests__/dl-text.test.ts src/__tests__/dl-engine.test.ts src/__tests__/dl-transfer.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@adguard/agtree": "4.3.0",
+    "@adguard/dnr-converter": "2.0.0",
+    "@adguard/re2-wasm": "1.2.0",
+    "@adguard/scriptlets": "2.5.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.9.2"
+  }
+}
