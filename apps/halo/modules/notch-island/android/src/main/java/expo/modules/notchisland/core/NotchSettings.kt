@@ -8,7 +8,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 
-data class EventSwitches(val charging: Boolean = true, val ringer: Boolean = true, val dnd: Boolean = true)
+data class EventSwitches(val charging: Boolean = true, val ringer: Boolean = true, val dnd: Boolean = true, val bluetooth: Boolean = true)
 
 // The same allowed values as apps/halo/src/island/settings.ts; keep the two lists in step.
 data class NotchSettings(
@@ -30,7 +30,7 @@ data class NotchSettings(
       "foldMs" to JsonPrimitive(foldMs),
       "clock" to JsonPrimitive(clock),
       "widgets" to JsonArray(widgets.map { JsonPrimitive(it) }),
-      "events" to JsonObject(mapOf("charging" to JsonPrimitive(events.charging), "ringer" to JsonPrimitive(events.ringer), "dnd" to JsonPrimitive(events.dnd))),
+      "events" to JsonObject(mapOf("charging" to JsonPrimitive(events.charging), "ringer" to JsonPrimitive(events.ringer), "dnd" to JsonPrimitive(events.dnd), "bluetooth" to JsonPrimitive(events.bluetooth))),
     ),
   ).toString()
 
@@ -85,6 +85,7 @@ data class NotchSettings(
           charging = flag("charging", DEFAULTS.events.charging),
           ringer = flag("ringer", DEFAULTS.events.ringer),
           dnd = flag("dnd", DEFAULTS.events.dnd),
+          bluetooth = flag("bluetooth", DEFAULTS.events.bluetooth),
         ),
       )
     }
