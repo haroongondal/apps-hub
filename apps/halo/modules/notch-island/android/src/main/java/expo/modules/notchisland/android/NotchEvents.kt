@@ -16,6 +16,7 @@ class NotchEvents(private val context: Context, private val onRefresh: () -> Uni
   private var receiver: BroadcastReceiver? = null
   private var plugged: Boolean? = null
   private var level: Int? = null
+  private var lowFired: Int? = null
   private var ringer: RingerMode? = null
   private var dnd: Boolean? = null
 
@@ -75,9 +76,11 @@ class NotchEvents(private val context: Context, private val onRefresh: () -> Uni
     level = percent ?: wasLevel
     if (wasPlugged != null && wasPlugged != now) {
       onEvent(Transient.Charging(now, percent, type == BatteryManager.BATTERY_PLUGGED_WIRELESS, if (now) minutesToFull() else null))
-    } else if (percent != null && Transients.lowBatteryCrossing(wasLevel, percent, now) != null) {
-      onEvent(Transient.LowBattery(percent))
     }
+    if (percent == null) return
+    val step = Transients.lowBatteryStep(wasLevel, percent, now, lowFired)
+    lowFired = step.fired
+    if (step.event != null && wasPlugged == now) onEvent(Transient.LowBattery(percent))
   }
 
   private fun minutesToFull(): Int? =

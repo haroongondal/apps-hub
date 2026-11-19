@@ -9,11 +9,15 @@ sealed interface Transient {
   data class Dnd(val on: Boolean) : Transient
 }
 
+/** [event] is the threshold to warn about now; [fired] is the lowest one already warned about, carried to the next reading. */
+data class LowBatteryStep(val event: Int?, val fired: Int?)
+
 data class TransientText(val icon: String, val title: String, val subtitle: String?)
 
 object Transients {
   const val HOLD_MS = 2500L
   private val LOW_LEVELS = listOf(10, 20)
+  private const val REARM_GAP = 3
 
   // Null drops the event. A call is never covered and a card the user opened is never replaced; otherwise the newest wins, any kind.
   fun decide(current: Transient?, incoming: Transient, callActive: Boolean, cardOpen: Boolean): Transient? = when {
@@ -30,6 +34,14 @@ object Transients {
 
   fun lowBatteryCrossing(previous: Int?, now: Int, plugged: Boolean): Int? =
     if (plugged || previous == null) null else LOW_LEVELS.firstOrNull { previous > it && now <= it }
+
+  // Adds hysteresis: after a threshold fires it stays quiet until the level climbs 3 points above it or the phone is plugged in, so 21, 20, 21, 20 warns once.
+  fun lowBatteryStep(previous: Int?, now: Int, plugged: Boolean, fired: Int?): LowBatteryStep {
+    if (plugged) return LowBatteryStep(null, null)
+    val armedAt = if (fired != null && now >= fired + REARM_GAP) null else fired
+    val event = lowBatteryCrossing(previous, now, plugged = false)?.takeIf { armedAt == null || it < armedAt }
+    return LowBatteryStep(event, event ?: armedAt)
+  }
 
   fun ringerMode(raw: Int): RingerMode? = when (raw) {
     0 -> RingerMode.SILENT

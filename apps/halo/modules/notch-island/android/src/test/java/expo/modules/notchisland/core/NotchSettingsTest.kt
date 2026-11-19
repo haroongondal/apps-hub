@@ -32,8 +32,9 @@ class NotchSettingsTest {
   @Test fun eventsDefaultOnAndFallBackPerSwitch() {
     assertEquals(EventSwitches(true, true, true), NotchSettings.DEFAULTS.events)
     assertEquals(EventSwitches(true, true, true), NotchSettings.parse("""{"accent":"mint"}""").events)
-    val s = NotchSettings.parse("""{"events":{"charging":false,"ringer":"no","dnd":1}}""")
+    val s = NotchSettings.parse("""{"events":{"charging":false,"ringer":"false","dnd":1}}""")
     assertEquals(EventSwitches(charging = false, ringer = true, dnd = true), s.events)
+    assertEquals(EventSwitches(charging = true, ringer = false, dnd = true), NotchSettings.parse("""{"events":{"ringer":false}}""").events)
     assertEquals(EventSwitches(true, true, true), NotchSettings.parse("""{"events":[false]}""").events)
   }
 

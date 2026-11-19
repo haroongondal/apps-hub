@@ -58,6 +58,31 @@ class TransientTest {
     assertNull(Transients.lowBatteryCrossing(null, 15, plugged = false))
   }
 
+  private fun lowEvents(levels: List<Int>, plugged: List<Boolean> = levels.map { false }): List<Int> {
+    var fired: Int? = null
+    var prev: Int? = null
+    val out = mutableListOf<Int>()
+    levels.forEachIndexed { i, now ->
+      val step = Transients.lowBatteryStep(prev, now, plugged[i], fired)
+      fired = step.fired
+      step.event?.let { out += it }
+      prev = now
+    }
+    return out
+  }
+
+  @Test fun lowBatteryDoesNotRefireWhenTheLevelBouncesAtTheThreshold() {
+    assertEquals(listOf(20), lowEvents(listOf(21, 20, 21, 20)))
+    assertEquals(listOf(20, 10), lowEvents(listOf(21, 20, 21, 20, 11, 10, 11, 10)))
+  }
+
+  @Test fun lowBatteryRearmsThreePointsAboveOrOnPlugIn() {
+    assertEquals(listOf(20, 20), lowEvents(listOf(21, 20, 23, 20)))
+    // Plugging in re-arms even though the level never reached 23 before unplugging.
+    assertEquals(listOf(20, 20), lowEvents(listOf(21, 20, 20, 21, 20), listOf(false, false, true, false, false)))
+    assertEquals(listOf(20, 10), lowEvents(listOf(21, 20, 11, 10)))
+  }
+
   @Test fun ringerAndDndMapThePlatformValues() {
     assertEquals(RingerMode.SILENT, Transients.ringerMode(0))
     assertEquals(RingerMode.VIBRATE, Transients.ringerMode(1))
