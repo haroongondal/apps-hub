@@ -67,10 +67,6 @@ data class FramePlan(val timeS: Double, val format: String, val ext: String) : P
   override val tool get() = "frame"
 }
 
-data class ImagePlan(val format: String, val ext: String) : Plan {
-  override val tool get() = "image"
-}
-
 data class Loudness(val inputI: Double, val inputTp: Double, val inputLra: Double, val inputThresh: Double, val offset: Double)
 
 data class VolumePlan(val mode: String, val gainDb: Double, val video: String?, val ext: String, val measured: Loudness? = null) : Plan {
