@@ -70,7 +70,16 @@ with `cd-engineering-tools:parallel-agents-coord` (section 0 loop with the ledge
 
 - 2026-11-20: design approved; worktree and branch `ai-hub` created from origin/main; P1 ledger
   and briefs written; P1 started.
+- 2026-11-20: P1 T1 (scaffold, brand aihub) dd937412; Transport contract 3f0d81f0; T3 (queue,
+  caller policy, usage) 9d9dd1d1; T4 (key vault, store, transport) a7425871 + fix 682b6e79
+  (vault never overwrites keys it can't open; clear() is the way out); T2 (providers, key
+  hand-over, 42 tests) 84dfc98e. T5a (bound service, AIDL, worker) and T5b (module functions,
+  screens) dispatched in parallel from 84dfc98e.
 
 ## Current state + exact next step
 
-P1 in progress. Read the ledger for which tasks are complete; dispatch the next ready task.
+P1: T1-T4 complete; T5a and T5b running (briefs task-5a-brief.md, task-5b-brief.md). When both
+are in: controller-check each commit, then one review of the risky commits (KeyVault 682b6e79,
+Provider 84dfc98e, the service and caller check from T5a), one fix round for Important findings,
+then the full gates from a clean export: `pnpm test`, `pnpm typecheck`, and
+`:ai-hub-core:testDebugUnitTest :app:assembleDebug`. Then P2 (chat screen).
