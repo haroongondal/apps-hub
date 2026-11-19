@@ -126,3 +126,29 @@ test('a sample whose widget was switched off falls back to the first available o
   assert.equal(resolveSample('music', ['media']), 'music');
   assert.equal(resolveSample('event', []), 'event');
 });
+
+test('message peek defaults off with no apps', () => {
+  assert.deepEqual(DEFAULTS.messagePeek, { on: false, apps: [] });
+  assert.deepEqual(normalize({ accent: 'mint' }).messagePeek, { on: false, apps: [] });
+  assert.deepEqual(normalize({ messagePeek: [true] }).messagePeek, { on: false, apps: [] });
+});
+
+test('message peek fields fall back on their own and reject strings', () => {
+  assert.deepEqual(normalize({ messagePeek: { on: true, apps: 'com.whatsapp' } }).messagePeek, { on: true, apps: [] });
+  assert.deepEqual(normalize({ messagePeek: { on: 'true', apps: ['com.whatsapp'] } }).messagePeek, { on: false, apps: ['com.whatsapp'] });
+  assert.equal(normalize({ messagePeek: { on: 1 } }).messagePeek.on, false);
+});
+
+test('message peek keeps only valid, unique package names, at most 20', () => {
+  const apps = ['com.whatsapp', 1, null, true, 'com.whatsapp', 'bad/pkg', '', 'a'.repeat(151), 'org.telegram.messenger'];
+  assert.deepEqual(normalize({ messagePeek: { on: true, apps } }).messagePeek.apps, ['com.whatsapp', 'org.telegram.messenger']);
+  const many = Array.from({ length: 25 }, (_, i) => `com.app${i + 1}`);
+  const capped = normalize({ messagePeek: { apps: many } }).messagePeek.apps;
+  assert.equal(capped.length, 20);
+  assert.equal(capped[0], 'com.app1');
+});
+
+test('message peek survives a round trip through JSON', () => {
+  const s = { ...DEFAULTS, messagePeek: { on: true, apps: ['com.whatsapp', 'org.telegram.messenger'] } };
+  assert.deepEqual(normalize(JSON.parse(JSON.stringify(s))), s);
+});
