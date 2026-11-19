@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Text, View, type ViewStyle } from 'react-native';
 import { Group, Segmented, space } from '@apps-hub/ui';
-import { SWATCHES, clockLabel, earPlan, pillHex, resolveClock, type NotchSettings } from './settings';
+import { SWATCHES, availableSamples, clockLabel, earPlan, pillHex, resolveClock, resolveSample, type NotchSettings, type PreviewSample } from './settings';
 
 // Same numbers as the native pill: closed width max(hole + 16, 32% of the screen), height hole + 4,
 // expanded card 11 in from each side, 84 high (160 for music), content inset 20.
@@ -16,7 +16,6 @@ const SAMPLES = [
   { key: 'event', label: 'Event' },
   { key: 'ears', label: 'Clock' },
 ] as const;
-type Sample = (typeof SAMPLES)[number]['key'];
 
 const WHITE = '#FFFFFF';
 const SOFT = 'rgba(255,255,255,0.65)';
@@ -50,7 +49,9 @@ const Bars = () => (
 
 // The pill is always dark, whatever the app theme, so its text is fixed white.
 export function Preview({ value }: { value: NotchSettings }) {
-  const [sample, setSample] = useState<Sample>(() => (value.widgets.includes('media') ? 'music' : value.widgets.includes('timer') ? 'timer' : 'ears'));
+  const [chosen, setSample] = useState<PreviewSample>(() => (value.widgets.includes('media') ? 'music' : value.widgets.includes('timer') ? 'timer' : 'ears'));
+  const sample = resolveSample(chosen, value.widgets);
+  const options = SAMPLES.filter((o) => availableSamples(value.widgets).includes(o.key));
   const background = pillHex(value.pill, value.accent);
   const accent = SWATCHES[value.accent];
   const now = new Date();
@@ -153,7 +154,7 @@ export function Preview({ value }: { value: NotchSettings }) {
         <View style={{ width: SCREEN - 22, height, borderRadius: cardRadius, backgroundColor: background, overflow: 'hidden' }}>{content}</View>
       </View>
       <View style={{ padding: space.md, paddingTop: 0 }}>
-        <Segmented options={SAMPLES} value={sample} onChange={setSample} accessibilityLabel="Sample to preview" />
+        <Segmented options={options} value={sample} onChange={setSample} accessibilityLabel="Sample to preview" />
       </View>
     </Group>
   );

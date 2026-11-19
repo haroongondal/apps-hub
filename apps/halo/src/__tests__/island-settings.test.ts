@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEFAULTS, SWATCHES, clockLabel, earPlan, foldLabel, moveWidget, normalize, pillHex, rowsFor, widgetLabel } from '../island/settings.ts';
+import { DEFAULTS, SWATCHES, availableSamples, clockLabel, earPlan, foldLabel, moveWidget, normalize, pillHex, resolveSample, rowsFor, widgetLabel } from '../island/settings.ts';
 
 test('the pill colours match the native card', () => {
   assert.equal(pillHex('black', 'indigo'), '#000000');
@@ -101,4 +101,17 @@ test('event switches default on and fall back one by one', () => {
 test('event switches survive a round trip through JSON', () => {
   const s = { ...DEFAULTS, events: { charging: false, ringer: true, dnd: false } };
   assert.deepEqual(normalize(JSON.parse(JSON.stringify(s))), s);
+});
+
+test('preview samples follow the widgets that are on', () => {
+  assert.deepEqual(availableSamples(['clock', 'battery']), ['call', 'event', 'ears']);
+  assert.deepEqual(availableSamples(['media', 'timer']), ['music', 'call', 'timer', 'event', 'ears']);
+  assert.deepEqual(availableSamples(['timer']), ['call', 'timer', 'event', 'ears']);
+});
+
+test('a sample whose widget was switched off falls back to the first available one', () => {
+  assert.equal(resolveSample('music', ['clock']), 'call');
+  assert.equal(resolveSample('timer', ['media']), 'music');
+  assert.equal(resolveSample('music', ['media']), 'music');
+  assert.equal(resolveSample('event', []), 'event');
 });

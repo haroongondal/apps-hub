@@ -136,3 +136,17 @@ const WIDGET_LABELS: Record<WidgetId, string> = { clock: 'Clock', battery: 'Batt
 export function widgetLabel(id: WidgetId): string {
   return WIDGET_LABELS[id];
 }
+
+export type PreviewSample = 'music' | 'call' | 'timer' | 'event' | 'ears';
+
+/** The samples worth showing: Music and Timer only while their widget is on, as native only gives those a card row then. */
+export function availableSamples(widgets: WidgetId[]): PreviewSample[] {
+  const all: PreviewSample[] = ['music', 'call', 'timer', 'event', 'ears'];
+  return all.filter((s) => (s === 'music' ? widgets.includes('media') : s === 'timer' ? widgets.includes('timer') : true));
+}
+
+/** The chosen sample, or the first available one when the chosen one has just been switched off. */
+export function resolveSample(chosen: PreviewSample, widgets: WidgetId[]): PreviewSample {
+  const available = availableSamples(widgets);
+  return available.includes(chosen) ? chosen : available[0];
+}
