@@ -21,6 +21,7 @@ data class NotchSettings(
   val widgets: List<String>,
   val events: EventSwitches = EventSwitches(),
   val progressCards: Boolean = true,
+  val messagePeek: MessagePeekSettings = MessagePeekSettings(),
 ) {
   fun toJson(): String = JsonObject(
     mapOf(
@@ -33,6 +34,7 @@ data class NotchSettings(
       "widgets" to JsonArray(widgets.map { JsonPrimitive(it) }),
       "events" to JsonObject(mapOf("charging" to JsonPrimitive(events.charging), "ringer" to JsonPrimitive(events.ringer), "dnd" to JsonPrimitive(events.dnd), "bluetooth" to JsonPrimitive(events.bluetooth))),
       "progressCards" to JsonPrimitive(progressCards),
+      "messagePeek" to JsonObject(mapOf("on" to JsonPrimitive(messagePeek.on), "apps" to JsonArray(messagePeek.apps.map { JsonPrimitive(it) }))),
     ),
   ).toString()
 
@@ -73,6 +75,7 @@ data class NotchSettings(
         ?.distinct()
         ?: DEFAULTS.widgets
       val e = o["events"] as? JsonObject
+      val peek = o["messagePeek"] as? JsonObject
       fun flag(key: String, fallback: Boolean): Boolean =
         (e?.get(key) as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull ?: fallback
       return NotchSettings(
@@ -90,6 +93,14 @@ data class NotchSettings(
           bluetooth = flag("bluetooth", DEFAULTS.events.bluetooth),
         ),
         progressCards = (o["progressCards"] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull ?: DEFAULTS.progressCards,
+        messagePeek = MessagePeekSettings(
+          on = (peek?.get("on") as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull ?: DEFAULTS.messagePeek.on,
+          apps = (peek?.get("apps") as? JsonArray)
+            ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.takeIf(MessagePeek.PACKAGE::matches) }
+            ?.distinct()
+            ?.take(MessagePeek.MAX_APPS)
+            ?: DEFAULTS.messagePeek.apps,
+        ),
       )
     }
   }
