@@ -260,6 +260,62 @@ async function syncSuite() {
     await until('the unlock sync to bring the phone login', async () => (await names()).includes('After restart'));
     check('unlocking after a restart signs in again by itself and syncs', (await names()).join() === 'After restart,From Chrome,From phone,Phone mail', (await names()).join());
 
+    // Email-code sign-in: a fresh profile signs in with the email code and master password once the owner approves, never typing the account key.
+    const emailProfile = mkdtempSync(join(tmpdir(), 'sg-email-e2e-'));
+    const fresh = await launchWith(syncDist, emailProfile);
+    const ep = await fresh.ctx.newPage();
+    ep.on('pageerror', (e) => errors.push(`email popup: ${e.message}`));
+    await ep.goto(`chrome-extension://${fresh.id}/popup.html`);
+    await ep.getByRole('heading', { name: 'Create your vault' }).waitFor();
+    await ep.getByRole('button', { name: 'Use my Strongroom account instead' }).click();
+    await ep.getByRole('heading', { name: 'Sign in to sync' }).waitFor();
+    await ep.getByRole('button', { name: 'No account key? Sign in with your email code' }).click();
+    await ep.getByRole('heading', { name: 'Sign in with your email code' }).waitFor();
+    await ep.screenshot({ path: `${SCRATCH}/email-1-start.png` });
+    const mailsBefore = world.mail.sent.length;
+    await ep.getByRole('button', { name: 'Email me an approval link' }).click();
+    await ep.getByText('Open the email Strongroom just sent you').waitFor();
+    await ep.screenshot({ path: `${SCRATCH}/email-2-waiting.png` });
+    const approvalMail = world.mail.sent.at(-1);
+    check('asking sends the owner one approval mail naming this browser, with no code in it',
+      world.mail.sent.length === mailsBefore + 1 && approvalMail.text.includes('Strongroom for Chrome') && !approvalMail.text.includes(mailCode2), approvalMail?.text);
+    check('the waiting screen offers Check again and Ask again', (await ep.getByRole('button', { name: 'Check again' }).count()) === 1 && (await ep.getByRole('button', { name: 'Ask again' }).count()) === 1);
+    await ep.getByRole('button', { name: 'Check again' }).click();
+    await ep.getByText('Open the email Strongroom just sent you').waitFor();
+    check('before approval, checking again still waits and shows no code form', (await ep.getByLabel('Code from the email').count()) === 0);
+
+    const approveToken = decodeURIComponent(/\/v1\/signin\/approve\?t=([^&\s]+)/.exec(approvalMail.text)[1]);
+    await world.serve(new Request('https://vault.example/v1/signin/approve', {
+      method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `t=${encodeURIComponent(approveToken)}`,
+    }));
+    // The popup still shows the waiting screen: a stale "Ask again" must not throw the approval away or mail again.
+    await ep.getByRole('button', { name: 'Ask again' }).click();
+    await ep.getByText('already approved').waitFor();
+    check('a stale Ask again after approval is refused and sends no new mail', world.mail.sent.length === mailsBefore + 1);
+    await ep.getByRole('button', { name: 'Check again' }).click();
+    await ep.getByLabel('Code from the email').waitFor();
+    await ep.screenshot({ path: `${SCRATCH}/email-3-ready.png` });
+    check('after approval the screen asks for the code and master password, not the account key',
+      (await ep.getByLabel('Master password').count()) === 1 && (await ep.getByLabel('Account key').count()) === 0);
+
+    await ep.getByLabel('Code from the email').fill('AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA');
+    await ep.getByLabel('Master password').fill(world.password);
+    await ep.getByRole('button', { name: 'Sign in' }).click();
+    await ep.getByText("That code isn't right").waitFor();
+    check('a wrong code is refused and keeps the released blob', !!(await fresh.sw.evaluate(() => chrome.storage.local.get('signinBlob'))).signinBlob);
+    await ep.getByLabel('Code from the email').fill(mailCode2);
+    await ep.getByRole('button', { name: 'Sign in' }).click();
+    await ep.getByRole('heading', { name: 'Strongroom', exact: true }).waitFor();
+    await ep.locator('.row').first().waitFor();
+    await ep.screenshot({ path: `${SCRATCH}/email-4-signed-in.png` });
+    const emailRows = await ep.locator('.row').allInnerTexts();
+    check('signed in by email code, the synced logins are here', emailRows.some((r) => r.includes('Phone mail')), emailRows.join(' | '));
+    const emailStore = await fresh.sw.evaluate(async () => await chrome.storage.local.get(null));
+    check('the account key is kept sealed, and the sign-in claim and blob are gone',
+      typeof emailStore.accountKeySealed === 'string' && !('signinClaim' in emailStore) && !('signinBlob' in emailStore), Object.keys(emailStore).join());
+    await fresh.ctx.close();
+    rmSync(emailProfile, { recursive: true, force: true });
+
     // A separate profile with no local vault: the device that lost access, walked through the real Worker world with a backdated release time instead of a 24-hour wait.
     // ctx (the owner's signed-in popup) stays open so it can cancel the lost-access request below, same as a real second device would.
     const lostProfile = mkdtempSync(join(tmpdir(), 'sg-lost-e2e-'));
