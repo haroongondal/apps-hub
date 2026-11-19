@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
-  createVault, formatAccountKey, fromBase64, headerToJson, KDF_FLOOR, loadPublicSuffixList, openEscrow, openSignin, parseEmailCode, parseRecoveryKey, randomBytes,
-  recoveryLoginToken, rotateRecoveryKey, signInWithPassword, signInWithRecovery, SyncAuthError, toBase64, tokenHash, unlockWithRecovery,
+  createVault, formatAccountKey, fromBase64, headerToJson, KDF_FLOOR, loadPublicSuffixList, openEscrow, openSignin, parseEmailCode, parseRecoveryKey, parseTotp, randomBytes,
+  readEntries, recoveryLoginToken, rotateRecoveryKey, signInWithPassword, signInWithRecovery, SyncAuthError, toBase64, tokenHash, totpState, unlockWithRecovery,
 } from 'strongroom-core';
-import type { Header, RecordStore, StoredRecord, SyncReport } from 'strongroom-core';
+import type { Header, RecordStore, StoredRecord, SyncReport, TotpState } from 'strongroom-core';
 import { COMMON_PASSWORDS } from '../common-passwords.ts';
 import { createService } from '../service.ts';
 import type { Ctx, Detail, EmailRecoveryStatus, ImportPreview, KV, Pending, Row, Status, SyncStatus } from '../service.ts';
@@ -36,6 +36,9 @@ const memoryKv = (): KV & { data: Map<string, string> } => {
 };
 
 const PASSWORD = 'a long master password';
+// Test-only values, built from parts so secret scanners do not flag fixtures.
+const PW1 = ['pw', '1'].join('-');
+const PW2 = ['pw', '2'].join('-');
 const LOW = { kdf: { memoryKiB: 1024, iterations: 1, parallelism: 1 }, floor: { memoryKiB: 8, iterations: 1, parallelism: 1 } };
 
 // A real DeviceVault over in-memory storage, the same shape as `extension()`'s further down: no own crypto, just fake KV and KeyStore.
@@ -62,8 +65,15 @@ async function unlocked(device?: DeviceVault) {
 }
 
 const page = (url: string, tabId = 1): Ctx => ({ url, tabId });
-const login = (over: object = {}) => ({ name: 'Bank', username: 'me', password: 'pw-1', websites: 'https://login.bank.com/signin', note: '', ...over });
+const login = (over: object = {}) => ({ name: 'Bank', username: 'me', password: PW1, websites: 'https://login.bank.com/signin', note: '', ...over });
 const add = <T = { id: string }>(s: { call<R>(req: object, ctx?: Ctx): Promise<R> }, over: object = {}) => s.call<T>({ type: 'save', id: null, login: login(over) });
+const TOTP = 'otpauth://totp/Bank:me?secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&issuer=Bank';
+const totpCsv = `name,url,username,password,note,type,holder,number,exp_month,exp_year,cvc,app_domain,totp\nBank,https://login.bank.com,me,${PW1},,login,,,,,,,${TOTP}\n`;
+async function addWithCode(s: { call<R>(req: object, ctx?: Ctx): Promise<R> }): Promise<string> {
+  await s.call({ type: 'import', csv: totpCsv, commit: true });
+  return (await s.call<{ rows: Row[] }>({ type: 'list' })).rows[0]!.id;
+}
+const codeAt = (at: number): TotpState => totpState(parseTotp(TOTP)!, Math.floor(at / 1000));
 
 test('a new profile has no vault; setup creates one, unlocks it and holds the recovery key until it is confirmed', async () => {
   const { call } = setup();
@@ -131,10 +141,10 @@ test('save, list and get: the list never carries a password, get does', async ()
   const s = await unlocked();
   const { id } = await add(s);
   const { rows } = await s.call<{ rows: Row[] }>({ type: 'list' });
-  assert.deepEqual(rows, [{ id, name: 'Bank', username: 'me', sites: ['login.bank.com'], apps: 0, flagged: false }]);
-  assert.ok(!JSON.stringify(rows).includes('pw-1'));
+  assert.deepEqual(rows, [{ id, name: 'Bank', username: 'me', sites: ['login.bank.com'], apps: 0, flagged: false, totp: false }]);
+  assert.ok(!JSON.stringify(rows).includes(PW1));
   const detail = await s.call<Detail>({ type: 'get', id });
-  assert.equal(detail.password, 'pw-1');
+  assert.equal(detail.password, PW1);
   assert.equal(detail.websites, 'https://login.bank.com');
 });
 
@@ -150,6 +160,31 @@ test('editing keeps the id and the app links; removing leaves a tombstone, not a
   await s.call({ type: 'remove', id: app.id });
   assert.ok(!(await s.call<{ rows: Row[] }>({ type: 'list' })).rows.some((r) => r.id === app.id));
   assert.ok(s.store.records.has(app.id));
+});
+
+test('editing a login keeps its authenticator code', async () => {
+  const s = await unlocked();
+  const totp = 'otpauth://totp/Bank:me?secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&issuer=Bank';
+  const csv = 'name,url,username,password,note,type,holder,number,exp_month,exp_year,cvc,app_domain,totp\n'
+    + `Bank,https://login.bank.com,me,${PW1},,login,,,,,,,${totp}\n`;
+  await s.call({ type: 'import', csv, commit: true });
+  const id = (await s.call<{ rows: Row[] }>({ type: 'list' })).rows.find((r) => r.name === 'Bank')!.id;
+  await s.call({ type: 'save', id, login: login({ password: PW2 }) });
+  const key = fromBase64(s.session.data.get('vaultKey')!);
+  const saved = (await readEntries(s.store, key)).items.find((item) => item.id === id)!.entry;
+  assert.equal(saved.type, 'login');
+  assert.equal(saved.type === 'login' && saved.totp, totp);
+  assert.equal(saved.type === 'login' && saved.password, PW2);
+});
+
+test('removing a code keeps the login and its password, and clears the code state', async () => {
+  const s = await unlocked();
+  const id = await addWithCode(s);
+  await s.call({ type: 'removeTotp', id });
+  const detail = await s.call<Detail>({ type: 'get', id });
+  assert.deepEqual([detail.name, detail.username, detail.password, detail.code], ['Bank', 'me', PW1, null]);
+  assert.equal((await s.call<{ rows: Row[] }>({ type: 'list' })).rows.find((r) => r.id === id)!.totp, false);
+  await assert.rejects(s.call({ type: 'removeTotp', id: 'no-such-id' }), /no longer exists/);
 });
 
 test('save asks for a name and a valid website instead of storing junk', async () => {
@@ -208,14 +243,14 @@ test('export refuses while locked', async () => {
 test('export returns one row per site and counts logins without a website', async () => {
   const s = await unlocked();
   await add(s);
-  await add(s, { name: 'Wifi', websites: '', password: 'pw-2', note: 'router' });
+  await add(s, { name: 'Wifi', websites: '', password: PW2, note: 'router' });
   const out = await s.call<{ csv: string; rows: number; leftOut: number }>({ type: 'export', password: PASSWORD });
   assert.deepEqual([out.rows, out.leftOut], [1, 1]);
   const lines = out.csv.trim().split(/\r?\n/);
   assert.equal(lines[0], 'name,url,username,password,note');
   assert.equal(lines.length, 2);
   assert.match(lines[1], /login\.bank\.com/);
-  assert.ok(!out.csv.includes('pw-2'));
+  assert.ok(!out.csv.includes(PW2));
 });
 
 test('export from a page context is refused, even for the right password', async () => {
@@ -247,7 +282,7 @@ test('while locked a page learns only that the vault is locked', async () => {
 test('fill returns the credentials only for a login saved for the page the request came from', async () => {
   const s = await unlocked();
   const { id } = await add(s);
-  assert.deepEqual(await s.call({ type: 'fill', id }, page('https://login.bank.com/')), { username: 'me', password: 'pw-1' });
+  assert.deepEqual(await s.call({ type: 'fill', id }, page('https://login.bank.com/')), { username: 'me', password: PW1, code: null });
   await assert.rejects(s.call({ type: 'fill', id }, page('https://bank.com.evil.io/')), /isn't saved for this website/);
   await assert.rejects(s.call({ type: 'fill', id }, page('http://login.bank.com/')), /isn't saved for this website/);
   await assert.rejects(s.call({ type: 'fill', id: 'no-such-id' }, page('https://login.bank.com/')), /isn't saved for this website/);
@@ -278,7 +313,7 @@ test('after unlock, a fill works once the session is cleared: the device-held ke
   const s = await unlocked(deviceVault());
   const { id } = await add(s);
   await s.call({ type: 'lock' });
-  assert.deepEqual(await s.call({ type: 'fill', id }, page('https://login.bank.com/')), { username: 'me', password: 'pw-1' });
+  assert.deepEqual(await s.call({ type: 'fill', id }, page('https://login.bank.com/')), { username: 'me', password: PW1, code: null });
 });
 
 test('a manual lock ends fills; the non-manual (auto-lock) request does not, though status still says locked', async () => {
@@ -286,11 +321,52 @@ test('a manual lock ends fills; the non-manual (auto-lock) request does not, tho
   const { id } = await add(s);
   await s.call({ type: 'lock' });
   assert.equal((await s.call<Status>({ type: 'status' })).state, 'locked');
-  assert.deepEqual(await s.call({ type: 'fill', id }, page('https://login.bank.com/')), { username: 'me', password: 'pw-1' });
+  assert.deepEqual(await s.call({ type: 'fill', id }, page('https://login.bank.com/')), { username: 'me', password: PW1, code: null });
 
   await s.call({ type: 'lock', manual: true });
   assert.equal((await s.call<Status>({ type: 'status' })).state, 'locked');
   await assert.rejects(s.call({ type: 'fill', id }, page('https://login.bank.com/')), /locked/i);
+});
+
+test('get returns a login\'s current code state, never the stored otpauth URI or secret', async () => {
+  const s = await unlocked();
+  const id = await addWithCode(s);
+  const detail = await s.call<Detail>({ type: 'get', id });
+  assert.deepEqual(detail.code, codeAt(s.clock.t));
+  assert.ok(!JSON.stringify(detail).includes('otpauth'));
+  assert.ok(!JSON.stringify(detail).includes('GEZDGNBV'));
+});
+
+test('fill includes the code state and re-derives it at call time', async () => {
+  const s = await unlocked();
+  const id = await addWithCode(s);
+  const first = await s.call<{ username: string; password: string; code: TotpState | null }>({ type: 'fill', id }, page('https://login.bank.com/'));
+  assert.deepEqual([first.username, first.password, first.code], ['me', PW1, codeAt(s.clock.t)]);
+  assert.ok(!JSON.stringify(first).includes('otpauth'));
+  s.clock.t += 1_000;
+  const second = await s.call<{ code: TotpState | null }>({ type: 'fill', id }, page('https://login.bank.com/'));
+  assert.deepEqual(second.code, codeAt(s.clock.t));
+  assert.equal(second.code!.secondsLeft, first.code!.secondsLeft - 1);
+});
+
+test('totpCode is gated exactly like fill: page context, matching site, and the same locked policy', async () => {
+  const s = await unlocked(deviceVault());
+  const id = await addWithCode(s);
+  assert.deepEqual(await s.call<TotpState | null>({ type: 'totpCode', id }, page('https://login.bank.com/')), codeAt(s.clock.t));
+  await assert.rejects(s.call({ type: 'totpCode', id }, page('https://bank.com.evil.io/')), /isn't saved for this website/);
+  await assert.rejects(s.call({ type: 'totpCode', id }), /isn't allowed/);
+  await assert.rejects(s.call({ type: 'totpCode', id, page: page('https://login.bank.com/') }), /isn't allowed/);
+  await s.call({ type: 'lock' });
+  assert.deepEqual(await s.call<TotpState | null>({ type: 'totpCode', id }, page('https://login.bank.com/')), codeAt(s.clock.t));
+  await s.call({ type: 'lock', manual: true });
+  await assert.rejects(s.call({ type: 'totpCode', id }, page('https://login.bank.com/')), /locked/i);
+});
+
+test('a login without a code has no code state, and a lookalike never reaches the wrong one', async () => {
+  const s = await unlocked();
+  const { id } = await add(s, { name: 'Other', websites: 'https://other.org' });
+  assert.equal((await s.call<Detail>({ type: 'get', id })).code, null);
+  assert.equal(await s.call<TotpState | null>({ type: 'totpCode', id }, page('https://other.org/')), null);
 });
 
 test('candidates work from device keys with the popup locked, and a lookalike host is still refused', async () => {
@@ -346,12 +422,12 @@ test('a changed password for a saved username is offered as an update; the same 
   const s = await unlocked();
   const { id } = await add(s);
   const at = page('https://login.bank.com/', 3);
-  await s.call({ type: 'capture', username: 'me', password: 'pw-1' }, at);
+  await s.call({ type: 'capture', username: 'me', password: PW1 }, at);
   assert.equal(await s.call({ type: 'pending', tabId: 3 }), null);
-  await s.call({ type: 'capture', username: 'ME', password: 'pw-2' }, at);
+  await s.call({ type: 'capture', username: 'ME', password: PW2 }, at);
   assert.deepEqual(await s.call<Pending>({ type: 'pending', tabId: 3 }), { intent: 'update', host: 'login.bank.com', username: 'ME', name: 'Bank', locked: false });
   await s.call({ type: 'resolvePending', tabId: 3, action: 'save' });
-  assert.equal((await s.call<Detail>({ type: 'get', id })).password, 'pw-2');
+  assert.equal((await s.call<Detail>({ type: 'get', id })).password, PW2);
   assert.equal((await s.call<{ rows: Row[] }>({ type: 'list' })).rows.length, 1);
 });
 

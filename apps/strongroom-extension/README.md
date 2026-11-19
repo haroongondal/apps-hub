@@ -14,13 +14,14 @@ Chrome → `chrome://extensions` → turn on Developer mode → Load unpacked �
 ## What it does
 
 - **Fill:** click a login field on a site you saved a login for and pick the suggestion. Nothing fills until you click. Fill and background sync keep working after auto-lock and after a browser restart; only the Lock button clears the key that makes that possible.
+- **Authenticator codes:** a login that arrived through sync or a Google export can carry a two-factor code. Click a site's code field and pick the login to fill the current code; a normal login fill also fills the code when that login has one. The popup shows the code with seconds left, Copy, and Remove code. No QR scanning here: codes come with sync or the CSV import.
 - **Save:** after you sign in on a site with a new or changed password, the toolbar icon shows a badge. Open it and choose Save or Update.
 - **Import:** Google Password Manager export (CSV), once. Opens in its own tab. Delete the file afterwards; it is plain text.
 - **Export:** a CSV Chrome's own password importer accepts, behind your master password. Delete the file afterwards; it is plain text.
 - **Email recovery** (opt-in, off by default): turn it on in Settings to get back in by email if you forget your master password. See `docs/handoffs/strongroom-extension-security.md` for the flow and its disclosed risk.
 - **Locks** the popup after 5 minutes without use, and with the Lock button.
 
-Not in this version: cards and notes in the UI, change master password, a standalone "new recovery key" with no email involved, clipboard auto-clear, fingerprint (designed, waiting on a hardware spike), Firefox.
+Not in this version: cards and notes in the UI, change master password, a standalone "new recovery key" with no email involved, clipboard auto-clear, fingerprint (designed, waiting on a hardware spike), Firefox, QR scanning, HOTP and SMS codes.
 
 ## Develop
 
