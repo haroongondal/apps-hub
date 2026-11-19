@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_SETTINGS } from 'halo-engine/src/settings.ts';
-import { appSetting, parseTime, sortApps } from '../notifyForm.ts';
+import { appSetting, brandColour, parseTime, pickStyle, sortApps, styleKey } from '../notifyForm.ts';
 
 test('parseTime takes 24-hour HH:MM only', () => {
   assert.equal(parseTime('07:05'), '07:05');
@@ -35,11 +35,30 @@ test('sortApps does not change its input', () => {
   assert.deepEqual(apps, copy);
 });
 
-test('appSetting: a listed app keeps its own choice, others follow defaultOn', () => {
-  const notify = { ...DEFAULT_SETTINGS.notify, defaultOn: false, apps: { 'com.chat': { on: true, colour: '#FF0000' } } };
-  assert.deepEqual(appSetting(notify, 'com.chat'), { on: true, colour: '#FF0000' });
-  assert.deepEqual(appSetting(notify, 'com.other'), { on: false, colour: null });
-  assert.deepEqual(appSetting({ ...notify, defaultOn: true }, 'com.other'), { on: true, colour: null });
+test('appSetting: a listed app keeps its own choice, others follow defaultOn and the shared style', () => {
+  const own = { on: true, colour: '#FF0000', style: 'sweep' };
+  const notify = { ...DEFAULT_SETTINGS.notify, defaultOn: false, apps: { 'com.chat': own } };
+  assert.deepEqual(appSetting(notify, 'com.chat'), own);
+  assert.deepEqual(appSetting(notify, 'com.other'), { on: false, colour: null, style: null });
+  assert.deepEqual(appSetting({ ...notify, defaultOn: true }, 'com.other'), { on: true, colour: null, style: null });
   // A package named like an Object method is still just an unknown app.
-  assert.deepEqual(appSetting(notify, 'constructor'), { on: false, colour: null });
+  assert.deepEqual(appSetting(notify, 'constructor'), { on: false, colour: null, style: null });
+});
+
+test('brandColour knows WhatsApp and Instagram only', () => {
+  assert.equal(brandColour('com.whatsapp'), '#25D366');
+  assert.equal(brandColour('com.whatsapp.w4b'), '#25D366');
+  assert.equal(brandColour('com.instagram.android'), '#FF3D9A');
+  assert.equal(brandColour('com.chat'), null);
+  assert.equal(brandColour('constructor'), null);
+});
+
+test('styleKey and pickStyle: a pattern choice keeps the pattern already picked, else takes the fallback', () => {
+  assert.equal(styleKey('pulse'), 'pulse');
+  assert.equal(styleKey('sweep'), 'sweep');
+  assert.equal(styleKey('comet'), 'pattern');
+  assert.equal(pickStyle('sweep', 'comet', 'rain'), 'sweep');
+  assert.equal(pickStyle('pattern', 'comet', 'rain'), 'comet');
+  assert.equal(pickStyle('pattern', 'pulse', 'rain'), 'rain');
+  assert.equal(pickStyle('pattern', null, 'rain'), 'rain');
 });
