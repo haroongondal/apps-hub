@@ -1,0 +1,24 @@
+{
+  "name": "sieve",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Sieve for Chrome (Manifest V3): blocks ads, trackers and annoyances with compiled filter lists",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test src/__tests__/counts.test.ts src/__tests__/pick-handler.test.ts src/__tests__/my-filters.test.ts src/__tests__/panel-log.test.ts src/__tests__/panels.test.ts src/__tests__/controls.test.ts src/__tests__/inject.test.ts src/__tests__/lists.test.ts src/__tests__/yt-handler.test.ts src/__tests__/commands.test.ts src/__tests__/tidy-css.test.ts src/__tests__/dl-engine-link.test.ts src/__tests__/dl-net-rules.test.ts src/__tests__/dl-router.test.ts src/__tests__/dl-save.test.ts src/__tests__/dl-takeover-wiring.test.ts src/__tests__/dl-menus.test.ts src/__tests__/dl-css.test.ts && node test/yt-perf.mjs --self-check",
+    "test:e2e": "node test/e2e.mjs",
+    "test:yt": "node test/yt-e2e.mjs",
+    "test:dl": "node test/dl/e2e.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@apps-hub/sieve-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.3.7",
+    "@types/node": "^22.10.0",
+    "esbuild": "0.28.2",
+    "typescript": "~5.9.2"
+  }
+}

@@ -1,0 +1,14 @@
+#app { display: grid; gap: var(--space-sm); padding: var(--space-md); }
+.status { margin: 0; }
+.status:empty { display: none; }
+.table { overflow-x: auto; }
+table { width: 100%; min-width: 660px; border-collapse: collapse; table-layout: fixed; font: var(--type-data) var(--font-sans); }
+th { text-align: left; font: 600 var(--type-caption) var(--font-sans); color: var(--c-muted); background: var(--c-raised); }
+th, td { padding: var(--space-xs) var(--space-sm); vertical-align: top; overflow-wrap: anywhere; }
+tbody tr + tr td { border-top: 1px solid var(--c-line); }
+td:first-child { white-space: nowrap; }
+th:nth-child(1) { width: 96px; }
+th:nth-child(2) { width: 10%; }
+th:nth-child(3) { width: 28%; }
+th:nth-child(4) { width: 11%; }
+th:nth-child(5) { width: 35%; }

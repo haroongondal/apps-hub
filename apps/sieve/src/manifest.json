@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Sieve",
+  "version": "0.3.0",
+  "description": "Blocks ads, trackers, cookie banners and annoyances with open filter lists. No account, no analytics.",
+  "minimum_chrome_version": "128",
+  "icons": { "16": "icon-16.png", "32": "icon-32.png", "48": "icon-48.png", "128": "icon-128.png" },
+  "action": {
+    "default_title": "Sieve",
+    "default_popup": "popup.html",
+    "default_icon": { "16": "icon-16.png", "32": "icon-32.png", "48": "icon-48.png", "128": "icon-128.png" }
+  },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "options_page": "options.html",
+  "devtools_page": "devtools.html",
+  "content_scripts": [
+    {
+      "matches": ["*://www.youtube.com/*", "*://m.youtube.com/*", "*://music.youtube.com/*", "*://www.youtube-nocookie.com/*"],
+      "js": ["yt-main.js"],
+      "world": "MAIN",
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["*://www.youtube.com/*", "*://m.youtube.com/*", "*://music.youtube.com/*", "*://www.youtube-nocookie.com/*"],
+      "js": ["yt-relay.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "permissions": ["alarms", "contextMenus", "declarativeNetRequest", "declarativeNetRequestFeedback", "downloads", "offscreen", "scripting", "storage", "unlimitedStorage", "webNavigation"],
+  "host_permissions": ["<all_urls>"]
+}

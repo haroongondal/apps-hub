@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<title>Sieve spike</title>
+<h1>Sieve spike</h1>
+<p>Open a YouTube video in another tab and pause it, then run the probes against it. A playing video shares the connection and slows the speed test.</p>
+<p>Speed test needs no video. It downloads about 2 GB from three public test servers and compares a plain Chrome download with six parts, so it takes a while on a slow link.</p>
+<p>
+  <button id="run">Run all</button>
+  <button id="speed">Speed test</button>
+  <button id="save">Save results</button>
+</p>
+<p id="status" role="status"></p>
+<div id="results"></div>
+<iframe id="solver" src="solver.html" hidden></iframe>
+<script src="spike.js"></script>
