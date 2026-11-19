@@ -212,6 +212,10 @@
     // preload.cjs, so the mobile schema gains an event too (SPEC §14.3 as built)
     keepAutosave: () => call('keepAutosave'),
     setDocState: ({ title, dirty, filePath }) => post({ type: 'docState', title, dirty, filePath: filePath ?? null }),
+    // documented addition, 2026-11-19: reads text in an image on the phone (touch.js Copy text) and
+    // copies it. Desktop and Chrome have no recognizer; the sheet button is hidden there anyway.
+    recognizeText: ({ base64, x, y }) =>
+      window.ReactNativeWebView ? call('recognizeText', { base64, x, y }) : Promise.reject(new Error('Reading text needs the phone app.')),
     onMenu: fn => {
       menuHandler = fn;
       while (menuBacklog.length) fn(menuBacklog.shift());

@@ -78,6 +78,12 @@ Current apps:
   its `CLAUDE.md` and `AI_CONTEXT.md` still say `npm run`, read that as
   `pnpm --filter autonomous-browsing <script>`.
 
+- **text-ocr** (`packages/text-ocr`) — Expo local module shared by Design Editor mobile and
+  PDF Editor: Tesseract (English, bundled `tessdata_fast`) plus a clipboard copy, Android only.
+  Design Editor: long-press an image, "Copy text" (bridge event `recognizeText`). PDF Editor:
+  "+" → "Scan text" (`app/scan-text.tsx`, system camera through expo-image-picker). The Scan
+  branch's Phase 4 OCR in `pdf-scan` is separate and unchanged.
+
 Not here on purpose: `~/Documents/agent-harness` (deferred until its phase
 branches are merged).
 

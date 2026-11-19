@@ -6,7 +6,9 @@
 //   once every finger lifts; the finger that started the gesture can't start a drag.
 // - one finger and the mouse keep Fabric's own select, drag and text editing.
 // - long-press (500 ms, stays within 12 px) on an object selects it and opens its action sheet:
-//   duplicate, delete, bring forward, send backward. Fabric is walled off while the sheet shows.
+//   duplicate, delete, bring forward, send backward, and on an image in the phone app Copy text
+//   (reads the picture on the device and copies the line under the finger). Fabric is walled off
+//   while the sheet shows.
 // - objects get larger handles (cornerSize/touchCornerSize/padding); these are interaction props
 //   Fabric never serialises (checked against toObject), so saves stay clean and undo restores
 //   them automatically because reopening a page fires object:added.
@@ -61,6 +63,7 @@
   sheet.hidden = true;
   sheet.innerHTML = '<button data-a="duplicate">Duplicate</button>'
     + '<button data-a="forward">Bring forward</button><button data-a="backward">Send backward</button>'
+    + '<button data-a="ocr" hidden>Copy text</button>'
     + '<button data-a="delete" class="danger">Delete</button><button data-a="close">Cancel</button>';
   document.body.append(sheet);
   sheet.addEventListener('click', e => {
@@ -68,7 +71,8 @@
     if (a === 'close') { closeSheet(); return; }
     if (!a) return;
     const o = canvas.getActiveObject();
-    if (a === 'duplicate') editor.MENU.duplicate();
+    if (a === 'ocr') { if (o instanceof fabric.FabricImage && pressAt) copyText(o, pressAt); }
+    else if (a === 'duplicate') editor.MENU.duplicate();
     else if (a === 'forward' && o) { canvas.bringObjectForward(o); canvas.requestRenderAll(); canvas.fire('object:modified', { target: o }); }
     else if (a === 'backward' && o) { canvas.sendObjectBackwards(o); canvas.requestRenderAll(); canvas.fire('object:modified', { target: o }); }
     else if (a === 'delete' && o && !o.isEditing) {
@@ -77,6 +81,60 @@
     }
     closeSheet();
   });
+
+  // ---- copy text from an image ----
+  // The canvas box is CSS-zoomed, so (box width / page width) is the px-per-scene-unit scale. An
+  // image's calcTransformMatrix (flips and rotation included) takes its centred local space to
+  // scene units; adding half the crop size and the crop offset reaches the element's pixels, and
+  // cw/sw, ch/sh the downscaled JPEG the recognizer reads.
+  let pressAt = null; // client point of the long-press that opened the sheet
+  let mark = null, markTimer;
+  function clearMark() { clearTimeout(markTimer); mark?.remove(); mark = null; }
+  const boxScale = () => { const r = canvas.lowerCanvasEl.getBoundingClientRect(); return [r, r.width / editor.size[0]]; };
+  async function copyText(o, at) {
+    clearMark();
+    const el = o.getElement(), sw = o.width, sh = o.height;
+    if (!el || !sw || !sh) { toast('This image is not ready yet. Wait a moment and try again.'); return; }
+    const k = Math.min(1, 2000 / Math.max(sw, sh)), cw = Math.max(1, Math.round(sw * k)), ch = Math.max(1, Math.round(sh * k));
+    let base64;
+    try {
+      const c = document.createElement('canvas');
+      c.width = cw; c.height = ch;
+      const g = c.getContext('2d');
+      g.fillStyle = '#fff'; g.fillRect(0, 0, cw, ch); // JPEG has no alpha: transparent areas would turn black
+      g.drawImage(el, o.cropX || 0, o.cropY || 0, sw, sh, 0, 0, cw, ch);
+      base64 = c.toDataURL('image/jpeg', 0.9).split(',')[1];
+    } catch {
+      toast('Could not read this image. Add it to the design again.');
+      return;
+    }
+    const [r, z] = boxScale();
+    const p = fabric.util.transformPoint(new fabric.Point((at.x - r.left) / z, (at.y - r.top) / z), fabric.util.invertTransform(o.calcTransformMatrix()));
+    let x = (p.x + sw / 2) * cw / sw, y = (p.y + sh / 2) * ch / sh;
+    if (x < 0 || y < 0 || x > cw || y > ch) x = y = null;
+    toast('Reading text…', 15000);
+    try {
+      const res = await window.native.recognizeText({ base64, x, y });
+      if (res.scope !== 'line') { toast('Copied all text'); return; }
+      toast(`Copied: ${res.text.slice(0, 40)}${res.text.length > 40 ? '…' : ''}`);
+      if (!res.box || !canvas.contains(o)) return;
+      // the line's four corners, back through the image's current matrix to page pixels
+      const m = o.calcTransformMatrix(), [r2, z2] = boxScale(), [l, t, rt, b] = res.box;
+      const xs = [], ys = [];
+      for (const [qx, qy] of [[l, t], [rt, t], [rt, b], [l, b]]) {
+        const s = fabric.util.transformPoint(new fabric.Point(qx * sw / cw - sw / 2, qy * sh / ch - sh / 2), m);
+        xs.push(r2.left + s.x * z2); ys.push(r2.top + s.y * z2);
+      }
+      mark = document.createElement('div');
+      mark.className = 'ocrmark';
+      Object.assign(mark.style, { left: Math.min(...xs) + 'px', top: Math.min(...ys) + 'px', width: Math.max(...xs) - Math.min(...xs) + 'px', height: Math.max(...ys) - Math.min(...ys) + 'px' });
+      document.body.append(mark);
+      markTimer = setTimeout(clearMark, 1500);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast(msg.startsWith('No text found') ? `${msg}. Try a sharper picture.` : msg);
+    }
+  }
 
   // ---- pinch and pan ----
   const pts = new Map(); // pointerId → { x, y }
@@ -137,6 +195,8 @@
     if (gest || pts.size > 1) return;
     const target = hit(e);
     if (target) {
+      pressAt = { x: e.clientX, y: e.clientY };
+      sheet.querySelector('[data-a="ocr"]').hidden = !(window.ReactNativeWebView && target instanceof fabric.FabricImage);
       canvas.setActiveObject(target);
       canvas.requestRenderAll();
       canvas._currentTransform = null;
@@ -149,6 +209,7 @@
   // ---- pointer plumbing (capture: read the fingers before anything else looks) ----
   board.addEventListener('pointerdown', e => {
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    clearMark(); // any new touch, a pinch included, drops the highlight
     if (sheet.hidden === false) closeSheet();
     disarmPress();
     if (pts.size === 2) startGesture();

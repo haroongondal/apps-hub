@@ -393,6 +393,9 @@ importers:
       react-native-webview:
         specifier: 13.15.0
         version: 13.15.0(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
+      text-ocr:
+        specifier: workspace:*
+        version: link:../../packages/text-ocr
     devDependencies:
       '@types/react':
         specifier: ~19.1.0
@@ -749,6 +752,9 @@ importers:
       react-native-worklets:
         specifier: 0.5.1
         version: 0.5.1(@babel/core@7.29.7(supports-color@8.1.1))(react-native@0.81.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)(supports-color@8.1.1)
+      text-ocr:
+        specifier: workspace:*
+        version: link:../../packages/text-ocr
     devDependencies:
       '@apps-hub/pdf-editor-engine':
         specifier: workspace:*
@@ -975,6 +981,19 @@ importers:
       '@noble/hashes':
         specifier: ^2.4.0
         version: 2.4.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.10.10
+      typescript:
+        specifier: ~5.9.2
+        version: 5.9.3
+
+  packages/text-ocr:
+    dependencies:
+      expo-modules-core:
+        specifier: ~3.0.30
+        version: 3.0.30(react-native@0.81.5(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.1.17)(react@19.1.0)(supports-color@10.2.2))(react@19.1.0)
     devDependencies:
       '@types/node':
         specifier: ^22.10.0

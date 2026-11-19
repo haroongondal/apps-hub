@@ -115,6 +115,7 @@ button:disabled { opacity: .45; cursor: default; }
 .board { touch-action: none; -webkit-user-select: none; user-select: none; }
 .actsheet { position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%); display: grid; gap: 8px; min-width: 200px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px; box-shadow: 0 10px 30px rgba(29,36,51,.25); z-index: 40; }
 .actsheet [hidden] { display: none; }
+.ocrmark { position: fixed; z-index: 30; pointer-events: none; border-radius: 3px; outline: 2px solid var(--c-accent); background: var(--c-accent-soft); background: color-mix(in srgb, var(--c-accent) 30%, transparent); }
 
 body.embedded { grid-template-rows: 1fr; }
 body.embedded main { grid-template-columns: 1fr; grid-template-rows: 1fr var(--rail); grid-template-areas: "work" "rail"; }
