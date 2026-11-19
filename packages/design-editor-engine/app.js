@@ -381,20 +381,29 @@ const AI_COPY = {
   aiNoPrompt: 'Describe the design first.',
   aiUnavailable: 'Design with AI is not available here.',
   aiWorking: 'Designing your page…',
-  aiNoKey: 'Add your Groq API key first.',
+  aiNoKey: 'Add a Groq or Gemini API key first.',
   aiKeySaved: 'Key saved. Press Generate.',
   aiNoSecure: `This ${PHONE ? 'phone' : 'Mac'} can’t store the key safely.`,
-  aiRefused: 'The API key was refused. Check it and save it again.',
+  aiRefused: 'The API key was refused. Check your keys and add them again.',
+  aiBadKey: 'That isn’t a Groq key (it starts gsk_) or a Gemini key (it starts AIza).',
   aiRateLimit: 'Too many requests right now. Wait a minute and try again.',
-  aiOffline: 'Couldn’t reach Groq. Check your connection and try again.',
+  aiOffline: 'Couldn’t reach the AI service. Check your connection and try again.',
   aiFailed: 'The request didn’t work. Try again.',
   aiDone: 'Done. Undo puts the page back.',
   aiDoneNewPage: 'Done. It is on a new page. Undo removes it.',
 };
-const AI_ERR = { nosecure: AI_COPY.aiNoSecure, offline: AI_COPY.aiOffline, timeout: AI_COPY.aiOffline };
+const AI_ERR = { nosecure: AI_COPY.aiNoSecure, badkey: AI_COPY.aiBadKey, offline: AI_COPY.aiOffline, timeout: AI_COPY.aiOffline };
 const aiStatus = msg => { $('#aiStatus').textContent = msg; };
 async function aiShowKeyRow(force) {
-  const has = !force && !!(await native.ai?.hasKey().catch(() => false));
+  const labels = await native.ai?.keys().catch(() => []) || [];
+  $('#aiKeyList').replaceChildren(...labels.map((label, i) => {
+    const li = document.createElement('li'), b = document.createElement('button');
+    b.textContent = 'Remove'; b.setAttribute('aria-label', `Remove ${label}`);
+    b.onclick = async () => { try { await native.ai.removeKey(i); } catch { aiStatus(AI_COPY.aiFailed); } aiShowKeyRow(false); };
+    li.append(label, b);
+    return li;
+  }));
+  const has = !force && labels.length > 0;
   $('#aiKeyRow').hidden = has; $('#aiChange').hidden = !has;
 }
 async function generate() {
@@ -406,8 +415,9 @@ async function generate() {
     const hadObjects = canvas.getObjects().length > 0;
     const res = await native.ai.request(AiLayout.buildRequest(prompt, W, H));
     if (res.error === 'nokey') { aiShowKeyRow(true); return aiStatus(AI_COPY.aiNoKey); }
-    if (res.status === 401) aiShowKeyRow(true);
-    if (!res.ok) return aiStatus(AI_ERR[res.error] || (res.status === 401 ? AI_COPY.aiRefused : res.status === 429 ? AI_COPY.aiRateLimit : AI_COPY.aiFailed));
+    const refusedKey = res.status === 401 || res.status === 403;
+    if (refusedKey) aiShowKeyRow(true);
+    if (!res.ok) return aiStatus(AI_ERR[res.error] || (refusedKey ? AI_COPY.aiRefused : res.status === 429 ? AI_COPY.aiRateLimit : AI_COPY.aiFailed));
     const layout = AiLayout.parseReply(res.json);
     if (!(await applyLayout(layout))) return aiStatus(AI_COPY.aiFailed);
     aiStatus(hadObjects ? AI_COPY.aiDoneNewPage : AI_COPY.aiDone);
@@ -422,7 +432,7 @@ $('#aiSave').onclick = async () => {
   $('#aiKey').value = '';
   try {
     const r = await native.ai.setKey(key);
-    if (r && r.ok === false) return aiStatus(r.error === 'nosecure' ? AI_COPY.aiNoSecure : AI_COPY.aiFailed);
+    if (r && r.ok === false) return aiStatus(AI_ERR[r.error] || AI_COPY.aiFailed);
     aiShowKeyRow(false); aiStatus(AI_COPY.aiKeySaved);
   } catch { aiStatus(AI_COPY.aiFailed); }
 };

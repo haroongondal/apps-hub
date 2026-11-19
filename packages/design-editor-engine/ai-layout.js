@@ -1,7 +1,7 @@
 // Pure request and reply handling for "Design with AI". No DOM, no Node API:
 // it loads as a plain <script> (globalThis.AiLayout) and through require() in node --test.
 (function (root) {
-  const MODEL = 'openai/gpt-oss-120b'; // on Groq, OpenAI-compatible chat completions
+  const MODEL = 'openai/gpt-oss-120b'; // Groq's; the app swaps in the model of whichever key it uses (ai-keys.js)
   const FONTS = ['Atkinson Hyperlegible Next', 'Jost', 'Playfair Display', 'Dancing Script'];
   const TYPES = ['text', 'rect', 'circle', 'star', 'line'];
   const ALIGNS = ['left', 'center', 'right'];
