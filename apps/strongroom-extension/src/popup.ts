@@ -21,6 +21,10 @@ async function call<T = unknown>(req: Request | { type: string }): Promise<T> {
   return reply.data as T;
 }
 
+const groupedCode = (code: string) => (code.length === 6 ? `${code.slice(0, 3)} ${code.slice(3)}`
+  : code.length === 8 ? `${code.slice(0, 4)} ${code.slice(4)}` : code);
+const secondsLeftText = (seconds: number) => `${seconds} second${seconds === 1 ? '' : 's'} left`;
+
 const root = document.getElementById('app')!;
 let tab: PageRef | null = null;
 // Chrome closes the toolbar popup when the file picker opens, so Import runs in a full tab (popup.html#import).
@@ -464,9 +468,43 @@ async function detailScreen(id: string) {
     await vaultScreen();
   }), 'ui-btn--danger');
   const line = (name: string, ...kids: Child[]) => h('div', { class: 'ui-field' }, h('span', { class: 'ui-caption' }, name), h('div', { class: 'ui-toolbar' }, ...kids));
+
+  // The code is recomputed by the service on every read; this screen only counts down and asks again at rollover.
+  let currentCode = d.code?.code ?? '';
+  let deadline = d.code ? Date.now() + d.code.secondsLeft * 1000 : 0;
+  const codeText = h('span', { class: 'ui-mono grow' }, currentCode ? groupedCode(currentCode) : 'None');
+  const codeLeft = h('span', { class: 'ui-meta' }, d.code ? secondsLeftText(d.code.secondsLeft) : '');
+  let removeSure = false;
+  const removeCode = button('Remove code', () => guarded(msg, [removeCode], async () => {
+    if (!removeSure) {
+      removeSure = true;
+      removeCode.textContent = 'Tap again to remove';
+      removeCode.disabled = false;
+      return;
+    }
+    await call({ type: 'removeTotp', id });
+    await detailScreen(id);
+  }), 'ui-btn--danger');
+  const timer = setInterval(() => {
+    if (!codeText.isConnected) return clearInterval(timer);
+    if (!currentCode) return;
+    const left = Math.max(1, Math.ceil((deadline - Date.now()) / 1000));
+    codeLeft.textContent = secondsLeftText(left);
+    if (Date.now() < deadline) return;
+    void call<Detail>({ type: 'get', id }).then((fresh) => {
+      if (!codeText.isConnected) return;
+      currentCode = fresh.code?.code ?? '';
+      deadline = fresh.code ? Date.now() + fresh.code.secondsLeft * 1000 : 0;
+      codeText.textContent = currentCode ? groupedCode(currentCode) : 'None';
+      codeLeft.textContent = fresh.code ? secondsLeftText(fresh.code.secondsLeft) : '';
+    }).catch(() => {});
+  }, 1_000);
+
   screen(d.name, vaultScreen,
     line('Username', h('span', { class: 'grow' }, d.username || 'None'), d.username && button('Copy', () => copy(d.username, 'Username', toast))),
     line('Password', h('span', { class: 'grow' }, shown), toggle, button('Copy', () => copy(d.password, 'Password', toast))),
+    d.code && line('Authenticator code', codeText, codeLeft,
+      button('Copy', () => copy(currentCode, 'Code', toast)), removeCode),
     d.websites && line('Websites', h('span', { class: 'grow pre' }, d.websites)),
     d.note && line('Note', h('span', { class: 'grow pre' }, d.note)),
     h('div', { class: 'ui-toolbar' }, button('Edit', () => editScreen(d), 'ui-btn--primary'), del), toast, msg);

@@ -1,5 +1,6 @@
-type Row = { id: string; name: string; username: string };
+type Row = { id: string; name: string; username: string; totp?: boolean };
 type Candidates = { locked: boolean; rows: Row[] };
+type TotpState = { code: string; secondsLeft: number; period: number };
 
 const MENU_CSS = `
   .menu { font: 13px system-ui, sans-serif; background: #fff; color: #1a1a1a; border: 1px solid #a21cafaa; border-radius: 8px;
@@ -27,6 +28,38 @@ const passwordFields = () => [...document.querySelectorAll<HTMLInputElement>('in
 const isUserField = (el: Element): el is HTMLInputElement =>
   el instanceof HTMLInputElement && ['text', 'email', 'tel'].includes(el.type) && !el.disabled && !el.readOnly && visible(el);
 
+// DESIGN §15.2's bounded keyword heuristic, mirroring FormDetector.kt (including its Roman-Urdu words).
+// "security code" and "card code" are excluded with the CVC words: they are payment fields, not codes.
+const OTP_WORD = /(^|[^a-z0-9])(code|otp|pin|verification|2\s?fa|confirmation|tasdeeq|tasdiq|tasdeek)([^a-z0-9]|$)/i;
+const OTP_NOT = /(^|[^a-z0-9])(cvc|cvv|csc|card|postal|post|zip|country|area|security)([^a-z0-9]|$)/i;
+const camelLower = (text: string) => text.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
+
+function fieldText(el: HTMLInputElement): string {
+  const parts = [el.name, el.id, el.getAttribute('aria-label') ?? '', el.placeholder];
+  for (const id of (el.getAttribute('aria-labelledby') ?? '').split(/\s+/).filter(Boolean)) parts.push(document.getElementById(id)?.textContent ?? '');
+  if (el.labels) for (const label of el.labels) parts.push(label.textContent ?? '');
+  return parts.join(' ');
+}
+
+/** autocomplete="one-time-code" first, then a named code box that is numeric or 4–8 characters long. */
+function isOtpField(el: Element): boolean {
+  if (!(el instanceof HTMLInputElement) || el.type === 'password' || el.disabled || el.readOnly || !visible(el)) return false;
+  if (!['text', 'tel', 'number'].includes(el.type)) return false;
+  const text = camelLower(fieldText(el));
+  if (OTP_NOT.test(text)) return false;
+  if (el.autocomplete.split(/\s+/).some((token) => token.toLowerCase() === 'one-time-code')) return true;
+  if (!OTP_WORD.test(text)) return false;
+  const numeric = el.type === 'number' || el.inputMode === 'numeric'
+    || /(\[0-9\]|\\d|0-9)/.test(el.getAttribute('pattern') ?? '');
+  return numeric || (el.maxLength >= 4 && el.maxLength <= 8);
+}
+
+const otpFields = (scope: ParentNode) =>
+  [...scope.querySelectorAll<HTMLInputElement>('input')].filter((field): field is HTMLInputElement => isOtpField(field));
+const formScope = (field: HTMLInputElement): ParentNode => field.form ?? document;
+const grouped = (code: string) => (code.length === 6 ? `${code.slice(0, 3)} ${code.slice(3)}`
+  : code.length === 8 ? `${code.slice(0, 4)} ${code.slice(4)}` : code);
+
 function usernameFor(pw: HTMLInputElement): HTMLInputElement | null {
   const before = [...(pw.form ?? document).querySelectorAll('input')].filter(isUserField)
     .filter((i) => i.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING);
@@ -39,12 +72,19 @@ function setValue(el: HTMLInputElement, value: string) {
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-function fillForm(username: string, password: string, near?: HTMLInputElement) {
+function fillForm(username: string, password: string, near?: HTMLInputElement): ParentNode {
   const all = passwordFields();
   const pw = (near && all.find((p) => p === near || usernameFor(p) === near)) ?? all[0];
   const user = pw ? usernameFor(pw) : near && isUserField(near) ? near : null;
   if (user && username) setValue(user, username);
   if (pw) setValue(pw, password);
+  return pw?.form ?? near?.form ?? document;
+}
+
+/** §15.2: a chosen login's code targets every otp field in that form, never another form on the page. */
+function fillCodes(state: TotpState | null, scope: ParentNode) {
+  if (!state) return;
+  for (const field of otpFields(scope)) setValue(field, state.code);
 }
 
 let menu: HTMLElement | null = null;
@@ -103,9 +143,31 @@ async function offerLogins(field: HTMLInputElement) {
   showMenu(field, found.rows.map((row) => ({
     html: [row.name, row.username],
     run: async () => {
-      const creds = await send<{ username: string; password: string }>({ type: 'fill', id: row.id });
+      const creds = await send<{ username: string; password: string; code: TotpState | null }>({ type: 'fill', id: row.id });
       hideMenu();
-      if (creds) fillForm(creds.username, creds.password, field);
+      if (creds) fillCodes(creds.code, fillForm(creds.username, creds.password, field));
+    },
+  })));
+}
+
+async function offerCodes(field: HTMLInputElement) {
+  const found = await send<Candidates>({ type: 'candidates' });
+  if (!found || document.activeElement !== field || field.value !== '') return;
+  if (found.locked) return showMenu(field, [{ html: ['Strongroom is locked', 'Click to unlock'], run: () => void send({ type: 'openPopup' }) }]);
+  const coded = found.rows.filter((row) => row.totp);
+  if (coded.length === 0) return;
+  const states = await Promise.all(coded.map(async (row) => ({ row, state: await send<TotpState | null>({ type: 'totpCode', id: row.id }) })));
+  if (document.activeElement !== field || field.value !== '') return;
+  const items = states.filter((entry): entry is { row: Row; state: TotpState } => entry.state !== null);
+  if (items.length === 0) return;
+  showMenu(field, items.map(({ row, state }) => ({
+    html: [grouped(state.code), `· ${row.name}`],
+    run: async () => {
+      // A displayed code goes stale; fetch the current one at click time and never fill the menu's copy.
+      const current = await send<TotpState | null>({ type: 'totpCode', id: row.id });
+      const scope = formScope(field);
+      hideMenu();
+      if (current) fillCodes(current, scope);
     },
   })));
 }
@@ -113,6 +175,7 @@ async function offerLogins(field: HTMLInputElement) {
 document.addEventListener('focusin', (e) => {
   const el = e.target;
   if (!(el instanceof HTMLInputElement) || !visible(el)) return;
+  if (isOtpField(el)) return void offerCodes(el);
   const isLoginField = el.type === 'password' || (isUserField(el) && (el.autocomplete.includes('username') || passwordFields().some((p) => usernameFor(p) === el)));
   if (isLoginField) void offerLogins(el);
 });
@@ -147,8 +210,8 @@ document.addEventListener('click', (e) => {
 // The popup names a login by id only; the worker then checks the page this script is really running on.
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id || message?.type !== 'fillForm') return;
-  void send<{ username: string; password: string }>({ type: 'fill', id: String(message.id) }).then((creds) => {
-    if (creds) fillForm(creds.username, creds.password);
+  void send<{ username: string; password: string; code: TotpState | null }>({ type: 'fill', id: String(message.id) }).then((creds) => {
+    if (creds) fillCodes(creds.code, fillForm(creds.username, creds.password));
     sendResponse({ filled: creds !== null });
   });
   return true;
