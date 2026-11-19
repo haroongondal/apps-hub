@@ -33,7 +33,15 @@ const WIDGET_NAMES: Record<WidgetId, string> = {
 };
 const BLUETOOTH = PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT;
 
-export function SettingsScreen({ value, onChange }: { value: NotchSettings; onChange: (next: NotchSettings) => void }) {
+export function SettingsScreen({
+  value,
+  onChange,
+  onPickMessageApps,
+}: {
+  value: NotchSettings;
+  onChange: (next: NotchSettings) => void;
+  onPickMessageApps: () => void;
+}) {
   const { c } = useTheme();
   // Read on mount and each time the app comes back, e.g. from the notification access page.
   const [listener, setListener] = useState(() => NotchIsland.isListenerAllowed());
@@ -171,6 +179,16 @@ export function SettingsScreen({ value, onChange }: { value: NotchSettings; onCh
           subtitle="A ringing alarm with Snooze and Dismiss, shown when you open the pill"
           value={value.alarmCard}
           onChange={(alarmCard) => set({ alarmCard })}
+        />
+      </Group>
+
+      <Group title="Message peek" footer="The pill opens for up to 8 seconds with the sender and one line of a new message, only from the apps you choose. Never during a call. Nothing is saved.">
+        <SwitchRow title="Message peek" value={value.messagePeek.on} onChange={(on) => set({ messagePeek: { ...value.messagePeek, on } })} />
+        <Row
+          title="Apps"
+          subtitle={value.messagePeek.apps.length === 0 ? 'None chosen yet' : `${value.messagePeek.apps.length} chosen`}
+          accessibilityHint="Choose which apps can peek"
+          onPress={onPickMessageApps}
         />
       </Group>
 
