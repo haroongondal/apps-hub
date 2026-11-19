@@ -52,4 +52,13 @@ class NotchSettingsTest {
     val s = NotchSettings.DEFAULTS.copy(events = EventSwitches(charging = false, ringer = true, dnd = false))
     assertEquals(s, NotchSettings.parse(s.toJson()))
   }
+
+  @Test fun bluetoothSwitchDefaultsOnRejectsStringsAndRoundTrips() {
+    assertEquals(true, NotchSettings.DEFAULTS.events.bluetooth)
+    assertEquals(true, NotchSettings.parse("""{"events":{"dnd":false}}""").events.bluetooth)
+    assertEquals(false, NotchSettings.parse("""{"events":{"bluetooth":false}}""").events.bluetooth)
+    assertEquals(true, NotchSettings.parse("""{"events":{"bluetooth":"false"}}""").events.bluetooth)
+    val s = NotchSettings.DEFAULTS.copy(events = EventSwitches(bluetooth = false))
+    assertEquals(s, NotchSettings.parse(s.toJson()))
+  }
 }
