@@ -1,0 +1,46 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { formatCount, keysUnreadable, lastUsedText, plainError, servicesFor, usageText } from '../format.ts';
+
+test('formatCount shortens thousands and millions', () => {
+  assert.equal(formatCount(0), '0');
+  assert.equal(formatCount(999), '999');
+  assert.equal(formatCount(1000), '1k');
+  assert.equal(formatCount(1234), '1.2k');
+  assert.equal(formatCount(2_500_000), '2.5M');
+});
+
+test('lastUsedText speaks in the largest whole unit', () => {
+  const now = 10 * 86_400_000;
+  assert.equal(lastUsedText(0, now), 'Never used');
+  assert.equal(lastUsedText(now - 30_000, now), 'Used just now');
+  assert.equal(lastUsedText(now - 5 * 60_000, now), 'Used 5 min ago');
+  assert.equal(lastUsedText(now - 3 * 3_600_000, now), 'Used 3 h ago');
+  assert.equal(lastUsedText(now - 86_400_000, now), 'Used 1 day ago');
+  assert.equal(lastUsedText(now - 3 * 86_400_000, now), 'Used 3 days ago');
+});
+
+test('usageText covers no calls, one call and many', () => {
+  assert.equal(usageText({ calls: 0, inputTokens: 0, outputTokens: 0 }), 'No calls yet');
+  assert.equal(usageText({ calls: 1, inputTokens: 120, outputTokens: 7 }), '1 call, 120 tokens in, 7 out');
+  assert.equal(usageText({ calls: 12, inputTokens: 3400, outputTokens: 1200 }), '12 calls, 3.4k tokens in, 1.2k out');
+});
+
+test('plainError keeps only the module message', () => {
+  const wrapped = new Error("Call to function 'AiHubCore.addKey' has been rejected.\n→ Caused by: Enter a model id.");
+  assert.equal(plainError(wrapped), 'Enter a model id.');
+  assert.equal(plainError(new Error('Plain.')), 'Plain.');
+  assert.equal(plainError(new Error('')), 'Something went wrong. Try again.');
+});
+
+test('keysUnreadable spots the vault message', () => {
+  assert.ok(keysUnreadable("Your saved keys couldn't be opened. Try again."));
+  assert.ok(!keysUnreadable('Enter a model id.'));
+});
+
+test('servicesFor matches what each job can run on', () => {
+  assert.deepEqual(servicesFor('chat'), ['groq', 'gemini']);
+  assert.deepEqual(servicesFor('vision'), ['gemini']);
+  assert.deepEqual(servicesFor('embed'), ['gemini']);
+  assert.deepEqual(servicesFor('transcribe'), ['groq']);
+});

@@ -1,13 +1,18 @@
 import React from 'react';
-import { Header, Notice, Screen, ThemeProvider } from '@apps-hub/ui';
+import { Header, Screen, ThemeProvider } from '@apps-hub/ui';
 import { BRAND } from './src/brand';
+import { AppsGroup } from './src/AppsGroup';
+import { KeysGroup } from './src/KeysGroup';
+import { ModelsGroup } from './src/ModelsGroup';
 
 export default function App() {
   return (
     <ThemeProvider brand={BRAND}>
       <Screen scroll>
         <Header title="AI hub" />
-        <Notice>Add your Gemini or Groq keys to start.</Notice>
+        <KeysGroup />
+        <ModelsGroup />
+        <AppsGroup />
       </Screen>
     </ThemeProvider>
   );
