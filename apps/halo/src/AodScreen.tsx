@@ -137,6 +137,12 @@ export default function AodScreen({ settings, update, onOpenTheme }: { settings:
         <View style={{ padding: space.md }}>
           <Segmented options={CHARGE_EFFECTS} value={a.chargeEffect} onChange={(chargeEffect) => setAod({ chargeEffect })} accessibilityLabel="Charging effect" />
         </View>
+        <SwitchRow
+          title="Wake the screen when the charger is plugged in"
+          subtitle="Shows the always-on screen for 10 seconds. Only when the phone is locked and not in a pocket."
+          value={a.wakeOnCharge}
+          onChange={(wakeOnCharge) => setAod({ wakeOnCharge })}
+        />
       </Group>
       <Group title="Themes" trailing={<Button label="Add theme" variant="secondary" size="sm" disabled={themes.length >= 20} onPress={addTheme} />}>
         {themes.map((t) => (

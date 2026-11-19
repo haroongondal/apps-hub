@@ -103,6 +103,7 @@ class SettingsTest {
     assertEquals("$name aod.dots.kinds keys", DotKind.entries.map { it.key }.toSet(), kinds.keys)
     for (k in DotKind.entries) assertEquals("$name aod.dots.kinds.${k.key}", kinds.b(k.key), k in s.dots.kinds)
     assertEquals("$name aod.chargeEffect", a.str("chargeEffect"), s.chargeEffect.key)
+    assertEquals("$name aod.wakeOnCharge", a.b("wakeOnCharge"), s.wakeOnCharge)
   }
 
   private fun checkThemes(name: String, expected: JsonArray, themes: List<Theme>) {

@@ -72,6 +72,8 @@ export interface Aod {
   slots: { start: string; themeId: string }[]; // max 4
   dots: AodDots;
   chargeEffect: ChargeEffect;
+  /** Plugging in the charger with the screen off wakes the always-on screen for 10 s, unless the phone is in a pocket. */
+  wakeOnCharge: boolean;
 }
 
 export interface Settings {
@@ -141,6 +143,7 @@ export const DEFAULT_SETTINGS: Settings = {
     slots: [],
     dots: { on: true, kinds: Object.fromEntries(DOT_KINDS.map((k) => [k, true])) as Record<DotKind, boolean>, count: true },
     chargeEffect: 'sweep',
+    wakeOnCharge: true,
   },
   themes: STARTER_THEMES,
 };
@@ -241,6 +244,7 @@ function normalizeAod(raw: unknown): Aod {
       count: bool(dots.count, d.dots.count),
     },
     chargeEffect: a.chargeEffect === 'off' || a.chargeEffect === 'sweep' ? a.chargeEffect : d.chargeEffect,
+    wakeOnCharge: bool(a.wakeOnCharge, d.wakeOnCharge),
   };
 }
 

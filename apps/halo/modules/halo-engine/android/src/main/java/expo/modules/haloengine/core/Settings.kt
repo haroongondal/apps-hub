@@ -85,6 +85,7 @@ data class SettingsAod(
   val slots: List<AodSlot> = emptyList(), // max 4
   val dots: AodDots = AodDots(),
   val chargeEffect: ChargeEffect = ChargeEffect.SWEEP,
+  val wakeOnCharge: Boolean = true, // plug-in with the screen off wakes the always-on screen, unless in a pocket
 )
 
 data class FaceOptions(
@@ -220,6 +221,7 @@ object SettingsCodec {
         )
       },
       chargeEffect = ChargeEffect.entries.firstOrNull { it.key == a.str("chargeEffect") } ?: d.chargeEffect,
+      wakeOnCharge = a.bool("wakeOnCharge", d.wakeOnCharge),
     )
   }
 
@@ -386,6 +388,7 @@ object SettingsCodec {
         put("count", s.aod.dots.count)
       })
       put("chargeEffect", s.aod.chargeEffect.key)
+      put("wakeOnCharge", s.aod.wakeOnCharge)
     })
     put("themes", buildJsonArray {
       s.themes.forEach { t ->
