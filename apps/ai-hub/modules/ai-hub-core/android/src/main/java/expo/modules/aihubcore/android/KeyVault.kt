@@ -18,31 +18,50 @@ class KeyVault(context: Context) {
   private val prefs = context.getSharedPreferences(ALIAS, Context.MODE_PRIVATE)
   private val serializer = ListSerializer(String.serializer())
 
-  // A list that cannot be opened (key lost after a restore, torn write) reads as empty; the owner pastes the keys again.
+  // For display only: an unopenable blob shows as empty. Writers go through read(), which throws instead.
   @Synchronized
-  fun list(): List<String> = try {
-    val cipher = Cipher.getInstance(TRANSFORM)
-    cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.decode(prefs.getString("iv", null), Base64.NO_WRAP)))
-    Json.decodeFromString(serializer, String(cipher.doFinal(Base64.decode(prefs.getString("keys", null), Base64.NO_WRAP))))
-  } catch (e: Exception) {
-    emptyList()
-  }
+  fun list(): List<String> = try { read() } catch (e: IllegalStateException) { emptyList() }
 
   @Synchronized
   fun add(key: String) {
     val value = key.trim()
-    val all = list()
-    if (value.isNotEmpty() && value !in all) replaceAll(all + value)
+    val all = read()
+    if (value.isNotEmpty() && value !in all) seal(all + value)
   }
 
   @Synchronized
   fun remove(index: Int) {
-    val all = list()
-    if (index in all.indices) replaceAll(all.filterIndexed { i, _ -> i != index })
+    val all = read()
+    if (index in all.indices) seal(all.filterIndexed { i, _ -> i != index })
   }
 
   @Synchronized
   fun replaceAll(keys: List<String>) {
+    read()
+    seal(keys)
+  }
+
+  // The way out when the saved keys cannot be opened: drops the blob and the Keystore key.
+  @Synchronized
+  fun clear() {
+    prefs.edit().clear().commit()
+    KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(ALIAS)
+  }
+
+  private fun read(): List<String> {
+    val iv = prefs.getString("iv", null)
+    val sealed = prefs.getString("keys", null)
+    if (iv == null && sealed == null) return emptyList()
+    try {
+      val cipher = Cipher.getInstance(TRANSFORM)
+      cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP)))
+      return Json.decodeFromString(serializer, String(cipher.doFinal(Base64.decode(sealed, Base64.NO_WRAP))))
+    } catch (e: Exception) {
+      throw IllegalStateException("Your saved keys couldn't be opened. Try again, or remove all keys and add them again.")
+    }
+  }
+
+  private fun seal(keys: List<String>) {
     val clean = keys.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
     val cipher = Cipher.getInstance(TRANSFORM).apply { init(Cipher.ENCRYPT_MODE, key()) }
     val sealed = cipher.doFinal(Json.encodeToString(serializer, clean).toByteArray())
