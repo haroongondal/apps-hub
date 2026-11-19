@@ -2,6 +2,7 @@ package expo.modules.designmedia.android
 
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtException
 import ai.onnxruntime.OrtSession
 import android.content.Context
 import expo.modules.designmedia.core.ClipModels
@@ -53,6 +54,13 @@ object ClipSessions {
   private fun open(ctx: Context, m: ModelFile, threads: Int): OrtSession =
     OrtSession.SessionOptions().use { opts ->
       opts.setIntraOpNumThreads(threads)
-      env.createSession(File(File(ctx.filesDir, "models"), m.name).path, opts)
+      val file = File(File(ctx.filesDir, "models"), m.name)
+      try {
+        env.createSession(file.path, opts)
+      } catch (e: OrtException) {
+        // Right size, bad bytes: delete it so the next use downloads it again (as Vision.session does).
+        file.delete()
+        throw e
+      }
     }
 }
