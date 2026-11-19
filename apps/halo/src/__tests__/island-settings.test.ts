@@ -114,6 +114,16 @@ test('progress cards default on, reject non-booleans and survive a round trip', 
   assert.deepEqual(normalize(JSON.parse(JSON.stringify(s))), s);
 });
 
+test('the alarm card defaults on, rejects non-booleans and survives a round trip', () => {
+  assert.equal(DEFAULTS.alarmCard, true);
+  assert.equal(normalize({ accent: 'mint' }).alarmCard, true);
+  assert.equal(normalize({ alarmCard: false }).alarmCard, false);
+  assert.equal(normalize({ alarmCard: 'false' }).alarmCard, true);
+  assert.equal(normalize({ alarmCard: 0 }).alarmCard, true);
+  const s = { ...DEFAULTS, alarmCard: false };
+  assert.deepEqual(normalize(JSON.parse(JSON.stringify(s))), s);
+});
+
 test('preview samples follow the widgets that are on', () => {
   assert.deepEqual(availableSamples(['clock', 'battery']), ['call', 'event', 'ears']);
   assert.deepEqual(availableSamples(['media', 'timer']), ['music', 'call', 'timer', 'event', 'ears']);
