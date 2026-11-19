@@ -23,6 +23,8 @@ import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import android.widget.TextView
 import expo.modules.notchisland.core.Cutout
+import expo.modules.notchisland.core.MessagePeek
+import expo.modules.notchisland.core.MessageSnapshot
 import expo.modules.notchisland.core.NotchSettings
 import expo.modules.notchisland.core.PillBox
 import expo.modules.notchisland.core.CALL_GREEN
@@ -53,6 +55,8 @@ class NotchAccessibilityService : AccessibilityService() {
   // Set only while the pill is open for an event; null while open means the user opened the card.
   private var transient: Transient? = null
   private val collapse = Runnable { setOpen(false) }
+  private var peeked: MessageSnapshot? = null
+  private val messageExpired = Runnable { setActive() }
   private val tick = object : Runnable {
     override fun run() {
       val now = SystemClock.elapsedRealtime()
@@ -106,6 +110,7 @@ class NotchAccessibilityService : AccessibilityService() {
   // The phase 1 indicator hook: media, a call or the timer changed. An open card rebinds its rows; a folded pill whose indicator changed is rebuilt at the new width.
   fun setActive() {
     if (pill == null) return
+    peekMessage()
     if (open) {
       if (NotchMedia.call != null) transient = null
       card?.transient = transient
@@ -118,6 +123,20 @@ class NotchAccessibilityService : AccessibilityService() {
     updateIndicator()
     main.removeCallbacks(tick)
     if (ticking()) main.post(tick)
+  }
+
+  // A new message from an allowed app opens the folded pill, or takes over from a quick event, for the rest of its 8 s.
+  private fun peekMessage() {
+    main.removeCallbacks(messageExpired)
+    val m = NotchMedia.message?.snap
+    val left = MessagePeek.remainingMs(m, settings.messagePeek, System.currentTimeMillis(), NotchMedia.messageSeenUntil, NotchMedia.call != null)
+    if (m == null || left <= 0) return
+    main.postDelayed(messageExpired, left)
+    if (m === peeked) return
+    peeked = m
+    if (open && transient == null) return
+    transient = null
+    setOpen(true, left)
   }
 
   // Rows appeared or went while the card is open: match the window height; the fold timer is left as it is.
@@ -215,6 +234,7 @@ class NotchAccessibilityService : AccessibilityService() {
       scaleY = scaleX
       pivotY = 0f
       onTouchDown = this@NotchAccessibilityService::holdOpen
+      onMessageOpened = { setOpen(false) }
     }
     card = content
     refresh()
@@ -300,7 +320,10 @@ class NotchAccessibilityService : AccessibilityService() {
     if (next && holdMs != null) main.postDelayed(collapse, holdMs)
     if (next == open) return
     open = next
-    if (!next) transient = null
+    if (!next) {
+      transient = null
+      NotchMedia.messageSeenUntil = System.currentTimeMillis()
+    }
     if (next) {
       refresh()
     } else {
