@@ -91,6 +91,10 @@ class MessagePeekTest {
     assertEquals(0, MessagePeek.remainingMs(null, on, 11_000, 0, false))
   }
 
+  @Test fun theRowIs64dp() {
+    assertEquals(64, PillGeometry.rowDp("message"))
+  }
+
   @Test fun packagePattern() {
     assertTrue(MessagePeek.PACKAGE.matches("org.telegram.messenger"))
     assertTrue(MessagePeek.PACKAGE.matches("com.whats_app2"))
