@@ -27,7 +27,7 @@ object PillGeometry {
     "media" -> 128
     "timer" -> 88
     "event" -> 48
-    "progress" -> 64
+    "progress", "message" -> 64
     else -> 44
   }
 
