@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { Button, Group, Header, Notice, Row, Screen } from '@apps-hub/ui';
 import NotchIsland from 'notch-island';
-import { BackButton } from './Stepper.tsx';
 import { Preview } from './island/Preview';
 import { SettingsScreen } from './island/SettingsScreen';
 import { normalize, type NotchSettings } from './island/settings';
@@ -12,7 +11,7 @@ function loadSettings(): NotchSettings {
   return normalize(JSON.parse(NotchIsland.getSettings()));
 }
 
-export default function IslandScreen({ onBack }: { onBack: () => void }) {
+export default function IslandScreen() {
   const read = useCallback(() => notchStatus(NotchIsland.isRunning()), []);
   const [status, setStatus] = useState(read);
   const [settings, setSettings] = useState<NotchSettings>(loadSettings);
@@ -31,7 +30,6 @@ export default function IslandScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <Screen scroll>
-      <BackButton onPress={onBack} />
       <Header title="Notch" subtitle="A pill around your camera. Tap it to expand." />
       {status === 'off' && (
         <Notice tone="warn" title="Notch is off" action={open}>
