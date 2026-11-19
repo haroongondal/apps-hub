@@ -26,7 +26,7 @@ class OkHttpTransportTest {
   }
 
   // Serves each request in order; `drop` lists the request numbers answered by closing the connection instead.
-  private fun server(drop: Set<Int>, block: (port: Int, accepted: AtomicInteger) -> Unit) {
+  private fun server(drop: Set<Int>, closeAfterReply: Boolean = false, block: (port: Int, accepted: AtomicInteger) -> Unit) {
     ServerSocket(0, 50, InetAddress.getLoopbackAddress()).use { server ->
       val accepted = AtomicInteger()
       val requests = AtomicInteger()
@@ -39,6 +39,11 @@ class OkHttpTransportTest {
               try { readRequest(it.getInputStream()) } catch (e: IOException) { break }
               if (requests.incrementAndGet() in drop) break
               it.getOutputStream().apply { write("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}".toByteArray()); flush() }
+              // The close lands after the client could have reused the connection, as an idle timeout would.
+              if (closeAfterReply) {
+                Thread.sleep(200)
+                break
+              }
             }
           }
         }
@@ -58,9 +63,15 @@ class OkHttpTransportTest {
     assertEquals(1, accepted.get())
   }
 
-  @Test fun aPooledConnectionThatDropsIsNotSilentlyResent() = server(drop = setOf(2)) { port, accepted ->
+  @Test fun aSecondRequestThatDropsIsNotSilentlyResent() = server(drop = setOf(2)) { port, accepted ->
     assertEquals(200, post(port).code)
     assertThrows(SocketTimeoutException::class.java) { post(port) }
-    assertEquals(1, accepted.get())
+    assertEquals(2, accepted.get())
+  }
+
+  @Test fun aConnectionTheServerClosedAfterItsReplyIsNotReused() = server(drop = emptySet(), closeAfterReply = true) { port, accepted ->
+    assertEquals(200, post(port).code)
+    assertEquals(200, post(port).code)
+    assertEquals(2, accepted.get())
   }
 }

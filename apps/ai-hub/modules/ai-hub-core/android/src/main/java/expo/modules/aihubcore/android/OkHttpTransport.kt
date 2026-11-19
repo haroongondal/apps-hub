@@ -8,6 +8,8 @@ import java.net.NoRouteToHostException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLHandshakeException
+import okhttp3.ConnectionPool
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -19,6 +21,8 @@ class OkHttpTransport(
     .readTimeout(60, TimeUnit.SECONDS)
     .callTimeout(120, TimeUnit.SECONDS)
     .retryOnConnectionFailure(false)
+    // No idle reuse: a pooled connection the server closed would fail as a timeout, since it can't be re-sent.
+    .connectionPool(ConnectionPool(0, 1, TimeUnit.SECONDS))
     .build(),
 ) : Transport {
   override fun post(url: String, headers: Map<String, String>, body: ByteArray, contentType: String): HttpReply {
@@ -33,7 +37,7 @@ class OkHttpTransport(
       }
     } catch (e: IOException) {
       // Only a request that never connected may be re-sent; anything after connecting may already be billed.
-      if (e is ConnectException || e is UnknownHostException || e is NoRouteToHostException) throw IOException(e.message, e)
+      if (e is ConnectException || e is UnknownHostException || e is NoRouteToHostException || e is SSLHandshakeException) throw IOException(e.message, e)
       throw e as? SocketTimeoutException ?: SocketTimeoutException(e.message).apply { initCause(e) }
     }
   }
