@@ -148,6 +148,11 @@ export function VaultScreen({ status, refresh, view, onView, onOpen, onEdit, onA
           {banner.body}
         </Notice>
       )}
+      {banner && (
+        <Notice tone="warn" title={banner.title} action={<Button label="Cancel the request" size="sm" variant="secondary" onPress={cancelRequest} busy={cancelling} />}>
+          {banner.body}
+        </Notice>
+      )}
       <SyncFooter onPress={onOpenSync} />
     </View>
   );

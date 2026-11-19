@@ -1,6 +1,6 @@
 // Phone proof only (Task 6c, ruling R25): the Worker's `handle` over node:https with the node:sqlite D1 fake, on 127.0.0.1.
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:https';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -21,11 +21,22 @@ if (!dir) throw new Error(USAGE);
 const dbFile = join(dir, 'vault.db');
 const fresh = !existsSync(dbFile);
 const sqlite = new DatabaseSync(dbFile);
-if (fresh) sqlite.exec(readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8'));
+const migrations = new URL('../migrations/', import.meta.url);
+if (fresh) for (const f of readdirSync(migrations).filter((n) => /^\d{4}_.*\.sql$/.test(n)).sort()) sqlite.exec(readFileSync(new URL(f, migrations), 'utf8'));
 
 const tokenFile = join(dir, 'setup-token.txt');
 if (!existsSync(tokenFile)) writeFileSync(tokenFile, randomBytes(20).toString('hex'), { mode: 0o600 });
-const env = { DB: d1FromNodeSqlite(sqlite), SETUP_TOKEN: readFileSync(tokenFile, 'utf8').trim() };
+const publicUrl = process.env.PUBLIC_URL ?? `https://127.0.0.1:${port}`;
+const env = { DB: d1FromNodeSqlite(sqlite), SETUP_TOKEN: readFileSync(tokenFile, 'utf8').trim(), PUBLIC_URL: publicUrl };
+
+// Test rig: <dir>/clock-offset-ms (read on every request) shifts the server clock; <dir>/mail-fail present makes the mailer throw; mail goes to <dir>/mail.log; <dir>/drop-reply loses PUT replies (below).
+const now = () => Date.now() + (existsSync(join(dir, 'clock-offset-ms')) ? Number(readFileSync(join(dir, 'clock-offset-ms'), 'utf8').trim()) || 0 : 0);
+const mail = {
+  async send(to: string, subject: string, text: string) {
+    if (existsSync(join(dir, 'mail-fail'))) throw new Error('fake mailer: mail-fail switch is on');
+    appendFileSync(join(dir, 'mail.log'), `${JSON.stringify({ at: new Date(now()).toISOString(), to, subject, text })}\n`);
+  },
+};
 
 // For the log only: which secret signed a request (the Worker decides access itself).
 async function roleOf(auth: string | undefined): Promise<string> {
@@ -45,8 +56,16 @@ createServer(tls, async (req, res) => {
   for (const h of ['authorization', 'content-type']) if (req.headers[h]) headers.set(h, String(req.headers[h]));
   const role = await roleOf(req.headers.authorization);
   const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
-  const response = await handle(new Request(`https://127.0.0.1:${port}${req.url}`, { method: req.method, headers, body: hasBody ? Buffer.concat(chunks) : undefined }), env);
+  const response = await handle(new Request(`${publicUrl}${req.url}`, { method: req.method, headers, body: hasBody ? Buffer.concat(chunks) : undefined }), env, { now, mail });
   const body = Buffer.from(await response.arrayBuffer());
+  // Test rig: <dir>/drop-reply present makes a PUT /v1/account do its work and then lose the reply (the socket closes with no answer).
+  // <dir>/drop-reply-once does the same for one PUT and then removes itself.
+  const once = req.method === 'PUT' && existsSync(join(dir, 'drop-reply-once'));
+  if (once) unlinkSync(join(dir, 'drop-reply-once'));
+  if (once || (req.method === 'PUT' && existsSync(join(dir, 'drop-reply')))) {
+    console.log(`${new Date().toISOString()} ${req.method} ${req.url} ${role} -> ${response.status}, REPLY DROPPED`);
+    return void req.socket.destroy();
+  }
   response.headers.forEach((v, k) => res.setHeader(k, v));
   res.writeHead(response.status).end(body);
   console.log(`${new Date().toISOString()} ${req.method} ${req.url} ${role} -> ${response.status} (${body.length} bytes)`);
