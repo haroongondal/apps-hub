@@ -18,6 +18,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import expo.modules.notchisland.core.AlarmCard
+import expo.modules.notchisland.core.MessagePeek
 import expo.modules.notchisland.core.NotchSettings
 import expo.modules.notchisland.core.PillGeometry
 import expo.modules.notchisland.core.Progress
@@ -59,11 +60,13 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
   private val transientRow = TransientRow(context, density)
   private val progressRow = ProgressRow(context, density)
   private val alarmRow = AlarmRow(context, density)
+  private val messageRow = MessageRow(context, density).apply { onOpened = { onMessageOpened?.invoke() } }
   private val rows = LinearLayout(context).apply { orientation = VERTICAL; setPadding(0, dp(PillGeometry.INSET_BELOW_HOLE_DP), 0, 0) }
   private var accent = Color.WHITE
   private var dateLine = false
   private var clockStyle = "24"
   var onTouchDown: (() -> Unit)? = null
+  var onMessageOpened: (() -> Unit)? = null
   var transient: Transient? = null
 
   init {
@@ -83,12 +86,15 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
     return false
   }
 
-  // A transient event alone; else the call row first, a ringing alarm next, then the media and timer rows in widget order, each only when it has something to show, then a progress card last.
+  // A transient event alone; else the call row first, a ringing alarm next, then the media and timer rows in widget order, each only when it has something to show, then a peeked message, then a progress card last.
   fun activeRows(s: NotchSettings): List<View> {
     if (transient != null) return listOf(transientRow)
     val rows = listOfNotNull(callRow.takeIf { NotchMedia.call != null }, alarmRow.takeIf { AlarmCard.show(s.alarmCard, NotchMedia.alarm?.snap) }) +
       rowsFor(s.widgets).mapNotNull { if (it == "media") mediaRow.takeIf { r -> r.isVisibleFor(NotchMedia.media) } else timerRow }
-    return rows + listOfNotNull(progressRow.takeIf { Progress.show(s.progressCards, NotchMedia.progress, rows.map(::kind)) })
+    val message = messageRow.takeIf {
+      MessagePeek.remainingMs(NotchMedia.message?.snap, s.messagePeek, System.currentTimeMillis(), NotchMedia.messageSeenUntil, NotchMedia.call != null) > 0
+    }
+    return rows + listOfNotNull(message, progressRow.takeIf { Progress.show(s.progressCards, NotchMedia.progress, rows.map(::kind)) })
   }
 
   fun activeKinds(s: NotchSettings): List<String> = activeRows(s).map(::kind)
@@ -99,6 +105,7 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
     transientRow -> "event"
     progressRow -> "progress"
     alarmRow -> "alarm"
+    messageRow -> "message"
     else -> "timer"
   }
 
@@ -116,6 +123,7 @@ class IslandCard(context: Context, holeWidth: Int, earHeight: Int, private val d
     transient?.let { transientRow.bind(it, accent) }
     NotchMedia.progress?.let { progressRow.bind(it, accent) }
     NotchMedia.alarm?.let { alarmRow.bind(it, clockStyle, accent) }
+    NotchMedia.message?.let { messageRow.bind(it) }
     tickRows()
   }
 
