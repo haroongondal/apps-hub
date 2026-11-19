@@ -1,3 +1,4 @@
+import { imageFormat } from './image.ts';
 import { GIF_MAX_S } from './gif.ts';
 import { reverseProblem } from './reverse.ts';
 import { GAIN_LIMIT_DB } from './volume.ts';
@@ -13,7 +14,9 @@ export interface FrameSpec { tool: 'frame'; inputId: string; timeS: number; form
 export interface VolumeSpec { tool: 'volume'; inputId: string; mode: 'normalize' | 'gain'; gainDb: number }
 export interface ReverseSpec { tool: 'reverse'; inputId: string; sound: boolean }
 export interface StabilizeSpec { tool: 'stabilize'; inputId: string; level: 'minimum' | 'recommended' | 'most' }
-export type JobSpec = SizeSpec | QualitySpec | ClipSpec | AudioSpec | GifSpec | ConvertSpec | FrameSpec | VolumeSpec | ReverseSpec | StabilizeSpec;
+export interface ImageSpec { tool: 'image'; inputId: string }
+export interface MusicSpec { tool: 'music'; inputId: string; musicInputId: string; mode: 'mix' | 'replace'; gainDb: number }
+export type JobSpec = SizeSpec | QualitySpec | ClipSpec | AudioSpec | GifSpec | ConvertSpec | FrameSpec | VolumeSpec | ReverseSpec | StabilizeSpec | ImageSpec | MusicSpec;
 
 const MIN_TARGET_BYTES = 1_000_000;
 const ENCODERS: Record<Platform, readonly Encoder[]> = {
@@ -29,6 +32,11 @@ export function validateSpec(spec: unknown, info: MediaInfo, platform: Platform)
   const s = spec as Record<string, unknown>;
   const errors: string[] = [];
   if (s.inputId !== info.id) errors.push('The file changed since you picked it. Pick it again.');
+  if (s.tool === 'image') {
+    if (info.container !== 'image' || !imageFormat(info.name)) errors.push('Pick a PNG or JPEG file for this tool.');
+    return errors;
+  }
+  if (info.container === 'image') return [...errors, 'This file is an image. Use Compress image.'];
   if (!(info.durationS > 0)) errors.push("The file's length couldn't be read. Pick another file.");
   const hasVideo = info.tracks.some(t => t.kind === 'video');
   const hasAudio = info.tracks.some(t => t.kind === 'audio');
@@ -102,6 +110,13 @@ export function validateSpec(spec: unknown, info: MediaInfo, platform: Platform)
     case 'stabilize':
       if (!hasVideo) errors.push("This file has no video track, so there's nothing to stabilize.");
       if (s.level !== 'minimum' && s.level !== 'recommended' && s.level !== 'most') errors.push('Pick Minimum cut, Recommended or Most stable.');
+      break;
+    case 'music':
+      if (platform !== 'mac') errors.push('Add music is on the Mac for now.');
+      if (!hasVideo) errors.push("This file has no video track, so there's nothing to add music to.");
+      if (typeof s.musicInputId !== 'string' || s.musicInputId === '') errors.push('Pick a song first.');
+      if (s.mode !== 'mix' && s.mode !== 'replace') errors.push('Pick Mix or Replace.');
+      if (!(Math.abs(n(s.gainDb)) <= GAIN_LIMIT_DB)) errors.push(`Pick a song volume from -${GAIN_LIMIT_DB} to +${GAIN_LIMIT_DB} dB.`);
       break;
     default:
       errors.push("This job type isn't supported yet.");

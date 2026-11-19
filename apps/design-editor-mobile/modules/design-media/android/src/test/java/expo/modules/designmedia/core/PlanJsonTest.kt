@@ -34,6 +34,19 @@ class PlanJsonTest {
   }
 
   @Test
+  fun anImageJobRoundTrips() {
+    val image = jobs[0].copy(id = "img", inputName = "shot.png", plan = ImagePlan("png", "png"))
+    assertEquals(listOf(image), decodeJobs(encodeJobs(listOf(image))))
+  }
+
+  @Test(expected = IllegalArgumentException::class)
+  fun refusesAnImageExtensionThatIsNotTheFormat() {
+    decodeJobs(
+      """[{"id":"x","inputId":"u","inputName":"a.png","state":"queued","progress":0,"attempt":1,"plan":{"tool":"image","format":"png","ext":"../x"}}]""",
+    )
+  }
+
+  @Test
   fun decodesTheExactPlanEveryMediaCorePlannerProduces() {
     val plans = decodeSamples()
     assertEquals(

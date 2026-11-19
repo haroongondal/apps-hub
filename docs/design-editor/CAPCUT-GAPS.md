@@ -31,7 +31,7 @@ Dated 2026-11-03, session B2.1. Written for: the owner and the next build sessio
 | 13 | Subtitles and captions (typed or imported) | On-screen text | Yes | No | No | Yes ("subtitles") | Out of scope |
 | 14 | Merge clips | Join several clips | Yes | No | No | Yes ("merging"); PRD later idea 4 | Out of scope for v1 |
 | 15 | Transitions, overlays, keyframes, chroma key, effects | Editing on a timeline | Yes | No | No | Yes ("filters" and the video timeline) | Out of scope |
-| 16 | Music and sound-effect library | Add licensed audio | No (library download) | Cloud | Yes (licensed assets) | No | Rejected: needs a licensed library |
+| 16 | Music and sound-effect library | Add licensed audio | No (library download) | Cloud | Yes (licensed assets) | No | Library rejected. Built as "Add music": the owner's own song file, picked from disk, mixed or replacing the sound, Mac only. No bundled or downloaded songs |
 
 Rows 1–4 are covered already. Rows 5 and 6 are the top two gaps that fit, and they are implemented here.
 

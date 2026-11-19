@@ -67,6 +67,10 @@ data class FramePlan(val timeS: Double, val format: String, val ext: String) : P
   override val tool get() = "frame"
 }
 
+data class ImagePlan(val format: String, val ext: String) : Plan {
+  override val tool get() = "image"
+}
+
 data class Loudness(val inputI: Double, val inputTp: Double, val inputLra: Double, val inputThresh: Double, val offset: Double)
 
 data class VolumePlan(val mode: String, val gainDb: Double, val video: String?, val ext: String, val measured: Loudness? = null) : Plan {
@@ -159,6 +163,7 @@ fun decodePlan(o: JsonObject): Plan = when (val tool = textOf(o, "tool")) {
   "reverse" -> ReversePlan(o.getValue("sound").jsonPrimitive.boolean, doubleOf(o, "quality"), textOf(o, "ext"))
   "stabilize" -> StabilizePlan(textOf(o, "level"), intOf(o, "search"), doubleOf(o, "quality"), textOf(o, "ext"))
   "compose" -> decodeComposePlan(o)
+  "image" -> decodeImagePlan(o)
   else -> throw IllegalArgumentException("Unknown tool: $tool")
 }
 
@@ -256,6 +261,7 @@ fun encodePlan(p: Plan): JsonObject = when (p) {
     put("plannedBytes", p.plannedBytes)
     put("ext", p.ext)
   }
+  is ImagePlan -> buildJsonObject { put("tool", "image"); put("format", p.format); put("ext", p.ext) }
 }
 
 fun decodeSizePlan(o: JsonObject): SizePlan {
@@ -335,6 +341,10 @@ private fun decodeVolumePlan(o: JsonObject): VolumePlan {
     Loudness(doubleOf(it, "inputI"), doubleOf(it, "inputTp"), doubleOf(it, "inputLra"), doubleOf(it, "inputThresh"), doubleOf(it, "offset"))
   }
   return VolumePlan(textOf(o, "mode"), doubleOf(o, "gainDb"), optText(o, "video"), textOf(o, "ext"), measured)
+}
+
+fun decodeImagePlan(o: JsonObject): ImagePlan = ImagePlan(format = textOf(o, "format"), ext = textOf(o, "ext")).also {
+  require(it.format in setOf("png", "jpg") && it.ext == it.format) { "Pick a PNG or JPEG image." }
 }
 
 // Absent optional fields are left out, so they reach JS as undefined, which is what NativeJobStatus declares.

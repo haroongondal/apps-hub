@@ -4,10 +4,11 @@ import { randomUUID } from 'node:crypto';
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import { Readable } from 'node:stream';
+import zlib from 'node:zlib';
 import path from 'node:path';
 import {
-  DESTINATIONS, ffmpegArgs, ffprobeArgs, fromFfprobe, keyframeArgs, loudnormMeasureArgs, nextGifAttempt, nextRunnable, nextSizeAttempt, outputName,
-  parseKeyframe, parseLoudnorm, parseProgress, planAudio, planClip, planConvert, planFrame, planGif, planQuality, planReverse, planSize, planStabilize, planVolume, reduce, thumbArgs, validateSpec,
+  DESTINATIONS, ffmpegArgs, ffprobeArgs, fromFfprobe, keyframeArgs, loudnormMeasureArgs, nextGifAttempt, nextRunnable, nextSizeAttempt, optimizeImage, outputName,
+  parseKeyframe, parseLoudnorm, parseProgress, planAudio, planClip, planConvert, planFrame, planGif, planImage, planMusic, planQuality, planReverse, planSize, planStabilize, planVolume, reduce, thumbArgs, validateSpec,
 } from './vendor/media-core/index.ts';
 
 // Electron cannot run a binary inside app.asar; the packager unpacks vendor/ffmpeg beside it.
@@ -15,7 +16,15 @@ const BIN = path.join(import.meta.dirname, 'vendor/ffmpeg').replace('app.asar', 
 const FFMPEG = path.join(BIN, 'ffmpeg');
 const FFPROBE = path.join(BIN, 'ffprobe');
 const INPUT_EXTENSIONS = ['mp4', 'm4v', 'mov', 'mkv', 'webm', 'mp3', 'm4a', 'aac', 'ogg', 'opus', 'wav', 'flac', 'ac3', 'eac3', 'mka'];
-const LABELS = { size: 'compressed', quality: 'compressed', clip: 'clip', convert: 'converted', frame: 'frame', volume: 'volume', reverse: 'reversed', stabilize: 'stabilized' };
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg'];
+const SONG_EXTENSIONS = ['mp3', 'm4a', 'aac', 'ogg', 'opus', 'wav', 'flac', 'ac3', 'eac3', 'mka'];
+// Level 9 with both strategies, keeping the smaller: filtered data often packs better with Z_FILTERED.
+const ZLIB = {
+  inflate: b => zlib.inflateSync(b),
+  deflate: b => [zlib.constants.Z_DEFAULT_STRATEGY, zlib.constants.Z_FILTERED]
+    .map(strategy => zlib.deflateSync(b, { level: 9, memLevel: 9, strategy })).reduce((a, c) => (c.length < a.length ? c : a)),
+};
+const LABELS = { size: 'compressed', quality: 'compressed', clip: 'clip', convert: 'converted', frame: 'frame', volume: 'volume', reverse: 'reversed', stabilize: 'stabilized', image: 'lossless', music: 'with music' };
 const STATS_PATH = () => path.join(app.getPath('userData'), 'media-stats.json');
 
 // The renderer only ever sends ids; the paths stay here (PRD AC-11).
@@ -68,16 +77,26 @@ export function registerMedia() {
   app.whenReady().then(() => protocol.handle(MEDIA_SCHEME, serveInput));
   ipcMain.handle('media-status', () => ({ ready: existsSync(FFMPEG) && existsSync(FFPROBE), destinations: DESTINATIONS }));
   ipcMain.handle('media-pick', async () => {
-    const r = await showOpen({ properties: ['openFile', 'multiSelections'], filters: [{ name: 'Video and audio', extensions: INPUT_EXTENSIONS }] });
+    const r = await showOpen({ properties: ['openFile', 'multiSelections'], filters: [{ name: 'Video, audio and images', extensions: [...INPUT_EXTENSIONS, ...IMAGE_EXTENSIONS] }] });
     if (r.canceled) return [];
     const picked = [];
     for (const file of r.filePaths) {
-      const json = JSON.parse(await execText(FFPROBE, ffprobeArgs(file), file));
-      const info = fromFfprobe(json, randomUUID(), path.basename(file));
+      const info = IMAGE_EXTENSIONS.includes(path.extname(file).slice(1).toLowerCase())
+        ? { id: randomUUID(), name: path.basename(file), bytes: statSync(file).size, durationS: 0, container: 'image', tracks: [] }
+        : fromFfprobe(JSON.parse(await execText(FFPROBE, ffprobeArgs(file), file)), randomUUID(), path.basename(file));
       inputs.set(info.id, { path: file, info });
       picked.push(info);
     }
     return picked;
+  });
+  // The song stays in the main process like any input; the renderer only gets its id and length.
+  ipcMain.handle('media-pick-song', async () => {
+    const r = await showOpen({ properties: ['openFile'], filters: [{ name: 'Audio', extensions: SONG_EXTENSIONS }] });
+    if (r.canceled) return null;
+    const file = r.filePaths[0];
+    const info = fromFfprobe(JSON.parse(await execText(FFPROBE, ffprobeArgs(file), file)), randomUUID(), path.basename(file));
+    inputs.set(info.id, { path: file, info });
+    return info;
   });
   ipcMain.handle('media-pick-folder', async () => {
     const r = await showOpen({ properties: ['openDirectory', 'createDirectory'] });
@@ -133,6 +152,12 @@ async function planFor(spec) {
     case 'volume': return planVolume(input.info, spec.mode, spec.gainDb);
     case 'reverse': return planReverse(input.info, spec.sound);
     case 'stabilize': return planStabilize(input.info, spec.level);
+    case 'image': return planImage(input.info);
+    case 'music': {
+      const song = inputs.get(spec.musicInputId);
+      if (!song) return { ok: false, reason: 'invalid', detail: 'The song changed since you picked it. Pick it again.' };
+      return planMusic(input.info, song.info, spec.mode, spec.gainDb);
+    }
     default: return { ok: false, reason: 'invalid', detail: "This job type isn't supported yet." };
   }
 }
@@ -145,11 +170,11 @@ async function enqueue(items) {
     if (!folder) throw new Error('Pick an output folder first.');
     const plan = await planFor(item.spec);
     if (!plan.ok) throw new Error(refusalText(plan));
-    planned.push({ input: inputs.get(item.spec.inputId), plan: plan.plan, folder });
+    planned.push({ input: inputs.get(item.spec.inputId), plan: plan.plan, folder, song: inputs.get(item.spec.musicInputId)?.path });
   }
-  const jobs = planned.map(({ input, plan, folder }) => {
+  const jobs = planned.map(({ input, plan, folder, song }) => {
     const job = { id: randomUUID(), inputId: input.info.id, inputName: input.info.name, plan, state: 'queued', progress: 0, attempt: 1, outputs: [] };
-    meta.set(job.id, { input: input.path, folder, inputName: input.info.name, label: labelFor(plan, input.info) });
+    meta.set(job.id, { input: input.path, song, folder, inputName: input.info.name, label: labelFor(plan, input.info) });
     return job;
   });
   dispatch({ type: 'enqueue', jobs });
@@ -177,13 +202,14 @@ async function runJob(job) {
     if (plan.tool === 'volume' && plan.mode === 'normalize') plan = { ...plan, measured: await measureLoudness(input.path) };
     for (let attempt = 1; ; attempt++) {
       const out = path.join(tmp, `attempt-${attempt}.${extOf(plan)}`);
-      await encode(job.id, plan, input, out, tmp);
+      await encode(job.id, plan, input, out, tmp, m.song);
       const bytes = (await fs.stat(out)).size;
       if (plan.tool === 'size' && plan.attempt === 1) await recordRatio(plan, bytes);
       const next = checkOutput(plan, bytes);
       if (!next.ok) throw new Error(refusalText(next));
       if (next.plan === plan) {
         const output = await publish(job, out, m);
+        if (plan.tool === 'image') output.note = `${Math.round((1 - output.bytes / input.info.bytes) * 100)}% smaller`;
         dispatch({ type: 'done', id: job.id, outputs: [output], at: Date.now() });
         return;
       }
@@ -204,13 +230,20 @@ function checkOutput(plan, bytes) {
   return { ok: true, plan };
 }
 
-async function encode(jobId, plan, input, out, tmp) {
+async function encodeImage(plan, input, out) {
+  const bytes = optimizeImage(new Uint8Array(await fs.readFile(input.path)), plan.format, ZLIB);
+  if (!bytes) throw new Error('This image is already as small as lossless compression can make it.');
+  await fs.writeFile(out, bytes);
+}
+
+async function encode(jobId, plan, input, out, tmp, song) {
+  if (plan.tool === 'image') return encodeImage(plan, input, out);
   if (plan.tool === 'size' && plan.encoder === 'x264') {
     const passlog = path.join(tmp, 'x264');
     await runFfmpeg(jobId, ffmpegArgs(plan, input.path, out, { n: 1, log: passlog }), input.info.durationS, [0, 0.5]);
     await runFfmpeg(jobId, ffmpegArgs(plan, input.path, out, { n: 2, log: passlog }), input.info.durationS, [0.5, 1]);
   } else {
-    await runFfmpeg(jobId, ffmpegArgs(plan, input.path, out), input.info.durationS, [0, 1]);
+    await runFfmpeg(jobId, ffmpegArgs(plan, input.path, out, undefined, song), input.info.durationS, [0, 1]);
   }
 }
 
@@ -314,7 +347,7 @@ function labelFor(plan, info) {
 }
 
 function extOf(plan) {
-  return { size: 'mp4', quality: 'mp4', clip: plan.ext, audio: plan.ext, gif: 'gif', convert: plan.ext, frame: plan.ext, volume: plan.ext, reverse: 'mp4', stabilize: 'mp4' }[plan.tool];
+  return { size: 'mp4', quality: 'mp4', clip: plan.ext, audio: plan.ext, gif: 'gif', convert: plan.ext, frame: plan.ext, volume: plan.ext, reverse: 'mp4', stabilize: 'mp4', image: plan.ext, music: plan.ext }[plan.tool];
 }
 
 function refusalText(r) {

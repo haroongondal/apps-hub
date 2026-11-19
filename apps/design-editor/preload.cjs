@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('native', {
   media: {
     status: () => ipcRenderer.invoke('media-status'),
     pick: () => ipcRenderer.invoke('media-pick'),
+    pickSong: () => ipcRenderer.invoke('media-pick-song'),
     pickFolder: () => ipcRenderer.invoke('media-pick-folder'),
     plan: spec => ipcRenderer.invoke('media-plan', spec),
     enqueue: items => ipcRenderer.invoke('media-enqueue', items),

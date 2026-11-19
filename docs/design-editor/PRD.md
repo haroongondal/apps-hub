@@ -123,6 +123,17 @@ hardware encoders; §6.6 works the numbers for a one-minute clip into 20 MB (720
   - Volume: normalize the sound to -23 LUFS (two-pass loudnorm) or change it by -20 to +20 dB. The picture is copied when it fits MP4, else re-encoded to H.264.
   - Reverse: the picture and, by default, the sound run backwards. Clips up to 10 s, at 1920×1080 or below.
   - Stabilize: FFmpeg's `deshake` at three levels (Minimum cut, Recommended, Most stable). Edges are mirrored, so the frame keeps its size.
+- **Compress image (Mac and Android, added 2026-11-18):** lossless, so every pixel stays identical. PNG is
+  unfiltered, re-filtered per row and deflated at level 9, and drops text, EXIF and timestamp chunks
+  (colour, transparency and print-size chunks stay). JPEG keeps its picture data byte for byte and
+  drops GPS, camera, thumbnail and XMP data; rotation and the colour profile stay. Written as
+  `<name> (lossless).png|jpg`. Needs no FFmpeg. A file that cannot shrink fails with "already as small
+  as lossless compression can make it". Animated PNG, and a JPEG with a gain map or second picture
+  after its end marker, are refused or left alone. Other formats (WebP, HEIC, GIF, TIFF) are not
+  covered, and JPEG Huffman re-optimisation is not done.
+  Android: a Kotlin port (`ImageOptimizer`) runs in the media queue on its own thread, reads the original
+  read-only and publishes to `Pictures/Design Editor`. Its only screen today is the Media lab; the real
+  Media tab will list it with the other tools. Images over about 96 MB decoded are refused.
 - **FR-9: Batch queue.**
   - The same settings apply to every selected file; each file is one job.
   - Jobs run one at a time, with progress per job and for the batch.

@@ -62,4 +62,12 @@ class OutputNameTest {
     assertEquals("audio 1", audioLabel(0, null))
     assertEquals("audio 1", audioLabel(0, "not a tag!"))
   }
+
+  @Test
+  fun imageOutputsAreLosslessWithTheirOwnExtension() {
+    assertEquals("Shot (lossless).png", imageOutputName("Shot.PNG", "png", none))
+    val taken = setOf("Shot (lossless).jpg")
+    assertEquals("Shot (lossless) 2.jpg", imageOutputName("Shot.jpeg", "jpg") { it in taken })
+    assertEquals("Image (lossless).png", imageOutputName("", "png", none))
+  }
 }

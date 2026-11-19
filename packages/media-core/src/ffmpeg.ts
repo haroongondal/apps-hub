@@ -1,6 +1,6 @@
 import { STABILIZE_PASSES } from './stabilize.ts';
 import { LOUDNESS_TARGET_LUFS } from './volume.ts';
-import type { Codec, ConvertPlan, Encoder, GifPlan, Plan, ReversePlan, SizePlan, StabilizePlan, VolumePlan } from './types.ts';
+import type { Codec, ConvertPlan, Encoder, GifPlan, ImagePlan, MusicPlan, Plan, ReversePlan, SizePlan, StabilizePlan, VolumePlan } from './types.ts';
 
 
 const GLOBAL = ['-hide_banner', '-nostats', '-progress', 'pipe:1', '-y'];
@@ -28,7 +28,8 @@ export function thumbArgs(input: string, timeS: number): string[] {
 }
 
 // pass: 1 or 2 for the two-pass libx264 size job; the log is the job's temp file.
-export function ffmpegArgs(plan: Plan, input: string, output: string, pass?: { n: 1 | 2; log: string }): string[] {
+// song: the music file's path, needed by the music tool only.
+export function ffmpegArgs(plan: Exclude<Plan, ImagePlan>, input: string, output: string, pass?: { n: 1 | 2; log: string }, song?: string): string[] {
   switch (plan.tool) {
     case 'size': return sizeArgs(plan, input, output, pass);
     case 'quality': return [...GLOBAL, '-i', input, '-map', '0:v:0', '-map', '0:a?',
@@ -54,6 +55,7 @@ export function ffmpegArgs(plan: Plan, input: string, output: string, pass?: { n
     case 'reverse': return reverseArgs(plan, input, output);
     case 'stabilize': return stabilizeArgs(plan, input, output);
     case 'compose': throw new Error('Make a video runs on the phone only.');
+    case 'music': return musicArgs(plan, input, song ?? '', output);
   }
 }
 
@@ -135,6 +137,15 @@ function reverseArgs(plan: ReversePlan, input: string, output: string): string[]
   const sound = plan.sound ? ['-map', '0:a:0?', '-af', 'areverse', '-c:a', 'aac', '-b:a', '192k'] : ['-an'];
   return [...GLOBAL, '-i', input, '-map', '0:v:0', '-vf', 'reverse', '-c:v', 'h264_videotoolbox', '-q:v', String(plan.quality),
     '-pix_fmt', 'yuv420p', ...sound, '-movflags', '+faststart', ...STRIP, output];
+}
+
+// amix with normalize=0 adds the two sounds at their own levels; the song's gain is applied before it.
+function musicArgs(plan: MusicPlan, input: string, song: string, output: string): string[] {
+  const gain = `[1:a]volume=${plan.gainDb}dB`;
+  const graph = plan.mix ? `${gain}[m];[0:a:0][m]amix=inputs=2:duration=first:normalize=0[a]` : `${gain}[a]`;
+  const video = plan.video === 'copy' ? ['-c:v', 'copy'] : ['-c:v', 'h264_videotoolbox', '-q:v', '65', '-pix_fmt', 'yuv420p'];
+  return [...GLOBAL, '-i', input, '-i', song, '-filter_complex', graph, '-map', '0:v:0', '-map', '[a]', ...video,
+    '-c:a', 'aac', '-b:a', '192k', '-t', plan.durationS.toFixed(3), '-movflags', '+faststart', ...STRIP, output];
 }
 
 function stabilizeArgs(plan: StabilizePlan, input: string, output: string): string[] {

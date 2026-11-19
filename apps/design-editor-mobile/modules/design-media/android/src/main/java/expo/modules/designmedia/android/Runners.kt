@@ -6,6 +6,7 @@ import expo.modules.designmedia.core.ComposePlan
 import expo.modules.designmedia.core.ConvertPlan
 import expo.modules.designmedia.core.FramePlan
 import expo.modules.designmedia.core.GifPlan
+import expo.modules.designmedia.core.ImagePlan
 import expo.modules.designmedia.core.QualityPlan
 import expo.modules.designmedia.core.ReversePlan
 import expo.modules.designmedia.core.SizePlan
@@ -23,6 +24,7 @@ object Runners {
       is AudioPlan -> if (plan.mode == "aac") TransformerRunner.start(req, null, done) else CopyRunner.start(req, source, done)
       is ConvertPlan -> if (plan.mode == "remux") CopyRunner.start(req, source, done) else TransformerRunner.start(req, source, done)
       is GifPlan -> GifRunner.start(req, source, done)
+      is ImagePlan -> ImageRunner.start(req, done)
       is FramePlan -> StillRunner.start(req, source, done)
       is VolumePlan, is ReversePlan, is StabilizePlan -> FfmpegRunner.start(req, source, done)
       is ComposePlan -> TransformerRunner.compose(req, plan, done)

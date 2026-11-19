@@ -17,6 +17,7 @@ import expo.modules.designmedia.core.ClipPlan
 import expo.modules.designmedia.core.EncoderStatsStore
 import expo.modules.designmedia.core.GifNext
 import expo.modules.designmedia.core.GifPlan
+import expo.modules.designmedia.core.ImagePlan
 import expo.modules.designmedia.core.Job
 import expo.modules.designmedia.core.JobState
 import expo.modules.designmedia.core.Messages
@@ -29,6 +30,7 @@ import expo.modules.designmedia.core.SizePlan
 import expo.modules.designmedia.core.VBR
 import expo.modules.designmedia.core.decodeJobs
 import expo.modules.designmedia.core.firstMode
+import expo.modules.designmedia.core.imageOutputName
 import expo.modules.designmedia.core.neededBytes
 import expo.modules.designmedia.core.nextGifAttempt
 import expo.modules.designmedia.core.nextRunnable
@@ -197,10 +199,11 @@ class MediaJobService : Service() {
     when (outcome) {
       is Outcome.Failed -> {
         Log.w(TAG, "${r.plan.tool} failed: ${outcome.detail}")
-        encoderFailed(r, Messages.COULDNT_PROCESS)
+        if (r.plan is ImagePlan) giveUp(r, outcome.userMessage ?: Messages.COULDNT_PROCESS) else encoderFailed(r, Messages.COULDNT_PROCESS)
       }
       is Outcome.Written -> {
         r.label = outcome.label
+        r.note = outcome.note
         completed(r, out)
       }
     }
@@ -258,7 +261,11 @@ class MediaJobService : Service() {
   private fun publish(r: Run, out: File) {
     val target = targetFor(r.plan)
     val output = try {
-      val name = outputName(r.job.inputName, r.label ?: outputLabel(r.plan), outputExt(r.plan)) { Outputs.exists(this, target, it) }
+      val taken: (String) -> Boolean = { Outputs.exists(this, target, it) }
+      val name = when (val plan = r.plan) {
+        is ImagePlan -> imageOutputName(r.job.inputName, plan.ext, taken)
+        else -> outputName(r.job.inputName, r.label ?: outputLabel(plan), outputExt(plan), taken)
+      }
       Outputs.publish(this, out, name, target)
     } catch (e: Exception) {
       Log.w(TAG, "publish failed", e)
@@ -267,7 +274,7 @@ class MediaJobService : Service() {
       return
     }
     release(r)
-    record(QueueEvent.Done(r.job.id, listOf(output), now()))
+    record(QueueEvent.Done(r.job.id, listOf(r.note?.let { output.copy(note = it) } ?: output), now()))
     pump()
   }
 
@@ -336,6 +343,7 @@ class MediaJobService : Service() {
   private inner class Run(val job: Job, var plan: Plan, var mode: String) : Runnable {
     var runner: Runner? = null
     var label: String? = null
+    var note: String? = null
     var aborted = false
     var finished = false
     var startedMs = 0L
