@@ -19,6 +19,7 @@ class NotchEvents(private val context: Context, private val onRefresh: () -> Uni
   private var lowFired: Int? = null
   private var ringer: RingerMode? = null
   private var dnd: Boolean? = null
+  private val headsets = HeadsetWatch(context, onEvent)
 
   fun register() {
     ringer = Transients.ringerMode(context.getSystemService(AudioManager::class.java).ringerMode)
@@ -57,11 +58,13 @@ class NotchEvents(private val context: Context, private val onRefresh: () -> Uni
     receiver = r
     // System broadcasts only, so an exported receiver is safe.
     context.registerReceiver(r, filter, Context.RECEIVER_EXPORTED)
+    headsets.register()
   }
 
   fun unregister() {
     receiver?.let { runCatching { context.unregisterReceiver(it) } }
     receiver = null
+    headsets.unregister()
   }
 
   private fun battery(intent: Intent) {

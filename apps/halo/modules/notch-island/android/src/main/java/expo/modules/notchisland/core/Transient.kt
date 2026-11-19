@@ -7,6 +7,7 @@ sealed interface Transient {
   data class LowBattery(val percent: Int) : Transient
   data class Ringer(val mode: RingerMode) : Transient
   data class Dnd(val on: Boolean) : Transient
+  data class Headset(val connected: Boolean, val name: String?) : Transient
 }
 
 /** [event] is the threshold to warn about now; [fired] is the lowest one already warned about, carried to the next reading. */
@@ -30,7 +31,21 @@ object Transients {
     is Transient.Charging, is Transient.LowBattery -> e.charging
     is Transient.Ringer -> e.ringer
     is Transient.Dnd -> e.dnd
+    is Transient.Headset -> e.bluetooth
   }
+
+  const val WIRED_KEY = "wired"
+  // AudioDeviceInfo types: 3 wired headset, 4 wired headphones, 22 USB headset; 7 Bluetooth SCO, 8 A2DP, 26 BLE headset. One device's ports share a key.
+  fun headsetKey(type: Int, address: String): String? = when (type) {
+    3, 4, 22 -> WIRED_KEY
+    7, 8, 26 -> "bt:$address"
+    else -> null
+  }
+
+  /** Headsets keyed as [headsetKey], with their names. Disconnects come first, so a connect in the same change shows last and wins. */
+  fun headsetChanges(before: Map<String, String?>, now: Map<String, String?>): List<Transient.Headset> =
+    before.filterKeys { it !in now }.map { Transient.Headset(false, it.value) } +
+      now.filterKeys { it !in before }.map { Transient.Headset(true, it.value) }
 
   fun lowBatteryCrossing(previous: Int?, now: Int, plugged: Boolean): Int? =
     if (plugged || previous == null) null else LOW_LEVELS.firstOrNull { previous > it && now <= it }
@@ -70,6 +85,11 @@ object Transients {
       RingerMode.SILENT -> TransientText("bell_off", "Silent", null)
     }
     is Transient.Dnd -> TransientText("moon", if (t.on) "Do not disturb on" else "Do not disturb off", null)
+    is Transient.Headset -> {
+      val name = t.name?.trim()?.ifEmpty { null }
+      val state = if (t.connected) "Connected" else "Disconnected"
+      TransientText("headphones", name ?: "Headphones ${state.lowercase()}", state.takeIf { name != null })
+    }
   }
 
   fun fullIn(minutes: Int): String {

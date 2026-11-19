@@ -48,6 +48,7 @@ class TransientRow(context: Context, density: Float) : LinearLayout(context) {
         "bell" -> R.drawable.notch_bell
         "bell_off" -> R.drawable.notch_bell_off
         "moon" -> R.drawable.notch_moon
+        "headphones" -> R.drawable.notch_headphones
         else -> R.drawable.notch_bolt
       },
     )
