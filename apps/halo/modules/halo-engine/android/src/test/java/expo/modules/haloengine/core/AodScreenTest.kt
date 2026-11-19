@@ -7,8 +7,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AodScreenTest {
-  private fun note(key: String, pkg: String, at: Long, ongoing: Boolean = false, importance: Int = 3, summary: Boolean = false, secret: Boolean = false) =
-    PostedNote(key, pkg, ongoing, importance, summary, null, at, secret = secret)
+  private fun note(key: String, pkg: String, at: Long, ongoing: Boolean = false, importance: Int = 3, summary: Boolean = false, secret: Boolean = false, category: String? = null) =
+    PostedNote(key, pkg, ongoing, importance, summary, category, at, secret = secret)
 
   @Test fun swipeLeftIsNextRightIsPrevious() {
     assertEquals(AodAction.NEXT, AodGestures.fling(onCard = true, pocket = false, dx = -200f, dy = 20f, minPx = 100f))
@@ -117,5 +117,23 @@ class AodScreenTest {
     assertNull(AodScreen.switchTheme(aod, themes, 21 * 60 + 59, "a"))
     assertEquals("b", AodScreen.switchTheme(aod, themes, 22 * 60, "a")?.id)
     assertNull(AodScreen.switchTheme(aod, themes, 22 * 60 + 1, "b"))
+  }
+
+  @Test fun groupsSplitByPackageAndCategoryNewestFirstAndForgetRemoved() {
+    val icons = NoteIcons("own.app")
+    icons.posted(note("a1", "chat", 1, category = "msg"))
+    icons.posted(note("a2", "chat", 2, category = "call"))
+    icons.posted(note("a3", "chat", 3, category = "msg"))
+    icons.posted(note("b1", "mail", 4))
+    assertFalse(icons.posted(note("s", "bank", 5, secret = true)))
+    assertEquals(listOf(NoteGroup("mail", null, 1), NoteGroup("chat", "msg", 2), NoteGroup("chat", "call", 1)), icons.groups())
+    icons.removed("a2")
+    icons.removed("b1")
+    assertEquals(listOf(NoteGroup("chat", "msg", 2)), icons.groups())
+    // A re-post may change the category; the key keeps one entry.
+    icons.posted(note("a1", "chat", 6, category = "call"))
+    assertEquals(listOf(NoteGroup("chat", "call", 1), NoteGroup("chat", "msg", 1)), icons.groups())
+    icons.reset(emptyList())
+    assertTrue(icons.groups().isEmpty())
   }
 }

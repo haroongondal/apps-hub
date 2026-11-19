@@ -38,8 +38,8 @@ data class SettingsEdges(
   val insets: List<Int> = listOf(0, 0, 0, 0),
 )
 
-/** colour is "#RRGGBB", or null to take it from the app icon. */
-data class AppNotify(val on: Boolean = true, val colour: String? = null)
+/** colour is "#RRGGBB", or null for the brand or icon colour; style null follows SettingsNotify.style. */
+data class AppNotify(val on: Boolean = true, val colour: String? = null, val style: String? = null)
 
 data class SettingsQuiet(val on: Boolean = false, val start: String = "22:00", val end: String = "07:00")
 
@@ -71,6 +71,11 @@ data class AodSchedule(val on: Boolean = false, val start: String = "00:00", val
 
 data class AodSlot(val start: String, val themeId: String)
 
+/** kinds holds the enabled dot kinds; count shows the number on a dot of two or more. */
+data class AodDots(val on: Boolean = true, val kinds: Set<DotKind> = DotKind.entries.toSet(), val count: Boolean = true)
+
+enum class ChargeEffect(val key: String) { OFF("off"), SWEEP("sweep") }
+
 data class SettingsAod(
   val enabled: Boolean = false,
   val timeoutSec: Int? = 30, // 10, 30, 60, 300, 900, 1800 or null = never stop
@@ -78,6 +83,8 @@ data class SettingsAod(
   val schedule: AodSchedule = AodSchedule(),
   val themeId: String = "night",
   val slots: List<AodSlot> = emptyList(), // max 4
+  val dots: AodDots = AodDots(),
+  val chargeEffect: ChargeEffect = ChargeEffect.SWEEP,
 )
 
 data class FaceOptions(
@@ -204,6 +211,15 @@ object SettingsCodec {
         val id = o.str("themeId")?.takeIf { ID.matches(it) } ?: return@mapNotNull null
         AodSlot(start, id)
       }.take(MAX_SLOTS),
+      dots = a.obj("dots").let { o ->
+        val k = o.obj("kinds")
+        AodDots(
+          on = o.bool("on", d.dots.on),
+          kinds = DotKind.entries.filter { k.bool(it.key, true) }.toSet(),
+          count = o.bool("count", d.dots.count),
+        )
+      },
+      chargeEffect = ChargeEffect.entries.firstOrNull { it.key == a.str("chargeEffect") } ?: d.chargeEffect,
     )
   }
 
@@ -263,7 +279,7 @@ object SettingsCodec {
       if (apps.size >= MAX_APPS) break
       val a = v as? JsonObject ?: continue
       if (!PKG.matches(k)) continue
-      apps[k] = AppNotify(a.bool("on", true), a.str("colour")?.takeIf { HEX.matches(it) }?.uppercase())
+      apps[k] = AppNotify(a.bool("on", true), a.str("colour")?.takeIf { HEX.matches(it) }?.uppercase(), a.str("style")?.takeIf { ID.matches(it) })
     }
     return SettingsNotify(
       enabled = n.bool("enabled", d.enabled),
@@ -327,6 +343,7 @@ object SettingsCodec {
           put(k, buildJsonObject {
             put("on", a.on)
             put("colour", a.colour)
+            put("style", a.style)
           })
         }
       })
@@ -363,6 +380,12 @@ object SettingsCodec {
       put("slots", buildJsonArray {
         s.aod.slots.forEach { add(buildJsonObject { put("start", it.start); put("themeId", it.themeId) }) }
       })
+      put("dots", buildJsonObject {
+        put("on", s.aod.dots.on)
+        put("kinds", buildJsonObject { DotKind.entries.forEach { put(it.key, it in s.aod.dots.kinds) } })
+        put("count", s.aod.dots.count)
+      })
+      put("chargeEffect", s.aod.chargeEffect.key)
     })
     put("themes", buildJsonArray {
       s.themes.forEach { t ->

@@ -211,4 +211,26 @@ class NotifyRulesTest {
     assertNull(r.onPosted(note(key = "seen", at = 1_000), s, noon, 70_000))
     assertNull(r.onPosted(note(key = "late", at = 7_000, once = true), s, noon, 70_000))
   }
+
+  @Test
+  fun colourFallsBackFromEntryToBrandToIcon() {
+    val r = NotifyRules(own)
+    val s = SettingsNotify(apps = mapOf("com.whatsapp" to AppNotify(true, "#112233")))
+    assertEquals(0xFF112233.toInt(), r.onPosted(note(key = "a", pkg = "com.whatsapp"), s, noon, 0)!!.colour)
+    assertEquals(0xFF25D366.toInt(), r.onPosted(note(key = "b", pkg = "com.whatsapp.w4b"), s, noon, 0)!!.colour)
+    assertEquals(0xFFFF3D9A.toInt(), r.onPosted(note(key = "c", pkg = "com.instagram.android"), s, noon, 0)!!.colour)
+    assertNull(r.onPosted(note(key = "d", pkg = "com.chat"), s, noon, 0)!!.colour)
+  }
+
+  @Test
+  fun appStyleOverridesTheGlobalStyle() {
+    val r = NotifyRules(own)
+    val s = SettingsNotify(style = "pulse", apps = mapOf("com.a" to AppNotify(style = "sweep"), "com.b" to AppNotify(style = null)))
+    assertEquals("sweep", r.onPosted(note(key = "a", pkg = "com.a"), s, noon, 0)!!.style)
+    assertEquals("pulse", r.onPosted(note(key = "b", pkg = "com.b"), s, noon, 0)!!.style)
+    assertEquals("pulse", r.onPosted(note(key = "c", pkg = "com.unlisted"), s, noon, 0)!!.style)
+    // Reminders use the same per-app style.
+    val rem = SettingsNotify(style = "pulse", reminderMin = 1, apps = s.apps)
+    assertEquals(listOf("sweep", "pulse", "pulse"), r.dueReminders(rem, noon, 60_000).map { it.style })
+  }
 }
