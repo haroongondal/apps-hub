@@ -18,6 +18,8 @@ export interface EventSwitches {
   charging: boolean;
   ringer: boolean;
   dnd: boolean;
+  /** Bluetooth or wired headphones connecting and disconnecting. */
+  bluetooth: boolean;
 }
 
 export interface NotchSettings {
@@ -42,7 +44,7 @@ export const DEFAULTS: NotchSettings = {
   foldMs: 5000,
   clock: 'system',
   widgets: ['clock', 'battery'],
-  events: { charging: true, ringer: true, dnd: true },
+  events: { charging: true, ringer: true, dnd: true, bluetooth: true },
   progressCards: true,
 };
 
@@ -86,6 +88,7 @@ export function normalize(raw: unknown): NotchSettings {
       charging: flag(events.charging, DEFAULTS.events.charging),
       ringer: flag(events.ringer, DEFAULTS.events.ringer),
       dnd: flag(events.dnd, DEFAULTS.events.dnd),
+      bluetooth: flag(events.bluetooth, DEFAULTS.events.bluetooth),
     },
     progressCards: flag(o.progressCards, DEFAULTS.progressCards),
   };
