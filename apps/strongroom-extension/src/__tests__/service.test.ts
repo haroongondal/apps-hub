@@ -177,6 +177,16 @@ test('editing a login keeps its authenticator code', async () => {
   assert.equal(saved.type === 'login' && saved.password, PW2);
 });
 
+test('removing a code keeps the login and its password, and clears the code state', async () => {
+  const s = await unlocked();
+  const id = await addWithCode(s);
+  await s.call({ type: 'removeTotp', id });
+  const detail = await s.call<Detail>({ type: 'get', id });
+  assert.deepEqual([detail.name, detail.username, detail.password, detail.code], ['Bank', 'me', PW1, null]);
+  assert.equal((await s.call<{ rows: Row[] }>({ type: 'list' })).rows.find((r) => r.id === id)!.totp, false);
+  await assert.rejects(s.call({ type: 'removeTotp', id: 'no-such-id' }), /no longer exists/);
+});
+
 test('save asks for a name and a valid website instead of storing junk', async () => {
   const s = await unlocked();
   await assert.rejects(add(s, { name: ' ', websites: '' }), /name/i);

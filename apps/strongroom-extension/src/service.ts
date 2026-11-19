@@ -39,6 +39,7 @@ export type Request =
   | { type: 'list' }
   | { type: 'get'; id: string }
   | { type: 'save'; id: string | null; login: LoginInput }
+  | { type: 'removeTotp'; id: string }
   | { type: 'remove'; id: string }
   | { type: 'import'; csv: string; commit: boolean }
   | { type: 'export'; password: string }
@@ -703,6 +704,18 @@ export function createService(deps: Deps) {
         }
         case 'save':
           return await save(req.id, req.login);
+        case 'removeTotp': {
+          const key = await requireKey();
+          const target = (await logins(key)).found.find((f) => f.id === req.id);
+          if (!target) throw new UserError('That login no longer exists.');
+          if (target.login.totp !== undefined) {
+            const { totp: _removed, ...login } = target.login;
+            await writeEntries(store, key, [{ id: req.id, entry: { ...login, updatedAt: now() } }]);
+            deps.resetAutoLock();
+            syncSoon();
+          }
+          return null;
+        }
         case 'remove': {
           const key = await requireKey();
           if (!(await logins(key)).found.some((f) => f.id === req.id)) throw new UserError('That login no longer exists.');
