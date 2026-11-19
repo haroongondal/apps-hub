@@ -90,6 +90,15 @@ export function registerMedia() {
     }
     return picked;
   });
+  // The song stays in the main process like any input; the renderer only gets its id and length.
+  ipcMain.handle('media-pick-song', async () => {
+    const r = await showOpen({ properties: ['openFile'], filters: [{ name: 'Audio', extensions: SONG_EXTENSIONS }] });
+    if (r.canceled) return null;
+    const file = r.filePaths[0];
+    const info = fromFfprobe(JSON.parse(await execText(FFPROBE, ffprobeArgs(file), file)), randomUUID(), path.basename(file));
+    inputs.set(info.id, { path: file, info });
+    return info;
+  });
   ipcMain.handle('media-pick-folder', async () => {
     const r = await showOpen({ properties: ['openDirectory', 'createDirectory'] });
     if (r.canceled || !r.filePaths[0]) return null;
@@ -157,11 +166,11 @@ async function enqueue(items) {
     if (!folder) throw new Error('Pick an output folder first.');
     const plan = await planFor(item.spec);
     if (!plan.ok) throw new Error(refusalText(plan));
-    planned.push({ input: inputs.get(item.spec.inputId), plan: plan.plan, folder });
+    planned.push({ input: inputs.get(item.spec.inputId), plan: plan.plan, folder, song: inputs.get(item.spec.musicInputId)?.path });
   }
-  const jobs = planned.map(({ input, plan, folder }) => {
+  const jobs = planned.map(({ input, plan, folder, song }) => {
     const job = { id: randomUUID(), inputId: input.info.id, inputName: input.info.name, plan, state: 'queued', progress: 0, attempt: 1, outputs: [] };
-    meta.set(job.id, { input: input.path, folder, inputName: input.info.name, label: labelFor(plan, input.info) });
+    meta.set(job.id, { input: input.path, song, folder, inputName: input.info.name, label: labelFor(plan, input.info) });
     return job;
   });
   dispatch({ type: 'enqueue', jobs });
@@ -189,7 +198,7 @@ async function runJob(job) {
     if (plan.tool === 'volume' && plan.mode === 'normalize') plan = { ...plan, measured: await measureLoudness(input.path) };
     for (let attempt = 1; ; attempt++) {
       const out = path.join(tmp, `attempt-${attempt}.${extOf(plan)}`);
-      await encode(job.id, plan, input, out, tmp);
+      await encode(job.id, plan, input, out, tmp, m.song);
       const bytes = (await fs.stat(out)).size;
       if (plan.tool === 'size' && plan.attempt === 1) await recordRatio(plan, bytes);
       const next = checkOutput(plan, bytes);
@@ -232,7 +241,7 @@ async function encode(jobId, plan, input, out, tmp) {
     await runFfmpeg(jobId, ffmpegArgs(plan, input.path, out, { n: 1, log: passlog }), input.info.durationS, [0, 0.5]);
     await runFfmpeg(jobId, ffmpegArgs(plan, input.path, out, { n: 2, log: passlog }), input.info.durationS, [0.5, 1]);
   } else {
-    await runFfmpeg(jobId, ffmpegArgs(plan, input.path, out), input.info.durationS, [0, 1]);
+    await runFfmpeg(jobId, ffmpegArgs(plan, input.path, out, undefined, song), input.info.durationS, [0, 1]);
   }
 }
 

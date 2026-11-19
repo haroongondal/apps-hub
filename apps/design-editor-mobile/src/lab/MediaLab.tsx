@@ -1,8 +1,10 @@
 import DesignMedia, { type CodecInfo, type NativeJobStatus } from 'design-media';
 import {
   DESTINATIONS,
+  planImage,
   planSize,
   validateSpec,
+  type ImageSpec,
   type Job,
   type MediaInfo,
   type Planned,
@@ -82,14 +84,16 @@ export default function MediaLab() {
   function pick() {
     return run('pick', async () => {
       const picked = await DocumentPicker.getDocumentAsync({
-        type: ['video/*'],
+        type: ['video/*', 'image/png', 'image/jpeg'],
         copyToCacheDirectory: false,
         multiple: false,
       });
       if (picked.canceled) return;
       const probed = await DesignMedia.probe(picked.assets[0].uri);
       setInfo(probed);
-      log(`Probed ${probed.name}: ${probed.durationS.toFixed(1)} s, ${mb(probed.bytes)} MB`);
+      log(probed.container === 'image'
+        ? `Probed ${probed.name}: image, ${mb(probed.bytes)} MB`
+        : `Probed ${probed.name}: ${probed.durationS.toFixed(1)} s, ${mb(probed.bytes)} MB`);
     });
   }
 
@@ -126,9 +130,33 @@ export default function MediaLab() {
     });
   }
 
-  const plan: Planned<SizePlan> | null = info
+  const isImage = info?.container === 'image';
+  const plan: Planned<SizePlan> | null = info && !isImage
     ? planSize(info, TARGET_BYTES, encoder)
     : null;
+
+  function startImage() {
+    if (!info) {
+      setError('Pick a file first.');
+      return;
+    }
+    const spec: ImageSpec = { tool: 'image', inputId: info.id };
+    const errors = validateSpec(spec, info, 'android');
+    const imagePlan = planImage(info);
+    if (errors.length || !imagePlan.ok) {
+      setError(errors.length ? errors.join(' ') : refusalText(imagePlan as Refusal));
+      return;
+    }
+    return run('image', async () => {
+      await DesignMedia.persistAccess(info.id);
+      const job: Job = {
+        id: `image-${Date.now()}`, inputId: info.id, inputName: info.name, plan: imagePlan.plan,
+        state: 'queued', progress: 0, attempt: 1, outputs: [],
+      };
+      await DesignMedia.enqueue(JSON.stringify([job]), false);
+      log(`Image: queued ${info.name}, lossless`);
+    });
+  }
 
   const spikes: { id: string; title: string; action: string; run: () => void }[] = [
     {
@@ -157,12 +185,18 @@ export default function MediaLab() {
 
       {error ? <Notice tone="danger" title="Something went wrong">{error}</Notice> : null}
 
-      <Group title="File" footer="Originals are never changed. Outputs go to Movies/Design Editor.">
-        <Row title={info ? info.name : 'No file picked'} subtitle={info ? `${info.durationS.toFixed(1)} s, ${mb(info.bytes)} MB` : 'Pick one video to probe it.'} />
-        <Button label="Pick a video" variant="secondary" block busy={busy === 'pick'} onPress={pick} />
+      <Group title="File" footer="Originals are never changed. Videos go to Movies/Design Editor, images to Pictures/Design Editor.">
+        <Row title={info ? info.name : 'No file picked'} subtitle={info ? (isImage ? `Image, ${mb(info.bytes)} MB` : `${info.durationS.toFixed(1)} s, ${mb(info.bytes)} MB`) : 'Pick one video or a PNG or JPEG image.'} />
+        <Button label="Pick a file" variant="secondary" block busy={busy === 'pick'} onPress={pick} />
       </Group>
 
-      {info ? (
+      {info && isImage ? (
+        <Group title="Compress image" footer="Lossless: every pixel stays the same. PNG is packed tighter; JPEG loses its camera, location and thumbnail data but keeps rotation and colour profile.">
+          <Button label="Compress image" block busy={busy === 'image'} onPress={startImage} />
+        </Group>
+      ) : null}
+
+      {info && !isImage ? (
         <Group title="Size job" footer={`Target ${mb(TARGET_BYTES)} MB, the Discord preset.`}>
           <Segmented options={ENCODERS} value={encoder} onChange={setEncoder} accessibilityLabel="Encoder" />
           {plan?.ok ? (
@@ -186,7 +220,7 @@ export default function MediaLab() {
           <Row
             key={job.id}
             title={job.id}
-            subtitle={`${job.state}, try ${job.attempt}${job.error ? `: ${job.error}` : ''}${job.attempts.length ? `\n${attemptText(job)}` : ''}`}
+            subtitle={`${job.state}, try ${job.attempt}${job.error ? `: ${job.error}` : ''}${job.outputs[0]?.note ? `, ${job.outputs[0].note}` : ''}${job.attempts.length ? `\n${attemptText(job)}` : ''}`}
             trailing={job.state === 'running' || job.state === 'queued' ? (
               <Button label="Cancel" variant="ghost" onPress={() => DesignMedia.cancel(job.id).catch(e => setError(message(e)))} />
             ) : undefined}

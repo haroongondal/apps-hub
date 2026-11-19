@@ -138,6 +138,15 @@ function reverseArgs(plan: ReversePlan, input: string, output: string): string[]
     '-pix_fmt', 'yuv420p', ...sound, '-movflags', '+faststart', ...STRIP, output];
 }
 
+// amix with normalize=0 adds the two sounds at their own levels; the song's gain is applied before it.
+function musicArgs(plan: MusicPlan, input: string, song: string, output: string): string[] {
+  const gain = `[1:a]volume=${plan.gainDb}dB`;
+  const graph = plan.mix ? `${gain}[m];[0:a:0][m]amix=inputs=2:duration=first:normalize=0[a]` : `${gain}[a]`;
+  const video = plan.video === 'copy' ? ['-c:v', 'copy'] : ['-c:v', 'h264_videotoolbox', '-q:v', '65', '-pix_fmt', 'yuv420p'];
+  return [...GLOBAL, '-i', input, '-i', song, '-filter_complex', graph, '-map', '0:v:0', '-map', '[a]', ...video,
+    '-c:a', 'aac', '-b:a', '192k', '-t', plan.durationS.toFixed(3), '-movflags', '+faststart', ...STRIP, output];
+}
+
 function stabilizeArgs(plan: StabilizePlan, input: string, output: string): string[] {
   const pass = `deshake=rx=${plan.search}:ry=${plan.search}:edge=mirror:search=less`;
   const chain = Array.from({ length: STABILIZE_PASSES[plan.level] }, () => pass).join(',');

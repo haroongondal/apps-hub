@@ -7,6 +7,7 @@ packages:
 allowBuilds:
   workerd: true
   electron: true
+  better-sqlite3: true
   canvas: false
   unrs-resolver: false
   esbuild: false

@@ -3,9 +3,15 @@ package expo.modules.designmedia.core
 private val UNSAFE = Regex("[\\\\/:*?\"<>|\u0000-\u001f]")
 
 // Mirrors packages/media-core/src/names.ts: "<name> (<label>).<ext>", then "<name> (<label>) 2.<ext>".
-fun outputName(inputName: String, label: String, ext: String, exists: (String) -> Boolean): String {
+fun outputName(inputName: String, label: String, ext: String, exists: (String) -> Boolean): String =
+  namedOutput(inputName, "Video", label, ext, exists)
+
+fun imageOutputName(inputName: String, ext: String, exists: (String) -> Boolean): String =
+  namedOutput(inputName, "Image", "lossless", ext, exists)
+
+private fun namedOutput(inputName: String, fallback: String, label: String, ext: String, exists: (String) -> Boolean): String {
   val dot = inputName.lastIndexOf('.')
-  val stem = (if (dot > 0) inputName.substring(0, dot) else inputName).replace(UNSAFE, "_").trim().take(100).ifEmpty { "Video" }
+  val stem = (if (dot > 0) inputName.substring(0, dot) else inputName).replace(UNSAFE, "_").trim().take(100).ifEmpty { fallback }
   val safeLabel = label.replace(UNSAFE, "_").trim().take(50)
   val base = if (safeLabel.isNotEmpty()) "$stem ($safeLabel)" else stem
   var name = "$base.$ext"
