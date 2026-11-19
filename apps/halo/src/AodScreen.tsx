@@ -133,7 +133,7 @@ export default function AodScreen({ settings, update, onOpenTheme }: { settings:
           ))}
         {a.dots.on && <SwitchRow title="Show counts" subtitle="A number on a dot for two or more notifications." value={a.dots.count} onChange={(count) => setAod({ dots: { ...a.dots, count } })} />}
       </Group>
-      <Group title="Charging effect" footer={a.chargeEffect === 'sweep' ? 'A light sweeps around the edges of the always-on screen while charging.' : undefined}>
+      <Group title="Charging effect" footer={a.chargeEffect === 'sweep' ? 'A green light sweeps once around the edges when you plug in the charger while the always-on screen shows.' : undefined}>
         <View style={{ padding: space.md }}>
           <Segmented options={CHARGE_EFFECTS} value={a.chargeEffect} onChange={(chargeEffect) => setAod({ chargeEffect })} accessibilityLabel="Charging effect" />
         </View>

@@ -32,7 +32,11 @@ import expo.modules.haloengine.core.AodAction
 import expo.modules.haloengine.core.AodGestures
 import expo.modules.haloengine.core.AodScreen
 import expo.modules.haloengine.core.BurnIn
+import expo.modules.haloengine.core.ChargeEffect
 import expo.modules.haloengine.core.ColorSource
+import expo.modules.haloengine.core.DotKind
+import expo.modules.haloengine.core.DotKinds
+import expo.modules.haloengine.core.DotSystemState
 import expo.modules.haloengine.core.FlashDecision
 import expo.modules.haloengine.core.Patterns
 import expo.modules.haloengine.core.PocketTimer
@@ -73,6 +77,7 @@ class AodContent(
   private val dim = View(ctx).apply { setBackgroundColor(Color.BLACK); alpha = theme.dim.toFloat(); visibility = GONE }
   private val edge = EdgeView(ctx, source)
   private val face = FaceView(ctx)
+  private val dots = DotsView(ctx).apply { if (!settings.aod.dots.on) visibility = GONE }
   private val icons = LinearLayout(ctx).apply { gravity = Gravity.CENTER }
   private val art = ImageView(ctx).apply { scaleType = ImageView.ScaleType.CENTER_CROP; clipToOutline = true }
   private val title = text(16f, 0xEEFFFFFF.toInt())
@@ -91,6 +96,7 @@ class AodContent(
   }
 
   private val watch = MediaWatch(ctx, ::onMedia) {}
+  private val power = PowerWatch(ctx, ::onPower)
   private var controller: MediaController? = null
   private val mediaCallback = object : MediaController.Callback() {
     override fun onPlaybackStateChanged(state: PlaybackState?) = showCard()
@@ -109,7 +115,10 @@ class AodContent(
     override fun onSensorChanged(e: SensorEvent) = setPocket(AodScreen.near(e.values[0], e.sensor.maximumRange))
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
   }
-  private val iconsHook: () -> Unit = { showIcons() }
+  private val iconsHook: () -> Unit = {
+    showIcons()
+    showDots()
+  }
 
   private val shift = FloatArray(2)
   private val burnIn = object : Runnable {
@@ -118,6 +127,9 @@ class AodContent(
       BurnIn.offset(now, 12 * dp, shift)
       lower.translationX = shift[0]
       lower.translationY = shift[1]
+      dots.translationX = shift[0] / 2
+      dots.translationY = shift[1] / 2
+      if (power.refreshAlarm()) showDots()
       main.postDelayed(this, 60_000L - now % 60_000L)
     }
   }
@@ -154,6 +166,7 @@ class AodContent(
     content.addView(dim, LayoutParams(match))
     content.addView(edge, LayoutParams(match))
     content.addView(column, LayoutParams(match))
+    content.addView(dots, LayoutParams(match))
     addView(content, LayoutParams(match))
     edge.apply(settings, Patterns.create(theme.edge.pattern), palette)
     edge.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> if (theme.edge.on && !pocket) edge.kick() }
@@ -167,10 +180,13 @@ class AodContent(
 
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
+    // Power first: watch.start() reports a playing session at once, and that first dots row must already know the charger.
+    power.start()
     watch.start()
     if (!preview) sensors?.getDefaultSensor(Sensor.TYPE_PROXIMITY)?.let { sensors.registerListener(proximity, it, SensorManager.SENSOR_DELAY_NORMAL, main) }
     NotifyFlash.onIcons = iconsHook
     showIcons()
+    showDots()
     burnIn.run()
     deriveColours()
     if (theme.photo) loadPhoto()
@@ -181,6 +197,7 @@ class AodContent(
     main.removeCallbacks(pocketEnd)
     if (NotifyFlash.onIcons === iconsHook) NotifyFlash.onIcons = null
     sensors?.unregisterListener(proximity)
+    power.stop()
     setController(null)
     watch.stop()
     edge.stop()
@@ -230,6 +247,7 @@ class AodContent(
 
   // A paused track keeps its card (so a tap can resume it) until its session ends.
   private fun onMedia() {
+    showDots()
     val c = watch.playing ?: return
     if (c.sessionToken != controller?.sessionToken) setController(c)
   }
@@ -254,6 +272,18 @@ class AodContent(
     art.setImageBitmap(ART_KEYS.firstNotNullOfOrNull { meta?.getBitmap(it) })
     card.alpha = if (c.playbackState?.state == PlaybackState.STATE_PLAYING) 1f else 0.6f
     card.visibility = VISIBLE
+  }
+
+  private fun onPower(pluggedIn: Boolean) {
+    showDots()
+    if (pluggedIn && settings.aod.chargeEffect == ChargeEffect.SWEEP) flash(CHARGE_SWEEP, DotKind.CHARGING.colour)
+  }
+
+  private fun showDots() {
+    val d = settings.aod.dots
+    if (!d.on) return
+    val system = DotSystemState(power.charging, power.lowBattery, power.alarmSoon, watch.playing != null)
+    dots.set(DotKinds.dots(NotifyFlash.groups(), system, d.kinds), d.count)
   }
 
   private fun showIcons() {
@@ -325,6 +355,8 @@ class AodContent(
   companion object {
     private const val BANDS = 32
     private const val SEED = 0x40D
+    // ':' is not allowed in a package name, so this flash never shares an app's slot.
+    private val CHARGE_SWEEP = FlashDecision("halo:charging", DotKind.CHARGING.colour, "sweep", 1, 1_800L)
     private val ART_KEYS = listOf(MediaMetadata.METADATA_KEY_ALBUM_ART, MediaMetadata.METADATA_KEY_ART, MediaMetadata.METADATA_KEY_DISPLAY_ICON)
 
     fun fullScreen(w: Window) {
