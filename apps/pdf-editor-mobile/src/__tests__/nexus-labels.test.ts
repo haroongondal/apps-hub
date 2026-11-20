@@ -31,4 +31,5 @@ test('the card says what the queue is doing, in plain words', () => {
   assert.equal(jobLabel(job({ error: 'Offline.', status: 'running' }), 'audio', true, none).label, 'Transcribing…'); // back online, working again
   assert.deepEqual(jobLabel(job({ stage: 'done', status: 'done' }), 'pdf', false, { ideas: 1, links: 6 }), { label: '1 idea, 6 links', tone: 'ok' });
   assert.equal(jobLabel(job({ status: 'failed', error: 'HTTP 400' }), 'note', true, none).tone, 'danger');
+  assert.deepEqual(jobLabel(null, 'pdf', true, none, true), { label: 'Not in Nexus', tone: 'neutral' }); // kept out wins over any stale job
 });
