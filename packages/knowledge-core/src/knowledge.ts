@@ -129,12 +129,40 @@ export class Knowledge {
   }
 
   async enqueue(itemId: string): Promise<void> {
-    await this.db.run(
-      `INSERT INTO kn_jobs (item_id, stage, status, updated_at) VALUES (?, 'text', 'queued', ?)
-       ON CONFLICT(item_id) DO UPDATE SET stage = 'text', status = 'queued', gen = gen + 1, attempts = 0, error = NULL,
-         updated_at = excluded.updated_at`,
-      [itemId, this.deps.now()],
-    );
+    await this.db.transaction(async (tx) => {
+      if (await isExcluded(tx, itemId)) return;
+      await tx.run(
+        `INSERT INTO kn_jobs (item_id, stage, status, updated_at) VALUES (?, 'text', 'queued', ?)
+         ON CONFLICT(item_id) DO UPDATE SET stage = 'text', status = 'queued', gen = gen + 1, attempts = 0, error = NULL,
+           updated_at = excluded.updated_at`,
+        [itemId, this.deps.now()],
+      );
+    });
+  }
+
+  // Segments stay: they are the item's own transcript or OCR text. A stage already running finds no job and writes nothing.
+  async exclude(itemId: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.run('INSERT OR IGNORE INTO kn_excluded (item_id, excluded_at) VALUES (?, ?)', [itemId, this.deps.now()]);
+      await tx.run('DELETE FROM kn_jobs WHERE item_id = ?', [itemId]);
+      await tx.run('DELETE FROM kn_chunks WHERE item_id = ?', [itemId]);
+      await tx.run('DELETE FROM kn_nodes WHERE item_id = ?', [itemId]); // the source node and its atoms; their edges go by cascade
+      await tx.run('DELETE FROM kn_edges WHERE item_id = ?', [itemId]); // the links it made to concepts other items share
+      await pruneConcepts(tx);
+    });
+  }
+
+  async include(itemId: string): Promise<void> {
+    await this.db.run('DELETE FROM kn_excluded WHERE item_id = ?', [itemId]);
+    await this.enqueue(itemId);
+  }
+
+  isExcluded(itemId: string): Promise<boolean> {
+    return isExcluded(this.db, itemId);
+  }
+
+  async excludedIds(): Promise<Set<string>> {
+    return new Set((await this.db.all('SELECT item_id FROM kn_excluded')).map((r) => r.item_id as string));
   }
 
   async retry(itemId: string): Promise<void> {
@@ -170,7 +198,9 @@ export class Knowledge {
   }
 
   async enqueueMissing(): Promise<number> {
-    const missing = await this.db.all('SELECT id FROM items WHERE id NOT IN (SELECT item_id FROM kn_jobs)');
+    const missing = await this.db.all(
+      'SELECT id FROM items WHERE id NOT IN (SELECT item_id FROM kn_jobs) AND id NOT IN (SELECT item_id FROM kn_excluded)',
+    );
     for (const r of missing) await this.enqueue(r.id as string);
     return missing.length;
   }
@@ -424,6 +454,7 @@ export class Knowledge {
 
 // A run whose job was re-queued (an edit, or recover after a kill) must not overwrite newer results.
 const isLive = async (tx: SqlPort, itemId: string, gen: number) => (await tx.first('SELECT gen FROM kn_jobs WHERE item_id = ?', [itemId]))?.gen === gen;
+const isExcluded = async (db: SqlPort, itemId: string) => (await db.first('SELECT 1 FROM kn_excluded WHERE item_id = ?', [itemId])) !== null;
 
 export const pruneConcepts = (db: SqlPort) =>
   db.run(

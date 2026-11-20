@@ -24,6 +24,7 @@ interface Loaded {
   segments: Segment[];
   related: Item[];
   hasKey: boolean;
+  keptOut: boolean;
 }
 
 const SAVE_MS = 800;
@@ -135,6 +136,7 @@ export default function ItemScreen() {
       segments: item.kind === 'note' ? [] : await kn.segmentsOf(item.id),
       related: (await kn.related(item.id)).map((r) => r.item),
       hasKey: await hasKeys(),
+      keptOut: await kn.isExcluded(item.id),
     });
   }, [params.id]);
   useEffect(() => {
@@ -153,7 +155,7 @@ export default function ItemScreen() {
   }
   if (!data) return <Screen>{null}</Screen>;
   const { item, job } = data;
-  const status = jobLabel(job, item.kind, data.hasKey, data.found);
+  const status = jobLabel(job, item.kind, data.hasKey, data.found, data.keptOut);
   const retry = async () => {
     await (await openKnowledge()).retry(item.id);
     await kick();
