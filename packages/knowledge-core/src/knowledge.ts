@@ -49,6 +49,9 @@ const EMBED_BATCH = 64;
 const EXTRACT_CHARS = 24_000;
 const NEXT: Record<Exclude<JobStage, 'done'>, JobStage> = { text: 'embed', embed: 'graph', graph: 'done' };
 
+/** Thrown when the item was excluded or re-queued during a stage, so the stage stops before its next outbound call. */
+class Withdrawn extends Error {}
+
 const loc = (v: unknown): Locator => (typeof v === 'string' ? (JSON.parse(v) as Locator) : null);
 const locJson = (l: Locator) => (l === null ? null : JSON.stringify(l));
 const marks = (n: number) => Array.from({ length: n }, () => '?').join(', ');
@@ -224,6 +227,7 @@ export class Knowledge {
       else if (stage === 'embed') await this.embedStage(itemId, gen);
       else await this.serialGraph(item, gen);
     } catch (e) {
+      if (e instanceof Withdrawn) return 'ran';
       const message = e instanceof Error ? e.message : String(e);
       if (e instanceof AiError && PAUSING.includes(e.kind)) {
         await this.db.run("UPDATE kn_jobs SET status = 'queued', error = ? WHERE item_id = ? AND gen = ?", [message, itemId, gen]);
@@ -244,7 +248,12 @@ export class Knowledge {
     return 'ran';
   }
 
+  private async keep(itemId: string, gen: number): Promise<void> {
+    if (!(await isLive(this.db, itemId, gen))) throw new Withdrawn('The item was taken out of Nexus.');
+  }
+
   private async textStage(item: Item, gen: number): Promise<void> {
+    await this.keep(item.id, gen); // audio and images go out to the provider inside segments()
     const segments = (await this.deps.content.segments(item)).filter((s) => s.text.trim() !== '');
     const wrote = await this.db.transaction(async (tx) => {
       if (!(await isLive(tx, item.id, gen))) return false;
@@ -266,6 +275,7 @@ export class Knowledge {
     const chunks = chunkSegments(await this.segmentsOf(itemId));
     const vectors: Float32Array[] = [];
     for (let i = 0; i < chunks.length; i += EMBED_BATCH) {
+      await this.keep(itemId, gen);
       vectors.push(...(await this.deps.ai.embed(chunks.slice(i, i + EMBED_BATCH).map((c) => c.text))));
     }
     if (vectors.length !== chunks.length) throw new AiError('bad_reply', 'The model sent the wrong number of embeddings.');
@@ -299,7 +309,9 @@ export class Knowledge {
       input.push(s.text.slice(0, EXTRACT_CHARS));
       chars += s.text.length;
     }
+    await this.keep(item.id, gen);
     const ex: Extraction = input.length ? cleanExtraction(await this.deps.ai.extract(input), input.length) : { concepts: [], atoms: [], relations: [] };
+    await this.keep(item.id, gen);
     const { idOf, touched } = await this.resolve(ex.concepts);
     const now = this.deps.now();
     const src = srcId(item.id);
