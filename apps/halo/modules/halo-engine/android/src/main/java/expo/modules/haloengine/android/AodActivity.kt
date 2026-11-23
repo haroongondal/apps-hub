@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.view.WindowManager
 import expo.modules.haloengine.core.AodScreen
 import expo.modules.haloengine.core.Faces
@@ -90,7 +91,7 @@ class AodActivity : Activity() {
   private fun end(why: String) {
     ProbeLog.log(this, "aod", "AodActivity ended by $why, finishing")
     window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-    HaloService.aodPolicy.onTimedOut()
+    if (AodScreen.markTimedOut(isFinishing, getSystemService(KeyguardManager::class.java).isKeyguardLocked)) HaloService.aodPolicy.onTimedOut()
     finish()
   }
 
@@ -115,7 +116,14 @@ class AodActivity : Activity() {
     if (!getSystemService(KeyguardManager::class.java).isKeyguardLocked) {
       ProbeLog.log(this, "aod", "AodActivity resumed unlocked, finishing")
       finish()
+      return
     }
+    HaloService.aodClose = closeHook
+  }
+
+  override fun onStop() {
+    if (AodScreen.clearCloseOnStop(getSystemService(PowerManager::class.java).isInteractive) && HaloService.aodClose === closeHook) HaloService.aodClose = null
+    super.onStop()
   }
 
   override fun onDestroy() {

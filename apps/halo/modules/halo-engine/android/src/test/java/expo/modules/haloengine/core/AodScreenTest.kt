@@ -10,6 +10,18 @@ class AodScreenTest {
   private fun note(key: String, pkg: String, at: Long, ongoing: Boolean = false, importance: Int = 3, summary: Boolean = false, secret: Boolean = false, category: String? = null) =
     PostedNote(key, pkg, ongoing, importance, summary, category, at, secret = secret)
 
+  @Test fun stopWithTheScreenOnClearsTheCloseHookButScreenOffKeepsIt() {
+    assertTrue(AodScreen.clearCloseOnStop(interactive = true))
+    assertFalse(AodScreen.clearCloseOnStop(interactive = false))
+  }
+
+  @Test fun onlyALiveScreenOverTheLockMarksTimedOut() {
+    assertTrue(AodScreen.markTimedOut(isFinishing = false, keyguardLocked = true))
+    assertFalse(AodScreen.markTimedOut(isFinishing = true, keyguardLocked = true))
+    assertFalse(AodScreen.markTimedOut(isFinishing = false, keyguardLocked = false))
+    assertFalse(AodScreen.markTimedOut(isFinishing = true, keyguardLocked = false))
+  }
+
   @Test fun swipeLeftIsNextRightIsPrevious() {
     assertEquals(AodAction.NEXT, AodGestures.fling(onCard = true, pocket = false, dx = -200f, dy = 20f, minPx = 100f))
     assertEquals(AodAction.PREVIOUS, AodGestures.fling(onCard = true, pocket = false, dx = 200f, dy = -20f, minPx = 100f))

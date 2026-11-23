@@ -76,15 +76,15 @@ What 0.5.0 contains: aod/themes settings, AodPolicy, restart-on-app-open fix (th
 background photo, real always-on screen (music card, icon row, edge lights, pocket, double tap, notification wake), Always-on + Theme
 screens, tabs Home/Lights/Alerts/Always-on. Reviews: whole-stage review (opus) + security re-check (opus) + scoped re-review of the
 fix: findings and rulings in docs/handoffs/halo-sdd-ledger.md under "Task 4.7".
-Deferred (0.5.1 candidates, both Minor): (m1) Home gesture on the always-on screen then no unlock → the keyguard's screen-off is read as a
-power press → always-on stays off until next unlock (fix: onStop clears aodClose only while PowerManager.isInteractive; onResume re-sets it);
-(m2) AodActivity.end() calls onTimedOut() without isFinishing/keyguard-locked check (narrow race around unlock).
+Fixed on eco/halo (commit in the ecosystem F4 branch; JVM-tested via AodScreen.clearCloseOnStop and AodScreen.markTimedOut, phone check not run): (m1) Home gesture
+on the always-on screen then no unlock: AodActivity.onStop clears aodClose only while PowerManager.isInteractive, onResume sets it again, so the keyguard's
+screen-off is no longer read as a power press; (m2) AodActivity.end() calls onTimedOut() only when not isFinishing and the keyguard is locked.
 Also open: AOSP "Viewing full screen" hint may appear once (check HyperOS); AOD EdgeView also writes HaloService.frameP95Ms; photo refresh on
 ThemeScreen after changing a photo was not checked on a device; reminder wake only compiled.
 NEXT STEP 1 (owner present): phone check of 0.5.0 (Task 4.7 Step 2): claim device:49kjmnuwonkffqzh with coord, owner installs 0.5.0 via the
 Store app; check each starter theme (night, pulse, glass, mono), Never stop for ~1 h (battery % before/after, burn-in movement visible),
 pocket (ends after 3 s), power button on the always-on screen (turns it off), double tap, notification wake (incl. off hours), music card
-controls, music trigger with lights off, time slot switch, Home-gesture case (m1), photo pick/remove. Record results in this file and the
+controls, music trigger with lights off, time slot switch, Home-gesture case (m1) and lock-then-timeout case (m2), photo pick/remove. Record results in this file and the
 spec §13; fix what fails (a 0.5.1) via parallel-agents-coord.
 NEXT STEP 2: Stage 5 (extras, 0.6.0): only an outline exists (plan "Stage 5 — extras", 5.1-5.6: charging + low battery events, call glow,
 Quick Settings tiles, music overlay, theme export/import incl. NaN-safe decode, battery-exemption prompt + boot polish). Write its detailed
