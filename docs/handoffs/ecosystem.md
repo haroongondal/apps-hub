@@ -159,6 +159,9 @@ Risks: no phone check has ever run and everything depends on Store-signed builds
   - C8 finding for the owner: Arabic and Urdu OCR is MISSING (engine is English only). tessdata_fast sizes: ara 1,432,056 B, urd 1,398,718 B, script/Arabic 9,311,038 B; adding them touches asset copy, sha pins in build.gradle, Recognizer.kt, a language choice, and grows Design Editor too (shared module). Offline OCR text reaches nothing in Nexus today; no open-source notices screen exists (Leptonica, IJG, libpng ask for one); the JitPack AAR is prebuilt.
   - Minutes chat falls back to Gemini when Groq cannot answer (existing Nexus fallback), so minutes text may reach Gemini: consent copy updated; owner may want Groq-only.
 
+- P4 TunnelWall DONE (eco/tunnelwall 96c2bcbf, handoff ee6c82ab): open-tunnel-core 45 (38), open_tunnel_vpn ts 155 (150), JUnit 79 (52), app-link-contract 133, assembleDebug ok, auditManifest [] on module and merged manifests, iOS not compiled (no Pods; Swift rejects ERR_NOT_SUPPORTED). Shields master switch (off by default, Android 12+) turns on Trusted Wi-Fi auto-connect and serves `shield` {on, untrusted_now, since} (only while on) + `health`; CHANGED ping to Halo only when the pulse flips; `untrusted_now` goes stale if the process dies (Halo must judge by `since` and health `last_seen_at`). Needs security-engineer + invariant review. Phone not run (7 checks listed in the report/handoff).
+- E2 app integrations started (Nexus, Design Editor, Deputy; Inflow later): branches have eco/ai-hub merged in; the app PRs therefore depend on the eco/ai-hub PR (merge order: eco/base, eco/ai-hub, then apps).
+
 ## Security findings handled during the build (automated reviews)
 
 - ai-hub-client did not verify the hub identity (package squatting): fixed, 60875260 on eco/ai-hub.
