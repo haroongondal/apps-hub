@@ -1,0 +1,58 @@
+[
+  {
+    "isSelf": false,
+    "holdsPermission": false,
+    "signatureMatches": false,
+    "allow": false,
+    "reason": "no-permission"
+  },
+  {
+    "isSelf": false,
+    "holdsPermission": false,
+    "signatureMatches": true,
+    "allow": false,
+    "reason": "no-permission"
+  },
+  {
+    "isSelf": false,
+    "holdsPermission": true,
+    "signatureMatches": false,
+    "allow": false,
+    "reason": "signature-mismatch"
+  },
+  {
+    "isSelf": false,
+    "holdsPermission": true,
+    "signatureMatches": true,
+    "allow": true,
+    "reason": "ok"
+  },
+  {
+    "isSelf": true,
+    "holdsPermission": false,
+    "signatureMatches": false,
+    "allow": true,
+    "reason": "self"
+  },
+  {
+    "isSelf": true,
+    "holdsPermission": false,
+    "signatureMatches": true,
+    "allow": true,
+    "reason": "self"
+  },
+  {
+    "isSelf": true,
+    "holdsPermission": true,
+    "signatureMatches": false,
+    "allow": true,
+    "reason": "self"
+  },
+  {
+    "isSelf": true,
+    "holdsPermission": true,
+    "signatureMatches": true,
+    "allow": true,
+    "reason": "self"
+  }
+]
