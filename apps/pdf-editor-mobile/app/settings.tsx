@@ -6,7 +6,7 @@ import { View } from 'react-native';
 
 import { IconButton } from '../src/library/icon-button';
 import { errorMessage } from '../src/library/use-library';
-import { checkKey, getKey, type Service, setKey } from '../src/nexus/ai';
+import { checkKey, getKeys, type Service, setKeys } from '../src/nexus/ai';
 import { kick, openKnowledge } from '../src/nexus/worker';
 
 const SERVICES: { id: Service; name: string; placeholder: string; hint: string }[] = [
@@ -24,7 +24,7 @@ const SERVICES: { id: Service; name: string; placeholder: string; hint: string }
   },
 ];
 
-function KeyPanel({ service, saved, onChange }: { service: (typeof SERVICES)[number]; saved: string | null; onChange: (key: string | null) => void }) {
+function KeyPanel({ service, saved, onChange }: { service: (typeof SERVICES)[number]; saved: string[]; onChange: (keys: string[]) => void }) {
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -32,13 +32,15 @@ function KeyPanel({ service, saved, onChange }: { service: (typeof SERVICES)[num
   const save = async () => {
     const key = draft.trim();
     if (!key) return setError(`Paste your ${service.name} key first.`);
+    if (saved.includes(key)) return setError('That key is already saved.');
     setBusy(true);
     setError(null);
     try {
       await checkKey(service.id, key); // proves the key works before anything is queued on it
-      await setKey(service.id, key);
+      const next = [...saved, key];
+      await setKeys(service.id, next);
       setDraft('');
-      onChange(key);
+      onChange(next);
       await kick();
     } catch (err) {
       setError(err instanceof AiError ? err.message : `The key could not be checked: ${errorMessage(err)}`);
@@ -47,21 +49,32 @@ function KeyPanel({ service, saved, onChange }: { service: (typeof SERVICES)[num
     }
   };
 
-  const remove = async () => {
-    await setKey(service.id, null);
-    onChange(null);
+  const remove = async (index: number) => {
+    const next = saved.filter((_, i) => i !== index);
+    await setKeys(service.id, next);
+    onChange(next);
   };
 
   return (
     <>
-      {saved ? (
-        <Group title={`${service.name} key`}>
-          <Row title="Saved on this phone" subtitle={`Ends in ${saved.slice(-4)}`} trailing={<Button label="Remove" size="sm" variant="danger" onPress={() => void remove()} />} />
+      {saved.length ? (
+        <Group
+          title={`${service.name} keys`}
+          footer="Nexus tries these in order. When one is rate-limited or refused, it moves to the next."
+        >
+          {saved.map((key, i) => (
+            <Row
+              key={`${i}-${key.slice(-4)}`}
+              title={`Key ${i + 1}`}
+              subtitle={`Ends in ${key.slice(-4)}`}
+              trailing={<Button label="Remove" size="sm" variant="danger" onPress={() => void remove(i)} />}
+            />
+          ))}
         </Group>
       ) : null}
       <View style={{ gap: space.md }}>
         <Field
-          label={saved ? `Replace the ${service.name} key` : `${service.name} API key`}
+          label={saved.length ? `Add another ${service.name} key` : `${service.name} API key`}
           value={draft}
           onChangeText={setDraft}
           placeholder={service.placeholder}
@@ -79,14 +92,14 @@ function KeyPanel({ service, saved, onChange }: { service: (typeof SERVICES)[num
 }
 
 export default function SettingsScreen() {
-  const [keys, setKeys] = useState<Partial<Record<Service, string | null>>>({});
+  const [keys, setSaved] = useState<Record<Service, string[]>>({ gemini: [], groq: [] });
   const [queued, setQueued] = useState<string | null>(null);
 
   useEffect(() => {
-    void Promise.all([getKey('gemini'), getKey('groq')]).then(([gemini, groq]) => setKeys({ gemini, groq }));
+    void Promise.all([getKeys('gemini'), getKeys('groq')]).then(([gemini, groq]) => setSaved({ gemini, groq }));
   }, []);
 
-  const ready = !!keys.gemini && !!keys.groq;
+  const ready = keys.gemini.length > 0 && keys.groq.length > 0;
 
   const processAll = async () => {
     const n = await (await openKnowledge()).enqueueMissing();
@@ -98,12 +111,18 @@ export default function SettingsScreen() {
     <Screen scroll>
       <Header title="AI settings" trailing={<IconButton icon="close" label="Close" onPress={() => router.back()} />} />
       <Notice tone="neutral" title="What leaves this phone">
-        With both keys saved, Nexus sends Google the text of your notes, PDFs and scans, and your photos, to find ideas and read images. It sends
-        Groq the text of your notes, PDFs and scans, to build the graph and answer questions, and your voice recordings, to transcribe them. Your
-        files stay on this phone. Without the keys nothing is sent.
+        With a key saved for each service, Nexus sends Google the text of your notes, PDFs and scans, and your photos, to find ideas and read
+        images. It sends Groq the text of your notes, PDFs and scans, to build the graph and answer questions, and your voice recordings, to
+        transcribe them. The CV maker sends the details you type to whichever service answers. Your files stay on this phone. Without the keys
+        nothing is sent.
       </Notice>
       {SERVICES.map((s) => (
-        <KeyPanel key={s.id} service={s} saved={keys[s.id] ?? null} onChange={(key) => setKeys((k) => ({ ...k, [s.id]: key }))} />
+        <KeyPanel
+          key={s.id}
+          service={s}
+          saved={keys[s.id]}
+          onChange={(list) => setSaved((k) => ({ ...k, [s.id]: list }))}
+        />
       ))}
       {ready ? (
         <Group title="Your library" footer="New notes, recordings, photos and opened PDFs are queued as you add them. Use this for older items.">
