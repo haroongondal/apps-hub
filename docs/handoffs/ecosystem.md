@@ -79,7 +79,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | E2 | AI keys once (Strongroom) | eco/strongroom + readers | todo (needs E1; owner decision) |
 | E3 | Share targets | eco/nexus, eco/design-editor, eco/deputy | todo (needs E1) |
 | E4 | Store health hub | eco/store | todo (needs E1) |
-| C1 | Clipboard smart actions + phase 1 | eco/clipboard | todo |
+| C1 | Clipboard smart actions + phase 1 | eco/clipboard | in progress (Add to Inflow action waits for E1 actions) |
 | C2 | Deputy repeating tasks | eco/deputy | in progress |
 | C3 | TunnelWall (firewall already on main) | eco/tunnelwall | in progress |
 | C4 | HomeNet | eco/homenet | todo |
@@ -87,7 +87,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | C6 | Halo progress ring | eco/halo | built + gated (c230590a): halo-engine 165, notch-island 127, halo ts 127 pass, assembleDebug ok; default ON (my call); phone not run; security-engineer look pending |
 | C7 | Design Editor brand kit from image | eco/design-editor | todo |
 | C8 | Nexus offline OCR (on main; verify, audit, fill gaps) | eco/nexus | todo |
-| C9 | autonomous-browsing dry run | eco/autonomous-browsing | in progress |
+| C9 | autonomous-browsing dry run | eco/autonomous-browsing | built + gated (d4ab7da7): vitest 514 pass (500 before), tsc clean; real-window check not run; open: assert probe waits default timeout on missing targets |
 | V1-V5 | Vitals in Inflow | eco/inflow | V1-V4 in progress (phase vitals); V5 waits for E1 final |
 | M1-M5 | Minutes in Nexus | eco/nexus | M1,M2,M5,M4 + E3-Nexus + C8 in progress (phase nexus-w2); M3 needs E1/B3 |
 | B1-B6 | Cross-app wave 3 | various | todo |
