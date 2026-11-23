@@ -65,6 +65,17 @@ test('an exported activity-alias without the permission is flagged when its targ
   assert.deepEqual(auditManifest(manifest(`<activity android:name=".Main" android:exported="false" />` + alias('').replace('.Open"', '.Main"'))), []);
 });
 
+test('an alias target is matched across relative and qualified class names', () => {
+  const link = (name: string) => `<activity android:name="${name}" android:exported="false" android:permission="${P}">${LINK_FILTER}</activity>`;
+  const alias = (target: string) => `<activity-alias android:name=".A" android:targetActivity="${target}" android:exported="true" />`;
+  const problem = `activity-alias .A is a link action but its permission is missing, expected ${P}`;
+  const withPkg = (app: string) => manifest(app).replace('<manifest ', '<manifest package="com.haroon.inflow" ');
+  assert.deepEqual(auditManifest(manifest(link('.Open') + alias('com.haroon.inflow.Open'))), [problem]); // qualified target, relative activity
+  assert.deepEqual(auditManifest(manifest(link('com.haroon.inflow.Open') + alias('.Open'))), [problem]); // relative target, qualified activity
+  assert.deepEqual(auditManifest(withPkg(link('.Open') + alias('com.haroon.inflow.Open'))), [problem]);
+  assert.deepEqual(auditManifest(manifest(link('.Open') + alias('.Other'))), []);
+});
+
 test('an activity-alias with a link action filter needs the permission, exported or not', () => {
   const alias = (attrs: string) => `<activity-alias android:name=".A" android:targetActivity=".Main" ${attrs}>${LINK_FILTER}</activity-alias>`;
   const problem = `activity-alias .A is a link action but its permission is missing, expected ${P}`;

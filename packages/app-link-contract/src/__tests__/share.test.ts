@@ -56,7 +56,7 @@ test('refuses a bad path', () => {
 
 test('refuses sensitive column names and non snake_case names', () => {
   const bad = ['password', 'user_passwd', 'client_secret', 'access_token', 'otp', 'pin', 'pin_code', 'pins', 'seed', 'seed_phrase', 'cvv', 'cvc', 'api_key', 'apikey', 'private_key', 'credential_id', 'session_id', 'cookie_jar', 'mnemonic',
-    'code', 'codes', 'status_code', 'key', 'keys', 'item_key', 'pass', 'pass_hash', 'pwd', 'user_pwd', 'passcode', 'lock_passcode', 'auth', 'auth_state', 'iban', 'bank_iban', 'card', 'card_id', 'cardnumber', 'cardnumber_last4'];
+    'code', 'codes', 'status_code', 'key', 'keys', 'item_key', 'pass', 'pass_hash', 'pwd', 'user_pwd', 'passcode', 'lock_passcode', 'auth', 'auth_state', 'iban', 'bank_iban', 'card', 'card_id', 'cardnumber', 'cardnumber_last4', 'passphrase', 'wallet_passphrase', 'totp', 'totp_seed_x', 'hotp', 'hotp_counter'];
   for (const name of bad) {
     assert.equal(isSensitiveName(name), true, name);
     assert.throws(() => defineShare<{ [k: string]: number }>()({ ...base, columns: { [name]: 'long' } } as never), /sensitive/, name);

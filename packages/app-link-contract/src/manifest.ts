@@ -25,6 +25,13 @@ function parse(xml: string): El {
   return root;
 }
 
+/** Two class names written in a manifest: equal, or one is `.Short` and the other ends with it; a leading `.` is also resolved against `pkg`. */
+function sameClass(a: string, b: string, pkg?: string): boolean {
+  const full = (n: string) => (n.startsWith('.') && pkg ? pkg + n : n);
+  const [x, y] = [full(a), full(b)];
+  return x === y || (x.startsWith('.') && y.endsWith(x)) || (y.startsWith('.') && x.endsWith(y));
+}
+
 const all = (el: El): El[] => el.kids.flatMap((k) => [k, ...all(k)]);
 
 /** `android:exported` is true for `true` and for any `@bool/...` reference (fail closed: a reference could resolve to true). */
@@ -45,6 +52,7 @@ const isTrue = (v: string | undefined) => v === 'true' || (v?.startsWith('@') ??
 export function auditManifest(xml: string, opts: { allowHeadless?: string[] } = {}): string[] {
   const allow = opts.allowHeadless ?? [];
   const els = all(parse(xml));
+  const pkg = els.find((e) => e.name === 'manifest')?.attrs.package;
   const problems: string[] = [];
   const inApp = (e: El) => e.parent?.name === 'application';
   const filtersOf = (e: El) => e.kids.filter((k) => k.name === 'intent-filter');
@@ -76,14 +84,14 @@ export function auditManifest(xml: string, opts: { allowHeadless?: string[] } = 
     const name = a.attrs.name ?? '';
     const who = `activity ${name}`;
     if (a.attrs.permission !== LINK_PERMISSION) problems.push(`${who} is a link action but its permission is ${a.attrs.permission ?? 'missing'}, expected ${LINK_PERMISSION}`);
-    if (headlessTheme(a) && !allow.some((x) => x === name || (name.startsWith('.') && x.endsWith(name)))) {
+    if (headlessTheme(a) && !allow.some((x) => sameClass(x, name, pkg))) {
       problems.push(`${who} is a link action that runs headless (${a.attrs.theme}); link actions must show a screen`);
     }
   }
 
   // An alias carries its own permission and replaces the target's: an unguarded alias opens the target.
   for (const al of els.filter((e) => e.name === 'activity-alias' && inApp(e))) {
-    const target = activities.find((a) => a.attrs.name === al.attrs.targetActivity);
+    const target = activities.find((a) => sameClass(a.attrs.name ?? '', al.attrs.targetActivity ?? '\0', pkg));
     const link = hasLinkFilter(al) || (exportedComponent(al) && target !== undefined && isLinkActivity(target));
     if (link && al.attrs.permission !== LINK_PERMISSION) {
       problems.push(`activity-alias ${al.attrs.name} is a link action but its permission is ${al.attrs.permission ?? 'missing'}, expected ${LINK_PERMISSION}`);

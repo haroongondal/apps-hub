@@ -47,7 +47,7 @@ const COLUMN_TYPES: readonly string[] = ['long', 'int', 'double', 'string', 'lon
 
 // Long words are refused anywhere in the name (so `access_token_hash` fails too); short words
 // that sit inside harmless names (pinned, spinner, speed, keyboard, decode_ms) only count as a whole `_` word.
-const SENSITIVE_SUBSTRINGS = ['password', 'passwd', 'passcode', 'secret', 'token', 'apikey', 'api_key', 'private', 'credential', 'session', 'cookie', 'mnemonic', 'cardnumber'];
+const SENSITIVE_SUBSTRINGS = ['password', 'passwd', 'passcode', 'passphrase', 'secret', 'token', 'apikey', 'api_key', 'private', 'credential', 'session', 'cookie', 'mnemonic', 'cardnumber', 'totp', 'hotp'];
 const SENSITIVE_WORDS = ['pin', 'otp', 'seed', 'cvv', 'cvc', 'code', 'key', 'pass', 'pwd', 'passcode', 'auth', 'iban', 'card'];
 
 /**
