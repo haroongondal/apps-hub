@@ -258,3 +258,50 @@ pushed, not on a phone.
 
 All of it: the block actually black-holes traffic on HyperOS, the switch gap, Always-on restart
 after a process kill, ics revoke detection, the SSID/BSSID reads, background behaviour.
+
+## TunnelWall Shields (eco P4 B4, 2026-11-24)
+
+Branch `eco/tunnelwall`, on top of the C3 commits. Not pushed, not on a phone.
+
+### Built
+
+- Settings > Shields (Android 12+, off by default): one switch, "Warn me and protect me on networks I
+  don't trust". On turns on Trusted Wi-Fi auto-connect (the existing precise-location ask); a refusal
+  leaves Shields on and says auto-connect is off and every network counts as not trusted.
+- `untrustedNow(network, trusted)` in `src/tunnel/trusted-wifi.ts`: connected and not a trusted Wi-Fi
+  (mobile data and unreadable Wi-Fi count as not trusted; no network counts as nothing).
+- New module function `publishShield(on, untrustedNow)` (TS contract, adapter, Kotlin, Swift typed
+  `ERR_NOT_SUPPORTED`; Kotlin failure `ERR_LINK_FAILED`). App.tsx calls it when Shields, the network or
+  the trusted list changes; only two booleans cross the bridge.
+- Kotlin: `ShieldLink` (pure: state step, ping decision, rows; `ShieldLinkTest`), `TunnelLinkStore`
+  (SharedPreferences `applink`: shield on/untrusted/since and the heartbeat; sends the CHANGED ping),
+  `TunnelLinkProvider` on `com.haroon.opentunnel.applink` serving `shield` and `health`, guard copies in
+  `applink/` (`AppLinkGuardTest` over the contract fixtures).
+- Shares: `packages/open-tunnel-core/src/shield-share.ts` (`SHIELD_SHARE`, `TUNNEL_HEALTH_SHARE`, not
+  exported from the index so Metro never resolves app-link-contract); fixtures in
+  `packages/open-tunnel-core/fixtures/`, bound by `shield-share.test.ts` (TS) and
+  `TunnelLinkProviderShareTest` (Kotlin). The node test also audits the module and app manifests and
+  checks the Kotlin ping against `CHANGED_PING`.
+- Heartbeat: written when the JS runtime starts (module `OnCreate`) and on every tunnel status change
+  (`TunnelStateRegistry.attach` from the module and from `OpenTunnelVpnService.onCreate`). A query never
+  writes.
+
+### Decisions (my call)
+
+- The switch lives in the JS settings store like Trusted Wi-Fi; the native side keeps only what the
+  provider serves. Every app start republishes, so the two cannot stay apart.
+- Shields off turns auto-connect off too (one master switch). The trusted list is kept.
+- The share serves no row while Shields is off; `health` is always served (the Store reads it).
+- Ping only when Halo's pulse (on and untrusted) flips: entering or leaving an untrusted network, and
+  turning Shields on or off while on one. `since` restarts on any change of on or untrusted.
+- `untrusted_now` is the last state TunnelWall saw. When the process dies (C3: the watch runs only
+  while the app is open or connected) the row keeps that state; Halo can judge it by `since` and the
+  health row's `last_seen_at`. A live reading in the provider would need the trusted list and precise
+  location natively, and was not built.
+- The provider and permission are in the module manifest, so a prebuild keeps them; the merged app
+  manifest carries them (checked in `build/intermediates/merged_manifest`).
+
+### Not proven (needs the phone)
+
+The provider answering Halo and refusing the shell, the ping reaching Halo, the pulse flip on a real
+network change, the location-refused path, the heartbeat after open and after a connect.
