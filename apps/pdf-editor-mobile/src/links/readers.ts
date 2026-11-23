@@ -71,8 +71,34 @@ export function runText(task: unknown, state: unknown): string | null {
 export const deputySource = (native: Native): SnapshotSource =>
   snapshotSource(native, 'deputy.runs', (row) => ({ id: row.id, text: runText(row.task, row.state), at: row.finished_at, from: null }));
 
-export const clipboardSource = (native: Native): SnapshotSource =>
-  snapshotSource(native, 'clipboard.pinned', (row) => ({ id: row.id, text: row.text, at: row.pinned_at, from: row.from_app }));
+export const MAX_PIN_PAGES = 10;
+
+// Ruling R10: Clipboard serves pins oldest first in pages, so the snapshot is every page up to an empty one. A failed page,
+// a page that does not move past the last id, or no empty page within MAX_PIN_PAGES reads is unreachable (null): nothing is deleted.
+export async function pinnedSnapshot(native: Native): Promise<Record<string, unknown>[] | null> {
+  const all: Record<string, unknown>[] = [];
+  let since = 0;
+  for (let page = 0; page < MAX_PIN_PAGES; page++) {
+    const r = await readShare(native, 'clipboard.pinned', since);
+    if (r.status !== 'ok') return null;
+    if (!r.rows.length) return all;
+    const top = Math.max(...r.rows.map((row) => (isSafe(row.id) ? row.id : 0)));
+    if (top <= since) return null;
+    all.push(...r.rows);
+    since = top;
+  }
+  return null;
+}
+
+export function clipboardSource(native: Native): SnapshotSource {
+  return {
+    status: async () => sourceStatus((await readShare(native, 'clipboard.pinned', 0)).status),
+    async snapshot() {
+      const rows = await pinnedSnapshot(native);
+      return rows && rows.map((row) => ({ id: row.id, text: row.text, at: row.pinned_at, from: row.from_app }));
+    },
+  };
+}
 
 export const sourceProviders = (native: Native): Record<SourceApp, SourceProvider> => ({
   inflow: inflowSource(native),

@@ -25,7 +25,9 @@
       ]
     ],
     "maxRows": 200,
-    "paged": true
+    "pkg": "com.haroon.inflow",
+    "paged": true,
+    "strict": false
   },
   "inflow.ask_ids": {
     "authority": "com.haroon.inflow.autopilot",
@@ -37,7 +39,9 @@
       ]
     ],
     "maxRows": 200,
-    "paged": true
+    "pkg": "com.haroon.inflow",
+    "paged": true,
+    "strict": true
   },
   "inflow.debits": {
     "authority": "com.haroon.inflow.autopilot",
@@ -65,7 +69,9 @@
       ]
     ],
     "maxRows": 200,
-    "paged": true
+    "pkg": "com.haroon.inflow",
+    "paged": true,
+    "strict": false
   },
   "deputy.runs": {
     "authority": "com.haroon.deputy.applink",
@@ -89,7 +95,9 @@
       ]
     ],
     "maxRows": 200,
-    "paged": false
+    "pkg": "com.haroon.deputy",
+    "paged": false,
+    "strict": true
   },
   "clipboard.pinned": {
     "authority": "com.haroon.clipboard.applink",
@@ -113,6 +121,8 @@
       ]
     ],
     "maxRows": 200,
-    "paged": false
+    "pkg": "com.haroon.clipboard",
+    "paged": true,
+    "strict": true
   }
 }

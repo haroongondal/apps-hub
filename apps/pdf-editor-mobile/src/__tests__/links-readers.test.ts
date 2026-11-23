@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { cleanRow } from '@apps-hub/knowledge-core';
 
-import { clipboardSource, deputySource, inflowSource, readDebits, readShare, runText, sourceProviders, startLink, type Native } from '../links/readers.ts';
+import { clipboardSource, deputySource, inflowSource, MAX_PIN_PAGES, readDebits, readShare, runText, sourceProviders, startLink, type Native } from '../links/readers.ts';
 
 type Answer = unknown | (() => unknown);
 
@@ -93,19 +93,48 @@ test('Deputy runs become the task and its end in plain words, dated by finished_
   assert.equal(runText(7, 'done'), null);
 });
 
+// Serves pins oldest first after sinceId, `size` per page, the way Clipboard's pinned/<sinceId> does.
+function pinPages(ids: number[], size: number, calls: unknown[][] = [], fail?: number): Native {
+  return {
+    readShare: (async (id: string, sinceId = 0) => {
+      calls.push([id, sinceId]);
+      if (fail !== undefined && sinceId === fail) return { status: 'failed', rows: [] };
+      return ok(ids.filter((n) => n > sinceId).slice(0, size).map((n) => ({ id: n, text: `pin ${n}`, pinned_at: n * 10, from_app: n === 4 ? '' : 'com.whatsapp' })));
+    }) as unknown as NonNullable<Native>['readShare'],
+    startLink: (async () => ({ status: 'failed' })) as unknown as NonNullable<Native>['startLink'],
+  };
+}
+
 test('Clipboard pins carry text, pinned_at and the app they came from', async () => {
-  const snap = await clipboardSource(fake({ 'clipboard.pinned': ok([{ id: 3, text: 'Flat 4B', pinned_at: 20, from_app: 'com.whatsapp' }, { id: 4, text: 'x', pinned_at: 21, from_app: '' }]) })).snapshot();
-  assert.deepEqual(snap, [{ id: 3, text: 'Flat 4B', at: 20, from: 'com.whatsapp' }, { id: 4, text: 'x', at: 21, from: '' }]);
+  const snap = await clipboardSource(pinPages([3, 4], 200)).snapshot();
+  assert.deepEqual(snap, [{ id: 3, text: 'pin 3', at: 30, from: 'com.whatsapp' }, { id: 4, text: 'pin 4', at: 40, from: '' }]);
   assert.equal(cleanRow(snap?.[1])?.from, null);
   assert.equal(await clipboardSource(fake({ 'clipboard.pinned': { status: 'failed', rows: [] } })).snapshot(), null);
 });
 
-test('snapshot readers take no sinceId', async () => {
+test('Clipboard pins are read page by page from the last id until an empty page', async () => {
+  const calls: unknown[][] = [];
+  const snap = await clipboardSource(pinPages([1, 2, 3, 4, 5], 2, calls)).snapshot();
+  assert.deepEqual(snap?.map((r) => (r as { id: number }).id), [1, 2, 3, 4, 5]);
+  assert.deepEqual(calls, [['clipboard.pinned', 0], ['clipboard.pinned', 2], ['clipboard.pinned', 4], ['clipboard.pinned', 5]]);
+});
+
+test('Clipboard paging gives up as unreachable when a page fails, repeats or never ends', async () => {
+  assert.equal(await clipboardSource(pinPages([1, 2, 3, 4], 2, [], 2)).snapshot(), null);
+  assert.equal(await clipboardSource(fake({ 'clipboard.pinned': ok([{ id: 1, text: 't', pinned_at: 1, from_app: '' }]) })).snapshot(), null);
+  const calls: unknown[][] = [];
+  const ids = Array.from({ length: MAX_PIN_PAGES }, (_, i) => i + 1);
+  assert.equal(await clipboardSource(pinPages(ids, 1, calls)).snapshot(), null);
+  assert.equal(calls.length, MAX_PIN_PAGES);
+  assert.equal((await clipboardSource(pinPages(ids.slice(0, -1), 1)).snapshot())?.length, MAX_PIN_PAGES - 1);
+});
+
+test('Deputy runs take no sinceId; Clipboard pins start at 0', async () => {
   const calls: unknown[][] = [];
   const all = sourceProviders(fake({ 'deputy.runs': ok([]), 'clipboard.pinned': ok([]) }, calls));
   await (all.deputy as { snapshot(): Promise<unknown> }).snapshot();
   await (all.clipboard as { snapshot(): Promise<unknown> }).snapshot();
-  assert.deepEqual(calls, [['deputy.runs'], ['clipboard.pinned']]);
+  assert.deepEqual(calls, [['deputy.runs'], ['clipboard.pinned', 0]]);
 });
 
 test('debits keep only valid rows and map status the same way', async () => {

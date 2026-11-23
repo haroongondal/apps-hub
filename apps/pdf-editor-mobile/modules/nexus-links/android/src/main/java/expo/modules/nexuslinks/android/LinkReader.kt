@@ -1,14 +1,15 @@
 package expo.modules.nexuslinks.android
 
-import android.content.ContentResolver
+import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import android.os.CancellationSignal
+import expo.modules.nexuslinks.applink.AppLinkTarget
 import expo.modules.nexuslinks.core.Readers
 import expo.modules.nexuslinks.core.Readers.answer
 import java.util.concurrent.Executors
 
-class LinkReader(private val resolver: ContentResolver) {
+class LinkReader(private val context: Context) {
   // Two threads: a provider stuck in a binder call can hold at most both, and later reads then time out instead of piling up.
   private val pool = Executors.newFixedThreadPool(2)
 
@@ -19,15 +20,17 @@ class LinkReader(private val resolver: ContentResolver) {
   }
 
   private fun query(plan: Readers.Plan, signal: CancellationSignal): Map<String, Any?> {
-    val cursor = resolver.query(Uri.parse(plan.uri), null, null, null, null, signal) ?: return answer(Readers.MISSING)
+    // Checked before every query: another app can claim the authority, or the sibling can be replaced while Nexus runs.
+    if (!AppLinkTarget.trustedProvider(context, plan.spec.authority, plan.spec.pkg)) return answer(Readers.MISSING)
+    val cursor = context.contentResolver.query(Uri.parse(plan.uri), null, null, null, null, signal) ?: return answer(Readers.MISSING)
     return cursor.use { c ->
       val indexes = Readers.columnIndexes(plan.spec, c.columnNames.toList()) ?: return answer(Readers.FAILED)
       val raw = ArrayList<List<Any?>>()
-      while (raw.size < plan.spec.maxRows && c.moveToNext()) {
+      while (raw.size <= plan.spec.maxRows && c.moveToNext()) {
         signal.throwIfCanceled()
         raw.add(indexes.map { value(c, it) })
       }
-      answer(Readers.OK, Readers.rows(plan.spec, raw))
+      Readers.rows(plan.spec, raw)?.let { answer(Readers.OK, it) } ?: answer(Readers.FAILED)
     }
   }
 

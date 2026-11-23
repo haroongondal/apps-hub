@@ -43,7 +43,9 @@ class ReadersTest {
       assertEquals(id, o.getValue("path").jsonPrimitive.content, spec.path)
       assertEquals(id, o.getValue("columns").jsonArray.map { c -> c.jsonArray.let { it[0].jsonPrimitive.content to type(it[1].jsonPrimitive.content) } }, spec.columns)
       assertEquals(id, o.getValue("maxRows").jsonPrimitive.int, spec.maxRows)
+      assertEquals(id, o.getValue("pkg").jsonPrimitive.content, spec.pkg)
       assertEquals(id, o.getValue("paged").jsonPrimitive.boolean, spec.paged)
+      assertEquals(id, o.getValue("strict").jsonPrimitive.boolean, spec.strict)
       assertTrue(spec.maxRows <= 500)
     }
   }
@@ -61,10 +63,19 @@ class ReadersTest {
     for (bad in listOf(-1.0, 1.5, Double.NaN, Double.POSITIVE_INFINITY, 9007199254740992.0)) assertNull("$bad", Readers.plan("inflow.ask_items", bad))
   }
 
-  @Test fun aSnapshotReaderTakesNoSinceId() {
+  @Test fun deputyRunsTakeNoSinceIdAndClipboardPinsPageByNumber() {
     assertEquals("content://com.haroon.deputy.applink/runs", Readers.plan("deputy.runs", null)?.uri)
-    assertEquals("content://com.haroon.clipboard.applink/pinned", Readers.plan("clipboard.pinned", null)?.uri)
-    assertNull(Readers.plan("clipboard.pinned", 3.0))
+    assertNull(Readers.plan("deputy.runs", 3.0))
+    assertEquals("content://com.haroon.clipboard.applink/pinned/0", Readers.plan("clipboard.pinned", null)?.uri)
+    assertEquals("content://com.haroon.clipboard.applink/pinned/3", Readers.plan("clipboard.pinned", 3.0)?.uri)
+    assertNull(Readers.plan("clipboard.pinned", -3.0))
+  }
+
+  @Test fun eachReaderExpectsItsSiblingPackage() {
+    assertEquals(
+      mapOf("inflow.ask_items" to "com.haroon.inflow", "inflow.ask_ids" to "com.haroon.inflow", "inflow.debits" to "com.haroon.inflow", "deputy.runs" to "com.haroon.deputy", "clipboard.pinned" to "com.haroon.clipboard"),
+      Readers.SPECS.mapValues { it.value.pkg },
+    )
   }
 
   @Test fun goodRowsComeBackTypedAndNamed() {
@@ -90,13 +101,32 @@ class ReadersTest {
       listOf(5L, "sms", "Ali", "hi"), // a column short
       listOf(5L, "sms", "Ali", "x".repeat(Readers.MAX_TEXT + 1), 1L), // text over 8000
     ))
-    assertEquals(listOf(4L), rows.map { it["id"] })
-    assertEquals(1, Readers.rows(asks, listOf(listOf(6L, "sms", null, "x".repeat(Readers.MAX_TEXT), 1L))).size)
+    assertEquals(listOf(4L), rows?.map { it["id"] })
+    assertEquals(1, Readers.rows(asks, listOf(listOf(6L, "sms", null, "x".repeat(Readers.MAX_TEXT), 1L)))?.size)
   }
 
-  @Test fun rowsPastMaxRowsAreCut() {
-    val many = (1L..(runs.maxRows + 50L)).map { listOf(it, "t", "done", 1L) }
-    assertEquals(runs.maxRows, Readers.rows(runs, many).size)
+  @Test fun anItemReadPastMaxRowsIsCut() {
+    val many = (1L..(asks.maxRows + 1L)).map { listOf(it, "sms", null, "t", 1L) }
+    assertEquals(asks.maxRows, Readers.rows(asks, many)?.size)
+  }
+
+  @Test fun aStrictReadWithOneBadRowFailsWhole() {
+    val ids = Readers.SPECS.getValue("inflow.ask_ids")
+    val pins = Readers.SPECS.getValue("clipboard.pinned")
+    assertEquals(listOf(mapOf("id" to 1L), mapOf("id" to 2L)), Readers.rows(ids, listOf(listOf(1L), listOf(2L))))
+    assertNull(Readers.rows(ids, listOf(listOf(1L), listOf(0L))))
+    assertNull(Readers.rows(runs, listOf(listOf(1L, "t", "done", 1L), listOf(2L, "t", 7L, 1L))))
+    assertNull(Readers.rows(pins, listOf(listOf(1L, "x".repeat(Readers.MAX_TEXT + 1), 1L, ""))))
+    assertEquals(emptyList<Map<String, Any?>>(), Readers.rows(pins, emptyList()))
+  }
+
+  @Test fun aStrictReadPastMaxRowsFailsInsteadOfBeingCut() {
+    assertEquals(runs.maxRows, Readers.rows(runs, (1L..runs.maxRows).map { listOf(it, "t", "done", 1L) })?.size)
+    assertNull(Readers.rows(runs, (1L..(runs.maxRows + 1L)).map { listOf(it, "t", "done", 1L) }))
+  }
+
+  @Test fun onlySnapshotsAndIdListsAreStrict() {
+    assertEquals(listOf("inflow.ask_ids", "deputy.runs", "clipboard.pinned"), Readers.SPECS.filterValues { it.strict }.keys.toList())
   }
 
   @Test fun aMissingColumnFailsTheReadInsteadOfDroppingEveryRow() {

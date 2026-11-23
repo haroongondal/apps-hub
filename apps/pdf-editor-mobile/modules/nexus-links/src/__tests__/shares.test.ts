@@ -12,9 +12,11 @@ test('the Kotlin fixture equals the TypeScript shares', () => {
   assert.deepEqual(JSON.parse(fs.readFileSync(FIXTURE, 'utf8')), readerFixture());
 });
 
-test('the reader allowlist is exactly the five shares, and only Inflow pages', () => {
+test('the reader allowlist is exactly the five shares; Deputy alone takes no sinceId; snapshots and id lists are strict', () => {
   assert.deepEqual(Object.keys(READERS), ['inflow.ask_items', 'inflow.ask_ids', 'inflow.debits', 'deputy.runs', 'clipboard.pinned']);
-  assert.deepEqual(Object.values(READERS).filter((r) => r.paged).map((r) => r.share.authority), Array(3).fill('com.haroon.inflow.autopilot'));
+  assert.deepEqual(Object.entries(READERS).filter(([, r]) => !r.paged).map(([id]) => id), ['deputy.runs']);
+  assert.deepEqual(Object.entries(READERS).filter(([, r]) => r.strict).map(([id]) => id), ['inflow.ask_ids', 'deputy.runs', 'clipboard.pinned']);
+  assert.deepEqual(Object.values(READERS).map((r) => r.pkg), ['com.haroon.inflow', 'com.haroon.inflow', 'com.haroon.inflow', 'com.haroon.deputy', 'com.haroon.clipboard']);
 });
 
 test('no column is named like a secret, text and account included', () => {

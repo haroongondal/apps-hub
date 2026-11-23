@@ -1,5 +1,6 @@
 package expo.modules.nexuslinks.core
 
+import expo.modules.nexuslinks.applink.SiblingPackages
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.TimeUnit
@@ -17,17 +18,17 @@ object Readers {
 
   enum class Type(val nullable: Boolean) { LONG(false), INT(false), DOUBLE(false), STRING(false), LONG_N(true), INT_N(true), DOUBLE_N(true), STRING_N(true) }
 
-  data class Spec(val authority: String, val path: String, val columns: List<Pair<String, Type>>, val maxRows: Int, val paged: Boolean)
+  data class Spec(val authority: String, val path: String, val columns: List<Pair<String, Type>>, val maxRows: Int, val pkg: String, val paged: Boolean, val strict: Boolean)
 
   private const val INFLOW = "com.haroon.inflow.autopilot"
   private fun cols(vararg c: Pair<String, Type>) = c.toList()
 
   val SPECS: Map<String, Spec> = linkedMapOf(
-    "inflow.ask_items" to Spec(INFLOW, "ask_items", cols("id" to Type.LONG, "app" to Type.STRING, "sender" to Type.STRING_N, "text" to Type.STRING, "at" to Type.LONG), 200, true),
-    "inflow.ask_ids" to Spec(INFLOW, "ask_ids", cols("id" to Type.LONG), 200, true),
-    "inflow.debits" to Spec(INFLOW, "debits", cols("id" to Type.LONG, "amount_minor" to Type.LONG, "at" to Type.LONG, "merchant" to Type.STRING, "account" to Type.STRING), 200, true),
-    "deputy.runs" to Spec("com.haroon.deputy.applink", "runs", cols("id" to Type.LONG, "task" to Type.STRING, "state" to Type.STRING, "finished_at" to Type.LONG), 200, false),
-    "clipboard.pinned" to Spec("com.haroon.clipboard.applink", "pinned", cols("id" to Type.LONG, "text" to Type.STRING, "pinned_at" to Type.LONG, "from_app" to Type.STRING), 200, false),
+    "inflow.ask_items" to Spec(INFLOW, "ask_items", cols("id" to Type.LONG, "app" to Type.STRING, "sender" to Type.STRING_N, "text" to Type.STRING, "at" to Type.LONG), 200, SiblingPackages.INFLOW, paged = true, strict = false),
+    "inflow.ask_ids" to Spec(INFLOW, "ask_ids", cols("id" to Type.LONG), 200, SiblingPackages.INFLOW, paged = true, strict = true),
+    "inflow.debits" to Spec(INFLOW, "debits", cols("id" to Type.LONG, "amount_minor" to Type.LONG, "at" to Type.LONG, "merchant" to Type.STRING, "account" to Type.STRING), 200, SiblingPackages.INFLOW, paged = true, strict = false),
+    "deputy.runs" to Spec("com.haroon.deputy.applink", "runs", cols("id" to Type.LONG, "task" to Type.STRING, "state" to Type.STRING, "finished_at" to Type.LONG), 200, SiblingPackages.DEPUTY, paged = false, strict = true),
+    "clipboard.pinned" to Spec("com.haroon.clipboard.applink", "pinned", cols("id" to Type.LONG, "text" to Type.STRING, "pinned_at" to Type.LONG, "from_app" to Type.STRING), 200, SiblingPackages.CLIPBOARD, paged = true, strict = true),
   )
 
   data class Plan(val spec: Spec, val uri: String)
@@ -44,8 +45,12 @@ object Readers {
   fun columnIndexes(spec: Spec, cursorColumns: List<String>): List<Int>? =
     spec.columns.map { (name, _) -> cursorColumns.indexOf(name).takeIf { it >= 0 } ?: return null }
 
-  fun rows(spec: Spec, raw: List<List<Any?>>): List<Map<String, Any?>> =
-    raw.take(spec.maxRows).mapNotNull { row(spec, it) }
+  // Null fails the read. Ruling R11: a strict read (snapshot or id list) with one bad row, or more than maxRows rows, fails whole,
+  // because a shorter list would delete kept items; an item read just skips bad rows and keeps the first maxRows.
+  fun rows(spec: Spec, raw: List<List<Any?>>): List<Map<String, Any?>>? {
+    val kept = raw.take(spec.maxRows).mapNotNull { row(spec, it) }
+    return if (spec.strict && kept.size != raw.size) null else kept
+  }
 
   fun row(spec: Spec, values: List<Any?>): Map<String, Any?>? {
     if (values.size != spec.columns.size) return null

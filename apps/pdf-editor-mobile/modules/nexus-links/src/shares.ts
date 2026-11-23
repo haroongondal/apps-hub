@@ -1,4 +1,4 @@
-import { defineShare } from '@apps-hub/app-link-contract';
+import { defineShare, SIBLING_PACKAGES } from '@apps-hub/app-link-contract';
 
 // Inflow has not defined these three shares yet, so they follow ruling R5 (Nexus P3) and must be rechecked at merge.
 const INFLOW = 'com.haroon.inflow.autopilot';
@@ -72,19 +72,20 @@ export const PINNED_SHARE = defineShare<PinnedRow>()({
     "Pinned text clips, never passwords, codes, clips marked sensitive, images or files; read by Nexus only, oldest first, paged with pinned/<sinceId>. Off until the owner turns on 'Let Nexus read my pinned clips'.",
 });
 
+// `strict` (ruling R11): a snapshot or id list with one bad row fails whole, so a malformed row can never delete a kept item.
 export const READERS = {
-  'inflow.ask_items': { share: ASK_ITEMS_SHARE, paged: true },
-  'inflow.ask_ids': { share: ASK_IDS_SHARE, paged: true },
-  'inflow.debits': { share: DEBITS_SHARE, paged: true },
-  'deputy.runs': { share: RUNS_SHARE, paged: false },
-  'clipboard.pinned': { share: PINNED_SHARE, paged: false },
+  'inflow.ask_items': { share: ASK_ITEMS_SHARE, pkg: SIBLING_PACKAGES.inflow, paged: true, strict: false },
+  'inflow.ask_ids': { share: ASK_IDS_SHARE, pkg: SIBLING_PACKAGES.inflow, paged: true, strict: true },
+  'inflow.debits': { share: DEBITS_SHARE, pkg: SIBLING_PACKAGES.inflow, paged: true, strict: false },
+  'deputy.runs': { share: RUNS_SHARE, pkg: SIBLING_PACKAGES.deputy, paged: false, strict: true },
+  'clipboard.pinned': { share: PINNED_SHARE, pkg: SIBLING_PACKAGES.clipboard, paged: true, strict: true },
 } as const;
 
 export function readerFixture() {
   return Object.fromEntries(
-    Object.entries(READERS).map(([id, { share, paged }]) => [
+    Object.entries(READERS).map(([id, { share, pkg, paged, strict }]) => [
       id,
-      { authority: share.authority, path: share.path, columns: share.columns.map((name) => [name, (share.types as Record<string, string>)[name]]), maxRows: share.maxRows, paged },
+      { authority: share.authority, path: share.path, columns: share.columns.map((name) => [name, (share.types as Record<string, string>)[name]]), maxRows: share.maxRows, pkg, paged, strict },
     ]),
   );
 }

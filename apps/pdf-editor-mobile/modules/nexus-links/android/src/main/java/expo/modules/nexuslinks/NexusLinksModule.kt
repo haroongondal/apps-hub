@@ -8,12 +8,13 @@ import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.nexuslinks.android.LinkReader
+import expo.modules.nexuslinks.applink.AppLinkTarget
 import expo.modules.nexuslinks.core.Links
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
 
 class NexusLinksModule : Module() {
-  private val readerLazy = lazy { LinkReader(requireNotNull(appContext.reactContext).contentResolver) }
+  private val readerLazy = lazy { LinkReader(requireNotNull(appContext.reactContext).applicationContext) }
   // The read waits up to its timeout on this pool, never on Expo's shared async queue.
   private val waiters = Executors.newCachedThreadPool()
   private val pending = AtomicReference<Promise?>(null)
@@ -39,9 +40,11 @@ class NexusLinksModule : Module() {
       }
       val activity = appContext.currentActivity
       if (activity == null || activity.isFinishing) return@AsyncFunction promise.resolve(Links.Result(Links.UNAVAILABLE).toMap())
+      val intent = intent(start)
+      if (!AppLinkTarget.trustedActivity(activity, intent)) return@AsyncFunction promise.resolve(Links.Result(Links.UNAVAILABLE).toMap())
       if (!pending.compareAndSet(null, promise)) return@AsyncFunction promise.resolve(Links.Result(Links.FAILED, "busy").toMap())
       val failed = try {
-        activity.startActivityForResult(intent(start), Links.REQUEST_CODE)
+        activity.startActivityForResult(intent, Links.REQUEST_CODE)
         null
       } catch (_: ActivityNotFoundException) {
         Links.Result(Links.UNAVAILABLE)
