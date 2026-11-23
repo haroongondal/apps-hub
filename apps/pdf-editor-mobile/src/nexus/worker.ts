@@ -30,7 +30,7 @@ export function onQueueChange(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
-const emit = () => listeners.forEach((l) => l());
+export const emit = () => listeners.forEach((l) => l());
 
 async function work(kn: Knowledge) {
   try {

@@ -1,4 +1,4 @@
-import type { Job } from '@apps-hub/knowledge-core';
+import { AiError, type Job, type MinutesAction, type MinutesPoint } from '@apps-hub/knowledge-core';
 import type { ItemKind } from '@apps-hub/library-core';
 import type { Tone } from '@apps-hub/ui';
 
@@ -41,4 +41,26 @@ export function jobLabel(
   if (!hasKey) return { label: 'Waiting for an AI key', tone: 'warn' };
   if (job.status === 'queued' && job.error) return { label: job.error, tone: 'warn' };
   return { label: `${WORKING[job.stage as Exclude<Job['stage'], 'done'>](kind)}…`, tone: 'accent' };
+}
+
+const two = (n: number) => String(n).padStart(2, '0');
+
+export function clockTime(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h ? `${h}:${two(m)}:${two(s % 60)}` : `${m}:${two(s % 60)}`;
+}
+
+export function minutesDetail(p: MinutesPoint & Partial<Pick<MinutesAction, 'owner' | 'due'>>): string {
+  return [p.owner, p.due, p.cites.map((c) => clockTime(c.startSec)).join(', ')].filter(Boolean).join(' · ');
+}
+
+export const seekTo = (p: MinutesPoint): number => p.cites[0].startSec;
+
+// The queue's own messages promise a later retry; minutes run only on a tap, so they say what to do instead.
+export function minutesError(err: unknown): string {
+  if (err instanceof AiError && err.kind === 'rate') return 'The AI service is busy for your key. Wait a minute, then try again.';
+  if (err instanceof AiError && err.kind === 'offline') return "Nexus couldn't reach the AI service. Check your connection, then try again.";
+  return err instanceof Error ? err.message : String(err);
 }

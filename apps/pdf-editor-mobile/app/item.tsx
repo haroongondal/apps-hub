@@ -1,10 +1,10 @@
-import { locatorLabel, type Job, type Segment } from '@apps-hub/knowledge-core';
+import { locatorLabel, type Job, type MinutesAction, type MinutesPoint, type SavedMinutes, type Segment } from '@apps-hub/knowledge-core';
 import type { Item, PlaceReminder } from '@apps-hub/library-core';
-import { Button, confirmAction, Field, Group, Header, Notice, Pill, Row, Screen, space, Text } from '@apps-hub/ui';
+import { Button, confirmAction, Field, Group, Header, Notice, Pill, Progress, Row, Screen, space, Text } from '@apps-hub/ui';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, View } from 'react-native';
 
 import { IconButton } from '../src/library/icon-button';
@@ -14,7 +14,8 @@ import { itemFile } from '../src/library/paths';
 import { errorMessage, useDebounced } from '../src/library/use-library';
 import { hasKeys } from '../src/nexus/ai';
 import { saveNote } from '../src/nexus/capture';
-import { jobLabel } from '../src/nexus/labels';
+import { jobLabel, minutesDetail, minutesError, seekTo } from '../src/nexus/labels';
+import { isMakingMinutes, makeMinutes } from '../src/nexus/minutes';
 import { enqueue, kick, onQueueChange, openKnowledge } from '../src/nexus/worker';
 import { describePlace } from '../src/places/describe';
 import { PlaceSheet } from '../src/places/place-sheet';
@@ -30,6 +31,8 @@ interface Loaded {
   hasKey: boolean;
   places: PlaceReminder[];
   keptOut: boolean;
+  minutes: SavedMinutes | null;
+  makingMinutes: boolean;
 }
 
 const SAVE_MS = 800;
@@ -79,7 +82,76 @@ function NoteEditor({ item, onSaved }: { item: Item; onSaved: () => void }) {
   return <Field label="Note" value={text} onChangeText={setText} multiline textAlignVertical="top" style={{ minHeight: 200, paddingVertical: space.md }} />;
 }
 
-function Recording({ item, segments, at }: { item: Item; segments: Segment[]; at: number | null }) {
+function MinutesSection({ item, saved, making, playFrom }: { item: Item; saved: SavedMinutes | null; making: boolean; playFrom: (sec: number) => void }) {
+  const [error, setError] = useState<string | null>(null);
+  const make = () => {
+    setError(null);
+    makeMinutes(item.id).catch((err) => setError(minutesError(err)));
+  };
+  const again = () =>
+    confirmAction({
+      title: 'Replace these minutes?',
+      message: 'Nexus sends the transcript to Groq again and replaces the minutes you have now.',
+      confirmLabel: 'Replace',
+      onConfirm: make,
+    });
+  const point = (p: MinutesPoint | MinutesAction, i: number) => (
+    <Row
+      key={i}
+      title={<Text>{p.text}</Text>}
+      subtitle={minutesDetail(p)}
+      onPress={() => playFrom(seekTo(p))}
+      accessibilityHint="Plays the recording from where this was said"
+    />
+  );
+  const found = saved ? saved.minutes.decisions.length + saved.minutes.actions.length : 0;
+
+  return (
+    <>
+      <Group
+        title="Minutes"
+        footer={saved ? undefined : 'Nexus sends this transcript to Groq to write a summary, the decisions and the action items, each with the time it was said.'}
+      >
+        {saved ? <Row title={<Text>{saved.minutes.summary}</Text>} /> : null}
+        {making ? (
+          <Row title="Making minutes…">
+            <Progress value={null} />
+          </Row>
+        ) : null}
+      </Group>
+      {error ? (
+        <Notice tone="warn" title="Couldn't make the minutes">
+          {error}
+        </Notice>
+      ) : null}
+      {saved?.stale ? <Notice tone="warn">The transcript changed after these minutes were made. Make them again to match it.</Notice> : null}
+      {saved && found === 0 ? <Text tone="muted">No decisions or action items were found.</Text> : null}
+      {saved?.minutes.decisions.length ? (
+        <Group title="Decisions" footer="Tap one to play from where it was said.">
+          {saved.minutes.decisions.map(point)}
+        </Group>
+      ) : null}
+      {saved?.minutes.actions.length ? <Group title="Action items">{saved.minutes.actions.map(point)}</Group> : null}
+      {making ? null : saved ? (
+        <Button label="Make minutes again" variant="secondary" onPress={again} />
+      ) : (
+        <Button label="Make minutes" onPress={make} accessibilityHint="Sends the transcript to Groq" />
+      )}
+    </>
+  );
+}
+
+function Recording({
+  item,
+  segments,
+  at,
+  minutes,
+}: {
+  item: Item;
+  segments: Segment[];
+  at: number | null;
+  minutes?: (playFrom: (sec: number) => void) => ReactNode;
+}) {
   const player = useAudioPlayer(itemFile(item.id, 'audio.m4a').uri);
   const status = useAudioPlayerStatus(player);
   const sought = useRef(false);
@@ -106,6 +178,7 @@ function Recording({ item, segments, at }: { item: Item; segments: Segment[]; at
           else player.play();
         }}
       />
+      {minutes?.(playFrom)}
       {segments.length ? (
         <Group title="Transcript" footer="Tap a line to play from there.">
           {segments.map((s, i) => (
@@ -144,6 +217,8 @@ export default function ItemScreen() {
       hasKey: await hasKeys(),
       places: await kn.lib.listReminders(item.id),
       keptOut: await kn.isExcluded(item.id),
+      minutes: item.kind === 'audio' ? await kn.minutes(item.id) : null,
+      makingMinutes: isMakingMinutes(item.id),
     });
   }, [params.id]);
   useEffect(() => {
@@ -187,7 +262,18 @@ export default function ItemScreen() {
       </View>
 
       {item.kind === 'note' ? <NoteEditor item={item} onSaved={() => void load()} /> : null}
-      {item.kind === 'audio' ? <Recording item={item} segments={data.segments} at={Number.isFinite(at) ? at : null} /> : null}
+      {item.kind === 'audio' ? (
+        <Recording
+          item={item}
+          segments={data.segments}
+          at={Number.isFinite(at) ? at : null}
+          minutes={
+            data.segments.length && !data.keptOut
+              ? (playFrom) => <MinutesSection item={item} saved={data.minutes} making={data.makingMinutes} playFrom={playFrom} />
+              : undefined
+          }
+        />
+      ) : null}
       {item.kind === 'image' ? (
         <>
           <Image

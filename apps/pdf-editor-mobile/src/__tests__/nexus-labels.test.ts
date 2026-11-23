@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { Job } from '@apps-hub/knowledge-core';
+import { AiError, type Job } from '@apps-hub/knowledge-core';
 
-import { captureTitle, jobLabel, noteTitle } from '../nexus/labels.ts';
+import { captureTitle, clockTime, jobLabel, minutesDetail, minutesError, noteTitle, seekTo } from '../nexus/labels.ts';
 
 const job = (over: Partial<Job>): Job => ({ itemId: 'x', stage: 'text', status: 'queued', attempts: 0, error: null, updatedAt: 0, ...over });
 const none = { ideas: 0, links: 0 };
@@ -32,4 +32,30 @@ test('the card says what the queue is doing, in plain words', () => {
   assert.deepEqual(jobLabel(job({ stage: 'done', status: 'done' }), 'pdf', false, { ideas: 1, links: 6 }), { label: '1 idea, 6 links', tone: 'ok' });
   assert.equal(jobLabel(job({ status: 'failed', error: 'HTTP 400' }), 'note', true, none).tone, 'danger');
   assert.deepEqual(jobLabel(null, 'pdf', true, none, true), { label: 'Not in Nexus', tone: 'neutral' }); // kept out wins over any stale job
+});
+
+test('minutes times read m:ss under an hour and h:mm:ss after', () => {
+  assert.equal(clockTime(0), '0:00');
+  assert.equal(clockTime(65.9), '1:05');
+  assert.equal(clockTime(3599), '59:59');
+  assert.equal(clockTime(3600), '1:00:00');
+  assert.equal(clockTime(3 * 3600 + 7 * 60 + 9), '3:07:09');
+  assert.equal(clockTime(-2), '0:00');
+});
+
+test('a minutes line says who, when it is due and where it was said, and seeks to its first cite', () => {
+  const cites = [
+    { segment: 4, startSec: 62 },
+    { segment: 9, startSec: 3700 },
+  ];
+  assert.equal(minutesDetail({ text: 'Send the plan', owner: 'Sam', due: 'by Friday', cites }), 'Sam · by Friday · 1:02, 1:01:40');
+  assert.equal(minutesDetail({ text: 'Budget agreed', cites: [cites[0]] }), '1:02');
+  assert.equal(seekTo({ text: 'x', cites }), 62);
+});
+
+test('a minutes failure says what happened and how to fix it', () => {
+  assert.match(minutesError(new AiError('rate', 'The AI service is rate-limiting this key. Nexus tries again later.')), /wait a minute, then try again/i);
+  assert.match(minutesError(new AiError('offline', 'queued items continue')), /check your connection, then try again/i);
+  assert.equal(minutesError(new AiError('auth', 'No API key is set. Add your key in AI settings.')), 'No API key is set. Add your key in AI settings.');
+  assert.equal(minutesError(new Error('This recording is too short to make minutes from.')), 'This recording is too short to make minutes from.');
 });
