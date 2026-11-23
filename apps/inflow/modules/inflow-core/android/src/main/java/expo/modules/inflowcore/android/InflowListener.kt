@@ -24,6 +24,8 @@ class InflowListener : NotificationListenerService() {
     GmailSync.startPeriodic(applicationContext)
     AiRunner.startPeriodic(applicationContext)
     StoreHolder.backfill(applicationContext)
+    // The system starts the listener at boot, so this re-arms medicine reminders after a reboot without a boot receiver.
+    MedicineReminders.rearm(applicationContext)
   }
 
   override fun onListenerDisconnected() {

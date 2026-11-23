@@ -4,7 +4,7 @@
   <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
   <!-- Gmail over IMAP (imap.gmail.com:993), and https to the AI address the owner sets in Settings; nothing else. -->
   <uses-permission android:name="android.permission.INTERNET" />
-  <!-- The "your report is ready" notification. A runtime permission (Android 13+); without it reports are still made and listed. -->
+  <!-- The "your report is ready" notification, suggestion cards and medicine reminders. A runtime permission (Android 13+); without it reports are still made and listed, and medicines are saved and logged. -->
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <!-- Signature level: only apps signed with the same key (Deputy, later Halo) can hold it. Inflow declares it so it can reach Deputy's RunSuggestionActivity. -->
   <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
@@ -83,6 +83,9 @@
     </activity-alias>
     <receiver android:name=".android.SuggestionSkipReceiver" android:exported="false" />
     <receiver android:name=".android.SuggestionReminderReceiver" android:exported="false" />
+    <!-- Medicine reminders: the one alarm, and Taken, Skip and Snooze on a reminder. Not exported: only Inflow's own PendingIntents reach them. -->
+    <receiver android:name=".android.MedicineAlarmReceiver" android:exported="false" />
+    <receiver android:name=".android.MedicineActionReceiver" android:exported="false" />
     <receiver
       android:name="expo.modules.inflowcore.android.SmsReceiver"
       android:exported="true"

@@ -59,6 +59,13 @@ class ManifestTest {
     for (n in listOf("SuggestionRunActivity", "SuggestionSkipReceiver", "SuggestionReminderReceiver")) assertEquals(n, "false", names.getValue(n).attr("exported"))
   }
 
+  @Test fun medicineRemindersAddNoPermissionAndTheirReceiversAreNotExported() {
+    val names = tags("receiver").associateBy { it.attr("name").substringAfterLast('.') }
+    for (n in listOf("MedicineAlarmReceiver", "MedicineActionReceiver")) assertEquals(n, "false", names.getValue(n).attr("exported"))
+    val asked = tags("uses-permission").map { it.attr("name") }
+    for (p in listOf("SCHEDULE_EXACT_ALARM", "USE_EXACT_ALARM", "RECEIVE_BOOT_COMPLETED", "FOREGROUND_SERVICE")) assertTrue(p, asked.none { it.endsWith(p) })
+  }
+
   @Test fun deputyIsVisibleToThePackageManager() {
     assertTrue(tags("package").any { it.attr("name") == "com.haroon.deputy" })
     assertEquals(1, tags("queries").size)
