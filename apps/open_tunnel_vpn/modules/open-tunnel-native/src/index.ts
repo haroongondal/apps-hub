@@ -27,9 +27,11 @@ import {
   type FirewallRuleKind,
   type FirewallStatus,
   type FirewallVerdict,
+  type KillSwitchStatus,
   type NativeAppRule,
   type NativeLogRow,
   type OpenTunnelNativeApi,
+  type ProtectionNativeApi,
   type VpnProtocol,
   type VpnStatusPayload,
   type VpnStatusState,
@@ -52,10 +54,12 @@ export type {
   FirewallRuleKind,
   FirewallStatus,
   FirewallVerdict,
+  KillSwitchStatus,
   NativeAppRule,
   NativeLogRow,
   OpenTunnelErrorCode,
   OpenTunnelNativeApi,
+  ProtectionNativeApi,
   VpnProtocol,
   VpnStatusPayload,
   VpnStatusState,
@@ -494,4 +498,53 @@ export function createFirewallBinding(options?: BindingOptions): FirewallApi {
   if (platform !== 'android') return unsupportedFirewall(platform);
   const native = resolveNativeModule(platform);
   return native == null ? unsupportedFirewall(platform) : bindFirewall(native);
+}
+
+const NO_BLOCK: KillSwitchStatus = { blocking: false, alwaysOn: null, lockdown: null };
+
+const flag = (value: unknown): boolean | null => (typeof value === 'boolean' ? value : null);
+
+/** Anything malformed reads as not blocking and unknown, never as protected. */
+export function normalizeKillSwitchStatus(raw: unknown): KillSwitchStatus {
+  if (raw === null || typeof raw !== 'object') return NO_BLOCK;
+  const value = raw as Record<string, unknown>;
+  return { blocking: value.blocking === true, alwaysOn: flag(value.alwaysOn), lockdown: flag(value.lockdown) };
+}
+
+/** Kill switch and network state: the in-app blocking interface and Android's Always-on reading. */
+export interface ProtectionApi {
+  getKillSwitchStatus(): Promise<KillSwitchStatus>;
+  addOnKillSwitchChanged(listener: (blocking: boolean) => void): ListenerHandle;
+}
+
+export function bindProtection(native: ProtectionNativeApi): ProtectionApi {
+  return {
+    async getKillSwitchStatus() {
+      return normalizeKillSwitchStatus(await native.getKillSwitchStatus());
+    },
+    addOnKillSwitchChanged(listener) {
+      const subscription = native.addListener('onKillSwitchChanged', (payload) =>
+        listener(normalizeKillSwitchStatus(payload).blocking),
+      );
+      return { remove: () => subscription.remove() };
+    },
+  };
+}
+
+function unavailableProtection(): ProtectionApi {
+  return {
+    async getKillSwitchStatus() {
+      return NO_BLOCK;
+    },
+    addOnKillSwitchChanged() {
+      return { remove: () => undefined };
+    },
+  };
+}
+
+export function createProtectionBinding(options?: BindingOptions): ProtectionApi {
+  const platform = options?.platform ?? runtimePlatform();
+  if (platform !== 'android' && platform !== 'ios') return unavailableProtection();
+  const native = resolveNativeModule(platform);
+  return native == null ? unavailableProtection() : bindProtection(native);
 }

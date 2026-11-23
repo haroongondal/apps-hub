@@ -18,6 +18,8 @@ import com.opentunnel.open_tunnel_vpn.engines.EngineAdapter
 import com.opentunnel.open_tunnel_vpn.engines.EngineConfig
 import com.opentunnel.open_tunnel_vpn.engines.EngineUnavailableException
 import com.opentunnel.open_tunnel_vpn.engines.TunnelEngine
+import expo.modules.opentunnelnative.KillSwitch
+import expo.modules.opentunnelnative.KillSwitchEvent
 import expo.modules.opentunnelnative.ServiceContracts
 import expo.modules.opentunnelnative.TunnelEventBus
 import expo.modules.opentunnelnative.TunnelStateRegistry
@@ -95,9 +97,25 @@ class OpenTunnelVpnService : VpnService() {
     stopSelf()
   }
 
+  private var killSwitchEnabled = false
+  private var armed = false
+  private var blockFd: ParcelFileDescriptor? = null
+  private val killSwitchPrefs by lazy { getSharedPreferences(KILL_SWITCH_PREFS, MODE_PRIVATE) }
+  private val statusListener = object : TunnelEventBus.Listener {
+    override fun onStatus(state: String, message: String?, code: String?) {
+      main.post { onEngineStatus(state) }
+    }
+
+    override fun onTraffic(bytesIn: Long, bytesOut: Long, connectedDurationSec: Long) = Unit
+  }
+
   override fun onCreate() {
     super.onCreate()
     ensureChannel()
+    // A fresh process (Always-on restart, boot) remembers that the user still wanted the tunnel.
+    armed = runCatching { killSwitchPrefs.getBoolean(KEY_ARMED, false) }.getOrDefault(false)
+    killSwitchEnabled = armed
+    TunnelEventBus.add(statusListener)
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -105,12 +123,16 @@ class OpenTunnelVpnService : VpnService() {
     // engine setup.
     main.removeCallbacks(release)
     startForegroundNow()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) TunnelStateRegistry.setLockdown(isAlwaysOn, isLockdownEnabled)
     when (intent?.action) {
       ServiceContracts.ACTION_START -> {
         val config = parseEngineConfig(intent.getStringExtra(ServiceContracts.EXTRA_CONFIG))
         if (config == null) {
           failStart("tunnel config missing or malformed (contract field check failed)")
         } else {
+          killSwitchEnabled = config.enableKillSwitch
+          setArmed(KillSwitch.next(armed, killSwitchEnabled, KillSwitchEvent.START))
+          if (!armed) releaseBlock()
           startTunnel(config)
         }
       }
@@ -119,8 +141,12 @@ class OpenTunnelVpnService : VpnService() {
       ServiceContracts.ACTION_RELEASE -> {
         engine?.let { runCatching { it.stop() } }
         engine = null
-        setServerActive(false)
         TrafficTicker.stop()
+        val revoked = intent?.getBooleanExtra(ServiceContracts.EXTRA_REVOKED, false) == true
+        setArmed(KillSwitch.next(armed, killSwitchEnabled, if (revoked) KillSwitchEvent.ENGINE_REVOKED else KillSwitchEvent.ENGINE_ENDED))
+        // Blocked: the service, its notice and the server flag stay until a relay connects or the user stops blocking.
+        if (armed && holdBlock()) return START_NOT_STICKY
+        setServerActive(false)
         // Android 15+ cuts a background app's network about 5 s after its last foreground service ends.
         if (intent?.getBooleanExtra(ServiceContracts.EXTRA_HOLD, false) == true) main.postDelayed(release, HOLD_MS) else release.run()
       }
@@ -129,6 +155,12 @@ class OpenTunnelVpnService : VpnService() {
         // tear down the notice and end this instance cleanly; the registry
         // keeps its true state.
         val engineRunning = engine != null || pendingStart != null
+        if (armed && !engineRunning && FirewallService.isImplicitStart(intent?.action) && holdBlock()) {
+          Log.i(TAG, "system start ${intent?.action}: blocking until the user connects or stops blocking")
+          if (firewallState(FirewallService.STATE_ENABLED) == "true" && firewallState(FirewallService.STATE_PAUSED) != "true") firewallStopped = true
+          setServerActive(true)
+          return START_NOT_STICKY
+        }
         if (forwardsToFirewall(intent?.action, engineRunning, firewallState(FirewallService.STATE_ENABLED))) {
           Log.i(TAG, "system start ${intent?.action}: forwarded to the firewall")
           sendToFirewall(FirewallService.ACTION_START)
@@ -148,6 +180,8 @@ class OpenTunnelVpnService : VpnService() {
     // engine stop can wait up to 3 s) must never report `disconnected` over
     // this start or end the service under the new engine.
     synchronized(stateLock) { startGeneration.incrementAndGet() }
+    // Held before the old engine stops, so a relay switch has no gap; the new engine's interface replaces it.
+    if (armed) holdBlock()
     val previous = engine
     if (previous != null) {
       engine = null
@@ -266,6 +300,8 @@ class OpenTunnelVpnService : VpnService() {
    * between) replaces the stale run and stops the current tunnel. */
   private fun stopTunnel(intentStartId: Int) {
     cancelPendingStart()
+    setArmed(KillSwitch.next(armed, killSwitchEnabled, KillSwitchEvent.USER_STOP))
+    releaseBlock()
     val requestGeneration = startGeneration.get()
     synchronized(stateLock) {
       if (!StopPolicy.shouldRunStop(stopRunGeneration, requestGeneration)) {
@@ -322,6 +358,8 @@ class OpenTunnelVpnService : VpnService() {
    * true (system-owned) outcome. The firewall is not restored here: another VPN holds the slot and a
    * firewall start would take it back. */
   override fun onRevoke() {
+    setArmed(KillSwitch.next(armed, killSwitchEnabled, KillSwitchEvent.BLOCK_REVOKED))
+    releaseBlock()
     val active = engine
     engine = null
     if (active != null) runCatching { active.stop() }
@@ -333,6 +371,8 @@ class OpenTunnelVpnService : VpnService() {
   }
 
   override fun onDestroy() {
+    TunnelEventBus.remove(statusListener)
+    releaseBlock()
     main.removeCallbacks(release)
     cancelPendingStart()
     TrafficTicker.stop()
@@ -367,6 +407,7 @@ class OpenTunnelVpnService : VpnService() {
     TrafficTicker.stop()
     TunnelStateRegistry.setStatus(TunnelStatus.ERROR, message)
     TunnelEventBus.postStatus(TunnelStatus.ERROR, message)
+    if (armed && holdBlock()) return
     setServerActive(false)
     restoreFirewall()
     stopForegroundCompat()
@@ -402,14 +443,51 @@ class OpenTunnelVpnService : VpnService() {
 
     for (appId in config.disallowedApps) builder.addDisallowedApplication(appId)
 
-    // In-app packet blocking for hosted engines. `setBlocking(boolean)` was
-    // verified against the installed android-36 platform jar (API 22+);
-    // the bypass opt-out hole stays uncalled.
-    if (config.enableKillSwitch) builder.setBlocking(true)
-
     val descriptor: ParcelFileDescriptor = builder.establish()
       ?: throw EngineUnavailableException("could not establish the tun interface")
     return descriptor
+  }
+
+  private fun onEngineStatus(state: String) {
+    if (state == TunnelStatus.CONNECTED) setArmed(KillSwitch.next(armed, killSwitchEnabled, KillSwitchEvent.CONNECTED))
+    if (!KillSwitch.holdsBlock(armed, state)) releaseBlock()
+  }
+
+  private fun setArmed(value: Boolean) {
+    if (armed == value) return
+    armed = value
+    runCatching { killSwitchPrefs.edit().putBoolean(KEY_ARMED, value).apply() }
+      .onFailure { Log.w(TAG, "could not save the kill switch state: ${it.message}") }
+  }
+
+  /** An interface that routes all traffic and is never read, so nothing leaves; the app itself stays outside to reach VPN Gate. */
+  private fun holdBlock(): Boolean {
+    if (blockFd != null) return true
+    blockFd = runCatching {
+      Builder()
+        .setSession("TunnelWall")
+        .addAddress(BLOCK_ADDRESS_V4, 32)
+        .addRoute("0.0.0.0", 0)
+        .addAddress(BLOCK_ADDRESS_V6, 128)
+        .addRoute("::", 0)
+        .addDisallowedApplication(packageName)
+        .establish()
+    }.onFailure { Log.w(TAG, "could not block traffic: ${it.javaClass.simpleName}") }.getOrNull()
+    if (blockFd != null) publishBlocking(true)
+    return blockFd != null
+  }
+
+  private fun releaseBlock() {
+    val held = blockFd ?: return
+    blockFd = null
+    runCatching { held.close() }
+    publishBlocking(false)
+  }
+
+  private fun publishBlocking(blocking: Boolean) {
+    TunnelStateRegistry.setBlocking(blocking)
+    TunnelEventBus.postKillSwitch(blocking)
+    runCatching { getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, tunnelNotification()) }
   }
 
   /** Contract-shaped JSON → EngineConfig; malformed payloads never pass. */
@@ -474,7 +552,10 @@ class OpenTunnelVpnService : VpnService() {
       }
     return builder
       .setContentTitle("TunnelWall")
-      .setContentText("VPN tunnel service running")
+      .setContentText(
+        if (blockFd != null) "Internet is blocked until the VPN reconnects. Open TunnelWall to connect or stop blocking."
+        else "VPN tunnel service running",
+      )
       .setSmallIcon(R.mipmap.ic_launcher)
       .setContentIntent(openApp)
       .setOngoing(true)
@@ -503,5 +584,10 @@ class OpenTunnelVpnService : VpnService() {
     private const val NOTIFICATION_ID = 1
     // Covers the app's relay refetch and probe sweep after a drop.
     private const val HOLD_MS = 60_000L
+    private const val KILL_SWITCH_PREFS = "kill_switch"
+    private const val KEY_ARMED = "armed"
+    // Not 10.0.0.0/8 (a common LAN) and not the firewall's 100.127.222.0/24.
+    private const val BLOCK_ADDRESS_V4 = "100.127.223.1"
+    private const val BLOCK_ADDRESS_V6 = "fd00::2"
   }
 }

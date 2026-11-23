@@ -9,13 +9,15 @@
  * input (AGENTS: probing failure keeps static ping as fallback). The socket
  * itself is destroyed by the native side immediately after the attempt.
  */
-import { createFirewallBinding, createOpenTunnelBinding } from 'open-tunnel-native';
+import { createFirewallBinding, createOpenTunnelBinding, createProtectionBinding } from 'open-tunnel-native';
 
 /** Shared live binding for this app run (typed fail-fast on iOS). */
 export const openTunnelBinding = createOpenTunnelBinding();
 
 /** The firewall seam: typed `FIREWALL_NOT_SUPPORTED` rejects off Android, so only the Android tab uses it. */
 export const firewallBinding = createFirewallBinding();
+
+export const protectionBinding = createProtectionBinding();
 
 export const nativeTcpProbe: (ip: string, port: number, timeoutMs: number) => Promise<number | null> =
   async (ip, port, timeoutMs) => {

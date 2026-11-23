@@ -15,7 +15,9 @@ import type { TunnelSettings } from './src/data/settings-store.ts';
 import { xhrVpnGateFetcher } from './src/data/vpngate-fetcher.ts';
 import { FirewallScreen } from './src/firewall/firewall-screen.tsx';
 import { serverHoldsSlot } from './src/firewall/status.ts';
-import { firewallBinding, openTunnelBinding, nativeTcpProbe } from './src/tunnel/native-tcp-probe.ts';
+import type { KillSwitchStatus } from 'open-tunnel-native';
+import { killSwitchView } from './src/tunnel/kill-switch.ts';
+import { firewallBinding, openTunnelBinding, nativeTcpProbe, protectionBinding } from './src/tunnel/native-tcp-probe.ts';
 import { MAX_ATTEMPTS, isAuthError, pickRelayCandidates } from './src/tunnel/relay-failover.ts';
 import {
   createTunnelClient,
@@ -73,6 +75,7 @@ function OpenTunnelApp() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [killSwitch, setKillSwitch] = useState<KillSwitchStatus>({ blocking: false, alwaysOn: null, lockdown: null });
   const mountedRef = useRef(true);
   const failedIds = useRef(new Set<string>());
 
@@ -98,6 +101,24 @@ function OpenTunnelApp() {
       handle.remove();
     };
   }, [client]);
+
+  useEffect(() => {
+    const handle = protectionBinding.addOnKillSwitchChanged((blocking) =>
+      setKillSwitch((current) => ({ ...current, blocking })),
+    );
+    return () => handle.remove();
+  }, []);
+
+  // Always-on and lockdown are read by the VPN service when it runs, so they are re-read on every state change.
+  useEffect(() => {
+    let cancelled = false;
+    void protectionBinding.getKillSwitchStatus().then((status) => {
+      if (!cancelled) setKillSwitch(status);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tunnel.state]);
 
   useEffect(() => {
     if (!FIREWALL_TAB) return;
@@ -204,7 +225,9 @@ function OpenTunnelApp() {
         // Switching relays never double-starts: a live tunnel gets an
         // explicit stop before the new start (plan §5).
         const current = client.getSnapshot();
-        if (current.state === 'connected' || current.state === 'reasserting' || current.state === 'connecting') {
+        const switching = current.state === 'connected' || current.state === 'reasserting' || current.state === 'connecting';
+        // With the kill switch on, Android's service replaces the engine itself and blocks traffic in between; a stop would lift the block.
+        if (switching && !(Platform.OS === 'android' && config.enableKillSwitch)) {
           await client.stopTunnel();
         }
         await client.startTunnel(config);
@@ -369,6 +392,8 @@ function OpenTunnelApp() {
             }}
             loadError={loadError}
             actionError={actionError}
+            killSwitch={killSwitchView(tunnel.state, killSwitch.blocking, scanning)}
+            onStopBlocking={disconnect}
             onAutoSelect={() => void autoSelect()}
             onOpenServers={() => setSheet('servers')}
             onOpenSettings={() => setSheet('settings')}
@@ -413,6 +438,7 @@ function OpenTunnelApp() {
           visible={sheet === 'settings'}
           onClose={() => setSheet('none')}
           settings={settings}
+          killSwitch={killSwitch}
           onChangeKillSwitch={(enabled) => void changeKillSwitch(enabled)}
           onAddDisallowedApp={(packageName) => void addDisallowedApp(packageName)}
           onRemoveDisallowedApp={(packageName) => void removeDisallowedApp(packageName)}

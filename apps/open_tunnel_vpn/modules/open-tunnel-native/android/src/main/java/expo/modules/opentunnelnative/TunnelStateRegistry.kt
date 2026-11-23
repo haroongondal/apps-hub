@@ -54,6 +54,29 @@ object TunnelStateRegistry {
   var connectedAtMs: Long? = null
     private set
 
+  /** OpenTunnelVpnService holds its blocking interface (kill switch). */
+  @Volatile
+  var blocking: Boolean = false
+    private set
+
+  /** VpnService.isAlwaysOn and isLockdownEnabled as the service last read them; null until it ran in this process. */
+  @Volatile
+  var alwaysOn: Boolean? = null
+    private set
+
+  @Volatile
+  var lockdown: Boolean? = null
+    private set
+
+  fun setBlocking(value: Boolean) {
+    blocking = value
+  }
+
+  fun setLockdown(alwaysOn: Boolean, lockdown: Boolean) {
+    this.alwaysOn = alwaysOn
+    this.lockdown = lockdown
+  }
+
   fun setStatus(state: String, message: String? = null, code: String? = null) {
     TunnelStatus.requireKnown(state)
     statusState = state

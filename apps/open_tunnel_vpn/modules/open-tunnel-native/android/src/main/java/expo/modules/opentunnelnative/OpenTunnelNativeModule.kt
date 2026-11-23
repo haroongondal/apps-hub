@@ -29,6 +29,7 @@ import org.json.JSONObject
 
 private const val EVENT_STATUS_CHANGED = "onStatusChanged"
 private const val EVENT_TRAFFIC_UPDATE = "onTrafficUpdate"
+private const val EVENT_KILL_SWITCH_CHANGED = "onKillSwitchChanged"
 
 private const val ERR_INVALID_CONFIG = "ERR_INVALID_CONFIG"
 private const val ERR_INVALID_PARAMS = "ERR_INVALID_PARAMS"
@@ -102,7 +103,7 @@ class OpenTunnelNativeModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("OpenTunnelNative")
 
-    Events(EVENT_STATUS_CHANGED, EVENT_TRAFFIC_UPDATE)
+    Events(EVENT_STATUS_CHANGED, EVENT_TRAFFIC_UPDATE, EVENT_KILL_SWITCH_CHANGED)
 
     OnStartObserving {
       val listener = object : TunnelEventBus.Listener {
@@ -118,6 +119,10 @@ class OpenTunnelNativeModule : Module() {
               }
             postEvent(EVENT_STATUS_CHANGED, payload)
           }
+        }
+
+        override fun onKillSwitch(blocking: Boolean) {
+          moduleScope.launch { postEvent(EVENT_KILL_SWITCH_CHANGED, mapOf("blocking" to blocking)) }
         }
 
         override fun onTraffic(bytesIn: Long, bytesOut: Long, connectedDurationSec: Long) {
@@ -284,6 +289,16 @@ class OpenTunnelNativeModule : Module() {
 
     AsyncFunction("getState") { promise: Promise ->
       promise.resolve(TunnelStateRegistry.statusState)
+    }
+
+    AsyncFunction("getKillSwitchStatus") { promise: Promise ->
+      promise.resolve(
+        mapOf(
+          "blocking" to TunnelStateRegistry.blocking,
+          "alwaysOn" to TunnelStateRegistry.alwaysOn,
+          "lockdown" to TunnelStateRegistry.lockdown,
+        ),
+      )
     }
 
     /**

@@ -14,4 +14,5 @@ object ServiceContracts {
   const val ACTION_RELEASE = "expo.modules.opentunnelnative.action.RELEASE_TUNNEL"
   const val EXTRA_CONFIG = "config"
   const val EXTRA_HOLD = "hold"
+  const val EXTRA_REVOKED = "revoked"
 }

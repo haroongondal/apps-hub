@@ -155,7 +155,20 @@ export interface FirewallNativeApi {
   openUsageAccessSettings(): Promise<null>;
 }
 
-export interface OpenTunnelNativeApi extends FirewallNativeApi {
+/** Android: the app's blocking interface plus the system Always-on state; iOS reports false and null. */
+export interface KillSwitchStatus {
+  blocking: boolean;
+  /** Null until the VPN service ran in this app session, and always on iOS or Android 9 and older. */
+  alwaysOn: boolean | null;
+  lockdown: boolean | null;
+}
+
+export interface ProtectionNativeApi {
+  getKillSwitchStatus(): Promise<unknown>;
+  addListener(event: 'onKillSwitchChanged', listener: (payload: unknown) => void): { remove(): void };
+}
+
+export interface OpenTunnelNativeApi extends FirewallNativeApi, ProtectionNativeApi {
   startTunnel(config: VpnTunnelConfig): Promise<null>;
   stopTunnel(): Promise<null>;
   getState(): Promise<VpnStatusState>;
@@ -170,6 +183,7 @@ export interface OpenTunnelNativeApi extends FirewallNativeApi {
     event: 'onTrafficUpdate',
     listener: (payload: VpnTrafficPayload) => void,
   ): { remove(): void };
+  addListener(event: 'onKillSwitchChanged', listener: (payload: unknown) => void): { remove(): void };
 }
 
 /** Typed native rejects (Expo `Promise.reject` codes, plan §4.1). The

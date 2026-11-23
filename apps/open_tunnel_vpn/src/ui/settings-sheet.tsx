@@ -19,12 +19,15 @@ import {
   space,
 } from '@apps-hub/ui';
 
+import type { KillSwitchStatus } from 'open-tunnel-native';
 import type { TunnelSettings } from '../data/settings-store.ts';
+import { lockdownHint } from '../tunnel/kill-switch.ts';
 
 export interface SettingsSheetProps {
   visible: boolean;
   onClose(): void;
   settings: TunnelSettings;
+  killSwitch: KillSwitchStatus;
   onChangeKillSwitch(enabled: boolean): void;
   onAddDisallowedApp(packageName: string): void;
   onRemoveDisallowedApp(packageName: string): void;
@@ -38,15 +41,16 @@ const KILL_SWITCH_OPTIONS = [
 
 function killSwitchDetail(platform: string): string {
   if (platform === 'ios') {
-    return 'The tunnel uses the system on-demand rule to hold the connection while this is on.';
+    return 'iPhone reconnects the VPN by itself and keeps traffic inside it while this is on.';
   }
-  return 'The engine drops packets that try to bypass the tunnel. The system always-on switch adds OS-level blocking.';
+  return 'If the VPN drops, TunnelWall blocks internet until a relay connects or you stop blocking.';
 }
 
 export function SettingsSheet({
   visible,
   onClose,
   settings,
+  killSwitch,
   onChangeKillSwitch,
   onAddDisallowedApp,
   onRemoveDisallowedApp,
@@ -77,27 +81,35 @@ export function SettingsSheet({
   return (
     <Sheet visible={visible} onClose={onClose} title="Settings">
       <Group
-        title="Kill switch"
-        footer="Applies on the next connect. Changing it does not alter a running tunnel."
+        title="When the VPN drops"
+        footer="Applies on the next connect. Changing it does not alter a running connection."
       >
         <Row
-          title="Block traffic without the tunnel"
+          title="Block internet while the VPN is off"
           subtitle={killSwitchDetail(Platform.OS)}
           trailing={
             <Segmented
               options={KILL_SWITCH_OPTIONS}
               value={settings.killSwitchEnabled ? 'on' : 'off'}
               onChange={(key) => onChangeKillSwitch(key === 'on')}
-              accessibilityLabel="Kill switch"
+              accessibilityLabel="Block internet while the VPN is off"
             />
           }
         />
-        <Row
-          title="Always-on VPN settings"
-          subtitle="Opens the system screen for the OS-level switch"
-          onPress={onOpenSystemSettings}
-          accessibilityHint="Deep-links to the system VPN settings"
-        />
+        {Platform.OS === 'android' ? (
+          <Row
+            {...lockdownHint(killSwitch)}
+            onPress={onOpenSystemSettings}
+            accessibilityHint="Opens Android's VPN settings"
+          />
+        ) : (
+          <Row
+            title="VPN settings"
+            subtitle="Opens the settings for TunnelWall"
+            onPress={onOpenSystemSettings}
+            accessibilityHint="Opens the system settings"
+          />
+        )}
       </Group>
 
       {Platform.OS === 'android' && (
