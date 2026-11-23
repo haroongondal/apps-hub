@@ -33,6 +33,15 @@ src/preload/index.ts         contextBridge API (`window.api`)
 src/renderer/                React management UI (automations, runs, run thread)
 ```
 
+## Dry run
+
+Press **Dry run** next to **Run** on an automation to see what it would do without
+doing it. Nothing is clicked, typed, selected or navigated, and no model is called.
+For each step the app looks for its target on the page that is open, takes a
+screenshot, and writes `report.md` plus `step-N.jpg` files to
+`userData/dry-runs/<time>-<name>/`. Open the start page first, because `navigate`
+steps are skipped. **Show report** opens the folder. Reports stay on this computer.
+
 ## Routine flow
 
 - **System routines** live as JSON files in `updates/`. Every sync wholesale-replaces

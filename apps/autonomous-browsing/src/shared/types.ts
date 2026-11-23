@@ -239,6 +239,19 @@ export interface RunRoutineInput {
   params?: Record<string, string>
 }
 
+export interface DryRunSummary {
+  total: number
+  checked: number
+  skipped: number
+  found: number
+  notFound: number
+}
+
+export interface DryRunResult {
+  reportPath: string
+  summary: DryRunSummary
+}
+
 export interface ResumeDescriptor {
   startIndex: number
   vars: Record<string, string>
@@ -350,7 +363,7 @@ export type QueueDisposition =
   | 'dropped-app-quit'
 
 export type QueueWork =
-  | { kind: 'routine'; target: RunRoutineInput; resume?: { fromRunId: string; startIndex: number } }
+  | { kind: 'routine'; target: RunRoutineInput; resume?: { fromRunId: string; startIndex: number }; dryRun?: true }
   | { kind: 'chat'; input: ChatSendInput }
   | { kind: 'lease'; label: string }
 

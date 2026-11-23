@@ -52,6 +52,7 @@ export function workLabel(work: QueueWork, names: Map<string, string>): string {
   if (work.kind === 'lease') return work.label
   if (work.kind === 'chat') return work.input.goal
   const name = names.get(work.target.id) ?? work.target.id
+  if (work.dryRun) return `${name} — dry run`
   if (!work.resume) return name
   return `${name} — resumed from step ${work.resume.startIndex + 1}`
 }

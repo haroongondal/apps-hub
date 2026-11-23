@@ -17,6 +17,7 @@ import type {
   RunDetail,
   RoutineHealth,
   RunListQuery,
+  DryRunResult,
   RunResult,
   RunRoutineInput,
   RunSummary,
@@ -60,6 +61,8 @@ const api = {
   },
   automation: {
     run: (input: RunRoutineInput): Promise<RunResult> => invoke(IpcChannels.automationRun, input),
+    dryRun: (input: RunRoutineInput): Promise<DryRunResult> => invoke(IpcChannels.automationDryRun, input),
+    revealDryRun: (reportPath: string): Promise<void> => invoke(IpcChannels.automationDryRunReveal, reportPath),
     chatSend: (input: ChatSendInput): Promise<void> => invoke(IpcChannels.automationChatSend, input),
     chatSave: (runId: string, name: string): Promise<UserRoutine> =>
       invoke(IpcChannels.automationChatSave, { runId, name }),

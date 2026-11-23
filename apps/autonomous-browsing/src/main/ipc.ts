@@ -1,6 +1,7 @@
-import { BrowserWindow, dialog, ipcMain, type WebContents } from 'electron'
+import { BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
 import { IpcChannels, type IpcChannel } from '../shared/ipc'
 import fs from 'node:fs'
+import path from 'node:path'
 import {
   ROUTINE_FILE_FORMAT_VERSION,
   applyRepairs,
@@ -28,6 +29,7 @@ import type {
   SystemRoutine,
   UserRoutine
 } from '../shared/types'
+import { writeDryRunReport } from './dry-run-report'
 import type { AutomationOrchestrator } from './automation/orchestrator'
 import type { RunQueue } from './automation/run-queue'
 import type { SessionControl } from './automation/session-control'
@@ -65,6 +67,7 @@ interface IpcDeps {
   user: UserRoutineStore
   runs: RunStore
   updatesDir: string
+  dryRunsDir: string
   automation: AutomationOrchestrator
   queue: RunQueue
   proposals: RepairProposalStore
@@ -158,6 +161,27 @@ export function registerIpcHandlers(deps: IpcDeps): void {
     return deps.queue.enqueue({ kind: 'routine', target: input }, { priority: 'interactive' }, () =>
       startRoutineRun(deps, kind, id, params, {})
     )
+  })
+
+  handle(IpcChannels.automationDryRun, (payload) => {
+    const input = assertRunRoutineInput(payload)
+    const params = input.params ?? {}
+    const { routine } = resolveRoutine(deps, input.kind, input.id)
+    assertParamsFilled(routine.definition, params)
+
+    return deps.queue.enqueue({ kind: 'routine', target: input, dryRun: true }, { priority: 'interactive' }, async () => {
+      const report = await deps.automation.dryRunRoutine(routine, params)
+      return writeDryRunReport(deps.dryRunsDir, report)
+    })
+  })
+
+  handle(IpcChannels.automationDryRunReveal, (reportPath) => {
+    if (typeof reportPath !== 'string') throw new Error('reportPath must be a string')
+    const inside = path.relative(deps.dryRunsDir, path.resolve(reportPath))
+    if (inside.startsWith('..') || path.isAbsolute(inside) || path.basename(inside) !== 'report.md') {
+      throw new Error('that file is not a dry-run report')
+    }
+    shell.showItemInFolder(path.resolve(reportPath))
   })
 
   handle(IpcChannels.runsResumePlan, (payload) => {
