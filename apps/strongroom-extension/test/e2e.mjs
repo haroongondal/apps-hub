@@ -33,9 +33,16 @@ const otp_html = `<!doctype html><title>Verify</title><body style="font:16px san
 <p><label>Verification code <input id="otp" name="otp" autocomplete="one-time-code" inputmode="numeric" maxlength="6"></label></p>
 <button id="go" type="submit">Sign in</button></form>
 <form id="card"><p><label>Card code <input id="cvc" name="cardCvc" inputmode="numeric" maxlength="3"></label></p></form></body>`;
+// Two-step sign-in in one document; the page's own window-capture listener stops Enter before any later listener sees it.
+const swallow_html = `<!doctype html><title>Sign in</title><body style="font:16px sans-serif;padding:40px"><div id="root"></div><script>
+window.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.type === 'password') { e.stopImmediatePropagation(); e.preventDefault(); location.assign('/welcome'); } }, true);
+const root = document.getElementById('root');
+root.innerHTML = '<input type="email" id="id" name="identifier">';
+document.getElementById('id').addEventListener('keydown', (e) => { if (e.key === 'Enter') root.innerHTML = '<input type="hidden" name="identifier"><input type="password" id="pw" name="Passwd" autocomplete="current-password">'; });
+</script>`;
 const serve = (req, res) => {
   res.setHeader('content-type', 'text/html');
-  res.end(req.url.startsWith('/otp') ? otp_html : req.url.startsWith('/login') ? page_html : '<h1>Welcome</h1>');
+  res.end(req.url.startsWith('/swallow') ? swallow_html : req.url.startsWith('/otp') ? otp_html : req.url.startsWith('/login') ? page_html : '<h1>Welcome</h1>');
 };
 const server = http.createServer(serve);
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -519,6 +526,20 @@ try {
   const update = await send({ type: 'pending', tabId: pageTabId });
   check('a changed password for a saved login is offered as an update', pendingNow.length === 1 && update.ok && update.data.intent === 'update' && update.data.name === 'Local test', JSON.stringify(update));
   await send({ type: 'resolvePending', tabId: pageTabId, action: 'dismiss' });
+  const swallowPage = await ctx.newPage();
+  await swallowPage.goto(`http://127.0.0.1:${PORT}/swallow`);
+  await swallowPage.waitForTimeout(500);
+  await swallowPage.locator('#id').click();
+  await swallowPage.keyboard.type('someone@example.com');
+  await swallowPage.keyboard.press('Enter');
+  await swallowPage.locator('#pw').waitFor();
+  await swallowPage.locator('#pw').click();
+  await swallowPage.keyboard.type('swallowed-enter-pass-1');
+  await Promise.all([swallowPage.waitForURL('**/welcome'), swallowPage.keyboard.press('Enter')]);
+  await swallowPage.waitForTimeout(800);
+  const swallowed = Object.values(JSON.parse(await sw.evaluate(async () => (await chrome.storage.session.get('pending')).pending ?? '{}')));
+  check('a two-step sign-in whose page swallows Enter early is still caught', swallowed.some((c) => c.password === 'swallowed-enter-pass-1'), JSON.stringify(swallowed.map((c) => c.url)));
+  await swallowPage.close();
   await page.goto(GOOD);
   await page.waitForTimeout(500);
   await popup.evaluate(([t, i]) => chrome.tabs.sendMessage(t, { type: 'fillForm', id: i }), [pageTabId, localId]);

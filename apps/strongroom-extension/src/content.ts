@@ -194,14 +194,15 @@ function report(pw: HTMLInputElement) {
 const filledPassword = (scope: ParentNode) => [...scope.querySelectorAll<HTMLInputElement>('input[type=password]')].find((p) => p.value);
 
 // A script's own el.click() or synthetic key event is not a sign-in; only the person's real input counts.
-document.addEventListener('submit', (e) => {
+// On window, registered at document_start, so a page that stops the event in its own early capture listener cannot hide the sign-in.
+window.addEventListener('submit', (e) => {
   const pw = e.isTrusted && e.target instanceof HTMLFormElement ? filledPassword(e.target) : undefined;
   if (pw) report(pw);
 }, true);
-document.addEventListener('keydown', (e) => {
+window.addEventListener('keydown', (e) => {
   if (e.isTrusted && e.key === 'Enter' && e.target instanceof HTMLInputElement && e.target.type === 'password') report(e.target);
 }, true);
-document.addEventListener('click', (e) => {
+window.addEventListener('click', (e) => {
   const button = e.isTrusted && e.target instanceof Element ? e.target.closest('button, input[type=submit], [role=button]') : null;
   const pw = button && filledPassword(button.closest('form') ?? document);
   if (pw) report(pw);
