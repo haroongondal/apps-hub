@@ -16,6 +16,7 @@ private enum ErrorCode {
   static let serviceStartFailed = "ERR_SERVICE_START_FAILED"
   static let probeFailed = "ERR_PROBE_FAILED"
   static let firewallNotSupported = "ERR_FIREWALL_NOT_SUPPORTED"
+  static let notSupported = "ERR_NOT_SUPPORTED"
   // Kotlin mirror: TunnelErrorCode.AUTH_FAILED. No iOS engine classifies
   // auth failures yet; the status payload is able to carry the code.
   static let authFailed = "ERR_AUTH_FAILED"
@@ -733,7 +734,7 @@ public class OpenTunnelNativeModule: Module {
   public func definition() -> ModuleDefinition {
     Name("OpenTunnelNative")
 
-    Events("onStatusChanged", "onTrafficUpdate", "onKillSwitchChanged")
+    Events("onStatusChanged", "onTrafficUpdate", "onKillSwitchChanged", "onNetworkChanged")
 
     OnStartObserving {
       let forwarder = ModuleEventForwarder(module: self)
@@ -825,6 +826,15 @@ public class OpenTunnelNativeModule: Module {
         "alwaysOn": (nil as Bool?) as Any,
         "lockdown": (nil as Bool?) as Any,
       ])
+    }
+
+    // Reading the Wi-Fi name on iOS needs the Access WiFi Information entitlement, which no profile carries yet.
+    AsyncFunction("startNetworkWatch") { (promise: Promise) in
+      promise.reject(ErrorCode.notSupported, "Trusted Wi-Fi isn't available on iPhone yet.")
+    }
+
+    AsyncFunction("stopNetworkWatch") { (promise: Promise) in
+      promise.resolve(nil)
     }
 
     /**

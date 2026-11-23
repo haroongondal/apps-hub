@@ -5,7 +5,15 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { bindProtection, createProtectionBinding, normalizeKillSwitchStatus, type ProtectionNativeApi } from '../index.ts';
+import {
+  OPEN_TUNNEL_ERROR_CODES,
+  OpenTunnelError,
+  bindProtection,
+  createProtectionBinding,
+  normalizeKillSwitchStatus,
+  normalizeNetworkInfo,
+  type ProtectionNativeApi,
+} from '../index.ts';
 
 const NATIVE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const kotlinModule = readFileSync(
@@ -14,8 +22,8 @@ const kotlinModule = readFileSync(
 );
 const swiftModule = readFileSync(join(NATIVE_ROOT, 'ios/OpenTunnelNativeModule.swift'), 'utf8');
 
-const PROTECTION_FUNCTIONS = ['getKillSwitchStatus'];
-const PROTECTION_EVENTS = ['onKillSwitchChanged'];
+const PROTECTION_FUNCTIONS = ['getKillSwitchStatus', 'startNetworkWatch', 'stopNetworkWatch'];
+const PROTECTION_EVENTS = ['onKillSwitchChanged', 'onNetworkChanged'];
 
 test('both platforms declare every protection function and event', () => {
   for (const name of PROTECTION_FUNCTIONS) {
@@ -54,6 +62,8 @@ test('the adapter normalizes reads and events and removes its subscription', asy
   let removed = 0;
   const native: ProtectionNativeApi = {
     getKillSwitchStatus: async () => ({ blocking: true, alwaysOn: null, lockdown: null }),
+    startNetworkWatch: async () => null,
+    stopNetworkWatch: async () => null,
     addListener: (_event, next) => {
       listener = next;
       return { remove: () => void (removed += 1) };
@@ -73,4 +83,39 @@ test('the adapter normalizes reads and events and removes its subscription', asy
 test('off a device the binding reports no block, never a protected state', async () => {
   const protection = createProtectionBinding({ platform: 'unavailable' });
   assert.deepEqual(await protection.getKillSwitchStatus(), { blocking: false, alwaysOn: null, lockdown: null });
+});
+
+test('the network payload keys match on Android, and iOS rejects the watch with the typed code', () => {
+  for (const key of ['connected', 'wifi', 'ssid', 'bssid']) {
+    assert.match(kotlinModule, new RegExp(`"${key}" to`), `Kotlin is missing ${key}`);
+  }
+  const start = swiftModule.slice(swiftModule.indexOf('AsyncFunction("startNetworkWatch")'));
+  assert.match(start.slice(0, start.indexOf('}')), /promise\.reject\(ErrorCode\.notSupported,/);
+  assert.match(swiftModule, /static let notSupported = "ERR_NOT_SUPPORTED"/);
+});
+
+test('a malformed or withheld network can never look like a known Wi-Fi', () => {
+  const offline = { connected: false, wifi: false, ssid: null, bssid: null };
+  assert.deepEqual(normalizeNetworkInfo(undefined), offline);
+  assert.deepEqual(normalizeNetworkInfo({ connected: 'yes', wifi: true, ssid: 'Home', bssid: 'aa:bb:cc:dd:ee:ff' }), offline);
+  assert.deepEqual(normalizeNetworkInfo({ connected: true, wifi: true, ssid: '', bssid: 7 }), {
+    connected: true,
+    wifi: true,
+    ssid: null,
+    bssid: null,
+  });
+  assert.deepEqual(normalizeNetworkInfo({ connected: true, wifi: false, ssid: 'Home', bssid: 'aa:bb:cc:dd:ee:ff' }), {
+    connected: true,
+    wifi: false,
+    ssid: null,
+    bssid: null,
+  });
+});
+
+test('off a device the network watch rejects typed instead of pretending to watch', async () => {
+  await assert.rejects(createProtectionBinding({ platform: 'unavailable' }).startNetworkWatch(), (error: unknown) => {
+    assert.ok(error instanceof OpenTunnelError);
+    assert.equal(error.code, OPEN_TUNNEL_ERROR_CODES.NOT_SUPPORTED);
+    return true;
+  });
 });

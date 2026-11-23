@@ -163,9 +163,19 @@ export interface KillSwitchStatus {
   lockdown: boolean | null;
 }
 
+/** The phone's own network (never the VPN). `ssid`/`bssid` are null when Android withholds them (no precise location). */
+export interface NetworkInfo {
+  connected: boolean;
+  wifi: boolean;
+  ssid: string | null;
+  bssid: string | null;
+}
+
 export interface ProtectionNativeApi {
   getKillSwitchStatus(): Promise<unknown>;
-  addListener(event: 'onKillSwitchChanged', listener: (payload: unknown) => void): { remove(): void };
+  startNetworkWatch(): Promise<null>;
+  stopNetworkWatch(): Promise<null>;
+  addListener(event: 'onKillSwitchChanged' | 'onNetworkChanged', listener: (payload: unknown) => void): { remove(): void };
 }
 
 export interface OpenTunnelNativeApi extends FirewallNativeApi, ProtectionNativeApi {
@@ -183,7 +193,7 @@ export interface OpenTunnelNativeApi extends FirewallNativeApi, ProtectionNative
     event: 'onTrafficUpdate',
     listener: (payload: VpnTrafficPayload) => void,
   ): { remove(): void };
-  addListener(event: 'onKillSwitchChanged', listener: (payload: unknown) => void): { remove(): void };
+  addListener(event: 'onKillSwitchChanged' | 'onNetworkChanged', listener: (payload: unknown) => void): { remove(): void };
 }
 
 /** Typed native rejects (Expo `Promise.reject` codes, plan §4.1). The
@@ -203,6 +213,8 @@ export const OPEN_TUNNEL_ERROR_CODES = {
   AUTH_FAILED: 'ERR_AUTH_FAILED',
   FIREWALL_NOT_SUPPORTED: 'ERR_FIREWALL_NOT_SUPPORTED',
   FIREWALL_FAILED: 'ERR_FIREWALL_FAILED',
+  /** Trusted Wi-Fi on iOS and on Android 11 and older. */
+  NOT_SUPPORTED: 'ERR_NOT_SUPPORTED',
 } as const;
 
 export type OpenTunnelErrorCode =

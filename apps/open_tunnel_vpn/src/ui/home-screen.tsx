@@ -203,7 +203,7 @@ export function HomeScreen({
       <Group title="Settings">
         <Row
           title="Settings"
-          subtitle="Blocking without the VPN, apps outside the VPN, and privacy notes"
+          subtitle="Blocking without the VPN, trusted Wi-Fi, apps outside the VPN, and privacy notes"
           onPress={onOpenSettings}
           accessibilityHint="Opens the settings sheet"
         />

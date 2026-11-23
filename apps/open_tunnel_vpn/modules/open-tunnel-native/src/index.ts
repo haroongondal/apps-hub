@@ -29,6 +29,7 @@ import {
   type FirewallVerdict,
   type KillSwitchStatus,
   type NativeAppRule,
+  type NetworkInfo,
   type NativeLogRow,
   type OpenTunnelNativeApi,
   type ProtectionNativeApi,
@@ -57,6 +58,7 @@ export type {
   KillSwitchStatus,
   NativeAppRule,
   NativeLogRow,
+  NetworkInfo,
   OpenTunnelErrorCode,
   OpenTunnelNativeApi,
   ProtectionNativeApi,
@@ -511,10 +513,27 @@ export function normalizeKillSwitchStatus(raw: unknown): KillSwitchStatus {
   return { blocking: value.blocking === true, alwaysOn: flag(value.alwaysOn), lockdown: flag(value.lockdown) };
 }
 
-/** Kill switch and network state: the in-app blocking interface and Android's Always-on reading. */
+const OFFLINE: NetworkInfo = { connected: false, wifi: false, ssid: null, bssid: null };
+
+const text = (value: unknown): string | null => (typeof value === 'string' && value.length > 0 ? value : null);
+
+/** A malformed payload is no network: it can never match a trusted one. */
+export function normalizeNetworkInfo(raw: unknown): NetworkInfo {
+  if (raw === null || typeof raw !== 'object') return OFFLINE;
+  const value = raw as Record<string, unknown>;
+  if (value.connected !== true) return OFFLINE;
+  const wifi = value.wifi === true;
+  return { connected: true, wifi, ssid: wifi ? text(value.ssid) : null, bssid: wifi ? text(value.bssid) : null };
+}
+
+/** Kill switch and network state: the in-app blocking interface, Android's Always-on reading, the phone's own network. */
 export interface ProtectionApi {
   getKillSwitchStatus(): Promise<KillSwitchStatus>;
   addOnKillSwitchChanged(listener: (blocking: boolean) => void): ListenerHandle;
+  /** Rejects `ERR_NOT_SUPPORTED` on iOS and Android 11 and older. */
+  startNetworkWatch(): Promise<void>;
+  stopNetworkWatch(): Promise<void>;
+  addOnNetworkChanged(listener: (network: NetworkInfo) => void): ListenerHandle;
 }
 
 export function bindProtection(native: ProtectionNativeApi): ProtectionApi {
@@ -528,6 +547,16 @@ export function bindProtection(native: ProtectionNativeApi): ProtectionApi {
       );
       return { remove: () => subscription.remove() };
     },
+    async startNetworkWatch() {
+      await native.startNetworkWatch();
+    },
+    async stopNetworkWatch() {
+      await native.stopNetworkWatch();
+    },
+    addOnNetworkChanged(listener) {
+      const subscription = native.addListener('onNetworkChanged', (payload) => listener(normalizeNetworkInfo(payload)));
+      return { remove: () => subscription.remove() };
+    },
   };
 }
 
@@ -537,6 +566,13 @@ function unavailableProtection(): ProtectionApi {
       return NO_BLOCK;
     },
     addOnKillSwitchChanged() {
+      return { remove: () => undefined };
+    },
+    async startNetworkWatch() {
+      throw new OpenTunnelError(OPEN_TUNNEL_ERROR_CODES.NOT_SUPPORTED, "Trusted Wi-Fi isn't available in this runtime.");
+    },
+    async stopNetworkWatch() {},
+    addOnNetworkChanged() {
       return { remove: () => undefined };
     },
   };

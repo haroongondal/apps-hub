@@ -15,8 +15,9 @@ import type { TunnelSettings } from './src/data/settings-store.ts';
 import { xhrVpnGateFetcher } from './src/data/vpngate-fetcher.ts';
 import { FirewallScreen } from './src/firewall/firewall-screen.tsx';
 import { serverHoldsSlot } from './src/firewall/status.ts';
-import type { KillSwitchStatus } from 'open-tunnel-native';
+import type { KillSwitchStatus, NetworkInfo } from 'open-tunnel-native';
 import { killSwitchView } from './src/tunnel/kill-switch.ts';
+import { autoConnectDecision, forgetNetwork, trustNetwork } from './src/tunnel/trusted-wifi.ts';
 import { firewallBinding, openTunnelBinding, nativeTcpProbe, protectionBinding } from './src/tunnel/native-tcp-probe.ts';
 import { MAX_ATTEMPTS, bestRelayFailure, isAuthError } from './src/tunnel/relay-failover.ts';
 import {
@@ -76,6 +77,11 @@ function OpenTunnelApp() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [killSwitch, setKillSwitch] = useState<KillSwitchStatus>({ blocking: false, alwaysOn: null, lockdown: null });
+  const [network, setNetwork] = useState<NetworkInfo | null>(null);
+  const [trustedWifiError, setTrustedWifiError] = useState<string | null>(null);
+  const lastNetworkKey = useRef<string | null>(null);
+  // Turning Trusted Wi-Fi on never connects on the network the user is on right then; they can mark it first.
+  const skipNextNetwork = useRef(false);
   const mountedRef = useRef(true);
   const failedIds = useRef(new Set<string>());
 
@@ -306,6 +312,64 @@ function OpenTunnelApp() {
     if (was === 'connected' || was === 'reasserting' || auth) void autoSelect(true);
   }, [tunnel.state, tunnel.code, activeNode, autoSelect]);
 
+  const watchingNetwork = Platform.OS === 'android' && settings?.trustedWifiEnabled === true;
+  useEffect(() => {
+    if (!watchingNetwork) {
+      setNetwork(null);
+      lastNetworkKey.current = null;
+      return;
+    }
+    const handle = protectionBinding.addOnNetworkChanged(setNetwork);
+    protectionBinding.startNetworkWatch().catch((error: unknown) => {
+      if (mountedRef.current) setTrustedWifiError(error instanceof Error ? error.message : String(error));
+    });
+    return () => {
+      handle.remove();
+      void protectionBinding.stopNetworkWatch();
+    };
+  }, [watchingNetwork]);
+
+  useEffect(() => {
+    if (network === null || settings === null) return;
+    const decision = autoConnectDecision(lastNetworkKey.current, {
+      enabled: settings.trustedWifiEnabled,
+      network,
+      trusted: settings.trustedNetworks,
+      tunnelState: tunnel.state,
+      scanning,
+    });
+    lastNetworkKey.current = decision.key;
+    if (skipNextNetwork.current) {
+      skipNextNetwork.current = false;
+      return;
+    }
+    if (decision.connect) void autoSelect();
+  }, [network]);
+
+  const changeTrustedWifi = useCallback(
+    async (enabled: boolean) => {
+      if (database === null) return;
+      setTrustedWifiError(null);
+      if (enabled && !(await requestPreciseLocation())) {
+        setTrustedWifiError('Trusted Wi-Fi stays off: Android shows the Wi-Fi name only to apps allowed precise location.');
+        return;
+      }
+      skipNextNetwork.current = enabled;
+      await database.settings.setTrustedWifiEnabled(enabled);
+      setSettings((current) => (current === null ? current : { ...current, trustedWifiEnabled: enabled }));
+    },
+    [database],
+  );
+
+  const saveTrustedNetworks = useCallback(
+    async (next: ReturnType<typeof forgetNetwork>) => {
+      if (database === null) return;
+      await database.settings.setTrustedNetworks(next);
+      setSettings((current) => (current === null ? current : { ...current, trustedNetworks: next }));
+    },
+    [database],
+  );
+
   const selectCountry = useCallback(
     (code: string | null) => {
       setCountry(code);
@@ -437,6 +501,14 @@ function OpenTunnelApp() {
           onClose={() => setSheet('none')}
           settings={settings}
           killSwitch={killSwitch}
+          network={network}
+          trustedWifiError={trustedWifiError}
+          onChangeTrustedWifi={(enabled) => void changeTrustedWifi(enabled)}
+          onTrustNetwork={() => {
+            const next = network === null ? null : trustNetwork(network, settings.trustedNetworks);
+            if (next !== null) void saveTrustedNetworks(next);
+          }}
+          onForgetNetwork={(ssid) => void saveTrustedNetworks(forgetNetwork(ssid, settings.trustedNetworks))}
           onChangeKillSwitch={(enabled) => void changeKillSwitch(enabled)}
           onAddDisallowedApp={(packageName) => void addDisallowedApp(packageName)}
           onRemoveDisallowedApp={(packageName) => void removeDisallowedApp(packageName)}
@@ -458,6 +530,17 @@ function describeLocalError(error: unknown): string {
   if (error instanceof OpenTunnelError) return `${error.code}: ${error.message}`;
   if (error instanceof Error) return error.message;
   return `the connect attempt failed (${typeof error})`;
+}
+
+async function requestPreciseLocation(): Promise<boolean> {
+  if (Platform.OS !== 'android') return false;
+  try {
+    const { ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION } = PermissionsAndroid.PERMISSIONS;
+    const result = await PermissionsAndroid.requestMultiple([ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION]);
+    return result[ACCESS_FINE_LOCATION] === PermissionsAndroid.RESULTS.GRANTED;
+  } catch {
+    return false;
+  }
 }
 
 // A denial only hides the connection notice; the tunnel still runs.

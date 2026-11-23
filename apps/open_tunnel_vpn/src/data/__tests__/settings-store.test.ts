@@ -84,3 +84,15 @@ test('an unreadable consent value counts as unset, so the sheet shows again', as
   await driver.run('UPDATE app_settings SET value = ? WHERE key = ?', ['yes?', 'firewallConsented']);
   assert.equal((await store.loadSettings()).firewallConsented, false);
 });
+
+test('trusted Wi-Fi is off by default and round-trips with its networks', async () => {
+  const store = openStore();
+  const empty = await store.loadSettings();
+  assert.equal(empty.trustedWifiEnabled, false);
+  assert.deepEqual(empty.trustedNetworks, []);
+  await store.setTrustedWifiEnabled(true);
+  await store.setTrustedNetworks([{ ssid: 'Home', bssids: ['aa:aa:aa:aa:aa:01'] }]);
+  const saved = await store.loadSettings();
+  assert.equal(saved.trustedWifiEnabled, true);
+  assert.deepEqual(saved.trustedNetworks, [{ ssid: 'Home', bssids: ['aa:aa:aa:aa:aa:01'] }]);
+});

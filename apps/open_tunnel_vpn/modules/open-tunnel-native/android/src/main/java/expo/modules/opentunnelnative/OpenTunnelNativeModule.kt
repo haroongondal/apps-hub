@@ -6,8 +6,15 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.VpnService
+import android.net.wifi.WifiInfo
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
@@ -30,6 +37,7 @@ import org.json.JSONObject
 private const val EVENT_STATUS_CHANGED = "onStatusChanged"
 private const val EVENT_TRAFFIC_UPDATE = "onTrafficUpdate"
 private const val EVENT_KILL_SWITCH_CHANGED = "onKillSwitchChanged"
+private const val EVENT_NETWORK_CHANGED = "onNetworkChanged"
 
 private const val ERR_INVALID_CONFIG = "ERR_INVALID_CONFIG"
 private const val ERR_INVALID_PARAMS = "ERR_INVALID_PARAMS"
@@ -38,6 +46,7 @@ private const val ERR_SERVICE_START_FAILED = "ERR_SERVICE_START_FAILED"
 private const val ERR_PROBE_FAILED = "ERR_PROBE_FAILED"
 private const val ERR_FIREWALL_NOT_SUPPORTED = "ERR_FIREWALL_NOT_SUPPORTED"
 private const val ERR_FIREWALL_FAILED = "ERR_FIREWALL_FAILED"
+private const val ERR_NOT_SUPPORTED = "ERR_NOT_SUPPORTED"
 private const val VPN_CONSENT_REQUEST = 0x0715
 
 /** Validated tunnel config — handed to the service as JSON in the intent
@@ -84,6 +93,11 @@ class OpenTunnelNativeModule : Module() {
   @Volatile
   private var firewallStoreInstance: FirewallStore? = null
 
+  private var networkCallback: ConnectivityManager.NetworkCallback? = null
+  private var networkWatchManager: ConnectivityManager? = null
+  @Volatile
+  private var lastNetwork: Map<String, Any?>? = null
+
   private fun startTunnelService(config: NormalizedTunnelConfig) {
     val context = appContext.reactContext ?: throw IllegalStateException("React context unavailable")
     TunnelStateRegistry.setStatus(TunnelStatus.CONNECTING)
@@ -103,7 +117,7 @@ class OpenTunnelNativeModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("OpenTunnelNative")
 
-    Events(EVENT_STATUS_CHANGED, EVENT_TRAFFIC_UPDATE, EVENT_KILL_SWITCH_CHANGED)
+    Events(EVENT_STATUS_CHANGED, EVENT_TRAFFIC_UPDATE, EVENT_KILL_SWITCH_CHANGED, EVENT_NETWORK_CHANGED)
 
     OnStartObserving {
       val listener = object : TunnelEventBus.Listener {
@@ -162,6 +176,7 @@ class OpenTunnelNativeModule : Module() {
     }
 
     OnDestroy {
+      stopNetworkWatch()
       busListener?.let { TunnelEventBus.remove(it) }
       busListener = null
       moduleScope.cancel()
@@ -322,6 +337,31 @@ class OpenTunnelNativeModule : Module() {
         }
         promise.resolve(started)
       }
+    }
+
+    /**
+     * Watches the phone's own (non-VPN) network for Trusted Wi-Fi. Android 12+ only: the SSID and BSSID arrive in the
+     * callback only with FLAG_INCLUDE_LOCATION_INFO, and only while the app holds location permission.
+     */
+    AsyncFunction("startNetworkWatch") { promise: Promise ->
+      val context = appContext.reactContext?.applicationContext
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        promise.reject(ERR_NOT_SUPPORTED, "Trusted Wi-Fi needs Android 12 or newer.", null)
+      } else if (context == null) {
+        promise.reject(ERR_NO_CONTEXT, "React context unavailable", null)
+      } else {
+        try {
+          startNetworkWatch(context)
+          promise.resolve(null)
+        } catch (error: Exception) {
+          promise.reject(ERR_SERVICE_START_FAILED, "network watch failed: ${error.javaClass.name}", error)
+        }
+      }
+    }
+
+    AsyncFunction("stopNetworkWatch") { promise: Promise ->
+      stopNetworkWatch()
+      promise.resolve(null)
     }
 
     AsyncFunction("getFirewallStatus") { promise: Promise ->
@@ -558,6 +598,53 @@ class OpenTunnelNativeModule : Module() {
     withContext(Dispatchers.Main) {
       activity.startActivityForResult(prepareIntent, VPN_CONSENT_REQUEST)
     }
+  }
+
+  @Synchronized
+  private fun startNetworkWatch(context: Context) {
+    if (networkCallback != null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+    val connectivity = context.getSystemService(ConnectivityManager::class.java)
+    val callback = object : ConnectivityManager.NetworkCallback(ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO) {
+      override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+        val wifi = capabilities.transportInfo as? WifiInfo
+        emitNetwork(
+          mapOf(
+            "connected" to true,
+            "wifi" to capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI),
+            "ssid" to WifiIdentity.ssid(wifi?.ssid),
+            "bssid" to WifiIdentity.bssid(wifi?.bssid),
+          ),
+        )
+      }
+
+      override fun onLost(network: Network) {
+        emitNetwork(mapOf("connected" to false, "wifi" to false, "ssid" to null, "bssid" to null))
+      }
+    }
+    // The tunnel itself must never count as the phone's network.
+    val request = NetworkRequest.Builder()
+      .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+      .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+      .build()
+    connectivity.registerBestMatchingNetworkCallback(request, callback, Handler(Looper.getMainLooper()))
+    networkCallback = callback
+    networkWatchManager = connectivity
+  }
+
+  @Synchronized
+  private fun stopNetworkWatch() {
+    val callback = networkCallback ?: return
+    networkCallback = null
+    lastNetwork = null
+    runCatching { networkWatchManager?.unregisterNetworkCallback(callback) }
+    networkWatchManager = null
+  }
+
+  // Signal-strength updates repeat the same network many times a minute; only a change is sent.
+  private fun emitNetwork(payload: Map<String, Any?>) {
+    if (payload == lastNetwork) return
+    lastNetwork = payload
+    moduleScope.launch { postEvent(EVENT_NETWORK_CHANGED, payload) }
   }
 
   /** Deliver events on the main thread (service callbacks originate off it). */

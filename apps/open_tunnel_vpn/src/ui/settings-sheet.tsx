@@ -19,15 +19,22 @@ import {
   space,
 } from '@apps-hub/ui';
 
-import type { KillSwitchStatus } from 'open-tunnel-native';
+import type { KillSwitchStatus, NetworkInfo } from 'open-tunnel-native';
 import type { TunnelSettings } from '../data/settings-store.ts';
 import { lockdownHint } from '../tunnel/kill-switch.ts';
+import { describeNetwork, isTrusted, trustNetwork } from '../tunnel/trusted-wifi.ts';
 
 export interface SettingsSheetProps {
   visible: boolean;
   onClose(): void;
   settings: TunnelSettings;
   killSwitch: KillSwitchStatus;
+  /** The phone's own network while Trusted Wi-Fi watches it; null otherwise. */
+  network: NetworkInfo | null;
+  trustedWifiError: string | null;
+  onChangeTrustedWifi(enabled: boolean): void;
+  onTrustNetwork(): void;
+  onForgetNetwork(ssid: string): void;
   onChangeKillSwitch(enabled: boolean): void;
   onAddDisallowedApp(packageName: string): void;
   onRemoveDisallowedApp(packageName: string): void;
@@ -51,6 +58,11 @@ export function SettingsSheet({
   onClose,
   settings,
   killSwitch,
+  network,
+  trustedWifiError,
+  onChangeTrustedWifi,
+  onTrustNetwork,
+  onForgetNetwork,
   onChangeKillSwitch,
   onAddDisallowedApp,
   onRemoveDisallowedApp,
@@ -111,6 +123,56 @@ export function SettingsSheet({
           />
         )}
       </Group>
+
+      {Platform.OS === 'android' && (
+        <Group
+          title="Trusted Wi-Fi"
+          footer="Off unless you turn it on. When on, TunnelWall connects to the best relay by itself on any network that is not a trusted Wi-Fi, while TunnelWall is open or connected. Wi-Fi names stay on this phone."
+        >
+          {Number(Platform.Version) < 31 ? (
+            <Row title="Connect on other networks" subtitle="Needs Android 12 or newer." />
+          ) : (
+            <Row
+              title="Connect on other networks"
+              subtitle="Turning this on asks for precise location: Android shows the Wi-Fi name only to apps that have it."
+              trailing={
+                <Segmented
+                  options={KILL_SWITCH_OPTIONS}
+                  value={settings.trustedWifiEnabled ? 'on' : 'off'}
+                  onChange={(key) => onChangeTrustedWifi(key === 'on')}
+                  accessibilityLabel="Connect on networks that are not trusted"
+                />
+              }
+            />
+          )}
+          {trustedWifiError !== null && (
+            <View style={{ paddingHorizontal: space.lg, paddingBottom: space.md }}>
+              <Notice tone="warn">{trustedWifiError}</Notice>
+            </View>
+          )}
+          {settings.trustedWifiEnabled && (
+            <Row
+              title="This network"
+              subtitle={describeNetwork(network, settings.trustedNetworks)}
+              trailing={
+                network !== null &&
+                !isTrusted(network, settings.trustedNetworks) &&
+                trustNetwork(network, settings.trustedNetworks) !== null ? (
+                  <Button label="Trust" variant="secondary" size="sm" onPress={onTrustNetwork} />
+                ) : undefined
+              }
+            />
+          )}
+          {settings.trustedNetworks.map((entry) => (
+            <Row
+              key={entry.ssid}
+              title={entry.ssid}
+              subtitle={entry.bssids.length === 1 ? 'Trusted on 1 access point' : `Trusted on ${entry.bssids.length} access points`}
+              trailing={<Button label="Forget" variant="danger" size="sm" onPress={() => onForgetNetwork(entry.ssid)} />}
+            />
+          ))}
+        </Group>
+      )}
 
       {Platform.OS === 'android' && (
         <Group
