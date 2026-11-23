@@ -10,6 +10,8 @@ import {
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { openKnowledge } from '../nexus/worker';
+
 import { openLibrary } from './open-library';
 
 export interface LibraryQuery {
@@ -31,9 +33,11 @@ export interface LibraryData {
   tags: Tag[];
   kinds: ItemKind[];
   rows: LibraryRow[];
+  /** Items kept out of Nexus. Nexus failing to open must not stop the Library, so it reads as none. */
+  keptOut: Set<string>;
 }
 
-const EMPTY: LibraryData = { loading: true, error: null, path: [], tags: [], kinds: [], rows: [] };
+const EMPTY: LibraryData = { loading: true, error: null, path: [], tags: [], kinds: [], rows: [], keptOut: new Set() };
 
 export function errorMessage(error: unknown): string {
   if (error instanceof LibraryError && error.code === 'too_new') {
@@ -70,10 +74,13 @@ export function useLibraryData(q: LibraryQuery) {
       const kind = q.kind ?? undefined;
       const tagId = q.tagId ?? undefined;
       const filtered = kind !== undefined || tagId !== undefined;
-      const [path, tags, kindRows] = await Promise.all([
+      const [path, tags, kindRows, keptOut] = await Promise.all([
         q.folderId ? lib.folderPath(q.folderId) : Promise.resolve<Folder[]>([]),
         lib.listTags(),
         lib.db.all('SELECT DISTINCT kind FROM items'),
+        openKnowledge()
+          .then((kn) => kn.excludedIds())
+          .catch(() => new Set<string>()),
       ]);
       let rows: LibraryRow[];
       if (ftsQuery(q.text) !== null) {
@@ -96,7 +103,7 @@ export function useLibraryData(q: LibraryQuery) {
         ];
       }
       if (run === latest.current) {
-        setData({ loading: false, error: null, path, tags, kinds: kindRows.map((r) => r.kind as ItemKind), rows });
+        setData({ loading: false, error: null, path, tags, kinds: kindRows.map((r) => r.kind as ItemKind), rows, keptOut });
       }
     } catch (error) {
       if (run === latest.current) setData((d) => ({ ...d, loading: false, error: errorMessage(error) }));

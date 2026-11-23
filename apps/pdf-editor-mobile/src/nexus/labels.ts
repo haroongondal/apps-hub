@@ -25,7 +25,14 @@ const WORKING: Record<Exclude<Job['stage'], 'done'>, (kind: ItemKind) => string>
   graph: () => 'Finding ideas',
 };
 
-export function jobLabel(job: Job | null, kind: ItemKind, hasKey: boolean, found: { ideas: number; links: number }): { label: string; tone: Tone } {
+export function jobLabel(
+  job: Job | null,
+  kind: ItemKind,
+  hasKey: boolean,
+  found: { ideas: number; links: number },
+  keptOut = false,
+): { label: string; tone: Tone } {
+  if (keptOut) return { label: 'Not in Nexus', tone: 'neutral' };
   if (!job) return { label: 'Not processed yet', tone: 'neutral' };
   if (job.status === 'done') return { label: `${plural(found.ideas, 'idea')}, ${plural(found.links, 'link')}`, tone: 'ok' };
   if (job.status === 'failed') return { label: `Couldn't process it: ${job.error ?? 'unknown error'}`, tone: 'danger' };

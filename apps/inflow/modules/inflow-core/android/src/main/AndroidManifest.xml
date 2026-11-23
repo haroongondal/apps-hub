@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.READ_SMS" />
   <uses-permission android:name="android.permission.RECEIVE_SMS" />
+  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
   <!-- Gmail over IMAP (imap.gmail.com:993), and https to the AI address the owner sets in Settings; nothing else. -->
   <uses-permission android:name="android.permission.INTERNET" />
   <!-- The "your report is ready" notification. A runtime permission (Android 13+); without it reports are still made and listed. -->
