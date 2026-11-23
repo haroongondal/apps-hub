@@ -72,7 +72,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | F1 | Release guard | eco/base | todo |
 | F2 | Rollback | eco/base + eco/store | todo |
 | F3 | Docs drift | eco/base | todo |
-| F4 | Halo 0.5.1 minors | eco/halo | todo |
+| F4 | Halo m1/m2 minors | eco/halo | built + gated (0f60b826, 4ece59ca); halo-engine 165 tests, notch-island 109, assembleDebug ok, halo ts 126 pass; phone not run |
 | F5 | Deputy reliability (verify and close; code is on main) | eco/deputy | todo |
 | F6 | Nexus shortcuts | eco/nexus | todo |
 | E1 | app-link-contract | eco/base | todo |
@@ -84,7 +84,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | C3 | TunnelWall (firewall already on main) | eco/tunnelwall | todo |
 | C4 | HomeNet | eco/homenet | todo |
 | C5 | Strongroom health report | eco/strongroom | todo |
-| C6 | Halo progress ring | eco/halo | todo |
+| C6 | Halo progress ring | eco/halo | in progress |
 | C7 | Design Editor brand kit from image | eco/design-editor | todo |
 | C8 | Nexus offline OCR (on main; verify, audit, fill gaps) | eco/nexus | todo |
 | C9 | autonomous-browsing dry run | eco/autonomous-browsing | todo |
@@ -107,6 +107,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 
 ## Session log
 
+- 2026-11-23: session interrupted; five agents resumed. F4 done. C6 started.
 - 2026-11-23: recon done (Reuse table). F-base and E1 phase agents dispatched.
 - 2026-11-23: start-up read, fetched origin, created `eco/base` and eleven app worktrees, installed deps, baseline gates green (above).
 
