@@ -5,6 +5,7 @@ import InflowCore, { type ItemFilter, type PartyTotal, type ReportRow, type Stat
 import { AppsScreen } from './src/AppsScreen.tsx';
 import { AskScreen } from './src/AskScreen.tsx';
 import { ContactsScreen } from './src/ContactsScreen.tsx';
+import { HealthScreen } from './src/HealthScreen.tsx';
 import { HomeScreen } from './src/HomeScreen.tsx';
 import { ListScreen } from './src/ListScreen.tsx';
 import { LockScreen } from './src/LockScreen.tsx';
@@ -17,6 +18,7 @@ import { LOAD_ERROR } from './src/messages.ts';
 import { SettingsScreen } from './src/SettingsScreen.tsx';
 import { SetupScreen } from './src/SetupScreen.tsx';
 import { TodosScreen } from './src/TodosScreen.tsx';
+import { VitalsScreen } from './src/VitalsScreen.tsx';
 import { setupComplete, setupRows } from './src/setup.ts';
 
 type Tab = 'home' | 'money' | 'ask' | 'settings';
@@ -24,6 +26,8 @@ type Route =
   | { kind: 'items'; filter: ItemFilter; title: string }
   | { kind: 'contacts'; pkg: string; title: string; promo: boolean }
   | { kind: 'apps' }
+  | { kind: 'health' }
+  | { kind: 'vitals' }
   | { kind: 'party'; name: string | null; own: boolean; title: string }
   | { kind: 'report'; id: number; title: string };
 
@@ -143,6 +147,8 @@ function Root() {
     return <ContactsScreen key={stack.length} title={top.title} pkg={pkg} promo={top.promo} onBack={back} onOpen={open} onOpenPromotions={() => openContacts(pkg, 'Promotions', true)} />;
   }
   if (top?.kind === 'apps') return <AppsScreen key={stack.length} onBack={back} onOpen={open} onOpenContacts={openContacts} />;
+  if (top?.kind === 'health') return <HealthScreen key={stack.length} onBack={back} onOpenVitals={() => push({ kind: 'vitals' })} />;
+  if (top?.kind === 'vitals') return <VitalsScreen key={stack.length} onBack={back} />;
   if (top?.kind === 'report') return <ReportScreen key={stack.length} id={top.id} title={top.title} onBack={back} />;
   if (top?.kind === 'party') return <PartyScreen key={stack.length} title={top.title} name={top.name} own={top.own} onBack={back} />;
 
@@ -152,7 +158,7 @@ function Root() {
     <>
       <View style={{ flex: 1 }}>
         {tab === 'home' ? (
-          <HomeScreen status={status} refreshStatus={refresh} onOpen={open} onOpenContacts={openContacts} onOpenMoney={() => setTab('money')} onOpenApps={() => push({ kind: 'apps' })} onOpenTodos={() => setTodosOpen(true)} />
+          <HomeScreen status={status} refreshStatus={refresh} onOpen={open} onOpenContacts={openContacts} onOpenMoney={() => setTab('money')} onOpenApps={() => push({ kind: 'apps' })} onOpenTodos={() => setTodosOpen(true)} onOpenHealth={() => push({ kind: 'health' })} />
         ) : tab === 'money' ? (
           <MoneyScreen status={status} onOpenParty={openParty} onOpenReport={openReport} />
         ) : tab === 'ask' ? (
