@@ -321,6 +321,8 @@ export class Library {
     sort?: 'recent' | 'title';
     limit?: number;
     offset?: number;
+    /** Leaves out items read from other apps (item_sources). */
+    ownOnly?: boolean;
   }): Promise<Item[]> {
     const order = q.sort === 'title' ? 'i.title COLLATE NOCASE, i.rid' : 'i.updated_at DESC, i.rid DESC';
     const kind = q.kind ?? null;
@@ -330,9 +332,10 @@ export class Library {
        WHERE (? = 1 OR i.folder_id IS ?)
          AND (? IS NULL OR i.kind = ?)
          AND (? IS NULL OR EXISTS (SELECT 1 FROM item_tags t WHERE t.item_id = i.id AND t.tag_id = ?))
+         AND (? = 0 OR NOT EXISTS (SELECT 1 FROM item_sources s WHERE s.item_id = i.id))
        ORDER BY ${order}
        LIMIT ? OFFSET ?`,
-      [q.everywhere ? 1 : 0, q.folderId ?? null, kind, kind, tagId, tagId, q.limit ?? DEFAULT_LIST_LIMIT, q.offset ?? 0],
+      [q.everywhere ? 1 : 0, q.folderId ?? null, kind, kind, tagId, tagId, q.ownOnly ? 1 : 0, q.limit ?? DEFAULT_LIST_LIMIT, q.offset ?? 0],
     );
     return rows.map(toItem);
   }

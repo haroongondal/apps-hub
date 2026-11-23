@@ -42,6 +42,14 @@ test('the same source id again updates the one item and never adds a second', as
   assert.equal((await lib.sourceOf(first.item.id))?.sourceAt, 1_700_000_100_000);
 });
 
+test('a list of own items leaves out source items, even when they are the newest', async () => {
+  const { lib } = await openLibrary();
+  const own = await lib.createItem({ kind: 'note', title: 'My own note' });
+  for (let id = 1; id <= 3; id++) await lib.putSourceItem(msg(id));
+  assert.deepEqual(titles(await lib.list({ everywhere: true, limit: 2, ownOnly: true })), [own.title]);
+  assert.equal((await lib.list({ everywhere: true, limit: 2 })).length, 2);
+});
+
 test('each app gets its own folder, made once and reused', async () => {
   const { lib } = await openLibrary();
   await lib.putSourceItem(msg(1));

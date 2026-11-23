@@ -48,7 +48,7 @@ function useCards() {
       .catch((err) => console.warn('Could not check the meeting recording', err));
     try {
       const kn = await openKnowledge();
-      const items = await kn.lib.list({ everywhere: true, limit: RECENT });
+      const items = await kn.lib.list({ everywhere: true, limit: RECENT, ownOnly: true }); // source items live in Library and Ask (R12)
       const keptOut = await kn.excludedIds();
       const next: Card[] = [];
       for (const item of items) {
