@@ -11,6 +11,7 @@ import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.TextView
+import expo.modules.haloengine.applink.AppLinkTarget
 import kotlin.math.abs
 
 // A small touchable window of its own: the edge window stays non-touchable. It shows a count only, never a title, because it can sit over the lock screen.
@@ -56,6 +57,8 @@ class WaitingBubble(private val ctx: Context, colour: Int) {
   private fun open() {
     val pkg = target ?: return
     val i = ctx.packageManager.getLaunchIntentForPackage(pkg) ?: return
+    // The launcher is not a link action, so it does not require the link permission; package and signature are still checked.
+    if (!AppLinkTarget.trustedActivity(ctx, i, requireLinkPermission = false)) return
     runCatching { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
       .onFailure { ProbeLog.log(ctx, "links", "bubble open FAILED ${it.javaClass.name}") }
   }

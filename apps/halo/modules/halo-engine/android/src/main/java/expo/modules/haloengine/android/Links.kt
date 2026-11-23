@@ -1,7 +1,6 @@
 package expo.modules.haloengine.android
 
 import android.content.Context
-import android.content.pm.PackageManager
 import android.database.Cursor
 import android.graphics.Color
 import android.net.Uri
@@ -10,17 +9,18 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
+import expo.modules.haloengine.applink.AppLinkTarget
 import expo.modules.haloengine.core.FlashDecision
 import expo.modules.haloengine.core.LinkPulse
 import expo.modules.haloengine.core.LinkShares
 import expo.modules.haloengine.core.LinkSnapshot
 import expo.modules.haloengine.core.LinkSurfaces
 import expo.modules.haloengine.core.PulseKind
-import expo.modules.haloengine.core.ProviderTrust
 import expo.modules.haloengine.core.PulseState
 import expo.modules.haloengine.core.QuietHours
 import expo.modules.haloengine.core.RawRow
 import expo.modules.haloengine.core.ReadShare
+import expo.modules.haloengine.core.ShareOwners
 import expo.modules.haloengine.core.RereadGate
 import expo.modules.haloengine.core.any
 import expo.modules.haloengine.core.readsWaiting
@@ -114,8 +114,10 @@ object Links {
   }
 
   // A missing provider, a refusal (a debug build, the other app's switch off), a hang past the timeout or a broken cursor all mean "no data".
-  private fun query(c: Context, share: ReadShare): List<RawRow> {
-    if (!trusted(c, share.authority)) return emptyList()
+  private fun query(c: Context, share: ReadShare): List<RawRow> =
+    ShareOwners.read(share, { authority, owner -> AppLinkTarget.trustedProvider(c, authority, owner) }) { queryProvider(c, it) }
+
+  private fun queryProvider(c: Context, share: ReadShare): List<RawRow> {
     val signal = CancellationSignal()
     val job = queries.submit<List<RawRow>> {
       c.contentResolver.query(Uri.parse("content://${share.authority}/${share.path}"), null, null, null, null, signal)?.use { cur ->
@@ -130,12 +132,6 @@ object Links {
       emptyList()
     }
   }
-
-  private fun trusted(c: Context, authority: String): Boolean = runCatching {
-    val pm = c.packageManager
-    val expected = ProviderTrust.expectedPackage(authority) ?: return false
-    ProviderTrust.allowed(expected, pm.resolveContentProvider(authority, 0)?.packageName, pm.checkSignatures(c.packageName, expected) == PackageManager.SIGNATURE_MATCH)
-  }.getOrDefault(false)
 
   private fun row(c: Cursor): RawRow = buildMap {
     for (i in 0 until c.columnCount) {

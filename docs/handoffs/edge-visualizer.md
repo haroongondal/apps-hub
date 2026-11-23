@@ -140,10 +140,12 @@ Open naming: app name, package (com.haroon.<name>), Store release id, @apps-hub/
   only, so Metro never resolves it.
 - Inflow `briefing` column: the brief said `private`, but `defineShare` refuses that name, so Halo reads `personal` (my call; Inflow's
   P2 must use the same name or tell Halo). Inflow has not declared the share on eco/inflow yet.
-- Provider identity (security finding from the coordinator, applied to every reader): before each query
-  `PackageManager.resolveContentProvider(authority, 0).packageName` must equal the owner from a fixed table (`core/ProviderTrust.kt`:
-  netlens -> app.netlens, opentunnel -> com.opentunnel.open_tunnel_vpn, deputy, strongroom, inflow, pdfeditor) and
-  `checkSignatures(own package, owner) == SIGNATURE_MATCH`; otherwise no query and no data (`ProviderTrustTest`, 6 tests).
+- AppLinkTarget (2026-11-24, replaces `ProviderTrust`): `applink/AppLinkTarget.kt` (canonical copy, `SiblingPackages`) and its test are copied in;
+  `core/ShareOwners.kt` maps each share authority to its `SiblingPackages` owner (HomeNet, TunnelWall, Deputy, Inflow) and `Links.query` calls
+  `AppLinkTarget.trustedProvider(ctx, authority, owner)` before every query through `ShareOwners.read` (the trust check is a parameter, so
+  `ShareOwnersTest` feeds it Spoofed, NotInstalled and unknown-authority decisions). The waiting bubble calls
+  `AppLinkTarget.trustedActivity(ctx, launchIntent, requireLinkPermission = false)` before it opens Inflow or Deputy (a launcher activity is not a link
+  action); false does nothing, like the old quiet failure. No `<queries>`: Halo holds QUERY_ALL_PACKAGES.
 - When Halo re-reads (`core/LinkTiming.kt` RereadGate): a CHANGED ping reads 5 s after the first ping of a burst; app open (getStatus)
   and service start read at once; never two reads within a minute; the always-on screen re-reads only data older than 15 minutes when
   it opens (my call: this replaces a 15-minute worker, so there is no timer and no wake-up).
