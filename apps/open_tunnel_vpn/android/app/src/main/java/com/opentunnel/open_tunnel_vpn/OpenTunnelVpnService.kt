@@ -111,6 +111,7 @@ class OpenTunnelVpnService : VpnService() {
 
   override fun onCreate() {
     super.onCreate()
+    TunnelStateRegistry.attach(this)
     ensureChannel()
     // A fresh process (Always-on restart, boot) remembers that the user still wanted the tunnel.
     armed = runCatching { killSwitchPrefs.getBoolean(KEY_ARMED, false) }.getOrDefault(false)

@@ -32,6 +32,8 @@ export interface SettingsSheetProps {
   /** The phone's own network while Trusted Wi-Fi watches it; null otherwise. */
   network: NetworkInfo | null;
   trustedWifiError: string | null;
+  shieldsError: string | null;
+  onChangeShields(enabled: boolean): void;
   onChangeTrustedWifi(enabled: boolean): void;
   onTrustNetwork(): void;
   onForgetNetwork(ssid: string): void;
@@ -60,6 +62,8 @@ export function SettingsSheet({
   killSwitch,
   network,
   trustedWifiError,
+  shieldsError,
+  onChangeShields,
   onChangeTrustedWifi,
   onTrustNetwork,
   onForgetNetwork,
@@ -126,6 +130,35 @@ export function SettingsSheet({
 
       {Platform.OS === 'android' && (
         <Group
+          title="Shields"
+          footer="Off unless you turn it on. When on, TunnelWall connects by itself on networks you don't trust, and Halo shows a red pulse while you're on one. It watches only while TunnelWall is open or connected. Halo learns only whether the network is trusted, never its name."
+        >
+          {Number(Platform.Version) < 31 ? (
+            <Row title="Shields" subtitle="Needs Android 12 or newer." />
+          ) : (
+            <Row
+              title="Shields"
+              subtitle="Warn me and protect me on networks I don't trust."
+              trailing={
+                <Segmented
+                  options={KILL_SWITCH_OPTIONS}
+                  value={settings.shieldsEnabled ? 'on' : 'off'}
+                  onChange={(key) => onChangeShields(key === 'on')}
+                  accessibilityLabel="Shields: warn me and protect me on networks I don't trust"
+                />
+              }
+            />
+          )}
+          {shieldsError !== null && (
+            <View style={{ paddingHorizontal: space.lg, paddingBottom: space.md }}>
+              <Notice tone="warn">{shieldsError}</Notice>
+            </View>
+          )}
+        </Group>
+      )}
+
+      {Platform.OS === 'android' && (
+        <Group
           title="Trusted Wi-Fi"
           footer="Off unless you turn it on. When on, TunnelWall connects to the best relay by itself on any network that is not a trusted Wi-Fi, while TunnelWall is open or connected. Wi-Fi names stay on this phone."
         >
@@ -150,7 +183,7 @@ export function SettingsSheet({
               <Notice tone="warn">{trustedWifiError}</Notice>
             </View>
           )}
-          {settings.trustedWifiEnabled && (
+          {(settings.trustedWifiEnabled || settings.shieldsEnabled) && (
             <Row
               title="This network"
               subtitle={describeNetwork(network, settings.trustedNetworks)}

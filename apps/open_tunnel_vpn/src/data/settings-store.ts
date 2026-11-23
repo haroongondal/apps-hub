@@ -33,6 +33,8 @@ export interface TunnelSettings {
   readonly trustedWifiEnabled: boolean;
   /** Wi-Fi names and access points the user marked trusted; never leave the phone. */
   readonly trustedNetworks: readonly TrustedNetwork[];
+  /** Shields: warn (Halo's red pulse) and protect (Trusted Wi-Fi) on networks the owner does not trust. Off by default. */
+  readonly shieldsEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: TunnelSettings = {
@@ -42,6 +44,7 @@ export const DEFAULT_SETTINGS: TunnelSettings = {
   firewallConsented: false,
   trustedWifiEnabled: false,
   trustedNetworks: [],
+  shieldsEnabled: false,
 };
 
 const KEY_KILL_SWITCH = 'killSwitchEnabled';
@@ -50,6 +53,7 @@ const KEY_LAST_NODE_ID = 'lastNodeId';
 const KEY_FIREWALL_CONSENT = 'firewallConsented';
 const KEY_TRUSTED_WIFI = 'trustedWifiEnabled';
 const KEY_TRUSTED_NETWORKS = 'trustedNetworks';
+const KEY_SHIELDS = 'shieldsEnabled';
 
 export class AppSettingsStore {
   private readonly driver: SqliteDriver;
@@ -76,6 +80,7 @@ export class AppSettingsStore {
     const firewallConsented = await this.readBool(KEY_FIREWALL_CONSENT, DEFAULT_SETTINGS.firewallConsented);
     const trustedWifiEnabled = await this.readBool(KEY_TRUSTED_WIFI, DEFAULT_SETTINGS.trustedWifiEnabled);
     const trustedNetworks = parseTrustedNetworks(await this.readJson(KEY_TRUSTED_NETWORKS));
+    const shieldsEnabled = await this.readBool(KEY_SHIELDS, DEFAULT_SETTINGS.shieldsEnabled);
     return {
       killSwitchEnabled,
       disallowedApps,
@@ -83,7 +88,13 @@ export class AppSettingsStore {
       firewallConsented,
       trustedWifiEnabled,
       trustedNetworks,
+      shieldsEnabled,
     };
+  }
+
+  async setShieldsEnabled(enabled: boolean): Promise<void> {
+    await this.open();
+    await this.writeValue(KEY_SHIELDS, enabled ? 'true' : 'false');
   }
 
   async setTrustedWifiEnabled(enabled: boolean): Promise<void> {

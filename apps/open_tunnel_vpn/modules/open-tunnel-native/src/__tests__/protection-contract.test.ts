@@ -22,7 +22,7 @@ const kotlinModule = readFileSync(
 );
 const swiftModule = readFileSync(join(NATIVE_ROOT, 'ios/OpenTunnelNativeModule.swift'), 'utf8');
 
-const PROTECTION_FUNCTIONS = ['getKillSwitchStatus', 'startNetworkWatch', 'stopNetworkWatch'];
+const PROTECTION_FUNCTIONS = ['getKillSwitchStatus', 'startNetworkWatch', 'stopNetworkWatch', 'publishShield'];
 const PROTECTION_EVENTS = ['onKillSwitchChanged', 'onNetworkChanged'];
 
 test('both platforms declare every protection function and event', () => {
@@ -64,6 +64,7 @@ test('the adapter normalizes reads and events and removes its subscription', asy
     getKillSwitchStatus: async () => ({ blocking: true, alwaysOn: null, lockdown: null }),
     startNetworkWatch: async () => null,
     stopNetworkWatch: async () => null,
+    publishShield: async () => null,
     addListener: (_event, next) => {
       listener = next;
       return { remove: () => void (removed += 1) };
@@ -114,6 +115,42 @@ test('a malformed or withheld network can never look like a known Wi-Fi', () => 
 
 test('off a device the network watch rejects typed instead of pretending to watch', async () => {
   await assert.rejects(createProtectionBinding({ platform: 'unavailable' }).startNetworkWatch(), (error: unknown) => {
+    assert.ok(error instanceof OpenTunnelError);
+    assert.equal(error.code, OPEN_TUNNEL_ERROR_CODES.NOT_SUPPORTED);
+    return true;
+  });
+});
+
+test('publishShield takes the same two flags in the same order on both platforms, and iOS rejects it typed', () => {
+  assert.match(kotlinModule, /AsyncFunction\("publishShield"\) \{ on: Boolean, untrustedNow: Boolean, promise: Promise ->/);
+  assert.match(swiftModule, /AsyncFunction\("publishShield"\) \{ \(on: Bool, untrustedNow: Bool, promise: Promise\) in/);
+  const fn = swiftModule.slice(swiftModule.indexOf('AsyncFunction("publishShield")'));
+  assert.match(fn.slice(0, fn.indexOf('}')), /promise\.reject\(ErrorCode\.notSupported,/);
+  assert.match(kotlinModule, /private const val ERR_LINK_FAILED = "ERR_LINK_FAILED"/);
+  assert.equal(OPEN_TUNNEL_ERROR_CODES.LINK_FAILED, 'ERR_LINK_FAILED');
+});
+
+test('the adapter never publishes an untrusted network while Shields is off', async () => {
+  const sent: Array<[boolean, boolean]> = [];
+  const native: ProtectionNativeApi = {
+    getKillSwitchStatus: async () => null,
+    startNetworkWatch: async () => null,
+    stopNetworkWatch: async () => null,
+    publishShield: async (on, untrustedNow) => {
+      sent.push([on, untrustedNow]);
+      return null;
+    },
+    addListener: () => ({ remove: () => undefined }),
+  };
+  const protection = bindProtection(native);
+  await protection.publishShield(false, true);
+  await protection.publishShield(true, true);
+  await protection.publishShield(true, false);
+  assert.deepEqual(sent, [[false, false], [true, true], [true, false]]);
+});
+
+test('off a device Shields rejects typed instead of pretending to share', async () => {
+  await assert.rejects(createProtectionBinding({ platform: 'unavailable' }).publishShield(true, true), (error: unknown) => {
     assert.ok(error instanceof OpenTunnelError);
     assert.equal(error.code, OPEN_TUNNEL_ERROR_CODES.NOT_SUPPORTED);
     return true;

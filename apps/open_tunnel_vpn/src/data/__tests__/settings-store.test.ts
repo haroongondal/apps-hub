@@ -96,3 +96,12 @@ test('trusted Wi-Fi is off by default and round-trips with its networks', async 
   assert.equal(saved.trustedWifiEnabled, true);
   assert.deepEqual(saved.trustedNetworks, [{ ssid: 'Home', bssids: ['aa:aa:aa:aa:aa:01'] }]);
 });
+
+test('Shields is off by default and round-trips', async () => {
+  const store = openStore();
+  assert.equal((await store.loadSettings()).shieldsEnabled, false);
+  await store.setShieldsEnabled(true);
+  assert.equal((await store.loadSettings()).shieldsEnabled, true);
+  await store.setShieldsEnabled(false);
+  assert.equal((await store.loadSettings()).shieldsEnabled, false);
+});

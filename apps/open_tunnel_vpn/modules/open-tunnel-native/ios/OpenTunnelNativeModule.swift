@@ -837,6 +837,11 @@ public class OpenTunnelNativeModule: Module {
       promise.resolve(nil)
     }
 
+    // Shields needs the network watch above and Halo, which is Android only.
+    AsyncFunction("publishShield") { (on: Bool, untrustedNow: Bool, promise: Promise) in
+      promise.reject(ErrorCode.notSupported, "Shields isn't available on iPhone.")
+    }
+
     /**
      * iOS has no ACTION_VPN_SETTINGS equivalent for the VPN sheet — the
      * app settings page (openSettingsURLString) is the app's lever; the

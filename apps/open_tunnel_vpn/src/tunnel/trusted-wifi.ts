@@ -11,6 +11,11 @@ export function isTrusted(network: NetworkInfo, trusted: readonly TrustedNetwork
   return trusted.some((entry) => entry.ssid === network.ssid && entry.bssids.includes(network.bssid!));
 }
 
+// Shields warns on any network that is not a trusted Wi-Fi, mobile data and unreadable Wi-Fi included; no network is nothing to warn about.
+export function untrustedNow(network: NetworkInfo, trusted: readonly TrustedNetwork[]): boolean {
+  return network.connected && !isTrusted(network, trusted);
+}
+
 export function trustNetwork(network: NetworkInfo, trusted: readonly TrustedNetwork[]): TrustedNetwork[] | null {
   const { ssid, bssid } = network;
   if (!network.wifi || ssid === null || bssid === null) return null;

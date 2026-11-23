@@ -9,6 +9,7 @@ import {
   isTrusted,
   parseTrustedNetworks,
   trustNetwork,
+  untrustedNow,
   type AutoConnectInput,
 } from '../trusted-wifi.ts';
 
@@ -89,4 +90,15 @@ test('the current network is described in plain words', () => {
   assert.equal(describeNetwork(MOBILE, trusted), 'Mobile data, not trusted');
   assert.equal(describeNetwork(OFFLINE, trusted), 'No network');
   assert.equal(describeNetwork(null, trusted), 'Checking the network');
+});
+
+test('Shields counts every network but a trusted Wi-Fi as untrusted, and no network as nothing', () => {
+  const trusted = trustNetwork(HOME, [])!;
+  assert.equal(untrustedNow(HOME, trusted), false);
+  assert.equal(untrustedNow(HOME_OTHER_AP, trusted), true);
+  assert.equal(untrustedNow(EVIL_TWIN, trusted), true);
+  assert.equal(untrustedNow(HIDDEN, trusted), true);
+  assert.equal(untrustedNow(MOBILE, trusted), true);
+  assert.equal(untrustedNow(OFFLINE, trusted), false);
+  assert.equal(untrustedNow(HOME, []), true);
 });

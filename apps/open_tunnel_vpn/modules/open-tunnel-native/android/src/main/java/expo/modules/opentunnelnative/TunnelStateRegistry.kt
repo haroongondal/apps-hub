@@ -1,5 +1,6 @@
 package expo.modules.opentunnelnative
 
+import android.content.Context
 import android.os.SystemClock
 
 /**
@@ -68,6 +69,14 @@ object TunnelStateRegistry {
   var lockdown: Boolean? = null
     private set
 
+  // Set by the module and the VPN service so every status change refreshes the health heartbeat.
+  @Volatile
+  private var appContext: Context? = null
+
+  fun attach(context: Context) {
+    appContext = context.applicationContext
+  }
+
   fun setBlocking(value: Boolean) {
     blocking = value
   }
@@ -84,5 +93,6 @@ object TunnelStateRegistry {
     statusCode = code
     connectedAtMs =
       if (state == TunnelStatus.CONNECTED) SystemClock.elapsedRealtime() else null
+    appContext?.let { TunnelLinkStore.heartbeat(it, System.currentTimeMillis()) }
   }
 }

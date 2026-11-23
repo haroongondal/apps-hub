@@ -17,7 +17,7 @@ import { FirewallScreen } from './src/firewall/firewall-screen.tsx';
 import { serverHoldsSlot } from './src/firewall/status.ts';
 import type { KillSwitchStatus, NetworkInfo } from 'open-tunnel-native';
 import { killSwitchView } from './src/tunnel/kill-switch.ts';
-import { autoConnectDecision, forgetNetwork, trustNetwork } from './src/tunnel/trusted-wifi.ts';
+import { autoConnectDecision, forgetNetwork, trustNetwork, untrustedNow } from './src/tunnel/trusted-wifi.ts';
 import { firewallBinding, openTunnelBinding, nativeTcpProbe, protectionBinding } from './src/tunnel/native-tcp-probe.ts';
 import { MAX_ATTEMPTS, bestRelayFailure, isAuthError } from './src/tunnel/relay-failover.ts';
 import {
@@ -79,6 +79,7 @@ function OpenTunnelApp() {
   const [killSwitch, setKillSwitch] = useState<KillSwitchStatus>({ blocking: false, alwaysOn: null, lockdown: null });
   const [network, setNetwork] = useState<NetworkInfo | null>(null);
   const [trustedWifiError, setTrustedWifiError] = useState<string | null>(null);
+  const [shieldsError, setShieldsError] = useState<string | null>(null);
   const lastNetworkKey = useRef<string | null>(null);
   // Turning Trusted Wi-Fi on never connects on the network the user is on right then; they can mark it first.
   const skipNextNetwork = useRef(false);
@@ -312,7 +313,8 @@ function OpenTunnelApp() {
     if (was === 'connected' || was === 'reasserting' || auth) void autoSelect(true);
   }, [tunnel.state, tunnel.code, activeNode, autoSelect]);
 
-  const watchingNetwork = Platform.OS === 'android' && settings?.trustedWifiEnabled === true;
+  const shieldsOn = Platform.OS === 'android' && settings?.shieldsEnabled === true;
+  const watchingNetwork = Platform.OS === 'android' && (settings?.trustedWifiEnabled === true || shieldsOn);
   useEffect(() => {
     if (!watchingNetwork) {
       setNetwork(null);
@@ -346,19 +348,51 @@ function OpenTunnelApp() {
     if (decision.connect) void autoSelect();
   }, [network]);
 
+  // Halo reads this through the shield share; only two flags leave the JS side, never the network itself.
+  const trustedNetworks = settings?.trustedNetworks;
+  useEffect(() => {
+    if (Platform.OS !== 'android' || trustedNetworks === undefined) return;
+    if (shieldsOn && network === null) return;
+    const untrusted = shieldsOn && network !== null && untrustedNow(network, trustedNetworks);
+    protectionBinding.publishShield(shieldsOn, untrusted).then(
+      () => mountedRef.current && setShieldsError(null),
+      () => mountedRef.current && setShieldsError("Halo can't see Shields right now. Turn Shields off and on again."),
+    );
+  }, [shieldsOn, network, trustedNetworks]);
+
   const changeTrustedWifi = useCallback(
-    async (enabled: boolean) => {
-      if (database === null) return;
+    async (enabled: boolean): Promise<boolean> => {
+      if (database === null) return false;
       setTrustedWifiError(null);
       if (enabled && !(await requestPreciseLocation())) {
         setTrustedWifiError('Trusted Wi-Fi stays off: Android shows the Wi-Fi name only to apps allowed precise location.');
-        return;
+        return false;
       }
-      skipNextNetwork.current = enabled;
+      // A watch that already runs has decided the current network, so it never connects there anyway.
+      skipNextNetwork.current = enabled && !watchingNetwork;
       await database.settings.setTrustedWifiEnabled(enabled);
       setSettings((current) => (current === null ? current : { ...current, trustedWifiEnabled: enabled }));
+      return true;
     },
-    [database],
+    [database, watchingNetwork],
+  );
+
+  // One switch: on turns on Trusted Wi-Fi auto-connect too (asking for location then), off turns both off.
+  const changeShields = useCallback(
+    async (enabled: boolean) => {
+      if (database === null) return;
+      setShieldsError(null);
+      // Auto-connect first: the watch must not start (and decide this network) before Trusted Wi-Fi knows it is on.
+      const autoConnectSet = enabled === settings?.trustedWifiEnabled || (await changeTrustedWifi(enabled));
+      await database.settings.setShieldsEnabled(enabled);
+      setSettings((current) => (current === null ? current : { ...current, shieldsEnabled: enabled }));
+      if (!autoConnectSet) {
+        setTrustedWifiError(
+          "Shields is on, but auto-connect is off: without precise location TunnelWall can't tell your Wi-Fi apart, so it warns on every network.",
+        );
+      }
+    },
+    [database, settings, changeTrustedWifi],
   );
 
   const saveTrustedNetworks = useCallback(
@@ -503,6 +537,8 @@ function OpenTunnelApp() {
           killSwitch={killSwitch}
           network={network}
           trustedWifiError={trustedWifiError}
+          shieldsError={shieldsError}
+          onChangeShields={(enabled) => void changeShields(enabled)}
           onChangeTrustedWifi={(enabled) => void changeTrustedWifi(enabled)}
           onTrustNetwork={() => {
             const next = network === null ? null : trustNetwork(network, settings.trustedNetworks);

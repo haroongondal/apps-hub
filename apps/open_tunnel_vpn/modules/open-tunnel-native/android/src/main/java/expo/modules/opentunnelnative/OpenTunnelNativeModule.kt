@@ -47,6 +47,7 @@ private const val ERR_PROBE_FAILED = "ERR_PROBE_FAILED"
 private const val ERR_FIREWALL_NOT_SUPPORTED = "ERR_FIREWALL_NOT_SUPPORTED"
 private const val ERR_FIREWALL_FAILED = "ERR_FIREWALL_FAILED"
 private const val ERR_NOT_SUPPORTED = "ERR_NOT_SUPPORTED"
+private const val ERR_LINK_FAILED = "ERR_LINK_FAILED"
 private const val VPN_CONSENT_REQUEST = 0x0715
 
 /** Validated tunnel config — handed to the service as JSON in the intent
@@ -118,6 +119,14 @@ class OpenTunnelNativeModule : Module() {
     Name("OpenTunnelNative")
 
     Events(EVENT_STATUS_CHANGED, EVENT_TRAFFIC_UPDATE, EVENT_KILL_SWITCH_CHANGED, EVENT_NETWORK_CHANGED)
+
+    // The JS runtime starts only when the app is opened, so this is the "app opened" heartbeat.
+    OnCreate {
+      appContext.reactContext?.applicationContext?.let { context ->
+        TunnelStateRegistry.attach(context)
+        moduleScope.launch(Dispatchers.IO) { TunnelLinkStore.heartbeat(context, System.currentTimeMillis()) }
+      }
+    }
 
     OnStartObserving {
       val listener = object : TunnelEventBus.Listener {
@@ -362,6 +371,22 @@ class OpenTunnelNativeModule : Module() {
     AsyncFunction("stopNetworkWatch") { promise: Promise ->
       stopNetworkWatch()
       promise.resolve(null)
+    }
+
+    AsyncFunction("publishShield") { on: Boolean, untrustedNow: Boolean, promise: Promise ->
+      val context = appContext.reactContext?.applicationContext
+      if (context == null) {
+        promise.reject(ERR_NO_CONTEXT, "React context unavailable", null)
+      } else {
+        moduleScope.launch(Dispatchers.IO) {
+          try {
+            TunnelLinkStore.publishShield(context, on, untrustedNow, System.currentTimeMillis())
+            promise.resolve(null)
+          } catch (error: Exception) {
+            promise.reject(ERR_LINK_FAILED, "Shields state not shared: ${error.javaClass.name}", error)
+          }
+        }
+      }
     }
 
     AsyncFunction("getFirewallStatus") { promise: Promise ->

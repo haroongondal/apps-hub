@@ -534,6 +534,8 @@ export interface ProtectionApi {
   startNetworkWatch(): Promise<void>;
   stopNetworkWatch(): Promise<void>;
   addOnNetworkChanged(listener: (network: NetworkInfo) => void): ListenerHandle;
+  /** Saves what the Shields share tells Halo (two flags, nothing about the network). Rejects `ERR_NOT_SUPPORTED` on iOS. */
+  publishShield(on: boolean, untrustedNow: boolean): Promise<void>;
 }
 
 export function bindProtection(native: ProtectionNativeApi): ProtectionApi {
@@ -557,6 +559,9 @@ export function bindProtection(native: ProtectionNativeApi): ProtectionApi {
       const subscription = native.addListener('onNetworkChanged', (payload) => listener(normalizeNetworkInfo(payload)));
       return { remove: () => subscription.remove() };
     },
+    async publishShield(on, untrustedNow) {
+      await native.publishShield(on, on && untrustedNow);
+    },
   };
 }
 
@@ -574,6 +579,9 @@ function unavailableProtection(): ProtectionApi {
     async stopNetworkWatch() {},
     addOnNetworkChanged() {
       return { remove: () => undefined };
+    },
+    async publishShield() {
+      throw new OpenTunnelError(OPEN_TUNNEL_ERROR_CODES.NOT_SUPPORTED, "Shields isn't available in this runtime.");
     },
   };
 }

@@ -175,6 +175,7 @@ export interface ProtectionNativeApi {
   getKillSwitchStatus(): Promise<unknown>;
   startNetworkWatch(): Promise<null>;
   stopNetworkWatch(): Promise<null>;
+  publishShield(on: boolean, untrustedNow: boolean): Promise<null>;
   addListener(event: 'onKillSwitchChanged' | 'onNetworkChanged', listener: (payload: unknown) => void): { remove(): void };
 }
 
@@ -213,8 +214,10 @@ export const OPEN_TUNNEL_ERROR_CODES = {
   AUTH_FAILED: 'ERR_AUTH_FAILED',
   FIREWALL_NOT_SUPPORTED: 'ERR_FIREWALL_NOT_SUPPORTED',
   FIREWALL_FAILED: 'ERR_FIREWALL_FAILED',
-  /** Trusted Wi-Fi on iOS and on Android 11 and older. */
+  /** Trusted Wi-Fi on iOS and on Android 11 and older; Shields on iOS. */
   NOT_SUPPORTED: 'ERR_NOT_SUPPORTED',
+  /** Android could not save the Shields state the link provider serves. */
+  LINK_FAILED: 'ERR_LINK_FAILED',
 } as const;
 
 export type OpenTunnelErrorCode =

@@ -20,4 +20,6 @@ android {
 dependencies {
   // JVM tests: NativeTcpProbe counts a refused relay port as down.
   testImplementation("junit:junit:4.13.2")
+  // Test-only fixture reader (shared JSON fixtures in packages/); Apache-2.0, not in the APK.
+  testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
 }
