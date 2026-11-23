@@ -82,4 +82,16 @@ class DeputyProposalTest {
     assertEquals("com.haroon.deputy", DeputyProposal.DEPUTY_PACKAGE)
     assertTrue(DeputyProposal.REQUEST_CODE in 0..0xffff)
   }
+
+  @Test fun anUntrustedDeputyIsNotInstalledAndNothingStarts() {
+    var started = false
+    assertEquals("not_installed", DeputyProposal.start(trusted = { false }, go = { started = true }))
+    assertTrue("nothing may be sent", !started)
+  }
+
+  @Test fun aTrustedDeputyIsStarted() {
+    var started = false
+    assertNull(DeputyProposal.start(trusted = { true }, go = { started = true }))
+    assertTrue(started)
+  }
 }

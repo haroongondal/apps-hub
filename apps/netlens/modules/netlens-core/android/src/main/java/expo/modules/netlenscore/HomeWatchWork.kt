@@ -23,6 +23,7 @@ import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import expo.modules.netlenscore.applink.AppLinkGuard
+import expo.modules.netlenscore.applink.AppLinkTarget
 import java.net.Inet4Address
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -135,9 +136,13 @@ object HomeWatch {
 
   /** Tells Halo to re-read the shares: no extras ever, Halo only, and only same-key apps may receive it. */
   fun ping(context: Context, newDevice: Boolean, presenceChanged: Boolean) {
-    if (!HomeWatchStore.claimPing(context, newDevice, presenceChanged)) return
+    val intent = Intent(ChangedPing.ACTION).setPackage(ChangedPing.TARGET_PACKAGE)
     runCatching {
-      context.sendBroadcast(Intent(ChangedPing.ACTION).setPackage(ChangedPing.TARGET_PACKAGE), AppLinkGuard.PERMISSION)
+      ChangedPing.deliver(
+        trusted = { AppLinkTarget.trustedReceiver(context, intent) },
+        claim = { HomeWatchStore.claimPing(context, newDevice, presenceChanged) },
+        send = { context.sendBroadcast(intent, AppLinkGuard.PERMISSION) },
+      )
     }
   }
 

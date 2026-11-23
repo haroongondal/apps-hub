@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
     <uses-permission android:name="com.haroon.permission.AUTOPILOT" />
+    <queries>
+        <package android:name="com.haroon.deputy" />
+        <package android:name="com.haroon.halo" />
+    </queries>
     <application>
         <provider
             android:name=".HomeLinkProvider"

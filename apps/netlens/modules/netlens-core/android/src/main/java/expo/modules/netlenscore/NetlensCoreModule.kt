@@ -1,7 +1,6 @@
 package expo.modules.netlenscore
 
 import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
@@ -9,6 +8,7 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.netlenscore.applink.AppLinkTarget
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.util.concurrent.atomic.AtomicReference
@@ -382,14 +382,10 @@ class NetlensCoreModule : Module() {
         else -> {
           val intent = Intent(DeputyProposal.ACTION).setPackage(DeputyProposal.DEPUTY_PACKAGE)
           extras.forEach { (key, value) -> (value as? String)?.let { intent.putExtra(key, it) } }
-          val failed = try {
-            activity.startActivityForResult(intent, DeputyProposal.REQUEST_CODE)
-            null
-          } catch (_: ActivityNotFoundException) {
-            "not_installed"
-          } catch (_: SecurityException) {
-            "refused"
-          }
+          val failed = DeputyProposal.start(
+            trusted = { AppLinkTarget.trustedActivity(activity, intent) },
+            go = { activity.startActivityForResult(intent, DeputyProposal.REQUEST_CODE) },
+          )
           if (failed != null) deputyPromise.getAndSet(null)?.resolve(deputyResult(failed))
         }
       }

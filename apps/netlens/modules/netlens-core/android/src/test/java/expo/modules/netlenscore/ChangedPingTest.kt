@@ -1,5 +1,6 @@
 package expo.modules.netlenscore
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -40,5 +41,20 @@ class ChangedPingTest {
 
   @Test fun thePingIsTheContractPing() {
     assertTrue(ChangedPing.ACTION == "com.haroon.autopilot.CHANGED" && ChangedPing.TARGET_PACKAGE == "com.haroon.halo")
+  }
+
+  @Test fun anUntrustedHaloGetsNothingAndSpendsNoClaim() {
+    var claimed = false
+    var sent = false
+    assertFalse(ChangedPing.deliver(trusted = { false }, claim = { claimed = true; true }, send = { sent = true }))
+    assertFalse("a refused ping must not use up the minute", claimed)
+    assertFalse(sent)
+  }
+
+  @Test fun aTrustedHaloIsPingedOnlyWhenTheClaimIsDue() {
+    val calls = mutableListOf<String>()
+    assertFalse(ChangedPing.deliver(trusted = { true }, claim = { calls += "claim"; false }, send = { calls += "send" }))
+    assertTrue(ChangedPing.deliver(trusted = { true }, claim = { calls += "claim"; true }, send = { calls += "send" }))
+    assertEquals(listOf("claim", "claim", "send"), calls)
   }
 }

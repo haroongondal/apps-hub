@@ -1,5 +1,6 @@
 package expo.modules.netlenscore
 
+import android.content.ActivityNotFoundException
 import expo.modules.netlenscore.applink.AppLinkGuard
 
 // Pure twins of packages/core presence.ts and new-devices.ts; HomeRulesTest runs the same fixtures.
@@ -141,6 +142,13 @@ object ChangedPing {
   const val TARGET_PACKAGE = "com.haroon.halo"
   const val MIN_GAP_MS = 60_000L
 
+  /** Sends only to a verified Halo, and only then spends the rate-limit claim, so a refused ping never delays a real one. */
+  fun deliver(trusted: () -> Boolean, claim: () -> Boolean, send: () -> Unit): Boolean {
+    if (!trusted() || !claim()) return false
+    send()
+    return true
+  }
+
   fun presenceChanged(before: List<PersonWatch>, after: List<PersonWatch>): Boolean {
     fun home(people: List<PersonWatch>) = people.filter { it.state.present }.map { it.label.lowercase() }.toSet()
     return home(before) != home(after)
@@ -167,6 +175,19 @@ object DeputyProposal {
     "apps" to AppLinkGuard.ExtraSpec(AppLinkGuard.ExtraType.STRING_ARRAY, max = 20),
     "ref" to AppLinkGuard.ExtraSpec(AppLinkGuard.ExtraType.LONG),
   )
+
+  /** Null when started; otherwise the outcome to resolve with. An untrusted or missing Deputy is "not_installed" and nothing is sent. */
+  fun start(trusted: () -> Boolean, go: () -> Unit): String? {
+    if (!trusted()) return "not_installed"
+    return try {
+      go()
+      null
+    } catch (_: ActivityNotFoundException) {
+      "not_installed"
+    } catch (_: SecurityException) {
+      "refused"
+    }
+  }
 
   /** Only task and, when not blank, context; the owner picks the apps in Deputy's draft. Null when the extras break the contract. */
   fun extras(task: String, context: String): Map<String, Any>? {

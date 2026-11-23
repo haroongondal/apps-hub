@@ -62,7 +62,9 @@ test('the CHANGED ping is the contract ping: Halo only, the link permission, no 
   assert.match(rules, new RegExp(`const val TARGET_PACKAGE = "${CHANGED_PING.targetPackage}"`));
   const work = kotlin('HomeWatchWork.kt');
   const send = work.match(/sendBroadcast\(([^\n]*)\)/)?.[1] ?? '';
-  assert.equal(send, 'Intent(ChangedPing.ACTION).setPackage(ChangedPing.TARGET_PACKAGE), AppLinkGuard.PERMISSION');
+  assert.equal(send, 'intent, AppLinkGuard.PERMISSION');
+  assert.match(work, /val intent = Intent\(ChangedPing\.ACTION\)\.setPackage\(ChangedPing\.TARGET_PACKAGE\)/);
+  assert.match(work, /trusted = \{ AppLinkTarget\.trustedReceiver\(context, intent\) \}/);
   assert.equal(LINK_PERMISSION, 'com.haroon.permission.AUTOPILOT');
   const ping = work.slice(work.indexOf('fun ping('), work.indexOf('\n  }\n', work.indexOf('fun ping(')));
   assert.match(ping, /sendBroadcast/);

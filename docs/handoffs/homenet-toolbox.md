@@ -135,7 +135,7 @@ Decisions:
 - `apps` and `ref` are never sent (my call): the owner picks the router app in Deputy's draft; guessing a package would be wrong for most homes.
 - New-device pings are not rate-limited (my call): the check runs every 3 hours at most. A new-device ping also resets the one-minute presence window.
 - One pending hand-off at a time (my call): a second tap while Deputy is open answers `busy`. The promise settles once through an `AtomicReference`, and `OnDestroy` settles it as `cancelled`.
-- No `<queries>` entry (my call): starting another app's activity is not filtered by package visibility; a missing Deputy throws `ActivityNotFoundException`, shown as "not installed".
+- `<queries>` for `com.haroon.deputy` and `com.haroon.halo` (replaces the earlier "no entry" call): `AppLinkTarget` needs package visibility to resolve and check the sibling, so without them every check answers "not installed".
 - The heartbeat lives next to the home-watch state in `homenet_home_watch` SharedPreferences (my call), not in the JSON state, so a query never parses the state for it.
 
 Known limits: Halo receives the ping only once its manifest holds `<uses-permission android:name="com.haroon.permission.AUTOPILOT" />` and declares the receiver (Halo's side, not built here). The heartbeat is written only if the React context exists when the module is created; the background checks write it too.
@@ -143,3 +143,7 @@ Known limits: Halo receives the ping only once its manifest holds `<uses-permiss
 Verified (2026-11-24): `@apps-hub/core` 358/358, core and netlens typecheck clean, `@apps-hub/app-link-contract` 133/133, Gradle `:netlens-core:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL with 71 JVM tests (ChangedPingTest 5, DeputyProposalTest 6, HomeLinkProviderShareTest 5, TcpProbeClassifierTest 5 and the rest), merged manifest has the provider behind the signature permission. iOS build not run (no Pods); `swiftc -parse` of the module passes; Kotlin and Swift register the same 14 functions.
 
 Phone checks (not run): see the P4 report.
+
+## AppLinkTarget (2026-11-24)
+
+`applink/AppLinkTarget.kt` (+ `AppLinkTargetTest.kt`) are the canonical copy-ins (only the `package` line differs). Two call sites: `proposeDeputyTask` in `NetlensCoreModule.kt` runs `AppLinkTarget.trustedActivity(activity, intent)` before `startActivityForResult` (false resolves `not_installed`, nothing is sent), and `HomeWatch.ping` in `HomeWatchWork.kt` runs `trustedReceiver` before the CHANGED broadcast to Halo. The rate-limit claim is taken only after the trust check passes, so a refused ping never uses up the one-minute window. Seams for JVM tests: `DeputyProposal.start(trusted, go)` and `ChangedPing.deliver(trusted, claim, send)` (tests in `DeputyProposalTest` and `ChangedPingTest`). The module manifest holds the `<queries>` entries for Deputy and Halo. Phone check not run: with Deputy or Halo uninstalled HomeNet says not installed and sends nothing; with Store-signed siblings it works as before.
