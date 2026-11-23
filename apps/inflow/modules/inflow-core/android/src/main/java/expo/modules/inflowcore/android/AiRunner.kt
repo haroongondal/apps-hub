@@ -11,6 +11,7 @@ import expo.modules.inflowcore.core.AUTOPILOT_META
 import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.Ask
 import expo.modules.inflowcore.core.FastPath
+import expo.modules.inflowcore.core.HealthForAsk
 import expo.modules.inflowcore.core.Period
 import expo.modules.inflowcore.core.ReportRun
 import expo.modules.inflowcore.core.ReportSchedule
@@ -228,7 +229,8 @@ object AiRunner {
       val since = store.enabledSince() ?: Long.MAX_VALUE
       val items = store.askItems(plan.from, plan.to, pkgs, since, Ask.MAX_ITEMS)
       val txns = if (plan.money) SqlLedgerStore(store.db).askTxns(plan.from, plan.to, Ask.MAX_TXNS) else emptyList()
-      val answer = provider.complete(Ask.answerSystem(), Ask.answerUser(q, items, txns, now, zone))
+      val health = HealthForAsk.context(HealthForAsk.on(store.meta(HealthForAsk.META)), SqlHealthStore(store.db), SqlMedicineStore(store), plan.from, plan.to, now, zone)
+      val answer = provider.complete(Ask.answerSystem(health != null), Ask.answerUser(q, items, txns, now, zone, health))
       cfg.spend(answer)
       reply(answer.text.trim(), null, plan.from, plan.to, items.size, txns.size)
     } catch (e: AiError) {

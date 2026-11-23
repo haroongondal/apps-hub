@@ -23,6 +23,8 @@ import expo.modules.inflowcore.android.Lock
 import expo.modules.inflowcore.android.GmailClient
 import expo.modules.inflowcore.android.Gallery
 import expo.modules.inflowcore.android.GmailSync
+import expo.modules.inflowcore.android.DoctorPdf
+import expo.modules.inflowcore.android.DoctorRunner
 import expo.modules.inflowcore.android.HealthConnectReader
 import expo.modules.inflowcore.android.InflowListener
 import expo.modules.inflowcore.android.MediaStore
@@ -47,7 +49,10 @@ import expo.modules.inflowcore.core.AUTOPILOT_META
 import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.AutopilotSettingsInput
 import expo.modules.inflowcore.core.Categories
+import expo.modules.inflowcore.core.DoctorPayload
+import expo.modules.inflowcore.core.DoctorRange
 import expo.modules.inflowcore.core.Edits
+import expo.modules.inflowcore.core.HealthForAsk
 import expo.modules.inflowcore.core.GmailPolicy
 import expo.modules.inflowcore.core.HealthAggregate
 import expo.modules.inflowcore.core.Journal
@@ -98,6 +103,7 @@ class InflowCoreModule : Module() {
   }
 
   private lateinit var healthPermissions: AppContextActivityResultLauncher<ArrayList<String>, Set<String>>
+  private lateinit var createPdf: AppContextActivityResultLauncher<String, Uri?>
 
   private fun day(text: String): String =
     try {
@@ -139,6 +145,7 @@ class InflowCoreModule : Module() {
 
     RegisterActivityContracts {
       healthPermissions = registerForActivityResult(HealthConnectReader.PermissionContract())
+      createPdf = registerForActivityResult(DoctorPdf.CreateContract())
     }
 
     OnDestroy {
@@ -694,6 +701,35 @@ class InflowCoreModule : Module() {
 
     Function("deleteJournal") { id: Long ->
       SqlJournalStore(store()).delete(id)
+    }
+
+    AsyncFunction("doctorPreview") Coroutine { fromDay: String, toDay: String, include: Map<String, Any?> ->
+      withContext(Dispatchers.IO) { DoctorRunner.of(store()).preview(fromDay, toDay, include) }
+    }
+
+    // Only on the owner's tap after the preview; refuses when the data no longer hashes to what they saw.
+    AsyncFunction("doctorSummarize") Coroutine { fromDay: String, toDay: String, include: Map<String, Any?>, hash: String ->
+      withContext(Dispatchers.IO) { DoctorRunner.of(store()).summarize(fromDay, toDay, include, hash) }
+    }
+
+    // True once saved, false when the owner closed the file picker.
+    AsyncFunction("saveDoctorPdf") Coroutine { summary: String, fromDay: String, toDay: String ->
+      val range = DoctorRange.parse(fromDay, toDay).getOrElse { throw CodedException("BAD_RANGE", it.message, null) }
+      val text = DoctorPayload.cleanReply(summary)
+      if (text.isEmpty()) throw CodedException("NO_SUMMARY", "Make the summary first.", null)
+      val uri = createPdf.launch(DoctorPdf.fileName(range)) ?: return@Coroutine false
+      if (!withContext(Dispatchers.IO) { DoctorPdf.save(context, uri, text, range) }) {
+        throw CodedException("PDF_FAILED", "Inflow couldn't save the PDF. Try again, or pick another folder.", null)
+      }
+      true
+    }
+
+    Function("healthInAsk") { ->
+      HealthForAsk.on(store().meta(HealthForAsk.META))
+    }
+
+    Function("setHealthInAsk") { on: Boolean ->
+      if (on) store().setMeta(HealthForAsk.META, "1") else store().deleteMeta(HealthForAsk.META)
     }
   }
 }

@@ -360,6 +360,27 @@ export interface JournalInput {
   note: string;
 }
 
+export interface DoctorInclude {
+  steps: boolean;
+  sleep: boolean;
+  heartRate: boolean;
+  medicines: boolean;
+  journal: boolean;
+}
+
+// text is exactly what doctorSummarize sends; error (plain words) when the range or the choice is not valid, then text and hash are null.
+export interface DoctorPreview {
+  text: string | null;
+  hash: string | null;
+  chars: number;
+  error: string | null;
+}
+
+export interface DoctorSummary {
+  summary: string | null;
+  error: string | null;
+}
+
 export interface InflowCoreApi {
   getStatus(): Status;
   openNotificationAccess(): void;
@@ -498,6 +519,13 @@ export interface InflowCoreApi {
   // Returns the problem in plain words, or null once saved.
   saveJournal(entry: JournalInput): string | null;
   deleteJournal(id: number): void;
+  doctorPreview(fromDay: string, toDay: string, include: DoctorInclude): Promise<DoctorPreview>;
+  // R12: refuses (error) when the data no longer hashes to the previewed hash. The summary is untrusted model text: show it as plain text only.
+  doctorSummarize(fromDay: string, toDay: string, include: DoctorInclude, hash: string): Promise<DoctorSummary>;
+  // false = the owner closed the file picker.
+  saveDoctorPdf(summary: string, fromDay: string, toDay: string): Promise<boolean>;
+  healthInAsk(): boolean;
+  setHealthInAsk(on: boolean): void;
   addListener(event: 'onCaptured' | 'onSuggestions', listener: (e: { count: number }) => void): { remove(): void };
 }
 
