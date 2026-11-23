@@ -809,6 +809,38 @@ class AgentLoopTest {
     assertEquals(expected.summary, r.finished().summary)
   }
 
+  private val saved = FakeDevice(clock, reply = { if (it is Action.MakeVideo) "Saved Movies/Deputy/v.mp4, 6 s, from a.jpg." else "ok" })
+  private val savedNote = "Before it stopped, Deputy saved Movies/Deputy/v.mp4."
+
+  @Test fun aRunTheOwnerStopsAfterMakingAVideoStillSaysTheVideoWasSaved() = runTest {
+    val r = run(saved, Script(call("make_video", """{"photos":["a.jpg"]}""")))
+    val job = launch { r.loop.run("t") }
+    runCurrent()
+    job.cancel()
+    runCurrent()
+    assertEquals(RunStatus.STOPPED, r.finished().status)
+    assertEquals("Stopped by the owner. $savedNote", r.finished().summary)
+  }
+
+  @Test fun aRunThatHitsTheStepCapAfterMakingAVideoStillSaysTheVideoWasSaved() = runTest {
+    val script = Script(call("make_video", """{"photos":["a.jpg"]}"""), *Array(5) { call("wait", """{"seconds":1}""") })
+    val result = run(saved, script, Caps(maxSteps = 2)).loop.run("t")
+    assertEquals(RunStatus.CAPPED, result.status)
+    assertTrue(result.summary, result.summary!!.endsWith(savedNote))
+  }
+
+  @Test fun aRunThatCrashesAfterMakingAVideoStillSaysTheVideoWasSaved() = runTest {
+    val turns = ArrayDeque(listOf(call("make_video", """{"photos":["a.jpg"]}""")))
+    val crashing = object : LlmProvider {
+      override suspend fun step(history: List<Msg>, tools: List<ToolSpec>) = turns.removeFirstOrNull()
+        ?.let { ModelTurn(Msg("assistant", buildJsonObject { put("role", "assistant") }), it, Usage(0, 0, 0), null) }
+        ?: error("boom")
+    }
+    val result = run(saved, crashing).loop.run("t")
+    assertEquals(RunStatus.FAILED, result.status)
+    assertEquals("Deputy hit an error and stopped: boom $savedNote", result.summary)
+  }
+
   @Test fun aFinishedRunAndAFailedVideoAddNothingToTheSummary() = runTest {
     val done = run(FakeDevice(clock, reply = { "Saved Movies/Deputy/v.mp4, 3 s, from a.jpg." }), Script(call("make_video", """{"photos":["a.jpg"]}"""), call("finish", """{"status":"done","summary":"Made it."}""")))
     assertEquals("Made it.", done.loop.run("t").summary)
