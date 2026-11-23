@@ -1,6 +1,6 @@
 import { defineShare, SIBLING_PACKAGES } from '@apps-hub/app-link-contract';
 
-// Inflow has not defined these three shares yet, so they follow ruling R5 (Nexus P3) and must be rechecked at merge.
+// These three match Inflow's own definitions in packages/autopilot-contract/src/inflow-shares.ts (authority, paths, columns, maxRows 200); recheck when that file changes.
 const INFLOW = 'com.haroon.inflow.autopilot';
 
 export interface AskItemRow {

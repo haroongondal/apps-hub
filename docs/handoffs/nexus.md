@@ -436,7 +436,7 @@ calls, summarised here and marked "(my call)": nothing in the owner's brief fixe
   `{"v":1,"on":bool,"items":[{"title","dueAt"}]}`. Items are the owner's own items due from local midnight to local midnight + 3
   days (`Library.dueBetween`, source items excluded), soonest first, at most 100, titles only (control characters and line breaks
   become a space, at most 200 UTF-16 units, blank ones skipped), `dueAt` whole epoch ms, the whole file at most 64 KB. Switch off
-  writes `{"v":1,"on":false,"items":[]}`. Written through a temp file moved into place, only when the text changed, on app start,
+  first removes the file (the switch stays On if that fails), then writes `{"v":1,"on":false,"items":[]}`; a failed write removes the file. Written through a temp file moved into place, only when the text changed, on app start,
   foreground, a due-date change, a rename or note retitle, a delete and a switch change. The provider in `nexus-links` keeps only
   what is due today (local time) at query time.
 - Settings, "Other apps": "Show what is due today in my other apps", off by default.
@@ -447,8 +447,8 @@ calls, summarised here and marked "(my call)": nothing in the owner's brief fixe
 ### Rulings (my call)
 - R1 `item_due` table and quick picks, no date picker. R2 new Android-only module `nexus-links`. R3 `today` and health are served
   from small files JS writes; Kotlin filters "today" at query time. R4 source items are `kind='note'` items in an automatic
-  "From <app>" folder, embed-only (no graph extraction, no Groq per message). R5 Inflow shares mirror the planned columns until
-  eco/inflow commits them. R6 snapshot is the truth for runs and pins; Inflow uses `ask_ids`. R7 ADD_TODO sends `dueAt` only from a
+  "From <app>" folder, embed-only (no graph extraction, no Groq per message). R5 Inflow shares mirror Inflow's own definitions
+  (eco/inflow `packages/autopilot-contract/src/inflow-shares.ts`, columns identical). R6 snapshot is the truth for runs and pins; Inflow uses `ask_ids`. R7 ADD_TODO sends `dueAt` only from a
   real `item_due`. R8 source items show in Library in their folder, 50 new per source per run. R9 Deputy and Clipboard answer
   empty while their switch is off, so "Off in <app>" shows only for missing or refusing providers, plus a fixed hint. R10 Clipboard
   `pinned` is paged, read up to 10 pages, cap hit means unreachable. R11 a bad row in a snapshot or id list fails the whole read; in
@@ -470,6 +470,14 @@ calls, summarised here and marked "(my call)": nothing in the owner's brief fixe
    the adb shell the read is refused, because the shell lacks the signature permission; that refusal is the point.)
 7. Heartbeat: open Nexus, then read `health` from a sibling: last_seen_at within a minute of now.
 8. Open the app twice within a minute: `files/last_seen` changes at most once a minute (needs `adb shell run-as com.haroon.pdfeditor cat files/last_seen` on a debuggable build only).
+9. Inflow switch off then on again (fix round): with "Inflow messages" On in Nexus and items kept, turn Inflow's "Let Nexus read my
+   messages" off, open Nexus: the From Inflow items go. Turn it on again, open Nexus: the old messages come back (up to 50 a run), not lost.
+10. Today switch off with a full disk (fix round): fill the phone's storage, switch "Show what is due today in my other apps" Off. A
+   sibling reading `today` gets no rows; if Nexus cannot even remove the file, the switch flips back to On with "Could not change what
+   other apps see".
+11. Receipt consent line (fix round): "Read as receipt" opens a screen that says "Nexus sends this photo to your AI service to read it."
+   and reads nothing until "Read receipt" is tapped. On a scan kept out of Nexus the button is disabled with "Kept out of Nexus. Add it
+   back to read it as a receipt."
 
 ### M3 action items: Add to Inflow and Do with Deputy
 - Where: each Minutes action item on an audio item screen, and the note screen (one pair under the note field). Not on source items
@@ -507,7 +515,8 @@ Not run (phone), after M3:
 
 ### B6 receipts: read a receipt, match it to an Inflow payment, optional warranty reminder
 
-What it does. On a scan (Library, scan screen) "Read as receipt" opens `app/scan/receipt.tsx`. It reads the first page, shows amount, date,
+What it does. On a scan (Library, scan screen) "Read as receipt" opens `app/scan/receipt.tsx` (disabled on a scan kept out of Nexus). It
+says "Nexus sends this photo to your AI service to read it." and, only after the owner taps "Read receipt", reads the first page, shows amount, date,
 shop and an optional warranty end as four editable fields (the owner's edits go through the same checks as the model's reply), and a
 "Match to Inflow" button. The match runs on the phone against Inflow's `debits` share (switch "Let Nexus match my receipts" in Inflow).
 The owner always answers: "Yes, it matches" / "No" for one result, or pick one of up to three, or none. A "Remind me" button appears
@@ -532,7 +541,8 @@ The rules.
   page, a page that does not move on, or the page cap is "Couldn't read Inflow right now." Inflow serves only the last 60 days
   (newest 500 debits), so an older receipt finds nothing.
 - Lines: off "Off in Inflow. Turn on 'Let Nexus match my receipts' in Inflow."; missing "Inflow isn't installed."; failed "Couldn't
-  read Inflow right now."; none "No matching payment found yet."; weak "Amount and date match, the name doesn't. Is one of these yours?"
+  read Inflow right now."; none "No matching payment found yet. If you haven't, turn on 'Let Nexus match my receipts' in Inflow." (Inflow serves an empty list,
+  not a refusal, while that switch is off); weak "Amount and date match, the name doesn't. Is one of these yours?"
 
 (my call)
 - The photo read keeps the app's fixed image prompt (`ai.readImage` has no prompt argument), so the receipt JSON comes from a second,
@@ -546,13 +556,27 @@ The rules.
   `addTodoExtras` builds title, source and `dueAt` (its note label cap is 100, too short for a long shop name).
 
 Not run (phone), after B6:
-1. Scan a receipt (Library, Scan), open it, tap "Read as receipt": fields fill in a few seconds. Edit the amount to "12,50": the field
+1. Scan a receipt (Library, Scan), open it, tap "Read as receipt", then "Read receipt": fields fill in a few seconds. Edit the amount to "12,50": the field
    shows an error and "Match to Inflow" is disabled; "12.50" works again. With no AI keys and AI hub off: "Nexus needs an AI service".
 2. Inflow switch off: "Match to Inflow" says "Off in Inflow. Turn on 'Let Nexus match my receipts' in Inflow." Switch on with a payment of
    the same amount, within 3 days, same shop: "This looks like your ... payment of 12.50 on 20 Nov. Is it the same?" Yes: "Matched with
    ... Nexus didn't save it." Leave and come back: nothing is remembered.
 3. Same amount and day, different shop: the weak line with up to three rows plus "None of these". Two equal payments: a list to pick from.
-   No payment: "No matching payment found yet." Inflow uninstalled: "Inflow isn't installed."
+   No payment: "No matching payment found yet. If you haven't, turn on ..." Inflow uninstalled: "Inflow isn't installed."
 4. Warranty field 2028-11-20 (or the model's): "Remind me" opens Inflow's screen with "Warranty ends: <shop>", due 14 days before
    at midday; Add gives "Added to Inflow.", Back "You didn't add it." A warranty ending in under two weeks shows the no-time line.
 5. Layout of the four fields, the match rows and the buttons is unseen (typed and read only).
+
+### Fix round (code review R1, security review S1)
+- Inflow answering empty or after a data reset (R16, my call): an empty answer from Inflow while Nexus holds its messages still removes
+  them (Inflow's switch off means take them back, R9), and Nexus now forgets how far it had read, so they come back when Inflow answers
+  again. Ids below that point (Inflow cleared its data and numbers from 1 again) do the same, and the same run reads again from the start,
+  so a reused id ends with the new text. Cost: after a passing empty answer, up to 50 messages a run are read and embedded again. Limit:
+  a reset that already has more messages than the old point cannot be told apart from normal growth.
+- A switch-off whose delete failed is finished by the next run (open or foreground) of that source, and tapping Off again deletes too
+  (`switchStep` in `ask-runner.ts`); the line under a switch that is off but still holds items says "Tap Off to delete them."
+- `files/today.json` fails closed (`closedFile` in `share-files.ts`): switching off removes it first, a failed write removes it.
+- Settings "What leaves this phone" names Ask my life sources, Read as receipt and the today titles.
+- Receipts: Read as receipt is disabled on a scan kept out of Nexus; the receipt screen asks before it reads; the no-match line adds
+  the Inflow switch hint.
+- Stream lists only the owner's own items (`Library.list({ ownOnly: true })`); source items stay in Library and Ask (R12).
