@@ -72,4 +72,16 @@ END;
 INSERT INTO item_tags (item_id, tag_id) SELECT item_id, tag_id FROM temp.keep_item_tags;
 DROP TABLE temp.keep_item_tags;
 `,
+  `
+CREATE TABLE reminders (
+  id         TEXT PRIMARY KEY,
+  item_id    TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  lat        REAL NOT NULL CHECK (lat BETWEEN -90 AND 90),
+  lng        REAL NOT NULL CHECK (lng BETWEEN -180 AND 180),
+  radius_m   INTEGER NOT NULL CHECK (radius_m BETWEEN 100 AND 5000),
+  trigger    TEXT NOT NULL CHECK (trigger IN ('arrive', 'leave')),
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX reminders_item ON reminders (item_id);
+`,  // Nexus: place reminders. Later rebuilds of items must keep this table too (DROP cascades it).
 ];

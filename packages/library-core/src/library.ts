@@ -34,6 +34,20 @@ export interface Tag {
 export interface SearchHit extends Item {
   snippet: string | null;
 }
+export type ReminderTrigger = 'arrive' | 'leave';
+export interface PlaceReminder {
+  id: string;
+  itemId: string;
+  lat: number;
+  lng: number;
+  radiusM: number;
+  trigger: ReminderTrigger;
+  createdAt: number;
+}
+/** A reminder with its item's title, which is what the notification shows. */
+export interface ActivePlaceReminder extends PlaceReminder {
+  title: string;
+}
 export interface LibraryDeps {
   now(): number;
   newId(): string;
@@ -68,6 +82,18 @@ const toFolder = (r: Row): Folder => ({
   itemCount: r.item_count as number,
 });
 const toTag = (r: Row): Tag => ({ id: r.id as string, name: r.name as string, itemCount: r.item_count as number });
+const toReminder = (r: Row): PlaceReminder => ({
+  id: r.id as string,
+  itemId: r.item_id as string,
+  lat: r.lat as number,
+  lng: r.lng as number,
+  radiusM: r.radius_m as number,
+  trigger: r.trigger as ReminderTrigger,
+  createdAt: r.created_at as number,
+});
+const REMINDER_COLUMNS = 'id, item_id, lat, lng, radius_m, trigger, created_at';
+const MIN_RADIUS_M = 100; // Android ignores proximity alerts much tighter than this
+const MAX_RADIUS_M = 5000;
 
 /** Trims, then checks length (in characters) and control characters. Throws invalid_name. */
 function cleanName(raw: string, max: number, what: string, allowSlash = true): string {
@@ -446,6 +472,57 @@ export class Library {
       await tagIn(tx, id);
       await tx.run('DELETE FROM tags WHERE id = ?', [id]);
     });
+  }
+
+  // place reminders
+
+  async addReminder(input: {
+    itemId: string;
+    lat: number;
+    lng: number;
+    radiusM: number;
+    trigger: ReminderTrigger;
+  }): Promise<PlaceReminder> {
+    if (!(Number.isFinite(input.lat) && input.lat >= -90 && input.lat <= 90 && Number.isFinite(input.lng) && input.lng >= -180 && input.lng <= 180)) {
+      throw new LibraryError('invalid_place', 'The place needs a latitude from -90 to 90 and a longitude from -180 to 180');
+    }
+    if (!Number.isInteger(input.radiusM) || input.radiusM < MIN_RADIUS_M || input.radiusM > MAX_RADIUS_M) {
+      throw new LibraryError('invalid_place', `The radius must be ${MIN_RADIUS_M} to ${MAX_RADIUS_M} metres`);
+    }
+    if (input.trigger !== 'arrive' && input.trigger !== 'leave') {
+      throw new LibraryError('invalid_place', 'The reminder must fire when you arrive or when you leave');
+    }
+    const id = this.deps.newId();
+    const now = this.deps.now();
+    return this.db.transaction(async (tx) => {
+      await ridOf(tx, input.itemId);
+      await tx.run(
+        `INSERT INTO reminders (id, item_id, lat, lng, radius_m, trigger, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [id, input.itemId, input.lat, input.lng, input.radiusM, input.trigger, now],
+      );
+      return toReminder((await tx.first(`SELECT ${REMINDER_COLUMNS} FROM reminders WHERE id = ?`, [id]))!);
+    });
+  }
+
+  async listReminders(itemId: string): Promise<PlaceReminder[]> {
+    const rows = await this.db.all(
+      `SELECT ${REMINDER_COLUMNS} FROM reminders WHERE item_id = ? ORDER BY created_at, id`,
+      [itemId],
+    );
+    return rows.map(toReminder);
+  }
+
+  /** Every reminder with its item's title. The native side registers exactly this list. */
+  async activeReminders(): Promise<ActivePlaceReminder[]> {
+    const rows = await this.db.all(
+      `SELECT r.id, r.item_id, r.lat, r.lng, r.radius_m, r.trigger, r.created_at, i.title
+       FROM reminders r JOIN items i ON i.id = r.item_id ORDER BY r.created_at, r.id`,
+    );
+    return rows.map((r) => ({ ...toReminder(r), title: r.title as string }));
+  }
+
+  async removeReminder(id: string): Promise<void> {
+    await this.db.run('DELETE FROM reminders WHERE id = ?', [id]);
   }
 
   /** Trims, dedupes ignoring case (an existing tag keeps its spelling), creates new tags, drops unused ones. */

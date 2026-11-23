@@ -12,6 +12,7 @@ import { KIND_PLURAL } from '../../src/library/format';
 import { IconButton } from '../../src/library/icon-button';
 import { openItem } from '../../src/library/open-item';
 import { openLibrary } from '../../src/library/open-library';
+import { syncPlaceReminders } from '../../src/places/sync';
 import { itemDir } from '../../src/library/paths';
 import { FolderRow, ItemRow } from '../../src/library/rows';
 import { AddSheet, FolderPickerSheet, NameSheet, TagFilterSheet, TagManageSheet, TagsSheet } from '../../src/library/sheets';
@@ -137,6 +138,7 @@ export default function LibraryScreen() {
         onPress: () =>
           void guard('Could not delete it', async () => {
             await (await openLibrary()).deleteItem(item.id);
+            await syncPlaceReminders();
             try {
               itemDir(item.id).delete();
             } catch {

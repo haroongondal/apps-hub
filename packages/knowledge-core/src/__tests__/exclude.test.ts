@@ -66,6 +66,40 @@ test('a graph stage that is running when its item is excluded writes nothing', a
   assert.equal(await kn.job(pay.id), null);
 });
 
+test('an item excluded just before its embed stage calls the model sends nothing to it', async () => {
+  const { kn, db, ai, add } = await setup();
+  const pay = await add('Pay slip', 'payslip for March');
+  await kn.runNext(); // text
+  const load = kn.segmentsOf.bind(kn);
+  kn.segmentsOf = async (id) => {
+    const segments = await load(id);
+    await kn.exclude(id); // the owner excludes it after the stage has read its text
+    return segments;
+  };
+  const embedsBefore = ai.calls.embed;
+
+  assert.equal(await kn.runNext(), 'ran');
+  assert.equal(ai.calls.embed, embedsBefore);
+  assert.equal((await db.first('SELECT COUNT(*) AS n FROM kn_chunks WHERE item_id = ?', [pay.id]))?.n, 0);
+});
+
+test('an item excluded just before its graph stage calls the model sends nothing to it', async () => {
+  const { kn, ai, add } = await setup();
+  const pay = await add('Pay slip', 'payslip for March');
+  await kn.runNext(); // text
+  await kn.runNext(); // embed
+  const load = kn.segmentsOf.bind(kn);
+  kn.segmentsOf = async (id) => {
+    const segments = await load(id);
+    await kn.exclude(id);
+    return segments;
+  };
+
+  assert.equal(await kn.runNext(), 'ran');
+  assert.equal(ai.calls.extract, 0);
+  assert.equal(await kn.job(pay.id), null);
+});
+
 test('taking an item back out of the exclusion list indexes it again', async () => {
   const { kn, ai, add, drain } = await setup();
   ai.onExtract = () => payslip;
