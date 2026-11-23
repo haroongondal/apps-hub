@@ -1,19 +1,11 @@
-import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import {
-  MANIFEST_PATH,
-  SIGNING_CERT_SHA256,
-  StoreManifestSchema,
-  emptyManifest,
-  nextVersionCode,
-  upsertAndroidRelease,
-  type StoreManifest,
-} from '@apps-hub/store-manifest';
+import { MANIFEST_PATH, StoreManifestSchema, emptyManifest, nextVersionCode, type StoreManifest } from '@apps-hub/store-manifest';
 import { APPS } from './apps.ts';
-import { applyAppsHubGradle, assembleRelease, inspectApk, sha256File } from './android.ts';
+import { checkReleasable, readHead } from './guard.ts';
+import { releaseAndroid } from './release-android.ts';
+import { formatPlan, installDeps, planRollback, storeTarget, withWorktree } from './rollback.ts';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
 const ENV_FILE = join(homedir(), '.config/apps-hub/release.env');
@@ -24,18 +16,35 @@ const { values, positionals } = parseArgs({
     platform: { type: 'string', default: 'android' },
     all: { type: 'boolean', default: false },
     changelog: { type: 'string', short: 'm', default: '' },
+    'from-branch': { type: 'boolean', default: false },
+    rollback: { type: 'boolean', default: false },
+    to: { type: 'string' },
+    'dry-run': { type: 'boolean', default: false },
   },
 });
 
 const ids = values.all ? Object.keys(APPS) : positionals;
 if (ids.length === 0 || ids.some((id) => !APPS[id])) {
-  console.error(`usage: pnpm release <${Object.keys(APPS).join('|')}> [--platform android|ios|all] [--all] [-m changelog]`);
+  console.error(`usage: pnpm release <${Object.keys(APPS).join('|')}> [--platform android|ios|all] [--all] [-m changelog] [--from-branch]\n       pnpm release <app> --rollback [--to <sha|tag>] [--dry-run] [-m changelog] [--from-branch]`);
+  process.exit(1);
+}
+if (values.rollback ? ids.length !== 1 || values.all : values['dry-run'] || values.to) {
+  console.error('--rollback takes exactly one app (no --all). --to and --dry-run only work with --rollback.');
   process.exit(1);
 }
 if (values.platform !== 'android') {
   console.error('iOS releases need a paid Apple Developer Program membership (ad hoc OTA). See docs/app-store.md.');
   process.exit(1);
 }
+
+const guard = checkReleasable(ROOT, { fromBranch: values['from-branch'] });
+if (!guard.ok) {
+  console.error(guard.reason);
+  process.exit(1);
+}
+if (guard.warning) console.error(guard.warning);
+const withBranchTag = (text: string) => (guard.warning ? `[branch build ${guard.head.slice(0, 7)}] ${text}` : text);
+const changelog = withBranchTag(values.changelog);
 
 process.loadEnvFile(ENV_FILE);
 const API = process.env.STORE_API_URL?.replace(/\/$/, '');
@@ -59,55 +68,35 @@ async function upload(key: string, body: Buffer | string, contentType: string): 
   if (!res.ok) throw new Error(`PUT ${key}: ${res.status} ${await res.text()}`);
 }
 
-async function releaseAndroid(id: string, manifest: StoreManifest): Promise<StoreManifest> {
-  const app = APPS[id];
-  const appDir = resolve(ROOT, app.dir);
-  for (const [cmd, ...args] of app.prepare ?? []) execFileSync(cmd, args, { cwd: appDir, stdio: 'inherit' });
-  if (app.prebuild) {
-    execFileSync('npx', ['expo', 'prebuild', '--platform', 'android', '--clean', '--no-install'], {
-      cwd: appDir,
-      stdio: 'inherit',
-      env: { ...process.env, CI: '1' },
+let manifest = await fetchManifest();
+
+if (values.rollback) {
+  const id = ids[0];
+  const plan = planRollback({ repoDir: ROOT, id, manifest, to: values.to });
+  console.log(formatPlan(plan, storeTarget(API)));
+  if (values['dry-run']) process.exit(0);
+  // The rebuilt old commit gets a NEW, higher versionCode: Android refuses an install over a higher one.
+  console.log(`\nBuilding ${plan.toCommit.slice(0, 7)} in a temporary worktree (pnpm install first).`);
+  manifest = await withWorktree(ROOT, plan.toCommit, async (root) => {
+    installDeps(root);
+    return releaseAndroid({
+      root,
+      id,
+      manifest,
+      versionCode: plan.newVersionCode,
+      changelog: values.changelog ? changelog : withBranchTag(plan.changelog),
+      commit: plan.toCommit,
+      upload,
     });
-  }
-  const gradleFile = join(appDir, 'android/app/build.gradle');
-  const gradle = readFileSync(gradleFile, 'utf8');
-  const wired = applyAppsHubGradle(gradle);
-  if (wired !== gradle) writeFileSync(gradleFile, wired);
-  const versionName: string = JSON.parse(readFileSync(join(appDir, 'app.json'), 'utf8')).expo.version;
-  const versionCode = nextVersionCode(manifest, id);
-  console.log(`\n▶ ${id}: building ${versionName} (${versionCode})`);
-
-  const apk = assembleRelease(appDir, versionCode, versionName);
-  const info = inspectApk(apk);
-  if (info.signers.length !== 1 || info.signers[0] !== SIGNING_CERT_SHA256) {
-    throw new Error(`${id}: APK signed by [${info.signers}], expected ${SIGNING_CERT_SHA256}. Is ~/.gradle/gradle.properties set up?`);
-  }
-  if (info.packageName !== app.android.packageName || info.versionCode !== versionCode) {
-    throw new Error(`${id}: APK is ${info.packageName}@${info.versionCode}, expected ${app.android.packageName}@${versionCode}`);
-  }
-
-  const bytes = readFileSync(apk);
-  const apkPath = `apps/${id}/android/${versionCode}.apk`;
-  const android = {
-    packageName: info.packageName,
-    versionCode,
-    versionName,
-    minSdk: info.minSdk,
-    apkPath,
-    sha256: await sha256File(apk),
-    signingCertSha256: SIGNING_CERT_SHA256,
-    sizeBytes: bytes.length,
-  };
-  const next = upsertAndroidRelease(manifest, { id, name: app.name, changelog: values.changelog }, android);
-  console.log(`▶ ${id}: uploading ${apkPath} (${(bytes.length / 1e6).toFixed(1)} MB)`);
-  await upload(apkPath, bytes, 'application/vnd.android.package-archive');
-  return next;
+  });
+  await upload(MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'application/json');
+  console.log(`✔ ${id} rolled back to ${plan.toVersionName} as ${plan.newVersionCode} published`);
+  process.exit(0);
 }
 
-let manifest = await fetchManifest();
+const commit = readHead(ROOT);
 for (const id of ids) {
-  manifest = await releaseAndroid(id, manifest);
+  manifest = await releaseAndroid({ root: ROOT, id, manifest, versionCode: nextVersionCode(manifest, id), changelog, commit, upload });
   // Publish after each app so a later failure never strands an uploaded build.
   await upload(MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'application/json');
   console.log(`✔ ${id} ${manifest.apps.find((a) => a.id === id)?.android?.versionCode} published`);

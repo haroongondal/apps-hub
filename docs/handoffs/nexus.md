@@ -49,7 +49,7 @@ push or release only when the owner says so.
 - `docs/superpowers/specs/2026-11-18-nexus-design.md`: design and phases N1–N6.
 - `docs/nexus/PRD.md`: the owner's PRD.
 - `packages/library-core/src/schema.ts`: library step 2.
-- `packages/knowledge-core/`: N1 (schema, queue, pipeline, resolution, graph, Ask, OpenAI
+- `packages/knowledge-core/`: N1 (schema, queue, pipeline, resolution, graph, Ask, OpenAI-compatible
   adapter) and its tests.
 
 ## Session log
@@ -60,7 +60,7 @@ push or release only when the owner says so.
     New test `library-kinds.test.ts` (v1 → v2 keeps folder, tags, FTS, delete trigger).
     library-core 97/97.
   - `packages/knowledge-core`: `Knowledge` (enqueue, retry, recover, runNext, job,
-    summary, related, ask), `cleanExtraction`, `chunkSegments`, `openAiPort` (embed,
+    summary, related, ask), `cleanExtraction`, `chunkSegments`, `openAiPort` (now `openAiCompatPort`; embed,
     extract, answer, readImage, transcribe). 31/31 tests; typecheck clean for
     library-core, knowledge-core and pdf-editor-mobile; pdf-editor-mobile tests 7/7.
   - Code review (code-reviewer agent): migration confirmed safe. Fixed its three confirmed
@@ -72,7 +72,8 @@ push or release only when the owner says so.
     until `recover()` re-queues it (safe now, just slow). Add an AbortController timeout
     in the app worker, long enough for Whisper on long recordings.
 
-- 2026-11-18 S1 (cont.): owner said yes to OpenAI, expo-secure-store + expo-audio, and the
+- 2026-11-18 S1 (cont.): owner said yes to OpenAI (changed 2026-11-19, #54: Gemini and Groq
+  instead, see Current state), expo-secure-store + expo-audio, and the
   rename; "start N2". Built N2 in the same worktree (uncommitted):
   - Deps: expo-secure-store 15.0.8, expo-audio 1.1.1 (MIT, AndroidX only, no install
     scripts). The repo installs with pnpm's isolated linker (app `node_modules`), as main does.
@@ -126,7 +127,7 @@ push or release only when the owner says so.
     a concept other items still support (aliases are not tracked per source).
   - Not done: exclude-at-import option; phone test.
 
-- 2026-11-23 S3: CV maker, branch `nexus-cv` (PR #64), rebuilt on `origin/main` after the first
+- 2026-11-23 S3: CV maker, branch `nexus-cv` (PR #64, merged to main as 6981cf70), rebuilt on `origin/main` after the first
   version conflicted with main's own key handling (#57), which was kept:
   - CV tab (`app/(tabs)/cv.tsx`, `app/cv/new.tsx`, `app/cv/[id].tsx`). Logic in `src/cv/`
     (model, three templates, PDF writer, prompts; pure, tested). The AI writes only the content;
@@ -291,6 +292,12 @@ push or release only when the owner says so.
 ## Current state + exact next step
 
 Nexus 1.4.0 (versionCode 18) is on the Store, built from `nexus` at a88538e8. PR #44 was merged to main on 2026-11-18.
+
+AI today (#54, #57, #64; `packages/knowledge-core/src/providers.ts`): Gemini embeds text and reads
+images, Groq transcribes (Whisper), and chat (`extract`, `answer`, `complete`) tries Groq's keys, then
+Gemini's. Several keys per service, kept in expo-secure-store. No OpenAI.
+Merged to main: the CV maker as #64 (6981cf70), location reminders as #65 (22e72423), the keep-out
+feature as c3b6a309 and 68006565 (both `[skip ci]`, no PR number).
 
 Keep-out feature (S2 above): on the `nexus-keep-out` branch, released to the Store after the owner's go
 on 2026-11-20 and installed from the Store on the phone for testing. Test checklist: the Library item

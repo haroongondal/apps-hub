@@ -139,6 +139,9 @@ Halo shows that something is waiting, and a creature on the always-on screen gro
 
 - A signature permission `com.haroon.permission.AUTOPILOT` (`protectionLevel="signature"`), declared with the same
   definition in all four apps' manifests, so install order doesn't matter.
+  As built (2026-11-23): only Inflow and Deputy declare it; Halo and Design Editor do not yet. A new link app
+  must declare it with `<permission>` plus `<uses-permission>`; `auditManifest` in `packages/app-link-contract`
+  requires both.
 - **Inflow exports one content provider** (authority `com.haroon.inflow.autopilot`, read and write permission
   `com.haroon.permission.AUTOPILOT`) with:
   - `suggestions`: id, kind, title, reason, source item id, action, state, created/due/updated times.

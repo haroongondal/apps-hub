@@ -1,0 +1,28 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.aihubclient'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.aihubclient"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  buildFeatures {
+    aidl true
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // The same pins AI hub uses, already in the repo: no new third-party dependency.
+  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+  testImplementation("junit:junit:4.13.2")
+}

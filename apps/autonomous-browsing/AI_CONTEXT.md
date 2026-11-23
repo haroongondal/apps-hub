@@ -36,18 +36,18 @@ are worth consulting before you re-derive why something is shaped the way it is.
 
 | Command                                                                       | Notes                                                                                      |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `npm run dev`                                                                 | electron-vite with hot reload                                                              |
-| `npm run typecheck`                                                           | `tsc --noEmit`; `strict` + `noUncheckedIndexedAccess` are on                               |
-| `npm test`                                                                    | vitest over `tests/**/*.test.ts` — pure logic only, no Electron, no browser                |
-| `npx vitest run tests/routines.test.ts`                                       | one file                                                                                   |
-| `npx vitest run -t "substring of the test name"`                              | one test                                                                                   |
-| `npm run test:db`                                                             | **must** go through this script — see §9                                                   |
-| `npm run test:extension`                                                      | `node tests/content-script.verify.mjs`; content-script checks that cannot run under vitest |
-| `npm run test:playwright`                                                     | real-Chrome verify of the playwright backend: launch/adopt lifecycle, trusted input, guards |
-| `npm run eval [-- --suite … --case … --trials N]`                             | model-behaviour evals; **spends live gateway calls** — see [evals/README.md](evals/README.md) |
-| `npm run install:host <extension-id> [chrome\|canary\|chromium\|edge\|brave]` | writes the native-host manifest and `relay-shim.sh`                                        |
-| `npm run build` / `npm run dist`                                              | bundle into `out/` / package with electron-builder — `dist` **fails** without signing certs |
-| `npm run dist:local`                                                          | ad-hoc-signed local package; runs here, fails Gatekeeper elsewhere — see [docs/SIGNING.md](docs/SIGNING.md) |
+| `pnpm --filter autonomous-browsing dev`                                                                 | electron-vite with hot reload                                                              |
+| `pnpm --filter autonomous-browsing typecheck`                                                           | `tsc --noEmit`; `strict` + `noUncheckedIndexedAccess` are on                               |
+| `pnpm --filter autonomous-browsing test`                                                                    | vitest over `tests/**/*.test.ts` — pure logic only, no Electron, no browser                |
+| `pnpm --filter autonomous-browsing exec vitest run tests/routines.test.ts`                                       | one file                                                                                   |
+| `pnpm --filter autonomous-browsing exec vitest run -t "substring of the test name"`                              | one test                                                                                   |
+| `pnpm --filter autonomous-browsing test:db`                                                             | **must** go through this script — see §9                                                   |
+| `pnpm --filter autonomous-browsing test:extension`                                                      | `node tests/content-script.verify.mjs`; content-script checks that cannot run under vitest |
+| `pnpm --filter autonomous-browsing test:playwright`                                                     | real-Chrome verify of the playwright backend: launch/adopt lifecycle, trusted input, guards |
+| `pnpm --filter autonomous-browsing eval [--suite … --case … --trials N]`                             | model-behaviour evals; **spends live gateway calls** — see [evals/README.md](evals/README.md) |
+| `pnpm --filter autonomous-browsing install:host <extension-id> [chrome\|canary\|chromium\|edge\|brave]` | writes the native-host manifest and `relay-shim.sh`                                        |
+| `pnpm --filter autonomous-browsing build` / `pnpm --filter autonomous-browsing dist`                                              | bundle into `out/` / package with electron-builder — `dist` **fails** without signing certs |
+| `pnpm --filter autonomous-browsing dist:local`                                                          | ad-hoc-signed local package; runs here, fails Gatekeeper elsewhere — see [docs/SIGNING.md](docs/SIGNING.md) |
 
 **Environment.** `AI_GATEWAY_API_KEY`; the dev-only `AUTOMATION_DEBUG`
 (`1` for a per-step trace, `dom` to also dump each step's filtered DOM — see
@@ -891,7 +891,7 @@ when nothing is coming back at all.
   unavailable. `pruneThread` is client-side for that reason — and pruning an
   image invalidates the messages cache, so pruning and caching cannot both be
   had.
-- **`npm run test:db` cannot be replaced by `vitest` or `node`.** `postinstall`
+- **`pnpm --filter autonomous-browsing test:db` cannot be replaced by `vitest` or `node`.** `postinstall`
   rebuilds better-sqlite3 against Electron's ABI, so plain Node cannot load it.
   The script esbuild-bundles `tests/db.verify.ts` into `.cache/` (outside
   electron-builder's `out/**` glob) and runs it under `ELECTRON_RUN_AS_NODE=1`.
@@ -1083,7 +1083,7 @@ otherwise waste tokens rediscovering.
   has not moved with it.** `package.json`'s `name`, `productName`, the `appId`
   (`com.cd.browser.autonomousbrowsing`), the window title and the top bar all
   say the new name. Electron derives `app.getPath('userData')` from
-  `package.json`'s `name`, so `npm run dev` now opens
+  `package.json`'s `name`, so `pnpm --filter autonomous-browsing dev` now opens
   `~/Library/Application Support/autonomous-browsing` — a fresh directory. The
   real database, the `automation-profile` Chrome profile that carries every
   login, and all stored run screenshots are still under the old

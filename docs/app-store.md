@@ -99,6 +99,49 @@ For each app, the CLI:
 
 `--platform ios` exits with an explanation until iOS is set up.
 
+### Release guard
+
+Before anything is built, `pnpm release` runs `git fetch origin main` and refuses unless:
+- `HEAD` is contained in `origin/main` (`git merge-base --is-ancestor HEAD origin/main`), and
+- the working tree is clean (`git status --porcelain` is empty; untracked files count, git-ignored ones do not).
+
+A failed fetch or a missing `origin/main` also refuses. Untracked files are always counted, whatever `status.showUntrackedFiles` says. This stops a branch build from replacing a main build in
+the Store. For a test build, pass `--from-branch`: it skips both checks, prints a warning to stderr and starts the
+changelog with `[branch build <short sha>]`. CI is not affected: it builds a pushed commit of `main` in a clean checkout.
+
+### Rollback
+
+`pnpm release <app> --rollback [--to <sha|tag>] [--dry-run]` republishes an older build of one app.
+
+- **A rollback is a new release, not a downgrade.** Android refuses to install an APK with a lower `versionCode` over
+  a higher one ([versioning](https://developer.android.com/studio/publish/versioning)), and on a user build only the
+  system server may override that for a non-debuggable app (`isDowngradePermitted` in AOSP
+  [`PackageManagerServiceUtils.java`](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerServiceUtils.java)),
+  so neither `adb install -d` nor the Store can go back. The old commit is rebuilt with `versionCode` = published + 1;
+  its `versionName` stays the old one. The changelog defaults to `Rollback to <versionName> (<short sha>)`.
+- **Which commit.** Every release now records the full git sha it was built from in the manifest
+  (`android.commit`; optional, releases made before this have none). Without `--to`, the target is the first parent
+  of the last commit that changed the app's folder (`apps/<app>`) at or before that recorded commit, that is, the app as
+  it was just before its latest change. (The recorded commit alone is not enough: it can be a merge of another app's
+  work, or one HEAD recorded for every app of an `--all` release.) `--to` takes a sha, short sha or tag. The target
+  must be on `origin/main`, older than the current release, different from it, contain the app, and differ from the
+  release commit inside the app's folder (otherwise there is nothing to roll back). Without a recorded commit and
+  without `--to` it refuses. The manifest holds only the latest release per app, so there is no "previous
+  versionName" lookup and `--to` does not take a versionName.
+- **How it builds.** The usual release guard runs on your checkout. The target is checked out in a temporary
+  `git worktree` (removed afterwards, also on Ctrl-C; a hard kill is cleaned up by `git worktree prune` on the next run), `pnpm install --frozen-lockfile --prefer-offline` runs there, then the normal
+  steps (prepare, prebuild, gradle patch, `assembleRelease`, signer check, upload) run with that worktree as the root.
+  Your own tree is never touched.
+- **`--dry-run`** prints `app`, `from` (commit and versionCode), `to commit`, `new versionCode` and `target` (Store
+  host) and exits before any worktree, build or upload. It only reads the manifest.
+- Rolling back replaces what every phone gets from the Store, so run it only on the owner's go.
+
+```bash
+pnpm release netlens --rollback --dry-run                 # see the plan
+pnpm release netlens --rollback -m "Back out the scan bug" # roll back to main before the released change
+pnpm release netlens --rollback --to 1a2b3c4 --dry-run    # an explicit target
+```
+
 ### CI/CD (automatic releases)
 
 `.github/workflows/ci.yml` runs on GitHub Actions (free for this public repo):
@@ -110,7 +153,9 @@ For each app, the CLI:
   workspace package the app depends on, e.g. `packages/ui` releases all four, `packages/core` only NetLens.
   Changes to `*.md` files alone release nothing. A release only reads the commit range of that push, so if
   one fails, re-run it from the Actions tab or use **Run workflow** with the app ids.
-- **Manual:** Actions → CI → Run workflow, `apps` = `netlens open-tunnel pdf-editor store` (any subset).
+- **Manual:** Actions → CI → Run workflow, `apps` = `netlens open-tunnel pdf-editor store` (any subset). The field takes
+  app ids only (lowercase letters, digits and dashes, none starting with a dash); anything else fails the run, so a flag
+  such as `--rollback` or `--from-branch` cannot be passed through.
 
 Releases run one at a time (`concurrency`), since each one rewrites `manifest.json`. Repository secrets
 (Settings → Secrets and variables → Actions), copied from this Mac's files:

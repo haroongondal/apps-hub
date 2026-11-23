@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.double
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -24,6 +25,11 @@ data class Msg(val role: String, val json: JsonObject) {
   val hasImage: Boolean
     get() = (json["content"] as? JsonArray)?.any { (it as? JsonObject)?.get("type")?.jsonPrimitive?.contentOrNull == "image_url" } == true
 }
+
+data class Segment(val start: Double, val end: Double, val text: String)
+
+// `segments` is null unless the caller asked for them.
+data class Transcript(val text: String, val segments: List<Segment>? = null)
 
 data class ToolSpec(val name: String, val description: String, val parameters: JsonObject)
 
@@ -151,8 +157,12 @@ class Provider(
     return ProviderJson.parseChat(body, served)
   }
 
-  fun embed(choice: ModelChoice, texts: List<String>): List<FloatArray> {
-    val request = buildJsonObject { put("model", choice.model); put("input", JsonArray(texts.map(::JsonPrimitive))) }.toString().toByteArray()
+  fun embed(choice: ModelChoice, texts: List<String>, dimensions: Int? = null): List<FloatArray> {
+    val request = buildJsonObject {
+      put("model", choice.model)
+      put("input", JsonArray(texts.map(::JsonPrimitive)))
+      dimensions?.let { put("dimensions", it) }
+    }.toString().toByteArray()
     val (_, body) = send(listOf(choice), "embeddings", JSON) { request }
     return ProviderJson.readable(choice.service) {
       val data = Json.parseToJsonElement(body).jsonObject["data"]!!.jsonArray.map { it.jsonObject }.sortedBy { it["index"]!!.jsonPrimitive.int }
@@ -161,11 +171,19 @@ class Provider(
     }
   }
 
-  fun transcribe(choice: ModelChoice, audio: ByteArray, fileName: String, mime: String): String {
+  fun transcribe(choice: ModelChoice, audio: ByteArray, fileName: String, mime: String, segments: Boolean = false): Transcript {
     val boundary = "aihub-${UUID.randomUUID()}"
-    val request = ProviderJson.multipart(boundary, mapOf("model" to choice.model), fileName, mime, audio)
+    val fields = if (segments) mapOf("model" to choice.model, "response_format" to "verbose_json") else mapOf("model" to choice.model)
+    val request = ProviderJson.multipart(boundary, fields, fileName, mime, audio)
     val (_, body) = send(listOf(choice), "audio/transcriptions", "multipart/form-data; boundary=$boundary") { request }
-    return ProviderJson.readable(choice.service) { Json.parseToJsonElement(body).jsonObject["text"]!!.jsonPrimitive.content }
+    return ProviderJson.readable(choice.service) {
+      val root = Json.parseToJsonElement(body).jsonObject
+      val parts = if (!segments) null else root["segments"]!!.jsonArray.map { g ->
+        val o = g.jsonObject
+        Segment(o["start"]!!.jsonPrimitive.double, o["end"]!!.jsonPrimitive.double, o["text"]!!.jsonPrimitive.content)
+      }
+      Transcript(root["text"]!!.jsonPrimitive.content, parts)
+    }
   }
 
   private fun send(choices: List<ModelChoice>, path: String, contentType: String, request: (ModelChoice) -> ByteArray): Pair<ModelChoice, String> {

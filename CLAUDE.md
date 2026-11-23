@@ -49,7 +49,7 @@ The owner's apps are meant to talk to each other over one private channel that o
 
 - What can this app or feature **give** the others (signals, text, files, actions it can do on request)?
 - What could it **use** from them (Inflow's messages, ledger and to-dos; Deputy running a task; Halo's edge, always-on screen and bubble; Design Editor's canvas and on-device photo search)?
-- Does it join the channel (declare `com.haroon.permission.AUTOPILOT`, follow the shared contract) now or later? Say which, and why.
+- Does it join the channel (declare `com.haroon.permission.AUTOPILOT`, follow the shared contract in `packages/app-link-contract`) now or later? Say which, and why.
 - Does it keep the channel's privacy rules: items blocked from AI, OTPs, Strongroom and Inflow's own items never cross; the lock screen shows titles only; nothing starts without the owner's tap?
 
 Bring the best one or two ideas to the owner as a question; don't build them unasked. Add any idea that isn't built to "Later ideas" in the Autopilot design.

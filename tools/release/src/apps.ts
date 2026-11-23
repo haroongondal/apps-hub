@@ -36,6 +36,7 @@ export const APPS: Record<string, ReleasableApp> = {
   inflow: { name: 'Inflow', dir: 'apps/inflow', android: { packageName: ANDROID_PACKAGES.inflow } },
   clipboard: { name: 'Clipboard', dir: 'apps/clipboard', android: { packageName: ANDROID_PACKAGES.clipboard } },
   halo: { name: 'Halo', dir: 'apps/halo', android: { packageName: ANDROID_PACKAGES.halo } },
+  'ai-hub': { name: 'AI hub', dir: 'apps/ai-hub', android: { packageName: ANDROID_PACKAGES['ai-hub'] } },
 };
 
 /** Release ids of the apps whose workspace-relative dir is in `dirs` (the packages pnpm says changed). */

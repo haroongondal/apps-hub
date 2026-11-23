@@ -18,6 +18,7 @@ export const ANDROID_PACKAGES = {
   clipboard: 'com.haroon.clipboard',
   halo: 'com.haroon.halo',
   notch: 'com.haroon.notch',
+  'ai-hub': 'com.haroon.aihub',
 } as const;
 
 export function androidPackageFor(id: string): string | undefined {
@@ -25,6 +26,7 @@ export function androidPackageFor(id: string): string | undefined {
 }
 
 const hex64 = z.string().regex(/^[0-9a-f]{64}$/, 'lowercase hex SHA-256');
+const gitSha = z.string().regex(/^[0-9a-f]{40}$/, 'lowercase 40-hex git commit');
 
 export const AndroidReleaseSchema = z.object({
   packageName: z.string().min(1),
@@ -35,6 +37,8 @@ export const AndroidReleaseSchema = z.object({
   sha256: hex64,
   signingCertSha256: hex64,
   sizeBytes: z.number().int().positive(),
+  /** Full git sha the APK was built from. Absent on releases made before rollback support. */
+  commit: gitSha.optional(),
 });
 
 export const IosReleaseSchema = z.object({

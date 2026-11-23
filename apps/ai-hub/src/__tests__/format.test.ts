@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatCount, keysUnreadable, lastUsedText, plainError, servicesFor, usageText } from '../format.ts';
+import { formatCount, keysUnreadable, lastUsedText, plainError, requestText, servicesFor, usageText } from '../format.ts';
 
 test('formatCount shortens thousands and millions', () => {
   assert.equal(formatCount(0), '0');
@@ -31,6 +31,10 @@ test('plainError keeps only the module message', () => {
   assert.equal(plainError(wrapped), 'Enter a model id.');
   assert.equal(plainError(new Error('Plain.')), 'Plain.');
   assert.equal(plainError(new Error('')), 'Something went wrong. Try again.');
+  const java = new Error("Call to function 'AiHubCore.addKey' has been rejected.\n→ Caused by: java.lang.IllegalArgumentException: This doesn't look like a Gemini key.");
+  assert.equal(plainError(java), "This doesn't look like a Gemini key.");
+  assert.equal(plainError(new Error('kotlin.IllegalStateException: Your saved keys couldn\'t be opened.')), "Your saved keys couldn't be opened.");
+  assert.equal(plainError(new Error('Use a newer app: java.lang.Exception: kept')), 'Use a newer app: java.lang.Exception: kept');
 });
 
 test('keysUnreadable spots the vault message', () => {
@@ -43,4 +47,10 @@ test('servicesFor matches what each job can run on', () => {
   assert.deepEqual(servicesFor('vision'), ['gemini']);
   assert.deepEqual(servicesFor('embed'), ['gemini']);
   assert.deepEqual(servicesFor('transcribe'), ['groq']);
+});
+
+test('requestText names the job, the service and when, never what was asked', () => {
+  const now = 10 * 86_400_000;
+  assert.equal(requestText({ job: 'chat', service: 'groq', time: now - 5 * 60_000 }, now), 'Chat with Groq. Used 5 min ago');
+  assert.equal(requestText({ job: 'vision', service: 'gemini', time: now - 10_000 }, now), 'Images with Gemini. Used just now');
 });
