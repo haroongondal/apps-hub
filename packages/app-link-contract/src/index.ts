@@ -5,3 +5,4 @@ export * from './action.ts';
 export * from './manifest.ts';
 export * from './health.ts';
 export * from './links.ts';
+export * from './target.ts';
