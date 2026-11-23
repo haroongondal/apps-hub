@@ -51,7 +51,9 @@ test('the module and app manifests follow the link rules', () => {
 test('the Kotlin ping is the contract CHANGED ping: Halo only, guarded by the link permission, no extras', () => {
   const kotlin = appFile(`${NATIVE}java/expo/modules/opentunnelnative/TunnelLinkStore.kt`);
   assert.match(kotlin, new RegExp(`"${CHANGED_PING.action.replaceAll('.', '\\.')}"`));
-  assert.match(kotlin, new RegExp(`"${CHANGED_PING.targetPackage.replaceAll('.', '\\.')}"`));
-  assert.match(kotlin, /sendBroadcast\(Intent\(CHANGED_ACTION\)\.setPackage\(HALO_PACKAGE\), AppLinkGuard\.PERMISSION\)/);
+  assert.equal(CHANGED_PING.targetPackage, 'com.haroon.halo');
+  assert.match(kotlin, /Intent\(CHANGED_ACTION\)\.setPackage\(SiblingPackages\.HALO\)/);
+  assert.match(kotlin, /AppLinkTarget\.trustedReceiver\(context, intent\)/);
+  assert.match(kotlin, /sendBroadcast\(intent, AppLinkGuard\.PERMISSION\)/);
   assert.doesNotMatch(kotlin, /putExtra/);
 });

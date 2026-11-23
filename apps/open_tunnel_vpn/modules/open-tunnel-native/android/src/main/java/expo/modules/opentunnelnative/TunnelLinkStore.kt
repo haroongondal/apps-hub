@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import expo.modules.opentunnelnative.applink.AppLinkGuard
+import expo.modules.opentunnelnative.applink.AppLinkTarget
+import expo.modules.opentunnelnative.applink.SiblingPackages
 
 private const val PREFS = "applink"
 private const val KEY_ON = "shield_on"
@@ -11,7 +13,6 @@ private const val KEY_UNTRUSTED = "shield_untrusted"
 private const val KEY_SINCE = "shield_since"
 private const val KEY_LAST_SEEN = "last_seen_at"
 private const val CHANGED_ACTION = "com.haroon.autopilot.CHANGED"
-private const val HALO_PACKAGE = "com.haroon.halo"
 
 /** What the link provider serves: the Shields state and the heartbeat. Only this app writes it; a provider query only reads. */
 object TunnelLinkStore {
@@ -40,6 +41,14 @@ object TunnelLinkStore {
         .putLong(KEY_SINCE, step.state.sinceMs)
         .commit(),
     ) { "Shields state not saved" }
-    if (step.ping) context.sendBroadcast(Intent(CHANGED_ACTION).setPackage(HALO_PACKAGE), AppLinkGuard.PERMISSION)
+    if (step.ping) {
+      val intent = Intent(CHANGED_ACTION).setPackage(SiblingPackages.HALO)
+      sendIfTrusted({ AppLinkTarget.trustedReceiver(context, intent) }) { context.sendBroadcast(intent, AppLinkGuard.PERMISSION) }
+    }
+  }
+
+  /** The state is already saved; only the ping is gated. A lookalike Halo (or none) gets nothing, and there is no fallback. */
+  internal fun sendIfTrusted(trusted: () -> Boolean, send: () -> Unit) {
+    if (trusted()) send()
   }
 }

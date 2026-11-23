@@ -305,3 +305,7 @@ Branch `eco/tunnelwall`, on top of the C3 commits. Not pushed, not on a phone.
 
 The provider answering Halo and refusing the shell, the ping reaching Halo, the pulse flip on a real
 network change, the location-refused path, the heartbeat after open and after a connect.
+
+## AppLinkTarget (TunnelWall, 2026-11-24)
+
+TunnelWall sends one thing to a sibling: the Shields CHANGED ping to Halo (`TunnelLinkStore.publishShield`). It now calls `AppLinkTarget.trustedReceiver(context, intent)` first; false sends nothing (the Shields state is still saved). The module manifest has `<queries><package android:name="com.haroon.halo"/></queries>`. `AppLinkTarget.kt` and its test are canonical copies in `modules/open-tunnel-native/android/.../applink/`. TunnelWall has no readers and no activity senders. Phone check not run: with Halo uninstalled or not Store-signed, flipping Shields sends nothing and the app is unaffected; with the Store-signed Halo, Halo still hears the ping.

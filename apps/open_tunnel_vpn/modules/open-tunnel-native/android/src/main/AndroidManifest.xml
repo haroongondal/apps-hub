@@ -4,6 +4,9 @@
          app manifest (see apps/open_tunnel_vpn/android/app/src/main). -->
     <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
     <uses-permission android:name="com.haroon.permission.AUTOPILOT" />
+    <queries>
+        <package android:name="com.haroon.halo" />
+    </queries>
     <application>
         <provider
             android:name=".TunnelLinkProvider"
