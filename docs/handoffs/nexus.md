@@ -2,8 +2,8 @@
 
 ## Resume prompt
 
-Dated 2026-11-18. Work in `/Users/outsentia/Documents/apps-hub/.claude/worktrees/nexus` on
-branch `nexus`. Read `docs/handoffs/nexus.md` completely first, then
+Dated 2026-11-24. Work in `/Users/outsentia/Documents/apps-hub-wt/eco-nexus` on
+branch `eco/nexus`. Read `docs/handoffs/nexus.md` completely first, then
 `docs/superpowers/specs/2026-11-18-nexus-design.md` (the design) and `docs/nexus/PRD.md`
 (the owner's PRD). Trust the decisions and verified facts below and don't re-derive them.
 Follow the handoff contract in `~/.claude/CLAUDE.md`: keep the session log and current
@@ -162,6 +162,102 @@ push or release only when the owner says so.
     `:audio-chunks:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL.
   - Not run (no phone in this wave): Ask citation to a PDF page; a recording over 25 MB; keyboard on Stream.
 
+- 2026-11-24 S5 (eco wave 2, branch `eco/nexus`): Meeting mode, Minutes, searchable minutes, share targets, OCR check,
+  each committed when green:
+  - M1 long recordings (876bc472, 5fbea4c8): each transcribed piece is saved in `library/<id>/transcribe/piece-<n>.json`
+    (`{identity, segments}`; identity = file key + offset + piece geometry), so a retry sends only missing pieces;
+    `planSource` plans one or several files on the whole recording's clock; `ContentPort.saved` deletes the pieces
+    after the transcript is stored. Gates: app 47/47, knowledge-core 81/81, library-core 106/106.
+  - M1 Meeting mode (f0c47c52): `MeetingService` (foreground, type microphone) records AAC in ADTS to
+    `documents/meeting/recording.aac`, so a kill keeps what was written; Stop copies it into `audio.m4a` with `cut()`;
+    an unsaved meeting is offered on Stream. No wake lock, no restart after a kill, calls are detected as "silenced"
+    on Android 10+. Gates: app 54/54, `:audio-chunks:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL
+    (MeetingClockTest 3/3).
+  - M2 Minutes (6678cdec, c2f3b361): `composeMinutes` (knowledge-core `minutes.ts`), Groq gpt-oss-120b through
+    `nexusPort.complete` with the Gemini chat fallback, only on "Make minutes". Transcript fenced as untrusted data,
+    every decision and action cited to a segment (uncited ones dropped), hand validator, 3 tries, 10,000-character
+    map-reduce windows. Stored in `kn_minutes` (knowledge step 4). Gates: app 57/57, knowledge-core 99/99.
+  - M5 searchable (79bb4920, dbeb57f1): `Knowledge.indexBody` puts the minutes lines in the Library body; making
+    minutes re-queues the item at `embed` with `kn_jobs.embed_only = 1` (knowledge step 5), so Ask cites decisions at
+    their time without re-making the graph. Also removed a duplicate "Scan text" add-sheet entry. Gates: app 57/57,
+    knowledge-core 107/107, library-core 106/106.
+  - C8 OCR check (521350d8): licence audit below. Offline OCR text reaches nothing in Nexus; English only.
+  - E3/M4 share targets (8f335668): `ShareActivity` in `modules/audio-chunks` takes SEND / SEND_MULTIPLE for PDF, text,
+    image and audio, copies to `files/shared-inbox/<id>/`, and `app/share.tsx` asks "Add to Nexus?"; nothing is added
+    before Add. Audio is kept as `audio.<ext>` in its real format; AMR, 3GP, raw AAC and non-M4A over 25 MB are
+    refused. Links and text become notes, never fetched. Gates: app 76/76, Gradle BUILD SUCCESSFUL (ShareRulesTest 8/8).
+  - Security fix (0a1b24bd): the share intake could be pointed at Nexus's own FileProvider with an authority like
+    `0@com.haroon.pdfeditor.pdfscan.fileprovider` (ContentResolver strips the user id, the old
+    `resolveContentProvider` check did not). Now `ShareRules.sourceAllowed`: content:// only, no `@` or `:` in the
+    authority, no own authority (all of Nexus's providers from `getPackageInfo(GET_PROVIDERS)`), and the opened
+    descriptor's real path (`/proc/self/fd`) outside the app's dirs. `PdfScanFileProvider` now serves only
+    `cache/pdfscan-share/`, where `ShareImages` copies the pages it shares. The share screen shows a copy that is
+    gone as unreadable.
+  - Voice-note fix (9970a3fb): `toggleRecording` sets `shouldPlayInBackground` while recording; expo-audio 1.1.1 on
+    Android pauses every recorder on host pause (Home, app switch, screen off) without it. Before this, voice notes
+    silently skipped the screen-off span.
+  - Final gates (after the last code change): app 77/77, typecheck and lint exit 0; knowledge-core 107/107, typecheck
+    exit 0; `:audio-chunks:testDebugUnitTest :pdf-scan:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL
+    (ShareRulesTest 14/14, CutWindowTest 5/5, MeetingClockTest 3/3, pdf-scan 59/59); merged manifest checked with
+    aapt2: ShareActivity exported with exactly the two filters, PdfScanFileProvider paths only `pdfscan-share/`.
+  - Call audio: Nexus can't record phone calls; Android blocks that for apps like Nexus. If another app saved a call
+    recording, share it to Nexus.
+  - Open owner decision: Arabic/Urdu OCR. tessdata_fast `ara.traineddata` 1,432,056 bytes and `urd.traineddata`
+    1,398,718 bytes (about 2.8 MB together), or `script/Arabic.traineddata` 9,311,038 bytes; Design Editor shares the
+    module, so its APK grows too. Nothing downloaded.
+  - Not run (phone; main session's coord queue, install from the Store only):
+    1. Record or import audio over 25 MB with a key set; interrupt after the first piece (airplane mode). Network back
+       or kill and reopen: it resumes without uploading piece 1 again (Groq usage count), times run through the whole
+       recording, and the item's `transcribe` folder is gone afterwards.
+    2. Stream, the people icon next to the mic, Meeting, Start recording; allow microphone and notifications: a
+       "Recording a meeting" notice with a running timer and the big elapsed readout.
+    3. Screen off 10 minutes, unlock, open Nexus: readout about 10:00. Stop and save: a "Meeting, <date time>" card that
+       plays the full length; seek works.
+    4. Kill test: start, record 3 minutes, `adb shell am force-stop com.haroon.pdfeditor`. Reopen: "Save the meeting you
+       were recording?". Save: the item plays about 3 minutes. If Save fails with "could not be cut", the truncated-ADTS
+       assumption is wrong on this phone (switch to rolling segments).
+    5. During a meeting take a 1-minute call: the Meeting screen shows "Another app is using the microphone"; after
+       Stop an alert says about 1:00 was silent.
+    6. Record over 60 minutes, Stop; with keys set, transcription runs in pieces and tapping a line seeks to it.
+    7. HyperOS: battery saver at default, screen off 30+ minutes during a meeting; note whether it keeps recording,
+       and that the save offer appears if it was killed. Repeat with "No restrictions".
+    8. Tap the meeting notification: it opens the Meeting screen.
+    9. A short voice note records, stops and saves; the mic while a meeting records says "A meeting is recording".
+    10. Voice note with the screen off: record, lock the phone 1 minute, unlock, stop. The note plays the whole span
+        (before 9970a3fb the locked minute was missing).
+    11. Open a voice note or meeting with a transcript: "Minutes" with "Make minutes"; nothing sent before the tap.
+        Tap: "Making minutes…", then a summary, Decisions and Action items with owner, due and times.
+    12. Tap a decision: the player jumps there and plays the matching words. Leave and come back while making: still
+        "Making minutes…", then the result.
+    13. "Make minutes again" asks "Replace these minutes?"; Replace swaps them.
+    14. Airplane mode, Make minutes: "Nexus couldn't reach the AI service. Check your connection, then try again." With
+        no Groq or Gemini key: the message says no API key is set.
+    15. "Keep out of Nexus" on that recording: Minutes disappear; "Add to Nexus": "Make minutes" again, nothing made
+        automatically.
+    16. A meeting over 30 minutes: minutes come back as one; on a free Groq key note whether the per-minute limit stops
+        it. An Urdu or Arabic transcript: minutes in that language with working times.
+    17. Library search for a word only in a decision: the item shows with that line; an Arabic or Urdu minutes word
+        typed without harakat or with the other kaf/yeh form finds it.
+    18. Ask about that decision: the answer cites the recording with a time; the citation seeks there. Make minutes
+        again with other content: the old word no longer finds it, the new one does. Keep it out: minutes words no
+        longer find it, transcript words still do.
+    19. Right after making minutes the item status shows working briefly, then the same "N ideas, N links".
+    20. The Library "+" sheet shows "Scan text" once; Scan text reads English, not Arabic (English model only).
+    21. Chrome, a page, Share, Nexus: one row "Link, saved as a note"; Add: a note with title and URL that opens.
+        Share again and Cancel (and again with Back): nothing added.
+    22. Files, a PDF, Share, Nexus, Add: a PDF item and the editor opens. Gallery, 3 photos: three "Photo" rows and
+        "Add 3". 11 photos: "You can add up to 10 files at a time".
+    23. WhatsApp voice note, Share, Nexus: "Voice recording"; Add: it plays and, with keys, gets a transcript. An M4A
+        over 25 MB is accepted and transcribed in pieces. An AMR or 3GP file: "Nexus can't read this kind of audio yet."
+    24. A long text (over 200 words with a link) becomes a "Note". With Nexus swiped away, share a PDF: it cold-starts
+        on the Add screen. A video and a mixed PDF + photo share do not list Nexus. HyperOS shows "Nexus" with its icon.
+    25. Scan, a scan's "Share images" and a page's "Share image" into another app (Gmail, Files): the images arrive and
+        open (they now come from `cache/pdfscan-share/`).
+    26. From a test app (or `adb shell am start -a android.intent.action.SEND -t application/pdf --eu
+        android.intent.extra.STREAM content://0@com.haroon.pdfeditor.pdfscan.fileprovider/share/x -n
+        com.haroon.pdfeditor/expo.modules.audiochunks.android.ShareActivity`): the Add screen shows "Nexus only takes
+        files that another app shares with it." and nothing is copied.
+
 ## Current state + exact next step
 
 Nexus 1.4.0 (versionCode 18) is on the Store, built from `nexus` at a88538e8. PR #44 was merged to main on 2026-11-18.
@@ -170,17 +266,25 @@ Keep-out feature (S2 above): on the `nexus-keep-out` branch, released to the Sto
 on 2026-11-20 and installed from the Store on the phone for testing. Test checklist: the Library item
 menu's "Keep out of Nexus" removes its ideas from Stream and Ask, and "Add to Nexus" indexes it again.
 
-Next step: phone test through the coord queue (`device:49kjmnuwonkffqzh`), installing from
-the Store only. First check the existing library still opens after the migration (library
-step 2 on real data), then: tabs, note capture without a key ("Waiting for an AI key"),
-voice note record/stop (and with the screen off), photo, PDF page text; with the owner's key
-entered by the owner: transcription, ideas, Ask with citations, seek from a voice
-citation, kill-and-resume.
+Wave 2 (S5) is on `eco/nexus` (HEAD after the S5 docs commit), not pushed, not released: Meeting mode,
+Minutes, searchable minutes, share targets with the security fix, the voice-note screen-off fix. All gates
+green; nothing tried on the phone yet.
 
-Known shortcuts: first ~24k characters per item feed the graph; brute-force vector search;
-no share-sheet ingestion yet. Done in S4 on `eco/nexus` (phone test pending): cited PDFs open at
-the cited page (aeae7091); recordings over 25 MB are transcribed in pieces on Android (5624026f);
-the tab bar hides while the keyboard is open (6134b70e).
+Next step: the security-engineer review of the share intake and a code review of the Minutes prompt, the
+SEND intake, chunk persistence and the Meeting service (the wave's remaining dispatches). Then the phone
+test through the coord queue (`device:49kjmnuwonkffqzh`), installing from the Store only, with the 26
+steps in the S5 log. Then the owner decides on Arabic/Urdu OCR (sizes in the S5 log) and on merging and
+releasing `eco/nexus`.
+
+Known shortcuts: first ~24k characters per item feed the graph; brute-force vector search; a Minutes run
+that hits the free-tier Groq rate limit repeats the whole run on the next tap (window results are not
+kept); the Library body is read and written in two transactions (`indexBody`), so a transcript and minutes
+saved at the same instant can leave the older body until the next change; no open-source notices screen
+(Leptonica, IJG, libpng ask for one); offline OCR text never reaches Nexus; shared links are stored as notes
+and never fetched; a shared PDF is indexed only once it is opened in the editor; a voice note killed
+mid-recording is lost (use Meeting). Done in S4 on `eco/nexus` (phone test pending): cited PDFs open at the
+cited page (aeae7091); recordings over 25 MB are transcribed in pieces on Android (5624026f); the tab bar
+hides while the keyboard is open (6134b70e).
 
 ## OCR licence audit (C8)
 
