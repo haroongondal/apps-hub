@@ -99,6 +99,16 @@ For each app, the CLI:
 
 `--platform ios` exits with an explanation until iOS is set up.
 
+### Release guard
+
+Before anything is built, `pnpm release` runs `git fetch origin main` and refuses unless:
+- `HEAD` is contained in `origin/main` (`git merge-base --is-ancestor HEAD origin/main`), and
+- the working tree is clean (`git status --porcelain` is empty; untracked files count, git-ignored ones do not).
+
+A failed fetch or a missing `origin/main` also refuses. This stops a branch build from replacing a main build in
+the Store. For a test build, pass `--from-branch`: it skips both checks, prints a warning to stderr and starts the
+changelog with `[branch build <short sha>]`. CI is not affected: it builds a pushed commit of `main` in a clean checkout.
+
 ### CI/CD (automatic releases)
 
 `.github/workflows/ci.yml` runs on GitHub Actions (free for this public repo):

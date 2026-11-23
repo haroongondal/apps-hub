@@ -13,6 +13,7 @@ import {
   type StoreManifest,
 } from '@apps-hub/store-manifest';
 import { APPS } from './apps.ts';
+import { checkReleasable } from './guard.ts';
 import { applyAppsHubGradle, assembleRelease, inspectApk, sha256File } from './android.ts';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
@@ -24,18 +25,27 @@ const { values, positionals } = parseArgs({
     platform: { type: 'string', default: 'android' },
     all: { type: 'boolean', default: false },
     changelog: { type: 'string', short: 'm', default: '' },
+    'from-branch': { type: 'boolean', default: false },
   },
 });
 
 const ids = values.all ? Object.keys(APPS) : positionals;
 if (ids.length === 0 || ids.some((id) => !APPS[id])) {
-  console.error(`usage: pnpm release <${Object.keys(APPS).join('|')}> [--platform android|ios|all] [--all] [-m changelog]`);
+  console.error(`usage: pnpm release <${Object.keys(APPS).join('|')}> [--platform android|ios|all] [--all] [-m changelog] [--from-branch]`);
   process.exit(1);
 }
 if (values.platform !== 'android') {
   console.error('iOS releases need a paid Apple Developer Program membership (ad hoc OTA). See docs/app-store.md.');
   process.exit(1);
 }
+
+const guard = checkReleasable(ROOT, { fromBranch: values['from-branch'] });
+if (!guard.ok) {
+  console.error(guard.reason);
+  process.exit(1);
+}
+if (guard.warning) console.error(guard.warning);
+const changelog = guard.warning ? `[branch build ${guard.head.slice(0, 7)}] ${values.changelog}` : values.changelog;
 
 process.loadEnvFile(ENV_FILE);
 const API = process.env.STORE_API_URL?.replace(/\/$/, '');
@@ -99,7 +109,7 @@ async function releaseAndroid(id: string, manifest: StoreManifest): Promise<Stor
     signingCertSha256: SIGNING_CERT_SHA256,
     sizeBytes: bytes.length,
   };
-  const next = upsertAndroidRelease(manifest, { id, name: app.name, changelog: values.changelog }, android);
+  const next = upsertAndroidRelease(manifest, { id, name: app.name, changelog }, android);
   console.log(`▶ ${id}: uploading ${apkPath} (${(bytes.length / 1e6).toFixed(1)} MB)`);
   await upload(apkPath, bytes, 'application/vnd.android.package-archive');
   return next;
