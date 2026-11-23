@@ -8,6 +8,11 @@
     <!-- App links between the owner's apps (packages/app-link-contract): the health row, and starting Deputy's draft screen. -->
     <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
     <uses-permission android:name="com.haroon.permission.AUTOPILOT" />
+    <!-- AppLinkTarget checks Deputy (task proposals) and Nexus (photos) before each hand-off; Android 11+ hides them without this. -->
+    <queries>
+        <package android:name="com.haroon.deputy" />
+        <package android:name="com.haroon.pdfeditor" />
+    </queries>
     <application>
         <!-- ONNX Runtime's AAR adds a start-up telemetry sender (Microsoft 1DS); this app sends no telemetry. -->
         <provider

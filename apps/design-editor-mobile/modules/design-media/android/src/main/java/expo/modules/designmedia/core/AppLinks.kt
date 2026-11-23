@@ -1,6 +1,7 @@
 package expo.modules.designmedia.core
 
 import expo.modules.designmedia.applink.AppLinkGuard
+import expo.modules.designmedia.applink.SiblingPackages
 
 object AppHealth {
   const val AUTHORITY = "com.haroon.designeditor.applink"
@@ -20,9 +21,18 @@ object AppHealth {
     listOf(arrayOf(APP_ID, null, null, aiSource(aiSourceText), lastSeen(heartbeatText)))
 }
 
+// A hand-off to a sibling starts only when the sibling check passes; otherwise nothing is sent and the caller says "not installed".
+object TrustedStart {
+  fun begin(trusted: () -> Boolean, start: () -> Unit): Boolean {
+    if (!trusted()) return false
+    start()
+    return true
+  }
+}
+
 object DeputyProposal {
   const val ACTION = "com.haroon.deputy.action.PROPOSE_TASK"
-  const val DEPUTY_PACKAGE = "com.haroon.deputy"
+  const val DEPUTY_PACKAGE = SiblingPackages.DEPUTY
   const val REQUEST_CODE = 0x5C20
   val SPEC = mapOf(
     "task" to AppLinkGuard.ExtraSpec(AppLinkGuard.ExtraType.STRING, max = 300, required = true),
@@ -46,7 +56,7 @@ object DeputyProposal {
 // Nexus's share screen (pdf-editor-mobile ShareRules.MAX_ITEMS) refuses a share of more than 10 files outright,
 // and only this app's gallery photos may be granted to it, never a file from this app's own storage.
 object NexusShare {
-  const val PACKAGE = "com.haroon.pdfeditor"
+  const val PACKAGE = SiblingPackages.NEXUS
   const val MAX = 10
 
   fun ids(uris: List<String>, galleryBase: String): List<Long>? {

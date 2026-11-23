@@ -7,9 +7,11 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.provider.MediaStore
+import expo.modules.designmedia.applink.AppLinkTarget
 import expo.modules.designmedia.core.DeputyProposal
 import expo.modules.designmedia.core.NexusShare
 import expo.modules.designmedia.core.PhotoTimes
+import expo.modules.designmedia.core.TrustedStart
 import expo.modules.kotlin.Promise
 import java.util.concurrent.atomic.AtomicReference
 
@@ -29,8 +31,10 @@ object Handoffs {
         (extras["task"] as? String)?.let { intent.putExtra("task", it) }
         (extras["apps"] as? List<*>)?.filterIsInstance<String>()?.let { intent.putExtra("apps", it.toTypedArray()) }
         val failed = try {
-          activity.startActivityForResult(intent, DeputyProposal.REQUEST_CODE)
-          null
+          val started = TrustedStart.begin({ AppLinkTarget.trustedActivity(activity, intent) }) {
+            activity.startActivityForResult(intent, DeputyProposal.REQUEST_CODE)
+          }
+          if (started) null else "not_installed"
         } catch (_: ActivityNotFoundException) {
           "not_installed"
         } catch (_: SecurityException) {
@@ -59,9 +63,13 @@ object Handoffs {
       .putParcelableArrayListExtra(Intent.EXTRA_STREAM, streams)
       .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     send.clipData = ClipData.newRawUri(null, streams.first()).apply { streams.drop(1).forEach { addItem(ClipData.Item(it)) } }
+    // Nexus's share screen is an ordinary share target, not a link action, so it holds no link permission.
+    val starter: Context = activity ?: context
     return try {
-      if (activity != null) activity.startActivity(send) else context.startActivity(send.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-      "sent"
+      val started = TrustedStart.begin({ AppLinkTarget.trustedActivity(starter, send, requireLinkPermission = false) }) {
+        if (activity != null) activity.startActivity(send) else context.startActivity(send.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+      }
+      if (started) "sent" else "not_installed"
     } catch (_: ActivityNotFoundException) {
       "not_installed"
     }
