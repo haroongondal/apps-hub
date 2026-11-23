@@ -184,3 +184,77 @@ Next, in order: (1) the owner's go-ahead to release. Pushing or merging to
 `main` auto-releases both apps through the Store, so do not push or merge
 without it. (2) Phone check: the firewall checks above, plus the HomeNet checks
 if HomeNet has not been checked yet.
+
+## TunnelWall protection: kill switch, best relay, Trusted Wi-Fi (eco C3, 2026-11-23)
+
+Branch `eco/tunnelwall` (worktree `apps-hub-wt/eco-tunnelwall`), three code commits on top of
+`f595c4a9`: `73fcb21e` (kill switch), `c13b0e52` (best relay), `93bccc5a` (Trusted Wi-Fi). Not
+pushed, not on a phone.
+
+### What was there before (recon)
+
+- `enableKillSwitch` reached the service, but both engines host their own VpnService
+  (ics-openvpn's `OpenVPNService`, WireGuard's `GoBackend$VpnService`), so on the live path the
+  switch did nothing on Android. Only the unused hosted path called `Builder.setBlocking(true)`,
+  which only puts the tun fd in blocking-read mode; it is not a kill switch (removed).
+- ics-openvpn already covers `reasserting`: its `getTunReopenStatus` answers only `NOACTION` or
+  `OPEN_BEFORE_CLOSE` (javap of the AAR), so its own reconnect has no gap.
+- The real leak windows: a relay switch (App.tsx stopped, then started), the engine ending (drop,
+  auth failure, failed failover), the app process dying, and boot.
+- Auto-select with failover already existed in App.tsx (`pickRelayCandidates`, `settled`).
+
+### Built
+
+- Kill switch (Android): once a tunnel has connected with the switch on ("armed"),
+  `OpenTunnelVpnService` holds its own interface (IPv4 `100.127.223.1/32` + `0.0.0.0/0`, IPv6
+  `fd00::2/128` + `::/0`, never read) whenever no engine interface is up: before the old engine
+  stops on a relay switch, after the engine ends, after a failed start, and at an Always-on start
+  when the process had died armed (`kill_switch` SharedPreferences, one boolean). The app's own
+  package is outside the block so it can fetch VPN Gate and probe relays. The service keeps its
+  foreground notice ("Internet is blocked until the VPN reconnects") and the server-active flag,
+  so the firewall cannot take the slot. Lifted by: a relay connecting (its interface replaces
+  the block), Disconnect or Stop blocking, or any revoke. Decisions: `KillSwitch.kt` (JVM test).
+  App view: `src/tunnel/kill-switch.ts` (`connected | reconnecting | blocked | off`).
+- Lockdown hint: the service reads `VpnService.isAlwaysOn()` / `isLockdownEnabled()` (API 29,
+  instance methods, so only known after it ran in this process). `getKillSwitchStatus()` returns
+  `{blocking, alwaysOn, lockdown}`; the settings row says what is on and opens
+  `Settings.ACTION_VPN_SETTINGS`.
+- iOS: `includeAllNetworks = enableKillSwitch` (iOS 14, below the 15.1 target) next to the
+  existing `NEOnDemandRuleConnect`; a user stop turns on-demand off first so the OS does not bring
+  the tunnel back. Compile not verified here (no Pods in the worktree); iOS engines stay gated.
+- Connect to the best relay: `connectRankedRelay` in `packages/open-tunnel-core/src/best-relay.ts`
+  over the LatencyProber ranking (fitness formula unchanged, 8 probes at a time, listed ping as
+  fallback), max 6 attempts, failed relays skipped, cancel stops; App.tsx runs it; plain-words
+  failure copy in `relay-failover.ts`.
+- Trusted Wi-Fi (off by default; owner decision pending): Settings > Trusted Wi-Fi. Module
+  `startNetworkWatch`/`stopNetworkWatch` + `onNetworkChanged`
+  (`registerBestMatchingNetworkCallback`, non-VPN internet request, `FLAG_INCLUDE_LOCATION_INFO`,
+  changes only). Logic in `src/tunnel/trusted-wifi.ts`; list in the local sqlite settings.
+
+### Decisions (my call)
+
+- Kill switch arms only after a connect succeeded: a dead relay on a first connect must not take
+  the internet away. A process that died armed stays armed for the next start and for an
+  Always-on start (the user's last intent was "VPN on").
+- Any revoke disarms (ics logs `permission_revoked` from its `onRevoke`; `OpenVpnEngine` passes
+  `EXTRA_REVOKED`): the user or another VPN app took the slot, and blocking would take it back.
+- At an Always-on start with the switch armed, the block wins over the firewall; Stop blocking
+  gives the slot back to the firewall if it was on and not paused.
+- A relay switch with the switch on skips the app's explicit stop: the native START replaces the
+  engine with the block held in between (Android only; iOS and switch-off keep stop-then-start).
+- Trusted Wi-Fi identifies a network by SSID plus BSSID, which needs precise location on
+  Android 10+ (asked only when the switch is turned on). A no-permission fingerprint (gateway
+  address, DNS servers) was rejected: home routers share `192.168.1.1`, and a false match means
+  no VPN on a stranger's network. Unreadable names count as not trusted (the safe direction).
+- Trusted Wi-Fi needs Android 12+ (the location-info callback); older Android and iOS reject
+  `ERR_NOT_SUPPORTED`. iOS `NEOnDemandRuleDisconnect` per SSID was not built: no iOS engine can
+  start and reading the SSID needs the Access WiFi Information entitlement.
+- No new service: the watch runs while the app's JS runtime is alive (app open, or in the
+  background while connected or blocking). Turning the switch on never connects on the network
+  you are on right then; each network is decided once, so a manual disconnect sticks until the
+  network changes. Trusted networks never auto-disconnect.
+
+### Not proven (needs the phone)
+
+All of it: the block actually black-holes traffic on HyperOS, the switch gap, Always-on restart
+after a process kill, ics revoke detection, the SSID/BSSID reads, background behaviour.
