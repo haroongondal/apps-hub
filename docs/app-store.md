@@ -120,7 +120,9 @@ changelog with `[branch build <short sha>]`. CI is not affected: it builds a pus
   so neither `adb install -d` nor the Store can go back. The old commit is rebuilt with `versionCode` = published + 1;
   its `versionName` stays the old one. The changelog defaults to `Rollback to <versionName> (<short sha>)`.
 - **Which commit.** Every release now records the full git sha it was built from in the manifest
-  (`android.commit`; optional, releases made before this have none). Without `--to`, the target is the first parent
+  (`android.commit`; optional, releases made before this have none). The Store shows its first seven characters on the
+  app's row as "Build from commit 8b8db0d", and hides the line when there is none. The manifest has no rollback flag, so the
+  Store does not say a build is a rollback. Without `--to`, the target is the first parent
   of the last commit that changed the app's folder (`apps/<app>`) at or before that recorded commit, that is, the app as
   it was just before its latest change. (The recorded commit alone is not enough: it can be a merge of another app's
   work, or one HEAD recorded for every app of an `--all` release.) `--to` takes a sha, short sha or tag. The target
