@@ -6,7 +6,7 @@ import { View } from 'react-native';
 
 import { IconButton } from '../src/library/icon-button';
 import { errorMessage } from '../src/library/use-library';
-import { addKey, checkKey, getKeys, removeKey, type Service } from '../src/nexus/ai';
+import { addKey, aiReady, checkKey, getKeys, removeKey, type Service } from '../src/nexus/ai';
 import { kick, openKnowledge } from '../src/nexus/worker';
 
 const SERVICES: { id: Service; name: string; placeholder: string; hint: string }[] = [
@@ -83,12 +83,14 @@ function KeyPanel({ service, saved, onChange }: { service: (typeof SERVICES)[num
 export default function SettingsScreen() {
   const [keys, setKeys] = useState<Record<Service, string[]>>({ gemini: [], groq: [] });
   const [queued, setQueued] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     void Promise.all([getKeys('gemini'), getKeys('groq')]).then(([gemini, groq]) => setKeys({ gemini, groq }));
   }, []);
-
-  const ready = keys.gemini.length > 0 && keys.groq.length > 0;
+  useEffect(() => {
+    void aiReady().then(setReady);
+  }, [keys]);
 
   const processAll = async () => {
     const n = await (await openKnowledge()).enqueueMissing();
@@ -102,8 +104,8 @@ export default function SettingsScreen() {
       <Notice tone="neutral" title="What leaves this phone">
         With both keys saved, Nexus sends Google the text of your notes, PDFs and scans, and your photos, to find ideas and read images. It sends
         Groq the text of your notes, PDFs and scans, to build the graph and answer questions, and your voice recordings, to transcribe them. The
-        CV maker sends the details you type to Groq, or to Gemini when Groq cannot answer. Your files stay on this phone. Without the keys nothing
-        is sent.
+        CV maker sends the details you type to Groq or Gemini. When AI hub is installed and lets Nexus use it, Nexus sends the same things through
+        AI hub instead, which passes them to Groq or Gemini, and uses your own keys only when AI hub can&apos;t. Your files stay on this phone. Without the keys or AI hub nothing is sent.
       </Notice>
       {SERVICES.map((s) => (
         <KeyPanel key={s.id} service={s} saved={keys[s.id]} onChange={(list) => setKeys((k) => ({ ...k, [s.id]: list }))} />

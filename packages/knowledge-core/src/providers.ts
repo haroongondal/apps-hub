@@ -3,8 +3,9 @@ import { EMBED_DIMS, openAiCompatPort, type CompatPort } from './openai.ts';
 
 export const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
 export const GROQ_URL = 'https://api.groq.com/openai/v1/';
+export const EMBED_MODEL = 'gemini-embedding-001';
 /** Stored beside the vectors: when it changes, Knowledge re-embeds every item. */
-export const EMBED_TAG = `gemini-embedding-001@${EMBED_DIMS}`;
+export const EMBED_TAG = `${EMBED_MODEL}@${EMBED_DIMS}`;
 
 /** Each service takes one key or several; a key that is refused or at its limit hands over to the next (openai.ts). */
 export interface NexusKeys {
@@ -14,7 +15,7 @@ export interface NexusKeys {
 }
 
 export function nexusPort({ gemini, groq, fetch }: NexusKeys): CompatPort {
-  const g = openAiCompatPort({ apiKey: gemini, baseUrl: GEMINI_URL, embedModel: 'gemini-embedding-001', chatModel: 'gemini-3.5-flash-lite', fetch });
+  const g = openAiCompatPort({ apiKey: gemini, baseUrl: GEMINI_URL, embedModel: EMBED_MODEL, chatModel: 'gemini-3.5-flash-lite', fetch });
   const q = openAiCompatPort({
     apiKey: groq,
     baseUrl: GROQ_URL,

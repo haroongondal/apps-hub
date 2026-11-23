@@ -12,7 +12,7 @@ import { openItem } from '../src/library/open-item';
 import { openLibrary } from '../src/library/open-library';
 import { itemFile } from '../src/library/paths';
 import { errorMessage, useDebounced } from '../src/library/use-library';
-import { hasKeys } from '../src/nexus/ai';
+import { aiReady } from '../src/nexus/ai';
 import { saveNote } from '../src/nexus/capture';
 import { audioFile } from '../src/nexus/content';
 import { jobLabel, minutesDetail, minutesError, seekTo } from '../src/nexus/labels';
@@ -92,7 +92,7 @@ function MinutesSection({ item, saved, making, playFrom }: { item: Item; saved: 
   const again = () =>
     confirmAction({
       title: 'Replace these minutes?',
-      message: 'Nexus sends the transcript to Groq again, or to Gemini when Groq cannot answer, and replaces the minutes you have now.',
+      message: 'Nexus sends the transcript to Groq or Gemini again and replaces the minutes you have now.',
       confirmLabel: 'Replace',
       onConfirm: make,
     });
@@ -114,7 +114,7 @@ function MinutesSection({ item, saved, making, playFrom }: { item: Item; saved: 
         footer={
           saved
             ? undefined
-            : 'Nexus sends this transcript to Groq, or to Gemini when Groq cannot answer, to write a summary, the decisions and the action items, each with the time it was said. To make the minutes searchable, it sends them to Gemini when a Gemini key is set.'
+            : 'Nexus sends this transcript to Groq or Gemini to write a summary, the decisions and the action items, each with the time it was said. To make the minutes searchable, it sends them to Gemini when a Gemini key is set or AI hub is on.'
         }
       >
         {saved ? <Row title={<Text>{saved.minutes.summary}</Text>} /> : null}
@@ -140,7 +140,7 @@ function MinutesSection({ item, saved, making, playFrom }: { item: Item; saved: 
       {making ? null : saved ? (
         <Button label="Make minutes again" variant="secondary" onPress={again} />
       ) : (
-        <Button label="Make minutes" onPress={make} accessibilityHint="Sends the transcript to Groq, or to Gemini when Groq cannot answer" />
+        <Button label="Make minutes" onPress={make} accessibilityHint="Sends the transcript to Groq or Gemini" />
       )}
     </>
   );
@@ -219,7 +219,7 @@ export default function ItemScreen() {
       ideas: await kn.ideas(item.id),
       segments: item.kind === 'note' ? [] : await kn.segmentsOf(item.id),
       related: (await kn.related(item.id)).map((r) => r.item),
-      hasKey: await hasKeys(),
+      hasKey: await aiReady(),
       places: await kn.lib.listReminders(item.id),
       keptOut: await kn.isExcluded(item.id),
       minutes: item.kind === 'audio' ? await kn.minutes(item.id) : null,

@@ -6,9 +6,9 @@ export { Knowledge, locatorLabel, MAX_ATTEMPTS, MERGE_AT, pruneConcepts, STUCK_M
 export type { Answer, Job, JobStage, JobStatus, KnowledgeDeps, RunResult, Source } from './knowledge.ts';
 export { composeMinutes, MINUTES_WINDOW_CHARS, minutesFingerprint, minutesSegments, readMinutes } from './minutes.ts';
 export type { Minutes, MinutesAction, MinutesChat, MinutesCite, MinutesDraft, MinutesOptions, MinutesPoint, SavedMinutes } from './minutes.ts';
-export { EMBED_DIMS, openAiCompatPort } from './openai.ts';
-export type { CompatPort, OpenAiCompatOptions, UploadFile } from './openai.ts';
-export { EMBED_TAG, GEMINI_URL, GROQ_URL, nexusPort } from './providers.ts';
+export { answerMessages, EMBED_DIMS, extractMessages, IMAGE_PROMPT, openAiCompatPort, unit } from './openai.ts';
+export type { ChatText, CompatPort, OpenAiCompatOptions, UploadFile } from './openai.ts';
+export { EMBED_MODEL, EMBED_TAG, GEMINI_URL, GROQ_URL, nexusPort } from './providers.ts';
 export type { NexusKeys } from './providers.ts';
 export { KNOWLEDGE_STEPS } from './schema.ts';
 export { AiError, RELATIONS } from './types.ts';

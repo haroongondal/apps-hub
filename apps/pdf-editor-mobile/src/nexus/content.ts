@@ -84,7 +84,7 @@ export const content: ContentPort = {
     if (item.kind === 'image') {
       const file = itemFile(item.id, 'image.jpg');
       if (!file.exists) throw new Error('The image is missing from this device.');
-      return [{ text: await ai.readImage(await file.base64()), locator: null }];
+      return [{ text: await ai.readImage(file), locator: null }];
     }
     if (item.kind === 'pdf') {
       const pages = itemFile(item.id, 'pages.json');

@@ -289,13 +289,69 @@ push or release only when the owner says so.
     28. Two shares in a row: share a PDF to Nexus and, while "Add to Nexus?" shows, share three photos from Gallery. The
         screen shows "Getting it ready…" then the three photos; Add adds the photos only, and the PDF is not added.
 
-## Current state + exact next step
+- 2026-11-24 S6 (eco E2, branch `eco/nexus`): AI through AI hub, hub first and own keys second.
+  - `src/nexus/hub-first.ts` (pure, tested with a fake hub in `hub-first.test.ts`) wraps the own-key port. Every
+    call goes to AI hub first; the own keys serve it when the hub can't (`canFallBack`: hub-missing, not-allowed,
+    version, no-key) or when its reply can't be stored. Other hub errors become `AiError`s (busy -> rate,
+    timeout/provider-error/cancelled -> server, too-large/invalid -> bad_request), so the queue pauses or retries
+    as before and the own keys are not tried.
+    - Embed: `dimensions: 512`; the client sends batches of 8. A reply whose `dims` is not 512, whose `model` is
+      not `gemini-embedding-001` or with the wrong count goes to the own keys for that call; vectors are
+      re-normalised (`unit`, Gemini normalises only 3072-size ones). `EMBED_TAG` is unchanged.
+    - Transcribe: `segments: true` (apiVersion 2; an older hub answers `version` before anything is sent, then the
+      own key). Segments come back in the own path's shape (trimmed text, `startSec`/`endSec`). The piece-wise
+      chunking, per-piece files and the keep-out check before each piece are unchanged: each piece goes to the hub
+      or to the own key.
+    - Vision: the item's `image.jpg` file goes to the hub when it is 1 byte to 7 MB; larger, base64 to the own key.
+      `readImage` now takes the file (`ImageFile`), not base64.
+    - Chat (`extract`, `answer`, `complete`): the same prompts (now exported from knowledge-core `openai.ts`:
+      `extractMessages`, `answerMessages`, `IMAGE_PROMPT`, `unit`; `EMBED_MODEL` from `providers.ts`).
+  - `ai.ts`: `hasKeys()` is now `aiReady()`: both own keys saved, or the hub answers `available(2)` (checked at
+    most once a minute) and has not said not-allowed in the last 10 minutes. `ai_source` (`hub`, `own`, `none`) is
+    written to `files/ai_source` when it changes. `hub-binding.android.ts` binds `aiHub`; `hub-binding.ts`
+    (iOS) has no hub, because the client is Android only and `requireNativeModule` would throw on iOS.
+  - Copy: the Stream and CV "AI is off" notices mention turning Nexus on in AI hub; AI settings says what goes
+    through AI hub; the Minutes notice, replace prompt and button hint say "Groq or Gemini" (through the hub the
+    hub picks; with own keys it is Groq, then Gemini). "Process everything" shows when `aiReady()`.
+  - (my call) decisions:
+    - Also check the embed `model`, not only `dims`: another model at 512 would break search just as silently.
+    - Every hub chat asks for `maxTokens: 8192` (the hub's cap): its default 2048 would cut a long graph or
+      minutes reply, and the own path sets no cap. Graph extraction runs at `background` priority.
+    - The hub has no JSON mode, so `extract` and `complete(json)` take the text from the first `{` to the last `}`
+      (`jsonPart`) before parsing; minutes and CV validators then work as before.
+    - not-allowed is remembered in memory for 10 minutes (a new app start asks again); other fall-back kinds are
+      not remembered.
+    - provider-error maps to `server` (uses an attempt), not `offline`: the hub's kind does not say whether the
+      phone is offline, and pausing on a real refusal would keep the item first in the queue forever.
+    - `ai_source` lives in a plain file, not secure-store (not a secret, written on change only).
+  - Gates: the S6 gates line in "Current state".
+  - Not run (phone; main session's coord queue, Store installs only):
+    1. AI hub not installed, own keys set: add a note; it gets ideas; `adb shell run-as com.haroon.pdfeditor cat
+       files/ai_source` prints `own`.
+    2. AI hub installed, Nexus not allowed, no own keys: open Nexus; AI hub's Apps list shows Nexus "Asked to use
+       AI. Allow?". Add a note: Stream shows "AI is off" after the first try, nothing is sent, `ai_source` is `none`.
+    3. Same with own keys set: the note is processed with the own keys (`ai_source` `own`).
+    4. Allow Nexus in AI hub, remove the own keys, reopen Nexus: a note gets ideas, Ask answers with citations, a
+       photo gets its text, a voice note gets a transcript with tappable times, Make minutes works, the CV maker
+       writes a CV; `ai_source` is `hub`. AI hub's usage shows the calls.
+    5. Hub on: Library search and Ask still find items embedded before (same tag, 512 dims): no re-embedding.
+    6. Hub on, a recording over 25 MB: transcribed in pieces through the hub; times run through the recording.
+    7. Hub on, a photo over 7 MB (if the camera makes one): read with the own Gemini key.
+    8. Turn Nexus off in AI hub while it is used: the next call falls back to the own keys (or pauses without them).
+
 
 Nexus 1.4.0 (versionCode 18) is on the Store, built from `nexus` at a88538e8. PR #44 was merged to main on 2026-11-18.
 
 AI today (#54, #57, #64; `packages/knowledge-core/src/providers.ts`): Gemini embeds text and reads
 images, Groq transcribes (Whisper), and chat (`extract`, `answer`, `complete`) tries Groq's keys, then
 Gemini's. Several keys per service, kept in expo-secure-store. No OpenAI.
+On `eco/nexus` (S6, E2): every AI call goes to AI hub first (`src/nexus/hub-first.ts`) and to these own keys only
+when the hub can't serve it; same providers, same data. S6 gates: app tests 92/92 (78 + 14 in `hub-first.test.ts`),
+typecheck and lint exit 0; knowledge-core 110/110, typecheck exit 0; library-core 106/106; `expo export --platform
+android` exit 0 (bundle holds the hub client); `:audio-chunks:testDebugUnitTest :ai-hub-client:testDebugUnitTest
+:app:assembleDebug` BUILD SUCCESSFUL (audio-chunks 22/22, ai-hub-client 12/12); merged manifest and APK (aapt2) hold
+`uses-permission com.haroon.permission.AI_HUB`, its `<permission>` with protectionLevel signature and
+`<queries><package com.haroon.aihub/>`. Phone checks S6 1-8 not run.
 Merged to main: the CV maker as #64 (6981cf70), location reminders as #65 (22e72423), the keep-out
 feature as c3b6a309 and 68006565 (both `[skip ci]`, no PR number).
 

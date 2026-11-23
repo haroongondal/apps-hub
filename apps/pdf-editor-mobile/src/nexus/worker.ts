@@ -4,7 +4,7 @@ import { AppState } from 'react-native';
 import { newId } from '../library/ids';
 import { openLibrary } from '../library/open-library';
 
-import { ai, hasKeys } from './ai';
+import { ai, aiReady } from './ai';
 import { content } from './content';
 
 const WORKERS = 3;
@@ -47,7 +47,7 @@ async function work(kn: Knowledge) {
 /** Without a key nothing leaves the phone: queued items wait until one is saved. */
 export function kick(): Promise<void> {
   return inTurn(async () => {
-    if (!(await hasKeys())) return emit();
+    if (!(await aiReady())) return emit();
     const kn = await openKnowledge();
     while (running < WORKERS) {
       running++;

@@ -35,10 +35,23 @@ const ANSWER_PROMPT = `Answer the question using only the numbered sources from 
 Cite every claim with its source number in square brackets, like [2] or [1, 3].
 If the sources don't answer it, say so in one sentence. Be brief.`;
 
-const IMAGE_PROMPT = `Transcribe all text in this image verbatim. Then, on a new line starting "Description:", describe what it shows in two sentences.`;
+export const IMAGE_PROMPT = `Transcribe all text in this image verbatim. Then, on a new line starting "Description:", describe what it shows in two sentences.`;
 
-// Gemini's dimensions option is not verified here, so cut to EMBED_DIMS and re-normalise ourselves.
-const unit = (v: number[]): Float32Array => {
+// A type, not an interface, so it fits message types with an index signature (ai-hub-client's ChatMessage).
+export type ChatText = { role: 'system' | 'user'; content: string };
+
+export const extractMessages = (segments: string[]): ChatText[] => [
+  { role: 'system', content: EXTRACT_PROMPT },
+  { role: 'user', content: segments.map((s, i) => `[${i}] ${s}`).join('\n\n') },
+];
+
+export const answerMessages = (question: string, sources: string[]): ChatText[] => [
+  { role: 'system', content: ANSWER_PROMPT },
+  { role: 'user', content: `${sources.map((s, i) => `[${i + 1}] ${s}`).join('\n\n')}\n\nQuestion: ${question}` },
+];
+
+// Gemini only normalises full-size vectors, so cut to EMBED_DIMS and re-normalise ourselves.
+export const unit = (v: number[] | Float32Array): Float32Array => {
   const out = Float32Array.from(v.slice(0, EMBED_DIMS));
   const n = Math.hypot(...out) || 1;
   return out.map((x) => x / n);
@@ -112,13 +125,7 @@ export function openAiCompatPort(o: OpenAiCompatOptions): CompatPort {
     },
 
     async extract(segments) {
-      const content = await chat(
-        [
-          { role: 'system', content: EXTRACT_PROMPT },
-          { role: 'user', content: segments.map((s, i) => `[${i}] ${s}`).join('\n\n') },
-        ],
-        { type: 'json_object' },
-      );
+      const content = await chat(extractMessages(segments), { type: 'json_object' });
       try {
         return JSON.parse(content) as unknown;
       } catch {
@@ -131,10 +138,7 @@ export function openAiCompatPort(o: OpenAiCompatOptions): CompatPort {
     },
 
     answer(question, sources) {
-      return chat([
-        { role: 'system', content: ANSWER_PROMPT },
-        { role: 'user', content: `${sources.map((s, i) => `[${i + 1}] ${s}`).join('\n\n')}\n\nQuestion: ${question}` },
-      ]);
+      return chat(answerMessages(question, sources));
     },
 
     readImage(jpegBase64) {

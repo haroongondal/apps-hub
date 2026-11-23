@@ -12,7 +12,7 @@ import { addPdf } from '../../src/library/files';
 import { IconButton } from '../../src/library/icon-button';
 import { openItem } from '../../src/library/open-item';
 import { errorMessage } from '../../src/library/use-library';
-import { hasKeys } from '../../src/nexus/ai';
+import { aiReady } from '../../src/nexus/ai';
 import { addNote, addPhoto, addRecording } from '../../src/nexus/capture';
 import { jobLabel } from '../../src/nexus/labels';
 import { currentMeeting, meetingStatus, meetingSupported } from '../../src/nexus/meeting';
@@ -62,7 +62,7 @@ function useCards() {
         });
       }
       setCards(next);
-      setHasKey(await hasKeys());
+      setHasKey(await aiReady());
     } catch (err) {
       console.warn('Stream did not load', err);
     }
@@ -245,7 +245,7 @@ export default function StreamScreen() {
             <Header title="Stream" trailing={<IconButton icon="key-outline" label="AI settings" onPress={() => router.push('/settings')} />} />
             {!hasKey ? (
               <Notice tone="accent" title="AI is off" action={<Button label="Add your key" size="sm" onPress={() => router.push('/settings')} />}>
-                Add your Gemini and Groq keys to transcribe, find ideas and ask questions. Until then nothing leaves this phone.
+                Add your Gemini and Groq keys, or turn on Nexus in AI hub, to transcribe, find ideas and ask questions. Until then nothing leaves this phone.
               </Notice>
             ) : null}
             {meeting === 'recording' ? (

@@ -1,7 +1,12 @@
 import { nexusPort, type CompatPort } from '@apps-hub/knowledge-core';
+import { AiHubError, API_VERSION } from 'ai-hub-client/src/contract.ts';
+import { File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 
-// Gemini embeds text and reads images; Groq answers, builds the graph and transcribes. Both keys are needed.
+import { platformHub } from './hub-binding';
+import { hubFirst, type AiSource, type Hub, type NexusAi } from './hub-first';
+
+// AI hub serves each call when it can (hub-first.ts). Otherwise Gemini embeds text and reads images; Groq answers, builds the graph and transcribes, so both keys are needed.
 export type Service = 'gemini' | 'groq';
 const UPLOAD_MS = 10 * 60_000; // long enough to upload and transcribe a 25 MB recording
 const TEXT_MS = 90_000; // short, so a hung service hands the call to the next key or service sooner
@@ -39,8 +44,35 @@ export async function removeKey(s: Service, index: number): Promise<void> {
   await saveKeys(s, (await getKeys(s)).filter((_, i) => i !== index));
 }
 
-export async function hasKeys(): Promise<boolean> {
+async function hasOwnKeys(): Promise<boolean> {
   return (await getKeys('gemini')).length > 0 && (await getKeys('groq')).length > 0;
+}
+
+const HUB_CHECK_MS = 60_000;
+let hubCheck: { at: number; ok: boolean } | null = null;
+
+async function hubReady(): Promise<boolean> {
+  if (!platformHub || routed.hubBlocked()) return false;
+  if (!hubCheck || Date.now() - hubCheck.at > HUB_CHECK_MS) hubCheck = { at: Date.now(), ok: (await platformHub.available(API_VERSION)).ok };
+  return hubCheck.ok;
+}
+
+/** True when AI hub can take Nexus's calls or both own keys are saved; otherwise nothing leaves the phone. */
+export async function aiReady(): Promise<boolean> {
+  const ready = (await hasOwnKeys()) || (await hubReady());
+  if (!ready) recordSource('none');
+  return ready;
+}
+
+let lastSource: AiSource | null = null;
+function recordSource(source: AiSource): void {
+  if (source === lastSource) return;
+  lastSource = source;
+  try {
+    new File(Paths.document, 'ai_source').write(source);
+  } catch (err) {
+    console.warn('Nexus could not record ai_source', err);
+  }
 }
 
 const timedFetch: typeof fetch = (input, init) => {
@@ -59,11 +91,8 @@ export async function checkKey(s: Service, key: string): Promise<void> {
 // One port, so a key that took over stays in use; saveKeys builds a new one.
 const current = () => (port ??= nexusPort({ gemini: cached.gemini ?? [], groq: cached.groq ?? [], fetch: timedFetch }));
 
-export const ai: CompatPort = {
-  embed: (texts) => current().embed(texts),
-  extract: (segments) => current().extract(segments),
-  answer: (question, sources) => current().answer(question, sources),
-  readImage: (jpeg) => current().readImage(jpeg),
-  transcribe: (file) => current().transcribe(file),
-  complete: (system, user, json) => current().complete(system, user, json),
-};
+const missing = () => Promise.reject(new AiHubError('hub-missing', 'AI hub runs on Android only.'));
+const hub: Hub = platformHub ?? { chat: missing, vision: missing, embed: missing, transcribe: missing };
+const routed = hubFirst({ hub, own: current, served: recordSource });
+
+export const ai: NexusAi = routed;
