@@ -21,3 +21,8 @@ export function decideCaller(facts: CallerFacts): CallerDecision {
   if (facts.signatureMatches !== true) return { allow: false, reason: 'signature-mismatch' };
   return { allow: true, reason: 'ok' };
 }
+
+/** Mirrors AppLinkActivityCaller.allowedActivityCaller; both read fixtures/activity-caller-decisions.json. */
+export function allowedActivityCaller(callingPackage: string | null | undefined, signaturesMatch: boolean): boolean {
+  return typeof callingPackage === 'string' && callingPackage.length > 0 && signaturesMatch === true;
+}

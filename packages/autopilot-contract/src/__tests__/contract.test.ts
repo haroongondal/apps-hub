@@ -22,6 +22,11 @@ test('suggestions share: columns equal ROW_KEYS in order, URIs follow the spec',
   assert.equal(SUGGESTIONS_SHARE.uri(), 'content://com.haroon.inflow.autopilot/suggestions');
 });
 
+test('suggestions share equals fixtures/suggestions.share.json (the Kotlin provider is tested against the same file)', () => {
+  const { authority, path, columns, maxRows } = SUGGESTIONS_SHARE;
+  assert.deepEqual(read('suggestions.share.json'), { authority, path, columns, maxRows });
+});
+
 test('sample rows: one per kind, exact keys, valid states', () => {
   const rows: SuggestionRow[] = read('suggestion-rows.sample.json');
   assert.equal(rows.length, 4);

@@ -1,0 +1,6 @@
+{
+  "authority": "com.haroon.inflow.autopilot",
+  "path": "suggestions",
+  "columns": ["id", "kind", "title", "item_id", "due_at", "state", "created_at", "expires_at"],
+  "maxRows": 200
+}

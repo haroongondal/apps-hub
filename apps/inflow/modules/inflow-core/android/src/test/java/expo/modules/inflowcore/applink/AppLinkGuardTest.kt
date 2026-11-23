@@ -6,6 +6,11 @@ import expo.modules.inflowcore.applink.AppLinkGuard.ExtrasCheck
 import expo.modules.inflowcore.applink.AppLinkGuard.Reason
 import java.io.File
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -140,5 +145,63 @@ class AppLinkGuardTest {
 
   @Test fun neverThrowsOnOddInput() {
     assertFalse(AppLinkGuard.validateExtras(spec, mapOf("text" to Any())) is ExtrasCheck.Ok)
+  }
+
+  @Test fun aLongTakesAWholeDoubleAndReturnsALong() {
+    assertEquals(5L, ok(mapOf("text" to "t", "id" to 5.0))["id"])
+    assertEquals(-5L, ok(mapOf("text" to "t", "id" to -5.0))["id"])
+    assertEquals(9007199254740991L, ok(mapOf("text" to "t", "id" to 9007199254740991.0))["id"])
+    assertEquals("id must be a whole number", rejected(mapOf("text" to "t", "id" to 9007199254740992.0)))
+    assertEquals("id must be a whole number", rejected(mapOf("text" to "t", "id" to 1.5)))
+    assertEquals("id must be a whole number", rejected(mapOf("text" to "t", "id" to Double.NaN)))
+    assertEquals("id must be a whole number", rejected(mapOf("text" to "t", "id" to Double.POSITIVE_INFINITY)))
+  }
+
+  @Test fun aSpecWithAMaxOutOfRangeIsRefusedNotThrown() {
+    fun bad(s: ExtraSpec) = rejected(mapOf("k" to "x"), mapOf("k" to s))
+    for (s in listOf(
+      ExtraSpec(ExtraType.STRING, max = 0), ExtraSpec(ExtraType.STRING, max = -1), ExtraSpec(ExtraType.STRING, max = AppLinkGuard.MAX_STRING_CHARS + 1),
+      ExtraSpec(ExtraType.STRING_ARRAY, max = 0), ExtraSpec(ExtraType.STRING_ARRAY, max = AppLinkGuard.MAX_ARRAY_ITEMS + 1),
+      ExtraSpec(ExtraType.LONG, max = 5), ExtraSpec(ExtraType.BOOLEAN, max = 5),
+    )) assertTrue("$s", bad(s)!!.startsWith("bad spec for k: "))
+    // the bad spec is refused even when the caller sends nothing for it
+    assertTrue(rejected(emptyMap(), mapOf("k" to ExtraSpec(ExtraType.STRING, max = 0)))!!.startsWith("bad spec"))
+    assertEquals(null, rejected(mapOf("k" to "x"), mapOf("k" to ExtraSpec(ExtraType.STRING, max = AppLinkGuard.MAX_STRING_CHARS))))
+    assertEquals(null, rejected(mapOf("k" to listOf("x")), mapOf("k" to ExtraSpec(ExtraType.STRING_ARRAY, max = AppLinkGuard.MAX_ARRAY_ITEMS))))
+  }
+
+  // The same table the TypeScript validateExtras runs (extras-cases.test.ts); only ok / not ok is compared.
+  private fun value(e: JsonElement): Any? = when (e) {
+    is JsonNull -> null
+    is JsonArray -> e.map { value(it) }
+    is JsonObject -> e.getValue("repeat").jsonPrimitive.content.repeat(e.getValue("n").jsonPrimitive.int) // {"repeat":"x","n":2000}
+    is JsonPrimitive -> when {
+      e.isString -> e.content
+      e.content == "true" || e.content == "false" -> e.content.toBoolean()
+      e.content.any { it == '.' || it == 'e' || it == 'E' } -> e.content.toDouble()
+      else -> e.content.toLong()
+    }
+  }
+
+  private fun type(s: String) = when (s) {
+    "string" -> ExtraType.STRING
+    "long" -> ExtraType.LONG
+    "boolean" -> ExtraType.BOOLEAN
+    "stringArray" -> ExtraType.STRING_ARRAY
+    else -> throw AssertionError("unknown type $s")
+  }
+
+  @Test fun everyRowOfTheSharedExtrasTableGetsTheSameVerdictAsTypeScript() {
+    val cases = Json.parseToJsonElement(fixture("extras-cases.json")).jsonArray
+    assertTrue(cases.size >= 30)
+    for (c in cases.map { it.jsonObject }) {
+      val spec = c.getValue("spec").jsonObject.mapValues { (_, v) ->
+        val o = v.jsonObject
+        ExtraSpec(type(o.getValue("type").jsonPrimitive.content), o["max"]?.jsonPrimitive?.int, o["required"]?.jsonPrimitive?.boolean ?: false)
+      }
+      val raw = c.getValue("raw").jsonObject.mapValues { value(it.value) }
+      val verdict = AppLinkGuard.validateExtras(spec, raw)
+      assertEquals(c.getValue("name").jsonPrimitive.content, c.getValue("ok").jsonPrimitive.boolean, verdict is ExtrasCheck.Ok)
+    }
   }
 }

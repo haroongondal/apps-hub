@@ -34,7 +34,7 @@ object AppLinkGuard {
 
   enum class ExtraType { STRING, LONG, BOOLEAN, STRING_ARRAY }
 
-  /** `max` only lowers a limit: chars for a string, items for a string array. */
+  /** `max` only lowers a limit: chars for a string (1..MAX_STRING_CHARS), items for a string array (1..MAX_ARRAY_ITEMS). A long or boolean takes none. */
   data class ExtraSpec(val type: ExtraType, val max: Int? = null, val required: Boolean = false)
 
   sealed interface ExtrasCheck {
@@ -42,12 +42,17 @@ object AppLinkGuard {
     data class Rejected(val reason: String) : ExtrasCheck
   }
 
-  /** Checks the extras of an incoming intent (`raw` is built from its extras bundle). Strings come back untouched, but a NUL is refused. Lengths count UTF-16 units. */
+  /**
+   * Checks the extras of an incoming intent (`raw` is built from its extras bundle). Strings come back untouched, but a NUL is refused.
+   * Lengths count UTF-16 units. A LONG extra takes a Long, an Int, or a Double that is a whole number (the React Native bridge sends
+   * every number as a Double); it comes back as a Long. A spec whose `max` is out of range is refused here, it never throws out.
+   */
   fun validateExtras(spec: Map<String, ExtraSpec>, raw: Map<String, Any?>): ExtrasCheck =
     runCatching { check(spec, raw) }.getOrElse { ExtrasCheck.Rejected("extras could not be read") }
 
   private fun check(spec: Map<String, ExtraSpec>, raw: Map<String, Any?>): ExtrasCheck {
     fun no(reason: String) = ExtrasCheck.Rejected(reason)
+    for ((key, s) in spec) badMax(s)?.let { return no("bad spec for $key: $it") }
     if (raw.size > MAX_EXTRAS) return no("more than $MAX_EXTRAS extras")
     raw.keys.firstOrNull { it !in spec }?.let { return no("unknown extra $it") }
     var total = 0
@@ -60,7 +65,7 @@ object AppLinkGuard {
       val value = raw[key]
       when (s.type) {
         ExtraType.LONG -> {
-          val n = (value as? Long) ?: (value as? Int)?.toLong()
+          val n = (value as? Long) ?: (value as? Int)?.toLong() ?: (value as? Double)?.takeIf { it.isFinite() && it == Math.floor(it) && Math.abs(it) <= MAX_SAFE_LONG.toDouble() }?.toLong()
           if (n == null || n > MAX_SAFE_LONG || n < -MAX_SAFE_LONG) return no("$key must be a whole number")
           out[key] = n
         }
@@ -88,5 +93,16 @@ object AppLinkGuard {
     }
     if (total > MAX_TOTAL_CHARS) return no("extras hold more than $MAX_TOTAL_CHARS characters")
     return ExtrasCheck.Ok(out)
+  }
+
+  /** Why a spec's `max` is out of range, or null when it is fine. */
+  private fun badMax(s: ExtraSpec): String? {
+    val max = s.max ?: return null
+    val limit = when (s.type) {
+      ExtraType.STRING -> MAX_STRING_CHARS
+      ExtraType.STRING_ARRAY -> MAX_ARRAY_ITEMS
+      else -> return "a ${s.type.name.lowercase()} takes no max"
+    }
+    return if (max in 1..limit) null else "max must be 1 to $limit, got $max"
   }
 }

@@ -25,22 +25,43 @@ function parse(xml: string): El {
   return root;
 }
 
+/** Two class names written in a manifest: equal, or one is `.Short` and the other ends with it; a leading `.` is also resolved against `pkg`. */
+function sameClass(a: string, b: string, pkg?: string): boolean {
+  const full = (n: string) => (n.startsWith('.') && pkg ? pkg + n : n);
+  const [x, y] = [full(a), full(b)];
+  return x === y || (x.startsWith('.') && y.endsWith(x)) || (y.startsWith('.') && x.endsWith(y));
+}
+
 const all = (el: El): El[] => el.kids.flatMap((k) => [k, ...all(k)]);
+
+/** `android:exported` is true for `true` and for any `@bool/...` reference (fail closed: a reference could resolve to true). */
+const isTrue = (v: string | undefined) => v === 'true' || (v?.startsWith('@') ?? false);
 
 /**
  * Checks an AndroidManifest.xml text against the link rules and returns the problems (empty is clean):
- * a link provider or action refuses callers without the signature permission, nothing a link starts
- * runs headless, and the permission is declared as `signature`. `allowHeadless` lists activities
- * (full class name, or the `.dotted` name written in the manifest) that are grandfathered as headless.
- * Limits: path-permission children and `activity-alias` are not read.
+ * a link provider, action or action alias refuses callers without the signature permission, a provider
+ * has no `path-permission` (it would replace the permission for its path), link actions are not
+ * services or receivers, and the permission is declared as `signature`. `allowHeadless` lists
+ * activities (full class name, or the `.dotted` name written in the manifest) that are grandfathered as headless.
+ *
+ * Limits: "a link action shows a screen" is a code-review rule. The audit only catches the `NoDisplay`
+ * theme substring; it cannot prove a screen is shown (a translucent theme, or `finish()` in `onCreate`,
+ * passes). An `<activity-alias>` is judged by its own filters and by whether its `targetActivity` is a
+ * link action in the same manifest; its theme is not read.
  */
 export function auditManifest(xml: string, opts: { allowHeadless?: string[] } = {}): string[] {
   const allow = opts.allowHeadless ?? [];
   const els = all(parse(xml));
+  const pkg = els.find((e) => e.name === 'manifest')?.attrs.package;
   const problems: string[] = [];
   const inApp = (e: El) => e.parent?.name === 'application';
+  const filtersOf = (e: El) => e.kids.filter((k) => k.name === 'intent-filter');
+  const hasLinkFilter = (e: El) => filtersOf(e).some((f) => f.kids.some((k) => k.name === 'action' && ACTION.test(k.attrs.name ?? '')));
+  const exportedComponent = (e: El) => isTrue(e.attrs.exported) || (e.attrs.exported === undefined && filtersOf(e).length > 0);
+  const headlessTheme = (e: El) => (e.attrs.theme ?? '').includes('NoDisplay');
+  const isLinkActivity = (a: El) => hasLinkFilter(a) || (headlessTheme(a) && a.attrs.permission === LINK_PERMISSION);
 
-  for (const p of els.filter((e) => e.name === 'provider' && inApp(e) && e.attrs.exported === 'true')) {
+  for (const p of els.filter((e) => e.name === 'provider' && inApp(e) && isTrue(e.attrs.exported))) {
     const authorities = (p.attrs.authorities ?? '').split(';');
     if (!authorities.some(isKnownAuthority)) continue;
     const who = `provider ${p.attrs.name}`;
@@ -52,22 +73,33 @@ export function auditManifest(xml: string, opts: { allowHeadless?: string[] } = 
     if (p.attrs.grantUriPermissions === 'true' || p.kids.some((k) => k.name === 'grant-uri-permission')) {
       problems.push(`${who} grants URI permissions`);
     }
+    if (p.kids.some((k) => k.name === 'path-permission')) problems.push(`${who} has a path-permission, which replaces the provider permission for its path`);
   }
 
-  for (const a of els.filter((e) => e.name === 'activity' && inApp(e))) {
-    const filters = a.kids.filter((k) => k.name === 'intent-filter');
-    const exported = a.attrs.exported === 'true' || (a.attrs.exported === undefined && filters.length > 0);
-    if (!exported) continue;
-    const headless = (a.attrs.theme ?? '').includes('NoDisplay');
-    const linkFilter = filters.some((f) => f.kids.some((k) => k.name === 'action' && ACTION.test(k.attrs.name ?? '')));
+  const activities = els.filter((e) => e.name === 'activity' && inApp(e));
+  for (const a of activities) {
+    if (!exportedComponent(a)) continue;
     // Started by an explicit intent: still a link action when only link callers may start it.
-    if (!linkFilter && !(headless && a.attrs.permission === LINK_PERMISSION)) continue;
+    if (!isLinkActivity(a)) continue;
     const name = a.attrs.name ?? '';
     const who = `activity ${name}`;
     if (a.attrs.permission !== LINK_PERMISSION) problems.push(`${who} is a link action but its permission is ${a.attrs.permission ?? 'missing'}, expected ${LINK_PERMISSION}`);
-    if (headless && !allow.some((x) => x === name || (name.startsWith('.') && x.endsWith(name)))) {
+    if (headlessTheme(a) && !allow.some((x) => sameClass(x, name, pkg))) {
       problems.push(`${who} is a link action that runs headless (${a.attrs.theme}); link actions must show a screen`);
     }
+  }
+
+  // An alias carries its own permission and replaces the target's: an unguarded alias opens the target.
+  for (const al of els.filter((e) => e.name === 'activity-alias' && inApp(e))) {
+    const target = activities.find((a) => sameClass(a.attrs.name ?? '', al.attrs.targetActivity ?? '\0', pkg));
+    const link = hasLinkFilter(al) || (exportedComponent(al) && target !== undefined && isLinkActivity(target));
+    if (link && al.attrs.permission !== LINK_PERMISSION) {
+      problems.push(`activity-alias ${al.attrs.name} is a link action but its permission is ${al.attrs.permission ?? 'missing'}, expected ${LINK_PERMISSION}`);
+    }
+  }
+
+  for (const c of els.filter((e) => (e.name === 'service' || e.name === 'receiver') && inApp(e) && exportedComponent(e) && hasLinkFilter(e))) {
+    problems.push(`${c.name} ${c.attrs.name} is exported with a link action filter; link actions must be activities that show a screen`);
   }
 
   const uses = els.some((e) => e.name !== 'permission' && e.name !== 'uses-permission'

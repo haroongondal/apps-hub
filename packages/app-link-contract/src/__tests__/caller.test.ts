@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
-import { decideCaller } from '../index.ts';
+import { allowedActivityCaller, decideCaller } from '../index.ts';
 
 const cases: { isSelf: boolean; holdsPermission: boolean; signatureMatches: boolean; allow: boolean; reason: string }[] = JSON.parse(
   fs.readFileSync(new URL('../../fixtures/caller-decisions.json', import.meta.url), 'utf8'),
@@ -33,4 +33,20 @@ test('fails closed on missing or non-boolean fields', () => {
     assert.equal(loose(facts).allow, false, JSON.stringify(facts));
   }
   assert.deepEqual(loose({ holdsPermission: true, signatureMatches: 'yes' }), { allow: false, reason: 'signature-mismatch' });
+});
+
+const activityCases: { callingPackage: string | null; signaturesMatch: boolean; allow: boolean }[] = JSON.parse(
+  fs.readFileSync(new URL('../../fixtures/activity-caller-decisions.json', import.meta.url), 'utf8'),
+);
+
+test('allowedActivityCaller matches every row of activity-caller-decisions.json', () => {
+  assert.ok(activityCases.some((c) => c.allow) && activityCases.some((c) => !c.allow));
+  for (const c of activityCases) assert.equal(allowedActivityCaller(c.callingPackage, c.signaturesMatch), c.allow, JSON.stringify(c));
+});
+
+test('allowedActivityCaller fails closed on odd input', () => {
+  const loose = allowedActivityCaller as (p: unknown, s: unknown) => boolean;
+  for (const [p, s] of [[undefined, true], [5, true], [{}, true], ['com.haroon.inflow', 'yes'], ['com.haroon.inflow', 1], ['com.haroon.inflow', undefined]]) {
+    assert.equal(loose(p, s), false, JSON.stringify([p, s]));
+  }
 });

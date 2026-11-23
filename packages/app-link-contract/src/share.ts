@@ -46,19 +46,26 @@ const INT32_MAX = 2147483647;
 const COLUMN_TYPES: readonly string[] = ['long', 'int', 'double', 'string', 'long?', 'int?', 'double?', 'string?'];
 
 // Long words are refused anywhere in the name (so `access_token_hash` fails too); short words
-// that sit inside harmless names (pinned, spinner, speed) only count as a whole `_` word.
-const SENSITIVE_SUBSTRINGS = ['password', 'passwd', 'secret', 'token', 'apikey', 'api_key', 'private', 'credential', 'session', 'cookie', 'mnemonic'];
-const SENSITIVE_WORDS = ['pin', 'otp', 'seed', 'cvv', 'cvc'];
+// that sit inside harmless names (pinned, spinner, speed, keyboard, decode_ms) only count as a whole `_` word.
+const SENSITIVE_SUBSTRINGS = ['password', 'passwd', 'passcode', 'passphrase', 'secret', 'token', 'apikey', 'api_key', 'private', 'credential', 'session', 'cookie', 'mnemonic', 'cardnumber', 'totp', 'hotp'];
+const SENSITIVE_WORDS = ['pin', 'otp', 'seed', 'cvv', 'cvc', 'code', 'key', 'pass', 'pwd', 'passcode', 'auth', 'iban', 'card'];
 
-/** True for names a share must never serve. A plural word (`pins`) counts; `pincode` (no `_`) does not, so name such a column `pin_code`. */
+/**
+ * True for names a share must never serve. A whole `_` word counts, plural or not (`pins`, `keys`);
+ * `pincode` (no `_`) does not, so name such a column `pin_code`. The list is deliberately blunt: an
+ * author renames instead of arguing, so `status_code` (word `code`) and `item_key` (word `key`) are
+ * refused too; name them `status_id` and `item_ref`. Only names are checked, never values.
+ */
 export function isSensitiveName(name: string): boolean {
-  return SENSITIVE_SUBSTRINGS.some((s) => name.includes(s)) || name.split('_').some((w) => SENSITIVE_WORDS.includes(w.replace(/s$/, '')));
+  return SENSITIVE_SUBSTRINGS.some((s) => name.includes(s)) || name.split('_').some((w) => SENSITIVE_WORDS.includes(w) || SENSITIVE_WORDS.includes(w.replace(/s$/, '')));
 }
 
 /**
  * Declares a read-only content provider path. Rows are flat and typed (numbers and strings,
- * nullable or not); secrets never travel: a column named like a password, token, code or key is
- * refused ("serves nothing sensitive by construction"). Text that came from other people
+ * nullable or not). A column NAMED like a password, token, code or key is refused (see
+ * `isSensitiveName`); that is a name check only and says nothing about the values a provider puts
+ * in a column, and it binds a provider only when a JVM test ties the provider's column array and
+ * row cap to this share's fixture (README, "Add a share"). Text that came from other people
  * (messages, names, titles) must not appear in a share unless the share's README entry says
  * it is untrusted data, which the receiving app must never treat as instructions.
  *

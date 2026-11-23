@@ -93,6 +93,16 @@ test('unknown keys, missing keys, wrong types', () => {
   assert.deepEqual(validateExtras(act, { task: 't', count: -5, dry: false, tags: [] }), { ok: true, extras: { task: 't', count: -5, dry: false, tags: [] } });
 });
 
+test('an inherited property is not an extra, and Object.prototype names cannot be extras', () => {
+  assert.deepEqual(validateExtras(act, Object.create({ task: 'inherited' })), { ok: false, reason: 'missing extra task' });
+  assert.equal(validateExtras(act, Object.assign(Object.create({ count: 'inherited' }), { task: 't' })).ok, true);
+  const ok = { app: 'deputy', name: 'X', screen: true as const, description: 'd' };
+  for (const key of ['toString', 'constructor', 'valueOf', 'hasOwnProperty', 'isPrototypeOf']) {
+    assert.throws(() => defineAction({ ...ok, extras: { [key]: { type: 'string' } } }), /every object has/, key);
+  }
+  assert.throws(() => defineAction({ ...ok, extras: JSON.parse('{"__proto__":{"type":"string"}}') }), /extra key/);
+});
+
 test('never throws on odd input', () => {
   for (const raw of [null, undefined, 'x', 5, [], new Proxy({}, { ownKeys() { throw new Error('boom'); } })]) {
     assert.equal(validateExtras(act, raw as never).ok, false);

@@ -52,6 +52,7 @@ export function defineAction<const E extends Record<string, ExtraSpec>>(spec: Ac
   if (keys.length > MAX_EXTRAS) throw new Error(`an action takes at most ${MAX_EXTRAS} extras, got ${keys.length}`);
   for (const key of keys) {
     if (!EXTRA_KEY.test(key)) throw new Error(`extra key ${JSON.stringify(key)} must match ${EXTRA_KEY}`);
+    if (key in Object.prototype) throw new Error(`extra key ${JSON.stringify(key)} is a property every object has (toString, constructor, ...); pick another name`);
     const { type, max } = spec.extras[key];
     if (!['string', 'long', 'boolean', 'stringArray'].includes(type)) throw new Error(`extra ${key} has unknown type ${JSON.stringify(type)}`);
     if (max === undefined) continue;
@@ -81,7 +82,7 @@ function check<E extends Record<string, ExtraSpec>>(action: Action<E>, raw: Reco
   let total = 0;
   const out: Record<string, unknown> = {};
   for (const [key, spec] of Object.entries<ExtraSpec>(action.extras)) {
-    const value = raw[key];
+    const value = Object.hasOwn(raw, key) ? raw[key] : undefined; // never an inherited property
     if (value === undefined) {
       if (spec.required) return { ok: false, reason: `missing extra ${key}` };
       continue;

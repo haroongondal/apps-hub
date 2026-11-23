@@ -31,12 +31,14 @@ function JobRow({ job, label, saved, onSaved, onError }: { job: JobKey; label: s
   return (
     <Row title={label}>
       {options.length > 1 && (
-        <Segmented
-          accessibilityLabel={`${label} service`}
-          options={options.map((key) => ({ key, label: SERVICE_LABEL[key] }))}
-          value={service}
-          onChange={setService}
-        />
+        <View style={{ alignSelf: 'flex-start' }}>
+          <Segmented
+            accessibilityLabel={`${label} service`}
+            options={options.map((key) => ({ key, label: SERVICE_LABEL[key] }))}
+            value={service}
+            onChange={setService}
+          />
+        </View>
       )}
       <Field label={options.length > 1 ? 'Model id' : `Model id on ${SERVICE_LABEL[options[0]]}`} value={model} onChangeText={setModelId} autoCapitalize="none" autoCorrect={false} mono />
       {dirty && <Button label="Save" size="sm" onPress={save} busy={busy} disabled={model.trim().length === 0} accessibilityLabel={`Save ${label} model`} />}
