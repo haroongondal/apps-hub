@@ -164,6 +164,8 @@ Risks: no phone check has ever run and everything depends on Store-signed builds
 
 - E2 Design Editor phone DONE (eco/design-editor 622c3b41): design-editor-mobile 137 (120), engine 48, JUnit 316, Metro bundle ok (AiHubClient in the Hermes bundle), merged manifest has AI_HUB permission + queries; hub first, own key second; empty hub reply is NOT retried on the own key; not-allowed remembered 10 min; ai_source in ai-source.txt; the app's only AI call is layout chat (no image generation call exists); phone not run.
 
+- E2 Deputy: NOT BUILT on purpose (e7d154c4, docs only; JVM 339, deputy ts 24): hub apiVersion 2 cannot carry Deputy's steps. Blockers: (1) chat reply omits the assistant message (Gemini thought signatures in tool_calls extra_content / OpenRouter reasoning_details; SPEC 9.3 forbids rebuilding it), (2) the hub's default chat model (Groq gpt-oss-120b) cannot read screenshots and the Gemini fallback is disabled for image messages, (3) no tool_choice "required" and no reasoning_effort, (4) spend cannot be priced before the call. Sizes fit (step <= about 62 KB plus one image, under the 512 KB cap). Hub apiVersion 3 would need: (a) chat reply returns `raw` assistant message, (b) request `toolChoice`, (c) images in chat routed to a vision model or inline image parts in the vision job. Owner decision: build hub apiVersion 3 for Deputy? Deputy keeps its own keys until then; `ai_source` own/none already reported.
+
 ## Security findings handled during the build (automated reviews)
 
 - ai-hub-client did not verify the hub identity (package squatting): fixed, 60875260 on eco/ai-hub.
