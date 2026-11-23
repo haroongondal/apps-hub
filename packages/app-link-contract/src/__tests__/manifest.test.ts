@@ -53,6 +53,53 @@ test('action problems', () => {
   assert.deepEqual(auditManifest(manifest(explicit), { allowHeadless: ['a.b.Run'] }), []);
 });
 
+const LINK_FILTER = '<intent-filter><action android:name="com.haroon.inflow.action.OPEN" /></intent-filter>';
+
+test('an exported activity-alias without the permission is flagged when its target is a link action', () => {
+  const target = `<activity android:name=".Open" android:exported="false" android:permission="${P}">${LINK_FILTER}</activity>`;
+  const alias = (attrs: string) => `<activity-alias android:name=".OpenAlias" android:targetActivity=".Open" android:exported="true" ${attrs} />`;
+  assert.deepEqual(auditManifest(manifest(target + alias(''))), [`activity-alias .OpenAlias is a link action but its permission is missing, expected ${P}`]);
+  assert.deepEqual(auditManifest(manifest(target + alias(`android:permission="x.Y"`))), [`activity-alias .OpenAlias is a link action but its permission is x.Y, expected ${P}`]);
+  assert.deepEqual(auditManifest(manifest(target + alias(`android:permission="${P}"`))), []);
+  // an alias of an ordinary activity is not a link
+  assert.deepEqual(auditManifest(manifest(`<activity android:name=".Main" android:exported="false" />` + alias('').replace('.Open"', '.Main"'))), []);
+});
+
+test('an activity-alias with a link action filter needs the permission, exported or not', () => {
+  const alias = (attrs: string) => `<activity-alias android:name=".A" android:targetActivity=".Main" ${attrs}>${LINK_FILTER}</activity-alias>`;
+  const problem = `activity-alias .A is a link action but its permission is missing, expected ${P}`;
+  assert.deepEqual(auditManifest(manifest(alias(''))), [problem]);
+  assert.deepEqual(auditManifest(manifest(alias('android:exported="false"'))), [problem]);
+  assert.deepEqual(auditManifest(manifest(alias(`android:permission="${P}"`))), []);
+});
+
+test('a path-permission child of a link provider is flagged', () => {
+  const withPath = provider().replace(' />', `><path-permission android:pathPrefix="/open" android:readPermission="android.permission.READ_SMS" /></provider>`);
+  assert.deepEqual(auditManifest(manifest(withPath)), ['provider .Share has a path-permission, which replaces the provider permission for its path']);
+});
+
+test('an exported service or receiver with a link action filter is flagged', () => {
+  const problem = (tag: string) => `${tag} .Do is exported with a link action filter; link actions must be activities that show a screen`;
+  for (const tag of ['service', 'receiver']) {
+    assert.deepEqual(auditManifest(manifest(`<${tag} android:name=".Do" android:exported="true" android:permission="${P}">${LINK_FILTER}</${tag}>`)), [problem(tag)], tag);
+    // exported by default because it has a filter
+    assert.deepEqual(auditManifest(manifest(`<${tag} android:name=".Do">${LINK_FILTER}</${tag}>`)), [problem(tag)], tag);
+    assert.deepEqual(auditManifest(manifest(`<${tag} android:name=".Do" android:exported="false">${LINK_FILTER}</${tag}>`)), [], tag);
+  }
+});
+
+test('android:exported given as a resource reference counts as exported', () => {
+  assert.deepEqual(auditManifest(manifest(provider('').replace('exported="true"', 'exported="@bool/open"'))), ['provider .Share is exported with no readPermission']);
+  assert.deepEqual(auditManifest(manifest(action('').replace('exported="true"', 'exported="@bool/open"'))), [`activity .Open is a link action but its permission is missing, expected ${P}`]);
+  assert.deepEqual(auditManifest(manifest(`<service android:name=".Do" android:exported="@bool/open">${LINK_FILTER}</service>`)), [
+    'service .Do is exported with a link action filter; link actions must be activities that show a screen',
+  ]);
+});
+
+test('a translucent or finishing screen passes: the audit only reads the NoDisplay theme', () => {
+  assert.deepEqual(auditManifest(manifest(action(`android:permission="${P}" android:theme="@style/Theme.Translucent"`))), []);
+});
+
 test('permission declaration problems', () => {
   assert.deepEqual(auditManifest(manifest(provider(), '')), [
     `${P} is used on a component but not declared with <permission>`,
