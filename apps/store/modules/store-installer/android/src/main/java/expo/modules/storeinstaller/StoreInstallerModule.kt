@@ -53,7 +53,7 @@ class StoreInstallerModule : Module() {
     Function("getUpdateCheckHours") { UpdateCheckWorker.hours(context) }
 
     Function("getServiceSettings") { Health.settings(context) }
-    AsyncFunction("queryHealth") Coroutine { authority: String, expectedPackage: String -> Health.report(context, authority, expectedPackage) }
+    AsyncFunction("queryHealth") Coroutine { authority: String, appId: String -> Health.report(context, authority, appId) }
     Function("openAppSettings") { packageName: String -> Health.openAppSettings(context, packageName) }
     Function("openAccessibilitySettings") { Health.openAccessibilitySettings(context) }
     Function("openListenerSettings") { packageName: String, className: String? -> Health.openListenerSettings(context, packageName, className) }

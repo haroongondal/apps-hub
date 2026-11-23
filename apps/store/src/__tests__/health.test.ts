@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ANDROID_PACKAGES } from '@apps-hub/store-manifest';
-import type { HealthAppId } from '@apps-hub/app-link-contract';
+import { SIBLING_PACKAGES, type HealthAppId } from '@apps-hub/app-link-contract';
 import {
   AUTOSTART_STEPS,
   SERVICES,
@@ -29,6 +29,10 @@ test('lists installed apps from the package table, HomeNet and TunnelWall includ
   assert.ok(all.includes('netlens') && all.includes('open-tunnel') && all.includes('ai-hub'));
   assert.ok(!all.includes('store' as HealthAppId) && !all.includes('notch' as HealthAppId));
   assert.deepEqual(healthApps((p) => p === 'app.netlens' || p === 'com.haroon.store'), [{ id: 'netlens', packageName: 'app.netlens' }]);
+});
+
+test('every health app id is a sibling with the same package, so native queryHealth finds its expected package by id', () => {
+  for (const a of healthApps(() => true)) assert.equal(SIBLING_PACKAGES[a.id], a.packageName, a.id);
 });
 
 test('parses the secure setting like Deputy does: full and short component names, exact match', () => {

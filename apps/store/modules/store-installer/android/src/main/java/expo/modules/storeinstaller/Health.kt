@@ -4,11 +4,12 @@ import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import expo.modules.storeinstaller.applink.AppLinkTarget
+import expo.modules.storeinstaller.applink.SiblingPackages
 
 object Health {
   private const val LISTENERS = "enabled_notification_listeners"
@@ -27,20 +28,20 @@ object Health {
     null
   }
 
-  suspend fun report(context: Context, authority: String, expectedPackage: String): List<Map<String, Any?>>? =
-    Deadline.within(TIMEOUT_MS) { rows(context, authority, expectedPackage) }
+  // The expected package comes from the sibling table by release id, never from the caller; an id with no entry (notch) is "no report".
+  suspend fun report(context: Context, authority: String, appId: String): List<Map<String, Any?>>? =
+    Deadline.within(TIMEOUT_MS) {
+      read(appId, { AppLinkTarget.trustedProvider(context, authority, it) }) { query(context, authority) }
+    }
 
-  private fun trusted(context: Context, authority: String, expectedPackage: String): Boolean {
-    val pm = context.packageManager
-    val resolved = pm.resolveContentProvider(authority, 0)?.packageName
-    val signed = pm.checkSignatures(context.packageName, expectedPackage) == PackageManager.SIGNATURE_MATCH
-    return ProviderTrust.allowed(expectedPackage, resolved, signed)
+  internal fun read(appId: String, trusted: (expectedPackage: String) -> Boolean, query: () -> List<Map<String, Any?>>?): List<Map<String, Any?>>? {
+    val expected = SiblingPackages.ALL[appId] ?: return null
+    return if (trusted(expected)) query() else null
   }
 
-  // Any failure (no provider yet, a debug build refused by the signature check, a broken provider) is "no report".
-  private fun rows(context: Context, authority: String, expectedPackage: String): List<Map<String, Any?>>? = try {
-    if (!trusted(context, authority, expectedPackage)) null
-    else context.contentResolver.query(Uri.parse("content://$authority/$PATH"), null, null, null, null)?.use { c ->
+  // Any failure (no provider yet, a broken provider) is "no report".
+  private fun query(context: Context, authority: String): List<Map<String, Any?>>? = try {
+    context.contentResolver.query(Uri.parse("content://$authority/$PATH"), null, null, null, null)?.use { c ->
       buildList { while (size < MAX_ROWS && c.moveToNext()) add(row(c)) }
     }
   } catch (e: Exception) {

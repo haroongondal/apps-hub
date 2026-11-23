@@ -19,7 +19,7 @@ async function readHealth(): Promise<Snapshot> {
   const now = Date.now();
   const reports = await Promise.all(
     apps.map((a) =>
-      StoreInstaller.queryHealth(appHealthShare(a.id).authority, a.packageName).then(
+      StoreInstaller.queryHealth(appHealthShare(a.id).authority, a.id).then(
         (rows) => parseHealthRow(rows, a.id, now),
         () => null,
       ),
