@@ -84,4 +84,21 @@ CREATE TABLE reminders (
 );
 CREATE INDEX reminders_item ON reminders (item_id);
 `,  // Nexus: place reminders. Later rebuilds of items must keep this table too (DROP cascades it).
+  `
+-- Items read from another app (Ask my life). app is checked in code (SOURCE_APPS), so a new app needs no rebuild.
+CREATE TABLE item_sources (
+  item_id   TEXT PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+  app       TEXT NOT NULL,
+  source_id INTEGER NOT NULL,               -- the row id in that app's share
+  source_at INTEGER NOT NULL,               -- ms since epoch, when it happened in that app
+  UNIQUE (app, source_id)
+);
+`,  // Later rebuilds of items must keep this table too (DROP cascades it).
+  `
+CREATE TABLE item_due (
+  item_id TEXT PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+  due_at  INTEGER NOT NULL                  -- ms since epoch, UTC
+);
+CREATE INDEX item_due_at ON item_due (due_at);
+`,  // Later rebuilds of items must keep this table too (DROP cascades it).
 ];
