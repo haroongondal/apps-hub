@@ -21,6 +21,8 @@ object BriefingRefresh {
   /** Either briefing switch changed: forget what was built (it may hold too much), then rebuild. */
   fun settingChanged(context: Context) = of(context).run {
     clear()
+    // Sharing off rebuilds nothing, but what Halo may read just went away: tell it. Sharing on tells it from the rebuild, if the lines differ.
+    if (!Briefing.on(StoreHolder.get(context).getOrNull()?.meta(Briefing.SHARE_META))) HaloPing.changed(context)
     refreshAsync()
   }
 
@@ -39,6 +41,7 @@ object BriefingRefresh {
       executor,
       System::currentTimeMillis,
       { Briefing.on(store()?.meta(Briefing.SHARE_META)) },
+      { HaloPing.changed(app) },   // the lines differ from the last snapshot: Halo re-reads (it gets no data in the ping)
     )
   }
 }

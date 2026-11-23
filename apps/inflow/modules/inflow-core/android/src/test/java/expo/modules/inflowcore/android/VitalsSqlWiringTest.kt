@@ -102,6 +102,17 @@ class VitalsSqlWiringTest {
     assertTrue(source.none { Regex("\\b(Journal\\w*|sleepMinutes|hrAvg|hrLow|Doctor\\w*|HealthForAsk|name|dose)\\b").containsMatchIn(it) })
   }
 
+  // P2 item 4: the 08:00 and 20:00 summary reaches health only through the briefing's gated source (Briefing.build), so none of its own files names health code.
+  @Test fun theSummaryAndThePingNameNoHealthCodeAndTakeHealthOnlyFromTheBriefing() {
+    val noText = { l: String -> l.replace(Regex("\"([^\"\\\\]|\\\\.)*\""), "\"\"") }
+    val own = listOf("Digest.kt", "DigestNotifier.kt", "DigestAlarm.kt", "ChangedPing.kt", "HaloPing.kt")
+    for (n in own) assertTrue("$n names health code", code(file(n)).none { healthCode.containsMatchIn(noText(it)) || wordMention.containsMatchIn(it) })
+    for (n in own) assertTrue("$n asks for health", code(file(n)).none { it.contains(".health()") || it.contains("healthOn") })
+    // The morning is Briefing.build (behind healthOn); the evening has no health line.
+    assertTrue(code(file("Digest.kt")).any { it.contains("DigestKind.MORNING -> Briefing.build(inputs, now, zone)") })
+    assertTrue(code(file("DigestAlarm.kt")).any { it.contains("Digest.build(kind, StoreBriefingInputs(store, ctx, zone), now, zone)") })
+  }
+
   @Test fun theDoctorSummaryReadsHealthOnlyThroughTheStores() {
     val sql = Regex("\\b(SELECT|INSERT|DELETE|UPDATE|JOIN)\\b|rawQuery|execSQL|compileStatement|\\.query\\(|\\.run\\(")
     for (name in listOf("DoctorSummary.kt", "DoctorRunner.kt", "DoctorPdf.kt", "PdfLayout.kt", "HealthForAsk.kt", "BriefingHealth.kt", "Briefing.kt")) {

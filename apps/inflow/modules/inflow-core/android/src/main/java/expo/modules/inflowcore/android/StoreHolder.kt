@@ -15,6 +15,7 @@ import expo.modules.inflowcore.core.NotifyingSuggestionStore
 import expo.modules.inflowcore.core.Sms
 import expo.modules.inflowcore.core.pickedChatKey
 import expo.modules.inflowcore.core.SuggestionStore
+import expo.modules.inflowcore.core.WaitingWatch
 import java.io.File
 import java.time.ZoneId
 import java.util.concurrent.atomic.AtomicBoolean
@@ -28,14 +29,17 @@ object StoreHolder {
   @Synchronized
   fun get(context: Context): Result<SqlItemStore> {
     opened?.let { if (it.isSuccess || it.exceptionOrNull()?.message == KEY_LOST_MESSAGE) return it }
-    return SqlItemStore.open(context.applicationContext).also { opened = it }
+    val app = context.applicationContext
+    if (SqlSuggestionStore.watch == null) SqlSuggestionStore.watch = WaitingWatch { HaloPing.changed(app) }
+    return SqlItemStore.open(app).also { opened = it }
   }
 
-  /** The health row's last_seen_at: written when the app opens and when the listener connects, never by a provider query. Runs off the caller's thread. Also rebuilds the briefing snapshot (while sharing is on). */
+  /** The health row's last_seen_at: written when the app opens and when the listener connects, never by a provider query. Runs off the caller's thread. Also rebuilds the briefing snapshot (while sharing is on) and arms the next summary alarm. */
   fun heartbeat(context: Context) {
     val app = context.applicationContext
     InflowListener.executor.execute { runCatching { get(app).getOrNull()?.let { AppHealth.beat(it, System.currentTimeMillis()) } } }
     BriefingRefresh.refresh(app)
+    DigestAlarm.rearm(app)
   }
 
   fun storeError(context: Context): String? = get(context).exceptionOrNull()?.message
