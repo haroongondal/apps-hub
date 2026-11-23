@@ -9,10 +9,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image } from 'react-native';
 
 import { plainError } from '../../src/media/errors';
-import { pickFiles, startJobs } from '../../src/media/jobs';
+import { pickFiles, probeFiles, startJobs } from '../../src/media/jobs';
 import { loadPrefs, savePrefs } from '../../src/media/prefs';
+import { takeHandoff } from '../../src/media/share-tools';
 import { specsFor, soundTracksOf, type Options } from '../../src/media/specs';
-import { correctionFrom, parseTime, TOOLS, timeText, type ToolKey } from '../../src/media/tools';
+import { correctionFrom, isSingle, parseTime, TOOLS, timeText, type ToolKey } from '../../src/media/tools';
 import { RangeStrip } from '../../src/timeline/RangeStrip';
 import { usePreviewFrame } from '../../src/timeline/usePreviewFrame';
 
@@ -21,7 +22,7 @@ const say = (e: unknown) => plainError(e, 'Something went wrong. Try again.');
 export default function ToolSetup() {
   const { tool } = useLocalSearchParams<{ tool: ToolKey }>();
   const def = TOOLS.find(t => t.key === tool) ?? TOOLS[0];
-  const single = def.key === 'trim' || def.key === 'gif' || def.key === 'picture';
+  const single = isSingle(def.key);
   const [files, setFiles] = useState<MediaInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -70,17 +71,26 @@ export default function ToolSetup() {
   async function add() {
     setError(null);
     try {
-      const picked = await pickFiles(def.accept, !single);
-      if (!picked.length) return;
-      setFiles(single ? picked.slice(0, 1) : [...files, ...picked]);
-      if (!files.length || single) { // a second pick keeps the choices already made
-        const first = picked[0];
-        setPlayheadS(0);
-        setPick(n => n + 1);
-        setStart('0:00.0'); setEnd(timeText(Math.min(first.durationS, def.key === 'gif' ? 10 : first.durationS)));
-      }
+      adopt(await pickFiles(def.accept, !single));
     } catch (e) { setError(say(e)); }
   }
+
+  function adopt(picked: MediaInfo[]) {
+    if (!picked.length) return;
+    setFiles(single ? picked.slice(0, 1) : [...files, ...picked]);
+    if (!files.length || single) { // a second pick keeps the choices already made
+      const first = picked[0];
+      setPlayheadS(0);
+      setPick(n => n + 1);
+      setStart('0:00.0'); setEnd(timeText(Math.min(first.durationS, def.key === 'gif' ? 10 : first.durationS)));
+    }
+  }
+
+  useEffect(() => { // files chosen on the Add to Design Editor screen arrive here already copied
+    const shared = takeHandoff();
+    if (shared.length) probeFiles(shared.map(i => i.uri)).then(adopt, e => setError(say(e)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const targetBytes = dest === 'custom' ? Math.round(Number(customMb) * 1_000_000) : DESTINATIONS.find(d => d.id === dest)!.bytes;
 

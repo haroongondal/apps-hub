@@ -1,5 +1,5 @@
 import { requireNativeModule } from 'expo-modules-core';
-import type { Job, MediaInfo, Output } from '@apps-hub/media-core';
+import type { Job, MediaInfo, Output, RawShare } from '@apps-hub/media-core';
 
 // SPEC §7.1: Phase 1 core plus the Phase 4 calls below.
 export interface CodecInfo {
@@ -14,6 +14,8 @@ export interface NativeJobStatus {
 }
 export interface JobProgressEvent { id: string; fraction: number; attempt: number }
 export interface QueueEvent { jobs: NativeJobStatus[] }
+// takeShare: copies of what other apps shared since the last call (already in the app's own folder); overCap and blocked count streams left out.
+export interface ShareRead { items: RawShare[]; overCap: number; blocked: number }
 export interface VisionToolEntry { tool: 'person' | 'object' | 'upscale'; name: string; url: string; bytes: number; ready: boolean }
 export interface VisionProgressEvent { id: string; fraction: number }
 export type CleanupKind = 'blurry' | 'copies' | 'lookalikes' | 'screenshots' | 'dark';
@@ -69,10 +71,12 @@ export interface DesignMediaModule {
   installVisionModel(name: string): Promise<boolean>; // file name, like installPhotoModel
   runVision(id: string, op: 'cutout' | 'upscale', src: string, option: string): Promise<string>; // option 'person'|'object' or '2'|'4'; returns the PNG's absolute path
   cancelVision(id: string): Promise<void>;
+  takeShare(): Promise<ShareRead>; // from the intent the app was opened with, or the one that arrived while it was open
   saveJson(name: string, text: string, filePath: string | null): Promise<string>;
   saveExport(name: string, ext: string, base64: string): Promise<string>;
   addListener(name: 'onJobProgress', fn: (e: JobProgressEvent) => void): { remove(): void };
   addListener(name: 'onQueue', fn: (e: QueueEvent) => void): { remove(): void };
+  addListener(name: 'onShare', fn: () => void): { remove(): void };
   addListener(name: 'onVisionProgress', fn: (e: VisionProgressEvent) => void): { remove(): void };
 }
 

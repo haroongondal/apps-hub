@@ -11,6 +11,7 @@ import expo.modules.designmedia.android.Intents
 import expo.modules.designmedia.android.MediaJobService
 import expo.modules.designmedia.android.PhotoSearch
 import expo.modules.designmedia.android.Probe
+import expo.modules.designmedia.android.Shares
 import expo.modules.designmedia.android.Thumbs
 import expo.modules.designmedia.android.Waveform
 import expo.modules.designmedia.vision.Vision
@@ -30,6 +31,7 @@ import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class DesignMediaModule : Module() {
   private val readScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -40,7 +42,7 @@ class DesignMediaModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("DesignMedia")
 
-    Events(MediaJobService.EVENT_PROGRESS, MediaJobService.EVENT_QUEUE, Vision.EVENT_PROGRESS)
+    Events(MediaJobService.EVENT_PROGRESS, MediaJobService.EVENT_QUEUE, Vision.EVENT_PROGRESS, Shares.EVENT)
 
     View(CompositionView::class) {
       Events("onPosition", "onEnded", "onError")
@@ -59,11 +61,21 @@ class DesignMediaModule : Module() {
       MediaJobService.listener = null
     }
 
+    // A share while the app is open (singleTask) arrives here, not in onCreate: copy it, then tell the screen.
+    OnNewIntent { intent ->
+      readScope.launch {
+        runCatching { Shares.capture(context, intent) }
+        if (Shares.hasPending()) sendEvent(Shares.EVENT, emptyMap<String, Any?>())
+      }
+    }
+
     OnActivityEntersBackground { CompositionView.pauseAll() }
 
     OnActivityResult { _, result -> CleanupTrash.onResult(context, result.requestCode, result.resultCode) }
 
     OnActivityEntersForeground { CleanupTrash.onForeground() }
+
+    AsyncFunction("takeShare") { Shares.take(context, appContext.currentActivity?.intent) }.runOnQueue(readScope)
 
     AsyncFunction("probe") { uri: String -> Probe.read(context, Uri.parse(uri)) }
 

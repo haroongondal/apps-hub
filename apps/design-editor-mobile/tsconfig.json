@@ -13,6 +13,7 @@
   ],
   "exclude": [
     "src/__tests__",
+    "plugin/__tests__",
     "node_modules"
   ]
 }

@@ -9,6 +9,7 @@ import android.provider.OpenableColumns
 import java.io.File
 import expo.modules.designmedia.core.displaySize
 import expo.modules.designmedia.core.estimateVideoBps
+import expo.modules.designmedia.core.isPictureName
 import expo.modules.designmedia.core.microseconds
 
 object Probe {
@@ -20,7 +21,8 @@ object Probe {
       .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
       ?.use { c -> if (c.moveToFirst()) c.getString(0).orEmpty() to c.getLong(1) else null }
       ?: (uri.lastPathSegment.orEmpty() to 0L)
-    if (context.contentResolver.getType(uri)?.startsWith("image/") == true) {
+    val isPicture = localFile(uri)?.let { isPictureName(it.name) } ?: (context.contentResolver.getType(uri)?.startsWith("image/") == true)
+    if (isPicture) {
       return mapOf("id" to uri.toString(), "name" to name, "bytes" to bytes, "durationS" to 0.0, "container" to "image", "tracks" to emptyList<Any>())
     }
     val retriever = MediaMetadataRetriever()
