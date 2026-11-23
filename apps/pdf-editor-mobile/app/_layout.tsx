@@ -42,6 +42,7 @@ export default function RootLayout() {
           <Stack.Screen name="scan/review" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="scan/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="scan/page" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="scan/receipt" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="scan-text" options={{ animation: 'slide_from_right' }} />
         </Stack>
       </ThemeProvider>

@@ -504,3 +504,55 @@ Not run (phone), after M3:
    Friday." in the note when the speaker said it.
 5. A source item ("From Inflow") and a decision row show no buttons. On iOS no buttons appear.
 6. Layout of the buttons under an action row and the note field is unseen (typed and read only).
+
+### B6 receipts: read a receipt, match it to an Inflow payment, optional warranty reminder
+
+What it does. On a scan (Library, scan screen) "Read as receipt" opens `app/scan/receipt.tsx`. It reads the first page, shows amount, date,
+shop and an optional warranty end as four editable fields (the owner's edits go through the same checks as the model's reply), and a
+"Match to Inflow" button. The match runs on the phone against Inflow's `debits` share (switch "Let Nexus match my receipts" in Inflow).
+The owner always answers: "Yes, it matches" / "No" for one result, or pick one of up to three, or none. A "Remind me" button appears
+when the warranty end is valid; it asks Inflow's `ADD_TODO` through `startLink` on that tap only (Inflow shows its own screen first).
+
+The rules.
+- Transactions are never indexed into Ask, never written by Nexus (no Library, kn_meta, file or log write), never sent to any AI. Only
+  the receipt photo is read by the existing hub-first wrapper (`ai.readImage`), then its text goes to `ai.complete` inside the fixed
+  prompt `RECEIPT_PROMPT` (fenced, "untrusted data", JSON only). No debit row or Inflow field is ever in a prompt; the screen holds the
+  matched rows in memory only until the owner answers, then keeps only a sentence ("Matched with ... Nexus didn't save it.").
+- Pure code, tests first: `receipt-parse.ts` (reply and field validation, `RECEIPT_PROMPT`), `receipt-match.ts` (`matchReceipt`),
+  `receipt-reminder.ts` (`warrantyReminder`), `receipt-debits.ts` (paging and the plain lines), `receipt-read.ts` (the two AI calls
+  behind a port). Glue only in `app/scan/receipt.tsx`. No native, Gradle, dependency or lockfile change.
+- Parse: first JSON object in the reply (fence or prose allowed); amount is a number or a plain decimal string, converted to minor units
+  (x100, rounded), 1..10^12; date is a real calendar day, 2000 or later, at most tomorrow; shop is cleaned (control characters out)
+  and cut to 80; warranty end must be a real day after the purchase and within 30 years, otherwise only it is dropped.
+- Match: same `amount_minor` (nothing else about currency is compared), the debit within 3 local calendar days (DST-safe), then a
+  name check (accents, case, punctuation and legal suffixes ignored; shared words or bigram Dice/Jaccard at least 0.5, or one name
+  holds the other; Arabic and Urdu script names only by containment). Same amount and days but another name is `weak`: it is only ever
+  listed for the owner to pick, never offered as "this looks like".
+- Reading: `readDebits` pages are read forward (oldest first by id, 200 a page) until an empty page, at most 10 pages. A failing later
+  page, a page that does not move on, or the page cap is "Couldn't read Inflow right now." Inflow serves only the last 60 days
+  (newest 500 debits), so an older receipt finds nothing.
+- Lines: off "Off in Inflow. Turn on 'Let Nexus match my receipts' in Inflow."; missing "Inflow isn't installed."; failed "Couldn't
+  read Inflow right now."; none "No matching payment found yet."; weak "Amount and date match, the name doesn't. Is one of these yours?"
+
+(my call)
+- The photo read keeps the app's fixed image prompt (`ai.readImage` has no prompt argument), so the receipt JSON comes from a second,
+  text-only `ai.complete` call on the text that read gave back. Nothing but the receipt's own text goes through it.
+- Nothing is stored about the receipt, the match or the reminder (no "already matched" memory): the simplest choice.
+- Equal name score and equal day gap = `tie`; if two debits fit the name equally well, the nearer day wins and is offered as the one
+  match (the owner still confirms). The brief read "equal top scores = tie".
+- A comma used as a decimal ("12,50") is refused rather than guessed; "1,234.50" with thousands commas is accepted.
+- Only the first page of a scan is read; the warranty date stays editable by typing YYYY-MM-DD (no date picker).
+- The "Remind me" note says "Warranty for <shop> ends on 20 Nov 2028. Receipt scanned in Nexus." (readable date), set after
+  `addTodoExtras` builds title, source and `dueAt` (its note label cap is 100, too short for a long shop name).
+
+Not run (phone), after B6:
+1. Scan a receipt (Library, Scan), open it, tap "Read as receipt": fields fill in a few seconds. Edit the amount to "12,50": the field
+   shows an error and "Match to Inflow" is disabled; "12.50" works again. With no AI keys and AI hub off: "Nexus needs an AI service".
+2. Inflow switch off: "Match to Inflow" says "Off in Inflow. Turn on 'Let Nexus match my receipts' in Inflow." Switch on with a payment of
+   the same amount, within 3 days, same shop: "This looks like your ... payment of 12.50 on 20 Nov. Is it the same?" Yes: "Matched with
+   ... Nexus didn't save it." Leave and come back: nothing is remembered.
+3. Same amount and day, different shop: the weak line with up to three rows plus "None of these". Two equal payments: a list to pick from.
+   No payment: "No matching payment found yet." Inflow uninstalled: "Inflow isn't installed."
+4. Warranty field 2028-11-20 (or the model's): "Remind me" opens Inflow's screen with "Warranty ends: <shop>", due 14 days before
+   at midday; Add gives "Added to Inflow.", Back "You didn't add it." A warranty ending in under two weeks shows the no-time line.
+5. Layout of the four fields, the match rows and the buttons is unseen (typed and read only).

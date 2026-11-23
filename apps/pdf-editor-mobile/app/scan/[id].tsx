@@ -106,6 +106,7 @@ export default function ScanScreen() {
           onPress={() => run('save', async () => savedMessage(await saveImages(id)), "The images weren't saved. Check that the phone has free space, then try again.")}
         />
         <Button label="Share images" block variant="secondary" busy={busy === 'images'} disabled={!!busy || pages.length === 0} onPress={() => run('images', () => shareImages(id), "The images couldn't be shared.")} />
+        <Button label="Read as receipt" block variant="secondary" disabled={!!busy || pages.length === 0} onPress={() => router.push({ pathname: '/scan/receipt', params: { id } })} />
         <Button label="Add pages" block variant="secondary" disabled={!!busy || !item} onPress={startAppend} />
       </View>
     </Screen>
