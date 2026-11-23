@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 import { createVpnNode, type VpnNode } from 'open-tunnel-core';
 import { OPEN_TUNNEL_ERROR_CODES } from 'open-tunnel-native';
-import { MAX_ATTEMPTS, isAuthError, pickRelayCandidates } from '../relay-failover.ts';
+import { MAX_ATTEMPTS, bestRelayFailure, isAuthError, pickRelayCandidates } from '../relay-failover.ts';
 
 function relay(rank: number): VpnNode {
   return createVpnNode({
@@ -57,4 +57,15 @@ test('isAuthError is true only for the auth-failure code', () => {
   assert.equal(isAuthError(OPEN_TUNNEL_ERROR_CODES.ENGINE_UNAVAILABLE), false);
   assert.equal(isAuthError(OPEN_TUNNEL_ERROR_CODES.INVALID_CONFIG), false);
   assert.equal(isAuthError(null), false);
+});
+
+test('a pass that connected nothing says so in plain words', () => {
+  assert.match(bestRelayFailure({ outcome: 'none-left' })!, /already failed/);
+  assert.equal(
+    bestRelayFailure({ outcome: 'all-failed', attempts: 6 }),
+    'None of the 6 best relays connected. Pull down to refresh the list, or choose another country.',
+  );
+  assert.match(bestRelayFailure({ outcome: 'all-failed', attempts: 1 })!, /^The best relay didn't connect\./);
+  assert.equal(bestRelayFailure({ outcome: 'cancelled', attempts: 1 }), null);
+  assert.equal(bestRelayFailure({ outcome: 'connected', node: relay(1), attempts: 1 }), null);
 });

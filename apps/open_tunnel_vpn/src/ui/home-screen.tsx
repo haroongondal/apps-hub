@@ -181,15 +181,15 @@ export function HomeScreen({
           }
         />
         <Row
-          title="Auto-select fastest"
+          title="Connect to the best relay"
           subtitle={
             country === null
-              ? 'Measures the cached relays and connects to the best score'
-              : `Measures the relays in ${countryName} and connects to the best score`
+              ? 'Checks which relays answer fastest and connects to the best one'
+              : `Checks the relays in ${countryName} and connects to the best one`
           }
           trailing={
             <Button
-              label="Scan"
+              label="Connect"
               variant="primary"
               size="sm"
               disabled={busy || nodeCount === 0}

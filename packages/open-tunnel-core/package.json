@@ -6,7 +6,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "test": "node --test src/__tests__/model.test.ts src/__tests__/parser.test.ts src/__tests__/sanitizer.test.ts src/__tests__/prober.test.ts src/__tests__/service.test.ts",
+    "test": "node --test src/__tests__/model.test.ts src/__tests__/parser.test.ts src/__tests__/sanitizer.test.ts src/__tests__/prober.test.ts src/__tests__/service.test.ts src/__tests__/best-relay.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

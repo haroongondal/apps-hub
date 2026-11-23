@@ -9,7 +9,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, PermissionsAndroid, Platform, View } from 'react-native';
 import { Header, Screen, TabBar, ThemeProvider } from '@apps-hub/ui';
 
-import { LatencyProber, VpnGateService, type VpnNode } from 'open-tunnel-core';
+import { LatencyProber, VpnGateService, connectRankedRelay, type RelayAttempt, type VpnNode } from 'open-tunnel-core';
 import { openAppDatabase, type AppDatabase } from './src/data/open-database.ts';
 import type { TunnelSettings } from './src/data/settings-store.ts';
 import { xhrVpnGateFetcher } from './src/data/vpngate-fetcher.ts';
@@ -18,7 +18,7 @@ import { serverHoldsSlot } from './src/firewall/status.ts';
 import type { KillSwitchStatus } from 'open-tunnel-native';
 import { killSwitchView } from './src/tunnel/kill-switch.ts';
 import { firewallBinding, openTunnelBinding, nativeTcpProbe, protectionBinding } from './src/tunnel/native-tcp-probe.ts';
-import { MAX_ATTEMPTS, isAuthError, pickRelayCandidates } from './src/tunnel/relay-failover.ts';
+import { MAX_ATTEMPTS, bestRelayFailure, isAuthError } from './src/tunnel/relay-failover.ts';
 import {
   createTunnelClient,
   OpenTunnelError,
@@ -256,17 +256,20 @@ function OpenTunnelApp() {
       const ranked = refetched !== null ? inCountry(refetched) : await prober.probeAndScoreNodes(shown, { concurrency: 8 });
       const rankedIds = new Set(ranked.map((node) => node.id));
       if (mountedRef.current) setNodes((all) => [...ranked, ...all.filter((node) => !rankedIds.has(node.id))]);
-      // VPN Gate lists relays that are down or refuse this client, so a failed start moves on to the next one.
-      let candidates = pickRelayCandidates(ranked, failedIds.current, MAX_ATTEMPTS);
-      // When every candidate already failed, a stale cache is the likely
-      // cause (relays churn within hours): refresh the list once and
-      // re-rank before giving up. `retriedCache` keeps this a single retry,
-      // never a loop.
-      let retriedCache = false;
-      if (candidates.length === 0 && !retriedCache && database !== null) {
+      const options = {
+        failedIds: failedIds.current,
+        maxAttempts: MAX_ATTEMPTS,
+        async tryConnect(node: VpnNode): Promise<RelayAttempt> {
+          await connect(node);
+          const state = await settled(client);
+          return state === 'connected' ? 'connected' : state === 'error' ? 'failed' : 'cancelled';
+        },
+      };
+      let result = await connectRankedRelay(ranked, options);
+      // Every relay already failed: a stale cache is the likely cause (relays churn within hours), so refresh once.
+      if (result.outcome === 'none-left' && database !== null) {
         const lastFetchedAt = await database.nodes.lastFetchedAtMs();
         if (lastFetchedAt !== null && Date.now() - lastFetchedAt >= AUTO_REFRESH_AFTER_MS) {
-          retriedCache = true;
           const refreshed = await refreshList(database);
           if (refreshed !== null) {
             const reRanked = inCountry(refreshed);
@@ -274,17 +277,12 @@ function OpenTunnelApp() {
             if (mountedRef.current) {
               setNodes((all) => [...reRanked, ...all.filter((node) => !reRankedIds.has(node.id))]);
             }
-            candidates = pickRelayCandidates(reRanked, failedIds.current, MAX_ATTEMPTS);
+            result = await connectRankedRelay(reRanked, options);
           }
         }
       }
-      if (candidates.length === 0) {
-        setActionError('Every relay here has already failed. Pull down to refresh the list, or choose another country.');
-      }
-      for (const candidate of candidates) {
-        await connect(candidate);
-        if ((await settled(client)) !== 'error') return;
-      }
+      const failure = bestRelayFailure(result);
+      if (failure !== null && mountedRef.current) setActionError(failure);
     } catch (error) {
       if (mountedRef.current) setActionError(describeLocalError(error));
     } finally {
