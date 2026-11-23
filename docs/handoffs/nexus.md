@@ -181,3 +181,29 @@ Known shortcuts: first ~24k characters per item feed the graph; brute-force vect
 no share-sheet ingestion yet. Done in S4 on `eco/nexus` (phone test pending): cited PDFs open at
 the cited page (aeae7091); recordings over 25 MB are transcribed in pieces on Android (5624026f);
 the tab bar hides while the keyboard is open (6134b70e).
+
+## OCR licence audit (C8)
+
+Checked 2026-11-23 (Nexus wave 2, task 4) from the sources, not from memory. Offline OCR is `packages/text-ocr`
+(Android only), used by the Library's "Scan text" screen (`app/scan-text.tsx`).
+
+| Component | Version | Licence | Where verified |
+| --- | --- | --- | --- |
+| Tesseract4Android (`cz.adaptech.tesseract4android:tesseract4android`, JitPack) | 4.9.0 | Apache-2.0 | `packages/text-ocr/android/build.gradle`; Gradle cache POM and `.module` (the POM names no licence; its only dependency is `androidx.annotation:annotation:1.3.0`, Apache-2.0); AAR sha256 `bce5d641…cb2a` matches the `.module`; GitHub `adaptech-cz/Tesseract4Android` tag 4.9.0 licence API and README |
+| Tesseract OCR (inside the AAR, `libtesseract.so`) | 5.5.1 | Apache-2.0 | `tesseract4android/src/main/cpp/tesseract/src/VERSION` and `LICENSE` at tag 4.9.0 |
+| Leptonica (`libleptonica.so`) | 1.85.0 | BSD-2-Clause style (Leptonica licence) | `cpp/leptonica/src/leptonica-license.txt` at tag 4.9.0; version from the README |
+| libjpeg (`libjpeg.so`) | 9f (14-Jan-2024) | IJG licence | `cpp/libjpeg/src/jversion.h` and README "LEGAL ISSUES" at tag 4.9.0 |
+| libpng (`libpngx.so`) | 1.6.48 | PNG Reference Library License v2 | `cpp/libpng/src/LICENSE` and README at tag 4.9.0 |
+| `eng.traineddata` (tessdata_fast) | tessdata_fast `main` | Apache-2.0 | Bundled at `packages/text-ocr/android/src/main/assets/tessdata/`; sha256 `7d4322bd…70b2`, 4,113,088 bytes, pinned by `verifyEngTraineddata` in `build.gradle` (runs before `preBuild`); its git blob id `bbef4675…` equals upstream `tesseract-ocr/tessdata_fast/eng.traineddata` (GitHub contents API); repo licence Apache-2.0 |
+
+- F-Droid: every licence above is FOSS. The JitPack AAR ships prebuilt `.so` files, so an F-Droid build would
+  have to build Tesseract4Android from source (srclib) instead of taking the JitPack binary. Nexus ships through the
+  private Store only, so this does not block anything today.
+- Attribution: Leptonica's BSD licence, the IJG licence and libpng's licence ask for their notices in the
+  documentation of a binary distribution. The app has no open-source notices screen yet (open finding).
+- The app ships arm64-v8a only, so only the arm64 `.so` files (about 7.5 MB) go into the APK.
+- Language coverage: English only. Arabic and Urdu need an owner decision (tessdata_fast `ara.traineddata`
+  1,432,056 bytes, `urd.traineddata` 1,398,718 bytes, or `script/Arabic.traineddata` 9,311,038 bytes; sizes from
+  the GitHub contents API, nothing downloaded).
+- What reaches Nexus: nothing. "Scan text" saves nothing (it copies text to the clipboard); `scan` items have an
+  `ocr_text` column that nothing fills yet; `image` items are read by Gemini vision, not by the offline OCR.
