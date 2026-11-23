@@ -8,12 +8,12 @@ and a token-optimization layer for screenshots and DOM snapshots.
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Launch with hot reload (electron-vite) |
-| `npm run build` | Bundle main/preload/renderer into `out/` |
-| `npm run typecheck` | Strict TypeScript check, no emit |
-| `npm test` | Unit tests (TokenOptimizer DOM filter, routine validation) |
-| `npm run test:db` | Database-layer assertions, run under Electron's Node |
-| `npm run dist` | Package with electron-builder |
+| `pnpm --filter autonomous-browsing dev` | Launch with hot reload (electron-vite) |
+| `pnpm --filter autonomous-browsing build` | Bundle main/preload/renderer into `out/` |
+| `pnpm --filter autonomous-browsing typecheck` | Strict TypeScript check, no emit |
+| `pnpm --filter autonomous-browsing test` | Unit tests (TokenOptimizer DOM filter, routine validation) |
+| `pnpm --filter autonomous-browsing test:db` | Database-layer assertions, run under Electron's Node |
+| `pnpm --filter autonomous-browsing dist` | Package with electron-builder |
 
 `postinstall` rebuilds better-sqlite3 against Electron's ABI, so plain `node`
 cannot load it afterwards — that is why `test:db` (scripts/db-verify.mjs) bundles
