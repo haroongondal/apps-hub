@@ -5,7 +5,7 @@ import { Alert } from 'react-native';
 
 import { errorMessage } from '../library/use-library';
 
-import { APP_NAMES } from './ask-runner';
+import { APP_NAMES, switchStep } from './ask-runner';
 import { askState, syncAskSources, turnOffSource, turnOnSource, type AskState } from './ask-sources';
 import { setTodayShare, todayShareOn } from './today-share';
 
@@ -43,7 +43,7 @@ function details(app: SourceApp, s: AskState | undefined): string {
     if (s.line) lines.push(s.line);
     else if (s.kept > 0) lines.push(`Nexus keeps ${plural(s.kept)} from ${APP_NAMES[app]}.`);
   } else if (s && s.kept > 0) {
-    lines.push(`Nexus still keeps ${plural(s.kept)} from ${APP_NAMES[app]}. Turn it on, then off, to delete them.`);
+    lines.push(`Nexus still keeps ${plural(s.kept)} from ${APP_NAMES[app]}. Tap Off to delete them.`);
   }
   lines.push(SOURCES[app].hint);
   return lines.join('\n');
@@ -77,8 +77,9 @@ export function AskMyLife() {
   };
 
   const change = (app: SourceApp, key: 'on' | 'off') => {
-    if (busy !== null || !state || state[app].on === (key === 'on')) return;
-    if (key === 'on') return void work(app, () => turnOnSource(app), `Could not turn on ${SOURCES[app].title}`);
+    const step = state && busy === null ? switchStep(state[app].on, state[app].kept, key) : null;
+    if (!step) return;
+    if (step === 'on') return void work(app, () => turnOnSource(app), `Could not turn on ${SOURCES[app].title}`);
     confirmAction({
       title: `Delete everything Nexus kept from ${APP_NAMES[app]}?`,
       message: `Nexus deletes its copies of the text, and the ideas and search entries made from them. Nothing changes in ${APP_NAMES[app]}.`,

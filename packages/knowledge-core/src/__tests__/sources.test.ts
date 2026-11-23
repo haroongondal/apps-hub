@@ -164,6 +164,70 @@ test('items deleted in the app go from Nexus on the next run, read from the full
   assert.deepEqual(await w.sourceIds('deputy'), [2]);
 });
 
+test('Inflow answering empty removes its items, and they come back when it answers again', async () => {
+  const w = await world();
+  const rows = [1, 2, 3].map((id) => msg(id));
+  w.inflow.rows = rows;
+  await w.sync.run('inflow');
+  w.inflow.rows = [];
+  assert.deepEqual(await w.sync.run('inflow'), { status: 'ready', added: 0, updated: 0, removed: 3 });
+  assert.deepEqual(await w.sourceIds('inflow'), []);
+  w.inflow.rows = rows;
+  assert.equal((await w.sync.run('inflow')).added, 3);
+  assert.deepEqual(await w.sourceIds('inflow'), [1, 2, 3]);
+});
+
+test('after an Inflow data reset its reused ids carry the new text and nothing of the old', async () => {
+  const w = await world();
+  w.inflow.rows = Array.from({ length: 10 }, (_, i) => msg(i + 1, `old secret ${i + 1}`));
+  await w.sync.run('inflow');
+  await w.drain();
+  w.inflow.rows = [1, 2, 3].map((id) => msg(id, `new message ${id}`, 'Shop'));
+  assert.deepEqual(await w.sync.run('inflow'), { status: 'ready', added: 0, updated: 3, removed: 7 });
+  await w.drain();
+  assert.deepEqual(await w.sourceIds('inflow'), [1, 2, 3]);
+  for (const table of ['kn_segments', 'kn_chunks']) {
+    const texts = (await w.db.all(`SELECT text FROM ${table}`)).map((r) => String(r.text));
+    assert.equal(texts.filter((t) => t.includes('old secret')).length, 0, table);
+    assert.deepEqual([1, 2, 3].map((id) => texts.some((t) => t.includes(`new message ${id}`))), [true, true, true], table);
+  }
+  assert.deepEqual((await w.lib.list({ everywhere: true, sort: 'title' })).map((i) => i.title), ['Message from Shop, 3 Nov', 'Message from Shop, 3 Nov', 'Message from Shop, 3 Nov']);
+  assert.equal((await w.lib.search('secret')).length, 0);
+});
+
+test('a normal run keeps the read mark and embeds unchanged messages only once', async () => {
+  const w = await world();
+  w.inflow.rows = [1, 2, 3].map((id) => msg(id));
+  await w.sync.run('inflow');
+  await w.drain();
+  const embeds = w.ai.calls.embed;
+  w.inflow.rows = [1, 2, 3, 4].map((id) => msg(id));
+  assert.deepEqual(await w.sync.run('inflow'), { status: 'ready', added: 1, updated: 0, removed: 0 });
+  assert.deepEqual(await w.sync.run('inflow'), { status: 'ready', added: 0, updated: 0, removed: 0 });
+  assert.deepEqual(w.inflow.sinces, [0, 3, 3, 4, 4]);
+  await w.drain();
+  assert.equal(w.ai.calls.embed, embeds + 1);
+});
+
+test('a switch-off whose delete failed is finished by the next run', async () => {
+  const w = await world();
+  w.inflow.rows = [msg(1), msg(2)];
+  await w.sync.run('inflow');
+  const deleteAll = w.lib.deleteAllFromSource;
+  w.lib.deleteAllFromSource = async () => {
+    throw new Error('disk full');
+  };
+  await assert.rejects(w.sync.turnOff('inflow'), /disk full/);
+  assert.equal(w.sw.on.has('inflow'), false);
+  assert.deepEqual(await w.sourceIds('inflow'), [1, 2]);
+  assert.equal((await w.sync.run('inflow')).status, 'failed');
+  w.lib.deleteAllFromSource = deleteAll;
+  assert.deepEqual(await w.sync.run('inflow'), { status: 'disabled', added: 0, updated: 0, removed: 2 });
+  assert.deepEqual(await w.sourceIds('inflow'), []);
+  assert.equal(await count(w.db, "kn_meta WHERE key LIKE 'source_mark:%'"), 0);
+  assert.deepEqual(w.inflow.sinces, [0, 2]);
+});
+
 test('an app that is off, missing or not answering keeps every item it gave before', async () => {
   const w = await world();
   w.inflow.rows = [1, 2, 3, 4].map((id) => msg(id));

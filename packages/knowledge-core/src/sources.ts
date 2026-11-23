@@ -122,6 +122,10 @@ export class SourceSync {
   async turnOff(app: SourceApp): Promise<number> {
     this.epochs.set(app, this.epoch(app) + 1);
     await this.switches.set(app, false);
+    return this.wipe(app);
+  }
+
+  private async wipe(app: SourceApp): Promise<number> {
     const db = this.kn.lib.db;
     const removed = await this.kn.lib.deleteAllFromSource(app);
     await pruneConcepts(db);
@@ -132,7 +136,7 @@ export class SourceSync {
   async run(app: SourceApp, o: { maxNew?: number } = {}): Promise<SyncReport> {
     const report: SyncReport = { status: 'disabled', added: 0, updated: 0, removed: 0 };
     const epoch = this.epoch(app);
-    if (!(await this.switches.get(app))) return report;
+    if (!(await this.switches.get(app))) return this.wipeLeftovers(app, report);
     const provider = this.providers[app];
     if (!provider) return { ...report, status: 'missing' };
     try {
@@ -152,6 +156,16 @@ export class SourceSync {
     return report;
   }
 
+  // A switch reads Off but copies are still here: an earlier turnOff saved the switch and then failed to delete.
+  private async wipeLeftovers(app: SourceApp, report: SyncReport): Promise<SyncReport> {
+    try {
+      if (!(await this.kn.lib.listSourceIds(app)).length) return report;
+      return { ...report, removed: await this.wipe(app) };
+    } catch (e) {
+      return { ...report, status: 'failed', error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
   private async store(app: SourceApp, row: SourceRow, live: () => void, report: SyncReport): Promise<void> {
     const body = sourceBody(app, row);
     const title = sourceTitle(app, row);
@@ -166,8 +180,22 @@ export class SourceSync {
 
   private async fromPages(app: SourceApp, p: PagedSource, maxNew: number, live: () => void, report: SyncReport): Promise<void> {
     const db = this.kn.lib.db;
-    let since = Number((await db.first('SELECT value FROM kn_meta WHERE key = ?', [markKey(app)]))?.value ?? 0) || 0;
-    for (let budget = maxNew; budget > 0; ) {
+    const read = await this.readPages(app, p, Number((await db.first('SELECT value FROM kn_meta WHERE key = ?', [markKey(app)]))?.value ?? 0) || 0, maxNew, live, report);
+    const ids = await this.allLiveIds(p);
+    await this.removeGone(app, ids, live, report);
+    let newest = 0;
+    for (const id of ids) newest = Math.max(newest, id);
+    if (newest >= read.mark) return;
+    // Ruling R16: an empty list (Inflow switched off) or ids below the mark (Inflow data reset) restart the read from 0, or those messages never come back.
+    live();
+    await db.run('DELETE FROM kn_meta WHERE key = ?', [markKey(app)]);
+    if (ids.size) await this.readPages(app, p, 0, read.left, live, report);
+  }
+
+  private async readPages(app: SourceApp, p: PagedSource, since: number, maxNew: number, live: () => void, report: SyncReport): Promise<{ mark: number; left: number }> {
+    const db = this.kn.lib.db;
+    let budget = maxNew;
+    for (; budget > 0; ) {
       const page = answer(await p.items(since, budget), 'items').slice(0, budget);
       const top = Math.max(since, ...page.map(idOf).filter((id): id is number => id !== null));
       if (top <= since) break;
@@ -178,7 +206,7 @@ export class SourceSync {
       since = top;
       budget -= page.length;
     }
-    await this.removeGone(app, await this.allLiveIds(p), live, report);
+    return { mark: since, left: budget };
   }
 
   private async allLiveIds(p: PagedSource): Promise<Set<number>> {

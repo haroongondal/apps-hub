@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import type { SyncReport } from '@apps-hub/knowledge-core';
 import type { SourceApp } from '@apps-hub/library-core';
 
-import { createAskRunner, statusLine, type Reports, type SyncPort } from '../nexus/ask-runner.ts';
+import { createAskRunner, statusLine, switchStep, type Reports, type SyncPort } from '../nexus/ask-runner.ts';
 
 const report = (r: Partial<SyncReport>): SyncReport => ({ status: 'ready', added: 0, updated: 0, removed: 0, ...r });
 
@@ -140,4 +140,19 @@ test('turning a source on switches it on before the first run', async () => {
   sync.run = async (app, o) => (log.push(`run:${app}`), inner(app, o));
   await createAskRunner({ sync }).turnOn('clipboard');
   assert.deepEqual(log, ['on:clipboard', 'run:inflow', 'run:clipboard', 'run:deputy']);
+});
+
+test('Off still deletes when the switch already reads Off but copies are left; other taps on the current value do nothing', () => {
+  assert.equal(switchStep(false, 3, 'off'), 'off');
+  assert.equal(switchStep(false, 0, 'off'), null);
+  assert.equal(switchStep(true, 0, 'off'), 'off');
+  assert.equal(switchStep(false, 3, 'on'), 'on');
+  assert.equal(switchStep(true, 3, 'on'), null);
+});
+
+test('sources whose switch is off are still run, so a wipe that failed earlier is finished there', async () => {
+  const { sync, calls } = fakeSync({ deputy: report({ status: 'disabled', removed: 2 }) });
+  const out = await createAskRunner({ sync }).request();
+  assert.deepEqual(calls.map(([app]) => app), ['inflow', 'clipboard', 'deputy']);
+  assert.equal(out.deputy?.removed, 2);
 });

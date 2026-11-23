@@ -19,6 +19,12 @@ export function statusLine(app: SourceApp, report: SyncReport | undefined): stri
   return null;
 }
 
+/** What a tap on a source switch does. Off still deletes when it already reads Off but copies are left (an earlier delete failed). */
+export function switchStep(on: boolean, kept: number, key: 'on' | 'off'): 'on' | 'off' | null {
+  if (key === 'on') return on ? null : 'on';
+  return on || kept > 0 ? 'off' : null;
+}
+
 /**
  * Runs every source the owner switched on, one after the other. A request while a run is going is coalesced into one more run
  * after it, so requests never overlap and none is lost. Nothing is thrown out of it: a source that cannot be read is a report.
