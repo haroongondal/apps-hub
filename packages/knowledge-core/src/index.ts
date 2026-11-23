@@ -4,6 +4,8 @@ export { chunkSegments, MAX_CHUNK } from './chunk.ts';
 export { cleanExtraction, normLabel } from './extraction.ts';
 export { Knowledge, locatorLabel, MAX_ATTEMPTS, MERGE_AT, pruneConcepts, STUCK_MS } from './knowledge.ts';
 export type { Answer, Job, JobStage, JobStatus, KnowledgeDeps, RunResult, Source } from './knowledge.ts';
+export { composeMinutes, MINUTES_WINDOW_CHARS, minutesFingerprint, readMinutes } from './minutes.ts';
+export type { Minutes, MinutesAction, MinutesChat, MinutesCite, MinutesDraft, MinutesOptions, MinutesPoint, SavedMinutes } from './minutes.ts';
 export { EMBED_DIMS, openAiCompatPort } from './openai.ts';
 export type { CompatPort, OpenAiCompatOptions, UploadFile } from './openai.ts';
 export { EMBED_TAG, GEMINI_URL, GROQ_URL, nexusPort } from './providers.ts';

@@ -71,4 +71,13 @@ CREATE TABLE kn_excluded (
   excluded_at INTEGER NOT NULL
 );
 `,
+  `
+-- Minutes of a recording, made only when the owner taps for them. Cites in body point at kn_segments.seq.
+CREATE TABLE kn_minutes (
+  item_id TEXT PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+  body    TEXT NOT NULL,     -- JSON Minutes (minutes.ts)
+  source  TEXT NOT NULL,     -- fingerprint of the transcript it was made from
+  made_at INTEGER NOT NULL
+);
+`,
 ];

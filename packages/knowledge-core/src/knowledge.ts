@@ -2,6 +2,7 @@ import { migrate, type Item, type ItemKind, type Library, type Row, type SqlPort
 
 import { chunkSegments } from './chunk.ts';
 import { cleanExtraction, normLabel } from './extraction.ts';
+import { composeMinutes, minutesFingerprint, type Minutes, type MinutesChat, type MinutesOptions, type SavedMinutes } from './minutes.ts';
 import { KNOWLEDGE_STEPS } from './schema.ts';
 import { AiError, PAUSING, type AiPort, type ContentPort, type Extraction, type Locator, type Segment } from './types.ts';
 import { cosine, fromBlob, toBlob, topK } from './vectors.ts';
@@ -47,6 +48,8 @@ const ASK_ATOMS = 6;
 const EMBED_BATCH = 64;
 // shortcut: only the first ~24k characters of an item feed the graph (Ask still searches every chunk); extract per window when long PDFs need full graphs.
 const EXTRACT_CHARS = 24_000;
+const KEPT_OUT = 'This item is kept out of Nexus, so Nexus does not send its transcript anywhere.';
+const GONE = 'This item is no longer in your library.';
 const NEXT: Record<Exclude<JobStage, 'done'>, JobStage> = { text: 'embed', embed: 'graph', graph: 'done' };
 
 /** Thrown when the item was excluded or re-queued during a stage, so the stage stops before its next outbound call. */
@@ -151,6 +154,7 @@ export class Knowledge {
       await tx.run('DELETE FROM kn_chunks WHERE item_id = ?', [itemId]);
       await tx.run('DELETE FROM kn_nodes WHERE item_id = ?', [itemId]); // the source node and its atoms; their edges go by cascade
       await tx.run('DELETE FROM kn_edges WHERE item_id = ?', [itemId]); // the links it made to concepts other items share
+      await tx.run('DELETE FROM kn_minutes WHERE item_id = ?', [itemId]);
       await pruneConcepts(tx);
     });
   }
@@ -270,6 +274,39 @@ export class Knowledge {
   async segmentsOf(itemId: string): Promise<Segment[]> {
     const rows = await this.db.all('SELECT text, locator FROM kn_segments WHERE item_id = ? ORDER BY seq', [itemId]);
     return rows.map((r) => ({ text: r.text as string, locator: loc(r.locator) }));
+  }
+
+  async minutes(itemId: string): Promise<SavedMinutes | null> {
+    const row = await this.db.first('SELECT body, source, made_at FROM kn_minutes WHERE item_id = ?', [itemId]);
+    if (!row) return null;
+    return {
+      minutes: JSON.parse(row.body as string) as Minutes,
+      madeAt: row.made_at as number,
+      stale: row.source !== minutesFingerprint(await this.segmentsOf(itemId)),
+    };
+  }
+
+  // Only on the owner's tap, never from the queue: excluding or including an item never makes minutes by itself.
+  async makeMinutes(itemId: string, chat: MinutesChat, o: MinutesOptions = {}): Promise<Minutes> {
+    const keptOut = async () => {
+      if (await this.isExcluded(itemId)) throw new Error(KEPT_OUT);
+    };
+    await keptOut();
+    const item = await this.lib.getItem(itemId);
+    if (!item) throw new Error(GONE);
+    if (item.kind !== 'audio') throw new Error('Minutes are made from voice notes and meetings.');
+    const segments = await this.segmentsOf(itemId);
+    const minutes = await composeMinutes(segments, chat, { ...o, check: keptOut });
+    await this.db.transaction(async (tx) => {
+      if (await isExcluded(tx, itemId)) throw new Error(KEPT_OUT);
+      if (!(await tx.first('SELECT 1 FROM items WHERE id = ?', [itemId]))) throw new Error(GONE);
+      await tx.run(
+        `INSERT INTO kn_minutes (item_id, body, source, made_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(item_id) DO UPDATE SET body = excluded.body, source = excluded.source, made_at = excluded.made_at`,
+        [itemId, JSON.stringify(minutes), minutesFingerprint(segments), this.deps.now()],
+      );
+    });
+    return minutes;
   }
 
   private async embedStage(itemId: string, gen: number): Promise<void> {
