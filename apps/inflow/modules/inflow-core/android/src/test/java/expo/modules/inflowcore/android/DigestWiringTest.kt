@@ -11,15 +11,18 @@ class DigestWiringTest {
 
   private fun text(name: String) = File(src, name).also { assertTrue("$name not found from ${File(".").absoluteFile}", it.isFile) }.readLines().filterNot { it.trimStart().startsWith("//") || it.trimStart().startsWith("*") || it.trimStart().startsWith("/*") }.joinToString("\n")
 
-  // ---- the notification: private on the lock screen, counts only in its public version
+  // ---- the notification: secret when a line is personal, else private with a public version that holds the count only
 
-  @Test fun theNotificationIsPrivateWithAPublicVersionThatHoldsTheCountOnly() {
+  @Test fun theNotificationIsSecretWhenPersonalElsePrivateWithAPublicVersionThatHoldsTheCountOnly() {
     val t = text("android/DigestNotifier.kt")
     assertTrue(t.contains("NotificationChannel(CHANNEL, \"Daily summary\", NotificationManager.IMPORTANCE_LOW)"))
-    assertTrue(t.contains(".setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setPublicVersion(public)"))
+    assertTrue(t.contains("val lock = Digest.lockScreenText(c)"))
+    assertTrue(t.contains(".setVisibility(if (public == null) NotificationCompat.VISIBILITY_SECRET else NotificationCompat.VISIBILITY_PRIVATE).setPublicVersion(public)"))
+    assertEquals(1, Regex("setVisibility").findAll(t).count())
     assertTrue("the notification must not be public", !t.contains("VISIBILITY_PUBLIC"))
     val public = t.lines().single { it.contains("val public = ") }
-    assertTrue(public, public.contains(".setContentTitle(c.title).setContentText(c.publicText).build()"))
+    assertTrue(public, public.contains("val public = lock?.let { ") && public.contains(".setContentTitle(c.title).setContentText(it).build() }"))
+    assertTrue("the count is read only through the lock-screen decision", !t.contains("c.publicText") && !t.contains("c.personal"))
     // Neither the private text nor anything else of the content reaches the public builder, and the lines are named only after it.
     assertTrue(public, !public.contains("lines") && !public.contains("setStyle") && !public.contains("first()"))
     assertTrue(t.indexOf("c.lines") > t.indexOf("val public = "))

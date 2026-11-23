@@ -157,15 +157,52 @@ class DigestTest {
     assertTrue(c.title.none { it.isDigit() })
   }
 
-  @Test fun atMostFiveLinesEachAtMostSixtyCharactersWhileTheCountIsOfAll() {
+  @Test fun atMostFiveLinesEachAtMostSixtyCharactersAndTheCountIsOfTheLinesShown() {
     val many = (1L..9L).map { DueThing(it, SuggestionKind.BILL, at("2026-11-25T10:00") + it) }
     val inputs = Inputs(dueList = many, appLines = listOf(AppLine(BriefingKind.TASKS, "x".repeat(200))))
     val c = Digest.build(DigestKind.MORNING, inputs, now, zone)!!
     assertEquals(5, c.lines.size)
     assertTrue(c.lines.all { it.length <= Digest.MAX_TEXT })
-    assertEquals("6 things today", c.publicText)
+    assertEquals("5 things today", c.publicText)
     val long = Digest.build(DigestKind.MORNING, Inputs(appLines = listOf(AppLine(BriefingKind.TASKS, "y".repeat(200)))), now, zone)!!
     assertEquals(60, long.lines.single().length)
+  }
+
+  // ---- the lock screen
+
+  @Test fun aPersonalLineShowsNothingOnTheLockScreen() {
+    val home = Digest.build(DigestKind.MORNING, Inputs(dueList = listOf(DueThing(7, SuggestionKind.BILL, at("2026-11-25T00:00"))), appLines = listOf(AppLine(BriefingKind.HOME, "Ali is home"))), now, zone)!!
+    assertTrue(home.personal)
+    assertNull(Digest.lockScreenText(home))
+    val spentYesterday = Digest.build(DigestKind.MORNING, Inputs(txnList = listOf(txn(Direction.OUT, 420_000, at("2026-11-23T12:00")))), now, zone)!!
+    assertNull(Digest.lockScreenText(spentYesterday))
+    val steps = Digest.build(DigestKind.MORNING, Inputs(healthOn = true, source = StoreBriefingHealth(health, meds)), now, zone)!!
+    assertNull(Digest.lockScreenText(steps))
+  }
+
+  @Test fun theEveningSpentLineIsPersonal() {
+    val ev = at("2026-11-24T20:00:30")
+    val c = Digest.build(DigestKind.EVENING, Inputs(dueList = listOf(DueThing(2, SuggestionKind.BILL, at("2026-11-25T00:00"))), txnList = listOf(txn(Direction.OUT, 300_000, at("2026-11-24T09:00")))), ev, zone)!!
+    assertEquals(listOf("Spent PKR 3,000 today", "Bill due 25 Nov"), c.lines)
+    assertTrue(c.personal)
+    assertNull(Digest.lockScreenText(c))
+  }
+
+  @Test fun onlyBillAndEventLinesKeepTheCountOnTheLockScreen() {
+    val m = Digest.build(DigestKind.MORNING, Inputs(dueList = listOf(DueThing(7, SuggestionKind.BILL, at("2026-11-25T00:00")), DueThing(8, SuggestionKind.EVENT, at("2026-11-24T11:00")))), now, zone)!!
+    assertEquals(false, m.personal)
+    assertEquals("2 things today", Digest.lockScreenText(m))
+    val e = Digest.build(DigestKind.EVENING, Inputs(dueList = listOf(DueThing(2, SuggestionKind.BILL, at("2026-11-25T00:00")))), at("2026-11-24T20:00:30"), zone)!!
+    assertEquals("1 thing tonight", Digest.lockScreenText(e))
+    for (line in m.lines + e.lines) assertTrue(line, !Digest.lockScreenText(m)!!.contains(line) && !Digest.lockScreenText(e)!!.contains(line))
+  }
+
+  @Test fun onlyTheLinesShownDecide() {
+    // Five bills fill the five lines; the home line after them is not shown, so the count stays on the lock screen.
+    val bills = (1L..5L).map { DueThing(it, SuggestionKind.BILL, at("2026-11-25T10:00") + it) }
+    val c = Digest.build(DigestKind.MORNING, Inputs(dueList = bills, appLines = listOf(AppLine(BriefingKind.HOME, "Ali is home"))), now, zone)!!
+    assertTrue(c.lines.none { it.contains("Ali") })
+    assertEquals("5 things today", Digest.lockScreenText(c))
   }
 
   // ---- the health gate
