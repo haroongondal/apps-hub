@@ -25,7 +25,7 @@ class HealthSqlWiringTest {
     val src = File("src/main/java")   // Gradle runs module unit tests from the module's android/ folder
     assertTrue("sources not found from ${File(".").absoluteFile}", src.isDirectory)
     val users = src.walk().filter { it.isFile && it.extension == "kt" && it.readText().contains("health_daily") }.map { it.name }.toSet()
-    assertEquals(setOf("SqlItemStore.kt", "SqlHealthStore.kt"), users)
+    assertEquals(setOf("SqlItemStore.kt", "SqlHealthStore.kt", "HealthTables.kt"), users)
     assertEquals(1, File(src, "expo/modules/inflowcore/android/SqlItemStore.kt").readLines().count { it.contains("health_daily") && !it.trimStart().startsWith("//") })
   }
 }

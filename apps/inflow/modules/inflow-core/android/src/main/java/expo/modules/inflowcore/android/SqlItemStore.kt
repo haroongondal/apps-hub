@@ -570,7 +570,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
 
   companion object {
     private const val DB_NAME = "inflow.db"
-    private const val SCHEMA_VERSION = 9
+    private const val SCHEMA_VERSION = 10
     private const val GENERIC_FAILURE =
       "Inflow can't open your saved history. The history file is kept, not deleted. Restart the phone and try again."
     private const val ITEM_COLUMNS = "i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, " +
@@ -784,6 +784,15 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       "CREATE TABLE health_daily(day TEXT PRIMARY KEY, steps INTEGER, sleep_minutes INTEGER, hr_avg INTEGER, hr_low INTEGER, updated_at INTEGER NOT NULL)",
     )
 
+    // Not idempotent, like the others. Medicines (times "HH:MM,...", days ISO weekdays "1,...,7"), their dose log (taken, skipped, missed) and the journal; no other query reads them.
+    internal val SCHEMA_V10 = listOf(
+      "CREATE TABLE medicines(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, dose TEXT NOT NULL, times TEXT NOT NULL, days TEXT NOT NULL, " +
+        "start_day TEXT NOT NULL, end_day TEXT, active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL)",
+      "CREATE TABLE dose_log(medicine_id INTEGER NOT NULL, due_at INTEGER NOT NULL, status TEXT NOT NULL, marked_at INTEGER NOT NULL, PRIMARY KEY(medicine_id, due_at))",
+      "CREATE TABLE journal(id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, mood INTEGER NOT NULL, tags TEXT NOT NULL, note TEXT NOT NULL, created_at INTEGER NOT NULL)",
+      "CREATE INDEX journal_at ON journal(at)",
+    )
+
     // Runs after SCHEMA_V6, in its transaction: the old names become the new ones (money out), and a money-in txn holding a name that is not a money-in category is cleared to be categorised again.
     internal const val V6_RENAME = "UPDATE txns SET category = ? WHERE category = ? AND direction = 'OUT'"
     internal val V6_CLEAR_IN = "UPDATE txns SET category = NULL WHERE direction = 'IN' AND category IS NOT NULL AND category NOT IN (${Categories.IN.joinToString { "?" }})"
@@ -882,6 +891,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
           if (db.version < 7) SCHEMA_V7.forEach(db::execSQL)
           if (db.version < 8) SCHEMA_V8.forEach(db::execSQL)
           if (db.version < 9) SCHEMA_V9.forEach(db::execSQL)
+          if (db.version < 10) SCHEMA_V10.forEach(db::execSQL)
           db.version = SCHEMA_VERSION
           db.setTransactionSuccessful()
         } finally {
