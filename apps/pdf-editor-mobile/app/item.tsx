@@ -92,7 +92,7 @@ function MinutesSection({ item, saved, making, playFrom }: { item: Item; saved: 
   const again = () =>
     confirmAction({
       title: 'Replace these minutes?',
-      message: 'Nexus sends the transcript to Groq again and replaces the minutes you have now.',
+      message: 'Nexus sends the transcript to Groq again, or to Gemini when Groq cannot answer, and replaces the minutes you have now.',
       confirmLabel: 'Replace',
       onConfirm: make,
     });
@@ -111,7 +111,11 @@ function MinutesSection({ item, saved, making, playFrom }: { item: Item; saved: 
     <>
       <Group
         title="Minutes"
-        footer={saved ? undefined : 'Nexus sends this transcript to Groq to write a summary, the decisions and the action items, each with the time it was said.'}
+        footer={
+          saved
+            ? undefined
+            : 'Nexus sends this transcript to Groq, or to Gemini when Groq cannot answer, to write a summary, the decisions and the action items, each with the time it was said. To make the minutes searchable, it sends them to Gemini when a Gemini key is set.'
+        }
       >
         {saved ? <Row title={<Text>{saved.minutes.summary}</Text>} /> : null}
         {making ? (
@@ -136,7 +140,7 @@ function MinutesSection({ item, saved, making, playFrom }: { item: Item; saved: 
       {making ? null : saved ? (
         <Button label="Make minutes again" variant="secondary" onPress={again} />
       ) : (
-        <Button label="Make minutes" onPress={make} accessibilityHint="Sends the transcript to Groq" />
+        <Button label="Make minutes" onPress={make} accessibilityHint="Sends the transcript to Groq, or to Gemini when Groq cannot answer" />
       )}
     </>
   );
