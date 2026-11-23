@@ -131,4 +131,19 @@ class AddTodoTest {
     assertEquals(AddTodoFlow.Outcome.ADDED, flow.add("x"))   // a failed write does not use up the one add
     assertEquals(1, saved.rows.size)
   }
+
+  // The Activity needs a device, so its order is pinned in the source: the caller check is the first thing after super, and the flow unlocks only after a failed prompt has returned.
+  @Test fun theActivityChecksTheCallerFirstAndUnlocksOnlyAfterTheFingerprint() {
+    val src = File("src/main/java/expo/modules/inflowcore/android/AddTodoActivity.kt").also { assertTrue(it.isFile) }.readText()
+    val create = src.substringAfter("override fun onCreate(savedInstanceState: Bundle?) {").substringBefore("\n  }\n").lines().map { it.trim() }.filter { it.isNotEmpty() }
+    assertEquals("super.onCreate(savedInstanceState)", create[0])
+    assertEquals("if (!AppLinkActivityCaller.allowed(this)) return end()", create[1])
+    val unlock = src.substringAfter("private fun unlock() {").substringBefore("\n  }\n")
+    val prompt = unlock.indexOf("val (ok, message) = Lock.authenticate(this@AddTodoActivity)")
+    val refused = unlock.indexOf("if (!ok) {")
+    val back = unlock.indexOf("return@launch end()")
+    val unlocked = unlock.indexOf("flow.unlocked()")
+    assertTrue(unlock, prompt >= 0 && prompt < refused && refused < back && back < unlocked)
+    assertEquals(1, Regex("\\.unlocked\\(\\)").findAll(src).count())
+  }
 }

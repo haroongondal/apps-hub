@@ -75,6 +75,19 @@ class AutopilotProviderShareTest {
     assertTrue(src.contains("if (matcher.match(uri) != ONE) return 0"))
   }
 
+  @Test fun theBriefingIsServedToHaloAloneDecidedOnTheBinderThreadBeforeAnyRow() {
+    val src = File("src/main/java/expo/modules/inflowcore/android/AutopilotProvider.kt").readText()
+    val branch = src.substringAfter("      BRIEFING -> MatrixCursor(BRIEFING_COLUMNS)").substringBefore("\n      }\n")
+    val halo = "val halo = runCatching { BriefingShare.callerIsHalo(ctx?.packageManager?.getPackagesForUid(Binder.getCallingUid())) }.getOrDefault(false)"
+    assertTrue(branch, branch.contains(halo))
+    assertTrue(branch, branch.contains("if (halo && store != null && ctx != null) runCatching {"))
+    assertTrue("the caller is decided before any row or refresh", branch.indexOf(halo) < branch.indexOf("BriefingShare.serve(") && branch.indexOf(halo) < branch.indexOf("maybeRefresh"))
+    assertEquals(1, Regex("addRow").findAll(branch).count())
+    // The two switches come from their own meta keys, exactly.
+    assertTrue(branch.contains("val shareOn = Briefing.on(store.meta(Briefing.SHARE_META))"))
+    assertTrue(branch.contains("BriefingShare.serve(shareOn, Briefing.on(store.meta(Briefing.HEALTH_META)), snapshot).forEach { c.addRow(it) }"))
+  }
+
   // The Nexus shares (INFLOW_ASK_ITEMS_SHARE, INFLOW_ASK_IDS_SHARE, INFLOW_DEBITS_SHARE in inflow-shares.ts), on the same legacy authority, paged by since-id.
   private fun fixture(name: String) = File("../../../../../packages/autopilot-contract/fixtures/$name.share.json").also {
     assertTrue("fixture not found from ${File(".").absoluteFile}", it.isFile)

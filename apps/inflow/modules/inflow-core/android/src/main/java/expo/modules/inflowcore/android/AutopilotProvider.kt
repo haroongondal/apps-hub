@@ -27,7 +27,7 @@ import expo.modules.inflowcore.core.SuggestionState
  *  - `suggestions/#` (query one row, update `state` to started, done or skipped).
  *  - `items/#` (query one source item; empty when Inflow refuses to share it: see AutopilotAccess).
  *  - `health` (query, one row for the Store: listener on or off, where the AI keys come from, the last heartbeat; no personal data, so no switch guards it, but the caller check still does).
- *  - `briefing` (query, up to 20 lines of today's briefing, built in Inflow from structured data: see Briefing): rows only while 'Share my morning briefing' is on, otherwise an empty cursor. They come from the snapshot
+ *  - `briefing` (query, up to 20 lines of today's briefing, built in Inflow from structured data: see Briefing): rows only for Halo and only while 'Show my morning briefing in Halo' is on, otherwise an empty cursor. They come from the snapshot
  *    BriefingRefresh keeps; the query never runs a reader, and starts at most one background rebuild when the snapshot is older than 10 minutes. The lines that come from the health-in-briefing switch are dropped while that switch is off.
  *  - `ask_items/<sinceId>`, `ask_ids/<sinceId>`, `debits/<sinceId>` (query, Nexus alone, each behind its own switch: see NexusShares); anything else gets an empty cursor.
  *
@@ -65,7 +65,9 @@ class AutopilotProvider : ContentProvider() {
       }
       BRIEFING -> MatrixCursor(BRIEFING_COLUMNS).also { c ->
         val ctx = context
-        if (store != null && ctx != null) runCatching {
+        // Read on the binder thread, before any hop, so the uid is the reader's own; any failure serves nothing.
+        val halo = runCatching { BriefingShare.callerIsHalo(ctx?.packageManager?.getPackagesForUid(Binder.getCallingUid())) }.getOrDefault(false)
+        if (halo && store != null && ctx != null) runCatching {
           val shareOn = Briefing.on(store.meta(Briefing.SHARE_META))
           val snapshot = BriefingSnapshot.parse(store.meta(BriefingSnapshot.META))
           BriefingShare.serve(shareOn, Briefing.on(store.meta(Briefing.HEALTH_META)), snapshot).forEach { c.addRow(it) }

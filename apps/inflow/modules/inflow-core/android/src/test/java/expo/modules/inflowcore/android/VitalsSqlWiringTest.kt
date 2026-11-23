@@ -94,6 +94,8 @@ class VitalsSqlWiringTest {
     for (f in briefing.filter { it.name != "BriefingHealth.kt" && it.name != "BriefingSource.kt" }) {
       assertTrue("${f.name} touches health", code(f).none { healthCode.containsMatchIn(noText(it)) })
     }
+    // The setting is read from its own meta key, exactly: `get() = true` would hand health to every briefing.
+    assertEquals(listOf("override val healthOn: Boolean get() = Briefing.on(store.meta(Briefing.HEALTH_META))"), code(file("BriefingSource.kt")).filter { it.contains("healthOn") }.map { it.trim() })
     val glue = code(file("BriefingSource.kt")).filter { healthCode.containsMatchIn(noText(it)) && !it.startsWith("import ") }.map { it.trim() }
     assertEquals(listOf("override fun health(): BriefingHealth = StoreBriefingHealth(SqlHealthStore(store.db), SqlMedicineStore(store))"), glue)
     assertEquals(setOf("BriefingSource.kt"), sources().filter { f -> code(f).any { it.contains("StoreBriefingHealth(") && !it.trimStart().startsWith("class ") } }.map { it.name }.toSet())

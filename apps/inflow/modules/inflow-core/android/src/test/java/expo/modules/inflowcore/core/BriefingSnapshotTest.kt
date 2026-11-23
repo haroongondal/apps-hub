@@ -1,5 +1,6 @@
 package expo.modules.inflowcore.core
 
+import expo.modules.inflowcore.applink.SiblingPackages
 import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -66,6 +67,14 @@ class BriefingSnapshotTest {
     assertFalse(s.stale(1_000_000 + 10 * 60_000))
     assertTrue(s.stale(1_000_000 + 10 * 60_000 + 1))
     assertTrue(s.stale(999_999))
+  }
+
+  @Test fun onlyAUidHoldingHaloAloneIsHalo() {
+    assertEquals("com.haroon.halo", SiblingPackages.HALO)
+    assertTrue(BriefingShare.callerIsHalo(arrayOf(SiblingPackages.HALO)))
+    for (other in listOf(null, emptyArray(), arrayOf(SiblingPackages.NEXUS), arrayOf(SiblingPackages.DEPUTY), arrayOf(SiblingPackages.INFLOW), arrayOf(SiblingPackages.HALO, SiblingPackages.NEXUS), arrayOf(SiblingPackages.DEPUTY, SiblingPackages.HALO), arrayOf("com.haroon.halo.debug"), arrayOf(""))) {
+      assertFalse(other?.toList().toString(), BriefingShare.callerIsHalo(other))
+    }
   }
 
   @Test fun sharingOffServesNothingWhateverTheSnapshotHolds() {

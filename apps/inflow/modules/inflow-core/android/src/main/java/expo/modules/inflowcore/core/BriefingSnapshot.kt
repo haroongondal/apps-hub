@@ -1,5 +1,6 @@
 package expo.modules.inflowcore.core
 
+import expo.modules.inflowcore.applink.SiblingPackages
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -54,7 +55,7 @@ data class BriefingSnapshot(val builtAt: Long, val lines: List<BriefingLine>) {
   }
 }
 
-/** What the `briefing` path serves: rows from the snapshot only, and only while the owner turned sharing on. */
+/** What the `briefing` path serves: rows from the snapshot only, to Halo alone, and only while the owner turned sharing on. */
 object BriefingShare {
   // Equal to INFLOW_BRIEFING_SHARE in packages/autopilot-contract/src/inflow-shares.ts (fixtures/briefing.share.json).
   val COLUMNS = arrayOf("line_id", "kind", "text", "at", "personal")
@@ -64,6 +65,8 @@ object BriefingShare {
   // The two kinds that come from the health setting: dropped at serve time whenever that setting is off, whatever the snapshot holds.
   private val HEALTH_KINDS = setOf(BriefingKind.MEDICINE.key, BriefingKind.STEPS.key)
   private val KINDS = BriefingKind.values().associateBy { it.key }
+
+  fun callerIsHalo(packages: Array<String>?): Boolean = packages != null && packages.size == 1 && packages[0] == SiblingPackages.HALO
 
   fun valid(l: BriefingLine): Boolean =
     l.kind in KINDS && (l.personal == 0 || l.personal == 1) && l.text.isNotBlank() && Briefing.clean(l.text, Briefing.MAX_TEXT) == l.text

@@ -120,18 +120,18 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
         </Row>
       </Group>
       <Group title="Morning briefing">
-        <Row title="Share my morning briefing with my other Haroon apps" subtitle="Other apps of yours can read the briefing lines on this phone. Nothing leaves the phone.">
-          <Segmented accessibilityLabel="Share my morning briefing with my other Haroon apps" options={RECORD_OPTIONS} value={briefingShare ? 'on' : 'off'} onChange={(k) => change(() => InflowCore.setBriefingShare(k === 'on'))} />
+        <Row title="Show my morning briefing in Halo" subtitle="Halo can read these lines on this phone. Nothing leaves the phone.">
+          <Segmented accessibilityLabel="Show my morning briefing in Halo" options={RECORD_OPTIONS} value={briefingShare ? 'on' : 'off'} onChange={(k) => change(() => InflowCore.setBriefingShare(k === 'on'))} />
         </Row>
-        <Row title="Include medicines and steps in my morning briefing" subtitle="Adds your next medicine time and today's steps. Off keeps health numbers out of the briefing.">
+        <Row title="Include medicines and steps in my morning briefing" subtitle="Adds your next medicine time and today's steps to the morning summary and to the briefing Halo shows. Off keeps health numbers out of both.">
           <Segmented accessibilityLabel="Include medicines and steps in my morning briefing" options={RECORD_OPTIONS} value={healthBriefing ? 'on' : 'off'} onChange={(k) => change(() => InflowCore.setHealthInBriefing(k === 'on'))} />
         </Row>
-        <Row title="Morning and evening summary" subtitle="Inflow posts what is due and what you spent at 08:00 and 20:00. Nothing leaves the phone.">
+        <Row title="Morning and evening summary" subtitle="Inflow posts what is due and what you spent at 08:00 and 20:00, and in the morning who is home and news from your other apps. Nothing leaves the phone.">
           <Segmented accessibilityLabel="Morning and evening summary" options={RECORD_OPTIONS} value={digest ? 'on' : 'off'} onChange={(k) => change(() => InflowCore.setDigest(k === 'on'))} />
         </Row>
       </Group>
       <Group title="Nexus">
-        <Row title="Let Nexus read my messages" subtitle="Nexus can search your text messages and emails on this phone, to answer your questions. Nothing leaves the phone.">
+        <Row title="Let Nexus read my messages" subtitle="Nexus keeps a copy of your text messages and emails to answer your questions, and sends them to Gemini and Groq, through AI hub or with your own keys. One-time codes are never shared.">
           <Segmented accessibilityLabel="Let Nexus read my messages" options={RECORD_OPTIONS} value={nexusAsk ? 'on' : 'off'} onChange={(k) => change(() => InflowCore.setNexusAsk(k === 'on'))} />
         </Row>
         <Row title="Let Nexus match my receipts" subtitle="Nexus can see the money you spent in the last 60 days to match receipts. Nothing leaves the phone.">

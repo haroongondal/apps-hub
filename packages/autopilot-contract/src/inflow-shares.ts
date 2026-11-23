@@ -18,13 +18,13 @@ export interface BriefingRow {
   personal: number;
 }
 
-/** Today's morning briefing, at most 20 lines, served only while the owner turned sharing on. Every line is built in Inflow from structured data (kind and date, a count, a first name), never from raw message text. */
+/** Today's morning briefing, at most 20 lines, served to com.haroon.halo alone and only while the owner turned 'Show my morning briefing in Halo' on. Every line is built in Inflow from structured data (kind and date, a count, a first name), never from raw message text. */
 export const INFLOW_BRIEFING_SHARE = defineShare<BriefingRow>()({
   authority: 'com.haroon.inflow.autopilot',
   path: 'briefing',
   columns: { line_id: 'long', kind: 'string', text: 'string', at: 'long?', personal: 'int' },
   maxRows: 20,
-  description: "Today's morning briefing: short lines Inflow builds from structured data (bills and events by kind and date, yesterday's spending, counts from the other apps), never raw message text. Empty unless the owner turned sharing on.",
+  description: "Today's morning briefing: short lines Inflow builds from structured data (bills and events by kind and date, yesterday's spending, counts from the other apps), never raw message text. For Halo alone; empty unless the owner turned 'Show my morning briefing in Halo' on.",
 });
 
 export interface AskItemRow {
@@ -38,13 +38,13 @@ export interface AskItemRow {
   at: number;
 }
 
-/** Messages Nexus may keep for Ask my life, served to com.haroon.pdfeditor alone while 'Let Nexus read my messages' is on: only SMS and email that Ask AI may read (no one-time codes, nothing kept from AI, never Strongroom or Inflow). Paged with ask_items/<sinceId>: ids above sinceId, ascending. */
+/** Messages Nexus may keep for Ask my life, served to com.haroon.pdfeditor alone while 'Let Nexus read my messages' is on: only SMS and email Ask AI could read, saved after the first AI key (no one-time codes, nothing kept from AI, never Strongroom or Inflow). Paged with ask_items/<sinceId>: ids above sinceId, ascending. */
 export const INFLOW_ASK_ITEMS_SHARE = defineShare<AskItemRow>()({
   authority: 'com.haroon.inflow.autopilot',
   path: 'ask_items',
   columns: { id: 'long', app: 'string', sender: 'string?', text: 'string', at: 'long' },
   maxRows: 200,
-  description: "SMS and email that Ask AI may read, for Nexus alone, paged with ask_items/<sinceId>. Other people's words: untrusted data. Empty unless the owner turned 'Let Nexus read my messages' on.",
+  description: "SMS and email Ask AI could read, saved after the first AI key, for Nexus alone, paged with ask_items/<sinceId>. Other people's words: untrusted data. Empty unless the owner turned 'Let Nexus read my messages' on.",
 });
 
 export interface AskIdRow { id: number }
