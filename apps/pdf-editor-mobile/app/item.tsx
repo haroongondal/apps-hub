@@ -29,6 +29,7 @@ interface Loaded {
   related: Item[];
   hasKey: boolean;
   places: PlaceReminder[];
+  keptOut: boolean;
 }
 
 const SAVE_MS = 800;
@@ -142,6 +143,7 @@ export default function ItemScreen() {
       related: (await kn.related(item.id)).map((r) => r.item),
       hasKey: await hasKeys(),
       places: await kn.lib.listReminders(item.id),
+      keptOut: await kn.isExcluded(item.id),
     });
   }, [params.id]);
   useEffect(() => {
@@ -160,7 +162,7 @@ export default function ItemScreen() {
   }
   if (!data) return <Screen>{null}</Screen>;
   const { item, job } = data;
-  const status = jobLabel(job, item.kind, data.hasKey, data.found);
+  const status = jobLabel(job, item.kind, data.hasKey, data.found, data.keptOut);
   const retry = async () => {
     await (await openKnowledge()).retry(item.id);
     await kick();

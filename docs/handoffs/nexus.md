@@ -109,10 +109,30 @@ push or release only when the owner says so.
   green. Pushed `nexus`, opened PR #44. Released `pnpm release pdf-editor`: **Nexus 1.4.0,
   versionCode 18**; manifest re-fetched, all 10 apps intact.
 
+- 2026-11-20 S2: owner asked for a way to keep documents out of the knowledge base (personal
+  info, ideas). Built:
+  - `knowledge` migration step 3: `kn_excluded(item_id, excluded_at)`.
+  - `Knowledge.exclude(id)` deletes the item's jobs, chunks, source node, atoms and its own
+    edges, then prunes concepts that lost their last link. Segments stay: they are the item's
+    own transcript/OCR and feed Library search. `include(id)` removes the exclusion and
+    re-queues from the text stage. `enqueue` and `enqueueMissing` skip excluded items. An
+    in-flight stage finds no job and writes nothing (existing `isLive` guard).
+  - App: Library item menu gets "Keep out of Nexus" (confirmed, styled destructive) and "Add
+    to Nexus"; Stream cards and the item screen show "Not in Nexus". `openKnowledge()` failing
+    leaves the Library working with no exclusions.
+  - Gates: knowledge-core tests and typecheck clean (new `exclude.test.ts`, 4 tests, registered
+    in package.json); pdf-editor-mobile 26/26 tests, typecheck and `pnpm lint` clean.
+  - Known limit: a concept's alias names contributed only by an excluded item can persist on
+    a concept other items still support (aliases are not tracked per source).
+  - Not done: exclude-at-import option; phone test.
+
 ## Current state + exact next step
 
-Nexus 1.4.0 (versionCode 18) is on the Store, built from `nexus` at a88538e8. PR #44 is open
-(merge with `[skip ci]` in the subject, owner's go only). Not yet tested on the phone.
+Nexus 1.4.0 (versionCode 18) is on the Store, built from `nexus` at a88538e8. PR #44 was merged to main on 2026-11-18.
+
+Keep-out feature (S2 above): on the `nexus-keep-out` branch, released to the Store after the owner's go
+on 2026-11-20 and installed from the Store on the phone for testing. Test checklist: the Library item
+menu's "Keep out of Nexus" removes its ideas from Stream and Ask, and "Add to Nexus" indexes it again.
 
 Next step: phone test through the coord queue (`device:49kjmnuwonkffqzh`), installing from
 the Store only. First check the existing library still opens after the migration (library

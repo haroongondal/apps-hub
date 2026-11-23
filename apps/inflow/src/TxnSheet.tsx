@@ -6,6 +6,7 @@ import { exactTime } from './format.ts';
 import { ITEM_REMOVED, LOAD_ERROR, SAVE_ERROR } from './messages.ts';
 import { formatAmount } from './money.ts';
 import { deleteTxnConfirm } from './records.ts';
+import { ReceiptSheet } from './ReceiptSheet.tsx';
 
 const OWN_OPTIONS = [
   { key: 'yes', label: 'Yes' },
@@ -33,6 +34,7 @@ export function TxnSheet({
   const [choices, setChoices] = useState<string[] | null>(null);
   const [sources, setSources] = useState<Array<Item | null>>([]);
   const [error, setError] = useState<string | null>(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
 
   useEffect(() => {
     if (!txn) return;
@@ -114,6 +116,7 @@ export function TxnSheet({
   };
 
   return (
+    <>
     <Sheet visible={txn !== null} onClose={onClose} title={txn ? formatAmount(txn.amount, txn.currency) : 'Transaction'}>
       {txn && (
         <>
@@ -135,6 +138,9 @@ export function TxnSheet({
             <Row title="Own transfer" subtitle={txn.paired && own ? 'Matched with the other side of this transfer.' : 'Left out of your totals when set to Yes.'}>
               <Segmented accessibilityLabel="Own transfer" options={OWN_OPTIONS} value={own ? 'yes' : 'no'} onChange={choose} />
             </Row>
+            {txn.itemIds.length > 0 ? (
+              <Row title="Receipt" subtitle="Find a photo from around this date that shows this amount" onPress={() => setReceiptOpen(true)} />
+            ) : null}
           </Group>
           {choices !== null && (
             <Group title="Choose a category">
@@ -156,5 +162,7 @@ export function TxnSheet({
         </>
       )}
     </Sheet>
+    <ReceiptSheet txn={receiptOpen ? txn : null} onClose={() => setReceiptOpen(false)} onAttached={onChanged} />
+    </>
   );
 }
