@@ -12,6 +12,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import androidx.fragment.app.FragmentActivity
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.activityresult.AppContextActivityResultLauncher
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
@@ -22,9 +23,11 @@ import expo.modules.inflowcore.android.Lock
 import expo.modules.inflowcore.android.GmailClient
 import expo.modules.inflowcore.android.Gallery
 import expo.modules.inflowcore.android.GmailSync
+import expo.modules.inflowcore.android.HealthConnectReader
 import expo.modules.inflowcore.android.InflowListener
 import expo.modules.inflowcore.android.MediaStore
 import expo.modules.inflowcore.android.ReportNotifier
+import expo.modules.inflowcore.android.SqlHealthStore
 import expo.modules.inflowcore.android.SqlReportStore
 import expo.modules.inflowcore.android.SqlMediaIndex
 import expo.modules.inflowcore.android.SmsImporter
@@ -43,6 +46,7 @@ import expo.modules.inflowcore.core.AutopilotSettingsInput
 import expo.modules.inflowcore.core.Categories
 import expo.modules.inflowcore.core.Edits
 import expo.modules.inflowcore.core.GmailPolicy
+import expo.modules.inflowcore.core.HealthAggregate
 import expo.modules.inflowcore.core.Prices
 import expo.modules.inflowcore.core.RawMedia
 import expo.modules.inflowcore.core.Retention
@@ -52,6 +56,8 @@ import expo.modules.inflowcore.core.toMap
 import expo.modules.inflowcore.core.toRow
 import kotlinx.coroutines.Dispatchers
 import java.io.File
+import java.time.LocalDate
+import java.time.format.DateTimeParseException
 import kotlinx.coroutines.withContext
 
 private const val CAPTURED_EVENT = "onCaptured"
@@ -85,6 +91,15 @@ class InflowCoreModule : Module() {
     if (id >= 0) openReport = id
   }
 
+  private lateinit var healthPermissions: AppContextActivityResultLauncher<ArrayList<String>, Set<String>>
+
+  private fun day(text: String): String =
+    try {
+      LocalDate.parse(text).toString()
+    } catch (e: DateTimeParseException) {
+      throw CodedException("BAD_DAY", "Use a date like 2026-03-10.", null)
+    }
+
   private fun settingFor(store: SqlItemStore, pkg: String): AppSetting = store.appSetting(pkg) ?: Retention.default(pkg, InflowListener.label(context, pkg))
 
   /** Tells JS the list may have changed, with the number of waiting suggestions (expired ones are swept first). */
@@ -114,6 +129,10 @@ class InflowCoreModule : Module() {
     }
 
     OnNewIntent { intent -> readOpenReport(intent) }
+
+    RegisterActivityContracts {
+      healthPermissions = registerForActivityResult(HealthConnectReader.PermissionContract())
+    }
 
     OnDestroy {
       StoreHolder.onCaptured = null
@@ -584,6 +603,26 @@ class InflowCoreModule : Module() {
 
     AsyncFunction("ask") Coroutine { question: String ->
       withContext(Dispatchers.IO) { AiRunner.ask(context, question) }
+    }
+
+    AsyncFunction("healthStatus") Coroutine { ->
+      withContext(Dispatchers.IO) { HealthConnectReader.status(context) }
+    }
+
+    // Health Connect's own screen; resolves with whether all three are granted afterwards (false at once when Health Connect is not ready).
+    AsyncFunction("requestHealthPermissions") Coroutine { ->
+      if (HealthConnectReader.availability(context) != "available") return@Coroutine false
+      healthPermissions.launch(ArrayList(HealthConnectReader.PERMISSIONS))
+      withContext(Dispatchers.IO) { HealthConnectReader.granted(context) } == HealthConnectReader.PERMISSIONS
+    }
+
+    // Reads the last `days` local days (1 to 90) and replaces them in the store; only called while the app is open.
+    AsyncFunction("refreshHealth") Coroutine { days: Int ->
+      withContext(Dispatchers.IO) { HealthConnectReader.refresh(context, store(), days.coerceIn(1, HealthAggregate.MAX_DAYS)) }
+    }
+
+    Function("healthDays") { fromDay: String, toDay: String ->
+      SqlHealthStore(store().db).days(day(fromDay), day(toDay)).map { it.toMap() }
     }
   }
 }

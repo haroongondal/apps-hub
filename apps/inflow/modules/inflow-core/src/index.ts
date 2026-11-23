@@ -271,6 +271,23 @@ export interface PickableChat {
   app: string;
 }
 
+// One local day from Health Connect; null = no data for that metric. hrLow is the lowest 5-minute average with at least 2 readings, not a medical measure.
+export interface HealthDay {
+  day: string; // YYYY-MM-DD
+  steps: number | null;
+  sleepMinutes: number | null;
+  hrAvg: number | null;
+  hrLow: number | null;
+}
+
+export interface HealthStatus {
+  // missing: Health Connect is not on the phone; update: it needs an update first.
+  availability: 'available' | 'missing' | 'update';
+  steps: boolean;
+  sleep: boolean;
+  heartRate: boolean;
+}
+
 export interface InflowCoreApi {
   getStatus(): Status;
   openNotificationAccess(): void;
@@ -382,6 +399,13 @@ export interface InflowCoreApi {
   setAutopilotSettings(settings: AutopilotSettings): void;
   // Chats of messaging apps (not SMS or email, which already reach the AI), newest first, at most 200.
   pickableChats(): PickableChat[];
+  healthStatus(): Promise<HealthStatus>;
+  // Opens Health Connect's own screen; true when steps, sleep and heart rate are all allowed afterwards.
+  requestHealthPermissions(): Promise<boolean>;
+  // Reads the last `days` local days (clamped to 1..90; 30 is the usual) and replaces them in the store. days in the result = rows saved.
+  refreshHealth(days: number): Promise<{ ok: boolean; message: string | null; days: number }>;
+  // fromDay <= day <= toDay (YYYY-MM-DD), oldest first; days without data have no row.
+  healthDays(fromDay: string, toDay: string): HealthDay[];
   addListener(event: 'onCaptured' | 'onSuggestions', listener: (e: { count: number }) => void): { remove(): void };
 }
 
