@@ -80,7 +80,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | E3 | Share targets | eco/nexus, eco/design-editor, eco/deputy | todo (needs E1) |
 | E4 | Store health hub | eco/store | todo (needs E1) |
 | C1 | Clipboard smart actions + phase 1 | eco/clipboard | in progress (Add to Inflow action waits for E1 actions) |
-| C2 | Deputy repeating tasks | eco/deputy | in progress |
+| C2 | Deputy repeating tasks | eco/deputy | built + gated (d23c625a): Deputy gradle 299 tests (274 before), deputy ts 15 pass, typecheck ok, WorkManager 2.12.0 Apache-2.0 no gms; gate unchanged (test proves scheduled run meets same gate); phone not run; security-engineer review pending |
 | C3 | TunnelWall (firewall already on main) | eco/tunnelwall | in progress |
 | C4 | HomeNet | eco/homenet | todo |
 | C5 | Strongroom health report | eco/strongroom | todo |
@@ -105,7 +105,8 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 2. Health data to Ask AI or Autopilot (V4): default off.
 3. TunnelWall auto-connect on untrusted Wi-Fi (C3): default off.
 4. Where the Shields switch lives (B4): (my call, to write down).
-5. Repeating Deputy tasks that include payments (C2): default no; gate always stops them.
+5. Repeating Deputy tasks that include payments (C2): built as `ScheduledRun.PAYMENTS_ALLOWED = true` (a paying task can be saved, but always stops at the gate; false refuses to save them). Owner flips it.
+6. C2 auto-start: the PRD default was a "Tap to run" notification; I built auto-start on an unlocked phone (PRD FR-9 and SPEC section 11 updated). A scheduled run may take over the screen while you use the phone (alternative: 10 s "starting soon, Not now" warning). Owner confirms.
 
 ## File map
 
