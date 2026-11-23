@@ -23,6 +23,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.strongroomvault.android.BiometricKey
 import expo.modules.strongroomvault.android.EntryInput
+import expo.modules.strongroomvault.android.AppHealth
 import expo.modules.strongroomvault.android.ExpiryShare
 import expo.modules.strongroomvault.android.KeepAliveService
 import expo.modules.strongroomvault.android.MODE_MIGRATION
@@ -124,6 +125,7 @@ class StrongroomVaultModule : Module() {
     Events(LOCK_EVENT, SYNC_EVENT)
 
     OnCreate {
+      appContext.reactContext?.let { AppHealth.beat(it) }
       VaultHolder.lockListener = {
         stopPresenting()
         sendEvent(LOCK_EVENT)
@@ -146,7 +148,10 @@ class StrongroomVaultModule : Module() {
       restoreBrightness()
     }
 
-    OnActivityEntersForeground { appContext.currentActivity?.let { a -> a.runOnUiThread { SensitiveClipboard.whenFocused(a) } } }
+    OnActivityEntersForeground {
+      appContext.reactContext?.let { AppHealth.beat(it) }
+      appContext.currentActivity?.let { a -> a.runOnUiThread { SensitiveClipboard.whenFocused(a) } }
+    }
 
     View(SecretFieldView::class) {
       Events("onChangeValue", "onSubmit", "onFocusChange", "onContentHeight")

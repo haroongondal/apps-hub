@@ -36,9 +36,10 @@ internal object ExpiryShare {
 
   fun delete(context: Context) = synchronized(lock) { VaultHolder.file(context, FILE).delete() }
 
-  fun read(context: Context): List<ExpiryItem> {
-    if (!enabled(context)) return emptyList()
-    val sealed = synchronized(lock) { with(VaultHolder) { file(context, FILE).readOrNull() } } ?: return emptyList()
-    return ExpiryIndex.decode(DeviceKey.open(sealed))
+  fun read(context: Context): List<ExpiryItem> = readIf(enabled(context)) {
+    val sealed = synchronized(lock) { with(VaultHolder) { file(context, FILE).readOrNull() } } ?: return@readIf emptyList()
+    ExpiryIndex.decode(DeviceKey.open(sealed))
   }
+
+  internal fun readIf(enabled: Boolean, load: () -> List<ExpiryItem>): List<ExpiryItem> = if (enabled) load() else emptyList()
 }

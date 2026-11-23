@@ -819,3 +819,29 @@ passed once reverted), typechecks clean, Gradle BUILD SUCCESSFUL, 661 tests (new
    only) → one row `card, Card, 2027-02-28, <days>`; Show names → label `Visa travel`; lock Strongroom
    → the same rows; lock the phone → no rows; turn it off → no rows and `files/expiry.bin` is gone
    (`run-as` is unavailable on a release build, so check the absence by the empty result).
+
+## Health row (ecosystem wave 3, 2026-11-24)
+
+Branch `eco/strongroom`, not pushed, not released, nothing run on the phone. The same provider
+(`ExpiryLinkProvider`, authority `com.haroon.strongroom.applink`) now also answers path `health`
+(`appHealthShare('strongroom')`): one row `{app_id: strongroom, accessibility: null, listener: null,
+ai_source: none, last_seen_at}`.
+
+- **Null accessibility and listener.** Strongroom fills through the Android autofill service; the
+  vault module manifest and the app declare no accessibility service and no notification listener
+  (a node test pins this).
+- **Heartbeat.** `AppHealth.beat` writes `lastSeenAt` (epoch ms) to the `strongroom` prefs when the
+  module starts, when the app comes to the foreground and when the autofill service connects. A query
+  only reads it; `null` until the app has run once after this version.
+- **Always served** to same-signed callers (`AppLinkCaller` first, as before). It holds no personal
+  data and does not depend on the expiry switch. The expiry path is unchanged: off by default, empty
+  while off. `AppHealthShareTest` covers both (health served with the switch off, expiry empty) and
+  binds the path and columns to `test/resources/app-health.share.json`, a copy that
+  `expiry-share.test.ts` pins byte for byte to `packages/app-link-contract/fixtures/app-health.share.json`.
+- Not touched: the vault, the Password check, the expiry index.
+
+**Phone check (not run).** From a Store-signed sibling holding the permission (the Store's health
+screen once it reads rows): query `content://com.haroon.strongroom.applink/health`, expect one row
+with `strongroom`, null, null, `none` and a `last_seen_at` near the last time Strongroom was opened;
+repeat the query and confirm `last_seen_at` does not change; with the expiry switch off the same
+sibling still gets the health row and no `/expiry` rows. From `adb shell` both paths are refused.

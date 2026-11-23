@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { assertRowShape, auditManifest, isSensitiveName } from '@apps-hub/app-link-contract';
+import { appHealthShare, assertRowShape, auditManifest, isSensitiveName } from '@apps-hub/app-link-contract';
 import { EXPIRY_SHARE, type ExpiryRow } from '../expiry-share.ts';
 
 const vault = join(import.meta.dirname, '..', '..', 'modules', 'strongroom-vault', 'android', 'src');
@@ -34,4 +34,18 @@ test('the vault module manifest follows the link rules', () => {
   assert.deepEqual(auditManifest(xml), []);
   assert.match(xml, /android:authorities="com\.haroon\.strongroom\.applink"/);
   assert.doesNotMatch(xml, /grantUriPermissions/);
+});
+
+test('the health row share equals the contract fixture the Kotlin AppHealthShareTest copy is pinned to', () => {
+  const share = appHealthShare('strongroom');
+  const fixture = readFileSync(join(import.meta.dirname, '..', '..', '..', '..', 'packages', 'app-link-contract', 'fixtures', 'app-health.share.json'), 'utf8');
+  assert.equal(readFileSync(join(vault, 'test', 'resources', 'app-health.share.json'), 'utf8'), fixture);
+  assert.deepEqual(JSON.parse(fixture), { path: share.path, columns: share.columns, maxRows: share.maxRows });
+  assert.equal(share.authority, 'com.haroon.strongroom.applink');
+});
+
+test('Strongroom declares no accessibility service, so the health row says accessibility is null', () => {
+  const xml = readFileSync(join(vault, 'main', 'AndroidManifest.xml'), 'utf8');
+  assert.doesNotMatch(xml, /BIND_ACCESSIBILITY_SERVICE|AccessibilityService/);
+  assert.doesNotMatch(xml, /BIND_NOTIFICATION_LISTENER_SERVICE|NotificationListenerService/);
 });

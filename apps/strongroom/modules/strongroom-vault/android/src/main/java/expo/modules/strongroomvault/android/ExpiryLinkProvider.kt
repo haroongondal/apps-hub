@@ -7,21 +7,19 @@ import android.database.MatrixCursor
 import android.net.Uri
 import expo.modules.strongroomvault.applink.AppLinkCaller
 import expo.modules.strongroomvault.core.ExpiryIndex
+import expo.modules.strongroomvault.core.ExpiryItem
 import java.time.LocalDate
 
 // The expiry share (apps/strongroom/src/expiry-share.ts): card expiry dates only, from ExpiryShare's index, never the vault.
-// Selection, projection and sort from the caller are ignored.
+// Also serves the `health` row (AppHealth), which does not depend on the expiry switch. Selection, projection and sort from the caller are ignored.
 class ExpiryLinkProvider : ContentProvider() {
   override fun onCreate() = true
 
   override fun query(uri: Uri, projection: Array<String>?, selection: String?, selectionArgs: Array<String>?, sortOrder: String?): Cursor {
     val ctx = context
     if (ctx == null || !AppLinkCaller.allowed(ctx)) throw SecurityException("Not a signed sibling app")
-    if (uri.pathSegments != listOf(PATH)) throw IllegalArgumentException("Unknown path")
-    val today = LocalDate.now()
-    return MatrixCursor(ROW_COLUMNS).apply {
-      ExpiryShare.read(ctx).take(LIST_LIMIT).forEach { addRow(ExpiryIndex.row(it, today)) }
-    }
+    val answer = answer(uri.pathSegments, { AppHealth.lastSeen(ctx) }, { ExpiryShare.read(ctx) }, LocalDate.now())
+    return MatrixCursor(answer.columns).apply { answer.rows.forEach { addRow(it) } }
   }
 
   override fun insert(uri: Uri, values: ContentValues?): Uri = throw UnsupportedOperationException("Read-only")
@@ -32,7 +30,15 @@ class ExpiryLinkProvider : ContentProvider() {
 
   override fun getType(uri: Uri): String? = null
 
+  internal class Answer(val columns: Array<String>, val rows: List<List<Any?>>)
+
   internal companion object {
+    internal fun answer(segments: List<String>, lastSeen: () -> Long?, expiry: () -> List<ExpiryItem>, today: LocalDate): Answer = when (segments) {
+      listOf(PATH) -> Answer(ROW_COLUMNS, expiry().take(LIST_LIMIT).map { ExpiryIndex.row(it, today).toList() })
+      listOf(AppHealth.PATH) -> Answer(AppHealth.COLUMNS, listOf(AppHealth.row(lastSeen()).toList()))
+      else -> throw IllegalArgumentException("Unknown path")
+    }
+
     internal const val AUTHORITY = "com.haroon.strongroom.applink"
     internal const val PATH = "expiry"
     internal val ROW_COLUMNS = arrayOf("kind", "label", "expires_on", "days_left")
