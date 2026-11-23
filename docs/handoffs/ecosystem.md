@@ -205,7 +205,8 @@ Call sites to change (snapshot at that time; verify at HEAD): Design Editor Hand
 ## Fix wave progress (AppLinkTarget)
 
 - Halo DONE (eco/halo 8707950f): all sibling reads via `AppLinkTarget.trustedProvider` (ShareOwners seam + 6 tests), `ProviderTrust` deleted, waiting bubble uses `trustedActivity(requireLinkPermission = false)` because it opens the sibling's LAUNCHER activity (no link permission; package + signature checks still run); no `<queries>` needed (QUERY_ALL_PACKAGES); halo-engine 209 (206), notch-island 128, halo ts 137, app-link-contract 138; phone check: if the bubble does nothing, `trustedActivity` on a launcher intent is the cause.
-- Running: Design Editor, HomeNet, Store workers; TunnelWall, Clipboard, Deputy workers just started; Inflow and Nexus apply it inside their phases.
+- Store DONE (eco/store 26e05170): AppLinkTarget in Health.kt (queryHealth now takes the release id, Kotlin looks up SiblingPackages.ALL[appId]; JS no longer supplies the package), ProviderTrust deleted, HealthTest 4 + AppLinkTargetTest 3, store ts 23, gradle 17 tests, app-link-contract 138; Store holds QUERY_ALL_PACKAGES so no `<queries>`; no sender.
+- Running: Design Editor, HomeNet workers; TunnelWall, Clipboard, Deputy workers just started; Inflow and Nexus apply it inside their phases.
 
 ## Open owner decisions (collect here, ask once at the end)
 
