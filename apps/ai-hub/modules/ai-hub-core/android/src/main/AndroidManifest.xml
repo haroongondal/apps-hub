@@ -1,0 +1,14 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Only apps signed with the shared release key can hold it; AiHubService still checks each caller. -->
+    <permission android:name="com.haroon.permission.AI_HUB" android:protectionLevel="signature" />
+    <application>
+        <service
+            android:name="expo.modules.aihubcore.android.AiHubService"
+            android:exported="true"
+            android:permission="com.haroon.permission.AI_HUB">
+            <intent-filter>
+                <action android:name="com.haroon.aihub.BIND" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>
