@@ -1,6 +1,6 @@
 # @apps-hub/app-link-contract
 
-How one of the owner's apps lets another app read from it or start something in it, and how the receiving app decides who may ask. Pure TypeScript plus three Kotlin files to copy into an app.
+How one of the owner's apps lets another app read from it or start something in it, and how the receiving app decides who may ask. Pure TypeScript plus four Kotlin files (and one Kotlin test) to copy into an app.
 
 There are two families of link:
 
@@ -211,6 +211,37 @@ Extras cases: `fixtures/propose-task-extras.json` and `fixtures/add-todo-extras.
 
 `CHANGED_PING` is the broadcast `com.haroon.autopilot.CHANGED`, sent with an explicit package (`setPackage("com.haroon.halo")`; Halo only, and Android 8+ does not deliver an implicit broadcast to a manifest receiver anyway). It has no extras and never carries data: it only says "something changed", and Halo re-reads the shares, which keep their own guard. Send it with `sendBroadcast(intent, LINK_PERMISSION)` and declare Halo's receiver `exported="true"` with `android:permission="com.haroon.permission.AUTOPILOT"`, so only same-key apps can send or receive it. It is not a link action: its name has no `.action.` part, so `auditManifest` lets a receiver take it (a receiver with a link action filter is still flagged).
 
+## Who answers: the reader rule and the sender rule
+
+The guards above protect the app that is asked. They do not protect the app that asks: Android hands a read or an intent to whichever app holds the authority or the package name on this phone. An app that took a sibling's authority first, or a lookalike signed with the public debug key, would get the intent and its extras (and any URI grant), or feed the reader made-up rows. `android/AppLinkTarget.kt` checks the other end before anything is read or sent.
+
+**Reader rule.** Every app that reads another app's share MUST call `AppLinkTarget.trustedProvider(context, authority, expectedPackage)` before it queries, every time (not once at start: an app can be replaced while ours runs). It passes only when `resolveContentProvider(authority, 0)` names exactly `expectedPackage` and `checkSignatures(context.packageName, expectedPackage) == SIGNATURE_MATCH`. False means "not installed, no data": never query, never show cached rows from it as fresh, never retry another way.
+
+**Sender rule.** Every app that starts another app's activity or sends it a broadcast MUST make the intent explicit (`setPackage` or `setComponent`) and call `AppLinkTarget.trustedActivity(context, intent)` or `AppLinkTarget.trustedReceiver(context, intent)` first. False means "not installed": never send, never fall back to an implicit intent or a chooser.
+
+- `trustedActivity` runs `queryIntentActivities(intent, MATCH_DEFAULT_ONLY)`: every activity found must sit in the intent's package, that package must be a sibling with our signature, and every one must require `com.haroon.permission.AUTOPILOT`. Pass `requireLinkPermission = false` only for a sibling activity that is not a link action (Design Editor's photos to Nexus go to Nexus's ordinary share screen); the package and signature checks still run.
+- `trustedReceiver` runs `queryBroadcastReceivers(intent, 0)` with the same package and signature checks, and every receiver must require the link permission. Send with `sendBroadcast(intent, LINK_PERMISSION)` all the same: the check is about who is there now, the permission overload is what Android enforces on delivery.
+- An intent with both a component and a package that disagree is refused.
+
+**The decision.** `AppLinkTarget.decide(expectedPackage, resolvedPackage, signaturesMatch)` returns `Trusted`, `NotInstalled` (nothing resolved) or `Spoofed(reason)`: `UNKNOWN_SIBLING` (the expected package is not in `SiblingPackages`, so a typo or the Store never passes), `WRONG_PACKAGE` (another app answers; names compare exactly, case included) or `SIGNATURE_MISMATCH`. The TypeScript twin is `decideTarget` in `src/target.ts`; both read `fixtures/target-decisions.json`. The glue functions return a plain Boolean and count any exception as false.
+
+**The sibling table.** `SiblingPackages` (Kotlin, in `AppLinkTarget.kt`) and `SIBLING_PACKAGES` (TypeScript) hold each app's package by release app id, and both equal `fixtures/sibling-packages.json`: HomeNet `app.netlens`, TunnelWall `com.opentunnel.open_tunnel_vpn`, Deputy `com.haroon.deputy`, Strongroom `com.haroon.strongroom`, Inflow `com.haroon.inflow`, Nexus `com.haroon.pdfeditor`, Clipboard `com.haroon.clipboard`, Halo `com.haroon.halo`, Design Editor `com.haroon.designeditor`, AI hub `com.haroon.aihub`. `target.test.ts` fails when the fixture, the TypeScript table, the Kotlin table, `ANDROID_PACKAGES` in `packages/store-manifest` or an app's `applicationId` disagree. A new sibling goes in all of them at once. Halo's `ProviderTrust` and Inflow's `SiblingIdentity` are earlier per-app versions of the reader check; replace them with this file.
+
+**Package visibility.** On Android 11+ `resolveContentProvider`, `queryIntentActivities`, `queryBroadcastReceivers` and `checkSignatures` see only packages visible to the app, so without a `<queries>` entry every check answers "not installed" (fail closed, the link just stops). Declare `<queries><package android:name="..." /></queries>` for each sibling the app reads from or sends to, unless it already holds `QUERY_ALL_PACKAGES`. Not checked on a phone yet.
+
+**API levels.** The int-flag overloads (`resolveContentProvider(String, int)`, `queryIntentActivities(Intent, int)`, `queryBroadcastReceivers(Intent, int)`) exist on every API level the apps support; the `ComponentInfoFlags` and `ResolveInfoFlags` overloads need API 33. In the android-36 `android.jar` the int overloads carry no deprecation attribute (`javap -v`), so no `@Suppress` is needed.
+
+**Copy it in.**
+
+1. Copy `android/AppLinkTarget.kt` into the module next to the other guard files (`android/src/main/java/<module package>/applink/`) and change only the `package` line. It is self-contained (its own `LINK_PERMISSION`, no other guard file needed).
+2. Copy `android/AppLinkTargetTest.kt` to the same package under `android/src/test/java/` and change only the `package` line. It needs only `junit:junit` (no JSON library) and reads the fixtures five folders above the module's `android/` directory, like `AppLinkGuardTest`. Run it with `./gradlew :<module>:testDebugUnitTest`.
+3. Add the `<queries>` entries above.
+4. Wrap every read and send: `if (!AppLinkTarget.trustedProvider(context, authority, SiblingPackages.INFLOW)) return emptyList()` before `contentResolver.query`; `if (!AppLinkTarget.trustedActivity(activity, intent)) return "not_installed"` before `startActivityForResult`; `if (AppLinkTarget.trustedReceiver(context, intent)) context.sendBroadcast(intent, AppLinkTarget.LINK_PERMISSION)`.
+
+`copies.test.ts` checks every copy of `AppLinkTarget.kt`, `AppLinkTargetTest.kt` and any file that declares `SiblingPackages`, like the other guard files.
+
+The Kotlin side was checked without Gradle: both canonical files compiled with the Kotlin 2.2.21 compiler from the Gradle 9.3.1 distribution against the android-36 `android.jar` with `-Werror`, and `AppLinkTargetTest` ran under JUnit 4.13.2 from `apps/inflow/modules/inflow-core/android` (3 tests OK), as did a copy with only the `package` line changed. Two mutants (a case-insensitive package compare, a wrong package in the table) each failed it.
+
 ## Threat model
 
 **Who can call.** A sibling signed with the same key. Two gates:
@@ -219,6 +250,8 @@ Extras cases: `fixtures/propose-task-extras.json` and `fixtures/add-todo-extras.
 2. In a provider, `AppLinkCaller.allowed` re-checks the caller's signing certificate with `PackageManager.checkSignatures(callerUid, ownUid)` and also that the caller holds the permission. A squatter that declares the permission name first does not hold it as ours: on Android 5+ the real app's install then fails (`INSTALL_FAILED_DUPLICATE_PERMISSION`), so squatting is a denial of service, not a way in. The certificate check stays as defense against OEM or historical custom-permission bugs, and it does not rely on Android's refusal. Any failure to find out counts as "not allowed". A call from the app's own uid is allowed. The decision table is `fixtures/caller-decisions.json`, read by both `decideCaller` (TypeScript) and `AppLinkGuard.decide` (Kotlin).
 
 **Actions have two gates when the caller asks for a result.** `AppLinkCaller` reads `Binder.getCallingUid()`, which is the app's own uid inside an `Activity.onCreate` (no binder call is in progress), so it would always answer "self, allowed". Use it in provider methods only. An action's first gate is its manifest `android:permission`; its second is `AppLinkActivityCaller.allowed(activity)`, which reads the system-set `callingPackage` and re-checks that package's certificate. That second gate only exists when the caller used `startActivityForResult` from an Activity, so an action that calls it refuses every start from a service, a notification or a plain `startActivity`. That is the trade: Deputy runs its tasks in a service, so a Deputy run can never start another app's action; buttons that start actions live in app screens.
+
+**Who answers is checked by the asker.** A reader or sender trusts the other end only through `AppLinkTarget` (above): the app Android resolves to must be the expected sibling's package and carry our signing certificate. An app that took a sibling's authority or package name first (installed before the sibling, or a debug-signed lookalike) gets nothing and feeds nothing; the asking app treats the sibling as not installed. This relies on the same shared-key trust as the provider guard, so between two debug builds it protects nothing (see "Signing finding").
 
 **The ping is not a gate.** `com.haroon.autopilot.CHANGED` carries no data. A same-key sibling (or, without the receiver permission, anyone) can only make Halo re-read shares it was going to read anyway, and each read still passes the provider's guard.
 
@@ -233,6 +266,7 @@ Extras cases: `fixtures/propose-task-extras.json` and `fixtures/add-todo-extras.
 - Manifest merging, `tools:` overrides and `@string/` references: `auditManifest` is a small text scanner and does not see them. Audit the source manifest of a module, not the merged one. An `android:exported` set by a resource reference (`@bool/...`) counts as exported.
 - Whether a link action really shows a screen (see "Add an action").
 - `AppLinkCaller` has no JVM test, because it needs a real binder. Its decision logic (`AppLinkGuard.decide`) is tested; the glue is covered only by the phone checks below. The same holds for `AppLinkActivityCaller.allowed`: `allowedActivityCaller` is tested against its fixture, the glue only on a phone.
+- `AppLinkTarget`'s glue (`trustedProvider`, `trustedActivity`, `trustedReceiver`) needs a real `PackageManager`, so only `decide` and the sibling table have a JVM test; the glue is covered only by the phone checks below.
 - Phone checks of the whole chain have not been run (below).
 
 ## The rule
@@ -258,6 +292,7 @@ The phone is used through the coord queue by the main session only.
 1. Install Inflow and Deputy from Store releases. In Inflow open a reply suggestion and tap Run: Deputy starts the run as before.
 2. With the phone connected, run `adb shell content query --uri content://com.haroon.inflow.autopilot/suggestions`. The shell uid does not hold the permission, so the query must fail with a `SecurityException` (a permission denial naming `com.haroon.permission.AUTOPILOT`). This exercises the manifest gate only; to see the Kotlin certificate check refuse a caller you need an app that holds the permission but is signed with another key, which Android should refuse to install in the first place.
 3. Open Deputy: it still lists and reads Inflow's suggestions.
+4. After an app adopts `AppLinkTarget`, with Store-signed siblings installed: its reads and sends work as before, and with the sibling uninstalled it says the sibling is not installed. The refusal of a lookalike signed with another key needs a non-Store install, which the owner does not allow on the phone; it is covered by `fixtures/target-decisions.json` only.
 
 ## Metro
 
