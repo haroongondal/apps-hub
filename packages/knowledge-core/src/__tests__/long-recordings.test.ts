@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { planSource, stitchTranscripts, transcribeInChunks, type ChunkWindow, type PieceStore, type SourceFile } from '../audio-chunks.ts';
+import { STUCK_MS } from '../knowledge.ts';
 import { AiError, type Segment } from '../types.ts';
 import { setup } from './helpers.ts';
 
@@ -192,4 +193,79 @@ test('a failing cleanup does not fail the transcript', async () => {
   await drain();
   assert.equal((await kn.segmentsOf(item.id)).length, 1);
   assert.equal((await kn.job(item.id))?.status, 'done');
+});
+
+/** A knowledge run whose recording is the three-piece fixture; `onSend(i)` runs while piece i is being uploaded. */
+async function liveRun(onSend: (i: number, itemId: string) => Promise<void>) {
+  const env = await setup();
+  const { store, records } = memoryStore();
+  const sent: number[] = [];
+  const item = await env.add('Meeting', [], 'audio');
+  env.content.segments = (it, check) =>
+    transcribeInChunks<number>({
+      windows: three,
+      store,
+      check,
+      retryDelayMs: 0,
+      cut: async (_w, i) => i,
+      transcribe: async (i) => {
+        sent.push(i);
+        await onSend(i, it.id);
+        const lead = (three[i].keepFromMs - three[i].startMs) / 1000;
+        return [seg(`piece ${i}`, lead + 1, lead + 2)];
+      },
+      release: () => {},
+    });
+  env.content.withdrawn = async () => store.clear();
+  return { ...env, item, sent, records };
+}
+
+test('keeping a recording out of Nexus mid-transcription stops the uploads and drops the saved pieces', async () => {
+  let kn: Awaited<ReturnType<typeof setup>>['kn'] | null = null;
+  const run = await liveRun(async (i, id) => {
+    if (i === 0) await kn!.exclude(id);
+  });
+  kn = run.kn;
+  assert.equal(await kn.runNext(), 'ran');
+  assert.deepEqual(run.sent, [0], 'nothing after the piece in flight is sent');
+  assert.equal(run.records.size, 0, 'no transcript text is left in the piece store');
+  assert.deepEqual(await kn.segmentsOf(run.item.id), []);
+  assert.equal(await kn.job(run.item.id), null);
+  await run.drain();
+  assert.deepEqual(run.sent, [0]);
+});
+
+test('a run re-queued by recover stops at the next piece, and the new run sends only what is missing', async () => {
+  let env: Awaited<ReturnType<typeof liveRun>> | null = null;
+  env = await liveRun(async (i) => {
+    if (i === 0 && env!.sent.length === 1) {
+      env!.clock.now += STUCK_MS;
+      await env!.kn.recover();
+    }
+  });
+  assert.equal(await env.kn.runNext(), 'ran');
+  assert.deepEqual(env.sent, [0]);
+  assert.deepEqual([...env.records.keys()], [0], 'the finished piece stays for the new run');
+  await env.drain();
+  assert.deepEqual(env.sent, [0, 1, 2]);
+  assert.equal((await env.kn.segmentsOf(env.item.id)).length, 3);
+});
+
+test('the stop signal passes through unchanged and the cut piece is still released', async () => {
+  const stop = new Error('stop');
+  let checks = 0;
+  const released: number[] = [];
+  await assert.rejects(
+    transcribeInChunks<number>({
+      windows: three,
+      check: async () => {
+        if (++checks === 2) throw stop; // the second check is before piece 0's upload
+      },
+      cut: async (_w, i) => i,
+      transcribe: async () => [],
+      release: (i) => void released.push(i),
+    }),
+    (err: unknown) => err === stop,
+  );
+  assert.deepEqual(released, [0]);
 });

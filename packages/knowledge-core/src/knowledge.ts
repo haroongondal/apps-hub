@@ -160,6 +160,12 @@ export class Knowledge {
       return had;
     });
     if (hadMinutes) await this.indexBody(itemId); // the transcript stays searchable, the minutes go
+    await this.dropWork(itemId);
+  }
+
+  // A text stage still running stops at its next check and calls this again, after the piece it had in flight is saved.
+  private async dropWork(itemId: string): Promise<void> {
+    await this.deps.content.withdrawn?.(itemId).catch(() => {}); // leftovers only waste space, and are cleared with the item
   }
 
   async include(itemId: string): Promise<void> {
@@ -260,8 +266,16 @@ export class Knowledge {
   }
 
   private async textStage(item: Item, gen: number): Promise<void> {
-    await this.keep(item.id, gen); // audio and images go out to the provider inside segments()
-    const segments = (await this.deps.content.segments(item)).filter((s) => s.text.trim() !== '');
+    const check = () => this.keep(item.id, gen);
+    await check(); // audio and images go out to the provider inside segments()
+    let segments: Segment[];
+    try {
+      segments = (await this.deps.content.segments(item, check)).filter((s) => s.text.trim() !== '');
+    } catch (e) {
+      // kept out: drop the pieces this run saved; re-queued (recover): the newer run resumes from them
+      if (e instanceof Withdrawn && (await isExcluded(this.db, item.id))) await this.dropWork(item.id);
+      throw e;
+    }
     const wrote = await this.db.transaction(async (tx) => {
       if (!(await isLive(tx, item.id, gen))) return false;
       await tx.run('DELETE FROM kn_segments WHERE item_id = ?', [item.id]);
@@ -270,6 +284,7 @@ export class Knowledge {
       }
       return true;
     });
+    if (!wrote && (await isExcluded(this.db, item.id))) await this.dropWork(item.id); // kept out during the last piece
     if (wrote && (item.kind === 'audio' || item.kind === 'image')) await this.indexBody(item.id);
     if (wrote) await this.deps.content.saved?.(item).catch(() => {}); // leftovers only waste space, and are cleared with the item
   }

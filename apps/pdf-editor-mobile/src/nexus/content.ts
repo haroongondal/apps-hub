@@ -30,9 +30,13 @@ interface Piece {
  * Transcribes a recording made of one file or several (a meeting's rolling segment files), each with its start in
  * the whole recording. Files are cut under the limit with no re-encoding and sent one piece at a time; the
  * transcript keeps the whole recording's times. Finished pieces are saved (see `pieceStore`), so a retry or a
- * restart sends only what is missing; `content.saved` removes them once the transcript is stored.
+ * restart sends only what is missing; `content.saved` removes them once the transcript is stored, `content.withdrawn` when the item is kept out.
  */
-export async function transcribeFiles(itemId: string, files: { file: File; offsetMs: number }[]): Promise<Segment[]> {
+export async function transcribeFiles(
+  itemId: string,
+  files: { file: File; offsetMs: number }[],
+  check?: () => Promise<void>, // throws once the item is kept out of Nexus, so no further piece is cut or sent
+): Promise<Segment[]> {
   const cutter = AudioChunks;
   if (!cutter) throw new Error('This recording is over 25 MB, too long to transcribe on this phone.');
   const source: TranscribeSource = await Promise.all(
@@ -46,6 +50,7 @@ export async function transcribeFiles(itemId: string, files: { file: File; offse
   return transcribeInChunks<Piece>({
     windows: planSource(source, MAX_UPLOAD),
     store: pieceStore(itemId),
+    check,
     cut: async (w, i) => {
       const { file } = files[w.file ?? 0];
       if (w.startMs === 0 && w.endMs >= source[w.file ?? 0].durationMs && file.size <= MAX_UPLOAD) return { file, temp: false };
@@ -64,7 +69,7 @@ export async function transcribeFiles(itemId: string, files: { file: File; offse
 }
 
 export const content: ContentPort = {
-  async segments(item): Promise<Segment[]> {
+  async segments(item, check): Promise<Segment[]> {
     if (item.kind === 'note') {
       const file = itemFile(item.id, 'note.md');
       return [{ text: file.exists ? await file.text() : '', locator: null }];
@@ -74,7 +79,7 @@ export const content: ContentPort = {
       if (!file.exists) throw new Error('The recording is missing from this device.');
       if (file.size <= MAX_UPLOAD) return upload(file, ext);
       if (ext !== 'm4a') throw new Error('This recording is over 25 MB and only M4A recordings can be cut into pieces.');
-      return transcribeFiles(item.id, [{ file, offsetMs: 0 }]);
+      return transcribeFiles(item.id, [{ file, offsetMs: 0 }], check);
     }
     if (item.kind === 'image') {
       const file = itemFile(item.id, 'image.jpg');
@@ -89,5 +94,8 @@ export const content: ContentPort = {
   },
   async saved(item) {
     if (item.kind === 'audio') await pieceStore(item.id).clear();
+  },
+  async withdrawn(itemId) {
+    await pieceStore(itemId).clear();
   },
 };

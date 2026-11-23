@@ -148,6 +148,11 @@ export interface ChunkedTranscription<F> {
    * store once the stitched transcript is safely saved.
    */
   store?: PieceStore;
+  /**
+   * Called before each cut and each upload attempt; it throws to stop the run (the item was taken out, say).
+   * Its error passes through unchanged and the pieces already finished stay in `store`.
+   */
+  check?: () => Promise<void>;
 }
 
 // One piece at a time. A piece that still fails after its retries stops the run with its error; the pieces before it stay saved in `store`.
@@ -157,6 +162,15 @@ export async function transcribeInChunks<F>(o: ChunkedTranscription<F>): Promise
   const parts: ChunkTranscript[] = [];
   const { store } = o;
   if (store && o.windows.some((w) => !w.identity)) throw new RangeError('Saving pieces needs every piece to have an identity.');
+  let stop: unknown = null;
+  const check = async () => {
+    try {
+      await o.check?.();
+    } catch (err) {
+      stop = err;
+      throw err;
+    }
+  };
   for (const [i, window] of o.windows.entries()) {
     const which = `part ${i + 1} of ${o.windows.length}`;
     const done = store ? await savedPiece(store, i, window.identity!) : null;
@@ -164,6 +178,7 @@ export async function transcribeInChunks<F>(o: ChunkedTranscription<F>): Promise
       parts.push({ window, segments: done });
       continue;
     }
+    await check();
     let file: F;
     try {
       file = await o.cut(window, i);
@@ -172,6 +187,7 @@ export async function transcribeInChunks<F>(o: ChunkedTranscription<F>): Promise
     }
     try {
       for (let attempt = 1; ; attempt++) {
+        await check();
         try {
           const segments = await o.transcribe(file);
           parts.push({ window, segments });
@@ -184,6 +200,7 @@ export async function transcribeInChunks<F>(o: ChunkedTranscription<F>): Promise
         }
       }
     } catch (err) {
+      if (err === stop) throw err;
       const message = `Nexus could not transcribe ${which} of this recording. ${err instanceof Error ? err.message : String(err)}`;
       throw err instanceof AiError ? new AiError(err.kind, message) : new Error(message);
     } finally {
