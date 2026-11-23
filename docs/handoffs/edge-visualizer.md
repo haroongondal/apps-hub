@@ -76,7 +76,7 @@ What 0.5.0 contains: aod/themes settings, AodPolicy, restart-on-app-open fix (th
 background photo, real always-on screen (music card, icon row, edge lights, pocket, double tap, notification wake), Always-on + Theme
 screens, tabs Home/Lights/Alerts/Always-on. Reviews: whole-stage review (opus) + security re-check (opus) + scoped re-review of the
 fix: findings and rulings in docs/handoffs/halo-sdd-ledger.md under "Task 4.7".
-Fixed on eco/halo (commit in the ecosystem F4 branch; JVM-tested via AodScreen.clearCloseOnStop and AodScreen.markTimedOut, phone check not run): (m1) Home gesture
+Fixed on eco/halo (commit 0f60b826 on eco/halo; JVM-tested via AodScreen.clearCloseOnStop and AodScreen.markTimedOut, phone check not run): (m1) Home gesture
 on the always-on screen then no unlock: AodActivity.onStop clears aodClose only while PowerManager.isInteractive, onResume sets it again, so the keyguard's
 screen-off is no longer read as a power press; (m2) AodActivity.end() calls onTimedOut() only when not isFinishing and the keyguard is locked.
 Also open: AOSP "Viewing full screen" hint may appear once (check HyperOS); AOD EdgeView also writes HaloService.frameP95Ms; photo refresh on
