@@ -6,3 +6,4 @@ export const RECEIPT_PHOTOS_DENIED = 'Inflow needs access to your photos to find
 export const RECEIPT_SEARCH_ERROR = "Inflow couldn't search your photos. Close and reopen the app, then try again.";
 export const RECEIPT_NONE = 'No photos were taken from 3 days before to 1 day after this transaction.';
 export const RECEIPT_SAVE_ERROR = "Inflow couldn't attach that photo. Try another photo, or close and reopen the app.";
+export const RECEIPT_UNREADABLE = "Inflow couldn't read any of the photos from those days. Close and reopen the app, then try again.";
