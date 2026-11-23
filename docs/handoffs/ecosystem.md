@@ -162,6 +162,8 @@ Risks: no phone check has ever run and everything depends on Store-signed builds
 - P4 TunnelWall DONE (eco/tunnelwall 96c2bcbf, handoff ee6c82ab): open-tunnel-core 45 (38), open_tunnel_vpn ts 155 (150), JUnit 79 (52), app-link-contract 133, assembleDebug ok, auditManifest [] on module and merged manifests, iOS not compiled (no Pods; Swift rejects ERR_NOT_SUPPORTED). Shields master switch (off by default, Android 12+) turns on Trusted Wi-Fi auto-connect and serves `shield` {on, untrusted_now, since} (only while on) + `health`; CHANGED ping to Halo only when the pulse flips; `untrusted_now` goes stale if the process dies (Halo must judge by `since` and health `last_seen_at`). Needs security-engineer + invariant review. Phone not run (7 checks listed in the report/handoff).
 - E2 app integrations started (Nexus, Design Editor, Deputy; Inflow later): branches have eco/ai-hub merged in; the app PRs therefore depend on the eco/ai-hub PR (merge order: eco/base, eco/ai-hub, then apps).
 
+- E2 Design Editor phone DONE (eco/design-editor 622c3b41): design-editor-mobile 137 (120), engine 48, JUnit 316, Metro bundle ok (AiHubClient in the Hermes bundle), merged manifest has AI_HUB permission + queries; hub first, own key second; empty hub reply is NOT retried on the own key; not-allowed remembered 10 min; ai_source in ai-source.txt; the app's only AI call is layout chat (no image generation call exists); phone not run.
+
 ## Security findings handled during the build (automated reviews)
 
 - ai-hub-client did not verify the hub identity (package squatting): fixed, 60875260 on eco/ai-hub.
