@@ -3,6 +3,7 @@ import { Button, Field, Group, Header, Notice, RecordMenu, Row, Screen, Segmente
 import InflowCore, { type AppSetting, type SenderName, type Status } from 'inflow-core';
 import { AiSettings } from './AiSettings.tsx';
 import { AutopilotSettings } from './AutopilotSettings.tsx';
+import { HEALTH_IN_ASK_NOTE } from './doctor.ts';
 import { keepLabel } from './format.ts';
 import { GmailSettings } from './GmailSettings.tsx';
 import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
@@ -41,6 +42,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
   const [ownerName, setOwnerName] = useState('');
   const [blocks, setBlocks] = useState<string[]>([]);
   const [mediaLine, setMediaLine] = useState('');
+  const [healthAsk, setHealthAsk] = useState(false);
   const [sub, setSub] = useState<'autopilot' | 'suggestions' | null>(null);
   const { run, notice } = useSetupAction(refreshStatus);
 
@@ -51,6 +53,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
       setOwnerName(InflowCore.getOwnerName() ?? '');
       setBlocks(InflowCore.listAiBlocks());
       setMediaLine(mediaStatsLabel(InflowCore.mediaStats()));
+      setHealthAsk(InflowCore.healthInAsk());
       setError(null);
     } catch {
       setError(LOAD_ERROR);
@@ -101,6 +104,11 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
       </Group>
       <GmailSettings />
       <AiSettings />
+      <Group title="Health in Ask AI" footer={HEALTH_IN_ASK_NOTE}>
+        <Row title="Include health in Ask AI">
+          <Segmented accessibilityLabel="Include health in Ask AI" options={RECORD_OPTIONS} value={healthAsk ? 'on' : 'off'} onChange={(k) => change(() => InflowCore.setHealthInAsk(k === 'on'))} />
+        </Row>
+      </Group>
       <Group title="Kept from AI" footer="Inflow never sends these to the AI.">
         {blocks.length === 0 ? (
           <Row title={<Text tone="muted">Nothing is kept from AI</Text>} />

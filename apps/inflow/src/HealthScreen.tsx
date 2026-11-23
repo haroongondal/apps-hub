@@ -5,8 +5,8 @@ import { NOT_A_MEDICAL_DEVICE, summaryLine } from './vitals.ts';
 import { useHardwareBack } from './useHardwareBack.ts';
 import { useVitals } from './useVitals.ts';
 
-// The Health section: one row per area. A later area (doctor summary) adds a row here.
-export function HealthScreen({ onBack, onOpenVitals, onOpenMedicines, onOpenJournal }: { onBack: () => void; onOpenVitals: () => void; onOpenMedicines: () => void; onOpenJournal: () => void }) {
+// The Health section: one row per area.
+export function HealthScreen({ onBack, onOpenVitals, onOpenMedicines, onOpenJournal, onOpenDoctor }: { onBack: () => void; onOpenVitals: () => void; onOpenMedicines: () => void; onOpenJournal: () => void; onOpenDoctor: () => void }) {
   useHardwareBack(onBack);
   const v = useVitals();
   const today = v.series[v.series.length - 1];
@@ -21,6 +21,7 @@ export function HealthScreen({ onBack, onOpenVitals, onOpenMedicines, onOpenJour
         <Row title="Steps, sleep and heart rate" subtitle={v.state === null ? undefined : summaryLine(v.state, today)} onPress={onOpenVitals} />
         <Row title="Medicines" subtitle="Reminders, today's doses and how many you took" onPress={onOpenMedicines} />
         <Row title="Journal" subtitle="How you feel and what you notice" onPress={onOpenJournal} />
+        <Row title="Doctor summary" subtitle="A short written summary you can bring to a visit. You read the text before anything is sent." onPress={onOpenDoctor} />
       </Group>
       <Text variant="meta" tone="muted">{NOT_A_MEDICAL_DEVICE}</Text>
     </Screen>

@@ -5,6 +5,7 @@ import InflowCore, { type ItemFilter, type PartyTotal, type ReportRow, type Stat
 import { AppsScreen } from './src/AppsScreen.tsx';
 import { AskScreen } from './src/AskScreen.tsx';
 import { ContactsScreen } from './src/ContactsScreen.tsx';
+import { DoctorScreen } from './src/DoctorScreen.tsx';
 import { HealthScreen } from './src/HealthScreen.tsx';
 import { HomeScreen } from './src/HomeScreen.tsx';
 import { JournalScreen } from './src/JournalScreen.tsx';
@@ -33,6 +34,7 @@ type Route =
   | { kind: 'vitals' }
   | { kind: 'medicines' }
   | { kind: 'journal' }
+  | { kind: 'doctor' }
   | { kind: 'party'; name: string | null; own: boolean; title: string }
   | { kind: 'report'; id: number; title: string };
 
@@ -153,10 +155,11 @@ function Root() {
     return <ContactsScreen key={stack.length} title={top.title} pkg={pkg} promo={top.promo} onBack={back} onOpen={open} onOpenPromotions={() => openContacts(pkg, 'Promotions', true)} />;
   }
   if (top?.kind === 'apps') return <AppsScreen key={stack.length} onBack={back} onOpen={open} onOpenContacts={openContacts} />;
-  if (top?.kind === 'health') return <HealthScreen key={stack.length} onBack={back} onOpenVitals={() => push({ kind: 'vitals' })} onOpenMedicines={() => push({ kind: 'medicines' })} onOpenJournal={() => push({ kind: 'journal' })} />;
+  if (top?.kind === 'health') return <HealthScreen key={stack.length} onBack={back} onOpenVitals={() => push({ kind: 'vitals' })} onOpenMedicines={() => push({ kind: 'medicines' })} onOpenJournal={() => push({ kind: 'journal' })} onOpenDoctor={() => push({ kind: 'doctor' })} />;
   if (top?.kind === 'vitals') return <VitalsScreen key={stack.length} onBack={back} />;
   if (top?.kind === 'medicines') return <MedicinesScreen key={stack.length} onBack={back} />;
   if (top?.kind === 'journal') return <JournalScreen key={stack.length} onBack={back} />;
+  if (top?.kind === 'doctor') return <DoctorScreen key={stack.length} onBack={back} />;
   if (top?.kind === 'report') return <ReportScreen key={stack.length} id={top.id} title={top.title} onBack={back} />;
   if (top?.kind === 'party') return <PartyScreen key={stack.length} title={top.title} name={top.name} own={top.own} onBack={back} />;
 
