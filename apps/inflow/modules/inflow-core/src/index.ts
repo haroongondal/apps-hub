@@ -533,6 +533,11 @@ export interface InflowCoreApi {
   // The 08:00 and 20:00 summary notification; off by default. Turning it on or off arms or cancels the alarm.
   digest(): boolean;
   setDigest(on: boolean): void;
+  // Nexus alone may read messages (ask_items, ask_ids) and money out (debits) on this phone, each only while its switch is on; both off by default.
+  nexusAsk(): boolean;
+  setNexusAsk(on: boolean): void;
+  nexusDebits(): boolean;
+  setNexusDebits(on: boolean): void;
   addListener(event: 'onCaptured' | 'onSuggestions', listener: (e: { count: number }) => void): { remove(): void };
 }
 

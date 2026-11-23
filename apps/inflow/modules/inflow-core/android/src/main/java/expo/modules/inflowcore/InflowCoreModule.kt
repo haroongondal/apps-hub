@@ -53,6 +53,7 @@ import expo.modules.inflowcore.core.AutopilotSettingsInput
 import expo.modules.inflowcore.core.Briefing
 import expo.modules.inflowcore.core.Categories
 import expo.modules.inflowcore.core.Digest
+import expo.modules.inflowcore.core.NexusShares
 import expo.modules.inflowcore.core.DoctorPayload
 import expo.modules.inflowcore.core.DoctorRange
 import expo.modules.inflowcore.core.Edits
@@ -766,6 +767,22 @@ class InflowCoreModule : Module() {
     Function("setDigest") { on: Boolean ->
       if (on) store().setMeta(Digest.META, "1") else store().deleteMeta(Digest.META)
       DigestAlarm.rearm(context)
+    }
+
+    Function("nexusAsk") { ->
+      Briefing.on(store().meta(NexusShares.ASK_META))
+    }
+
+    Function("setNexusAsk") { on: Boolean ->
+      if (on) store().setMeta(NexusShares.ASK_META, "1") else store().deleteMeta(NexusShares.ASK_META)
+    }
+
+    Function("nexusDebits") { ->
+      Briefing.on(store().meta(NexusShares.DEBITS_META))
+    }
+
+    Function("setNexusDebits") { on: Boolean ->
+      if (on) store().setMeta(NexusShares.DEBITS_META, "1") else store().deleteMeta(NexusShares.DEBITS_META)
     }
   }
 }

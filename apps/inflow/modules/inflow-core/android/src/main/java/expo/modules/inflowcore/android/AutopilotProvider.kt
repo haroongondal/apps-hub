@@ -6,12 +6,14 @@ import android.content.UriMatcher
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import android.os.Binder
 import androidx.core.app.NotificationManagerCompat
 import expo.modules.inflowcore.applink.AppLinkCaller
 import expo.modules.inflowcore.core.AppHealth
 import expo.modules.inflowcore.core.Briefing
 import expo.modules.inflowcore.core.BriefingShare
 import expo.modules.inflowcore.core.BriefingSnapshot
+import expo.modules.inflowcore.core.NexusShares
 import expo.modules.inflowcore.core.Suggestion
 import expo.modules.inflowcore.core.SuggestionMoves
 import expo.modules.inflowcore.core.SuggestionState
@@ -27,6 +29,7 @@ import expo.modules.inflowcore.core.SuggestionState
  *  - `health` (query, one row for the Store: listener on or off, where the AI keys come from, the last heartbeat; no personal data, so no switch guards it, but the caller check still does).
  *  - `briefing` (query, up to 20 lines of today's briefing, built in Inflow from structured data: see Briefing): rows only while 'Share my morning briefing' is on, otherwise an empty cursor. They come from the snapshot
  *    BriefingRefresh keeps; the query never runs a reader, and starts at most one background rebuild when the snapshot is older than 10 minutes. The lines that come from the health-in-briefing switch are dropped while that switch is off.
+ *  - `ask_items/<sinceId>`, `ask_ids/<sinceId>`, `debits/<sinceId>` (query, Nexus alone, each behind its own switch: see NexusShares); anything else gets an empty cursor.
  *
  * The projection, selection and sort arguments are ignored: the columns are fixed.
  */
@@ -69,9 +72,28 @@ class AutopilotProvider : ContentProvider() {
           if (shareOn) BriefingRefresh.of(ctx).maybeRefresh(snapshot)
         }
       }
+      ASK_ITEMS -> MatrixCursor(NexusShares.ASK_ITEMS_COLUMNS).also { c ->
+        val since = nexusSince(uri, store, NexusShares.ASK_META)
+        if (since != null) runCatching { store!!.nexusAskItems(since, NexusShares.PAGE).mapNotNull(NexusShares::askRow) }.getOrDefault(emptyList()).forEach { c.addRow(it) }
+      }
+      ASK_IDS -> MatrixCursor(NexusShares.ASK_IDS_COLUMNS).also { c ->
+        val since = nexusSince(uri, store, NexusShares.ASK_META)
+        if (since != null) runCatching { store!!.nexusAskIds(since, NexusShares.PAGE).mapNotNull(NexusShares::idRow) }.getOrDefault(emptyList()).forEach { c.addRow(it) }
+      }
+      DEBITS -> MatrixCursor(NexusShares.DEBITS_COLUMNS).also { c ->
+        val since = nexusSince(uri, store, NexusShares.DEBITS_META)
+        val now = System.currentTimeMillis()
+        if (since != null) runCatching { SqlLedgerStore(store!!.db).nexusDebits(since, NexusShares.debitsFrom(now), NexusShares.PAGE).mapNotNull { NexusShares.debitRow(it, now) } }
+          .getOrDefault(emptyList()).forEach { c.addRow(it) }
+      }
       else -> throw IllegalArgumentException("Unknown uri")
     }
   }
+
+  // Runs on the binder thread before any hop, so the calling uid is the reader's own; any failure serves nothing.
+  private fun nexusSince(uri: Uri, store: SqlItemStore?, switchMeta: String): Long? = runCatching {
+    NexusShares.since(context?.packageManager?.getPackagesForUid(Binder.getCallingUid()), store?.meta(switchMeta), uri.lastPathSegment)
+  }.getOrNull()
 
   /** Rows changed: 0 for an unknown id, any value but started, done or skipped, an illegal move (SuggestionState.movableFrom decides) or a store that will not open. */
   override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<String>?): Int {
@@ -96,6 +118,9 @@ class AutopilotProvider : ContentProvider() {
     ITEM -> "vnd.android.cursor.item/vnd.com.haroon.inflow.item"
     HEALTH -> "vnd.android.cursor.item/vnd.com.haroon.inflow.health"
     BRIEFING -> "vnd.android.cursor.dir/vnd.com.haroon.inflow.briefing"
+    ASK_ITEMS -> "vnd.android.cursor.dir/vnd.com.haroon.inflow.ask_item"
+    ASK_IDS -> "vnd.android.cursor.dir/vnd.com.haroon.inflow.ask_id"
+    DEBITS -> "vnd.android.cursor.dir/vnd.com.haroon.inflow.debit"
     else -> null
   }
 
@@ -120,6 +145,9 @@ class AutopilotProvider : ContentProvider() {
     const val HEALTH_MAX_ROWS = 1
     const val BRIEFING = 5
     const val BRIEFING_MAX_ROWS = BriefingShare.MAX_ROWS
+    const val ASK_ITEMS = 6
+    const val ASK_IDS = 7
+    const val DEBITS = 8
     const val LIST_LIMIT = 200
     // Equal to ROW_KEYS in packages/autopilot-contract/src/index.ts.
     val ROW_COLUMNS = arrayOf("id", "kind", "title", "item_id", "due_at", "state", "created_at", "expires_at")
@@ -136,6 +164,10 @@ class AutopilotProvider : ContentProvider() {
         addURI(AUTHORITY, "items/#", ITEM)
         addURI(AUTHORITY, "health", HEALTH)
         addURI(AUTHORITY, BriefingShare.PATH, BRIEFING)
+        // `*`, not `#`: a non-numeric or negative since-id must reach NexusShares.since and get an empty cursor.
+        addURI(AUTHORITY, "${NexusShares.ASK_ITEMS_PATH}/*", ASK_ITEMS)
+        addURI(AUTHORITY, "${NexusShares.ASK_IDS_PATH}/*", ASK_IDS)
+        addURI(AUTHORITY, "${NexusShares.DEBITS_PATH}/*", DEBITS)
       }
     }
   }

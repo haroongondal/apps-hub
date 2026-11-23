@@ -46,6 +46,8 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
   const [briefingShare, setBriefingShare] = useState(false);
   const [healthBriefing, setHealthBriefing] = useState(false);
   const [digest, setDigest] = useState(false);
+  const [nexusAsk, setNexusAsk] = useState(false);
+  const [nexusDebits, setNexusDebits] = useState(false);
   const [sub, setSub] = useState<'autopilot' | 'suggestions' | null>(null);
   const { run, notice } = useSetupAction(refreshStatus);
 
@@ -60,6 +62,8 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
       setBriefingShare(InflowCore.briefingShare());
       setHealthBriefing(InflowCore.healthInBriefing());
       setDigest(InflowCore.digest());
+      setNexusAsk(InflowCore.nexusAsk());
+      setNexusDebits(InflowCore.nexusDebits());
       setError(null);
     } catch {
       setError(LOAD_ERROR);
@@ -124,6 +128,14 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
         </Row>
         <Row title="Morning and evening summary" subtitle="Inflow posts what is due and what you spent at 08:00 and 20:00. Nothing leaves the phone.">
           <Segmented accessibilityLabel="Morning and evening summary" options={RECORD_OPTIONS} value={digest ? 'on' : 'off'} onChange={(k) => change(() => InflowCore.setDigest(k === 'on'))} />
+        </Row>
+      </Group>
+      <Group title="Nexus">
+        <Row title="Let Nexus read my messages" subtitle="Nexus can search your text messages and emails on this phone, to answer your questions. Nothing leaves the phone.">
+          <Segmented accessibilityLabel="Let Nexus read my messages" options={RECORD_OPTIONS} value={nexusAsk ? 'on' : 'off'} onChange={(k) => change(() => InflowCore.setNexusAsk(k === 'on'))} />
+        </Row>
+        <Row title="Let Nexus match my receipts" subtitle="Nexus can see the money you spent in the last 60 days to match receipts. Nothing leaves the phone.">
+          <Segmented accessibilityLabel="Let Nexus match my receipts" options={RECORD_OPTIONS} value={nexusDebits ? 'on' : 'off'} onChange={(k) => change(() => InflowCore.setNexusDebits(k === 'on'))} />
         </Row>
       </Group>
       <Group title="Kept from AI" footer="Inflow never sends these to the AI.">

@@ -2,6 +2,7 @@ package expo.modules.inflowcore.android
 
 import java.io.File
 import expo.modules.inflowcore.core.BriefingShare
+import expo.modules.inflowcore.core.NexusShares
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -72,5 +73,43 @@ class AutopilotProviderShareTest {
     assertTrue(src.contains("override fun delete(uri: Uri, selection: String?, selectionArgs: Array<String>?): Int = throw UnsupportedOperationException"))
     // update only moves a suggestion (path suggestions/#); every other path, the briefing included, answers 0
     assertTrue(src.contains("if (matcher.match(uri) != ONE) return 0"))
+  }
+
+  // The Nexus shares (INFLOW_ASK_ITEMS_SHARE, INFLOW_ASK_IDS_SHARE, INFLOW_DEBITS_SHARE in inflow-shares.ts), on the same legacy authority, paged by since-id.
+  private fun fixture(name: String) = File("../../../../../packages/autopilot-contract/fixtures/$name.share.json").also {
+    assertTrue("fixture not found from ${File(".").absoluteFile}", it.isFile)
+  }.let { Json.parseToJsonElement(it.readText()).jsonObject }
+
+  @Test fun theNexusColumnsPathsAndPageEqualTheirShares() {
+    for ((name, path, columns) in listOf(
+      Triple("ask-items", NexusShares.ASK_ITEMS_PATH, NexusShares.ASK_ITEMS_COLUMNS),
+      Triple("ask-ids", NexusShares.ASK_IDS_PATH, NexusShares.ASK_IDS_COLUMNS),
+      Triple("debits", NexusShares.DEBITS_PATH, NexusShares.DEBITS_COLUMNS),
+    )) {
+      val share = fixture(name)
+      assertEquals(name, share.getValue("columns").jsonArray.map { it.jsonPrimitive.content }, columns.toList())
+      assertEquals(name, share.getValue("path").jsonPrimitive.content, path)
+      assertEquals(name, share.getValue("authority").jsonPrimitive.content, AutopilotProvider.AUTHORITY)
+      assertEquals(name, share.getValue("maxRows").jsonPrimitive.int, NexusShares.PAGE)
+    }
+  }
+
+  @Test fun eachNexusPathChecksTheCallerAndItsOwnSwitchAndBuildsRowsOnlyThroughNexusShares() {
+    val src = File("src/main/java/expo/modules/inflowcore/android/AutopilotProvider.kt").readText()
+    val query = src.substringAfter("override fun query(").substringBefore("override fun update(")
+    assertTrue(query.trimStart().substringAfter("{").trimStart().startsWith("requireSibling()"))
+    for ((match, meta, rows) in listOf(
+      Triple("ASK_ITEMS", "NexusShares.ASK_META", "store!!.nexusAskItems(since, NexusShares.PAGE).mapNotNull(NexusShares::askRow)"),
+      Triple("ASK_IDS", "NexusShares.ASK_META", "store!!.nexusAskIds(since, NexusShares.PAGE).mapNotNull(NexusShares::idRow)"),
+      Triple("DEBITS", "NexusShares.DEBITS_META", "SqlLedgerStore(store!!.db).nexusDebits(since, NexusShares.debitsFrom(now), NexusShares.PAGE).mapNotNull { NexusShares.debitRow(it, now) }"),
+    )) {
+      val branch = query.substringAfter("      $match -> MatrixCursor(NexusShares.${match}_COLUMNS)").substringBefore("\n      }\n")
+      assertTrue(match, branch.contains("val since = nexusSince(uri, store, $meta)"))
+      assertTrue(match, branch.contains("if (since != null) runCatching { $rows }"))
+      assertTrue(match, src.contains("addURI(AUTHORITY, \"\${NexusShares.${match}_PATH}/*\", $match)"))
+    }
+    // The caller is read on the binder thread, before any hop, from the calling uid's packages; NexusShares.since decides.
+    assertTrue(src.contains("NexusShares.since(context?.packageManager?.getPackagesForUid(Binder.getCallingUid()), store?.meta(switchMeta), uri.lastPathSegment)"))
+    assertTrue(src.contains("}.getOrNull()"))
   }
 }
