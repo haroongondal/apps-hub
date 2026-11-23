@@ -31,6 +31,10 @@ test('plainError keeps only the module message', () => {
   assert.equal(plainError(wrapped), 'Enter a model id.');
   assert.equal(plainError(new Error('Plain.')), 'Plain.');
   assert.equal(plainError(new Error('')), 'Something went wrong. Try again.');
+  const java = new Error("Call to function 'AiHubCore.addKey' has been rejected.\n→ Caused by: java.lang.IllegalArgumentException: This doesn't look like a Gemini key.");
+  assert.equal(plainError(java), "This doesn't look like a Gemini key.");
+  assert.equal(plainError(new Error('kotlin.IllegalStateException: Your saved keys couldn\'t be opened.')), "Your saved keys couldn't be opened.");
+  assert.equal(plainError(new Error('Use a newer app: java.lang.Exception: kept')), 'Use a newer app: java.lang.Exception: kept');
 });
 
 test('keysUnreadable spots the vault message', () => {
