@@ -114,6 +114,16 @@ test('progress cards default on, reject non-booleans and survive a round trip', 
   assert.deepEqual(normalize(JSON.parse(JSON.stringify(s))), s);
 });
 
+test('the progress ring defaults on, rejects non-booleans and survives a round trip', () => {
+  assert.equal(DEFAULTS.progressRing, true);
+  assert.equal(normalize({ accent: 'mint' }).progressRing, true);
+  assert.equal(normalize({ progressRing: false }).progressRing, false);
+  assert.equal(normalize({ progressRing: 'false' }).progressRing, true);
+  assert.equal(normalize({ progressRing: 0 }).progressRing, true);
+  const s = { ...DEFAULTS, progressRing: false };
+  assert.deepEqual(normalize(JSON.parse(JSON.stringify(s))), s);
+});
+
 test('the alarm card defaults on, rejects non-booleans and survives a round trip', () => {
   assert.equal(DEFAULTS.alarmCard, true);
   assert.equal(normalize({ accent: 'mint' }).alarmCard, true);

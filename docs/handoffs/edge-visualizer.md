@@ -100,3 +100,27 @@ Unanswered question put to the owner: which Muviz patterns/screens they use day 
 Next step: ask that one question, then lay out approaches, write the design doc at
 docs/superpowers/specs/2026-11-17-edge-visualizer-design.md, get approval, then superpowers:writing-plans, then build.
 Open naming: app name, package (com.haroon.<name>), Store release id, @apps-hub/ui brand key — propose one, owner confirms.
+
+## C6: progress ring on the pill (2026-11-23, branch eco/halo)
+- What: while another app's ongoing notification carries progress, a ring around the camera hole in the folded pill fills
+  with it (indeterminate: a short arc spins at about 15 fps, `ProgressRing.SPIN_FRAME_MS` = 66 ms, the same cap as the
+  always-on edge). Open card unchanged: the existing progress card still shows title, app and bar.
+- Model: `notch-island` `core/ProgressRing.kt` (JVM-tested in `ProgressRingTest`, 17 tests). Most recently updated wins
+  (ties by key); max <= 0 ignored unless indeterminate; Halo's own, secret-visibility and not-ongoing notifications never
+  ring; removal clears at once; a ring at 100% holds 2.5 s from when it got there, then clears, even if the notification
+  stays or is removed. Fraction clamped to 0..1.
+- Feed: `NotchFeed.ringPosted` in the one listener (HaloListener), no second listener. Hold expiry re-publishes via a
+  main-thread Handler. Drawing: `android/RingView.kt`, redraws only when the whole-degree sweep, the spin state or the
+  accent changes; the spin stops while the card is open (ring at alpha 0) and when the screen is off (no draws). Hidden
+  during a call (the call timer owns the pill).
+- Setting: `progressRing` (TS `src/island/settings.ts`, Kotlin `NotchSettings`), default ON (my call: the comparable
+  progress and alarm cards default on; message peek is off only because it reads text). Switch "Progress ring" under
+  the progress card switch in Island settings.
+- Notification data (for Halo's AGENTS.md paragraph): for the ring, only while its switch is on, the listener reads the
+  package name, isOngoing, whether visibility is secret, the post time, the notification key and EXTRA_PROGRESS,
+  EXTRA_PROGRESS_MAX and EXTRA_PROGRESS_INDETERMINATE; kept in memory only, never text. The ring shows a fraction only,
+  so it obeys the lock-screen text rule; secret notifications never ring.
+- Not checked on the phone: ring position around the real hole (the cutout rect's vertical centre is assumed to be the
+  hole's centre), look on the tinted pill, indeterminate spin cost. Steps: start a Design Editor export (or any app's
+  download), watch the folded pill while unlocked and on the lock screen; let it finish (100% holds ~2.5 s then clears);
+  open the card (ring hides); turn off "Progress ring" (ring gone).

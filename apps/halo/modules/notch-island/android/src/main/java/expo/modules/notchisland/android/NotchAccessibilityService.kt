@@ -50,6 +50,7 @@ class NotchAccessibilityService : AccessibilityService() {
   private var small = PillBox(0, 0, 0)
   private var dot: View? = null
   private var callTime: TextView? = null
+  private var ringView: RingView? = null
   private var shown: String? = null
   private var events: NotchEvents? = null
   // Set only while the pill is open for an event; null while open means the user opened the card.
@@ -210,6 +211,20 @@ class NotchAccessibilityService : AccessibilityService() {
     d.requestLayout()
     t.visibility = if (kind == CALL) View.VISIBLE else View.GONE
     NotchMedia.call?.let { t.text = durationText(callElapsed(Notification.CATEGORY_CALL, it.startedAt, System.currentTimeMillis()) ?: 0L) }
+    updateRing()
+  }
+
+  // Numbers only, never notification text, so the lock screen shows it too; a call's timer takes the pill instead.
+  private fun updateRing() {
+    val v = ringView ?: return
+    val r = NotchMedia.ring?.takeIf { settings.progressRing && NotchMedia.call == null }
+    v.visibility = if (r == null) View.GONE else View.VISIBLE
+    r?.let { v.bind(it.fraction, Colours.accent(settings.accent)) }
+    (v.parent as? View)?.contentDescription = when {
+      r == null -> "Notch"
+      r.fraction == null -> "Notch, in progress"
+      else -> "Notch, ${(r.fraction * 100).toInt()}% done"
+    }
   }
 
   private fun cutout(manager: WindowManager): Cutout? {
@@ -251,9 +266,14 @@ class NotchAccessibilityService : AccessibilityService() {
       layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL or Gravity.END)
         .apply { rightMargin = (6 * density).toInt() }
     }
+    val ringSize = hole?.let { minOf(it.right - it.left + (11 * density).toInt(), small.height) } ?: (small.height - (4 * density).toInt())
+    val ring = RingView(this, density).apply {
+      layoutParams = FrameLayout.LayoutParams(ringSize, ringSize, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
+        .apply { topMargin = (((hole?.bottom ?: small.height) - ringSize) / 2).coerceAtLeast(0) }
+    }
     dot = indicatorDot
     callTime = indicatorTime
-    updateIndicator()
+    ringView = ring
 
     val view = FrameLayout(this).apply {
       background = GradientDrawable().apply { setColor(Colours.pill(settings.pill, settings.accent)) }
@@ -262,8 +282,10 @@ class NotchAccessibilityService : AccessibilityService() {
       addView(content, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
       addView(indicatorDot)
       addView(indicatorTime)
+      addView(ring)
     }
-    for (v in listOf(indicatorDot, indicatorTime)) v.alpha = if (open) 0f else 1f
+    updateIndicator()
+    for (v in listOf(indicatorDot, indicatorTime, ring)) v.alpha = if (open) 0f else 1f
     val box = if (open) expanded() else folded()
     content.pivotX = box.width / 2f
     val lp = WindowManager.LayoutParams(
@@ -296,6 +318,7 @@ class NotchAccessibilityService : AccessibilityService() {
     card = null
     dot = null
     callTime = null
+    ringView = null
   }
 
   private fun corners(box: PillBox) {
@@ -333,7 +356,7 @@ class NotchAccessibilityService : AccessibilityService() {
     val from = PillBox(lp.x, lp.width, lp.height)
     val to = if (next) expanded() else folded()
     val c = card
-    val marks = listOfNotNull(dot, callTime)
+    val marks = listOfNotNull(dot, callTime, ringView)
     val screenW = resources.displayMetrics.widthPixels
     animator = ValueAnimator.ofFloat(0f, 1f).apply {
       duration = Spring.SETTLE_MS

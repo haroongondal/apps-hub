@@ -175,6 +175,12 @@ export function SettingsScreen({
           onChange={(progressCards) => set({ progressCards })}
         />
         <SwitchRow
+          title="Progress ring"
+          subtitle="A ring around the camera fills as another app's download or export goes on"
+          value={value.progressRing}
+          onChange={(progressRing) => set({ progressRing })}
+        />
+        <SwitchRow
           title="Alarm card"
           subtitle="A ringing alarm with Snooze and Dismiss, shown when you open the pill"
           value={value.alarmCard}

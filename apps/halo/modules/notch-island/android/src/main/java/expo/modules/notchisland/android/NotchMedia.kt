@@ -7,6 +7,7 @@ import android.os.Looper
 import expo.modules.notchisland.core.AlarmSnapshot
 import expo.modules.notchisland.core.MessageSnapshot
 import expo.modules.notchisland.core.ProgressSnapshot
+import expo.modules.notchisland.core.RingShown
 
 data class MediaInfo(val title: String?, val artist: String?, val art: Bitmap?, val playing: Boolean)
 
@@ -23,6 +24,7 @@ object NotchMedia {
   @Volatile var media: MediaInfo? = null
   @Volatile var call: CallInfo? = null
   @Volatile var progress: ProgressSnapshot? = null
+  @Volatile var ring: RingShown? = null
   @Volatile var alarm: AlarmInfo? = null
   @Volatile var message: MessageInfo? = null
   // Wall-clock time the open pill last folded; a message posted before it has been seen.
