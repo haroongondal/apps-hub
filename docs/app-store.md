@@ -273,6 +273,8 @@ except `store` and `notch`, found by package, so HomeNet and TunnelWall count). 
 - **The app's own report**: the `health` share from `@apps-hub/app-link-contract`, queried for each app on a
   background thread with a 3 s limit. The Store declares `com.haroon.permission.AUTOPILOT` (signature) and
   holds it; `QUERY_ALL_PACKAGES` already makes every provider visible, so it needs no `<queries>` entry.
+  Before each query it checks who serves the authority: `resolveContentProvider` must name the app's package
+  from `ANDROID_PACKAGES` and `checkSignatures` must match the Store's key (`ProviderTrust`), otherwise no query.
   `parseHealthRow` checks each row (one row, the right `app_id`, flags 0, 1 or null, `ai_source` hub, own or
   none, a heartbeat after 2024 and not in the future); anything else, a debug build refused by the signature
   check, or an app without the share yet, shows "Not reported".

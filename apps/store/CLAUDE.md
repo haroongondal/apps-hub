@@ -17,7 +17,7 @@ Install builds on the phone through the Store itself (`pnpm release store`), not
 ## Structure
 
 - `src/api.ts`, `status.ts`, `present.ts` and `health.ts` are pure TypeScript with tests: manifest fetch and signed-URL calls, install status, display text, and the Setup and health checks (service table, Settings.Secure parsing, health-row validation, reconcile). `App.tsx` and `src/HealthScreen.tsx` are the UI over them; `manifest.test.ts` runs the link contract's `auditManifest` over the Store manifests.
-- Install and update logic is Kotlin in `modules/store-installer`: `ApkVerifier`, `Installer`, `InstallWorker` (foreground WorkManager download), `UpdateCheckWorker`, `SelfUpdateReceiver` and `Credentials` (Keystore). `Health` reads Settings.Secure and the sibling apps' `health` rows (through `Deadline`, 3 s) and opens their settings pages. `ApkVerifierTest` and `DeadlineTest` are the JVM tests.
+- Install and update logic is Kotlin in `modules/store-installer`: `ApkVerifier`, `Installer`, `InstallWorker` (foreground WorkManager download), `UpdateCheckWorker`, `SelfUpdateReceiver` and `Credentials` (Keystore). `Health` reads Settings.Secure and the sibling apps' `health` rows (through `Deadline`, 3 s) and opens their settings pages. It reads a row only when `ProviderTrust` passes (the authority resolves to the expected package, signed with the Store's key). `ApkVerifierTest`, `DeadlineTest` and `ProviderTrustTest` are the JVM tests.
 
 ## Rules that are easy to break
 

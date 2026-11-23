@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.database.Cursor
 import android.net.Uri
 import android.os.Build
@@ -26,12 +27,20 @@ object Health {
     null
   }
 
-  suspend fun report(context: Context, authority: String): List<Map<String, Any?>>? =
-    Deadline.within(TIMEOUT_MS) { rows(context, authority) }
+  suspend fun report(context: Context, authority: String, expectedPackage: String): List<Map<String, Any?>>? =
+    Deadline.within(TIMEOUT_MS) { rows(context, authority, expectedPackage) }
+
+  private fun trusted(context: Context, authority: String, expectedPackage: String): Boolean {
+    val pm = context.packageManager
+    val resolved = pm.resolveContentProvider(authority, 0)?.packageName
+    val signed = pm.checkSignatures(context.packageName, expectedPackage) == PackageManager.SIGNATURE_MATCH
+    return ProviderTrust.allowed(expectedPackage, resolved, signed)
+  }
 
   // Any failure (no provider yet, a debug build refused by the signature check, a broken provider) is "no report".
-  private fun rows(context: Context, authority: String): List<Map<String, Any?>>? = try {
-    context.contentResolver.query(Uri.parse("content://$authority/$PATH"), null, null, null, null)?.use { c ->
+  private fun rows(context: Context, authority: String, expectedPackage: String): List<Map<String, Any?>>? = try {
+    if (!trusted(context, authority, expectedPackage)) null
+    else context.contentResolver.query(Uri.parse("content://$authority/$PATH"), null, null, null, null)?.use { c ->
       buildList { while (size < MAX_ROWS && c.moveToNext()) add(row(c)) }
     }
   } catch (e: Exception) {
