@@ -1,6 +1,8 @@
 package expo.modules.inflowcore.android
 
 import android.content.ContentResolver
+import android.content.Context
+import android.content.pm.PackageManager
 import android.database.Cursor
 import android.net.Uri
 import android.os.Binder
@@ -20,7 +22,7 @@ import expo.modules.inflowcore.core.Txn
 import java.time.LocalDate
 import java.time.ZoneId
 
-class StoreBriefingInputs(private val store: SqlItemStore, private val resolver: ContentResolver, private val zone: ZoneId) : BriefingInputs {
+class StoreBriefingInputs(private val store: SqlItemStore, private val context: Context, private val zone: ZoneId) : BriefingInputs {
   override val healthOn: Boolean get() = Briefing.on(store.meta(Briefing.HEALTH_META))
 
   override fun due(): List<DueThing> =
@@ -33,7 +35,12 @@ class StoreBriefingInputs(private val store: SqlItemStore, private val resolver:
   // Never on the main thread, and never while serving another app's call into Inflow's own provider (that binder thread must answer fast).
   override fun others(): List<AppLine> =
     if (Looper.myLooper() == Looper.getMainLooper() || Binder.getCallingUid() != Process.myUid()) emptyList()
-    else BriefingReaders.lines(AndroidLinkResolver(resolver), LocalDate.now(zone))
+    else BriefingReaders.lines(
+      AndroidLinkResolver(context.contentResolver),
+      { authority -> context.packageManager.resolveContentProvider(authority, PackageManager.ComponentInfoFlags.of(0))?.packageName },
+      { pkg -> context.packageManager.checkSignatures(context.packageName, pkg) == PackageManager.SIGNATURE_MATCH },
+      LocalDate.now(zone),
+    )
 }
 
 class AndroidLinkResolver(private val resolver: ContentResolver) : LinkResolver {

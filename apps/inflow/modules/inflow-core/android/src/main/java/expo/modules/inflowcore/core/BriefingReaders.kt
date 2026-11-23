@@ -16,7 +16,7 @@ object BriefingReaders {
   const val TIMEOUT_MS = 2_000L
   const val MAX_ROWS = 200
   const val MAX_TEXT = 200
-  const val MAX_NAME = 20
+  const val MAX_NAME = 12
   const val HOME_URI = "content://com.haroon.netlens.applink/who_is_home"
   const val CARDS_URI = "content://com.haroon.strongroom.applink/expiry"
   const val TASKS_URI = "content://com.haroon.deputy.applink/waiting"
@@ -34,10 +34,12 @@ object BriefingReaders {
     Reader(NEXUS_URI, mapOf("id" to Col.LONG, "title" to Col.TEXT, "due_at" to Col.LONG_OPT), 200) { rows, _ -> nexus(rows) },
   )
 
-  fun lines(resolver: LinkResolver, today: LocalDate, timeoutMs: Long = TIMEOUT_MS): List<AppLine> {
+  fun lines(resolver: LinkResolver, owner: ProviderOwner, sameKey: SameKey, today: LocalDate, timeoutMs: Long = TIMEOUT_MS): List<AppLine> {
     val pool = Executors.newFixedThreadPool(READERS.size) { r -> Thread(r, "briefing-reader").apply { isDaemon = true } }
     try {
-      val jobs = READERS.map { r -> r to pool.submit(Callable { resolver.query(r.uri) }) }
+      val jobs = READERS.map { r ->
+        r to pool.submit(Callable { if (SiblingIdentity.trusted(authority(r.uri), owner, sameKey)) resolver.query(r.uri) else null })
+      }
       val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
       return jobs.mapNotNull { (r, job) ->
         runCatching { job.get(maxOf(0L, deadline - System.nanoTime()), TimeUnit.NANOSECONDS)?.let { t -> valid(t, r.columns, r.maxRows) }?.let { r.line(it, today) } }.getOrNull()
@@ -46,6 +48,8 @@ object BriefingReaders {
       pool.shutdownNow()
     }
   }
+
+  fun authority(uri: String): String = uri.removePrefix("content://").substringBefore('/')
 
   private fun valid(t: LinkTable, columns: Map<String, Col>, maxRows: Int): List<Map<String, Any?>>? {
     val at = columns.keys.associateWith { t.columns.indexOf(it) }

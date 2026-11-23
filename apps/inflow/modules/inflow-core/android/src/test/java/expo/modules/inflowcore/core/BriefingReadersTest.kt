@@ -29,9 +29,34 @@ class BriefingReadersTest {
     BriefingReaders.TASKS_URI to { tasks }, BriefingReaders.NEXUS_URI to { nexus },
   )
 
+  private val realOwner = ProviderOwner { SiblingIdentity.PACKAGES[it] }
+  private val sameKey = SameKey { true }
+
+  private fun read(r: LinkResolver, timeoutMs: Long = BriefingReaders.TIMEOUT_MS, owner: ProviderOwner = realOwner, key: SameKey = sameKey) =
+    BriefingReaders.lines(r, owner, key, today, timeoutMs)
+
+  @Test fun aProviderThatFailsTheIdentityCheckIsNeverQueriedAndGivesNoLine() {
+    val (r, asked) = resolver(*all)
+    val owner = ProviderOwner { a ->
+      when (a) {
+        BriefingReaders.authority(BriefingReaders.HOME_URI) -> "com.evil.lookalike"   // someone else claims HomeNet's authority
+        BriefingReaders.authority(BriefingReaders.TASKS_URI) -> null                  // no provider installed
+        BriefingReaders.authority(BriefingReaders.NEXUS_URI) -> throw IllegalStateException("package manager died")
+        else -> SiblingIdentity.PACKAGES[a]
+      }
+    }
+    val key = SameKey { pkg -> if (pkg == "com.haroon.strongroom") throw RuntimeException("NameNotFoundException") else true }
+    assertEquals(emptyList<AppLine>(), read(r, owner = owner, key = key))
+    assertEquals(emptyList<String>(), asked.toList())
+    assertEquals(emptyList<AppLine>(), read(r, key = SameKey { false }))
+    assertEquals(emptyList<String>(), asked.toList())
+    assertEquals(listOf(AppLine(BriefingKind.TASKS, "2 tasks are waiting for you")), read(r, key = SameKey { it == "com.haroon.deputy" }))
+    assertEquals(listOf(BriefingReaders.TASKS_URI), asked.toList())
+  }
+
   @Test fun eachShareGivesOneSummaryLineBuiltByInflow() {
     val (r, asked) = resolver(*all)
-    val lines = BriefingReaders.lines(r, today)
+    val lines = read(r)
     assertEquals(
       listOf(
         AppLine(BriefingKind.HOME, "Ali and Sara are home"), AppLine(BriefingKind.CARDS, "1 card expires this month"),
@@ -50,14 +75,14 @@ class BriefingReadersTest {
       BriefingReaders.TASKS_URI to { null },
       BriefingReaders.NEXUS_URI to { nexus },
     )
-    assertEquals(listOf(AppLine(BriefingKind.NEXUS, "3 things in Nexus today")), BriefingReaders.lines(r, today))
-    assertEquals(emptyList<AppLine>(), BriefingReaders.lines(resolver().first, today))
+    assertEquals(listOf(AppLine(BriefingKind.NEXUS, "3 things in Nexus today")), read(r))
+    assertEquals(emptyList<AppLine>(), read(resolver().first))
   }
 
   @Test fun aSlowProviderIsDroppedAfterTheTimeout() {
     val (r, _) = resolver(BriefingReaders.HOME_URI to { Thread.sleep(10_000); home }, BriefingReaders.TASKS_URI to { tasks })
     val started = System.nanoTime()
-    val lines = BriefingReaders.lines(r, today, timeoutMs = 300)
+    val lines = read(r, timeoutMs = 300)
     assertTrue((System.nanoTime() - started) / 1_000_000 < 3_000)
     assertEquals(listOf(AppLine(BriefingKind.TASKS, "2 tasks are waiting for you")), lines)
   }
@@ -67,7 +92,7 @@ class BriefingReadersTest {
     val noSeen = LinkTable(listOf("person", "present"), listOf(listOf("Ali", 1L)))
     val plannedNexusWithout = LinkTable(listOf("id", "name"), listOf(listOf(1L, "x")))
     val (r, _) = resolver(BriefingReaders.HOME_URI to { noSeen }, BriefingReaders.TASKS_URI to { noState }, BriefingReaders.NEXUS_URI to { plannedNexusWithout })
-    assertEquals(emptyList<AppLine>(), BriefingReaders.lines(r, today))
+    assertEquals(emptyList<AppLine>(), read(r))
   }
 
   @Test fun badRowsAreDroppedAndGoodOnesKept() {
@@ -84,21 +109,21 @@ class BriefingReadersTest {
         listOf("Nadia", 1L, -1L),               // impossible last seen
       ),
     )
-    assertEquals(listOf(AppLine(BriefingKind.HOME, "Bilal Khan is home")), BriefingReaders.lines(resolver(BriefingReaders.HOME_URI to { bad }).first, today))
+    assertEquals(listOf(AppLine(BriefingKind.HOME, "Bilal Khan is home")), read(resolver(BriefingReaders.HOME_URI to { bad }).first))
     val tasksBad = LinkTable(listOf("id", "label", "due_at", "state"), listOf(listOf("1", "x", null, "draft"), listOf(2L, "x", "soon", "draft"), listOf(3L, "x", null, "draft")))
-    assertEquals(listOf(AppLine(BriefingKind.TASKS, "1 task is waiting for you")), BriefingReaders.lines(resolver(BriefingReaders.TASKS_URI to { tasksBad }).first, today))
+    assertEquals(listOf(AppLine(BriefingKind.TASKS, "1 task is waiting for you")), read(resolver(BriefingReaders.TASKS_URI to { tasksBad }).first))
   }
 
   @Test fun columnsAreFoundByNameInAnyOrder() {
     val shuffled = LinkTable(listOf("last_seen_at", "person", "present"), listOf(listOf(5L, "Ali", 1L)))
-    assertEquals(listOf(AppLine(BriefingKind.HOME, "Ali is home")), BriefingReaders.lines(resolver(BriefingReaders.HOME_URI to { shuffled }).first, today))
+    assertEquals(listOf(AppLine(BriefingKind.HOME, "Ali is home")), read(resolver(BriefingReaders.HOME_URI to { shuffled }).first))
   }
 
   @Test fun homeNamesUpToThreeThenCountsAndCapsEachName() {
     fun rows(vararg names: String) = names.map { mapOf<String, Any?>("person" to it, "present" to 1L, "last_seen_at" to 1L) }
     assertEquals("Ali, Sara and Omar are home", BriefingReaders.home(rows("Ali", "Sara", "Omar"))?.text)
     assertEquals("4 people are home", BriefingReaders.home(rows("Ali", "Sara", "Omar", "Zed"))?.text)
-    assertEquals("A".repeat(20) + " is home", BriefingReaders.home(rows("A".repeat(60)))?.text)
+    assertEquals("A".repeat(12) + " is home", BriefingReaders.home(rows("A".repeat(60)))?.text)
     assertEquals(null, BriefingReaders.home(emptyList()))
   }
 
@@ -110,6 +135,6 @@ class BriefingReadersTest {
 
   @Test fun onlyTheShareRowCapIsRead() {
     val many = LinkTable(listOf("person", "present", "last_seen_at"), (1..40).map { listOf("P$it", if (it > 16) 1L else 0L, 1L) })
-    assertEquals(emptyList<AppLine>(), BriefingReaders.lines(resolver(BriefingReaders.HOME_URI to { many }).first, today))
+    assertEquals(emptyList<AppLine>(), read(resolver(BriefingReaders.HOME_URI to { many }).first))
   }
 }

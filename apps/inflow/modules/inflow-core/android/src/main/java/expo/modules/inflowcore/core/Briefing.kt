@@ -6,9 +6,9 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
 
-data class BriefingLine(val lineId: Long, val kind: String, val text: String, val at: Long?, val sensitive: Int)
+data class BriefingLine(val lineId: Long, val kind: String, val text: String, val at: Long?, val personal: Int)
 
-enum class BriefingKind(val code: Long, val key: String, val sensitive: Int) {
+enum class BriefingKind(val code: Long, val key: String, val personal: Int) {
   BILL(1, "bill", 0), EVENT(2, "event", 0), SPENT(3, "spent", 1), MEDICINE(4, "medicine", 1), STEPS(5, "steps", 1),
   HOME(6, "home", 1), CARDS(7, "cards", 0), TASKS(8, "tasks", 0), NEXUS(9, "nexus", 0),
 }
@@ -39,7 +39,8 @@ interface BriefingInputs {
 object Briefing {
   const val HEALTH_META = "healthInBriefing"
   const val SHARE_META = "briefingShare"
-  const val MAX_TEXT = 80
+  const val MAX_TEXT = 60
+  const val MAX_LINES = 20
   const val MAX_DUE = 5
   const val SOON_DAYS = 3L
   // lineId = kind code * ID_BLOCK + n (n: suggestion id for a bill or event, else the place within its kind): unique, stable while the same things are due, below 2^53.
@@ -72,7 +73,7 @@ object Briefing {
     inputs.others().groupBy { it.kind }.toSortedMap().forEach { (kind, lines) ->
       lines.forEachIndexed { i, l -> out += line(kind, i.toLong(), l.text, null) }
     }
-    return out
+    return out.take(MAX_LINES)
   }
 
   private fun healthLines(h: BriefingHealth, now: Long, today: LocalDate, zone: ZoneId): List<BriefingLine> = listOfNotNull(
@@ -81,11 +82,11 @@ object Briefing {
       val time = String.format(Locale.ENGLISH, "%02d:%02d", day.hour, day.minute)
       line(BriefingKind.MEDICINE, 0, if (day.toLocalDate() == today) "Medicine at $time" else "Medicine at $time tomorrow", at)
     },
-    h.steps(today)?.takeIf { it > 0 }?.let { line(BriefingKind.STEPS, 0, String.format(Locale.ENGLISH, "%,d steps", it), null) },
+    h.steps(today)?.takeIf { it > 0 }?.let { line(BriefingKind.STEPS, 0, String.format(Locale.ENGLISH, "%d steps", it), null) },
   )
 
   private fun line(kind: BriefingKind, n: Long, text: String, at: Long?) =
-    BriefingLine(kind.code * ID_BLOCK + n, kind.key, clean(text, MAX_TEXT), at, kind.sensitive)
+    BriefingLine(kind.code * ID_BLOCK + n, kind.key, clean(text, MAX_TEXT), at, kind.personal)
 
   fun clean(text: String, max: Int): String =
     text.replace(Regex("[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]"), " ").replace(Regex("\\s+"), " ").trim().take(max).trim()

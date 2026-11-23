@@ -55,7 +55,7 @@ class BriefingTest {
     assertEquals(listOf("bill", "event", "bill"), lines.map { it.kind })
     assertEquals(listOf(1_000_000_000_011L, 2_000_000_000_008L, 1_000_000_000_007L), lines.map { it.lineId })
     assertEquals(listOf(at("2026-11-24T00:00"), at("2026-11-24T11:00"), at("2026-11-25T00:00")), lines.map { it.at })
-    assertTrue(lines.all { it.sensitive == 0 })
+    assertTrue(lines.all { it.personal == 0 })
   }
 
   @Test fun atMostFiveDueLines() {
@@ -77,7 +77,7 @@ class BriefingTest {
     val lines = Briefing.build(Inputs(txnList = txns), now, zone)
     assertEquals(listOf("Spent PKR 4,200 yesterday", "Spent USD 12.50 yesterday"), lines.map { it.text })
     assertEquals(listOf(3_000_000_000_000L, 3_000_000_000_001L), lines.map { it.lineId })
-    assertTrue(lines.all { it.kind == "spent" && it.sensitive == 1 && it.at == null })
+    assertTrue(lines.all { it.kind == "spent" && it.personal == 1 && it.at == null })
     assertTrue(lines.none { it.text.contains("CANARY") || it.text.contains("1234") })
   }
 
@@ -100,9 +100,9 @@ class BriefingTest {
     val inputs = Inputs(healthOn = true, source = StoreBriefingHealth(health, meds))
     val lines = Briefing.build(inputs, now, zone)
     assertEquals(1, inputs.healthCalls)
-    assertEquals(listOf("Medicine at 14:00", "6,214 steps"), lines.map { it.text })
+    assertEquals(listOf("Medicine at 14:00", "6214 steps"), lines.map { it.text })
     assertEquals(listOf("medicine", "steps"), lines.map { it.kind })
-    assertEquals(listOf(1, 1), lines.map { it.sensitive })
+    assertEquals(listOf(1, 1), lines.map { it.personal })
     assertEquals(listOf(at("2026-11-24T14:00"), null), lines.map { it.at })
     assertTrue(lines.none { it.text.contains("CANARY") || it.text.contains("401") || it.text.contains("71") || it.text.contains("57") })
   }
@@ -130,15 +130,23 @@ class BriefingTest {
     assertEquals(a, Briefing.build(inputs, now + 60_000, zone))
     assertEquals(a.size, a.map { it.lineId }.toSet().size)
     assertTrue(a.all { it.lineId in 1 until (1L shl 53) })
-    assertEquals(listOf(0, 0, 1, 1, 1, 1, 0, 0, 0), a.map { it.sensitive })
+    assertEquals(listOf(0, 0, 1, 1, 1, 1, 0, 0, 0), a.map { it.personal })
   }
 
-  @Test fun everyTextIsOneCleanLineOfAtMost80Characters() {
-    val long = AppLine(BriefingKind.HOME, "Ali\nis home\u0000" + "x".repeat(200))
+  @Test fun atMost20Lines() {
+    val y = at("2026-11-23T12:00")
+    val txns = (0 until 25).map { txn(Direction.OUT, 100, y, "A" + ('A' + it) + "X") }
+    val lines = Briefing.build(Inputs(txnList = txns), now, zone)
+    assertEquals(20, lines.size)
+    assertEquals("Spent AAX 1 yesterday", lines.first().text)
+  }
+
+  @Test fun everyTextIsOneCleanLineOfAtMost60Characters() {
+    val long = AppLine(BriefingKind.HOME, "Ali\nis\u2028home\u0000" + "x".repeat(200))
     val text = Briefing.build(Inputs(appLines = listOf(long)), now, zone).single().text
-    assertEquals(80, text.length)
+    assertEquals(60, text.length)
     assertTrue(text.startsWith("Ali is home x"))
-    assertFalse(text.any { it.isISOControl() || it == ' ' })
+    assertFalse(text.any { it.isISOControl() || it == '\u2028' })
   }
 
   @Test fun bothBriefingSettingsAreOffUntilTurnedOn() {
