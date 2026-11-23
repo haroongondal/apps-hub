@@ -1,5 +1,6 @@
 package expo.modules.haloengine.android
 
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
@@ -322,15 +323,17 @@ class AodContent(
   }
 
   private fun showLinks() {
-    val block = LinkSurfaces.aod(Links.snapshot, settings.links, System.currentTimeMillis())
+    // The real always-on screen only ever shows over the keyguard, so it counts as locked whatever the keyguard reports.
+    val locked = !preview || context.getSystemService(KeyguardManager::class.java).isKeyguardLocked
+    val block = LinkSurfaces.aod(Links.snapshot, settings.links, locked, System.currentTimeMillis())
     linksBox.removeAllViews()
     fun line(s: String, head: Boolean) = linksBox.addView(text(if (head) 14f else 13f, if (head) 0xEEFFFFFF.toInt() else 0x99FFFFFF.toInt()).apply {
       text = s
       gravity = Gravity.CENTER
     })
-    if (block.waitingCount > 0) line(if (block.waitingCount == 1) "1 waiting" else "${block.waitingCount} waiting", true)
+    block.waiting?.let { line(it, true) }
     block.waitingTitles.forEach { line(it, false) }
-    if (block.briefing.isNotEmpty()) line("Briefing", true)
+    block.briefingHead?.let { line(it, true) }
     block.briefing.forEach { line(it, false) }
     linksBox.visibility = if (block.empty) GONE else VISIBLE
   }

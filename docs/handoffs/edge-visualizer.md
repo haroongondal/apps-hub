@@ -157,10 +157,15 @@ Open naming: app name, package (com.haroon.<name>), Store release id, @apps-hub/
   - Waiting pulse: amber #F5A524 every 10 min while anything waits (Inflow suggestions in state waiting and not expired; Deputy
     `waiting_for_ok` not past its time, and `draft`; Deputy `scheduled` rows do not count: they need no one, my call). Red goes first.
     Both pulses skip quiet hours and a dark screen, and run without the notification-flash switch (`HaloService.pulse`).
-  - Always-on rows (`AodContent`): "N waiting" plus up to 3 titles, then "Briefing" plus up to 4 lines. Lock-screen rule: the
-    always-on screen is always the lock screen, so titles and lines that look like money or long numbers (currency words or signs next
-    to digits, 1,234-style numbers, 5+ digit runs) are dropped (the count keeps them); private lines only with the private switch;
-    people at home only as a count, never names, never "nobody home", and only with the private switch (my call).
+  - Always-on rows (`AodContent`, model `LinkSurfaces.aod(snapshot, links, locked, now)`). Lock screen fails CLOSED (security finding,
+    replaces the first build's money regex, which failed open and is removed): while locked (the real always-on screen always counts
+    as locked; the in-app preview reads `KeyguardManager.isKeyguardLocked`) Halo shows only its own phrases built from counts:
+    "1 thing is waiting" / "N things are waiting" and "Briefing ready" (only when a non-private line exists). No text column from
+    another app (Inflow titles and briefing lines, Deputy labels, HomeNet names) ever reaches the locked screen, and the private switch
+    does not change that. Unlocked (preview): the count, up to 3 titles, "Briefing" plus up to 4 lines; private lines (medicine, steps)
+    and the people-at-home count only with "Show private briefing lines" (off by default), names never. `LinkSurfacesTest` runs every
+    switch combination locked and unlocked against hostile lines ("Pay Ali rupees 4,200", no-break and figure spaces, names, a
+    direction override) and proves no source text reaches the locked output. Practical effect: the always-on screen shows counts only.
   - Bubble (`android/WaitingBubble.kt`): a 48 dp touchable overlay with the count only, draggable; a tap opens Inflow when one of its
     suggestions waits, else Deputy. No list, no Run or Skip in Halo (my call: Halo stays a reader and never writes to Inflow or starts a
     Deputy run; Run and Skip stay in Inflow). Position kept in memory only.
@@ -171,17 +176,17 @@ Open naming: app name, package (com.haroon.<name>), Store release id, @apps-hub/
   `isNotificationListenerAccessGranted(HaloListener)`, ai_source `none`, `last_seen_at` = heartbeat written on service start and app
   open (SharedPreferences `applink`); a query never writes. `HaloHealthTest` binds it to `app-health.share.json`.
 - Battery: no new loops; the pulse timer exists only while a pulse is wanted; the always-on rows redraw only when the snapshot changes.
-- Gates (2026-11-24): halo-engine JVM 205 (165), notch-island 128 (127), assembleDebug ok, merged manifest `auditManifest` = [];
+- Gates (2026-11-24): halo-engine JVM 206 (165), notch-island 128 (127), assembleDebug ok, merged manifest `auditManifest` = [];
   halo ts 137 (127), typecheck clean, app-link-contract 133. Mutations checked: private filter, freshness, receiver extras, settle
-  time, guard copy drift, share fixture drift and the provider signer check all fail their tests.
+  time, guard copy drift, share fixture drift, the provider signer check and the locked gate all fail their tests.
 - Not checked on the phone (needs Store-signed builds of Halo, TunnelWall, HomeNet, Inflow and Deputy; debug builds refuse each other):
   1. Halo: with every switch in Your other apps off, the Diagnostics event log shows no `links read` line; turn one on and one appears.
   2. TunnelWall Shields on, join a Wi-Fi not in the trusted list: within ~5 s of its ping the edge pulses red, again after 5 min;
      join a trusted Wi-Fi: the pulse stops. Force-stop TunnelWall on an untrusted network and wait 2 h: the pulse stops.
   3. HomeNet: let its background check find a new device: red pulse; mark it as yours: stops after the next ping.
   4. Inflow with a waiting suggestion: amber pulse every 10 min, the bubble shows the count; tap opens Inflow; drag moves it.
-  5. Always-on screen with waiting and briefing on: "N waiting", titles, "Briefing" lines; a bill with an amount never shows its
-     title; medicine and steps lines appear only after the private switch; people home as a count only.
+  5. Always-on screen with waiting and briefing on: only "N things are waiting" and "Briefing ready", never a title, line or name,
+     whatever the private switch says. Preview from Halo (unlocked): titles and lines; medicine and steps only with the private switch.
   6. `adb shell content query --uri content://com.haroon.halo.applink/health` must fail with a permission denial; the Store's
      health screen shows Halo's row (accessibility, listener, last seen).
   7. `adb shell am broadcast -a com.haroon.autopilot.CHANGED -p com.haroon.halo` must be refused (shell lacks the permission).

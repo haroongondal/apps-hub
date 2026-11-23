@@ -14,8 +14,9 @@ enum class WaitingFrom(val pkg: String) { INFLOW("com.haroon.inflow"), DEPUTY("c
 
 data class WaitingItem(val title: String, val from: WaitingFrom, val dueAt: Long?)
 
-data class AodLinks(val waitingCount: Int, val waitingTitles: List<String>, val briefing: List<String>) {
-  val empty: Boolean get() = waitingCount == 0 && briefing.isEmpty()
+/** heads are Halo's own phrases; titles and lines are other apps' text and stay empty while the phone is locked. */
+data class AodLinks(val waiting: String?, val waitingTitles: List<String>, val briefingHead: String?, val briefing: List<String>) {
+  val empty: Boolean get() = waiting == null && briefingHead == null
 }
 
 object LinkSurfaces {
@@ -47,24 +48,26 @@ object LinkSurfaces {
     return inflow + deputy
   }
 
-  /** The always-on screen is the lock screen: titles that look like money or long numbers never show, private lines only with their switch. */
-  fun aod(s: LinkSnapshot, links: SettingsLinks, now: Long): AodLinks {
+  const val BRIEFING_HEAD = "Briefing"
+  const val BRIEFING_READY = "Briefing ready"
+
+  fun waitingPhrase(n: Int) = if (n == 1) "1 thing is waiting" else "$n things are waiting"
+
+  // Fails closed: while locked only Halo's own phrases built from counts show, never a text column from another app.
+  fun aod(s: LinkSnapshot, links: SettingsLinks, locked: Boolean, now: Long): AodLinks {
     val items = if (links.waitingAod) waiting(s, now) else emptyList()
-    val titles = items.mapNotNull { lockSafe(it.title) }.distinct().take(AOD_TITLES)
+    val waiting = items.size.takeIf { it > 0 }?.let(::waitingPhrase)
+    val open = if (links.briefing) s.briefing.sortedBy { it.lineId }.filter { !it.personal } else emptyList()
+    if (locked) return AodLinks(waiting, emptyList(), if (open.isEmpty()) null else BRIEFING_READY, emptyList())
     val lines = if (!links.briefing) emptyList() else buildList {
-      s.briefing.sortedBy { it.lineId }.filter { !it.personal || links.briefingPrivate }.mapNotNullTo(this) { lockSafe(it.text) }
+      s.briefing.sortedBy { it.lineId }.filter { !it.personal || links.briefingPrivate }.mapTo(this) { it.text }
       val home = s.home.count { it.present && fresh(it.lastSeenAt, now, HOME_FRESH_MS) }
       if (links.briefingPrivate && home > 0) add(if (home == 1) "1 person at home" else "$home people at home")
     }.distinct().take(AOD_BRIEFING)
-    return AodLinks(items.size, titles, lines)
+    val titles = items.map { it.title }.distinct().take(AOD_TITLES)
+    return AodLinks(waiting, titles, if (lines.isEmpty()) null else BRIEFING_HEAD, lines)
   }
-
-  fun lockSafe(text: String): String? = text.takeUnless { AMOUNT.containsMatchIn(it) }
 
   fun bubbleTarget(items: List<WaitingItem>): String? =
     (items.firstOrNull { it.from == WaitingFrom.INFLOW } ?: items.firstOrNull())?.from?.pkg
-
-  private val AMOUNT = Regex(
-    "(?i)\\b(pkr|rs|inr|usd|aed|sar|eur|gbp)\\.?\\s?\\d|[$€£₹₨]\\s?\\d|\\d\\s?(pkr|rs|inr|usd|aed|sar|eur|gbp)\\b|\\d{1,3}([,.]\\d{3})+|\\d{5,}",
-  )
 }
