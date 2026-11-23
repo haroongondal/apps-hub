@@ -24,7 +24,9 @@ Current apps:
   `packages/library-core`, app glue in `apps/pdf-editor-mobile/src/library`. Scan
   and Reader build on it; specs `docs/pdf-editor/`, progress `docs/handoffs/pdf-editor-scan.md`.
   The mobile app is named **Nexus** since N2 (package id and Store id unchanged): an opt-in
-  AI layer (owner's OpenAI key; fully offline without one) over the same Library, with
+  AI layer over the same Library through the owner's Gemini and Groq keys (Gemini embeds text
+  and reads images, Groq transcribes and answers with Gemini as chat fallback, several keys per
+  service in expo-secure-store; no OpenAI; fully offline without a key), with
   logic in `packages/knowledge-core` and glue in `apps/pdf-editor-mobile/src/nexus`. Design
   `docs/superpowers/specs/2026-11-18-nexus-design.md`, progress `docs/handoffs/nexus.md`.
 - **design-editor** (`apps/design-editor`) — offline Canva-style editor for the
@@ -55,7 +57,9 @@ Current apps:
   (Manifest V3, Mac and Windows, loaded unpacked). Its own local vault in the
   Android vault format (`packages/strongroom-core`, checked against the shared
   `vault-vectors.json`); fills and saves logins; signs in to sync with the phone
-  through the vault server (`tools/vault-api`, Phase 2, not deployed yet). Handoffs:
+  through the vault server (`tools/vault-api`, a Cloudflare Worker with D1 in the owner's
+  account, deployed by `.github/workflows/deploy-vault.yml`; Strongroom 0.2.0 added the phone's
+  side of sync). Handoffs:
   `docs/handoffs/strongroom-extension.md`, `docs/handoffs/strongroom-sync.md`.
 - **inflow** (`apps/inflow`, formerly Notebox) — personal notification, SMS and
   money archive: saves every notification, the SMS inbox and marked Gmail senders'
@@ -71,6 +75,20 @@ Current apps:
   `docs/superpowers/plans/2026-11-13-inflow-stage-*.md`, `docs/superpowers/plans/2026-11-18-inflow-ux.md`; progress:
   `docs/handoffs/inflow.md`. Autopilot (stage 1): turns what arrives into reply, bill, event and money suggestions with Run and Skip, shared with Deputy through a signature-guarded provider; design `docs/superpowers/specs/2026-11-18-autopilot-design.md`, progress `docs/handoffs/autopilot.md`. R44 has one exception: items from conversations the owner picked go to the AI for Autopilot only. Ask AI stays SMS and email only, and the ledger and bank parsing take only SMS and Gmail items, not pushes from chat or other apps.
 
+- **clipboard** (`apps/clipboard`) — the owner's own clipboard history, replacing Gboard's
+  1-hour delete. Android only, private Store only (`com.haroon.clipboard`). An
+  AccessibilityService (`CaptureService` in `modules/clipboard-core`) saves copies in the
+  background; a draggable bubble, shown only while the keyboard is open, pastes a clip into the
+  focused field; swipe deletes with Undo. Kotlin owns capture and storage; RN only renders.
+  Design: `docs/clipboard/DESIGN.md`; progress: `docs/handoffs/clipboard.md`.
+- **ai-hub** (`apps/ai-hub`, shown as "AI hub") — the one place on the phone where AI is
+  configured: Gemini and Groq keys (several per service, hand-over to the next key, sealed with
+  an Android Keystore key), a model per job, an on/off switch per app, and a
+  signature-protected bound service (AIDL v1) that Store apps will call. Android only, private
+  Store only (`com.haroon.aihub`, Store id `ai-hub`, brand `aihub`). Kotlin owns logic
+  (`modules/ai-hub-core`); RN only renders. No OpenAI, no Anthropic, no local LLM; Strongroom
+  never calls it. No other app calls it yet (each still holds its own keys). Plan:
+  `docs/ai-hub/PLAN.md`; progress: `docs/handoffs/ai-hub.md`.
 - **sieve** (`apps/sieve`) — the owner's ad blocker for Chrome (Manifest V3), sold through
   the Chrome Web Store (release state in `docs/handoffs/sieve.md`). Filter compiler and
   settings logic in `packages/sieve-core`; how to install and what is verified in
@@ -79,9 +97,9 @@ Current apps:
 - **autonomous-browsing** (`apps/autonomous-browsing`) — Electron desktop app for
   chat-authored browser automation routines, copied in from
   `~/Documents/browser-automation` on 2026-11-17 (tracked files only, no git
-  history; the original stays standalone). A normal pnpm workspace member now;
-  its `CLAUDE.md` and `AI_CONTEXT.md` still say `npm run`, read that as
-  `pnpm --filter autonomous-browsing <script>`.
+  history; the original stays standalone). A normal pnpm workspace member now; its
+  `CLAUDE.md`, `README.md` and `AI_CONTEXT.md` use `pnpm --filter autonomous-browsing <script>`;
+  its other docs (`ARCHITECTURE.md`, `evals/`, `docs/`) may still say `npm run`, read that the same way.
 
 - **text-ocr** (`packages/text-ocr`) — Expo local module shared by Design Editor mobile and
   PDF Editor: Tesseract (English, bundled `tessdata_fast`) plus a clipboard copy, Android only.
@@ -104,7 +122,7 @@ Planned (do not scaffold yet):
 - Tokens live in `src/tokens.ts` only. After changing them run
   `pnpm --filter @apps-hub/ui build:css`; the test fails if `web/tokens.css` is
   stale, and it enforces WCAG AA contrast for every brand in light and dark.
-- Brands: netlens, opentunnel, store, pdf, design, deputy, strongroom, inflow, clipboard, halo, sieve (hue + accent from each
+- Brands: netlens, opentunnel, store, pdf, design, deputy, strongroom, inflow, clipboard, halo, sieve, aihub (hue + accent from each
   launcher icon). Light and dark follow the system.
 - Copy is sentence case, active voice; errors say what happened and how to fix
   it. No emoji icons, no ALL-CAPS labels.
