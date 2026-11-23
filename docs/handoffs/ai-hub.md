@@ -84,6 +84,11 @@ with `cd-engineering-tools:parallel-agents-coord` (section 0 loop with the ledge
   one KeyVault and HubStore per process. Final gates from a clean export of 1a748a04: pnpm test
   2463/0, typecheck clean, JVM 101/101, assembleDebug OK.
 
+- 2026-11-23: merged origin/main into ai-hub (fa4f4a63; frozen install, ui 29/29, ai-hub 7/7,
+  typecheck, JVM 101/101 + assembleDebug); pushed; PR #66 opened
+  (https://github.com/haroongondal/apps-hub/pull/66). Release APK built (signed CN=Haroon Mukhtar,
+  O=apps-hub); phone install waits in the coord queue.
+
 ## Current state + exact next step
 
 P1 (hub and providers) is complete on `ai-hub` at 1a748a04. Nothing has run on a phone yet.
