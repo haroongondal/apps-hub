@@ -4,6 +4,16 @@
     <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
     <item name="colorPrimary">@color/colorPrimary</item>
     <item name="android:statusBarColor">#ffffff</item>
+    <item name="alertDialogTheme">@style/AppAlertDialog</item>
+    <item name="android:alertDialogTheme">@style/AppAlertDialog</item>
+  </style>
+  <style name="AppAlertDialog" parent="Theme.AppCompat.DayNight.Dialog.Alert">
+    <item name="buttonBarButtonStyle">@style/AppAlertButton</item>
+    <item name="android:buttonBarButtonStyle">@style/AppAlertButton</item>
+  </style>
+  <style name="AppAlertButton" parent="Widget.AppCompat.Button.ButtonBar.AlertDialog">
+    <item name="android:textAllCaps">false</item>
+    <item name="textAllCaps">false</item>
   </style>
   <style name="Theme.App.SplashScreen" parent="AppTheme">
     <item name="android:windowBackground">@drawable/ic_launcher_background</item>
