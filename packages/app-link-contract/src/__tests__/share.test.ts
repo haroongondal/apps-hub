@@ -55,12 +55,13 @@ test('refuses a bad path', () => {
 });
 
 test('refuses sensitive column names and non snake_case names', () => {
-  const bad = ['password', 'user_passwd', 'client_secret', 'access_token', 'otp', 'pin', 'pin_code', 'pins', 'seed', 'seed_phrase', 'cvv', 'cvc', 'api_key', 'apikey', 'private_key', 'credential_id', 'session_id', 'cookie_jar', 'mnemonic'];
+  const bad = ['password', 'user_passwd', 'client_secret', 'access_token', 'otp', 'pin', 'pin_code', 'pins', 'seed', 'seed_phrase', 'cvv', 'cvc', 'api_key', 'apikey', 'private_key', 'credential_id', 'session_id', 'cookie_jar', 'mnemonic',
+    'code', 'codes', 'status_code', 'key', 'keys', 'item_key', 'pass', 'pass_hash', 'pwd', 'user_pwd', 'passcode', 'lock_passcode', 'auth', 'auth_state', 'iban', 'bank_iban', 'card', 'card_id', 'cardnumber', 'cardnumber_last4'];
   for (const name of bad) {
     assert.equal(isSensitiveName(name), true, name);
     assert.throws(() => defineShare<{ [k: string]: number }>()({ ...base, columns: { [name]: 'long' } } as never), /sensitive/, name);
   }
-  for (const name of ['pinned', 'spinner', 'speed', 'title', 'item_id', 'due_at', 'keyboard']) assert.equal(isSensitiveName(name), false, name);
+  for (const name of ['pinned', 'spinner', 'speed', 'title', 'item_id', 'due_at', 'keyboard', 'decode_ms', 'barcode', 'passage', 'author', 'discard', 'cardinal', 'monkey', 'status_id']) assert.equal(isSensitiveName(name), false, name);
   for (const name of ['Title', '1a', 'a-b', 'a b', '']) {
     assert.throws(() => defineShare<{ [k: string]: number }>()({ ...base, columns: { [name]: 'long' } } as never), /snake_case/, name);
   }
