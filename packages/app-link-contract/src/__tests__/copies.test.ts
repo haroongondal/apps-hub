@@ -6,9 +6,11 @@ import test from 'node:test';
 
 const repo = path.resolve(import.meta.dirname, '../../../..');
 const canonicalDir = path.join(repo, 'packages/app-link-contract/android');
-const FILES = ['AppLinkGuard.kt', 'AppLinkCaller.kt'];
+const FILES = ['AppLinkGuard.kt', 'AppLinkCaller.kt', 'AppLinkActivityCaller.kt'];
+// Inflow serves a share, so it must carry the provider guard; the activity check is copied in only by apps with a link action.
+const INFLOW_FILES = ['AppLinkGuard.kt', 'AppLinkCaller.kt'];
 // Modifiers and indentation are allowed, so `internal object AppLinkGuard` is still found (and then reported as differing).
-const OBJECT = /^\s*(?:\w+\s+)*object (AppLinkGuard|AppLinkCaller)\b/m;
+const OBJECT = /^\s*(?:\w+\s+)*object (AppLinkGuard|AppLinkCaller|AppLinkActivityCaller)\b/m;
 const PACKAGE_LINE = /^package [a-z][\w.]*$/;
 const SKIP = new Set(['node_modules', 'build', '.git', '.gradle', '.cxx', '.worktrees']);
 
@@ -58,6 +60,11 @@ test('copyProblems accepts a good copy and names every kind of bad one', () => {
   assert.match(copyProblems(guard, guard.replace('object AppLinkGuard', 'class AppLinkGuardX'), 'AppLinkGuard.kt').join(), /no plain `object AppLinkGuard`/);
   const caller = canonical('AppLinkCaller.kt');
   assert.match(copyProblems(caller, guard, 'AppLinkCaller.kt').join(), /expected AppLinkGuard\.kt/);
+  const activity = canonical('AppLinkActivityCaller.kt');
+  const moved = activity.replace('package applink', 'package expo.modules.deputyagent.applink');
+  assert.deepEqual(copyProblems(activity, moved, 'AppLinkActivityCaller.kt'), []);
+  assert.match(copyProblems(activity, moved.replace('&& signaturesMatch', '|| signaturesMatch'), 'AppLinkActivityCaller.kt').join(), /differs from the canonical/);
+  assert.match(copyProblems(activity, moved, 'AppLinkCaller.kt').join(), /expected AppLinkActivityCaller\.kt/);
 });
 
 test('walk includes a file named like a canonical one even when its object line is altered', () => {
@@ -67,9 +74,11 @@ test('walk includes a file named like a canonical one even when its object line 
     fs.writeFileSync(path.join(dir, 'a/AppLinkGuard.kt'), 'package x\nclass Renamed\n');
     fs.writeFileSync(path.join(dir, 'a/Other.kt'), 'package x\ninternal object AppLinkCaller {}\n');
     fs.writeFileSync(path.join(dir, 'a/Unrelated.kt'), 'package x\nobject Something\n');
+    fs.writeFileSync(path.join(dir, 'a/AppLinkActivityCaller.kt'), 'package x\nclass Renamed\n');
+    fs.writeFileSync(path.join(dir, 'a/Gate.kt'), 'package x\n  object AppLinkActivityCaller {}\n');
     const found: string[] = [];
     walk(dir, found);
-    assert.deepEqual(found.map((f) => path.basename(f)).sort(), ['AppLinkGuard.kt', 'Other.kt']);
+    assert.deepEqual(found.map((f) => path.basename(f)).sort(), ['AppLinkActivityCaller.kt', 'AppLinkGuard.kt', 'Gate.kt', 'Other.kt']);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -79,7 +88,7 @@ const copies: string[] = [];
 walk(path.join(repo, 'apps'), copies);
 
 test('Inflow carries a copy of each canonical file', () => {
-  for (const f of FILES) assert.ok(copies.some((c) => c.includes(`${path.sep}inflow${path.sep}`) && path.basename(c) === f), `no Inflow copy of ${f}`);
+  for (const f of INFLOW_FILES) assert.ok(copies.some((c) => c.includes(`${path.sep}inflow${path.sep}`) && path.basename(c) === f), `no Inflow copy of ${f}`);
 });
 
 test('every copy under apps/ (found by content) equals the canonical file apart from its package line', () => {
