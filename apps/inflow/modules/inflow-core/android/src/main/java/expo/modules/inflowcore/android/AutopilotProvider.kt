@@ -6,13 +6,14 @@ import android.content.UriMatcher
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import expo.modules.inflowcore.applink.AppLinkCaller
 import expo.modules.inflowcore.core.Suggestion
 import expo.modules.inflowcore.core.SuggestionMoves
 import expo.modules.inflowcore.core.SuggestionState
 
 /**
  * What Deputy (and later Halo) may ask Inflow, guarded by the signature permission AUTOPILOT for read and write (see the manifest);
- * this class checks nothing more. It reads through StoreHolder, whose key needs no unlock, so it answers while Inflow's own screens are
+ * AppLinkCaller then also checks the caller's signing certificate. It reads through StoreHolder, whose key needs no unlock, so it answers while Inflow's own screens are
  * locked or the app is not running. When the store cannot be opened it answers with an empty cursor or 0.
  *
  *  - `suggestions` (query): the SuggestionRow columns of the contract, no summaries or text. `?state=waiting,started` picks states, default waiting.
@@ -26,7 +27,13 @@ class AutopilotProvider : ContentProvider() {
 
   private fun store(): SqlItemStore? = context?.let { StoreHolder.get(it).getOrNull() }
 
+  /** The manifest permission is the first gate; this also needs the caller's signing certificate to be Inflow's own (a null context is denied). */
+  private fun requireSibling() {
+    if (context?.let { AppLinkCaller.allowed(it) } != true) throw SecurityException("Not a signed sibling app")
+  }
+
   override fun query(uri: Uri, projection: Array<String>?, selection: String?, selectionArgs: Array<String>?, sortOrder: String?): Cursor {
+    requireSibling()
     val store = runCatching { store() }.getOrNull()
     return when (matcher.match(uri)) {
       LIST -> MatrixCursor(ROW_COLUMNS).also { c ->
@@ -45,6 +52,7 @@ class AutopilotProvider : ContentProvider() {
 
   /** Rows changed: 0 for an unknown id, any value but started, done or skipped, an illegal move (SuggestionState.movableFrom decides) or a store that will not open. */
   override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<String>?): Int {
+    requireSibling()
     if (matcher.match(uri) != ONE) return 0
     val state = when (values?.getAsString("state")) {
       "started" -> SuggestionState.STARTED
