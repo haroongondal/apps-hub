@@ -288,6 +288,78 @@ export interface HealthStatus {
   heartRate: boolean;
 }
 
+// Times are "HH:MM" local wall time, days ISO weekdays (Monday 1 to Sunday 7), dates YYYY-MM-DD. A stopped medicine (active false) keeps its history and has no new doses.
+export interface Medicine {
+  id: number;
+  name: string;
+  dose: string;
+  times: string[];
+  days: number[];
+  startDay: string;
+  endDay: string | null;
+  active: boolean;
+  createdAt: number;
+}
+
+// id null creates a new medicine.
+export interface MedicineInput {
+  id: number | null;
+  name: string;
+  dose: string;
+  times: string[];
+  days: number[];
+  startDay: string;
+  endDay: string | null;
+}
+
+// pending: due and still open to mark; upcoming: not due yet. A dose is open until 4 hours after it is due or the medicine's next dose (windowEnd).
+export type DoseStatus = 'taken' | 'skipped' | 'missed' | 'pending' | 'upcoming';
+
+export interface DoseRow {
+  medicineId: number;
+  dueAt: number;
+  windowEnd: number;
+  status: DoseStatus;
+  markedAt: number | null; // null until marked
+}
+
+// Counts only. percent = taken / (taken + skipped + missed), null when nothing counted yet; streak in days. medicineId null = all medicines.
+export interface AdherenceRow {
+  medicineId: number | null;
+  taken: number;
+  skipped: number;
+  missed: number;
+  percent: number | null;
+  streak: number;
+}
+
+export interface AdherenceReport {
+  period: 'week' | 'month';
+  fromDay: string;
+  toDay: string;
+  all: AdherenceRow;
+  medicines: AdherenceRow[];
+}
+
+export type JournalTag = 'headache' | 'tired' | 'stomach ache' | 'cough' | 'pain' | 'anxious' | 'low mood' | 'poor sleep' | 'dizzy' | 'nausea';
+
+export interface JournalEntry {
+  id: number;
+  at: number;
+  mood: number; // 1 to 5
+  tags: JournalTag[];
+  note: string; // at most 2000 characters
+}
+
+// id null creates a new entry.
+export interface JournalInput {
+  id: number | null;
+  at: number;
+  mood: number;
+  tags: JournalTag[];
+  note: string;
+}
+
 export interface InflowCoreApi {
   getStatus(): Status;
   openNotificationAccess(): void;
@@ -406,6 +478,26 @@ export interface InflowCoreApi {
   refreshHealth(days: number): Promise<{ ok: boolean; message: string | null; days: number }>;
   // fromDay <= day <= toDay (YYYY-MM-DD), oldest first; days without data have no row.
   healthDays(fromDay: string, toDay: string): HealthDay[];
+  // Stopped medicines last.
+  medicines(): Medicine[];
+  // Returns the problem in plain words, or null once saved. Works without the notification permission.
+  saveMedicine(m: MedicineInput): string | null;
+  stopMedicine(id: number): void;
+  // Also deletes its dose history.
+  deleteMedicine(id: number): void;
+  // fromDay <= day <= toDay (at most a year), oldest first: every logged dose plus the scheduled ones not logged yet.
+  dosesBetween(fromDay: string, toDay: string): DoseRow[];
+  // Also later, as a correction (a missed dose can become taken); up to an hour before it is due. Returns the problem in plain words, or null once saved.
+  markDose(medicineId: number, dueAt: number, status: 'taken' | 'skipped'): string | null;
+  // week = the last 7 days, month = the last 30, today included.
+  adherence(period: 'week' | 'month'): AdherenceReport;
+  // False when notifications (askNotifications asks) or the medicine reminders channel are off.
+  medicineRemindersAllowed(): boolean;
+  // Newest first, at < beforeAt (null for the first page), at most limit (200 at most).
+  journalList(beforeAt: number | null, limit: number): JournalEntry[];
+  // Returns the problem in plain words, or null once saved.
+  saveJournal(entry: JournalInput): string | null;
+  deleteJournal(id: number): void;
   addListener(event: 'onCaptured' | 'onSuggestions', listener: (e: { count: number }) => void): { remove(): void };
 }
 

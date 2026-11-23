@@ -26,12 +26,15 @@ import expo.modules.inflowcore.android.GmailSync
 import expo.modules.inflowcore.android.HealthConnectReader
 import expo.modules.inflowcore.android.InflowListener
 import expo.modules.inflowcore.android.MediaStore
+import expo.modules.inflowcore.android.MedicineReminders
 import expo.modules.inflowcore.android.ReportNotifier
 import expo.modules.inflowcore.android.SqlHealthStore
 import expo.modules.inflowcore.android.SqlReportStore
 import expo.modules.inflowcore.android.SqlMediaIndex
 import expo.modules.inflowcore.android.SmsImporter
 import expo.modules.inflowcore.android.SqlItemStore
+import expo.modules.inflowcore.android.SqlJournalStore
+import expo.modules.inflowcore.android.SqlMedicineStore
 import expo.modules.inflowcore.android.SqlLedgerStore
 import expo.modules.inflowcore.android.SqlSuggestionStore
 import expo.modules.inflowcore.android.SuggestionNotifier
@@ -47,6 +50,8 @@ import expo.modules.inflowcore.core.Categories
 import expo.modules.inflowcore.core.Edits
 import expo.modules.inflowcore.core.GmailPolicy
 import expo.modules.inflowcore.core.HealthAggregate
+import expo.modules.inflowcore.core.Journal
+import expo.modules.inflowcore.core.Medicines
 import expo.modules.inflowcore.core.Prices
 import expo.modules.inflowcore.core.RawMedia
 import expo.modules.inflowcore.core.Retention
@@ -57,6 +62,7 @@ import expo.modules.inflowcore.core.toRow
 import kotlinx.coroutines.Dispatchers
 import java.io.File
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeParseException
 import kotlinx.coroutines.withContext
 
@@ -119,6 +125,7 @@ class InflowCoreModule : Module() {
         sendSuggestions()
       }
       StoreHolder.backfill(context)
+      MedicineReminders.rearm(context)
       // Decrypted copies handed to a viewer live only until the next start; files no row names are swept (rolled-back saves).
       InflowListener.executor.execute {
         runCatching {
@@ -623,6 +630,70 @@ class InflowCoreModule : Module() {
 
     Function("healthDays") { fromDay: String, toDay: String ->
       SqlHealthStore(store().db).days(day(fromDay), day(toDay)).map { it.toMap() }
+    }
+
+    // Stopped medicines last; they keep their history.
+    Function("medicines") { ->
+      SqlMedicineStore(store()).medicines().map { it.toMap() }
+    }
+
+    // Create (id null) or update; returns the problem in plain words, or null once saved. Saving works without the notification permission.
+    Function("saveMedicine") { m: Map<String, Any?> ->
+      val s = store()
+      s.inTransaction { Medicines.save(SqlMedicineStore(s), m, System.currentTimeMillis()) }.also { if (it == null) MedicineReminders.rearm(context) }
+    }
+
+    Function("stopMedicine") { id: Long ->
+      SqlMedicineStore(store()).stop(id)
+      MedicineReminders.cancelAll(context, id)
+      MedicineReminders.rearm(context)
+    }
+
+    // The medicine and its whole dose history, in one transaction.
+    Function("deleteMedicine") { id: Long ->
+      SqlMedicineStore(store()).delete(id)
+      MedicineReminders.cancelAll(context, id)
+      MedicineReminders.rearm(context)
+    }
+
+    Function("dosesBetween") { fromDay: String, toDay: String ->
+      val from = LocalDate.parse(day(fromDay))
+      val to = LocalDate.parse(day(toDay))
+      if (to.isBefore(from) || to.isAfter(from.plusDays(366))) throw CodedException("BAD_RANGE", "Pick a range of at most a year, ending on or after its start.", null)
+      Medicines.dosesBetween(SqlMedicineStore(store()), from, to, System.currentTimeMillis(), ZoneId.systemDefault()).map { it.toMap() }
+    }
+
+    // Taken or skipped, also later as a correction; returns the problem in plain words, or null once saved.
+    Function("markDose") { medicineId: Long, dueAt: Long, status: String ->
+      val s = store()
+      s.inTransaction { Medicines.markFromApp(SqlMedicineStore(s), medicineId, dueAt, status, System.currentTimeMillis(), ZoneId.systemDefault()) }.also {
+        if (it == null) {
+          MedicineReminders.cancel(context, medicineId, dueAt)
+          MedicineReminders.rearm(context)
+        }
+      }
+    }
+
+    Function("adherence") { period: String ->
+      if (period != "week" && period != "month") throw CodedException("BAD_PERIOD", "Pick week or month.", null)
+      Medicines.adherence(SqlMedicineStore(store()), period, System.currentTimeMillis(), ZoneId.systemDefault()).toMap()
+    }
+
+    // False when notifications or the medicine reminders channel are off: medicines still save, reminders cannot show. askNotifications asks.
+    Function("medicineRemindersAllowed") { ->
+      MedicineReminders.allowed(context)
+    }
+
+    Function("journalList") { beforeAt: Long?, limit: Int ->
+      Journal.list(SqlJournalStore(store()), beforeAt, limit).map { it.toMap() }
+    }
+
+    Function("saveJournal") { entry: Map<String, Any?> ->
+      Journal.save(SqlJournalStore(store()), entry, System.currentTimeMillis())
+    }
+
+    Function("deleteJournal") { id: Long ->
+      SqlJournalStore(store()).delete(id)
     }
   }
 }
