@@ -51,6 +51,9 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
   private var fade = 0f
   private var lastDrawMs = -1L
 
+  /** Minimum gap between frames in ms; 0 draws every display frame. */
+  var frameIntervalMs = 0L
+
   private val times = FloatArray(WINDOW)
   private val sorted = FloatArray(WINDOW)
   private var timeCount = 0
@@ -65,7 +68,7 @@ class EdgeView(ctx: Context, private val source: Source) : View(ctx) {
       fade = if (fadeStartMs < 0) 1f else 1f - (now - fadeStartMs).toFloat() / FADE_MS
       invalidate()
       if (fade > 0f || events.active(now)) {
-        choreographer.postFrameCallback(this)
+        if (frameIntervalMs > 0) choreographer.postFrameCallbackDelayed(this, frameIntervalMs) else choreographer.postFrameCallback(this)
       } else {
         looping = false
         ProbeLog.log(context, "frame", "loop stopped frames=$frames p95=${fmt(p95())}")

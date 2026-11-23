@@ -23,6 +23,8 @@ object AodGestures {
 object AodScreen {
   const val WAKE_MS = 10_000L
   const val POCKET_END_MS = 3_000L
+  // shortcut: the always-on edge draws about 15 frames a second, not every display frame (it blurs a full-screen layer each frame, which kept the GPU busy for the whole timeout); upgrade if it looks choppy on the owner's phone.
+  const val EDGE_FRAME_MS = 66L
   private const val NEAR_CM = 5f
 
   fun timeoutMs(themeMs: Long?, wake: Boolean): Long? = if (wake) WAKE_MS else themeMs

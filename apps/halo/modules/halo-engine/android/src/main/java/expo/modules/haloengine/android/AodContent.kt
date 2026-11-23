@@ -75,7 +75,7 @@ class AodContent(
   private val content = FrameLayout(ctx)
   private val photo = ImageView(ctx).apply { scaleType = ImageView.ScaleType.CENTER_CROP; visibility = GONE }
   private val dim = View(ctx).apply { setBackgroundColor(Color.BLACK); alpha = theme.dim.toFloat(); visibility = GONE }
-  private val edge = EdgeView(ctx, source)
+  private val edge = EdgeView(ctx, source).apply { frameIntervalMs = AodScreen.EDGE_FRAME_MS }
   private val face = FaceView(ctx)
   private val dots = DotsView(ctx).apply { if (!settings.aod.dots.on) visibility = GONE }
   private val icons = LinearLayout(ctx).apply { gravity = Gravity.CENTER }
