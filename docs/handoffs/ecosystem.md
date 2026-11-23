@@ -170,6 +170,8 @@ Risks: no phone check has ever run and everything depends on Store-signed builds
 
 - E2 Nexus DONE (eco/nexus 599b1486): pdf-editor-mobile 92 (78), knowledge-core 110, library-core 106, lint ok, Metro bundle ok, gradle (audio-chunks 22, ai-hub-client 12) assembleDebug ok, merged manifest has AI_HUB permission+queries; hub first, own key second; embeds checked for dims 512 AND model gemini-embedding-001 (else own key); maxTokens 8192 on hub chat; hub errors mapped to Nexus kinds (busy->rate, timeout/provider-error/cancelled->server, too-large/invalid->bad_request); `files/ai_source`. Open: copy says "No API key" when hub says not-allowed and no own keys; offline through the hub burns retry attempts (hub reports offline as provider-error); security-engineer review pending; phone not run.
 
+- Strongroom health row DONE (eco/strongroom 98e4762b): strongroom ts 111 (109), gradle 669 (661), app-link-contract 133; `health` served always (null accessibility/listener: Strongroom uses an autofill service, no accessibility service or listener exists), expiry stays opt-in; heartbeat only on app open or autofill connect (can look stale); phone not run.
+
 ## Security findings handled during the build (automated reviews)
 
 - ai-hub-client did not verify the hub identity (package squatting): fixed, 60875260 on eco/ai-hub.
