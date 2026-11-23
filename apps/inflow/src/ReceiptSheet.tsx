@@ -4,7 +4,7 @@ import { Group, Notice, Row, Sheet, Text, space } from '@apps-hub/ui';
 import InflowCore, { type Txn } from 'inflow-core';
 import TextOcr, { allText } from 'text-ocr';
 import { exactTime } from './format.ts';
-import { RECEIPT_NONE, RECEIPT_PHOTOS_DENIED, RECEIPT_SAVE_ERROR, RECEIPT_SEARCH_ERROR } from './messages.ts';
+import { RECEIPT_NONE, RECEIPT_PHOTOS_DENIED, RECEIPT_SAVE_ERROR, RECEIPT_SEARCH_ERROR, RECEIPT_UNREADABLE } from './messages.ts';
 import { MAX_PHOTOS_READ, matchReceipt, receiptWindow, type ReceiptMatch } from './receipts.ts';
 
 interface Found { uri: string; takenAt: number; match: ReceiptMatch }
@@ -52,11 +52,12 @@ export function ReceiptSheet({ txn, onClose, onAttached }: { txn: Txn | null; on
           const ocr = await TextOcr.recognizeFile(p.uri);
           out.push({ ...p, match: matchReceipt(allText(ocr.lines), t) });
         } catch {
-          // A photo that cannot be read is left out of the list, not an error for the whole search.
+          // One photo that cannot be read is left out; only when none can be read is it an error.
         }
         setProgress(i + 1);
       }
       if (!alive.current) return;
+      if (out.length === 0) return fail(RECEIPT_UNREADABLE);
       setFound(out.sort((a, b) => b.match.score - a.match.score || b.takenAt - a.takenAt));
       setPhase('done');
     } catch {

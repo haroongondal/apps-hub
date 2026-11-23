@@ -42,7 +42,8 @@ fun exifMatrix(orientation: Int): Matrix? {
 /** Reads a picture at a size Tesseract can take, upright. `open` is called once per pass (bounds, pixels, EXIF). */
 fun decodeUpright(open: () -> InputStream?): Bitmap {
   val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-  open()?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: throw IllegalArgumentException("Cannot open the picture")
+  // decodeStream returns null when only the bounds are read, so a null result cannot mean "could not open".
+  (open() ?: throw IllegalArgumentException("Cannot open the picture")).use { BitmapFactory.decodeStream(it, null, bounds) }
   if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IllegalArgumentException("The data is not a picture Android can read")
   val opts = BitmapFactory.Options().apply { inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight) }
   val bmp = open()?.use { BitmapFactory.decodeStream(it, null, opts) } ?: throw IllegalArgumentException("Cannot decode the picture")
