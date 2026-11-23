@@ -151,6 +151,11 @@ Risks: no phone check has ever run and everything depends on Store-signed builds
 
 - P1-A DONE on eco/base (240b8f40): app-link-contract 133 tests (91), autopilot-contract 5, inflow ts 91; `appHealthShare(app)` + fixtures, `AppLinkActivityCaller.kt` canonical (+ copies.test, mutation proven), `PROPOSE_TASK` and `ADD_TODO` via defineAction (ADD_TODO extra is `dueAt`, camelCase only), `CHANGED_PING` constant; README sections. Health authorities: pdf-editor->pdfeditor (this is Nexus), open-tunnel->opentunnel, design-editor->designeditor, ai-hub->aihub, netlens->com.haroon.netlens.applink, inflow keeps legacy com.haroon.inflow.autopilot, deputy/strongroom/clipboard/halo com.haroon.<id>.applink. (The worker wrongly said Nexus lives in design-editor-mobile; Nexus is pdf-editor-mobile.) Open: no health-row validator for readers (P2 Store should validate at its boundary); CHANGED receiver permission not audited; README "Signing finding (c)" still says ai-hub has no release path (stale, docs pass). AGENTS.md text for app-link-contract is in eco-work/agents-md-paragraphs.md.
 
+## Security findings handled during the build (automated reviews)
+
+- ai-hub-client did not verify the hub identity (package squatting): fixed, 60875260 on eco/ai-hub.
+- Share intakes copying the receiver's OWN files (confused deputy via own FileProvider URIs, authority userinfo bypass): Design Editor was NOT safe and is fixed in ba7cb514 on eco/design-editor (content:// only, strict authority parse, own-authority list + resolver check, /proc/self/fd private-path check, JVM 316, app 120, media-core 184). Gaps: the /proc check is skipped if /proc is unreadable (does not fail closed; security-engineer to decide), and the app's FileProvider `<paths>` were not narrowed (library resources). Nexus intake: fix requested from the nexus-w2 phase agent (pending). Deputy takes text only, not affected.
+
 ## Open owner decisions (collect here, ask once at the end)
 
 1. Strongroom holds the shared AI keys (E2): the prompt says yes, but AI hub (#66, on main) already owns a Keystore key ring for Gemini and Groq with a signature-guarded bound service. (my call, pending owner) E2 will build on the AI hub, NOT duplicate a key store in Strongroom, unless the owner says Strongroom must hold them. Needs owner confirmation.
