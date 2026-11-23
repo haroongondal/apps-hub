@@ -73,14 +73,14 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | F2 | Rollback | eco/base + eco/store | todo |
 | F3 | Docs drift | eco/base | todo |
 | F4 | Halo m1/m2 minors | eco/halo | built + gated (0f60b826, 4ece59ca); halo-engine 165 tests, notch-island 109, assembleDebug ok, halo ts 126 pass; phone not run |
-| F5 | Deputy reliability (verify and close; code is on main) | eco/deputy | todo |
+| F5 | Deputy reliability (verify and close; code is on main) | eco/deputy | built + gated (1eef0a8b, e7b5b9b0): only gap was Retry-After as an HTTP date; Deputy gradle 267 -> 274 tests, 0 fail; deputy ts 12 pass; phone not run |
 | F6 | Nexus shortcuts | eco/nexus | todo |
 | E1 | app-link-contract | eco/base | todo |
 | E2 | AI keys once (Strongroom) | eco/strongroom + readers | todo (needs E1; owner decision) |
 | E3 | Share targets | eco/nexus, eco/design-editor, eco/deputy | todo (needs E1) |
 | E4 | Store health hub | eco/store | todo (needs E1) |
 | C1 | Clipboard smart actions + phase 1 | eco/clipboard | todo |
-| C2 | Deputy repeating tasks | eco/deputy | todo |
+| C2 | Deputy repeating tasks | eco/deputy | in progress |
 | C3 | TunnelWall (firewall already on main) | eco/tunnelwall | todo |
 | C4 | HomeNet | eco/homenet | todo |
 | C5 | Strongroom health report | eco/strongroom | todo |
