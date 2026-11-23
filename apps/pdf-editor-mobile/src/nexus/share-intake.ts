@@ -256,6 +256,12 @@ export function parseInbox(text: string): SharedPayload | null {
   }
 }
 
+// The manifest may name a copy that is gone (an add moved it, a sweep removed it): that row shows as unreadable and is never added.
+export const onlyExisting = (p: SharedPayload, exists: (file: string) => boolean): SharedPayload => ({
+  ...p,
+  files: p.files.map((f) => (f.file !== null && !exists(f.file) ? { ...f, file: null, refused: 'unreadable' } : f)),
+});
+
 export function sizeLabel(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;

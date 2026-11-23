@@ -5,7 +5,7 @@ import { addPdf } from '../library/files';
 import { entryName } from '../library/paths';
 
 import { addNote, addSharedAudio, addSharedPhoto } from './capture';
-import { isInboxId, parseInbox, staleInboxes, type IntakeDeps, type SharedPayload } from './share-intake';
+import { isInboxId, onlyExisting, parseInbox, staleInboxes, type IntakeDeps, type SharedPayload } from './share-intake';
 
 // ShareActivity (modules/audio-chunks) writes here: Paths.document is the app's filesDir. Nothing indexes this folder.
 const inboxRoot = () => new Directory(Paths.document, 'shared-inbox');
@@ -17,7 +17,9 @@ function inboxDir(id: string): Directory {
 
 export async function readInbox(id: string): Promise<SharedPayload | null> {
   const manifest = new File(inboxDir(id), 'inbox.json');
-  return manifest.exists ? parseInbox(await manifest.text()) : null;
+  if (!manifest.exists) return null;
+  const payload = parseInbox(await manifest.text());
+  return payload && onlyExisting(payload, (name) => inboxFile(id, name).exists);
 }
 
 export function inboxFile(id: string, name: string): File {

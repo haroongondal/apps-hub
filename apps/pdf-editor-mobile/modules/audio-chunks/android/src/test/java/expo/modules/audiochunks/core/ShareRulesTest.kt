@@ -78,6 +78,72 @@ class ShareRulesTest {
     assertFalse(ShareRules.allowedScheme(null))
   }
 
+  private val own = "com.haroon.pdfeditor.pdfscan.fileprovider"
+  private val ownAuthorities = listOf(own, "com.haroon.pdfeditor.FileSystemFileProvider")
+  private val ownDirs = listOf("/data/user/0/com.haroon.pdfeditor", "/data/data/com.haroon.pdfeditor/files", "/data/user_de/0/com.haroon.pdfeditor/")
+
+  private fun allowed(
+    authority: String?,
+    host: String? = authority,
+    scheme: String? = "content",
+    resolved: String? = null,
+    path: String? = null,
+  ) = ShareRules.sourceAllowed(scheme, authority, host, ownAuthorities, "com.haroon.pdfeditor", resolved, path, ownDirs)
+
+  @Test
+  fun acceptsAnotherAppsProvider() {
+    assertTrue(allowed("com.whatsapp.provider.media", resolved = "com.whatsapp"))
+    assertTrue(allowed("media", resolved = "com.android.providers.media.module"))
+  }
+
+  @Test
+  fun refusesNexussOwnProviders() {
+    assertFalse(allowed(own))
+    assertFalse(allowed("com.haroon.pdfeditor.FileSystemFileProvider"))
+    assertFalse(allowed("COM.Haroon.PdfEditor.PdfScan.FileProvider"))
+    assertFalse(allowed("some.alias", resolved = "com.haroon.pdfeditor"))
+  }
+
+  @Test
+  fun refusesUserInfoUserIdAndPortForms() {
+    assertFalse(allowed("evil@$own", host = own))
+    assertFalse(allowed("0@$own", host = own))
+    assertFalse(allowed("0@com.whatsapp.provider.media", host = "com.whatsapp.provider.media"))
+    assertFalse(allowed("$own:80", host = own))
+    assertFalse(allowed("com.whatsapp.provider.media:1", host = "com.whatsapp.provider.media"))
+  }
+
+  @Test
+  fun refusesMissingAuthorityEmptyHostAndOtherSchemes() {
+    assertFalse(allowed(null))
+    assertFalse(allowed(""))
+    assertFalse(allowed("media", host = ""))
+    assertFalse(allowed("media", host = null))
+    assertFalse(allowed("media", scheme = "file"))
+    assertFalse(allowed("", scheme = "file", path = "/sdcard/x.pdf"))
+  }
+
+  @Test
+  fun refusesADescriptorInNexussOwnStorage() {
+    assertFalse(allowed("media", path = "/data/user/0/com.haroon.pdfeditor/databases/library.db"))
+    assertFalse(allowed("media", path = "/data/data/com.haroon.pdfeditor/files/library/abc/audio.m4a"))
+    assertFalse(allowed("media", path = "/data/user/0/com.haroon.pdfeditor"))
+    assertFalse(allowed("media", path = "/data/user_de/0/com.haroon.pdfeditor/shared_prefs/x.xml"))
+    assertFalse(allowed("media", path = "/storage/emulated/0/../../../data/user/0/com.haroon.pdfeditor/shared_prefs/keys.xml"))
+    // A symlink already resolved by the kernel, so the canonical string is what arrives.
+    assertFalse(allowed("media", path = "/data/data/com.haroon.pdfeditor/files/shared-inbox/x/0"))
+  }
+
+  @Test
+  fun acceptsADescriptorOutsideNexussStorage() {
+    assertTrue(allowed("media", path = "/storage/emulated/0/Download/report.pdf"))
+    assertTrue(allowed("media", path = "/data/user/0/com.haroon.pdfeditorx/files/a"))
+    assertTrue(allowed("media", path = "/data/data/com.haroon.pdfeditor/filesx/a"))
+    assertTrue(allowed("media", path = "pipe:[48213]"))
+    assertTrue(allowed("media", path = null))
+    assertFalse(allowed(own, path = null))
+  }
+
   @Test
   fun stopsCopyingPastTheCap() {
     val data = ByteArray(200_000) { it.toByte() }

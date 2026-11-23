@@ -8,6 +8,7 @@ import {
   isInboxId,
   isSafeLink,
   MAX_FILE_BYTES,
+  onlyExisting,
   parseInbox,
   SAY,
   staleInboxes,
@@ -229,6 +230,23 @@ test('the inbox file is read strictly', () => {
   assert.equal(tricky.text, null);
   assert.deepEqual(tricky.files.map((f) => [f.file, f.sniffed, f.refused]), [[null, 'pdf', 'unreadable'], ['1', 'unknown', 'unreadable'], [null, 'unknown', 'unreadable']]);
   assert.ok(classifyShared(tricky).every((e) => !e.ok));
+});
+
+test('a copy that is no longer in the inbox is shown as unreadable and never added', async () => {
+  const p = share({ files: [file({ file: '0', sniffed: 'pdf', mime: 'application/pdf' }), file({ file: '1', sniffed: 'pdf', mime: 'application/pdf' })] });
+  const left = onlyExisting(p, (name) => name === '1');
+  assert.deepEqual(left.files.map((f) => [f.file, f.refused]), [[null, 'unreadable'], ['1', null]]);
+  assert.deepEqual(classifyShared(left).map((e) => e.ok), [false, true]);
+  const added: string[] = [];
+  const deps: IntakeDeps<string> = {
+    addPdf: async (f) => (added.push(f), f),
+    addImage: async (f) => f,
+    addAudio: async (f) => f,
+    addNote: async (t) => t,
+    discard: () => {},
+  };
+  await intakeShared(onlyExisting(p, () => false), deps);
+  assert.deepEqual(added, []);
 });
 
 test('inbox ids and the start-up sweep', () => {

@@ -3,9 +3,13 @@ package expo.modules.audiochunks.android
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
+import android.system.Os
 import android.widget.Toast
 import androidx.core.content.IntentCompat
 import expo.modules.audiochunks.core.ShareRules
@@ -50,8 +54,9 @@ object ShareInbox {
       val files = JSONArray()
       if (streams.size <= ShareRules.MAX_ITEMS) {
         var budget = ShareRules.MAX_SHARE_BYTES
+        val own = OwnStorage(context)
         streams.forEachIndexed { i, uri ->
-          val entry = copyOne(context, uri, dir, i.toString(), minOf(ShareRules.MAX_ITEM_BYTES, budget))
+          val entry = copyOne(context, own, uri, dir, i.toString(), minOf(ShareRules.MAX_ITEM_BYTES, budget))
           budget -= entry.optLong("size", 0)
           files.put(entry)
         }
@@ -80,16 +85,19 @@ object ShareInbox {
       listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
     }
 
-  private fun copyOne(context: Context, uri: Uri, dir: File, name: String, cap: Long): JSONObject {
+  private fun copyOne(context: Context, own: OwnStorage, uri: Uri, dir: File, name: String, cap: Long): JSONObject {
     val entry = JSONObject().put("file", JSONObject.NULL).put("name", "Shared file").put("mime", "").put("sniffed", "unknown").put("size", 0).put("refused", JSONObject.NULL)
-    if (!ShareRules.allowedScheme(uri.scheme) || ownProvider(context, uri)) return entry.put("refused", "not-allowed")
+    if (!own.allows(uri, null)) return entry.put("refused", "not-allowed")
     val out = File(dir, name)
     try {
       val resolver = context.contentResolver
       entry.put("mime", resolver.getType(uri) ?: "")
       entry.put("name", ShareRules.displayName(nameOf(context, uri)))
-      val size = resolver.openInputStream(uri)?.use { input -> FileOutputStream(out).use { ShareRules.copyCapped(input, it, cap) } }
-        ?: return entry.put("refused", "unreadable")
+      // The same call openInputStream makes, kept open so the bytes copied come from the descriptor whose path was checked.
+      val size = resolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
+        if (!own.allows(uri, realPath(afd.parcelFileDescriptor))) return entry.put("refused", "not-allowed")
+        afd.createInputStream().use { input -> FileOutputStream(out).use { ShareRules.copyCapped(input, it, cap) } }
+      } ?: return entry.put("refused", "unreadable")
       if (size < 0) {
         out.delete()
         return entry.put("refused", "too-big")
@@ -110,8 +118,35 @@ object ShareInbox {
       }
     }.getOrNull() ?: uri.lastPathSegment
 
-  private fun ownProvider(context: Context, uri: Uri): Boolean {
-    val authority = uri.authority ?: return true
-    return context.packageManager.resolveContentProvider(authority, 0)?.packageName == context.packageName
+  private fun realPath(fd: ParcelFileDescriptor): String? = runCatching { Os.readlink("/proc/self/fd/${fd.fd}") }.getOrNull()
+
+  private class OwnStorage(private val context: Context) {
+    private val pm = context.packageManager
+    private val pkg = context.packageName
+
+    private val authorities: List<String> by lazy {
+      val flags = PackageManager.GET_PROVIDERS or PackageManager.MATCH_DISABLED_COMPONENTS
+      val info = if (Build.VERSION.SDK_INT >= 33) {
+        pm.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(flags.toLong()))
+      } else {
+        @Suppress("DEPRECATION")
+        pm.getPackageInfo(pkg, flags)
+      }
+      info.providers.orEmpty().flatMap { it.authority.orEmpty().split(';') }
+    }
+
+    private val dirs: List<String> by lazy {
+      listOf(context.dataDir, context.filesDir, context.cacheDir, context.noBackupFilesDir, context.codeCacheDir,
+        context.createDeviceProtectedStorageContext().dataDir, File("/data/data", pkg))
+        .flatMap { listOf(it.absolutePath, runCatching { it.canonicalPath }.getOrNull()) }
+        .filterNotNull()
+    }
+
+    fun allows(uri: Uri, realPath: String?): Boolean {
+      val authority = uri.authority
+      @Suppress("DEPRECATION")
+      val resolved = authority?.let { runCatching { pm.resolveContentProvider(it, 0)?.packageName }.getOrNull() }
+      return ShareRules.sourceAllowed(uri.scheme, authority, uri.host, authorities, pkg, resolved, realPath, dirs)
+    }
   }
 }

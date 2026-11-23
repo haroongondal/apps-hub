@@ -1,7 +1,9 @@
 package expo.modules.audiochunks.core
 
+import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.Locale
 import java.util.Random
 
 object ShareRules {
@@ -55,6 +57,30 @@ object ShareRules {
 
   // file:// (or any scheme but content://) could point Nexus at its own private files.
   fun allowedScheme(scheme: String?): Boolean = scheme.equals("content", ignoreCase = true)
+
+  // Nexus copies in its own process, so its own providers and its own storage must never be the source.
+  fun sourceAllowed(
+    scheme: String?,
+    authority: String?,
+    host: String?,
+    ownAuthorities: Collection<String>,
+    ownPackage: String,
+    resolvedPackage: String?,
+    realPath: String?,
+    ownDirs: Collection<String>,
+  ): Boolean {
+    if (!allowedScheme(scheme)) return false
+    // ContentResolver strips a "0@" user-id prefix when it resolves, so '@' or a ':' port could slip past the checks below.
+    if (authority.isNullOrEmpty() || '@' in authority || ':' in authority || host.isNullOrEmpty()) return false
+    val asked = authority.lowercase(Locale.ROOT)
+    if (ownAuthorities.any { it.trim().lowercase(Locale.ROOT) == asked }) return false
+    if (resolvedPackage == ownPackage) return false
+    if (realPath == null || !realPath.startsWith("/")) return true
+    val path = File(realPath).normalize().path
+    return ownDirs.filter { it.startsWith("/") }.map { File(it).normalize().path.trimEnd('/') }.none { dir ->
+      dir.isNotEmpty() && (path == dir || path.startsWith("$dir/"))
+    }
+  }
 
   fun copyCapped(input: InputStream, output: OutputStream, cap: Long): Long {
     val buffer = ByteArray(64 * 1024)
