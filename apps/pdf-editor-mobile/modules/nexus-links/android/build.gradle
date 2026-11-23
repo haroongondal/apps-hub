@@ -19,6 +19,6 @@ android {
 
 dependencies {
   testImplementation("junit:junit:4.13.2")
-  // Reads the shared JSON fixtures in tests only; the app already ships this version through ai-hub-client (Apache-2.0).
-  testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+  // Parses today.json and reads the shared JSON fixtures in tests; the app already ships this version through ai-hub-client (Apache-2.0).
+  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
 }

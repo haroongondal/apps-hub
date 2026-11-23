@@ -6,7 +6,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "test": "node --test src/__tests__/shares.test.ts src/__tests__/manifest.test.ts",
+    "test": "node --test src/__tests__/shares.test.ts src/__tests__/manifest.test.ts src/__tests__/provided.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
