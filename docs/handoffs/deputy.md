@@ -1680,7 +1680,91 @@ the calling app are needed, a debug build fails closed):
 7. Open Deputy, close it, read `health` again: `last_seen_at` is the time Deputy
    opened; reading it again does not change it.
 
+### E2 (2026-11-24): AI through AI hub, feasibility (ecosystem wave, branch `eco/deputy`)
+
+**Result: not feasible with AI hub apiVersion 2. Deputy stays on its own keys.**
+No `HubProvider` was written and `ai-hub-client` was not added to Deputy (it would
+only add the AI_HUB permission and a `<queries>` entry for nothing). Read from the
+hub code merged into this branch (`apps/ai-hub/modules/ai-hub-core/android/.../core/Request.kt`,
+`Provider.kt`, `Jobs.kt`, `android/Worker.kt`) and the client (`packages/ai-hub-client`).
+
+What carries over: the hub's chat and vision jobs take Deputy's messages as they
+are (`Msg(role, json)` passed through untouched: `system`, `user` with `image_url`
+parts, `assistant` with `tool_calls`, `tool` with `tool_call_id`) and its tools
+(`name`, `description`, `parameters`). Size is not the blocker either.
+
+What blocks it (each one is enough):
+
+1. **The reply drops the assistant message.** `Results.chat` returns only `text`,
+   `toolCalls[{id, name, args}]`, `usage` and `model`. Deputy replays the
+   provider's own assistant object (SPEC §9.3): Gemini's thought signature rides in
+   `tool_calls[].extra_content.google.thought_signature`, OpenRouter's in
+   `reasoning_details`, and SPEC §9.3 says never to rebuild that message from
+   parsed fields. The hub builds `ModelTurn.raw` but does not send it back.
+2. **A screenshot step fails on a default hub.** The hub's chat model is Groq
+   `openai/gpt-oss-120b` (`Job.CHAT` default), which reads no images (Deputy's
+   `Settings.KNOWN` marks it `images = false`), and `Provider.chat` turns off the
+   Gemini fallback when any message has an image
+   (`fallback = if (messages.any { it.hasImage }) null else …`). Only the owner
+   moving the hub's chat model to Gemini would make it work, and the client can't
+   see that choice (`AiHubClient` exposes `apiVersion()` only). The vision job
+   (Gemini, image as a file put into the last user message, which is where
+   Deputy's screenshot sits) needs an attachment on every call, so steps without a
+   screenshot (most steps) would go to the chat model: two models inside one run,
+   with `look`/`tap_at` offered to a model that can't see.
+3. **No `tool_choice` and no `reasoning_effort`.** `Worker.execute` calls
+   `provider.chat(choice, messages, r.tools, r.maxTokens)`; the request has no
+   field for either. Deputy sends `tool_choice: "required"` (GPT-OSS answered in
+   plain text without it, 0.2.1 phone test, and then failed on
+   `output_parse_failed`) and `reasoning_effort: "low"` for GPT-OSS (steps near a
+   second).
+4. **Spend caps can't be counted before a call.** The hub picks the model, so
+   Deputy can't know the price per token up front; its per-task and daily caps
+   are counted with its own model's prices.
+
+Sizes (measured 2026-11-24 with Deputy's own `ProviderJson.request`, a throwaway
+JVM test, deleted after): system prompt 2,335 bytes; tool list 7,837 bytes;
+step 1 with a full 8,000-character screen and no image 18,375 bytes; each later
+step adds about 439 bytes (the shortened screen, a `tap` call, a one-line result;
+Gemini thought signatures not included, their length is unmeasured); step 100
+(the step cap's maximum) 61,836 bytes. A screenshot is 720 px wide JPEG quality 70
+(`AgentLoop.SHOT_WIDTH`, `DeviceAdapter.screenshot`); a stand-in 720×1600 frame
+came to 81,610 bytes, 108,817 as base64 (a real phone screen is unmeasured and
+likely larger, an estimated 150 to 330 KB as base64). Only the newest screen keeps
+its screenshot, so a step is at most about 62 KB plus one image: within the
+512 KB request cap. The Binder parcel carries the JSON as UTF-16, so the
+parcel is about twice that, still under the 1 MB limit for a typical step.
+
+**Hub changes that would make it feasible** (an apiVersion 3, owner's call):
+(a) the chat reply also returns the provider's assistant message as `raw` (role,
+content, tool_calls, reasoning_details); (b) a chat request may say
+`toolChoice: "required"`; (c) a run can be pinned to a model that reads images:
+either a chat request with `image_url` parts goes to the vision model (Gemini)
+instead of failing on GPT-OSS, or the vision job accepts inline image parts with
+no attachment, so every step of a run reaches the same model. The reply already
+names the `model`, so Deputy could price a step after it ran.
+
+Decisions:
+- (my call) Not forced: no hub path in Deputy until (a) to (c) exist. A rebuilt
+  assistant message (no thought signatures) and a model that changes mid-run are
+  the kind of silent failure a phone agent should not have.
+- (my call) `ai_source` needs no new code: P1-B's `LinkRows.health` already
+  reports `own` when a key is saved for the chosen address and `none` otherwise
+  (`LinkRowsTest`), which is the whole truth while Deputy has no hub path.
+- (my call) For a future hub path: Deputy's model, effort and prices apply on the
+  own-key path only; a hub run's cost would be counted with the `model` the reply
+  names when Deputy knows its prices, else shown as "not counted" and the caps
+  fall back to steps and minutes.
+
+Untouched: the confirmation gate, the untrusted-text block, the model prompt, the
+provider and the key vault. No code changed in this step.
+
 ## Current state + exact next step
+
+- **2026-11-24, E2 AI hub feasibility**: not feasible with hub apiVersion 2
+  (session log "E2"); Deputy stays on its own keys, no code changed. Next: the
+  owner decides whether AI hub gets the apiVersion 3 changes (a) to (c) listed
+  there; then a `HubProvider` with a `HubFirst(hub, own)` wrapper can follow.
 
 - **2026-11-24, P1-B proposed tasks and link shares** built on `eco/deputy` (session
   log "P1-B"), not released. Next: security-engineer review of the untrusted-context
