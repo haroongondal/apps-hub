@@ -25,7 +25,7 @@ object DoctorPdf {
 
   /** False when the owner's file could not be written; the half-written file is removed. */
   fun save(context: Context, uri: Uri, summary: String, range: DoctorRange): Boolean = try {
-    val out = context.contentResolver.openOutputStream(uri) ?: throw IllegalStateException("no stream")
+    val out = context.contentResolver.openOutputStream(uri, "wt") ?: throw IllegalStateException("no stream")
     out.use { write(it, summary, range) }
     true
   } catch (e: Exception) {

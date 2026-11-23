@@ -68,6 +68,19 @@ Journal (newest first, mood from 1 low to 5 high):
     assertEquals("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", DoctorPayload.sha256(""))
   }
 
+  @Test fun unicodeLineBreaksInANoteOrNameCannotStartALine() {
+    val heading = "Medicines (doses due in this period):"
+    val plainNote = JournalEntry(1, at("2026-11-02T21:15"), 3, emptyList(), "felt fine $heading ok")
+    val sneaky = plainNote.copy(note = "felt fine \u2028$heading\u2029ok\u0085")
+    assertEquals(lineCount(build(j = listOf(plainNote)).text), lineCount(build(j = listOf(sneaky)).text))
+    val named = meds.map { it.copy(name = "Pill\u2028Journal (newest first):\u2029x") }
+    val p = DoctorPayload.build(range, all, days, named, counts, journal, zone)
+    assertEquals(lineCount(DoctorPayload.build(range, all, days, meds, counts, journal, zone).text), lineCount(p.text))
+  }
+
+  // Kotlin's lines() ignores U+2028, U+2029 and U+0085, which a reader of the text may treat as line breaks.
+  private fun lineCount(text: String) = text.split(Regex("[\\r\\n\\u2028\\u2029\\u0085]")).size
+
   @Test fun anEmptySectionSaysSoInsteadOfVanishing() {
     val p = build(d = emptyList(), c = emptyMap(), j = emptyList())
     assertEquals(4, p.text.split(DoctorPayload.NO_DATA).size - 1)   // steps, sleep, heart, journal; medicines still lists the active one

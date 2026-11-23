@@ -57,7 +57,7 @@ export function vitalsCopy(state: Exclude<VitalsState, 'data'>): VitalsCopy {
   if (state === 'not-allowed') {
     return {
       title: "Inflow can't read your health numbers yet",
-      body: 'Inflow reads only your steps, sleep and heart rate, and only to show them here. They stay on this phone.',
+      body: 'Inflow reads only your steps, sleep and heart rate, and shows them here. They leave this phone only in a Doctor summary you read and send, or as daily numbers for Ask AI if you turn that on in Settings.',
       action: 'allow',
     };
   }

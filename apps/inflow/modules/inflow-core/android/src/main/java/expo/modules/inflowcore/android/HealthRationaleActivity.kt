@@ -27,7 +27,7 @@ class HealthRationaleActivity : Activity() {
     val TEXT = listOf(
       "Inflow reads your steps, sleep and heart rate from Health Connect. It never writes anything there.",
       "Inflow keeps one total for each day: steps, minutes asleep, and the average and lowest heart rate. They are saved encrypted on this phone only.",
-      "Nothing leaves this phone unless you tap Doctor summary, read the exact text that would be sent, and confirm it.",
+      "Your numbers leave this phone in two ways only. A Doctor summary, after you read the exact text and tap Send. And, only if you turn it on in Settings, Ask AI gets daily step, sleep and heart rate numbers, never your journal or medicine names.",
       "Inflow is not a medical device. It gives no medical advice and does not diagnose anything.",
       "You can take this access away at any time in Health Connect.",
     ).joinToString("\n\n")

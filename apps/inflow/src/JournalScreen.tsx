@@ -49,7 +49,7 @@ export function JournalScreen({ onBack }: { onBack: () => void }) {
         <Header title="Journal" trailing={<Button label="New entry" variant="secondary" size="sm" onPress={() => setEditing('new')} />} />
       </View>
       {error !== null && <Notice tone="danger">{error}</Notice>}
-      {loaded && error === null && entries.length === 0 && <Empty title="No entries yet" body="Write down how you feel and anything you notice. Entries stay on this phone." />}
+      {loaded && error === null && entries.length === 0 && <Empty title="No entries yet" body="Write down how you feel and anything you notice. Entries stay on this phone unless you put them in a Doctor summary and send it." />}
       {groups.map((g) => (
         <Group key={g.day} title={g.title}>
           {g.entries.map((e) => (
