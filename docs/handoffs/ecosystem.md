@@ -88,7 +88,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | C7 | Design Editor brand kit from image | eco/design-editor | built + gated (4fc78b36): engine 48/48, design-editor-mobile 105/105, design-editor 9/9 (unit), mobile tsc ok; engine is classic JS (image-maths.js), ui WCAG helper is private to its test so formula is duplicated and pinned by known values; UI is DOM code never run in a window or phone |
 | C8 | Nexus offline OCR (on main; verify, audit, fill gaps) | eco/nexus | todo |
 | C9 | autonomous-browsing dry run | eco/autonomous-browsing | built + gated (d4ab7da7): vitest 514 pass (500 before), tsc clean; real-window check not run; open: assert probe waits default timeout on missing targets |
-| V1-V5 | Vitals in Inflow | eco/inflow | V1-V4 in progress (phase vitals); V5 waits for E1 final |
+| V1-V5 | Vitals in Inflow | eco/inflow | V1-V4 built + gated + security-reviewed (tip 87b98f3e; carry-in signing fix 2121f7a1): Inflow gradle 670 tests (572), inflow ts 142 (91), autopilot-contract 6, ui 29, release 35; health permissions READ_STEPS/SLEEP/HEART_RATE only; doctor summary uses a Groq key from AI settings (not Inflow default Gemini); health in Ask AI off by default; PDF via file picker only; eco/base merged into eco/inflow (3ea669e1). V5 NOT built (R15): the Inflow `briefing` share in P2 replaces it (next dose from Medicines.occurrences/tick, steps from SqlHealthStore.days; medicine lines private=1; never journal, heart rate or sleep). Phone not run; docs/handoffs/inflow.md has no Vitals section yet (docs pass) |
 | M1-M5 | Minutes in Nexus | eco/nexus | M1,M2,M5,M4 + E3-Nexus + C8 in progress (phase nexus-w2); M3 needs E1/B3 |
 | B1-B6 | Cross-app wave 3 | various | todo |
 
