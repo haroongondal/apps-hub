@@ -140,6 +140,10 @@ Open naming: app name, package (com.haroon.<name>), Store release id, @apps-hub/
   only, so Metro never resolves it.
 - Inflow `briefing` column: the brief said `private`, but `defineShare` refuses that name, so Halo reads `personal` (my call; Inflow's
   P2 must use the same name or tell Halo). Inflow has not declared the share on eco/inflow yet.
+- Provider identity (security finding from the coordinator, applied to every reader): before each query
+  `PackageManager.resolveContentProvider(authority, 0).packageName` must equal the owner from a fixed table (`core/ProviderTrust.kt`:
+  netlens -> app.netlens, opentunnel -> com.opentunnel.open_tunnel_vpn, deputy, strongroom, inflow, pdfeditor) and
+  `checkSignatures(own package, owner) == SIGNATURE_MATCH`; otherwise no query and no data (`ProviderTrustTest`, 6 tests).
 - When Halo re-reads (`core/LinkTiming.kt` RereadGate): a CHANGED ping reads 5 s after the first ping of a burst; app open (getStatus)
   and service start read at once; never two reads within a minute; the always-on screen re-reads only data older than 15 minutes when
   it opens (my call: this replaces a 15-minute worker, so there is no timer and no wake-up).
@@ -167,9 +171,9 @@ Open naming: app name, package (com.haroon.<name>), Store release id, @apps-hub/
   `isNotificationListenerAccessGranted(HaloListener)`, ai_source `none`, `last_seen_at` = heartbeat written on service start and app
   open (SharedPreferences `applink`); a query never writes. `HaloHealthTest` binds it to `app-health.share.json`.
 - Battery: no new loops; the pulse timer exists only while a pulse is wanted; the always-on rows redraw only when the snapshot changes.
-- Gates (2026-11-24): halo-engine JVM 199 (165), notch-island 128 (127), assembleDebug ok, merged manifest `auditManifest` = [];
+- Gates (2026-11-24): halo-engine JVM 205 (165), notch-island 128 (127), assembleDebug ok, merged manifest `auditManifest` = [];
   halo ts 137 (127), typecheck clean, app-link-contract 133. Mutations checked: private filter, freshness, receiver extras, settle
-  time, guard copy drift, share fixture drift all fail their tests.
+  time, guard copy drift, share fixture drift and the provider signer check all fail their tests.
 - Not checked on the phone (needs Store-signed builds of Halo, TunnelWall, HomeNet, Inflow and Deputy; debug builds refuse each other):
   1. Halo: with every switch in Your other apps off, the Diagnostics event log shows no `links read` line; turn one on and one appears.
   2. TunnelWall Shields on, join a Wi-Fi not in the trusted list: within ~5 s of its ping the edge pulses red, again after 5 min;
