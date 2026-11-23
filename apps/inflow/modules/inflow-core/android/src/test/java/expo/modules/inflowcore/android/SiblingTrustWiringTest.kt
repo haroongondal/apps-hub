@@ -18,6 +18,22 @@ class SiblingTrustWiringTest {
     assertTrue("a refusal must say not installed", body.substring(gate).substringBefore("\n").contains("return \"Deputy isn't installed.\""))
   }
 
+  @Test fun payWithDeputyChecksTheTargetBeforeItLaunchesAndStartsAnExplicitIntent() {
+    val module = text("InflowCoreModule.kt")
+    val body = module.substringAfter("AsyncFunction(\"proposeToDeputy\")").substringBefore("Function(\"skipSuggestion\")")
+    val gate = body.indexOf("ProposeToDeputy.run({ AppLinkTarget.trustedActivity(activity, intent) }, { proposeTask.launch(start) })")
+    assertTrue("no trust check in proposeToDeputy", gate >= 0)
+    assertTrue("proposeTask.launch must only be inside the gated run", Regex("""proposeTask\.launch\(""").findAll(module).count() == 1)
+    val bill = text("android/ProposeBill.kt")
+    assertTrue("the intent must be explicit", bill.contains("Intent(ProposeToDeputy.ACTION).setPackage(SiblingPackages.DEPUTY)"))
+    assertTrue("the checked intent and the started one come from the same start", body.contains("val intent = start.intent()") && bill.contains("createIntent(context: Context, input: ProposeStart): Intent = input.intent()"))
+    // The start is an Activity result launch only: no plain startActivity for Deputy, no service, no broadcast.
+    assertTrue(!bill.contains("startActivity(") && !bill.contains("createChooser"))
+    // The gate is inside the pure seam too: run refuses before it calls launch.
+    val seam = text("core/ProposeToDeputy.kt").substringAfter("inline fun run(")
+    assertTrue(seam.indexOf("if (!trusted()) return UNAVAILABLE") in 0 until seam.indexOf("launch()"))
+  }
+
   @Test fun theBriefingAsksTheTargetBeforeEveryReaderQuery() {
     assertTrue(text("android/BriefingSource.kt").contains("AppLinkTarget.trustedProvider(context, authority, pkg)"))
     val readers = text("core/BriefingReaders.kt")

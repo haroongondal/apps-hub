@@ -487,6 +487,8 @@ export interface InflowCoreApi {
   // The owner's Run: the text to tell them when it could not start, null once it did.
   runSuggestion(id: number): string | null;
   skipSuggestion(id: number): void;
+  // Pay with Deputy (Android; Inflow has no iOS build): hands a waiting bill to Deputy's draft screen. 'handed_over' = it is in Deputy's draft, 'cancelled' = the owner backed out, 'unavailable' = Deputy is not on this phone or is not the Deputy with our signature. Rejects with BILL_GONE when the bill is no longer waiting.
+  proposeToDeputy(suggestionId: number): Promise<'handed_over' | 'cancelled' | 'unavailable'>;
   autopilotSettings(): AutopilotSettings;
   // Bad values fall back to their defaults; a picked chat without a "|" is dropped.
   setAutopilotSettings(settings: AutopilotSettings): void;

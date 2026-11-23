@@ -19,6 +19,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.inflowcore.android.AiConfig
 import expo.modules.inflowcore.android.AiRunner
+import expo.modules.inflowcore.applink.AppLinkTarget
 import expo.modules.inflowcore.android.BriefingRefresh
 import expo.modules.inflowcore.android.DigestAlarm
 import expo.modules.inflowcore.android.Lock
@@ -31,6 +32,8 @@ import expo.modules.inflowcore.android.HealthConnectReader
 import expo.modules.inflowcore.android.InflowListener
 import expo.modules.inflowcore.android.MediaStore
 import expo.modules.inflowcore.android.MedicineReminders
+import expo.modules.inflowcore.android.ProposeBill
+import expo.modules.inflowcore.android.ProposeStart
 import expo.modules.inflowcore.android.ReportNotifier
 import expo.modules.inflowcore.android.SqlHealthStore
 import expo.modules.inflowcore.android.SqlReportStore
@@ -63,6 +66,8 @@ import expo.modules.inflowcore.core.HealthAggregate
 import expo.modules.inflowcore.core.Journal
 import expo.modules.inflowcore.core.Medicines
 import expo.modules.inflowcore.core.Prices
+import expo.modules.inflowcore.core.ProposeReply
+import expo.modules.inflowcore.core.ProposeToDeputy
 import expo.modules.inflowcore.core.RawMedia
 import expo.modules.inflowcore.core.Retention
 import expo.modules.inflowcore.core.SuggestionMoves
@@ -109,6 +114,7 @@ class InflowCoreModule : Module() {
 
   private lateinit var healthPermissions: AppContextActivityResultLauncher<ArrayList<String>, Set<String>>
   private lateinit var createPdf: AppContextActivityResultLauncher<String, Uri?>
+  private lateinit var proposeTask: AppContextActivityResultLauncher<ProposeStart, ProposeReply>
 
   private fun day(text: String): String =
     try {
@@ -152,6 +158,7 @@ class InflowCoreModule : Module() {
     RegisterActivityContracts {
       healthPermissions = registerForActivityResult(HealthConnectReader.PermissionContract())
       createPdf = registerForActivityResult(DoctorPdf.CreateContract())
+      proposeTask = registerForActivityResult(ProposeBill.Contract())
     }
 
     OnDestroy {
@@ -604,6 +611,15 @@ class InflowCoreModule : Module() {
     // The owner's Run: returns what to tell them, or null once it started.
     Function("runSuggestion") { id: Long ->
       SuggestionNotifier.run(context, id).also { sendSuggestions() }
+    }
+
+    // Pay with Deputy: a bill goes to Deputy's draft screen (PROPOSE_TASK, startActivityForResult from this Activity). Nothing is paid here.
+    AsyncFunction("proposeToDeputy") Coroutine { id: Long ->
+      val activity = appContext.currentActivity ?: return@Coroutine ProposeToDeputy.UNAVAILABLE
+      val start = withContext(Dispatchers.IO) { val items = store(); ProposeBill.start(items, SqlSuggestionStore(items.db), id, System.currentTimeMillis(), ZoneId.systemDefault()) }
+        ?: throw CodedException("BILL_GONE", "That bill is no longer waiting.", null)
+      val intent = start.intent()
+      ProposeToDeputy.run({ AppLinkTarget.trustedActivity(activity, intent) }, { proposeTask.launch(start) })
     }
 
     Function("skipSuggestion") { id: Long ->

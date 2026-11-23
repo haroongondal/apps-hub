@@ -152,6 +152,15 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     ).use { c -> if (c.moveToFirst()) AutopilotItem(c.getLong(0), c.getString(1), c.getString(2), c.str(3), c.str(4), c.getString(5), c.getLong(6)) else null }
   }
 
+  // Pay with Deputy: the sender's name only, never the message text, and nothing from an app on the never-share list.
+  fun billPayee(itemId: Long): String? {
+    val never = AutopilotAccess.NEVER_SHARE.toTypedArray()
+    return query(
+      "SELECT COALESCE(n.name, i.sender) FROM items i LEFT JOIN sender_names n ON n.sender_key = i.sender_key WHERE i.id = ? AND i.pkg NOT IN (${never.joinToString(",") { "?" }})",
+      itemId, *never,
+    ).use { c -> if (c.moveToFirst()) c.str(0) else null }
+  }
+
   override fun hasOwnMessageAfter(pkg: String, conversationKey: String, at: Long): Boolean =
     query("SELECT 1 FROM items WHERE pkg = ? AND conversation_key = ? AND lower(sender) = 'you' AND posted_at > ? LIMIT 1", pkg, conversationKey, at).use { it.moveToFirst() }
 
