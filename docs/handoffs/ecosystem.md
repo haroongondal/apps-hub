@@ -70,7 +70,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | Id | Item | Branch | Status |
 |---|---|---|---|
 | F1 | Release guard | eco/base | built + gated (468c9211); invariant-reviewed; @apps-hub/release 35 pass |
-| F2 | Rollback | eco/base + eco/store | release side built + gated (38891621, 0cf71791, 8b8db0d1; manifest 8 pass); dry-run only, real rollback needs owner go; Store row in progress on eco/store |
+| F2 | Rollback | eco/base + eco/store | release side built + gated (38891621, 0cf71791, 8b8db0d1; manifest 8 pass); dry-run only, real rollback needs owner go; Store row built (6510ec60: "Build from commit <7 hex>", store tests 11 pass, store gradle ok); no rollback flag in the manifest so no "rolled back" line (needs an optional field, not built) |
 | F3 | Docs drift | eco/base | built (e07c189f, 9f63af1a, f2e72447, 8e9a93bd); more AGENTS.md text pending from apps |
 | F4 | Halo m1/m2 minors | eco/halo | built + gated (0f60b826, 4ece59ca); halo-engine 165 tests, notch-island 109, assembleDebug ok, halo ts 126 pass; phone not run |
 | F5 | Deputy reliability (verify and close; code is on main) | eco/deputy | built + gated (1eef0a8b, e7b5b9b0): only gap was Retry-After as an HTTP date; Deputy gradle 267 -> 274 tests, 0 fail; deputy ts 12 pass; phone not run |
@@ -87,8 +87,8 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | C6 | Halo progress ring | eco/halo | built + gated (c230590a): halo-engine 165, notch-island 127, halo ts 127 pass, assembleDebug ok; default ON (my call); phone not run; security-engineer look pending |
 | C7 | Design Editor brand kit from image | eco/design-editor | todo |
 | C8 | Nexus offline OCR (on main; verify, audit, fill gaps) | eco/nexus | todo |
-| C9 | autonomous-browsing dry run | eco/autonomous-browsing | todo |
-| V1-V5 | Vitals in Inflow | eco/inflow | todo |
+| C9 | autonomous-browsing dry run | eco/autonomous-browsing | in progress |
+| V1-V5 | Vitals in Inflow | eco/inflow | V1-V4 in progress (phase vitals); V5 waits for E1 final |
 | M1-M5 | Minutes in Nexus | eco/nexus | M1,M2,M5,M4 + E3-Nexus + C8 in progress (phase nexus-w2); M3 needs E1/B3 |
 | B1-B6 | Cross-app wave 3 | various | todo |
 
@@ -115,6 +115,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 
 ## Session log
 
+- 2026-11-23: F-base, F6 done; Store row done; Nexus wave 2, Vitals, C9, C2, C3 running. Disk is tight (about 30 GiB): COMMON.md now tells agents to delete their worktree build output when done.
 - 2026-11-23: session interrupted; five agents resumed. F4 done. C6 started.
 - 2026-11-23: recon done (Reuse table). F-base and E1 phase agents dispatched.
 - 2026-11-23: start-up read, fetched origin, created `eco/base` and eleven app worktrees, installed deps, baseline gates green (above).
