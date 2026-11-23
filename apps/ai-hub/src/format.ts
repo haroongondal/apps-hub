@@ -42,9 +42,12 @@ export function usageText(app: Pick<AppInfo, 'calls' | 'inputTokens' | 'outputTo
 }
 
 // Expo wraps a native failure as "Call to function ... rejected.\n→ Caused by: <message>".
+// Native errors arrive as "java.lang.IllegalArgumentException: <message>"; people should only see the message.
+const JVM_CLASS = /^\s*(?:[a-z_][\w$]*\.)+[A-Z][\w$]*(?:Exception|Error):\s*/;
+
 export function plainError(e: unknown): string {
   const text = e instanceof Error ? e.message : String(e);
-  const cause = text.split('Caused by: ').pop() ?? text;
+  const cause = (text.split('Caused by: ').pop() ?? text).replace(JVM_CLASS, '');
   return cause.trim() || 'Something went wrong. Try again.';
 }
 
