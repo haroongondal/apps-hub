@@ -1,6 +1,7 @@
 package expo.modules.inflowcore.android
 
 import expo.modules.inflowcore.core.AutopilotSettings
+import expo.modules.inflowcore.core.BriefingShare
 import expo.modules.inflowcore.core.HealthTables
 import expo.modules.inflowcore.core.Suggestion
 import expo.modules.inflowcore.core.SuggestionKind
@@ -116,7 +117,7 @@ class VitalsSqlWiringTest {
     // The provider's column arrays live in a private companion next to a UriMatcher (an Android stub here), so they are read from its source.
     val columns = code(file("AutopilotProvider.kt")).filter { it.contains("_COLUMNS = arrayOf(") }.flatMap { Regex("\"([^\"]+)\"").findAll(it).map { m -> m.groupValues[1] }.toList() }
     assertEquals(15, columns.size)
-    val names = row.keys + columns + SuggestionKind.values().map { it.name } + AutopilotSettings().toMap().keys
+    val names = row.keys + columns + BriefingShare.COLUMNS + SuggestionKind.values().map { it.name } + AutopilotSettings().toMap().keys
     for (n in names) for (w in words) assertTrue("$n carries $w", !n.lowercase().contains(w))
   }
 }

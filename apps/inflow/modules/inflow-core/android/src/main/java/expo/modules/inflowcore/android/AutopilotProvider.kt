@@ -9,6 +9,9 @@ import android.net.Uri
 import androidx.core.app.NotificationManagerCompat
 import expo.modules.inflowcore.applink.AppLinkCaller
 import expo.modules.inflowcore.core.AppHealth
+import expo.modules.inflowcore.core.Briefing
+import expo.modules.inflowcore.core.BriefingShare
+import expo.modules.inflowcore.core.BriefingSnapshot
 import expo.modules.inflowcore.core.Suggestion
 import expo.modules.inflowcore.core.SuggestionMoves
 import expo.modules.inflowcore.core.SuggestionState
@@ -22,6 +25,8 @@ import expo.modules.inflowcore.core.SuggestionState
  *  - `suggestions/#` (query one row, update `state` to started, done or skipped).
  *  - `items/#` (query one source item; empty when Inflow refuses to share it: see AutopilotAccess).
  *  - `health` (query, one row for the Store: listener on or off, where the AI keys come from, the last heartbeat; no personal data, so no switch guards it, but the caller check still does).
+ *  - `briefing` (query, up to 20 lines of today's briefing, built in Inflow from structured data: see Briefing): rows only while 'Share my morning briefing' is on, otherwise an empty cursor. They come from the snapshot
+ *    BriefingRefresh keeps; the query never runs a reader, and starts at most one background rebuild when the snapshot is older than 10 minutes. The lines that come from the health-in-briefing switch are dropped while that switch is off.
  *
  * The projection, selection and sort arguments are ignored: the columns are fixed.
  */
@@ -55,6 +60,15 @@ class AutopilotProvider : ContentProvider() {
         val seen = if (store != null) runCatching { AppHealth.lastSeen(store) }.getOrNull() else null
         c.addRow(AppHealth.row(listener, keys, seen))
       }
+      BRIEFING -> MatrixCursor(BRIEFING_COLUMNS).also { c ->
+        val ctx = context
+        if (store != null && ctx != null) runCatching {
+          val shareOn = Briefing.on(store.meta(Briefing.SHARE_META))
+          val snapshot = BriefingSnapshot.parse(store.meta(BriefingSnapshot.META))
+          BriefingShare.serve(shareOn, Briefing.on(store.meta(Briefing.HEALTH_META)), snapshot).forEach { c.addRow(it) }
+          if (shareOn) BriefingRefresh.of(ctx).maybeRefresh(snapshot)
+        }
+      }
       else -> throw IllegalArgumentException("Unknown uri")
     }
   }
@@ -81,6 +95,7 @@ class AutopilotProvider : ContentProvider() {
     ONE -> "vnd.android.cursor.item/vnd.com.haroon.inflow.suggestion"
     ITEM -> "vnd.android.cursor.item/vnd.com.haroon.inflow.item"
     HEALTH -> "vnd.android.cursor.item/vnd.com.haroon.inflow.health"
+    BRIEFING -> "vnd.android.cursor.dir/vnd.com.haroon.inflow.briefing"
     else -> null
   }
 
@@ -103,11 +118,15 @@ class AutopilotProvider : ContentProvider() {
     const val ITEM = 3
     const val HEALTH = 4
     const val HEALTH_MAX_ROWS = 1
+    const val BRIEFING = 5
+    const val BRIEFING_MAX_ROWS = BriefingShare.MAX_ROWS
     const val LIST_LIMIT = 200
     // Equal to ROW_KEYS in packages/autopilot-contract/src/index.ts.
     val ROW_COLUMNS = arrayOf("id", "kind", "title", "item_id", "due_at", "state", "created_at", "expires_at")
     // Equal to appHealthShare('inflow') (packages/autopilot-contract/src/inflow-shares.ts).
     val HEALTH_COLUMNS = AppHealth.COLUMNS
+    // Equal to INFLOW_BRIEFING_SHARE (packages/autopilot-contract/src/inflow-shares.ts).
+    val BRIEFING_COLUMNS = BriefingShare.COLUMNS
     val ITEM_COLUMNS = arrayOf("id", "app", "pkg", "sender", "conversation", "text", "at")
     // lazy: android.jar's UriMatcher is a stub that throws on the JVM, and the share test reads the constants above.
     val matcher by lazy {
@@ -116,6 +135,7 @@ class AutopilotProvider : ContentProvider() {
         addURI(AUTHORITY, "suggestions/#", ONE)
         addURI(AUTHORITY, "items/#", ITEM)
         addURI(AUTHORITY, "health", HEALTH)
+        addURI(AUTHORITY, BriefingShare.PATH, BRIEFING)
       }
     }
   }

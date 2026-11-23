@@ -19,6 +19,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.inflowcore.android.AiConfig
 import expo.modules.inflowcore.android.AiRunner
+import expo.modules.inflowcore.android.BriefingRefresh
 import expo.modules.inflowcore.android.Lock
 import expo.modules.inflowcore.android.GmailClient
 import expo.modules.inflowcore.android.Gallery
@@ -744,6 +745,7 @@ class InflowCoreModule : Module() {
 
     Function("setHealthInBriefing") { on: Boolean ->
       if (on) store().setMeta(Briefing.HEALTH_META, "1") else store().deleteMeta(Briefing.HEALTH_META)
+      BriefingRefresh.settingChanged(context)
     }
 
     Function("briefingShare") { ->
@@ -752,6 +754,7 @@ class InflowCoreModule : Module() {
 
     Function("setBriefingShare") { on: Boolean ->
       if (on) store().setMeta(Briefing.SHARE_META, "1") else store().deleteMeta(Briefing.SHARE_META)
+      BriefingRefresh.settingChanged(context)
     }
   }
 }

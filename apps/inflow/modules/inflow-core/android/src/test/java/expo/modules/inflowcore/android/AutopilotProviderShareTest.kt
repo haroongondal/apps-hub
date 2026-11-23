@@ -1,6 +1,7 @@
 package expo.modules.inflowcore.android
 
 import java.io.File
+import expo.modules.inflowcore.core.BriefingShare
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -45,5 +46,31 @@ class AutopilotProviderShareTest {
     val declared = Regex("""\binflow: '([^']+)'""").find(src)?.groupValues?.get(1)
     assertEquals("com.haroon.inflow.autopilot", declared)
     assertEquals(declared, AutopilotProvider.AUTHORITY)
+  }
+
+  // The briefing share (INFLOW_BRIEFING_SHARE in inflow-shares.ts), on the same legacy authority.
+  private val briefing = File("../../../../../packages/autopilot-contract/fixtures/briefing.share.json").also {
+    assertTrue("fixture not found from ${File(".").absoluteFile}", it.isFile)
+  }.let { Json.parseToJsonElement(it.readText()).jsonObject }
+
+  @Test fun theBriefingColumnsEqualTheBriefingShareColumnsInOrder() =
+    assertEquals(briefing.getValue("columns").jsonArray.map { it.jsonPrimitive.content }, AutopilotProvider.BRIEFING_COLUMNS.toList())
+
+  @Test fun theBriefingRowCapEqualsTheShareCap() =
+    assertEquals(briefing.getValue("maxRows").jsonPrimitive.int, AutopilotProvider.BRIEFING_MAX_ROWS)
+
+  @Test fun theBriefingPathAndAuthorityAreTheShares() {
+    assertEquals(briefing.getValue("path").jsonPrimitive.content, BriefingShare.PATH)
+    assertEquals(briefing.getValue("authority").jsonPrimitive.content, AutopilotProvider.AUTHORITY)
+  }
+
+  @Test fun theProviderMatchesTheBriefingPathAndAnswersItAsAReadOnlyDirectory() {
+    val src = File("src/main/java/expo/modules/inflowcore/android/AutopilotProvider.kt").readText()
+    assertTrue(src.contains("addURI(AUTHORITY, BriefingShare.PATH, BRIEFING)"))
+    assertTrue(src.contains("BriefingShare.serve(shareOn, "))   // the one way rows reach the cursor: the share and health switches are decided there
+    assertTrue(src.contains("override fun insert(uri: Uri, values: ContentValues?): Uri = throw UnsupportedOperationException"))
+    assertTrue(src.contains("override fun delete(uri: Uri, selection: String?, selectionArgs: Array<String>?): Int = throw UnsupportedOperationException"))
+    // update only moves a suggestion (path suggestions/#); every other path, the briefing included, answers 0
+    assertTrue(src.contains("if (matcher.match(uri) != ONE) return 0"))
   }
 }

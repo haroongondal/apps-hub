@@ -31,10 +31,11 @@ object StoreHolder {
     return SqlItemStore.open(context.applicationContext).also { opened = it }
   }
 
-  /** The health row's last_seen_at: written when the app opens and when the listener connects, never by a provider query. Runs off the caller's thread. */
+  /** The health row's last_seen_at: written when the app opens and when the listener connects, never by a provider query. Runs off the caller's thread. Also rebuilds the briefing snapshot (while sharing is on). */
   fun heartbeat(context: Context) {
     val app = context.applicationContext
     InflowListener.executor.execute { runCatching { get(app).getOrNull()?.let { AppHealth.beat(it, System.currentTimeMillis()) } } }
+    BriefingRefresh.refresh(app)
   }
 
   fun storeError(context: Context): String? = get(context).exceptionOrNull()?.message
