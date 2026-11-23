@@ -1,4 +1,4 @@
-import { AiError, type Segment } from './types.ts';
+import { AiError, type Locator, type Segment } from './types.ts';
 
 export interface MinutesCite {
   segment: number;
@@ -213,4 +213,14 @@ export function minutesFingerprint(segments: readonly Segment[]): string {
     h = Math.imul(h, 0x01000193);
   }
   return `${segments.length}:${(h >>> 0).toString(16)}`;
+}
+
+/** Minutes as text for Library search and chunks for Ask: one per summary, decision and action item, each at the time of its first cite. */
+export function minutesSegments(m: Minutes): Segment[] {
+  const at = (p: MinutesPoint): Locator => (p.cites.length ? { startSec: p.cites[0].startSec, endSec: p.cites[0].startSec } : null);
+  return [
+    { text: `Minutes summary: ${m.summary}`, locator: null },
+    ...m.decisions.map((d) => ({ text: `Decision: ${d.text}`, locator: at(d) })),
+    ...m.actions.map((a) => ({ text: `Action item: ${a.text}${a.owner ? `. Owner: ${a.owner}` : ''}${a.due ? `. Due: ${a.due}` : ''}`, locator: at(a) })),
+  ];
 }

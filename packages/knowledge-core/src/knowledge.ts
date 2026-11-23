@@ -2,7 +2,7 @@ import { migrate, type Item, type ItemKind, type Library, type Row, type SqlPort
 
 import { chunkSegments } from './chunk.ts';
 import { cleanExtraction, normLabel } from './extraction.ts';
-import { composeMinutes, minutesFingerprint, type Minutes, type MinutesChat, type MinutesOptions, type SavedMinutes } from './minutes.ts';
+import { composeMinutes, minutesFingerprint, minutesSegments, type Minutes, type MinutesChat, type MinutesOptions, type SavedMinutes } from './minutes.ts';
 import { KNOWLEDGE_STEPS } from './schema.ts';
 import { AiError, PAUSING, type AiPort, type ContentPort, type Extraction, type Locator, type Segment } from './types.ts';
 import { cosine, fromBlob, toBlob, topK } from './vectors.ts';
@@ -123,7 +123,7 @@ export class Knowledge {
     if ((await this.db.first("SELECT value FROM kn_meta WHERE key = 'embed_tag'"))?.value === tag) return;
     await this.db.transaction(async (tx) => {
       await tx.run(
-        `UPDATE kn_jobs SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, error = NULL, updated_at = ?
+        `UPDATE kn_jobs SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, error = NULL, embed_only = 0, updated_at = ?
          WHERE stage <> 'text' AND item_id IN (SELECT item_id FROM kn_chunks)`,
         [this.deps.now()],
       );
@@ -140,7 +140,7 @@ export class Knowledge {
       await tx.run(
         `INSERT INTO kn_jobs (item_id, stage, status, updated_at) VALUES (?, 'text', 'queued', ?)
          ON CONFLICT(item_id) DO UPDATE SET stage = 'text', status = 'queued', gen = gen + 1, attempts = 0, error = NULL,
-           updated_at = excluded.updated_at`,
+           embed_only = 0, updated_at = excluded.updated_at`,
         [itemId, this.deps.now()],
       );
     });
@@ -148,7 +148,8 @@ export class Knowledge {
 
   // Segments stay: they are the item's own transcript or OCR text. A stage already running finds no job and writes nothing.
   async exclude(itemId: string): Promise<void> {
-    await this.db.transaction(async (tx) => {
+    const hadMinutes = await this.db.transaction(async (tx) => {
+      const had = (await tx.first('SELECT 1 FROM kn_minutes WHERE item_id = ?', [itemId])) !== null;
       await tx.run('INSERT OR IGNORE INTO kn_excluded (item_id, excluded_at) VALUES (?, ?)', [itemId, this.deps.now()]);
       await tx.run('DELETE FROM kn_jobs WHERE item_id = ?', [itemId]);
       await tx.run('DELETE FROM kn_chunks WHERE item_id = ?', [itemId]);
@@ -156,7 +157,9 @@ export class Knowledge {
       await tx.run('DELETE FROM kn_edges WHERE item_id = ?', [itemId]); // the links it made to concepts other items share
       await tx.run('DELETE FROM kn_minutes WHERE item_id = ?', [itemId]);
       await pruneConcepts(tx);
+      return had;
     });
+    if (hadMinutes) await this.indexBody(itemId); // the transcript stays searchable, the minutes go
   }
 
   async include(itemId: string): Promise<void> {
@@ -215,7 +218,7 @@ export class Knowledge {
   async runNext(): Promise<RunResult> {
     const now = this.deps.now();
     const claimed = await this.db.transaction(async (tx) => {
-      const row = await tx.first("SELECT item_id, stage, gen FROM kn_jobs WHERE status = 'queued' ORDER BY updated_at, item_id LIMIT 1");
+      const row = await tx.first("SELECT item_id, stage, gen, embed_only FROM kn_jobs WHERE status = 'queued' ORDER BY updated_at, item_id LIMIT 1");
       if (row) await tx.run("UPDATE kn_jobs SET status = 'running', updated_at = ? WHERE item_id = ?", [now, row.item_id]);
       return row;
     });
@@ -244,7 +247,7 @@ export class Knowledge {
       );
       return 'ran';
     }
-    const next = NEXT[stage];
+    const next = stage === 'embed' && claimed.embed_only === 1 ? 'done' : NEXT[stage];
     await this.db.run(
       'UPDATE kn_jobs SET stage = ?, status = ?, attempts = 0, error = NULL, updated_at = ? WHERE item_id = ? AND gen = ?',
       [next, next === 'done' ? 'done' : 'queued', this.deps.now(), itemId, gen],
@@ -267,8 +270,18 @@ export class Knowledge {
       }
       return true;
     });
-    if (wrote && (item.kind === 'audio' || item.kind === 'image')) await this.lib.setBody(item.id, segments.map((s) => s.text).join('\n')); // so Library search finds transcripts and OCR
+    if (wrote && (item.kind === 'audio' || item.kind === 'image')) await this.indexBody(item.id);
     if (wrote) await this.deps.content.saved?.(item).catch(() => {}); // leftovers only waste space, and are cleared with the item
+  }
+
+  /**
+   * Library search text of a recording or picture: its transcript or read text, then its minutes, rewritten whenever either changes.
+   * shortcut: read then written in two transactions, so a transcript and minutes saved at the same instant can leave the older text until the next change; read inside Library if that shows up.
+   */
+  private async indexBody(itemId: string): Promise<void> {
+    const minutes = await storedMinutes(this.db, itemId);
+    const texts = [...(await this.segmentsOf(itemId)), ...(minutes ? minutesSegments(minutes) : [])].map((s) => s.text);
+    await this.lib.setBody(itemId, texts.join('\n'));
   }
 
   async segmentsOf(itemId: string): Promise<Segment[]> {
@@ -305,18 +318,34 @@ export class Knowledge {
          ON CONFLICT(item_id) DO UPDATE SET body = excluded.body, source = excluded.source, made_at = excluded.made_at`,
         [itemId, JSON.stringify(minutes), minutesFingerprint(segments), this.deps.now()],
       );
+      // Ask finds minutes through their chunks: a finished item embeds them and stops; one still in the queue picks them up on its way.
+      await tx.run(
+        `UPDATE kn_jobs SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, error = NULL, updated_at = ?,
+           embed_only = CASE WHEN stage = 'done' THEN 1 ELSE embed_only END
+         WHERE item_id = ? AND stage <> 'text'`,
+        [this.deps.now(), itemId],
+      );
     });
+    await this.indexBody(itemId);
     return minutes;
   }
 
   private async embedStage(itemId: string, gen: number): Promise<void> {
-    const chunks = chunkSegments(await this.segmentsOf(itemId));
-    const vectors: Float32Array[] = [];
-    for (let i = 0; i < chunks.length; i += EMBED_BATCH) {
+    const minutes = await storedMinutes(this.db, itemId);
+    const chunks = [...chunkSegments(await this.segmentsOf(itemId)), ...(minutes ? minutesSegments(minutes) : [])];
+    // A chunk whose text is already embedded keeps its vector (retagEmbeddings drops every vector of an old model), so new minutes cost only their own embeddings.
+    const known = new Map(
+      (await this.db.all('SELECT text, embedding FROM kn_chunks WHERE item_id = ?', [itemId])).map((r) => [r.text as string, fromBlob(r.embedding as Uint8Array)]),
+    );
+    const missing = [...new Set(chunks.map((c) => c.text).filter((t) => !known.has(t)))];
+    for (let i = 0; i < missing.length; i += EMBED_BATCH) {
       await this.keep(itemId, gen);
-      vectors.push(...(await this.deps.ai.embed(chunks.slice(i, i + EMBED_BATCH).map((c) => c.text))));
+      const batch = missing.slice(i, i + EMBED_BATCH);
+      const got = await this.deps.ai.embed(batch);
+      if (got.length !== batch.length) throw new AiError('bad_reply', 'The model sent the wrong number of embeddings.');
+      batch.forEach((t, j) => known.set(t, got[j]));
     }
-    if (vectors.length !== chunks.length) throw new AiError('bad_reply', 'The model sent the wrong number of embeddings.');
+    const vectors = chunks.map((c) => known.get(c.text) as Float32Array);
     await this.db.transaction(async (tx) => {
       if (!(await isLive(tx, itemId, gen))) return;
       await tx.run('DELETE FROM kn_chunks WHERE item_id = ?', [itemId]);
@@ -504,6 +533,10 @@ export class Knowledge {
 
 // A run whose job was re-queued (an edit, or recover after a kill) must not overwrite newer results.
 const isLive = async (tx: SqlPort, itemId: string, gen: number) => (await tx.first('SELECT gen FROM kn_jobs WHERE item_id = ?', [itemId]))?.gen === gen;
+const storedMinutes = async (db: SqlPort, itemId: string): Promise<Minutes | null> => {
+  const row = await db.first('SELECT body FROM kn_minutes WHERE item_id = ?', [itemId]);
+  return row ? (JSON.parse(row.body as string) as Minutes) : null;
+};
 const isExcluded = async (db: SqlPort, itemId: string) => (await db.first('SELECT 1 FROM kn_excluded WHERE item_id = ?', [itemId])) !== null;
 
 export const pruneConcepts = (db: SqlPort) =>

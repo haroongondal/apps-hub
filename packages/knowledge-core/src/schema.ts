@@ -80,4 +80,8 @@ CREATE TABLE kn_minutes (
   made_at INTEGER NOT NULL
 );
 `,
+  `
+-- 1 when new minutes re-queued a finished item at the embed stage: it embeds them and stops, without making its graph again.
+ALTER TABLE kn_jobs ADD COLUMN embed_only INTEGER NOT NULL DEFAULT 0;
+`,
 ];
