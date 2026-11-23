@@ -126,6 +126,20 @@ push or release only when the owner says so.
     a concept other items still support (aliases are not tracked per source).
   - Not done: exclude-at-import option; phone test.
 
+- 2026-11-23 S3: CV maker, branch `nexus-cv` (PR #64), rebuilt on `origin/main` after the first
+  version conflicted with main's own key handling (#57), which was kept:
+  - CV tab (`app/(tabs)/cv.tsx`, `app/cv/new.tsx`, `app/cv/[id].tsx`). Logic in `src/cv/`
+    (model, three templates, PDF writer, prompts; pure, tested). The AI writes only the content;
+    the user picks Classic, Modern or Minimal. An AI edit returns the whole CV, which is
+    validated before it replaces the old one. Export is a PDF in the share sheet.
+  - `CompatPort.complete(system, user, json)`; `nexusPort` chat (`extract`, `answer`,
+    `complete`) tries Groq's keys, then Gemini's. Embeddings and images stay Gemini only,
+    transcription Groq only. In the app's `ai.ts`, text requests time out after 90 s and uploads
+    keep 10 min, so a hung service hands over sooner.
+  - Shortcuts: base-14 fonts, so no Arabic or Urdu (shown as "?"); estimated text widths, so
+    lines wrap a little early; an AI edit that returns a truncated CV replaces the old one.
+  - Not done: phone test (adb went offline mid-session); AI calls with real keys.
+
 ## Current state + exact next step
 
 Nexus 1.4.0 (versionCode 18) is on the Store, built from `nexus` at a88538e8. PR #44 was merged to main on 2026-11-18.

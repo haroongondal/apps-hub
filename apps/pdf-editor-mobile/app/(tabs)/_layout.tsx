@@ -1,10 +1,11 @@
 import { TabBar } from '@apps-hub/ui';
 import { Tabs } from 'expo-router';
 
-type Key = 'index' | 'library';
+type Key = 'index' | 'library' | 'cv';
 const TABS: { key: Key; label: string }[] = [
   { key: 'index', label: 'Stream' },
   { key: 'library', label: 'Library' },
+  { key: 'cv', label: 'CV' },
 ];
 
 export default function TabsLayout() {
@@ -17,6 +18,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" />
       <Tabs.Screen name="library" />
+      <Tabs.Screen name="cv" />
     </Tabs>
   );
 }

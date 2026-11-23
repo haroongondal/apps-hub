@@ -1,3 +1,4 @@
+import { AiError } from './types.ts';
 import { EMBED_DIMS, openAiCompatPort, type CompatPort } from './openai.ts';
 
 export const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
@@ -12,7 +13,6 @@ export interface NexusKeys {
   fetch?: typeof fetch;
 }
 
-/** Gemini embeds text and reads images; Groq answers questions, builds the graph and transcribes audio. */
 export function nexusPort({ gemini, groq, fetch }: NexusKeys): CompatPort {
   const g = openAiCompatPort({ apiKey: gemini, baseUrl: GEMINI_URL, embedModel: 'gemini-embedding-001', chatModel: 'gemini-3.5-flash-lite', fetch });
   const q = openAiCompatPort({
@@ -23,5 +23,26 @@ export function nexusPort({ gemini, groq, fetch }: NexusKeys): CompatPort {
     transcribeModel: 'whisper-large-v3-turbo',
     fetch,
   });
-  return { embed: g.embed, readImage: g.readImage, extract: q.extract, answer: q.answer, transcribe: q.transcribe };
+  const chat = [q, g];
+  return {
+    embed: g.embed,
+    readImage: g.readImage,
+    transcribe: q.transcribe,
+    extract: (segments) => firstOk(chat, (p) => p.extract(segments)),
+    answer: (question, sources) => firstOk(chat, (p) => p.answer(question, sources)),
+    complete: (system, user, json) => firstOk(chat, (p) => p.complete(system, user, json)),
+  };
+}
+
+async function firstOk<P, T>(ports: P[], run: (p: P) => Promise<T>): Promise<T> {
+  let last: unknown = new AiError('auth', 'No API key is set. Add your key in AI settings.');
+  for (const p of ports) {
+    try {
+      return await run(p);
+    } catch (err) {
+      if (!(err instanceof AiError)) throw err;
+      last = err;
+    }
+  }
+  throw last;
 }

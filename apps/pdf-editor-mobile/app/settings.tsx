@@ -101,8 +101,9 @@ export default function SettingsScreen() {
       <Header title="AI settings" trailing={<IconButton icon="close" label="Close" onPress={() => router.back()} />} />
       <Notice tone="neutral" title="What leaves this phone">
         With both keys saved, Nexus sends Google the text of your notes, PDFs and scans, and your photos, to find ideas and read images. It sends
-        Groq the text of your notes, PDFs and scans, to build the graph and answer questions, and your voice recordings, to transcribe them. Your
-        files stay on this phone. Without the keys nothing is sent.
+        Groq the text of your notes, PDFs and scans, to build the graph and answer questions, and your voice recordings, to transcribe them. The
+        CV maker sends the details you type to Groq, or to Gemini when Groq cannot answer. Your files stay on this phone. Without the keys nothing
+        is sent.
       </Notice>
       {SERVICES.map((s) => (
         <KeyPanel key={s.id} service={s} saved={keys[s.id]} onChange={(list) => setKeys((k) => ({ ...k, [s.id]: list }))} />

@@ -3,7 +3,8 @@ import * as SecureStore from 'expo-secure-store';
 
 // Gemini embeds text and reads images; Groq answers, builds the graph and transcribes. Both keys are needed.
 export type Service = 'gemini' | 'groq';
-const TIMEOUT_MS = 10 * 60_000; // long enough to upload and transcribe a 25 MB recording
+const UPLOAD_MS = 10 * 60_000; // long enough to upload and transcribe a 25 MB recording
+const TEXT_MS = 90_000; // short, so a hung service hands the call to the next key or service sooner
 
 // Each service takes several keys: one that is refused or at its limit hands over to the next (knowledge-core openai.ts).
 const keyName = (s: Service) => `${s}-api-keys`; // a JSON list
@@ -44,7 +45,7 @@ export async function hasKeys(): Promise<boolean> {
 
 const timedFetch: typeof fetch = (input, init) => {
   const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => abort.abort(), init?.body instanceof FormData ? UPLOAD_MS : TEXT_MS);
   return fetch(input, { ...init, signal: abort.signal }).finally(() => clearTimeout(timer));
 };
 
@@ -64,4 +65,5 @@ export const ai: CompatPort = {
   answer: (question, sources) => current().answer(question, sources),
   readImage: (jpeg) => current().readImage(jpeg),
   transcribe: (file) => current().transcribe(file),
+  complete: (system, user, json) => current().complete(system, user, json),
 };

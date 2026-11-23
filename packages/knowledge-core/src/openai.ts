@@ -18,6 +18,8 @@ export type UploadFile = Blob | { uri: string; name: string; type: string };
 export interface CompatPort extends AiPort {
   transcribe(file: UploadFile): Promise<Segment[]>;
   readImage(jpegBase64: string): Promise<string>;
+  /** One chat turn for other features (the CV maker). `json` asks the model for one JSON object. */
+  complete(system: string, user: string, json: boolean): Promise<string>;
 }
 
 export const EMBED_DIMS = 512;
@@ -122,6 +124,10 @@ export function openAiCompatPort(o: OpenAiCompatOptions): CompatPort {
       } catch {
         throw new AiError('bad_reply', 'The AI service sent a graph Nexus could not read.');
       }
+    },
+
+    complete(system, user, json) {
+      return chat([{ role: 'system', content: system }, { role: 'user', content: user }], json ? { type: 'json_object' } : undefined);
     },
 
     answer(question, sources) {
