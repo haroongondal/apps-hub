@@ -41,6 +41,19 @@
             android:permission="com.haroon.permission.AUTOPILOT"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.NoDisplay" />
+        <!-- Share sheet target for text and links. It opens Deputy's screen with the text as a draft; nothing starts without the owner's tap. -->
+        <activity
+            android:name="expo.modules.deputyagent.android.ShareActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
         <receiver
             android:name="expo.modules.deputyagent.android.GateReceiver"
             android:exported="false" />

@@ -147,6 +147,24 @@ export interface ScheduleRun {
   runId: string | null;
 }
 
+/** Text another app shared with Deputy, cleaned and cut to 4,000 characters (`cut` says it was cut). Someone else wrote it. */
+export interface SharedText {
+  text: string;
+  subject: string | null;
+  cut: boolean;
+}
+
+/** A task written about shared text. Only `instruction` is the task; `text` reaches the model as information only. */
+export interface Draft {
+  id: string;
+  instruction: string;
+  text: string;
+  subject: string | null;
+  createdAt: number;
+}
+
+export type DraftInput = Omit<Draft, 'id' | 'createdAt'> & { id: string | null };
+
 interface DeputyAgentApi {
   getServiceState(): ServiceState;
   openAccessibilitySettings(): void;
@@ -175,6 +193,13 @@ interface DeputyAgentApi {
   listSavedTasks(): SavedTask[];
   saveTask(task: Omit<SavedTask, 'id'> & { id: string | null }): { id: string | null; error: string | null };
   deleteTask(id: string): void;
+  /** The text shared with Deputy since the last call, once; null when there is none. */
+  takeSharedText(): SharedText | null;
+  listDrafts(): Draft[];
+  saveDraft(draft: DraftInput): { id: string | null; error: string | null };
+  deleteDraft(id: string): void;
+  /** Only the owner's Start tap may call this: a share must never start a run by itself. */
+  startDraft(draft: DraftInput): { runId: string | null; error: string | null };
   listSchedules(): Schedule[];
   /** Copy for the screen when a value isn't valid, or null error once saved; saving also sets the next start. */
   saveSchedule(schedule: Omit<Schedule, 'id' | 'createdAt' | 'nextRunAt'> & { id: string | null }): { id: string | null; error: string | null };
@@ -193,6 +218,8 @@ interface DeputyAgentApi {
   dumpForegroundTree(delaySeconds: number): Promise<TreeDump>;
   copyToClipboard(text: string): void;
   addListener(event: 'onRunEvent', listener: (e: RunEvent) => void): { remove(): void };
+  /** Something was shared with Deputy while it is open: call `takeSharedText`. */
+  addListener(event: 'onShare', listener: () => void): { remove(): void };
 }
 
 export default requireNativeModule<DeputyAgentApi>('DeputyAgent');

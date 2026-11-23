@@ -19,8 +19,11 @@ import expo.modules.deputyagent.android.KeyVault
 import expo.modules.deputyagent.android.OwnerStore
 import expo.modules.deputyagent.android.Schedules
 import expo.modules.deputyagent.android.StopChip
+import expo.modules.deputyagent.core.Begin
+import expo.modules.deputyagent.core.Draft
 import expo.modules.deputyagent.core.SavedTask
 import expo.modules.deputyagent.core.ServiceSetting
+import expo.modules.deputyagent.core.SharedInbox
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.functions.Queues
@@ -33,6 +36,7 @@ import kotlinx.coroutines.withContext
 private const val NOT_CONNECTED =
   "The accessibility service isn't connected. If Setup says it is on, turn it off and on again in Accessibility settings."
 private const val RUN_EVENT = "onRunEvent"
+private const val SHARE_EVENT = "onShare"
 private const val SPEECH_REQUEST = 7301
 
 class DeputyAgentModule : Module() {
@@ -46,14 +50,18 @@ class DeputyAgentModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("DeputyAgent")
 
-    Events(RUN_EVENT)
+    Events(RUN_EVENT, SHARE_EVENT)
 
     OnCreate {
       appContext.reactContext?.let(AgentRuntime::init)
       AgentRuntime.listener = { e -> sendEvent(RUN_EVENT, AgentRuntime.toMap(e)) }
+      SharedInbox.listener = { sendEvent(SHARE_EVENT, emptyMap<String, Any>()) }
     }
 
-    OnDestroy { AgentRuntime.listener = null }
+    OnDestroy {
+      AgentRuntime.listener = null
+      SharedInbox.listener = null
+    }
 
     Function("getServiceState") {
       val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
@@ -110,6 +118,24 @@ class DeputyAgentModule : Module() {
     Function("listSavedTasks") { OwnerStore.tasks(context).map(OwnerStore::toMap) }
     Function("saveTask") { input: Map<String, Any?> -> OwnerStore.saveTask(context, input) }
     Function("deleteTask") { id: String -> OwnerStore.deleteTask(context, id) }
+
+    Function("takeSharedText") {
+      SharedInbox.take()?.let { mapOf("text" to it.text, "subject" to it.subject, "cut" to it.cut) }
+    }
+    Function("listDrafts") { OwnerStore.drafts(context).map(OwnerStore::draftMap) }
+    Function("saveDraft") { input: Map<String, Any?> -> OwnerStore.saveDraft(context, input) }
+    Function("deleteDraft") { id: String -> OwnerStore.deleteDraft(context, id) }
+    Function("startDraft") { input: Map<String, Any?> ->
+      val r = try {
+        Draft.begin(OwnerStore.draftFrom(input)) { task, apps, untrusted -> AgentRuntime.start(context, task, apps, untrusted, trigger = "shared_text") }
+      } catch (e: IllegalArgumentException) {
+        Begin.Failed(e.message ?: Draft.NO_TEXT)
+      }
+      when (r) {
+        is Begin.Started -> mapOf("runId" to r.runId, "error" to null)
+        is Begin.Failed -> mapOf("runId" to null, "error" to r.message)
+      }
+    }
 
     Function("listSchedules") { Schedules.list(context).map(Schedules::toMap) }
     Function("saveSchedule") { input: Map<String, Any?> -> Schedules.save(context, input) }

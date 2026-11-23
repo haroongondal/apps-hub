@@ -2,6 +2,7 @@ package expo.modules.deputyagent.android
 
 import android.content.Context
 import expo.modules.deputyagent.core.DefaultTrust
+import expo.modules.deputyagent.core.Draft
 import expo.modules.deputyagent.core.SavedTask
 import expo.modules.deputyagent.core.Settings
 import expo.modules.deputyagent.core.TrustLevel
@@ -74,4 +75,32 @@ object OwnerStore {
   fun toMap(t: SavedTask): Map<String, Any> = mapOf("id" to t.id, "name" to t.name, "task" to t.task, "apps" to t.apps)
 
   private fun writeTasks(c: Context, tasks: List<SavedTask>) = prefs(c).edit().putString("tasks", SavedTask.toJson(tasks)).apply()
+
+  fun drafts(c: Context): List<Draft> = prefs(c).getString("drafts", null)?.let(Draft::fromJson).orEmpty()
+
+  fun draftFrom(input: Map<String, Any?>): Draft = Draft.of(
+    (input["id"] as? String) ?: UUID.randomUUID().toString().take(8),
+    (input["instruction"] as? String).orEmpty(),
+    (input["text"] as? String).orEmpty(),
+    input["subject"] as? String,
+    System.currentTimeMillis(),
+  )
+
+  @Synchronized
+  fun saveDraft(c: Context, input: Map<String, Any?>): Map<String, String?> {
+    val d = try { draftFrom(input) } catch (e: IllegalArgumentException) { return mapOf("id" to null, "error" to e.message) }
+    val list = drafts(c)
+    val old = list.firstOrNull { it.id == d.id }
+    if (old == null && list.size >= Draft.MAX) return mapOf("id" to null, "error" to Draft.FULL)
+    val next = if (old != null) list.map { if (it.id == d.id) d.copy(createdAt = old.createdAt) else it } else list + d
+    prefs(c).edit().putString("drafts", Draft.toJson(next)).apply()
+    return mapOf("id" to d.id, "error" to null)
+  }
+
+  @Synchronized
+  fun deleteDraft(c: Context, id: String) = prefs(c).edit().putString("drafts", Draft.toJson(drafts(c).filter { it.id != id })).apply()
+
+  fun draftMap(d: Draft): Map<String, Any?> = mapOf(
+    "id" to d.id, "instruction" to d.instruction, "text" to d.text, "subject" to d.subject, "createdAt" to d.createdAt.toDouble(),
+  )
 }

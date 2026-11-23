@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AppState, View } from 'react-native';
 import { Button, Header, Notice, Screen, TabBar, ThemeProvider, useTheme } from '@apps-hub/ui';
-import DeputyAgent from 'deputy-agent';
+import DeputyAgent, { type Draft } from 'deputy-agent';
 import { AppsScreen } from './src/AppsScreen';
+import { Drafts } from './src/Drafts';
 import { History } from './src/History';
 import { Repeating } from './src/Repeating';
 import { RunPanel } from './src/RunPanel';
 import { SavedTasks } from './src/SavedTasks';
 import { SettingsScreen } from './src/SettingsScreen';
+import { SharedTextSheet, type SharedInput } from './src/SharedTextSheet';
 import { setupComplete, setupRows } from './src/setup';
 
 type Tab = 'tasks' | 'repeat' | 'apps' | 'settings';
@@ -32,7 +34,26 @@ function Home() {
   const [state, setState] = useState(() => DeputyAgent.getServiceState());
   const [tab, setTab] = useState<Tab>('tasks');
 
+  const [drafts, setDrafts] = useState<Draft[]>(() => DeputyAgent.listDrafts());
+  const [shared, setShared] = useState<{ key: number; input: SharedInput } | null>(null);
+
   const refresh = useCallback(() => setState(DeputyAgent.getServiceState()), []);
+
+  // A new share replaces whatever sheet is open; the key resets its typed instruction.
+  const open = useCallback((input: SharedInput) => {
+    setTab('tasks');
+    setShared({ key: Date.now(), input });
+  }, []);
+  const takeShare = useCallback(() => {
+    const s = DeputyAgent.takeSharedText();
+    if (s) open({ id: null, instruction: '', ...s });
+  }, [open]);
+
+  useEffect(() => {
+    takeShare();
+    const sub = DeputyAgent.addListener('onShare', takeShare);
+    return () => sub.remove();
+  }, [takeShare]);
 
   useEffect(() => DeputyAgent.setPalette(JSON.stringify(c)), [c]);
   // Here, not in RunPanel: a run can end while another tab is open.
@@ -65,6 +86,14 @@ function Home() {
               )
             )}
             <RunPanel state={state} refresh={refresh} />
+            <Drafts
+              drafts={drafts}
+              onOpen={(d) => open({ id: d.id, instruction: d.instruction, text: d.text, subject: d.subject, cut: false })}
+              onDelete={(d) => {
+                DeputyAgent.deleteDraft(d.id);
+                setDrafts(DeputyAgent.listDrafts());
+              }}
+            />
             <SavedTasks state={state} refresh={refresh} />
             <History state={state} refresh={refresh} />
           </Screen>
@@ -74,6 +103,16 @@ function Home() {
         {tab === 'settings' && <SettingsScreen state={state} refresh={refresh} />}
       </View>
       <TabBar tabs={TABS} value={tab} onChange={setTab} />
+      {shared && (
+        <SharedTextSheet
+          key={shared.key}
+          input={shared.input}
+          state={state}
+          onClose={() => setShared(null)}
+          onSaved={() => setDrafts(DeputyAgent.listDrafts())}
+          refresh={refresh}
+        />
+      )}
     </>
   );
 }
