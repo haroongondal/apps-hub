@@ -111,6 +111,8 @@ class HaloService : Service() {
     // A listener reconnect leaves the old session watch empty, so it is rebuilt.
     onListener = { main.post { media?.run { stop(); start() } } }
     applySettings(SettingsStore.load(this))
+    Heartbeat.beat(this)
+    Links.opened(this)
     return START_NOT_STICKY
   }
 
@@ -403,6 +405,7 @@ class HaloService : Service() {
     onFlash = null
     unregisterScreenOff()
     lightsOff()
+    Links.stop()
     worker.shutdownNow()
     running = false
     state = null
@@ -530,11 +533,16 @@ class HaloService : Service() {
     }
 
     /** Flashes over the lights; when they are not shown, in a window of its own for the flash's duration. */
-    fun flash(ctx: Context, d: FlashDecision, colour: Int) {
+    fun flash(ctx: Context, d: FlashDecision, colour: Int) = show(ctx, d, colour, notification = true)
+
+    /** A pulse from another app's data: its own switch decides, not the notification flashes switch. */
+    fun pulse(ctx: Context, d: FlashDecision, colour: Int) = show(ctx, d, colour, notification = false)
+
+    private fun show(ctx: Context, d: FlashDecision, colour: Int, notification: Boolean) {
       val app = ctx.applicationContext
       flashMain.post {
         val s = current(app)
-        if (!s.notify.enabled) return@post
+        if (notification && !s.notify.enabled) return@post
         aodFlash?.let { it(d, colour); return@post }
         if (onFlash?.invoke(d, colour) == true) return@post
         val st = RuleInputs.snapshot(app)

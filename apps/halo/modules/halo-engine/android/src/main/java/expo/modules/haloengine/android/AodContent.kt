@@ -38,6 +38,7 @@ import expo.modules.haloengine.core.DotKind
 import expo.modules.haloengine.core.DotKinds
 import expo.modules.haloengine.core.DotSystemState
 import expo.modules.haloengine.core.FlashDecision
+import expo.modules.haloengine.core.LinkSurfaces
 import expo.modules.haloengine.core.Patterns
 import expo.modules.haloengine.core.PocketTimer
 import expo.modules.haloengine.core.RandomMotion
@@ -89,6 +90,12 @@ class AodContent(
     background = GradientDrawable().apply { cornerRadius = 20 * dp; setColor(0x26FFFFFF) }
     setPadding((12 * dp).toInt(), (10 * dp).toInt(), (16 * dp).toInt(), (10 * dp).toInt())
   }
+  private val linksBox = LinearLayout(ctx).apply {
+    orientation = LinearLayout.VERTICAL
+    gravity = Gravity.CENTER_HORIZONTAL
+    visibility = GONE
+  }
+  private val linksHook: () -> Unit = { showLinks() }
   private val lower = LinearLayout(ctx).apply {
     orientation = LinearLayout.VERTICAL
     gravity = Gravity.CENTER_HORIZONTAL
@@ -155,6 +162,7 @@ class AodContent(
     card.addView(art, LinearLayout.LayoutParams((48 * dp).toInt(), (48 * dp).toInt()).apply { marginEnd = (12 * dp).toInt() })
     card.addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
     art.background = GradientDrawable().apply { cornerRadius = 10 * dp; setColor(0x33FFFFFF) }
+    lower.addView(linksBox, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (16 * dp).toInt() })
     lower.addView(icons, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
     lower.addView(card, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (16 * dp).toInt() })
     val column = LinearLayout(ctx).apply {
@@ -185,7 +193,10 @@ class AodContent(
     watch.start()
     if (!preview) sensors?.getDefaultSensor(Sensor.TYPE_PROXIMITY)?.let { sensors.registerListener(proximity, it, SensorManager.SENSOR_DELAY_NORMAL, main) }
     NotifyFlash.onIcons = iconsHook
+    Links.onChange = linksHook
     showIcons()
+    showLinks()
+    Links.ensureFresh(context)
     showDots()
     burnIn.run()
     deriveColours()
@@ -196,6 +207,7 @@ class AodContent(
     main.removeCallbacks(burnIn)
     main.removeCallbacks(pocketEnd)
     if (NotifyFlash.onIcons === iconsHook) NotifyFlash.onIcons = null
+    if (Links.onChange === linksHook) Links.onChange = null
     sensors?.unregisterListener(proximity)
     power.stop()
     setController(null)
@@ -307,6 +319,20 @@ class AodContent(
       }
       icons.addView(cell, LinearLayout.LayoutParams((38 * dp).toInt(), (38 * dp).toInt()).apply { marginStart = (4 * dp).toInt(); marginEnd = (4 * dp).toInt() })
     }
+  }
+
+  private fun showLinks() {
+    val block = LinkSurfaces.aod(Links.snapshot, settings.links, System.currentTimeMillis())
+    linksBox.removeAllViews()
+    fun line(s: String, head: Boolean) = linksBox.addView(text(if (head) 14f else 13f, if (head) 0xEEFFFFFF.toInt() else 0x99FFFFFF.toInt()).apply {
+      text = s
+      gravity = Gravity.CENTER
+    })
+    if (block.waitingCount > 0) line(if (block.waitingCount == 1) "1 waiting" else "${block.waitingCount} waiting", true)
+    block.waitingTitles.forEach { line(it, false) }
+    if (block.briefing.isNotEmpty()) line("Briefing", true)
+    block.briefing.forEach { line(it, false) }
+    linksBox.visibility = if (block.empty) GONE else VISIBLE
   }
 
   private fun deriveColours() {

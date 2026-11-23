@@ -9,6 +9,7 @@ export type SettingsPatch = Partial<Pick<Settings, 'enabled' | 'pattern'>> & {
   rules?: Partial<Settings['rules']>;
   aod?: Partial<Aod>;
   themes?: Settings['themes'];
+  links?: Partial<Settings['links']>;
 };
 export type UpdateSettings = (patch: SettingsPatch) => void;
 
@@ -49,6 +50,7 @@ export function useSettings(): [Settings, UpdateSettings] {
         rules: { ...s.rules, ...patch.rules },
         aod: { ...s.aod, ...patch.aod },
         themes: patch.themes ?? s.themes,
+        links: { ...s.links, ...patch.links },
       };
       latest.current = next;
       setSettings(next);

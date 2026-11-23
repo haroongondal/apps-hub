@@ -1,0 +1,70 @@
+{
+  "valid": {
+    "who_is_home": [
+      { "person": "Sara", "present": 1, "last_seen_at": 1764000000000 },
+      { "person": "Ali", "present": 0, "last_seen_at": 1763990000000 }
+    ],
+    "new_devices": [
+      { "first_seen_at": 1764000000000, "label": "Phone", "acknowledged": 0 },
+      { "first_seen_at": 1763000000000, "label": "Printer", "acknowledged": 1 }
+    ],
+    "shield": [
+      { "on": 1, "untrusted_now": 1, "since": 1764000000000 }
+    ],
+    "tunnel_health": [
+      { "app_id": "open-tunnel", "accessibility": null, "listener": null, "ai_source": "none", "last_seen_at": 1764000000000 }
+    ],
+    "deputy_waiting": [
+      { "id": 7, "label": "Water the plants", "due_at": 1764003600000, "state": "waiting_for_ok" },
+      { "id": 8, "label": "Draft from shared text", "due_at": null, "state": "draft" },
+      { "id": 9, "label": "Morning news", "due_at": 1764050000000, "state": "scheduled" }
+    ],
+    "suggestions": [
+      { "id": 1, "kind": "reply", "title": "Reply to Ali", "item_id": 101, "due_at": null, "state": "waiting", "created_at": 1763539200000, "expires_at": 1763625600000 },
+      { "id": 2, "kind": "bill", "title": "Bill due 25 Nov", "item_id": 102, "due_at": 1764028800000, "state": "waiting", "created_at": 1763539200000, "expires_at": 1764288000000 },
+      { "id": 3, "kind": "event", "title": "Meeting 11:00 tomorrow", "item_id": 103, "due_at": 1763604000000, "state": "started", "created_at": 1763539200000, "expires_at": 1763604000000 },
+      { "id": 4, "kind": "money", "title": "Large debit at Alfalah", "item_id": 104, "due_at": null, "state": "skipped", "created_at": 1763539200000, "expires_at": 1764144000000 }
+    ],
+    "briefing": [
+      { "line_id": 1, "kind": "medicine", "text": "Medicine at 14:00", "at": 1764007200000, "personal": 1 },
+      { "line_id": 2, "kind": "steps", "text": "3,200 steps yesterday", "at": null, "personal": 1 },
+      { "line_id": 3, "kind": "bill", "text": "Bill due 25 Nov", "at": null, "personal": 0 },
+      { "line_id": 4, "kind": "todo", "text": "2 to-dos today", "at": null, "personal": 0 }
+    ]
+  },
+  "badFlags": {
+    "who_is_home": [
+      { "person": "Sara", "present": 2, "last_seen_at": 1764000000000 }
+    ],
+    "shield": [
+      { "on": 1, "untrusted_now": -1, "since": 1764000000000 }
+    ]
+  },
+  "invalid": {
+    "who_is_home": [
+      { "person": 5, "present": 1, "last_seen_at": 1764000000000 },
+      { "person": "Sara", "present": 1 }
+    ],
+    "new_devices": [
+      { "first_seen_at": "yesterday", "label": "Phone", "acknowledged": 0 },
+      { "first_seen_at": 1764000000000, "label": "Phone", "acknowledged": "0" }
+    ],
+    "shield": [
+      { "on": 1, "untrusted_now": 1, "since": 1.5 },
+      { "on": "1", "untrusted_now": 1, "since": 1764000000000 }
+    ],
+    "deputy_waiting": [
+      { "id": 7, "label": "Water the plants", "due_at": "soon", "state": "waiting_for_ok" },
+      { "id": 7, "label": null, "due_at": null, "state": "draft" },
+      { "id": 9007199254740993, "label": "Too big", "due_at": null, "state": "draft" }
+    ],
+    "suggestions": [
+      { "id": 1, "kind": "reply", "title": "Reply to Ali", "item_id": 101, "due_at": null, "state": "waiting", "created_at": 1763539200000 },
+      { "id": 1, "kind": "reply", "title": 7, "item_id": 101, "due_at": null, "state": "waiting", "created_at": 1763539200000, "expires_at": 1763625600000 }
+    ],
+    "briefing": [
+      { "line_id": 1, "kind": "medicine", "text": "Medicine at 14:00", "at": null, "personal": "yes" },
+      { "line_id": 2, "kind": "steps", "text": "Steps", "at": null }
+    ]
+  }
+}

@@ -15,6 +15,8 @@ import expo.modules.haloengine.android.Backgrounds
 import expo.modules.haloengine.android.FacePreview
 import expo.modules.haloengine.android.HaloListener
 import expo.modules.haloengine.android.HaloService
+import expo.modules.haloengine.android.Heartbeat
+import expo.modules.haloengine.android.Links
 import expo.modules.haloengine.android.NotifyFlash
 import expo.modules.haloengine.android.PickBackgroundContract
 import expo.modules.haloengine.android.ProbeLog
@@ -83,6 +85,8 @@ class HaloEngineModule : Module() {
         HaloService.start(context, HaloService.MEDIA_PLAYBACK, "app")
       }
       HaloService.retryWindow()
+      Heartbeat.beat(context)
+      Links.opened(context)
       status()
     }
 
