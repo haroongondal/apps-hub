@@ -130,4 +130,28 @@ class BriefingRefresherTest {
     refresher.refreshNow()
     assertEquals(20, refresher.snapshot().lines.size)
   }
+
+  @Test fun onChangedRunsOncePerRebuildThatChangedTheLinesAndNeverForTheSameLines() {
+    var pings = 0
+    val r = BriefingRefresher(cache, { builds++; lines }, queue, { now }, { on }, { pings++ })
+    r.refreshNow()
+    assertEquals(1, pings)
+    r.refreshNow()   // same lines
+    assertEquals(1, pings)
+    lines = listOf(BriefingLine(1, "bill", "Bill due 26 Nov", 5, 0))
+    r.refreshNow()
+    assertEquals(2, pings)
+    lines = null   // a failed build keeps the old snapshot and says nothing
+    r.refreshNow()
+    on = false
+    lines = listOf(BriefingLine(2, "bill", "Bill due 27 Nov", 5, 0))
+    r.refreshNow()   // sharing off: nothing built
+    assertEquals(2, pings)
+  }
+
+  @Test fun aFailingOnChangedDoesNotLoseTheSnapshot() {
+    val r = BriefingRefresher(cache, { builds++; lines }, queue, { now }, { on }, { throw IllegalStateException("x") })
+    assertTrue(r.refreshNow())
+    assertEquals(lines, r.snapshot().lines)
+  }
 }

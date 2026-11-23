@@ -21,6 +21,7 @@ class BriefingRefresher(
   private val executor: Executor,
   private val clock: () -> Long,
   private val enabled: () -> Boolean = { true },
+  private val onChanged: () -> Unit = {},
 ) {
   @Volatile var changed = false
     private set
@@ -42,6 +43,7 @@ class BriefingRefresher(
     val lines = runCatching { build(now) }.getOrNull()?.take(Briefing.MAX_LINES) ?: return false
     cache.write(BriefingSnapshot(now, lines).toJson())
     changed = lines != before
+    if (changed) runCatching(onChanged)
     return changed
   }
 
