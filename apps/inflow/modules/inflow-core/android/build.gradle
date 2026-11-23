@@ -28,5 +28,7 @@ dependencies {
   implementation("org.eclipse.angus:angus-mail:2.0.3")
   // JSON element API for the AI request and reply (no compiler plugin). Apache-2.0, Kotlin team, no network or analytics code; Deputy ships the same version.
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+  // Read-only steps, sleep and heart rate from Health Connect (newest stable). Apache-2.0 (AOSP); pulls guava, protobuf-lite and coroutines, no Play Services or analytics.
+  implementation("androidx.health.connect:connect-client:1.1.0")
   testImplementation("junit:junit:4.13.2")
 }

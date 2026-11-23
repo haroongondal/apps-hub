@@ -36,9 +36,22 @@ class ManifestTest {
   }
 
   @Test fun onlyTheKnownComponentsAreExported() {
-    val exported = listOf("activity", "service", "receiver", "provider").flatMap { tags(it) }.filter { it.attr("exported") == "true" }.map { it.attr("name").substringAfterLast('.') }
-    assertEquals(setOf("InflowListener", "SmsReceiver", "AutopilotProvider"), exported.toSet())
-    assertEquals(3, exported.size)
+    val exported = listOf("activity", "activity-alias", "service", "receiver", "provider").flatMap { tags(it) }.filter { it.attr("exported") == "true" }.map { it.attr("name").substringAfterLast('.') }
+    assertEquals(setOf("InflowListener", "SmsReceiver", "AutopilotProvider", "HealthRationaleActivity", "ViewPermissionUsageActivity"), exported.toSet())
+    assertEquals(5, exported.size)
+  }
+
+  @Test fun healthConnectIsReadOnlyWithTheRationaleScreen() {
+    val health = tags("uses-permission").map { it.attr("name") }.filter { it.startsWith("android.permission.health.") }
+    assertEquals(listOf("android.permission.health.READ_STEPS", "android.permission.health.READ_SLEEP", "android.permission.health.READ_HEART_RATE"), health)
+    assertTrue(tags("package").any { it.attr("name") == "com.google.android.apps.healthdata" })
+    val rationale = tags("activity").single { it.attr("name") == ".android.HealthRationaleActivity" }
+    assertEquals("androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE", (rationale.getElementsByTagName("action").item(0) as Element).attr("name"))
+    val alias = tags("activity-alias").single()
+    assertEquals(".android.HealthRationaleActivity", alias.attr("targetActivity"))
+    assertEquals("android.permission.START_VIEW_PERMISSION_USAGE", alias.attr("permission"))
+    assertEquals("android.intent.action.VIEW_PERMISSION_USAGE", (alias.getElementsByTagName("action").item(0) as Element).attr("name"))
+    assertEquals("android.intent.category.HEALTH_PERMISSIONS", (alias.getElementsByTagName("category").item(0) as Element).attr("name"))
   }
 
   @Test fun theSuggestionComponentsAreDeclaredAndNotExported() {
