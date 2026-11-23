@@ -43,6 +43,8 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
   const [blocks, setBlocks] = useState<string[]>([]);
   const [mediaLine, setMediaLine] = useState('');
   const [healthAsk, setHealthAsk] = useState(false);
+  const [briefingShare, setBriefingShare] = useState(false);
+  const [healthBriefing, setHealthBriefing] = useState(false);
   const [sub, setSub] = useState<'autopilot' | 'suggestions' | null>(null);
   const { run, notice } = useSetupAction(refreshStatus);
 
@@ -54,6 +56,8 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
       setBlocks(InflowCore.listAiBlocks());
       setMediaLine(mediaStatsLabel(InflowCore.mediaStats()));
       setHealthAsk(InflowCore.healthInAsk());
+      setBriefingShare(InflowCore.briefingShare());
+      setHealthBriefing(InflowCore.healthInBriefing());
       setError(null);
     } catch {
       setError(LOAD_ERROR);
@@ -107,6 +111,14 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
       <Group title="Health in Ask AI" footer={HEALTH_IN_ASK_NOTE}>
         <Row title="Include health in Ask AI">
           <Segmented accessibilityLabel="Include health in Ask AI" options={RECORD_OPTIONS} value={healthAsk ? 'on' : 'off'} onChange={(k) => change(() => InflowCore.setHealthInAsk(k === 'on'))} />
+        </Row>
+      </Group>
+      <Group title="Morning briefing">
+        <Row title="Share my morning briefing with my other Haroon apps" subtitle="Other apps of yours can read the briefing lines on this phone. Nothing leaves the phone.">
+          <Segmented accessibilityLabel="Share my morning briefing with my other Haroon apps" options={RECORD_OPTIONS} value={briefingShare ? 'on' : 'off'} onChange={(k) => change(() => InflowCore.setBriefingShare(k === 'on'))} />
+        </Row>
+        <Row title="Include medicines and steps in my morning briefing" subtitle="Adds your next medicine time and today's steps. Off keeps health numbers out of the briefing.">
+          <Segmented accessibilityLabel="Include medicines and steps in my morning briefing" options={RECORD_OPTIONS} value={healthBriefing ? 'on' : 'off'} onChange={(k) => change(() => InflowCore.setHealthInBriefing(k === 'on'))} />
         </Row>
       </Group>
       <Group title="Kept from AI" footer="Inflow never sends these to the AI.">

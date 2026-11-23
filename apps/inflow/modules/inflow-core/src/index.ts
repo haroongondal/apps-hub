@@ -526,6 +526,10 @@ export interface InflowCoreApi {
   saveDoctorPdf(summary: string, fromDay: string, toDay: string): Promise<boolean>;
   healthInAsk(): boolean;
   setHealthInAsk(on: boolean): void;
+  healthInBriefing(): boolean;
+  setHealthInBriefing(on: boolean): void;
+  briefingShare(): boolean;
+  setBriefingShare(on: boolean): void;
   addListener(event: 'onCaptured' | 'onSuggestions', listener: (e: { count: number }) => void): { remove(): void };
 }
 

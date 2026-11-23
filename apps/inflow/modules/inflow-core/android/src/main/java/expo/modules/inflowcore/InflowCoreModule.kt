@@ -48,6 +48,7 @@ import expo.modules.inflowcore.core.AppSetting
 import expo.modules.inflowcore.core.AUTOPILOT_META
 import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.AutopilotSettingsInput
+import expo.modules.inflowcore.core.Briefing
 import expo.modules.inflowcore.core.Categories
 import expo.modules.inflowcore.core.DoctorPayload
 import expo.modules.inflowcore.core.DoctorRange
@@ -735,6 +736,22 @@ class InflowCoreModule : Module() {
 
     Function("setHealthInAsk") { on: Boolean ->
       if (on) store().setMeta(HealthForAsk.META, "1") else store().deleteMeta(HealthForAsk.META)
+    }
+
+    Function("healthInBriefing") { ->
+      Briefing.on(store().meta(Briefing.HEALTH_META))
+    }
+
+    Function("setHealthInBriefing") { on: Boolean ->
+      if (on) store().setMeta(Briefing.HEALTH_META, "1") else store().deleteMeta(Briefing.HEALTH_META)
+    }
+
+    Function("briefingShare") { ->
+      Briefing.on(store().meta(Briefing.SHARE_META))
+    }
+
+    Function("setBriefingShare") { on: Boolean ->
+      if (on) store().setMeta(Briefing.SHARE_META, "1") else store().deleteMeta(Briefing.SHARE_META)
     }
   }
 }
