@@ -570,7 +570,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
 
   companion object {
     private const val DB_NAME = "inflow.db"
-    private const val SCHEMA_VERSION = 8
+    private const val SCHEMA_VERSION = 9
     private const val GENERIC_FAILURE =
       "Inflow can't open your saved history. The history file is kept, not deleted. Restart the phone and try again."
     private const val ITEM_COLUMNS = "i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, " +
@@ -779,6 +779,11 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       "CREATE INDEX suggestions_state ON suggestions(state)",
     )
 
+    // Not idempotent, like the others. health_daily: one row per local day of Health Connect numbers (NULL = no data for that metric), never raw samples; no other query reads it.
+    internal val SCHEMA_V9 = listOf(
+      "CREATE TABLE health_daily(day TEXT PRIMARY KEY, steps INTEGER, sleep_minutes INTEGER, hr_avg INTEGER, hr_low INTEGER, updated_at INTEGER NOT NULL)",
+    )
+
     // Runs after SCHEMA_V6, in its transaction: the old names become the new ones (money out), and a money-in txn holding a name that is not a money-in category is cleared to be categorised again.
     internal const val V6_RENAME = "UPDATE txns SET category = ? WHERE category = ? AND direction = 'OUT'"
     internal val V6_CLEAR_IN = "UPDATE txns SET category = NULL WHERE direction = 'IN' AND category IS NOT NULL AND category NOT IN (${Categories.IN.joinToString { "?" }})"
@@ -876,6 +881,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
           }
           if (db.version < 7) SCHEMA_V7.forEach(db::execSQL)
           if (db.version < 8) SCHEMA_V8.forEach(db::execSQL)
+          if (db.version < 9) SCHEMA_V9.forEach(db::execSQL)
           db.version = SCHEMA_VERSION
           db.setTransactionSuccessful()
         } finally {
