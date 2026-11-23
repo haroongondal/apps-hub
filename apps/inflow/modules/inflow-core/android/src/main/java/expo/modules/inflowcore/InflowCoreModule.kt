@@ -20,6 +20,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.inflowcore.android.AiConfig
 import expo.modules.inflowcore.android.AiRunner
 import expo.modules.inflowcore.android.BriefingRefresh
+import expo.modules.inflowcore.android.DigestAlarm
 import expo.modules.inflowcore.android.Lock
 import expo.modules.inflowcore.android.GmailClient
 import expo.modules.inflowcore.android.Gallery
@@ -51,6 +52,7 @@ import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.AutopilotSettingsInput
 import expo.modules.inflowcore.core.Briefing
 import expo.modules.inflowcore.core.Categories
+import expo.modules.inflowcore.core.Digest
 import expo.modules.inflowcore.core.DoctorPayload
 import expo.modules.inflowcore.core.DoctorRange
 import expo.modules.inflowcore.core.Edits
@@ -755,6 +757,15 @@ class InflowCoreModule : Module() {
     Function("setBriefingShare") { on: Boolean ->
       if (on) store().setMeta(Briefing.SHARE_META, "1") else store().deleteMeta(Briefing.SHARE_META)
       BriefingRefresh.settingChanged(context)
+    }
+
+    Function("digest") { ->
+      Briefing.on(store().meta(Digest.META))
+    }
+
+    Function("setDigest") { on: Boolean ->
+      if (on) store().setMeta(Digest.META, "1") else store().deleteMeta(Digest.META)
+      DigestAlarm.rearm(context)
     }
   }
 }

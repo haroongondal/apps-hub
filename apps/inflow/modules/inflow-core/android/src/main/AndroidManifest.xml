@@ -6,6 +6,8 @@
   <uses-permission android:name="android.permission.INTERNET" />
   <!-- The "your report is ready" notification, suggestion cards and medicine reminders. A runtime permission (Android 13+); without it reports are still made and listed, and medicines are saved and logged. -->
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- Arms the 08:00 and 20:00 summary alarm again after a restart (a normal permission; it re-arms that alarm only). -->
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <!-- Signature level: only apps signed with the same key (Deputy, later Halo) can hold it. Inflow declares it so it can reach Deputy's RunSuggestionActivity. -->
   <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
   <uses-permission android:name="com.haroon.permission.AUTOPILOT" />
@@ -107,6 +109,13 @@
     <!-- Medicine reminders: the one alarm, and Taken, Skip and Snooze on a reminder. Not exported: only Inflow's own PendingIntents reach them. -->
     <receiver android:name=".android.MedicineAlarmReceiver" android:exported="false" />
     <receiver android:name=".android.MedicineActionReceiver" android:exported="false" />
+    <!-- The 08:00 and 20:00 summary: the alarm, and the restart that arms it again. Not exported: only Inflow's own PendingIntent and the system's boot broadcast reach them. -->
+    <receiver android:name=".android.DigestAlarmReceiver" android:exported="false" />
+    <receiver android:name=".android.DigestBootReceiver" android:exported="false">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+      </intent-filter>
+    </receiver>
     <receiver
       android:name="expo.modules.inflowcore.android.SmsReceiver"
       android:exported="true"

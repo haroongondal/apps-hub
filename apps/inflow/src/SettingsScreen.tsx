@@ -45,6 +45,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
   const [healthAsk, setHealthAsk] = useState(false);
   const [briefingShare, setBriefingShare] = useState(false);
   const [healthBriefing, setHealthBriefing] = useState(false);
+  const [digest, setDigest] = useState(false);
   const [sub, setSub] = useState<'autopilot' | 'suggestions' | null>(null);
   const { run, notice } = useSetupAction(refreshStatus);
 
@@ -58,6 +59,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
       setHealthAsk(InflowCore.healthInAsk());
       setBriefingShare(InflowCore.briefingShare());
       setHealthBriefing(InflowCore.healthInBriefing());
+      setDigest(InflowCore.digest());
       setError(null);
     } catch {
       setError(LOAD_ERROR);
@@ -119,6 +121,9 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
         </Row>
         <Row title="Include medicines and steps in my morning briefing" subtitle="Adds your next medicine time and today's steps. Off keeps health numbers out of the briefing.">
           <Segmented accessibilityLabel="Include medicines and steps in my morning briefing" options={RECORD_OPTIONS} value={healthBriefing ? 'on' : 'off'} onChange={(k) => change(() => InflowCore.setHealthInBriefing(k === 'on'))} />
+        </Row>
+        <Row title="Morning and evening summary" subtitle="Inflow posts what is due and what you spent at 08:00 and 20:00. Nothing leaves the phone.">
+          <Segmented accessibilityLabel="Morning and evening summary" options={RECORD_OPTIONS} value={digest ? 'on' : 'off'} onChange={(k) => change(() => InflowCore.setDigest(k === 'on'))} />
         </Row>
       </Group>
       <Group title="Kept from AI" footer="Inflow never sends these to the AI.">

@@ -75,7 +75,28 @@ class ManifestTest {
     val names = tags("receiver").associateBy { it.attr("name").substringAfterLast('.') }
     for (n in listOf("MedicineAlarmReceiver", "MedicineActionReceiver")) assertEquals(n, "false", names.getValue(n).attr("exported"))
     val asked = tags("uses-permission").map { it.attr("name") }
-    for (p in listOf("SCHEDULE_EXACT_ALARM", "USE_EXACT_ALARM", "RECEIVE_BOOT_COMPLETED", "FOREGROUND_SERVICE")) assertTrue(p, asked.none { it.endsWith(p) })
+    for (p in listOf("SCHEDULE_EXACT_ALARM", "USE_EXACT_ALARM", "FOREGROUND_SERVICE")) assertTrue(p, asked.none { it.endsWith(p) })
+  }
+
+  // The 08:00 and 20:00 summary: exactly one new permission (the normal one that re-arms its alarm after a restart) and two receivers that nothing outside can start.
+  @Test fun theSummaryAddsOnlyItsTwoReceiversAndTheBootPermission() {
+    val receivers = tags("receiver").associateBy { it.attr("name").substringAfterLast('.') }
+    for (n in listOf("DigestAlarmReceiver", "DigestBootReceiver")) {
+      assertEquals(n, "false", receivers.getValue(n).attr("exported"))
+      assertEquals(n, "", receivers.getValue(n).attr("permission"))
+    }
+    assertEquals(0, receivers.getValue("DigestAlarmReceiver").getElementsByTagName("intent-filter").length)
+    val boot = receivers.getValue("DigestBootReceiver").getElementsByTagName("action")
+    assertEquals(listOf("android.intent.action.BOOT_COMPLETED"), (0 until boot.length).map { (boot.item(it) as Element).attr("name") })
+    val asked = tags("uses-permission").map { it.attr("name") }
+    assertEquals(1, asked.count { it == "android.permission.RECEIVE_BOOT_COMPLETED" })
+    assertEquals(
+      setOf(
+        "android.permission.READ_SMS", "android.permission.RECEIVE_SMS", "android.permission.READ_MEDIA_IMAGES", "android.permission.INTERNET", "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED", permission, "android.permission.health.READ_STEPS", "android.permission.health.READ_SLEEP", "android.permission.health.READ_HEART_RATE",
+      ),
+      asked.toSet(),
+    )
   }
 
   @Test fun deputyIsVisibleToThePackageManager() {

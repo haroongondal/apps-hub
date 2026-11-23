@@ -530,6 +530,9 @@ export interface InflowCoreApi {
   setHealthInBriefing(on: boolean): void;
   briefingShare(): boolean;
   setBriefingShare(on: boolean): void;
+  // The 08:00 and 20:00 summary notification; off by default. Turning it on or off arms or cancels the alarm.
+  digest(): boolean;
+  setDigest(on: boolean): void;
   addListener(event: 'onCaptured' | 'onSuggestions', listener: (e: { count: number }) => void): { remove(): void };
 }
 
