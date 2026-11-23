@@ -1,0 +1,12 @@
+{
+  "netlens": "app.netlens",
+  "open-tunnel": "com.opentunnel.open_tunnel_vpn",
+  "deputy": "com.haroon.deputy",
+  "strongroom": "com.haroon.strongroom",
+  "inflow": "com.haroon.inflow",
+  "pdf-editor": "com.haroon.pdfeditor",
+  "clipboard": "com.haroon.clipboard",
+  "halo": "com.haroon.halo",
+  "design-editor": "com.haroon.designeditor",
+  "ai-hub": "com.haroon.aihub"
+}
