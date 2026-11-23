@@ -1,4 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { aiHub } from 'ai-hub-client';
+import { createAiRouter, type AiSource } from './ai-hub-route.ts';
 import { createSender, labelOf, serviceOf, type AiReply } from './ai-keys.ts';
 
 // Design with AI on the phone (SPEC §14.3). The page never sees a key and never picks the URL or
@@ -6,6 +8,7 @@ import { createSender, labelOf, serviceOf, type AiReply } from './ai-keys.ts';
 // a key that is refused or at its limit hands over to the next one (ai-keys.ts).
 // shortcut: the keys sit in an app-private file, not hardware-backed; upgrade to expo-secure-store if wanted.
 const KEYS_FILE = FileSystem.documentDirectory + 'ai-keys.json';
+const SOURCE_FILE = FileSystem.documentDirectory + 'ai-source.txt'; // 'hub' | 'own' | 'none': who served the last call, for the health row
 const OLD_KEY_FILE = FileSystem.documentDirectory + 'ai-key.txt'; // one Groq key, before several were allowed
 const TIMEOUT_MS = 60_000;
 
@@ -96,8 +99,23 @@ async function postToService(url: string, key: string, body: Record<string, unkn
 
 const send = createSender();
 
+// shortcut: a failed write is dropped, the health row only reads a hint; upgrade when that row shows more.
+const recordSource = (source: AiSource) => void FileSystem.writeAsStringAsync(SOURCE_FILE, source).catch(() => {});
+
+async function ownRequest(body: Record<string, unknown>): Promise<AiReply> {
+  return send(await readKeys(), body, postToService);
+}
+
+const route = createAiRouter({ hub: aiHub, own: ownRequest, record: recordSource });
+
+// AI hub first, the keys above second (ai-hub-route.ts). Image generation does not exist in this app, so no call stays on Gemini images.
 export async function aiRequest(page: unknown): Promise<AiReply> {
   const body = aiSanitise(page);
   if (!body) return { ok: false, status: 0, error: 'bad' };
-  return send(await readKeys(), body, postToService);
+  return route(body);
+}
+
+// Asking once on start puts this app in the hub's Apps list ("Asked to use AI. Allow?"), even before anyone taps Generate.
+export function aiHubWarmUp(): void {
+  void aiHub.available().catch(() => {});
 }
