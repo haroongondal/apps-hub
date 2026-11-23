@@ -7,8 +7,8 @@ import test from 'node:test';
 const repo = path.resolve(import.meta.dirname, '../../../..');
 const canonicalDir = path.join(repo, 'packages/app-link-contract/android');
 const FILES = ['AppLinkGuard.kt', 'AppLinkCaller.kt', 'AppLinkActivityCaller.kt'];
-// Inflow serves a share, so it must carry the provider guard; the activity check is copied in only by apps with a link action.
-const INFLOW_FILES = ['AppLinkGuard.kt', 'AppLinkCaller.kt'];
+// Inflow serves a share and an action (ADD_TODO), so it carries the provider guard and the activity check; the activity check is copied in only by apps with a link action.
+const INFLOW_FILES = ['AppLinkGuard.kt', 'AppLinkCaller.kt', 'AppLinkActivityCaller.kt'];
 // Modifiers and indentation are allowed, so `internal object AppLinkGuard` is still found (and then reported as differing).
 const OBJECT = /^\s*(?:\w+\s+)*object (AppLinkGuard|AppLinkCaller|AppLinkActivityCaller)\b/m;
 const PACKAGE_LINE = /^package [a-z][\w.]*$/;

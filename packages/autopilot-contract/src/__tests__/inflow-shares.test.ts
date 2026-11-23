@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
-import { assertRowShape, auditManifest } from '@apps-hub/app-link-contract';
+import { ADD_TODO, assertRowShape, auditManifest } from '@apps-hub/app-link-contract';
 import { AUTHORITY } from '../index.ts';
 import { INFLOW_HEALTH_SHARE } from '../inflow-shares.ts';
 
@@ -29,4 +29,12 @@ test('the sample health rows pass the share shape, and the health row holds no p
 
 test("Inflow's module manifest passes the link audit", () => {
   assert.deepEqual(auditManifest(read('apps/inflow/modules/inflow-core/android/src/main/AndroidManifest.xml')), []);
+});
+
+test('the module manifest declares the ADD_TODO activity behind the link permission, and nothing else listens for it', () => {
+  const xml = read('apps/inflow/modules/inflow-core/android/src/main/AndroidManifest.xml');
+  const activity = /<activity\s[^>]*AddTodoActivity[^>]*>/.exec(xml)?.[0] ?? '';
+  assert.match(activity, /android:exported="true"/);
+  assert.match(activity, /android:permission="com\.haroon\.permission\.AUTOPILOT"/);
+  assert.equal(xml.split(ADD_TODO.name).length - 1, 1);
 });

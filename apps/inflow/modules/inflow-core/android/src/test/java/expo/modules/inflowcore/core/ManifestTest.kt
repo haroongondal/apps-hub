@@ -37,8 +37,19 @@ class ManifestTest {
 
   @Test fun onlyTheKnownComponentsAreExported() {
     val exported = listOf("activity", "activity-alias", "service", "receiver", "provider").flatMap { tags(it) }.filter { it.attr("exported") == "true" }.map { it.attr("name").substringAfterLast('.') }
-    assertEquals(setOf("InflowListener", "SmsReceiver", "AutopilotProvider", "HealthRationaleActivity", "ViewPermissionUsageActivity"), exported.toSet())
-    assertEquals(5, exported.size)
+    assertEquals(setOf("InflowListener", "SmsReceiver", "AutopilotProvider", "HealthRationaleActivity", "ViewPermissionUsageActivity", "AddTodoActivity"), exported.toSet())
+    assertEquals(6, exported.size)
+  }
+
+  @Test fun addTodoIsAnExportedScreenBehindThePermissionWithItsOwnActionOnly() {
+    val a = tags("activity").single { it.attr("name") == ".android.AddTodoActivity" }
+    assertEquals("true", a.attr("exported"))
+    assertEquals(permission, a.attr("permission"))
+    // a screen: not NoDisplay, not translucent; default launch mode
+    assertTrue(a.attr("theme"), a.attr("theme").let { it.isNotEmpty() && !it.contains("NoDisplay") && !it.contains("Translucent") })
+    assertEquals("", a.attr("launchMode"))
+    val actions = (0 until a.getElementsByTagName("action").length).map { (a.getElementsByTagName("action").item(it) as Element).attr("name") }
+    assertEquals(listOf(AddTodo.ACTION), actions)
   }
 
   @Test fun healthConnectIsReadOnlyWithTheRationaleScreen() {

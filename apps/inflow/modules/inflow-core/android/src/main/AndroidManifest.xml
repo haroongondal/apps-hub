@@ -81,6 +81,17 @@
         <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
       </intent-filter>
     </activity-alias>
+    <!-- ADD_TODO: another app of the owner's asks Inflow to add a to-do. Same-key apps only (signature permission, then the calling package is checked in code); it shows the fingerprint prompt, then a screen, and saves only when the owner taps Add. -->
+    <activity
+      android:name=".android.AddTodoActivity"
+      android:exported="true"
+      android:permission="com.haroon.permission.AUTOPILOT"
+      android:theme="@android:style/Theme.DeviceDefault.DayNight">
+      <intent-filter>
+        <action android:name="com.haroon.inflow.action.ADD_TODO" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
+    </activity>
     <receiver android:name=".android.SuggestionSkipReceiver" android:exported="false" />
     <receiver android:name=".android.SuggestionReminderReceiver" android:exported="false" />
     <!-- Medicine reminders: the one alarm, and Taken, Skip and Snooze on a reminder. Not exported: only Inflow's own PendingIntents reach them. -->
