@@ -74,7 +74,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | F3 | Docs drift | eco/base | todo |
 | F4 | Halo m1/m2 minors | eco/halo | built + gated (0f60b826, 4ece59ca); halo-engine 165 tests, notch-island 109, assembleDebug ok, halo ts 126 pass; phone not run |
 | F5 | Deputy reliability (verify and close; code is on main) | eco/deputy | built + gated (1eef0a8b, e7b5b9b0): only gap was Retry-After as an HTTP date; Deputy gradle 267 -> 274 tests, 0 fail; deputy ts 12 pass; phone not run |
-| F6 | Nexus shortcuts | eco/nexus | todo |
+| F6 | Nexus shortcuts | eco/nexus | built + gated (6134b70e, aeae7091, 5624026f, 92385261): pdf-editor-mobile 47/47, knowledge-core 67/67, engine 2/2, gradle ok; new module audio-chunks (Android only); phone not run |
 | E1 | app-link-contract | eco/base | todo |
 | E2 | AI keys once (Strongroom) | eco/strongroom + readers | todo (needs E1; owner decision) |
 | E3 | Share targets | eco/nexus, eco/design-editor, eco/deputy | todo (needs E1) |
@@ -89,7 +89,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | C8 | Nexus offline OCR (on main; verify, audit, fill gaps) | eco/nexus | todo |
 | C9 | autonomous-browsing dry run | eco/autonomous-browsing | todo |
 | V1-V5 | Vitals in Inflow | eco/inflow | todo |
-| M1-M5 | Minutes in Nexus | eco/nexus | todo |
+| M1-M5 | Minutes in Nexus | eco/nexus | M1,M2,M5,M4 + E3-Nexus + C8 in progress (phase nexus-w2); M3 needs E1/B3 |
 | B1-B6 | Cross-app wave 3 | various | todo |
 
 ## Open owner decisions (collect here, ask once at the end)
