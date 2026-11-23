@@ -228,12 +228,17 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     ).use { c -> buildList { while (c.moveToNext()) add(AskItem(c.getString(0), c.str(1), c.getLong(2), c.str(3), c.getString(4))) } }
   }
 
-  fun nexusAskItems(sinceId: Long, limit: Int): List<NexusAskItem> =
-    query(NEXUS_ASK_ITEMS_SQL, sinceId, limit.toLong())
+  // Like Ask AI: nothing saved before the first AI key, and nothing at all before there is one.
+  fun nexusAskItems(sinceId: Long, limit: Int): List<NexusAskItem> {
+    val from = enabledSince() ?: return emptyList()
+    return query(NEXUS_ASK_ITEMS_SQL, sinceId, from, limit.toLong())
       .use { c -> buildList { while (c.moveToNext()) add(NexusAskItem(c.getLong(0), c.getString(1), c.str(2), c.getString(3), c.getLong(4))) } }
+  }
 
-  fun nexusAskIds(sinceId: Long, limit: Int): List<Long> =
-    query(NEXUS_ASK_IDS_SQL, sinceId, limit.toLong()).use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } }
+  fun nexusAskIds(sinceId: Long, limit: Int): List<Long> {
+    val from = enabledSince() ?: return emptyList()
+    return query(NEXUS_ASK_IDS_SQL, sinceId, from, limit.toLong()).use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } }
+  }
 
   fun setTodoDone(id: Long, done: Boolean) {
     run("UPDATE todos SET done = ? WHERE id = ?", if (done) 1L else 0L, id)
@@ -604,8 +609,8 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     private val SMS_OR_EMAIL = "($SMS_OR_EMAIL_TERMS)"
     internal const val NEVER_SENT_PREFIX = "nosend:"
     internal val NEVER_SEND_FILTER = "i.otp_expires_at IS NULL AND $SMS_OR_EMAIL AND $SENDABLE"
-    // Nexus's ask_items and ask_ids: Ask AI's filter (never the picked-chat exception), never Strongroom or Inflow, paged by id (one ?).
-    internal val NEXUS_ASK_WHERE = "i.id > ? AND i.pkg NOT IN (${AutopilotAccess.SQL_LIST}) AND $NEVER_SEND_FILTER"
+    // Nexus's ask_items and ask_ids: Ask AI's filter (never the picked-chat exception), posted after the first AI key, never Strongroom or Inflow, paged by id (two ?: since-id, first-key time).
+    internal val NEXUS_ASK_WHERE = "i.id > ? AND i.posted_at >= ? AND i.pkg NOT IN (${AutopilotAccess.SQL_LIST}) AND $NEVER_SEND_FILTER"
     internal val NEXUS_ASK_ITEMS_SQL = "SELECT i.id, i.app_label, COALESCE(n.name, i.sender), substr(COALESCE(i.email_text, i.text), 1, ${NexusShares.MAX_TEXT}), i.posted_at " +
       "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.sender_key WHERE $NEXUS_ASK_WHERE ORDER BY i.id LIMIT ?"
     internal val NEXUS_ASK_IDS_SQL = "SELECT i.id FROM items i WHERE $NEXUS_ASK_WHERE ORDER BY i.id LIMIT ?"

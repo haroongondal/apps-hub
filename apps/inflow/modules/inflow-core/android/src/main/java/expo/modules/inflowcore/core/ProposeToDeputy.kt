@@ -52,30 +52,20 @@ object ProposeTaskExtras {
 
   const val BILL_TASK = "Help me pay this bill. The bill details are in the quoted text."
 
-  // shortcut: the amount is the largest number in the message, so from 10,000,000 up it could be an account or card number and is left out; upgrade when the AI returns a real bill amount.
-  private const val AMOUNT_MAX_MINOR = 10_000_000L * 100
-
   private val DAY = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
-  private val KEY = Regex("^bill:(\\d+):\\d{4}-\\d{2}-\\d{2}$")
-
-  fun billAmountMinor(dedupeKey: String): Long? =
-    KEY.find(dedupeKey)?.groupValues?.get(1)?.toLongOrNull()?.takeIf { it in 1 until AMOUNT_MAX_MINOR }
 
   fun cleanPayee(raw: String?): String? =
     raw?.replace(Regex("\\s+"), " ")?.filterNot { Character.isISOControl(it) }?.trim()?.take(PAYEE_MAX)
       ?.let { if (it.isNotEmpty() && it.last().isHighSurrogate()) it.dropLast(1) else it }?.trim()?.takeIf { it.isNotEmpty() }
 
-  private fun money(minor: Long) = (minor / 100).toString() + if (minor % 100 == 0L) "" else ".%02d".format(Locale.ENGLISH, minor % 100)
-
-  fun billContext(payee: String?, amountMinor: Long?, dueAt: Long?, zone: ZoneId): String =
+  fun billContext(payee: String?, dueAt: Long?, zone: ZoneId): String =
     listOfNotNull(
       cleanPayee(payee)?.let { "Payee: $it." },
-      amountMinor?.let { "Amount: ${money(it)}." },
       dueAt?.let { "Due: ${DAY.format(Instant.ofEpochMilli(it).atZone(zone))}." },
     ).joinToString(" ").take(CONTEXT_MAX)
 
-  fun forBill(suggestionId: Long, payee: String?, amountMinor: Long?, dueAt: Long?, zone: ZoneId): Map<String, Any>? {
-    val ctx = billContext(payee, amountMinor, dueAt, zone)
+  fun forBill(suggestionId: Long, payee: String?, dueAt: Long?, zone: ZoneId): Map<String, Any>? {
+    val ctx = billContext(payee, dueAt, zone)
     val extras = buildMap<String, Any> {
       put("task", BILL_TASK)
       if (ctx.isNotEmpty()) put("context", ctx)

@@ -24,7 +24,7 @@ object ProposeBill {
   /** Null when the bill is gone or no longer a waiting bill. */
   fun start(items: SqlItemStore, suggestions: SqlSuggestionStore, id: Long, now: Long, zone: ZoneId): ProposeStart? {
     val s = suggestions.get(id)?.takeIf { it.kind == SuggestionKind.BILL && it.state == SuggestionState.WAITING && it.expiresAt > now } ?: return null
-    val extras = ProposeTaskExtras.forBill(s.id, items.billPayee(s.itemId), ProposeTaskExtras.billAmountMinor(s.dedupeKey), s.dueAt, zone) ?: return null
+    val extras = ProposeTaskExtras.forBill(s.id, items.billPayee(s.itemId), s.dueAt, zone) ?: return null
     return ProposeStart(HashMap(extras))
   }
 

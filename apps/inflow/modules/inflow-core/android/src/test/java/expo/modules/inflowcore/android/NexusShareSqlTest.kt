@@ -6,6 +6,7 @@ import expo.modules.inflowcore.core.NexusShares
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 
@@ -55,27 +56,48 @@ class NexusShareSqlTest {
     healthCanary
 
   @Test fun askItemsServeOnlySmsAndEmailThatAskAiMayReadAndNoHealth() {
-    val served = rows(mixed, SqlItemStore.NEXUS_ASK_ITEMS_SQL, 0, NexusShares.PAGE)
+    val served = rows(mixed, SqlItemStore.NEXUS_ASK_ITEMS_SQL, 0, 0, NexusShares.PAGE)
     assertEquals(listOf(listOf("1", "App", "Ali", "sms ok", "1"), listOf("4", "App", "Ali", "full email", "4"), listOf("10", "App", "Ammi", "renamed", "10")), served)
     assertFalse(served.flatten().any { it.contains("HEALTH CANARY") || it == "6214" })
   }
 
   @Test fun askIdsAreTheIdsAskItemsWouldServe() =
-    assertEquals(listOf("1", "4", "10"), rows(mixed, SqlItemStore.NEXUS_ASK_IDS_SQL, 0, NexusShares.PAGE).map { it.single() })
+    assertEquals(listOf("1", "4", "10"), rows(mixed, SqlItemStore.NEXUS_ASK_IDS_SQL, 0, 0, NexusShares.PAGE).map { it.single() })
+
+  // posted_at of the fixture rows equals the id, so a first-key time of 5 leaves out rows 1 to 4; with no key the store answers nothing before any SQL runs.
+  @Test fun nothingSavedBeforeTheFirstAiKeyIsServed() {
+    assertEquals(listOf("10"), rows(mixed, SqlItemStore.NEXUS_ASK_IDS_SQL, 0, 5, NexusShares.PAGE).map { it.single() })
+    assertEquals(listOf("10"), rows(mixed, SqlItemStore.NEXUS_ASK_ITEMS_SQL, 0, 5, NexusShares.PAGE).map { it[0] })
+    assertEquals(listOf("4", "10"), rows(mixed, SqlItemStore.NEXUS_ASK_IDS_SQL, 0, 4, NexusShares.PAGE).map { it.single() })   // the edge is included, like Ask AI
+    assertEquals(emptyList<List<String>>(), rows(mixed, SqlItemStore.NEXUS_ASK_ITEMS_SQL, 0, 11, NexusShares.PAGE))
+  }
+
+  @Test fun withNoAiKeyNothingIsServed() {
+    // No key bound: the clause alone already serves nothing ...
+    assertEquals(emptyList<List<String>>(), rows(mixed, SqlItemStore.NEXUS_ASK_IDS_SQL, 0, "NULL", NexusShares.PAGE))
+    assertEquals(emptyList<List<String>>(), rows(mixed, SqlItemStore.NEXUS_ASK_ITEMS_SQL, 0, "NULL", NexusShares.PAGE))
+    // ... and the store does not even query: both reads return empty when enabledSince() is null.
+    val src = File("src/main/java/expo/modules/inflowcore/android/SqlItemStore.kt").readText()
+    for (fn in listOf("fun nexusAskItems(sinceId: Long, limit: Int)", "fun nexusAskIds(sinceId: Long, limit: Int)")) {
+      val body = src.substringAfter(fn).substringBefore("\n  }\n").lines().map { it.trim() }.filter { it.isNotEmpty() }
+      assertEquals(fn, "val from = enabledSince() ?: return emptyList()", body[1])
+      assertTrue(fn, body[2].startsWith("return query(NEXUS_ASK_") && body[2].contains("_SQL, sinceId, from, limit.toLong())"))
+    }
+  }
 
   private val many = "WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 250) " +
     "INSERT INTO items(id, hash, pkg, app_label, text, posted_at, captured_at, search, sms_hash) SELECT x, 'h' || x, '$sms', 'App', 'm' || x, x, x, '', 's' || x FROM n;\n"
 
   @Test fun pagesAreIdsStrictlyAboveTheSinceIdAscendingAtMostAPage() {
-    assertEquals((1L..200L).map { "$it" }, rows(many, SqlItemStore.NEXUS_ASK_IDS_SQL, 0, NexusShares.PAGE).map { it.single() })
-    assertEquals((201L..250L).map { "$it" }, rows(many, SqlItemStore.NEXUS_ASK_IDS_SQL, 200, NexusShares.PAGE).map { it.single() })
-    assertEquals(emptyList<List<String>>(), rows(many, SqlItemStore.NEXUS_ASK_IDS_SQL, 250, NexusShares.PAGE))
-    assertEquals(listOf("6", "7", "8"), rows(many, SqlItemStore.NEXUS_ASK_ITEMS_SQL, 5, 3).map { it[0] })
+    assertEquals((1L..200L).map { "$it" }, rows(many, SqlItemStore.NEXUS_ASK_IDS_SQL, 0, 0, NexusShares.PAGE).map { it.single() })
+    assertEquals((201L..250L).map { "$it" }, rows(many, SqlItemStore.NEXUS_ASK_IDS_SQL, 200, 0, NexusShares.PAGE).map { it.single() })
+    assertEquals(emptyList<List<String>>(), rows(many, SqlItemStore.NEXUS_ASK_IDS_SQL, 250, 0, NexusShares.PAGE))
+    assertEquals(listOf("6", "7", "8"), rows(many, SqlItemStore.NEXUS_ASK_ITEMS_SQL, 5, 0, 3).map { it[0] })
   }
 
   @Test fun longTextIsCutInTheQuery() {
     val long = item(1, sms, "x", sms = true) + "UPDATE items SET text = replace(hex(zeroblob(2500)), '0', 'a') WHERE id = 1;\n"
-    assertEquals(NexusShares.MAX_TEXT, rows(long, SqlItemStore.NEXUS_ASK_ITEMS_SQL, 0, 1).single()[3].length)
+    assertEquals(NexusShares.MAX_TEXT, rows(long, SqlItemStore.NEXUS_ASK_ITEMS_SQL, 0, 0, 1).single()[3].length)
   }
 
   private val debitsSql = "SELECT t.id FROM txns t WHERE ${SqlLedgerStore.NEXUS_DEBITS_WHERE}"
