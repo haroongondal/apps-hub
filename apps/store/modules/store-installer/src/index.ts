@@ -50,6 +50,13 @@ interface StoreInstallerApi {
   clearCredentials(): void;
   scheduleUpdateCheck(hours: number): void;
   getUpdateCheckHours(): number;
+  /** Raw Settings.Secure strings; null when unset or when the phone refuses the read. */
+  getServiceSettings(): { accessibility: string | null; listeners: string | null };
+  /** Rows of `content://<authority>/health` (at most 2, unvalidated), or null on any failure or after 3 s. */
+  queryHealth(authority: string): Promise<unknown[] | null>;
+  openAppSettings(packageName: string): void;
+  openAccessibilitySettings(): void;
+  openListenerSettings(packageName: string, className: string | null): void;
   addListener(event: 'onInstallStatus', listener: (e: InstallStatusEvent) => void): { remove(): void };
   addListener(event: 'onInstallProgress', listener: (e: InstallProgress) => void): { remove(): void };
 }

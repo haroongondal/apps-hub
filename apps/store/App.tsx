@@ -25,6 +25,7 @@ import StoreInstaller, { type InstallProgress, type InstallStatusEvent } from 's
 import { fetchManifest, signUrl, type Credentials } from './src/api';
 import { downloadLabel, installFailure, listSummary, statusPill, versionLines } from './src/present';
 import { appStatus, type Installed } from './src/status';
+import { HealthScreen } from './src/HealthScreen';
 
 const CHECK_INTERVALS = [
   { key: '0', label: 'Off' },
@@ -136,6 +137,8 @@ function StoreList({ creds, onSignOut }: { creds: Credentials; onSignOut: () => 
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hours, setHours] = useState(() => StoreInstaller.getUpdateCheckHours());
+  const [showHealth, setShowHealth] = useState(false);
+  const closeHealth = useCallback(() => setShowHealth(false), []);
 
   const setBusy = (pkg: string, b: Busy | null) => setProgress(({ [pkg]: _, ...rest }) => (b ? { ...rest, [pkg]: b } : rest));
   const report = (pkg: string, p: Problem | null) =>
@@ -252,6 +255,8 @@ function StoreList({ creds, onSignOut }: { creds: Credentials; onSignOut: () => 
   const subtitle = manifest ? listSummary(statuses) : error ? undefined : 'Loading your apps';
   const retry = <Button label="Try again" variant="secondary" size="sm" onPress={refresh} busy={refreshing} />;
 
+  if (showHealth) return <HealthScreen names={Object.fromEntries(apps.map((a) => [a.id, a.name]))} onBack={closeHealth} />;
+
   return (
     <Screen scroll refreshing={refreshing} onRefresh={refresh}>
       <Header title="Store" subtitle={subtitle} />
@@ -345,6 +350,15 @@ function StoreList({ creds, onSignOut }: { creds: Credentials; onSignOut: () => 
           })}
         </Group>
       )}
+
+      <Group>
+        <Row
+          title="Setup and health"
+          subtitle="See which apps need a setting turned on, and how to fix it."
+          onPress={() => setShowHealth(true)}
+          accessibilityHint="Opens the setup and health check for your apps"
+        />
+      </Group>
 
       <Group title="Updates" footer="Checks run on Wi-Fi only.">
         <Row title="Check for updates" subtitle="Store notifies you when a new version is ready.">

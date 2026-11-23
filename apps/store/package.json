@@ -7,10 +7,11 @@
     "start": "expo start",
     "android": "expo run:android",
     "prebuild": "expo prebuild --platform android",
-    "test": "node --test src/__tests__/status.test.ts src/__tests__/present.test.ts",
+    "test": "node --test src/__tests__/status.test.ts src/__tests__/present.test.ts src/__tests__/health.test.ts src/__tests__/manifest.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@apps-hub/app-link-contract": "workspace:*",
     "@apps-hub/store-manifest": "workspace:*",
     "@apps-hub/ui": "workspace:*",
     "expo": "~54.0.36",
