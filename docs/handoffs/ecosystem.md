@@ -153,6 +153,8 @@ Risks: no phone check has ever run and everything depends on Store-signed builds
 
 - P1-B DONE on eco/deputy (56bf66a0): Deputy JVM 339 (315), deputy ts 24 (17), app-link-contract 134; PROPOSE_TASK activity (waits in the caller's task on a small screen until the owner saves/starts/closes the draft; result handed_over/cancelled), provider com.haroon.deputy.applink with health (always), waiting (opt-in, owner-given names only), runs (opt-in, owner-typed tasks, only served to com.haroon.pdfeditor), `ai_source` is own when a key is saved else none; RunSuggestionActivity still NOT hardened (Inflow starts it with plain startActivity): the B3 line in the plan that says "same commit hardens RunSuggestionActivity" is wrong/obsolete; phone not run.
 
+- P4 HomeNet DONE (b416dea8): core 358 (349), netlens-core JVM 71 (58), app-link-contract 133, assembleDebug ok, iOS Swift only parsed; CHANGED ping to Halo (only with sharing on; presence pings at most 1/min), `health` row, Android-only "Restart the router with Deputy" (fixed task text only; context/apps/ref never sent). Halo must declare `<uses-permission AUTOPILOT>` and an exported receiver with that permission to receive the ping (P3). Needs security-engineer review. Phone not run.
+
 ## Security findings handled during the build (automated reviews)
 
 - ai-hub-client did not verify the hub identity (package squatting): fixed, 60875260 on eco/ai-hub.
