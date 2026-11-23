@@ -75,17 +75,17 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | F4 | Halo m1/m2 minors | eco/halo | built + gated (0f60b826, 4ece59ca); halo-engine 165 tests, notch-island 109, assembleDebug ok, halo ts 126 pass; phone not run |
 | F5 | Deputy reliability (verify and close; code is on main) | eco/deputy | built + gated (1eef0a8b, e7b5b9b0): only gap was Retry-After as an HTTP date; Deputy gradle 267 -> 274 tests, 0 fail; deputy ts 12 pass; phone not run |
 | F6 | Nexus shortcuts | eco/nexus | built + gated (6134b70e, aeae7091, 5624026f, 92385261): pdf-editor-mobile 47/47, knowledge-core 67/67, engine 2/2, gradle ok; new module audio-chunks (Android only); phone not run |
-| E1 | app-link-contract | eco/base | todo |
+| E1 | app-link-contract | eco/base | built + gated + security-reviewed (commits 18657714 ... fda0631b): app-link-contract 91/91, autopilot-contract 5/5, inflow ts 91/91, Inflow gradle 578 tests; phone not run |
 | E2 | AI keys once (Strongroom) | eco/strongroom + readers | todo (needs E1; owner decision) |
 | E3 | Share targets | eco/nexus, eco/design-editor, eco/deputy | todo (needs E1) |
 | E4 | Store health hub | eco/store | todo (needs E1) |
 | C1 | Clipboard smart actions + phase 1 | eco/clipboard | in progress (Add to Inflow action waits for E1 actions) |
 | C2 | Deputy repeating tasks | eco/deputy | built + gated (d23c625a): Deputy gradle 299 tests (274 before), deputy ts 15 pass, typecheck ok, WorkManager 2.12.0 Apache-2.0 no gms; gate unchanged (test proves scheduled run meets same gate); phone not run; security-engineer review pending |
 | C3 | TunnelWall (firewall already on main) | eco/tunnelwall | in progress |
-| C4 | HomeNet | eco/homenet | todo |
-| C5 | Strongroom health report | eco/strongroom | todo |
+| C4 | HomeNet | eco/homenet | in progress |
+| C5 | Strongroom health report | eco/strongroom | in progress |
 | C6 | Halo progress ring | eco/halo | built + gated (c230590a): halo-engine 165, notch-island 127, halo ts 127 pass, assembleDebug ok; default ON (my call); phone not run; security-engineer look pending |
-| C7 | Design Editor brand kit from image | eco/design-editor | todo |
+| C7 | Design Editor brand kit from image | eco/design-editor | in progress |
 | C8 | Nexus offline OCR (on main; verify, audit, fill gaps) | eco/nexus | todo |
 | C9 | autonomous-browsing dry run | eco/autonomous-browsing | built + gated (d4ab7da7): vitest 514 pass (500 before), tsc clean; real-window check not run; open: assert probe waits default timeout on missing targets |
 | V1-V5 | Vitals in Inflow | eco/inflow | V1-V4 in progress (phase vitals); V5 waits for E1 final |
@@ -98,6 +98,13 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 - apps/inflow/android/app/build.gradle is NOT wired to the shared signing key; a release rewrites it in the caller's tree so the next `pnpm release` refuses until reverted. Fix belongs on eco/inflow: commit the wired file (tell the Vitals phase).
 - apps/ai-hub is not in the release list (no Store release path): not guaranteed shared-key signed (E1 finding); matters for E2.
 - Releases before F1/F2 have no recorded commit: the first rollback of each app needs `--to <sha>`.
+
+## E1 outcome (for later phases)
+
+- Contract: packages/app-link-contract (README has "how an app adds a share/action", threat model, phone checks). One permission `com.haroon.permission.AUTOPILOT` exported as LINK_PERMISSION (R1: a rename needs a coordinated release of every app). Kotlin guard is canonical copy-in files (AppLinkGuard.kt, AppLinkCaller.kt) with a drift test. Guard also re-checks the caller cert (checkSignatures).
+- Signing: all releases use the ONE Store key. Signature trust holds only for Store-installed builds: every committed debug.keystore is the same public Expo debug key, so a debug-built app would trust anything signed with it. `apps/ai-hub` is NOT in the release list, so it has no trust path yet (matters for E2).
+- Open from E1: Deputy's RunSuggestionActivity (headless, grandfathered) has no callingPackage check or extras validation; any same-key sibling can start it (add when Deputy is next touched, B3 will). First action author must add the second caller check for activities (R7). Inflow `items/#` and `update` paths are legacy; new shares must not copy them; OTP filtering in AutopilotAccess not traced (check before E3/B2).
+- Metro: nothing imports app-link-contract at runtime yet; the first app that does must list it as a dependency and bundle once.
 
 ## Open owner decisions (collect here, ask once at the end)
 
