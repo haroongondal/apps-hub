@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import { ADD_TODO, assertRowShape, auditManifest, defineShare } from '@apps-hub/app-link-contract';
+import type { Share } from '@apps-hub/app-link-contract';
 import { AUTHORITY } from '../index.ts';
-import { INFLOW_BRIEFING_SHARE, INFLOW_HEALTH_SHARE } from '../inflow-shares.ts';
+import { INFLOW_ASK_IDS_SHARE, INFLOW_ASK_ITEMS_SHARE, INFLOW_BRIEFING_SHARE, INFLOW_DEBITS_SHARE, INFLOW_HEALTH_SHARE } from '../inflow-shares.ts';
 
 const root = (rel: string) => new URL(`../../../../${rel}`, import.meta.url);
 const read = (rel: string) => fs.readFileSync(root(rel), 'utf8');
@@ -70,4 +71,51 @@ test('a briefing row with an extra column, a missing one or a wrong type fails, 
     () => defineShare<{ line_id: number; private: number }>()({ authority: 'com.haroon.inflow.autopilot', path: 'briefing', columns: { line_id: 'long', private: 'int' }, description: 'x' }),
     /looks sensitive/,
   );
+});
+
+const nexusShares: [string, Share<Record<string, unknown>>][] = [
+  ['ask-items', INFLOW_ASK_ITEMS_SHARE],
+  ['ask-ids', INFLOW_ASK_IDS_SHARE],
+  ['debits', INFLOW_DEBITS_SHARE],
+];
+
+test('the three Nexus shares equal the fixtures the Kotlin provider is tested against, and their sample rows pass the shape', () => {
+  for (const [name, share] of nexusShares) {
+    const { authority, path, columns, maxRows } = share;
+    assert.deepEqual(json(`packages/autopilot-contract/fixtures/${name}.share.json`), { authority, path, columns, maxRows }, name);
+    assert.equal(share.uri(12), `content://com.haroon.inflow.autopilot/${path}/12`);
+    assert.throws(() => share.uri(-1));
+    const rows: unknown[] = json(`packages/autopilot-contract/fixtures/${name}-rows.sample.json`);
+    assert.ok(rows.length > 0 && rows.length <= maxRows, name);
+    for (const row of rows) assertRowShape(share, row);
+  }
+});
+
+// Copied from what Nexus reads (eco/nexus: apps/pdf-editor-mobile/modules/nexus-links/fixtures/reader-shares.json and Readers.SPECS): Nexus drops rows whose columns differ.
+const NEXUS_READS = {
+  ask_items: { columns: [['id', 'long'], ['app', 'string'], ['sender', 'string?'], ['text', 'string'], ['at', 'long']], maxRows: 200 },
+  ask_ids: { columns: [['id', 'long']], maxRows: 200 },
+  debits: { columns: [['id', 'long'], ['amount_minor', 'long'], ['at', 'long'], ['merchant', 'string'], ['account', 'string']], maxRows: 200 },
+};
+
+test("the Nexus shares serve exactly the columns, types, paths and row cap Nexus's reader expects", () => {
+  for (const [, share] of nexusShares) {
+    const want = NEXUS_READS[share.path as keyof typeof NEXUS_READS];
+    assert.equal(share.authority, 'com.haroon.inflow.autopilot');
+    assert.deepEqual(share.columns.map((c) => [c, share.types[c]]), want.columns, share.path);
+    assert.equal(share.maxRows, want.maxRows);
+  }
+});
+
+test('a debit row with a card number for an account, a fractional amount or a missing merchant fails; text is capped in the samples', () => {
+  const ok = { id: 7, amount_minor: 420000, at: 1764000000000, merchant: 'Imtiaz', account: 'Meezan ****1234' };
+  assertRowShape(INFLOW_DEBITS_SHARE, ok);
+  assert.throws(() => assertRowShape(INFLOW_DEBITS_SHARE, { ...ok, amount_minor: 1.5 }), /amount_minor must be long/);
+  const { merchant: _m, ...noMerchant } = ok;
+  assert.throws(() => assertRowShape(INFLOW_DEBITS_SHARE, noMerchant), /missing \[merchant\]/);
+  const debits: { account: string }[] = json('packages/autopilot-contract/fixtures/debits-rows.sample.json');
+  assert.ok(debits.every((r) => (r.account.match(/\d/g) ?? []).length <= 4));
+  const asks: { text: string }[] = json('packages/autopilot-contract/fixtures/ask-items-rows.sample.json');
+  assert.ok(asks.every((r) => r.text.length <= 4000));
+  assert.throws(() => assertRowShape(INFLOW_ASK_ITEMS_SHARE, { id: 1, app: 'Messages', sender: undefined, text: 'x', at: 1 }), /sender must be string\?/);
 });
