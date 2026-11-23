@@ -147,6 +147,10 @@ Gate 0 (before P1): E3-Deputy committed; C4 committed; C5 committed (done); Vita
 Before each phase: P1 commit is in eco/base and merged into the worktree; worktree clean; other phase for that app done (Inflow and Nexus take one worker at a time); `auditManifest` and `copies.test.ts` pass on the branch.
 Risks: no phone check has ever run and everything depends on Store-signed builds (debug fails closed); Halo reading a provider on the lock screen; TunnelWall Shields only while the process is alive; router restart may hit a login page (must stop at the gate, no credentials cross); Nexus `ask_ids` re-sync pages of 500.
 
+## Wave 3 progress
+
+- P1-A DONE on eco/base (240b8f40): app-link-contract 133 tests (91), autopilot-contract 5, inflow ts 91; `appHealthShare(app)` + fixtures, `AppLinkActivityCaller.kt` canonical (+ copies.test, mutation proven), `PROPOSE_TASK` and `ADD_TODO` via defineAction (ADD_TODO extra is `dueAt`, camelCase only), `CHANGED_PING` constant; README sections. Health authorities: pdf-editor->pdfeditor (this is Nexus), open-tunnel->opentunnel, design-editor->designeditor, ai-hub->aihub, netlens->com.haroon.netlens.applink, inflow keeps legacy com.haroon.inflow.autopilot, deputy/strongroom/clipboard/halo com.haroon.<id>.applink. (The worker wrongly said Nexus lives in design-editor-mobile; Nexus is pdf-editor-mobile.) Open: no health-row validator for readers (P2 Store should validate at its boundary); CHANGED receiver permission not audited; README "Signing finding (c)" still says ai-hub has no release path (stale, docs pass). AGENTS.md text for app-link-contract is in eco-work/agents-md-paragraphs.md.
+
 ## Open owner decisions (collect here, ask once at the end)
 
 1. Strongroom holds the shared AI keys (E2): the prompt says yes, but AI hub (#66, on main) already owns a Keystore key ring for Gemini and Groq with a signature-guarded bound service. (my call, pending owner) E2 will build on the AI hub, NOT duplicate a key store in Strongroom, unless the owner says Strongroom must hold them. Needs owner confirmation.
