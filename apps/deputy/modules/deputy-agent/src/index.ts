@@ -154,13 +154,34 @@ export interface SharedText {
   cut: boolean;
 }
 
-/** A task written about shared text. Only `instruction` is the task; `text` reaches the model as information only. */
+export interface AppRef {
+  pkg: string;
+  label: string;
+}
+
+/** A task written about shared text, or proposed by a signed sibling app (`source` is its label). Only `instruction` is the task; `text` reaches the model as information only; `apps`, when any, limit the run. */
 export interface Draft {
   id: string;
   instruction: string;
   text: string;
   subject: string | null;
   createdAt: number;
+  source: string | null;
+  apps: AppRef[];
+}
+
+/** A task another of the owner's apps proposed. `instruction` is its suggestion; `text` is someone else's words (may be empty). */
+export interface Proposal {
+  id: string;
+  instruction: string;
+  text: string;
+  source: string;
+  apps: AppRef[];
+}
+
+export interface LinkShares {
+  waiting: boolean;
+  runs: boolean;
 }
 
 export type DraftInput = Omit<Draft, 'id' | 'createdAt'> & { id: string | null };
@@ -195,11 +216,18 @@ interface DeputyAgentApi {
   deleteTask(id: string): void;
   /** The text shared with Deputy since the last call, once; null when there is none. */
   takeSharedText(): SharedText | null;
+  /** The proposed task since the last call, once; null when there is none. */
+  takeProposal(): Proposal | null;
+  /** Tells the app that proposed it whether the owner kept it (saved or started) or closed it. Starts nothing. */
+  settleProposal(id: string, kept: boolean): void;
   listDrafts(): Draft[];
   saveDraft(draft: DraftInput): { id: string | null; error: string | null };
   deleteDraft(id: string): void;
   /** Only the owner's Start tap may call this: a share must never start a run by itself. */
   startDraft(draft: DraftInput): { runId: string | null; error: string | null };
+  /** Both off until the owner turns them on. */
+  getLinkShares(): LinkShares;
+  setLinkShare(name: keyof LinkShares, on: boolean): void;
   listSchedules(): Schedule[];
   /** Copy for the screen when a value isn't valid, or null error once saved; saving also sets the next start. */
   saveSchedule(schedule: Omit<Schedule, 'id' | 'createdAt' | 'nextRunAt'> & { id: string | null }): { id: string | null; error: string | null };
@@ -220,6 +248,8 @@ interface DeputyAgentApi {
   addListener(event: 'onRunEvent', listener: (e: RunEvent) => void): { remove(): void };
   /** Something was shared with Deputy while it is open: call `takeSharedText`. */
   addListener(event: 'onShare', listener: () => void): { remove(): void };
+  /** Another app proposed a task while Deputy is open: call `takeProposal`. */
+  addListener(event: 'onProposal', listener: () => void): { remove(): void };
 }
 
 export default requireNativeModule<DeputyAgentApi>('DeputyAgent');

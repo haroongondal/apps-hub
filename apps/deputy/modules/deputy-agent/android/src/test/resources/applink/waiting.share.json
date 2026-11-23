@@ -1,0 +1,6 @@
+{
+  "authority": "com.haroon.deputy.applink",
+  "path": "waiting",
+  "columns": ["id", "label", "due_at", "state"],
+  "maxRows": 100
+}

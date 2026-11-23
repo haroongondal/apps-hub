@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { draftRow } from '../share.ts';
+import { draftRow, sheetCopy } from '../share.ts';
 
 test('a draft row names the owner’s task and previews the shared text on one line', () => {
   assert.deepEqual(draftRow({ instruction: ' Add it to my calendar ', text: '\n\nDinner at 8\nBring cake', subject: null }), {
@@ -25,4 +25,22 @@ test('only the Start button of the shared text sheet starts a draft', () => {
   assert.match(sheet, /<Button label="Start" onPress=\{start\}/);
   assert.equal(sheet.match(/\{start\}/g)?.length, 1, 'start is used only as the Start button’s onPress');
   assert.equal(sheet.match(/(?<![\w.])start\(/g), null, 'nothing calls start directly');
+});
+
+test('a suggested task names the app that suggested it, and a shared text keeps its own copy', () => {
+  assert.deepEqual(draftRow({ instruction: 'Reply to the landlord', text: '', subject: null, source: 'Inflow' }), { title: 'Reply to the landlord', subtitle: 'Suggested by Inflow' });
+  assert.deepEqual(sheetCopy({ id: null, source: 'Inflow' }), {
+    title: 'Suggested task',
+    label: 'What should Deputy do?',
+    hint: 'Suggested by Inflow. Change it as you like before you tap Start.',
+  });
+  assert.equal(sheetCopy({ id: null, source: null }).title, 'New task from shared text');
+  assert.equal(sheetCopy({ id: 'd1', source: null }).title, 'Draft task');
+});
+
+test('a proposed task reaches the screen only as a sheet: nothing outside the Start button starts it', () => {
+  const app = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'App.tsx'), 'utf8');
+  for (const word of ['startDraft(', 'startRun(', 'saveDraft(']) assert.equal(app.includes(word), false, word);
+  const take = app.slice(app.indexOf('const takeProposal'), app.indexOf('}, [open]);', app.indexOf('const takeProposal')));
+  assert.match(take, /if \(p\) open\(\{ id: null, instruction: p\.instruction, text: p\.text, subject: null, cut: false, source: p\.source, apps: p\.apps, proposalId: p\.id \}\)/);
 });

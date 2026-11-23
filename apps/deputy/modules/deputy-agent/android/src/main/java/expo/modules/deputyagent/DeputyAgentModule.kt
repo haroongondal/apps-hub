@@ -21,6 +21,7 @@ import expo.modules.deputyagent.android.Schedules
 import expo.modules.deputyagent.android.StopChip
 import expo.modules.deputyagent.core.Begin
 import expo.modules.deputyagent.core.Draft
+import expo.modules.deputyagent.core.ProposalInbox
 import expo.modules.deputyagent.core.SavedTask
 import expo.modules.deputyagent.core.ServiceSetting
 import expo.modules.deputyagent.core.SharedInbox
@@ -37,6 +38,7 @@ private const val NOT_CONNECTED =
   "The accessibility service isn't connected. If Setup says it is on, turn it off and on again in Accessibility settings."
 private const val RUN_EVENT = "onRunEvent"
 private const val SHARE_EVENT = "onShare"
+private const val PROPOSAL_EVENT = "onProposal"
 private const val SPEECH_REQUEST = 7301
 
 class DeputyAgentModule : Module() {
@@ -50,17 +52,20 @@ class DeputyAgentModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("DeputyAgent")
 
-    Events(RUN_EVENT, SHARE_EVENT)
+    Events(RUN_EVENT, SHARE_EVENT, PROPOSAL_EVENT)
 
     OnCreate {
       appContext.reactContext?.let(AgentRuntime::init)
       AgentRuntime.listener = { e -> sendEvent(RUN_EVENT, AgentRuntime.toMap(e)) }
       SharedInbox.listener = { sendEvent(SHARE_EVENT, emptyMap<String, Any>()) }
+      ProposalInbox.listener = { sendEvent(PROPOSAL_EVENT, emptyMap<String, Any>()) }
+      appContext.reactContext?.let(OwnerStore::heartbeat)
     }
 
     OnDestroy {
       AgentRuntime.listener = null
       SharedInbox.listener = null
+      ProposalInbox.listener = null
     }
 
     Function("getServiceState") {
@@ -122,12 +127,20 @@ class DeputyAgentModule : Module() {
     Function("takeSharedText") {
       SharedInbox.take()?.let { mapOf("text" to it.text, "subject" to it.subject, "cut" to it.cut) }
     }
-    Function("listDrafts") { OwnerStore.drafts(context).map(OwnerStore::draftMap) }
+    Function("takeProposal") {
+      ProposalInbox.take()?.let {
+        mapOf("id" to it.id, "instruction" to it.task, "text" to it.context, "source" to it.source, "apps" to OwnerStore.appRefs(context, it.apps))
+      }
+    }
+    Function("settleProposal") { id: String, kept: Boolean -> ProposalInbox.settle(id, kept) }
+    Function("listDrafts") { OwnerStore.drafts(context).map { OwnerStore.draftMap(context, it) } }
     Function("saveDraft") { input: Map<String, Any?> -> OwnerStore.saveDraft(context, input) }
     Function("deleteDraft") { id: String -> OwnerStore.deleteDraft(context, id) }
     Function("startDraft") { input: Map<String, Any?> ->
       val r = try {
-        Draft.begin(OwnerStore.draftFrom(input)) { task, apps, untrusted -> AgentRuntime.start(context, task, apps, untrusted, trigger = "shared_text") }
+        val draft = OwnerStore.draftFrom(input)
+        val trigger = if (draft.source != null) "proposed_task" else "shared_text"
+        Draft.begin(draft) { task, apps, untrusted -> AgentRuntime.start(context, task, apps, untrusted, trigger = trigger) }
       } catch (e: IllegalArgumentException) {
         Begin.Failed(e.message ?: Draft.NO_TEXT)
       }
@@ -136,6 +149,9 @@ class DeputyAgentModule : Module() {
         is Begin.Failed -> mapOf("runId" to null, "error" to r.message)
       }
     }
+
+    Function("getLinkShares") { OwnerStore.linkShares(context) }
+    Function("setLinkShare") { name: String, on: Boolean -> OwnerStore.setLinkShare(context, name, on) }
 
     Function("listSchedules") { Schedules.list(context).map(Schedules::toMap) }
     Function("saveSchedule") { input: Map<String, Any?> -> Schedules.save(context, input) }

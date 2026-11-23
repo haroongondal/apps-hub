@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
 import { Button, Header, Notice, Screen, TabBar, ThemeProvider, useTheme } from '@apps-hub/ui';
 import DeputyAgent, { type Draft } from 'deputy-agent';
@@ -39,21 +39,34 @@ function Home() {
 
   const refresh = useCallback(() => setState(DeputyAgent.getServiceState()), []);
 
-  // A new share replaces whatever sheet is open; the key resets its typed instruction.
+  // A new share replaces whatever sheet is open (the app that proposed a replaced task hears it was not kept); the key resets its typed instruction.
+  const proposal = useRef<string | null>(null);
   const open = useCallback((input: SharedInput) => {
+    if (proposal.current) DeputyAgent.settleProposal(proposal.current, false);
+    proposal.current = input.proposalId;
     setTab('tasks');
     setShared({ key: Date.now(), input });
   }, []);
+  const close = useCallback((kept: boolean) => {
+    if (proposal.current) DeputyAgent.settleProposal(proposal.current, kept);
+    proposal.current = null;
+    setShared(null);
+  }, []);
   const takeShare = useCallback(() => {
     const s = DeputyAgent.takeSharedText();
-    if (s) open({ id: null, instruction: '', ...s });
+    if (s) open({ id: null, instruction: '', ...s, source: null, apps: [], proposalId: null });
+  }, [open]);
+  const takeProposal = useCallback(() => {
+    const p = DeputyAgent.takeProposal();
+    if (p) open({ id: null, instruction: p.instruction, text: p.text, subject: null, cut: false, source: p.source, apps: p.apps, proposalId: p.id });
   }, [open]);
 
   useEffect(() => {
     takeShare();
-    const sub = DeputyAgent.addListener('onShare', takeShare);
-    return () => sub.remove();
-  }, [takeShare]);
+    takeProposal();
+    const subs = [DeputyAgent.addListener('onShare', takeShare), DeputyAgent.addListener('onProposal', takeProposal)];
+    return () => subs.forEach((s) => s.remove());
+  }, [takeShare, takeProposal]);
 
   useEffect(() => DeputyAgent.setPalette(JSON.stringify(c)), [c]);
   // Here, not in RunPanel: a run can end while another tab is open.
@@ -88,7 +101,7 @@ function Home() {
             <RunPanel state={state} refresh={refresh} />
             <Drafts
               drafts={drafts}
-              onOpen={(d) => open({ id: d.id, instruction: d.instruction, text: d.text, subject: d.subject, cut: false })}
+              onOpen={(d) => open({ id: d.id, instruction: d.instruction, text: d.text, subject: d.subject, cut: false, source: d.source, apps: d.apps, proposalId: null })}
               onDelete={(d) => {
                 DeputyAgent.deleteDraft(d.id);
                 setDrafts(DeputyAgent.listDrafts());
@@ -108,7 +121,7 @@ function Home() {
           key={shared.key}
           input={shared.input}
           state={state}
-          onClose={() => setShared(null)}
+          onClose={close}
           onSaved={() => setDrafts(DeputyAgent.listDrafts())}
           refresh={refresh}
         />

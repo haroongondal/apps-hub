@@ -13,6 +13,7 @@ import java.util.UUID
 object OwnerStore {
   private fun prefs(c: Context) = c.getSharedPreferences("deputy-settings", Context.MODE_PRIVATE)
   private fun trustPrefs(c: Context) = c.getSharedPreferences("deputy-trust", Context.MODE_PRIVATE)
+  private fun linkPrefs(c: Context) = c.getSharedPreferences("deputy-links", Context.MODE_PRIVATE)
 
   // Read per node while observing, so kept in memory; setTrust replaces it, and a run sees the change at its next step.
   @Volatile private var trustCache: TrustTable? = null
@@ -84,6 +85,8 @@ object OwnerStore {
     (input["text"] as? String).orEmpty(),
     input["subject"] as? String,
     System.currentTimeMillis(),
+    input["source"] as? String,
+    (input["apps"] as? List<*>).orEmpty().mapNotNull { (it as? Map<*, *>)?.get("pkg") as? String },
   )
 
   @Synchronized
@@ -100,7 +103,25 @@ object OwnerStore {
   @Synchronized
   fun deleteDraft(c: Context, id: String) = prefs(c).edit().putString("drafts", Draft.toJson(drafts(c).filter { it.id != id })).apply()
 
-  fun draftMap(d: Draft): Map<String, Any?> = mapOf(
+  fun draftMap(c: Context, d: Draft): Map<String, Any?> = mapOf(
     "id" to d.id, "instruction" to d.instruction, "text" to d.text, "subject" to d.subject, "createdAt" to d.createdAt.toDouble(),
+    "source" to d.source, "apps" to appRefs(c, d.apps),
   )
+
+  fun appRefs(c: Context, pkgs: List<String>): List<Map<String, String>> {
+    val labels = launcherApps(c).toMap()
+    return pkgs.map { mapOf("pkg" to it, "label" to (labels[it] ?: it)) }
+  }
+
+  /** Written when Deputy opens or a run ends; a link query only reads it. */
+  fun heartbeat(c: Context) = linkPrefs(c).edit().putLong("last_seen_at", System.currentTimeMillis()).apply()
+
+  fun lastSeen(c: Context): Long? = linkPrefs(c).getLong("last_seen_at", -1L).takeIf { it >= 0 }
+
+  fun linkShares(c: Context): Map<String, Boolean> = linkPrefs(c).let { mapOf("waiting" to it.getBoolean("waiting", false), "runs" to it.getBoolean("runs", false)) }
+
+  fun setLinkShare(c: Context, name: String, on: Boolean) {
+    require(name == "waiting" || name == "runs") { "Unknown share $name" }
+    linkPrefs(c).edit().putBoolean(name, on).apply()
+  }
 }

@@ -7,6 +7,7 @@ import expo.modules.deputyagent.core.AgentLoop
 import expo.modules.deputyagent.core.Gate
 import expo.modules.deputyagent.core.Gates
 import expo.modules.deputyagent.core.Guard
+import expo.modules.deputyagent.core.LiveGate
 import expo.modules.deputyagent.core.Msgs
 import expo.modules.deputyagent.core.ObservationBuilder
 import expo.modules.deputyagent.core.OpenAiCompatProvider
@@ -40,6 +41,7 @@ object AgentRuntime {
   private val events = ArrayList<RunEvent>()
   @Volatile private var job: Job? = null
   @Volatile private var runId: String? = null
+  @Volatile private var task: String? = null
   @Volatile var listener: ((RunEvent) -> Unit)? = null
   private val scope = CoroutineScope(
     SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e -> Notifier.finished(app, "Deputy stopped after an internal error: ${e.message}") },
@@ -92,6 +94,7 @@ object AgentRuntime {
     )
     synchronized(events) { events.clear() }
     runId = id
+    this.task = task
     store.start(id, task, settings.model, trigger)
     runCatching { app.startForegroundService(Intent(app, RunService::class.java)) }
     StopChip.show(service)
@@ -106,6 +109,7 @@ object AgentRuntime {
         StopChip.hide()
         Notifier.clearGate(app)
         store.prune()
+        OwnerStore.heartbeat(app)
       }
     }
     return id
@@ -132,6 +136,12 @@ object AgentRuntime {
 
   /** The gate waiting now, so a rebound service can show its card again (overlays go with the old connection). */
   fun pendingGate(): Gate? = gates.pending()
+
+  fun liveGate(): LiveGate? {
+    val gate = gates.pending() ?: return null
+    val id = liveRunId() ?: return null
+    return LiveGate(id, task.orEmpty(), gate.expiresAt)
+  }
 
   fun snapshot(): Map<String, Any?> = mapOf(
     "runId" to runId,

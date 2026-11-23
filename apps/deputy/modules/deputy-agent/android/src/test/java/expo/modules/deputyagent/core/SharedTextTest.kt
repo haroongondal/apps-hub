@@ -142,6 +142,39 @@ class SharedTextTest {
     }
     for (file in listOf("android/AgentRuntime.kt", "android/Schedules.kt", "core/Schedule.kt", "android/RunSuggestionActivity.kt")) {
       assertFalse("$file must not know about shares", source(file).contains("SharedInbox") || source(file).contains("Draft"))
+      assertFalse("$file must not know about proposals", source(file).contains("Proposal") || source(file).contains("ProposeTask"))
     }
+  }
+
+  @Test fun noCodePathStartsARunFromAProposedTaskWithoutTheOwnersTap() {
+    val module = source("DeputyAgentModule.kt")
+    assertEquals(
+      "a proposal only tells the screen",
+      listOf("ProposalInbox.listener = { sendEvent(PROPOSAL_EVENT, emptyMap<String, Any>()) }", "ProposalInbox.listener = null"),
+      module.lines().filter { it.contains("ProposalInbox.listener =") }.map { it.trim() },
+    )
+    val take = module.substringAfter("Function(\"takeProposal\")").substringBefore("Function(\"settleProposal\")")
+    for (word in listOf("AgentRuntime", "begin(", "startRun", "saveDraft")) assertFalse("takeProposal must not use $word", take.contains(word))
+    assertEquals(
+      "settling only answers the caller",
+      "Function(\"settleProposal\") { id: String, kept: Boolean -> ProposalInbox.settle(id, kept) }",
+      module.lines().single { it.contains("Function(\"settleProposal\")") }.trim(),
+    )
+
+    val activity = source("android/ProposeTaskActivity.kt")
+    for (word in listOf("AgentRuntime", "Schedules", "begin(", "OwnerStore", "startRun", "Draft", "RunService", "GateReceiver", "resolveGate")) {
+      assertFalse("ProposeTaskActivity must not use $word", activity.contains(word))
+    }
+    val onCreate = activity.substringAfter("override fun onCreate(").substringBefore("override fun onDestroy")
+    val firstCall = onCreate.lines().drop(2).first { it.isNotBlank() }.trim()
+    assertTrue("the caller check runs first: $firstCall", firstCall.startsWith("if (!AppLinkActivityCaller.allowed(this)) return answer(RESULT_CANCELED"))
+    assertTrue("the extras pass the contract's validator", source("core/Proposal.kt").contains("AppLinkGuard.validateExtras(SPEC, raw)"))
+
+    val provider = source("android/DeputyLinkProvider.kt")
+    for (word in listOf("AgentRuntime.start", "begin(", "Schedules.fire", "Schedules.runNow", "resolveGate", "ProposalInbox", "heartbeat", "save", "edit()", "AgentRuntime.init")) {
+      assertFalse("a link query must not start or write anything: $word", provider.contains(word))
+    }
+    val query = provider.substringAfter("override fun query(")
+    assertTrue("the provider checks its caller first", query.lines().drop(1).take(2).joinToString().contains("if (!AppLinkCaller.allowed(c)) throw SecurityException"))
   }
 }

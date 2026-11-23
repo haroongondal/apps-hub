@@ -1,0 +1,11 @@
+{
+  "waiting": [
+    {"id": 2864434397, "label": "A task you started", "due_at": 1764000300000, "state": "waiting_for_ok"},
+    {"id": 1763900000000, "label": "Morning alarm check", "due_at": 1764050400000, "state": "scheduled"},
+    {"id": 1763950000000, "label": "Draft suggested by Inflow", "due_at": null, "state": "draft"}
+  ],
+  "runs": [
+    {"id": 2864434397, "task": "Tell me my next alarm", "state": "done", "finished_at": 1764000000000},
+    {"id": 3735928559, "task": "Free up storage", "state": "stopped", "finished_at": 1763990000000}
+  ]
+}

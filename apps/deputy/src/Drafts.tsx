@@ -6,7 +6,7 @@ import { draftRow } from './share';
 export function Drafts({ drafts, onOpen, onDelete }: { drafts: Draft[]; onOpen: (d: Draft) => void; onDelete: (d: Draft) => void }) {
   if (drafts.length === 0) return null;
   return (
-    <Group title="Drafts" footer="Text shared with Deputy waits here until you open it and tap Start.">
+    <Group title="Drafts" footer="Shared text and suggested tasks wait here until you open them and tap Start.">
       {drafts.map((d) => {
         const row = draftRow(d);
         return (

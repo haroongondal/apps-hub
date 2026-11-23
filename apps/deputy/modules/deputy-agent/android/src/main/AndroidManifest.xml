@@ -54,6 +54,26 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+        <!-- PROPOSE_TASK from a signed sibling app (startActivityForResult only). It shows the task as a draft; nothing starts without the owner's tap. -->
+        <activity
+            android:name="expo.modules.deputyagent.android.ProposeTaskActivity"
+            android:exported="true"
+            android:permission="com.haroon.permission.AUTOPILOT"
+            android:label="Suggested task"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
+            android:theme="@android:style/Theme.DeviceDefault.DayNight">
+            <intent-filter>
+                <action android:name="com.haroon.deputy.action.PROPOSE_TASK" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <!-- Read-only shares for signed sibling apps: health always; waiting and runs only while the owner's switch is on. -->
+        <provider
+            android:name="expo.modules.deputyagent.android.DeputyLinkProvider"
+            android:authorities="com.haroon.deputy.applink"
+            android:exported="true"
+            android:readPermission="com.haroon.permission.AUTOPILOT"
+            android:writePermission="com.haroon.permission.AUTOPILOT" />
         <receiver
             android:name="expo.modules.deputyagent.android.GateReceiver"
             android:exported="false" />

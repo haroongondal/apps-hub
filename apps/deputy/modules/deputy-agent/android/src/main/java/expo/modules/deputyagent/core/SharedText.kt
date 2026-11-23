@@ -54,7 +54,16 @@ object SharedInbox {
   fun take(): SharedText? = pending.also { pending = null }
 }
 
-data class Draft(val id: String, val instruction: String, val text: String, val subject: String?, val createdAt: Long) {
+/** `source` is the label of the signed sibling app that proposed the task (PROPOSE_TASK), never text from an extra; `apps` limit the run when not empty. */
+data class Draft(
+  val id: String,
+  val instruction: String,
+  val text: String,
+  val subject: String?,
+  val createdAt: Long,
+  val source: String? = null,
+  val apps: List<String> = emptyList(),
+) {
   companion object {
     const val MAX = 50
     const val NO_TEXT = "There is no shared text in this draft."
@@ -62,10 +71,11 @@ data class Draft(val id: String, val instruction: String, val text: String, val 
     const val FULL = "You have 50 drafts. Delete one, then save again."
     const val CANT_START = "Deputy couldn't start this task."
 
-    fun of(id: String, instruction: String, text: String, subject: String?, createdAt: Long): Draft {
+    fun of(id: String, instruction: String, text: String, subject: String?, createdAt: Long, source: String? = null, apps: List<String> = emptyList()): Draft {
       val body = SharedText.cap(SharedText.clean(text), SharedText.TEXT_MAX).first
-      require(body.isNotEmpty()) { NO_TEXT }
-      return Draft(id, instruction.trim(), body, SharedText.oneLine(subject), createdAt)
+      val from = SharedText.oneLine(source)
+      require(body.isNotEmpty() || from != null) { NO_TEXT }
+      return Draft(id, instruction.trim(), body, SharedText.oneLine(subject), createdAt, from, apps.filter(ProposeTask::isPackageName).distinct().take(ProposeTask.APPS_MAX))
     }
 
     internal fun untrustedEntry(d: Draft) = buildString {
@@ -77,7 +87,7 @@ data class Draft(val id: String, val instruction: String, val text: String, val 
     fun begin(d: Draft, start: (task: String, apps: Set<String>?, untrusted: List<String>) -> String): Begin {
       if (d.instruction.isBlank()) return Begin.Failed(NO_TASK)
       return try {
-        Begin.Started(start(d.instruction, null, listOf(untrustedEntry(d))))
+        Begin.Started(start(d.instruction, SavedTask.allowList(d.apps), listOfNotNull(untrustedEntry(d).takeIf { d.text.isNotEmpty() })))
       } catch (e: Exception) { // a refused start (busy, service off, no key) comes back as copy, never a crash
         Begin.Failed(e.message ?: CANT_START)
       }
@@ -88,6 +98,7 @@ data class Draft(val id: String, val instruction: String, val text: String, val 
         buildJsonObject {
           put("id", d.id); put("instruction", d.instruction); put("text", d.text)
           put("subject", d.subject?.let(::JsonPrimitive) ?: JsonNull); put("createdAt", d.createdAt)
+          put("source", d.source?.let(::JsonPrimitive) ?: JsonNull); put("apps", JsonArray(d.apps.map(::JsonPrimitive)))
         }
       },
     ).toString()
@@ -98,6 +109,7 @@ data class Draft(val id: String, val instruction: String, val text: String, val 
         of(
           o["id"]!!.jsonPrimitive.content, o["instruction"]!!.jsonPrimitive.content, o["text"]!!.jsonPrimitive.content,
           o["subject"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content, o["createdAt"]!!.jsonPrimitive.long,
+          o["source"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content, o["apps"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
         )
       }.getOrNull()
     }
