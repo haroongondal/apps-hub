@@ -77,6 +77,13 @@ describe('checkReleasable', () => {
     assert.equal(checkReleasable(clone, { fromBranch: false }).ok, false);
   });
 
+  it('refuses an untracked file even when status.showUntrackedFiles is no', () => {
+    const { clone } = fixture();
+    git(clone, 'config', 'status.showUntrackedFiles', 'no');
+    writeFileSync(join(clone, 'new.txt'), 'x');
+    assert.equal(checkReleasable(clone, { fromBranch: false }).ok, false);
+  });
+
   it('refuses a feature branch with an unmerged commit', () => {
     const { clone } = fixture();
     git(clone, 'checkout', '-b', 'feature');

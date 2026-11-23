@@ -75,6 +75,28 @@ describe('planRollback', () => {
     assert.equal(plan.changelog, `Rollback to 0.2.0 (${c2.slice(0, 7)})`);
   });
 
+  it('targets before the app\'s last change when the release commit itself only touched another folder', () => {
+    const { clone, c2, c3 } = fixture();
+    writeFileSync(join(clone, 'README'), 'other work');
+    git(clone, 'add', 'README');
+    git(clone, 'commit', '-m', 'unrelated');
+    const c4 = git(clone, 'rev-parse', 'HEAD');
+    git(clone, 'push', 'origin', 'main');
+    const plan = planRollback({ repoDir: clone, id: 'netlens', manifest: published(41, c4) });
+    assert.equal(plan.toCommit, c2); // the app as before c3, its last change; a plain first parent would give c3
+    assert.notEqual(plan.toCommit, c3);
+  });
+
+  it('refuses --to when the app folder is identical to the current release', () => {
+    const { clone, c3 } = fixture();
+    writeFileSync(join(clone, 'README'), 'other work');
+    git(clone, 'add', 'README');
+    git(clone, 'commit', '-m', 'unrelated');
+    const c4 = git(clone, 'rev-parse', 'HEAD');
+    git(clone, 'push', 'origin', 'main');
+    assert.throws(() => planRollback({ repoDir: clone, id: 'netlens', manifest: published(41, c4), to: c3 }), /nothing to roll back/);
+  });
+
   it('--to resolves a full sha, a short sha and a tag, and may skip several releases', () => {
     const { clone, c1, c3 } = fixture();
     const manifest = published(7, c3);
@@ -156,7 +178,7 @@ describe('planRollback', () => {
 });
 
 describe('dry run', () => {
-  it('prints app, from, to, new versionCode and target, and leaves no worktree behind', () => {
+  it('plan output has the five lines, and planning itself creates no worktree', () => {
     const { clone, c2, c3 } = fixture();
     const before = git(clone, 'worktree', 'list');
     const plan = planRollback({ repoDir: clone, id: 'netlens', manifest: published(41, c3) });
@@ -189,6 +211,16 @@ describe('withWorktree', () => {
     await assert.rejects(withWorktree(clone, c1, async () => { throw new Error('boom'); }), /boom/);
     assert.equal(git(clone, 'worktree', 'list'), before);
     assert.equal(git(clone, 'status', '--porcelain'), '');
+  });
+
+  it('prunes a worktree whose folder was deleted behind git\'s back (a killed earlier run)', async () => {
+    const { clone, c1, c2 } = fixture();
+    const stale = join(tmp, `stale${n++}`);
+    git(clone, 'worktree', 'add', '--detach', stale, c1);
+    rmSync(stale, { recursive: true, force: true });
+    assert.ok(git(clone, 'worktree', 'list').includes(stale));
+    await withWorktree(clone, c2, async () => {});
+    assert.ok(!git(clone, 'worktree', 'list').includes(stale));
   });
 });
 

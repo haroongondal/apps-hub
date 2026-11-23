@@ -41,7 +41,7 @@ export function checkReleasable(repoDir: string, opts: { fromBranch: boolean; fe
       problems.push('There is no origin/main in this repo. Add the origin remote and push main first.');
     }
   }
-  if (git(repoDir, ['status', '--porcelain']) !== '') {
+  if (git(repoDir, ['status', '--porcelain', '--untracked-files=all']) !== '') {
     problems.push('The working tree has uncommitted or untracked files. Commit, stash or delete them first.');
   }
 

@@ -31,10 +31,13 @@ const gitOk = (cwd: string, args: string[]): boolean => {
 /**
  * Decide what a rollback of `id` would build, or throw an Error saying why it cannot.
  *
- * Previous-release rule: the manifest holds only the latest release, so with no `to` the target is the
- * first parent of the commit recorded on the current entry (main as it was just before the released change).
- * `to` (a sha, short sha or tag) overrides it. Either way the target must be on origin/main, older than the
- * current release commit and different from it, and contain the app. Reads git only; builds and writes nothing.
+ * Previous-release rule: the manifest holds only the latest release, so with no `to` the target is the first
+ * parent of the last commit that changed the app's folder at or before the commit recorded on the current entry,
+ * that is, the app as it was just before its latest change (the recorded commit itself may be a merge of another
+ * app's work, or one HEAD recorded for several apps). `to` (a sha, short sha or tag) overrides it. Either way the
+ * target must be on origin/main, older than the current release commit, different from it, contain the app, and
+ * differ from the release commit in the app's folder (else there is nothing to roll back).
+ * Reads git only; builds and writes nothing.
  */
 export function planRollback(o: { repoDir: string; id: string; manifest: StoreManifest; to?: string; mainRef?: string }): RollbackPlan {
   const { repoDir, id } = o;
@@ -56,10 +59,17 @@ export function planRollback(o: { repoDir: string; id: string; manifest: StoreMa
     if (!fromCommit) {
       throw new Error(`${id}: the published release (versionCode ${current.versionCode}) has no commit recorded, so the previous release cannot be determined. Pass --to <sha>.`);
     }
+    let changedAt: string;
     try {
-      toCommit = git(repoDir, ['rev-parse', '--verify', '--quiet', `${fromCommit}^1^{commit}`]);
+      changedAt = git(repoDir, ['log', '-1', '--first-parent', '--format=%H', fromCommit, '--', app.dir]);
     } catch {
-      throw new Error(`${id}: the current release commit ${fromCommit.slice(0, 7)} is unknown here or has no parent. Fetch origin, or pass --to <sha>.`);
+      throw new Error(`${id}: the current release commit ${fromCommit.slice(0, 7)} is unknown here. Fetch origin, or pass --to <sha>.`);
+    }
+    if (!changedAt) throw new Error(`${id}: ${app.dir} has no history up to ${fromCommit.slice(0, 7)}, so there is no earlier version. Pass --to <sha>.`);
+    try {
+      toCommit = git(repoDir, ['rev-parse', '--verify', '--quiet', `${changedAt}^1^{commit}`]);
+    } catch {
+      throw new Error(`${id}: ${changedAt.slice(0, 7)}, the commit that first added the app, has no parent, so there is no earlier version. Pass --to <sha>.`);
     }
   }
 
@@ -69,6 +79,10 @@ export function planRollback(o: { repoDir: string; id: string; manifest: StoreMa
   }
   if (fromCommit && gitOk(repoDir, ['cat-file', '-e', `${fromCommit}^{commit}`]) && !gitOk(repoDir, ['merge-base', '--is-ancestor', toCommit, fromCommit])) {
     throw new Error(`${id}: ${toCommit.slice(0, 7)} is newer than the current release ${fromCommit.slice(0, 7)}. A rollback goes back.`);
+  }
+
+  if (fromCommit && gitOk(repoDir, ['cat-file', '-e', `${fromCommit}^{commit}`]) && gitOk(repoDir, ['diff', '--quiet', toCommit, fromCommit, '--', app.dir])) {
+    throw new Error(`${id}: ${app.dir} is identical at ${toCommit.slice(0, 7)} and at the current release ${fromCommit.slice(0, 7)}, so there is nothing to roll back.`);
   }
 
   let toVersionName: string;
@@ -110,19 +124,35 @@ export function storeTarget(apiUrl: string | undefined): string {
   }
 }
 
-/** Run `fn` in a clean detached worktree of `sha`, and always remove it (even when `fn` throws). */
+/**
+ * Run `fn` in a clean detached worktree of `sha`, and always remove it: when `fn` throws, and on SIGINT/SIGTERM.
+ * A hard kill skips both, so the next call starts with `git worktree prune` to drop what it left behind.
+ */
 export async function withWorktree<T>(repoDir: string, sha: string, fn: (dir: string) => Promise<T>): Promise<T> {
+  git(repoDir, ['worktree', 'prune']);
   const tmp = mkdtempSync(join(tmpdir(), 'rollback-'));
   const dir = join(tmp, 'tree');
   git(repoDir, ['worktree', 'add', '--detach', dir, sha]);
+  const cleanup = () => {
+    try {
+      git(repoDir, ['worktree', 'remove', '--force', dir]);
+    } catch {
+      // already gone; prune handles the rest
+    }
+    rmSync(tmp, { recursive: true, force: true });
+  };
+  const onSignal = (sig: NodeJS.Signals) => {
+    cleanup();
+    process.exit(sig === 'SIGINT' ? 130 : 143);
+  };
+  process.on('SIGINT', onSignal);
+  process.on('SIGTERM', onSignal);
   try {
     return await fn(dir);
   } finally {
-    try {
-      git(repoDir, ['worktree', 'remove', '--force', dir]);
-    } finally {
-      rmSync(tmp, { recursive: true, force: true });
-    }
+    process.off('SIGINT', onSignal);
+    process.off('SIGTERM', onSignal);
+    cleanup();
   }
 }
 
