@@ -13,6 +13,8 @@ Domain facts live in `packages/autopilot-contract` (Autopilot's `SuggestionRow`,
 
 ## Before you rely on a link
 
+Only Inflow and Deputy declare the permission today (`<permission>` plus `<uses-permission>`); Halo, Design Editor and the others do not. A new link app must declare both in its module manifest, and `auditManifest` requires them as soon as a component names the permission.
+
 Signature trust only holds for apps installed from a Store release, because only `tools/release` signs with the shared key and refuses an APK signed by anyone else. A debug build, or a release built without the key, is signed with the public Expo debug key and is refused by every guarded link (it fails closed). See "Signing finding" below.
 
 ## Add a share
@@ -38,11 +40,14 @@ Signature trust only holds for apps installed from a Store release, because only
    error TS2741: Property 'title' is missing in type '{ id: "long"; }' but required in type '{ id: "long" | "int" | "double"; title: "string"; }'.
    ```
 
-   Declare a boolean field (`done: boolean`) as `'int'` and you get `error TS2322: Type 'string' is not assignable to type 'never'.` A boolean, an object or an array has no column type: store it as a number or a string. At runtime `defineShare` also refuses a bad authority, a path that is not 1 to 3 lowercase segments, more than 24 columns, `maxRows` above 500 (default 200) and any column named like a secret (password, token, secret, session, cookie, api key, private, credential, mnemonic, or the whole words pin, otp, seed, cvv, cvc).
+   Declare a boolean field (`done: boolean`) as `'int'` and you get `error TS2322: Type 'string' is not assignable to type 'never'.` A boolean, an object or an array has no column type: store it as a number or a string. At runtime `defineShare` also refuses a bad authority, a path that is not 1 to 3 lowercase segments, more than 24 columns, `maxRows` above 500 (default 200) and any column named like a secret: the substrings password, passwd, passcode, secret, token, apikey, api_key, private, credential, session, cookie, mnemonic and cardnumber anywhere in the name, and the whole `_` words pin, otp, seed, cvv, cvc, code, key, pass, pwd, passcode, auth, iban and card (plural too). The list is blunt on purpose: harmless names such as `keyboard`, `pinned`, `speed` and `decode_ms` stay allowed, but `status_code` and `item_key` are refused, so name them `status_id` and `item_ref`. This checks names only, never values.
 
 2. **Choose the authority** `com.haroon.<app>.applink`. `com.haroon.inflow.autopilot` is the one legacy authority that stays valid.
 
-3. **Write the provider**: a `ContentProvider` that calls `AppLinkCaller.allowed(context)` first in `query`, throws `SecurityException` when it returns false, and answers with a `MatrixCursor` whose columns are exactly the share's columns, at most `maxRows` rows. `insert`, `update` and `delete` throw `UnsupportedOperationException`. Pass ids as numbers only (`share.uri(3)`), never free text.
+3. **Write the provider**: a `ContentProvider` that calls `AppLinkCaller.allowed(context)` first in `query`, throws `SecurityException` when it returns false, and answers with a `MatrixCursor` whose columns are exactly the share's columns, at most `maxRows` rows. `insert`, `update` and `delete` throw `UnsupportedOperationException`. Pass ids as numbers only (`share.uri(3)`), never free text. Two rules for every provider method:
+
+   - `ContentProvider.call()` has no framework permission check (only `query`, `insert`, `update` and `delete` are covered by `readPermission` and `writePermission`), so a provider that overrides `call` must run `AppLinkCaller.allowed` first there too.
+   - `AppLinkCaller.allowed` must run synchronously in the provider method, on the binder thread, before any hop to another thread: it reads `Binder.getCallingUid()`, which on a worker thread is the app's own uid and would pass as "self".
 
    ```kotlin
    class NotesLinkProvider : ContentProvider() {
@@ -77,11 +82,13 @@ Signature trust only holds for apps installed from a Store release, because only
 
    Never set `android:grantUriPermissions="true"` or add `<grant-uri-permission>`: a granted URI would let an app without the permission read the share.
 
-5. **Copy the guard in.** Copy `android/AppLinkGuard.kt` and `android/AppLinkCaller.kt` into the module's `android/src/main/java/...` and change only the `package` line (ruling R2). It is a copy, not a shared Gradle module, because each app has its own committed `android/` prebuild. `src/__tests__/copies.test.ts` walks `apps/*/modules/*/android/src/main` and fails when a copy differs from the canonical file in any line but `package`, so drift is loud. Inflow's copy is in `apps/inflow/modules/inflow-core/android/src/main/java/expo/modules/inflowcore/applink/`.
+5. **Copy the guard in.** Copy `android/AppLinkGuard.kt` and `android/AppLinkCaller.kt` into the module's `android/src/main/java/...` and change only the `package` line (ruling R2). It is a copy, not a shared Gradle module, because each app has its own committed `android/` prebuild. `src/__tests__/copies.test.ts` finds every `.kt` file under `apps/` that declares `object AppLinkGuard` or `object AppLinkCaller` (by content, not by file name), and fails when a copy is not named like the canonical file, has more than the one plain `package <name>` line, or differs in any other line, so drift is loud. Inflow's copy is in `apps/inflow/modules/inflow-core/android/src/main/java/expo/modules/inflowcore/applink/`.
 
-6. **Add a Gradle JVM test** like Inflow's `AppLinkGuardTest.kt` (same folder tree under `src/test`): it runs `AppLinkGuard.decide` against every row of `fixtures/caller-decisions.json`, checks the limits against `fixtures/limits.json`, and runs `validateExtras` cases. It reads the fixtures from five folders above the module's `android/` directory, so the app must sit at `apps/<app>/modules/<module>`.
+6. **Bind the provider to the share.** The share's rules (column names, types, row cap) are checked in TypeScript, so the provider has to be tied to them or it can serve more than the share says. Generate a fixture from the share in a node test, and read it in a JVM test next to the provider. Autopilot's pattern: `packages/autopilot-contract/fixtures/suggestions.share.json` (`{ authority, path, columns, maxRows }`) is asserted equal to the live `SUGGESTIONS_SHARE` in `contract.test.ts`, so TypeScript drift fails; Inflow's `AutopilotProviderShareTest.kt` reads the same file and asserts the provider's `ROW_COLUMNS` equal its columns in order, its authority constant equals the fixture's, and `LIST_LIMIT <= maxRows` (the provider's companion constants are `internal` for that). What this guarantees is the names of the columns the provider declares, not the values it puts in them.
 
-7. **Add a node test** that runs `assertRowShape(NOTES_SHARE, row)` on sample rows (keep them in a fixture, as `autopilot-contract` does) and one that runs `auditManifest` on the module manifest:
+7. **Add a Gradle JVM test** like Inflow's `AppLinkGuardTest.kt` (same folder tree under `src/test`): it runs `AppLinkGuard.decide` against every row of `fixtures/caller-decisions.json`, checks the limits against `fixtures/limits.json`, and runs `validateExtras` cases. It reads the fixtures from five folders above the module's `android/` directory, so the app must sit at `apps/<app>/modules/<module>`. `fixtures/extras-cases.json` is one table of extras cases that `extras-cases.test.ts` (TypeScript) and `AppLinkGuardTest.kt` (Kotlin) both run, so the two validators are checked against each other.
+
+8. **Add a node test** that runs `assertRowShape(NOTES_SHARE, row)` on sample rows (keep them in a fixture, as `autopilot-contract` does) and one that runs `auditManifest` on the module manifest:
 
    ```ts
    import assert from 'node:assert/strict';
@@ -95,9 +102,9 @@ Signature trust only holds for apps installed from a Store release, because only
    });
    ```
 
-   The app lists `"@apps-hub/app-link-contract": "workspace:*"` as a dependency, and the new test file is added by name to its `test` script (a new file does nothing until it is listed). I ran `auditManifest` on Inflow's module manifest and it returns no problems; no test in Inflow runs it yet.
+   The app lists `"@apps-hub/app-link-contract": "workspace:*"` as a dependency, and the new test file is added by name to its `test` script (a new file does nothing until it is listed). `manifest.test.ts` in this package already audits the real Inflow and Deputy manifests.
 
-Reference host: Inflow's `AutopilotProvider` (`apps/inflow/modules/inflow-core/android/src/main/java/expo/modules/inflowcore/android/AutopilotProvider.kt`). It predates this recipe in two ways you should not copy: `update` on `suggestions/#` lets a sibling move a suggestion to started, done or skipped, and `items/#` answers with a source message (sender, conversation, text) that no `defineShare` declares. Both sit behind the same `requireSibling()` check; new shares stay read-only and declare every column they serve.
+Reference host: Inflow's `AutopilotProvider` (`apps/inflow/modules/inflow-core/android/src/main/java/expo/modules/inflowcore/android/AutopilotProvider.kt`). Only its `suggestions` list is a declared share (`SUGGESTIONS_SHARE`, bound by `AutopilotProviderShareTest.kt`). It also serves two undeclared legacy paths that predate this recipe: `items/#` answers with a source message (sender, conversation, text; Inflow's `AutopilotAccess` decides which items may cross) and `update` on `suggestions/#` lets a sibling move a suggestion to started, done or skipped. Both sit behind the same `requireSibling()` check and neither has a share, a fixture or a column test. New shares must not copy them: stay read-only and declare every column served.
 
 ## Add an action
 
@@ -114,8 +121,9 @@ export const OPEN_NOTE = defineAction({
 // OPEN_NOTE.name === 'com.haroon.notes.action.OPEN_NOTE'
 ```
 
-- `screen` is the literal `true`. There is no headless variant to declare. The activity must show the user a screen before it does anything; it must never use `Theme.NoDisplay`, and `auditManifest` reports a link action with a `NoDisplay` theme.
-- Manifest: `android:exported="true"`, `android:permission="com.haroon.permission.AUTOPILOT"`, an intent filter with the action name, and the same `<permission>` and `<uses-permission>` lines as a share.
+- `screen` is the literal `true`. There is no headless variant to declare. The activity must show the user a screen before it does anything. That is a code-review rule: `auditManifest` only catches a `Theme.NoDisplay` theme (a substring check) and cannot prove a screen is shown, so a translucent theme, or an activity that calls `finish()` in `onCreate`, passes the audit. Review it by hand.
+- Manifest: `android:exported="true"`, `android:permission="com.haroon.permission.AUTOPILOT"`, an intent filter with the action name, and the same `<permission>` and `<uses-permission>` lines as a share. A link action is an `<activity>`: the audit flags an exported `<service>` or `<receiver>` with a link action filter, an `<activity-alias>` of a link action without the permission (an alias carries its own permission and replaces the target's), and a `<path-permission>` inside a link provider.
+- Guard the caller of an action. The manifest `android:permission` (signature level, enforced by Android) is the gate. The usable second check inside the activity is `getCallingPackage()`, which is set only when the caller used `startActivityForResult`; then `packageManager.checkSignatures(callingPackage, packageName)` must be `SIGNATURE_MATCH`. Never use `getReferrer()` for security: the caller controls it. `getLaunchedFromUid` needs API 34 and the sender opting in. `AppLinkCaller` does not work here (below). No action exists yet, so this second check is documented, not built; the first action's author adds it.
 - Validate the extras before using them: `validateExtras(OPEN_NOTE, raw)` in TypeScript, `AppLinkGuard.validateExtras(spec, raw)` in Kotlin (`raw` is the intent's extras as a map). Both return a rejection with a reason instead of throwing, and an unknown extra, a NUL character, a wrong type or an over-limit value is rejected.
 - Answer with an `ActionResult`: `{ status: 'done' | 'cancelled' | 'failed', code?, message? }`. `code` is lowercase letters, digits and underscores (at most 40). `message` is plain words for the user, at most 200 characters, never a raw error. `validateResult` checks it.
 
@@ -131,26 +139,27 @@ Limits (`fixtures/limits.json`, equal in TypeScript and Kotlin):
 | Characters in a result message | 200 |
 | Rows in a share | 200 by default, 500 at most |
 
-Lengths count UTF-16 units, as Kotlin's `String.length` does. A `long` extra must be within JavaScript's safe integer range on both sides.
+Lengths count UTF-16 units, as Kotlin's `String.length` does. A `long` extra must be within JavaScript's safe integer range on both sides. Kotlin also accepts a `Double` that is a whole number in that range for a `long` extra (the React Native bridge sends every number as a Double) and returns it as a `Long`; TypeScript sees the same number as a JS number.
 
-Deputy's `RunSuggestionActivity` is the one grandfathered headless action (ruling R5). It is `Theme.NoDisplay`, shows only a toast, and is started only by the owner's tap on Run inside Inflow. New actions must not copy it. `auditManifest(xml, { allowHeadless: ['expo.modules.deputyagent.android.RunSuggestionActivity'] })` is how it is exempted; without that option the audit flags it. It does not call `AppLinkCaller`; its only gate today is the manifest permission.
+Deputy's `RunSuggestionActivity` is the one grandfathered headless action (ruling R5). It is `Theme.NoDisplay` and shows only a toast. It is meant to be started only by Inflow's Run tap, but any app signed with the same key can start it: its extras are not validated and `lookIn` is unbounded. When Deputy is next touched it should check `callingPackage` and validate its extras; that is an owner decision and is not done here. New actions must not copy it. `auditManifest(xml, { allowHeadless: ['expo.modules.deputyagent.android.RunSuggestionActivity'] })` is how it is exempted; without that option the audit flags it. It does not call `AppLinkCaller`; its only gate today is the manifest permission.
 
 ## Threat model
 
 **Who can call.** A sibling signed with the same key. Two gates:
 
 1. The manifest permission is signature level, so Android grants it only to apps signed like the one that declares it.
-2. In a provider, `AppLinkCaller.allowed` re-checks the caller's signing certificate with `PackageManager.checkSignatures(callerUid, ownUid)` and also that the caller holds the permission. That backs up the manifest in case another app holds the permission name with a different key, for example a hostile app installed first that declared it. Android normally refuses to install a second app that declares the same name with a different key; this check does not rely on that. Any failure to find out counts as "not allowed". A call from the app's own uid is allowed. The decision table is `fixtures/caller-decisions.json`, read by both `decideCaller` (TypeScript) and `AppLinkGuard.decide` (Kotlin).
+2. In a provider, `AppLinkCaller.allowed` re-checks the caller's signing certificate with `PackageManager.checkSignatures(callerUid, ownUid)` and also that the caller holds the permission. A squatter that declares the permission name first does not hold it as ours: on Android 5+ the real app's install then fails (`INSTALL_FAILED_DUPLICATE_PERMISSION`), so squatting is a denial of service, not a way in. The certificate check stays as defense against OEM or historical custom-permission bugs, and it does not rely on Android's refusal. Any failure to find out counts as "not allowed". A call from the app's own uid is allowed. The decision table is `fixtures/caller-decisions.json`, read by both `decideCaller` (TypeScript) and `AppLinkGuard.decide` (Kotlin).
 
 **Actions have only the first gate.** `AppLinkCaller` reads `Binder.getCallingUid()`, which is the app's own uid inside an `Activity.onCreate` (no binder call is in progress), so it would always answer "self, allowed". Use it in provider methods only. An action is guarded by its manifest `android:permission` alone.
 
-**What can leak.** Only the typed columns a share declares, at most 500 rows. Sensitive column names are refused when the share is declared, and no secret may be added to a share, an extra or a result. The columns are fixed: a caller's projection, selection and sort arguments are ignored.
+**What can leak.** What a share declares is the names of its columns, at most 500 rows: `defineShare` refuses a sensitive column name (names only, never values), and the guarantee reaches a provider only when a JVM test binds that provider's column array and row cap to the share's fixture (Inflow's `AutopilotProviderShareTest.kt` does this for `suggestions`). Not covered by any share: Inflow's `items/#` (message text, served under `AutopilotAccess`) and its `update` path, which are undeclared legacy paths. No secret may be added to a share, an extra or a result. A provider fixes its columns and ignores a caller's projection, selection and sort arguments.
 
 **What the guard does not cover.**
 
 - A sibling app that is itself compromised: it holds the permission and the key, so it is let in.
 - A rooted device.
-- Manifest merging, `tools:` overrides, `@string/` references, `<activity-alias>` and path-permission children: `auditManifest` is a small text scanner and does not see them. Audit the source manifest of a module, not the merged one.
+- Manifest merging, `tools:` overrides and `@string/` references: `auditManifest` is a small text scanner and does not see them. Audit the source manifest of a module, not the merged one. An `android:exported` set by a resource reference (`@bool/...`) counts as exported.
+- Whether a link action really shows a screen (see "Add an action").
 - `AppLinkCaller` has no JVM test, because it needs a real binder. Its decision logic (`AppLinkGuard.decide`) is tested; the glue is covered only by the phone checks below.
 - Phone checks of the whole chain have not been run (below).
 
@@ -159,7 +168,7 @@ Deputy's `RunSuggestionActivity` is the one grandfathered headless action (rulin
 - No secrets cross a link, ever: no passwords, tokens, keys, codes, vault items.
 - Text that came from other people (messages, contact names, titles) is untrusted data in the receiving app, never instructions. In Deputy it goes in the untrusted block. Inflow's suggestion `title` and the source message text are of this kind.
 - A link never skips Deputy's confirmation gate for anything that sends, pays, deletes or posts.
-- Nothing from another app starts anything without the user seeing a screen (Deputy's grandfathered `RunSuggestionActivity` is the one exception, because the owner's own tap on Run starts it).
+- Nothing from another app starts anything without the user seeing a screen. Deputy's grandfathered `RunSuggestionActivity` is the one exception; it is meant to be started by the owner's tap on Run, but a same-key sibling can start it too (see "Add an action").
 
 ## Signing finding
 
