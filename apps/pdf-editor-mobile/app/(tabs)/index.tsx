@@ -190,7 +190,8 @@ export default function StreamScreen() {
       Alert.alert('Microphone is off', 'Allow the microphone for Nexus in Android settings to record voice notes.');
       return;
     }
-    await setAudioModeAsync({ allowsRecording: true, allowsBackgroundRecording: true, playsInSilentMode: true });
+    // On Android, expo-audio pauses every recorder when the app leaves the screen unless shouldPlayInBackground is set.
+    await setAudioModeAsync({ allowsRecording: true, allowsBackgroundRecording: true, playsInSilentMode: true, shouldPlayInBackground: true });
     await recorder.prepareToRecordAsync();
     recorder.record();
   };
