@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import InflowCore, { type HealthDay, type HealthStatus } from 'inflow-core';
+import { beginPermissionPrompt, endPermissionPrompt } from './lockGrace.ts';
 import { ACCESS_NOT_GIVEN, REFRESH_DAYS, REFRESH_FAILED, SHOWN_DAYS, fillSeries, lastDays, shouldRefresh, vitalsState, type VitalsState } from './vitals.ts';
 
 // Kept outside the hook so closing and reopening the section does not reset the 15 minute gap.
@@ -68,11 +69,14 @@ export function useVitals(): Vitals {
   );
 
   const allow = useCallback(async () => {
+    beginPermissionPrompt(Date.now());
     try {
       const ok = await InflowCore.requestHealthPermissions();
       setMessage(ok ? null : ACCESS_NOT_GIVEN);
     } catch {
       setMessage(REFRESH_FAILED);
+    } finally {
+      endPermissionPrompt();
     }
     await run(true);
   }, [run]);

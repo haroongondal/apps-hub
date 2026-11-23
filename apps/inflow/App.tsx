@@ -9,6 +9,7 @@ import { HealthScreen } from './src/HealthScreen.tsx';
 import { HomeScreen } from './src/HomeScreen.tsx';
 import { ListScreen } from './src/ListScreen.tsx';
 import { LockScreen } from './src/LockScreen.tsx';
+import { permissionPromptOpen } from './src/lockGrace.ts';
 import { MoneyScreen } from './src/MoneyScreen.tsx';
 import { partyTitle } from './src/money.ts';
 import { PartyScreen } from './src/PartyScreen.tsx';
@@ -81,6 +82,7 @@ function Root() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'background') {
+        if (permissionPromptOpen(Date.now())) return;
         setLocked(true);
         setStack([]);
         setTodosOpen(false);
