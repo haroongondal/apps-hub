@@ -69,9 +69,9 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 
 | Id | Item | Branch | Status |
 |---|---|---|---|
-| F1 | Release guard | eco/base | todo |
-| F2 | Rollback | eco/base + eco/store | todo |
-| F3 | Docs drift | eco/base | todo |
+| F1 | Release guard | eco/base | built + gated (468c9211); invariant-reviewed; @apps-hub/release 35 pass |
+| F2 | Rollback | eco/base + eco/store | release side built + gated (38891621, 0cf71791, 8b8db0d1; manifest 8 pass); dry-run only, real rollback needs owner go; Store row in progress on eco/store |
+| F3 | Docs drift | eco/base | built (e07c189f, 9f63af1a, f2e72447, 8e9a93bd); more AGENTS.md text pending from apps |
 | F4 | Halo m1/m2 minors | eco/halo | built + gated (0f60b826, 4ece59ca); halo-engine 165 tests, notch-island 109, assembleDebug ok, halo ts 126 pass; phone not run |
 | F5 | Deputy reliability (verify and close; code is on main) | eco/deputy | built + gated (1eef0a8b, e7b5b9b0): only gap was Retry-After as an HTTP date; Deputy gradle 267 -> 274 tests, 0 fail; deputy ts 12 pass; phone not run |
 | F6 | Nexus shortcuts | eco/nexus | built + gated (6134b70e, aeae7091, 5624026f, 92385261): pdf-editor-mobile 47/47, knowledge-core 67/67, engine 2/2, gradle ok; new module audio-chunks (Android only); phone not run |
@@ -91,6 +91,13 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | V1-V5 | Vitals in Inflow | eco/inflow | todo |
 | M1-M5 | Minutes in Nexus | eco/nexus | M1,M2,M5,M4 + E3-Nexus + C8 in progress (phase nexus-w2); M3 needs E1/B3 |
 | B1-B6 | Cross-app wave 3 | various | todo |
+
+## Findings to carry (from F-base)
+
+- Android refuses a lower versionCode over a higher one; `adb install -d` and the Store installer both fail on a release APK (AOSP isDowngradePermitted: debuggable only). Rollback = rebuild old commit with versionCode = published + 1, versionName stays old.
+- apps/inflow/android/app/build.gradle is NOT wired to the shared signing key; a release rewrites it in the caller's tree so the next `pnpm release` refuses until reverted. Fix belongs on eco/inflow: commit the wired file (tell the Vitals phase).
+- apps/ai-hub is not in the release list (no Store release path): not guaranteed shared-key signed (E1 finding); matters for E2.
+- Releases before F1/F2 have no recorded commit: the first rollback of each app needs `--to <sha>`.
 
 ## Open owner decisions (collect here, ask once at the end)
 
