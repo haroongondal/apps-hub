@@ -54,6 +54,19 @@ object InflowTodo {
   fun extras(title: String, note: String, source: String): Map<String, Any>? =
     (AppLinkGuard.validateExtras(SPEC, mapOf("title" to title, "note" to note, "source" to source)) as? AppLinkGuard.ExtrasCheck.Ok)?.extras
 
+  // Null means the start went out. An untrusted Inflow counts as not installed and nothing is sent (decision is a parameter so a JVM test can pass a fake).
+  fun launch(trusted: Boolean, start: () -> Unit): String? {
+    if (!trusted) return "not_installed"
+    return try {
+      start()
+      null
+    } catch (_: android.content.ActivityNotFoundException) {
+      "not_installed"
+    } catch (_: SecurityException) {
+      "refused"
+    }
+  }
+
   fun outcome(resultOk: Boolean, code: String?): String = when {
     resultOk && code == "added" -> "added"
     code == null || code == "cancelled" -> "cancelled"

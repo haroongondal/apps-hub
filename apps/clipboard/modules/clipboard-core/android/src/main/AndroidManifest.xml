@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
     <uses-permission android:name="com.haroon.permission.AUTOPILOT" />
+    <!-- Android 11+ package visibility: lets AppLinkTarget see Inflow before the ADD_TODO hand-off -->
+    <queries>
+        <package android:name="com.haroon.inflow" />
+    </queries>
     <application>
         <service
             android:name="expo.modules.clipboardcore.android.CaptureService"

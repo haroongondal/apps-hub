@@ -248,6 +248,16 @@ Claude's calls are marked *(My call.)* in DESIGN.md.
 
 ## Current state + exact next step
 
+**2026-11-24 (AppLinkTarget):** `AddToInflow` now calls
+`AppLinkTarget.trustedActivity(activity, intent)` (copy-in, package line only,
+plus `AppLinkTargetTest`) before `startActivityForResult`; false means the
+existing `not_installed` outcome and nothing is sent (`InflowTodo.launch`,
+tested with a fake decision). The module manifest has `<queries>` for
+`com.haroon.inflow`; the release manifest still has no INTERNET. The `pinned`
+share is a provider, not a reader, so it is unchanged. Phone, Store-signed
+builds only: with Inflow uninstalled the not-installed words show and nothing
+is sent; with Store-signed Clipboard and Inflow Add to Inflow works as before.
+
 **2026-11-24 (P5):** `eco/clipboard` also holds the `pinned` share, the
 health row and Add to Inflow (session log). Not merged or released; needs
 Store-signed builds of Clipboard, Nexus and Inflow (debug builds fail closed).

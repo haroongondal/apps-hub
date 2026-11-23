@@ -134,6 +134,12 @@ class ClipLinksTest {
   }
 
   @Test fun `Inflow result codes`() {
+    var started = 0
+    assertEquals("not_installed", InflowTodo.launch(false) { started++ })
+    assertEquals(0, started)
+    assertNull(InflowTodo.launch(true) { started++ })
+    assertEquals(1, started)
+    assertEquals("refused", InflowTodo.launch(true) { throw SecurityException("no") })
     assertEquals("added", InflowTodo.outcome(true, "added"))
     assertEquals("cancelled", InflowTodo.outcome(false, "cancelled"))
     assertEquals("cancelled", InflowTodo.outcome(false, null))

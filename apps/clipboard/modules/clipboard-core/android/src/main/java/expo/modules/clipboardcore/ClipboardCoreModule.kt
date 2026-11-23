@@ -1,7 +1,6 @@
 package expo.modules.clipboardcore
 
 import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentName
@@ -14,6 +13,7 @@ import android.view.ViewTreeObserver
 import expo.modules.clipboardcore.android.Bubble
 import expo.modules.clipboardcore.android.CaptureService
 import expo.modules.clipboardcore.android.ClipStore
+import expo.modules.clipboardcore.applink.AppLinkTarget
 import expo.modules.clipboardcore.core.InflowTodo
 import expo.modules.clipboardcore.core.OpenTarget
 import expo.modules.kotlin.Promise
@@ -121,13 +121,8 @@ class ClipboardCoreModule : Module() {
         else -> {
           val intent = Intent(InflowTodo.ACTION).setPackage(InflowTodo.INFLOW_PACKAGE)
           extras.forEach { (key, value) -> (value as? String)?.let { intent.putExtra(key, it) } }
-          val failed = try {
+          val failed = InflowTodo.launch(AppLinkTarget.trustedActivity(activity, intent)) {
             activity.startActivityForResult(intent, InflowTodo.REQUEST_CODE)
-            null
-          } catch (_: ActivityNotFoundException) {
-            "not_installed"
-          } catch (_: SecurityException) {
-            "refused"
           }
           if (failed != null) inflowPromise.getAndSet(null)?.resolve(failed)
         }
