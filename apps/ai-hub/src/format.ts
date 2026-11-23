@@ -1,7 +1,8 @@
-import type { AppInfo, JobKey, ServiceKey } from 'ai-hub-core';
+import type { AppInfo, CallInfo, JobKey, ServiceKey } from 'ai-hub-core';
 
 export const STRONGROOM = 'com.haroon.strongroom';
 export const BLOCKED_TEXT = 'Blocked: passwords never leave Strongroom.';
+export const PENDING_TEXT = 'Asked to use AI. Allow?';
 export const KEYS_UNREADABLE = "Your saved keys couldn't be opened";
 
 export const SERVICE_LABEL: Record<ServiceKey, string> = { groq: 'Groq', gemini: 'Gemini' };
@@ -41,10 +42,19 @@ export function usageText(app: Pick<AppInfo, 'calls' | 'inputTokens' | 'outputTo
   return `${calls}, ${formatCount(app.inputTokens)} tokens in, ${formatCount(app.outputTokens)} out`;
 }
 
+export function requestText(call: Pick<CallInfo, 'job' | 'service' | 'time'>, now: number): string {
+  const job = JOBS.find((j) => j.key === call.job)?.label ?? 'Request';
+  const service = SERVICE_LABEL[call.service] ?? call.service;
+  return `${job} with ${service}. ${lastUsedText(call.time, now)}`;
+}
+
 // Expo wraps a native failure as "Call to function ... rejected.\n→ Caused by: <message>".
+// Native errors arrive as "java.lang.IllegalArgumentException: <message>"; people should only see the message.
+const JVM_CLASS = /^\s*(?:[a-z_][\w$]*\.)+[A-Z][\w$]*(?:Exception|Error):\s*/;
+
 export function plainError(e: unknown): string {
   const text = e instanceof Error ? e.message : String(e);
-  const cause = text.split('Caused by: ').pop() ?? text;
+  const cause = (text.split('Caused by: ').pop() ?? text).replace(JVM_CLASS, '');
   return cause.trim() || 'Something went wrong. Try again.';
 }
 

@@ -35,6 +35,26 @@ with `cd-engineering-tools:parallel-agents-coord` (section 0 loop with the ledge
   `com.haroon.aihub` / `ai-hub` / `aihub`; release only on the owner's go.
 - 2026-11-20, owner: hub holds the keys (reverses Model Host design §4).
 - 2026-11-20, owner: no local LLM; only the Design Editor's ONNX models on device.
+- 2026-11-24, ecosystem E2 (main session's call, owner to confirm; recorded in
+  `docs/handoffs/ecosystem.md`): the hub keeps the keys (option A). Apps call `submit()`; no API
+  hands a key to another app. Each app keeps its own key fields as a fallback when the hub is
+  missing, refuses, has no key or speaks an older apiVersion. This differs from PLAN's "apps drop
+  their own keys after moving"; the owner decides which stands.
+- 2026-11-24, E2: unknown apps are denied by default. A same-signed app is served only after the
+  owner turns it on (`switches[pkg] == true`). No app bound the hub before this, so nothing was
+  grandfathered. A refused, undecided app is listed as pending (package and last time, at most
+  20, one write per app per minute) so the owner can allow it.
+- 2026-11-24, E2 (my call, owner decides if it stays): a per-call log in HubStore `call_log`
+  (app, job, service, time; never prompt, reply or key; newest 200; Clear button), shown as
+  "Recent requests".
+- 2026-11-24, E2: apiVersion 2 adds embed `dimensions` (rounded up to 128, 256, 512, 768, 1536 or
+  3072, sent to Gemini as `dimensions`) and transcribe `segments` (Whisper `verbose_json`, reply
+  gets `segments: [{start, end, text}]`). Version 1 requests are unchanged. The AIDL is unchanged.
+  P2 streaming, planned as "v2", becomes apiVersion 3.
+- 2026-11-24, E2 security fix: the client trusts `com.haroon.aihub` only when it is signed like
+  the calling app (`checkSignatures` = `SIGNATURE_MATCH`) and exposes exactly one exported service
+  guarded by `AI_HUB`; it binds that component and re-checks the signature in
+  `onServiceConnected`. A squatted package name gets `not-allowed`, nothing is sent (`HubTrust`).
 
 ## Evidence already verified (2026-11-20)
 
@@ -65,6 +85,9 @@ with `cd-engineering-tools:parallel-agents-coord` (section 0 loop with the ledge
 - `docs/ai-hub/PLAN.md`: approved design.
 - `.superpowers/sdd/ai-hub-p1/`: P1 ledger, briefs, reports (not committed).
 - `apps/ai-hub/`: the app (P1 creates it).
+- `packages/ai-hub-client/`: the client (P3 first half): AIDL copy, Kotlin `AiHubClient`, TS
+  `aiHub` API, shared fixture `fixtures/contract.json` (read by the hub's `ClientContractTest`).
+  README has the error kinds and the fallback rule. No app uses it yet.
 
 ## Session log
 
@@ -89,7 +112,21 @@ with `cd-engineering-tools:parallel-agents-coord` (section 0 loop with the ledge
   (https://github.com/haroongondal/apps-hub/pull/66). Release APK built (signed CN=Haroon Mukhtar,
   O=apps-hub); phone install waits in the coord queue.
 
+- 2026-11-24 (eco/ai-hub, E2): default deny + pending list, per-call log and Recent requests,
+  apiVersion 2 (embed dimensions, transcribe segments), `packages/ai-hub-client`. Gates: hub JVM
+  tests and assembleDebug, ai-hub and ai-hub-client node tests and typecheck; client Kotlin
+  compiled and tested inside the hub's Gradle build with an init script (see its README).
+  Nothing run on a phone.
+
 ## Current state + exact next step
+
+E2 (2026-11-24, branch eco/ai-hub): the client package exists and no app uses it yet. Next for P3:
+wire the first caller (Inflow) to `ai-hub-client` with its own key as the fallback, after the
+owner confirms option A, then the phone checks: a second app binds after the owner allows it; a
+never-allowed app shows as pending; a differently signed app is refused; real Gemini and Groq
+replies, including `dimensions` and `segments`.
+
+Earlier state (P1):
 
 P1 (hub and providers) is complete on `ai-hub` at 1a748a04. Nothing has run on a phone yet.
 Deferred (ledger): linkToDeath on callbacks; request cap counts bytes while Binder carries UTF-16;

@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Declared here as well as in AI hub: an app installed before the hub would otherwise never be granted it. -->
+    <permission android:name="com.haroon.permission.AI_HUB" android:protectionLevel="signature" />
+    <uses-permission android:name="com.haroon.permission.AI_HUB" />
+    <queries>
+        <package android:name="com.haroon.aihub" />
+    </queries>
+</manifest>

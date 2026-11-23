@@ -23,8 +23,18 @@ class CallerPolicyTest {
     assertTrue(decide("com.haroon.nexus", switches = mapOf("com.haroon.nexus" to false)) is Decision.Deny)
   }
 
-  @Test fun unknownAppDefaultsOn() {
-    assertEquals(Decision.Allow, decide("com.haroon.nexus"))
+  @Test fun unknownAppDefaultsOffAndAsksTheOwner() {
+    assertEquals(Decision.Deny(CallerPolicy.NOT_ON, ask = "com.haroon.nexus"), decide("com.haroon.nexus"))
+  }
+
+  @Test fun switchedOnAllowed() {
+    assertEquals(Decision.Allow, decide("com.haroon.nexus", switches = mapOf("com.haroon.nexus" to true)))
+  }
+
+  @Test fun onlyAnUndecidedSameSignedAppIsListedForTheOwner() {
+    assertEquals(null, (decide("com.haroon.nexus", signed = false) as Decision.Deny).ask)
+    assertEquals(null, (decide("com.haroon.nexus", switches = mapOf("com.haroon.nexus" to false)) as Decision.Deny).ask)
+    assertEquals(null, (decide("com.haroon.strongroom") as Decision.Deny).ask)
   }
 
   @Test fun hubAllowed() {

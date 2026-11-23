@@ -18,10 +18,21 @@ export interface AppInfo {
   packageName: string;
   label: string;
   enabled: boolean;
+  /** Asked to use AI before the owner turned it on or off. */
+  pending: boolean;
   calls: number;
   inputTokens: number;
   outputTokens: number;
   lastUsed: number;
+}
+
+/** One finished request. The log never holds what was asked or answered. */
+export interface CallInfo {
+  packageName: string;
+  label: string;
+  job: JobKey;
+  service: ServiceKey;
+  time: number;
 }
 
 interface AiHubCoreApi {
@@ -34,6 +45,8 @@ interface AiHubCoreApi {
   setModel(job: JobKey, service: ServiceKey, model: string): Promise<void>;
   apps(): Promise<AppInfo[]>;
   setAppEnabled(packageName: string, enabled: boolean): Promise<void>;
+  calls(): Promise<CallInfo[]>;
+  clearCalls(): Promise<void>;
 }
 
 const native = requireNativeModule<AiHubCoreApi>('AiHubCore');
@@ -53,3 +66,5 @@ export const models = (): Promise<Record<JobKey, ModelChoice>> => native.models(
 export const setModel = (job: JobKey, service: ServiceKey, model: string): Promise<void> => native.setModel(job, service, model);
 export const apps = (): Promise<AppInfo[]> => native.apps();
 export const setAppEnabled = (packageName: string, enabled: boolean): Promise<void> => native.setAppEnabled(packageName, enabled);
+export const calls = (): Promise<CallInfo[]> => native.calls();
+export const clearCalls = (): Promise<void> => native.clearCalls();

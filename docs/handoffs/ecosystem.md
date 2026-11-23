@@ -75,17 +75,17 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | F4 | Halo m1/m2 minors | eco/halo | built + gated (0f60b826, 4ece59ca); halo-engine 165 tests, notch-island 109, assembleDebug ok, halo ts 126 pass; phone not run |
 | F5 | Deputy reliability (verify and close; code is on main) | eco/deputy | built + gated (1eef0a8b, e7b5b9b0): only gap was Retry-After as an HTTP date; Deputy gradle 267 -> 274 tests, 0 fail; deputy ts 12 pass; phone not run |
 | F6 | Nexus shortcuts | eco/nexus | built + gated (6134b70e, aeae7091, 5624026f, 92385261): pdf-editor-mobile 47/47, knowledge-core 67/67, engine 2/2, gradle ok; new module audio-chunks (Android only); phone not run |
-| E1 | app-link-contract | eco/base | todo |
+| E1 | app-link-contract | eco/base | built + gated + security-reviewed (commits 18657714 ... fda0631b): app-link-contract 91/91, autopilot-contract 5/5, inflow ts 91/91, Inflow gradle 578 tests; phone not run |
 | E2 | AI keys once (Strongroom) | eco/strongroom + readers | todo (needs E1; owner decision) |
 | E3 | Share targets | eco/nexus, eco/design-editor, eco/deputy | todo (needs E1) |
 | E4 | Store health hub | eco/store | todo (needs E1) |
-| C1 | Clipboard smart actions + phase 1 | eco/clipboard | in progress (Add to Inflow action waits for E1 actions) |
+| C1 | Clipboard smart actions + phase 1 | eco/clipboard | built + gated (6f2ba514): clipboard ts 21 (7 before), gradle JVM 32 (24 before), release manifest has no INTERNET (test fails if it returns); Add to Inflow NOT built (needs an Inflow E1 action; extension point `actionFor()` in src/smart.ts); phone not run; security-engineer + invariant review pending |
 | C2 | Deputy repeating tasks | eco/deputy | built + gated (d23c625a): Deputy gradle 299 tests (274 before), deputy ts 15 pass, typecheck ok, WorkManager 2.12.0 Apache-2.0 no gms; gate unchanged (test proves scheduled run meets same gate); phone not run; security-engineer review pending |
-| C3 | TunnelWall (firewall already on main) | eco/tunnelwall | in progress |
-| C4 | HomeNet | eco/homenet | todo |
-| C5 | Strongroom health report | eco/strongroom | todo |
+| C3 | TunnelWall (firewall already on main) | eco/tunnelwall | built + gated (73fcb21e, c13b0e52, 93bccc5a, 0af9d514): open-tunnel-core 38, open_tunnel_vpn ts 150, gradle JVM 52, assembleDebug ok, expo-doctor 16/18 (same as baseline); iOS NOT compiled (no Pods); phone not run; invariant-reviewer pending. Kill switch: real gap was that it did nothing on Android (engines host their own VpnService); now an in-app blocking interface. Trusted Wi-Fi adds ACCESS_FINE/COARSE_LOCATION (runtime, only when switch is on) |
+| C4 | HomeNet | eco/homenet | in progress |
+| C5 | Strongroom health report | eco/strongroom | in progress |
 | C6 | Halo progress ring | eco/halo | built + gated (c230590a): halo-engine 165, notch-island 127, halo ts 127 pass, assembleDebug ok; default ON (my call); phone not run; security-engineer look pending |
-| C7 | Design Editor brand kit from image | eco/design-editor | todo |
+| C7 | Design Editor brand kit from image | eco/design-editor | built + gated (4fc78b36): engine 48/48, design-editor-mobile 105/105, design-editor 9/9 (unit), mobile tsc ok; engine is classic JS (image-maths.js), ui WCAG helper is private to its test so formula is duplicated and pinned by known values; UI is DOM code never run in a window or phone |
 | C8 | Nexus offline OCR (on main; verify, audit, fill gaps) | eco/nexus | todo |
 | C9 | autonomous-browsing dry run | eco/autonomous-browsing | built + gated (d4ab7da7): vitest 514 pass (500 before), tsc clean; real-window check not run; open: assert probe waits default timeout on missing targets |
 | V1-V5 | Vitals in Inflow | eco/inflow | V1-V4 in progress (phase vitals); V5 waits for E1 final |
@@ -99,11 +99,23 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 - apps/ai-hub is not in the release list (no Store release path): not guaranteed shared-key signed (E1 finding); matters for E2.
 - Releases before F1/F2 have no recorded commit: the first rollback of each app needs `--to <sha>`.
 
+## E1 outcome (for later phases)
+
+- Contract: packages/app-link-contract (README has "how an app adds a share/action", threat model, phone checks). One permission `com.haroon.permission.AUTOPILOT` exported as LINK_PERMISSION (R1: a rename needs a coordinated release of every app). Kotlin guard is canonical copy-in files (AppLinkGuard.kt, AppLinkCaller.kt) with a drift test. Guard also re-checks the caller cert (checkSignatures).
+- Signing: all releases use the ONE Store key. Signature trust holds only for Store-installed builds: every committed debug.keystore is the same public Expo debug key, so a debug-built app would trust anything signed with it. `apps/ai-hub` is NOT in the release list, so it has no trust path yet (matters for E2).
+- Open from E1: Deputy's RunSuggestionActivity (headless, grandfathered) has no callingPackage check or extras validation; any same-key sibling can start it (add when Deputy is next touched, B3 will). First action author must add the second caller check for activities (R7). Inflow `items/#` and `update` paths are legacy; new shares must not copy them; OTP filtering in AutopilotAccess not traced (check before E3/B2).
+- Metro: nothing imports app-link-contract at runtime yet; the first app that does must list it as a dependency and bundle once.
+
+## Findings to carry (from C1)
+
+- Clipboard smart actions put a tracking number or an address in a URL/geo query sent to the browser or map app, only on a tap, never by Clipboard itself (no INTERNET). COMMON.md's "no user data in URLs" rule was written for web forms; this is the feature, but security-engineer must confirm and the owner is told.
+- HyperOS: "Turn on" cannot open Clipboard's own accessibility page (ACTION_ACCESSIBILITY_DETAILS_SETTINGS is not in the public SDK); it opens the accessibility list instead.
+
 ## Open owner decisions (collect here, ask once at the end)
 
 1. Strongroom holds the shared AI keys (E2): the prompt says yes, but AI hub (#66, on main) already owns a Keystore key ring for Gemini and Groq with a signature-guarded bound service. (my call, pending owner) E2 will build on the AI hub, NOT duplicate a key store in Strongroom, unless the owner says Strongroom must hold them. Needs owner confirmation.
 2. Health data to Ask AI or Autopilot (V4): default off.
-3. TunnelWall auto-connect on untrusted Wi-Fi (C3): default off.
+3. TunnelWall auto-connect on untrusted Wi-Fi (C3): built default off. NEW for owner: it needs precise-location permission (Android only shows the Wi-Fi name to apps with it), asked only when the switch is turned on; works on Android 12+ and only while the app process is alive. Say if you would rather identify networks without location (rejected: gateway address is not unique).
 4. Where the Shields switch lives (B4): (my call, to write down).
 5. Repeating Deputy tasks that include payments (C2): built as `ScheduledRun.PAYMENTS_ALLOWED = true` (a paying task can be saved, but always stops at the gate; false refuses to save them). Owner flips it.
 6. C2 auto-start: the PRD default was a "Tap to run" notification; I built auto-start on an unlocked phone (PRD FR-9 and SPEC section 11 updated). A scheduled run may take over the screen while you use the phone (alternative: 10 s "starting soon, Not now" warning). Owner confirms.

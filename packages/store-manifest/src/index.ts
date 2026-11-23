@@ -18,6 +18,7 @@ export const ANDROID_PACKAGES = {
   clipboard: 'com.haroon.clipboard',
   halo: 'com.haroon.halo',
   notch: 'com.haroon.notch',
+  'ai-hub': 'com.haroon.aihub',
 } as const;
 
 export function androidPackageFor(id: string): string | undefined {
