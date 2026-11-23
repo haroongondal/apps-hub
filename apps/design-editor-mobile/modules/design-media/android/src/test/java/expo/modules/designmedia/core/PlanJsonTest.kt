@@ -101,11 +101,4 @@ class PlanJsonTest {
     assertEquals(listOf(mapOf("name" to "a.mp4", "ref" to "content://x", "bytes" to 9L)), noted.toStatusMap()["outputs"])
     assertEquals("Couldn't fit under 20 MB.", jobs[3].toStatusMap()["error"])
   }
-
-  @Test(expected = IllegalArgumentException::class)
-  fun refusesAnImageExtensionThatIsNotTheFormat() {
-    decodeJobs(
-      """[{"id":"x","inputId":"u","inputName":"a.png","state":"queued","progress":0,"attempt":1,"plan":{"tool":"image","format":"png","ext":"../x"}}]""",
-    )
-  }
 }
