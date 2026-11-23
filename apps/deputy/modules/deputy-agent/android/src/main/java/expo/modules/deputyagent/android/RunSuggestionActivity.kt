@@ -6,6 +6,8 @@ import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
+import expo.modules.deputyagent.applink.AppLinkTarget
+import expo.modules.deputyagent.applink.SiblingPackages
 import expo.modules.deputyagent.core.Begin
 import expo.modules.deputyagent.core.RunStatus
 import expo.modules.deputyagent.core.SuggestionItem
@@ -36,7 +38,8 @@ class RunSuggestionActivity : Activity() {
     const val EXTRA_ID = "suggestionId"
     /** Optional: package names of other apps the run may look in, which Inflow keeps as the owner's choice. */
     const val EXTRA_LOOK_IN = "lookIn"
-    private const val BASE = "content://com.haroon.inflow.autopilot"
+    private const val AUTHORITY = "com.haroon.inflow.autopilot"
+    private const val BASE = "content://$AUTHORITY"
 
     /** Returns what to tell the owner, or null when the run started. */
     private fun run(context: Context, id: Long, lookIn: Set<String>): String? {
@@ -50,20 +53,29 @@ class RunSuggestionActivity : Activity() {
       }
     }
 
-    /** The suggestion row names its source item; an empty cursor at either step means Inflow refused. */
-    private fun readItem(context: Context, id: Long): SuggestionItem? = runCatching {
-      val itemId = context.contentResolver.query(Uri.parse("$BASE/suggestions/$id"), null, null, null, null)?.use { c ->
-        if (c.moveToFirst()) c.getLong(c.getColumnIndexOrThrow("item_id")) else null
-      } ?: return@runCatching null
-      context.contentResolver.query(Uri.parse("$BASE/items/$itemId"), null, null, null, null)?.use { c ->
-        if (!c.moveToFirst()) return@runCatching null
-        fun s(col: String) = c.getString(c.getColumnIndexOrThrow(col)).orEmpty()
-        SuggestionItem(s("app"), s("pkg"), s("conversation").ifBlank { s("sender") }, s("text"))
+    // Another app can own Inflow's authority: nothing is read from or written to it unless it is the Store-signed Inflow.
+    private fun trustedInflow(context: Context) = AppLinkTarget.trustedProvider(context, AUTHORITY, SiblingPackages.INFLOW)
+
+    private fun queryRow(context: Context, path: String): Map<String, String>? =
+      context.contentResolver.query(Uri.parse("$BASE/$path"), null, null, null, null)?.use { c ->
+        if (!c.moveToFirst()) null else c.columnNames.associateWith { c.getString(c.getColumnIndexOrThrow(it)).orEmpty() }
       }
+
+    private fun readItem(context: Context, id: Long): SuggestionItem? =
+      readItem(id, { trustedInflow(context) }) { queryRow(context, it) }
+
+    /** The suggestion row names its source item; an empty row at either step means Inflow refused. `row` is never called unless `trusted()` says yes. */
+    internal fun readItem(id: Long, trusted: () -> Boolean, row: (String) -> Map<String, String>?): SuggestionItem? = runCatching {
+      val itemId = (if (trusted()) row("suggestions/$id") else null)?.get("item_id")?.toLongOrNull() ?: return@runCatching null
+      val r = (if (trusted()) row("items/$itemId") else null) ?: return@runCatching null
+      fun s(col: String) = r[col].orEmpty()
+      SuggestionItem(s("app"), s("pkg"), s("conversation").ifBlank { s("sender") }, s("text"))
     }.getOrNull()
 
     private fun setState(context: Context, id: Long, state: String) {
-      runCatching { context.contentResolver.update(Uri.parse("$BASE/suggestions/$id"), ContentValues().apply { put("state", state) }, null, null) }
+      runCatching {
+        if (trustedInflow(context)) context.contentResolver.update(Uri.parse("$BASE/suggestions/$id"), ContentValues().apply { put("state", state) }, null, null)
+      }
     }
   }
 }

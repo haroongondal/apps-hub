@@ -85,5 +85,7 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
         <provider android:authorities="com.haroon.inflow.autopilot" />
+        <!-- AppLinkTarget checks the resolved Inflow's package and signature before every read. -->
+        <package android:name="com.haroon.inflow" />
     </queries>
 </manifest>

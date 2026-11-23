@@ -2033,3 +2033,7 @@ provider and the key vault. No code changed in this step.
      and `com.opentunnel.open_tunnel_vpn`, which are not `com.haroon.*`.
   2. **On-device model test.** The user runs the FunctionGemma demo in Google's
      AI Edge Gallery app on the phone and reports speed and RAM use.
+
+## AppLinkTarget (eco/deputy)
+
+`RunSuggestionActivity` now calls `AppLinkTarget.trustedProvider(ctx, "com.haroon.inflow.autopilot", SiblingPackages.INFLOW)` before each Autopilot query and before the `state` update; when it says no, nothing is read, no run starts and the owner sees the usual "can't share" sentence. Its own entry is unchanged (no caller check added). Copies: `applink/AppLinkTarget.kt` and `src/test/.../applink/AppLinkTargetTest.kt` (package line only). The seam is `RunSuggestionActivity.readItem(id, trusted, row)`, tested in `RunSuggestionActivityTest`. The module manifest has `<package android:name="com.haroon.inflow"/>` in `<queries>`; Deputy does not hold QUERY_ALL_PACKAGES. Not run on a phone: with Store-signed Inflow, Run on a suggestion starts the task as before; with Inflow uninstalled or a lookalike on the authority, Run says it can't share and starts nothing.
