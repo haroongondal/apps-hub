@@ -10,6 +10,7 @@ import {
   MAX_FILE_BYTES,
   onlyExisting,
   parseInbox,
+  payloadFor,
   SAY,
   staleInboxes,
   type IntakeDeps,
@@ -257,4 +258,13 @@ test('inbox ids and the start-up sweep', () => {
   const fresh = id(now - 23 * 3_600_000);
   const old = id(now - 25 * 3_600_000);
   assert.deepEqual(staleInboxes([fresh, old, 'stray-file', id(now)], now), [old, 'stray-file']);
+});
+
+test('the share screen uses a payload only for the inbox it was read from', () => {
+  const payload: SharedPayload = { createdAt: 1, text: 'hello', subject: null, count: 0, files: [] };
+  const loaded = { id: 'mi0abc12-abcd1234', payload };
+  assert.equal(payloadFor(loaded, 'mi0abc12-abcd1234'), payload);
+  assert.equal(payloadFor(loaded, 'mi0abc13-abcd1234'), undefined, 'a newer share waits for its own inbox');
+  assert.equal(payloadFor(undefined, 'mi0abc12-abcd1234'), undefined);
+  assert.equal(payloadFor({ id: 'mi0abc12-abcd1234', payload: null }, 'mi0abc12-abcd1234'), null);
 });

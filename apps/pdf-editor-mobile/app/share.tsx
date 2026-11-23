@@ -9,7 +9,7 @@ import { IconButton } from '../src/library/icon-button';
 import { openItem } from '../src/library/open-item';
 import { errorMessage } from '../src/library/use-library';
 import { discardInbox, inboxDeps, inboxFile, readInbox } from '../src/nexus/share-inbox';
-import { classifyShared, intakeShared, isInboxId, sizeLabel, type IntakeEntry, type SharedPayload } from '../src/nexus/share-intake';
+import { classifyShared, intakeShared, isInboxId, payloadFor, sizeLabel, type IntakeEntry, type LoadedShare } from '../src/nexus/share-intake';
 
 const PREVIEW = 600;
 const preview = (text: string) => (text.length > PREVIEW ? `${text.slice(0, PREVIEW).trimEnd()}…` : text);
@@ -37,16 +37,22 @@ function EntryRow({ entry, inbox }: { entry: IntakeEntry; inbox: string }) {
 export default function ShareScreen() {
   const { inbox } = useLocalSearchParams<{ inbox?: string }>();
   const id = isInboxId(inbox) ? inbox : null;
-  const [payload, setPayload] = useState<SharedPayload | null | undefined>(undefined);
+  // A second share can reuse this screen with a new inbox id, so the payload is kept with the id it was read from.
+  const [loaded, setLoaded] = useState<LoadedShare | undefined>(undefined);
+  const payload = id ? payloadFor(loaded, id) : null;
   const [busy, setBusy] = useState(false);
   const taken = useRef(false);
 
   useEffect(() => {
-    if (!id) return setPayload(null);
+    if (!id) return;
+    let live = true;
+    taken.current = false;
+    setLoaded(undefined);
     readInbox(id)
-      .then(setPayload)
-      .catch(() => setPayload(null));
+      .then((p) => live && setLoaded({ id, payload: p }))
+      .catch(() => live && setLoaded({ id, payload: null }));
     return () => {
+      live = false;
       if (!taken.current) {
         try {
           discardInbox(id);

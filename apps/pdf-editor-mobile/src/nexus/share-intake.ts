@@ -218,6 +218,16 @@ const FILE_NAME = /^\d{1,2}$/;
 
 export const isInboxId = (id: unknown): id is string => typeof id === 'string' && INBOX_ID.test(id);
 
+/** What the share screen loaded, kept with the inbox it came from. */
+export interface LoadedShare {
+  id: string;
+  payload: SharedPayload | null;
+}
+
+/** The payload only while it belongs to the inbox the screen shows now: a new share can reuse the screen before its inbox is read. */
+export const payloadFor = (loaded: LoadedShare | undefined, id: string | null): SharedPayload | null | undefined =>
+  loaded && loaded.id === id ? loaded.payload : undefined;
+
 export function staleInboxes(names: string[], now: number): string[] {
   return names.filter((n) => {
     const m = INBOX_ID.exec(n);
