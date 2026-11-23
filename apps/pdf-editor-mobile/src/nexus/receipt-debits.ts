@@ -34,7 +34,7 @@ const nameOf = (d: DebitRow): string => (d.merchant.trim() ? `${d.merchant.trim(
 export const READ_FAILED = "Couldn't read Inflow right now.";
 export const NOT_INSTALLED = "Inflow isn't installed.";
 export const SWITCHED_OFF = "Off in Inflow. Turn on 'Let Nexus match my receipts' in Inflow.";
-export const NO_MATCH = 'No matching payment found yet.';
+export const NO_MATCH = "No matching payment found yet. If you haven't, turn on 'Let Nexus match my receipts' in Inflow.";
 
 export const readLine = (status: DebitsRead['status']): string | null =>
   status === 'ready' ? null : status === 'off' ? SWITCHED_OFF : status === 'missing' ? NOT_INSTALLED : READ_FAILED;

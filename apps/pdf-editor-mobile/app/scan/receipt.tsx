@@ -1,7 +1,7 @@
 import { Button, Field, Group, Header, Notice, Row, Screen, space, Text } from '@apps-hub/ui';
 import { router, useLocalSearchParams } from 'expo-router';
 import { NexusLinks, type DebitRow } from 'nexus-links';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { View } from 'react-native';
 
 import { IconButton } from '../../src/library/icon-button';
@@ -17,7 +17,7 @@ import { readReceipt } from '../../src/nexus/receipt-read';
 import { warrantyReminder } from '../../src/nexus/receipt-reminder';
 
 type Fields = { amount: string; date: string; merchant: string; warrantyEnd: string };
-type Phase = { kind: 'reading' } | { kind: 'no-ai' } | { kind: 'failed'; line: string } | { kind: 'ready' };
+type Phase = { kind: 'start' } | { kind: 'reading' } | { kind: 'no-ai' } | { kind: 'failed'; line: string } | { kind: 'ready' };
 type Outcome = { kind: 'read'; line: string } | { kind: 'match'; match: Match } | { kind: 'done'; line: string };
 
 const READ_FAILED = "Nexus couldn't read that receipt. Check the photo is clear and your connection works, then try again.";
@@ -25,12 +25,11 @@ const READ_FAILED = "Nexus couldn't read that receipt. Check the photo is clear 
 // The photo is read on the AI service the owner already uses for scans. The matched payment lives only in this screen's memory: nothing from Inflow is saved, logged or sent to an AI.
 export default function ReceiptScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [phase, setPhase] = useState<Phase>({ kind: 'reading' });
+  const [phase, setPhase] = useState<Phase>({ kind: 'start' });
   const [fields, setFields] = useState<Fields>({ amount: '', date: '', merchant: '', warrantyEnd: '' });
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [busy, setBusy] = useState<'match' | 'remind' | null>(null);
   const [reminded, setReminded] = useState<string | null>(null);
-  const started = useRef(false);
 
   const read = async () => {
     setPhase({ kind: 'reading' });
@@ -48,13 +47,6 @@ export default function ReceiptScreen() {
       setPhase({ kind: 'failed', line: READ_FAILED });
     }
   };
-
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    void read();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one read when the screen opens; Try again calls it by hand
-  }, []);
 
   const edit = (key: keyof Fields) => (value: string) => {
     setFields((f) => ({ ...f, [key]: value }));
@@ -97,6 +89,11 @@ export default function ReceiptScreen() {
     <Screen scroll>
       <Header title="Receipt" subtitle="Reads the first page" trailing={<IconButton icon="arrow-back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />} />
 
+      {phase.kind === 'start' ? (
+        <Notice tone="neutral" action={<Button label="Read receipt" size="sm" onPress={() => void read()} />}>
+          Nexus sends this photo to your AI service to read it.
+        </Notice>
+      ) : null}
       {phase.kind === 'reading' ? <Text tone="muted" accessibilityLiveRegion="polite">Reading the receipt...</Text> : null}
       {phase.kind === 'no-ai' ? (
         <Notice tone="warn" title="Nexus needs an AI service" action={<Button label="Open settings" size="sm" variant="secondary" onPress={() => router.push('/settings')} />}>

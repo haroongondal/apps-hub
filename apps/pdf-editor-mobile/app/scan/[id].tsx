@@ -1,6 +1,6 @@
 import type { Item } from '@apps-hub/library-core';
 import type { ScanPage } from '@apps-hub/scan-core';
-import { Button, Header, Notice, Screen, radius, space, useTheme } from '@apps-hub/ui';
+import { Button, Header, Notice, Screen, radius, space, Text, useTheme } from '@apps-hub/ui';
 import { Image } from 'expo-image';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -10,6 +10,7 @@ import { IconButton } from '../../src/library/icon-button';
 import { openLibrary } from '../../src/library/open-library';
 import { itemFile } from '../../src/library/paths';
 import { errorMessage } from '../../src/library/use-library';
+import { openKnowledge } from '../../src/nexus/worker';
 import { openInEditor, saveImages, savedMessage, shareImages, sharePdf } from '../../src/scan/export';
 import { getScanService } from '../../src/scan/service';
 import { discardSession, loadSession, saveSession } from '../../src/scan/session';
@@ -22,6 +23,7 @@ export default function ScanScreen() {
   const { c } = useTheme();
   const [item, setItem] = useState<Item | null>(null);
   const [pages, setPages] = useState<ScanPage[]>([]);
+  const [keptOut, setKeptOut] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,10 +35,12 @@ export default function ScanScreen() {
         try {
           const found = await (await openLibrary()).getItem(id);
           const list = await (await getScanService()).pages(id);
+          const out = await (await openKnowledge()).isExcluded(id);
           if (!alive) return;
           if (!found) throw new Error('This scan is no longer in the library. Go back and pick another.');
           setItem(found);
           setPages(list);
+          setKeptOut(out);
         } catch (e) {
           if (alive) setError(`The scan couldn't be opened. ${errorMessage(e)}`);
         }
@@ -106,7 +110,8 @@ export default function ScanScreen() {
           onPress={() => run('save', async () => savedMessage(await saveImages(id)), "The images weren't saved. Check that the phone has free space, then try again.")}
         />
         <Button label="Share images" block variant="secondary" busy={busy === 'images'} disabled={!!busy || pages.length === 0} onPress={() => run('images', () => shareImages(id), "The images couldn't be shared.")} />
-        <Button label="Read as receipt" block variant="secondary" disabled={!!busy || pages.length === 0} onPress={() => router.push({ pathname: '/scan/receipt', params: { id } })} />
+        <Button label="Read as receipt" block variant="secondary" disabled={!!busy || pages.length === 0 || keptOut} onPress={() => router.push({ pathname: '/scan/receipt', params: { id } })} />
+        {keptOut ? <Text tone="muted">Kept out of Nexus. Add it back to read it as a receipt.</Text> : null}
         <Button label="Add pages" block variant="secondary" disabled={!!busy || !item} onPress={startAppend} />
       </View>
     </Screen>

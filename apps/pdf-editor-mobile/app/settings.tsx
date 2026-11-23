@@ -106,7 +106,11 @@ export default function SettingsScreen() {
         With both keys saved, Nexus sends Google the text of your notes, PDFs and scans, and your photos, to find ideas and read images. It sends
         Groq the text of your notes, PDFs and scans, to build the graph and answer questions, and your voice recordings, to transcribe them. The
         CV maker sends the details you type to Groq or Gemini. When AI hub is installed and lets Nexus use it, Nexus sends the same things through
-        AI hub instead, which passes them to Groq or Gemini, and uses your own keys only when AI hub can&apos;t. Your files stay on this phone. Without the keys or AI hub nothing is sent.
+        AI hub instead, which passes them to Groq or Gemini, and uses your own keys only when AI hub can&apos;t. For each Ask my life source you
+        switch on, Nexus sends its messages, pinned clips or Deputy runs to Gemini to make them searchable, and the parts that match to Groq when
+        you ask, through AI hub first. When you tap Read as receipt, Nexus sends that photo to Gemini and the text read from it to Groq. While
+        Show what is due today is on, your other apps can read the titles of things due today, and nothing leaves your phone. Your files stay on
+        this phone. Without the keys or AI hub nothing is sent.
       </Notice>
       {SERVICES.map((s) => (
         <KeyPanel key={s.id} service={s} saved={keys[s.id]} onChange={(list) => setKeys((k) => ({ ...k, [s.id]: list }))} />

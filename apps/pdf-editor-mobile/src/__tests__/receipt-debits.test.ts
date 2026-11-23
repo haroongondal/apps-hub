@@ -56,7 +56,7 @@ test('plain lines for each outcome', () => {
   assert.equal(matchLine({ kind: 'match', debit: row(1) }), 'This looks like your Corner Cafe payment of 12.50 on 20 Nov. Is it the same?');
   assert.equal(matchLine({ kind: 'match', debit: { ...row(1), merchant: ' ' } }), 'This looks like your payment of 12.50 on 20 Nov. Is it the same?');
   assert.equal(matchLine({ kind: 'weak', candidates: [row(1)] }), "Amount and date match, the name doesn't. Is one of these yours?");
-  assert.equal(matchLine({ kind: 'none' }), 'No matching payment found yet.');
+  assert.equal(matchLine({ kind: 'none' }), "No matching payment found yet. If you haven't, turn on 'Let Nexus match my receipts' in Inflow.");
   assert.equal(candidateLine(row(1)), '20 Nov, 12.50');
   assert.ok(!matchLine({ kind: 'match', debit: row(1) }).includes('1234'), 'the account label is never shown');
 });
