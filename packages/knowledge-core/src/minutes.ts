@@ -79,7 +79,7 @@ Write one summary of the whole meeting. Merge decisions or actions that say the 
 ${SHAPE}`;
 
 // No fence can be forged: a transcript line never holds a line break or two angle brackets in a row.
-const neutral = (s: string) =>
+export const neutral = (s: string) =>
   s
     .replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ')
     .replace(/<{2,}/g, '<')

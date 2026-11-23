@@ -1,9 +1,10 @@
-import { migrate, type Item, type ItemKind, type Library, type Row, type SqlPort } from '@apps-hub/library-core';
+import { migrate, type Item, type ItemKind, type Library, type Row, type SourceApp, type SqlPort } from '@apps-hub/library-core';
 
 import { chunkSegments } from './chunk.ts';
 import { cleanExtraction, normLabel } from './extraction.ts';
 import { composeMinutes, minutesFingerprint, minutesSegments, type Minutes, type MinutesChat, type MinutesOptions, type SavedMinutes } from './minutes.ts';
 import { KNOWLEDGE_STEPS } from './schema.ts';
+import { sourceLabel } from './sources.ts';
 import { AiError, PAUSING, type AiPort, type ContentPort, type Extraction, type Locator, type Segment } from './types.ts';
 import { cosine, fromBlob, toBlob, topK } from './vectors.ts';
 
@@ -25,6 +26,8 @@ export interface Source {
   kind: ItemKind;
   locator: Locator;
   text: string;
+  /** "From Inflow message, 3 Nov" for an item read from another app, else null. */
+  origin: string | null;
 }
 export interface Answer {
   text: string;
@@ -123,7 +126,8 @@ export class Knowledge {
     if ((await this.db.first("SELECT value FROM kn_meta WHERE key = 'embed_tag'"))?.value === tag) return;
     await this.db.transaction(async (tx) => {
       await tx.run(
-        `UPDATE kn_jobs SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, error = NULL, embed_only = 0, updated_at = ?
+        `UPDATE kn_jobs SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, error = NULL, updated_at = ?,
+           embed_only = CASE WHEN item_id IN (SELECT item_id FROM item_sources) THEN 1 ELSE 0 END
          WHERE stage <> 'text' AND item_id IN (SELECT item_id FROM kn_chunks)`,
         [this.deps.now()],
       );
@@ -137,6 +141,8 @@ export class Knowledge {
   async enqueue(itemId: string): Promise<void> {
     await this.db.transaction(async (tx) => {
       if (await isExcluded(tx, itemId)) return;
+      // An item read from another app has no file to read again: its text is the segment the sync saved.
+      if (await tx.first('SELECT 1 FROM item_sources WHERE item_id = ?', [itemId])) return this.queueEmbedOnly(tx, itemId);
       await tx.run(
         `INSERT INTO kn_jobs (item_id, stage, status, updated_at) VALUES (?, 'text', 'queued', ?)
          ON CONFLICT(item_id) DO UPDATE SET stage = 'text', status = 'queued', gen = gen + 1, attempts = 0, error = NULL,
@@ -144,6 +150,27 @@ export class Knowledge {
         [itemId, this.deps.now()],
       );
     });
+  }
+
+  /** Saves `text` as the item's one segment and queues it to be embedded only (no graph, no AI extraction). False when the item is gone or kept out. */
+  async enqueueEmbedOnly(itemId: string, text: string): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      if (!(await tx.first('SELECT 1 FROM items WHERE id = ?', [itemId]))) return false;
+      await tx.run('DELETE FROM kn_segments WHERE item_id = ?', [itemId]);
+      await tx.run('INSERT INTO kn_segments (item_id, seq, text, locator) VALUES (?, 0, ?, NULL)', [itemId, text]);
+      if (await isExcluded(tx, itemId)) return false;
+      await this.queueEmbedOnly(tx, itemId);
+      return true;
+    });
+  }
+
+  private async queueEmbedOnly(tx: SqlPort, itemId: string): Promise<void> {
+    await tx.run(
+      `INSERT INTO kn_jobs (item_id, stage, status, embed_only, updated_at) VALUES (?, 'embed', 'queued', 1, ?)
+       ON CONFLICT(item_id) DO UPDATE SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, error = NULL,
+         embed_only = 1, updated_at = excluded.updated_at`,
+      [itemId, this.deps.now()],
+    );
   }
 
   // Segments stay: they are the item's own transcript or OCR text. A stage already running finds no job and writes nothing.
@@ -516,27 +543,35 @@ export class Knowledge {
     const q = question.trim();
     const [qv] = await this.deps.ai.embed([q]);
     // shortcut: brute-force cosine over every chunk; fine to ~20k chunks, switch to sqlite-vec beyond that.
-    const rows = await this.db.all('SELECT c.item_id, c.text, c.locator, c.embedding, i.title, i.kind FROM kn_chunks c JOIN items i ON i.id = c.item_id');
+    const rows = await this.db.all(
+      `SELECT c.item_id, c.text, c.locator, c.embedding, i.title, i.kind, s.app, s.source_at
+       FROM kn_chunks c JOIN items i ON i.id = c.item_id LEFT JOIN item_sources s ON s.item_id = c.item_id`,
+    );
     const hits = topK(rows, (r) => cosine(qv, fromBlob(r.embedding as Uint8Array)), ASK_CHUNKS).filter((h) => h.score > 0);
     const hitItems = [...new Set(hits.map((h) => h.item.item_id as string))];
     const atoms = hitItems.length
       ? await this.db.all(
-          `${WALK(hitItems.length)} SELECT n.item_id, n.label, n.locator, i.title, i.kind, MIN(walk.depth) AS d, COUNT(*) AS c
-           FROM walk JOIN kn_nodes n ON n.id = walk.id JOIN items i ON i.id = n.item_id
+          `${WALK(hitItems.length)} SELECT n.item_id, n.label, n.locator, i.title, i.kind, s.app, s.source_at, MIN(walk.depth) AS d, COUNT(*) AS c
+           FROM walk JOIN kn_nodes n ON n.id = walk.id JOIN items i ON i.id = n.item_id LEFT JOIN item_sources s ON s.item_id = n.item_id
            WHERE n.type = 'atom' AND n.item_id NOT IN (${marks(hitItems.length)})
            GROUP BY n.id ORDER BY d, c DESC, n.id LIMIT ?`,
           [...hitItems.map(srcId), 2, ...hitItems, ASK_ATOMS],
         )
       : [];
-    const sources: Source[] = [
-      ...hits.map(({ item: r }) => ({ itemId: r.item_id as string, title: r.title as string, kind: r.kind as ItemKind, locator: loc(r.locator), text: r.text as string })),
-      ...atoms.map((r) => ({ itemId: r.item_id as string, title: r.title as string, kind: r.kind as ItemKind, locator: loc(r.locator), text: r.label as string })),
-    ];
+    const source = (r: Row, text: unknown): Source => ({
+      itemId: r.item_id as string,
+      title: r.title as string,
+      kind: r.kind as ItemKind,
+      locator: loc(r.locator),
+      text: text as string,
+      origin: r.app === null || r.app === undefined ? null : sourceLabel({ app: r.app as SourceApp, sourceAt: r.source_at as number }),
+    });
+    const sources: Source[] = [...hits.map(({ item: r }) => source(r, r.text)), ...atoms.map((r) => source(r, r.label))];
     if (!sources.length) return { text: 'Nothing in your library matches that yet.', citations: [] };
 
     const text = await this.deps.ai.answer(
       q,
-      sources.map((s) => `${s.title}${s.locator ? ` (${locatorLabel(s.locator)})` : ''}: ${s.text}`),
+      sources.map((s) => `${s.origin ?? s.title}${s.locator ? ` (${locatorLabel(s.locator)})` : ''}: ${s.text}`),
     );
     const cited: number[] = [];
     for (const m of text.matchAll(/\[(\d+(?:\s*,\s*\d+)*)\]/g)) {
