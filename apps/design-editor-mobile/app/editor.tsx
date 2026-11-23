@@ -11,7 +11,8 @@ import WebView, { type WebViewMessageEvent, type WebViewNavigation } from 'react
 
 import DesignMedia from 'design-media';
 import { createImagePicker, type ImagePickDeps } from '../src/editor/image-pick';
-import { aiHasKey, aiRequest, aiSetKey } from '../src/editor/ai';
+import { aiHasKey, aiKeys, aiRemoveKey, aiRequest, aiSetKey } from '../src/editor/ai';
+import TextOcr, { allText, pickLine } from 'text-ocr';
 import { injectCommand, parseMessage, replyError, replyOk, type PageEvent } from '../src/editor/bridge';
 import { createVisionHost, type VisionHost } from '../src/editor/vision-host';
 import { getSearchTool } from '../src/photos/search-tool';
@@ -151,12 +152,30 @@ export default function EditorScreen() {
           case 'aiHasKey':
             injectCommand(webRef, replyOk(msg.reqId, await aiHasKey()));
             break;
+          case 'aiKeys':
+            injectCommand(webRef, replyOk(msg.reqId, await aiKeys()));
+            break;
+          case 'aiRemoveKey':
+            injectCommand(webRef, replyOk(msg.reqId, await aiRemoveKey(msg.index)));
+            break;
           case 'aiSetKey':
             injectCommand(webRef, replyOk(msg.reqId, await aiSetKey(msg.key)));
             break;
           case 'aiRequest':
             injectCommand(webRef, replyOk(msg.reqId, await aiRequest(msg.body)));
             break;
+          case 'recognizeText': {
+            const r = await TextOcr.recognizeBase64(msg.base64);
+            const line = typeof msg.x === 'number' && typeof msg.y === 'number' ? pickLine(r.lines, msg.x, msg.y) : null;
+            const text = line ? line.text.trim() : allText(r.lines);
+            if (!text) {
+              injectCommand(webRef, replyError(msg.reqId, 'No text found in this image'));
+              break;
+            }
+            await TextOcr.copy(text);
+            injectCommand(webRef, replyOk(msg.reqId, { text, box: line ? [line.left, line.top, line.right, line.bottom] : null, scope: line ? 'line' : 'all' }));
+            break;
+          }
           case 'docState': {
             docState.current = { title: msg.title, dirty: msg.dirty, filePath: msg.filePath };
             setTitle(msg.title);

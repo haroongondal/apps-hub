@@ -4,7 +4,7 @@ const $$ = sel => [...document.querySelectorAll(sel)];
 const MB = 1e6;
 const TOOL_LABELS = { size: 'Compress to size', quality: 'Compress by quality', clip: 'Clip', audio: 'Extract audio', gif: 'Make a GIF', convert: 'Convert', frame: 'Still frame', volume: 'Volume', reverse: 'Reverse', stabilize: 'Stabilize', image: 'Compress image' };
 const STATE_TEXT = { queued: 'Queued', running: 'Working', done: 'Done', failed: 'Failed', cancelled: 'Cancelled', interrupted: 'Interrupted', paused: 'Paused' };
-const state = { tool: 'size', files: [], selected: new Set(), folder: null, jobs: [], destinations: [], specs: new Map() };
+const state = { tool: 'size', files: [], selected: new Set(), folder: null, jobs: [], destinations: [], specs: new Map(), song: null };
 let planTimer = 0;
 let thumbToken = 0;
 
@@ -165,6 +165,7 @@ async function renderThumbs() {
 }
 
 function currentSpecs() {
+  if (state.tool === 'music' && !state.song) return [];
   const files = selectedFiles();
   if (state.tool === 'audio') {
     const tracks = $$('#tracks .track:checked').map(i => Number(i.value));
@@ -268,7 +269,8 @@ function schedulePlan() {
 async function updatePlan() {
   const specs = currentSpecs();
   if (!specs.length) {
-    setPlan(state.files.length ? 'Select a file to see the plan.' : 'Add a file to see the plan.');
+    if (state.tool === 'music' && !state.song) setPlan('Pick a song to see the plan.');
+    else setPlan(state.files.length ? 'Select a file to see the plan.' : 'Add a file to see the plan.');
     return;
   }
   try {
@@ -364,6 +366,17 @@ $('addFiles').onclick = async () => {
     renderFiles();
     renderTracks();
     renderThumbs();
+    schedulePlan();
+  } catch (err) {
+    fail(err);
+  }
+};
+$('pickSong').onclick = async () => {
+  try {
+    const song = await api.pickSong();
+    if (!song) return;
+    state.song = song;
+    $('songName').textContent = `${song.name} · ${fmt(song.durationS)}`;
     schedulePlan();
   } catch (err) {
     fail(err);

@@ -44,7 +44,7 @@ The Library tab (`app/(tabs)/library.tsx`) is the Library. Its logic is `package
 
 The app is named Nexus (N2). Logic is `packages/knowledge-core` (job queue, graph, Ask, the Gemini and Groq ports over the OpenAI-compatible adapter; `pnpm --filter @apps-hub/knowledge-core test`); `src/nexus/` is the glue. Design: `docs/superpowers/specs/2026-11-18-nexus-design.md`; progress: `docs/handoffs/nexus.md`.
 
-- Keys are lists per service, tried in order; `nexusPort` moves to the next key on any AI error (Groq then Gemini for chat).
+- Keys are lists per service; `openai.ts` rotates through a service's keys, and `nexusPort` hands chat (`extract`, `answer`, `complete`) from Groq to Gemini when Groq fails or has no key.
 - The CV maker is the CV tab with `app/cv/`. `src/cv/` is pure TypeScript (model, the three templates, the PDF writer, AI prompts) and is tested by this app's `test` script; `store.ts` is the Expo file glue.
 
 - Tabs: Stream (`app/(tabs)/index.tsx`, capture + Ask) and Library (`app/(tabs)/library.tsx`). A folder opens as `/folder` (same screen) so Back works.

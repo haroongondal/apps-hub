@@ -77,6 +77,42 @@ class AiProviderTest {
     assertTrue(http.sleeps.isEmpty())
   }
 
+  @Test fun aRefusedKeyHandsOverToTheNextAtOnce() {
+    for (code in listOf(401, 403)) {
+      val http = Fake(HttpReply(code, ""), ok)
+      assertEquals("done", provider(http, listOf("key-a", "key-b")).complete("s", "u").text)
+      assertEquals(listOf("key-a", "key-b"), http.keysUsed)
+      assertTrue(http.sleeps.isEmpty())
+    }
+  }
+
+  @Test fun geminiAnswering400ForAnUnknownKeyCountsAsRefused() {
+    val http = Fake(HttpReply(400, """{"error":{"message":"API key not valid. Please pass a valid API key."}}"""), ok)
+    provider(http, listOf("key-a", "key-b")).complete("s", "u")
+    assertEquals(listOf("key-a", "key-b"), http.keysUsed)
+  }
+
+  @Test fun anOrdinary400IsNotAKeyProblem() {
+    val http = Fake(HttpReply(400, """{"error":"bad body"}"""), ok)
+    assertEquals(AiError.Kind.BAD_REQUEST, failure { provider(http, listOf("key-a", "key-b")).complete("s", "u") }.kind)
+    assertEquals(1, http.calls.size)
+  }
+
+  @Test fun everyKeyRefusedFailsAtOnceNamingThemAll() {
+    val http = Fake(HttpReply(401, ""), HttpReply(403, ""))
+    val e = failure { provider(http, listOf("key-a", "key-b")).complete("s", "u") }
+    assertEquals(AiError.Kind.AUTH, e.kind)
+    assertEquals("The model refused every API key (HTTP 403). Check your API keys in Settings.", e.message)
+    assertTrue(http.sleeps.isEmpty())
+  }
+
+  @Test fun aRefusedKeyAndALimitedKeyWaitForTheLimitedOne() {
+    val http = Fake(HttpReply(401, ""), HttpReply(429, "", retryAfterMs = 5_000), ok)
+    provider(http, listOf("key-a", "key-b")).complete("s", "u")
+    assertEquals(listOf(5_000L), http.sleeps)
+    assertEquals(listOf("key-a", "key-b", "key-b"), http.keysUsed)
+  }
+
   @Test fun everyKeyLimitedWaitsTheServersTimeCappedAtAMinute() {
     val http = Fake(HttpReply(429, "", retryAfterMs = 5_000), HttpReply(429, "", retryAfterMs = 3_600_000), ok)
     provider(http, listOf("key-a", "key-b")).complete("s", "u")

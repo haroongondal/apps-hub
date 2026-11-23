@@ -305,6 +305,7 @@ fun encodePlan(p: Plan): JsonObject = when (p) {
     put("plannedBytes", p.plannedBytes)
     put("ext", p.ext)
   }
+  is ImagePlan -> buildJsonObject { put("tool", "image"); put("format", p.format); put("ext", p.ext) }
 }
 
 fun decodeSizePlan(o: JsonObject): SizePlan {
@@ -384,6 +385,10 @@ private fun decodeVolumePlan(o: JsonObject): VolumePlan {
     Loudness(doubleOf(it, "inputI"), doubleOf(it, "inputTp"), doubleOf(it, "inputLra"), doubleOf(it, "inputThresh"), doubleOf(it, "offset"))
   }
   return VolumePlan(textOf(o, "mode"), doubleOf(o, "gainDb"), optText(o, "video"), textOf(o, "ext"), measured)
+}
+
+fun decodeImagePlan(o: JsonObject): ImagePlan = ImagePlan(format = textOf(o, "format"), ext = textOf(o, "ext")).also {
+  require(it.format in setOf("png", "jpg") && it.ext == it.format) { "Pick a PNG or JPEG image." }
 }
 
 // Absent optional fields are left out, so they reach JS as undefined, which is what NativeJobStatus declares.

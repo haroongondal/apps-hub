@@ -109,27 +109,44 @@ push or release only when the owner says so.
   green. Pushed `nexus`, opened PR #44. Released `pnpm release pdf-editor`: **Nexus 1.4.0,
   versionCode 18**; manifest re-fetched, all 10 apps intact.
 
-- 2026-11-20 S2: CV maker and multi-key fallback, in worktree `.claude/worktrees/nexus-cv`
-  on branch `nexus-cv` (cut from `nexus-gemini-groq` 7cec9912; uncommitted):
-  - Keys: each service takes a list (`<service>-api-keys` in SecureStore, first key
-    migrated from `<service>-api-key`). `nexusPort` tries keys in order: chat tries Groq's,
-    then Gemini's; embeddings and images are Gemini only; transcription is Groq only.
-    Any AiError moves to the next key. Upload timeout 10 min, text calls 90 s.
-  - CV maker: a CV tab (`app/(tabs)/cv.tsx`), `app/cv/new.tsx`, `app/cv/[id].tsx`. Logic in
-    `src/cv/` (model, three templates, PDF writer, prompts; pure, tested). AI writes only
-    the content; the user picks one of Classic, Modern or Minimal. AI edits return the whole
-    CV, which is validated before it replaces the old one. Export = PDF into the share sheet.
-  - Tests: knowledge-core 44/44 (was 40), app 38/38 (was 26). Typecheck, lint and the
-    Android `expo export` pass. Previews of the three templates checked on a Mac via
-    qlmanage (not a phone). Not committed, not released, not tested on the phone.
-  - Shortcuts: base-14 fonts, so no Arabic or Urdu (shown as "?"); width estimate, so
-    lines wrap a little early; an AI edit that returns a truncated CV replaces the old one
-    (no undo yet).
+- 2026-11-20 S2: owner asked for a way to keep documents out of the knowledge base (personal
+  info, ideas). Built:
+  - `knowledge` migration step 3: `kn_excluded(item_id, excluded_at)`.
+  - `Knowledge.exclude(id)` deletes the item's jobs, chunks, source node, atoms and its own
+    edges, then prunes concepts that lost their last link. Segments stay: they are the item's
+    own transcript/OCR and feed Library search. `include(id)` removes the exclusion and
+    re-queues from the text stage. `enqueue` and `enqueueMissing` skip excluded items. An
+    in-flight stage finds no job and writes nothing (existing `isLive` guard).
+  - App: Library item menu gets "Keep out of Nexus" (confirmed, styled destructive) and "Add
+    to Nexus"; Stream cards and the item screen show "Not in Nexus". `openKnowledge()` failing
+    leaves the Library working with no exclusions.
+  - Gates: knowledge-core tests and typecheck clean (new `exclude.test.ts`, 4 tests, registered
+    in package.json); pdf-editor-mobile 26/26 tests, typecheck and `pnpm lint` clean.
+  - Known limit: a concept's alias names contributed only by an excluded item can persist on
+    a concept other items still support (aliases are not tracked per source).
+  - Not done: exclude-at-import option; phone test.
+
+- 2026-11-23 S3: CV maker, branch `nexus-cv` (PR #64), rebuilt on `origin/main` after the first
+  version conflicted with main's own key handling (#57), which was kept:
+  - CV tab (`app/(tabs)/cv.tsx`, `app/cv/new.tsx`, `app/cv/[id].tsx`). Logic in `src/cv/`
+    (model, three templates, PDF writer, prompts; pure, tested). The AI writes only the content;
+    the user picks Classic, Modern or Minimal. An AI edit returns the whole CV, which is
+    validated before it replaces the old one. Export is a PDF in the share sheet.
+  - `CompatPort.complete(system, user, json)`; `nexusPort` chat (`extract`, `answer`,
+    `complete`) tries Groq's keys, then Gemini's. Embeddings and images stay Gemini only,
+    transcription Groq only. In the app's `ai.ts`, text requests time out after 90 s and uploads
+    keep 10 min, so a hung service hands over sooner.
+  - Shortcuts: base-14 fonts, so no Arabic or Urdu (shown as "?"); estimated text widths, so
+    lines wrap a little early; an AI edit that returns a truncated CV replaces the old one.
+  - Not done: phone test (adb went offline mid-session); AI calls with real keys.
 
 ## Current state + exact next step
 
-Nexus 1.4.0 (versionCode 18) is on the Store, built from `nexus` at a88538e8. PR #44 is open
-(merge with `[skip ci]` in the subject, owner's go only). Not yet tested on the phone.
+Nexus 1.4.0 (versionCode 18) is on the Store, built from `nexus` at a88538e8. PR #44 was merged to main on 2026-11-18.
+
+Keep-out feature (S2 above): on the `nexus-keep-out` branch, released to the Store after the owner's go
+on 2026-11-20 and installed from the Store on the phone for testing. Test checklist: the Library item
+menu's "Keep out of Nexus" removes its ideas from Stream and Ask, and "Add to Nexus" indexes it again.
 
 Next step: phone test through the coord queue (`device:49kjmnuwonkffqzh`), installing from
 the Store only. First check the existing library still opens after the migration (library

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>YouTube watch page stand-in</title>
+    <script>
+      // Sieve's settings answer is a DOM event, so the page sees it too: the checks wait for it before reading.
+      window.told = 0;
+      document.addEventListener('sieve-yt-allow', () => window.told++);
+    </script>
+    <script type="application/json" id="fixture">%YT_FIXTURE%</script>
+    <script>
+      var ytInitialPlayerResponse = %YT_FIXTURE%;
+    </script>
+  </head>
+  <body>
+    <div id="movie_player"></div>
+    <iframe id="native" src="about:blank"></iframe>
+    <script>
+      // The about:blank frame gets no content script, so its JSON and Response are the browser's own.
+      const failure = async (run) => {
+        try {
+          await run();
+          return null;
+        } catch (e) {
+          return [e.constructor.name, e.message];
+        }
+      };
+      window.probe = async () => {
+        const text = document.getElementById('fixture').textContent;
+        const native = document.getElementById('native').contentWindow;
+        const original = native.JSON.parse(text);
+        const viaNative = (f) => native.Function.prototype.call.bind(f);
+        return {
+          keys: Object.keys(ytInitialPlayerResponse),
+          parsed: Object.keys(JSON.parse(text)),
+          fetched: Object.keys(await new Response(text).json()),
+          arrayed: Object.keys(JSON.parse(`[{"page":"watch"},{"playerResponse":${text}}]`)[1].playerResponse),
+          nativeKeys: Object.keys(original),
+          sameData:
+            JSON.stringify([ytInitialPlayerResponse.videoDetails, ytInitialPlayerResponse.streamingData]) ===
+            JSON.stringify([original.videoDetails, original.streamingData]),
+          wrapped: JSON.parse !== native.JSON.parse && Response.prototype.json !== native.Response.prototype.json,
+          badParse: await failure(() => JSON.parse('{bad')),
+          nativeBadParse: await failure(() => native.JSON.parse('{bad')),
+          badJson: await failure(() => new Response('{bad').json()),
+          nativeBadJson: await failure(() => viaNative(native.Response.prototype.json)(new Response('{bad'))),
+          wrongThis: await failure(() => Response.prototype.json.call({})),
+          nativeWrongThis: await failure(() => viaNative(native.Response.prototype.json)({})),
+          shape: [JSON.parse, Response.prototype.json].map((f) => [f.name, f.length, 'prototype' in f]),
+          nativeShape: [native.JSON.parse, native.Response.prototype.json].map((f) => [f.name, f.length, 'prototype' in f]),
+          text: [JSON.parse, Response.prototype.json].map((f) => [f.toString(), String(f), f.toString.toString(), Object.keys(f)]),
+          nativeText: [native.JSON.parse, native.Response.prototype.json].map((f) => [f.toString(), String(f), f.toString.toString(), Object.keys(f)]),
+          construct: [await failure(() => new JSON.parse('1')), await failure(() => new Response.prototype.json())].map((e) => e?.[0]),
+          nativeConstruct: [await failure(() => new native.JSON.parse('1')), await failure(() => new native.Response.prototype.json())].map((e) => e?.[0]),
+          reviver: JSON.parse('{"a":1,"b":[2]}', (k, v) => (typeof v === 'number' ? v * 10 : v)),
+          plain: [JSON.parse('5'), JSON.parse('"x"'), JSON.parse('null'), JSON.parse('[1,{"adSlots":1}]'), JSON.parse('[1,2,3,4,5,{"adSlots":1}]')],
+        };
+      };
+    </script>
+  </body>
+</html>

@@ -45,6 +45,12 @@ Current apps:
   (Kotlin owns the vault; RN only renders). Android only, private Store only
   (`com.haroon.strongroom`). Design: `docs/strongroom/DESIGN.md`; phases:
   `docs/strongroom/PHASE-1-PLAN.md` and `docs/handoffs/strongroom.md`.
+- **halo** (`apps/halo`) — edge visualizer: audio-reactive lights around the screen edge and
+  an always-on display. It also carries Notch, the pill around the camera (`modules/notch-island`,
+  fed by halo-engine's one notification listener; the separate `notch` app is gone). Android only,
+  private Store only (`com.haroon.halo`); Kotlin modules `halo-engine` and `notch-island`, RN renders
+  settings. Spec: `docs/superpowers/specs/2026-11-17-edge-visualizer-design.md`;
+  plan: `docs/superpowers/plans/2026-11-17-halo.md`; handoff: `docs/handoffs/edge-visualizer.md`.
 - **strongroom-extension** (`apps/strongroom-extension`) — Strongroom for Chrome
   (Manifest V3, Mac and Windows, loaded unpacked). Its own local vault in the
   Android vault format (`packages/strongroom-core`, checked against the shared
@@ -65,12 +71,23 @@ Current apps:
   `docs/superpowers/plans/2026-11-13-inflow-stage-*.md`, `docs/superpowers/plans/2026-11-18-inflow-ux.md`; progress:
   `docs/handoffs/inflow.md`. Autopilot (stage 1): turns what arrives into reply, bill, event and money suggestions with Run and Skip, shared with Deputy through a signature-guarded provider; design `docs/superpowers/specs/2026-11-18-autopilot-design.md`, progress `docs/handoffs/autopilot.md`. R44 has one exception: items from conversations the owner picked go to the AI for Autopilot only. Ask AI stays SMS and email only, and the ledger and bank parsing take only SMS and Gmail items, not pushes from chat or other apps.
 
+- **sieve** (`apps/sieve`) — the owner's ad blocker for Chrome (Manifest V3), sold through
+  the Chrome Web Store (release state in `docs/handoffs/sieve.md`). Filter compiler and
+  settings logic in `packages/sieve-core`; how to install and what is verified in
+  `apps/sieve/README.md`. Design: `docs/superpowers/specs/2026-11-06-sieve-design.md`;
+  plan: `docs/superpowers/plans/2026-11-06-sieve.md`; progress: `docs/handoffs/sieve.md`.
 - **autonomous-browsing** (`apps/autonomous-browsing`) — Electron desktop app for
   chat-authored browser automation routines, copied in from
   `~/Documents/browser-automation` on 2026-11-17 (tracked files only, no git
   history; the original stays standalone). A normal pnpm workspace member now;
   its `CLAUDE.md` and `AI_CONTEXT.md` still say `npm run`, read that as
   `pnpm --filter autonomous-browsing <script>`.
+
+- **text-ocr** (`packages/text-ocr`) — Expo local module shared by Design Editor mobile and
+  PDF Editor: Tesseract (English, bundled `tessdata_fast`) plus a clipboard copy, Android only.
+  Design Editor: long-press an image, "Copy text" (bridge event `recognizeText`). PDF Editor:
+  "+" → "Scan text" (`app/scan-text.tsx`, system camera through expo-image-picker). The Scan
+  branch's Phase 4 OCR in `pdf-scan` is separate and unchanged.
 
 Not here on purpose: `~/Documents/agent-harness` (deferred until its phase
 branches are merged).
@@ -87,7 +104,7 @@ Planned (do not scaffold yet):
 - Tokens live in `src/tokens.ts` only. After changing them run
   `pnpm --filter @apps-hub/ui build:css`; the test fails if `web/tokens.css` is
   stale, and it enforces WCAG AA contrast for every brand in light and dark.
-- Brands: netlens, opentunnel, store, pdf, design, deputy, strongroom, inflow (hue + accent from each
+- Brands: netlens, opentunnel, store, pdf, design, deputy, strongroom, inflow, clipboard, halo, sieve (hue + accent from each
   launcher icon). Light and dark follow the system.
 - Copy is sentence case, active voice; errors say what happened and how to fix
   it. No emoji icons, no ALL-CAPS labels.
@@ -172,9 +189,15 @@ cd apps/inflow/android && JAVA_HOME=$JAVA_HOME ./gradlew \
 # Native compile gate (PDF Editor mobile; the Scan module's JVM tests):
 cd apps/pdf-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :pdf-scan:testDebugUnitTest :app:assembleDebug
+# Native compile gate (Halo):
+cd apps/halo/android && JAVA_HOME=$JAVA_HOME ./gradlew \
+  :halo-engine:testDebugUnitTest :notch-island:testDebugUnitTest :app:assembleDebug
 # Native compile gate (Design Editor mobile):
 cd apps/design-editor-mobile/android && JAVA_HOME=$JAVA_HOME ./gradlew \
   :design-media:testDebugUnitTest :app:assembleDebug
+# Sieve (Chrome extension; the e2e opens headless Chrome for Testing in a temporary profile):
+pnpm --filter sieve build && pnpm --filter sieve test:e2e
+node apps/sieve/test/perf.mjs   # about 10 minutes (one full run on 2026-11-08 took 9 min 48 s); allow up to 30 minutes, the hard timeout; real sites, needs the machine otherwise idle
 # Electron apps (open real windows, so not part of `pnpm test`):
 pnpm --filter pdf-editor-desktop test:e2e   # desktop + Electron + mobile-bridge suites
 pnpm --filter design-editor test:e2e

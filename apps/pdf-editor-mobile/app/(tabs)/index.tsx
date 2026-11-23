@@ -26,6 +26,7 @@ interface Card {
   job: Job | null;
   found: { ideas: number; links: number };
   ideas: string[];
+  keptOut: boolean;
 }
 interface Exchange {
   id: number;
@@ -41,10 +42,17 @@ function useCards() {
     try {
       const kn = await openKnowledge();
       const items = await kn.lib.list({ everywhere: true, limit: RECENT });
+      const keptOut = await kn.excludedIds();
       const next: Card[] = [];
       for (const item of items) {
         const job = await kn.job(item.id);
-        next.push({ item, job, found: await kn.summary(item.id), ideas: job?.status === 'done' ? (await kn.ideas(item.id)).map((i) => i.text) : [] });
+        next.push({
+          item,
+          job,
+          found: await kn.summary(item.id),
+          ideas: job?.status === 'done' ? (await kn.ideas(item.id)).map((i) => i.text) : [],
+          keptOut: keptOut.has(item.id),
+        });
       }
       setCards(next);
       setHasKey(await hasKeys());
@@ -64,7 +72,7 @@ function useCards() {
 function CaptureCard({ card, hasKey }: { card: Card; hasKey: boolean }) {
   const { c } = useTheme();
   const [open, setOpen] = useState(false);
-  const status = jobLabel(card.job, card.item.kind, hasKey, card.found);
+  const status = jobLabel(card.job, card.item.kind, hasKey, card.found, card.keptOut);
   const retry = async () => {
     const kn = await openKnowledge();
     await kn.retry(card.item.id);

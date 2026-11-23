@@ -12,10 +12,12 @@ import { KIND_PLURAL } from '../../src/library/format';
 import { IconButton } from '../../src/library/icon-button';
 import { openItem } from '../../src/library/open-item';
 import { openLibrary } from '../../src/library/open-library';
+import { syncPlaceReminders } from '../../src/places/sync';
 import { itemDir } from '../../src/library/paths';
 import { FolderRow, ItemRow } from '../../src/library/rows';
 import { AddSheet, FolderPickerSheet, NameSheet, TagFilterSheet, TagManageSheet, TagsSheet } from '../../src/library/sheets';
 import { errorMessage, useDebounced, useLibraryData } from '../../src/library/use-library';
+import { keepOut, takeBack } from '../../src/nexus/worker';
 import { discardSession, loadSession } from '../../src/scan/session';
 
 type SheetState =
@@ -103,37 +105,49 @@ export default function LibraryScreen() {
 
   // A menu sheet must finish closing before the next sheet opens, or one of them is dropped.
 
-  const itemActions = (item: Item): RecordAction[] => [
-    { label: 'Rename', onPress: () => setSheet({ type: 'renameItem', item }) },
-    { label: 'Move to folder', onPress: () => setSheet({ type: 'moveItem', item }) },
-    { label: 'Tags', onPress: () => setSheet({ type: 'tags', item }) },
-    ...(item.kind === 'pdf'
-      ? [
-          {
-            label: 'Share PDF',
-            onPress: () =>
-              void guard('Could not share the PDF', async () => {
-                await Sharing.shareAsync(exportPdf(item), { mimeType: 'application/pdf', dialogTitle: 'Share PDF', UTI: 'com.adobe.pdf' });
-              }),
-          },
-        ]
-      : []),
-    {
-      label: 'Delete',
-      destructive: true,
-      confirmTitle: `Delete \u201c${item.title}\u201d?`,
-      confirmMessage: 'This removes it from this device and can\u2019t be undone.',
-      onPress: () =>
-        void guard('Could not delete it', async () => {
-          await (await openLibrary()).deleteItem(item.id);
-          try {
-            itemDir(item.id).delete();
-          } catch {
-            // the start-up sweep removes a directory that outlives its row
-          }
-        }),
-    },
-  ];
+  const itemActions = (item: Item): RecordAction[] => {
+    const keptOut = data.keptOut.has(item.id);
+    return [
+      { label: 'Rename', onPress: () => setSheet({ type: 'renameItem', item }) },
+      { label: 'Move to folder', onPress: () => setSheet({ type: 'moveItem', item }) },
+      { label: 'Tags', onPress: () => setSheet({ type: 'tags', item }) },
+      {
+        label: keptOut ? 'Add to Nexus' : 'Keep out of Nexus',
+        destructive: !keptOut,
+        confirmTitle: `Keep \u201c${item.title}\u201d out of Nexus?`,
+        confirmMessage: 'Its ideas and links are removed. Nexus won\u2019t read it again until you add it back.',
+        confirmLabel: 'Keep out',
+        onPress: () => void guard('Could not change Nexus for it', () => (keptOut ? takeBack(item.id) : keepOut(item.id))),
+      },
+      ...(item.kind === 'pdf'
+        ? [
+            {
+              label: 'Share PDF',
+              onPress: () =>
+                void guard('Could not share the PDF', async () => {
+                  await Sharing.shareAsync(exportPdf(item), { mimeType: 'application/pdf', dialogTitle: 'Share PDF', UTI: 'com.adobe.pdf' });
+                }),
+            },
+          ]
+        : []),
+      {
+        label: 'Delete',
+        destructive: true,
+        confirmTitle: `Delete \u201c${item.title}\u201d?`,
+        confirmMessage: 'This removes it from this device and can\u2019t be undone.',
+        onPress: () =>
+          void guard('Could not delete it', async () => {
+            await (await openLibrary()).deleteItem(item.id);
+            await syncPlaceReminders();
+            try {
+              itemDir(item.id).delete();
+            } catch {
+              // the start-up sweep removes a directory that outlives its row
+            }
+          }),
+      },
+    ];
+  };
 
   const folderActions = (target: Folder): RecordAction[] => [
     { label: 'Rename', onPress: () => setSheet({ type: 'renameFolder', folder: target }) },

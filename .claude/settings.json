@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "claude-agent-workflow": {
+      "source": {
+        "source": "github",
+        "repo": "haroongondal/claude-agent-workflow"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "coord@claude-agent-workflow": true
+  }
+}

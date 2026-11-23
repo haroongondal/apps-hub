@@ -6,13 +6,17 @@ import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.OpenableColumns
+import java.io.File
 import expo.modules.designmedia.core.displaySize
 import expo.modules.designmedia.core.estimateVideoBps
 import expo.modules.designmedia.core.microseconds
 
 object Probe {
+  // Free songs are files in the app's own folder (file://), which the content resolver can't query.
+  private fun localFile(uri: Uri): File? = if (uri.scheme == "file") File(requireNotNull(uri.path)) else null
+
   fun read(context: Context, uri: Uri): Map<String, Any?> {
-    val (name, bytes) = context.contentResolver
+    val (name, bytes) = localFile(uri)?.let { it.name to it.length() } ?: context.contentResolver
       .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
       ?.use { c -> if (c.moveToFirst()) c.getString(0).orEmpty() to c.getLong(1) else null }
       ?: (uri.lastPathSegment.orEmpty() to 0L)
@@ -63,7 +67,7 @@ object Probe {
     }
   }
 
-  fun bytesOf(context: Context, uri: Uri): Long = context.contentResolver
+  fun bytesOf(context: Context, uri: Uri): Long = localFile(uri)?.length() ?: context.contentResolver
     .query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
     ?.use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else 0L } ?: 0L
 

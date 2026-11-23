@@ -34,6 +34,19 @@ class PlanJsonTest {
   }
 
   @Test
+  fun anImageJobRoundTrips() {
+    val image = jobs[0].copy(id = "img", inputName = "shot.png", plan = ImagePlan("png", "png"))
+    assertEquals(listOf(image), decodeJobs(encodeJobs(listOf(image))))
+  }
+
+  @Test(expected = IllegalArgumentException::class)
+  fun refusesAnImageExtensionThatIsNotTheFormat() {
+    decodeJobs(
+      """[{"id":"x","inputId":"u","inputName":"a.png","state":"queued","progress":0,"attempt":1,"plan":{"tool":"image","format":"png","ext":"../x"}}]""",
+    )
+  }
+
+  @Test
   fun decodesTheExactPlanEveryMediaCorePlannerProduces() {
     val plans = decodeSamples()
     assertEquals(
@@ -87,12 +100,5 @@ class PlanJsonTest {
     val noted = job.copy(outputs = listOf(Output("a.mp4", "content://x", 9)))
     assertEquals(listOf(mapOf("name" to "a.mp4", "ref" to "content://x", "bytes" to 9L)), noted.toStatusMap()["outputs"])
     assertEquals("Couldn't fit under 20 MB.", jobs[3].toStatusMap()["error"])
-  }
-
-  @Test(expected = IllegalArgumentException::class)
-  fun refusesAnImageExtensionThatIsNotTheFormat() {
-    decodeJobs(
-      """[{"id":"x","inputId":"u","inputName":"a.png","state":"queued","progress":0,"attempt":1,"plan":{"tool":"image","format":"png","ext":"../x"}}]""",
-    )
   }
 }

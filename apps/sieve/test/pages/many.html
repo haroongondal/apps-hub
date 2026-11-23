@@ -1,0 +1,11 @@
+<!doctype html>
+<title>Many</title>
+<script>
+  // 600 blocked ad requests in one load: the panel keeps the newest 500.
+  for (let i = 0; i < 600; i++) {
+    const s = document.createElement('script');
+    s.src = 'https://%AD_HOST%:%PORT%/pagead/n.js?i=' + i;
+    document.head.append(s);
+  }
+</script>
+<p>Many fixture: 600 ad requests</p>

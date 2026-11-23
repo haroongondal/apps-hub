@@ -357,6 +357,8 @@ export interface InflowCoreApi {
   // Decrypts to a temporary file and opens it in another app.
   openMedia(mediaId: number): void;
   mediaStats(): MediaStats;
+  galleryBetween(fromMs: number, toMs: number): Array<{ uri: string; takenAt: number }>;
+  attachReceipt(itemId: number, uri: string): void;
   categories(): { out: string[]; in: string[] };
   // null = back to the AI's choice.
   setCategory(txnId: number, category: string | null): void;

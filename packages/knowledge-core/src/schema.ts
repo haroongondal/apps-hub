@@ -64,4 +64,11 @@ CREATE TABLE kn_meta (
   value TEXT NOT NULL
 );
 `,
+  `
+-- Items the owner kept out of Nexus. Nothing indexes them again until they are taken off this list.
+CREATE TABLE kn_excluded (
+  item_id     TEXT PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+  excluded_at INTEGER NOT NULL
+);
+`,
 ];

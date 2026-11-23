@@ -3,6 +3,12 @@
 Date 2026-11-18. Short design for a small change. The owner approved the approach on 2026-11-18
 ("layout and text first, go ahead"). Everything marked "(my call)" is unconfirmed.
 
+**Provider changed 2026-11-19 (owner's instruction): Groq replaces Anthropic.** The request is now
+OpenAI-compatible chat completions to `https://api.groq.com/openai/v1/chat/completions`, model
+`openai/gpt-oss-120b` (`reasoning_effort: low`), one function tool `make_layout`, and the reply's
+arguments are read from `tool_calls`. The key is a Groq key. The Anthropic sections below are the
+history of the first version.
+
 ## Intent
 
 The owner describes a design in words ("a poster for a Friday open night at a pottery studio")

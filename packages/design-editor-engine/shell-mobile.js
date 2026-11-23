@@ -4,7 +4,7 @@
 // one with window.__editorCommand('reply', { reqId, ok, value? }). The schema lives in
 // apps/design-editor-mobile/src/editor/bridge.ts; keep the two in step.
 // Additions over the six original native functions: confirm, keepAutosave, and native.ai
-// (hasKey, setKey, request: Design with AI, 2026-11-18). setKey resolves { ok, error?: 'nosecure'|'bad' }
+// (hasKey, keys, setKey, removeKey, request: Design with AI, 2026-11-18). setKey adds a key and resolves { ok, error?: 'nosecure'|'bad'|'badkey' }
 // on both platforms; request resolves { ok, status, json?, error? }.
 // Script order note: this runs before app.js because app.js calls native.onMenu() during its
 // own body — the desktop's preload guarantees native exists for that too.
@@ -212,6 +212,10 @@
     // preload.cjs, so the mobile schema gains an event too (SPEC §14.3 as built)
     keepAutosave: () => call('keepAutosave'),
     setDocState: ({ title, dirty, filePath }) => post({ type: 'docState', title, dirty, filePath: filePath ?? null }),
+    // documented addition, 2026-11-19: reads text in an image on the phone (touch.js Copy text) and
+    // copies it. Desktop and Chrome have no recognizer; the sheet button is hidden there anyway.
+    recognizeText: ({ base64, x, y }) =>
+      window.ReactNativeWebView ? call('recognizeText', { base64, x, y }) : Promise.reject(new Error('Reading text needs the phone app.')),
     onMenu: fn => {
       menuHandler = fn;
       while (menuBacklog.length) fn(menuBacklog.shift());
@@ -220,7 +224,9 @@
     // always resolves { ok, status, json?, error? } (SPEC §14.3, same as preload.cjs)
     ai: {
       hasKey: () => call('aiHasKey'),
+      keys: () => call('aiKeys'),
       setKey: key => call('aiSetKey', { key }),
+      removeKey: index => call('aiRemoveKey', { index }),
       request: body => call('aiRequest', { body }),
     },
     // the Media tools window is the Mac's; the rail button is hidden on phones (mobile.html).

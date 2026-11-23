@@ -1,0 +1,4 @@
+<resources>
+    <string name="notch_service_label">Notch</string>
+    <string name="notch_service_description">Notch draws a pill around your camera. It does not read your screen or what you type.</string>
+</resources>

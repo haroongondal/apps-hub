@@ -2,7 +2,8 @@ import { AiError, RELATIONS, type AiPort, type Segment } from './types.ts';
 
 // The OpenAI-compatible wire format, not the OpenAI service: Gemini and Groq both speak it (see providers.ts).
 export interface OpenAiCompatOptions {
-  apiKey: string;
+  /** Several keys are tried in turn: one that is refused or at its limit hands over to the next. */
+  apiKey: string | string[];
   baseUrl: string;
   chatModel?: string;
   embedModel?: string;
@@ -47,26 +48,46 @@ export function openAiCompatPort(o: OpenAiCompatOptions): CompatPort {
   const base = o.baseUrl.replace(/\/+$/, '');
   const doFetch = o.fetch ?? fetch;
 
+  const keys = (Array.isArray(o.apiKey) ? o.apiKey : [o.apiKey]).map((k) => k.trim()).filter(Boolean);
+  let current = 0; // the key in use; it changes only when that key is refused or at its limit
+
   async function call(path: string, body: string | FormData): Promise<Record<string, unknown>> {
-    if (!o.apiKey.trim()) throw new AiError('auth', 'No API key is set. Add your key in AI settings.');
-    const headers: Record<string, string> = { Authorization: `Bearer ${o.apiKey.trim()}` };
-    if (typeof body === 'string') headers['Content-Type'] = 'application/json';
-    let res: Response;
-    try {
-      res = await doFetch(`${base}${path}`, { method: 'POST', headers, body });
-    } catch {
-      throw new AiError('offline', "Nexus couldn't reach the AI service. Check your connection; queued items continue when it's back.");
+    if (!keys.length) throw new AiError('auth', 'No API key is set. Add your key in AI settings.');
+    let limited: AiError | undefined;
+    let denied: AiError | undefined;
+    for (let n = 0; n < keys.length; n++) {
+      const i = (current + n) % keys.length;
+      const headers: Record<string, string> = { Authorization: `Bearer ${keys[i]}` };
+      if (typeof body === 'string') headers['Content-Type'] = 'application/json';
+      let res: Response;
+      try {
+        res = await doFetch(`${base}${path}`, { method: 'POST', headers, body });
+      } catch {
+        throw new AiError('offline', "Nexus couldn't reach the AI service. Check your connection; queued items continue when it's back.");
+      }
+      const text = await res.text();
+      // Another key can fix a refused key (Gemini answers 400, not 401, for one it does not know) or a key at its limit; nothing else.
+      if (res.status === 401 || res.status === 403 || (res.status === 400 && /API key not valid|API_KEY_INVALID/.test(text))) {
+        denied ??= new AiError(
+          'auth',
+          `The AI service refused ${keys.length > 1 ? 'every API key' : 'the API key'} (HTTP ${res.status}). Check your key${keys.length > 1 ? 's' : ''} in AI settings.`,
+        );
+        continue;
+      }
+      if (res.status === 429) {
+        limited ??= new AiError('rate', `The AI service is rate-limiting ${keys.length > 1 ? 'every key' : 'this key'}. Nexus tries again later.`);
+        continue;
+      }
+      current = i;
+      if (res.status >= 500) throw new AiError('server', `The AI service had a problem (HTTP ${res.status}). Nexus tries again.`);
+      if (!res.ok) throw new AiError('bad_request', `The AI service rejected the request (HTTP ${res.status}): ${text.slice(0, 200)}`);
+      try {
+        return JSON.parse(text) as Record<string, unknown>;
+      } catch {
+        throw new AiError('bad_reply', 'The AI service sent a reply Nexus could not read.');
+      }
     }
-    const text = await res.text();
-    if (res.status === 401 || res.status === 403) throw new AiError('auth', `The AI service refused the API key (HTTP ${res.status}). Check your key in AI settings.`);
-    if (res.status === 429) throw new AiError('rate', 'The AI service is rate-limiting this key. Nexus tries again later.');
-    if (res.status >= 500) throw new AiError('server', `The AI service had a problem (HTTP ${res.status}). Nexus tries again.`);
-    if (!res.ok) throw new AiError('bad_request', `The AI service rejected the request (HTTP ${res.status}): ${text.slice(0, 200)}`);
-    try {
-      return JSON.parse(text) as Record<string, unknown>;
-    } catch {
-      throw new AiError('bad_reply', 'The AI service sent a reply Nexus could not read.');
-    }
+    throw limited ?? denied!; // a limit is answered over a refusal: waiting can fix it
   }
 
   async function chat(messages: object[], format?: object): Promise<string> {

@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu, dialog, ipcMain, net, safeStorage } from 'ele
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { openMediaWindow, registerMedia } from './media.js';
+import { createSender, labelOf, serviceOf } from './ai-keys.js';
 
 if (process.env.DESIGN_EDITOR_DATA) app.setPath('userData', process.env.DESIGN_EDITOR_DATA);
 const autosavePath = () => path.join(app.getPath('userData'), 'autosave.json');
@@ -105,38 +106,48 @@ ipcMain.handle('autosave-write', (_, saved) => {
   });
   return autosaving;
 });
-// Design with AI: the key is encrypted at rest and never leaves this process; the page only sends the request body
-const aiKeyPath = () => path.join(app.getPath('userData'), 'ai-key.bin');
-const readAiKey = async () => {
-  try { return safeStorage.decryptString(await fs.readFile(aiKeyPath())); } catch { return null; }
+// Design with AI: the keys are encrypted at rest and never leave this process; the page only sends the request body
+// and sees each key as a label ("Groq key ending 1111").
+const aiKeysPath = () => path.join(app.getPath('userData'), 'ai-keys.bin');
+const oldAiKeyPath = () => path.join(app.getPath('userData'), 'ai-key.bin'); // one Groq key, before several were allowed
+const readAiKeys = async () => {
+  try { return JSON.parse(safeStorage.decryptString(await fs.readFile(aiKeysPath()))).filter(k => typeof k === 'string' && serviceOf(k)); } catch { /* none saved yet */ }
+  try { const old = safeStorage.decryptString(await fs.readFile(oldAiKeyPath())).trim(); return serviceOf(old) ? [old] : []; } catch { return []; }
 };
-ipcMain.handle('ai-has-key', async () => !!(await readAiKey()));
+const writeAiKeys = async keys => {
+  if (keys.length) await fs.writeFile(aiKeysPath(), safeStorage.encryptString(JSON.stringify(keys)));
+  else await fs.rm(aiKeysPath(), { force: true });
+  await fs.rm(oldAiKeyPath(), { force: true });
+};
+ipcMain.handle('ai-has-key', async () => (await readAiKeys()).length > 0);
+ipcMain.handle('ai-keys', async () => (await readAiKeys()).map(labelOf));
 ipcMain.handle('ai-set-key', async (_, key) => {
   key = typeof key === 'string' ? key.trim() : '';
   if (!key) return { ok: false, error: 'bad' };
+  if (!serviceOf(key)) return { ok: false, error: 'badkey' };
   if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'nosecure' };
-  await fs.writeFile(aiKeyPath(), safeStorage.encryptString(key));
+  const keys = await readAiKeys();
+  if (!keys.includes(key)) await writeAiKeys([...keys, key]);
+  return { ok: true };
+});
+ipcMain.handle('ai-remove-key', async (_, index) => {
+  const keys = await readAiKeys();
+  if (Number.isInteger(index) && keys[index] !== undefined) await writeAiKeys(keys.filter((_, i) => i !== index));
   return { ok: true };
 });
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 // The page picks the prompt and the tool, not the model, the spend or a server tool. Keep this in step with aiSanitise in apps/design-editor-mobile/src/editor/ai.ts.
-const AI_MODEL = 'claude-sonnet-5-5'; // keep in step with MODEL in packages/design-editor-engine/ai-layout.js
 function aiSanitise(body) {
   if (!isObj(body) || !Array.isArray(body.messages)) return null;
-  if (body.tools !== undefined && (!Array.isArray(body.tools) || body.tools.some(t => !isObj(t) || 'type' in t))) return null;
-  const clean = { ...body, model: AI_MODEL, max_tokens: Math.min(Number(body.max_tokens) || 8000, 8000) };
-  delete clean.stream;
-  return clean;
+  if (body.tools !== undefined && (!Array.isArray(body.tools) || body.tools.some(t => !isObj(t) || t.type !== 'function' || !isObj(t.function)))) return null;
+  const { model, stream, ...clean } = body; // the model comes from the key's service (ai-keys.js)
+  return { ...clean, max_completion_tokens: Math.min(Number(body.max_completion_tokens) || 8000, 8000) };
 }
-ipcMain.handle('ai-request', async (_, page) => {
-  const body = aiSanitise(page);
-  if (!body) return { ok: false, status: 0, error: 'bad' };
-  const key = await readAiKey();
-  if (!key) return { ok: false, status: 0, error: 'nokey' };
+const postToService = async (url, key, body) => {
   try {
-    const res = await net.fetch('https://api.anthropic.com/v1/messages', {
+    const res = await net.fetch(url, {
       method: 'POST',
-      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      headers: { Authorization: `Bearer ${key}`, 'content-type': 'application/json' },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(60000),
     });
@@ -148,6 +159,12 @@ ipcMain.handle('ai-request', async (_, page) => {
   } catch (e) {
     return { ok: false, status: 0, error: e?.name === 'TimeoutError' ? 'timeout' : 'offline' };
   }
+};
+const sendAi = createSender();
+ipcMain.handle('ai-request', async (_, page) => {
+  const body = aiSanitise(page);
+  if (!body) return { ok: false, status: 0, error: 'bad' };
+  return sendAi(await readAiKeys(), body, postToService);
 });
 registerMedia();
 ipcMain.on('doc-state', (_, { title, dirty, filePath }) => {

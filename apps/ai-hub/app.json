@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "AI hub",
+    "slug": "ai-hub",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": [
+      "android"
+    ],
+    "android": {
+      "package": "com.haroon.aihub",
+      "versionCode": 1,
+      "allowBackup": false,
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "INTERNET"
+      ],
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#19190B",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      }
+    },
+    "icon": "./assets/icon.png"
+  }
+}

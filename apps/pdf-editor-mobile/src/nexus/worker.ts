@@ -61,6 +61,17 @@ export async function enqueue(itemId: string): Promise<void> {
   await kick();
 }
 
+export async function keepOut(itemId: string): Promise<void> {
+  await (await openKnowledge()).exclude(itemId);
+  emit();
+}
+
+export async function takeBack(itemId: string): Promise<void> {
+  await (await openKnowledge()).include(itemId);
+  emit();
+  await kick();
+}
+
 export function startWorker(): () => void {
   const resume = async () => {
     try {

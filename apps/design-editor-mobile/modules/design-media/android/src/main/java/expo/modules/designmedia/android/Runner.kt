@@ -16,9 +16,10 @@ interface Runner {
 }
 
 // `detail` goes to logcat, never to the screen. `label` replaces the plan's default output label (audio tracks).
+// `userMessage` is the sentence shown on screen, if any. Never build it from a raw exception.
 sealed interface Outcome {
-  data class Written(val label: String? = null) : Outcome
-  data class Failed(val detail: String) : Outcome
+  data class Written(val label: String? = null, val note: String? = null) : Outcome
+  data class Failed(val detail: String, val userMessage: String? = null) : Outcome
 }
 
 class Request(

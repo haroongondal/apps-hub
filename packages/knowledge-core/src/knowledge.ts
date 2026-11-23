@@ -49,6 +49,9 @@ const EMBED_BATCH = 64;
 const EXTRACT_CHARS = 24_000;
 const NEXT: Record<Exclude<JobStage, 'done'>, JobStage> = { text: 'embed', embed: 'graph', graph: 'done' };
 
+/** Thrown when the item was excluded or re-queued during a stage, so the stage stops before its next outbound call. */
+class Withdrawn extends Error {}
+
 const loc = (v: unknown): Locator => (typeof v === 'string' ? (JSON.parse(v) as Locator) : null);
 const locJson = (l: Locator) => (l === null ? null : JSON.stringify(l));
 const marks = (n: number) => Array.from({ length: n }, () => '?').join(', ');
@@ -129,12 +132,40 @@ export class Knowledge {
   }
 
   async enqueue(itemId: string): Promise<void> {
-    await this.db.run(
-      `INSERT INTO kn_jobs (item_id, stage, status, updated_at) VALUES (?, 'text', 'queued', ?)
-       ON CONFLICT(item_id) DO UPDATE SET stage = 'text', status = 'queued', gen = gen + 1, attempts = 0, error = NULL,
-         updated_at = excluded.updated_at`,
-      [itemId, this.deps.now()],
-    );
+    await this.db.transaction(async (tx) => {
+      if (await isExcluded(tx, itemId)) return;
+      await tx.run(
+        `INSERT INTO kn_jobs (item_id, stage, status, updated_at) VALUES (?, 'text', 'queued', ?)
+         ON CONFLICT(item_id) DO UPDATE SET stage = 'text', status = 'queued', gen = gen + 1, attempts = 0, error = NULL,
+           updated_at = excluded.updated_at`,
+        [itemId, this.deps.now()],
+      );
+    });
+  }
+
+  // Segments stay: they are the item's own transcript or OCR text. A stage already running finds no job and writes nothing.
+  async exclude(itemId: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.run('INSERT OR IGNORE INTO kn_excluded (item_id, excluded_at) VALUES (?, ?)', [itemId, this.deps.now()]);
+      await tx.run('DELETE FROM kn_jobs WHERE item_id = ?', [itemId]);
+      await tx.run('DELETE FROM kn_chunks WHERE item_id = ?', [itemId]);
+      await tx.run('DELETE FROM kn_nodes WHERE item_id = ?', [itemId]); // the source node and its atoms; their edges go by cascade
+      await tx.run('DELETE FROM kn_edges WHERE item_id = ?', [itemId]); // the links it made to concepts other items share
+      await pruneConcepts(tx);
+    });
+  }
+
+  async include(itemId: string): Promise<void> {
+    await this.db.run('DELETE FROM kn_excluded WHERE item_id = ?', [itemId]);
+    await this.enqueue(itemId);
+  }
+
+  isExcluded(itemId: string): Promise<boolean> {
+    return isExcluded(this.db, itemId);
+  }
+
+  async excludedIds(): Promise<Set<string>> {
+    return new Set((await this.db.all('SELECT item_id FROM kn_excluded')).map((r) => r.item_id as string));
   }
 
   async retry(itemId: string): Promise<void> {
@@ -170,7 +201,9 @@ export class Knowledge {
   }
 
   async enqueueMissing(): Promise<number> {
-    const missing = await this.db.all('SELECT id FROM items WHERE id NOT IN (SELECT item_id FROM kn_jobs)');
+    const missing = await this.db.all(
+      'SELECT id FROM items WHERE id NOT IN (SELECT item_id FROM kn_jobs) AND id NOT IN (SELECT item_id FROM kn_excluded)',
+    );
     for (const r of missing) await this.enqueue(r.id as string);
     return missing.length;
   }
@@ -194,6 +227,7 @@ export class Knowledge {
       else if (stage === 'embed') await this.embedStage(itemId, gen);
       else await this.serialGraph(item, gen);
     } catch (e) {
+      if (e instanceof Withdrawn) return 'ran';
       const message = e instanceof Error ? e.message : String(e);
       if (e instanceof AiError && PAUSING.includes(e.kind)) {
         await this.db.run("UPDATE kn_jobs SET status = 'queued', error = ? WHERE item_id = ? AND gen = ?", [message, itemId, gen]);
@@ -214,7 +248,12 @@ export class Knowledge {
     return 'ran';
   }
 
+  private async keep(itemId: string, gen: number): Promise<void> {
+    if (!(await isLive(this.db, itemId, gen))) throw new Withdrawn('The item was taken out of Nexus.');
+  }
+
   private async textStage(item: Item, gen: number): Promise<void> {
+    await this.keep(item.id, gen); // audio and images go out to the provider inside segments()
     const segments = (await this.deps.content.segments(item)).filter((s) => s.text.trim() !== '');
     const wrote = await this.db.transaction(async (tx) => {
       if (!(await isLive(tx, item.id, gen))) return false;
@@ -236,6 +275,7 @@ export class Knowledge {
     const chunks = chunkSegments(await this.segmentsOf(itemId));
     const vectors: Float32Array[] = [];
     for (let i = 0; i < chunks.length; i += EMBED_BATCH) {
+      await this.keep(itemId, gen);
       vectors.push(...(await this.deps.ai.embed(chunks.slice(i, i + EMBED_BATCH).map((c) => c.text))));
     }
     if (vectors.length !== chunks.length) throw new AiError('bad_reply', 'The model sent the wrong number of embeddings.');
@@ -269,7 +309,9 @@ export class Knowledge {
       input.push(s.text.slice(0, EXTRACT_CHARS));
       chars += s.text.length;
     }
+    await this.keep(item.id, gen);
     const ex: Extraction = input.length ? cleanExtraction(await this.deps.ai.extract(input), input.length) : { concepts: [], atoms: [], relations: [] };
+    await this.keep(item.id, gen);
     const { idOf, touched } = await this.resolve(ex.concepts);
     const now = this.deps.now();
     const src = srcId(item.id);
@@ -424,6 +466,7 @@ export class Knowledge {
 
 // A run whose job was re-queued (an edit, or recover after a kill) must not overwrite newer results.
 const isLive = async (tx: SqlPort, itemId: string, gen: number) => (await tx.first('SELECT gen FROM kn_jobs WHERE item_id = ?', [itemId]))?.gen === gen;
+const isExcluded = async (db: SqlPort, itemId: string) => (await db.first('SELECT 1 FROM kn_excluded WHERE item_id = ?', [itemId])) !== null;
 
 export const pruneConcepts = (db: SqlPort) =>
   db.run(

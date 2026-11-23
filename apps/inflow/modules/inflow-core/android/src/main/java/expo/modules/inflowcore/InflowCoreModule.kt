@@ -20,6 +20,7 @@ import expo.modules.inflowcore.android.AiConfig
 import expo.modules.inflowcore.android.AiRunner
 import expo.modules.inflowcore.android.Lock
 import expo.modules.inflowcore.android.GmailClient
+import expo.modules.inflowcore.android.Gallery
 import expo.modules.inflowcore.android.GmailSync
 import expo.modules.inflowcore.android.InflowListener
 import expo.modules.inflowcore.android.MediaStore
@@ -43,6 +44,7 @@ import expo.modules.inflowcore.core.Categories
 import expo.modules.inflowcore.core.Edits
 import expo.modules.inflowcore.core.GmailPolicy
 import expo.modules.inflowcore.core.Prices
+import expo.modules.inflowcore.core.RawMedia
 import expo.modules.inflowcore.core.Retention
 import expo.modules.inflowcore.core.SuggestionMoves
 import expo.modules.inflowcore.core.SuggestionState
@@ -56,6 +58,7 @@ private const val CAPTURED_EVENT = "onCaptured"
 private const val SUGGESTIONS_EVENT = "onSuggestions"
 private const val MEDIA_AUTHORITY = "com.haroon.inflow.media"
 private const val MAX_INLINE_BYTES = 8L * 1024 * 1024
+private const val MAX_RECEIPT_BYTES = 20L * 1024 * 1024
 private const val OPEN_GRACE_MS = 30_000L
 private val ADDRESS_QUERY = Regex("[^@\\s]*@[^@\\s.]+\\.[^@\\s]+")
 
@@ -324,6 +327,28 @@ class InflowCoreModule : Module() {
       } catch (e: android.content.ActivityNotFoundException) {
         file.delete()
         throw CodedException("MEDIA_NO_VIEWER", "No app can open this file.", null)
+      }
+    }
+
+    Function("galleryBetween") { fromMs: Long, toMs: Long ->
+      if (!Gallery.granted(context)) throw CodedException("GALLERY_DENIED", "Allow photos to search for receipts.", null)
+      Gallery.between(context, fromMs, toMs)
+    }
+
+    Function("attachReceipt") { itemId: Long, uri: String ->
+      val store = store()
+      val photos = android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI.toString()
+      if (!uri.startsWith(photos)) throw CodedException("RECEIPT_NOT_PHOTO", "Pick a photo from the gallery.", null)
+      val source = Uri.parse(uri)
+      val size = context.contentResolver.openAssetFileDescriptor(source, "r")?.use { it.length } ?: -1L
+      if (size > MAX_RECEIPT_BYTES) throw CodedException("MEDIA_TOO_BIG", "That photo is over 20 MB.", null)
+      val bytes = context.contentResolver.openInputStream(source)?.use { it.readBytes() }
+        ?: throw CodedException("RECEIPT_UNREADABLE", "That photo could not be read.", null)
+      if (bytes.size > MAX_RECEIPT_BYTES) throw CodedException("MEDIA_TOO_BIG", "That photo is over 20 MB.", null)
+      val mime = context.contentResolver.getType(source) ?: "image/jpeg"
+      val media = StoreHolder.media(context, store) ?: throw CodedException("MEDIA_UNAVAILABLE", "Receipts can't be saved right now.", null)
+      if (!media.save(itemId, RawMedia(mime, bytes), System.currentTimeMillis())) {
+        throw CodedException("RECEIPT_NOT_SAVED", "This photo is already saved for this transaction.", null)
       }
     }
 

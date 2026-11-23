@@ -5,9 +5,13 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { startWorker } from '../src/nexus/worker';
+import { syncPlaceReminders } from '../src/places/sync';
 
 export default function RootLayout() {
   useEffect(() => startWorker(), []);
+  useEffect(() => {
+    syncPlaceReminders().catch((err) => console.warn('Could not sync place reminders', err));
+  }, []);
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider brand="pdf">
@@ -24,6 +28,7 @@ export default function RootLayout() {
           <Stack.Screen name="scan/review" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="scan/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="scan/page" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="scan-text" options={{ animation: 'slide_from_right' }} />
         </Stack>
       </ThemeProvider>
     </GestureHandlerRootView>

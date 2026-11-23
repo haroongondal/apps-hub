@@ -2,9 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const AiLayout = require('../ai-layout.js');
 
+// A chat completion whose one tool call carries the arguments as a JSON string, as Groq sends them.
 const reply = (input, name = 'make_layout') => ({
-  content: [{ type: 'text', text: 'ok' }, { type: 'tool_use', id: 't1', name, input }],
-  stop_reason: 'tool_use',
+  choices: [{ message: { role: 'assistant', content: null, tool_calls: [{ id: 't1', type: 'function', function: { name, arguments: JSON.stringify(input) } }] }, finish_reason: 'tool_calls' }],
 });
 const text = (o = {}) => ({ type: 'text', x: 0.5, y: 0.5, w: 0.8, h: 0.2, text: 'Hi', size: 0.08, ...o });
 
@@ -58,25 +58,29 @@ test('drops unknown item types', () => {
   assert.equal(out.items[0].type, 'text');
 });
 
-test('throws "The reply had no layout. Try again." when there is no tool_use block', () => {
+test('throws "The reply had no layout. Try again." when there is no tool call', () => {
   const msg = 'The reply had no layout. Try again.';
-  assert.throws(() => AiLayout.parseReply({ content: [{ type: 'text', text: 'Sure!' }] }), { message: msg });
+  assert.throws(() => AiLayout.parseReply({ choices: [{ message: { role: 'assistant', content: 'Sure!' } }] }), { message: msg });
   assert.throws(() => AiLayout.parseReply(reply({ bg: '#fff', items: [] }, 'other_tool')), { message: msg });
   assert.throws(() => AiLayout.parseReply(reply({ bg: '#fff' })), { message: msg });
+  assert.throws(() => AiLayout.parseReply({ choices: [{ message: { tool_calls: [{ function: { name: 'make_layout', arguments: '{oops' } }] } }] }), { message: msg });
   assert.throws(() => AiLayout.parseReply(null), { message: msg });
 });
 
 test('buildRequest offers the tool and names the page size', () => {
   const b = AiLayout.buildRequest('  a poster  ', 1080, 1350);
   assert.equal(b.model, AiLayout.MODEL);
-  assert.equal(b.model, 'claude-sonnet-5-5');
+  assert.equal(b.model, 'openai/gpt-oss-120b');
   assert.equal(b.tools.length, 1);
-  assert.equal(b.tools[0].name, 'make_layout');
-  assert.equal(b.tools[0].input_schema.type, 'object');
-  assert.ok(b.system.includes('1080×1350'));
-  assert.ok(b.system.includes('make_layout'));
-  for (const f of AiLayout.FONTS) assert.ok(b.system.includes(f));
-  assert.deepEqual(b.messages, [{ role: 'user', content: 'a poster' }]);
+  assert.equal(b.tools[0].type, 'function');
+  assert.equal(b.tools[0].function.name, 'make_layout');
+  assert.equal(b.tools[0].function.parameters.type, 'object');
+  const system = b.messages[0].content;
+  assert.equal(b.messages[0].role, 'system');
+  assert.ok(system.includes('1080×1350'));
+  assert.ok(system.includes('make_layout'));
+  for (const f of AiLayout.FONTS) assert.ok(system.includes(f));
+  assert.deepEqual(b.messages[1], { role: 'user', content: 'a poster' });
   assert.ok(!('temperature' in b));
 });
 

@@ -1,30 +1,42 @@
 import { nexusPort, type CompatPort } from '@apps-hub/knowledge-core';
 import * as SecureStore from 'expo-secure-store';
 
-// Gemini embeds text and reads images; Groq answers, builds the graph and transcribes. Both need a key.
+// Gemini embeds text and reads images; Groq answers, builds the graph and transcribes. Both keys are needed.
 export type Service = 'gemini' | 'groq';
 const UPLOAD_MS = 10 * 60_000; // long enough to upload and transcribe a 25 MB recording
-const TEXT_MS = 90_000; // short, so a hung service hands the call to the next key sooner
+const TEXT_MS = 90_000; // short, so a hung service hands the call to the next key or service sooner
 
-// Keys are tried in the order saved. The first build stored one key under `<service>-api-key`.
-const listName = (s: Service) => `${s}-api-keys`;
-const oldName = (s: Service) => `${s}-api-key`;
+// Each service takes several keys: one that is refused or at its limit hands over to the next (knowledge-core openai.ts).
+const keyName = (s: Service) => `${s}-api-keys`; // a JSON list
+const oldKeyName = (s: Service) => `${s}-api-key`; // one key, before several were allowed
 const cached: Partial<Record<Service, string[]>> = {};
+let port: CompatPort | null = null;
 
 export async function getKeys(s: Service): Promise<string[]> {
-  if (!cached[s]) {
-    const list = await SecureStore.getItemAsync(listName(s));
-    const old = list ? null : await SecureStore.getItemAsync(oldName(s));
-    cached[s] = list ? (JSON.parse(list) as string[]) : old ? [old] : [];
+  if (cached[s] === undefined) {
+    const saved = await SecureStore.getItemAsync(keyName(s));
+    const old = saved === null ? await SecureStore.getItemAsync(oldKeyName(s)) : null;
+    cached[s] = saved !== null ? (JSON.parse(saved) as unknown[]).filter((k): k is string => typeof k === 'string') : old ? [old] : [];
+    port = null;
   }
-  return cached[s];
+  return cached[s] ?? [];
 }
 
-export async function setKeys(s: Service, keys: string[]): Promise<void> {
-  if (keys.length) await SecureStore.setItemAsync(listName(s), JSON.stringify(keys));
-  else await SecureStore.deleteItemAsync(listName(s));
-  await SecureStore.deleteItemAsync(oldName(s));
+async function saveKeys(s: Service, keys: string[]): Promise<void> {
+  if (keys.length) await SecureStore.setItemAsync(keyName(s), JSON.stringify(keys));
+  else await SecureStore.deleteItemAsync(keyName(s));
+  await SecureStore.deleteItemAsync(oldKeyName(s));
   cached[s] = keys;
+  port = null;
+}
+
+export async function addKey(s: Service, key: string): Promise<void> {
+  const keys = await getKeys(s);
+  if (!keys.includes(key)) await saveKeys(s, [...keys, key]);
+}
+
+export async function removeKey(s: Service, index: number): Promise<void> {
+  await saveKeys(s, (await getKeys(s)).filter((_, i) => i !== index));
 }
 
 export async function hasKeys(): Promise<boolean> {
@@ -44,13 +56,14 @@ export async function checkKey(s: Service, key: string): Promise<void> {
   else await port.answer('Nexus key check', ['Nexus key check']);
 }
 
-const current = async () => nexusPort({ gemini: await getKeys('gemini'), groq: await getKeys('groq'), fetch: timedFetch });
+// One port, so a key that took over stays in use; saveKeys builds a new one.
+const current = () => (port ??= nexusPort({ gemini: cached.gemini ?? [], groq: cached.groq ?? [], fetch: timedFetch }));
 
 export const ai: CompatPort = {
-  embed: async (texts) => (await current()).embed(texts),
-  extract: async (segments) => (await current()).extract(segments),
-  answer: async (question, sources) => (await current()).answer(question, sources),
-  readImage: async (jpeg) => (await current()).readImage(jpeg),
-  transcribe: async (file) => (await current()).transcribe(file),
-  complete: async (system, user, json) => (await current()).complete(system, user, json),
+  embed: (texts) => current().embed(texts),
+  extract: (segments) => current().extract(segments),
+  answer: (question, sources) => current().answer(question, sources),
+  readImage: (jpeg) => current().readImage(jpeg),
+  transcribe: (file) => current().transcribe(file),
+  complete: (system, user, json) => current().complete(system, user, json),
 };

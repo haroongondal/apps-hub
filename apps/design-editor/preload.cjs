@@ -10,12 +10,15 @@ contextBridge.exposeInMainWorld('native', {
   onMenu: fn => ipcRenderer.on('menu', (_, cmd) => fn(cmd)),
   ai: {
     hasKey: () => ipcRenderer.invoke('ai-has-key'),
+    keys: () => ipcRenderer.invoke('ai-keys'),
     setKey: key => ipcRenderer.invoke('ai-set-key', key),
+    removeKey: index => ipcRenderer.invoke('ai-remove-key', index),
     request: body => ipcRenderer.invoke('ai-request', body),
   },
   media: {
     status: () => ipcRenderer.invoke('media-status'),
     pick: () => ipcRenderer.invoke('media-pick'),
+    pickSong: () => ipcRenderer.invoke('media-pick-song'),
     pickFolder: () => ipcRenderer.invoke('media-pick-folder'),
     plan: spec => ipcRenderer.invoke('media-plan', spec),
     enqueue: items => ipcRenderer.invoke('media-enqueue', items),

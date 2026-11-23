@@ -1,0 +1,31 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.aihubcore'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.aihubcore"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  buildFeatures {
+    aidl true
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // Pinned to the OkHttp React Native 0.81.5 already ships, so the APK keeps one copy.
+  implementation("com.squareup.okhttp3:okhttp:4.9.2")
+  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+  // 1.7.3 is what expo-modules-core already resolves in this app; matches coroutines-test below.
+  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+  testImplementation("junit:junit:4.13.2")
+  testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+}

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <title>browse - YouTube</title>
+    <style>
+      /* The variables and rules are the ones recorded in src/yt/tidy-selectors.ts: html sets 4 and 6, the grid gets its own inline value from YouTube's script (here from the script at the end). */
+      html { font-size: 62.5%; --ytd-rich-grid-items-per-row: 4; --ytd-rich-grid-posts-per-row: 3; --ytd-rich-grid-slim-items-per-row: 6; }
+      body { margin: 0; font: 14px Roboto, Arial, sans-serif; background: #fff; color: #0f0f0f; }
+      ytd-app, ytd-page-manager, ytd-browse, ytd-rich-grid-renderer, ytd-rich-item-renderer, ytd-item-section-renderer, ytd-guide-entry-renderer, ytd-mini-guide-entry-renderer { display: block; }
+      grid-shelf-view-model { display: flex; flex-direction: column; min-height: 60px; background: #eef; }
+      #masthead-container { position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 2020; background: #fff; }
+      ytd-page-manager { padding-top: 56px; }
+      ytd-rich-grid-renderer { display: flex; flex-wrap: wrap; width: 1200px; }
+      ytd-rich-item-renderer { height: 40px; background: #eee; box-sizing: border-box; border: 1px solid #ccc; width: calc(100% / var(--ytd-rich-grid-items-per-row) - 8px); }
+      ytd-rich-item-renderer[is-shorts-grid] { width: calc(100% / var(--ytd-rich-grid-slim-items-per-row) - 8px); }
+      ytd-rich-item-renderer.post { width: calc(100% / var(--ytd-rich-grid-posts-per-row) - 8px); }
+    </style>
+  </head>
+  <body>
+    <ytd-app>
+      <div id="masthead-container"><ytd-masthead id="masthead"><a id="logo" href="/?fixture=browse">YouTube</a></ytd-masthead></div>
+      <div id="guide">
+        <ytd-guide-entry-renderer id="guide-home"><a id="endpoint" title="Home">Home</a></ytd-guide-entry-renderer>
+        <ytd-guide-entry-renderer id="guide-shorts"><a id="endpoint" title="Shorts">Shorts</a></ytd-guide-entry-renderer>
+        <ytd-mini-guide-entry-renderer id="mini-shorts"><a id="endpoint" href="/shorts/" title="Shorts">Shorts</a></ytd-mini-guide-entry-renderer>
+        <yt-tab-shape id="tab-shorts" tab-title="Shorts">Shorts</yt-tab-shape>
+      </div>
+      <ytd-page-manager id="page-manager">
+        <ytd-browse id="browse" page-subtype="home">
+          <ytd-item-section-renderer>
+            <div id="contents">
+              <!-- A search-results Shorts shelf: header, grid, Shorts lockups. -->
+              <grid-shelf-view-model id="shelf-shorts">
+                <yt-section-header-view-model>Shorts</yt-section-header-view-model>
+                <div><ytm-shorts-lockup-view-model><a id="short-link" href="/shorts/sieveTest01?fixture=browse">A Short</a></ytm-shorts-lockup-view-model></div>
+              </grid-shelf-view-model>
+              <script>
+                requestAnimationFrame(() => { window.__shelf = { display: getComputedStyle(document.querySelector('#shelf-shorts')).display, applied: performance.getEntriesByName('sieve-yt-applied')[0]?.startTime ?? null }; });
+              </script>
+              <grid-shelf-view-model id="shelf-other"><yt-section-header-view-model>Latest</yt-section-header-view-model><div><a href="/watch?v=sieveTest02&fixture=browse">A video</a></div></grid-shelf-view-model>
+            </div>
+          </ytd-item-section-renderer>
+          <ytd-rich-grid-renderer id="grid-videos" style="--ytd-rich-grid-items-per-row: 4; --ytd-rich-grid-posts-per-row: 3; --ytd-rich-grid-slim-items-per-row: 5">
+            <ytd-rich-item-renderer id="item-video-1"><a href="/watch?v=sieveTest02&fixture=browse">Video 1</a></ytd-rich-item-renderer>
+            <ytd-rich-item-renderer id="item-video-2"><a href="/watch?v=sieveTest03&fixture=browse">Video 2</a></ytd-rich-item-renderer>
+            <ytd-rich-item-renderer id="item-short-in-grid"><ytm-shorts-lockup-view-model><a href="/shorts/sieveTest04?fixture=browse">A Short in a grid</a></ytm-shorts-lockup-view-model></ytd-rich-item-renderer>
+            <ytd-rich-item-renderer id="item-post" class="post"><a href="#">A post</a></ytd-rich-item-renderer>
+          </ytd-rich-grid-renderer>
+          <ytd-rich-grid-renderer id="grid-shorts" is-shorts-grid="" style="--ytd-rich-grid-items-per-row: 3; --ytd-rich-grid-posts-per-row: 3; --ytd-rich-grid-slim-items-per-row: 5">
+            <ytd-rich-item-renderer id="item-shorts-1" is-shorts-grid="" is-slim-media=""><ytm-shorts-lockup-view-model><a href="/shorts/sieveTest05?fixture=browse">Short 1</a></ytm-shorts-lockup-view-model></ytd-rich-item-renderer>
+            <ytd-rich-item-renderer id="item-shorts-2" is-shorts-grid="" is-slim-media=""><ytm-shorts-lockup-view-model><a href="/shorts/sieveTest01?fixture=browse">Short 2</a></ytm-shorts-lockup-view-model></ytd-rich-item-renderer>
+          </ytd-rich-grid-renderer>
+        </ytd-browse>
+      </ytd-page-manager>
+    </ytd-app>
+    <script>
+      // ?sub=channels makes it a channel page (ytd-browse[page-subtype="channels"]).
+      const sub = new URLSearchParams(location.search).get('sub');
+      if (sub) document.querySelector('#browse').setAttribute('page-subtype', sub);
+      // An in-app navigation to a Short, as YouTube does it: the address changes with pushState, then yt-navigate-finish (src/yt/selectors.ts NAV) is dispatched on ytd-app.
+      window.__navigateShort = () => {
+        history.pushState(null, '', '/shorts/sieveTest01?fixture=browse');
+        document.querySelector('ytd-app').dispatchEvent(new CustomEvent('yt-navigate-finish', { bubbles: true, composed: true, detail: { pageType: 'shorts', fromHistory: false } }));
+      };
+    </script>
+  </body>
+</html>
