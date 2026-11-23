@@ -200,6 +200,30 @@ push or release only when the owner says so.
     exit 0; `:audio-chunks:testDebugUnitTest :pdf-scan:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL
     (ShareRulesTest 14/14, CutWindowTest 5/5, MeetingClockTest 3/3, pdf-scan 59/59); merged manifest checked with
     aapt2: ShareActivity exported with exactly the two filters, PdfScanFileProvider paths only `pdfscan-share/`.
+  - Security review (read-only security-engineer, after 81414c56): 0 high, 1 medium, 1 low, 3 suspicions; clean on share
+    source checks, inbox, deep link, prompt injection, keys, Meeting service, manifest. Fixed:
+    - Keep out mid-transcription (58128c58, medium): `transcribeInChunks` took no stop between pieces, so "Keep out of
+      Nexus" while a long recording was transcribing still cut and sent the remaining pieces to Groq and left
+      `transcribe/piece-<n>.json`. Now `ContentPort.segments(item, check)` passes the job's live check into
+      `ChunkedTranscription.check`, called before each cut and each upload attempt (its error passes through
+      unwrapped); a stage stopped because the item was kept out, or that ends after it, calls the new
+      `ContentPort.withdrawn(itemId)`, and `exclude()` calls it too, which clears the piece folder. A run re-queued by
+      `recover()` also stops at the next piece but keeps the pieces for the newer run.
+    - Minutes notice (4de148c9, low): the notice, the replace prompt and the button hint now say Groq, or Gemini when
+      Groq cannot answer (the chat fallback stays, the owner's design), and that the minutes go to Gemini to make them
+      searchable when a Gemini key is set.
+    - Share screen (4e32b1b4): expo-router 6.0.24 hands a deep link to the current route as a NAVIGATE that React
+      Navigation 7.6.5's StackRouter applies to the current `share` route (same key, new params), so the screen is
+      reused with a new `inbox` while the old payload is still in state. The payload is now kept with its inbox id
+      (`payloadFor`), reset when the id changes, and Add uses only the current id's payload.
+    - Scan image sharing (4df3e107): copies are numbered (`1-name.jpg`), so two pages with the same file name are both
+      shared. No JVM test (one-line rename inside Android-only code).
+    - Not a fix, reported: Nexus lists itself in the chooser for "Share images" from Scan; picking it is refused with
+      "Nexus only takes files that another app shares with it." and nothing is copied. Confusing, not harmful.
+    - Gates after these fixes: app 78/78, typecheck and lint exit 0; knowledge-core 110/110, typecheck exit 0;
+      `:audio-chunks:testDebugUnitTest :pdf-scan:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL (audio-chunks
+      22/22, pdf-scan 59/59). The code-review pass (chunk persistence, Meeting, Minutes quality) was not run: the
+      wave's dispatch cap was reached.
   - Call audio: Nexus can't record phone calls; Android blocks that for apps like Nexus. If another app saved a call
     recording, share it to Nexus.
   - Open owner decision: Arabic/Urdu OCR. tessdata_fast `ara.traineddata` 1,432,056 bytes and `urd.traineddata`
@@ -257,6 +281,12 @@ push or release only when the owner says so.
         android.intent.extra.STREAM content://0@com.haroon.pdfeditor.pdfscan.fileprovider/share/x -n
         com.haroon.pdfeditor/expo.modules.audiochunks.android.ShareActivity`): the Add screen shows "Nexus only takes
         files that another app shares with it." and nothing is copied.
+    27. Keep out mid-transcription: record a meeting over 52 minutes (or share an M4A over 25 MB) with keys set; while
+        the item says Transcribing, tap "Keep out of Nexus". Groq usage stops growing after at most the piece in
+        flight, the item has no transcript, and `files/library/<id>/transcribe/` is gone
+        (`adb shell run-as com.haroon.pdfeditor ls files/library/<id>`).
+    28. Two shares in a row: share a PDF to Nexus and, while "Add to Nexus?" shows, share three photos from Gallery. The
+        screen shows "Getting it ready…" then the three photos; Add adds the photos only, and the PDF is not added.
 
 ## Current state + exact next step
 
@@ -270,9 +300,9 @@ Wave 2 (S5) is on `eco/nexus` (HEAD after the S5 docs commit), not pushed, not r
 Minutes, searchable minutes, share targets with the security fix, the voice-note screen-off fix. All gates
 green; nothing tried on the phone yet.
 
-Next step: the security-engineer review of the share intake and a code review of the Minutes prompt, the
-SEND intake, chunk persistence and the Meeting service (the wave's remaining dispatches). Then the phone
-test through the coord queue (`device:49kjmnuwonkffqzh`), installing from the Store only, with the 26
+Next step: the security-engineer review is done and its findings fixed (S5 log); the code review of chunk
+persistence, the Meeting service and Minutes quality was not run (dispatch cap). Then the phone
+test through the coord queue (`device:49kjmnuwonkffqzh`), installing from the Store only, with the 28
 steps in the S5 log. Then the owner decides on Arabic/Urdu OCR (sizes in the S5 log) and on merging and
 releasing `eco/nexus`.
 
@@ -282,7 +312,9 @@ kept); the Library body is read and written in two transactions (`indexBody`), s
 saved at the same instant can leave the older body until the next change; no open-source notices screen
 (Leptonica, IJG, libpng ask for one); offline OCR text never reaches Nexus; shared links are stored as notes
 and never fetched; a shared PDF is indexed only once it is opened in the editor; a voice note killed
-mid-recording is lost (use Meeting). Done in S4 on `eco/nexus` (phone test pending): cited PDFs open at the
+mid-recording is lost (use Meeting); a share is copied into `files/shared-inbox/` before the Add tap (up to
+250 MB a share, swept after a day), so another app can fill storage by sharing over and over; a sending app
+whose provider never answers keeps the invisible ShareActivity waiting (no timeout). Done in S4 on `eco/nexus` (phone test pending): cited PDFs open at the
 cited page (aeae7091); recordings over 25 MB are transcribed in pieces on Android (5624026f); the tab bar
 hides while the keyboard is open (6134b70e).
 
