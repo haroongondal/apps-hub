@@ -28,7 +28,30 @@ clip from anywhere.
   the Android **Share** menu, because apps rarely put them on the clipboard.
   *(My call.)*
 - **Keeps** clips for 30 days; pinned clips stay until deleted (owner).
-  One-time codes delete after 10 minutes. *(My call.)*
+  One-time codes delete after 10 minutes. *(My call.)* Built 2026-11-23: the
+  time is a setting on the home screen (7 days, 30 days, 90 days, 1 year;
+  default 30), pin/unpin from a clip's menu, pinned clips listed first (app
+  and bubble). Expired clips are deleted when a clip is saved or the list is
+  read (`core/Expiry.kt`, JVM-tested); there is no background job.
+- **Smart actions** (2026-11-23): a text clip's row shows one button per kind
+  of thing found in it: a link ("Open link", http/https only), a phone number
+  ("Call", E.164 or Pakistani 03xx-xxxxxxx / +92; opens the dialer with
+  `ACTION_DIAL`, never calls), an address ("Open map", a house number plus a
+  street word, House/Street numbers, or a UK postcode; a `geo:0,0?q=` query),
+  a parcel tracking number ("Track parcel", opens the carrier's public page in
+  the browser for UPS, FedEx, DHL, USPS, TCS, Leopards, M&P, Pakistan Post;
+  bare digits count only when the carrier is named in the clip, and a number
+  with no known carrier gets no button), and an IBAN ("Copy IBAN", country
+  length plus mod-97, copied in groups of four). Plain account numbers are
+  not recognised: they have no check digit to tell them from other numbers.
+  Recognition is pure TypeScript (`src/smart.ts`, node-tested) and runs only
+  on the clip being drawn, on the phone; nothing is stored or sent, and
+  passwords, codes (hidden clips, including every clip marked sensitive) and
+  non-text clips get nothing. Nothing opens until the owner taps a button;
+  Kotlin re-checks every uri (`core/OpenTarget.kt`, http/https, `tel:` digits,
+  percent-encoded `geo:` only) before launching it. A tapped action hands the
+  link, number, tracking number or address to the browser, dialer or map app.
+  Clipboard itself has no INTERNET permission in release.
 - **Floating bubble** (owner, refined 2026-11-01): shown **only while the
   keyboard is open**, by default at the right edge 72 dp above the keyboard's
   top (`TYPE_WINDOWS_CHANGED` + the `TYPE_INPUT_METHOD` window's bounds). It

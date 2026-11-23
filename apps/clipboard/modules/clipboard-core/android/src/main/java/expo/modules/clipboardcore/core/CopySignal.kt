@@ -8,7 +8,8 @@ object CopySignal {
   const val ANNOUNCEMENT = 0x4000
 
   private val COPY_WORD = Regex("""\bcop(y|ied)\b""", RegexOption.IGNORE_CASE)
-  private val CLIP_WORD = Regex("""\bclip""", RegexOption.IGNORE_CASE)
+  // Windows that are never the app the user copied from.
+  val SYSTEM = setOf("android", "com.android.systemui", "com.google.android.inputmethod.latin")
 
   fun isCopy(type: Int, pkg: String?, text: String, ownPkg: String): Boolean {
     if (pkg == ownPkg) return false
@@ -19,5 +20,10 @@ object CopySignal {
     }
   }
 
-  fun loggable(text: String): Boolean = COPY_WORD.containsMatchIn(text) || CLIP_WORD.containsMatchIn(text)
+  // A click or an app's own "Copied" toast names the app; a system toast or announcement falls back to the last app window.
+  fun source(type: Int, pkg: String?, foreground: String?): String? = when {
+    type == VIEW_CLICKED -> pkg
+    pkg != null && pkg !in SYSTEM -> pkg
+    else -> foreground
+  }
 }

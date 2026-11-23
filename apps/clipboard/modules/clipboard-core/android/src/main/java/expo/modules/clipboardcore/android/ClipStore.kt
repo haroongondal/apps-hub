@@ -9,9 +9,11 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import expo.modules.clipboardcore.core.CaptureGate
 import expo.modules.clipboardcore.core.ClipKind
+import expo.modules.clipboardcore.core.Expiry
 
 private const val STRONGROOM = "com.haroon.strongroom"
 private const val DISMISSED = "dismissed_fingerprint"
+private const val RETENTION = "retention_days"
 
 data class Clip(
   val id: Long,
@@ -22,10 +24,11 @@ data class Clip(
   val source: String?,
   val via: String,
   val grabMs: Long?,
+  val pinned: Boolean,
 ) {
   fun toMap() = mapOf(
     "id" to id, "at" to at, "kind" to kind, "text" to text, "mime" to mime,
-    "source" to source, "via" to via, "grabMs" to grabMs,
+    "source" to source, "via" to via, "grabMs" to grabMs, "pinned" to pinned,
   )
 }
 
@@ -63,6 +66,7 @@ class ClipStore private constructor(context: Context) : SQLiteOpenHelper(context
     if (CaptureGate.skip(via, fingerprint, lastFingerprint, dismissed)) return false
     lastFingerprint = fingerprint
     val db = writableDatabase
+    prune(db)
     if (!kind.hidden) {
       db.rawQuery("SELECT kind, text FROM clips ORDER BY at DESC, id DESC LIMIT 1", null).use { c ->
         if (c.moveToFirst() && c.getString(0) == kind.id && c.getString(1) == text) return false
@@ -110,18 +114,52 @@ class ClipStore private constructor(context: Context) : SQLiteOpenHelper(context
     text?.let { prefs.edit().putInt(DISMISSED, it.hashCode()).apply() }
   }
 
-  fun recent(limit: Int): List<Clip> =
-    readableDatabase.rawQuery(
-      "SELECT id, at, kind, text, mime, source, via, grab_ms FROM clips ORDER BY at DESC, id DESC LIMIT ?",
+  /** Pinned clips first, then newest first. Expired clips are deleted before reading. */
+  @Synchronized
+  fun recent(limit: Int): List<Clip> {
+    val db = writableDatabase
+    prune(db)
+    return db.rawQuery(
+      "SELECT id, at, kind, text, mime, source, via, grab_ms, pinned FROM clips ORDER BY pinned DESC, at DESC, id DESC LIMIT ?",
       arrayOf(limit.toString()),
     ).use { c ->
       buildList {
         while (c.moveToNext()) {
           add(Clip(c.getLong(0), c.getLong(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5),
-            c.getString(6), if (c.isNull(7)) null else c.getLong(7)))
+            c.getString(6), if (c.isNull(7)) null else c.getLong(7), c.getInt(8) != 0))
         }
       }
     }
+  }
+
+  @Synchronized
+  fun setPinned(id: Long, pinned: Boolean) {
+    writableDatabase.update("clips", ContentValues().apply { put("pinned", if (pinned) 1 else 0) }, "id = ?", arrayOf(id.toString()))
+  }
+
+  fun retentionDays(): Int = Expiry.days(if (prefs.contains(RETENTION)) prefs.getInt(RETENTION, 0) else null)
+
+  @Synchronized
+  fun setRetentionDays(days: Int) {
+    prefs.edit().putInt(RETENTION, Expiry.days(days)).apply()
+    prune(writableDatabase)
+  }
+
+  private fun prune(db: SQLiteDatabase) {
+    val now = System.currentTimeMillis()
+    val days = retentionDays()
+    val expired = db.rawQuery("SELECT id, kind, at, pinned FROM clips", null).use { c ->
+      buildList { while (c.moveToNext()) if (Expiry.expired(c.getString(1), c.getLong(2), c.getInt(3) != 0, now, days)) add(c.getLong(0)) }
+    }
+    if (expired.isEmpty()) return
+    db.beginTransaction()
+    try {
+      expired.forEach { db.delete("clips", "id = ?", arrayOf(it.toString())) }
+      db.setTransactionSuccessful()
+    } finally {
+      db.endTransaction()
+    }
+  }
 
   /** The clip's text, moved to the top, or null when it has none to put back (hidden, image, file). */
   @Synchronized

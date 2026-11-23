@@ -5,11 +5,14 @@ import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
 import android.provider.Settings
 import android.view.ViewTreeObserver
 import expo.modules.clipboardcore.android.Bubble
 import expo.modules.clipboardcore.android.CaptureService
 import expo.modules.clipboardcore.android.ClipStore
+import expo.modules.clipboardcore.core.OpenTarget
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
@@ -38,8 +41,11 @@ class ClipboardCoreModule : Module() {
       mapOf("enabled" to enabled, "connected" to CaptureService.connected)
     }
 
+    // The per-service page is a system-only action, so open the list and ask Settings to scroll to and highlight our row.
     Function("openAccessibilitySettings") {
-      context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+      val ours = ComponentName(context, CaptureService::class.java).flattenToString()
+      val args = Bundle().apply { putString(":settings:fragment_args_key", ours) }
+      start(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).putExtra(":settings:fragment_args_key", ours).putExtra(":settings:show_fragment_args", args))
     }
 
     Function("captureNow") {
@@ -68,9 +74,33 @@ class ClipboardCoreModule : Module() {
 
     Function("remove") { id: Long -> ClipStore.get(context).remove(id) }
 
+    Function("setPinned") { id: Long, pinned: Boolean -> ClipStore.get(context).setPinned(id, pinned) }
+
+    Function("getRetentionDays") { ClipStore.get(context).retentionDays() }
+
+    Function("setRetentionDays") { days: Int -> ClipStore.get(context).setRetentionDays(days) }
+
+    Function("copyText") { text: String -> clipboard.setPrimaryClip(ClipData.newPlainText("Clipboard", text)) }
+
+    // Only after a tap on a smart action; the uri is checked again here so nothing but a web page, the dialer or the map opens.
+    Function("openAction") { uri: String ->
+      val intent = when (OpenTarget.action(uri)) {
+        OpenTarget.BROWSE -> Intent(Intent.ACTION_VIEW, Uri.parse(uri)).addCategory(Intent.CATEGORY_BROWSABLE)
+        OpenTarget.DIAL -> Intent(Intent.ACTION_DIAL, Uri.parse(uri))
+        OpenTarget.VIEW -> Intent(Intent.ACTION_VIEW, Uri.parse(uri))
+        else -> return@Function false
+      }
+      runCatching { start(intent) }.isSuccess
+    }
+
     Function("clearAll") { ClipStore.get(context).clearAll() }
 
     Function("setPalettes") { json: String -> Bubble.savePalettes(context, json) }
+  }
+
+  private fun start(intent: Intent) {
+    val activity = appContext.currentActivity
+    if (activity != null) activity.startActivity(intent) else context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
   }
 
   private fun captureFocused() {

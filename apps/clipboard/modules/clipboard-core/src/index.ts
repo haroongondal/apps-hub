@@ -13,6 +13,8 @@ export interface Clip {
   /** An accessibility event type, or "app" when the app read the clipboard on open. */
   via: string;
   grabMs: number | null;
+  /** Pinned clips never expire and are listed first. */
+  pinned: boolean;
 }
 
 export interface ServiceState {
@@ -27,6 +29,14 @@ interface ClipboardCoreApi {
   recent(limit: number): Clip[];
   copy(id: number): boolean;
   remove(id: number): void;
+  setPinned(id: number, pinned: boolean): void;
+  /** How many days unpinned clips are kept: 7, 30, 90 or 365. */
+  getRetentionDays(): number;
+  setRetentionDays(days: number): void;
+  /** Puts this text on the clipboard. */
+  copyText(text: string): void;
+  /** Opens an http(s) link, the dialer for a tel: uri, or the map for a geo: query; anything else is refused. False when nothing opened. */
+  openAction(uri: string): boolean;
   /** Deletes every saved clip. */
   clearAll(): void;
   /** JSON `{ light, dark }` palettes for the bubble, which draws without React Native. */

@@ -76,6 +76,22 @@ Claude's calls are marked *(My call.)* in DESIGN.md.
 
 ## Session log
 
+- 2026-11-23 (eco/clipboard worktree, not released): Phase 1 items and smart
+  actions. Expiry with a "Keep clips for" setting (7/30/90 days, 1 year;
+  default 30; codes 10 minutes; pinned never) in pure `core/Expiry.kt`; pin/
+  unpin (existing `pinned` column, no schema change); INTERNET dropped from
+  release (main manifest no longer asks, `src/release` removes the one
+  expo-filesystem merges in, debug and debugOptimized add it for Metro;
+  `src/__tests__/manifest.test.ts` guards it; merged release manifest checked
+  with `:app:processReleaseMainManifest`); spike logging removed; source taken
+  from a toast's own package (`CopySignal.source`); setup copy mentions
+  "Allow restricted settings" and Autostart. "Turn on" can't open our own
+  service page: `ACTION_ACCESSIBILITY_DETAILS_SETTINGS` is a system API (not
+  in the SDK 36 stubs), so it opens the list with Settings' highlight extras.
+  Smart actions (DESIGN §2): `src/smart.ts` + `core/OpenTarget.kt`. Not done:
+  images copied into storage (needs a FileProvider to paste back and a
+  thumbnail; separate slice). Phone checks not run.
+
 - 2026-11-13: owner asked for a movable bubble ("it hides some important
   content or button while typing"). Built the drag into `android/Bubble.kt`
   (touch handler: tap = open/close as before, any direction past the slop
@@ -181,6 +197,13 @@ Claude's calls are marked *(My call.)* in DESIGN.md.
   and a retry worked (manifest unchanged until a publish succeeds). JVM 16/16.
 
 ## Current state + exact next step
+
+**2026-11-23:** branch `eco/clipboard` holds Phase 1 (expiry setting, pin,
+no INTERNET in release, logging removed, setup copy) and smart actions; not
+merged or released. Next: the phone checks listed in that branch's report
+(phone, tracking number, IBAN, address rows; a Strongroom copy shows no
+buttons; a pinned clip survives a shorter "Keep clips for"), then images into
+storage (FileProvider + thumbnail). Older state below.
 
 **PR #34 merged to main as 6c541896** (https://github.com/haroongondal/apps-hub/pull/34):
 Clipboard 0.2.2 (7), the draggable bubble, rebased onto #32. Clipboard

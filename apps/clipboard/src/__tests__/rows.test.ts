@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Clip } from 'clipboard-core';
-import { clipSubtitle, clipTitle } from '../rows.ts';
+import { clipSubtitle, clipTitle, keepLabel } from '../rows.ts';
 
-const base: Clip = { id: 1, at: 0, kind: 'text', text: 'hello', mime: 'text/plain', source: null, via: 'app', grabMs: null };
+const base: Clip = { id: 1, at: 0, kind: 'text', text: 'hello', mime: 'text/plain', source: null, via: 'app', grabMs: null, pinned: false };
 
 test('hidden kinds never show text', () => {
   assert.equal(clipTitle({ ...base, kind: 'secret', text: null }), 'Password · hidden');
@@ -22,4 +22,14 @@ test('subtitle shows age and source, and says when a clip was saved on open', ()
   assert.equal(clipSubtitle(clicked, 5 * 60_000), '5 min ago · com.whatsapp');
   assert.equal(clipSubtitle(base, 3 * 3_600_000), '3 h ago · saved when you opened Clipboard');
   assert.equal(clipSubtitle(base, 2 * 86_400_000), '2 d ago · saved when you opened Clipboard');
+});
+
+test('pinned clips say so first', () => {
+  assert.equal(clipSubtitle({ ...base, pinned: true, source: 'com.whatsapp' }, 30_000), 'Pinned · just now · com.whatsapp · saved when you opened Clipboard');
+});
+
+test('keep labels', () => {
+  assert.equal(keepLabel(7), '7 days');
+  assert.equal(keepLabel(30), '30 days');
+  assert.equal(keepLabel(365), '1 year');
 });
