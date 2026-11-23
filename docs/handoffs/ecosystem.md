@@ -76,7 +76,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | F5 | Deputy reliability (verify and close; code is on main) | eco/deputy | built + gated (1eef0a8b, e7b5b9b0): only gap was Retry-After as an HTTP date; Deputy gradle 267 -> 274 tests, 0 fail; deputy ts 12 pass; phone not run |
 | F6 | Nexus shortcuts | eco/nexus | built + gated (6134b70e, aeae7091, 5624026f, 92385261): pdf-editor-mobile 47/47, knowledge-core 67/67, engine 2/2, gradle ok; new module audio-chunks (Android only); phone not run |
 | E1 | app-link-contract | eco/base | built + gated + security-reviewed (commits 18657714 ... fda0631b): app-link-contract 91/91, autopilot-contract 5/5, inflow ts 91/91, Inflow gradle 578 tests; phone not run |
-| E2 | AI keys once (Strongroom) | eco/strongroom + readers | todo (needs E1; owner decision) |
+| E2 | AI keys once (built on AI hub, not Strongroom: see E2 decision) | eco/ai-hub + readers | hub slice + ai-hub-client in progress (eco/ai-hub); app integrations (Inflow, Nexus, Design Editor phone, Deputy) wait until their current phases finish |
 | E3 | Share targets | eco/nexus, eco/design-editor, eco/deputy | todo (needs E1) |
 | E4 | Store health hub | eco/store | todo (needs E1) |
 | C1 | Clipboard smart actions + phase 1 | eco/clipboard | built + gated (6f2ba514): clipboard ts 21 (7 before), gradle JVM 32 (24 before), release manifest has no INTERNET (test fails if it returns); Add to Inflow NOT built (needs an Inflow E1 action; extension point `actionFor()` in src/smart.ts); phone not run; security-engineer + invariant review pending |
@@ -110,6 +110,15 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 
 - Clipboard smart actions put a tracking number or an address in a URL/geo query sent to the browser or map app, only on a tap, never by Clipboard itself (no INTERNET). COMMON.md's "no user data in URLs" rule was written for web forms; this is the feature, but security-engineer must confirm and the owner is told.
 - HyperOS: "Turn on" cannot open Clipboard's own accessibility page (ACTION_ACCESSIBILITY_DETAILS_SETTINGS is not in the public SDK); it opens the accessibility list instead.
+
+## E2 decision and plan (planner report 2026-11-23)
+
+- origin/main moved to 1ba92561 (#70 hub UI, #71 Store knows AI hub and registers it for release); merged into eco/base (e606c7e7). So ai-hub HAS a release path now (whether a hub build is published: unverified).
+- Hub today: Keystore AES-GCM key list, no API hands a key out; AIDL v1 submit/cancel/status/apiVersion guarded by signature permission com.haroon.permission.AI_HUB; jobs chat, vision (7 MB image), embed (8 texts), transcribe (25 MB, text only); request JSON capped 512 KB; no streaming; hub picks models. Unknown same-signed apps are allowed by default today; only counts are kept (no per-call log).
+- Option C (Strongroom holds keys) goes against code: handoff says Strongroom never calls the hub; CallerPolicy always denies Strongroom; E1 refuses apikey/secret/token columns. Option B (hub hands keys over) puts keys in five processes. CHOSEN (my call): Option A, apps call hub submit(), keys never leave the hub, own key fields stay as fallback.
+- Hub slice: default-deny for unknown apps + pending list; capped per-call log (app, job, service, time, never text); embed `dimensions` and transcribe `segments` (Nexus needs 512-dim vectors and Whisper segments); ApiVersion 2. Client: packages/ai-hub-client (Expo module, AIDL copy with drift test, fallback error kinds).
+- App integrations later: Inflow (AiConfig.provider()), Nexus (src/nexus/ai.ts, embeds in chunks of 8, dims 512), Design Editor phone (src/editor/ai.ts), Deputy (AgentRuntime.kt:77 HubProvider; screenshots may exceed 512 KB: check). Deputy and Inflow lose their own model/effort/base-URL choice on the hub path (fallback keeps them).
+- Owner questions for E2: (1) keys in AI hub not Strongroom; (2) Option A not B; (3) keep own key fields as fallback or delete them (the hub PLAN P3 says delete); (4) per-call log or counts only; (5) default-deny and re-enable apps; (6) Deputy/Inflow lose model/effort/base-URL choice on the hub path; (7) release ai-hub through the Store (needed before any phone test).
 
 ## Open owner decisions (collect here, ask once at the end)
 
