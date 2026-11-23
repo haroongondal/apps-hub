@@ -47,7 +47,7 @@
         android:name="android.support.FILE_PROVIDER_PATHS"
         android:resource="@xml/inflow_media_paths" />
     </provider>
-    <!-- Suggestions, and for a run one source item, for Deputy. Exported, but read and write both need the signature permission; no URI grants. -->
+    <!-- Suggestions, and for a run one source item, for Deputy; also the health row the Store reads. Exported, but read and write both need the signature permission; no URI grants. -->
     <provider
       android:name=".android.AutopilotProvider"
       android:authorities="com.haroon.inflow.autopilot"

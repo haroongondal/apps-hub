@@ -131,6 +131,7 @@ class InflowCoreModule : Module() {
         sendSuggestions()
       }
       StoreHolder.backfill(context)
+      StoreHolder.heartbeat(context)
       MedicineReminders.rearm(context)
       // Decrypted copies handed to a viewer live only until the next start; files no row names are swept (rolled-back saves).
       InflowListener.executor.execute {
@@ -151,6 +152,10 @@ class InflowCoreModule : Module() {
     OnDestroy {
       StoreHolder.onCaptured = null
       runCatching { clearOpened() }
+    }
+
+    OnActivityEntersForeground {
+      StoreHolder.heartbeat(context)
     }
 
     // The app locks when it goes to the background, so the decrypted copies go too; a copy younger than the grace stays

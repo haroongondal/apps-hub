@@ -25,4 +25,25 @@ class AutopilotProviderShareTest {
 
   @Test fun theListLimitIsWithinTheShareRowCap() =
     assertTrue(AutopilotProvider.LIST_LIMIT <= share.getValue("maxRows").jsonPrimitive.int)
+
+  // The health share (appHealthShare('inflow')): its fixture has no authority, which comes from HEALTH_AUTHORITIES in health.ts.
+  private val health = File("../../../../../packages/app-link-contract/fixtures/app-health.share.json").also {
+    assertTrue("fixture not found from ${File(".").absoluteFile}", it.isFile)
+  }.let { Json.parseToJsonElement(it.readText()).jsonObject }
+
+  @Test fun theHealthColumnsEqualTheHealthShareColumnsInOrder() =
+    assertEquals(health.getValue("columns").jsonArray.map { it.jsonPrimitive.content }, AutopilotProvider.HEALTH_COLUMNS.toList())
+
+  @Test fun theHealthRowCapEqualsTheHealthShareCap() =
+    assertEquals(health.getValue("maxRows").jsonPrimitive.int, AutopilotProvider.HEALTH_MAX_ROWS)
+
+  @Test fun theHealthPathIsTheSharePath() =
+    assertEquals(health.getValue("path").jsonPrimitive.content, "health")
+
+  @Test fun theLegacyAuthorityIsTheOneHealthAuthoritiesGivesInflow() {
+    val src = File("../../../../../packages/app-link-contract/src/health.ts").readText()
+    val declared = Regex("""\binflow: '([^']+)'""").find(src)?.groupValues?.get(1)
+    assertEquals("com.haroon.inflow.autopilot", declared)
+    assertEquals(declared, AutopilotProvider.AUTHORITY)
+  }
 }

@@ -21,6 +21,7 @@ class InflowListener : NotificationListenerService() {
 
   override fun onListenerConnected() {
     connected.set(true)
+    StoreHolder.heartbeat(applicationContext)
     GmailSync.startPeriodic(applicationContext)
     AiRunner.startPeriodic(applicationContext)
     StoreHolder.backfill(applicationContext)

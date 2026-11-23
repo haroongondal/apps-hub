@@ -4,6 +4,7 @@ import android.content.Context
 import android.provider.Telephony
 import android.util.Log
 import expo.modules.inflowcore.core.AUTOPILOT_META
+import expo.modules.inflowcore.core.AppHealth
 import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.Ledger
 import expo.modules.inflowcore.core.MoneySuggestions
@@ -28,6 +29,12 @@ object StoreHolder {
   fun get(context: Context): Result<SqlItemStore> {
     opened?.let { if (it.isSuccess || it.exceptionOrNull()?.message == KEY_LOST_MESSAGE) return it }
     return SqlItemStore.open(context.applicationContext).also { opened = it }
+  }
+
+  /** The health row's last_seen_at: written when the app opens and when the listener connects, never by a provider query. Runs off the caller's thread. */
+  fun heartbeat(context: Context) {
+    val app = context.applicationContext
+    InflowListener.executor.execute { runCatching { get(app).getOrNull()?.let { AppHealth.beat(it, System.currentTimeMillis()) } } }
   }
 
   fun storeError(context: Context): String? = get(context).exceptionOrNull()?.message

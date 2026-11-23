@@ -6,7 +6,9 @@ import android.content.UriMatcher
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import androidx.core.app.NotificationManagerCompat
 import expo.modules.inflowcore.applink.AppLinkCaller
+import expo.modules.inflowcore.core.AppHealth
 import expo.modules.inflowcore.core.Suggestion
 import expo.modules.inflowcore.core.SuggestionMoves
 import expo.modules.inflowcore.core.SuggestionState
@@ -19,6 +21,7 @@ import expo.modules.inflowcore.core.SuggestionState
  *  - `suggestions` (query): the SuggestionRow columns of the contract, no summaries or text. `?state=waiting,started` picks states, default waiting.
  *  - `suggestions/#` (query one row, update `state` to started, done or skipped).
  *  - `items/#` (query one source item; empty when Inflow refuses to share it: see AutopilotAccess).
+ *  - `health` (query, one row for the Store: listener on or off, where the AI keys come from, the last heartbeat; no personal data, so no switch guards it, but the caller check still does).
  *
  * The projection, selection and sort arguments are ignored: the columns are fixed.
  */
@@ -46,6 +49,12 @@ class AutopilotProvider : ContentProvider() {
         val item = if (store != null) runCatching { store.autopilotItem(uri.lastPathSegment!!.toLong(), System.currentTimeMillis()) }.getOrNull() else null
         if (item != null) c.addRow(arrayOf<Any?>(item.id, item.app, item.pkg, item.sender, item.conversation, item.text, item.at))
       }
+      HEALTH -> MatrixCursor(AppHealth.COLUMNS).also { c ->
+        val listener = runCatching { context?.let { NotificationManagerCompat.getEnabledListenerPackages(it).contains(it.packageName) } }.getOrNull() == true
+        val keys = store != null && runCatching { AiConfig(store).on() }.getOrDefault(false)
+        val seen = if (store != null) runCatching { AppHealth.lastSeen(store) }.getOrNull() else null
+        c.addRow(AppHealth.row(listener, keys, seen))
+      }
       else -> throw IllegalArgumentException("Unknown uri")
     }
   }
@@ -71,6 +80,7 @@ class AutopilotProvider : ContentProvider() {
     LIST -> "vnd.android.cursor.dir/vnd.com.haroon.inflow.suggestion"
     ONE -> "vnd.android.cursor.item/vnd.com.haroon.inflow.suggestion"
     ITEM -> "vnd.android.cursor.item/vnd.com.haroon.inflow.item"
+    HEALTH -> "vnd.android.cursor.item/vnd.com.haroon.inflow.health"
     else -> null
   }
 
@@ -91,9 +101,13 @@ class AutopilotProvider : ContentProvider() {
     const val LIST = 1
     const val ONE = 2
     const val ITEM = 3
+    const val HEALTH = 4
+    const val HEALTH_MAX_ROWS = 1
     const val LIST_LIMIT = 200
     // Equal to ROW_KEYS in packages/autopilot-contract/src/index.ts.
     val ROW_COLUMNS = arrayOf("id", "kind", "title", "item_id", "due_at", "state", "created_at", "expires_at")
+    // Equal to appHealthShare('inflow') (packages/autopilot-contract/src/inflow-shares.ts).
+    val HEALTH_COLUMNS = AppHealth.COLUMNS
     val ITEM_COLUMNS = arrayOf("id", "app", "pkg", "sender", "conversation", "text", "at")
     // lazy: android.jar's UriMatcher is a stub that throws on the JVM, and the share test reads the constants above.
     val matcher by lazy {
@@ -101,6 +115,7 @@ class AutopilotProvider : ContentProvider() {
         addURI(AUTHORITY, "suggestions", LIST)
         addURI(AUTHORITY, "suggestions/#", ONE)
         addURI(AUTHORITY, "items/#", ITEM)
+        addURI(AUTHORITY, "health", HEALTH)
       }
     }
   }
