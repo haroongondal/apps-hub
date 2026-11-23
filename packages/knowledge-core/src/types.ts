@@ -26,6 +26,8 @@ export interface AiPort {
 
 export interface ContentPort {
   segments(item: Item): Promise<Segment[]>;
+  /** Called after the item's segments are saved, so work kept only to finish them (saved transcript pieces) can go. A failure here is ignored. */
+  saved?(item: Item): Promise<void>;
 }
 
 export type AiErrorKind = 'auth' | 'offline' | 'rate' | 'server' | 'bad_request' | 'bad_reply';

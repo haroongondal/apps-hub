@@ -264,6 +264,7 @@ export class Knowledge {
       return true;
     });
     if (wrote && (item.kind === 'audio' || item.kind === 'image')) await this.lib.setBody(item.id, segments.map((s) => s.text).join('\n')); // so Library search finds transcripts and OCR
+    if (wrote) await this.deps.content.saved?.(item).catch(() => {}); // leftovers only waste space, and are cleared with the item
   }
 
   async segmentsOf(itemId: string): Promise<Segment[]> {
