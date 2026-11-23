@@ -4,11 +4,19 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { sweepInboxes } from '../src/nexus/share-inbox';
 import { startWorker } from '../src/nexus/worker';
 import { syncPlaceReminders } from '../src/places/sync';
 
 export default function RootLayout() {
   useEffect(() => startWorker(), []);
+  useEffect(() => {
+    try {
+      sweepInboxes();
+    } catch (err) {
+      console.warn('Could not clear old shares', err);
+    }
+  }, []);
   useEffect(() => {
     syncPlaceReminders().catch((err) => console.warn('Could not sync place reminders', err));
   }, []);
@@ -22,6 +30,7 @@ export default function RootLayout() {
           <Stack.Screen name="item" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="settings" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="meeting" options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="share" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="cv/new" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="cv/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="editor" options={{ animation: 'slide_from_right' }} />

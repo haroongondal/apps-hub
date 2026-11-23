@@ -1,6 +1,7 @@
 import type { Item } from '@apps-hub/library-core';
 import { AudioChunks } from 'audio-chunks';
 import { File } from 'expo-file-system';
+import { PdfScan } from 'pdf-scan';
 
 import { dirSize } from '../library/files';
 import { newId } from '../library/ids';
@@ -8,6 +9,7 @@ import { openLibrary } from '../library/open-library';
 import { itemDir, itemFile } from '../library/paths';
 
 import { captureTitle, noteTitle } from './labels';
+import type { AudioExt } from './share-intake';
 import { enqueue } from './worker';
 
 // Files first, row second: a crash in between leaves a directory the start-up sweep removes.
@@ -65,6 +67,15 @@ export const addMeeting = (recordingUri: string, id: string, startedAt: Date, sa
 
 export const addPhoto = (uri: string) =>
   addItem('image', captureTitle('image', new Date()), (id) => new File(uri).copy(itemFile(id, 'image.jpg')));
+
+export const addSharedAudio = (src: File, ext: AudioExt, title: string) =>
+  addItem('audio', title, (id) => src.move(itemFile(id, `audio.${ext}`)));
+
+// Decoded and written again as an upright JPEG, so every image item's image.jpg is a JPEG whatever was shared.
+export const addSharedPhoto = (src: File, title: string) =>
+  addItem('image', title, async (id) => {
+    await PdfScan.importImage(src.uri, itemFile(id, 'image.jpg').uri);
+  });
 
 export async function saveNote(item: Item, text: string): Promise<void> {
   const lib = await openLibrary();

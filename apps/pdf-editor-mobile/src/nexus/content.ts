@@ -7,9 +7,19 @@ import { itemFile } from '../library/paths';
 
 import { ai } from './ai';
 import { pieceStore } from './piece-store';
+import { AUDIO_EXTS, AUDIO_TYPES, type AudioExt } from './share-intake';
 
 const MAX_UPLOAD = 25 * 1024 * 1024; // the transcription API's file limit
-const upload = (file: File) => ai.transcribe({ uri: file.uri, name: 'audio.m4a', type: 'audio/mp4' });
+const upload = (file: File, ext: AudioExt = 'm4a') => ai.transcribe({ uri: file.uri, name: `audio.${ext}`, type: AUDIO_TYPES[ext] });
+
+/** Recordings made in Nexus are audio.m4a; shared ones keep their format (audio.ogg, audio.mp3, ...). */
+export function audioFile(itemId: string): { file: File; ext: AudioExt } {
+  for (const ext of AUDIO_EXTS) {
+    const file = itemFile(itemId, `audio.${ext}`);
+    if (file.exists) return { file, ext };
+  }
+  return { file: itemFile(itemId, 'audio.m4a'), ext: 'm4a' };
+}
 
 interface Piece {
   file: File;
@@ -60,9 +70,11 @@ export const content: ContentPort = {
       return [{ text: file.exists ? await file.text() : '', locator: null }];
     }
     if (item.kind === 'audio') {
-      const file = itemFile(item.id, 'audio.m4a');
+      const { file, ext } = audioFile(item.id);
       if (!file.exists) throw new Error('The recording is missing from this device.');
-      return file.size > MAX_UPLOAD ? transcribeFiles(item.id, [{ file, offsetMs: 0 }]) : upload(file);
+      if (file.size <= MAX_UPLOAD) return upload(file, ext);
+      if (ext !== 'm4a') throw new Error('This recording is over 25 MB and only M4A recordings can be cut into pieces.');
+      return transcribeFiles(item.id, [{ file, offsetMs: 0 }]);
     }
     if (item.kind === 'image') {
       const file = itemFile(item.id, 'image.jpg');

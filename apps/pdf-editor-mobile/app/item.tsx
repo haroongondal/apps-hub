@@ -14,6 +14,7 @@ import { itemFile } from '../src/library/paths';
 import { errorMessage, useDebounced } from '../src/library/use-library';
 import { hasKeys } from '../src/nexus/ai';
 import { saveNote } from '../src/nexus/capture';
+import { audioFile } from '../src/nexus/content';
 import { jobLabel, minutesDetail, minutesError, seekTo } from '../src/nexus/labels';
 import { isMakingMinutes, makeMinutes } from '../src/nexus/minutes';
 import { enqueue, kick, onQueueChange, openKnowledge } from '../src/nexus/worker';
@@ -152,7 +153,7 @@ function Recording({
   at: number | null;
   minutes?: (playFrom: (sec: number) => void) => ReactNode;
 }) {
-  const player = useAudioPlayer(itemFile(item.id, 'audio.m4a').uri);
+  const player = useAudioPlayer(audioFile(item.id).file.uri);
   const status = useAudioPlayerStatus(player);
   const sought = useRef(false);
   const playFrom = useCallback(
