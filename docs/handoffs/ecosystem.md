@@ -42,9 +42,26 @@ Hard rules (every agent gets them in its brief):
 - Phone: one physical device is connected over wireless adb (serial changes; use `adb shell getprop ro.serialno` for the coord key).
 - Recon of unmerged branches: see "Reuse table" (filled in from the recon agent).
 
-## Reuse table (item 4 of start-up)
+## Reuse table (item 4 of start-up; recon 2026-11-23 against origin/main f595c4a9)
 
-(pending recon)
+Branches are mostly squash-merged, so "ahead N" overstates what is unmerged. Verified by diffing branch tips against the squash commits.
+
+| Item | Finding | Decision |
+|---|---|---|
+| `tunnelwall-firewall` | On main as #14 (5d2de26f), a superset. No firewall kill switch or trusted-Wi-Fi code exists anywhere (the only kill switch is the VPN one: `enableKillSwitch` in App.tsx and OpenTunnelVpnService.kt). | Do NOT rebase (21 conflicts, already merged). C3 "land the branch" is a no-op; build only kill-switch hardening, best relay, trusted Wi-Fi. |
+| `text-ocr-pr` | No such ref. OCR is on main: #58, null-bounds fix #68; Nexus (`apps/pdf-editor-mobile`) depends on `text-ocr`, `app/scan-text.tsx`. Engine Tesseract4Android 4.9.0 (Apache-2.0), English-only `eng.traineddata` (tessdata_fast, Apache-2.0), sha256-pinned in build.gradle. | C8 shrinks to: verify what ships, audit licences, add what is missing (see C8 brief). |
+| `design-media-phase-4` | On main as #24 (6a005527). | Nothing to do. |
+| `strongroom-passes` | On main as #48. | Nothing to do. |
+| `inflow/post-release`, `inflow/stage-4b`, `inflow/receipts` | On main (#42, #35, cff47c0a). | Nothing to do. |
+| `autopilot` / `autopilot-stage-1` | Stage 1 on main (#52): `packages/autopilot-contract`, Inflow Autopilot*, Deputy RunSuggestion. No `autopilot-stage-1` ref. Stage 2 (Halo edge pulse, AOD Waiting row, bubble, daily digest) not started anywhere. | B1 builds Autopilot stage 2's digest once; no second digest. |
+| `photo-search` | Floor fix on main (#40). Only the handoff doc 5a53d05a is unmerged. | Optional cherry-pick of the doc; skipped (not in scope). |
+| Halo m1/m2 | Not fixed on any ref (AodActivity.end() has no isFinishing/keyguard check; no onStop/isInteractive handling). | F4 rebuilds both. |
+| `deputy-make-video` (F5) | On main (#23). 429 wait with retry is `RATE_DELAYS` in Provider.kt; saved-files report is `AgentLoop.made`; no re-download is `Slideshow.arrivals`; multi-key 429 fallback #57. The handoff still calls them follow-ups. | F5 becomes verify-and-close: prove each behaviour with tests, fill only real gaps, fix the stale handoff text. |
+| Nexus shortcuts (F6) | Not fixed on any ref: cited PDF opens at page 1; recordings over 25 MB rejected (`MAX_UPLOAD` in `src/nexus/content.ts`, "shortcut: split" comment); tab bar over keyboard on Stream. | F6 rebuilds all three. |
+| Clipboard Phase 1 | Not built; `android.permission.INTERNET` still in the manifest, no expiry or pin code. | C1 rebuilds. |
+| `homenet-toolbox` | On main as #47. | Nothing to do. |
+| `ai-hub` | Hub on main (#66): `com.haroon.aihub` owns the Gemini/Groq key ring in a Keystore vault; bound service `com.haroon.aihub.BIND` guarded by signature permission `com.haroon.permission.AI_HUB`; no app binds it yet. Only `ai-hub-ui-fixes` 833e41fa unmerged. | Affects E2: see "Open owner decisions" 1. The key ring already exists in AI hub. |
+| Share targets (E3) | No SEND / SEND_MULTIPLE intent filter in pdf-editor-mobile, design-editor-mobile or deputy. Existing filters are VIEW only. Gradle dirs are `apps/<app>/android`. | E3 adds filters; check how each prebuild is committed first. |
 
 ## Work items and status
 
@@ -56,7 +73,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | F2 | Rollback | eco/base + eco/store | todo |
 | F3 | Docs drift | eco/base | todo |
 | F4 | Halo 0.5.1 minors | eco/halo | todo |
-| F5 | Deputy reliability | eco/deputy | todo |
+| F5 | Deputy reliability (verify and close; code is on main) | eco/deputy | todo |
 | F6 | Nexus shortcuts | eco/nexus | todo |
 | E1 | app-link-contract | eco/base | todo |
 | E2 | AI keys once (Strongroom) | eco/strongroom + readers | todo (needs E1; owner decision) |
@@ -64,12 +81,12 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | E4 | Store health hub | eco/store | todo (needs E1) |
 | C1 | Clipboard smart actions + phase 1 | eco/clipboard | todo |
 | C2 | Deputy repeating tasks | eco/deputy | todo |
-| C3 | TunnelWall | eco/tunnelwall | todo |
+| C3 | TunnelWall (firewall already on main) | eco/tunnelwall | todo |
 | C4 | HomeNet | eco/homenet | todo |
 | C5 | Strongroom health report | eco/strongroom | todo |
 | C6 | Halo progress ring | eco/halo | todo |
 | C7 | Design Editor brand kit from image | eco/design-editor | todo |
-| C8 | Nexus offline OCR | eco/nexus | todo |
+| C8 | Nexus offline OCR (on main; verify, audit, fill gaps) | eco/nexus | todo |
 | C9 | autonomous-browsing dry run | eco/autonomous-browsing | todo |
 | V1-V5 | Vitals in Inflow | eco/inflow | todo |
 | M1-M5 | Minutes in Nexus | eco/nexus | todo |
@@ -77,7 +94,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 
 ## Open owner decisions (collect here, ask once at the end)
 
-1. Strongroom holds the shared AI keys (E2): (my call) yes, separate Keystore-wrapped store, allowed per app. Needs owner confirmation.
+1. Strongroom holds the shared AI keys (E2): the prompt says yes, but AI hub (#66, on main) already owns a Keystore key ring for Gemini and Groq with a signature-guarded bound service. (my call, pending owner) E2 will build on the AI hub, NOT duplicate a key store in Strongroom, unless the owner says Strongroom must hold them. Needs owner confirmation.
 2. Health data to Ask AI or Autopilot (V4): default off.
 3. TunnelWall auto-connect on untrusted Wi-Fi (C3): default off.
 4. Where the Shields switch lives (B4): (my call, to write down).
@@ -90,8 +107,9 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 
 ## Session log
 
+- 2026-11-23: recon done (Reuse table). F-base and E1 phase agents dispatched.
 - 2026-11-23: start-up read, fetched origin, created `eco/base` and eleven app worktrees, installed deps, baseline gates green (above).
 
 ## Current state + next step
 
-State: worktrees ready, baseline recorded. Next: record recon in "Reuse table", then dispatch the Wave 1 phase agents (F1+F2+F3, E1, F4, F5, F6), then F2 store side.
+State: F-base and E1 phase agents running on eco/base; F4, F5, F6 workers dispatched. Next: collect reports, then F2 store side (eco/store), then Wave 2.
