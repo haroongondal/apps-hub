@@ -13,12 +13,34 @@ const val SHARE_SPACE_MARGIN = 64L * 1024 * 1024
 
 class ShareTooBig : IOException("Over the size limit")
 
-// Only content:// streams are read. A file:// address from another app could point into this app's own folders.
+// A content address is plain host letters only: "own.authority@x", "x:1", "%2E" and similar forms can name another user's
+// or this app's own provider, so anything but letters, digits, dot, dash and underscore is refused. Returns it lower-cased.
+private val AUTHORITY = Regex("^[A-Za-z0-9._-]{1,255}$")
+
+fun contentAuthority(uri: String): String? {
+  if (!uri.startsWith("content://", ignoreCase = true)) return null
+  val authority = uri.substring("content://".length).takeWhile { it != '/' && it != '?' && it != '#' }
+  return authority.takeIf { AUTHORITY.matches(it) }?.lowercase()
+}
+
+// Our own providers (the file providers serve this app's files and cache) are never a source: another app could name
+// them in a share and make this app copy its own private files. ownerOf is the system's answer for an authority.
+fun isOwnAuthority(authority: String, ownAuthorities: Set<String>, ownerOf: (String) -> String?, ownPackage: String): Boolean =
+  authority.lowercase() in ownAuthorities.map { it.lowercase() } || ownerOf(authority) == ownPackage
+
+// Only content:// streams from other apps are read. A file:// address could point into this app's own folders.
 data class ShareUris(val keep: List<String>, val overCap: Int, val blocked: Int)
 
-fun acceptShareUris(uris: List<String>, max: Int = SHARE_MAX_ITEMS): ShareUris {
-  val content = uris.distinct().filter { it.startsWith("content://") }
-  return ShareUris(content.take(max), (content.size - max).coerceAtLeast(0), uris.distinct().size - content.size)
+fun acceptShareUris(uris: List<String>, max: Int = SHARE_MAX_ITEMS, isOwn: (String) -> Boolean = { false }): ShareUris {
+  val distinct = uris.distinct()
+  val allowed = distinct.filter { uri -> contentAuthority(uri)?.let { !isOwn(it) } == true }
+  return ShareUris(allowed.take(max), (allowed.size - max).coerceAtLeast(0), distinct.size - allowed.size)
+}
+
+// The opened stream's real path (from /proc/self/fd) must not lie inside the app's private folders, whatever address named it.
+fun insidePrivateDirs(realPath: String, privateDirs: List<String>): Boolean {
+  val path = File(realPath).toPath().normalize()
+  return privateDirs.any { path.startsWith(File(it).toPath().normalize()) }
 }
 
 fun copyCapped(input: InputStream, output: OutputStream, maxBytes: Long = SHARE_MAX_BYTES): Long {

@@ -2,16 +2,22 @@ package expo.modules.designmedia.android
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.system.Os
 import expo.modules.designmedia.core.SHARE_MAX_BYTES
 import expo.modules.designmedia.core.acceptShareUris
 import expo.modules.designmedia.core.copyCapped
 import expo.modules.designmedia.core.expiredBatches
 import expo.modules.designmedia.core.fitsOnDisk
 import expo.modules.designmedia.core.headOf
+import expo.modules.designmedia.core.insidePrivateDirs
+import expo.modules.designmedia.core.isOwnAuthority
 import expo.modules.designmedia.core.problemOf
 import java.io.File
+import java.io.FileInputStream
+import java.io.IOException
 
 // Pictures and videos other apps share with Design Editor. Each stream is copied into the app's own folder the moment
 // the intent is read, so no content address is kept; nothing is processed, sent or listed in the queue from here.
@@ -31,7 +37,8 @@ object Shares {
     val uris = streams(intent)
     if (uris.isEmpty()) return
     intent.putExtra(TAKEN, true)
-    val accepted = acceptShareUris(uris.map { it.toString() })
+    val own = ownAuthorities(context)
+    val accepted = acceptShareUris(uris.map { it.toString() }) { isOwnAuthority(it, own, { a -> ownerOf(context, a) }, context.packageName) }
     overCap += accepted.overCap
     blocked += accepted.blocked
     val root = File(context.filesDir, "shared")
@@ -80,8 +87,10 @@ object Shares {
     if (size > SHARE_MAX_BYTES) return failed(uri, name, "too_big", mime)
     if (!fitsOnDisk(size, target.parentFile?.usableSpace ?: 0L)) return failed(uri, name, "no_space", mime)
     return try {
-      val input = requireNotNull(resolver.openInputStream(uri)) { "No stream" }
-      val bytes = input.use { source -> target.outputStream().use { copyCapped(source, it) } }
+      val bytes = (resolver.openFileDescriptor(uri, "r") ?: throw IOException("No stream")).use { fd ->
+        if (insidePrivateDirs(realPath(fd) ?: "", privateDirs(context))) throw IOException("Private file")
+        FileInputStream(fd.fileDescriptor).use { source -> target.outputStream().use { copyCapped(source, it) } }
+      }
       mapOf("uri" to Uri.fromFile(target).toString(), "name" to name, "mime" to mime, "bytes" to bytes, "head" to headOf(target), "problem" to null)
     } catch (e: Exception) {
       target.delete()
@@ -91,4 +100,24 @@ object Shares {
 
   private fun failed(uri: Uri, name: String, problem: String, mime: String = ""): Map<String, Any?> =
     mapOf("uri" to "", "name" to name.ifEmpty { uri.lastPathSegment.orEmpty() }, "mime" to mime, "bytes" to 0L, "head" to emptyList<Int>(), "problem" to problem)
+
+  private fun ownAuthorities(context: Context): Set<String> = context.packageManager
+    .getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(PackageManager.GET_PROVIDERS.toLong()))
+    .providers.orEmpty().flatMap { it.authority.orEmpty().split(';') }.filter { it.isNotEmpty() }.toSet()
+
+  private fun ownerOf(context: Context, authority: String): String? =
+    context.packageManager.resolveContentProvider(authority, PackageManager.ComponentInfoFlags.of(0))?.packageName
+
+  // Where the descriptor really points; a pipe or socket has no path, so it is not a file of ours. Null when /proc cannot be read.
+  private fun realPath(fd: android.os.ParcelFileDescriptor): String? = try {
+    Os.readlink("/proc/self/fd/${fd.fd}").takeIf { it.startsWith("/") }?.let { File(it).canonicalPath }
+  } catch (e: Exception) {
+    null
+  }
+
+  private fun privateDirs(context: Context): List<String> {
+    val roots = listOfNotNull(context.dataDir, context.createDeviceProtectedStorageContext().dataDir) +
+      context.externalCacheDirs.filterNotNull().mapNotNull { it.parentFile } + context.obbDirs.filterNotNull()
+    return roots.flatMap { listOf(it.absolutePath, runCatching { it.canonicalPath }.getOrDefault(it.absolutePath)) }.distinct()
+  }
 }

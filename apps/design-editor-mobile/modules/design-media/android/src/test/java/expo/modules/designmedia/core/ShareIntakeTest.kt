@@ -87,4 +87,76 @@ class ShareIntakeTest {
     assertFalse(isPictureName("clip.mp4"))
     assertFalse(isPictureName("png"))
   }
+
+  private val own = setOf("com.haroon.designeditor.FileSystemFileProvider", "com.haroon.designeditor.fileprovider")
+  private val ownPackage = "com.haroon.designeditor"
+  private fun isOwn(a: String) = isOwnAuthority(a, own, { if (it == "sneaky.alias") ownPackage else null }, ownPackage)
+
+  @Test
+  fun aForeignAuthorityIsAccepted() {
+    val r = acceptShareUris(listOf("content://com.google.android.apps.photos.contentprovider/0/1/mediakey%3A%2F1/ORIGINAL/NONE/1", "content://media/external/images/media/9"), isOwn = ::isOwn)
+    assertEquals(2, r.keep.size)
+    assertEquals(0, r.blocked)
+  }
+
+  @Test
+  fun ourOwnProvidersAreRefusedWhateverTheCase() {
+    val uris = listOf(
+      "content://com.haroon.designeditor.FileSystemFileProvider/expo_files/databases/x",
+      "content://COM.HAROON.DESIGNEDITOR.filesystemfileprovider/cached_expo_files/a.jpg",
+      "CONTENT://com.haroon.designeditor.fileprovider/shared/a",
+      "content://sneaky.alias/x",
+    )
+    val r = acceptShareUris(uris, isOwn = ::isOwn)
+    assertEquals(emptyList<String>(), r.keep)
+    assertEquals(4, r.blocked)
+  }
+
+  @Test
+  fun userInfoPortAndEncodedFormsOfAnAuthorityAreRefused() {
+    listOf(
+      "content://evil@com.haroon.designeditor.FileSystemFileProvider/expo_files/x",
+      "content://0@com.haroon.designeditor.fileprovider/x",
+      "content://media:80/x",
+      "content://com.haroon.designeditor.fileprovider%2F/x",
+      "content://com.haroon.designeditor%2Efileprovider/x",
+      "content://own.authority\\x/y",
+      "content://a b/x",
+    ).forEach { assertEquals(it, null, contentAuthority(it)) }
+  }
+
+  @Test
+  fun aMissingAuthorityIsRefused() {
+    assertEquals(null, contentAuthority("content:///expo_files/x"))
+    assertEquals(null, contentAuthority("content://"))
+    assertEquals(null, contentAuthority("content://?q=1"))
+    assertEquals(0, acceptShareUris(listOf("content:///x", "content://")).keep.size)
+  }
+
+  @Test
+  fun fileAndOtherSchemesAreRefused() {
+    val r = acceptShareUris(listOf("file:///data/user/0/com.haroon.designeditor/files/x", "http://a/b", "android.resource://x/1", "/data/x"))
+    assertEquals(0, r.keep.size)
+    assertEquals(4, r.blocked)
+  }
+
+  @Test
+  fun theAuthorityIsReadUpToThePathQueryOrFragment() {
+    assertEquals("media", contentAuthority("content://Media/x"))
+    assertEquals("media", contentAuthority("content://media?x=1"))
+    assertEquals("media", contentAuthority("content://media#f"))
+  }
+
+  @Test
+  fun aStreamWhoseRealPathIsInsideTheAppsPrivateFoldersIsRefused() {
+    val dirs = listOf("/data/user/0/com.haroon.designeditor", "/data/data/com.haroon.designeditor", "/storage/emulated/0/Android/data/com.haroon.designeditor/files")
+    assertTrue(insidePrivateDirs("/data/user/0/com.haroon.designeditor/databases/vault.db", dirs))
+    assertTrue(insidePrivateDirs("/data/data/com.haroon.designeditor/shared_prefs/a.xml", dirs))
+    assertTrue(insidePrivateDirs("/data/user/0/com.haroon.designeditor/files/../no_backup/k", dirs))
+    assertTrue(insidePrivateDirs("/storage/emulated/0/Android/data/com.haroon.designeditor/files/a.jpg", dirs))
+    assertFalse(insidePrivateDirs("/storage/emulated/0/DCIM/Camera/a.jpg", dirs))
+    assertFalse(insidePrivateDirs("/data/user/0/com.haroon.designeditor2/files/a", dirs))
+    assertFalse(insidePrivateDirs("/data/user/0/com.other/files/../../com.haroon.designeditorx/a", dirs))
+    assertFalse(insidePrivateDirs("/data/user/0/com.haroon.designeditor/../com.other/files/a", dirs))
+  }
 }
