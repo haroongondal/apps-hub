@@ -121,6 +121,32 @@ export interface SavedTask {
   apps: string[];
 }
 
+/** A task Deputy starts by itself. Days run from 1 (Monday) to 7 (Sunday); every day, weekdays and weekly are all day sets. */
+export interface Schedule {
+  id: string;
+  name: string;
+  task: string;
+  hour: number;
+  minute: number;
+  days: number[];
+  enabled: boolean;
+  createdAt: number;
+  /** Epoch ms of the next start, or null when switched off. */
+  nextRunAt: number | null;
+}
+
+/** `running` and `waiting` (at a step that needs the owner's OK) describe only the run going on now. */
+export type ScheduleOutcome = 'running' | 'waiting' | 'finished' | 'stopped' | 'failed' | 'skipped';
+
+export interface ScheduleRun {
+  at: number;
+  outcome: ScheduleOutcome;
+  /** The run's summary, or why Deputy skipped it. */
+  summary: string;
+  /** Links to the run's steps in History while they are kept; null for a skip. */
+  runId: string | null;
+}
+
 interface DeputyAgentApi {
   getServiceState(): ServiceState;
   openAccessibilitySettings(): void;
@@ -149,6 +175,12 @@ interface DeputyAgentApi {
   listSavedTasks(): SavedTask[];
   saveTask(task: Omit<SavedTask, 'id'> & { id: string | null }): { id: string | null; error: string | null };
   deleteTask(id: string): void;
+  listSchedules(): Schedule[];
+  /** Copy for the screen when a value isn't valid, or null error once saved; saving also sets the next start. */
+  saveSchedule(schedule: Omit<Schedule, 'id' | 'createdAt' | 'nextRunAt'> & { id: string | null }): { id: string | null; error: string | null };
+  deleteSchedule(id: string): void;
+  /** Newest first, up to 30 from the last 30 days. */
+  listScheduleRuns(id: string): ScheduleRun[];
   /** The keys for the current address, in the order a run tries them; when one reaches its limit, the next takes over. */
   listApiKeys(): ApiKey[];
   /** Copy for the screen, or null once saved. */

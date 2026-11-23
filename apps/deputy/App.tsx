@@ -4,15 +4,17 @@ import { Button, Header, Notice, Screen, TabBar, ThemeProvider, useTheme } from 
 import DeputyAgent from 'deputy-agent';
 import { AppsScreen } from './src/AppsScreen';
 import { History } from './src/History';
+import { Repeating } from './src/Repeating';
 import { RunPanel } from './src/RunPanel';
 import { SavedTasks } from './src/SavedTasks';
 import { SettingsScreen } from './src/SettingsScreen';
 import { setupComplete, setupRows } from './src/setup';
 
-type Tab = 'tasks' | 'apps' | 'settings';
+type Tab = 'tasks' | 'repeat' | 'apps' | 'settings';
 
 const TABS: ReadonlyArray<{ key: Tab; label: string }> = [
   { key: 'tasks', label: 'Tasks' },
+  { key: 'repeat', label: 'Repeating' },
   { key: 'apps', label: 'Apps' },
   { key: 'settings', label: 'Settings' },
 ];
@@ -67,6 +69,7 @@ function Home() {
             <History state={state} refresh={refresh} />
           </Screen>
         )}
+        {tab === 'repeat' && <Repeating state={state} />}
         {tab === 'apps' && <AppsScreen />}
         {tab === 'settings' && <SettingsScreen state={state} refresh={refresh} />}
       </View>

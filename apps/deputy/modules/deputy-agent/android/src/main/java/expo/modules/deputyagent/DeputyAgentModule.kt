@@ -17,6 +17,7 @@ import expo.modules.deputyagent.android.AgentRuntime
 import expo.modules.deputyagent.android.DeputyAccessibilityService
 import expo.modules.deputyagent.android.KeyVault
 import expo.modules.deputyagent.android.OwnerStore
+import expo.modules.deputyagent.android.Schedules
 import expo.modules.deputyagent.android.StopChip
 import expo.modules.deputyagent.core.SavedTask
 import expo.modules.deputyagent.core.ServiceSetting
@@ -109,6 +110,11 @@ class DeputyAgentModule : Module() {
     Function("listSavedTasks") { OwnerStore.tasks(context).map(OwnerStore::toMap) }
     Function("saveTask") { input: Map<String, Any?> -> OwnerStore.saveTask(context, input) }
     Function("deleteTask") { id: String -> OwnerStore.deleteTask(context, id) }
+
+    Function("listSchedules") { Schedules.list(context).map(Schedules::toMap) }
+    Function("saveSchedule") { input: Map<String, Any?> -> Schedules.save(context, input) }
+    Function("deleteSchedule") { id: String -> Schedules.delete(context, id) }
+    Function("listScheduleRuns") { id: String -> Schedules.history(context, id) }
 
     Function("listApiKeys") { KeyVault.list(context, OwnerStore.settings(context)) }
     Function("addApiKey") { key: String -> KeyVault.add(context, key, OwnerStore.settings(context)) }

@@ -1393,7 +1393,94 @@ AgentRuntime, the accessibility service, RunPanel).
   says prefer it); Groq waits of ~20 s (the cross-provider fallback the owner asked
   about at the end of session 11 is still undesigned).
 
+### C2 (2026-11-23): repeating tasks (ecosystem wave, branch `eco/deputy`)
+
+Built (SPEC §11 "Repeating tasks", §12, §13; PRD FR-9 updated):
+
+- Core, pure Kotlin: `core/Schedule.kt` (`Schedule` with name, task, hour, minute,
+  a day set, on/off, createdAt; `nextRun(now, zone)`; `Outcome`; `ScheduledRun`
+  with `begin`, `blocker`, `paymentRefusal`, `PAYMENTS_ALLOWED`, `LATE_MS`) and
+  `core/ScheduleLog.kt` (history per schedule, `filesDir/deputy/schedules/<id>.jsonl`,
+  last 30 within 30 days). Schedules are the `schedules` JSON document in
+  `deputy-settings`, as saved tasks are.
+- Android: `android/Schedules.kt` (save, delete, history, `sync`, `fire`, `runNow`,
+  `ScheduleWorker`), a "Repeating tasks" channel and "Deputy skipped <name>"
+  notification with Run now (`Notifier.skipped`, `GateReceiver.RUN_SCHEDULE`), module
+  functions `listSchedules`, `saveSchedule`, `deleteSchedule`, `listScheduleRuns`.
+  `AgentRuntime.start` takes a `trigger` (logged only) and now calls `onEnd(runId,
+  result)` on Stop too; `init` runs `Schedules.sync`; "Clear history" also clears
+  the schedule histories. The approval notification's lock-screen text for a
+  confirm is now "Deputy is waiting for your OK" (manual and scheduled alike).
+- Dependency: `androidx.work:work-runtime-ktx:2.12.0` (Apache-2.0, the Store's
+  version; no Play Services or GCM in the resolved tree). The merged manifest has
+  WorkManager's `RescheduleReceiver` and `RECEIVE_BOOT_COMPLETED`.
+- RN: a Repeating tab (`src/Repeating.tsx`: list with switch, Past runs, Edit,
+  Delete; past runs link to the run's steps while History keeps them),
+  `src/ScheduleSheet.tsx` (name, task, 24-hour time, Every day / Weekdays / Choose
+  days, the "Deputy will ask you before it pays or sends anything" notice),
+  "Repeat this task" in History, pure `src/repeat.ts` + `repeat.test.ts`.
+- The gate is unchanged: a scheduled run goes through `AgentRuntime.start` like the
+  Run button; the scheduled path never resolves a gate, and `TrustTable` has no
+  trigger input. Test:
+  `AgentLoopTest.aScheduledRunMeetsTheSameGateAsAManualRunAndNeverActsWithoutTheOwner`
+  (Send, Pay, Delete, Post: same gate as a manual run, nothing performed, declined
+  after five minutes).
+
+Decisions (my call unless marked):
+
+- **Auto-start replaces the PRD's "Tap to run" default** (the C2 brief asks for runs
+  that start and stop at the gate). (my call) A run starts only with the service
+  connected, a key saved, no run active and the phone unlocked with the screen on.
+  Otherwise that time is skipped with its reason and a notification offers Run now
+  (unlock required). It never waits, never queues behind a manual run, never
+  interrupts one.
+- **It may start while the owner is using the phone** (unlocked is the only time it
+  can work); the Stop chip shows at once. (my call) Alternative if the owner dislikes
+  it: a 10-second "starting soon, Not now" heads-up first.
+- **Late window 30 minutes** (`ScheduledRun.LATE_MS`): later than that (phone off,
+  Doze) records one skip and never a backlog. (my call)
+- **Same five-minute gate timeout** as a manual run, counted as no: a longer one
+  would make the scheduled gate differ. (my call)
+- **Payments: `ScheduledRun.PAYMENTS_ALLOWED = true`**, owner decision pending.
+  True: a paying task can be saved and stops at the gate every time. False: saving
+  a task that reads like a payment is refused and one saved earlier is skipped.
+- **No app limit on a schedule**: it runs like a task typed into Deputy. (my call;
+  saved tasks' app lists could be added if the owner wants them)
+- **Inexact WorkManager only**, no `SCHEDULE_EXACT_ALARM`; timing can slip under
+  Doze. `sync` uses KEEP, so a time-zone change keeps the old zone's next run until
+  that run fires or the schedule is saved again. (my call)
+
+Gates (real output): `:deputy-agent:testDebugUnitTest :app:assembleDebug` exit 0,
+JVM 299/299 (274 before: +16 `ScheduleTest`, +8 `ScheduleLogTest`, +1
+`AgentLoopTest`); deputy TS 15/15; typecheck exit 0.
+
+Phone checks not run (no phone in this session; install through the Store only):
+
+1. Repeating tab → New → "Read my next alarm", task "Open the clock app and tell
+   me my next alarm", time two minutes ahead, Every day → Save. Keep the phone
+   unlocked. Within a few minutes the run starts, the Stop chip shows, and Past runs
+   shows Done linked to the run's steps.
+2. A task that sends (for example "Send 'test' to myself on WhatsApp") two minutes
+   ahead: at Send the approval notification and card appear; Deny ends it Stopped
+   and nothing is sent; repeat and leave it five minutes: Stopped, nothing sent.
+3. Lock the phone before a due time: "Deputy skipped <name>, Your phone was
+   locked" arrives; Run now asks to unlock, then the run starts (check what the
+   first observation shows while the shade closes).
+4. Start a manual task just before a due time: the scheduled one is skipped as
+   busy; the manual run is untouched.
+5. Switch a schedule off: no run at its time; on again: Next shows.
+6. Reboot the phone with a schedule due in 10 minutes: it still runs (or skips if
+   locked) at that time. Then update Deputy through the Store and check again.
+7. Turn the phone off over a due time for more than 30 minutes: on boot, one
+   "phone was off or asleep" skip, no catch-up run.
+8. Lock-screen text of a pending approval reads "Deputy is waiting for your OK".
+
 ## Current state + exact next step
+
+- **2026-11-23, C2 repeating tasks** built on `eco/deputy` (session log "C2"),
+  not released. Next: security-engineer review of the gate claim, then the phone
+  checks listed there after a Store release the owner approves. Owner decision
+  pending: `ScheduledRun.PAYMENTS_ALLOWED`.
 
 - **2026-11-01, Deputy 0.2.4 (build 12) released**, committed `eef7004` on
   `deputy-speed`, not pushed or merged. The mic now has two gestures: touch and

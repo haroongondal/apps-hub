@@ -42,7 +42,7 @@ class RunSuggestionActivity : Activity() {
     private fun run(context: Context, id: Long, lookIn: Set<String>): String? {
       val item = readItem(context, id) ?: return SuggestionTask.CANT_SHARE
       val result = SuggestionTask.begin(SuggestionRef(id), item, lookIn) { task, apps, untrusted, _ ->
-        AgentRuntime.start(context, task, apps, untrusted) { r -> if (r.status == RunStatus.DONE) setState(context, id, "done") }
+        AgentRuntime.start(context, task, apps, untrusted) { _, r -> if (r.status == RunStatus.DONE) setState(context, id, "done") }
       }
       return when (result) {
         is Begin.Started -> { setState(context, id, "started"); null }

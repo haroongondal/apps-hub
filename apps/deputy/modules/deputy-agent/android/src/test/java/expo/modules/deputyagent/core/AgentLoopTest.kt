@@ -322,6 +322,35 @@ class AgentLoopTest {
     assertTrue(device.performed.isEmpty())
   }
 
+  @Test fun aScheduledRunMeetsTheSameGateAsAManualRunAndNeverActsWithoutTheOwner() = runTest {
+    for (label in listOf("Send", "Pay", "Delete", "Post")) {
+      val app = screen("com.chat", "Chat", n("Ali", "com.chat"), n("On my way", "com.chat", editable = true), n(label, "com.chat"), n("Archive", "com.chat"), n("Info", "com.chat"))
+      val task = "$label it for Ali"
+      val manual = Triple(task, SavedTask.allowList(null), emptyList<String>())
+      var scheduled: Triple<String, Set<String>?, List<String>>? = null
+      val schedule = Schedule("s1", "Ali", task, 8, 0, java.time.DayOfWeek.entries.toSet(), true, 0L)
+      ScheduledRun.begin(schedule, 0L, 0L, java.time.ZoneOffset.UTC, blocker = null) { t, apps, untrusted -> scheduled = Triple(t, apps, untrusted); "r1" }
+      assertEquals(manual, scheduled)
+
+      val gates = listOf(manual, scheduled!!).map { (t, apps, untrusted) ->
+        val device = FakeDevice(app)
+        val r = run(device, Script(call("tap", """{"index":2}""")), allowed = apps)
+        var result: RunResult? = null
+        launch { result = r.loop.run(t, null, untrusted) }
+        runCurrent()
+        val gate = r.gates.pending()!!
+        assertEquals(Gates.TIMEOUT_MS, gate.expiresAt - testScheduler.currentTime)
+        assertTrue(r.events.contains(RunEvent.GateOpened(gate)))
+        advanceTimeBy(Gates.TIMEOUT_MS + 1)
+        assertEquals(RunStatus.DECLINED, result?.status)
+        assertTrue("$label ran without the owner's tap", device.performed.isEmpty())
+        gate.copy(id = "", expiresAt = 0L)
+      }
+      assertEquals(gates[0], gates[1])
+      assertEquals(listOf(GateKind.CONFIRM, label, "On my way"), listOf(gates[0].kind, gates[0].target, gates[0].draftText))
+    }
+  }
+
   @Test fun ac3AReadOnlyBankRefusesATransferAndTellsTheModelWhy() = runTest {
     val bank = screen("com.bank", "Bank", n("Transfer", "com.bank"), n("Balance 120.00", "com.bank"), n("Cards", "com.bank"), n("Help", "com.bank"), n("Menu", "com.bank"))
     val device = FakeDevice(bank)

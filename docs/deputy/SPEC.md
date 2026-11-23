@@ -762,11 +762,34 @@ the per-rule app lists, and the prompt only supports them.
 ## 11. Triggers
 
 - **On demand:** `startRun` from the Tasks screen or a saved task.
-- **Schedule (FR-9):** WorkManager `OneTimeWorkRequest` with an initial delay,
-  re-enqueued on each firing and restored after reboot. It posts a "Tap to run"
-  notification. If the schedule has auto-run on and the phone is unlocked and
-  interactive (`KeyguardManager`, `PowerManager`), it starts the run directly.
-  Exact-alarm access isn't requested, so timing can slip by minutes under Doze.
+- **Repeating tasks (FR-9, built in C2, 2026-11-23):** `core/Schedule.kt`
+  (`Schedule`, `nextRun`, `ScheduledRun`, `Outcome`), `core/ScheduleLog.kt` and
+  `android/Schedules.kt` (`ScheduleWorker`).
+  - A schedule is a name, the task text, a time and a set of days (every day,
+    weekdays and weekly are all day sets), an on/off switch and its creation time.
+    It runs like a task typed into Deputy: no app limit beyond the trust table, no
+    untrusted block (the owner wrote the text), and route memory as usual.
+  - Each schedule has one WorkManager `OneTimeWorkRequest` (unique name
+    `deputy-schedule-<id>`) with an initial delay to its next run. Saving or
+    switching replaces it; a firing queues the next one behind itself
+    (`APPEND_OR_REPLACE`); `AgentRuntime.init` re-adds a missing one with `KEEP`, so a
+    due-but-unstarted run is never dropped. WorkManager keeps the work across reboots
+    and app updates. No exact-alarm permission: timing can slip under Doze.
+  - At the firing, `ScheduledRun.begin` starts the run through `AgentRuntime.start`,
+    the Run button's entry point, with trigger `scheduled` in the run log. Nothing in
+    the scheduled path answers a gate: the run meets the same gate, the same
+    approval notification and the same five-minute timeout (counted as no).
+    `AgentLoopTest.aScheduledRunMeetsTheSameGateAsAManualRunAndNeverActsWithoutTheOwner`
+    holds this for Send, Pay, Delete and Post.
+  - It starts only if the service is connected, a key is saved, no run is active, and
+    the phone is unlocked with the screen on. Otherwise, or if the firing is more than
+    30 minutes late (phone off, Doze), that time is **skipped**: the reason goes in the
+    schedule's history and a "Deputy skipped <name>" notification offers Run now
+    (unlock required). It never waits, queues behind a run, or catches up a backlog.
+  - A run may start while the owner is using the phone; the Stop chip is there.
+  - `ScheduledRun.PAYMENTS_ALLOWED` (true) is the owner's pending decision: false
+    refuses saving a task that reads like a payment and skips one saved earlier.
+  - Exact-alarm access isn't requested.
 - **Notification rule:** `DeputyAccessibilityService` receives
   `TYPE_NOTIFICATION_STATE_CHANGED`. A rule matches on package plus an optional
   pattern over the event text. A match starts a run with the rule's saved task, the
@@ -805,7 +828,8 @@ All native; RN reads through the module.
 
 | What                                     | Where                                                                                   |
 | ---------------------------------------- | --------------------------------------------------------------------------------------- |
-| Settings, saved tasks, automations       | `SharedPreferences` file `deputy-settings`, one JSON document per kind                  |
+| Settings, saved tasks, schedules         | `SharedPreferences` file `deputy-settings`, one JSON document per kind (`schedules` for repeating tasks) |
+| Repeating-task history                   | `filesDir/deputy/schedules/<id>.jsonl`: per start the time, outcome, summary or skip reason, and run id; the last 30 within 30 days; deleted with the schedule and by "Clear history" |
 | Trust table (owner's changes only)       | `SharedPreferences` file `deputy-trust`, package name to level; a default is never stored |
 | Spend carried over by "Clear history"    | `filesDir/deputy/spent` (`yyyyMMdd amount`), so clearing never resets the daily cap      |
 | API keys                                 | `KeyVault`: each key AES-GCM sealed with a non-exportable Android Keystore key, alias `deputy-api-key`. The sealed keys, each with its address and an 8-character id, are one JSON array in `SharedPreferences` file `deputy-key` |
@@ -863,7 +887,9 @@ active voice; errors say what happened and how to fix it. No emoji icons.
 | Apps        | Installed apps with trust `Segmented` (blocked / read-only / standard); financial apps flagged              |
 | Settings    | Setup checklist, API keys (a row per key showing its last four characters, with Test and Remove, and a field to add another), model (a row per known model, base URL, name), prices, caps, debug tree dump, "Turn off Deputy" |
 
-- **Tab bar:** Tasks, Apps, Settings (Automations joins in Phase 4). The app opens
+- **Tab bar:** Tasks, Repeating, Apps, Settings. Repeating lists the repeating
+  tasks (switch, Past runs, Edit, Delete) and edits one in a sheet; History's past
+  task offers "Repeat this task". The app opens
   on Settings, where the Setup checklist lives, until setup is complete; the
   Tasks banner links there. The Run screen is the Tasks tab's current-task panel,
   and a past run opens in a sheet from History.
