@@ -109,6 +109,36 @@ A failed fetch or a missing `origin/main` also refuses. This stops a branch buil
 the Store. For a test build, pass `--from-branch`: it skips both checks, prints a warning to stderr and starts the
 changelog with `[branch build <short sha>]`. CI is not affected: it builds a pushed commit of `main` in a clean checkout.
 
+### Rollback
+
+`pnpm release <app> --rollback [--to <sha|tag>] [--dry-run]` republishes an older build of one app.
+
+- **A rollback is a new release, not a downgrade.** Android refuses to install an APK with a lower `versionCode` over
+  a higher one ([versioning](https://developer.android.com/studio/publish/versioning)), and on a user build only the
+  system server may override that for a non-debuggable app (`isDowngradePermitted` in AOSP
+  [`PackageManagerServiceUtils.java`](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerServiceUtils.java)),
+  so neither `adb install -d` nor the Store can go back. The old commit is rebuilt with `versionCode` = published + 1;
+  its `versionName` stays the old one. The changelog defaults to `Rollback to <versionName> (<short sha>)`.
+- **Which commit.** Every release now records the full git sha it was built from in the manifest
+  (`android.commit`; optional, releases made before this have none). Without `--to`, the target is the first parent
+  of that commit on `origin/main`, that is, main as it was just before the released change. `--to` takes a sha,
+  short sha or tag. The target must be on `origin/main`, older than the current release, different from it, and
+  contain the app. Without a recorded commit and without `--to` it refuses. The manifest holds only the latest
+  release per app, so there is no "previous versionName" lookup.
+- **How it builds.** The usual release guard runs on your checkout. The target is checked out in a temporary
+  `git worktree` (removed afterwards), `pnpm install --frozen-lockfile --prefer-offline` runs there, then the normal
+  steps (prepare, prebuild, gradle patch, `assembleRelease`, signer check, upload) run with that worktree as the root.
+  Your own tree is never touched.
+- **`--dry-run`** prints `app`, `from` (commit and versionCode), `to commit`, `new versionCode` and `target` (Store
+  host) and exits before any worktree, build or upload. It only reads the manifest.
+- Rolling back replaces what every phone gets from the Store, so run it only on the owner's go.
+
+```bash
+pnpm release netlens --rollback --dry-run                 # see the plan
+pnpm release netlens --rollback -m "Back out the scan bug" # roll back to main before the released change
+pnpm release netlens --rollback --to 1a2b3c4 --dry-run    # an explicit target
+```
+
 ### CI/CD (automatic releases)
 
 `.github/workflows/ci.yml` runs on GitHub Actions (free for this public repo):
