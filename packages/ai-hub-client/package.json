@@ -1,0 +1,19 @@
+{
+  "name": "ai-hub-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lets an app ask AI hub for chat, vision, embeddings and transcription over its bound service, so the app needs no key of its own (Expo local module, Android only)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "node --test src/__tests__/contract.test.ts src/__tests__/copies.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo-modules-core": "~3.0.30"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.9.2"
+  }
+}

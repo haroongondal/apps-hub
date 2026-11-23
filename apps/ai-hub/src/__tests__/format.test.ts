@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatCount, keysUnreadable, lastUsedText, plainError, servicesFor, usageText } from '../format.ts';
+import { formatCount, keysUnreadable, lastUsedText, plainError, requestText, servicesFor, usageText } from '../format.ts';
 
 test('formatCount shortens thousands and millions', () => {
   assert.equal(formatCount(0), '0');
@@ -47,4 +47,10 @@ test('servicesFor matches what each job can run on', () => {
   assert.deepEqual(servicesFor('vision'), ['gemini']);
   assert.deepEqual(servicesFor('embed'), ['gemini']);
   assert.deepEqual(servicesFor('transcribe'), ['groq']);
+});
+
+test('requestText names the job, the service and when, never what was asked', () => {
+  const now = 10 * 86_400_000;
+  assert.equal(requestText({ job: 'chat', service: 'groq', time: now - 5 * 60_000 }, now), 'Chat with Groq. Used 5 min ago');
+  assert.equal(requestText({ job: 'vision', service: 'gemini', time: now - 10_000 }, now), 'Images with Gemini. Used just now');
 });
