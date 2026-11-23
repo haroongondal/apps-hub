@@ -172,6 +172,8 @@ Risks: no phone check has ever run and everything depends on Store-signed builds
 
 - Strongroom health row DONE (eco/strongroom 98e4762b): strongroom ts 111 (109), gradle 669 (661), app-link-contract 133; `health` served always (null accessibility/listener: Strongroom uses an autofill service, no accessibility service or listener exists), expiry stays opt-in; heartbeat only on app open or autofill connect (can look stale); phone not run.
 
+- P5 Clipboard DONE (eco/clipboard a72dad0c): clipboard ts 31 (21), JVM 43 (32), app-link-contract 133, release manifest INTERNET 0, mutation check on copies.test; `pinned` share (served only to com.haroon.pdfeditor, switch off by default, schema v2 adds pinned_at) + `health` + "Add to Inflow" for IBANs (ADD_TODO via startActivityForResult; an Inflow without ADD_TODO yet shows "not installed or needs an update"; Inflow's caller-check refusal shows as "cancelled"); no Metro bundle check run; open: an unflagged password the owner pins would cross while the switch is on (security-engineer to confirm); security-engineer + invariant review pending; phone not run.
+
 ## Security findings handled during the build (automated reviews)
 
 - ai-hub-client did not verify the hub identity (package squatting): fixed, 60875260 on eco/ai-hub.
