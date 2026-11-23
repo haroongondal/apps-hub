@@ -79,7 +79,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | E2 | AI keys once (Strongroom) | eco/strongroom + readers | todo (needs E1; owner decision) |
 | E3 | Share targets | eco/nexus, eco/design-editor, eco/deputy | todo (needs E1) |
 | E4 | Store health hub | eco/store | todo (needs E1) |
-| C1 | Clipboard smart actions + phase 1 | eco/clipboard | in progress (Add to Inflow action waits for E1 actions) |
+| C1 | Clipboard smart actions + phase 1 | eco/clipboard | built + gated (6f2ba514): clipboard ts 21 (7 before), gradle JVM 32 (24 before), release manifest has no INTERNET (test fails if it returns); Add to Inflow NOT built (needs an Inflow E1 action; extension point `actionFor()` in src/smart.ts); phone not run; security-engineer + invariant review pending |
 | C2 | Deputy repeating tasks | eco/deputy | built + gated (d23c625a): Deputy gradle 299 tests (274 before), deputy ts 15 pass, typecheck ok, WorkManager 2.12.0 Apache-2.0 no gms; gate unchanged (test proves scheduled run meets same gate); phone not run; security-engineer review pending |
 | C3 | TunnelWall (firewall already on main) | eco/tunnelwall | built + gated (73fcb21e, c13b0e52, 93bccc5a, 0af9d514): open-tunnel-core 38, open_tunnel_vpn ts 150, gradle JVM 52, assembleDebug ok, expo-doctor 16/18 (same as baseline); iOS NOT compiled (no Pods); phone not run; invariant-reviewer pending. Kill switch: real gap was that it did nothing on Android (engines host their own VpnService); now an in-app blocking interface. Trusted Wi-Fi adds ACCESS_FINE/COARSE_LOCATION (runtime, only when switch is on) |
 | C4 | HomeNet | eco/homenet | in progress |
@@ -105,6 +105,11 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 - Signing: all releases use the ONE Store key. Signature trust holds only for Store-installed builds: every committed debug.keystore is the same public Expo debug key, so a debug-built app would trust anything signed with it. `apps/ai-hub` is NOT in the release list, so it has no trust path yet (matters for E2).
 - Open from E1: Deputy's RunSuggestionActivity (headless, grandfathered) has no callingPackage check or extras validation; any same-key sibling can start it (add when Deputy is next touched, B3 will). First action author must add the second caller check for activities (R7). Inflow `items/#` and `update` paths are legacy; new shares must not copy them; OTP filtering in AutopilotAccess not traced (check before E3/B2).
 - Metro: nothing imports app-link-contract at runtime yet; the first app that does must list it as a dependency and bundle once.
+
+## Findings to carry (from C1)
+
+- Clipboard smart actions put a tracking number or an address in a URL/geo query sent to the browser or map app, only on a tap, never by Clipboard itself (no INTERNET). COMMON.md's "no user data in URLs" rule was written for web forms; this is the feature, but security-engineer must confirm and the owner is told.
+- HyperOS: "Turn on" cannot open Clipboard's own accessibility page (ACTION_ACCESSIBILITY_DETAILS_SETTINGS is not in the public SDK); it opens the accessibility list instead.
 
 ## Open owner decisions (collect here, ask once at the end)
 
