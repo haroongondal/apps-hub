@@ -379,6 +379,9 @@ importers:
 
   apps/design-editor-mobile:
     dependencies:
+      '@apps-hub/app-link-contract':
+        specifier: workspace:*
+        version: link:../../packages/app-link-contract
       '@apps-hub/media-core':
         specifier: workspace:*
         version: link:../../packages/media-core

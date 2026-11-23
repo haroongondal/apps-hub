@@ -52,7 +52,7 @@ async function askNotifications() {
   try { await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS); } catch { /* jobs still run */ }
 }
 
-export async function startJobs(items: { info: MediaInfo; plan: Plan }[]): Promise<void> {
+export async function startJobs(items: { info: MediaInfo; plan: Plan }[]): Promise<string[]> {
   await askNotifications();
   const stamp = Date.now();
   const jobs: Job[] = items.map(({ info, plan }, i) => ({
@@ -63,6 +63,7 @@ export async function startJobs(items: { info: MediaInfo; plan: Plan }[]): Promi
   await FileSystem.writeAsStringAsync(STORE(), JSON.stringify(Object.fromEntries(keep)));
   await DesignMedia.enqueue(JSON.stringify(jobs), false);
   await refreshQueue();
+  return jobs.map(j => j.id);
 }
 
 export async function tryAgain(id: string): Promise<boolean> {

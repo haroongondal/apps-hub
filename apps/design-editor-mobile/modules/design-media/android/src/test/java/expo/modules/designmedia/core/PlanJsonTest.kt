@@ -53,7 +53,7 @@ class PlanJsonTest {
       setOf(
         "size", "quality", "clipCopy", "clipExact", "audioCopy", "audioRaw", "audioAac", "gif", "gifNoTarget", "convertRemux",
         "convertMuted", "convertHevc", "convertM4a", "frame", "volumeNormalize", "volumeGain", "reverse", "stabilize", "volumeMeasured",
-        "compose", "imagePng", "imageJpg",
+        "compose", "composeReel", "imagePng", "imageJpg",
       ),
       plans.keys,
     )

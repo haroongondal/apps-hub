@@ -19,6 +19,7 @@ export default function MediaTab() {
       ) : null}
       <Group>
         <Row title="Make a video" subtitle="Join clips into one video, cut them and put them in order." onPress={() => router.push('/video')} accessibilityHint="Opens Make a video" />
+        <Row title="Make a reel from my photos" subtitle="Find photos by words or dates, keep the ones you want and add music." onPress={() => router.push('/reel')} accessibilityHint="Opens Make a reel" />
       </Group>
       <Group>
         {TOOLS.map(t => (

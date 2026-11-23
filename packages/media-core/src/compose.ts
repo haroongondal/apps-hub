@@ -33,7 +33,9 @@ export function planCompose(p: Project): Planned<ComposePlan> {
     ok: true,
     plan: {
       tool: 'compose',
-      clips: p.clips.map(c => ({ uri: c.source.uri, name: c.source.name, inS: c.inS, outS: c.outS, hasAudio: c.source.hasAudio, volume: c.volume })),
+      clips: p.clips.map(c => ({
+        uri: c.source.uri, name: c.source.name, inS: c.inS, outS: c.outS, hasAudio: c.source.hasAudio, volume: c.volume, ...(c.source.still ? { still: true as const } : {}),
+      })),
       music: musicFor(p),
       width, height, fps, videoBps,
       plannedBytes: Math.ceil(((videoBps + AUDIO_BPS) / 8) * totalS(p)),

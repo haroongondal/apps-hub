@@ -2,7 +2,8 @@ import { MIN_RANGE_S, moveEdge, snapTenth } from './timeline.ts';
 import type { MediaInfo } from './types.ts';
 
 // width and height are the DISPLAY size (rotation already applied); durationS is floored to a tenth.
-export interface Source { uri: string; name: string; durationS: number; width: number; height: number; fps: number; hasAudio: boolean }
+// still: a photo shown for durationS (a reel); it has no sound and no frames of its own.
+export interface Source { uri: string; name: string; durationS: number; width: number; height: number; fps: number; hasAudio: boolean; still?: boolean }
 export interface Clip { id: string; source: Source; inS: number; outS: number; volume: number }
 export interface AudioSource { uri: string; name: string; durationS: number }
 // startS is the place on the video's timeline; inS and outS are times in the audio file.
@@ -10,6 +11,8 @@ export interface Music { id: string; source: AudioSource; inS: number; outS: num
 export interface Project { name: string; clips: Clip[]; music: Music[] }
 
 export const MAX_CLIPS = 20;
+// A photo opens no video decoder, so a reel may hold more of them than a video holds clips.
+export const MAX_STILLS = 40;
 export const MAX_TOTAL_S = 600;
 export const VOLUME_STEPS = [0, 0.5, 1, 1.5] as const;
 export const MAX_VOLUME = 1.5;
@@ -192,7 +195,9 @@ export const deleteMusic = (p: Project, id: string): Project => ({ ...p, music: 
 
 export function projectProblem(p: Project): string | undefined {
   if (!p.clips.length) return 'Add a clip first.';
-  if (p.clips.length > MAX_CLIPS) return `A video can have up to ${MAX_CLIPS} clips.`;
+  const stills = p.clips.filter(c => c.source.still).length;
+  if (p.clips.length - stills > MAX_CLIPS) return `A video can have up to ${MAX_CLIPS} clips.`;
+  if (stills > MAX_STILLS) return `A video can have up to ${MAX_STILLS} photos.`;
   if (totalS(p) > MAX_TOTAL_S + EPS) return `A video can be up to ${MAX_TOTAL_S / 60} minutes long.`;
   if (p.music.length > MAX_MUSIC) return `A video can have up to ${MAX_MUSIC} pieces of music.`;
   if (overlaps(p.music)) return 'Music pieces cannot overlap.';

@@ -1,6 +1,6 @@
 import DesignMedia from 'design-media';
 import { Button, Empty, Field, Header, Notice, Progress, Screen, Segmented, Sheet, Text, space } from '@apps-hub/ui';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Image, Linking, View, useWindowDimensions } from 'react-native';
 
@@ -13,6 +13,7 @@ import { getSearchTool } from '../../src/photos/search-tool';
 import { realSearchToolDeps } from '../../src/photos/search-tool-deps';
 import { noMatches, scanText } from '../../src/photos/screen-text';
 import { photosView, scanDecision, toolResultText, waitingText } from '../../src/photos/view';
+import { NEXUS_TEXT } from '../../src/reel/links';
 
 type IndexState = Awaited<ReturnType<typeof DesignMedia.photoIndexState>>;
 
@@ -274,6 +275,9 @@ export default function PhotosTab() {
           error={searchError}
         />
       )}
+      {similar ? null : (
+        <Button label="Make a reel from my photos" variant="secondary" block onPress={() => router.push('/reel')} accessibilityHint="Finds photos by words or dates and makes them into a video" />
+      )}
       {waitingNotice}
       {access === 'some' ? (
         <Notice
@@ -300,6 +304,14 @@ export default function PhotosTab() {
           accessibilityHint="Opens this photo in your photo viewer"
         />
         <Button label="More like this" variant="secondary" onPress={() => { if (picked) moreLikeThis(picked); }} accessibilityHint="Shows photos that look like this one" />
+        <Button
+          label="Send to Nexus"
+          variant="secondary"
+          onPress={() => {
+            if (picked) DesignMedia.sendToNexus([picked]).then(r => Alert.alert('Send to Nexus', NEXUS_TEXT[r]), say);
+          }}
+          accessibilityHint="Opens Nexus, which asks before it adds this photo"
+        />
       </Sheet>
     </Screen>
   );

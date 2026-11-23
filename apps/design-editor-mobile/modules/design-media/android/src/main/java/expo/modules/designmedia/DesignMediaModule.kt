@@ -1,5 +1,6 @@
 package expo.modules.designmedia
 
+import android.app.Activity
 import android.net.Uri
 import expo.modules.designmedia.android.Access
 import expo.modules.designmedia.android.CleanupTool
@@ -7,6 +8,8 @@ import expo.modules.designmedia.android.CleanupTrash
 import expo.modules.designmedia.android.CodecReport
 import expo.modules.designmedia.android.CompositionView
 import expo.modules.designmedia.android.DesignSaves
+import expo.modules.designmedia.android.Handoffs
+import expo.modules.designmedia.android.Heartbeat
 import expo.modules.designmedia.android.Intents
 import expo.modules.designmedia.android.MediaJobService
 import expo.modules.designmedia.android.PhotoSearch
@@ -55,10 +58,12 @@ class DesignMediaModule : Module() {
 
     OnCreate {
       MediaJobService.listener = { name, body -> sendEvent(name, body) }
+      appContext.reactContext?.let(Heartbeat::touch)
     }
 
     OnDestroy {
       MediaJobService.listener = null
+      Handoffs.dropDeputy()
     }
 
     // A share while the app is open (singleTask) arrives here, not in onCreate: copy it, then tell the screen.
@@ -71,9 +76,15 @@ class DesignMediaModule : Module() {
 
     OnActivityEntersBackground { CompositionView.pauseAll() }
 
-    OnActivityResult { _, result -> CleanupTrash.onResult(context, result.requestCode, result.resultCode) }
+    OnActivityResult { _, result ->
+      CleanupTrash.onResult(context, result.requestCode, result.resultCode)
+      Handoffs.onDeputyResult(result.requestCode, result.resultCode == Activity.RESULT_OK, result.data?.getStringExtra("code"))
+    }
 
-    OnActivityEntersForeground { CleanupTrash.onForeground() }
+    OnActivityEntersForeground {
+      CleanupTrash.onForeground()
+      appContext.reactContext?.let(Heartbeat::touch)
+    }
 
     AsyncFunction("takeShare") { Shares.take(context, appContext.currentActivity?.intent) }.runOnQueue(readScope)
 
@@ -147,6 +158,16 @@ class DesignMediaModule : Module() {
     AsyncFunction("similarPhotos") { uri: String -> PhotoSearch.similar(context, uri) }.runOnQueue(readScope)
 
     AsyncFunction("releasePhotoSearch") { PhotoSearch.release() }
+
+    AsyncFunction("photosTaken") { fromMs: Double, toMs: Double, uris: List<String>? ->
+      Handoffs.photosTaken(context, fromMs.toLong(), toMs.toLong(), uris)
+    }.runOnQueue(readScope)
+
+    AsyncFunction("proposeDeputyTask") { task: String, apps: List<String>, promise: Promise ->
+      Handoffs.proposeToDeputy(appContext.currentActivity, task, apps, promise)
+    }.runOnQueue(Queues.MAIN)
+
+    AsyncFunction("sendToNexus") { uris: List<String> -> Handoffs.sendToNexus(appContext.currentActivity, context, uris) }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("cleanupGroups") { options: Map<String, Any?>? -> CleanupTool.groups(context, options) }.runOnQueue(readScope)
 

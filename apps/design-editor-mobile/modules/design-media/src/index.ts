@@ -58,6 +58,10 @@ export interface DesignMediaModule {
   searchPhotos(query: string): Promise<string[]>; // content URIs, best first, at most 60
   similarPhotos(uri: string): Promise<string[]>; // photos that look like this one, not including it
   releasePhotoSearch(): Promise<void>; // frees the text model's memory
+  photosTaken(fromMs: number, toMs: number, uris: string[] | null): Promise<{ uri: string; takenAt: number }[]>; // gallery photos taken in [fromMs, toMs), oldest first, at most 500; uris narrows to those
+  // Hand-offs: each opens a screen in the other app, where the owner decides. Deputy's answer is one of handed_over, cancelled, not_installed, refused, busy.
+  proposeDeputyTask(task: string, apps: string[]): Promise<'handed_over' | 'cancelled' | 'not_installed' | 'refused' | 'busy'>;
+  sendToNexus(uris: string[]): Promise<'sent' | 'not_installed'>; // 1 to 10 gallery photos, read-only grants, Nexus asks before it adds them
   // Clean up: groups from the photo index. A photo leaves the gallery only through Android's own trash dialog.
   cleanupGroups(options?: { blurThreshold?: number; lookalikeCosine?: number }): Promise<CleanupResult>; // photos still in the gallery only
   trashPhotos(uris: string[]): Promise<{ moved: number; uris: string[]; noted: boolean }>; // opens Android's dialog; 0 and [] when the owner says no; uris: the ones sent, for Undo; noted false: in Android's trash but not in Recently removed
