@@ -1,6 +1,6 @@
 import { locatorLabel, type Job, type Segment } from '@apps-hub/knowledge-core';
-import type { Item } from '@apps-hub/library-core';
-import { Button, Field, Group, Header, Notice, Pill, Row, Screen, space, Text } from '@apps-hub/ui';
+import type { Item, PlaceReminder } from '@apps-hub/library-core';
+import { Button, confirmAction, Field, Group, Header, Notice, Pill, Row, Screen, space, Text } from '@apps-hub/ui';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -9,12 +9,16 @@ import { Alert, View } from 'react-native';
 
 import { IconButton } from '../src/library/icon-button';
 import { openItem } from '../src/library/open-item';
+import { openLibrary } from '../src/library/open-library';
 import { itemFile } from '../src/library/paths';
 import { errorMessage, useDebounced } from '../src/library/use-library';
 import { hasKeys } from '../src/nexus/ai';
 import { saveNote } from '../src/nexus/capture';
 import { jobLabel } from '../src/nexus/labels';
 import { enqueue, kick, onQueueChange, openKnowledge } from '../src/nexus/worker';
+import { describePlace } from '../src/places/describe';
+import { PlaceSheet } from '../src/places/place-sheet';
+import { syncPlaceReminders } from '../src/places/sync';
 
 interface Loaded {
   item: Item;
@@ -24,6 +28,7 @@ interface Loaded {
   segments: Segment[];
   related: Item[];
   hasKey: boolean;
+  places: PlaceReminder[];
   keptOut: boolean;
 }
 
@@ -122,6 +127,7 @@ export default function ItemScreen() {
   const params = useLocalSearchParams<{ id: string; at?: string }>();
   const [data, setData] = useState<Loaded | null>(null);
   const [missing, setMissing] = useState(false);
+  const [placeOpen, setPlaceOpen] = useState(false);
 
   const load = useCallback(async () => {
     const kn = await openKnowledge();
@@ -136,6 +142,7 @@ export default function ItemScreen() {
       segments: item.kind === 'note' ? [] : await kn.segmentsOf(item.id),
       related: (await kn.related(item.id)).map((r) => r.item),
       hasKey: await hasKeys(),
+      places: await kn.lib.listReminders(item.id),
       keptOut: await kn.isExcluded(item.id),
     });
   }, [params.id]);
@@ -161,6 +168,15 @@ export default function ItemScreen() {
     await kick();
   };
   const at = params.at ? Number(params.at) : null;
+  const removePlace = async (place: PlaceReminder) => {
+    try {
+      await (await openLibrary()).removeReminder(place.id);
+      await syncPlaceReminders();
+      await load();
+    } catch (err) {
+      Alert.alert('Could not remove the reminder', errorMessage(err));
+    }
+  };
 
   return (
     <Screen scroll>
@@ -183,6 +199,26 @@ export default function ItemScreen() {
           {data.segments.length ? <Text>{data.segments.map((s) => s.text).join('\n')}</Text> : null}
         </>
       ) : null}
+
+      <Group title="Place reminders" footer="Reminders need precise and background location.">
+        {data.places.map((p) => (
+          <Row
+            key={p.id}
+            title={describePlace(p)}
+            onPress={() =>
+              confirmAction({
+                title: 'Remove this reminder?',
+                message: describePlace(p),
+                confirmLabel: 'Remove',
+                onConfirm: () => void removePlace(p),
+              })
+            }
+            accessibilityHint="Removes this reminder"
+          />
+        ))}
+        <Row title="Add a place" onPress={() => setPlaceOpen(true)} accessibilityHint="Opens the place reminder form" />
+      </Group>
+      {placeOpen ? <PlaceSheet item={item} onSaved={() => void load()} onClose={() => setPlaceOpen(false)} /> : null}
 
       {data.ideas.length ? (
         <Group title="Ideas">
