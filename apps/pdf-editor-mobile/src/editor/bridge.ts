@@ -3,7 +3,7 @@ import type WebView from 'react-native-webview';
 
 // The frozen bridge schema between the Expo shell and packages/pdf-editor-engine/mobile.html.
 // Web -> Native: ready / documentLoaded / docInfo / pickPdf / pickImage / save
-// Native -> Web: open / image / toast (delivered through window.__editorCommand)
+// Native -> Web: open / image / toast / goto-page (delivered through window.__editorCommand)
 export type PageEvent =
   | { type: 'ready' }
   | { type: 'documentLoaded'; ok: boolean; name?: string; pages?: number; error?: string }
@@ -15,7 +15,8 @@ export type PageEvent =
 export type WebCommand =
   | { type: 'open'; name: string; base64: string; append: boolean }
   | { type: 'image'; ok: boolean; base64?: string; pageIndex: number; x: number; y: number }
-  | { type: 'toast'; message: string };
+  | { type: 'toast'; message: string }
+  | { type: 'goto-page'; page: number }; // 1-based; sent after documentLoaded, the page clamps it too
 
 // Strict JSON only: the page always posts JSON.stringify-ed payloads.
 export function parseMessage(data: string): PageEvent | null {
