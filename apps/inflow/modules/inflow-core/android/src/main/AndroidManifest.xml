@@ -15,6 +15,11 @@
   <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
   <queries>
     <package android:name="com.haroon.deputy" />
+    <!-- The morning briefing reads these shares of the owner's other apps (HomeNet, Strongroom, Deputy, Nexus): query only, signature-guarded on their side. -->
+    <provider android:authorities="com.haroon.netlens.applink" />
+    <provider android:authorities="com.haroon.strongroom.applink" />
+    <provider android:authorities="com.haroon.deputy.applink" />
+    <provider android:authorities="com.haroon.pdfeditor.applink" />
     <!-- The Health Connect app, on Android 13 and lower. -->
     <package android:name="com.google.android.apps.healthdata" />
     <intent>

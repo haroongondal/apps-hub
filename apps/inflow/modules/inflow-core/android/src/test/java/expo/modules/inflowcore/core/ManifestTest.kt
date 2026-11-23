@@ -81,4 +81,11 @@ class ManifestTest {
     assertTrue(tags("package").any { it.attr("name") == "com.haroon.deputy" })
     assertEquals(1, tags("queries").size)
   }
+
+  @Test fun theBriefingSeesOnlyTheFourSharesItReads() {
+    val q = tags("queries").single().getElementsByTagName("provider")
+    val authorities = (0 until q.length).map { (q.item(it) as Element).attr("authorities") }
+    val read = listOf(BriefingReaders.HOME_URI, BriefingReaders.CARDS_URI, BriefingReaders.TASKS_URI, BriefingReaders.NEXUS_URI).map { it.removePrefix("content://").substringBefore('/') }
+    assertEquals(read, authorities)
+  }
 }

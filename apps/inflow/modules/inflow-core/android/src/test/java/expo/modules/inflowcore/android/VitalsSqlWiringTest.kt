@@ -84,9 +84,26 @@ class VitalsSqlWiringTest {
     for (f in paths) assertTrue("${f.name} touches health", code(f).none { healthCode.containsMatchIn(it) })
   }
 
+  // P2 item 3: the briefing reaches health only through StoreBriefingHealth, built in one line of the glue and asked for in one line of the builder, behind the setting.
+  @Test fun theBriefingReachesHealthOnlyThroughItsSourceAndOnlyWhenTheSettingIsOn() {
+    val noText = { l: String -> l.replace(Regex("\"([^\"\\\\]|\\\\.)*\""), "\"\"") }
+    val briefing = sources().filter { it.name.startsWith("Briefing") }
+    assertTrue(briefing.map { it.name }.containsAll(listOf("Briefing.kt", "BriefingHealth.kt", "BriefingReaders.kt", "BriefingSource.kt")))
+    for (f in briefing.filter { it.name != "BriefingHealth.kt" && it.name != "BriefingSource.kt" }) {
+      assertTrue("${f.name} touches health", code(f).none { healthCode.containsMatchIn(noText(it)) })
+    }
+    val glue = code(file("BriefingSource.kt")).filter { healthCode.containsMatchIn(noText(it)) && !it.startsWith("import ") }.map { it.trim() }
+    assertEquals(listOf("override fun health(): BriefingHealth = StoreBriefingHealth(SqlHealthStore(store.db), SqlMedicineStore(store))"), glue)
+    assertEquals(setOf("BriefingSource.kt"), sources().filter { f -> code(f).any { it.contains("StoreBriefingHealth(") && !it.trimStart().startsWith("class ") } }.map { it.name }.toSet())
+    val asks = sources().flatMap { f -> code(f).filter { it.contains(".health()") }.map { f.name to it.trim() } }
+    assertEquals(listOf("Briefing.kt" to "if (inputs.healthOn) out += healthLines(inputs.health(), now, today, zone)"), asks)
+    val source = code(file("BriefingHealth.kt"))
+    assertTrue(source.none { Regex("\\b(Journal\\w*|sleepMinutes|hrAvg|hrLow|Doctor\\w*|HealthForAsk|name|dose)\\b").containsMatchIn(it) })
+  }
+
   @Test fun theDoctorSummaryReadsHealthOnlyThroughTheStores() {
     val sql = Regex("\\b(SELECT|INSERT|DELETE|UPDATE|JOIN)\\b|rawQuery|execSQL|compileStatement|\\.query\\(|\\.run\\(")
-    for (name in listOf("DoctorSummary.kt", "DoctorRunner.kt", "DoctorPdf.kt", "PdfLayout.kt", "HealthForAsk.kt")) {
+    for (name in listOf("DoctorSummary.kt", "DoctorRunner.kt", "DoctorPdf.kt", "PdfLayout.kt", "HealthForAsk.kt", "BriefingHealth.kt", "Briefing.kt")) {
       assertTrue(name, code(file(name)).none { sql.containsMatchIn(it) })
     }
   }
