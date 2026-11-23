@@ -51,6 +51,10 @@ with `cd-engineering-tools:parallel-agents-coord` (section 0 loop with the ledge
   3072, sent to Gemini as `dimensions`) and transcribe `segments` (Whisper `verbose_json`, reply
   gets `segments: [{start, end, text}]`). Version 1 requests are unchanged. The AIDL is unchanged.
   P2 streaming, planned as "v2", becomes apiVersion 3.
+- 2026-11-24, E2 security fix: the client trusts `com.haroon.aihub` only when it is signed like
+  the calling app (`checkSignatures` = `SIGNATURE_MATCH`) and exposes exactly one exported service
+  guarded by `AI_HUB`; it binds that component and re-checks the signature in
+  `onServiceConnected`. A squatted package name gets `not-allowed`, nothing is sent (`HubTrust`).
 
 ## Evidence already verified (2026-11-20)
 

@@ -4,12 +4,15 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.os.RemoteException
 import android.os.TransactionTooLargeException
 import expo.modules.aihubclient.core.AiHubException
 import expo.modules.aihubclient.core.HubLimits
+import expo.modules.aihubclient.core.HubService
+import expo.modules.aihubclient.core.HubTrust
 import expo.modules.aihubclient.core.Kinds
 import expo.modules.aihubcore.IAiHub
 import expo.modules.aihubcore.IAiHubCallback
@@ -72,9 +75,24 @@ class AiHubClient(
     withContext(NonCancellable + Dispatchers.IO) { runCatching { hub.cancel(requestId) } }
   }
 
+  private fun resolveHub(): HubService {
+    val pm = context.packageManager
+    val signature = pm.checkSignatures(context.packageName, PACKAGE)
+    // The ResolveInfoFlags overload needs API 33; this one works on every version the apps support.
+    @Suppress("DEPRECATION")
+    val services = pm.queryIntentServices(Intent(ACTION).setPackage(PACKAGE), 0).mapNotNull { r ->
+      r.serviceInfo?.let { HubService(it.packageName, it.name, it.permission, it.exported) }
+    }
+    HubTrust.problem(signature != PackageManager.SIGNATURE_UNKNOWN_PACKAGE, signature == PackageManager.SIGNATURE_MATCH, services)?.let { throw it }
+    return services.single()
+  }
+
+  private fun signedLikeUs(pkg: String): Boolean = context.packageManager.checkSignatures(context.packageName, pkg) == PackageManager.SIGNATURE_MATCH
+
   private suspend fun <T> withHub(block: suspend (IAiHub, Link) -> T): T {
-    val link = Link()
-    val intent = Intent(ACTION).setPackage(PACKAGE)
+    val service = resolveHub()
+    val link = Link { name -> HubTrust.connectedIsTrusted(service, name?.packageName, name?.className, name != null && signedLikeUs(name.packageName)) }
+    val intent = Intent(ACTION).setComponent(ComponentName(service.pkg, service.name))
     val bound = try {
       context.bindService(intent, link, Context.BIND_AUTO_CREATE)
     } catch (e: SecurityException) {
@@ -103,7 +121,7 @@ class AiHubClient(
     }
   }
 
-  private class Link : ServiceConnection {
+  private class Link(private val trusted: (ComponentName?) -> Boolean) : ServiceConnection {
     val hub = CompletableDeferred<IAiHub>()
     val reply = CompletableDeferred<String>()
 
@@ -118,7 +136,11 @@ class AiHubClient(
     }
 
     override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-      if (service == null) gone() else hub.complete(IAiHub.Stub.asInterface(service))
+      when {
+        service == null -> gone()
+        !trusted(name) -> gone(HubTrust.untrusted())
+        else -> hub.complete(IAiHub.Stub.asInterface(service))
+      }
     }
 
     override fun onServiceDisconnected(name: ComponentName?) = gone()
@@ -127,8 +149,7 @@ class AiHubClient(
 
     override fun onNullBinding(name: ComponentName?) = gone()
 
-    private fun gone() {
-      val e = AiHubException(Kinds.HUB_MISSING, GONE)
+    private fun gone(e: AiHubException = AiHubException(Kinds.HUB_MISSING, GONE)) {
       hub.completeExceptionally(e)
       reply.completeExceptionally(e)
     }
@@ -136,7 +157,7 @@ class AiHubClient(
 
   companion object {
     const val ACTION = "com.haroon.aihub.BIND"
-    const val PACKAGE = "com.haroon.aihub"
+    const val PACKAGE = HubTrust.PACKAGE
     private const val GONE = "AI hub stopped. Try again, or use this app's own key."
   }
 }

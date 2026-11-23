@@ -84,6 +84,18 @@ Every failure rejects with an `AiHubError` whose `kind` is one of these. `canFal
 | `timeout` | The service or the hub took too long | no, try again |
 | `provider-error` | Groq or Gemini failed or refused the request, the phone is offline, or a reply could not be read | no |
 
+## Threat model
+
+The client sends prompts and files to whatever answers as `com.haroon.aihub`, so it checks that app before it sends anything:
+
+1. `PackageManager.checkSignatures(ownPackage, "com.haroon.aihub")` must be `SIGNATURE_MATCH`. Every Store app shares one key, so a match means the owner's own build. An app that took the package name first (installed before the real hub) is signed with another key and is refused with `not-allowed`; an absent package is `hub-missing`.
+2. `queryIntentServices` for `com.haroon.aihub.BIND` in that package must return exactly one service, exported and guarded by `com.haroon.permission.AI_HUB`. None is `hub-missing`; two, an unguarded one or an unexported one is `not-allowed`. The client then binds that exact component, not the package.
+3. In `onServiceConnected` the connected component must be the resolved one, and its package is checked with `checkSignatures` again, in case the package changed between the check and the bind.
+
+The decision is the pure `HubTrust` (`core/HubTrust.kt`, tested in `HubTrustTest.kt`); a failure at any step means the request is never sent. The hub, in turn, checks every caller (signature permission on the bind, then `Callers.identify` per call and the owner's switch).
+
+Not covered: a compromised app that holds the shared key, a rooted phone, and debug builds (all signed with the public Expo debug key, so two debug builds trust each other).
+
 ## Contract and drift checks
 
 - `src/contract.ts` holds the request builders and reply parsers. `fixtures/contract.json` pins the JSON both ways: `contract.test.ts` checks the builders produce it and parse its replies; the hub's `ClientContractTest.kt` checks the hub accepts every request and writes exactly those replies.
