@@ -41,6 +41,11 @@ interface ClipboardCoreApi {
   clearAll(): void;
   /** JSON `{ light, dark }` palettes for the bubble, which draws without React Native. */
   setPalettes(json: string): void;
+  /** Whether Nexus may read pinned text clips through the link share. Off until the owner turns it on. */
+  getNexusReadsPinned(): boolean;
+  setNexusReadsPinned(on: boolean): void;
+  /** Opens Inflow's "Add to-do?" screen with these extras; nothing is added until the owner taps Add there. */
+  addToInflow(title: string, note: string, source: string): Promise<string>;
   addListener(event: 'onClip', listener: () => void): { remove(): void };
 }
 

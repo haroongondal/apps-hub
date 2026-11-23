@@ -1,4 +1,5 @@
 import type { Clip } from 'clipboard-core';
+import { ibanTodo, type InflowTodo } from './inflow.ts';
 
 export type FoundKind = 'link' | 'phone' | 'tracking' | 'iban' | 'address';
 export type Carrier = 'ups' | 'fedex' | 'dhl' | 'usps' | 'tcs' | 'leopards' | 'mp' | 'pakpost';
@@ -15,6 +16,8 @@ export interface SmartAction {
   accessibilityLabel: string;
   uri?: string;
   copy?: string;
+  /** IBANs only: the to-do Inflow's ADD_TODO screen opens with. */
+  todo?: InflowTodo;
 }
 
 const SCAN_LIMIT = 2000;
@@ -48,14 +51,14 @@ export function recognise(clip: Clip): Found[] {
   return found;
 }
 
-/** One action per recognised item. An IBAN's "Add to Inflow" (E1) joins the IBAN branch here once that contract is final. */
+/** One action per recognised item; an IBAN's also carries Inflow's "Add to Inflow" to-do. */
 export function actionFor(found: Found): SmartAction {
   const { kind, value } = found;
   if (kind === 'link') return { kind, label: 'Open link', accessibilityLabel: `Open link ${hostOf(value)}`, uri: value };
   if (kind === 'phone') return { kind, label: 'Call', accessibilityLabel: `Call ${value}`, uri: `tel:${value}` };
   if (kind === 'iban') {
     const formatted = formatIban(value);
-    return { kind, label: 'Copy IBAN', accessibilityLabel: `Copy IBAN ${formatted}`, copy: formatted };
+    return { kind, label: 'Copy IBAN', accessibilityLabel: `Copy IBAN ${formatted}`, copy: formatted, todo: ibanTodo(formatted) };
   }
   if (kind === 'tracking') {
     const carrier = CARRIERS[found.carrier!];

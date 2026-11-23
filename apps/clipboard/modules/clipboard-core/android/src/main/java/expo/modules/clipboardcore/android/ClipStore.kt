@@ -8,12 +8,15 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import expo.modules.clipboardcore.core.CaptureGate
+import expo.modules.clipboardcore.core.ClipLinks
 import expo.modules.clipboardcore.core.ClipKind
 import expo.modules.clipboardcore.core.Expiry
 
 private const val STRONGROOM = "com.haroon.strongroom"
 private const val DISMISSED = "dismissed_fingerprint"
 private const val RETENTION = "retention_days"
+private const val NEXUS_PINNED = "nexus_reads_pinned"
+private const val LAST_SEEN = "last_seen_at"
 
 data class Clip(
   val id: Long,
@@ -32,18 +35,24 @@ data class Clip(
   )
 }
 
-class ClipStore private constructor(context: Context) : SQLiteOpenHelper(context, "clips.db", null, 1) {
+class ClipStore private constructor(context: Context) : SQLiteOpenHelper(context, "clips.db", null, 2) {
   @Volatile private var lastFingerprint: Int? = null
   private val prefs = context.getSharedPreferences("clip_store", Context.MODE_PRIVATE)
 
   override fun onCreate(db: SQLiteDatabase) {
     db.execSQL(
       "CREATE TABLE clips (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, kind TEXT NOT NULL, " +
-        "text TEXT, mime TEXT, source TEXT, via TEXT NOT NULL, grab_ms INTEGER, pinned INTEGER NOT NULL DEFAULT 0)",
+        "text TEXT, mime TEXT, source TEXT, via TEXT NOT NULL, grab_ms INTEGER, pinned INTEGER NOT NULL DEFAULT 0, pinned_at INTEGER)",
     )
   }
 
-  override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+  // Version 2 adds pinned_at; clips pinned before it count as pinned when they were saved.
+  override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+    if (oldVersion < 2) {
+      db.execSQL("ALTER TABLE clips ADD COLUMN pinned_at INTEGER")
+      db.execSQL("UPDATE clips SET pinned_at = at WHERE pinned = 1")
+    }
+  }
 
   fun capture(resolver: ContentResolver, clip: ClipData?, source: String?, via: String, grabMs: Long?): Boolean {
     if (clip == null || clip.itemCount == 0 || source == STRONGROOM) return false
@@ -134,8 +143,39 @@ class ClipStore private constructor(context: Context) : SQLiteOpenHelper(context
 
   @Synchronized
   fun setPinned(id: Long, pinned: Boolean) {
-    writableDatabase.update("clips", ContentValues().apply { put("pinned", if (pinned) 1 else 0) }, "id = ?", arrayOf(id.toString()))
+    val values = ContentValues().apply {
+      put("pinned", if (pinned) 1 else 0)
+      if (pinned) put("pinned_at", System.currentTimeMillis()) else putNull("pinned_at")
+    }
+    writableDatabase.update("clips", values, "id = ?", arrayOf(id.toString()))
   }
+
+  // Read-only: no prune here (pinned clips never expire), so a share query never writes.
+  @Synchronized
+  fun pinnedRows(sinceId: Long): List<Array<Any?>> =
+    readableDatabase.rawQuery(
+      "SELECT id, kind, text, pinned, COALESCE(pinned_at, at), source FROM clips " +
+        "WHERE pinned = 1 AND kind = 'text' AND text IS NOT NULL AND id > ? ORDER BY id ASC LIMIT ?",
+      arrayOf(sinceId.toString(), ClipLinks.PINNED_MAX_ROWS.toString()),
+    ).use { c ->
+      buildList {
+        while (c.moveToNext()) {
+          ClipLinks.pinnedRow(c.getLong(0), c.getString(1), c.getString(2), c.getInt(3) != 0, c.getLong(4), c.getString(5))?.let(::add)
+        }
+      }
+    }
+
+  fun nexusReadsPinned(): Boolean = prefs.getBoolean(NEXUS_PINNED, false)
+
+  fun setNexusReadsPinned(on: Boolean) {
+    prefs.edit().putBoolean(NEXUS_PINNED, on).commit()
+  }
+
+  fun heartbeat() {
+    prefs.edit().putLong(LAST_SEEN, System.currentTimeMillis()).apply()
+  }
+
+  fun lastSeenAt(): Long? = prefs.getLong(LAST_SEEN, 0L).takeIf { it > 0L }
 
   fun retentionDays(): Int = Expiry.days(if (prefs.contains(RETENTION)) prefs.getInt(RETENTION, 0) else null)
 

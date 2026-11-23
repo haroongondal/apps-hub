@@ -2,12 +2,15 @@ package expo.modules.clipboardcore.android
 
 import android.accessibilityservice.AccessibilityService
 import android.content.ClipboardManager
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -26,6 +29,7 @@ class CaptureService : AccessibilityService() {
 
   override fun onServiceConnected() {
     connected = true
+    runCatching { ClipStore.get(this).heartbeat() }
   }
 
   override fun onUnbind(intent: Intent?): Boolean {
@@ -92,5 +96,11 @@ class CaptureService : AccessibilityService() {
   companion object {
     @Volatile var connected = false
       private set
+
+    fun isEnabled(context: Context): Boolean {
+      val ours = ComponentName(context, CaptureService::class.java)
+      return Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        ?.split(':')?.any { ComponentName.unflattenFromString(it) == ours } == true
+    }
   }
 }

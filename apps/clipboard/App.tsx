@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, FlatList, View } from 'react-native';
+import { AppState, FlatList, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, Empty, Header, Notice, RecordMenu, Row, Screen, Segmented, Text, ThemeProvider, confirmAction, palette, radius, space, useTheme } from '@apps-hub/ui';
+import { Button, Empty, Group, Header, Notice, RecordMenu, Row, Screen, Segmented, Text, ThemeProvider, confirmAction, palette, radius, space, useTheme } from '@apps-hub/ui';
 import ClipboardCore, { type Clip } from 'clipboard-core';
 import { KEEP_CHOICES, clipSubtitle, clipTitle, keepLabel } from './src/rows';
+import { inflowOutcomeMessage, parseInflowOutcome, type InflowTodo } from './src/inflow';
 import { smartActions, type SmartAction } from './src/smart';
 import { SwipeToDelete } from './src/SwipeToDelete';
 
@@ -24,10 +25,12 @@ function Home() {
   const [clips, setClips] = useState<Clip[]>(() => ClipboardCore.recent(LIMIT));
   const [notice, setNotice] = useState<{ text: string; tone: 'ok' | 'warn' } | null>(null);
   const [keep, setKeep] = useState(() => ClipboardCore.getRetentionDays());
+  const [nexusPinned, setNexusPinned] = useState(() => ClipboardCore.getNexusReadsPinned());
   const [pending, setPending] = useState<Clip | null>(null);
   const pendingRef = useRef<Clip | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
+  const { c } = useTheme();
 
   const reload = useCallback(() => setClips(ClipboardCore.recent(LIMIT)), []);
   // The row disappears at once; the clip is only removed when Undo times out or the app leaves the screen.
@@ -89,6 +92,21 @@ function Home() {
     }
     if (action.uri && ClipboardCore.openAction(action.uri)) return;
     setNotice({ text: 'No app on this phone can open that. Copy the clip and paste it where you need it.', tone: 'warn' });
+  };
+  // Only from this tap, in this screen: Inflow shows its own "Add to-do?" screen and adds nothing until the owner taps Add there.
+  const addToInflow = async (todo: InflowTodo) => {
+    let raw: unknown;
+    try {
+      raw = await ClipboardCore.addToInflow(todo.title, todo.note, todo.source);
+    } catch {
+      raw = 'refused';
+    }
+    const message = inflowOutcomeMessage(parseInflowOutcome(raw));
+    if (message) setNotice(message);
+  };
+  const changeNexusPinned = (on: boolean) => {
+    ClipboardCore.setNexusReadsPinned(on);
+    setNexusPinned(ClipboardCore.getNexusReadsPinned());
   };
   const remove = (clip: Clip) => {
     commit();
@@ -162,6 +180,21 @@ function Home() {
           Pinned clips stay until you delete them. One-time codes go after 10 minutes.
         </Text>
       </View>
+      <Group title="Other apps">
+        <Row
+          title="Let Nexus read my pinned clips"
+          subtitle="Nexus can read the clips you pinned, and may send them to AI when you turn on Ask my life. Passwords, codes and pictures never go."
+          trailing={
+            <Switch
+              value={nexusPinned}
+              onValueChange={changeNexusPinned}
+              accessibilityLabel="Let Nexus read my pinned clips"
+              trackColor={{ false: c.line, true: c.accent }}
+              thumbColor={nexusPinned ? c.surface : c.muted}
+            />
+          }
+        />
+      </Group>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.xs, minHeight: 32 }}>
         <Text variant="caption" tone="muted" accessibilityRole="header">
           History
@@ -183,6 +216,7 @@ function Home() {
         keyboardShouldPersistTaps="handled"
         renderItem={({ item, index }) => {
           const smart = smartActions(item);
+          const inflow = smart.flatMap((a) => (a.todo ? [a.todo] : []));
           const pinLabel = item.pinned ? 'Unpin' : 'Pin';
           return (
             <GroupItem first={index === 0} last={index === shown.length - 1}>
@@ -193,6 +227,7 @@ function Home() {
                 actions={[
                   { name: 'pin', label: pinLabel, run: () => togglePin(item) },
                   ...smart.map((a) => ({ name: a.kind, label: a.accessibilityLabel, run: () => runAction(a) })),
+                  ...inflow.map((todo) => ({ name: 'inflow', label: 'Add to Inflow', run: () => addToInflow(todo) })),
                 ]}
               >
                 <Row
@@ -207,6 +242,7 @@ function Home() {
                         { label: 'Copy', onPress: () => copy(item) },
                         { label: pinLabel, onPress: () => togglePin(item) },
                         ...smart.map((a) => ({ label: a.label, onPress: () => runAction(a) })),
+                        ...inflow.map((todo) => ({ label: 'Add to Inflow', onPress: () => addToInflow(todo) })),
                         { label: 'Delete', onPress: () => remove(item) },
                       ]}
                     />
@@ -222,6 +258,16 @@ function Home() {
                           size="sm"
                           variant="secondary"
                           onPress={() => runAction(a)}
+                        />
+                      ))}
+                      {inflow.map((todo) => (
+                        <Button
+                          key="inflow"
+                          label="Add to Inflow"
+                          accessibilityLabel={`Add a to-do in Inflow: ${todo.title}`}
+                          size="sm"
+                          variant="secondary"
+                          onPress={() => addToInflow(todo)}
                         />
                       ))}
                     </View>

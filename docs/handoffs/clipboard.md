@@ -76,6 +76,56 @@ Claude's calls are marked *(My call.)* in DESIGN.md.
 
 ## Session log
 
+- 2026-11-24 (eco/clipboard, P5 of the ecosystem wave, not released): links
+  to other apps (packages/app-link-contract).
+  - **`pinned` share** on `com.haroon.clipboard.applink` (`ClipLinkProvider`,
+    rows in pure `core/ClipLinks.kt`): `{id, text, pinned_at, from_app}` of
+    pinned text clips only (kind `text`, never secret/code/image/file; the SQL
+    filters and `ClipLinks.pinnedRow` re-checks each row), text cut at 2000
+    characters (never on half a surrogate pair), at most 200 rows, oldest id
+    first, paged with `pinned/<sinceId>`. Served only when
+    `AppLinkCaller.allowed` passes (else SecurityException) AND
+    `ContentProvider.getCallingPackage()` is `com.haroon.pdfeditor` (Nexus) AND
+    the switch "Let Nexus read my pinned clips" is on; otherwise an empty
+    cursor. The switch is off by default (prefs `nexus_reads_pinned`); its
+    subtitle says Nexus may send the clips to AI with Ask my life. This is the
+    first route from Clipboard to an app with internet. `from_app` is the copy
+    source package, `""` when unknown *(my call: the brief's type is string,
+    not string?)*. Schema v2 adds `pinned_at` (set on pin, cleared on unpin;
+    clips pinned before v2 get their saved time) *(my call)*. The share query
+    never writes (no prune: pinned clips never expire).
+  - **Health row** at `health` (`appHealthShare('clipboard')`): `clipboard`,
+    accessibility 1/0 from `ENABLED_ACCESSIBILITY_SERVICES`, listener null,
+    ai_source `none`, last_seen_at from a heartbeat written when the module
+    starts (app open) and when `CaptureService` connects. Same-key callers
+    always get it.
+  - **Add to Inflow** on a recognised IBAN only (`SmartAction.todo` from
+    `ibanTodo()` in `src/inflow.ts`): a button next to Copy IBAN, plus the
+    row menu and the accessibility action. Native `addToInflow(title, note,
+    source)` re-validates against `InflowTodo.SPEC` and starts
+    `com.haroon.inflow.action.ADD_TODO` (setPackage `com.haroon.inflow`) with
+    `startActivityForResult` from the current Activity, so Inflow's
+    `AppLinkActivityCaller` sees the calling package. Extras: title
+    "Pay account " + IBAN in groups of four, note "From Clipboard", source
+    "Clipboard". Answers: added, cancelled, not_installed
+    (ActivityNotFoundException), refused (SecurityException, bad extras or an
+    unknown code), busy (a second tap while one is open; nothing shown).
+    Inflow shows its own Add to-do screen and adds nothing until the owner taps
+    Add. No `<queries>` added: starting an activity needs no package visibility
+    *(my call, per the brief)*.
+  - Manifest: `<permission>` (signature) + `<uses-permission>` AUTOPILOT in the
+    clipboard-core manifest; canonical `AppLinkGuard.kt` and `AppLinkCaller.kt`
+    copied in (package line only; `AppLinkActivityCaller` not needed, Clipboard
+    hosts no action). Merged release manifest still has no INTERNET.
+  - Tests: `src/__tests__/links.test.ts` (share equals
+    `android/src/test/resources/applink/pinned.share.json`, sample rows,
+    auditManifest, provider order guard then calling package, read-only),
+    `src/__tests__/inflow.test.ts` (ADD_TODO fixture spec, IBAN-only, hidden
+    clips get nothing, outcome words); JVM `ClipLinksTest` (fixture binding of
+    both shares, reader rule, sinceId parsing, row filter and cap,
+    caller-decisions table, every add-todo-extras case, result codes).
+    clipboard ts 31 (21), JVM 43 (32), app-link-contract 133.
+
 - 2026-11-23 (eco/clipboard worktree, not released): Phase 1 items and smart
   actions. Expiry with a "Keep clips for" setting (7/30/90 days, 1 year;
   default 30; codes 10 minutes; pinned never) in pure `core/Expiry.kt`; pin/
@@ -197,6 +247,23 @@ Claude's calls are marked *(My call.)* in DESIGN.md.
   and a retry worked (manifest unchanged until a publish succeeds). JVM 16/16.
 
 ## Current state + exact next step
+
+**2026-11-24 (P5):** `eco/clipboard` also holds the `pinned` share, the
+health row and Add to Inflow (session log). Not merged or released; needs
+Store-signed builds of Clipboard, Nexus and Inflow (debug builds fail closed).
+Next: security-engineer review (first Clipboard data route to an app with
+internet) and invariant-reviewer, then the phone checks: (1) as the shell,
+`adb shell content query --uri content://com.haroon.clipboard.applink/pinned`
+must fail with a permission denial; (2) with the switch off, Nexus "Ask my
+life" shows Clipboard as off / reads no rows; switch on, pin a text clip, it
+appears in Nexus; a copied Strongroom password or a 6-digit code pinned (if
+the UI allows) never appears; unpin, it is no longer served; (3) the Store
+health screen shows Clipboard's accessibility state and a recent last seen;
+(4) copy `PK36 SCBL 0000 0011 2345 6702`, tap Add to Inflow: Inflow's Add
+to-do screen opens with "Pay account PK36 SCBL 0000 0011 2345 6702"; back
+out shows "Nothing was added to Inflow."; tap Add shows "Added to your
+to-dos in Inflow." and the to-do is in Inflow; with Inflow uninstalled the
+not-installed words show. Then the older checks below.
 
 **2026-11-23:** branch `eco/clipboard` holds Phase 1 (expiry setting, pin,
 no INTERNET in release, logging removed, setup copy) and smart actions; not

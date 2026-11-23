@@ -1,0 +1,6 @@
+{
+  "authority": "com.haroon.clipboard.applink",
+  "path": "pinned",
+  "columns": ["id", "text", "pinned_at", "from_app"],
+  "maxRows": 200
+}
