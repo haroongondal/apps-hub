@@ -152,10 +152,9 @@
 
   // Uploads on the phone. The WebView's own file chooser adds a camera entry to an image input,
   // so the label asks the app to pick (gallery and files only), pulls each photo over in pieces
-  // like vision does, and hands them to #imgFile's change event so app.js's readFiles runs as is.
-  const drop = document.querySelector('#drop');
+  // like vision does, and hands them to the label's own input (#imgFile or #brandImg) as a change event.
   let picking = false;
-  if (drop && window.ReactNativeWebView) drop.addEventListener('click', async e => {
+  if (window.ReactNativeWebView) for (const drop of document.querySelectorAll('#drop, #brandFromImage')) drop.addEventListener('click', async e => {
     e.preventDefault();
     if (picking) return;
     picking = true;

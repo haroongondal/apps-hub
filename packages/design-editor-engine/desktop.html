@@ -173,6 +173,8 @@ button:disabled { opacity: .45; cursor: default; }
       <h3>Colours</h3>
       <div class="swatches" id="brandColors"></div>
       <div class="row" style="margin-top:8px"><input type="color" id="brandPick" value="#2f54d8" aria-label="Brand colour"><button id="brandAdd">Add colour</button></div>
+      <label class="drop" id="brandFromImage" style="margin-top:8px;padding:10px">Add colours from an image<input type="file" id="brandImg" accept="image/*" hidden></label>
+      <div id="brandFound"></div>
       <p class="hint">Click a colour to apply it to the selection. Right-click to remove it.</p>
       <h3>Fonts</h3>
       <div class="row"><label for="brandHeading">Headings</label><select id="brandHeading"></select></div>
