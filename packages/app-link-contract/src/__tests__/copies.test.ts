@@ -6,11 +6,14 @@ import test from 'node:test';
 
 const repo = path.resolve(import.meta.dirname, '../../../..');
 const canonicalDir = path.join(repo, 'packages/app-link-contract/android');
-const FILES = ['AppLinkGuard.kt', 'AppLinkCaller.kt', 'AppLinkActivityCaller.kt'];
+const FILES = ['AppLinkGuard.kt', 'AppLinkCaller.kt', 'AppLinkActivityCaller.kt', 'AppLinkTarget.kt', 'AppLinkTargetTest.kt'];
 // Inflow serves a share, so it must carry the provider guard; the activity check is copied in only by apps with a link action.
 const INFLOW_FILES = ['AppLinkGuard.kt', 'AppLinkCaller.kt'];
 // Modifiers and indentation are allowed, so `internal object AppLinkGuard` is still found (and then reported as differing).
-const OBJECT = /^\s*(?:\w+\s+)*object (AppLinkGuard|AppLinkCaller|AppLinkActivityCaller)\b/m;
+const OBJECT = /^\s*(?:\w+\s+)*(?:object|class) (AppLinkGuard|AppLinkCaller|AppLinkActivityCaller|AppLinkTarget|SiblingPackages|AppLinkTargetTest)\b/m;
+// SiblingPackages lives in AppLinkTarget.kt, so a copy of it anywhere is checked against that file.
+const KIND_FILE: Record<string, string> = { SiblingPackages: 'AppLinkTarget' };
+const kindOf = (text: string, fileName: string) => KIND_FILE[OBJECT.exec(text)?.[1] ?? ''] ?? OBJECT.exec(text)?.[1] ?? fileName.replace(/\.kt$/, '');
 const PACKAGE_LINE = /^package [a-z][\w.]*$/;
 const SKIP = new Set(['node_modules', 'build', '.git', '.gradle', '.cxx', '.worktrees']);
 
@@ -26,10 +29,11 @@ function walk(dir: string, out: string[]) {
 
 /** Why `copy` (a file called `fileName`) is not a faithful copy of `canonical`; empty when it is. Only the `package` line may differ. */
 function copyProblems(canonical: string, copy: string, fileName: string): string[] {
-  const kind = OBJECT.exec(copy)?.[1] ?? fileName.replace(/\.kt$/, '');
+  const kind = kindOf(copy, fileName);
+  const declaration = kind.endsWith('Test') ? 'class' : 'object';
   const problems: string[] = [];
   if (fileName !== `${kind}.kt`) problems.push(`file is named ${fileName}, expected ${kind}.kt`);
-  if (!new RegExp(`^object ${kind}\\b`, 'm').test(copy)) problems.push(`has no plain \`object ${kind}\` declaration`);
+  if (!new RegExp(`^${declaration} ${kind}\\b`, 'm').test(copy)) problems.push(`has no plain \`${declaration} ${kind}\` declaration`);
   const lines = copy.split('\n');
   const packages = lines.filter((l) => /^package\b/.test(l));
   if (packages.length !== 1) problems.push(`needs exactly one package line, has ${packages.length}`);
@@ -65,6 +69,16 @@ test('copyProblems accepts a good copy and names every kind of bad one', () => {
   assert.deepEqual(copyProblems(activity, moved, 'AppLinkActivityCaller.kt'), []);
   assert.match(copyProblems(activity, moved.replace('&& signaturesMatch', '|| signaturesMatch'), 'AppLinkActivityCaller.kt').join(), /differs from the canonical/);
   assert.match(copyProblems(activity, moved, 'AppLinkCaller.kt').join(), /expected AppLinkActivityCaller\.kt/);
+  const target = canonical('AppLinkTarget.kt');
+  const targetCopy = target.replace('package applink', 'package expo.modules.halo.applink');
+  assert.deepEqual(copyProblems(target, targetCopy, 'AppLinkTarget.kt'), []);
+  assert.match(copyProblems(target, targetCopy.replace('resolvedPackage != expectedPackage', 'resolvedPackage == null'), 'AppLinkTarget.kt').join(), /differs from the canonical/);
+  assert.match(copyProblems(target, targetCopy.replace('"com.haroon.inflow"', '"com.evil.inflow"'), 'AppLinkTarget.kt').join(), /differs from the canonical/);
+  assert.match(copyProblems(target, 'package x\nobject SiblingPackages {}\n', 'Siblings.kt').join(), /expected AppLinkTarget\.kt.*differs from the canonical/);
+  const testFile = canonical('AppLinkTargetTest.kt');
+  const testCopy = testFile.replace('package applink', 'package expo.modules.halo.applink');
+  assert.deepEqual(copyProblems(testFile, testCopy, 'AppLinkTargetTest.kt'), []);
+  assert.match(copyProblems(testFile, testCopy.replace('cases.size >= 12', 'cases.size >= 0'), 'AppLinkTargetTest.kt').join(), /differs from the canonical/);
 });
 
 test('walk includes a file named like a canonical one even when its object line is altered', () => {
@@ -94,7 +108,7 @@ test('Inflow carries a copy of each canonical file', () => {
 test('every copy under apps/ (found by content) equals the canonical file apart from its package line', () => {
   for (const copy of copies) {
     const text = fs.readFileSync(copy, 'utf8');
-    const kind = OBJECT.exec(text)?.[1] ?? path.basename(copy).replace(/\.kt$/, '');
+    const kind = kindOf(text, path.basename(copy));
     assert.deepEqual(copyProblems(canonical(`${kind}.kt`), text, path.basename(copy)), [], path.relative(repo, copy));
   }
 });
