@@ -1,15 +1,16 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { Button, Empty, Group, Header, Notice, Pill, Row, Screen, Text, space } from '@apps-hub/ui';
 import type { State, SuggestionRow } from '@apps-hub/autopilot-contract';
 import InflowCore, { addSuggestionsListener } from 'inflow-core';
 import { dueLabel } from './ai.ts';
-import { groupByState, kindLabel, runDoneMessage } from './autopilot.ts';
+import { groupByState, kindLabel, payWithDeputyMessage, runDoneMessage } from './autopilot.ts';
 import { LOAD_ERROR } from './messages.ts';
 import { useHardwareBack } from './useHardwareBack.ts';
 
 const RUN_ERROR = "Inflow couldn't start that. Close and reopen the app, then try again.";
 const SKIP_ERROR = "Inflow couldn't skip that. Close and reopen the app, then try again.";
+const PAY_ERROR = "Inflow couldn't hand that to Deputy. Close and reopen the app, then try again.";
 const REPLY_NOTE = 'Deputy will ask you before it sends anything.';
 const STATE_LABEL: Record<State, string> = { waiting: 'Waiting', started: 'Started', done: 'Done', skipped: 'Skipped', expired: 'Expired' };
 
@@ -27,8 +28,9 @@ const bankAppIsSet = (): boolean => {
 };
 
 // Run and Skip for any list of suggestions; onChanged reloads the list after either one.
-export function useSuggestionActions(onChanged: () => void): { run: (row: SuggestionRow) => void; skip: (id: number) => void; message: ActionMessage | null } {
+export function useSuggestionActions(onChanged: () => void): { run: (row: SuggestionRow) => void; skip: (id: number) => void; pay: (id: number) => void; message: ActionMessage | null } {
   const [message, setMessage] = useState<ActionMessage | null>(null);
+  const paying = useRef(false);
   const run = (row: SuggestionRow) => {
     try {
       // null: it started. Text: why it could not, written for the owner.
@@ -48,10 +50,22 @@ export function useSuggestionActions(onChanged: () => void): { run: (row: Sugges
     }
     onChanged();
   };
-  return { run, skip, message };
+  // Pay with Deputy: the answer comes once the owner is done in Deputy, so a second tap meanwhile is ignored.
+  const pay = (id: number) => {
+    if (paying.current) return;
+    paying.current = true;
+    InflowCore.proposeToDeputy(id)
+      .then((outcome) => setMessage(payWithDeputyMessage(outcome)))
+      .catch(() => setMessage({ tone: 'danger', text: PAY_ERROR }))
+      .finally(() => {
+        paying.current = false;
+        onChanged();
+      });
+  };
+  return { run, skip, pay, message };
 }
 
-export function SuggestionRowItem({ row, now, onRun, onSkip }: { row: SuggestionRow; now: number; onRun: (row: SuggestionRow) => void; onSkip: (id: number) => void }) {
+export function SuggestionRowItem({ row, now, onRun, onSkip, onPay }: { row: SuggestionRow; now: number; onRun: (row: SuggestionRow) => void; onSkip: (id: number) => void; onPay: (id: number) => void }) {
   const waiting = row.state === 'waiting';
   const when = row.due_at === null ? '' : ` · ${dueLabel(row.due_at, now)}`;
   return (
@@ -69,6 +83,7 @@ export function SuggestionRowItem({ row, now, onRun, onSkip }: { row: Suggestion
         )
       }
     >
+      {waiting && row.kind === 'bill' && <Button label="Pay with Deputy" variant="ghost" size="sm" onPress={() => onPay(row.id)} accessibilityHint={`Ask Deputy to help pay: ${row.title}`} />}
       {waiting && row.kind === 'reply' && (
         <Text variant="caption" tone="muted">
           {REPLY_NOTE}
@@ -100,7 +115,7 @@ export function SuggestionsScreen({ onBack }: { onBack: () => void }) {
     const sub = addSuggestionsListener(load);
     return () => sub.remove();
   }, [load]);
-  const { run, skip, message } = useSuggestionActions(load);
+  const { run, skip, pay, message } = useSuggestionActions(load);
 
   const { waiting, history } = groupByState(rows);
   const now = Date.now();
@@ -114,14 +129,14 @@ export function SuggestionsScreen({ onBack }: { onBack: () => void }) {
       {waiting.length > 0 && (
         <Group title="Waiting">
           {waiting.map((r) => (
-            <SuggestionRowItem key={r.id} row={r} now={now} onRun={run} onSkip={skip} />
+            <SuggestionRowItem key={r.id} row={r} now={now} onRun={run} onSkip={skip} onPay={pay} />
           ))}
         </Group>
       )}
       {history.length > 0 && (
         <Group title="History">
           {history.map((r) => (
-            <SuggestionRowItem key={r.id} row={r} now={now} onRun={run} onSkip={skip} />
+            <SuggestionRowItem key={r.id} row={r} now={now} onRun={run} onSkip={skip} onPay={pay} />
           ))}
         </Group>
       )}

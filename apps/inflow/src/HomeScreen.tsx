@@ -55,7 +55,7 @@ export function HomeScreen({
       setError(LOAD_ERROR);
     }
   }, []);
-  const { run, skip, message } = useSuggestionActions(loadWaiting);
+  const { run, skip, pay, message } = useSuggestionActions(loadWaiting);
 
   const load = useCallback(() => {
     try {
@@ -176,7 +176,7 @@ export function HomeScreen({
       {count > 0 && (
         <Group title="Waiting" footer={headline}>
           {waiting.slice(0, WAITING_SHOWN).map((r) => (
-            <SuggestionRowItem key={r.id} row={r} now={now} onRun={run} onSkip={skip} />
+            <SuggestionRowItem key={r.id} row={r} now={now} onRun={run} onSkip={skip} onPay={pay} />
           ))}
           <Row title="See all" onPress={() => setShowSuggestions(true)} />
         </Group>
