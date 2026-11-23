@@ -1,6 +1,8 @@
 package expo.modules.audiochunks
 
 import expo.modules.audiochunks.android.AudioCutter
+import expo.modules.audiochunks.android.MeetingRecorder
+import expo.modules.audiochunks.android.MeetingService
 import expo.modules.audiochunks.core.CutWindow
 import expo.modules.audiochunks.core.filePath
 import expo.modules.kotlin.exception.CodedException
@@ -28,6 +30,28 @@ class AudioChunksModule : Module() {
         File(outPath).delete()
         throw CodedException("CUT_FAILED", "The recording could not be cut: ${e.message}", e)
       }
+    }
+
+    AsyncFunction("startMeeting") { outUri: String ->
+      val context = appContext.reactContext?.applicationContext ?: throw CodedException("START_FAILED", "Nexus is not ready to record yet.", null)
+      if (MeetingRecorder.isRecording) throw CodedException("START_FAILED", "A meeting is already recording.", null)
+      try {
+        MeetingRecorder.start(context, filePath(outUri))
+        MeetingService.start(context)
+      } catch (e: Exception) {
+        MeetingRecorder.stop(null)
+        throw CodedException("START_FAILED", "The recording could not start: ${e.message}", e)
+      }
+    }
+
+    AsyncFunction("stopMeeting") {
+      val status = MeetingRecorder.stop(null)
+      appContext.reactContext?.let { MeetingService.stop(it) }
+      status
+    }
+
+    Function("meetingStatus") {
+      MeetingRecorder.status()
     }
   }
 }

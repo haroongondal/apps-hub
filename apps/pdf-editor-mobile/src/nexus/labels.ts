@@ -12,9 +12,11 @@ export function noteTitle(text: string): string {
   return chars.length > MAX_TITLE ? `${chars.slice(0, MAX_TITLE - 1).join('').trimEnd()}…` : chars.join('');
 }
 
-export function captureTitle(kind: 'audio' | 'image', at: Date): string {
+const CAPTURED = { audio: 'Voice note', image: 'Photo', meeting: 'Meeting' };
+
+export function captureTitle(kind: keyof typeof CAPTURED, at: Date): string {
   const time = `${at.getDate()} ${MONTHS[at.getMonth()]} ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
-  return `${kind === 'audio' ? 'Voice note' : 'Photo'}, ${time}`;
+  return `${CAPTURED[kind]}, ${time}`;
 }
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;

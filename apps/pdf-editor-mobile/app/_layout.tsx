@@ -21,6 +21,7 @@ export default function RootLayout() {
           <Stack.Screen name="folder" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="item" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="settings" options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="meeting" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="cv/new" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="cv/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="editor" options={{ animation: 'slide_from_right' }} />

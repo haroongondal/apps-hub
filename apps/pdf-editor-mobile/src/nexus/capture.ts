@@ -1,4 +1,5 @@
 import type { Item } from '@apps-hub/library-core';
+import { AudioChunks } from 'audio-chunks';
 import { File } from 'expo-file-system';
 
 import { dirSize } from '../library/files';
@@ -10,14 +11,20 @@ import { captureTitle, noteTitle } from './labels';
 import { enqueue } from './worker';
 
 // Files first, row second: a crash in between leaves a directory the start-up sweep removes.
-async function addItem(kind: Item['kind'], title: string, write: (id: string) => void, body?: string, saved?: () => void): Promise<Item> {
+async function addItem(
+  kind: Item['kind'],
+  title: string,
+  write: (id: string) => void | Promise<void>,
+  body?: string,
+  saved?: () => void,
+  id = newId(),
+): Promise<Item> {
   const lib = await openLibrary();
-  const id = newId();
   const dir = itemDir(id);
   dir.create({ intermediates: true });
   let item: Item;
   try {
-    write(id);
+    await write(id);
     item = await lib.createItem({ id, kind, title, sizeBytes: dirSize(id), body });
   } catch (error) {
     dir.delete();
@@ -38,6 +45,22 @@ export const addRecording = (uri: string) =>
     (id) => new File(uri).copy(itemFile(id, 'audio.m4a')),
     undefined,
     () => new File(uri).delete(), // the recorder's file is the only copy until the row exists
+  );
+
+const WHOLE_MS = 7 * 24 * 3_600_000; // past any meeting's end, so the cut copies all of it without asking ADTS for its length
+
+/** The meeting's ADTS recording becomes a normal voice note's `audio.m4a` (same samples, MPEG-4 box), so playing, seeking and transcribing work unchanged. */
+export const addMeeting = (recordingUri: string, id: string, startedAt: Date, saved: () => void) =>
+  addItem(
+    'audio',
+    captureTitle('meeting', startedAt),
+    async (itemId) => {
+      if (!AudioChunks) throw new Error('Meeting recording works on Android only.');
+      await AudioChunks.cut(recordingUri, 0, WHOLE_MS, itemFile(itemId, 'audio.m4a').uri);
+    },
+    undefined,
+    saved,
+    id,
   );
 
 export const addPhoto = (uri: string) =>
