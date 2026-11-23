@@ -1,0 +1,20 @@
+{
+  "name": "nexus-links",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nexus: reads what Inflow, Deputy and Clipboard share with it and opens their Add to-do and Propose task screens (Expo local module, Android only)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "node --test src/__tests__/shares.test.ts src/__tests__/manifest.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@apps-hub/app-link-contract": "workspace:*",
+    "expo-modules-core": "~3.0.30"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.9.2"
+  }
+}
