@@ -2,7 +2,7 @@ import { File, Paths } from 'expo-file-system';
 import { AppState } from 'react-native';
 
 import { metaFlags, TODAY_KEY } from './meta-flags';
-import { changedWriter, createHeartbeat } from './share-files';
+import { closedFile, createHeartbeat } from './share-files';
 import { buildTodaySnapshot, todayWindow } from './today';
 import { onQueueChange, openKnowledge } from './worker';
 
@@ -17,7 +17,13 @@ function writeAtomic(name: string, text: string): void {
   tmp.move(target);
 }
 
-const writeToday = changedWriter((text) => writeAtomic('today.json', text));
+const today = closedFile({
+  write: (text) => writeAtomic('today.json', text),
+  remove: () => {
+    const target = new File(Paths.document, 'today.json');
+    if (target.exists) target.delete();
+  },
+});
 const heartbeat = createHeartbeat({ now: Date.now, write: (text) => writeAtomic('last_seen', text) });
 let turn: Promise<void> = Promise.resolve();
 
@@ -29,7 +35,7 @@ export function refreshTodayShare(): Promise<void> {
       const on = await metaFlags(kn.lib.db).get(TODAY_KEY);
       const now = Date.now();
       const rows = on ? await kn.lib.dueBetween(...todayWindow(now)) : [];
-      writeToday(buildTodaySnapshot(rows, on, now));
+      today.put(buildTodaySnapshot(rows, on, now));
     } catch (err) {
       console.warn('Nexus could not update what is due today for other apps', err);
     }
@@ -41,7 +47,9 @@ export async function todayShareOn(): Promise<boolean> {
   return metaFlags((await openKnowledge()).lib.db).get(TODAY_KEY);
 }
 
+/** Off removes today.json before anything else; if that fails it throws, so the switch never reads Off while the file still serves. */
 export async function setTodayShare(on: boolean): Promise<void> {
+  if (!on) today.clear();
   await metaFlags((await openKnowledge()).lib.db).set(TODAY_KEY, on);
   await refreshTodayShare();
 }

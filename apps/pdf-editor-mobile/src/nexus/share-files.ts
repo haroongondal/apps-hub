@@ -1,11 +1,23 @@
-/** Writes only when the text differs from the last text written. A write that throws is retried next time. */
-export function changedWriter(write: (text: string) => void): (text: string) => boolean {
+// Fails closed: a failed write removes the file, so an older "on" never keeps serving.
+export function closedFile(o: { write: (text: string) => void; remove: () => void }): { put: (text: string) => boolean; clear: () => void } {
   let last: string | null = null;
-  return (text) => {
-    if (text === last) return false;
-    write(text);
-    last = text;
-    return true;
+  const clear = () => {
+    last = null;
+    o.remove();
+  };
+  return {
+    put(text) {
+      if (text === last) return false;
+      try {
+        o.write(text);
+      } catch (err) {
+        clear();
+        throw err;
+      }
+      last = text;
+      return true;
+    },
+    clear,
   };
 }
 
