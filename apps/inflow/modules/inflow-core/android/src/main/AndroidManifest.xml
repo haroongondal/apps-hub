@@ -15,6 +15,11 @@
   <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
   <queries>
     <package android:name="com.haroon.deputy" />
+    <!-- Package visibility for the sibling checks (resolveContentProvider, checkSignatures, queryIntentActivities) before every read and start; Halo is for the changed ping. -->
+    <package android:name="app.netlens" />
+    <package android:name="com.haroon.strongroom" />
+    <package android:name="com.haroon.pdfeditor" />
+    <package android:name="com.haroon.halo" />
     <!-- The morning briefing reads these shares of the owner's other apps (HomeNet, Strongroom, Deputy, Nexus): query only, signature-guarded on their side. -->
     <provider android:authorities="com.haroon.netlens.applink" />
     <provider android:authorities="com.haroon.strongroom.applink" />

@@ -2,12 +2,12 @@ package expo.modules.inflowcore.android
 
 import android.content.ContentResolver
 import android.content.Context
-import android.content.pm.PackageManager
 import android.database.Cursor
 import android.net.Uri
 import android.os.Binder
 import android.os.Looper
 import android.os.Process
+import expo.modules.inflowcore.applink.AppLinkTarget
 import expo.modules.inflowcore.core.AppLine
 import expo.modules.inflowcore.core.Briefing
 import expo.modules.inflowcore.core.BriefingHealth
@@ -37,8 +37,7 @@ class StoreBriefingInputs(private val store: SqlItemStore, private val context: 
     if (Looper.myLooper() == Looper.getMainLooper() || Binder.getCallingUid() != Process.myUid()) emptyList()
     else BriefingReaders.lines(
       AndroidLinkResolver(context.contentResolver),
-      { authority -> context.packageManager.resolveContentProvider(authority, PackageManager.ComponentInfoFlags.of(0))?.packageName },
-      { pkg -> context.packageManager.checkSignatures(context.packageName, pkg) == PackageManager.SIGNATURE_MATCH },
+      { authority, pkg -> AppLinkTarget.trustedProvider(context, authority, pkg) },
       LocalDate.now(zone),
     )
 }

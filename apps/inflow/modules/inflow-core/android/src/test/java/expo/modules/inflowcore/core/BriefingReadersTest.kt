@@ -29,28 +29,29 @@ class BriefingReadersTest {
     BriefingReaders.TASKS_URI to { tasks }, BriefingReaders.NEXUS_URI to { nexus },
   )
 
-  private val realOwner = ProviderOwner { SiblingIdentity.PACKAGES[it] }
-  private val sameKey = SameKey { true }
+  private val trustAll = ProviderTrust { _, _ -> true }
 
-  private fun read(r: LinkResolver, timeoutMs: Long = BriefingReaders.TIMEOUT_MS, owner: ProviderOwner = realOwner, key: SameKey = sameKey) =
-    BriefingReaders.lines(r, owner, key, today, timeoutMs)
+  private fun read(r: LinkResolver, timeoutMs: Long = BriefingReaders.TIMEOUT_MS, trust: ProviderTrust = trustAll) =
+    BriefingReaders.lines(r, trust, today, timeoutMs)
 
   @Test fun aProviderThatFailsTheIdentityCheckIsNeverQueriedAndGivesNoLine() {
     val (r, asked) = resolver(*all)
-    val owner = ProviderOwner { a ->
-      when (a) {
-        BriefingReaders.authority(BriefingReaders.HOME_URI) -> "com.evil.lookalike"   // someone else claims HomeNet's authority
-        BriefingReaders.authority(BriefingReaders.TASKS_URI) -> null                  // no provider installed
-        BriefingReaders.authority(BriefingReaders.NEXUS_URI) -> throw IllegalStateException("package manager died")
-        else -> SiblingIdentity.PACKAGES[a]
-      }
-    }
-    val key = SameKey { pkg -> if (pkg == "com.haroon.strongroom") throw RuntimeException("NameNotFoundException") else true }
-    assertEquals(emptyList<AppLine>(), read(r, owner = owner, key = key))
+    val checked = java.util.Collections.synchronizedList(mutableListOf<Pair<String, String>>())
+    assertEquals(emptyList<AppLine>(), read(r, trust = { a, p -> checked += a to p; false }))
     assertEquals(emptyList<String>(), asked.toList())
-    assertEquals(emptyList<AppLine>(), read(r, key = SameKey { false }))
+    // Each reader asks about its own sibling's authority and package.
+    assertEquals(
+      setOf(
+        "com.haroon.netlens.applink" to "app.netlens", "com.haroon.strongroom.applink" to "com.haroon.strongroom",
+        "com.haroon.deputy.applink" to "com.haroon.deputy", "com.haroon.pdfeditor.applink" to "com.haroon.pdfeditor",
+      ),
+      checked.toSet(),
+    )
+    // A check that throws counts as untrusted.
+    assertEquals(emptyList<AppLine>(), read(r, trust = { _, _ -> throw IllegalStateException("package manager died") }))
     assertEquals(emptyList<String>(), asked.toList())
-    assertEquals(listOf(AppLine(BriefingKind.TASKS, "2 tasks are waiting for you")), read(r, key = SameKey { it == "com.haroon.deputy" }))
+    // Only the one that passes is read.
+    assertEquals(listOf(AppLine(BriefingKind.TASKS, "2 tasks are waiting for you")), read(r, trust = { _, p -> p == "com.haroon.deputy" }))
     assertEquals(listOf(BriefingReaders.TASKS_URI), asked.toList())
   }
 

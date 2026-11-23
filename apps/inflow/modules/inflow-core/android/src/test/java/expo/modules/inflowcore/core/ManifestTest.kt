@@ -1,5 +1,6 @@
 package expo.modules.inflowcore.core
 
+import expo.modules.inflowcore.applink.SiblingPackages
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertEquals
@@ -78,7 +79,9 @@ class ManifestTest {
   }
 
   @Test fun deputyIsVisibleToThePackageManager() {
-    assertTrue(tags("package").any { it.attr("name") == "com.haroon.deputy" })
+    val packages = tags("package").map { it.attr("name") }
+    // Every sibling Inflow reads or starts (and Halo, for the changed ping) is visible, or the AppLinkTarget checks answer "not installed".
+    for (p in listOf(SiblingPackages.HOMENET, SiblingPackages.STRONGROOM, SiblingPackages.DEPUTY, SiblingPackages.NEXUS, SiblingPackages.HALO)) assertTrue(p, p in packages)
     assertEquals(1, tags("queries").size)
   }
 

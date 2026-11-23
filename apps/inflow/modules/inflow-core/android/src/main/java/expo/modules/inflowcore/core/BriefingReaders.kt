@@ -1,5 +1,6 @@
 package expo.modules.inflowcore.core
 
+import expo.modules.inflowcore.applink.SiblingPackages
 import java.time.LocalDate
 import java.time.YearMonth
 import java.util.concurrent.Callable
@@ -10,6 +11,11 @@ class LinkTable(val columns: List<String>, val rows: List<List<Any?>>)
 
 fun interface LinkResolver {
   fun query(uri: String): LinkTable?
+}
+
+// The glue answers with AppLinkTarget.trustedProvider; a fake lets the JVM prove an untrusted provider is never queried.
+fun interface ProviderTrust {
+  fun trusted(authority: String, expectedPackage: String): Boolean
 }
 
 object BriefingReaders {
@@ -25,20 +31,20 @@ object BriefingReaders {
 
   private enum class Col { LONG, LONG_OPT, TEXT }
 
-  private class Reader(val uri: String, val columns: Map<String, Col>, val maxRows: Int, val line: (List<Map<String, Any?>>, LocalDate) -> AppLine?)
+  private class Reader(val uri: String, val sibling: String, val columns: Map<String, Col>, val maxRows: Int, val line: (List<Map<String, Any?>>, LocalDate) -> AppLine?)
 
   private val READERS = listOf(
-    Reader(HOME_URI, mapOf("person" to Col.TEXT, "present" to Col.LONG, "last_seen_at" to Col.LONG), 16) { rows, _ -> home(rows) },
-    Reader(CARDS_URI, mapOf("kind" to Col.TEXT, "label" to Col.TEXT, "expires_on" to Col.TEXT, "days_left" to Col.LONG), 200, ::cards),
-    Reader(TASKS_URI, mapOf("id" to Col.LONG, "label" to Col.TEXT, "due_at" to Col.LONG_OPT, "state" to Col.TEXT), 100) { rows, _ -> tasks(rows) },
-    Reader(NEXUS_URI, mapOf("id" to Col.LONG, "title" to Col.TEXT, "due_at" to Col.LONG_OPT), 200) { rows, _ -> nexus(rows) },
+    Reader(HOME_URI, SiblingPackages.HOMENET, mapOf("person" to Col.TEXT, "present" to Col.LONG, "last_seen_at" to Col.LONG), 16) { rows, _ -> home(rows) },
+    Reader(CARDS_URI, SiblingPackages.STRONGROOM, mapOf("kind" to Col.TEXT, "label" to Col.TEXT, "expires_on" to Col.TEXT, "days_left" to Col.LONG), 200, ::cards),
+    Reader(TASKS_URI, SiblingPackages.DEPUTY, mapOf("id" to Col.LONG, "label" to Col.TEXT, "due_at" to Col.LONG_OPT, "state" to Col.TEXT), 100) { rows, _ -> tasks(rows) },
+    Reader(NEXUS_URI, SiblingPackages.NEXUS, mapOf("id" to Col.LONG, "title" to Col.TEXT, "due_at" to Col.LONG_OPT), 200) { rows, _ -> nexus(rows) },
   )
 
-  fun lines(resolver: LinkResolver, owner: ProviderOwner, sameKey: SameKey, today: LocalDate, timeoutMs: Long = TIMEOUT_MS): List<AppLine> {
+  fun lines(resolver: LinkResolver, trust: ProviderTrust, today: LocalDate, timeoutMs: Long = TIMEOUT_MS): List<AppLine> {
     val pool = Executors.newFixedThreadPool(READERS.size) { r -> Thread(r, "briefing-reader").apply { isDaemon = true } }
     try {
       val jobs = READERS.map { r ->
-        r to pool.submit(Callable { if (SiblingIdentity.trusted(authority(r.uri), owner, sameKey)) resolver.query(r.uri) else null })
+        r to pool.submit(Callable { if (runCatching { trust.trusted(authority(r.uri), r.sibling) }.getOrDefault(false)) resolver.query(r.uri) else null })
       }
       val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
       return jobs.mapNotNull { (r, job) ->
