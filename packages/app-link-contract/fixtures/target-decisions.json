@@ -1,0 +1,18 @@
+[
+  { "case": "match", "expectedPackage": "com.haroon.inflow", "resolvedPackage": "com.haroon.inflow", "signaturesMatch": true, "trust": "trusted", "reason": "ok" },
+  { "case": "match, package outside com.haroon", "expectedPackage": "app.netlens", "resolvedPackage": "app.netlens", "signaturesMatch": true, "trust": "trusted", "reason": "ok" },
+  { "case": "wrong package", "expectedPackage": "com.haroon.inflow", "resolvedPackage": "com.evil.inflow", "signaturesMatch": true, "trust": "spoofed", "reason": "wrong-package" },
+  { "case": "wrong package and signature mismatch", "expectedPackage": "com.haroon.inflow", "resolvedPackage": "com.evil.inflow", "signaturesMatch": false, "trust": "spoofed", "reason": "wrong-package" },
+  { "case": "another sibling answers", "expectedPackage": "com.haroon.inflow", "resolvedPackage": "com.haroon.deputy", "signaturesMatch": true, "trust": "spoofed", "reason": "wrong-package" },
+  { "case": "null provider", "expectedPackage": "com.haroon.inflow", "resolvedPackage": null, "signaturesMatch": false, "trust": "not-installed", "reason": "not-installed" },
+  { "case": "null provider, signatures said to match", "expectedPackage": "com.haroon.inflow", "resolvedPackage": null, "signaturesMatch": true, "trust": "not-installed", "reason": "not-installed" },
+  { "case": "empty resolved package", "expectedPackage": "com.haroon.inflow", "resolvedPackage": "", "signaturesMatch": true, "trust": "not-installed", "reason": "not-installed" },
+  { "case": "signature mismatch (debug-signed lookalike)", "expectedPackage": "com.haroon.inflow", "resolvedPackage": "com.haroon.inflow", "signaturesMatch": false, "trust": "spoofed", "reason": "signature-mismatch" },
+  { "case": "unknown expected package", "expectedPackage": "com.evil.app", "resolvedPackage": "com.evil.app", "signaturesMatch": true, "trust": "spoofed", "reason": "unknown-sibling" },
+  { "case": "unknown expected package, not installed", "expectedPackage": "com.evil.app", "resolvedPackage": null, "signaturesMatch": false, "trust": "spoofed", "reason": "unknown-sibling" },
+  { "case": "the Store is not a link sibling", "expectedPackage": "com.haroon.store", "resolvedPackage": "com.haroon.store", "signaturesMatch": true, "trust": "spoofed", "reason": "unknown-sibling" },
+  { "case": "empty expected package", "expectedPackage": "", "resolvedPackage": "", "signaturesMatch": true, "trust": "spoofed", "reason": "unknown-sibling" },
+  { "case": "case sensitivity: resolved differs in case", "expectedPackage": "com.haroon.inflow", "resolvedPackage": "com.haroon.Inflow", "signaturesMatch": true, "trust": "spoofed", "reason": "wrong-package" },
+  { "case": "case sensitivity: expected differs in case", "expectedPackage": "COM.HAROON.INFLOW", "resolvedPackage": "COM.HAROON.INFLOW", "signaturesMatch": true, "trust": "spoofed", "reason": "unknown-sibling" },
+  { "case": "trailing space", "expectedPackage": "com.haroon.inflow", "resolvedPackage": "com.haroon.inflow ", "signaturesMatch": true, "trust": "spoofed", "reason": "wrong-package" }
+]
