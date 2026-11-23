@@ -3,6 +3,7 @@ package expo.modules.inflowcore.android
 import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.BriefingShare
 import expo.modules.inflowcore.core.HealthTables
+import expo.modules.inflowcore.core.NexusShares
 import expo.modules.inflowcore.core.Suggestion
 import expo.modules.inflowcore.core.SuggestionKind
 import expo.modules.inflowcore.core.SuggestionState
@@ -23,7 +24,7 @@ class VitalsSqlWiringTest {
   private val sqlMention = Regex("(?i)\\b(FROM|JOIN|INTO|UPDATE|TABLE|ON)\\s+($names)\\b")
   private val wordMention = Regex("\\b($names)\\b")
   private val healthStores = setOf("SqlItemStore.kt", "SqlHealthStore.kt", "SqlMedicineStore.kt", "SqlJournalStore.kt")
-  private val dataPaths = Regex("^(Ai|Ask|Autopilot|Item|Ingest|Suggestion|SqlSuggestion|SqlLedger|SqlBackfill|SqlReport|Ledger|Report|Capture|Retention).*\\.kt$")
+  private val dataPaths = Regex("^(Ai|Ask|Autopilot|Item|Ingest|Suggestion|SqlSuggestion|SqlLedger|SqlBackfill|SqlReport|Ledger|Report|Capture|Retention|Nexus).*\\.kt$")
 
   private fun sources() = src.walk().filter { it.isFile && it.extension == "kt" }.toList().also { assertTrue("sources not found from ${File(".").absoluteFile}", it.isNotEmpty()) }
 
@@ -62,7 +63,7 @@ class VitalsSqlWiringTest {
 
   @Test fun theItemsAiAskAndAutopilotCodeNeverNamesAHealthTable() {
     val paths = sources().filter { dataPaths.matches(it.name) }
-    assertTrue(paths.map { it.name }.containsAll(listOf("Ask.kt", "AiRunner.kt", "AutopilotApi.kt", "AutopilotProvider.kt", "AiQueue.kt", "ItemStore.kt", "Ingest.kt", "SqlSuggestionStore.kt")))
+    assertTrue(paths.map { it.name }.containsAll(listOf("Ask.kt", "AiRunner.kt", "AutopilotApi.kt", "AutopilotProvider.kt", "AiQueue.kt", "ItemStore.kt", "Ingest.kt", "SqlSuggestionStore.kt", "NexusShares.kt", "SqlLedgerStore.kt")))
     for (f in paths) assertTrue("${f.name} names a health table", f.readLines().none { wordMention.containsMatchIn(it) })
   }
 
@@ -81,7 +82,7 @@ class VitalsSqlWiringTest {
 
   @Test fun batchPromptsReportsAndAutopilotNeverTouchHealth() {
     val paths = sources().filter { dataPaths.matches(it.name) && it.name != "Ask.kt" && it.name != "AiRunner.kt" }
-    assertTrue(paths.map { it.name }.containsAll(listOf("Ai.kt", "AiQueue.kt", "AutopilotApi.kt", "AutopilotProvider.kt", "AutopilotAccess.kt", "Reports.kt", "SuggestionRules.kt")))
+    assertTrue(paths.map { it.name }.containsAll(listOf("Ai.kt", "AiQueue.kt", "AutopilotApi.kt", "AutopilotProvider.kt", "AutopilotAccess.kt", "Reports.kt", "SuggestionRules.kt", "NexusShares.kt")))
     for (f in paths) assertTrue("${f.name} touches health", code(f).none { healthCode.containsMatchIn(it) })
   }
 
@@ -128,7 +129,14 @@ class VitalsSqlWiringTest {
     // The provider's column arrays live in a private companion next to a UriMatcher (an Android stub here), so they are read from its source.
     val columns = code(file("AutopilotProvider.kt")).filter { it.contains("_COLUMNS = arrayOf(") }.flatMap { Regex("\"([^\"]+)\"").findAll(it).map { m -> m.groupValues[1] }.toList() }
     assertEquals(15, columns.size)
-    val names = row.keys + columns + BriefingShare.COLUMNS + SuggestionKind.values().map { it.name } + AutopilotSettings().toMap().keys
+    val names = row.keys + columns + BriefingShare.COLUMNS + NexusShares.ASK_ITEMS_COLUMNS + NexusShares.ASK_IDS_COLUMNS + NexusShares.DEBITS_COLUMNS + SuggestionKind.values().map { it.name } + AutopilotSettings().toMap().keys
     for (n in names) for (w in words) assertTrue("$n carries $w", !n.lowercase().contains(w))
+  }
+
+  // P2 item 5: the SQL that serves Nexus names no health table (SqlItemStore holds the schema, so its Nexus constants are checked on their own).
+  @Test fun theNexusSharesNameNoHealthTable() {
+    for (sql in listOf(SqlItemStore.NEXUS_ASK_WHERE, SqlItemStore.NEXUS_ASK_ITEMS_SQL, SqlItemStore.NEXUS_ASK_IDS_SQL, SqlLedgerStore.NEXUS_DEBITS_WHERE)) {
+      assertTrue(sql, !wordMention.containsMatchIn(sql) && !healthCode.containsMatchIn(sql))
+    }
   }
 }

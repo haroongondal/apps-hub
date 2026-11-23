@@ -37,6 +37,10 @@ class AiFilterTest {
     assertTrue(two.endsWith(SqlItemStore.SENDABLE))
   }
 
+  // Nexus gets what Ask AI may read, never the queue's picked chats, never Strongroom or Inflow (NexusShareSqlTest runs it where sqlite3 exists).
+  @Test fun nexusAskFilterIsTheNeverSendFilterWithoutStrongroomOrInflow() =
+    assertEquals("i.id > ? AND i.pkg NOT IN (${AutopilotAccess.SQL_LIST}) AND ${SqlItemStore.NEVER_SEND_FILTER}", SqlItemStore.NEXUS_ASK_WHERE)
+
   @Test fun neverSendFilterKnowsNothingOfPickedChats() {
     assertFalse(SqlItemStore.NEVER_SEND_FILTER.contains("conversation_key"))
     assertFalse(SqlItemStore.NEVER_SEND_FILTER.contains("?"))
