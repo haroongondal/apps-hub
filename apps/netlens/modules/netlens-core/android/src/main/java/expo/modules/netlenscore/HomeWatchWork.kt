@@ -22,12 +22,14 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import expo.modules.netlenscore.applink.AppLinkGuard
 import java.net.Inet4Address
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 class WhoIsHomeWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
   override suspend fun doWork(): Result {
+    HomeWatchStore.heartbeat(applicationContext)
     HomeWatch.checkWhoIsHome(applicationContext)
     return Result.success()
   }
@@ -35,6 +37,7 @@ class WhoIsHomeWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
 class NewDeviceWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
   override suspend fun doWork(): Result {
+    HomeWatchStore.heartbeat(applicationContext)
     HomeWatch.checkNewDevices(applicationContext)
     return Result.success()
   }
@@ -121,9 +124,20 @@ object HomeWatch {
     val ips = state.people.flatMap { it.ips }.filter { HomeSubnet.sameSlash24(it, lan.localIp) }.distinct()
     val alive = sweep(lan, ips)
     val now = System.currentTimeMillis()
+    var changed = false
     HomeWatchStore.update(context) { s ->
       if (s.settings.home?.networkId != home.networkId) s
       else s.copy(people = s.people.map { p -> p.copy(state = Presence.next(p.state, p.ips.any { it in alive }, now)) })
+        .also { changed = ChangedPing.presenceChanged(s.people, it.people) }
+    }
+    if (changed) ping(context, newDevice = false, presenceChanged = true)
+  }
+
+  /** Tells Halo to re-read the shares: no extras ever, Halo only, and only same-key apps may receive it. */
+  fun ping(context: Context, newDevice: Boolean, presenceChanged: Boolean) {
+    if (!HomeWatchStore.claimPing(context, newDevice, presenceChanged)) return
+    runCatching {
+      context.sendBroadcast(Intent(ChangedPing.ACTION).setPackage(ChangedPing.TARGET_PACKAGE), AppLinkGuard.PERMISSION)
     }
   }
 
@@ -143,6 +157,7 @@ object HomeWatch {
       s.copy(alerts = NewDevices.record(s.alerts, fresh, now), known = NewDevices.refreshKnown(s.known, alive.keys, now))
     }
     fresh.take(MAX_NOTIFICATIONS).forEach { notifyNewDevice(context, it, home.label) }
+    if (fresh.isNotEmpty()) ping(context, newDevice = true, presenceChanged = false)
   }
 
   fun notificationId(ip: String): Int = 0x4e440000 or (ip.hashCode() and 0xffff)

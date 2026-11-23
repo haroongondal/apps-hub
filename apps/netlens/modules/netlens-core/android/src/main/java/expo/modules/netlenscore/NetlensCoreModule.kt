@@ -1,12 +1,17 @@
 package expo.modules.netlenscore
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.net.ConnectivityManager
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.net.DatagramSocket
 import java.net.InetAddress
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +40,8 @@ class NetlensCoreModule : Module() {
   private val moduleScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
   private var tcpScanJob: kotlinx.coroutines.Job? = null
   private var serviceJob: kotlinx.coroutines.Job? = null
+  // The one open PROPOSE_TASK hand-off; getAndSet(null) settles its promise exactly once.
+  private val deputyPromise = AtomicReference<Promise?>(null)
 
   override fun definition() = ModuleDefinition {
     Name("NetLensCore")
@@ -47,6 +54,12 @@ class NetlensCoreModule : Module() {
     )
 
     OnStartObserving { }
+
+    // The health row's heartbeat: the app opened.
+    OnCreate {
+      val ctx = resolvedContext()?.applicationContext
+      if (ctx != null) moduleScope.launch(Dispatchers.IO) { runCatching { HomeWatchStore.heartbeat(ctx) } }
+    }
 
     AsyncFunction("getNetworkInterfaceInfo") { promise: Promise ->
       moduleScope.launch {
@@ -339,7 +352,13 @@ class NetlensCoreModule : Module() {
     /** Saves the settings and the device-list snapshot from the app, then schedules or cancels the background work. */
     AsyncFunction("setHomeWatch") { settings: Map<String, Any?>, snapshot: Map<String, Any?>?, promise: Promise ->
       homeWatchCall(promise) { ctx ->
-        HomeWatchStore.update(ctx) { HomeWatchStore.applyFromApp(it, settings, snapshot) }.also { HomeWatch.schedule(ctx, it.settings) }
+        var changed = false
+        HomeWatchStore.update(ctx) { prev ->
+          HomeWatchStore.applyFromApp(prev, settings, snapshot).also { changed = ChangedPing.presenceChanged(prev.people, it.people) }
+        }.also {
+          HomeWatch.schedule(ctx, it.settings)
+          if (changed) HomeWatch.ping(ctx, newDevice = false, presenceChanged = true)
+        }
       }
     }
 
@@ -349,12 +368,49 @@ class NetlensCoreModule : Module() {
       }
     }
 
+    /**
+     * Opens Deputy's PROPOSE_TASK draft from the current screen. startActivityForResult is what lets Deputy
+     * check who is asking (AppLinkActivityCaller); nothing runs until the owner starts the draft in Deputy.
+     */
+    AsyncFunction("proposeDeputyTask") { task: String, context: String, promise: Promise ->
+      val extras = DeputyProposal.extras(task, context)
+      val activity = appContext.currentActivity
+      when {
+        extras == null -> promise.resolve(deputyResult("invalid"))
+        activity == null -> promise.resolve(deputyResult("refused"))
+        !deputyPromise.compareAndSet(null, promise) -> promise.resolve(deputyResult("busy"))
+        else -> {
+          val intent = Intent(DeputyProposal.ACTION).setPackage(DeputyProposal.DEPUTY_PACKAGE)
+          extras.forEach { (key, value) -> (value as? String)?.let { intent.putExtra(key, it) } }
+          val failed = try {
+            activity.startActivityForResult(intent, DeputyProposal.REQUEST_CODE)
+            null
+          } catch (_: ActivityNotFoundException) {
+            "not_installed"
+          } catch (_: SecurityException) {
+            "refused"
+          }
+          if (failed != null) deputyPromise.getAndSet(null)?.resolve(deputyResult(failed))
+        }
+      }
+    }.runOnQueue(Queues.MAIN)
+
+    OnActivityResult { _, payload ->
+      if (payload.requestCode != DeputyProposal.REQUEST_CODE) return@OnActivityResult
+      deputyPromise.getAndSet(null)?.resolve(
+        deputyResult(DeputyProposal.outcome(payload.resultCode == Activity.RESULT_OK, payload.data?.getStringExtra("code"))),
+      )
+    }
+
     OnDestroy {
+      deputyPromise.getAndSet(null)?.resolve(deputyResult("cancelled"))
       moduleScope.cancel()
       tcpScanJob = null
       serviceJob = null
     }
   }
+
+  private fun deputyResult(outcome: String): Map<String, Any> = mapOf("supported" to true, "outcome" to outcome)
 
   private fun homeWatchCall(promise: Promise, work: (Context) -> HomeWatchState) {
     val context = resolvedContext()?.applicationContext

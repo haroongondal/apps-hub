@@ -485,6 +485,11 @@ public class NetlensCoreModule: Module {
       ["supported": false]
     }
 
+    // Deputy is an Android app; there is nothing to hand a task to on iOS.
+    AsyncFunction("proposeDeputyTask") { (_: String, _: String) -> [String: Any] in
+      ["supported": false]
+    }
+
     OnDestroy { }
   }
 }

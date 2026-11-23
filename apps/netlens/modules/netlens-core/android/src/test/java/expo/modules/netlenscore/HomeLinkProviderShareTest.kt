@@ -33,6 +33,24 @@ class HomeLinkProviderShareTest {
   @Test fun newDevicesEqualsItsShare() =
     check("new-devices.share.json", HomeShareRows.NEW_DEVICES_PATH, HomeShareRows.NEW_DEVICES_COLUMNS, HomeShareRows.NEW_DEVICES_LIMIT)
 
+  @Test fun healthEqualsTheContractHealthShare() {
+    val f = File("../../../../../packages/app-link-contract/fixtures/app-health.share.json")
+    assertTrue("fixture not found from ${File(".").absoluteFile}", f.isFile)
+    val s = Json.parseToJsonElement(f.readText()).jsonObject
+    assertEquals(s.getValue("columns").jsonArray.map { it.jsonPrimitive.content }, HomeShareRows.HEALTH_COLUMNS.toList())
+    assertEquals(s.getValue("path").jsonPrimitive.content, HomeShareRows.HEALTH_PATH)
+    assertTrue(HomeShareRows.HEALTH_LIMIT <= s.getValue("maxRows").jsonPrimitive.int)
+  }
+
+  @Test fun healthIsOneNonPersonalRowServedEvenWithSharingOff() {
+    val rows = HomeShareRows.health(1_764_000_000_000L)
+    assertEquals(1, rows.size)
+    assertEquals(listOf("netlens", null, null, "none", 1_764_000_000_000L), rows[0].toList())
+    assertEquals(null, HomeShareRows.health(null)[0][4])
+    val off = HomeWatchState(settings = HomeSettings(share = false))
+    assertTrue(HomeShareRows.whoIsHome(off).isEmpty() && HomeShareRows.newDevices(off).isEmpty())
+  }
+
   @Test fun everyRowHasExactlyTheShareColumns() {
     val state = HomeWatchState(
       settings = HomeSettings(whoIsHome = true, newDevices = true, share = true),
@@ -41,5 +59,6 @@ class HomeLinkProviderShareTest {
     )
     assertTrue(HomeShareRows.whoIsHome(state).all { it.size == HomeShareRows.WHO_IS_HOME_COLUMNS.size })
     assertTrue(HomeShareRows.newDevices(state).all { it.size == HomeShareRows.NEW_DEVICES_COLUMNS.size })
+    assertTrue(HomeShareRows.health(null).all { it.size == HomeShareRows.HEALTH_COLUMNS.size })
   }
 }

@@ -6,8 +6,9 @@
  * Note (Expo SDK 52+): requireNativeModule returns an object that IS an
  * EventEmitter, so listeners hang straight off the module.
  */
-import { parseHomeWatchStatus, tcpFetchArgsError, udpBroadcastArgsError, udpRequestArgsError } from '@apps-hub/core';
+import { parseDeputyOutcome, parseHomeWatchStatus, tcpFetchArgsError, udpBroadcastArgsError, udpRequestArgsError } from '@apps-hub/core';
 import type {
+  DeputyBinding,
   DnsResolution,
   HomeWatchBinding,
   ListenerHandle,
@@ -131,6 +132,18 @@ export function createHomeWatchBinding(): HomeWatchBinding {
     },
     async markDeviceMine(ip) {
       return parseHomeWatchStatus(await NetLensCore.markDeviceMine(ip));
+    },
+  };
+}
+
+export function createDeputyBinding(): DeputyBinding {
+  return {
+    async proposeDeputyTask({ task, context }) {
+      try {
+        return parseDeputyOutcome(await NetLensCore.proposeDeputyTask(task, context));
+      } catch {
+        return 'refused';
+      }
     },
   };
 }

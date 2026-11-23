@@ -1,5 +1,7 @@
 package expo.modules.netlenscore
 
+import expo.modules.netlenscore.applink.AppLinkGuard
+
 // Pure twins of packages/core presence.ts and new-devices.ts; HomeRulesTest runs the same fixtures.
 
 object Presence {
@@ -116,6 +118,13 @@ object HomeShareRows {
   val NEW_DEVICES_COLUMNS = arrayOf("first_seen_at", "label", "acknowledged")
   const val WHO_IS_HOME_LIMIT = 16
   const val NEW_DEVICES_LIMIT = 200
+  // appHealthShare('netlens') in packages/app-link-contract; not personal, so served whether sharing is on or not.
+  const val HEALTH_PATH = "health"
+  val HEALTH_COLUMNS = arrayOf("app_id", "accessibility", "listener", "ai_source", "last_seen_at")
+  const val HEALTH_LIMIT = 1
+
+  /** HomeNet has no accessibility service, no notification listener and no AI. */
+  fun health(lastSeenAt: Long?): List<Array<Any?>> = listOf(arrayOf("netlens", null, null, "none", lastSeenAt))
 
   fun whoIsHome(state: HomeWatchState): List<Array<Any>> =
     if (!state.settings.share || !state.settings.whoIsHome) emptyList()
@@ -124,4 +133,51 @@ object HomeShareRows {
   fun newDevices(state: HomeWatchState): List<Array<Any>> =
     if (!state.settings.share || !state.settings.newDevices) emptyList()
     else state.alerts.take(NEW_DEVICES_LIMIT).map { arrayOf(it.firstSeenAt, it.label, if (it.acknowledged) 1 else 0) }
+}
+
+/** The data-free CHANGED ping to Halo (CHANGED_PING in app-link-contract): when it is due. */
+object ChangedPing {
+  const val ACTION = "com.haroon.autopilot.CHANGED"
+  const val TARGET_PACKAGE = "com.haroon.halo"
+  const val MIN_GAP_MS = 60_000L
+
+  fun presenceChanged(before: List<PersonWatch>, after: List<PersonWatch>): Boolean {
+    fun home(people: List<PersonWatch>) = people.filter { it.state.present }.map { it.label.lowercase() }.toSet()
+    return home(before) != home(after)
+  }
+
+  /** A new device always pings; a presence change at most once a minute. Nothing pings while sharing is off. */
+  fun due(settings: HomeSettings, newDevice: Boolean, presenceChanged: Boolean, lastPingAt: Long, now: Long): Boolean {
+    if (!settings.share) return false
+    if (newDevice && settings.newDevices) return true
+    // A clock set back counts as due, so the ping never stalls until the clock catches up.
+    return presenceChanged && settings.whoIsHome && (now - lastPingAt >= MIN_GAP_MS || now < lastPingAt)
+  }
+}
+
+/** PROPOSE_TASK to Deputy (app-link-contract links.ts); DeputyProposalTest binds SPEC to fixtures/propose-task-extras.json. */
+object DeputyProposal {
+  const val ACTION = "com.haroon.deputy.action.PROPOSE_TASK"
+  const val DEPUTY_PACKAGE = "com.haroon.deputy"
+  // Lower 16 bits only: FragmentActivity refuses larger request codes.
+  const val REQUEST_CODE = 0x4e44
+  val SPEC = mapOf(
+    "task" to AppLinkGuard.ExtraSpec(AppLinkGuard.ExtraType.STRING, max = 300, required = true),
+    "context" to AppLinkGuard.ExtraSpec(AppLinkGuard.ExtraType.STRING, max = 2000),
+    "apps" to AppLinkGuard.ExtraSpec(AppLinkGuard.ExtraType.STRING_ARRAY, max = 20),
+    "ref" to AppLinkGuard.ExtraSpec(AppLinkGuard.ExtraType.LONG),
+  )
+
+  /** Only task and, when not blank, context; the owner picks the apps in Deputy's draft. Null when the extras break the contract. */
+  fun extras(task: String, context: String): Map<String, Any>? {
+    val raw = if (context.isBlank()) mapOf("task" to task) else mapOf("task" to task, "context" to context)
+    return (AppLinkGuard.validateExtras(SPEC, raw) as? AppLinkGuard.ExtrasCheck.Ok)?.extras
+  }
+
+  /** Deputy answers with a `code` extra (PROPOSE_TASK_RESULTS); anything else, or no answer, is not a hand-over. */
+  fun outcome(resultOk: Boolean, code: String?): String = when {
+    resultOk && code == "handed_over" -> "handed_over"
+    code == null || code == "cancelled" -> "cancelled"
+    else -> "refused"
+  }
 }

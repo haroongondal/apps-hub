@@ -52,6 +52,7 @@ export interface NetlensCoreApi {
     snapshot: Record<string, unknown> | null,
   ): Promise<Record<string, unknown>>;
   markDeviceMine(ip: string): Promise<Record<string, unknown>>;
+  proposeDeputyTask(task: string, context: string): Promise<Record<string, unknown>>;
   addListener(
     eventName: string,
     listener: (...args: any[]) => void,

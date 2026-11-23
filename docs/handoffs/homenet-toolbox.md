@@ -118,3 +118,28 @@ Decisions:
 Verified (2026-11-23): `@apps-hub/core` 349/349, core and netlens typecheck clean, `@apps-hub/app-link-contract` 91/91 (copies test covers the netlens copies), Gradle `:netlens-core:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL with 58 JVM tests (HomeRulesTest 8, HomeLinkProviderShareTest 3, HomeWatchStoreTest 5, AppLinkGuardTest 16, TcpProbeClassifierTest 5 and the rest), no gms/firebase on `releaseRuntimeClasspath`. iOS build not run (no Pods in the worktree); `swiftc -parse` of the module file passes.
 
 Phone checks (not run): see the C4 report; they need two Store-signed apps for the share and a second phone or laptop to join the Wi-Fi.
+
+## Halo ping, health row and Restart with Deputy (P4, ecosystem wave 3, 2026-11-24)
+
+Same branch `eco/homenet`, on top of C4. Not merged, not released, nothing run on a phone.
+
+What was added:
+
+- **CHANGED ping to Halo** (Android). After a background new-device check finds at least one new device, and after a who's-home change (someone arrived or left, from the 15-minute check or from a scan the app hands native), HomeNet sends `com.haroon.autopilot.CHANGED` to `com.haroon.halo` only, with `sendBroadcast(intent, "com.haroon.permission.AUTOPILOT")` and no extras, so Halo re-reads the `new_devices` and `who_is_home` shares through their guard. Rule `ChangedPing.due` (`HomeRules.kt`, `ChangedPingTest`): nothing while "Share with my other Haroon apps" is off; a new device pings when the new-device check is on; a presence change pings when the who's-home check is on, at most once a minute (`lastPingAt` in the same SharedPreferences, claimed under the store lock).
+- **Health row**: `content://com.haroon.netlens.applink/health` from `appHealthShare('netlens')`: `app_id` netlens, `accessibility` null, `listener` null, `ai_source` none, `last_seen_at` the heartbeat. The heartbeat is written when the native module is created (the app opened) and at the start of each background check; a query only reads it. Served to same-signed callers whatever the share switch says (not personal). `HomeLinkProviderShareTest` binds it to `packages/app-link-contract/fixtures/app-health.share.json`.
+- **Restart the router with Deputy** (Android; the button is hidden on iOS). A button on the Router tab (shown once the router lookup ends, in every state) calls the new native `proposeDeputyTask(task, context)`, which calls `startActivityForResult` on the current Activity with `com.haroon.deputy.action.PROPOSE_TASK`, package `com.haroon.deputy`, so Deputy's `AppLinkActivityCaller` check sees HomeNet. Extras: `task` only, the fixed text `ROUTER_RESTART_TASK` (`packages/core/src/deputy-proposal.ts`); Kotlin re-validates with `AppLinkGuard.validateExtras` against `DeputyProposal.SPEC` (bound to `propose-task-extras.json` by `DeputyProposalTest`). Outcomes `handed_over`, `cancelled`, `not_installed`, `refused`, `invalid`, `busy`, iOS `{ supported: false }`; each but cancelled shows a plain sentence. Deputy only opens a draft; the owner starts it there, behind Deputy's own gate.
+
+Decisions:
+
+- `context` is empty (my call). The only router brand and model HomeNet has come from the router's UPnP description, which is text the router (or whoever set it up) wrote, so it is not HomeNet's own words.
+- `apps` and `ref` are never sent (my call): the owner picks the router app in Deputy's draft; guessing a package would be wrong for most homes.
+- New-device pings are not rate-limited (my call): the check runs every 3 hours at most. A new-device ping also resets the one-minute presence window.
+- One pending hand-off at a time (my call): a second tap while Deputy is open answers `busy`. The promise settles once through an `AtomicReference`, and `OnDestroy` settles it as `cancelled`.
+- No `<queries>` entry (my call): starting another app's activity is not filtered by package visibility; a missing Deputy throws `ActivityNotFoundException`, shown as "not installed".
+- The heartbeat lives next to the home-watch state in `homenet_home_watch` SharedPreferences (my call), not in the JSON state, so a query never parses the state for it.
+
+Known limits: Halo receives the ping only once its manifest holds `<uses-permission android:name="com.haroon.permission.AUTOPILOT" />` and declares the receiver (Halo's side, not built here). The heartbeat is written only if the React context exists when the module is created; the background checks write it too.
+
+Verified (2026-11-24): `@apps-hub/core` 358/358, core and netlens typecheck clean, `@apps-hub/app-link-contract` 133/133, Gradle `:netlens-core:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL with 71 JVM tests (ChangedPingTest 5, DeputyProposalTest 6, HomeLinkProviderShareTest 5, TcpProbeClassifierTest 5 and the rest), merged manifest has the provider behind the signature permission. iOS build not run (no Pods); `swiftc -parse` of the module passes; Kotlin and Swift register the same 14 functions.
+
+Phone checks (not run): see the P4 report.

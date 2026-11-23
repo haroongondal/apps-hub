@@ -10,6 +10,8 @@ import org.json.JSONObject
 object HomeWatchStore {
   private const val PREFS = "homenet_home_watch"
   private const val KEY = "state"
+  private const val HEARTBEAT = "heartbeatAt"
+  private const val LAST_PING = "lastPingAt"
   private const val MAX_PEOPLE = 16
   private const val MAX_IPS_PER_PERSON = 4
   private const val MAX_KNOWN = 512
@@ -25,6 +27,24 @@ object HomeWatchStore {
     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, toJson(next).toString()).commit()
     next
   }
+
+  /** The health row's last_seen_at: written when the app opens or a background check runs, never by a share query. */
+  fun heartbeat(context: Context, now: Long = System.currentTimeMillis()) = synchronized(lock) {
+    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putLong(HEARTBEAT, now).commit()
+  }
+
+  fun lastSeenAt(context: Context): Long? = synchronized(lock) {
+    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(HEARTBEAT, 0L).takeIf { it > 0L }
+  }
+
+  /** True when a CHANGED ping is due (ChangedPing.due), and records it as sent. */
+  fun claimPing(context: Context, newDevice: Boolean, presenceChanged: Boolean, now: Long = System.currentTimeMillis()): Boolean =
+    synchronized(lock) {
+      val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+      val due = ChangedPing.due(load(context).settings, newDevice, presenceChanged, prefs.getLong(LAST_PING, 0L), now)
+      if (due) prefs.edit().putLong(LAST_PING, now).commit()
+      due
+    }
 
   /** Applies settings and a device-list snapshot sent by the app; values from JS are checked, not trusted. */
   fun applyFromApp(prev: HomeWatchState, settings: Map<String, Any?>, snapshot: Map<String, Any?>?): HomeWatchState {
