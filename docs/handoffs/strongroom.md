@@ -721,3 +721,101 @@ order (ledger "Post-plan work" has the rulings and P-briefs):
 Implementers so far: sonnet for Tasks 2–8 and 11, opus for Tasks 9–10 and
 12; reviewers opus for crypto/format/session/matching/platform, sonnet
 otherwise.
+
+## Password check and expiry share (ecosystem wave item C5, 2026-11-23)
+
+Branch `eco/strongroom` (worktree `/Users/outsentia/Documents/apps-hub-wt/eco-strongroom`), not pushed,
+not released, nothing run on the phone. Needs a security-engineer review of the expiry share before
+it is called done (repo privacy rule).
+
+**What it does.**
+
+- **Password check** (Settings → Your passwords → Password check). Kotlin (`core/PasswordHealth.kt`)
+  reads the unlocked vault's logins and flags: too short for its kinds of characters (length ×
+  log2 of the pool of lowercase/uppercase/digits/symbols under 50 bits), only digits, mostly a
+  keyboard or alphabet run (runs of 4+, either direction, covering at least half), mostly repeats
+  (runs of 3+ of one character covering at least half, or the whole password a shorter piece said
+  again), holds the site's name, the username (before @) or the entry's name (4+ characters), on the
+  bundled common list (also with up to four digits or symbols added at the end), and reused (same
+  password on more than one login, grouped). Only ids, flag kinds and counts cross the bridge
+  (`passwordCheck()`); the screen joins ids to the names it already gets from `rows()`. Reuse is
+  found by an in-memory SHA-256 of each password inside one call, never stored or logged. No network.
+- **Expiry share** (Settings → Your other apps → "Share expiry dates with my other Haroon apps").
+  A read-only app link, `content://com.haroon.strongroom.applink/expiry`, rows
+  `{kind, label, expires_on, days_left}` (`apps/strongroom/src/expiry-share.ts`, bound to
+  `ExpiryLinkProvider` by `ExpiryLinkProviderShareTest` through
+  `modules/strongroom-vault/android/src/test/resources/expiry.share.json`). Cards only: a pass has no
+  expiry date in the vault format, so `kind` is always `card` until one is added.
+
+**Decisions (my call; the owner can override).**
+
+- The share is **off by default**; turning it off deletes the index file at once.
+- **Labels default to "Dates only"**: every row says "Card". "Show names" puts the card's own name
+  (trimmed, at most 60 characters) in `label`. Never the number, last four, security code, holder,
+  note, or anything from a login or pass.
+- **Expiry index.** The provider never touches the vault. While the setting is on, every index
+  rebuild (each unlock, each local change, each sync pull: `VaultHolder.rebuildIndex`) also writes
+  `files/expiry.bin`: the JSON list of `{kind, label, expiresOn}` sealed with the existing
+  `DeviceKey` (AES-GCM, AndroidKeyStore, no user-auth requirement, `setUnlockedDeviceRequired`). So
+  a sibling reads it while the vault is locked, but only while the phone itself is unlocked; with the
+  phone locked, or the file missing or unreadable, the share answers with no rows. A failed write
+  deletes the file rather than leave a stale one. Reusing `DeviceKey` (not a new key) is my call: the
+  same protection as the locked-fill match index, and nothing new to rotate.
+- `days_left` is worked out at query time from the phone's date (negative once a card has expired);
+  `expires_on` is the last day of the card's expiry month. A 2-digit year counts as 20xx; a month
+  outside 1–12 or a year outside 2000–2999 gives no row.
+- Weak thresholds (50 bits, half-coverage, 4-character names) are my calls, chosen to stay
+  explainable in one plain sentence per flag; no zxcvbn-style dependency.
+- The share TS definition lives in the app (`apps/strongroom/src/expiry-share.ts`, "next to it" in
+  the contract README), not in `strongroom-core`, so the Chrome extension's package gains no
+  dependency. A reader app copies the definition (or it moves to a package) when one is built.
+
+**Common-password list.** `modules/strongroom-vault/android/src/main/resources/common_passwords.txt`:
+SecLists `Passwords/Common-Credentials/10k-most-common.txt`
+(https://raw.githubusercontent.com/danielmiessler/SecLists/master/Passwords/Common-Credentials/10k-most-common.txt),
+downloaded 2026-11-23, sha256 `68782d6a…0fdcce`, **MIT licence** (Copyright (c) 2018 Daniel
+Miessler; the full licence text heads the file). Lowercased, de-duplicated, sorted; 10,001 entries.
+It is a Java resource loaded once on the first check (like `public_suffix_list.dat`); 74,537 bytes,
+30,815 bytes compressed in the APK. The ten-entry `src/common-passwords.ts` (master-password rule,
+mirrored by the extension) is unchanged.
+
+**Threat model of the expiry share.**
+
+- Who can read: an app holding `com.haroon.permission.AUTOPILOT` (signature level, so signed with the
+  Store key) that also passes `AppLinkCaller` (same signing certificate), checked on the binder thread
+  before anything else. The shell, any other app and URI grants are refused (no
+  `grantUriPermissions`); insert, update and delete throw.
+- What it can learn with the setting on: how many cards have an expiry date and the last day of each
+  expiry month; with "Show names", the names the owner typed. Nothing else exists in the index file.
+  With the setting off: nothing (no file, no rows).
+- Locked vault: readable on purpose (the index is outside the vault). Locked phone: not readable
+  (`setUnlockedDeviceRequired`).
+- A compromised sibling (same key) gets the above, and so does anyone who gets code into a
+  same-signed app; a debug-signed sibling is refused by a Store-signed Strongroom (fail closed), but
+  two debug builds trust each other (contract README, signing finding).
+- A rooted phone is out of scope (as in the contract README). A device backup does not carry the file
+  (`allowBackup="false"`), and a copied file is useless without this phone's Keystore key.
+- Holding the permission also lets Strongroom read Inflow's suggestions; Strongroom never does.
+
+**Gates (2026-11-23, real output).** Baseline before the change: strongroom 102/102,
+strongroom-core 187/187, app-link-contract 91/91, typechecks clean; Gradle
+`:strongroom-vault:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL, 628 tests, 1 skipped.
+After: strongroom 109/109, strongroom-core 187/187, app-link-contract 91/91 (copies test also run
+with a deliberate drift line in Strongroom's `AppLinkCaller.kt` copy: it failed naming the file, then
+passed once reverted), typechecks clean, Gradle BUILD SUCCESSFUL, 661 tests (new: PasswordHealthTest
+7, ExpiryIndexTest 6, ExpiryLinkProviderShareTest 4, AppLinkGuardTest 16), 1 skipped.
+
+**Phone checks (not run; main session, coord queue, Store install only).**
+
+1. Seed: add logins with `123456`, `qwertyuiop`, the same password on three logins, a password that
+   holds the site name, and one strong unique password; add a card with expiry 02/2027 named "Visa
+   travel". Settings → Password check: the summary counts match; the three logins sit under "Same
+   password on 3 logins"; the strong one appears nowhere; tapping a row opens the login, Back returns
+   to the check.
+2. With the setting off: `adb shell content query --uri content://com.haroon.strongroom.applink/expiry`
+   fails with a permission denial naming `com.haroon.permission.AUTOPILOT` (shell lacks it).
+3. From a Store-signed sibling that holds the permission (no app reads it yet: a throwaway query in
+   Deputy or Inflow, or the next app that consumes it): setting off → no rows; turn it on (Dates
+   only) → one row `card, Card, 2027-02-28, <days>`; Show names → label `Visa travel`; lock Strongroom
+   → the same rows; lock the phone → no rows; turn it off → no rows and `files/expiry.bin` is gone
+   (`run-as` is unavailable on a release build, so check the absence by the empty result).

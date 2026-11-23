@@ -23,6 +23,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.strongroomvault.android.BiometricKey
 import expo.modules.strongroomvault.android.EntryInput
+import expo.modules.strongroomvault.android.ExpiryShare
 import expo.modules.strongroomvault.android.KeepAliveService
 import expo.modules.strongroomvault.android.MODE_MIGRATION
 import expo.modules.strongroomvault.android.MODE_TOTP
@@ -41,9 +42,11 @@ import expo.modules.strongroomvault.core.AppId
 import expo.modules.strongroomvault.core.Barcode
 import expo.modules.strongroomvault.core.BarcodeResult
 import expo.modules.strongroomvault.core.Browsers
+import expo.modules.strongroomvault.core.CommonPasswords
 import expo.modules.strongroomvault.core.CsvExport
 import expo.modules.strongroomvault.core.Entry
 import expo.modules.strongroomvault.core.GoogleImport
+import expo.modules.strongroomvault.core.HealthReport
 import expo.modules.strongroomvault.core.HEADER_CHECK
 import expo.modules.strongroomvault.core.KEY_LOST
 import expo.modules.strongroomvault.core.ImportError
@@ -51,6 +54,7 @@ import expo.modules.strongroomvault.core.ImportResult
 import expo.modules.strongroomvault.core.KdfOutOfRange
 import expo.modules.strongroomvault.core.MigrationImport
 import expo.modules.strongroomvault.core.Otp
+import expo.modules.strongroomvault.core.PasswordHealth
 import expo.modules.strongroomvault.core.LostState
 import expo.modules.strongroomvault.core.RecoveryKey
 import expo.modules.strongroomvault.core.SmsCodes
@@ -174,6 +178,8 @@ class StrongroomVaultModule : Module() {
         "lostSaves" to VaultHolder.lostSaves,
         "keepAliveEnabled" to VaultHolder.prefs(context).getBoolean(VaultHolder.KEEP_ALIVE, true),
         "smsFillEnabled" to VaultHolder.prefs(context).getBoolean(VaultHolder.SMS_FILL, false),
+        "expiryShare" to ExpiryShare.enabled(context),
+        "expiryNames" to ExpiryShare.names(context),
       )
     }
 
@@ -566,6 +572,15 @@ class StrongroomVaultModule : Module() {
     Function("setKeepAlive") { enable: Boolean ->
       VaultHolder.prefs(context).edit().putBoolean(VaultHolder.KEEP_ALIVE, enable).apply()
       if (enable) KeepAliveService.start(context) else KeepAliveService.stop(context)
+    }
+
+    // Ids, flag kinds and counts only: no password, and nothing derived from one, crosses the bridge.
+    AsyncFunction("passwordCheck") Coroutine { ->
+      withContext(Dispatchers.Default) { guard { PasswordHealth.check(vault().all(), CommonPasswords.set).toMap() } }
+    }
+
+    Function("setExpiryShare") { on: Boolean, names: Boolean ->
+      guard { ExpiryShare.set(context, on, names) { vault().all() } }
     }
 
     Function("setSmsFill") { enable: Boolean ->
@@ -1010,6 +1025,14 @@ internal inline fun <T> syncCall(block: () -> T): T = try {
 } catch (e: IllegalArgumentException) {
   throw if (e.message == "bad email") CodedException("BAD_EMAIL", "That email address isn't valid. Check it and try again.", e) else e
 }
+
+private fun HealthReport.toMap() = mapOf(
+  "checked" to checked,
+  "weak" to weak,
+  "reused" to reused,
+  "common" to common,
+  "items" to items.map { mapOf("id" to it.id, "flags" to it.flags.map { f -> f.id }, "group" to it.reuseGroup) },
+)
 
 private fun SyncStatus.toMap() =
   mapOf("state" to state, "lastSyncAt" to lastSyncAt, "blocked" to blocked, "quarantined" to quarantined, "available" to available)

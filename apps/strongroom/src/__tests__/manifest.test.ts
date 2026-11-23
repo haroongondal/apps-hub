@@ -51,6 +51,8 @@ test('the vault module keeps services private plus the keep-alive foreground ser
     'android.permission.RECEIVE_SMS',
     'android.permission.CAMERA',
     'android.permission.NFC',
+    // The app-link signature permission (packages/app-link-contract): only same-key sibling apps hold it; it guards the expiry share.
+    'com.haroon.permission.AUTOPILOT',
   ]);
   const autofill = serviceNamed(vaultModule, 'StrongroomAutofillService');
   const syncJob = serviceNamed(vaultModule, 'SyncJobService');
