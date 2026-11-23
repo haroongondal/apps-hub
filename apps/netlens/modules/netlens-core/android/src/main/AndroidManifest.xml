@@ -3,4 +3,18 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
+    <uses-permission android:name="com.haroon.permission.AUTOPILOT" />
+    <application>
+        <provider
+            android:name=".HomeLinkProvider"
+            android:authorities="com.haroon.netlens.applink"
+            android:exported="true"
+            android:readPermission="com.haroon.permission.AUTOPILOT"
+            android:writePermission="com.haroon.permission.AUTOPILOT" />
+        <receiver
+            android:name=".ThisIsMineReceiver"
+            android:exported="false" />
+    </application>
 </manifest>

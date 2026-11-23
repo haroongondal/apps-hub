@@ -1,0 +1,6 @@
+{
+  "authority": "com.haroon.netlens.applink",
+  "path": "new_devices",
+  "columns": ["first_seen_at", "label", "acknowledged"],
+  "maxRows": 200
+}

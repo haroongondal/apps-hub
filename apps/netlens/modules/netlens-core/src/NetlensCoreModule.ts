@@ -45,6 +45,13 @@ export interface NetlensCoreApi {
     timeoutMs: number,
     maxBytes: number,
   ): Promise<string | null>;
+  /** Background checks; Android answers `supported: true` with settings, people and newDevices, iOS `{ supported: false }`. */
+  getHomeWatch(): Promise<Record<string, unknown>>;
+  setHomeWatch(
+    settings: Record<string, unknown>,
+    snapshot: Record<string, unknown> | null,
+  ): Promise<Record<string, unknown>>;
+  markDeviceMine(ip: string): Promise<Record<string, unknown>>;
   addListener(
     eventName: string,
     listener: (...args: any[]) => void,

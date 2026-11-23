@@ -11,11 +11,11 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import {
   TcpScanEngine,
   applyDeviceNames,
-  carryPersonTags,
   cleanMdnsInstanceName,
   computeSubnetForHost,
   hashNetworkId,
   normalizeNetworkName,
+  personTagCarries,
   reconcileScan,
   sameInterface,
   resolveDeviceNames,
@@ -34,11 +34,13 @@ import {
 import { createNetLensNativeBinding } from 'netlens-core';
 
 import { openDeviceStore, type SettingsStore } from '../db/device-store-sqlite';
+import { useHomeWatch, type HomeWatch } from './useHomeWatch';
 
 export type Phase = 'idle' | 'scanning' | 'reconciling' | 'done' | 'error';
 
 /** Most UPnP description URLs kept per device. */
 const MAX_SSDP_LOCATIONS = 8;
+const MAX_SERVICE_NAMES = 8;
 
 /** mDNS/SSDP enrichment window appended around the sweep (SPEC §3.3). */
 const SERVICE_DISCOVERY_MS = 4000;
@@ -71,6 +73,9 @@ export interface NetworkScan {
   /** Forgets the network and its devices; resolves true when it was removed. Clears the scan if it was the current one. */
   forgetNetwork(network: StoredNetwork): Promise<boolean>;
   binding: NetLensNativeBinding;
+  homeWatch: HomeWatch;
+  /** Why a person's tag moved to a device this session, in plain words, by device id. */
+  tagReasons: ReadonlyMap<number, string>;
 }
 
 const ScanContext = createContext<NetworkScan | null>(null);
@@ -90,6 +95,8 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
   const devicesRef = useRef<ReconciledDevice[]>([]);
   // Every UPnP description URL the last scan saw per IP, for the device sheet's remote controls.
   const locationsByIp = useRef<Map<string, string[]>>(new Map()).current;
+  const serviceNamesByIp = useRef<Map<string, string[]>>(new Map());
+  const [tagReasons, setTagReasons] = useState<ReadonlyMap<number, string>>(new Map());
 
   const [store, setStore] = useState<(DeviceStore & SettingsStore) | null>(null);
   const [iface, setIfaceState] = useState<InterfaceInfo | null>(null);
@@ -151,9 +158,10 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
   // Moves a person's tag to the same phone's new row; carryPersonTags returns only changed rows, so a second pass is empty.
   const carryTags = useCallback(
     (target: DeviceStore, generation: number): void => {
-      const changed = carryPersonTags(devicesRef.current);
-      const rows = changed.filter((row) => row.id !== null);
+      const carries = personTagCarries(devicesRef.current, serviceNamesByIp.current);
+      const rows = carries.flatMap((c) => [c.from, c.device]).filter((row) => row.id !== null);
       if (rows.length === 0) return;
+      setTagReasons((prev) => new Map([...prev, ...carries.map((c): [number, string] => [c.device.id ?? -1, c.reason])]));
       const byId = new Map(rows.map((row) => [row.id, row]));
       commitDevices(devicesRef.current.map((row) => byId.get(row.id) ?? row));
       for (const row of rows) {
@@ -188,6 +196,8 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
         { usn: string | null; vendor: string | null; locations: string[] }
       >();
       const mdnsByIp = new Map<string, string>();
+      const servicesByIp = new Map<string, string[]>();
+      serviceNamesByIp.current = servicesByIp;
       const mdns = new Set<string>();
       const collectedTargets: DiscoveredHost[] = [];
 
@@ -200,6 +210,11 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
           }
           if (typeof event.host !== 'string' || !event.host) return;
           if (event.kind === 'mdns-instance') {
+            const clean = typeof event.instanceName === 'string' ? cleanMdnsInstanceName(event.instanceName) : null;
+            const names = servicesByIp.get(event.host) ?? [];
+            if (clean !== null && !names.includes(clean) && names.length < MAX_SERVICE_NAMES) {
+              servicesByIp.set(event.host, [...names, clean]);
+            }
             // First usable name per host wins; a device announces many services.
             // Keep the raw text: resolveDeviceNames is the one place that cleans it.
             if (
@@ -421,6 +436,8 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
     [commitDevices, currentNetworkId, store],
   );
 
+  const homeWatch = useHomeWatch(devices, currentNetworkId, iface, networkName, phase === 'done');
+
   const value = useMemo<NetworkScan>(
     () => ({
       iface,
@@ -443,9 +460,13 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
       renameNetwork,
       forgetNetwork,
       binding: bindingProxy,
+      homeWatch,
+      tagReasons,
     }),
     [
       bindingProxy,
+      homeWatch,
+      tagReasons,
       currentNetworkId,
       devices,
       discovered,

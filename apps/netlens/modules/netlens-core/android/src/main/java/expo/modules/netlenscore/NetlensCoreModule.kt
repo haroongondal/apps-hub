@@ -331,10 +331,43 @@ class NetlensCoreModule : Module() {
       }
     }
 
+    /** Background checks: settings, presence and new devices as one status map. */
+    AsyncFunction("getHomeWatch") { promise: Promise ->
+      homeWatchCall(promise) { ctx -> HomeWatchStore.load(ctx) }
+    }
+
+    /** Saves the settings and the device-list snapshot from the app, then schedules or cancels the background work. */
+    AsyncFunction("setHomeWatch") { settings: Map<String, Any?>, snapshot: Map<String, Any?>?, promise: Promise ->
+      homeWatchCall(promise) { ctx ->
+        HomeWatchStore.update(ctx) { HomeWatchStore.applyFromApp(it, settings, snapshot) }.also { HomeWatch.schedule(ctx, it.settings) }
+      }
+    }
+
+    AsyncFunction("markDeviceMine") { ip: String, promise: Promise ->
+      homeWatchCall(promise) { ctx ->
+        HomeWatchStore.update(ctx) { it.copy(alerts = NewDevices.acknowledge(it.alerts, ip.trim())) }
+      }
+    }
+
     OnDestroy {
       moduleScope.cancel()
       tcpScanJob = null
       serviceJob = null
+    }
+  }
+
+  private fun homeWatchCall(promise: Promise, work: (Context) -> HomeWatchState) {
+    val context = resolvedContext()?.applicationContext
+    if (context == null) {
+      promise.reject(ERR_NO_CONTEXT, "React context unavailable", null)
+      return
+    }
+    moduleScope.launch(Dispatchers.IO) {
+      try {
+        promise.resolve(HomeWatchStore.status(work(context)))
+      } catch (error: Exception) {
+        promise.reject("HOME_WATCH_FAILED", error.message, error)
+      }
     }
   }
 

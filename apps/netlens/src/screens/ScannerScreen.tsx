@@ -45,6 +45,7 @@ import {
 
 import { DeviceControls } from '../components/DeviceControls';
 import { WakeDevice } from '../components/WakeDevice';
+import { NewDevices } from '../components/NewDevices';
 import { useNetworkScan } from '../scan/ScanProvider';
 
 type FilterKey = 'all' | 'new' | 'untrusted';
@@ -392,6 +393,8 @@ export default function ScannerScreen() {
         disabled={store === null || scanning}
         accessibilityHint="Rename or forget networks HomeNet has scanned"
       />
+
+      <NewDevices />
 
       {devices.length > 0 ? (
         <Segmented

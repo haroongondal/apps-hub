@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { carryPersonTags, isGenericDeviceName, peopleStatus, probeHome } from '../people.ts';
+import fs from 'node:fs';
+
+import { cleanMdnsInstanceName } from '../device-names.ts';
+import { carryPersonTags, isGenericDeviceName, ownerOfName, peopleStatus, personTagCarries, probeHome } from '../people.ts';
 import type { ReconciledDevice } from '../device-repository.ts';
 import type { ProbeOutcome } from '../model.ts';
 
@@ -243,4 +246,74 @@ test('probeHome: a rejected call is not reachable and does not throw', async () 
   const b = fakeBinding({ 62078: 'throw', 80: 'open' });
   assert.equal(await probeHome(b, '10.0.0.7'), true);
   assert.deepEqual(b.calls.map((c) => c.port), [62078, 80]);
+});
+
+// Bonjour names as a second and third carry signal (phones with generic hostnames)
+
+const ownerCases: { serviceType: string; raw: string; clean: string; owner: string | null }[] = JSON.parse(
+  fs.readFileSync(new URL('../../fixtures/mdns-owner-names.json', import.meta.url), 'utf8'),
+);
+
+for (const c of ownerCases) {
+  test(`owner fixture (${c.serviceType}): ${c.raw}`, () => {
+    const clean = cleanMdnsInstanceName(c.raw);
+    assert.equal(clean, c.clean);
+    assert.equal(ownerOfName(clean), c.owner);
+  });
+}
+
+test('carry: a generic "iPhone" row moves to the new row that announces the same Bonjour name', () => {
+  const old = dev({ person: 'Sara', hostname: 'iPhone', mdnsName: 'Sara’s iPhone' });
+  const fresh = dev({ seenThisScan: true, hostname: 'iPhone', mdnsName: 'Living room speaker' });
+  const names = new Map([[fresh.lastIp, ['Living room speaker', 'Sara’s iPhone']]]);
+  const [carry] = personTagCarries([old, fresh], names);
+  assert.equal(carry.person, 'Sara');
+  assert.equal(carry.device.id, fresh.id);
+  assert.equal(carry.reason, 'It announces the same name, Sara’s iPhone');
+  assert.deepEqual(carryPersonTags([old, fresh], names).map((d) => [d.id, d.person]), [[old.id, null], [fresh.id, 'Sara']]);
+});
+
+test('carry: an "android" phone whose Bonjour name has the owner word of the tag takes the tag', () => {
+  const old = dev({ person: 'haroon', hostname: 'android' });
+  const fresh = dev({ seenThisScan: true, hostname: 'android' });
+  const names = new Map([[fresh.lastIp, ['Haroon’s Pixel']]]);
+  const carries = personTagCarries([old, fresh], names);
+  assert.equal(carries.length, 1);
+  assert.equal(carries[0].reason, 'It calls itself Haroon’s Pixel');
+  assert.equal(carries[0].device.person, 'haroon');
+});
+
+test('no carry: the owner word belongs to someone else', () => {
+  const old = dev({ person: 'Sara', hostname: 'iPhone' });
+  const fresh = dev({ seenThisScan: true, hostname: 'iPhone' });
+  assert.deepEqual(personTagCarries([old, fresh], new Map([[fresh.lastIp, ['Ali’s iPhone']]])), []);
+});
+
+test('no carry: two new rows call themselves Sara’s (ambiguous)', () => {
+  const old = dev({ person: 'Sara' });
+  const a = dev({ seenThisScan: true });
+  const b = dev({ seenThisScan: true, mdnsName: 'Sara’s iPad' });
+  assert.deepEqual(personTagCarries([old, a, b], new Map([[a.lastIp, ['Sara’s iPhone']]])), []);
+});
+
+test('no carry: a generic announced name never matches the old row', () => {
+  const old = dev({ person: 'Sara', mdnsName: 'iPhone' });
+  const fresh = dev({ seenThisScan: true });
+  assert.deepEqual(personTagCarries([old, fresh], new Map([[fresh.lastIp, ['iPhone']]])), []);
+});
+
+test('the name match still wins: an ambiguous name match is not rescued by a Bonjour owner match', () => {
+  const old = dev({ person: 'Sara', hostname: 'sara-laptop' });
+  const a = dev({ seenThisScan: true, hostname: 'sara-laptop' });
+  const b = dev({ seenThisScan: true, hostname: 'sara-laptop' });
+  const c = dev({ seenThisScan: true });
+  assert.deepEqual(personTagCarries([old, a, b, c], new Map([[c.lastIp, ['Sara’s iPhone']]])), []);
+});
+
+test('the name match keeps its reason and wins over a Bonjour owner match on another row', () => {
+  const old = dev({ person: 'Sara', hostname: 'sara-laptop' });
+  const a = dev({ seenThisScan: true, hostname: 'Sara-Laptop' });
+  const c = dev({ seenThisScan: true });
+  const carries = personTagCarries([old, a, c], new Map([[c.lastIp, ['Sara’s iPhone']]]));
+  assert.deepEqual(carries.map((x) => [x.device.id, x.reason]), [[a.id, 'Same name on the network, Sara-Laptop']]);
 });
