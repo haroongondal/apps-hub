@@ -34,3 +34,6 @@ export const ROW_KEYS = [...SUGGESTIONS_SHARE.columns] as (keyof SuggestionRow)[
 
 /** Packages whose items never reach the AI or Deputy. Inline for Metro; contract.test.ts keeps it equal to fixtures/never-share.json. */
 export const NEVER_SHARE: readonly string[] = ['com.haroon.strongroom', 'com.haroon.inflow'];
+
+/** Kinds of data that never reach Deputy: no shared column names one. Kept apart from NEVER_SHARE, a package list used in SQL. Equal to fixtures/never-share-data.json. */
+export const NEVER_SHARE_DATA: readonly string[] = ['health', 'journal', 'medicine', 'steps', 'sleep', 'heart'];

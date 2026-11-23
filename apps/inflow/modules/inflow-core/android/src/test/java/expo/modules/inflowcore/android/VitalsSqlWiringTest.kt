@@ -1,7 +1,16 @@
 package expo.modules.inflowcore.android
 
+import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.HealthTables
+import expo.modules.inflowcore.core.Suggestion
+import expo.modules.inflowcore.core.SuggestionKind
+import expo.modules.inflowcore.core.SuggestionState
+import expo.modules.inflowcore.core.toMap
+import expo.modules.inflowcore.core.toRow
 import java.io.File
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -54,5 +63,43 @@ class VitalsSqlWiringTest {
     val paths = sources().filter { dataPaths.matches(it.name) }
     assertTrue(paths.map { it.name }.containsAll(listOf("Ask.kt", "AiRunner.kt", "AutopilotApi.kt", "AutopilotProvider.kt", "AiQueue.kt", "ItemStore.kt", "Ingest.kt", "SqlSuggestionStore.kt")))
     for (f in paths) assertTrue("${f.name} names a health table", f.readLines().none { wordMention.containsMatchIn(it) })
+  }
+
+  // V4 / R10: Ask gets health only through HealthForAsk.context, gated by the setting; the batch prompts, reports and Autopilot never touch it.
+  private val healthCode = Regex("\\b(Sql(Health|Medicine|Journal)Store|HealthStore|MedicineStore|JournalStore|HealthForAsk|HealthDay|JournalEntry|Medicines?|Journal|Dose\\w*|Doctor\\w*)\\b")
+
+  private fun file(name: String) = sources().single { it.name == name }
+
+  @Test fun askReachesHealthOnlyThroughTheGate() {
+    val runner = code(file("AiRunner.kt")).filter { healthCode.containsMatchIn(it) && !it.startsWith("import ") }
+    assertEquals(1, runner.size)
+    assertTrue(runner.single(), runner.single().trim().startsWith("val health = HealthForAsk.context(HealthForAsk.on(store.meta(HealthForAsk.META)), "))
+    val ask = code(file("Ask.kt")).flatMap { healthCode.findAll(it).map { m -> m.value }.toList() }.toSet()
+    assertEquals(setOf("HealthForAsk"), ask)
+  }
+
+  @Test fun batchPromptsReportsAndAutopilotNeverTouchHealth() {
+    val paths = sources().filter { dataPaths.matches(it.name) && it.name != "Ask.kt" && it.name != "AiRunner.kt" }
+    assertTrue(paths.map { it.name }.containsAll(listOf("Ai.kt", "AiQueue.kt", "AutopilotApi.kt", "AutopilotProvider.kt", "AutopilotAccess.kt", "Reports.kt", "SuggestionRules.kt")))
+    for (f in paths) assertTrue("${f.name} touches health", code(f).none { healthCode.containsMatchIn(it) })
+  }
+
+  @Test fun theDoctorSummaryReadsHealthOnlyThroughTheStores() {
+    val sql = Regex("\\b(SELECT|INSERT|DELETE|UPDATE|JOIN)\\b|rawQuery|execSQL|compileStatement|\\.query\\(|\\.run\\(")
+    for (name in listOf("DoctorSummary.kt", "DoctorRunner.kt", "DoctorPdf.kt", "PdfLayout.kt", "HealthForAsk.kt")) {
+      assertTrue(name, code(file(name)).none { sql.containsMatchIn(it) })
+    }
+  }
+
+  @Test fun noSharedRowOrColumnCarriesHealth() {
+    // Gradle runs module unit tests from the module's android/ folder: five levels up is the repo root.
+    val words = Json.parseToJsonElement(File("../../../../../packages/autopilot-contract/fixtures/never-share-data.json").readText()).jsonArray.map { it.jsonPrimitive.content }
+    assertEquals(listOf("health", "journal", "medicine", "steps", "sleep", "heart"), words)
+    val row = Suggestion(1, SuggestionKind.REPLY, "t", 1, null, "k", SuggestionState.WAITING, 0, 0, 0).toRow()
+    // The provider's column arrays live in a private companion next to a UriMatcher (an Android stub here), so they are read from its source.
+    val columns = code(file("AutopilotProvider.kt")).filter { it.contains("_COLUMNS = arrayOf(") }.flatMap { Regex("\"([^\"]+)\"").findAll(it).map { m -> m.groupValues[1] }.toList() }
+    assertEquals(15, columns.size)
+    val names = row.keys + columns + SuggestionKind.values().map { it.name } + AutopilotSettings().toMap().keys
+    for (n in names) for (w in words) assertTrue("$n carries $w", !n.lowercase().contains(w))
   }
 }

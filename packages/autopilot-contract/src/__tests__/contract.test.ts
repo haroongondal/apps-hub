@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import { assertRowShape, LINK_PERMISSION } from '@apps-hub/app-link-contract';
-import { AUTHORITY, NEVER_SHARE, PERMISSION, ROW_KEYS, STATES, SUGGESTIONS_SHARE } from '../index.ts';
+import { AUTHORITY, KINDS, NEVER_SHARE, NEVER_SHARE_DATA, PERMISSION, ROW_KEYS, STATES, SUGGESTIONS_SHARE } from '../index.ts';
 import type { SuggestionRow } from '../index.ts';
 
 const read = (name: string) =>
@@ -37,4 +37,12 @@ test('never-share list covers Strongroom and Inflow', () => {
   assert.deepEqual(NEVER_SHARE, read('never-share.json'));
   assert.ok(NEVER_SHARE.includes('com.haroon.strongroom'));
   assert.ok(NEVER_SHARE.includes('com.haroon.inflow'));
+});
+
+test('never-share data names every health kind, and no suggestion column or kind carries one', () => {
+  assert.deepEqual(NEVER_SHARE_DATA, read('never-share-data.json'));
+  for (const kind of ['health', 'journal', 'medicine', 'steps', 'sleep', 'heart']) assert.ok(NEVER_SHARE_DATA.includes(kind), kind);
+  for (const name of [...SUGGESTIONS_SHARE.columns, ...KINDS]) {
+    for (const data of NEVER_SHARE_DATA) assert.ok(!name.toLowerCase().includes(data), `${name} names ${data}`);
+  }
 });
