@@ -85,7 +85,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | C4 | HomeNet | eco/homenet | in progress |
 | C5 | Strongroom health report | eco/strongroom | in progress |
 | C6 | Halo progress ring | eco/halo | built + gated (c230590a): halo-engine 165, notch-island 127, halo ts 127 pass, assembleDebug ok; default ON (my call); phone not run; security-engineer look pending |
-| C7 | Design Editor brand kit from image | eco/design-editor | in progress |
+| C7 | Design Editor brand kit from image | eco/design-editor | built + gated (4fc78b36): engine 48/48, design-editor-mobile 105/105, design-editor 9/9 (unit), mobile tsc ok; engine is classic JS (image-maths.js), ui WCAG helper is private to its test so formula is duplicated and pinned by known values; UI is DOM code never run in a window or phone |
 | C8 | Nexus offline OCR (on main; verify, audit, fill gaps) | eco/nexus | todo |
 | C9 | autonomous-browsing dry run | eco/autonomous-browsing | built + gated (d4ab7da7): vitest 514 pass (500 before), tsc clean; real-window check not run; open: assert probe waits default timeout on missing targets |
 | V1-V5 | Vitals in Inflow | eco/inflow | V1-V4 in progress (phase vitals); V5 waits for E1 final |
