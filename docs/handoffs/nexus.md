@@ -140,6 +140,28 @@ push or release only when the owner says so.
     lines wrap a little early; an AI edit that returns a truncated CV replaces the old one.
   - Not done: phone test (adb went offline mid-session); AI calls with real keys.
 
+- 2026-11-23 S4 (eco wave F6, branch `eco/nexus`): the three known shortcuts, each committed when green:
+  - Tab bar (6134b70e): the tabs layout hides the custom `TabBar` while the keyboard is shown (a custom
+    `tabBar` skips the navigator's `tabBarHideOnKeyboard`). The manifest and app.json already say
+    `adjustResize` / `softwareKeyboardLayoutMode: resize`, so neither changed.
+  - Cited PDF page (aeae7091): new bridge command `{ type: 'goto-page', page }` in `src/editor/bridge.ts`
+    and `core.js`. `openCitation` passes the page to `openItem`, the editor gets a `page` param, holds it
+    (`pendingPage` in `src/editor/goto-page.ts`) until the first `documentLoaded`, clamps it to the page
+    count and sends it once; the engine clamps again and scrolls a frame later, after the width fit.
+    App test `goto-page.test.ts` (7, including a check that core.js handles every command in bridge.ts).
+  - Long recordings (5624026f): knowledge-core `audio-chunks.ts`: `planChunks(durationMs, bytes, limit)`
+    (pieces under 90% of the limit, 2 s overlap each side, keep ranges that touch), `stitchTranscripts`
+    (times moved onto the whole recording; a segment belongs to the piece holding its midpoint; a
+    same-text repeat across the cut is dropped) and `transcribeInChunks` (sequential, 3 tries for
+    `server`/`bad_reply`, pausing errors keep their kind, any failed piece fails the item, every piece
+    file freed). 14 tests. New Android-only module `modules/audio-chunks` (`durationMs`, `cut`) cuts the
+    M4A with MediaExtractor + MediaMuxer without re-encoding (no ffmpeg in the app; the recorder writes
+    AAC in MPEG-4, so a container copy works); JVM test `CutWindowTest` (5). On iOS the module is absent
+    and a long recording fails with a plain message as before. Minutes (M1) can reuse all of it.
+  - Gates: app tests 47/47, typecheck and lint clean; knowledge-core 67/67, typecheck clean; engine 2/2;
+    `:audio-chunks:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL.
+  - Not run (no phone in this wave): Ask citation to a PDF page; a recording over 25 MB; keyboard on Stream.
+
 ## Current state + exact next step
 
 Nexus 1.4.0 (versionCode 18) is on the Store, built from `nexus` at a88538e8. PR #44 was merged to main on 2026-11-18.
@@ -155,6 +177,7 @@ voice note record/stop (and with the screen off), photo, PDF page text; with the
 entered by the owner: transcription, ideas, Ask with citations, seek from a voice
 citation, kill-and-resume.
 
-Known shortcuts: cited PDFs open at page 1 (needs a bridge message, N3); recordings over
-25 MB fail; first ~24k characters per item feed the graph; brute-force vector search;
-no share-sheet ingestion yet; the tab bar rises above the keyboard on the Stream screen.
+Known shortcuts: first ~24k characters per item feed the graph; brute-force vector search;
+no share-sheet ingestion yet. Done in S4 on `eco/nexus` (phone test pending): cited PDFs open at
+the cited page (aeae7091); recordings over 25 MB are transcribed in pieces on Android (5624026f);
+the tab bar hides while the keyboard is open (6134b70e).
