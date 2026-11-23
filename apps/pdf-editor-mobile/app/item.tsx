@@ -12,11 +12,13 @@ import { openItem } from '../src/library/open-item';
 import { openLibrary } from '../src/library/open-library';
 import { itemFile } from '../src/library/paths';
 import { errorMessage, useDebounced } from '../src/library/use-library';
+import { addTodoExtras, proposeTaskExtras } from '../src/nexus/action-links';
 import { aiReady } from '../src/nexus/ai';
 import { saveNote } from '../src/nexus/capture';
 import { audioFile } from '../src/nexus/content';
 import { jobLabel, minutesDetail, minutesError, seekTo, sourceText } from '../src/nexus/labels';
 import { isMakingMinutes, makeMinutes } from '../src/nexus/minutes';
+import { SendButtons } from '../src/nexus/send-buttons';
 import { dueFor, dueText, type QuickPick } from '../src/nexus/today';
 import { refreshTodayShare } from '../src/nexus/today-share';
 import { enqueue, keepOut, kick, onQueueChange, openKnowledge, takeBack } from '../src/nexus/worker';
@@ -43,7 +45,7 @@ interface Loaded {
 const SAVE_MS = 800;
 const REINDEX_MS = 5000; // PRD FR-1: re-index a note after 5 s without typing
 
-function NoteEditor({ item, onSaved }: { item: Item; onSaved: () => void }) {
+function NoteEditor({ item, due, onSaved }: { item: Item; due: number | null; onSaved: () => void }) {
   const [text, setText] = useState<string | null>(null);
   const latest = useRef<string | null>(null);
   const saved = useRef<string | null>(null);
@@ -84,7 +86,15 @@ function NoteEditor({ item, onSaved }: { item: Item; onSaved: () => void }) {
   );
 
   if (text === null) return null;
-  return <Field label="Note" value={text} onChangeText={setText} multiline textAlignVertical="top" style={{ minHeight: 200, paddingVertical: space.md }} />;
+  return (
+    <>
+      <Field label="Note" value={text} onChangeText={setText} multiline textAlignVertical="top" style={{ minHeight: 200, paddingVertical: space.md }} />
+      <SendButtons
+        inflow={addTodoExtras({ text, minutesLabel: 'From a Nexus note', dueAt: due })}
+        deputy={proposeTaskExtras({ text })}
+      />
+    </>
+  );
 }
 
 const PICKS: { pick: QuickPick; label: string }[] = [
@@ -130,6 +140,17 @@ function MinutesSection({ item, saved, making, playFrom }: { item: Item; saved: 
       accessibilityHint="Plays the recording from where this was said"
     />
   );
+  const action = (a: MinutesAction, i: number) => (
+    <View key={i}>
+      {point(a, i)}
+      <View style={{ paddingHorizontal: space.lg, paddingBottom: space.md }}>
+        <SendButtons
+          inflow={addTodoExtras({ text: a.text, minutesLabel: `From the minutes of ${item.title}`, owner: a.owner, spokenDue: a.due })}
+          deputy={proposeTaskExtras({ text: a.text })}
+        />
+      </View>
+    </View>
+  );
   const found = saved ? saved.minutes.decisions.length + saved.minutes.actions.length : 0;
 
   return (
@@ -161,7 +182,7 @@ function MinutesSection({ item, saved, making, playFrom }: { item: Item; saved: 
           {saved.minutes.decisions.map(point)}
         </Group>
       ) : null}
-      {saved?.minutes.actions.length ? <Group title="Action items">{saved.minutes.actions.map(point)}</Group> : null}
+      {saved?.minutes.actions.length ? <Group title="Action items">{saved.minutes.actions.map(action)}</Group> : null}
       {making ? null : saved ? (
         <Button label="Make minutes again" variant="secondary" onPress={again} />
       ) : (
@@ -327,6 +348,7 @@ export default function ItemScreen() {
       ) : null}
       {item.kind === 'note' && !data.source ? <NoteEditor
           item={item}
+          due={data.due}
           onSaved={() => {
             void refreshTodayShare(); // a note's title follows its first line, and the title is what other apps see
             void load();

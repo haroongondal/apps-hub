@@ -470,3 +470,37 @@ calls, summarised here and marked "(my call)": nothing in the owner's brief fixe
    the adb shell the read is refused, because the shell lacks the signature permission; that refusal is the point.)
 7. Heartbeat: open Nexus, then read `health` from a sibling: last_seen_at within a minute of now.
 8. Open the app twice within a minute: `files/last_seen` changes at most once a minute (needs `adb shell run-as com.haroon.pdfeditor cat files/last_seen` on a debuggable build only).
+
+### M3 action items: Add to Inflow and Do with Deputy
+- Where: each Minutes action item on an audio item screen, and the note screen (one pair under the note field). Not on source items
+  (text from other apps is not sent onward) and not on decisions. Small secondary buttons "Add to Inflow" and "Do with Deputy",
+  hidden when the platform has no `NexusLinks` (iOS). One tap sends one item through `startLink` from the button's onPress only;
+  there is no bulk send, no notification, shortcut, widget or background caller. Both buttons are disabled while a launch is open
+  (the native side also answers `busy`). The outcome sits under the buttons for 6 seconds or until the next tap.
+- Add to Inflow (`ADD_TODO`, Inflow shows its own screen and saves only on Add): `title` is the item text, whitespace collapsed and
+  control characters removed (NUL included), cut to 200 UTF-16 units at a word (never inside an emoji, no ellipsis). If it was cut,
+  the full cleaned text follows in `note`. `note` also holds the source line ("From the minutes of <title>", "From a Nexus note") and,
+  for a Minutes item, "Owner: Sara. Due: by Friday." as plain words. `dueAt` (camelCase) is sent only for an own note with a real
+  due date (`item_due`); a spoken due is free text and never becomes `dueAt` (R7). `source` is "Nexus".
+- Do with Deputy (`PROPOSE_TASK`, Deputy shows its draft screen and runs nothing until the owner starts it there): `task` is the
+  fixed sentence "Do this for me. The details are in the quoted text." written by Nexus, never built from item text. `context` is the
+  cleaned item text cut to 2000 and is untrusted at Deputy. No `apps`, no `ref`. Context is cleaned like the title, so line breaks
+  become spaces.
+- Outcomes (plain text): "Added to Inflow." / "Sent to Deputy. Check it there before it runs."; "You didn't add it." / "You didn't send
+  it."; "Inflow isn't installed." / "Deputy isn't installed."; refused or failed "Inflow didn't accept it." / "Deputy didn't accept it.
+  Nothing was sent."; busy "Wait a moment and tap again."
+- Code: pure builders and `outcomeText` in `src/nexus/action-links.ts`, tests in `src/__tests__/action-links.test.ts` (run against the
+  contract's `validateExtras`, `ADD_TODO` and `PROPOSE_TASK`, and the fixture specs); buttons in `src/nexus/send-buttons.tsx`; wired in
+  `app/item.tsx`. No native change.
+
+Not run (phone), after M3:
+1. Inflow installed: open a recording with minutes, tap "Add to Inflow" on an action item. Inflow asks for the fingerprint and shows its
+   screen with the text and the source line in the note. Tap Add: "Added to Inflow." appears under the buttons and clears in about 6 s.
+   Back instead: "You didn't add it."
+2. Uninstall Inflow: "Inflow isn't installed." Tap twice quickly with it installed: the second tap is ignored (buttons disabled).
+3. Deputy installed: "Do with Deputy" opens its draft screen with the fixed task and the item text as quoted context; saving it: "Sent
+   to Deputy. Check it there before it runs." Back: "You didn't send it." Deputy uninstalled: "Deputy isn't installed."
+4. An own note with a due date set (Due row), "Add to Inflow": Inflow shows that due date. A Minutes item shows none, with "Due: by
+   Friday." in the note when the speaker said it.
+5. A source item ("From Inflow") and a decision row show no buttons. On iOS no buttons appear.
+6. Layout of the buttons under an action row and the note field is unseen (typed and read only).
