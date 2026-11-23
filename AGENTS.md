@@ -106,6 +106,17 @@ Current apps:
   Design Editor: long-press an image, "Copy text" (bridge event `recognizeText`). PDF Editor:
   "+" → "Scan text" (`app/scan-text.tsx`, system camera through expo-image-picker). The Scan
   branch's Phase 4 OCR in `pdf-scan` is separate and unchanged.
+- **app-link-contract** (`packages/app-link-contract`) — how apps read from or start things in
+  each other: typed read-only shares (`defineShare`) and actions that always show a screen
+  (`defineAction`), both guarded by the one signature permission `com.haroon.permission.AUTOPILOT`.
+  `packages/autopilot-contract` is built on it. Providers call `AppLinkCaller.allowed` (permission
+  plus the same signing certificate); the Kotlin `AppLinkGuard` and `AppLinkCaller` are copied
+  into each app's module with only the `package` line changed and `copies.test.ts` fails on
+  drift. No secrets cross; other people's text is untrusted data in the receiving app and never
+  skips Deputy's confirmation gate. Deputy's `RunSuggestionActivity` is the one grandfathered
+  headless action; new ones must show a screen. Links hold only between Store-signed releases
+  (debug builds and `apps/ai-hub`, which has no release path yet, are not on the shared key).
+  How-to, threat model and phone checks: `packages/app-link-contract/README.md`.
 
 Not here on purpose: `~/Documents/agent-harness` (deferred until its phase
 branches are merged).
