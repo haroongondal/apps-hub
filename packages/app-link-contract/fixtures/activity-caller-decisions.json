@@ -1,0 +1,9 @@
+[
+  { "callingPackage": null, "signaturesMatch": false, "allow": false },
+  { "callingPackage": null, "signaturesMatch": true, "allow": false },
+  { "callingPackage": "", "signaturesMatch": false, "allow": false },
+  { "callingPackage": "", "signaturesMatch": true, "allow": false },
+  { "callingPackage": "com.haroon.inflow", "signaturesMatch": false, "allow": false },
+  { "callingPackage": "com.haroon.inflow", "signaturesMatch": true, "allow": true },
+  { "callingPackage": "com.other.app", "signaturesMatch": false, "allow": false }
+]
