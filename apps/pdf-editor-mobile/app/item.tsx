@@ -1,5 +1,5 @@
-import { locatorLabel, type Job, type MinutesAction, type MinutesPoint, type SavedMinutes, type Segment } from '@apps-hub/knowledge-core';
-import type { Item, PlaceReminder } from '@apps-hub/library-core';
+import { locatorLabel, sourceLabel, type Job, type MinutesAction, type MinutesPoint, type SavedMinutes, type Segment } from '@apps-hub/knowledge-core';
+import type { Item, ItemSource, PlaceReminder } from '@apps-hub/library-core';
 import { Button, confirmAction, Field, Group, Header, Notice, Pill, Progress, Row, Screen, space, Text } from '@apps-hub/ui';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Image } from 'expo-image';
@@ -15,9 +15,11 @@ import { errorMessage, useDebounced } from '../src/library/use-library';
 import { aiReady } from '../src/nexus/ai';
 import { saveNote } from '../src/nexus/capture';
 import { audioFile } from '../src/nexus/content';
-import { jobLabel, minutesDetail, minutesError, seekTo } from '../src/nexus/labels';
+import { jobLabel, minutesDetail, minutesError, seekTo, sourceText } from '../src/nexus/labels';
 import { isMakingMinutes, makeMinutes } from '../src/nexus/minutes';
-import { enqueue, kick, onQueueChange, openKnowledge } from '../src/nexus/worker';
+import { dueFor, dueText, type QuickPick } from '../src/nexus/today';
+import { refreshTodayShare } from '../src/nexus/today-share';
+import { enqueue, keepOut, kick, onQueueChange, openKnowledge, takeBack } from '../src/nexus/worker';
 import { describePlace } from '../src/places/describe';
 import { PlaceSheet } from '../src/places/place-sheet';
 import { syncPlaceReminders } from '../src/places/sync';
@@ -34,6 +36,8 @@ interface Loaded {
   keptOut: boolean;
   minutes: SavedMinutes | null;
   makingMinutes: boolean;
+  source: ItemSource | null;
+  due: number | null;
 }
 
 const SAVE_MS = 800;
@@ -81,6 +85,27 @@ function NoteEditor({ item, onSaved }: { item: Item; onSaved: () => void }) {
 
   if (text === null) return null;
   return <Field label="Note" value={text} onChangeText={setText} multiline textAlignVertical="top" style={{ minHeight: 200, paddingVertical: space.md }} />;
+}
+
+const PICKS: { pick: QuickPick; label: string }[] = [
+  { pick: 'today', label: 'Today' },
+  { pick: 'tomorrow', label: 'Tomorrow' },
+  { pick: 'week', label: 'In a week' },
+];
+
+function DueRow({ due, onPick }: { due: number | null; onPick: (dueAt: number | null) => void }) {
+  return (
+    <Group title="Due">
+      <Row title={due === null ? 'No due date' : dueText(due, Date.now())}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+          {PICKS.map((p) => (
+            <Button key={p.pick} label={p.label} size="sm" variant="secondary" onPress={() => onPick(dueFor(p.pick, Date.now()))} />
+          ))}
+          {due === null ? null : <Button label="Clear" size="sm" variant="ghost" onPress={() => onPick(null)} />}
+        </View>
+      </Row>
+    </Group>
+  );
 }
 
 function MinutesSection({ item, saved, making, playFrom }: { item: Item; saved: SavedMinutes | null; making: boolean; playFrom: (sec: number) => void }) {
@@ -212,18 +237,21 @@ export default function ItemScreen() {
     const item = await kn.lib.getItem(params.id);
     if (!item) return setMissing(true);
     const job = await kn.job(item.id);
+    const source = await kn.lib.sourceOf(item.id);
     setData({
       item,
       job,
       found: await kn.summary(item.id),
       ideas: await kn.ideas(item.id),
-      segments: item.kind === 'note' ? [] : await kn.segmentsOf(item.id),
+      segments: item.kind === 'note' && !source ? [] : await kn.segmentsOf(item.id),
       related: (await kn.related(item.id)).map((r) => r.item),
       hasKey: await aiReady(),
       places: await kn.lib.listReminders(item.id),
       keptOut: await kn.isExcluded(item.id),
       minutes: item.kind === 'audio' ? await kn.minutes(item.id) : null,
       makingMinutes: isMakingMinutes(item.id),
+      source,
+      due: source ? null : await kn.lib.getDue(item.id),
     });
   }, [params.id]);
   useEffect(() => {
@@ -248,6 +276,22 @@ export default function ItemScreen() {
     await kick();
   };
   const at = params.at ? Number(params.at) : null;
+  const setDue = async (dueAt: number | null) => {
+    try {
+      await (await openLibrary()).setDue(item.id, dueAt);
+      await refreshTodayShare();
+      await load();
+    } catch (err) {
+      Alert.alert('Could not set the due date', errorMessage(err));
+    }
+  };
+  const changeNexus = async () => {
+    try {
+      await (data.keptOut ? takeBack(item.id) : keepOut(item.id));
+    } catch (err) {
+      Alert.alert('Could not change Nexus for it', errorMessage(err));
+    }
+  };
   const removePlace = async (place: PlaceReminder) => {
     try {
       await (await openLibrary()).removeReminder(place.id);
@@ -260,13 +304,35 @@ export default function ItemScreen() {
 
   return (
     <Screen scroll>
-      <Header title={item.title} trailing={close} />
+      <Header
+        title={item.title}
+        subtitle={data.source ? sourceLabel(data.source) : data.due === null ? undefined : dueText(data.due, Date.now())}
+        trailing={close}
+      />
       <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
         <Pill label={status.label} tone={status.tone} />
         {job?.status === 'failed' ? <Button label="Try again" size="sm" variant="secondary" onPress={() => void retry()} /> : null}
       </View>
 
-      {item.kind === 'note' ? <NoteEditor item={item} onSaved={() => void load()} /> : null}
+      {data.source ? (
+        <>
+          <Text selectable>{sourceText(data.segments.map((s) => s.text).join('\n\n'))}</Text>
+          <Text tone="muted">A copy Nexus kept so you can ask about it. It can&apos;t be edited here.</Text>
+          <Button
+            label={data.keptOut ? 'Add to Nexus' : 'Keep out of Nexus'}
+            variant="secondary"
+            onPress={() => (data.keptOut ? void changeNexus() : confirmAction({ title: `Keep \u201c${item.title}\u201d out of Nexus?`, message: 'Its ideas and links are removed. Nexus won\u2019t read it again until you add it back.', confirmLabel: 'Keep out', onConfirm: () => void changeNexus() }))}
+          />
+        </>
+      ) : null}
+      {item.kind === 'note' && !data.source ? <NoteEditor
+          item={item}
+          onSaved={() => {
+            void refreshTodayShare(); // a note's title follows its first line, and the title is what other apps see
+            void load();
+          }}
+        /> : null}
+      {data.source ? null : <DueRow due={data.due} onPick={(d) => void setDue(d)} />}
       {item.kind === 'audio' ? (
         <Recording
           item={item}

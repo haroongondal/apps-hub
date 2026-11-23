@@ -7,6 +7,7 @@ import { View } from 'react-native';
 import { IconButton } from '../src/library/icon-button';
 import { errorMessage } from '../src/library/use-library';
 import { addKey, aiReady, checkKey, getKeys, removeKey, type Service } from '../src/nexus/ai';
+import { AskMyLife, TodayShare } from '../src/nexus/ask-settings';
 import { kick, openKnowledge } from '../src/nexus/worker';
 
 const SERVICES: { id: Service; name: string; placeholder: string; hint: string }[] = [
@@ -118,6 +119,8 @@ export default function SettingsScreen() {
           </View>
         </Group>
       ) : null}
+      <AskMyLife />
+      <TodayShare />
     </Screen>
   );
 }

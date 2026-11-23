@@ -4,12 +4,16 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { startAskSources } from '../src/nexus/ask-sources';
 import { sweepInboxes } from '../src/nexus/share-inbox';
+import { startShares } from '../src/nexus/today-share';
 import { startWorker } from '../src/nexus/worker';
 import { syncPlaceReminders } from '../src/places/sync';
 
 export default function RootLayout() {
   useEffect(() => startWorker(), []);
+  useEffect(() => startAskSources(), []);
+  useEffect(() => startShares(), []);
   useEffect(() => {
     try {
       sweepInboxes();

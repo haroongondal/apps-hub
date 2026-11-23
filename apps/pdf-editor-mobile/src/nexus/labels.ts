@@ -1,4 +1,4 @@
-import { AiError, type Job, type MinutesAction, type MinutesPoint } from '@apps-hub/knowledge-core';
+import { AiError, locatorLabel, type Job, type MinutesAction, type MinutesPoint, type Source } from '@apps-hub/knowledge-core';
 import type { ItemKind } from '@apps-hub/library-core';
 import type { Tone } from '@apps-hub/ui';
 
@@ -64,3 +64,9 @@ export function minutesError(err: unknown): string {
   if (err instanceof AiError && err.kind === 'offline') return "Nexus couldn't reach the AI service. Check your connection, then try again.";
   return err instanceof Error ? err.message : String(err);
 }
+
+/** An item read from another app is named by where it came from ("From Inflow message, 3 Nov"), not by its title. */
+export const citationLabel = (c: Source & { n: number }) => `${c.n} · ${c.origin ?? c.title}${c.locator ? `, ${locatorLabel(c.locator)}` : ''}`;
+
+// A source item's saved text opens with its own label line ("From Inflow message, 3 Nov, from Bank", blank line); the screen shows the label separately.
+export const sourceText = (saved: string): string => saved.replace(/^From [^\n]*\n\n/, '');

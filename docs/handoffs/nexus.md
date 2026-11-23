@@ -406,3 +406,67 @@ Checked 2026-11-23 (Nexus wave 2, task 4) from the sources, not from memory. Off
   the GitHub contents API, nothing downloaded).
 - What reaches Nexus: nothing. "Scan text" saves nothing (it copies text to the clipboard); `scan` items have an
   `ocr_text` column that nothing fills yet; `image` items are read by Gemini vision, not by the offline OCR.
+
+## P3 (eco Wave 3): Ask my life, due dates, shares
+
+Branch `eco/nexus`. Later workers (M3 buttons, B6 receipts) append their own parts below. Rulings R1 to R11 are the phase agent's
+calls, summarised here and marked "(my call)": nothing in the owner's brief fixed them.
+
+### What Ask my life (B2) does
+- Settings, "Ask my life": one On/Off switch per source, all off by default: Inflow messages, Clipboard pinned clips, Deputy run
+  history. The switches live in `kn_meta` (`source_switch:<app>`, same database as the items they guard); `today_share` is the
+  fifth flag there.
+- On: `SourceSync.turnOn`, then a first run. Off: asks "Delete everything Nexus kept from <app>?"; on confirm `SourceSync.turnOff`
+  wipes items, chunks, vectors and search rows at once, then Library, Stream, Ask and any open item screen refresh (a deleted item's
+  screen shows "Not found"; a Library view of the vanished "From <app>" folder steps back).
+- Runs (`src/nexus/ask-sources.ts`, pure part `ask-runner.ts`): when the app opens and when it returns to the foreground, one
+  `SourceSync` per process, at most 50 new items per source per run, never overlapping (a request during a run becomes one more run
+  after it), no timer and no background service. After a run that added or changed items the existing worker is kicked, so
+  embeddings go Gemini via the hub-first wrapper; Ask answers go to Groq (hub first when AI hub is installed). The switch copy says so.
+- A source that is off, missing or fails keeps its data and shows one plain line ("Off in Inflow", "Couldn't read Inflow right now").
+  Every switch also shows a fixed hint naming the other app's own switch (R9). Status lines come from the last run, so nothing is read
+  from another app while its switch here is off.
+- Source items: read-only on the item screen (text from `kn.segmentsOf`, label "From Inflow message, 3 Nov" in the header), Keep out of
+  Nexus / Add to Nexus, no editor, no due date, no Delete or Rename (a deleted Deputy run or pin would come back on the next run; a
+  rename would be overwritten). Library rows and search hits show the source label instead of kind, date and size. Citations show
+  `origin ?? title`. Nothing is opened or fetched from source text.
+
+### What is served to other apps (R3)
+- `files/today.json` (filesDir, where `ai_source` goes; `Paths.document` is `Context.getFilesDir()` in expo-modules-core 3.0.30):
+  `{"v":1,"on":bool,"items":[{"title","dueAt"}]}`. Items are the owner's own items due from local midnight to local midnight + 3
+  days (`Library.dueBetween`, source items excluded), soonest first, at most 100, titles only (control characters and line breaks
+  become a space, at most 200 UTF-16 units, blank ones skipped), `dueAt` whole epoch ms, the whole file at most 64 KB. Switch off
+  writes `{"v":1,"on":false,"items":[]}`. Written through a temp file moved into place, only when the text changed, on app start,
+  foreground, a due-date change, a rename or note retitle, a delete and a switch change. The provider in `nexus-links` keeps only
+  what is due today (local time) at query time.
+- Settings, "Other apps": "Show what is due today in my other apps", off by default.
+- `files/last_seen`: decimal epoch ms, on app open, foreground and after worker steps, at most once a minute.
+- Due dates (R1): item screen "Due" row, quick picks Today, Tomorrow, In a week (end of that local day) and Clear, no date-picker
+  dependency; the date also shows under the item title.
+
+### Rulings (my call)
+- R1 `item_due` table and quick picks, no date picker. R2 new Android-only module `nexus-links`. R3 `today` and health are served
+  from small files JS writes; Kotlin filters "today" at query time. R4 source items are `kind='note'` items in an automatic
+  "From <app>" folder, embed-only (no graph extraction, no Groq per message). R5 Inflow shares mirror the planned columns until
+  eco/inflow commits them. R6 snapshot is the truth for runs and pins; Inflow uses `ask_ids`. R7 ADD_TODO sends `dueAt` only from a
+  real `item_due`. R8 source items show in Library in their folder, 50 new per source per run. R9 Deputy and Clipboard answer
+  empty while their switch is off, so "Off in <app>" shows only for missing or refusing providers, plus a fixed hint. R10 Clipboard
+  `pinned` is paged, read up to 10 pages, cap hit means unreachable. R11 a bad row in a snapshot or id list fails the whole read; in
+  item reads it is skipped. W4's own: Source switches and the today flag in `kn_meta`, not a file (one database, one wipe); Keep out
+  offered on source items, Rename and Delete not.
+
+### Not run (phone; main session, coord device claim first, Store installs only)
+1. Ask my life, Inflow: in Inflow turn on "Let Nexus read my messages"; in Nexus Settings, Ask my life, switch "Inflow messages" On.
+   Expect the line "Nexus keeps N items from Inflow", a "From Inflow" folder in Library, and a message found by Ask with the
+   citation "From Inflow message, <day>" that opens read-only (no editor, no Delete). A bank one-time code never appears.
+2. Switch it Off: confirm "Delete everything Nexus kept from Inflow?". The folder, items and Ask citations are gone at once; an open
+   item screen of one shows "Not found"; Inflow is unchanged. Cancel the prompt: still On.
+3. With Inflow's switch off or Inflow not installed: Nexus shows "Off in Inflow", keeps what it had.
+4. Deputy and Clipboard: same flow with their own switches ("Let Nexus read my run history", "Let Nexus read pinned clips"). Finish a
+   Deputy task, reopen Nexus: a "Deputy run, <day>" item; unpin a clip: its item goes on the next open.
+5. Due: open an own note, tap Today, Tomorrow, In a week, Clear. The date shows under the title and in the Due row.
+6. Today share: Settings, Other apps, On, with an own item due today. A Store-signed sibling reading
+   `content://com.haroon.pdfeditor.applink/today` gets that title with its due time. Off: no rows. Switch Off again: no rows. (From
+   the adb shell the read is refused, because the shell lacks the signature permission; that refusal is the point.)
+7. Heartbeat: open Nexus, then read `health` from a sibling: last_seen_at within a minute of now.
+8. Open the app twice within a minute: `files/last_seen` changes at most once a minute (needs `adb shell run-as com.haroon.pdfeditor cat files/last_seen` on a debuggable build only).

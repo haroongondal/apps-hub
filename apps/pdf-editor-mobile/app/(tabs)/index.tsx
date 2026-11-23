@@ -14,10 +14,10 @@ import { openItem } from '../../src/library/open-item';
 import { errorMessage } from '../../src/library/use-library';
 import { aiReady } from '../../src/nexus/ai';
 import { addNote, addPhoto, addRecording } from '../../src/nexus/capture';
-import { jobLabel } from '../../src/nexus/labels';
+import { citationLabel, jobLabel } from '../../src/nexus/labels';
 import { currentMeeting, meetingStatus, meetingSupported } from '../../src/nexus/meeting';
 import type { MeetingState } from '../../src/nexus/meeting-session';
-import { citationLabel, openCitation } from '../../src/nexus/open-citation';
+import { openCitation } from '../../src/nexus/open-citation';
 import { UnsavedMeeting } from '../../src/nexus/unsaved-meeting';
 import { kick, onQueueChange, openKnowledge } from '../../src/nexus/worker';
 
