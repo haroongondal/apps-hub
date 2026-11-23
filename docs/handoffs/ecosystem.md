@@ -81,10 +81,10 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 | E4 | Store health hub | eco/store | todo (needs E1) |
 | C1 | Clipboard smart actions + phase 1 | eco/clipboard | todo |
 | C2 | Deputy repeating tasks | eco/deputy | in progress |
-| C3 | TunnelWall (firewall already on main) | eco/tunnelwall | todo |
+| C3 | TunnelWall (firewall already on main) | eco/tunnelwall | in progress |
 | C4 | HomeNet | eco/homenet | todo |
 | C5 | Strongroom health report | eco/strongroom | todo |
-| C6 | Halo progress ring | eco/halo | in progress |
+| C6 | Halo progress ring | eco/halo | built + gated (c230590a): halo-engine 165, notch-island 127, halo ts 127 pass, assembleDebug ok; default ON (my call); phone not run; security-engineer look pending |
 | C7 | Design Editor brand kit from image | eco/design-editor | todo |
 | C8 | Nexus offline OCR (on main; verify, audit, fill gaps) | eco/nexus | todo |
 | C9 | autonomous-browsing dry run | eco/autonomous-browsing | todo |
@@ -102,6 +102,7 @@ Status key: todo / in progress / built / gated / reviewed / not run.
 
 ## File map
 
+- AGENTS.md paragraph text collected from agents: `/Users/outsentia/Documents/apps-hub-wt/eco-work/agents-md-paragraphs.md` (applied by the final docs pass).
 - Ledger: `docs/handoffs/ecosystem.md` (this file; main session writes it).
 - Phase workspaces: `/Users/outsentia/Documents/apps-hub-wt/eco-work/<phase>/` (briefs, progress.md, locks, shared-files.txt). Outside the repo.
 
