@@ -49,7 +49,8 @@ The app is named Nexus (N2). Logic is `packages/knowledge-core` (job queue, grap
 
 - Tabs: Stream (`app/(tabs)/index.tsx`, capture + Ask) and Library (`app/(tabs)/library.tsx`). A folder opens as `/folder` (same screen) so Back works.
 - `openKnowledge()` (`src/nexus/worker.ts`) opens `Knowledge` on the Library's connection; `startWorker()` in the root layout runs up to 3 `runNext` loops while the app is in the foreground. Nothing is sent without a key (`src/nexus/ai.ts`, expo-secure-store).
-- Per kind, `src/nexus/content.ts` turns an item into text: `note.md`, `pages.json` (written by the editor from `docInfo`, so citations name pages), `audio.m4a` (Whisper), `image.jpg` (vision), else the Library body.
+- Per kind, `src/nexus/content.ts` turns an item into text: `note.md`, `pages.json` (written by the editor from `docInfo`, so citations name pages), `audio.m4a` (Whisper; over 25 MB it is cut into pieces by the Android module `modules/audio-chunks`, MediaExtractor + MediaMuxer without re-encoding, and sent one by one through knowledge-core's `planChunks` / `transcribeInChunks`, which put the times back on the whole recording's clock), `image.jpg` (vision), else the Library body.
+- A PDF citation opens the editor with a `page` param (`src/nexus/open-citation.ts`); the editor sends the bridge command `goto-page` once the page reports `documentLoaded` (`src/editor/goto-page.ts`).
 - New captures go through `src/nexus/capture.ts` (files first, then the row, then `enqueue`).
 
 ## Scan (the `pdf-scan` module)

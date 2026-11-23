@@ -1,3 +1,5 @@
+export { CHUNK_OVERLAP_MS, planChunks, stitchTranscripts, transcribeInChunks } from './audio-chunks.ts';
+export type { ChunkedTranscription, ChunkTranscript, ChunkWindow } from './audio-chunks.ts';
 export { chunkSegments, MAX_CHUNK } from './chunk.ts';
 export { cleanExtraction, normLabel } from './extraction.ts';
 export { Knowledge, locatorLabel, MAX_ATTEMPTS, MERGE_AT, pruneConcepts, STUCK_MS } from './knowledge.ts';
