@@ -11,7 +11,7 @@ import { HomeScreen } from './src/HomeScreen.tsx';
 import { JournalScreen } from './src/JournalScreen.tsx';
 import { ListScreen } from './src/ListScreen.tsx';
 import { LockScreen } from './src/LockScreen.tsx';
-import { permissionPromptOpen } from './src/lockGrace.ts';
+import { appStateDecision } from './src/lockGrace.ts';
 import { MedicinesScreen } from './src/MedicinesScreen.tsx';
 import { MoneyScreen } from './src/MoneyScreen.tsx';
 import { partyTitle } from './src/money.ts';
@@ -87,15 +87,17 @@ function Root() {
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
+      const decision = appStateDecision(s, Date.now());
       if (s === 'background') {
-        if (permissionPromptOpen(Date.now())) return;
+        if (decision !== 'lock') return;
         setLocked(true);
         setStack([]);
         setTodosOpen(false);
         setTab('home');
       } else if (s === 'active') {
+        if (decision === 'lock') setLocked(true);
         refresh();
-        if (!lockedRef.current) openTappedReport();
+        if (decision !== 'lock' && !lockedRef.current) openTappedReport();
       }
     });
     return () => sub.remove();
