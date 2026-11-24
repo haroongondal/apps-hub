@@ -11,7 +11,7 @@ object AppHealth {
   val COLUMNS = arrayOf("app_id", "accessibility", "listener", "ai_source", "last_seen_at")
   const val AI_SOURCE_FILE = "ai-source.txt"
   const val HEARTBEAT_FILE = "last-seen-at.txt"
-  private val SOURCES = setOf("hub", "own", "none")
+  private val SOURCES = setOf("hub", "none") // the contract also allows "own"; this app has no key of its own
 
   fun aiSource(text: String?): String = text?.trim()?.takeIf { it in SOURCES } ?: "none"
 
@@ -27,6 +27,22 @@ object TrustedStart {
     if (!trusted()) return false
     start()
     return true
+  }
+}
+
+// Design with AI's two buttons start the Store or AI hub on their own screen. The Store is not in SiblingPackages (nothing is
+// sent to it), so this checks the package and the owner's signature itself. Nothing but these two packages can be opened.
+object OpenApp {
+  const val STORE = "com.haroon.store"
+  private val TARGETS = mapOf("store" to STORE, "aihub" to SiblingPackages.AI_HUB)
+
+  fun packageFor(target: String): String? = TARGETS[target]
+
+  fun outcome(pkg: String?, launchable: Boolean, signaturesMatch: Boolean): String = when {
+    pkg == null -> "refused"
+    !launchable -> "not_installed"
+    !signaturesMatch -> "refused"
+    else -> "opened"
   }
 }
 

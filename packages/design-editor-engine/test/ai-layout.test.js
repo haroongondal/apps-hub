@@ -111,3 +111,18 @@ test('cuts text by characters, not by UTF-16 halves', () => {
   const out = AiLayout.parseReply(reply({ bg: '#ffffff', items: [text({ text: 'a'.repeat(299) + '😀😀' })] }));
   assert.equal(out.items[0].text, 'a'.repeat(299) + '😀');
 });
+
+test('the four AI hub states say what to do and which app the button opens, in plain words', () => {
+  assert.deepEqual(AiLayout.hubNeeded('hubmissing'), { message: 'AI needs AI hub.', button: 'Install AI hub', open: 'store' });
+  assert.deepEqual(AiLayout.hubNeeded('update'), { message: 'AI hub needs an update.', button: 'Update AI hub', open: 'store' });
+  assert.deepEqual(AiLayout.hubNeeded('notallowed'), { message: 'AI hub has not allowed Design Editor yet.', button: 'Allow Design Editor in AI hub', open: 'aihub' });
+  assert.deepEqual(AiLayout.hubNeeded('nokey'), { message: 'AI hub has no key yet.', button: 'Add a key in AI hub', open: 'aihub' });
+  assert.equal(AiLayout.hubNeeded('timeout'), null);
+  assert.equal(AiLayout.hubNeeded('constructor'), null);
+});
+
+test('the phone page tells the owner the description goes to Groq or Gemini, whichever AI hub uses for chat', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../mobile.html'), 'utf8');
+  const line = html.match(/<p class="hint">AI runs through AI hub\.[^<]*<\/p>/)?.[0] ?? '';
+  for (const word of ['Groq', 'Gemini', 'whichever AI hub uses']) assert.ok(line.includes(word), word);
+});

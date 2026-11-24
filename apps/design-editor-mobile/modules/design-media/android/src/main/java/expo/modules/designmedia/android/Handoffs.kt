@@ -6,10 +6,12 @@ import android.content.ClipData
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.provider.MediaStore
 import expo.modules.designmedia.applink.AppLinkTarget
 import expo.modules.designmedia.core.DeputyProposal
 import expo.modules.designmedia.core.NexusShare
+import expo.modules.designmedia.core.OpenApp
 import expo.modules.designmedia.core.PhotoTimes
 import expo.modules.designmedia.core.TrustedStart
 import expo.modules.kotlin.Promise
@@ -70,6 +72,21 @@ object Handoffs {
         if (activity != null) activity.startActivity(send) else context.startActivity(send.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
       }
       if (started) "sent" else "not_installed"
+    } catch (_: ActivityNotFoundException) {
+      "not_installed"
+    }
+  }
+
+  // The explicit launch intent of the app at that package, started only when that app is signed with our key.
+  fun openApp(activity: Activity?, context: Context, target: String): String {
+    val pkg = OpenApp.packageFor(target)
+    val launch = pkg?.let { runCatching { context.packageManager.getLaunchIntentForPackage(it) }.getOrNull() }
+    val signed = pkg != null && runCatching { context.packageManager.checkSignatures(context.packageName, pkg) == PackageManager.SIGNATURE_MATCH }.getOrDefault(false)
+    val result = OpenApp.outcome(pkg, launch != null, signed)
+    if (result != "opened") return result
+    return try {
+      (activity ?: context).startActivity(launch!!.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+      result
     } catch (_: ActivityNotFoundException) {
       "not_installed"
     }

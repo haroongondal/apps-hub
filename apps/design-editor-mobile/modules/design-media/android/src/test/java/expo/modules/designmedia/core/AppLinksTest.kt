@@ -33,12 +33,12 @@ class AppLinksTest {
     assertEquals("com.haroon.designeditor.applink", AppHealth.AUTHORITY)
   }
 
-  @Test fun oneRowWithNoPersonalDataAndOnlyTheThreeAiSources() {
+  @Test fun oneRowWithNoPersonalDataAndOnlyHubOrNoneAsTheAiSource() {
     val rows = AppHealth.rows("hub\n", "1764000000000")
     assertEquals(1, rows.size)
     assertArrayEquals(arrayOf<Any?>("design-editor", null, null, "hub", 1_764_000_000_000L), rows[0])
-    assertEquals("own", AppHealth.aiSource("own"))
-    listOf(null, "", "HUB", "gemini", "hub own").forEach { assertEquals(it, "none", AppHealth.aiSource(it)) }
+    assertEquals("hub", AppHealth.aiSource("hub"))
+    listOf(null, "", "own", "HUB", "gemini", "hub own").forEach { assertEquals(it, "none", AppHealth.aiSource(it)) }
     listOf(null, "", "soon", "-5", "0").forEach { assertNull(it, AppHealth.lastSeen(it)) }
     assertEquals(AppHealth.COLUMNS.size, AppHealth.rows(null, null)[0].size)
   }

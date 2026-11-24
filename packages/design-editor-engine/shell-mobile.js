@@ -4,8 +4,7 @@
 // one with window.__editorCommand('reply', { reqId, ok, value? }). The schema lives in
 // apps/design-editor-mobile/src/editor/bridge.ts; keep the two in step.
 // Additions over the six original native functions: confirm, keepAutosave, and native.ai
-// (hasKey, keys, setKey, removeKey, request: Design with AI, 2026-11-18). setKey adds a key and resolves { ok, error?: 'nosecure'|'bad'|'badkey' }
-// on both platforms; request resolves { ok, status, json?, error? }.
+// (request, open: Design with AI through AI hub only, 2026-11-24; the key functions are gone from the phone).
 // Script order note: this runs before app.js because app.js calls native.onMenu() during its
 // own body — the desktop's preload guarantees native exists for that too.
 (() => {
@@ -219,14 +218,12 @@
       menuHandler = fn;
       while (menuBacklog.length) fn(menuBacklog.shift());
     },
-    // Design with AI (2026-11-18): the key lives in the app and never reaches the page; request
-    // always resolves { ok, status, json?, error? } (SPEC §14.3, same as preload.cjs)
+    // Design with AI: AI hub holds the keys and the page never sees one. request always resolves
+    // { ok, status, json?, error?: 'hubmissing'|'update'|'notallowed'|'nokey'|'timeout'|'bad' } (SPEC §14.3); open('store'|'aihub')
+    // resolves 'opened' | 'not_installed' | 'refused'. The Mac's native.ai keeps its key functions (preload.cjs).
     ai: {
-      hasKey: () => call('aiHasKey'),
-      keys: () => call('aiKeys'),
-      setKey: key => call('aiSetKey', { key }),
-      removeKey: index => call('aiRemoveKey', { index }),
       request: body => call('aiRequest', { body }),
+      open: target => call('aiOpen', { target }),
     },
     // the Media tools window is the Mac's; the rail button is hidden on phones (mobile.html).
     // The stubs stand in so a stray media call can never crash the page.

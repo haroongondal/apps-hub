@@ -691,9 +691,8 @@ type PageEvent =
   | { type: 'openDesign'; reqId: string }
   | { type: 'readAutosave'; reqId: string }
   | { type: 'writeAutosave'; reqId: string; text: string }
-  | { type: 'aiHasKey'; reqId: string }                    // Design with AI: key stays in the app
-  | { type: 'aiSetKey'; reqId: string; key: string }        // reply value { ok, error?: 'nosecure'|'bad' }, same as the Mac
-  | { type: 'aiRequest'; reqId: string; body: unknown }    // reply value { ok, status, json?, error? }, never replyError
+  | { type: 'aiRequest'; reqId: string; body: unknown }    // Design with AI through AI hub only; reply value { ok, status, json?, error?: 'hubmissing'|'update'|'notallowed'|'nokey'|'timeout'|'bad' }, never replyError
+  | { type: 'aiOpen'; reqId: string; target: string }       // 'store' | 'aihub'; reply value 'opened' | 'not_installed' | 'refused'
   | { type: 'docState'; title: string; dirty: boolean; filePath: string | null };
 // Native → web
 type WebCommand =
