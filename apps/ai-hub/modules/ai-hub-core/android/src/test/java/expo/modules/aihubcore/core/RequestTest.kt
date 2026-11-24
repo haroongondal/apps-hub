@@ -68,7 +68,35 @@ class RequestTest {
     assertEquals(Request.MAX_AUDIO_BYTES, r.attachmentCap)
   }
 
-  @Test fun rejectsNewerApiVersion() = rejects(json(version = "2"), "newer AI hub")
+  @Test fun rejectsNewerApiVersion() = rejects(json(version = "3"), "newer AI hub")
+
+  @Test fun versionOneRequestsStillParseUnchanged() {
+    val embed = Request.parse(json("embed", "\"texts\":[\"a\"]", version = "1"))
+    assertNull(embed.dimensions)
+    val audio = Request.parse(json("transcribe", "\"fileName\":\"n.m4a\",\"mime\":\"audio/mp4\"", version = "1"))
+    assertEquals(false, audio.segments)
+    assertEquals(Job.CHAT, Request.parse(json(version = "1")).job)
+  }
+
+  @Test fun embedDimensionsRoundUpToASizeGeminiDocuments() {
+    fun dims(v: String) = Request.parse(json("embed", "\"texts\":[\"a\"],\"dimensions\":$v", version = "2")).dimensions
+    assertEquals(768, dims("768"))
+    assertEquals(768, dims("700"))
+    assertEquals(128, dims("1"))
+    assertEquals(3072, dims("3072"))
+    assertEquals(3072, dims("5000"))
+    rejects(json("embed", "\"texts\":[\"a\"],\"dimensions\":0"), "dimensions")
+    rejects(json("embed", "\"texts\":[\"a\"],\"dimensions\":\"768\""), "dimensions")
+    rejects(json("embed", "\"texts\":[\"a\"],\"dimensions\":76.8"), "dimensions")
+  }
+
+  @Test fun transcribeSegmentsIsABoolean() {
+    val base = "\"fileName\":\"n.m4a\",\"mime\":\"audio/mp4\""
+    assertEquals(true, Request.parse(json("transcribe", "$base,\"segments\":true", version = "2")).segments)
+    assertEquals(false, Request.parse(json("transcribe", "$base,\"segments\":false")).segments)
+    rejects(json("transcribe", "$base,\"segments\":\"yes\""), "true or false")
+    rejects(json("transcribe", "$base,\"segments\":1"), "true or false")
+  }
 
   @Test fun rejectsUnknownApiVersion() {
     rejects(json(version = "0"), "unknown")
@@ -209,7 +237,8 @@ class RequestTest {
   @Test fun sharedUidWithStrongroomIsDenied() {
     val d = decideCallers(listOf("com.haroon.nexus", CallerPolicy.STRONGROOM), true, emptyMap(), "com.haroon.aihub")
     assertTrue(d is Decision.Deny)
-    assertEquals(Decision.Allow, decideCallers(listOf("com.haroon.nexus"), true, emptyMap(), "com.haroon.aihub"))
+    assertEquals(Decision.Allow, decideCallers(listOf("com.haroon.nexus"), true, mapOf("com.haroon.nexus" to true), "com.haroon.aihub"))
+    assertEquals("com.haroon.nexus", (decideCallers(listOf("com.haroon.nexus"), true, emptyMap(), "com.haroon.aihub") as Decision.Deny).ask)
     assertTrue(decideCallers(emptyList(), true, emptyMap(), "com.haroon.aihub") is Decision.Deny)
   }
 
@@ -253,6 +282,10 @@ class RequestTest {
     val embed = Json.parseToJsonElement(Results.embed(listOf(floatArrayOf(0.5f, 1f)), "m", b64)).jsonObject
     assertEquals(setOf("vectorsB64", "dims", "model"), embed.keys)
     assertEquals("AAAAPwAAgD8=", embed["vectorsB64"]!!.jsonArray[0].jsonPrimitive.content)
-    assertEquals("hi", Json.parseToJsonElement(Results.transcribe("hi")).jsonObject["text"]!!.jsonPrimitive.content)
+    val plain = Json.parseToJsonElement(Results.transcribe(Transcript("hi"))).jsonObject
+    assertEquals(setOf("text"), plain.keys)
+    assertEquals("hi", plain["text"]!!.jsonPrimitive.content)
+    val timed = Results.transcribe(Transcript("hi there", listOf(Segment(0.0, 1.5, "hi"), Segment(1.5, 2.25, " there"))))
+    assertEquals("""{"text":"hi there","segments":[{"start":0.0,"end":1.5,"text":"hi"},{"start":1.5,"end":2.25,"text":" there"}]}""", timed)
   }
 }
