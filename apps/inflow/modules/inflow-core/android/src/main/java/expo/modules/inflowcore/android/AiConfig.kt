@@ -1,7 +1,9 @@
 package expo.modules.inflowcore.android
 
 import android.content.Context
+import android.util.Log
 import expo.modules.aihubclient.AiHubClient
+import expo.modules.aihubclient.core.AiHubException
 import expo.modules.inflowcore.core.AiMeta
 import expo.modules.inflowcore.core.AiPricing
 import expo.modules.inflowcore.core.AiReply
@@ -14,6 +16,8 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
+
+private const val HUB_TAG = "InflowHub"
 
 /** The keys saved before AI hub became Inflow's only AI. The table stays (old schema); nothing inserts into it. */
 class SqlOwnKeys(private val store: SqlItemStore) : OwnKeys {
@@ -58,7 +62,15 @@ class AiConfig(private val store: SqlItemStore) {
   /** AI hub whether or not AI is on: the Doctor summary is the owner's own tap and has no switch of its own. */
   fun hub(ctx: Context, foreground: Boolean): TextAi {
     val client = AiHubClient(ctx)
-    return HubAi({ json -> runBlocking { client.submit(json) } }, foreground, switch::hubAnswered, { UUID.randomUUID().toString() })
+    return HubAi({ json -> submitLogged(client, json) }, foreground, switch::hubAnswered, { UUID.randomUUID().toString() })
+  }
+
+  // Diagnostic: the screen collapses every hub error to one line, so the log keeps the kind and the request size (characters, never content).
+  private fun submitLogged(client: AiHubClient, json: String): String = try {
+    runBlocking { client.submit(json) }.also { Log.i(HUB_TAG, "hub request ok: request ${json.length} chars, reply ${it.length} chars") }
+  } catch (e: AiHubException) {
+    Log.w(HUB_TAG, "hub request failed: kind=${e.kind} request ${json.length} chars")
+    throw e
   }
 
   fun today(): String = LocalDate.ofInstant(Instant.now(), ZoneId.systemDefault()).toString()
