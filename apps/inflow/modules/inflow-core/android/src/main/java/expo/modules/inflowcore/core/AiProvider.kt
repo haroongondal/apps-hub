@@ -135,10 +135,10 @@ data class Prices(val inputPerM: Double, val cachedPerM: Double, val outputPerM:
     return ((used.inputTokens - used.cachedTokens).coerceAtLeast(0) * inputPerM + used.cachedTokens * cachedPerM + used.outputTokens * outputPerM) / 1_000_000
   }
 
-  // E2 (my call): a hub reply is priced from the model the hub names when Inflow knows it, else it is not counted (only the hub's own limits apply).
+  // E2 (my call): a hub reply is priced from the model the hub names when Inflow knows it, else at the dearest known model, so the daily limit still stops hub calls.
   fun cost(r: AiReply): Double = when (val m = r.hubModel) {
     null -> cost(r.usage, r.inputChars, r.text.length)
-    else -> AiModels.KNOWN.firstOrNull { it.model == m }?.prices?.cost(r.usage, r.inputChars, r.text.length) ?: 0.0
+    else -> AiModels.KNOWN.firstOrNull { it.model == m }?.prices?.cost(r.usage, r.inputChars, r.text.length) ?: AiModels.KNOWN.maxOf { it.prices.cost(r.usage, r.inputChars, r.text.length) }
   }
 }
 

@@ -143,12 +143,14 @@ class HubFirstTest {
     assertEquals(8_192, Json.parseToJsonElement(HubChat.request("a", true, "s", "u", 100_000)).jsonObject["maxTokens"]!!.jsonPrimitive.int)
   }
 
-  @Test fun aHubReplyIsPricedFromItsModelWhenKnownElseNotCounted() {
+  @Test fun aHubReplyIsPricedFromItsModelWhenKnownElseAtTheDearestKnownModel() {
     val ownPrices = Prices(100.0, 100.0, 100.0)
     val groq = HubChat.parse(hubReply, 10)
     assertEquals(AiModels.known(AiModels.GROQ_URL, "openai/gpt-oss-120b")!!.prices.cost(groq.usage), ownPrices.cost(groq), 1e-12)
     val unknown = HubChat.parse(hubReply.replace("openai/gpt-oss-120b", "some-new-model"), 10)
-    assertEquals(0.0, ownPrices.cost(unknown), 0.0)
+    val dearest = AiModels.KNOWN.maxOf { it.prices.cost(unknown.usage) }
+    assertTrue(dearest > 0.0)
+    assertEquals(dearest, ownPrices.cost(unknown), 1e-12)
     assertEquals(ownPrices.cost(Usage(1, 0, 1)), ownPrices.cost(AiReply("x", Usage(1, 0, 1))), 0.0)
   }
 }

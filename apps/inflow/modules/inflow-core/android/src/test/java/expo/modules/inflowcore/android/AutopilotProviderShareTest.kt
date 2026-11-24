@@ -75,6 +75,15 @@ class AutopilotProviderShareTest {
     assertTrue(src.contains("if (matcher.match(uri) != ONE) return 0"))
   }
 
+  @Test fun anItemIsServedToDeputyAloneDecidedOnTheBinderThreadBeforeTheStoreIsRead() {
+    val src = File("src/main/java/expo/modules/inflowcore/android/AutopilotProvider.kt").readText()
+    val branch = src.substringAfter("      ITEM -> MatrixCursor(ITEM_COLUMNS)").substringBefore("\n      }\n")
+    val deputy = "val deputy = runCatching { AutopilotAccess.callerIsDeputy(context?.packageManager?.getPackagesForUid(Binder.getCallingUid())) }.getOrDefault(false)"
+    assertTrue(branch, branch.contains(deputy))
+    assertTrue(branch, branch.contains("if (deputy && store != null) runCatching { store.autopilotItem("))
+    assertEquals(1, Regex("autopilotItem").findAll(branch).count())
+  }
+
   @Test fun theBriefingIsServedToHaloAloneDecidedOnTheBinderThreadBeforeAnyRow() {
     val src = File("src/main/java/expo/modules/inflowcore/android/AutopilotProvider.kt").readText()
     val branch = src.substringAfter("      BRIEFING -> MatrixCursor(BRIEFING_COLUMNS)").substringBefore("\n      }\n")

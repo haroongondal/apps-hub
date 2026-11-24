@@ -10,6 +10,7 @@ import android.os.Binder
 import androidx.core.app.NotificationManagerCompat
 import expo.modules.inflowcore.applink.AppLinkCaller
 import expo.modules.inflowcore.core.AppHealth
+import expo.modules.inflowcore.core.AutopilotAccess
 import expo.modules.inflowcore.core.Briefing
 import expo.modules.inflowcore.core.BriefingShare
 import expo.modules.inflowcore.core.BriefingSnapshot
@@ -25,7 +26,7 @@ import expo.modules.inflowcore.core.SuggestionState
  *
  *  - `suggestions` (query): the SuggestionRow columns of the contract, no summaries or text. `?state=waiting,started` picks states, default waiting.
  *  - `suggestions/#` (query one row, update `state` to started, done or skipped).
- *  - `items/#` (query one source item; empty when Inflow refuses to share it: see AutopilotAccess).
+ *  - `items/#` (query one source item, Deputy alone; empty for any other caller or when Inflow refuses to share it: see AutopilotAccess).
  *  - `health` (query, one row for the Store: listener on or off, where the AI keys come from, the last heartbeat; no personal data, so no switch guards it, but the caller check still does).
  *  - `briefing` (query, up to 20 lines of today's briefing, built in Inflow from structured data: see Briefing): rows only for Halo and only while 'Show my morning briefing in Halo' is on, otherwise an empty cursor. They come from the snapshot
  *    BriefingRefresh keeps; the query never runs a reader, and starts at most one background rebuild when the snapshot is older than 10 minutes. The lines that come from the health-in-briefing switch are dropped while that switch is off.
@@ -54,7 +55,9 @@ class AutopilotProvider : ContentProvider() {
         if (store != null) runCatching { fresh(store).get(uri.lastPathSegment!!.toLong()) }.getOrNull()?.let { c.addRow(row(it)) }
       }
       ITEM -> MatrixCursor(ITEM_COLUMNS).also { c ->
-        val item = if (store != null) runCatching { store.autopilotItem(uri.lastPathSegment!!.toLong(), System.currentTimeMillis()) }.getOrNull() else null
+        // Read on the binder thread, so the uid is the reader's own; message text is for Deputy alone, any failure serves nothing.
+        val deputy = runCatching { AutopilotAccess.callerIsDeputy(context?.packageManager?.getPackagesForUid(Binder.getCallingUid())) }.getOrDefault(false)
+        val item = if (deputy && store != null) runCatching { store.autopilotItem(uri.lastPathSegment!!.toLong(), System.currentTimeMillis()) }.getOrNull() else null
         if (item != null) c.addRow(arrayOf<Any?>(item.id, item.app, item.pkg, item.sender, item.conversation, item.text, item.at))
       }
       HEALTH -> MatrixCursor(AppHealth.COLUMNS).also { c ->

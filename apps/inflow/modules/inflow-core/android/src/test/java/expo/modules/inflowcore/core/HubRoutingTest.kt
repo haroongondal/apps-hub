@@ -34,6 +34,14 @@ class HubRoutingTest {
     }
   }
 
+  // The reverse pin: a file that names a health reader may not name a provider, whatever the allow-list above says. Ask's one pinned line is the only exception.
+  @Test fun noFileThatNamesHealthDataNamesAProvider() {
+    val health = listOf("SqlHealthStore", "SqlMedicineStore", "SqlJournalStore", "HealthForAsk", "HealthAggregate", "BriefingHealth", "DoctorPayload")
+    val bad = main.walkTopDown().filter { it.extension == "kt" }.filter { f -> f.readText().let { t -> health.any { it in t } && (".provider(" in t || "TextAi" in t) } }
+      .map { it.name }.toSortedSet()
+    assertEquals(sortedSetOf("AiRunner.kt"), bad)
+  }
+
   @Test fun askWithHealthOnUsesTheOwnKeyForTheWholeAsk() {
     val ask = src("android/AiRunner.kt").substringAfter("fun ask(")
     val choice = "val provider = (if (healthOn) cfg.ownProvider() else cfg.provider(foreground = true))"
