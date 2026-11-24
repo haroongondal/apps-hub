@@ -51,6 +51,8 @@ export interface NetlensCoreApi {
     settings: Record<string, unknown>,
     snapshot: Record<string, unknown> | null,
   ): Promise<Record<string, unknown>>;
+  /** Refreshes the stored home's label and URL and the device snapshot; the stored switches are never touched. */
+  syncHomeWatch(home: Record<string, unknown>, snapshot: Record<string, unknown>): Promise<Record<string, unknown>>;
   markDeviceMine(ip: string): Promise<Record<string, unknown>>;
   proposeDeputyTask(task: string, context: string): Promise<Record<string, unknown>>;
   addListener(

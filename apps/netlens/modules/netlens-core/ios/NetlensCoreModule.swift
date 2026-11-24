@@ -481,6 +481,10 @@ public class NetlensCoreModule: Module {
       ["supported": false]
     }
 
+    AsyncFunction("syncHomeWatch") { (_: [String: Any], _: [String: Any]) -> [String: Any] in
+      ["supported": false]
+    }
+
     AsyncFunction("markDeviceMine") { (_: String) -> [String: Any] in
       ["supported": false]
     }

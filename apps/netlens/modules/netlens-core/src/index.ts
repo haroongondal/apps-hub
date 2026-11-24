@@ -130,6 +130,9 @@ export function createHomeWatchBinding(): HomeWatchBinding {
     async setHomeWatch(settings, snapshot) {
       return parseHomeWatchStatus(await NetLensCore.setHomeWatch({ ...settings }, snapshot ? { ...snapshot } : null));
     },
+    async syncHome(home, snapshot) {
+      return parseHomeWatchStatus(await NetLensCore.syncHomeWatch({ ...home }, { ...snapshot }));
+    },
     async markDeviceMine(ip) {
       return parseHomeWatchStatus(await NetLensCore.markDeviceMine(ip));
     },

@@ -82,6 +82,27 @@ object HomeWatchStore {
     return base.copy(people = people, known = known)
   }
 
+  /**
+   * The post-scan refresh from the app: the stored switches stay exactly as they are, and a home other than the
+   * stored one (or no stored home, or both checks off) changes nothing. Only the label, the description URL and
+   * the device snapshot move.
+   */
+  fun applyHomeSync(prev: HomeWatchState, home: Map<String, Any?>, snapshot: Map<String, Any?>): HomeWatchState {
+    val stored = prev.settings
+    val storedHome = stored.home
+    if (storedHome == null || !(stored.whoIsHome || stored.newDevices)) return prev
+    if (home["networkId"] != storedHome.networkId || home["routerId"] != storedHome.routerId) return prev
+    val keepSwitches = mapOf<String, Any?>(
+      "whoIsHome" to stored.whoIsHome,
+      "newDevices" to stored.newDevices,
+      "newDeviceHours" to stored.newDeviceHours,
+      "share" to stored.share,
+      "home" to home,
+    )
+    val next = applyFromApp(prev, keepSwitches, snapshot)
+    return if (next.settings.home?.networkId == storedHome.networkId) next else prev
+  }
+
   fun status(state: HomeWatchState): Map<String, Any?> = mapOf(
     "supported" to true,
     "settings" to mapOf(

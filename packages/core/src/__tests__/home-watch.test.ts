@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import type { ReconciledDevice } from '../device-repository.ts';
-import { DEFAULT_HOME_WATCH_SETTINGS, homeWatchSnapshot, parseHomeWatchStatus, postScanSyncSettings, readHomeRouter, routerIdOf } from '../home-watch.ts';
+import { DEFAULT_HOME_WATCH_SETTINGS, homeWatchSnapshot, parseHomeWatchStatus, postScanSyncHome, orderHomeWatch, readHomeRouter, routerIdOf } from '../home-watch.ts';
 
 let nextId = 1;
 function dev(over: Partial<ReconciledDevice> = {}): ReconciledDevice {
@@ -133,17 +133,56 @@ test('readHomeRouter: a router that gives no ID (or no description) is null, so 
   assert.equal(await readHomeRouter(routerBinding({}), lan, []), null);
 });
 
-test('post-scan sync keeps the latest share and switch values', () => {
+test('post-scan sync sends only the home, never share or the switches', () => {
   const home = { networkId: 'n', gatewayIp: '192.168.1.1', label: 'Home', routerId: 'uuid:r', routerUrl: 'http://192.168.1.1:5000/old.xml' };
   const router = { routerId: 'uuid:r', routerUrl: 'http://192.168.1.1:5000/new.xml' };
-  const waiting = { ...DEFAULT_HOME_WATCH_SETTINGS, whoIsHome: true, newDevices: true, share: true, home };
-  const latest = { ...waiting, share: false, newDevices: false };
-  assert.deepEqual(postScanSyncSettings(latest, router, 'Flat 4'), {
-    ...latest,
-    home: { ...home, label: 'Flat 4', routerUrl: router.routerUrl },
+  const latest = { ...DEFAULT_HOME_WATCH_SETTINGS, whoIsHome: true, share: false, home };
+  assert.deepEqual(postScanSyncHome(latest, router, 'Flat 4'), { ...home, label: 'Flat 4', routerUrl: router.routerUrl });
+  assert.equal(postScanSyncHome({ ...latest, whoIsHome: false }, router, null), null, 'both switches off: nothing is saved');
+  assert.equal(postScanSyncHome({ ...latest, home: null }, router, null), null);
+  assert.equal(postScanSyncHome(null, router, null), null);
+  assert.equal(postScanSyncHome(latest, { ...router, routerId: 'uuid:other' }, null), null, 'another router is not home');
+});
+
+function gatedBinding() {
+  const order: string[] = [];
+  const gates: Array<() => void> = [];
+  const status = (tag: string) => ({ supported: false as const, tag });
+  const call = (name: string) => () => {
+    order.push(`start ${name}`);
+    return new Promise<never>((resolve) => gates.push(() => { order.push(`end ${name}`); resolve(status(name) as never); }));
+  };
+  const binding = { getHomeWatch: call('get'), setHomeWatch: call('set'), syncHome: call('sync'), markDeviceMine: call('mine') };
+  return { binding, order, release: async () => { gates.shift()?.(); await new Promise((r) => setImmediate(r)); } };
+}
+
+test('save queue: a call starts only after the one before it has finished, in the order made', async () => {
+  const { binding, order, release } = gatedBinding();
+  const queue = orderHomeWatch(binding);
+  const home = { networkId: 'n', gatewayIp: '192.168.1.1', label: 'Home', routerId: 'uuid:r', routerUrl: 'u' };
+  const sync = queue.syncHome(home, { people: [], known: [] });
+  const off = queue.setHomeWatch(DEFAULT_HOME_WATCH_SETTINGS, null);
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(order, ['start sync']);
+  await release();
+  assert.deepEqual(order, ['start sync', 'end sync', 'start set']);
+  await release();
+  await Promise.all([sync, off]);
+  assert.deepEqual(order, ['start sync', 'end sync', 'start set', 'end set']);
+});
+
+test('save queue: an answer older than a call made after it is dropped, a failed call does not block the next', async () => {
+  const stale = orderHomeWatch({
+    getHomeWatch: async () => ({ supported: false }),
+    setHomeWatch: async () => ({ supported: false }),
+    syncHome: async () => { throw new Error('native failed'); },
+    markDeviceMine: async () => ({ supported: false }),
   });
-  assert.equal(postScanSyncSettings({ ...latest, whoIsHome: false }, router, null), null, 'both switches off: nothing is saved');
-  assert.equal(postScanSyncSettings({ ...latest, home: null }, router, null), null);
-  assert.equal(postScanSyncSettings(null, router, null), null);
-  assert.equal(postScanSyncSettings(latest, { ...router, routerId: 'uuid:other' }, null), null, 'another router is not home');
+  const home = { networkId: 'n', gatewayIp: '192.168.1.1', label: 'Home', routerId: 'uuid:r', routerUrl: 'u' };
+  const first = stale.getHomeWatch();
+  const second = stale.setHomeWatch(DEFAULT_HOME_WATCH_SETTINGS, null);
+  assert.equal(await first, null);
+  assert.deepEqual(await second, { supported: false });
+  await assert.rejects(stale.syncHome(home, { people: [], known: [] }), /native failed/);
+  assert.deepEqual(await stale.markDeviceMine('192.168.1.2'), { supported: false });
 });

@@ -362,6 +362,16 @@ class NetlensCoreModule : Module() {
       }
     }
 
+    /** The post-scan refresh: only the home's label and URL and the snapshot change; the stored switches are never read from JS. */
+    AsyncFunction("syncHomeWatch") { home: Map<String, Any?>, snapshot: Map<String, Any?>, promise: Promise ->
+      homeWatchCall(promise) { ctx ->
+        var changed = false
+        HomeWatchStore.update(ctx) { prev ->
+          HomeWatchStore.applyHomeSync(prev, home, snapshot).also { changed = ChangedPing.presenceChanged(prev.people, it.people) }
+        }.also { if (changed) HomeWatch.ping(ctx, newDevice = false, presenceChanged = true) }
+      }
+    }
+
     AsyncFunction("markDeviceMine") { ip: String, promise: Promise ->
       homeWatchCall(promise) { ctx ->
         HomeWatchStore.update(ctx) { it.copy(alerts = NewDevices.acknowledge(it.alerts, ip.trim())) }

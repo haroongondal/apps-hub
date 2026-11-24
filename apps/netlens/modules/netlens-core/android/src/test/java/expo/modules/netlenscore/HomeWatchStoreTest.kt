@@ -81,4 +81,26 @@ class HomeWatchStoreTest {
     assertFalse(HomeWatchStore.isPrivateIpv4("localhost"))
     assertFalse(HomeWatchStore.isPrivateIpv4("fe80::1"))
   }
+
+  private val stored = HomeWatchStore.applyFromApp(HomeWatchState(), on + ("share" to true), null)
+  private val synced = home + ("label" to "Flat 4") + ("routerUrl" to "http://192.168.1.1:5000/new.xml")
+  private val snapshot = mapOf<String, Any?>("people" to listOf(mapOf("label" to "Sara", "ips" to listOf("192.168.1.20"), "seenNow" to true, "lastSeenAt" to 5.0)))
+
+  @Test fun theHomeSyncRefreshesTheHomeAndSnapshotButNeverTheSwitches() {
+    val s = HomeWatchStore.applyHomeSync(stored, synced, snapshot)
+    assertEquals("Flat 4", s.settings.home?.label)
+    assertEquals("http://192.168.1.1:5000/new.xml", s.settings.home?.routerUrl)
+    assertEquals("Sara", s.people.single().label)
+    assertEquals(stored.settings.copy(home = s.settings.home), s.settings)
+    assertTrue(s.settings.share && s.settings.whoIsHome && s.settings.newDevices)
+  }
+
+  @Test fun theHomeSyncChangesNothingForAnotherHomeNoHomeOrBothChecksOff() {
+    assertEquals(stored, HomeWatchStore.applyHomeSync(stored, synced + ("networkId" to "net_2"), snapshot))
+    assertEquals(stored, HomeWatchStore.applyHomeSync(stored, synced + ("routerId" to "uuid:other-router"), snapshot))
+    val none = HomeWatchState()
+    assertEquals(none, HomeWatchStore.applyHomeSync(none, synced, snapshot))
+    val off = stored.copy(settings = stored.settings.copy(whoIsHome = false, newDevices = false))
+    assertEquals(off, HomeWatchStore.applyHomeSync(off, synced, snapshot))
+  }
 }

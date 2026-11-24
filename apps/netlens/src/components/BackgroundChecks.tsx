@@ -73,12 +73,14 @@ export function BackgroundChecks() {
         />
         {s.newDevices ? (
           <Row title="How often">
-            <Segmented
-              options={HOUR_OPTIONS}
-              value={String(s.newDeviceHours)}
-              onChange={(key) => change({ newDeviceHours: Number(key) })}
-              accessibilityLabel="How often to look for new devices"
-            />
+            <View pointerEvents={saving ? 'none' : 'auto'} style={{ opacity: saving ? 0.5 : 1 }}>
+              <Segmented
+                options={HOUR_OPTIONS}
+                value={String(s.newDeviceHours)}
+                onChange={(key) => change({ newDeviceHours: Number(key) })}
+                accessibilityLabel="How often to look for new devices"
+              />
+            </View>
           </Row>
         ) : null}
         <SwitchRow
@@ -94,7 +96,7 @@ export function BackgroundChecks() {
         <Notice
           tone="warn"
           title="Notifications are off"
-          action={<Button label="Allow" variant="secondary" size="sm" onPress={() => change({ newDevices: true })} />}
+          action={<Button label="Allow" variant="secondary" size="sm" disabled={saving} onPress={() => change({ newDevices: true })} />}
         >
           HomeNet can't tell you about new devices until you allow its notifications.
         </Notice>

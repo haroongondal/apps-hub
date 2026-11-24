@@ -75,7 +75,35 @@ export interface HomeWatchSnapshot {
 export interface HomeWatchBinding {
   getHomeWatch(): Promise<HomeWatchStatus>;
   setHomeWatch(settings: HomeWatchSettings, snapshot: HomeWatchSnapshot | null): Promise<HomeWatchStatus>;
+  /** Refreshes the stored home's label and URL and the device snapshot; native keeps its own switches and refuses a different home. */
+  syncHome(home: HomeNetworkRef, snapshot: HomeWatchSnapshot): Promise<HomeWatchStatus>;
   markDeviceMine(ip: string): Promise<HomeWatchStatus>;
+}
+
+/** The same calls, one at a time in the order they were made (native runs each on its own thread and could swap two). */
+export interface OrderedHomeWatch {
+  /** A status is null when a newer call was made after this one: that call's answer is the fresher one. */
+  getHomeWatch(): Promise<HomeWatchStatus | null>;
+  setHomeWatch(settings: HomeWatchSettings, snapshot: HomeWatchSnapshot | null): Promise<HomeWatchStatus | null>;
+  syncHome(home: HomeNetworkRef, snapshot: HomeWatchSnapshot): Promise<HomeWatchStatus | null>;
+  markDeviceMine(ip: string): Promise<HomeWatchStatus | null>;
+}
+
+export function orderHomeWatch(binding: HomeWatchBinding): OrderedHomeWatch {
+  let tail: Promise<unknown> = Promise.resolve();
+  let issued = 0;
+  const run = (call: () => Promise<HomeWatchStatus>): Promise<HomeWatchStatus | null> => {
+    const seq = ++issued;
+    const result = tail.then(call);
+    tail = result.catch(() => undefined);
+    return result.then((status) => (seq === issued ? status : null));
+  };
+  return {
+    getHomeWatch: () => run(() => binding.getHomeWatch()),
+    setHomeWatch: (settings, snapshot) => run(() => binding.setHomeWatch(settings, snapshot)),
+    syncHome: (home, snapshot) => run(() => binding.syncHome(home, snapshot)),
+    markDeviceMine: (ip) => run(() => binding.markDeviceMine(ip)),
+  };
 }
 
 export function homeWatchSnapshot(devices: readonly ReconciledDevice[]): HomeWatchSnapshot {
@@ -104,17 +132,17 @@ export function homeWatchSnapshot(devices: readonly ReconciledDevice[]): HomeWat
   return { people: [...people.values()], known: [...known.values()].slice(0, MAX_KNOWN) };
 }
 
-/** What the post-scan sync may save: the owner's latest switches with a refreshed home; null when nothing should be saved. */
-export function postScanSyncSettings(
+/** The home the post-scan sync may refresh: label and description URL only. It never carries share or the other switches. */
+export function postScanSyncHome(
   latest: HomeWatchSettings | null,
   router: { routerId: string; routerUrl: string },
   networkName: string | null,
-): HomeWatchSettings | null {
+): HomeNetworkRef | null {
   const saved = latest?.home;
   if (!latest || !saved || !(latest.whoIsHome || latest.newDevices)) return null;
   // Another router at the same address is not home.
   if (router.routerId !== saved.routerId) return null;
-  return { ...latest, home: { ...saved, label: networkName ?? saved.label, routerUrl: router.routerUrl } };
+  return { ...saved, label: networkName ?? saved.label, routerUrl: router.routerUrl };
 }
 
 const UDN = /<UDN>\s*(uuid:[^<>\s]{1,128})\s*<\/UDN>/i;
