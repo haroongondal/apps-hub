@@ -48,3 +48,38 @@ test('a later kick, once every worker has stopped, tries again', async () => {
   await s.finished();
   assert.ok(s.calls() > 6, `the second kick called the queue again (${s.calls()} calls)`);
 });
+
+test('a new kick while a halted loop is still waiting on the hub is not lost, and no more than 3 calls are ever in flight', async () => {
+  const tick = () => new Promise((r) => setImmediate(r));
+  const waiting: ((r: RunResult) => void)[] = [];
+  let inFlight = 0;
+  let mostInFlight = 0;
+  let calls = 0;
+  const p = workerPool({
+    size: 3,
+    runNext: () => {
+      calls++;
+      inFlight++;
+      mostInFlight = Math.max(mostInFlight, inFlight);
+      return new Promise<RunResult>((resolve) => waiting.push((r) => (inFlight--, resolve(r))));
+    },
+    active: () => true,
+    onTick: () => {},
+    onIdle: () => {},
+  });
+  p.start();
+  await tick();
+  assert.equal(calls, 3);
+  waiting[0]('paused'); // the kick halts; two long calls are still in flight
+  await tick();
+  p.start(); // the owner taps Retry: one loop slot is free and the new kick must not inherit the halt
+  await tick();
+  assert.equal(calls, 4, 'the new kick runs its work although two halted-kick calls are still in flight');
+  waiting[1]('ran'); // a loop from the halted kick finishes its call
+  await tick();
+  assert.equal(calls, 5, 'it moved over to the new kick and asked the queue again instead of stopping');
+  for (const w of waiting.slice(2)) w('idle');
+  await tick();
+  assert.ok(mostInFlight <= 3, `in flight at most 3 (${mostInFlight})`);
+  assert.equal(p.running(), 0);
+});

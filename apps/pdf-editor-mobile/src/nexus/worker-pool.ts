@@ -9,19 +9,26 @@ export interface PoolOptions {
 }
 
 /**
- * Up to `size` loops pulling jobs. The first pause (AI hub not answering, the owner has to act, a rate limit)
- * stops every loop, so one kick never goes on hitting the hub with the rest of the queue; loops already
- * waiting on a call finish it. `start` after all loops ended begins again.
+ * Up to `size` loops pulling jobs. A pause (AI hub not answering, the owner has to act, a rate limit) halts the
+ * current kick, so its loops stop and one kick never goes on hitting the hub with the rest of the queue; calls
+ * already in flight finish. A later `start` opens a new kick: a loop still finishing a call from the halted one
+ * moves over to it instead of stopping, so a Retry or a new capture is never left waiting. `start` adds loops only
+ * up to `size`, so at most `size` calls are in flight across kicks.
  */
 export function workerPool({ size, runNext, active, onTick, onIdle }: PoolOptions) {
   let running = 0;
-  let halted = false;
+  let current = { halted: false };
 
   async function loop(): Promise<void> {
+    let mine = current;
     try {
-      while (!halted) {
+      for (;;) {
+        if (mine.halted) {
+          if (current.halted) break;
+          mine = current;
+        }
         const result = await runNext();
-        if (result === 'paused') halted = true;
+        if (result === 'paused') mine.halted = true;
         if (result !== 'ran' || !active()) break;
         onTick();
       }
@@ -35,7 +42,7 @@ export function workerPool({ size, runNext, active, onTick, onIdle }: PoolOption
 
   return {
     start(): void {
-      if (running === 0) halted = false;
+      if (current.halted) current = { halted: false };
       while (running < size) {
         running++;
         void loop();

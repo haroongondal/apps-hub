@@ -59,7 +59,11 @@ test('a minutes failure says what happened and how to fix it', () => {
   assert.match(actionError(new AiError('rate', 'AI hub is busy. Nexus tries again in a moment.')), /wait a minute, then try again/i);
   assert.equal(actionError(new AiError('auth', 'Add a key in AI hub')), 'Add a key in AI hub');
   assert.match(actionError(new AiError('unanswered', 'Waiting for AI hub to answer')), /did not answer.*try again/i);
+  assert.equal(actionError(new AiError('server', 'The AI service took too long. Nexus tries again.')), 'The AI service took too long. Wait a moment, then try again.');
+  assert.equal(actionError(new AiError('bad_reply', 'AI hub sent the wrong number of embeddings. Nexus tries again.')), 'AI hub sent the wrong number of embeddings. Wait a moment, then try again.');
+  assert.equal(actionError(new AiError('bad_reply', 'Nexus could not get readable minutes from the AI service after 3 tries. Try again later.')), 'Nexus could not get readable minutes from the AI service after 3 tries. Try again later.');
   assert.match(actionError(new AiError('offline', 'x')), /did not answer.*try again/i);
+  assert.equal(jobLabel(job({ status: 'failed', error: 'The AI service took too long. Nexus tries again.' }), 'note', 'ready', none).label, "Couldn't process it: The AI service took too long.");
   assert.match(jobLabel(job({ status: 'failed', error: 'Waiting for AI hub to answer' }), 'note', 'ready', none).label, /AI hub never answered/);
   assert.equal(jobLabel(job({ error: 'Waiting for AI hub to answer' }), 'note', 'ready', none).label, 'Waiting for AI hub to answer');
   assert.equal(actionError(new Error('This recording is too short to make minutes from.')), 'This recording is too short to make minutes from.');

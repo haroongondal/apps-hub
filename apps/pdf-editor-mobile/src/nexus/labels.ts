@@ -29,6 +29,9 @@ const WORKING: Record<Exclude<Job['stage'], 'done'>, (kind: ItemKind) => string>
   graph: () => 'Finding ideas',
 };
 
+// Messages written for the queue end with a promise that Nexus tries again; where nothing will, say it differently.
+const RETRY_PROMISE = /\s*Nexus tries again( in a moment| later)?\.?$/;
+
 export function jobLabel(
   job: Job | null,
   kind: ItemKind,
@@ -40,7 +43,7 @@ export function jobLabel(
   if (!job) return { label: 'Not processed yet', tone: 'neutral' };
   if (job.status === 'done') return { label: `${plural(found.ideas, 'idea')}, ${plural(found.links, 'link')}`, tone: 'ok' };
   if (job.status === 'failed') {
-    const why = job.error === WAITING_LINE ? 'AI hub never answered. Check AI hub and your connection, then try again' : (job.error ?? 'unknown error');
+    const why = job.error === WAITING_LINE ? 'AI hub never answered. Check AI hub and your connection, then try again' : (job.error ?? 'unknown error').replace(RETRY_PROMISE, '');
     return { label: `Couldn't process it: ${why}`, tone: 'danger' };
   }
   if (ai !== 'ready') return { label: HUB_COPY[ai].title, tone: 'warn' };
@@ -67,7 +70,8 @@ export const seekTo = (p: MinutesPoint): number => p.cites[0].startSec;
 export function actionError(err: unknown): string {
   if (err instanceof AiError && err.kind === 'rate') return 'AI hub is busy. Wait a minute, then try again.';
   if (err instanceof AiError && (err.kind === 'offline' || err.kind === 'unanswered')) return 'AI hub did not answer. Check your connection, then try again.';
-  return err instanceof Error ? err.message : String(err);
+  const message = err instanceof Error ? err.message : String(err);
+  return RETRY_PROMISE.test(message) ? `${message.replace(RETRY_PROMISE, '')} Wait a moment, then try again.` : message;
 }
 
 /** An item read from another app is named by where it came from ("From Inflow message, 3 Nov"), not by its title. */
