@@ -90,6 +90,17 @@ test('the NFC tag service is bindable by the system only and asks for an unlocke
   assert.equal(attr(hce, 'android:required'), 'false');
 });
 
+// The link provider is exported on purpose; only the signature permission (read and write) keeps other apps out, and it hands out no URI grants.
+test('the link provider is exported behind the signature permission and grants no URIs', () => {
+  const tag = vaultModule.match(/<provider\b[^>]*>/)?.[0] ?? '';
+  assert.equal(attr(tag, 'android:name'), 'expo.modules.strongroomvault.android.ExpiryLinkProvider');
+  assert.equal(attr(tag, 'android:exported'), 'true');
+  assert.equal(attr(tag, 'android:readPermission'), 'com.haroon.permission.AUTOPILOT');
+  assert.equal(attr(tag, 'android:writePermission'), 'com.haroon.permission.AUTOPILOT');
+  assert.doesNotMatch(vaultModule, /grantUriPermissions|<grant-uri-permission/);
+  assert.equal((vaultModule.match(/<provider\b/g) ?? []).length, 1, 'one provider only');
+});
+
 test('backup stays off', () => {
   assert.match(main, /android:allowBackup="false"/);
 });

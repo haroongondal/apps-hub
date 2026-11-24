@@ -24,14 +24,15 @@ internal object ExpiryShare {
 
   fun refresh(context: Context, entries: () -> Map<String, Entry>) {
     if (!enabled(context)) return delete(context)
-    synchronized(lock) {
-      val f = VaultHolder.file(context, FILE)
-      try {
-        with(VaultHolder) { f.write(DeviceKey.seal(ExpiryIndex.encode(ExpiryIndex.build(entries(), names(context))))) }
-      } catch (e: Exception) {
-        f.delete() // a stale index could still list a removed card; empty until the next unlock or change
-      }
+    val f = VaultHolder.file(context, FILE)
+    writeIfStillOn({ enabled(context) }, { with(VaultHolder) { f.write(DeviceKey.seal(ExpiryIndex.encode(ExpiryIndex.build(entries(), names(context))))) } }) {
+      f.delete() // a stale index could still list a removed card; empty until the next unlock or change
     }
+  }
+
+  // The switch is checked again under the lock: a sync thread that passed the check above can otherwise write after set(false) deleted the file.
+  internal fun writeIfStillOn(stillOn: () -> Boolean, write: () -> Unit, discard: () -> Unit) = synchronized(lock) {
+    if (stillOn()) try { write() } catch (e: Exception) { discard() }
   }
 
   fun delete(context: Context) = synchronized(lock) { VaultHolder.file(context, FILE).delete() }

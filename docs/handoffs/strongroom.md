@@ -787,7 +787,7 @@ mirrored by the extension) is unchanged.
   `grantUriPermissions`); insert, update and delete throw.
 - What it can learn with the setting on: how many cards have an expiry date and the last day of each
   expiry month; with "Show names", the names the owner typed. Nothing else exists in the index file.
-  With the setting off: nothing (no file, no rows).
+  With the setting off: no file and no expiry rows (the `health` row, installed and last-ran time only, is still served).
 - Locked vault: readable on purpose (the index is outside the vault). Locked phone: not readable
   (`setUnlockedDeviceRequired`).
 - A compromised sibling (same key) gets the above, and so does anyone who gets code into a
@@ -833,6 +833,11 @@ ai_source: none, last_seen_at}`.
 - **Heartbeat.** `AppHealth.beat` writes `lastSeenAt` (epoch ms) to the `strongroom` prefs when the
   module starts, when the app comes to the foreground and when the autofill service connects. A query
   only reads it; `null` until the app has run once after this version.
+- **Why autofill also beats (decided in the wave-4 fix).** A review asked for the heartbeat from the app only.
+  Kept in `StrongroomAutofillService.onConnected` on purpose: the owner mostly uses Strongroom through
+  autofill without opening the app, so an app-only beat would make the Store's "last seen" go stale for
+  days of normal use. What a same-key sibling learns is roughly when the owner last used Strongroom,
+  never what or where; the Settings footer now says so ("except that it is installed and when it last ran").
 - **Always served** to same-signed callers (`AppLinkCaller` first, as before). It holds no personal
   data and does not depend on the expiry switch. The expiry path is unchanged: off by default, empty
   while off. `AppHealthShareTest` covers both (health served with the switch off, expiry empty) and

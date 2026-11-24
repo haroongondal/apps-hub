@@ -210,7 +210,7 @@ export function SettingsScreen({ status, refresh, notice, onOpen }: Props) {
             ? status.expiryNames
               ? 'Your other Haroon apps see each card name you typed and when the card runs out, even while Strongroom is locked. Never numbers, security codes or passwords.'
               : 'Your other Haroon apps see only "Card" and when each card runs out, even while Strongroom is locked. Never names, numbers, security codes or passwords.'
-            : 'Off: your other apps see nothing from Strongroom.'
+            : 'Off: your other apps see nothing from Strongroom except that it is installed and when it last ran.'
         }
       >
         <Row
