@@ -82,7 +82,7 @@ export interface HomeWatchBinding {
 
 /** The same calls, one at a time in the order they were made (native runs each on its own thread and could swap two). */
 export interface OrderedHomeWatch {
-  /** A status is null when a newer call was made after this one: that call's answer is the fresher one. */
+  /** A status is null when a call made after this one worked: that call's answer is the fresher one. */
   getHomeWatch(): Promise<HomeWatchStatus | null>;
   setHomeWatch(settings: HomeWatchSettings, snapshot: HomeWatchSnapshot | null): Promise<HomeWatchStatus | null>;
   syncHome(home: HomeNetworkRef, snapshot: HomeWatchSnapshot): Promise<HomeWatchStatus | null>;
@@ -91,12 +91,17 @@ export interface OrderedHomeWatch {
 
 export function orderHomeWatch(binding: HomeWatchBinding): OrderedHomeWatch {
   let tail: Promise<unknown> = Promise.resolve();
-  let issued = 0;
+  const succeeded: Array<Promise<boolean>> = [Promise.resolve(false)];
   const run = (call: () => Promise<HomeWatchStatus>): Promise<HomeWatchStatus | null> => {
-    const seq = ++issued;
+    const seq = succeeded.length;
     const result = tail.then(call);
     tail = result.catch(() => undefined);
-    return result.then((status) => (seq === issued ? status : null));
+    succeeded.push(result.then(() => true, () => false));
+    return result.then(async (status) => {
+      // Later calls, including ones made while waiting: dropped only if one of them worked, else this is the freshest answer.
+      for (let later = seq + 1; later < succeeded.length; later++) if (await succeeded[later]) return null;
+      return status;
+    });
   };
   return {
     getHomeWatch: () => run(() => binding.getHomeWatch()),

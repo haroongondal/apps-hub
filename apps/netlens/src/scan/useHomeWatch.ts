@@ -99,8 +99,7 @@ export function useHomeWatch(
 
   const updateHomeWatch = useCallback(
     async (patch: Partial<Omit<HomeWatchSettings, 'home'>>): Promise<string | null> => {
-      const before = latestSettings.current;
-      const prev = before ?? DEFAULT_HOME_WATCH_SETTINGS;
+      const prev = latestSettings.current ?? DEFAULT_HOME_WATCH_SETTINGS;
       const next: HomeWatchSettings = { ...prev, ...patch };
       if (!next.whoIsHome && !next.newDevices) next.home = null;
       else if (!prev.whoIsHome && !prev.newDevices) {
@@ -115,6 +114,7 @@ export function useHomeWatch(
       if (patch.newDevices) setNotificationsAllowed(await notificationsGranted(true).catch(() => false));
       // Only a home pinned just now has a checked router; otherwise the post-scan sync sends the list once it has checked.
       const pinned = next.home !== null && next.home !== prev.home;
+      const before = latestSettings.current;
       latestSettings.current = next;
       try {
         setStatus(await binding.setHomeWatch(next, pinned ? homeWatchSnapshot(devices) : null));

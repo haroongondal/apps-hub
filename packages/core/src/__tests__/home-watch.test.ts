@@ -186,3 +186,18 @@ test('save queue: an answer older than a call made after it is dropped, a failed
   await assert.rejects(stale.syncHome(home, { people: [], known: [] }), /native failed/);
   assert.deepEqual(await stale.markDeviceMine('192.168.1.2'), { supported: false });
 });
+
+test('save queue: a save whose newer call then fails still shows its answer', async () => {
+  const saved = { supported: true as const, settings: { ...DEFAULT_HOME_WATCH_SETTINGS, share: true }, people: [], newDevices: [] };
+  const queue = orderHomeWatch({
+    getHomeWatch: async () => ({ supported: false }),
+    setHomeWatch: async () => saved,
+    syncHome: async () => { throw new Error('native failed'); },
+    markDeviceMine: async () => ({ supported: false }),
+  });
+  const home = { networkId: 'n', gatewayIp: '192.168.1.1', label: 'Home', routerId: 'uuid:r', routerUrl: 'u' };
+  const save = queue.setHomeWatch(saved.settings, null);
+  const sync = queue.syncHome(home, { people: [], known: [] });
+  await assert.rejects(sync, /native failed/);
+  assert.deepEqual(await save, saved);
+});
