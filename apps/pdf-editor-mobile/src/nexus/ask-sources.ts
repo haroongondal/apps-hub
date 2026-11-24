@@ -40,7 +40,7 @@ function parts(): Promise<Parts> {
   return opening;
 }
 
-// New or changed items need their embeddings: the existing worker does that, through the hub-first wrapper.
+// New or changed items need their embeddings: the existing worker does that, through AI hub.
 async function after(reports: Reports): Promise<void> {
   const all = Object.values(reports);
   if (all.some((r) => r.added || r.updated || r.removed)) emit();

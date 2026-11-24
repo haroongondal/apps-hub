@@ -27,9 +27,13 @@ export interface LinkResult {
   code?: string;
 }
 
+export type OpenableApp = 'store' | 'ai-hub';
+
 export interface NexusLinksModule {
   readShare(id: ReaderId, sinceId?: number): Promise<ReadResult>;
   startLink<A extends LinkAction>(action: A, extras: LinkExtras[A]): Promise<LinkResult>;
+  /** Opens the Store or AI hub. `unavailable`: not installed, or not signed like Nexus. */
+  openApp(app: OpenableApp): Promise<LinkResult>;
 }
 
 export const NexusLinks = requireOptionalNativeModule<NexusLinksModule>('NexusLinks');

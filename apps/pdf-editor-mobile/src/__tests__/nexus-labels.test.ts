@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { AiError, type Job } from '@apps-hub/knowledge-core';
 
-import { captureTitle, citationLabel, clockTime, jobLabel, minutesDetail, minutesError, noteTitle, seekTo, sourceText } from '../nexus/labels.ts';
+import { captureTitle, citationLabel, clockTime, jobLabel, minutesDetail, actionError, noteTitle, seekTo, sourceText } from '../nexus/labels.ts';
 
 const job = (over: Partial<Job>): Job => ({ itemId: 'x', stage: 'text', status: 'queued', attempts: 0, error: null, updatedAt: 0, ...over });
 const none = { ideas: 0, links: 0 };
@@ -23,15 +23,17 @@ test('voice notes and photos are titled by when they were captured', () => {
 });
 
 test('the card says what the queue is doing, in plain words', () => {
-  assert.deepEqual(jobLabel(null, 'note', true, none), { label: 'Not processed yet', tone: 'neutral' });
-  assert.equal(jobLabel(job({}), 'audio', true, none).label, 'Transcribing…');
-  assert.equal(jobLabel(job({ stage: 'graph', status: 'running' }), 'note', true, none).label, 'Finding ideas…');
-  assert.deepEqual(jobLabel(job({}), 'note', false, none), { label: 'Waiting for an AI key', tone: 'warn' });
-  assert.equal(jobLabel(job({ error: 'Offline.' }), 'note', true, none).label, 'Offline.');
-  assert.equal(jobLabel(job({ error: 'Offline.', status: 'running' }), 'audio', true, none).label, 'Transcribing…'); // back online, working again
-  assert.deepEqual(jobLabel(job({ stage: 'done', status: 'done' }), 'pdf', false, { ideas: 1, links: 6 }), { label: '1 idea, 6 links', tone: 'ok' });
-  assert.equal(jobLabel(job({ status: 'failed', error: 'HTTP 400' }), 'note', true, none).tone, 'danger');
-  assert.deepEqual(jobLabel(null, 'pdf', true, none, true), { label: 'Not in Nexus', tone: 'neutral' }); // kept out wins over any stale job
+  assert.deepEqual(jobLabel(null, 'note', 'ready', none), { label: 'Not processed yet', tone: 'neutral' });
+  assert.equal(jobLabel(job({}), 'audio', 'ready', none).label, 'Transcribing…');
+  assert.equal(jobLabel(job({ stage: 'graph', status: 'running' }), 'note', 'ready', none).label, 'Finding ideas…');
+  assert.deepEqual(jobLabel(job({}), 'note', 'no-key', none), { label: 'Add a key in AI hub', tone: 'warn' });
+  assert.equal(jobLabel(job({}), 'note', 'missing', none).label, 'AI needs AI hub');
+  assert.equal(jobLabel(job({}), 'note', 'not-allowed', none).label, 'Allow Nexus in AI hub');
+  assert.equal(jobLabel(job({ error: 'Offline.' }), 'note', 'ready', none).label, 'Offline.');
+  assert.equal(jobLabel(job({ error: 'Offline.', status: 'running' }), 'audio', 'ready', none).label, 'Transcribing…'); // back online, working again
+  assert.deepEqual(jobLabel(job({ stage: 'done', status: 'done' }), 'pdf', 'missing', { ideas: 1, links: 6 }), { label: '1 idea, 6 links', tone: 'ok' });
+  assert.equal(jobLabel(job({ status: 'failed', error: 'HTTP 400' }), 'note', 'ready', none).tone, 'danger');
+  assert.deepEqual(jobLabel(null, 'pdf', 'ready', none, true), { label: 'Not in Nexus', tone: 'neutral' }); // kept out wins over any stale job
 });
 
 test('minutes times read m:ss under an hour and h:mm:ss after', () => {
@@ -54,10 +56,17 @@ test('a minutes line says who, when it is due and where it was said, and seeks t
 });
 
 test('a minutes failure says what happened and how to fix it', () => {
-  assert.match(minutesError(new AiError('rate', 'The AI service is rate-limiting this key. Nexus tries again later.')), /wait a minute, then try again/i);
-  assert.match(minutesError(new AiError('offline', 'queued items continue')), /check your connection, then try again/i);
-  assert.equal(minutesError(new AiError('auth', 'No API key is set. Add your key in AI settings.')), 'No API key is set. Add your key in AI settings.');
-  assert.equal(minutesError(new Error('This recording is too short to make minutes from.')), 'This recording is too short to make minutes from.');
+  assert.match(actionError(new AiError('rate', 'AI hub is busy. Nexus tries again in a moment.')), /wait a minute, then try again/i);
+  assert.equal(actionError(new AiError('auth', 'Add a key in AI hub')), 'Add a key in AI hub');
+  assert.match(actionError(new AiError('unanswered', 'Waiting for AI hub to answer')), /did not answer.*try again/i);
+  assert.equal(actionError(new AiError('server', 'The AI service took too long. Nexus tries again.')), 'The AI service took too long. Wait a moment, then try again.');
+  assert.equal(actionError(new AiError('bad_reply', 'AI hub sent the wrong number of embeddings. Nexus tries again.')), 'AI hub sent the wrong number of embeddings. Wait a moment, then try again.');
+  assert.equal(actionError(new AiError('bad_reply', 'Nexus could not get readable minutes from the AI service after 3 tries. Try again later.')), 'Nexus could not get readable minutes from the AI service after 3 tries. Try again later.');
+  assert.match(actionError(new AiError('offline', 'x')), /did not answer.*try again/i);
+  assert.equal(jobLabel(job({ status: 'failed', error: 'The AI service took too long. Nexus tries again.' }), 'note', 'ready', none).label, "Couldn't process it: The AI service took too long.");
+  assert.match(jobLabel(job({ status: 'failed', error: 'Waiting for AI hub to answer' }), 'note', 'ready', none).label, /AI hub never answered/);
+  assert.equal(jobLabel(job({ error: 'Waiting for AI hub to answer' }), 'note', 'ready', none).label, 'Waiting for AI hub to answer');
+  assert.equal(actionError(new Error('This recording is too short to make minutes from.')), 'This recording is too short to make minutes from.');
 });
 
 const cite = (o: Partial<Parameters<typeof citationLabel>[0]>) => ({ n: 2, itemId: 'i', title: 'Message from Bank, 3 Nov', kind: 'note' as const, locator: null, text: 't', origin: null, ...o });

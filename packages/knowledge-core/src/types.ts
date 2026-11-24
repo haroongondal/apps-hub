@@ -33,7 +33,7 @@ export interface ContentPort {
   withdrawn?(itemId: string): Promise<void>;
 }
 
-export type AiErrorKind = 'auth' | 'offline' | 'rate' | 'server' | 'bad_request' | 'bad_reply';
+export type AiErrorKind = 'auth' | 'offline' | 'rate' | 'unanswered' | 'server' | 'bad_request' | 'bad_reply';
 
 export class AiError extends Error {
   readonly kind: AiErrorKind;
@@ -45,4 +45,8 @@ export class AiError extends Error {
 }
 
 // These wait for the owner or the network, so they pause the queue without using up an attempt.
-export const PAUSING: readonly AiErrorKind[] = ['auth', 'offline', 'rate'];
+export const PAUSING: readonly AiErrorKind[] = ['auth', 'offline', 'rate', 'unanswered'];
+
+// 'unanswered' (AI hub said its service failed: offline, refused, unreadable) may be a failure that never clears, so its pauses are counted.
+export const BOUNDED_PAUSE: readonly AiErrorKind[] = ['unanswered'];
+export const MAX_PAUSES = 5;

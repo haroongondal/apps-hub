@@ -2,6 +2,8 @@ import { AiError, locatorLabel, type Job, type MinutesAction, type MinutesPoint,
 import type { ItemKind } from '@apps-hub/library-core';
 import type { Tone } from '@apps-hub/ui';
 
+import { HUB_COPY, WAITING_LINE, type HubState } from './hub-state.ts';
+
 const MAX_TITLE = 80;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -27,18 +29,24 @@ const WORKING: Record<Exclude<Job['stage'], 'done'>, (kind: ItemKind) => string>
   graph: () => 'Finding ideas',
 };
 
+// Messages written for the queue end with a promise that Nexus tries again; where nothing will, say it differently.
+const RETRY_PROMISE = /\s*Nexus tries again( in a moment| later)?\.?$/;
+
 export function jobLabel(
   job: Job | null,
   kind: ItemKind,
-  hasKey: boolean,
+  ai: HubState,
   found: { ideas: number; links: number },
   keptOut = false,
 ): { label: string; tone: Tone } {
   if (keptOut) return { label: 'Not in Nexus', tone: 'neutral' };
   if (!job) return { label: 'Not processed yet', tone: 'neutral' };
   if (job.status === 'done') return { label: `${plural(found.ideas, 'idea')}, ${plural(found.links, 'link')}`, tone: 'ok' };
-  if (job.status === 'failed') return { label: `Couldn't process it: ${job.error ?? 'unknown error'}`, tone: 'danger' };
-  if (!hasKey) return { label: 'Waiting for an AI key', tone: 'warn' };
+  if (job.status === 'failed') {
+    const why = job.error === WAITING_LINE ? 'AI hub never answered. Check AI hub and your connection, then try again' : (job.error ?? 'unknown error').replace(RETRY_PROMISE, '');
+    return { label: `Couldn't process it: ${why}`, tone: 'danger' };
+  }
+  if (ai !== 'ready') return { label: HUB_COPY[ai].title, tone: 'warn' };
   if (job.status === 'queued' && job.error) return { label: job.error, tone: 'warn' };
   return { label: `${WORKING[job.stage as Exclude<Job['stage'], 'done'>](kind)}…`, tone: 'accent' };
 }
@@ -58,11 +66,12 @@ export function minutesDetail(p: MinutesPoint & Partial<Pick<MinutesAction, 'own
 
 export const seekTo = (p: MinutesPoint): number => p.cites[0].startSec;
 
-// The queue's own messages promise a later retry; minutes run only on a tap, so they say what to do instead.
-export function minutesError(err: unknown): string {
-  if (err instanceof AiError && err.kind === 'rate') return 'The AI service is busy for your key. Wait a minute, then try again.';
-  if (err instanceof AiError && err.kind === 'offline') return "Nexus couldn't reach the AI service. Check your connection, then try again.";
-  return err instanceof Error ? err.message : String(err);
+// The queue's own messages promise a later retry; minutes, Ask and the CV maker run only on a tap, so they say what to do instead.
+export function actionError(err: unknown): string {
+  if (err instanceof AiError && err.kind === 'rate') return 'AI hub is busy. Wait a minute, then try again.';
+  if (err instanceof AiError && (err.kind === 'offline' || err.kind === 'unanswered')) return 'AI hub did not answer. Check your connection, then try again.';
+  const message = err instanceof Error ? err.message : String(err);
+  return RETRY_PROMISE.test(message) ? `${message.replace(RETRY_PROMISE, '')} Wait a moment, then try again.` : message;
 }
 
 /** An item read from another app is named by where it came from ("From Inflow message, 3 Nov"), not by its title. */

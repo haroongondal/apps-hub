@@ -7,6 +7,7 @@ import { errorMessage } from '../library/use-library';
 
 import { APP_NAMES, switchStep } from './ask-runner';
 import { askState, syncAskSources, turnOffSource, turnOnSource, type AskState } from './ask-sources';
+import { ASK_KEEPS } from './consent-copy';
 import { setTodayShare, todayShareOn } from './today-share';
 
 const OPTIONS = [
@@ -32,8 +33,6 @@ const SOURCES: Record<SourceApp, { title: string; about: string; hint: string }>
   },
 };
 
-const KEEPS =
-  'When a switch is on, Nexus keeps a copy of that text inside Nexus. It sends the text to Gemini to make it searchable, and sends the parts that match to Groq when you ask about it (through AI hub when AI hub is installed). Nothing is sent while a switch is off. One-time codes, health data and Strongroom are never read. Turning a switch off deletes what Nexus kept.';
 
 const plural = (n: number) => `${n} ${n === 1 ? 'item' : 'items'}`;
 
@@ -89,7 +88,7 @@ export function AskMyLife() {
   };
 
   return (
-    <Group title="Ask my life" footer={KEEPS}>
+    <Group title="Ask my life" footer={ASK_KEEPS}>
       {SOURCE_APPS.map((app) => (
         <Row
           key={app}

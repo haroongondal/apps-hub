@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { cleanRow } from '@apps-hub/knowledge-core';
 
-import { clipboardSource, deputySource, inflowSource, MAX_PIN_PAGES, readDebits, readShare, runText, sourceProviders, startLink, type Native } from '../links/readers.ts';
+import { clipboardSource, deputySource, inflowSource, MAX_PIN_PAGES, readDebits, openApp, readShare, runText, sourceProviders, startLink, type Native } from '../links/readers.ts';
 
 type Answer = unknown | (() => unknown);
 
@@ -155,4 +155,14 @@ test('startLink drops undefined and null extras, keeps a valid code and fails cl
   assert.deepEqual(await startLink(fake({ [add]: { status: 'ok' } }), add, { title: 't' }), { status: 'failed' });
   assert.deepEqual(await startLink(fake({ [add]: () => { throw new Error('x'); } }), add, { title: 't' }), { status: 'failed' });
   assert.deepEqual(await startLink(fake({ [add]: { status: 'unavailable' } }), add, { title: 't' }), { status: 'unavailable' });
+});
+
+test('opening the Store or AI hub says unavailable without the native side and failed on a bad reply', async () => {
+  assert.deepEqual(await openApp(null, 'ai-hub'), { status: 'unavailable' });
+  const native = (reply: () => unknown) => ({ openApp: async () => reply() }) as unknown as Native;
+  assert.deepEqual(await openApp(native(() => ({ status: 'done', extra: 1 })), 'store'), { status: 'done' });
+  assert.deepEqual(await openApp(native(() => ({ status: 'unavailable' })), 'store'), { status: 'unavailable' });
+  assert.deepEqual(await openApp(native(() => 'done'), 'store'), { status: 'failed' });
+  assert.deepEqual(await openApp(native(() => ({ status: 'launched' })), 'store'), { status: 'failed' });
+  assert.deepEqual(await openApp(native(() => { throw new Error('boom'); }), 'store'), { status: 'failed' });
 });

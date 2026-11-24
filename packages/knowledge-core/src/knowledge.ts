@@ -5,7 +5,7 @@ import { cleanExtraction, normLabel } from './extraction.ts';
 import { composeMinutes, minutesFingerprint, minutesSegments, type Minutes, type MinutesChat, type MinutesOptions, type SavedMinutes } from './minutes.ts';
 import { KNOWLEDGE_STEPS } from './schema.ts';
 import { sourceLabel } from './sources.ts';
-import { AiError, PAUSING, type AiPort, type ContentPort, type Extraction, type Locator, type Segment } from './types.ts';
+import { AiError, BOUNDED_PAUSE, MAX_PAUSES, PAUSING, type AiPort, type ContentPort, type Extraction, type Locator, type Segment } from './types.ts';
 import { cosine, fromBlob, toBlob, topK } from './vectors.ts';
 
 export type JobStage = 'text' | 'embed' | 'graph' | 'done';
@@ -126,7 +126,7 @@ export class Knowledge {
     if ((await this.db.first("SELECT value FROM kn_meta WHERE key = 'embed_tag'"))?.value === tag) return;
     await this.db.transaction(async (tx) => {
       await tx.run(
-        `UPDATE kn_jobs SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, error = NULL, updated_at = ?,
+        `UPDATE kn_jobs SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, pauses = 0, error = NULL, updated_at = ?,
            embed_only = CASE WHEN item_id IN (SELECT item_id FROM item_sources) THEN 1 ELSE 0 END
          WHERE stage <> 'text' AND item_id IN (SELECT item_id FROM kn_chunks)`,
         [this.deps.now()],
@@ -145,7 +145,7 @@ export class Knowledge {
       if (await tx.first('SELECT 1 FROM item_sources WHERE item_id = ?', [itemId])) return this.queueEmbedOnly(tx, itemId);
       await tx.run(
         `INSERT INTO kn_jobs (item_id, stage, status, updated_at) VALUES (?, 'text', 'queued', ?)
-         ON CONFLICT(item_id) DO UPDATE SET stage = 'text', status = 'queued', gen = gen + 1, attempts = 0, error = NULL,
+         ON CONFLICT(item_id) DO UPDATE SET stage = 'text', status = 'queued', gen = gen + 1, attempts = 0, pauses = 0, error = NULL,
            embed_only = 0, updated_at = excluded.updated_at`,
         [itemId, this.deps.now()],
       );
@@ -167,7 +167,7 @@ export class Knowledge {
   private async queueEmbedOnly(tx: SqlPort, itemId: string): Promise<void> {
     await tx.run(
       `INSERT INTO kn_jobs (item_id, stage, status, embed_only, updated_at) VALUES (?, 'embed', 'queued', 1, ?)
-       ON CONFLICT(item_id) DO UPDATE SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, error = NULL,
+       ON CONFLICT(item_id) DO UPDATE SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, pauses = 0, error = NULL,
          embed_only = 1, updated_at = excluded.updated_at`,
       [itemId, this.deps.now()],
     );
@@ -209,7 +209,7 @@ export class Knowledge {
   }
 
   async retry(itemId: string): Promise<void> {
-    await this.db.run("UPDATE kn_jobs SET status = 'queued', attempts = 0, error = NULL WHERE item_id = ? AND status = 'failed'", [itemId]);
+    await this.db.run("UPDATE kn_jobs SET status = 'queued', attempts = 0, pauses = 0, error = NULL WHERE item_id = ? AND status = 'failed'", [itemId]);
   }
 
   /** `olderThanMs` 0 on a cold start: every running job then belongs to a dead process. */
@@ -270,8 +270,12 @@ export class Knowledge {
       if (e instanceof Withdrawn) return 'ran';
       const message = e instanceof Error ? e.message : String(e);
       if (e instanceof AiError && PAUSING.includes(e.kind)) {
-        await this.db.run("UPDATE kn_jobs SET status = 'queued', error = ? WHERE item_id = ? AND gen = ?", [message, itemId, gen]);
-        return 'paused';
+        const bounded = BOUNDED_PAUSE.includes(e.kind);
+        const paused = bounded ? ((await this.db.first('SELECT pauses FROM kn_jobs WHERE item_id = ?', [itemId]))?.pauses as number | undefined) ?? 0 : 0;
+        if (!bounded || paused < MAX_PAUSES) {
+          await this.db.run("UPDATE kn_jobs SET status = 'queued', error = ?, pauses = pauses + ? WHERE item_id = ? AND gen = ?", [message, bounded ? 1 : 0, itemId, gen]);
+          return 'paused';
+        }
       }
       await this.db.run(
         `UPDATE kn_jobs SET attempts = attempts + 1, status = CASE WHEN attempts + 1 >= ? THEN 'failed' ELSE 'queued' END,
@@ -282,7 +286,7 @@ export class Knowledge {
     }
     const next = stage === 'embed' && claimed.embed_only === 1 ? 'done' : NEXT[stage];
     await this.db.run(
-      'UPDATE kn_jobs SET stage = ?, status = ?, attempts = 0, error = NULL, updated_at = ? WHERE item_id = ? AND gen = ?',
+      'UPDATE kn_jobs SET stage = ?, status = ?, attempts = 0, pauses = 0, error = NULL, updated_at = ? WHERE item_id = ? AND gen = ?',
       [next, next === 'done' ? 'done' : 'queued', this.deps.now(), itemId, gen],
     );
     return 'ran';
@@ -362,7 +366,7 @@ export class Knowledge {
       );
       // Ask finds minutes through their chunks: a finished item embeds them and stops; one still in the queue picks them up on its way.
       await tx.run(
-        `UPDATE kn_jobs SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, error = NULL, updated_at = ?,
+        `UPDATE kn_jobs SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, pauses = 0, error = NULL, updated_at = ?,
            embed_only = CASE WHEN stage = 'done' THEN 1 ELSE embed_only END
          WHERE item_id = ? AND stage <> 'text'`,
         [this.deps.now(), itemId],

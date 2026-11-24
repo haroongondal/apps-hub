@@ -83,10 +83,16 @@ Current apps:
   `packages/library-core`, app glue in `apps/pdf-editor-mobile/src/library`. Scan
   and Reader build on it; specs `docs/pdf-editor/`, progress `docs/handoffs/pdf-editor-scan.md`.
   The mobile app is named **Nexus** since N2 (package id and Store id unchanged): an opt-in
-  AI layer over the same Library through the owner's Gemini and Groq keys (Gemini embeds text
-  and reads images, Groq transcribes and answers with Gemini as chat fallback, several keys per
-  service in expo-secure-store; no OpenAI; fully offline without a key), with
-  logic in `packages/knowledge-core` and glue in `apps/pdf-editor-mobile/src/nexus`. Design
+  AI layer over the same Library. AI runs through AI hub (`com.haroon.aihub`) only: Nexus has no
+  keys, no provider and no key settings of its own, and nothing leaves the phone without AI hub.
+  Through the hub, Gemini embeds text and reads images, Groq transcribes, and chat (graph, Ask,
+  Minutes, CVs, receipts) goes to Groq or Gemini, whichever AI hub uses for chat; no OpenAI. Without AI hub installed, Nexus says "AI needs AI hub" with a button
+  to the Store; if AI hub does not allow Nexus, "Allow Nexus in AI hub"; with no key there, "Add a
+  key in AI hub"; a hub whose service fails or is offline pauses an item five times ("Waiting for AI hub to
+  answer", with a Stream notice) without using up attempts, then counts attempts until it fails; a
+  timeout always counts. Keys Nexus saved before are deleted from the phone only
+  after the first successful hub chat or embed (a marker file records it).
+  Logic is in `packages/knowledge-core`, glue in `apps/pdf-editor-mobile/src/nexus`. Design
   `docs/superpowers/specs/2026-11-18-nexus-design.md`, progress `docs/handoffs/nexus.md`.
   Long recordings: over 25 MB is planned by `planSource` into pieces under 90% of the upload
   limit with 2 s overlap, cut by the Android `audio-chunks` module without re-encoding (iOS has no
@@ -102,14 +108,13 @@ Current apps:
   is "No restrictions". Voice notes set `shouldPlayInBackground` while recording; a voice note
   killed mid-recording is lost (use Meeting).
   Minutes: made by `composeMinutes` (`packages/knowledge-core/src/minutes.ts`) only when the owner
-  taps "Make minutes"; chat goes through `nexusPort.complete` (Groq gpt-oss-120b, then the Gemini
-  chat fallback; the consent copy says so), so the timed transcript lines are sent to Groq or,
-  when Groq cannot answer, Gemini. The transcript is untrusted (each segment `[seq] text` inside
+  taps "Make minutes"; chat goes through AI hub (`ai.complete`; Groq or Gemini, whichever AI hub
+  uses for chat; the consent copy says so), so the timed transcript lines are sent to Groq or Gemini. The transcript is untrusted (each segment `[seq] text` inside
   fences, delimiters neutralised); the model cites segment ids, the code keeps only ids it was
   shown and maps them to start times, uncited items are never stored; replies are validated and
   retried 3 times; long transcripts map-reduce over 10,000-character windows; stored in
   `kn_minutes`, cascade-deleted, removed by keep-out. Minutes text is appended to the item's
-  Library search body and embedded (Gemini embeddings, only with a key and not kept out) as one
+  Library search body and embedded (Gemini embeddings through AI hub, only when it is ready and the item is not kept out) as one
   chunk per summary, decision and action; making minutes re-queues the item at `embed` with
   `kn_jobs.embed_only`.
   Share to Nexus (Android only): `ShareActivity` (exported, SEND and SEND_MULTIPLE for pdf,
@@ -128,14 +133,13 @@ Current apps:
   (Android blocks it); it can import a recording another app saved. Offline OCR
   (`packages/text-ocr`, Tesseract4Android 4.9.0 Apache-2.0, English only) feeds nothing into Nexus
   today.
-  AI hub (E2): Nexus sends its AI calls (Gemini embeddings at 512 dimensions, Gemini image
-  reading, Groq Whisper transcription with timed segments, and chat for the graph, Ask, Minutes
-  and CVs, where AI hub picks Groq or Gemini) through AI hub first via `ai-hub-client`. It uses
-  its own Gemini and Groq keys only when the hub can't serve the call: not installed, Nexus not
-  switched on (remembered for 10 minutes), hub too old, no key in the hub, an image over 7 MB, or
-  an embedding reply that is not 512 dims of `gemini-embedding-001`. The same data goes to the
-  same services either way, items kept out of Nexus are never sent, and nothing is sent without
-  own keys or the hub.
+  AI hub only: Nexus sends every AI call (Gemini embeddings at 512 dimensions, Gemini image
+  reading, Groq Whisper transcription with timed segments, and chat for the graph, Ask, Minutes,
+  receipts and CVs, which AI hub sends to Groq or to Gemini) through AI hub via `ai-hub-client`.
+  There is no own-key fallback. Not installed, Nexus not allowed, no key in the hub or a hub too old
+  each show their plain notice and send nothing; an image over 7 MB is refused; an embedding reply
+  that is not 512 dims of `gemini-embedding-001` pauses and tells the owner to set Embeddings in AI
+  hub. Items kept out of Nexus are never sent.
   Ask my life, action items, receipts and shares (P3). Everything here is opt-in and OFF by
   default; every new data flow fails closed. Ask my life: Settings has three switches, Inflow
   messages (SMS and email, never one-time codes), Clipboard pinned clips and Deputy run history.
@@ -147,7 +151,7 @@ Current apps:
   service, at most 50 new items per source per run), and keeps a copy in `library.db` as a
   source-tagged item (shown read-only, labelled 'From Inflow message, 3 Nov', no Delete, Keep out
   still works). The text goes to Gemini for embeddings and, when the owner asks, the matching
-  parts go to Groq, through AI hub first and then the owner's own keys. Source items are
+  parts go to Groq or Gemini, whichever AI hub uses for chat, all through AI hub. Source items are
   embed-only (never graph extraction). All source text is untrusted and fenced in the Ask prompt.
   Never fetched: health data, one-time codes, Strongroom content. Turning a Nexus switch off
   deletes the items, chunks, vectors, search rows, graph, minutes and the read mark at once (a
@@ -162,7 +166,7 @@ Current apps:
   sentence from Nexus and the item text (at most 2000) as untrusted `context`; Deputy's
   confirmation gate stays in front.
   Receipts: 'Read as receipt' sends the scan's first page to Gemini and the text read from it to
-  Groq (hub first), only on the owner's tap on the receipt screen (not for kept-out scans).
+  Groq or Gemini, through AI hub, only on the owner's tap on the receipt screen (not for kept-out scans).
   Inflow payments from the `debits` share ('Let Nexus match my receipts', off in Inflow) are read
   only on 'Match to Inflow', matched on the phone (same amount, date within 3 days, fuzzy shop
   name, the owner confirms) and are never stored, logged, indexed into Ask or sent to any AI.
@@ -171,7 +175,7 @@ Current apps:
   (`AppLinkCaller`, signature permission AUTOPILOT for read and write, no grant URIs, a query
   never writes): `today` (titles of the owner's own items due today, from `files/today.json`
   written by the app; opt-in 'Show what is due today in my other apps', OFF by default; never
-  items read from other apps; Inflow shows only a count) and `health` (AI source hub, own or none,
+  items read from other apps; Inflow shows only a count) and `health` (AI source hub or none,
   and when Nexus was last open; always served). `files/today.json` fails closed: switching off or
   a failed write removes it first. The nexus-links module is Android-only (null on iOS, no
   Swift); `kotlinx-serialization-json` 1.8.1 (Apache-2.0, the version ai-hub-client already

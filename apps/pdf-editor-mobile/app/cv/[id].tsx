@@ -10,6 +10,8 @@ import type { Cv, TemplateId } from '../../src/cv/model';
 import { deleteCv, exportCv, loadCv, saveCv } from '../../src/cv/store';
 import { TEMPLATE_LIST, TEMPLATES } from '../../src/cv/templates';
 import { ai } from '../../src/nexus/ai';
+import { CV_CHANGE_FOOTER } from '../../src/nexus/consent-copy';
+import { actionError } from '../../src/nexus/labels';
 
 export default function CvEditorScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -48,7 +50,7 @@ export default function CvEditorScreen() {
       change({ ...cv, ...body });
       setInstruction('');
     } catch (err) {
-      setError(errorMessage(err));
+      setError(actionError(err));
     } finally {
       setBusy(null);
     }
@@ -103,7 +105,7 @@ export default function CvEditorScreen() {
           />
         ))}
       </Group>
-      <Group title="Change with AI" footer="AI changes the text, adds or removes sections, and keeps the rest as it is. It sends the whole CV to Groq or Gemini, whichever answers.">
+      <Group title="Change with AI" footer={CV_CHANGE_FOOTER}>
         <View style={{ padding: space.lg, gap: space.md }}>
           <Field
             label="What should change?"

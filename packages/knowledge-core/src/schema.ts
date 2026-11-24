@@ -84,4 +84,8 @@ CREATE TABLE kn_minutes (
 -- 1 when new minutes re-queued a finished item at the embed stage: it embeds them and stops, without making its graph again.
 ALTER TABLE kn_jobs ADD COLUMN embed_only INTEGER NOT NULL DEFAULT 0;
 `,
+  `
+-- Pauses per stage for an AI service that did not answer (types.ts BOUNDED_PAUSE); after MAX_PAUSES the next one counts as an attempt, so a request that never works ends as failed.
+ALTER TABLE kn_jobs ADD COLUMN pauses INTEGER NOT NULL DEFAULT 0;
+`,
 ];

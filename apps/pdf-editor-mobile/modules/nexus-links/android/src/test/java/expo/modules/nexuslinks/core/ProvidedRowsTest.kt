@@ -245,13 +245,13 @@ class ProvidedRowsTest {
 
   @Test fun healthIsOneRowForPdfEditorWithNoAccessibilityOrListener() {
     assertArrayEquals(arrayOf<Any?>("pdf-editor", null, null, "hub", 1764000000000L), ProvidedRows.health("hub", "1764000000000"))
-    assertEquals(ProvidedRows.HEALTH_COLUMNS.size, ProvidedRows.health("own", null).size)
+    assertEquals(ProvidedRows.HEALTH_COLUMNS.size, ProvidedRows.health("hub", null).size)
   }
 
-  @Test fun aiSourceIsOneOfHubOwnNoneElseNone() {
-    for (ok in listOf("hub", "own", "none")) assertEquals(ok, ProvidedRows.health(ok, null)[3])
-    assertEquals("own", ProvidedRows.health("own\n", null)[3])
-    for (bad in listOf(null, "", "HUB", "Hub", "groq", "hub own", "none\u0000", "gemini", "0")) assertEquals("$bad", "none", ProvidedRows.health(bad, null)[3])
+  @Test fun aiSourceIsOneOfHubNoneElseNone() {
+    for (ok in listOf("hub", "none")) assertEquals(ok, ProvidedRows.health(ok, null)[3])
+    assertEquals("hub", ProvidedRows.health("hub\n", null)[3])
+    for (bad in listOf(null, "", "own", "HUB", "Hub", "groq", "hub own", "none\u0000", "gemini", "0")) assertEquals("$bad", "none", ProvidedRows.health(bad, null)[3])
   }
 
   @Test fun lastSeenIsDecimalEpochMsElseNull() {

@@ -12,9 +12,11 @@ import { addPdf } from '../../src/library/files';
 import { IconButton } from '../../src/library/icon-button';
 import { openItem } from '../../src/library/open-item';
 import { errorMessage } from '../../src/library/use-library';
-import { aiReady } from '../../src/nexus/ai';
+import { hubState } from '../../src/nexus/ai';
+import { HubNotice, WaitingNotice } from '../../src/nexus/hub-notice';
+import { WAITING_LINE, type HubState } from '../../src/nexus/hub-state';
 import { addNote, addPhoto, addRecording } from '../../src/nexus/capture';
-import { citationLabel, jobLabel } from '../../src/nexus/labels';
+import { actionError, citationLabel, jobLabel } from '../../src/nexus/labels';
 import { currentMeeting, meetingStatus, meetingSupported } from '../../src/nexus/meeting';
 import type { MeetingState } from '../../src/nexus/meeting-session';
 import { openCitation } from '../../src/nexus/open-citation';
@@ -40,7 +42,7 @@ interface Exchange {
 
 function useCards() {
   const [cards, setCards] = useState<Card[]>([]);
-  const [hasKey, setHasKey] = useState(true);
+  const [ai, setAi] = useState<HubState>('ready');
   const [meeting, setMeeting] = useState<MeetingState>('none');
   const load = useCallback(async () => {
     currentMeeting()
@@ -62,7 +64,7 @@ function useCards() {
         });
       }
       setCards(next);
-      setHasKey(await aiReady());
+      setAi(await hubState());
     } catch (err) {
       console.warn('Stream did not load', err);
     }
@@ -73,13 +75,13 @@ function useCards() {
     }, [load]),
   );
   useEffect(() => onQueueChange(() => void load()), [load]);
-  return { cards, hasKey, meeting, load };
+  return { cards, ai, meeting, load };
 }
 
-function CaptureCard({ card, hasKey }: { card: Card; hasKey: boolean }) {
+function CaptureCard({ card, ai }: { card: Card; ai: HubState }) {
   const { c } = useTheme();
   const [open, setOpen] = useState(false);
-  const status = jobLabel(card.job, card.item.kind, hasKey, card.found, card.keptOut);
+  const status = jobLabel(card.job, card.item.kind, ai, card.found, card.keptOut);
   const retry = async () => {
     const kn = await openKnowledge();
     await kn.retry(card.item.id);
@@ -116,12 +118,16 @@ function CaptureCard({ card, hasKey }: { card: Card; hasKey: boolean }) {
   );
 }
 
-function ExchangeView({ x }: { x: Exchange }) {
+function ExchangeView({ x, onRetry }: { x: Exchange; onRetry: () => void }) {
   const open = (c: Answer['citations'][number]) => openCitation(c).catch((err) => Alert.alert('Could not open it', errorMessage(err)));
   return (
     <View style={{ gap: space.sm }}>
       <Text variant="bodyStrong">{x.question}</Text>
-      {x.error ? <Notice tone="danger">{x.error}</Notice> : null}
+      {x.error ? (
+        <Notice tone="danger" action={<Button label="Try again" size="sm" variant="secondary" onPress={onRetry} />}>
+          {x.error}
+        </Notice>
+      ) : null}
       {x.answer ? <Text>{x.answer.text}</Text> : x.error ? null : <Text tone="muted">Thinking…</Text>}
       {x.answer?.citations.map((c) => (
         <Button key={c.n} label={citationLabel(c)} size="sm" variant="ghost" onPress={() => void open(c)} accessibilityHint="Opens the source" />
@@ -132,7 +138,7 @@ function ExchangeView({ x }: { x: Exchange }) {
 
 export default function StreamScreen() {
   const { c } = useTheme();
-  const { cards, hasKey, meeting, load } = useCards();
+  const { cards, ai, meeting, load } = useCards();
   const [mode, setMode] = useState<'capture' | 'ask'>('capture');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -166,11 +172,16 @@ export default function StreamScreen() {
     }
     const id = Date.now();
     setThread((t) => [{ id, question: value, answer: null, error: null }, ...t]);
+    runAsk(id, value);
+  };
+
+  const runAsk = (id: number, value: string) => {
     const settle = (patch: Partial<Exchange>) => setThread((t) => t.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    settle({ answer: null, error: null });
     openKnowledge()
       .then((kn) => kn.ask(value))
       .then((answer) => settle({ answer }))
-      .catch((err) => settle({ error: errorMessage(err) }));
+      .catch((err) => settle({ error: actionError(err) }));
   };
 
   const toggleRecording = async () => {
@@ -235,19 +246,16 @@ export default function StreamScreen() {
       <FlatList<Card | Exchange>
         data={mode === 'capture' ? cards : thread}
         keyExtractor={(row) => ('item' in row ? row.item.id : String(row.id))}
-        renderItem={({ item: row }) => ('item' in row ? <CaptureCard card={row} hasKey={hasKey} /> : <ExchangeView x={row} />)}
+        renderItem={({ item: row }) => ('item' in row ? <CaptureCard card={row} ai={ai} /> : <ExchangeView x={row} onRetry={() => runAsk(row.id, row.question)} />)}
         ItemSeparatorComponent={() => <View style={{ height: space.md }} />}
         ListEmptyComponent={empty}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: space.lg }}
         ListHeaderComponent={
           <View style={{ gap: space.lg, paddingBottom: space.lg }}>
-            <Header title="Stream" trailing={<IconButton icon="key-outline" label="AI settings" onPress={() => router.push('/settings')} />} />
-            {!hasKey ? (
-              <Notice tone="accent" title="AI is off" action={<Button label="Add your key" size="sm" onPress={() => router.push('/settings')} />}>
-                Add your Gemini and Groq keys, or turn on Nexus in AI hub, to transcribe, find ideas and ask questions. Until then nothing leaves this phone.
-              </Notice>
-            ) : null}
+            <Header title="Stream" trailing={<IconButton icon="settings-outline" label="AI settings" onPress={() => router.push('/settings')} />} />
+            <HubNotice state={ai} />
+            {ai === 'ready' && cards.some((card) => card.job?.status === 'queued' && card.job.error === WAITING_LINE) ? <WaitingNotice /> : null}
             {meeting === 'recording' ? (
               <Notice tone="danger" title="Recording a meeting" action={<Button label="Open" size="sm" onPress={() => router.push('/meeting')} />}>
                 It keeps recording until you stop it.

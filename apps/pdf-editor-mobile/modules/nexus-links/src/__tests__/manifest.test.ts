@@ -12,10 +12,10 @@ test('manifest follows the link rules', () => {
   assert.deepEqual(auditManifest(xml), []);
 });
 
-test('manifest declares the link permission, holds it and can see the three apps', () => {
+test('manifest declares the link permission, holds it and can see the three apps and the Store', () => {
   assert.match(xml, /<permission android:name="com\.haroon\.permission\.AUTOPILOT" android:protectionLevel="signature" \/>/);
   assert.match(xml, /<uses-permission android:name="com\.haroon\.permission\.AUTOPILOT" \/>/);
-  for (const pkg of ['com.haroon.inflow', 'com.haroon.deputy', 'com.haroon.clipboard']) assert.match(xml, new RegExp(`<package android:name="${pkg.replaceAll('.', '\\.')}" />`));
+  for (const pkg of ['com.haroon.inflow', 'com.haroon.deputy', 'com.haroon.clipboard', 'com.haroon.store']) assert.match(xml, new RegExp(`<package android:name="${pkg.replaceAll('.', '\\.')}" />`));
 });
 
 const providers = [...xml.matchAll(/<provider\b[^>]*>/g)].map((m) => m[0]);

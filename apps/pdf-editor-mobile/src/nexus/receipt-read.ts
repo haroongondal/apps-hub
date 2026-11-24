@@ -1,4 +1,6 @@
-import type { ImageFile, NexusAi } from './hub-first.ts';
+import { AiError } from '@apps-hub/knowledge-core';
+
+import type { ImageFile, NexusAi } from './hub-ai.ts';
 import { parseReceiptReply, receiptMessages, type Receipt, type ReceiptResult } from './receipt-parse.ts';
 
 export type ReceiptReader = Pick<NexusAi, 'readImage' | 'complete'>;
@@ -9,6 +11,15 @@ export async function readReceipt(port: ReceiptReader, file: ImageFile, now: num
   return parseReceiptReply(await port.complete(system, user, true), now);
 }
 
+
+export const READ_FAILED = "Nexus couldn't read that receipt. Check the photo is clear and your connection works, then try again.";
+
+/** A hub that needs the owner (not allowed, no key) shows its notice at once; a photo that is too big says so; anything else is the usual line. */
+export function readFailure(err: unknown): Extract<ScanRead, { kind: 'no-ai' | 'failed' }> {
+  if (err instanceof AiError && err.kind === 'auth') return { kind: 'no-ai' };
+  if (err instanceof AiError && err.kind === 'bad_request') return { kind: 'failed', line: err.message };
+  return { kind: 'failed', line: READ_FAILED };
+}
 
 export const KEPT_OUT_LINE = 'Kept out of Nexus. Add it back to read it as a receipt.';
 
