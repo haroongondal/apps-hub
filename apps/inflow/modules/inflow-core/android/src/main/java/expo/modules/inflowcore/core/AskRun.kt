@@ -35,8 +35,9 @@ class AskRun(
     val found = items(plan, plan.pkgs.filter { p -> eligible.any { it.first == p } })
     val money = if (plan.money) txns(plan) else emptyList()
     val h = health(plan.from, plan.to)
-    val answer = ai.complete(Ask.answerSystem(h != null), Ask.answerUser(question, found, money, t, zone, h))
+    val (sentItems, sentTxns) = Ask.fit(found, money, zone)   // the newest that fit: a bigger request is refused by the provider
+    val answer = ai.complete(Ask.answerSystem(h != null), Ask.answerUser(question, sentItems, sentTxns, t, zone, h, found.size - sentItems.size, money.size - sentTxns.size))
     spend(answer)
-    return AskReply(answer.text.trim(), null, plan.from, plan.to, found.size, money.size)
+    return AskReply(answer.text.trim(), null, plan.from, plan.to, sentItems.size, sentTxns.size)
   }
 }

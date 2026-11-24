@@ -71,4 +71,33 @@ class AskTest {
     val prompt = Ask.answerUser("Anything?", emptyList(), emptyList(), now, karachi)
     assertTrue(prompt.contains("Messages (0)") && prompt.contains("Transactions (0)"))
   }
+
+  @Test fun fitKeepsTheNewestEntriesThatFitTheBudget() {
+    val items = (1..300).map { AskItem("Messages", "Bank", now - it * 60_000L, null, "m".repeat(500)) }
+    val txns = (1..300L).map { txn(it, Direction.OUT, 1_000 * it, "Shop $it", "Food") }
+    val (i, t) = Ask.fit(items, txns, karachi)
+    assertTrue("items ${i.size}", i.size in 1 until 300)
+    assertTrue("txns ${t.size}", t.size in 1 until 300)
+    assertEquals(items.take(i.size), i)   // newest first, no gaps
+    assertEquals(txns.take(t.size), t)
+    assertTrue(Ask.answerUser("q", i, t, now, karachi).length <= Ask.MAX_ANSWER_CHARS + 600)   // the budget plus the heading lines
+  }
+
+  @Test fun fitLeavesASmallRequestAlone() {
+    val items = listOf(AskItem("Gmail", null, now - day, null, "Please send the rent"))
+    val txns = listOf(txn(1, Direction.OUT, 150_050, "Dr Khan", "Health"))
+    assertEquals(items to txns, Ask.fit(items, txns, karachi))
+  }
+
+  @Test fun fitGivesTransactionsAtMostAThirdOfTheBudget() {
+    val txns = (1..300L).map { txn(it, Direction.OUT, 1_000 * it, "Shop $it", "Food") }
+    val (_, t) = Ask.fit(emptyList(), txns, karachi)
+    assertTrue(Ask.answerUser("q", emptyList(), t, now, karachi).length < Ask.MAX_ANSWER_CHARS / 3 + 600)
+  }
+
+  @Test fun answerPromptSaysHowManyOlderEntriesWereLeftOut() {
+    val prompt = Ask.answerUser("Anything?", emptyList(), emptyList(), now, karachi, omittedItems = 7, omittedTxns = 3)
+    assertTrue(prompt.contains("Messages (0, 7 older left out)") && prompt.contains("Transactions (0, 3 older left out)"))
+    assertFalse(Ask.answerUser("Anything?", emptyList(), emptyList(), now, karachi).contains("left out"))
+  }
 }
