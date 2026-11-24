@@ -77,4 +77,20 @@ class AskRunTest {
       assertFalse(requests.single().contains("48213"))
     }
   }
+
+  @Test fun aBroadQuestionSendsOnlyTheNewestEntriesThatFitAndSaysHowManyWereLeftOut() {
+    val many = (1..300).map { AskItem("Messages", "Bank", at("2026-11-10T12:00") - it * 60_000L, null, "#$it# " + "x".repeat(500)) }
+    val sent = mutableListOf<String>()
+    val reply = AskRun(
+      FakeHub.ai(foreground = true) { sent += it; if (sent.size == 1) FakeHub.reply("""{"from":"2026-11-01","to":"2026-11-14","apps":["sms.app"],"money":false}""") else FakeHub.reply("ok") },
+      {}, { false }, { listOf("sms.app" to "Messages") },
+      { _, _ -> many }, { emptyList() }, { _, _ -> null }, { now }, zone,
+    ).run("Summarise everything")
+    assertEquals("ok", reply.answer)
+    assertTrue("answer request ${sent[1].length} chars", sent[1].length < 20_000)   // 300 entries of 500 characters would be over 150,000
+    assertTrue(reply.items in 1 until 300)
+    assertTrue(sent[1].contains("older left out"))
+    assertTrue(sent[1].contains("#1#"))       // the newest is kept
+    assertFalse(sent[1].contains("#300#"))    // the oldest is left out
+  }
 }
