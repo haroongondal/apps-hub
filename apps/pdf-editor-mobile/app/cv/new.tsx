@@ -1,11 +1,14 @@
 import { Button, Field, Header, Screen, Segmented, space, Text } from '@apps-hub/ui';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 
 import { IconButton } from '../../src/library/icon-button';
 import { actionError } from '../../src/nexus/labels';
 import { generateBody } from '../../src/cv/generate';
+import { describeImport, type Imported } from '../../src/cv/import.ts';
+import { ImportSheet } from '../../src/cv/import-sheet';
+import { takeWaitingPdf } from '../../src/cv/import-sources';
 import { type TemplateId } from '../../src/cv/model';
 import { newCv, saveCv } from '../../src/cv/store';
 import { TEMPLATE_LIST, TEMPLATES } from '../../src/cv/templates';
@@ -20,7 +23,28 @@ export default function NewCvScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [importOpen, setImportOpen] = useState(false);
+  const [filledFrom, setFilledFrom] = useState<string | null>(null);
+
   const hub = useHubState();
+
+  const fill = (imported: Imported) => {
+    setProfile((current) => (current.trim() ? `${current.trim()}\n\n${imported.text}` : imported.text));
+    setFilledFrom(describeImport(imported));
+    setError(null);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      void takeWaitingPdf()
+        .then((waiting) => {
+          if (!waiting) return;
+          if (waiting.imported) fill(waiting.imported);
+          else setError(`Nexus hasn't read ${waiting.title} yet. Open it, wait for it to load, then come back here.`);
+        })
+        .catch((err) => setError(actionError(err)));
+    }, []),
+  );
 
   const create = async () => {
     if (!profile.trim()) return setError('Describe your experience first.');
@@ -42,6 +66,7 @@ export default function NewCvScreen() {
       <Header title="New CV" trailing={<IconButton icon="close" label="Close" onPress={() => router.back()} />} />
       <HubNotice state={hub} />
       <View style={{ gap: space.md }}>
+        <Button label="Import from a file" variant="secondary" onPress={() => setImportOpen(true)} />
         <Field
           label="About you"
           value={profile}
@@ -51,7 +76,7 @@ export default function NewCvScreen() {
           style={{ minHeight: 160 }}
           placeholder="Jobs with dates and what you did, education, skills, languages, certifications. Write it however it comes to you."
           error={error}
-          hint={CV_NEW_HINT}
+          hint={filledFrom ? `${filledFrom} ${CV_NEW_HINT}` : CV_NEW_HINT}
         />
         <Field label="Target role (optional)" value={role} onChangeText={setRole} placeholder="Data analyst" />
         <Segmented
@@ -63,6 +88,7 @@ export default function NewCvScreen() {
         <Text tone="muted">{TEMPLATES[template].blurb}</Text>
         <Button label="Create CV" busy={busy} disabled={hub !== null && hub !== 'ready'} onPress={() => void create()} />
       </View>
+      {importOpen ? <ImportSheet onImported={fill} onClose={() => setImportOpen(false)} /> : null}
     </Screen>
   );
 }

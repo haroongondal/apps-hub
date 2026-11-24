@@ -15,4 +15,6 @@ export const RECEIPT_START = `Nexus sends this photo to Gemini, and the text rea
 
 export const CV_NEW_HINT = `Nexus uses only what you write here and sends it through AI hub to ${CHAT_TO}.`;
 
+export const CV_IMPORT_NOTE = `The text is read on this phone. Nothing is sent until you tap Create CV, and then Nexus sends it through AI hub to ${CHAT_TO}.`;
+
 export const CV_CHANGE_FOOTER = `AI changes the text, adds or removes sections, and keeps the rest as it is. It sends the whole CV through AI hub to ${CHAT_TO}.`;
