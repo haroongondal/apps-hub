@@ -53,7 +53,7 @@ test('each native result shape picks one state', () => {
   const s = shown();
   assert.deepEqual(summaryStep(s, { summary: 'All good', error: null }), { kind: 'result', summary: 'All good', fromDay: s.fromDay, toDay: s.toDay });
   assert.deepEqual(summaryStep(s, { summary: null, error: DATA_CHANGED }), { kind: 'error', message: DATA_CHANGED, again: true });
-  assert.deepEqual(summaryStep(s, { summary: null, error: 'Add a Groq key in AI settings first. Nothing was sent.' }), { kind: 'error', message: 'Add a Groq key in AI settings first. Nothing was sent.', again: false });
+  assert.deepEqual(summaryStep(s, { summary: null, error: 'Something went wrong. Nothing was sent.' }), { kind: 'error', message: 'Something went wrong. Nothing was sent.', again: false });
   assert.deepEqual(summaryStep(s, { summary: null, error: null }), { kind: 'error', message: SEND_FAILED, again: false });
   assert.deepEqual(summaryStep(s, { summary: '  \n', error: null }), { kind: 'error', message: SEND_FAILED, again: false });
 });

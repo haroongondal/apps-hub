@@ -37,12 +37,13 @@ test('only a missing, refused or too old hub is a screen state; a ready hub or a
 });
 
 test('both health consents name Groq and Gemini, say what AI hub keeps and carry the free-tier note', () => {
-  assert.equal(HEALTH_PRIVACY, 'Your health text goes to Groq, or to Gemini when Groq has no working key, through AI hub. AI hub keeps only counts, never the text.');
+  assert.equal(HEALTH_PRIVACY, 'Your health text goes to Groq or Gemini, whichever AI hub uses for chat, through AI hub. AI hub keeps only counts, never the text.');
   for (const text of [HEALTH_IN_ASK_NOTE, SENDS_NOTICE]) {
     assert.ok(text.includes(HEALTH_PRIVACY));
     assert.ok(text.includes(FREE_TIER_NOTE));
     assert.match(text, /Groq/);
     assert.match(text, /Gemini/);
+    assert.match(text, /whichever AI hub uses for chat/);
     assert.match(text, /free-tier/);
     assert.match(text, /keeps only counts, never the text/);
   }

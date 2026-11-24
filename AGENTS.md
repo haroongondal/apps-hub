@@ -325,8 +325,8 @@ Current apps:
   most 90 days) and sections, reads the exact text and taps Send, Inflow sends that text (daily
   steps, sleep, heart rate; medicines with dose, schedule and taken/skipped/missed counts;
   journal entries with date, mood, tags and note; only the ticked sections, at most 40,000
-  characters) through AI hub (a chat job: Groq gpt-oss-120b, or Gemini when Groq has no working
-  key; the hub keeps only counts, never the text) with a fixed system prompt; the native side recomputes the text and refuses when its
+  characters) through AI hub (a chat job: Groq or Gemini, whichever AI hub uses for chat; the hub
+  keeps only counts, never the text) with a fixed system prompt; the native side recomputes the text and refuses when its
   SHA-256 differs from the preview; nothing is sent on a schedule or in the background; the reply
   is cleaned and shown as plain text; the PDF is saved only where the owner picks in the system
   file picker. (2) 'Include health in Ask AI' (meta `healthInAsk`, off by default): when on, Ask
@@ -356,7 +356,7 @@ Current apps:
   (`com.haroon.pdfeditor`), only while 'Let Nexus read my messages' (`nexusAsk`) is on: SMS and
   email only, no one-time codes, nothing kept from AI, never Strongroom or Inflow items, only
   items saved after AI was first turned on in Inflow (never on means nothing), text cut at 4000
-  characters, 200 rows a page, and Nexus sends what it reads to Groq or Gemini through AI hub
+  characters, 200 rows a page, and Nexus sends what it reads to Groq or Gemini, whichever AI hub uses, through AI hub
   (the switch says so); `debits/<sinceId>` to Nexus alone, only while 'Let Nexus
   match my receipts' (`nexusDebits`) is on: money out from the last 60 days, newest 500, own
   transfers left out, `account` a label with at most the last four digits. Any other caller, or a
@@ -391,7 +391,7 @@ Current apps:
   no key settings screen. The 30-minute batch (summaries, importance, to-dos, money and Autopilot suggestions),
   spending categories, the weekly and monthly reports, Ask AI and the Doctor summary all go to AI hub
   (`com.haroon.aihub`) as chat jobs through `ai-hub-client`, with exactly the text R44 already allows; the hub
-  picks Groq gpt-oss-120b, or Gemini when Groq has no working key, and keeps only counts. 'Use AI' in Settings
+  uses Groq or Gemini, whichever AI hub uses for chat (the owner can move chat to Gemini, and it also moves on to Gemini when every Groq key is rate-limited or missing), and keeps only counts. 'Use AI' in Settings
   is the owner's opt-in (the old 'a key is saved'): it sets aiSince the first time, and only items saved from
   then on are sent; a phone that had a key for the address its old model picker had chosen (Google's by default) stays on, any other stays off. Without the hub the screens say, in plain words with one
   button each: 'AI needs AI hub.' (Install AI hub opens the Store, which has no page link for one app), 'Allow
@@ -402,8 +402,8 @@ Current apps:
   cleanup run again at every start. A hub reply that names a model Inflow does not price counts at the
   dearest known price toward the daily limit. Health text (privacy-relevant change, owner to confirm): the
   Doctor summary (on the owner's tap, after the preview) and Ask AI with 'Include health in Ask AI' on now go
-  through the hub, so the text reaches Groq via AI hub, or Gemini when Groq has no working key; both switches stay off
-  by default with consent copy 'Your health text goes to Groq, or to Gemini when Groq has no working key,
+  through the hub, so the text reaches Groq or Gemini, whichever AI hub uses for chat; both switches stay off
+  by default with consent copy 'Your health text goes to Groq or Gemini, whichever AI hub uses for chat,
   through AI hub. AI hub keeps only counts, never the text.' plus the free-tier Gemini warning (Google may
   use what Inflow sends to improve its products; billing avoids that), restored from the old key panel and also
   shown under 'Use AI'. The background batch, categories and reports never carry health text (`HubRoutingTest`,
