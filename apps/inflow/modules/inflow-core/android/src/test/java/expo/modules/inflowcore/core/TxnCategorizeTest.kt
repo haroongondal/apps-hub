@@ -136,18 +136,19 @@ class TxnCategorizeTest {
     assertEquals(1, calls)
   }
 
-  @Test fun runBatchesOf100NewestFirst() {
+  @Test fun runBatchesOf50NewestFirst() {
     val ids = (1..130).map { add(amount = it * 100L, at = t0 + it) }
     assertEquals(130, run())
-    assertEquals(2, calls)
-    assertEquals(100, sentIds[0].size)
+    assertEquals(3, calls)
+    assertEquals(50, sentIds[0].size)
     assertEquals(ids.last(), sentIds[0].first())   // newest first
-    assertEquals(30, sentIds[1].size)
+    assertEquals(50, sentIds[1].size)
+    assertEquals(30, sentIds[2].size)
   }
 
   @Test fun runStopsAtMaxBatches() {
     (1..250).forEach { add(amount = it * 100L, at = t0 + it) }
-    assertEquals(200, run(max = 2))
+    assertEquals(100, run(max = 2))
     assertEquals(2, calls)
   }
 
