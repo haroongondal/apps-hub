@@ -62,7 +62,7 @@ export function KeysGroup() {
         <Row title="Add a key">
           <Field
             label="Gemini or Groq key"
-            hint="Starts with AIza for Gemini or gsk_ for Groq."
+            hint="Starts with AIza or AQ. for Gemini, or gsk_ for Groq."
             value={draft}
             onChangeText={setDraft}
             secureTextEntry
