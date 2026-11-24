@@ -26,10 +26,10 @@ class KeyRingTest {
   }
 
   @Test fun keysAreGroupedByServiceTrimmedAndDeduplicated() {
-    val ring = KeyRing(listOf(" gsk_a ", "AIza1", "gsk_b", "gsk_a", "sk-unknown", ""))
+    val ring = KeyRing(listOf(" gsk_a ", "AIza1", "AQ.2", "gsk_b", "gsk_a", "sk-unknown", ""))
     assertEquals(listOf("gsk_a", "gsk_b"), ring.keys(Service.GROQ))
-    assertEquals(listOf("AIza1"), ring.keys(Service.GEMINI))
-    assertEquals(3, ring.all.size)
+    assertEquals(listOf("AIza1", "AQ.2"), ring.keys(Service.GEMINI))
+    assertEquals(4, ring.all.size)
   }
 
   @Test fun theKeyInUseIsTriedFirstAndPerService() {

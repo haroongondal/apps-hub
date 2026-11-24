@@ -128,6 +128,6 @@ class AiHubCoreModule : Module() {
   private fun serviceNamed(name: String): Service? = Service.entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
 
   private companion object {
-    const val BAD_KEY = "This doesn't look like a Gemini key (AIza…) or a Groq key (gsk_…)."
+    const val BAD_KEY = "This doesn't look like a Gemini key (AIza… or AQ.…) or a Groq key (gsk_…)."
   }
 }
