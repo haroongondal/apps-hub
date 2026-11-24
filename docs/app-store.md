@@ -96,6 +96,9 @@ For each app, the CLI:
    versionCode.
 4. Uploads `apps/<id>/android/<versionCode>.apk`, then rewrites `manifest.json` (zod-validated, versionCode must
    strictly increase). The manifest is published after each app, so a later failure never leaves an upload half done.
+   Cloudflare caps one request body near 100 MB (a 109 MB APK got `413 Payload Too Large`), so a file over 32 MB goes up
+   in 32 MB parts through the Worker's multipart routes under `/admin/` (`POST ?uploads`, `PUT ?uploadId&part=N`,
+   `POST ?uploadId` with `{parts}`). Deploy the Worker before the first release that needs it.
 
 `--platform ios` exits with an explanation until iOS is set up.
 

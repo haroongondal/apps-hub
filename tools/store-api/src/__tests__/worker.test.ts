@@ -6,8 +6,26 @@ type Stored = { bytes: ArrayBuffer; type?: string };
 
 function fakeBucket(): Bucket & { data: Map<string, Stored> } {
   const data = new Map<string, Stored>();
+  const uploads = new Map<string, { type?: string; parts: Map<number, ArrayBuffer> }>();
+  const multipart = (key: string, id: string) => ({
+    async uploadPart(partNumber: number, value: ReadableStream) {
+      uploads.get(id)!.parts.set(partNumber, await new Response(value).arrayBuffer());
+      return { partNumber, etag: `e${partNumber}` };
+    },
+    async complete(parts: { partNumber: number; etag: string }[]) {
+      const up = uploads.get(id)!;
+      const chunks = parts.map((p) => new Uint8Array(up.parts.get(p.partNumber)!));
+      data.set(key, { bytes: await new Blob(chunks).arrayBuffer(), type: up.type });
+    },
+  });
   return {
     data,
+    async createMultipartUpload(key: string, options?: { httpMetadata?: { contentType?: string } }) {
+      const uploadId = `u${uploads.size + 1}`;
+      uploads.set(uploadId, { type: options?.httpMetadata?.contentType, parts: new Map() });
+      return { uploadId, ...multipart(key, uploadId) };
+    },
+    resumeMultipartUpload: (key: string, uploadId: string) => multipart(key, uploadId),
     async get(key: string) {
       const o = data.get(key);
       return o ? { body: new Blob([o.bytes]).stream(), size: o.bytes.byteLength, httpMetadata: { contentType: o.type } } : null;
@@ -164,4 +182,23 @@ test('apps keys stay private', async () => {
     assert.equal((await handle(req('GET', p), e)).status, 404, p);
   }
   assert.equal((await handle(req('GET', '/manifest.json'), e)).status, 401);
+});
+
+test('a big file goes up in parts and reads back whole; only the release token may do it', async () => {
+  const e = env();
+  const key = '/admin/apps/design-editor/android/22.apk';
+  assert.equal((await handle(req('POST', `${key}?uploads`, STORE), e)).status, 401);
+  const started = await handle(req('POST', `${key}?uploads`, RELEASE), e);
+  const { uploadId } = (await started.json()) as { uploadId: string };
+
+  const parts = [];
+  for (const [n, text] of [[1, 'AAAA'], [2, 'BB']] as const) {
+    const res = await handle(req('PUT', `${key}?uploadId=${uploadId}&part=${n}`, RELEASE, text), e);
+    assert.equal(res.status, 200);
+    parts.push(await res.json());
+  }
+  assert.equal((await handle(req('PUT', `${key}?uploadId=${uploadId}&part=0`, RELEASE, 'x'), e)).status, 400);
+  assert.equal((await handle(req('POST', `${key}?uploadId=${uploadId}`, RELEASE, JSON.stringify({ parts: [] })), e)).status, 400);
+  assert.equal((await handle(req('POST', `${key}?uploadId=${uploadId}`, RELEASE, JSON.stringify({ parts })), e)).status, 204);
+  assert.equal(new TextDecoder().decode(e.BUCKET.data.get('apps/design-editor/android/22.apk')!.bytes), 'AAAABB');
 });

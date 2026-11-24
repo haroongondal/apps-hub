@@ -1,4 +1,3 @@
-import { request as httpsRequest } from 'node:https';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -6,6 +5,7 @@ import { MANIFEST_PATH, StoreManifestSchema, emptyManifest, nextVersionCode, typ
 import { APPS } from './apps.ts';
 import { checkReleasable, readHead } from './guard.ts';
 import { releaseAndroid } from './release-android.ts';
+import { makeUploader } from './upload.ts';
 import { formatPlan, installDeps, planRollback, storeTarget, withWorktree } from './rollback.ts';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
@@ -60,25 +60,7 @@ async function fetchManifest(): Promise<StoreManifest> {
   return StoreManifestSchema.parse(await res.json());
 }
 
-async function upload(key: string, body: Buffer | string, contentType: string): Promise<void> {
-  // node:https has no headers timeout (fetch's undici gives up after 5 minutes, too short on a slow uplink).
-  const data = typeof body === 'string' ? Buffer.from(body) : body;
-  const { status, text } = await new Promise<{ status: number; text: string }>((resolveReq, reject) => {
-    const req = httpsRequest(
-      `${API}/admin/${key}`,
-      { method: 'PUT', headers: { ...auth, 'content-type': contentType, 'content-length': data.length } },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on('data', (c: Buffer) => chunks.push(c));
-        res.on('end', () => resolveReq({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString() }));
-      },
-    );
-    req.setTimeout(0);
-    req.on('error', reject);
-    req.end(data);
-  });
-  if (status < 200 || status > 299) throw new Error(`PUT ${key}: ${status} ${text}`);
-}
+const upload = makeUploader(API, TOKEN);
 
 let manifest = await fetchManifest();
 
